@@ -5,7 +5,7 @@ imports them. Nothing here is on the import path, in the test suite, or in a whe
 
 ## `qt/`
 
-The spike that chose the UI stack, before `src/perfboard/ui/` existed. Its own docstring
+The spike that chose the UI stack, before `src/perfboard_studio/ui/` existed. Its own docstring
 says what it was for: whether `QGraphicsView` feels right for a grid CAD editor or is
 something to fight, whether VTK carries the 3D requirement on ordinary hardware, and
 whether Qt really produces a true 1:1 printable sheet.

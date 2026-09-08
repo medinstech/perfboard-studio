@@ -7,7 +7,7 @@ Everything notable that changes in Perfboard Studio is written down here. The fo
 Two version numbers exist in this project and they move independently:
 
 - **The application version**, the one below, single-sourced from
-  [`src/perfboard/version.py`](./src/perfboard/version.py). While the major version is
+  [`src/perfboard_studio/version.py`](./src/perfboard_studio/version.py). While the major version is
   0, a **minor** bump is where breaking changes land.
 - **The document format version** (`DOCUMENT_FORMAT_VERSION` in `model.py`), bumped only
   when a `.perf` file written by an older build needs migrating in order to load. It is
@@ -20,28 +20,37 @@ closed without a bump.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-08
+
 ### Changed
 
-- **The application is called Perfboard Studio, and its package and command are
-  `perfboard`.** It was PerfStudio through ten releases. Two things were wrong with that
-  name, and the second is the one that decided it. The first is how it reads: one letter
-  separates "perf" from "perv", and not every eye lands on the right one. The second is
-  what the abbreviation already means in software — "perf" is *performance*. It is the
-  name of Linux's profiler, and AMD shipped a graphics profiler called **GPU PerfStudio**
-  for years. PLAN.md §12 picked "perf" *for* open-source discoverability, and
-  discoverability is exactly what it cost: a search for "perfstudio" lands among
-  profiling tools, not among perfboard. "Perfboard" is the word people actually search
-  for, and it is the word on the thing this program designs.
+- **The application is called Perfboard Studio; its package and command are
+  `perfboard-studio` and its Python module is `perfboard_studio`.** It was PerfStudio
+  through ten releases. Two things were wrong with that name, and the second is the one
+  that decided it. The first is how it reads: one letter separates "perf" from "perv",
+  and not every eye lands on the right one. The second is what the abbreviation already
+  means in software — "perf" is *performance*. It is the name of Linux's profiler, and
+  AMD shipped a graphics profiler called **GPU PerfStudio** for years. PLAN.md §12 picked
+  "perf" *for* open-source discoverability, and discoverability is exactly what it cost:
+  a search for "perfstudio" lands among profiling tools, not among perfboard.
+
+  **The identifier is `perfboard-studio` rather than the bare `perfboard`**, and that is
+  a second decision rather than a longer spelling of the first. `perfboard` is the name
+  of the board, not of this program; taking the generic word as a package name confuses
+  the product with the material it works on. It is also a word this repository writes in
+  prose on nearly every page, which would have made the name impossible to change again
+  without reading every line by hand.
 
   What it means for an existing install:
 
-  - `uv tool install perfboard`, or `pipx install perfboard`. The old `perfstudio`
-    distribution is not renamed in place — PyPI has no such operation — so it stays where
-    it is and stops at v0.10.0.
-  - The command is `perfboard` and the MCP server is `perfboard-mcp`. A client configured
-    with `python -m perfstudio.mcp` has to be pointed at `python -m perfboard.mcp`.
-  - The environment variables are `PERFBOARD_LANG`, `PERFBOARD_DOCUMENT`, `PERFBOARD_LOG`
-    and the three `PERFBOARD_BLESS_*`.
+  - `uv tool install perfboard-studio`, or `pipx install perfboard-studio`. The old
+    `perfstudio` distribution is not renamed in place — PyPI has no such operation — so
+    it stays where it is and stops at v0.10.0.
+  - The command is `perfboard-studio` and the MCP server is `perfboard-studio-mcp`. A
+    client configured with `python -m perfstudio.mcp` has to be pointed at
+    `python -m perfboard_studio.mcp`.
+  - The environment variables are `PERFBOARD_STUDIO_LANG`, `PERFBOARD_STUDIO_DOCUMENT`,
+    `PERFBOARD_STUDIO_LOG` and the three `PERFBOARD_STUDIO_BLESS_*`.
   - The window's stored settings are keyed on the application name, so the first start
     after upgrading comes up with the default layout, the default board colour and an
     empty recent-files list. Nothing on disk is lost; the old keys are simply not read.
@@ -227,7 +236,7 @@ closed without a bump.
   tree.
 - **The installers come first, and `pip install` is no longer the headline.** It is a
   desktop application and the three platform builds — none of which had been downloaded
-  once — were a paragraph below a `pip install perfboard` that does not work for most of
+  once — were a paragraph below a `pip install perfboard-studio` that does not work for most of
   the people this is for: an Intel Mac's system Python is 3.9, and Debian, Ubuntu and
   Fedora refuse a system-wide `pip install` outright under PEP 668. The releases table
   is the first thing under **Running it** now, and PyPI is a subsection under it, spelled
@@ -270,7 +279,7 @@ closed without a bump.
   `composite: false` and `noEmit`, which a solution build cannot reference. Verified by
   regenerating every fixture and finding the tree unchanged.
 - **The MCP recipe in both READMEs was two unrelated halves.** `pip install -e ".[mcp]"`
-  installs a clone in editable mode; `uvx --from "perfboard[mcp]"` fetches from PyPI and
+  installs a clone in editable mode; `uvx --from "perfboard-studio[mcp]"` fetches from PyPI and
   ignores it entirely. Printed as consecutive lines of one block they read as a two-step
   setup where either alone is the whole thing — which is what `docs/MCP.md` says, and now
   what the READMEs say too.
@@ -562,7 +571,7 @@ survived being checked.
   — two pads framed from a DRC finding in a large viewport — left the wheel dead in both
   directions. Steps are clamped; fits are pulled back inside.
 - **Opening a file from the command line did not fit it.** The dialog route fitted the
-  board; `perfboard big-board.perf` arrived at a fixed six pixels per millimetre, which is
+  board; `perfboard-studio big-board.perf` arrived at a fixed six pixels per millimetre, which is
   a corner of anything bigger than a 7 × 9 cm board.
 - **A truncated `.net` was a traceback.** `SExprSyntaxError` was not a `ValueError`, which is
   what both importers catch, so the commonest real breakage escaped the window and the MCP
@@ -632,7 +641,7 @@ survived being checked.
     circuit is, and one export that contradicts another is worse than no export.
   - **The writer is an engine module**, so it is pure and its output is comparable: both
     frozen sheets in `tests/schematic_golden/` now have an `.svg` beside the text dump,
-    blessed by the same `PERFBOARD_BLESS_SCHEMATIC=1`, because they describe one drawing
+    blessed by the same `PERFBOARD_STUDIO_BLESS_SCHEMATIC=1`, because they describe one drawing
     and blessing half of it would leave the two disagreeing. Every board in the repository
     is checked for well-formed XML and for dropping nothing on the way out — a wire, a
     junction dot or a whole symbol kind quietly not handled still looks like a schematic.
@@ -878,9 +887,9 @@ survived being checked.
     to keep in step with the netlist. `.perf` gains one optional `parts` array, omitted when
     empty, and all fifteen golden fixtures are byte-for-byte unchanged.
 
-- **`pip install perfboard`.** The application has been telling people to do this since
+- **`pip install perfboard-studio`.** The application has been telling people to do this since
   0.7.0 — `ui/updater.py` offers a `pip` install no download at all, on the grounds that
-  "its update is `pip install -U perfboard`" — and there was nothing on PyPI to install.
+  "its update is `pip install -U perfboard-studio`" — and there was nothing on PyPI to install.
   `release.yml` now builds an sdist and a pure-Python wheel on every tag and every dry
   run, and publishes them by **trusted publishing**, so there is no API token anywhere in
   this repository. The one-time setup on the PyPI side is written down in
@@ -902,10 +911,10 @@ survived being checked.
     against `[tool.setuptools.package-data]`, because that list is written out file by file
     on purpose, and a list nothing checks is a glob that stops matching the day an icon is
     renamed.
-  - `docs/MCP.md` can now point an agent at `uvx --from "perfboard[mcp]" perfboard-mcp`,
+  - `docs/MCP.md` can now point an agent at `uvx --from "perfboard-studio[mcp]" perfboard-studio-mcp`,
     which needs nothing installed first. The old instructions required a clone, an editable
     install and then the absolute path of the Python that had received it — which the
-    document had to warn about, because a bare `python -m perfboard.mcp` finds whichever
+    document had to warn about, because a bare `python -m perfboard_studio.mcp` finds whichever
     Python is first on `PATH` and that is the usual reason a client reports the server
     exiting immediately.
   - `README.md` carries absolute links now rather than relative ones. That is `readme =
@@ -2052,10 +2061,10 @@ survived being checked.
     DRC error — is reported as a warning rather than producing a quietly shorter guide.
 - `drc.trace_electrical` is public, so the guide and DRC rule 9 quote one resistance
   model rather than two.
-- **The MCP server** (PLAN.md §9, milestone M6, `perfboard.mcp`): 31 tools over stdio or
+- **The MCP server** (PLAN.md §9, milestone M6, `perfboard_studio.mcp`): 31 tools over stdio or
   streamable HTTP, driving the same command bus the GUI does, so an agent's edits undo
-  the same way and land in the same journal. `python -m perfboard.mcp`, or
-  `perfboard-mcp`. Setup and the full tool list are in [docs/MCP.md](./docs/MCP.md).
+  the same way and land in the same journal. `python -m perfboard_studio.mcp`, or
+  `perfboard-studio-mcp`. Setup and the full tool list are in [docs/MCP.md](./docs/MCP.md).
   - Holes are addressed as `C7` everywhere — there are no raw coordinates in the API,
     and a test enforces it.
   - A refused command comes back as data with a code, not as an exception; only
@@ -2093,7 +2102,7 @@ survived being checked.
   be removed by undoing the whole autoroute or re-routing the entire board.
 - The hole under the cursor is in the status bar. Every DRC message, guide step and MCP
   argument says "C7", and there was no way to tell which hole the pointer was on.
-- **A Turkish interface** (`ui/i18n.py`): `perfboard --lang tr`, `PERFBOARD_LANG=tr`,
+- **A Turkish interface** (`ui/i18n.py`): `perfboard-studio --lang tr`, `PERFBOARD_STUDIO_LANG=tr`,
   or the system locale. A dict rather than Qt Linguist, so there is no build step and no
   binary catalogue, and every key is the English string — a translation cannot attach to
   the wrong message and English is never "missing". `tests/test_i18n.py` fails if the
@@ -2299,7 +2308,7 @@ survived being checked.
 - **The MCP server did not import at all against the current SDK.** `pyproject` asked for
   `mcp>=1.0` with no upper bound, so a fresh install resolved to `mcp` 2.0.0 — which
   removes `mcp.server.fastmcp`, the decorator API every one of the 39 tools is bound with.
-  `python -m perfboard.mcp` died on the import. Capped at `<2`: 1.29.0 still ships
+  `python -m perfboard_studio.mcp` died on the import. Capped at `<2`: 1.29.0 still ships
   fastmcp and deprecates nothing.
   - **A development machine could not have noticed.** `pip install -e ".[mcp]"` leaves an
     already-satisfied requirement alone, so a tree that installed 1.x weeks ago keeps it
@@ -2311,7 +2320,7 @@ survived being checked.
     out of the door.
 
 - **No installer could be built on any platform, and the reason was older than the SDK
-  break above.** `perfboard.spec` collects the MCP package with
+  break above.** `perfboard-studio.spec` collects the MCP package with
   `collect_submodules("mcp")`, which *imports* every module it walks — including
   `mcp.cli`, a Typer front end that does `print(...); sys.exit(1)` at import time when
   typer is absent. So the collecting child process exits, PyInstaller reports *"Child
@@ -2325,7 +2334,7 @@ survived being checked.
     than in the first bug report from somebody who downloaded nothing.
 
 - **The macOS bundle could not be built at all**, on a line that has never run anywhere
-  else. `perfboard.spec` builds the `.icns` by scaling the mark to each size Finder
+  else. `perfboard-studio.spec` builds the `.icns` by scaling the mark to each size Finder
   wants, and passed the aspect and transformation modes as the bare integers `1` and `1`
   with the enum names in a comment beside them. PySide6 6.10 refuses an int where an enum
   is declared — *"QImage.scaled called with wrong argument values"* — and that branch runs
@@ -2498,9 +2507,9 @@ survived being checked.
   LED", which the registry contradicts for the LED (its pin 1 is named `A`). The drawing
   was right; the sentence a reader would have believed was not.
 
-- Versioning. `perfboard.__version__` is single-sourced from `version.py`, the wheel's
+- Versioning. `perfboard_studio.__version__` is single-sourced from `version.py`, the wheel's
   version is derived from it rather than repeated in `pyproject.toml`, and this file
-  exists. `perfboard --version` prints the app version, the document format version and
+  exists. `perfboard-studio --version` prints the app version, the document format version and
   the Python/PySide6 it is running on, which is what a bug report should quote.
 - The version is in the window title and in **Help → About**, so a screenshot says which
   build produced it.
@@ -2588,7 +2597,7 @@ physically exist.
 
 ### Added
 
-- **The desktop application.** The Qt prototype promoted into `src/perfboard/ui/` and
+- **The desktop application.** The Qt prototype promoted into `src/perfboard_studio/ui/` and
   wired to the real engine: the scene is built from the real model and persistence
   layer, and the prototype's parallel `board_model` is gone rather than kept alongside.
 - Dragging a part mutates nothing. It computes a snapped, uncommitted anchor, and on
@@ -2656,15 +2665,16 @@ was introduced during 0.4.0 development, so they are accurate but were not writt
 release time. Their compare links point at commits rather than tags for the same reason;
 from v0.4.0 onwards every release is tagged.
 
-[Unreleased]: https://github.com/medinstech/perfboard/compare/v0.10.0...HEAD
-[0.10.0]: https://github.com/medinstech/perfboard/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/medinstech/perfboard/compare/v0.8.1...v0.9.0
-[0.8.1]: https://github.com/medinstech/perfboard/compare/v0.8.0...v0.8.1
-[0.8.0]: https://github.com/medinstech/perfboard/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/medinstech/perfboard/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/medinstech/perfboard/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/medinstech/perfboard/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/medinstech/perfboard/compare/e36ac8c...v0.4.0
-[0.3.0]: https://github.com/medinstech/perfboard/compare/e66e3f8...e36ac8c
-[0.2.0]: https://github.com/medinstech/perfboard/compare/11cb8af...e66e3f8
-[0.1.0]: https://github.com/medinstech/perfboard/compare/2c7daa6...11cb8af
+[Unreleased]: https://github.com/medinstech/perfboard-studio/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/medinstech/perfboard-studio/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/medinstech/perfboard-studio/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/medinstech/perfboard-studio/compare/v0.8.1...v0.9.0
+[0.8.1]: https://github.com/medinstech/perfboard-studio/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/medinstech/perfboard-studio/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/medinstech/perfboard-studio/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/medinstech/perfboard-studio/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/medinstech/perfboard-studio/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/medinstech/perfboard-studio/compare/e36ac8c...v0.4.0
+[0.3.0]: https://github.com/medinstech/perfboard-studio/compare/e66e3f8...e36ac8c
+[0.2.0]: https://github.com/medinstech/perfboard-studio/compare/11cb8af...e66e3f8
+[0.1.0]: https://github.com/medinstech/perfboard-studio/compare/2c7daa6...11cb8af

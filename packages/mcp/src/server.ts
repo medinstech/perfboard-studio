@@ -25,10 +25,10 @@ import type {
   NetClass,
   PerfDocument,
   Rotation,
-} from '@perfboard/core';
+} from '@perfboard-studio/core';
 
 import type { DocumentStore } from './document-store.js';
-import { boardSizeMm, coordToHoleRef } from '@perfboard/core';
+import { boardSizeMm, coordToHoleRef } from '@perfboard-studio/core';
 import { log } from './log.js';
 
 // ---------------------------------------------------------------------------
@@ -348,7 +348,7 @@ export function dispatchToolCall(
 /** Builds the MCP server and registers all read-only tools against `store`. */
 export function createServer(store: DocumentStore): Server {
   const server = new Server(
-    { name: 'perfboard-mcp', version: '0.1.0' },
+    { name: 'perfboard-studio-mcp', version: '0.1.0' },
     { capabilities: { tools: {} } },
   );
 

@@ -254,7 +254,7 @@ button { font: inherit; color: var(--text); background: var(--panel-2);
 
 _SCRIPT = """
 (function () {
-  var key = 'perfboard-guide:' + document.body.dataset.doc;
+  var key = 'perfboard-studio-guide:' + document.body.dataset.doc;
   var boxes = Array.prototype.slice.call(document.querySelectorAll('input[type=checkbox]'));
   var fill = document.querySelector('.bar > i');
   var count = document.querySelector('.count');

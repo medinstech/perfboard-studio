@@ -6,13 +6,13 @@ command bus the desktop app does — undo works, the journal is shared, and the 
 cannot reach the document by any other route.
 
 ```sh
-pip install "perfboard[mcp]"     # ...or pip install -e ".[mcp]" from a clone
-perfboard-mcp                    # stdio, the primary transport
-perfboard-mcp board.perf         # ...opening a document
-perfboard-mcp --http             # streamable HTTP on localhost
+pip install "perfboard-studio[mcp]"     # ...or pip install -e ".[mcp]" from a clone
+perfboard-studio-mcp                    # stdio, the primary transport
+perfboard-studio-mcp board.perf         # ...opening a document
+perfboard-studio-mcp --http             # streamable HTTP on localhost
 ```
 
-`python -m perfboard.mcp` is the same server and takes the same arguments; the console
+`python -m perfboard_studio.mcp` is the same server and takes the same arguments; the console
 script is easier to point a client at, because it lives beside the Python that has
 Perfboard Studio installed rather than needing that Python to be named.
 
@@ -21,29 +21,29 @@ Perfboard Studio installed rather than needing that Python to be named.
 **Claude Code**
 
 ```sh
-claude mcp add perfboard -- uvx --from "perfboard[mcp]" perfboard-mcp
+claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-studio-mcp
 ```
 
 `uvx` fetches the package into its own cache on first use, so nothing has to be installed
 first and nothing else on the machine is touched. With Perfboard Studio already installed,
-`claude mcp add perfboard -- perfboard-mcp` is the same server without the fetch.
+`claude mcp add perfboard-studio -- perfboard-studio-mcp` is the same server without the fetch.
 
 **Anything that reads a JSON config** (Claude Desktop, Antigravity, Cursor, …):
 
 ```json
 {
   "mcpServers": {
-    "perfboard": {
+    "perfboard-studio": {
       "command": "uvx",
-      "args": ["--from", "perfboard[mcp]", "perfboard-mcp"]
+      "args": ["--from", "perfboard-studio[mcp]", "perfboard-studio-mcp"]
     }
   }
 }
 ```
 
-Without `uv`, use the absolute path to the `perfboard-mcp` in the environment that has
-Perfboard Studio installed — a virtualenv's `bin/` (or `Scripts\perfboard-mcp.exe` on Windows).
-A bare `python -m perfboard.mcp` finds whichever Python is first on `PATH`, which is the
+Without `uv`, use the absolute path to the `perfboard-studio-mcp` in the environment that has
+Perfboard Studio installed — a virtualenv's `bin/` (or `Scripts\perfboard-studio-mcp.exe` on Windows).
+A bare `python -m perfboard_studio.mcp` finds whichever Python is first on `PATH`, which is the
 usual reason a client reports that the server exited immediately.
 
 ## The shape of a session
@@ -204,7 +204,7 @@ it and left four connections" as the trap every previous perfboard autorouter fe
 
 **All logging goes to stderr.** On stdio, stdout *is* the protocol: one stray `print`
 corrupts the stream and the client reports something baffling and unrelated. A test
-checks that nothing under `perfboard/mcp/` prints.
+checks that nothing under `perfboard_studio/mcp/` prints.
 
 ## Without MCP at all
 

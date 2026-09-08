@@ -29,17 +29,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast, get_args
 
-from perfboard import persist
-from perfboard.autoroute import (
+from perfboard_studio import persist
+from perfboard_studio.autoroute import (
     AutorouteOptions,
     describe_reroute,
     plan_autoroute,
     plan_best_autoroute,
     plan_reroute,
 )
-from perfboard.autoroute import describe as describe_route
-from perfboard.command import CommandBus, CommandContext
-from perfboard.commands import (
+from perfboard_studio.autoroute import describe as describe_route
+from perfboard_studio.command import CommandBus, CommandContext
+from perfboard_studio.commands import (
     KEEP,
     AddConductorPayload,
     AddCutPayload,
@@ -73,14 +73,14 @@ from perfboard.commands import (
     create_empty_document,
     create_standard_registry,
 )
-from perfboard.connectivity import extract_physical_nets
-from perfboard.drc import run_drc
-from perfboard.footprints import (
+from perfboard_studio.connectivity import extract_physical_nets
+from perfboard_studio.drc import run_drc
+from perfboard_studio.footprints import (
     GENERATED_ID_GRAMMAR,
     footprint_lookup,
     standard_footprints,
 )
-from perfboard.geometry import (
+from perfboard_studio.geometry import (
     all_pin_holes,
     consumed_holes,
     edge_connector_holes,
@@ -89,11 +89,11 @@ from perfboard.geometry import (
     hole_ref_to_coord,
     pad_edge_gap_mm,
 )
-from perfboard.guide import build_guide
-from perfboard.guide import describe as describe_guide
-from perfboard.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
-from perfboard.lvs import run_lvs, stale_conductor_ids
-from perfboard.model import (
+from perfboard_studio.guide import build_guide
+from perfboard_studio.guide import describe as describe_guide
+from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
+from perfboard_studio.lvs import run_lvs, stale_conductor_ids
+from perfboard_studio.model import (
     Board,
     BoardEdge,
     BoardFace,
@@ -110,14 +110,14 @@ from perfboard.model import (
     SchematicPart,
     SpineSpec,
 )
-from perfboard.placer import PlacementOptions, plan_placement
-from perfboard.placer import describe as describe_placement
-from perfboard.ratsnest import ratsnest, summarize
-from perfboard.router import RoutingStyle, options_for_style
-from perfboard.stripboard import is_stripboard
-from perfboard.striproute import describe_plan as describe_strip_plan
-from perfboard.striproute import plan_stripboard
-from perfboard.version import __version__
+from perfboard_studio.placer import PlacementOptions, plan_placement
+from perfboard_studio.placer import describe as describe_placement
+from perfboard_studio.ratsnest import ratsnest, summarize
+from perfboard_studio.router import RoutingStyle, options_for_style
+from perfboard_studio.stripboard import is_stripboard
+from perfboard_studio.striproute import describe_plan as describe_strip_plan
+from perfboard_studio.striproute import plan_stripboard
+from perfboard_studio.version import __version__
 
 # ---------------------------------------------------------------------------
 # Errors and results
@@ -550,7 +550,7 @@ class BoardSession:
         return _ok(saved=str(target), bytes=target.stat().st_size)
 
     def import_netlist(self, path: str) -> dict[str, Any]:
-        from perfboard.parsers.kicad import parse_kicad_netlist
+        from perfboard_studio.parsers.kicad import parse_kicad_netlist
 
         target = _path_arg(path, "import_netlist")
         try:
@@ -1247,7 +1247,7 @@ class BoardSession:
         strays = stale_conductor_ids(self.document, self.lookup)
         if not strays:
             return _ok(removed=0, message="Every conductor still connects the net it claims.")
-        from perfboard.commands import DeleteConductorsPayload
+        from perfboard_studio.commands import DeleteConductorsPayload
 
         result = self._dispatch(
             "conductor.deleteMany",
@@ -1341,7 +1341,7 @@ class BoardSession:
         # process where it costs nothing. Both paths land on the same picture-less guide.
         images: dict[str, bytes] = {}
         try:
-            from perfboard.ui.view3d import offscreen_gl_available, render_step_images
+            from perfboard_studio.ui.view3d import offscreen_gl_available, render_step_images
 
             if offscreen_gl_available():
                 _ensure_qt_application()
@@ -1384,9 +1384,9 @@ class BoardSession:
             )
         out = _path_arg(directory, "export_pdf")
         try:
-            from perfboard.ui.export_pdf import export_pdf as write_pdf
-            from perfboard.ui.export_pdf import verify_scale
-            from perfboard.ui.view2d import BoardScene
+            from perfboard_studio.ui.export_pdf import export_pdf as write_pdf
+            from perfboard_studio.ui.export_pdf import verify_scale
+            from perfboard_studio.ui.view2d import BoardScene
         except Exception as err:  # pragma: no cover - only on a Qt-less install
             return _refused(
                 "qt-unavailable",
@@ -1422,8 +1422,8 @@ class BoardSession:
         from PySide6.QtCore import QRectF
         from PySide6.QtGui import QColor, QImage, QPainter
 
-        from perfboard.geometry import board_outline_mm
-        from perfboard.ui.view2d import RULER_MARGIN_MM, BoardScene
+        from perfboard_studio.geometry import board_outline_mm
+        from perfboard_studio.ui.view2d import RULER_MARGIN_MM, BoardScene
 
         _ensure_qt_application()
         board = self.document.board
@@ -1466,9 +1466,9 @@ class BoardSession:
         millimetres of sheet rather than a fixed pixel size, so it stays legible as the
         picture gets smaller.
         """
-        from perfboard.schematic import build_schematic
-        from perfboard.schematic_export import drawing_to_svg
-        from perfboard.ui.export_schematic import svg_to_image
+        from perfboard_studio.schematic import build_schematic
+        from perfboard_studio.schematic_export import drawing_to_svg
+        from perfboard_studio.ui.export_schematic import svg_to_image
 
         _ensure_qt_application()
         drawing = build_schematic(self.document, self.lookup)
@@ -1487,7 +1487,7 @@ class BoardSession:
         """A PNG of the 3D view, component side or turned over."""
         import tempfile
 
-        from perfboard.ui import view3d
+        from perfboard_studio.ui import view3d
 
         _ensure_qt_application()
         with tempfile.TemporaryDirectory() as tmp:
@@ -1631,7 +1631,7 @@ def _ensure_qt_application() -> None:
         os.environ.setdefault(
             "QT_QPA_PLATFORM", "windows" if sys.platform == "win32" else "offscreen"
         )
-        QApplication(["perfboard-mcp"])
+        QApplication(["perfboard-studio-mcp"])
 
 
 def _no_such_footprint(footprint_id: str) -> SessionError:

@@ -2,10 +2,10 @@
 
 Promoted from ``prototypes/qt/view2d.py``. The scene still works in MILLIMETRES (one
 scene unit = 1 mm) -- that is what makes the 1:1 PDF export exact -- but everything it
-draws now comes from a real ``perfboard.model.PerfDocument`` rather than the
+draws now comes from a real ``perfboard_studio.model.PerfDocument`` rather than the
 prototype's throwaway ``board_model`` dataclasses, and dragging a part no longer
 mutates anything directly: it dispatches ``component.move`` on a
-``perfboard.command.CommandBus`` and waits to be told the result.
+``perfboard_studio.command.CommandBus`` and waits to be told the result.
 
 MIRRORING. ``hole_to_screen``/``screen_to_hole`` below are the single place that turns
 a hole coordinate into a scene position and back, for either board side. The solder
@@ -44,8 +44,8 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 
-from perfboard.command import CommandBus, DispatchResult
-from perfboard.commands import (
+from perfboard_studio.command import CommandBus, DispatchResult
+from perfboard_studio.commands import (
     AddConductorPayload,
     AddCutPayload,
     AddNetPayload,
@@ -59,9 +59,9 @@ from perfboard.commands import (
     NewWireConductor,
     PlaceComponentPayload,
 )
-from perfboard.connectivity import FootprintLookup
-from perfboard.drc import DrcViolation
-from perfboard.geometry import (
+from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.drc import DrcViolation
+from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
     board_outline_mm,
@@ -89,8 +89,8 @@ from perfboard.geometry import (
 
 # The one place the wire-colour convention is defined, so the editor and the cut list a
 # person actually works from cannot disagree about which wire is which.
-from perfboard.guide import COLOR_BY_NET_CLASS, SIGNAL_COLORS
-from perfboard.model import (
+from perfboard_studio.guide import COLOR_BY_NET_CLASS, SIGNAL_COLORS
+from perfboard_studio.model import (
     Board,
     BoardLabels,
     BoardSide,
@@ -109,9 +109,9 @@ from perfboard.model import (
     TrackCut,
     contacts_every_path_hole,
 )
-from perfboard.occupancy import stacking_layers
-from perfboard.ratsnest import RatsnestLink, all_links, ratsnest
-from perfboard.stripboard import cut_holes, is_stripboard, segments
+from perfboard_studio.occupancy import stacking_layers
+from perfboard_studio.ratsnest import RatsnestLink, all_links, ratsnest
+from perfboard_studio.stripboard import cut_holes, is_stripboard, segments
 
 from .boardcolors import scheme_for
 from .bodies import (
@@ -957,7 +957,7 @@ def next_reference(document: PerfDocument, footprint_id: str) -> str:
     ``commands.assert_ref_free``), so counting only the placed parts would offer R1 to
     somebody who has just drawn R1 on the schematic and then have the bus refuse it.
     """
-    from perfboard.footprints import get_footprint
+    from perfboard_studio.footprints import get_footprint
 
     footprint = get_footprint(footprint_id)
     prefix = reference_prefix(footprint) if footprint is not None else "X"

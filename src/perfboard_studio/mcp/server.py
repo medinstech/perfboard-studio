@@ -8,7 +8,7 @@ transport, and the interesting failures are never in the transport.
 THE STDOUT TRAP (PLAN.md Sec 9.1). On stdio, stdout IS the protocol. One stray print
 corrupts the stream and the client reports something baffling and unrelated. So this
 module configures logging to stderr before anything else, and nothing anywhere under
-``perfboard.mcp`` may print. The engine has no prints; the Qt and VTK imports the
+``perfboard_studio.mcp`` may print. The engine has no prints; the Qt and VTK imports the
 render tools pull in are the real risk, which is another reason they are imported lazily
 inside the tools rather than at module scope.
 
@@ -55,12 +55,12 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP, Image
 
-from perfboard.mcp.session import BoardSession, SessionError, new_board
-from perfboard.version import __version__
+from perfboard_studio.mcp.session import BoardSession, SessionError, new_board
+from perfboard_studio.version import __version__
 
 # Before anything else, and to stderr. See the module docstring.
-logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="perfboard-mcp: %(message)s")
-log = logging.getLogger("perfboard.mcp")
+logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="perfboard-studio-mcp: %(message)s")
+log = logging.getLogger("perfboard_studio.mcp")
 
 INSTRUCTIONS = f"""\
 Perfboard Studio {__version__} — design a circuit on pad-per-hole perfboard, verify it, and
@@ -98,7 +98,7 @@ one step at a time.
 Nothing here writes to disk unless you name a path.
 """
 
-mcp: FastMCP[Any] = FastMCP("perfboard", instructions=INSTRUCTIONS)
+mcp: FastMCP[Any] = FastMCP("perfboard-studio", instructions=INSTRUCTIONS)
 
 #: One board per server process. See BoardSession for why it is not a workspace of them.
 session = BoardSession()
@@ -678,7 +678,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the server. stdio by default (PLAN.md Sec 9.1's primary transport)."""
     args = list(sys.argv[1:] if argv is None else argv)
     if "--version" in args:
-        print(f"perfboard-mcp {__version__}", file=sys.stderr)
+        print(f"perfboard-studio-mcp {__version__}", file=sys.stderr)
         return 0
 
     transport = "stdio"

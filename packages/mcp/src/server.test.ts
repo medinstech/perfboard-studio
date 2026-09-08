@@ -4,8 +4,8 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { DOCUMENT_FORMAT_VERSION } from '@perfboard/core';
-import type { PerfDocument } from '@perfboard/core';
+import { DOCUMENT_FORMAT_VERSION } from '@perfboard-studio/core';
+import type { PerfDocument } from '@perfboard-studio/core';
 
 import { DocumentStore } from './document-store.js';
 import { createServer, dispatchToolCall, TOOLS } from './server.js';

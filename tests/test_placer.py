@@ -1,4 +1,4 @@
-"""Tests for the placement optimiser (src/perfboard/placer.py).
+"""Tests for the placement optimiser (src/perfboard_studio/placer.py).
 
 Four things have to hold, and they are what this file is organised around:
 
@@ -34,15 +34,15 @@ from pathlib import Path
 
 import pytest
 
-from perfboard import persist
-from perfboard.autoroute import plan_autoroute
-from perfboard.command import CommandBus, CommandContext
-from perfboard.commands import create_document_id_generator, create_standard_registry
-from perfboard.connectivity import FootprintLookup
-from perfboard.drc import DrcViolation, run_drc
-from perfboard.footprints import footprint_lookup
-from perfboard.geometry import all_pin_holes, is_inside_board
-from perfboard.model import (
+from perfboard_studio import persist
+from perfboard_studio.autoroute import plan_autoroute
+from perfboard_studio.command import CommandBus, CommandContext
+from perfboard_studio.commands import create_document_id_generator, create_standard_registry
+from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.drc import DrcViolation, run_drc
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import all_pin_holes, is_inside_board
+from perfboard_studio.model import (
     Board,
     BodyArchetype,
     BodySpec,
@@ -58,7 +58,7 @@ from perfboard.model import (
     Point2,
     TrackCut,
 )
-from perfboard.placer import (
+from perfboard_studio.placer import (
     DEFAULT_PLACEMENT_OPTIONS,
     PlacementOptions,
     PlacementWeights,
@@ -78,8 +78,8 @@ from perfboard.placer import (
     plan_placement,
     summarize_changes,
 )
-from perfboard.router import DEFAULT_ROUTER_COSTS
-from perfboard.striproute import plan_stripboard
+from perfboard_studio.router import DEFAULT_ROUTER_COSTS
+from perfboard_studio.striproute import plan_stripboard
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -622,7 +622,7 @@ def test_the_placer_stops_turning_parts_for_nothing(fixture: str, monkeypatch) -
     Measured against the same search with the tidy-up disabled, because that is the claim:
     fewer parts turned, and the router no worse off for it.
     """
-    from perfboard import placer as placer_module
+    from perfboard_studio import placer as placer_module
 
     registry = footprint_lookup()
     doc = dataclasses.replace(golden_document(fixture), conductors=())

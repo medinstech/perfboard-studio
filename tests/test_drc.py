@@ -1,4 +1,4 @@
-"""Tests for the design rule checker (src/perfboard/drc.py).
+"""Tests for the design rule checker (src/perfboard_studio/drc.py).
 
 Two layers, mirroring test_connectivity.py's structure and priorities:
 
@@ -39,7 +39,7 @@ from typing import Any
 
 import pytest
 
-from perfboard.drc import (
+from perfboard_studio.drc import (
     DEFAULT_DRC_OPTIONS,
     DrcOptions,
     DrcViolation,
@@ -48,14 +48,14 @@ from perfboard.drc import (
     _component_courtyard,
     run_drc,
 )
-from perfboard.footprints import footprint_lookup, standard_footprints
-from perfboard.geometry import (
+from perfboard_studio.footprints import footprint_lookup, standard_footprints
+from perfboard_studio.geometry import (
     convex_polygons_overlap,
     coord_to_hole_ref,
     hole_key,
     transform_offset,
 )
-from perfboard.model import (
+from perfboard_studio.model import (
     HEAT_CLEARANCE_MM,
     VALID_ROTATIONS,
     Board,
@@ -75,14 +75,14 @@ from perfboard.model import (
     StripConductor,
     WireConductor,
 )
-from perfboard.occupancy import build_occupancy
+from perfboard_studio.occupancy import build_occupancy
 
 # ---------------------------------------------------------------------------
 # Golden fixtures: minimal *.perf reader (board, components, conductors, nets).
 #
 # Scaffolding only -- see module docstring. Parses exactly the subset of the
 # wire format drc.py consumes; footprints come from the real, verified
-# perfboard.footprints.footprint_lookup() registry, not a fixture file, since
+# perfboard_studio.footprints.footprint_lookup() registry, not a fixture file, since
 # every golden .perf's footprintId is one of the standard library's ids.
 # ---------------------------------------------------------------------------
 
@@ -643,7 +643,7 @@ def test_solder_trace_invalid_path_does_not_flag_a_valid_chain() -> None:
 def _with_a_finger_strip(*, components=(), conductors=()):
     import dataclasses
 
-    from perfboard.model import EdgeConnector
+    from perfboard_studio.model import EdgeConnector
 
     return dataclasses.replace(
         make_doc(components=components, conductors=conductors),
@@ -656,7 +656,7 @@ def test_a_pin_on_an_edge_connector_finger_is_an_error() -> None:
     mounting bore, which leaves a hole. Nothing checked it, so a part dropped on the
     finger strip was accepted in silence, and the finger strip runs along the board edge:
     exactly where a connector or a terminal block gets placed."""
-    from perfboard.geometry import undrilled_holes
+    from perfboard_studio.geometry import undrilled_holes
 
     board_rows = make_doc().board.rows
     finger = hole(0, board_rows - 1)

@@ -1,7 +1,7 @@
 /**
- * Library exports for @perfboard/mcp.
+ * Library exports for @perfboard-studio/mcp.
  *
- * The executable entry point (bin: perfboard-mcp) lives in stdio.ts and is not
+ * The executable entry point (bin: perfboard-studio-mcp) lives in stdio.ts and is not
  * re-exported here — importing this module must never have the side effect of
  * connecting a transport or touching stdin/stdout.
  */

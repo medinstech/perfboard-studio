@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from perfboard.model import BoardMaterial
+from perfboard_studio.model import BoardMaterial
 
 
 @dataclass(frozen=True, slots=True)

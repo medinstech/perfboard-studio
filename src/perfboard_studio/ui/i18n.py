@@ -192,10 +192,10 @@ TURKISH: Mapping[str, str] = {
         "Kurulum dosyasını İndirilenler klasörüne indirir ve eksiksiz geldiğini doğrular.",
     "Open the Download Page": "İndirme Sayfasını Aç",
     "There is no installer for this build. If you installed with pip, the "
-    "update is “pip install -U perfboard”; the release page carries "
+    "update is “pip install -U perfboard-studio”; the release page carries "
     "everything else.": (
         "Bu yapı için kurulum dosyası yok. pip ile kurduysanız güncelleme "
-        "“pip install -U perfboard”; geri kalan her şey sürüm sayfasında."
+        "“pip install -U perfboard-studio”; geri kalan her şey sürüm sayfasında."
     ),
     "What Changed": "Ne Değişti",
     "Open this release's notes on GitHub.": "Bu sürümün notlarını GitHub'da açar.",
@@ -975,7 +975,7 @@ _language = "en"
 def set_language(language: str | None) -> str:
     """Choose the interface language, returning the one actually in force.
 
-    ``None`` means "work it out": PERFBOARD_LANG first, then the system locale, then
+    ``None`` means "work it out": PERFBOARD_STUDIO_LANG first, then the system locale, then
     English. An unknown language falls back to English rather than failing, because a
     misspelled environment variable should not stop the application starting.
     """
@@ -990,7 +990,7 @@ def language() -> str:
 
 
 def _detect() -> str | None:
-    from_env = os.environ.get("PERFBOARD_LANG")
+    from_env = os.environ.get("PERFBOARD_STUDIO_LANG")
     if from_env:
         return from_env
     import locale

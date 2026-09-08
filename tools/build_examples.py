@@ -28,23 +28,23 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from perfboard import persist  # noqa: E402
-from perfboard.autoroute import plan_autoroute  # noqa: E402
-from perfboard.command import CommandBus, CommandContext  # noqa: E402
-from perfboard.commands import (  # noqa: E402
+from perfboard_studio import persist  # noqa: E402
+from perfboard_studio.autoroute import plan_autoroute  # noqa: E402
+from perfboard_studio.command import CommandBus, CommandContext  # noqa: E402
+from perfboard_studio.commands import (  # noqa: E402
     ImportNetlistPayload,
     PlaceComponentPayload,
     create_document_id_generator,
     create_empty_document,
     create_standard_registry,
 )
-from perfboard.drc import run_drc  # noqa: E402
-from perfboard.footprints import footprint_lookup  # noqa: E402
-from perfboard.guide import build_guide  # noqa: E402
-from perfboard.lvs import run_lvs  # noqa: E402
-from perfboard.model import Board, DocumentMeta, HoleCoord  # noqa: E402
-from perfboard.parsers.kicad import parse_kicad_netlist  # noqa: E402
-from perfboard.placer import PlacementOptions, plan_placement  # noqa: E402
+from perfboard_studio.drc import run_drc  # noqa: E402
+from perfboard_studio.footprints import footprint_lookup  # noqa: E402
+from perfboard_studio.guide import build_guide  # noqa: E402
+from perfboard_studio.lvs import run_lvs  # noqa: E402
+from perfboard_studio.model import Board, DocumentMeta, HoleCoord  # noqa: E402
+from perfboard_studio.parsers.kicad import parse_kicad_netlist  # noqa: E402
+from perfboard_studio.placer import PlacementOptions, plan_placement  # noqa: E402
 
 EXAMPLES = REPO_ROOT / "examples"
 

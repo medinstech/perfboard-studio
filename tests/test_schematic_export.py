@@ -1,13 +1,13 @@
 """The schematic, exported: the SVG writer, and the PDF and PNG made out of it.
 
-Two halves, and the split is the architecture. ``perfboard.schematic_export`` is an engine
+Two halves, and the split is the architecture. ``perfboard_studio.schematic_export`` is an engine
 module -- pure, no Qt -- so most of what matters here is asserted by reading a string, which
 is what lets a whole sheet be frozen in ``tests/schematic_golden/*.svg`` next to the text
-dumps ``test_schematic.py`` already keeps. ``perfboard.ui.export_schematic`` only asks Qt
+dumps ``test_schematic.py`` already keeps. ``perfboard_studio.ui.export_schematic`` only asks Qt
 to paginate or rasterise that string, so the tests for it are about the three things Qt can
 get wrong on the way out: the size, the aspect ratio and the colour of antialiased text.
 
-Re-bless the goldens with ``PERFBOARD_BLESS_SCHEMATIC=1`` -- the same switch that blesses
+Re-bless the goldens with ``PERFBOARD_STUDIO_BLESS_SCHEMATIC=1`` -- the same switch that blesses
 the text dumps, deliberately, because they describe one drawing and blessing half of it
 would leave the two disagreeing -- AFTER READING THE DIFF. A readable diff is the point.
 
@@ -30,23 +30,23 @@ from PySide6.QtCore import QRectF
 from PySide6.QtGui import QFontDatabase, QImage
 from PySide6.QtWidgets import QApplication
 
-from perfboard import persist
-from perfboard.footprints import footprint_lookup
-from perfboard.model import Board, DocumentMeta, Net, NetNode, PerfDocument
-from perfboard.schematic import (
+from perfboard_studio import persist
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.model import Board, DocumentMeta, Net, NetNode, PerfDocument
+from perfboard_studio.schematic import (
     SchematicDrawing,
     build_schematic,
     no_connect_arms,
     rail_glyph_bars,
 )
-from perfboard.schematic_export import PAPER, SheetInk, drawing_to_svg
-from perfboard.ui.export_schematic import (
+from perfboard_studio.schematic_export import PAPER, SheetInk, drawing_to_svg
+from perfboard_studio.ui.export_schematic import (
     SchematicRenderError,
     _fitted,
     svg_to_pdf,
     svg_to_png,
 )
-from perfboard.version import __version__
+from perfboard_studio.version import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN_DIR = ROOT / "tools" / "diffcheck" / "golden"
@@ -66,7 +66,7 @@ SVG_NS = "{http://www.w3.org/2000/svg}"
 
 @pytest.fixture(scope="module")
 def qapp() -> QApplication:
-    return QApplication.instance() or QApplication(["perfboard-schematic-export-tests"])
+    return QApplication.instance() or QApplication(["perfboard-studio-schematic-export-tests"])
 
 
 def _needs_text(app: QApplication) -> None:
@@ -353,7 +353,7 @@ def test_the_svg_is_the_svg_that_was_blessed(stem: str) -> None:
     produced = svg_for(stem, title=stem).replace(__version__, "{VERSION}")
     expected_path = EXPECTED_DIR / f"{stem}.svg"
 
-    if os.environ.get("PERFBOARD_BLESS_SCHEMATIC"):
+    if os.environ.get("PERFBOARD_STUDIO_BLESS_SCHEMATIC"):
         EXPECTED_DIR.mkdir(exist_ok=True)
         # An explicit LF, the way `test_guide_golden` already writes its own. The
         # repository is LF everywhere, and a bless run on Windows would otherwise put
@@ -362,7 +362,7 @@ def test_the_svg_is_the_svg_that_was_blessed(stem: str) -> None:
         pytest.skip(f"blessed {expected_path.name}")
 
     assert expected_path.exists(), (
-        f"{expected_path} is missing. Run with PERFBOARD_BLESS_SCHEMATIC=1 to create it."
+        f"{expected_path} is missing. Run with PERFBOARD_STUDIO_BLESS_SCHEMATIC=1 to create it."
     )
     expected = expected_path.read_text(encoding="utf-8")
     if produced != expected:

@@ -9,7 +9,7 @@
  * Domain vocabulary (holes, board sides, solder-trace chains of orthogonally
  * adjacent holes, component body archetypes) mirrors packages/core/src/model.ts.
  * This tool is intentionally standalone (no workspace dependency on
- * @perfboard/core) so it stays a zero-install, drop-anywhere harness.
+ * @perfboard-studio/core) so it stays a zero-install, drop-anywhere harness.
  */
 
 import * as THREE from 'three';

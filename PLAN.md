@@ -7,8 +7,8 @@
 > **Durum:** uçtan uca çalışıyor ve yayında — **v0.10.0**, PyPI'da ve üç masaüstü
 > platformu için kurulum paketi olarak. Açık kalan iki şey var ve ikisi de kod değil:
 > M5'in dogfood testi (§11) ve kod imzalama (§12).
-> **Sahip:** medinstech · **Lisans:** Apache-2.0 · **İsim:** Perfboard Studio — §12'de PerfStudio
-> seçilmişti, v0.11'de değişti
+> **Sahip:** medinstech · **Lisans:** Apache-2.0 · **İsim:** Perfboard Studio — §12'de
+> PerfStudio seçilmişti, v0.11'de değişti
 >
 > Bu belge **planın kendisidir** ve yazıldığı hâlde duruyor, ki neyin öngörüldüğü ile
 > neyin çıktığı yan yana okunabilsin — M0'ın Tauri/WebGL şeridi örneğin alınmadı,
@@ -504,14 +504,20 @@ bir kartı sıfırdan lehimlemeden M5 kapanmaz.
 Adaylar: **PerfStudio** · **PadPilot** · **Protoforge** · **SolderPlan**
 Repo: `github.com/medinstech/<isim>`
 
-> **Gerçekleşen: Perfboard Studio**, paket ve komut adı `perfboard`. PerfStudio on sürüm
-> taşıdı ve iki sebeple bırakıldı, ikincisi birincisinden ağır bastı. Okunuşu bir; "perf"
-> ile "perv" arasında tek harf var ve ilk bakışta okunan hep aynı olmuyor. Asıl sebep ise
-> kısaltmanın yazılımdaki anlamı: "perf" performans demek — Linux'ta profiler'ın adı, ve
-> AMD yıllarca **GPU PerfStudio** adlı bir grafik profiler'ı yayınladı. Yani ismi seçtiren
-> gerekçe — keşfedilebilirlik — tam da kendi aleyhine çalışıyordu: "perfstudio" araması
-> delikli plakete değil, profiling araçlarının arasına düşürüyordu. "Perfboard" aranan
-> kelimenin kendisi. `.perf` uzantısı ve `DOCUMENT_FORMAT_VERSION` kıpırdamadı — isim
+> **Gerçekleşen: Perfboard Studio**, paket ve komut adı `perfboard-studio`, Python modülü
+> `perfboard_studio`. PerfStudio on sürüm taşıdı ve iki sebeple bırakıldı, ikincisi
+> birincisinden ağır bastı. Okunuşu bir; "perf" ile "perv" arasında tek harf var ve ilk
+> bakışta okunan hep aynı olmuyor. Asıl sebep ise kısaltmanın yazılımdaki anlamı: "perf"
+> performans demek — Linux'ta profiler'ın adı, ve AMD yıllarca **GPU PerfStudio** adlı bir
+> grafik profiler'ı yayınladı. Yani ismi seçtiren gerekçe — keşfedilebilirlik — tam da
+> kendi aleyhine çalışıyordu: "perfstudio" araması delikli plakete değil, profiling
+> araçlarının arasına düşürüyordu.
+>
+> Tanıtıcının `perfboard` değil `perfboard-studio` olması ayrı bir karar: `perfboard`
+> plaketin kendi adı, bu programın değil. Jenerik kelimeyi paket adı olarak sahiplenmek
+> ürünle malzemeyi karıştırır, ve `perfboard` bu depoda prose'da geçen gerçek bir kelime —
+> ikisinin aynı yazılması, ismin geçtiği her satırı elle ayıklanması gereken bir metin
+> hâline getiriyordu. `.perf` uzantısı ve `DOCUMENT_FORMAT_VERSION` kıpırdamadı; isim
 > değişikliği tek bir baytlık dosya formatına dokunmuyor.
 
 **Kod imzalama.** Windows EV sertifikası ~$300/yıl, Apple notarization $99/yıl.

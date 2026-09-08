@@ -1,4 +1,4 @@
-"""Tests for the update check as the window performs it (src/perfboard/ui/updater.py).
+"""Tests for the update check as the window performs it (src/perfboard_studio/ui/updater.py).
 
 ``test_updates.py`` covers every decision; this file covers the parts that need Qt --
 what the strip says in each of its states, what a window does with an answer, and what it
@@ -30,20 +30,20 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QElapsedTimer, QEvent, QEventLoop
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from perfboard.commands import create_starter_document
-from perfboard.model import DocumentMeta
-from perfboard.ui import updater
-from perfboard.ui.main import MainWindow
-from perfboard.updates import Asset, Release
+from perfboard_studio.commands import create_starter_document
+from perfboard_studio.model import DocumentMeta
+from perfboard_studio.ui import updater
+from perfboard_studio.ui.main import MainWindow
+from perfboard_studio.updates import Asset, Release
 
 MAIN_SOURCE = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "perfboard" / "ui" / "main.py"
+    pathlib.Path(__file__).resolve().parents[1] / "src" / "perfboard_studio" / "ui" / "main.py"
 ).read_text(encoding="utf-8")
 
 NEXT_RELEASE = Release(
     version="0.8.0",
     tag="v0.8.0",
-    url="https://github.com/medinstech/perfboard/releases/tag/v0.8.0",
+    url="https://github.com/medinstech/perfboard-studio/releases/tag/v0.8.0",
     notes="- **Automatic updates.** The installers can now say so.\n",
     assets=(
         Asset(name="PerfboardStudio_0.8.0_Setup.exe", url="https://example.invalid/s.exe", size=1024),
@@ -54,7 +54,7 @@ NEXT_RELEASE = Release(
 
 @pytest.fixture(scope="session", autouse=True)
 def _app():
-    app = QApplication.instance() or QApplication(["perfboard-tests"])
+    app = QApplication.instance() or QApplication(["perfboard-studio-tests"])
     yield app
 
 
@@ -63,7 +63,7 @@ def settings(tmp_path, monkeypatch):
     """The session store, in a temporary file. See test_ui.py's own fixture on why."""
     from PySide6.QtCore import QSettings
 
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     store = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
     monkeypatch.setattr(main_module, "app_settings", lambda: store)
@@ -76,7 +76,7 @@ def _nothing_reaches_the_desktop(monkeypatch):
     opened: list[str] = []
     monkeypatch.setattr(updater, "open_url", opened.append)
     monkeypatch.setattr(updater, "open_in_file_manager", opened.append)
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     monkeypatch.setattr(main_module.updater, "open_url", opened.append)
     monkeypatch.setattr(main_module.updater, "open_in_file_manager", opened.append)

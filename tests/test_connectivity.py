@@ -1,4 +1,4 @@
-"""Tests for the connectivity engine (src/perfboard/connectivity.py).
+"""Tests for the connectivity engine (src/perfboard_studio/connectivity.py).
 
 Two layers, in order of importance:
 
@@ -31,7 +31,7 @@ from typing import Any
 
 import pytest
 
-from perfboard.connectivity import (
+from perfboard_studio.connectivity import (
     FootprintLookup,
     PhysicalNet,
     PhysicalNodeRef,
@@ -40,7 +40,7 @@ from perfboard.connectivity import (
     extract_physical_nets,
     net_of_pin,
 )
-from perfboard.model import (
+from perfboard_studio.model import (
     Board,
     BoardSide,
     BodySpec,

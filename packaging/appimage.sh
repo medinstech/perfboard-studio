@@ -2,10 +2,10 @@
 #
 # Build the Linux AppImage from a PyInstaller bundle.
 #
-#     python -m PyInstaller perfboard.spec --noconfirm
+#     python -m PyInstaller perfboard-studio.spec --noconfirm
 #     packaging/appimage.sh
 #
-# The Windows counterpart of this is `packaging/perfboard.nsi`, and the two do the same
+# The Windows counterpart of this is `packaging/perfboard-studio.nsi`, and the two do the same
 # job by opposite means.  NSIS writes an installer that unpacks the bundle into Program
 # Files and registers it; an AppImage installs nothing.  It is the bundle itself, in a
 # squashfs image, behind a small runtime that mounts that image and runs what is inside --
@@ -20,13 +20,13 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$here"
 
-BUILD_DIR="${BUILD_DIR:-dist/perfboard}"
+BUILD_DIR="${BUILD_DIR:-dist/perfboard-studio}"
 OUT_DIR="${OUT_DIR:-releases}"
 ARCH="${ARCH:-$(uname -m)}"
 
-version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/perfboard/version.py)
-[ -n "$version" ] || { echo "cannot read __version__ out of src/perfboard/version.py" >&2; exit 1; }
-[ -x "$BUILD_DIR/perfboard" ] || { echo "no bundle at $BUILD_DIR - run PyInstaller first" >&2; exit 1; }
+version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/perfboard_studio/version.py)
+[ -n "$version" ] || { echo "cannot read __version__ out of src/perfboard_studio/version.py" >&2; exit 1; }
+[ -x "$BUILD_DIR/perfboard-studio" ] || { echo "no bundle at $BUILD_DIR - run PyInstaller first" >&2; exit 1; }
 
 appdir="build/AppDir"
 rm -rf "$appdir"
@@ -39,8 +39,8 @@ cp -a "$BUILD_DIR/." "$appdir/usr/bin/"
 # file want one, and the .ico the Windows build uses is not it.  The generated mark is
 # already 256, so it is copied rather than converted: a conversion step is a thing that
 # can silently produce a blank square.
-cp src/perfboard/ui/assets/perfboard.png "$appdir/perfboard.png"
-cp "$appdir/perfboard.png" "$appdir/usr/share/icons/hicolor/256x256/apps/perfboard.png"
+cp src/perfboard_studio/ui/assets/perfboard-studio.png "$appdir/perfboard-studio.png"
+cp "$appdir/perfboard-studio.png" "$appdir/usr/share/icons/hicolor/256x256/apps/perfboard-studio.png"
 
 # `StartupWMClass` is what pairs the running window with this launcher, so the taskbar
 # shows one icon with the right name instead of a second, generic entry beside it.  Qt
@@ -49,21 +49,21 @@ cp "$appdir/perfboard.png" "$appdir/usr/share/icons/hicolor/256x256/apps/perfboa
 # `MimeType` is the Linux half of the file association the Windows installer writes and
 # the macOS bundle declares in its plist -- all three so that double-clicking a board
 # opens it, on whichever machine somebody is at.
-cat > "$appdir/perfboard.desktop" <<DESKTOP
+cat > "$appdir/perfboard-studio.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Perfboard Studio
 GenericName=Perfboard layout designer
 Comment=Design circuits on perfboard and get a soldering guide you can build from
-Exec=perfboard %f
-Icon=perfboard
+Exec=perfboard-studio %f
+Icon=perfboard-studio
 Terminal=false
 Categories=Development;Electronics;Engineering;
 Keywords=perfboard;stripboard;veroboard;electronics;PCB;soldering;netlist;
 MimeType=application/x-perfboard-document;
-StartupWMClass=perfboard
+StartupWMClass=perfboard-studio
 DESKTOP
-cp "$appdir/perfboard.desktop" "$appdir/usr/share/applications/perfboard.desktop"
+cp "$appdir/perfboard-studio.desktop" "$appdir/usr/share/applications/perfboard-studio.desktop"
 
 # A script rather than a symlink to the binary.  A symlink would work -- the bootloader
 # finds its own directory through /proc/self/exe, which resolves through one -- but this
@@ -81,7 +81,7 @@ root="$(dirname "$(readlink -f "$0")")"
 # of another and abort.
 unset QT_PLUGIN_PATH QT_QPA_PLATFORM_PLUGIN_PATH
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
-exec "$root/usr/bin/perfboard" "$@"
+exec "$root/usr/bin/perfboard-studio" "$@"
 APPRUN
 chmod +x "$appdir/AppRun"
 
@@ -118,7 +118,7 @@ fi
 # mount itself either.  This is the documented way round that, and it is why the build
 # does not need root to install libfuse2.
 export APPIMAGE_EXTRACT_AND_RUN=1
-out="$OUT_DIR/perfboard-${version}-${ARCH}.AppImage"
+out="$OUT_DIR/perfboard-studio-${version}-${ARCH}.AppImage"
 rm -f "$out"
 ARCH="$ARCH" "$tool" --runtime-file "$runtime" "$appdir" "$out"
 

@@ -21,7 +21,7 @@ monorepo — so it is trivially runnable on any machine a tester has at hand.
 From the repo root:
 
 ```
-pnpm --filter @perfboard/bench-3d dev
+pnpm --filter @perfboard-studio/bench-3d dev
 ```
 
 This starts a Vite dev server (default `http://localhost:5173/`). Open that

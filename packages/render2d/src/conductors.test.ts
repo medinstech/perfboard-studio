@@ -1,4 +1,4 @@
-import type { Conductor, HoleCoord } from '@perfboard/core';
+import type { Conductor, HoleCoord } from '@perfboard-studio/core';
 import { describe, expect, it } from 'vitest';
 
 import { drawConductor } from './conductors.js';

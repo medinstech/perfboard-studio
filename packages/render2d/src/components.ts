@@ -7,8 +7,8 @@
  * nothing would flag it until a physical board came back wrong.
  */
 
-import type { Board, ComponentInstance, Footprint, HoleCoord, Point2 } from '@perfboard/core';
-import { transformOffset } from '@perfboard/core';
+import type { Board, ComponentInstance, Footprint, HoleCoord, Point2 } from '@perfboard-studio/core';
+import { transformOffset } from '@perfboard-studio/core';
 
 import type { Theme } from './theme.js';
 import type { Viewport } from './transform.js';

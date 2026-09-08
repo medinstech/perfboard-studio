@@ -1,14 +1,14 @@
 """The one place Perfboard Studio's version number is written down.
 
 Everything else reads it from here: ``pyproject.toml`` through
-``[tool.setuptools.dynamic]``, ``perfboard.__version__``, the window title, the
+``[tool.setuptools.dynamic]``, ``perfboard_studio.__version__``, the window title, the
 ``--version`` flag and the build guide's own footer. A version number duplicated in two
 files is a version number that will disagree with itself, usually in a released
 artefact, so this module has exactly one job.
 
 This file deliberately imports nothing from the package. The build backend reads
 ``__version__`` out of it statically while assembling the wheel -- before dependencies
-are installed and before ``perfboard`` is importable -- and a single top-level import
+are installed and before ``perfboard_studio`` is importable -- and a single top-level import
 of anything at all would turn a working build into a confusing one.
 
 There are two version numbers in this project and they move independently:
@@ -27,7 +27,7 @@ from __future__ import annotations
 
 #: PEP 440 / SemVer. A ``.devN`` suffix means "not released yet": the changelog's
 #: Unreleased section describes what is accumulating towards it.
-__version__ = "0.11.0.dev0"
+__version__ = "0.11.0"
 
 
 def version_tuple() -> tuple[int, int, int]:
@@ -64,7 +64,7 @@ def describe() -> str:
 
     # Imported here, not at module scope: see this module's docstring -- the build
     # backend reads __version__ out of this file before the package can be imported.
-    from perfboard.model import DOCUMENT_FORMAT_VERSION
+    from perfboard_studio.model import DOCUMENT_FORMAT_VERSION
 
     try:
         from PySide6 import __version__ as qt_version

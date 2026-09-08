@@ -9,7 +9,7 @@
  *    only in the app and are free to adapt for contrast against the surrounding UI.
  */
 
-import type { BoardMaterial, ConductorKind } from '@perfboard/core';
+import type { BoardMaterial, ConductorKind } from '@perfboard-studio/core';
 
 export interface Theme {
   /** Fills the area outside the board outline (the canvas backdrop). */

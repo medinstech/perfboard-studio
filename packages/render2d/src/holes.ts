@@ -8,7 +8,7 @@
  * the culling actually happened.
  */
 
-import type { Board } from '@perfboard/core';
+import type { Board } from '@perfboard-studio/core';
 
 import type { Theme } from './theme.js';
 import type { Viewport } from './transform.js';

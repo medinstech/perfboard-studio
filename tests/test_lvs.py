@@ -1,4 +1,4 @@
-"""Tests for the LVS engine (src/perfboard/lvs.py).
+"""Tests for the LVS engine (src/perfboard_studio/lvs.py).
 
 Two layers, in order of importance:
 
@@ -36,9 +36,9 @@ from typing import Any
 
 import pytest
 
-from perfboard.connectivity import FootprintLookup, PhysicalPinRef
-from perfboard.footprints import footprint_lookup
-from perfboard.lvs import (
+from perfboard_studio.connectivity import FootprintLookup, PhysicalPinRef
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.lvs import (
     ContinuityCheck,
     IsolationCheck,
     LvsIssue,
@@ -50,7 +50,7 @@ from perfboard.lvs import (
     run_lvs,
     stale_conductor_ids,
 )
-from perfboard.model import (
+from perfboard_studio.model import (
     Board,
     BodySpec,
     ComponentInstance,

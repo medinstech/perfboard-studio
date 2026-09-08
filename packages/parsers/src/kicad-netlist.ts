@@ -10,7 +10,7 @@
  * from disk is the caller's job.
  */
 
-import type { Net, NetClass, NetNode } from '@perfboard/core';
+import type { Net, NetClass, NetNode } from '@perfboard-studio/core';
 
 import { parseSExpr, type SExpr } from './sexpr.js';
 

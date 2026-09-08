@@ -35,7 +35,7 @@ from PIL import Image, ImageDraw, ImageFont
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from perfboard.ui import theme  # noqa: E402
+from perfboard_studio.ui import theme  # noqa: E402
 
 COPPER = "#c8a06a"  # ui/boardcolors.py's tinned pad, for the second half of the rule.
 

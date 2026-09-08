@@ -31,14 +31,14 @@ from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
 
-from perfboard.recovery import (
+from perfboard_studio.recovery import (
     RECOVERY_SUFFIX,
     RecoveryRecord,
     format_record,
     is_stale,
     parse_record,
 )
-from perfboard.version import __version__
+from perfboard_studio.version import __version__
 
 #: How often a modified board is written out. Serializing the largest board in this
 #: repository takes 0.6 ms, so the interval is not about cost -- it is the most work a

@@ -1,4 +1,4 @@
-"""Tests for the autorouter (src/perfboard/autoroute.py).
+"""Tests for the autorouter (src/perfboard_studio/autoroute.py).
 
 Three layers:
 
@@ -30,8 +30,8 @@ from pathlib import Path
 
 import pytest
 
-from perfboard import persist
-from perfboard.autoroute import (
+from perfboard_studio import persist
+from perfboard_studio.autoroute import (
     ALL_ROUTING_STYLES,
     DEFAULT_AUTOROUTE_OPTIONS,
     AutorouteOptions,
@@ -48,12 +48,12 @@ from perfboard.autoroute import (
     score_plan,
     unrouted_links,
 )
-from perfboard.command import CommandBus, CommandContext
-from perfboard.commands import create_document_id_generator, create_standard_registry
-from perfboard.connectivity import FootprintLookup, PhysicalPinRef, are_pins_connected
-from perfboard.footprints import footprint_lookup
-from perfboard.lvs import run_lvs, stale_conductor_ids
-from perfboard.model import (
+from perfboard_studio.command import CommandBus, CommandContext
+from perfboard_studio.commands import create_document_id_generator, create_standard_registry
+from perfboard_studio.connectivity import FootprintLookup, PhysicalPinRef, are_pins_connected
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.lvs import run_lvs, stale_conductor_ids
+from perfboard_studio.model import (
     Board,
     BodySpec,
     ComponentInstance,
@@ -68,8 +68,8 @@ from perfboard.model import (
     PerfDocument,
     WireConductor,
 )
-from perfboard.ratsnest import ratsnest, summarize
-from perfboard.router import (
+from perfboard_studio.ratsnest import ratsnest, summarize
+from perfboard_studio.router import (
     DEFAULT_ROUTER_COSTS,
     DEFAULT_ROUTER_OPTIONS,
     RouterCosts,
@@ -928,7 +928,7 @@ def test_lead_bend_first_folds_legs_and_the_others_never_do() -> None:
 @pytest.mark.parametrize("style", ["balanced", "solder", "wire", "lead-bend"])
 def test_every_style_produces_a_board_that_lvs_and_drc_accept(style: str) -> None:
     """A preference may change how the board is built. It may not change whether it works."""
-    from perfboard.drc import run_drc
+    from perfboard_studio.drc import run_drc
 
     registry = footprint_lookup()
     doc = dataclasses.replace(_load_golden_document("ne555"), conductors=())
@@ -1001,7 +1001,7 @@ def test_the_comparison_does_not_use_the_cost_that_produced_it() -> None:
     physical facts, never from AutorouteSummary.total_cost."""
     import inspect
 
-    from perfboard import autoroute
+    from perfboard_studio import autoroute
 
     source = inspect.getsource(autoroute.score_plan)
 
@@ -1098,7 +1098,7 @@ def test_a_score_counts_wire_length_but_not_trace_length() -> None:
     towards wire on every long run -- the opposite of the project's premise."""
     doc = dataclasses.replace(_load_golden_document("ne555"), conductors=())
 
-    from perfboard.geometry import path_length_mm
+    from perfboard_studio.geometry import path_length_mm
 
     solder = plan_autoroute(doc, LOOKUP_STD, AutorouteOptions(router=options_for_style("solder")))
     score = score_plan(solder, doc)

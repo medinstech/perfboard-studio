@@ -25,19 +25,19 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.30.0(zod@4.4.3)
-      '@perfboard/core':
+      '@perfboard-studio/core':
         specifier: workspace:*
         version: link:../core
 
   packages/parsers:
     dependencies:
-      '@perfboard/core':
+      '@perfboard-studio/core':
         specifier: workspace:*
         version: link:../core
 
   packages/render2d:
     dependencies:
-      '@perfboard/core':
+      '@perfboard-studio/core':
         specifier: workspace:*
         version: link:../core
 

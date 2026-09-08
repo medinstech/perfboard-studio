@@ -1,5 +1,5 @@
 {
-  "name": "@perfboard/parsers",
+  "name": "@perfboard-studio/parsers",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,5 +8,5 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": { "build": "tsc -b", "test": "vitest run" },
-  "dependencies": { "@perfboard/core": "workspace:*" }
+  "dependencies": { "@perfboard-studio/core": "workspace:*" }
 }

@@ -1,6 +1,6 @@
 """Differential tests for the footprint port.
 
-The acceptance criterion for src/perfboard/footprints.py is that it
+The acceptance criterion for src/perfboard_studio/footprints.py is that it
 reproduces tools/diffcheck/golden/footprints.expected.json -- the registry
 dumped from the original TypeScript engine (packages/core/src/footprints.ts)
 -- EXACTLY: every id, every pin number and offset, every body-outline point,
@@ -57,7 +57,7 @@ from typing import Any
 
 import pytest
 
-from perfboard.footprints import (
+from perfboard_studio.footprints import (
     GENERATED_ID_GRAMMAR,
     axial_footprint,
     box_film_capacitor_footprint,
@@ -79,7 +79,7 @@ from perfboard.footprints import (
     to92_footprint,
     to220_footprint,
 )
-from perfboard.model import STANDARD_PITCH_MM, Footprint
+from perfboard_studio.model import STANDARD_PITCH_MM, Footprint
 
 
 def _ulps_apart(a: float, b: float) -> int:
@@ -562,7 +562,7 @@ def test_the_grammar_names_every_family_the_parser_accepts() -> None:
     """`GENERATED_ID_GRAMMAR` is the only thing that tells a person or an agent what to
     type, so a family added to the parser and left out of it is a feature nobody can reach.
     The same shape of check as the MCP tool table's."""
-    from perfboard.footprints import _GENERATED
+    from perfboard_studio.footprints import _GENERATED
 
     for pattern, _ in _GENERATED:
         prefix = pattern.pattern.lstrip("^").split("(")[0].split("\\")[0]
@@ -579,10 +579,10 @@ def test_a_custom_part_can_actually_be_built() -> None:
     command bus and asks the build guide about it, because `unknown-footprint` is exactly
     the warning a user with an odd part used to get and had no way to answer.
     """
-    from perfboard.command import CommandBus, CommandContext, create_id_generator
-    from perfboard.commands import PlaceComponentPayload, create_standard_registry
-    from perfboard.guide import build_guide
-    from perfboard.model import Board, DocumentMeta, HoleCoord, PerfDocument
+    from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
+    from perfboard_studio.commands import PlaceComponentPayload, create_standard_registry
+    from perfboard_studio.guide import build_guide
+    from perfboard_studio.model import Board, DocumentMeta, HoleCoord, PerfDocument
 
     board = Board(
         type="pad-per-hole", cols=30, rows=20, pitch=2.54, thickness=1.6,

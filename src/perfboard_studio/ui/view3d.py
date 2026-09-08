@@ -3,8 +3,8 @@
 Promoted from ``prototypes/qt/view3d.py``; the three claims it existed to test
 (instanced pad rendering, offscreen render for the build guide, and a solder trace
 looking different from a wire) are unchanged, only the data source is. The document is
-a real ``perfboard.model.PerfDocument`` and footprints come from an injected
-``FootprintLookup`` (``perfboard.footprints.footprint_lookup()`` in practice) rather
+a real ``perfboard_studio.model.PerfDocument`` and footprints come from an injected
+``FootprintLookup`` (``perfboard_studio.footprints.footprint_lookup()`` in practice) rather
 than a JSON sidecar file.
 
 Axis note, unchanged from the prototype: rows grow downward in board space
@@ -25,8 +25,8 @@ from typing import Any
 import vtk  # type: ignore[import-untyped]
 from vtkmodules.util import numpy_support
 
-from perfboard.connectivity import FootprintLookup
-from perfboard.geometry import (
+from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
     board_size_mm,
@@ -43,8 +43,8 @@ from perfboard.geometry import (
     transform_offset,
     undrilled_holes,
 )
-from perfboard.guide import Guide, all_steps, document_at_step, step_focus
-from perfboard.model import (
+from perfboard_studio.guide import Guide, all_steps, document_at_step, step_focus
+from perfboard_studio.model import (
     Board,
     BoardSide,
     Conductor,
@@ -54,8 +54,8 @@ from perfboard.model import (
     Point2,
     contacts_every_path_hole,
 )
-from perfboard.occupancy import stacking_layers
-from perfboard.stripboard import cut_holes, segments
+from perfboard_studio.occupancy import stacking_layers
+from perfboard_studio.stripboard import cut_holes, segments
 
 from .boardcolors import scheme_for
 from .bodies import (
@@ -2599,7 +2599,7 @@ def offscreen_gl_available() -> bool:
         # is not usable here -- it is the launcher script under some spawn methods.
         command = [sys.executable, PROBE_FLAG]
     else:
-        command = [sys.executable, "-m", "perfboard.ui.main", PROBE_FLAG]
+        command = [sys.executable, "-m", "perfboard_studio.ui.main", PROBE_FLAG]
     try:
         completed = subprocess.run(command, capture_output=True, timeout=180)
     except (OSError, subprocess.TimeoutExpired):  # pragma: no cover - machine-specific

@@ -41,7 +41,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, TypeGuard, cast
 
-from perfboard.commands import (
+from perfboard_studio.commands import (
     NewConductor,
     NewLeadBendConductor,
     NewSolderTraceConductor,
@@ -51,8 +51,8 @@ from perfboard.commands import (
     PlaceComponentPayload,
     create_document_id_generator,
 )
-from perfboard.geometry import is_inside_board
-from perfboard.model import (
+from perfboard_studio.geometry import is_inside_board
+from perfboard_studio.model import (
     ComponentInstance,
     Conductor,
     HoleCoord,
@@ -69,7 +69,7 @@ from .view2d import next_reference
 #: What the clipboard text announces itself as. Anything else on the clipboard -- a URL,
 #: a line of code, a screenshot -- is not a block, and Paste must say so rather than
 #: raising out of json.loads with a message about column 1.
-CLIPBOARD_KIND = "perfboard-block"
+CLIPBOARD_KIND = "perfboard-studio-block"
 
 #: Bumped only if the shape below stops being readable by an older build. Nothing has
 #: needed it yet; it exists because this text outlives the session that produced it.

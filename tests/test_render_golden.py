@@ -30,7 +30,7 @@ NO TEXT IS IN THE PICTURE. The rulers are turned off, exactly as the 1:1 PDF exp
 them off, because a font database is the one part of this that genuinely differs between
 platforms -- Qt's offscreen plugin ships none at all on Windows.
 
-To re-bless after a deliberate change: run this file with PERFBOARD_BLESS_RENDER=1 and
+To re-bless after a deliberate change: run this file with PERFBOARD_STUDIO_BLESS_RENDER=1 and
 commit the diff, having looked at the render first.
 
 The signature was blessed on Windows and the suite runs on three platforms. If another
@@ -55,10 +55,10 @@ from PySide6.QtCore import QRectF
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
-from perfboard import persist
-from perfboard.footprints import footprint_lookup
-from perfboard.model import BoardSide, PerfDocument
-from perfboard.ui.view2d import BoardScene
+from perfboard_studio import persist
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.model import BoardSide, PerfDocument
+from perfboard_studio.ui.view2d import BoardScene
 
 GOLDEN_DIR = pathlib.Path(__file__).resolve().parents[1] / "tools" / "diffcheck" / "golden"
 SIGNATURES = pathlib.Path(__file__).resolve().parent / "render_signatures.json"
@@ -152,7 +152,7 @@ def _load_signatures() -> dict[str, dict[str, object]]:
 
 @pytest.fixture(scope="module", autouse=True)
 def qapp():
-    app = QApplication.instance() or QApplication(["perfboard-render-tests"])
+    app = QApplication.instance() or QApplication(["perfboard-studio-render-tests"])
     yield app
 
 
@@ -164,7 +164,7 @@ def test_the_board_still_renders_the_way_it_did(name: str, side: str) -> None:
     signature = _signature(_render(_document(name), side))  # type: ignore[arg-type]
     key = f"{name}:{side}"
 
-    if os.environ.get("PERFBOARD_BLESS_RENDER"):
+    if os.environ.get("PERFBOARD_STUDIO_BLESS_RENDER"):
         stored = _load_signatures()
         stored[key] = signature
         # An explicit LF, the way `test_guide_golden` already writes its own. The
@@ -179,7 +179,7 @@ def test_the_board_still_renders_the_way_it_did(name: str, side: str) -> None:
 
     expected = _load_signatures().get(key)
     assert expected is not None, (
-        f"no stored signature for {key}. Run with PERFBOARD_BLESS_RENDER=1 to write one, "
+        f"no stored signature for {key}. Run with PERFBOARD_STUDIO_BLESS_RENDER=1 to write one, "
         f"after looking at the render."
     )
     assert signature["size"] == expected["size"]

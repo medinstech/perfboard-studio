@@ -1,4 +1,4 @@
-"""Tests for perfboard.persist: the .perf project file format.
+"""Tests for perfboard_studio.persist: the .perf project file format.
 
 The load-bearing test in this file is `test_golden_round_trip_byte_identical`: the
 acceptance criterion for the whole port is that every real document the TypeScript
@@ -18,8 +18,8 @@ import pathlib
 
 import pytest
 
-from perfboard import persist
-from perfboard.model import (
+from perfboard_studio import persist
+from perfboard_studio.model import (
     Board,
     ComponentInstance,
     DocumentMeta,
@@ -180,7 +180,7 @@ def test_components_conductors_nets_sorted_by_id() -> None:
 
 
 def test_cuts_sorted_by_hole_then_id() -> None:
-    from perfboard.model import TrackCut
+    from perfboard_studio.model import TrackCut
 
     cuts = (
         TrackCut(id="cut-z", at=HoleCoord(col=5, row=1)),

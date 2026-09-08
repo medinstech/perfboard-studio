@@ -1,4 +1,4 @@
-"""Tests for the soldering guide (src/perfboard/guide.py, guide_export.py).
+"""Tests for the soldering guide (src/perfboard_studio/guide.py, guide_export.py).
 
 The guide is the output the project exists to produce, and it is the one place where an
 engine mistake reaches a person holding a soldering iron. So the tests here are less
@@ -34,15 +34,15 @@ from pathlib import Path
 
 import pytest
 
-from perfboard import persist
-from perfboard.autoroute import plan_autoroute
-from perfboard.command import CommandBus, CommandContext
-from perfboard.commands import create_document_id_generator, create_standard_registry
-from perfboard.connectivity import FootprintLookup
-from perfboard.drc import run_drc, trace_electrical
-from perfboard.footprints import footprint_lookup
-from perfboard.geometry import format_hole
-from perfboard.guide import (
+from perfboard_studio import persist
+from perfboard_studio.autoroute import plan_autoroute
+from perfboard_studio.command import CommandBus, CommandContext
+from perfboard_studio.commands import create_document_id_generator, create_standard_registry
+from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.drc import run_drc, trace_electrical
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import format_hole
+from perfboard_studio.guide import (
     DEFAULT_GUIDE_OPTIONS,
     PHASE_BY_ARCHETYPE,
     PHASE_BY_CONDUCTOR,
@@ -58,8 +58,8 @@ from perfboard.guide import (
     document_at_step,
     step_focus,
 )
-from perfboard.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
-from perfboard.model import (
+from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
+from perfboard_studio.model import (
     Board,
     BodyArchetype,
     ComponentInstance,
@@ -307,7 +307,7 @@ def test_every_archetype_has_a_phase() -> None:
 def test_every_conductor_kind_has_a_phase() -> None:
     from typing import get_args
 
-    from perfboard.model import ConductorKind
+    from perfboard_studio.model import ConductorKind
 
     for kind in get_args(ConductorKind):
         assert kind in PHASE_BY_CONDUCTOR, kind
@@ -727,7 +727,7 @@ def test_json_round_trips_and_carries_hole_addresses_with_the_numbers() -> None:
 
 
 def test_json_names_the_generator_version() -> None:
-    from perfboard.version import __version__
+    from perfboard_studio.version import __version__
 
     data = json.loads(guide_to_json(build_guide(make_doc(), REGISTRY)))
     assert __version__ in data["generator"]

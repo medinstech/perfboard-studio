@@ -7,13 +7,13 @@ importable and testable on an install without it.
 
 Run it with::
 
-    python -m perfboard.mcp
+    python -m perfboard_studio.mcp
 
 or register it with a client (see docs/MCP.md).
 """
 
 from __future__ import annotations
 
-from perfboard.mcp.session import BoardSession, SessionError, new_board
+from perfboard_studio.mcp.session import BoardSession, SessionError, new_board
 
 __all__ = ["BoardSession", "SessionError", "new_board"]

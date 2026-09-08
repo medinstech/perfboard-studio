@@ -21,8 +21,8 @@ from typing import Any
 from PySide6.QtCore import QMarginsF, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QImage, QPageLayout, QPageSize, QPainter, QPdfWriter, QPen
 
-from perfboard.geometry import board_outline_mm
-from perfboard.model import Board
+from perfboard_studio.geometry import board_outline_mm
+from perfboard_studio.model import Board
 
 MM_PER_INCH = 25.4
 

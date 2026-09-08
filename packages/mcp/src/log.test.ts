@@ -3,18 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { log } from './log.js';
 
 describe('log', () => {
-  const originalLevel = process.env['PERFBOARD_LOG'];
+  const originalLevel = process.env['PERFBOARD_STUDIO_LOG'];
 
   beforeEach(() => {
-    delete process.env['PERFBOARD_LOG'];
+    delete process.env['PERFBOARD_STUDIO_LOG'];
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     if (originalLevel === undefined) {
-      delete process.env['PERFBOARD_LOG'];
+      delete process.env['PERFBOARD_STUDIO_LOG'];
     } else {
-      process.env['PERFBOARD_LOG'] = originalLevel;
+      process.env['PERFBOARD_STUDIO_LOG'] = originalLevel;
     }
   });
 
@@ -46,8 +46,8 @@ describe('log', () => {
     expect(parsed.data).toEqual({ code: 'x' });
   });
 
-  it('respects PERFBOARD_LOG to raise the minimum level', () => {
-    process.env['PERFBOARD_LOG'] = 'error';
+  it('respects PERFBOARD_STUDIO_LOG to raise the minimum level', () => {
+    process.env['PERFBOARD_STUDIO_LOG'] = 'error';
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     log.info('should be suppressed');
@@ -57,8 +57,8 @@ describe('log', () => {
     expect(stderrSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('respects PERFBOARD_LOG=debug to allow debug messages through', () => {
-    process.env['PERFBOARD_LOG'] = 'debug';
+  it('respects PERFBOARD_STUDIO_LOG=debug to allow debug messages through', () => {
+    process.env['PERFBOARD_STUDIO_LOG'] = 'debug';
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     log.debug('now visible');

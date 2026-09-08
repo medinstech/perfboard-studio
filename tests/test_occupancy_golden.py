@@ -20,8 +20,8 @@ from typing import Any
 
 import pytest
 
-from perfboard.footprints import footprint_lookup
-from perfboard.occupancy import build_occupancy
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.occupancy import build_occupancy
 
 from .test_drc import GOLDEN_CASE_NAMES, GOLDEN_DIR, _document
 
@@ -98,8 +98,8 @@ def test_occupancy_and_connectivity_disagree_exactly_where_they_should() -> None
     conductor declares. Both facts have to be true at once, and this asserts it over
     all fifteen boards rather than on a hand-built toy.
     """
-    from perfboard.connectivity import extract_physical_nets
-    from perfboard.model import contacts_every_path_hole
+    from perfboard_studio.connectivity import extract_physical_nets
+    from perfboard_studio.model import contacts_every_path_hole
 
     lookup = footprint_lookup()
     checked_traces = 0
@@ -164,7 +164,7 @@ def test_known_gap_occupancy_does_not_model_a_straight_run_geometrically() -> No
     a, b = wire.path
     midpoint_col = (a.col + b.col) // 2
     midpoint_row = (a.row + b.row) // 2
-    from perfboard.model import HoleCoord
+    from perfboard_studio.model import HoleCoord
 
     midpoint = HoleCoord(midpoint_col, midpoint_row)
     if midpoint not in (a, b):

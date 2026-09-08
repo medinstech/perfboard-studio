@@ -34,7 +34,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from perfboard.model import BodyArchetype, Footprint
+from perfboard_studio.model import BodyArchetype, Footprint
 
 # ---------------------------------------------------------------------------
 # Appearance

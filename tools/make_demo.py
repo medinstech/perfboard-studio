@@ -26,10 +26,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from perfboard import persist  # noqa: E402
-from perfboard.footprints import footprint_lookup  # noqa: E402
-from perfboard.guide import all_steps, build_guide, document_at_step  # noqa: E402
-from perfboard.ui import view3d  # noqa: E402
+from perfboard_studio import persist  # noqa: E402
+from perfboard_studio.footprints import footprint_lookup  # noqa: E402
+from perfboard_studio.guide import all_steps, build_guide, document_at_step  # noqa: E402
+from perfboard_studio.ui import view3d  # noqa: E402
 
 BOARD = REPO_ROOT / "examples" / "ne555-astable.perf"
 OUT = REPO_ROOT / "docs" / "images" / "assembly.gif"

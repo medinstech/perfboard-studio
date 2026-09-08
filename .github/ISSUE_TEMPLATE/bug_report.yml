@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for reporting. If this is a **security** issue, please close this and use
-        [a private security advisory](https://github.com/medinstech/perfboard/security/advisories/new)
+        [a private security advisory](https://github.com/medinstech/perfboard-studio/security/advisories/new)
         instead.
 
   - type: textarea
@@ -23,7 +23,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: The output of `perfboard --version`. It names the Python, the Qt and the document format as well, which is usually the part that matters.
+      description: The output of `perfboard-studio --version`. It names the Python, the Qt and the document format as well, which is usually the part that matters.
       render: text
       placeholder: Perfboard Studio 0.4.0.dev0 (document format 1) [Python 3.12.4 on win32, PySide6 6.10.0]
     validations:

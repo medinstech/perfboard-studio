@@ -1,19 +1,19 @@
 ; ============================================================================
 ; Perfboard Studio - Windows installer
 ;
-;   pyinstaller perfboard.spec --noconfirm     (writes dist\perfboard)
-;   makensis packaging\perfboard.nsi           (writes releases\...Setup.exe)
+;   pyinstaller perfboard-studio.spec --noconfirm     (writes dist\perfboard-studio)
+;   makensis packaging\perfboard-studio.nsi           (writes releases\...Setup.exe)
 ;
 ; English and Turkish, because the application is. The interface picks its language from
-; --lang, PERFBOARD_LANG or the system locale; an installer that could only speak
+; --lang, PERFBOARD_STUDIO_LANG or the system locale; an installer that could only speak
 ; English would be the one part of the product that does not.
 ; ============================================================================
 
 !define APP_NAME    "Perfboard Studio"
 !define APP_VENDOR  "Medinstech"
-!define APP_WEBSITE "https://github.com/medinstech/perfboard"
-!define APP_HELPURL "https://github.com/medinstech/perfboard/issues"
-!define EXE_NAME    "perfboard.exe"
+!define APP_WEBSITE "https://github.com/medinstech/perfboard-studio"
+!define APP_HELPURL "https://github.com/medinstech/perfboard-studio/issues"
+!define EXE_NAME    "perfboard-studio.exe"
 
 ; NSIS resolves the file arguments of its own directives - !searchparse, LicenseData,
 ; MUI_ICON, File - against the directory holding the *script*, not against wherever
@@ -26,13 +26,13 @@
 ; seconds and catches a broken page order or a missing string long before anyone waits
 ; for the real bundle to compress.
 !ifndef BUILD_DIR
-  !define BUILD_DIR "${ROOT}\dist\perfboard"
+  !define BUILD_DIR "${ROOT}\dist\perfboard-studio"
 !endif
 
 ; The version comes out of the one line that carries it - see docs/RELEASING.md. A text
 ; match, so the format of that line is a contract; tests/test_version.py holds both ends
 ; of it.
-!searchparse /file "${ROOT}\src\perfboard\version.py" `__version__ = "` APP_VERSION `"`
+!searchparse /file "${ROOT}\src\perfboard_studio\version.py" `__version__ = "` APP_VERSION `"`
 
 !define SETUP_NAME "PerfboardStudio_v${APP_VERSION}_Setup.exe"
 
@@ -73,9 +73,9 @@ VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 ; ------------------------------------------------------------------- look --
 !define MUI_ABORTWARNING
 
-!if /FileExists "${ROOT}\src\perfboard\ui\assets\perfboard.ico"
-  !define MUI_ICON   "${ROOT}\src\perfboard\ui\assets\perfboard.ico"
-  !define MUI_UNICON "${ROOT}\src\perfboard\ui\assets\perfboard.ico"
+!if /FileExists "${ROOT}\src\perfboard_studio\ui\assets\perfboard-studio.ico"
+  !define MUI_ICON   "${ROOT}\src\perfboard_studio\ui\assets\perfboard-studio.ico"
+  !define MUI_UNICON "${ROOT}\src\perfboard_studio\ui\assets\perfboard-studio.ico"
 !endif
 
 ; ------------------------------------------------------------------ pages --

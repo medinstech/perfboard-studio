@@ -1,4 +1,4 @@
-"""Tests for the interface translation (src/perfboard/ui/i18n.py).
+"""Tests for the interface translation (src/perfboard_studio/ui/i18n.py).
 
 A translation catalogue rots in one specific way: the interface changes, the catalogue
 does not, and nobody notices until someone runs the application in that language and
@@ -20,9 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from perfboard.ui.i18n import AVAILABLE, CATALOGUES, TURKISH, language, set_language, t
+from perfboard_studio.ui.i18n import AVAILABLE, CATALOGUES, TURKISH, language, set_language, t
 
-UI_DIR = Path(__file__).resolve().parents[1] / "src" / "perfboard" / "ui"
+UI_DIR = Path(__file__).resolve().parents[1] / "src" / "perfboard_studio" / "ui"
 
 #: Every string literal wrapped in t("...") anywhere in the UI.
 #:
@@ -64,7 +64,7 @@ def loop_built_labels() -> set[str]:
     catch. The drawing-tool names are the one set with no data structure behind them yet,
     so they are read out of the source that defines them.
     """
-    from perfboard.ui.boardcolors import SCHEMES
+    from perfboard_studio.ui.boardcolors import SCHEMES
 
     source = (UI_DIR / "main.py").read_text(encoding="utf-8")
     tools = set(re.findall(r'\(\s*"[a-z-]+",\s*"((?:[^"\\]|\\.)+)",\s*"(?:[^"\\]|\\.)*",\s*$',
@@ -268,23 +268,23 @@ def test_a_regional_code_selects_its_base_language() -> None:
 
 
 def test_the_environment_variable_is_consulted(monkeypatch) -> None:
-    monkeypatch.setenv("PERFBOARD_LANG", "tr")
+    monkeypatch.setenv("PERFBOARD_STUDIO_LANG", "tr")
     assert set_language(None) == "tr"
 
 
 def test_an_explicit_choice_beats_the_environment(monkeypatch) -> None:
-    monkeypatch.setenv("PERFBOARD_LANG", "tr")
+    monkeypatch.setenv("PERFBOARD_STUDIO_LANG", "tr")
     assert set_language("en") == "en"
 
 
 def test_the_command_line_flag_is_parsed_both_ways() -> None:
-    from perfboard.ui.main import _language_argument
+    from perfboard_studio.ui.main import _language_argument
 
-    assert _language_argument(["perfboard", "--lang", "tr"]) == "tr"
-    assert _language_argument(["perfboard", "--lang=tr"]) == "tr"
-    assert _language_argument(["perfboard", "board.perf"]) is None
+    assert _language_argument(["perfboard-studio", "--lang", "tr"]) == "tr"
+    assert _language_argument(["perfboard-studio", "--lang=tr"]) == "tr"
+    assert _language_argument(["perfboard-studio", "board.perf"]) is None
     # A trailing --lang with nothing after it must not raise.
-    assert _language_argument(["perfboard", "--lang"]) is None
+    assert _language_argument(["perfboard-studio", "--lang"]) is None
 
 
 def test_available_lists_exactly_what_can_be_selected() -> None:
@@ -301,7 +301,7 @@ def stored_language(tmp_path, monkeypatch):
     """A settings store of our own. The real one is the user's registry."""
     from PySide6.QtCore import QSettings
 
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     store = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
     monkeypatch.setattr(main_module, "app_settings", lambda: store)
@@ -311,35 +311,35 @@ def stored_language(tmp_path, monkeypatch):
 def test_the_stored_choice_is_used_when_nothing_overrides_it(stored_language, monkeypatch) -> None:
     """The language could only be chosen by an environment variable or a command-line
     flag -- which is to say, not by anybody running the application normally."""
-    from perfboard.ui.main import LANGUAGE_KEY, _preferred_language
+    from perfboard_studio.ui.main import LANGUAGE_KEY, _preferred_language
 
-    monkeypatch.delenv("PERFBOARD_LANG", raising=False)
+    monkeypatch.delenv("PERFBOARD_STUDIO_LANG", raising=False)
     stored_language.setValue(LANGUAGE_KEY, "tr")
 
-    assert _preferred_language(["perfboard"]) == "tr"
+    assert _preferred_language(["perfboard-studio"]) == "tr"
 
 
 def test_the_flag_beats_the_variable_which_beats_the_stored_choice(
     stored_language, monkeypatch
 ) -> None:
     """An environment variable is set for this run; a menu choice was made for every run."""
-    from perfboard.ui.main import LANGUAGE_KEY, _preferred_language
+    from perfboard_studio.ui.main import LANGUAGE_KEY, _preferred_language
 
     stored_language.setValue(LANGUAGE_KEY, "tr")
-    monkeypatch.setenv("PERFBOARD_LANG", "en")
+    monkeypatch.setenv("PERFBOARD_STUDIO_LANG", "en")
 
     # None hands the question to set_language, which is the one place that reads the
     # variable -- so the two cannot disagree about precedence.
-    assert _preferred_language(["perfboard"]) is None
-    assert _preferred_language(["perfboard", "--lang", "tr"]) == "tr"
+    assert _preferred_language(["perfboard-studio"]) is None
+    assert _preferred_language(["perfboard-studio", "--lang", "tr"]) == "tr"
 
 
 def test_nothing_stored_and_nothing_set_asks_the_system(stored_language, monkeypatch) -> None:
-    from perfboard.ui.main import _preferred_language
+    from perfboard_studio.ui.main import _preferred_language
 
-    monkeypatch.delenv("PERFBOARD_LANG", raising=False)
+    monkeypatch.delenv("PERFBOARD_STUDIO_LANG", raising=False)
 
-    assert _preferred_language(["perfboard"]) is None
+    assert _preferred_language(["perfboard-studio"]) is None
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +359,7 @@ def test_the_engine_carries_no_translation_calls() -> None:
     """The engine has no UI dependency, and its DRC and LVS messages are compared byte
     for byte against golden fixtures dumped from the reference implementation. A
     translation call in there would break the differential proof."""
-    engine = Path(__file__).resolve().parents[1] / "src" / "perfboard"
+    engine = Path(__file__).resolve().parents[1] / "src" / "perfboard_studio"
     for source in engine.glob("*.py"):
         text = source.read_text(encoding="utf-8")
         assert "from .ui" not in text, f"{source.name} imports the UI"

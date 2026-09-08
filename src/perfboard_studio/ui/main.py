@@ -3,15 +3,15 @@
 Promoted from ``prototypes/qt/main.py``. Everything the prototype only gestured at in
 its status-bar comment -- "(engine would now re-run DRC and re-route the nets it
 touches)" -- actually happens here: every mutation goes through a
-``perfboard.command.CommandBus`` (never a direct write to the document), and every
+``perfboard_studio.command.CommandBus`` (never a direct write to the document), and every
 successful command re-runs ``run_drc``/``run_lvs`` and repaints from the bus's own
 document.
 
-    python -m perfboard.ui.main                 launch the app (blank document)
-    python -m perfboard.ui.main path/to.perf     launch the app, opening a document
-    python -m perfboard.ui.main --lang tr        launch in Turkish (or PERFBOARD_LANG=tr)
-    python -m perfboard.ui.main --version        print the version and exit
-    python -m perfboard.ui.main --headless [path]
+    python -m perfboard_studio.ui.main                 launch the app (blank document)
+    python -m perfboard_studio.ui.main path/to.perf     launch the app, opening a document
+    python -m perfboard_studio.ui.main --lang tr        launch in Turkish (or PERFBOARD_STUDIO_LANG=tr)
+    python -m perfboard_studio.ui.main --version        print the version and exit
+    python -m perfboard_studio.ui.main --headless [path]
         render 2D/3D/PDF to files, run DRC and LVS, print counts and timings, and exit
         non-zero if the pipeline itself failed (bad file, a scale check that doesn't
         pass, a 3D render exception) -- NOT merely because DRC/LVS found violations,
@@ -75,8 +75,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from perfboard import persist
-from perfboard.autoroute import (
+from perfboard_studio import persist
+from perfboard_studio.autoroute import (
     AutorouteOptions,
     AutoroutePlan,
     UnroutedLink,
@@ -86,11 +86,11 @@ from perfboard.autoroute import (
     plan_best_autoroute,
     plan_reroute,
 )
-from perfboard.autoroute import (
+from perfboard_studio.autoroute import (
     describe as describe_plan,
 )
-from perfboard.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
-from perfboard.commands import (
+from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
+from perfboard_studio.commands import (
     AddEdgeConnectorPayload,
     AddMountingHolesPayload,
     AddNetPayload,
@@ -121,9 +121,9 @@ from perfboard.commands import (
     create_standard_registry,
     create_starter_document,
 )
-from perfboard.connectivity import FootprintLookup
-from perfboard.drc import DrcViolation, run_drc
-from perfboard.footprints import (
+from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.drc import DrcViolation, run_drc
+from perfboard_studio.footprints import (
     axial_footprint,
     box_film_capacitor_footprint,
     dip_footprint,
@@ -137,7 +137,7 @@ from perfboard.footprints import (
     screw_terminal_footprint,
     standard_footprints,
 )
-from perfboard.geometry import (
+from perfboard_studio.geometry import (
     STANDARD_PRESETS,
     BoardPreset,
     board_edge_margin_mm,
@@ -150,7 +150,7 @@ from perfboard.geometry import (
     preset_edge_connectors,
     preset_mounting_holes,
 )
-from perfboard.guide import (
+from perfboard_studio.guide import (
     Guide,
     GuideStep,
     PartStep,
@@ -159,10 +159,10 @@ from perfboard.guide import (
     document_at_step,
     step_focus,
 )
-from perfboard.guide import describe as describe_guide
-from perfboard.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
-from perfboard.lvs import LvsIssue, LvsResult, run_lvs, stale_conductor_ids
-from perfboard.model import (
+from perfboard_studio.guide import describe as describe_guide
+from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
+from perfboard_studio.lvs import LvsIssue, LvsResult, run_lvs, stale_conductor_ids
+from perfboard_studio.model import (
     Board,
     BoardEdge,
     BoardLabels,
@@ -183,29 +183,29 @@ from perfboard.model import (
     PerfDocument,
     Rotation,
 )
-from perfboard.parsers.kicad import parse_kicad_netlist
-from perfboard.placer import (
+from perfboard_studio.parsers.kicad import parse_kicad_netlist
+from perfboard_studio.placer import (
     PlacementOptions,
     PlacementPlan,
     plan_placement,
 )
-from perfboard.placer import (
+from perfboard_studio.placer import (
     describe as describe_placement,
 )
-from perfboard.placer import (
+from perfboard_studio.placer import (
     summarize_changes as summarize_placement,
 )
-from perfboard.ratsnest import NetRatsnest, ratsnest, summarize
-from perfboard.recovery import RecoveryRecord, is_worth_offering
-from perfboard.router import RoutingStyle, options_for_style
-from perfboard.schematic import build_schematic
-from perfboard.schematic_export import drawing_to_svg
-from perfboard.stripboard import is_stripboard
-from perfboard.striproute import StripboardPlan, plan_stripboard
-from perfboard.striproute import describe_plan as describe_strip_plan
-from perfboard.updates import RELEASES_PAGE_URL, Release, is_check_due
-from perfboard.version import __version__
-from perfboard.version import describe as describe_version
+from perfboard_studio.ratsnest import NetRatsnest, ratsnest, summarize
+from perfboard_studio.recovery import RecoveryRecord, is_worth_offering
+from perfboard_studio.router import RoutingStyle, options_for_style
+from perfboard_studio.schematic import build_schematic
+from perfboard_studio.schematic_export import drawing_to_svg
+from perfboard_studio.stripboard import is_stripboard
+from perfboard_studio.striproute import StripboardPlan, plan_stripboard
+from perfboard_studio.striproute import describe_plan as describe_strip_plan
+from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
+from perfboard_studio.version import __version__
+from perfboard_studio.version import describe as describe_version
 
 from . import icons, updater, view3d
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
@@ -6998,7 +6998,7 @@ class MainWindow(QMainWindow):
         box.setInformativeText(
             f"{describe_version()}\n\n"
             "Perfboard layout design, verification and a soldering guide.\n"
-            "Apache-2.0 · github.com/medinstech/perfboard"
+            "Apache-2.0 · github.com/medinstech/perfboard-studio"
         )
         box.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         box.exec()
@@ -7170,7 +7170,7 @@ def _preferred_language(argv: list[str]) -> str | None:
     """The language to start in: the flag, then the variable, then the last choice made.
 
     Returning None hands the question back to ``set_language``, which reads
-    PERFBOARD_LANG and then the system locale. That is why the variable is not read
+    PERFBOARD_STUDIO_LANG and then the system locale. That is why the variable is not read
     here: one place reads it, so the two cannot end up disagreeing about precedence.
     The stored choice sits BELOW the variable deliberately -- an environment variable is
     set for this run, and a menu choice was made for every run.
@@ -7178,7 +7178,7 @@ def _preferred_language(argv: list[str]) -> str | None:
     from_flag = _language_argument(argv)
     if from_flag:
         return from_flag
-    if os.environ.get("PERFBOARD_LANG"):
+    if os.environ.get("PERFBOARD_STUDIO_LANG"):
         return None
     stored = app_settings().value(LANGUAGE_KEY)
     return stored if isinstance(stored, str) and stored else None
@@ -7197,7 +7197,7 @@ def _apply_application_icon(app: QApplication) -> None:
     Silently skipped when it is missing. A working tree that has never run make_assets.py
     should still start; an icon is not worth a traceback.
     """
-    icon_path = Path(__file__).resolve().parent / "assets" / "perfboard.png"
+    icon_path = Path(__file__).resolve().parent / "assets" / "perfboard-studio.png"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 
@@ -7218,7 +7218,7 @@ def main() -> int:
         return view3d.probe_offscreen_gl()
 
     # Chosen before the window is built, because every menu label is translated once at
-    # construction. --lang wins over PERFBOARD_LANG, which wins over the View menu's own
+    # construction. --lang wins over PERFBOARD_STUDIO_LANG, which wins over the View menu's own
     # choice, which wins over the system locale. See _preferred_language.
     set_language(_preferred_language(sys.argv))
 

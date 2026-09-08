@@ -1,7 +1,7 @@
 /**
  * Cross-package integration test: netlist -> place -> route -> DRC -> LVS -> save.
  *
- * Lives in @perfboard/parsers because this is the only package that depends on both
+ * Lives in @perfboard-studio/parsers because this is the only package that depends on both
  * the parser and the engine, so it is the only place the whole pipeline can be driven.
  *
  * Every other test in this repo checks one module against its own spec. This one checks
@@ -26,8 +26,8 @@ import {
   runDrc,
   runLvs,
   serializeDocument,
-} from '@perfboard/core';
-import type { DocumentMeta, HoleCoord } from '@perfboard/core';
+} from '@perfboard-studio/core';
+import type { DocumentMeta, HoleCoord } from '@perfboard-studio/core';
 
 import { parseKicadNetlist } from './kicad-netlist.js';
 import { NE555_ASTABLE_NETLIST } from './__fixtures__/ne555-astable.js';

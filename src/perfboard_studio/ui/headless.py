@@ -1,6 +1,6 @@
 """The headless run: every output this application can produce, with no display.
 
-``python -m perfboard.ui.main --headless board.perf`` renders the 2D editor view, both
+``python -m perfboard_studio.ui.main --headless board.perf`` renders the 2D editor view, both
 1:1 PDFs, the schematic as SVG/PDF/PNG, the 3D view from each face, the build guide with
 its step images, and prints DRC, LVS, ratsnest, autoroute, style-sweep and placement
 timings.
@@ -31,22 +31,22 @@ from PySide6.QtCore import QRectF
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
-from perfboard import persist
-from perfboard.autoroute import describe as describe_plan
-from perfboard.autoroute import describe_best, plan_autoroute, plan_best_autoroute
-from perfboard.drc import run_drc
-from perfboard.footprints import footprint_lookup
-from perfboard.geometry import board_outline_mm, hole_span_mm
-from perfboard.guide import build_guide
-from perfboard.guide import describe as describe_guide
-from perfboard.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
-from perfboard.lvs import run_lvs
-from perfboard.placer import describe as describe_placement
-from perfboard.placer import plan_placement
-from perfboard.ratsnest import ratsnest, summarize
-from perfboard.schematic import build_schematic
-from perfboard.schematic_export import drawing_to_svg
-from perfboard.version import describe as describe_version
+from perfboard_studio import persist
+from perfboard_studio.autoroute import describe as describe_plan
+from perfboard_studio.autoroute import describe_best, plan_autoroute, plan_best_autoroute
+from perfboard_studio.drc import run_drc
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import board_outline_mm, hole_span_mm
+from perfboard_studio.guide import build_guide
+from perfboard_studio.guide import describe as describe_guide
+from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
+from perfboard_studio.lvs import run_lvs
+from perfboard_studio.placer import describe as describe_placement
+from perfboard_studio.placer import plan_placement
+from perfboard_studio.ratsnest import ratsnest, summarize
+from perfboard_studio.schematic import build_schematic
+from perfboard_studio.schematic_export import drawing_to_svg
+from perfboard_studio.version import describe as describe_version
 
 from . import view3d
 from .export_pdf import export_pdf, verify_scale

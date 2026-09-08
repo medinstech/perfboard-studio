@@ -2,7 +2,7 @@
 #
 # Wrap the macOS application bundle in a disk image.
 #
-#     python -m PyInstaller perfboard.spec --noconfirm
+#     python -m PyInstaller perfboard-studio.spec --noconfirm
 #     packaging/macos.sh
 #
 # The spec builds `dist/PerfboardStudio.app`; this is only the delivery.  A .dmg is what a Mac
@@ -23,8 +23,8 @@ APP="${APP:-dist/PerfboardStudio.app}"
 OUT_DIR="${OUT_DIR:-releases}"
 ARCH="${ARCH:-$(uname -m)}"
 
-version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/perfboard/version.py)
-[ -n "$version" ] || { echo "cannot read __version__ out of src/perfboard/version.py" >&2; exit 1; }
+version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/perfboard_studio/version.py)
+[ -n "$version" ] || { echo "cannot read __version__ out of src/perfboard_studio/version.py" >&2; exit 1; }
 [ -d "$APP" ] || { echo "no bundle at $APP - run PyInstaller first" >&2; exit 1; }
 
 # Reported, not imposed.  PyInstaller signs every Mach-O it collects and then the bundle,
@@ -51,7 +51,7 @@ mkdir -p "$staging" "$OUT_DIR"
 ditto "$APP" "$staging/$(basename "$APP")"
 ln -s /Applications "$staging/Applications"
 
-out="$OUT_DIR/perfboard-${version}-${ARCH}.dmg"
+out="$OUT_DIR/perfboard-studio-${version}-${ARCH}.dmg"
 rm -f "$out"
 # ULFO (LZFSE) rather than UDZO (zlib): it is both smaller and faster to decompress, and
 # the only thing it costs is macOS 10.11 and older, which cannot run an arm64 binary

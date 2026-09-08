@@ -1,5 +1,5 @@
 {
-  "name": "@perfboard/mcp",
+  "name": "@perfboard-studio/mcp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,10 +7,10 @@
   "description": "MCP server exposing Perfboard Studio to coding agents (stdio + streamable HTTP)",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": { "perfboard-mcp": "./dist/stdio.js" },
+  "bin": { "perfboard-studio-mcp": "./dist/stdio.js" },
   "scripts": { "build": "tsc -b", "test": "vitest run" },
   "dependencies": {
-    "@perfboard/core": "workspace:*",
+    "@perfboard-studio/core": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0"
   }
 }

@@ -23,9 +23,9 @@ import dataclasses
 
 import pytest
 
-from perfboard import persist
-from perfboard.command import CommandBus, CommandContext, create_id_generator
-from perfboard.commands import (
+from perfboard_studio import persist
+from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
+from perfboard_studio.commands import (
     DEFAULT_BOARD,
     AddEdgeConnectorPayload,
     AddMountingHolePayload,
@@ -36,9 +36,9 @@ from perfboard.commands import (
     create_empty_document,
     create_standard_registry,
 )
-from perfboard.drc import run_drc
-from perfboard.footprints import footprint_lookup
-from perfboard.geometry import (
+from perfboard_studio.drc import run_drc
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import (
     consumed_holes,
     copper_gap_mm,
     default_finger_length_mm,
@@ -51,8 +51,8 @@ from perfboard.geometry import (
     pad_extent_mm,
     printed_row_label,
 )
-from perfboard.guide import build_guide
-from perfboard.model import (
+from perfboard_studio.guide import build_guide
+from perfboard_studio.model import (
     Board,
     BoardLabels,
     ComponentInstance,
@@ -546,8 +546,8 @@ def test_a_printed_legend_is_not_shadowed_by_the_editors_own_ruler() -> None:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
 
-    QApplication.instance() or QApplication(["perfboard-tests"])
-    from perfboard.ui.view2d import BoardLegendItem, BoardScene, HoleRulerItem
+    QApplication.instance() or QApplication(["perfboard-studio-tests"])
+    from perfboard_studio.ui.view2d import BoardLegendItem, BoardScene, HoleRulerItem
 
     printed = _doc(dataclasses.replace(BOARD, border_x_mm=2.0, border_y_mm=2.0, labels=BoardLabels()))
     scene = BoardScene(printed, LOOKUP, side="top", show_rulers=True)
@@ -560,7 +560,7 @@ def test_a_printed_legend_is_not_shadowed_by_the_editors_own_ruler() -> None:
 def test_the_ruler_comes_back_when_the_legend_is_on_the_far_face() -> None:
     """Seen through the board the legend is a dim ghost, not something to read an address
     off — so the thing that can be read has to be there."""
-    from perfboard.ui.view2d import BoardScene, HoleRulerItem
+    from perfboard_studio.ui.view2d import BoardScene, HoleRulerItem
 
     board = dataclasses.replace(BOARD, border_x_mm=2.0, border_y_mm=2.0, labels=BoardLabels(face="top"))
     scene = BoardScene(_doc(board), LOOKUP, side="bottom", show_rulers=True)
@@ -569,7 +569,7 @@ def test_the_ruler_comes_back_when_the_legend_is_on_the_far_face() -> None:
 
 
 def test_a_board_with_no_legend_keeps_its_ruler() -> None:
-    from perfboard.ui.view2d import BoardScene, HoleRulerItem
+    from perfboard_studio.ui.view2d import BoardScene, HoleRulerItem
 
     scene = BoardScene(_doc(), LOOKUP, side="top", show_rulers=True)
     assert not scene.legend_is_readable()

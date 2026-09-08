@@ -40,7 +40,7 @@ from typing import Any
 
 #: Where the releases live. The API host and the human one are different machines and
 #: neither is derivable from the other, so both are written down.
-GITHUB_REPOSITORY = "medinstech/perfboard"
+GITHUB_REPOSITORY = "medinstech/perfboard-studio"
 RELEASES_API_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases"
 RELEASES_PAGE_URL = f"https://github.com/{GITHUB_REPOSITORY}/releases"
 

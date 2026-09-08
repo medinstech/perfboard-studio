@@ -1,8 +1,8 @@
 """Crash recovery: what a record means, and the files it lives in.
 
-Two halves, split the way ``updates.py`` and ``ui/updater.py`` are. ``perfboard.recovery``
+Two halves, split the way ``updates.py`` and ``ui/updater.py`` are. ``perfboard_studio.recovery``
 is pure -- no clock, no disk, no Qt -- so every decision it makes is reachable by handing it
-a string, which is most of this file. ``perfboard.ui.autosave`` is the host, and what is
+a string, which is most of this file. ``perfboard_studio.ui.autosave`` is the host, and what is
 worth testing there is the part that has to survive the thing the feature exists for: the
 process stopping in the middle.
 
@@ -22,7 +22,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 
-from perfboard.recovery import (
+from perfboard_studio.recovery import (
     RECOVERY_SUFFIX,
     RecoveryRecord,
     format_record,
@@ -30,7 +30,7 @@ from perfboard.recovery import (
     is_worth_offering,
     parse_record,
 )
-from perfboard.ui.autosave import Autosave, default_directory, disk_state
+from perfboard_studio.ui.autosave import Autosave, default_directory, disk_state
 
 DOCUMENT = '{\n  "meta": {\n    "name": "board"\n  }\n}\n'
 

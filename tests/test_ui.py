@@ -1,4 +1,4 @@
-"""Tests for perfboard.ui.
+"""Tests for perfboard_studio.ui.
 
 Runs entirely headless (QT_QPA_PLATFORM=offscreen, set before PySide6 is imported) so
 it works in CI with no display. The load-bearing tests here are the ones that would
@@ -31,12 +31,12 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
-from perfboard import persist
-from perfboard.command import CommandBus, CommandContext, create_id_generator
-from perfboard.commands import MoveComponentPayload, create_standard_registry
-from perfboard.footprints import footprint_lookup
-from perfboard.geometry import column_label
-from perfboard.model import (
+from perfboard_studio import persist
+from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
+from perfboard_studio.commands import MoveComponentPayload, create_standard_registry
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import column_label
+from perfboard_studio.model import (
     Board,
     HoleCoord,
     PerfDocument,
@@ -44,16 +44,16 @@ from perfboard.model import (
     WireConductor,
     contacts_every_path_hole,
 )
-from perfboard.ui import scenetext, view2d
-from perfboard.ui.export_pdf import verify_scale
-from perfboard.ui.main import (
+from perfboard_studio.ui import scenetext, view2d
+from perfboard_studio.ui.export_pdf import verify_scale
+from perfboard_studio.ui.main import (
     ROLE_NET_ID,
     _rotation_after,
     guess_footprint_id,
     read_document_text,
     window_title,
 )
-from perfboard.ui.view2d import (
+from perfboard_studio.ui.view2d import (
     BoardScene,
     ComponentItem,
     ConductorItem,
@@ -61,8 +61,8 @@ from perfboard.ui.view2d import (
     next_reference,
     screen_to_hole,
 )
-from perfboard.version import __version__
-from perfboard.version import describe as describe_version
+from perfboard_studio.version import __version__
+from perfboard_studio.version import describe as describe_version
 
 from .test_gl import requires_offscreen_gl
 
@@ -71,7 +71,7 @@ GOLDEN = pathlib.Path(__file__).resolve().parent.parent / "tools" / "diffcheck" 
 
 @pytest.fixture(scope="session", autouse=True)
 def qapp():
-    app = QApplication.instance() or QApplication(["perfboard-tests"])
+    app = QApplication.instance() or QApplication(["perfboard-studio-tests"])
     yield app
 
 
@@ -87,7 +87,7 @@ def _settings_in_a_temp_file(tmp_path, monkeypatch):
     """
     from PySide6.QtCore import QSettings
 
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     store = QSettings(str(tmp_path / "recent.ini"), QSettings.Format.IniFormat)
     monkeypatch.setattr(main_module, "app_settings", lambda: store)
@@ -104,7 +104,7 @@ def _recovery_in_a_temp_dir(tmp_path, monkeypatch):
     profile -- in the one directory whose whole purpose is to hold work that must not be
     lost.
     """
-    from perfboard.ui import autosave as autosave_module
+    from perfboard_studio.ui import autosave as autosave_module
 
     directory = tmp_path / "recovery"
     monkeypatch.setattr(autosave_module, "default_directory", lambda: directory)
@@ -291,7 +291,7 @@ def test_bottom_side_actually_reflects_about_hole_span_not_board_size() -> None:
     only checking self-consistency (a bug that reflects consistently about the WRONG
     axis would still pass a pure round-trip check).
     """
-    from perfboard.geometry import board_size_mm, hole_span_mm
+    from perfboard_studio.geometry import board_size_mm, hole_span_mm
 
     doc = _load_dense()
     board = doc.board
@@ -488,7 +488,7 @@ def test_refreshing_the_3d_view_does_not_move_the_camera() -> None:
     fixed elevation and azimuth -- so the 3D viewpoint snapped back to default after every
     command. Orbit the board, nudge a part, and the orbit was gone.
     """
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     document = _load_dense()
     lookup = footprint_lookup()
@@ -506,7 +506,7 @@ def test_refreshing_the_3d_view_does_not_move_the_camera() -> None:
 def test_repopulating_replaces_the_actors_and_keeps_the_light() -> None:
     """The refresh has to actually refresh -- and must not stack up a fresh light per call,
     which is the trap in reusing a renderer instead of rebuilding one."""
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     document = _load_dense()
     lookup = footprint_lookup()
@@ -521,7 +521,7 @@ def test_repopulating_replaces_the_actors_and_keeps_the_light() -> None:
 
 
 def test_apply_default_camera_is_the_only_thing_that_reframes() -> None:
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     document = _load_dense()
     lookup = footprint_lookup()
@@ -652,8 +652,8 @@ def test_nudging_with_no_selection_does_nothing() -> None:
 
 
 def _blank_bus() -> CommandBus:
-    from perfboard.commands import create_empty_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
 
     document = create_empty_document(
         DocumentMeta(name="t", created="2024-01-01T00:00:00.000Z", modified="2024-01-01T00:00:00.000Z")
@@ -835,7 +835,7 @@ def _double_click_at(pos: QPointF):
 
 def test_properties_edits_ref_value_and_lock_in_one_undo_step(monkeypatch) -> None:
     """One press of OK is one edit, however many fields it changed."""
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     component = window.bus.document.components[0]
@@ -855,7 +855,7 @@ def test_properties_edits_ref_value_and_lock_in_one_undo_step(monkeypatch) -> No
 
 def test_properties_that_changed_nothing_writes_no_history(monkeypatch) -> None:
     """An undo entry for a dialog somebody opened and closed is an undo entry that lies."""
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     component = window.bus.document.components[0]
@@ -876,7 +876,7 @@ def test_properties_that_changed_nothing_writes_no_history(monkeypatch) -> None:
 
 
 def test_a_duplicate_reference_is_refused_and_said_out_loud(monkeypatch) -> None:
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     first, second = window.bus.document.components[0], window.bus.document.components[1]
@@ -947,13 +947,13 @@ def test_version_flag_answers_without_starting_qt(monkeypatch, capsys) -> None:
     before touching QApplication -- and this test proves the ordering by making any attempt
     to construct one fail loudly.
     """
-    import perfboard.ui.main as main_module
+    import perfboard_studio.ui.main as main_module
 
     def refuse(*args, **kwargs):
         raise AssertionError("--version must not construct a QApplication")
 
     monkeypatch.setattr(main_module, "QApplication", refuse)
-    monkeypatch.setattr(sys, "argv", ["perfboard", "--version"])
+    monkeypatch.setattr(sys, "argv", ["perfboard-studio", "--version"])
 
     assert main_module.main() == 0
     assert __version__ in capsys.readouterr().out
@@ -971,7 +971,7 @@ def test_version_line_is_pasteable_ascii() -> None:
 
 
 def _window_on(doc):
-    from perfboard.ui.main import MainWindow
+    from perfboard_studio.ui.main import MainWindow
 
     return MainWindow(doc)
 
@@ -1027,8 +1027,8 @@ def test_reroll_advances_the_seed(monkeypatch) -> None:
 
 
 def test_autoplace_on_an_empty_board_says_so_rather_than_running(monkeypatch) -> None:
-    from perfboard.commands import create_empty_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
 
     window = _window_on(
         create_empty_document(
@@ -1052,13 +1052,13 @@ def test_autoplace_on_an_empty_board_says_so_rather_than_running(monkeypatch) ->
 
 @requires_offscreen_gl  # on_export_guide renders a step image per step
 def test_exporting_the_guide_writes_all_four_files(tmp_path, monkeypatch) -> None:
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     window.current_path = tmp_path / "board.perf"
 
     monkeypatch.setattr(
-        "perfboard.ui.main.QMessageBox.warning", lambda *args, **kwargs: None
+        "perfboard_studio.ui.main.QMessageBox.warning", lambda *args, **kwargs: None
     )
     # The export ends by offering to open what it wrote, which is a modal dialog: in a
     # headless run it waits for a click that never comes. Its own behaviour is checked by
@@ -1076,14 +1076,14 @@ def test_exporting_the_guide_writes_all_four_files(tmp_path, monkeypatch) -> Non
 def test_guide_gaps_are_reported_in_a_dialog_not_only_the_status_bar(tmp_path, monkeypatch) -> None:
     """Each warning says the guide describes less than the whole build. A user who misses
     that follows the steps to the end and finds the board does not work."""
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     window.current_path = tmp_path / "board.perf"
 
     shown: list[str] = []
     monkeypatch.setattr(
-        "perfboard.ui.main.QMessageBox.warning",
+        "perfboard_studio.ui.main.QMessageBox.warning",
         lambda parent, title, text, *args, **kwargs: shown.append(text),
     )
     monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written: None)
@@ -1096,7 +1096,7 @@ def test_guide_gaps_are_reported_in_a_dialog_not_only_the_status_bar(tmp_path, m
 def test_the_export_offers_to_open_what_it_wrote(tmp_path, monkeypatch) -> None:
     """The export used to end at a line in the status bar naming a file in a directory
     the user then had to go and find."""
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     guide_html = tmp_path / "board_guide.html"
@@ -1125,7 +1125,7 @@ def test_the_export_offers_to_open_what_it_wrote(tmp_path, monkeypatch) -> None:
 def test_the_guide_panel_lists_every_step_the_slider_counts() -> None:
     """Two views of one list. Building it twice would let them disagree about how many
     steps there are while showing the same board."""
-    from perfboard.ui.main import ROLE_STEP_INDEX
+    from perfboard_studio.ui.main import ROLE_STEP_INDEX
 
     window = _window_on(_load_dense())
     window.dock_guide.show()
@@ -1146,8 +1146,8 @@ def test_the_guide_panel_lists_every_step_the_slider_counts() -> None:
 def test_picking_a_step_shows_it_on_the_board() -> None:
     """"Fit R7, C7 to C11" is an instruction; the same step with those two pads lit up on
     the board in front of you is an answer."""
-    from perfboard.guide import PartStep
-    from perfboard.ui.main import ROLE_STEP_INDEX
+    from perfboard_studio.guide import PartStep
+    from perfboard_studio.ui.main import ROLE_STEP_INDEX
 
     window = _window_on(_load_dense())
     window.dock_guide.show()
@@ -1197,7 +1197,7 @@ def test_the_solder_side_shows_where_a_part_is_without_drawing_the_part() -> Non
     from that side. But drawing the body as seen from above is how somebody solders a
     board backwards, so the footprint is hatched and carries none of the component-side
     marks."""
-    from perfboard.ui.view2d import _paint_body_shadow
+    from perfboard_studio.ui.view2d import _paint_body_shadow
 
     doc = _load_dense()
     bottom = BoardScene(doc, footprint_lookup(), side="bottom")
@@ -1212,7 +1212,7 @@ def test_the_solder_side_body_shadow_ignores_the_polarity_key() -> None:
     from below would be inventing a view that does not exist."""
     import inspect
 
-    from perfboard.ui import view2d
+    from perfboard_studio.ui import view2d
 
     source = inspect.getsource(view2d._paint_body_shadow)
     assert "_body_path(footprint, placement, None)" in source
@@ -1270,8 +1270,8 @@ def test_both_views_band_a_resistor_from_the_same_source() -> None:
     """One table, two renderers. If these ever disagreed, a board would read as one part
     in the editor and another in the 3D view -- and the 3D view exists to be checked
     against the editor."""
-    from perfboard.ui import view3d
-    from perfboard.ui.bodies import resistor_bands
+    from perfboard_studio.ui import view3d
+    from perfboard_studio.ui.bodies import resistor_bands
 
     doc = _ne555_document()
     lookup = footprint_lookup()
@@ -1294,8 +1294,8 @@ def test_both_views_band_a_resistor_from_the_same_source() -> None:
 def test_insulated_wire_takes_its_nets_colour_from_the_build_guides_convention() -> None:
     """The screen and the cut list a person works from must not disagree about which
     wire is which."""
-    from perfboard.guide import COLOR_BY_NET_CLASS
-    from perfboard.ui.view2d import _INSULATION_SCREEN, insulation_color
+    from perfboard_studio.guide import COLOR_BY_NET_CLASS
+    from perfboard_studio.ui.view2d import _INSULATION_SCREEN, insulation_color
 
     assert insulation_color("power", 0) == _INSULATION_SCREEN[COLOR_BY_NET_CLASS["power"]]
     assert insulation_color("ground", 0) == _INSULATION_SCREEN[COLOR_BY_NET_CLASS["ground"]]
@@ -1303,7 +1303,7 @@ def test_insulated_wire_takes_its_nets_colour_from_the_build_guides_convention()
     assert insulation_color("signal", 0) != insulation_color("signal", 1)
     # Every name the guide can emit has a screen colour, or a wire would silently fall
     # back to grey and stop matching its own cut-list row.
-    from perfboard.guide import SIGNAL_COLORS
+    from perfboard_studio.guide import SIGNAL_COLORS
 
     for name in (*SIGNAL_COLORS, *COLOR_BY_NET_CLASS.values()):
         assert name in _INSULATION_SCREEN, name
@@ -1313,7 +1313,7 @@ def test_no_conductor_is_drawn_in_the_error_colour() -> None:
     """Red means "this is wrong" -- the DRC outline and the R5' risk ring. Every
     insulated wire used to be red as well, so a completely correct board looked alarming
     and a real risk had nothing to stand out against."""
-    from perfboard.ui.view2d import CONDUCTOR_STYLE, ERROR_OUTLINE, RISK_RING
+    from perfboard_studio.ui.view2d import CONDUCTOR_STYLE, ERROR_OUTLINE, RISK_RING
 
     for kind, (colour, _width, _dashed) in CONDUCTOR_STYLE.items():
         assert colour.name() != ERROR_OUTLINE.name(), kind
@@ -1324,7 +1324,7 @@ def test_solder_beads_sit_inside_the_pad_rather_than_over_it() -> None:
     """Solder fills a pad; it does not replace it. A bead wider than the pad hides the
     very thing being soldered to, which is what made a routed board read as a diagram of
     coloured bars with a board somewhere underneath."""
-    from perfboard.ui.view2d import CONDUCTOR_STYLE
+    from perfboard_studio.ui.view2d import CONDUCTOR_STYLE
 
     board = _load_dense().board
     for kind in ("solder-trace", "solder-trace-wired", "bare-wire", "insulated-wire"):
@@ -1346,7 +1346,7 @@ def _write(path: pathlib.Path, doc: PerfDocument) -> None:
 
 
 def test_an_unmodified_window_reloads_when_the_file_changes_underneath_it(tmp_path) -> None:
-    from perfboard.commands import MoveComponentPayload
+    from perfboard_studio.commands import MoveComponentPayload
 
     path = tmp_path / "board.perf"
     doc = _load_dense()
@@ -1372,7 +1372,7 @@ def test_an_unmodified_window_reloads_when_the_file_changes_underneath_it(tmp_pa
 def test_a_window_with_unsaved_work_is_never_reloaded_behind_the_users_back(tmp_path) -> None:
     """The one outcome that must not happen. The file and the window have both moved and
     only the person in front of it can say which is right."""
-    from perfboard.commands import MoveComponentPayload
+    from perfboard_studio.commands import MoveComponentPayload
 
     path = tmp_path / "board.perf"
     doc = _load_dense()
@@ -1398,7 +1398,7 @@ def test_a_window_with_unsaved_work_is_never_reloaded_behind_the_users_back(tmp_
 def test_saving_does_not_make_the_window_reload_itself(tmp_path) -> None:
     """A save changes the file, and a window that reloaded after every one would throw
     away its own undo history for nothing."""
-    from perfboard.commands import MoveComponentPayload
+    from perfboard_studio.commands import MoveComponentPayload
 
     path = tmp_path / "board.perf"
     window = _window_on(_load_dense())
@@ -1423,7 +1423,7 @@ def test_saving_does_not_make_the_window_reload_itself(tmp_path) -> None:
 def test_a_part_can_be_found_by_reference_value_or_footprint() -> None:
     """Which of the three somebody remembers depends on why they are looking: "R37" from
     a DRC message, "10k" from the schematic, "TO-220" from the pile on the bench."""
-    from perfboard.ui.main import GoToPartDialog
+    from perfboard_studio.ui.main import GoToPartDialog
 
     doc = _load_dense()
     dialog = GoToPartDialog(doc.components, footprint_lookup())
@@ -1459,7 +1459,7 @@ def test_measuring_reports_three_different_distances() -> None:
     """They are three answers, not one rounded three ways: holes across is what a
     footprint is written in, mm is what a lead-bending jig is set to, and steps is how
     much solder trace it would take -- a diagonal is two steps of copper, not 1.4."""
-    from perfboard.ui.view2d import describe_span
+    from perfboard_studio.ui.view2d import describe_span
 
     doc = _load_dense()
 
@@ -1472,7 +1472,7 @@ def test_measuring_reports_three_different_distances() -> None:
 
 
 def test_measuring_the_same_hole_twice_is_not_a_measurement() -> None:
-    from perfboard.ui.view2d import describe_span
+    from perfboard_studio.ui.view2d import describe_span
 
     doc = _load_dense()
 
@@ -1546,7 +1546,7 @@ def test_copy_then_paste_puts_a_second_copy_of_the_part_on_the_board() -> None:
     window.scene.select_components([first.id])
 
     window.on_copy()
-    assert "perfboard-block" in QApplication.clipboard().text()
+    assert "perfboard-studio-block" in QApplication.clipboard().text()
     window.on_paste()
 
     assert len(window.bus.document.components) == before + 1
@@ -1616,7 +1616,7 @@ def test_a_fresh_window_is_not_modified() -> None:
 
 
 def test_any_command_marks_the_board_modified() -> None:
-    from perfboard.commands import MoveComponentPayload
+    from perfboard_studio.commands import MoveComponentPayload
 
     window = _window_on(_load_dense())
     first = window.bus.document.components[0]
@@ -1632,7 +1632,7 @@ def test_any_command_marks_the_board_modified() -> None:
 def test_undoing_back_to_the_saved_state_reads_as_unmodified() -> None:
     """Identity, not equality: undo restores the very document object that was saved, so
     "I undid everything" correctly stops nagging."""
-    from perfboard.commands import MoveComponentPayload
+    from perfboard_studio.commands import MoveComponentPayload
 
     window = _window_on(_load_dense())
     first = window.bus.document.components[0]
@@ -1651,7 +1651,7 @@ def test_closing_with_unsaved_work_asks_and_can_be_cancelled(monkeypatch) -> Non
     """The last thing standing between an hour of layout and the X button."""
     from PySide6.QtGui import QCloseEvent
 
-    from perfboard.commands import MoveComponentPayload
+    from perfboard_studio.commands import MoveComponentPayload
 
     window = _window_on(_load_dense())
     first = window.bus.document.components[0]
@@ -1675,7 +1675,7 @@ def test_an_unmodified_board_closes_without_a_prompt(monkeypatch) -> None:
     window = _window_on(_load_dense())
     asked = []
     monkeypatch.setattr(
-        "perfboard.ui.main.QMessageBox.exec", lambda self: asked.append(1) or 0
+        "perfboard_studio.ui.main.QMessageBox.exec", lambda self: asked.append(1) or 0
     )
     assert window._offer_to_save() is True
     assert asked == []
@@ -1683,7 +1683,7 @@ def test_an_unmodified_board_closes_without_a_prompt(monkeypatch) -> None:
 
 
 def test_saving_clears_the_modified_marker(tmp_path) -> None:
-    from perfboard.commands import MoveComponentPayload
+    from perfboard_studio.commands import MoveComponentPayload
 
     window = _window_on(_load_dense())
     first = window.bus.document.components[0]
@@ -1704,7 +1704,7 @@ def test_saving_clears_the_modified_marker(tmp_path) -> None:
 
 
 def test_board_setup_dialog_round_trips_a_board() -> None:
-    from perfboard.ui.main import BoardSetupDialog
+    from perfboard_studio.ui.main import BoardSetupDialog
 
     doc = _load_dense()
     dialog = BoardSetupDialog(doc.board)
@@ -1725,15 +1725,15 @@ def test_every_board_material_is_offered() -> None:
     only one where the pad-lifting rule and the derated iron temperature apply."""
     from typing import get_args
 
-    from perfboard.model import BoardMaterial
-    from perfboard.ui.main import BoardSetupDialog
+    from perfboard_studio.model import BoardMaterial
+    from perfboard_studio.ui.main import BoardSetupDialog
 
     offered = {value for value, _label in BoardSetupDialog.MATERIALS}
     assert offered == set(get_args(BoardMaterial))
 
 
 def test_shrinking_the_board_under_a_part_is_refused_not_silently_applied(monkeypatch) -> None:
-    from perfboard.commands import SetBoardPayload
+    from perfboard_studio.commands import SetBoardPayload
 
     window = _window_on(_load_dense())
     tiny = dataclasses.replace(window.bus.document.board, cols=3, rows=3)
@@ -1751,8 +1751,8 @@ def test_shrinking_the_board_under_a_part_is_refused_not_silently_applied(monkey
 
 def _drawing_scene():
     """A scene over a small board with a bus, ready to draw on."""
-    from perfboard.commands import create_empty_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
 
     doc = create_empty_document(
         DocumentMeta(name="t", created="2024-01-01T00:00:00.000Z", modified="2024-01-01T00:00:00.000Z")
@@ -1828,8 +1828,8 @@ def test_a_hand_drawn_conductor_takes_a_net_only_when_it_is_unambiguous() -> Non
     """Copper with no net claim is what rip-up-and-reroute and the stale cleanup both
     promise never to touch, so a connection the tool cannot interpret is also one it will
     never quietly remove."""
-    from perfboard.commands import PlaceComponentPayload
-    from perfboard.model import Net, NetNode
+    from perfboard_studio.commands import PlaceComponentPayload
+    from perfboard_studio.model import Net, NetNode
 
     scene, bus = _drawing_scene()
     bus.dispatch(
@@ -1840,7 +1840,7 @@ def test_a_hand_drawn_conductor_takes_a_net_only_when_it_is_unambiguous() -> Non
         "component.place",
         PlaceComponentPayload(ref="R2", value="", footprint_id="r-axial-4", anchor=view2d.HoleCoord(9, 2)),
     )
-    from perfboard.commands import ImportNetlistPayload
+    from perfboard_studio.commands import ImportNetlistPayload
 
     bus.dispatch(
         "netlist.import",
@@ -1974,7 +1974,7 @@ def test_the_window_is_re_enabled_even_when_the_planner_fails() -> None:
 def test_placement_stopped_early_still_returns_a_legal_placement() -> None:
     """Cancelling asks the planner to stop and hand back its best result so far. Stopping
     early yields a worse placement, never an invalid one."""
-    from perfboard.placer import PlacementOptions, plan_placement
+    from perfboard_studio.placer import PlacementOptions, plan_placement
 
     doc = _load_dense()
     plan = plan_placement(
@@ -2006,7 +2006,7 @@ def test_the_cursor_hole_readout_tracks_the_pointer() -> None:
 def test_the_board_has_holes_from_underneath() -> None:
     """The substrate was one solid cube with pads only on top, so turning the board over
     showed a blank slab -- on the very view whose job is checking the solder side."""
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     doc = _load_dense()
     # Copper on both faces, at opposite sides of the substrate, and a bore through it.
@@ -2028,8 +2028,8 @@ def test_the_legend_on_the_underside_reads_the_right_way_round() -> None:
     """
     import dataclasses
 
-    from perfboard.model import BoardLabels
-    from perfboard.ui import view3d
+    from perfboard_studio.model import BoardLabels
+    from perfboard_studio.ui import view3d
 
     doc = _load_dense()
     board = dataclasses.replace(
@@ -2067,7 +2067,7 @@ def test_the_exploded_view_lifts_the_parts_and_leaves_the_board_alone() -> None:
     """
     import vtk
 
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     doc = _load_dense()
     lookup = footprint_lookup()
@@ -2094,8 +2094,8 @@ def test_every_exploded_part_has_a_line_down_to_its_own_holes() -> None:
     projects onto it from the standard viewpoint and reads as sitting on it, while an
     identical part near an edge reads as floating. The line is the answer to the question
     the view exists to ask -- which holes does this one go in."""
-    from perfboard.geometry import all_pin_holes
-    from perfboard.ui import view3d
+    from perfboard_studio.geometry import all_pin_holes
+    from perfboard_studio.ui import view3d
 
     doc = _load_dense()
     lookup = footprint_lookup()
@@ -2123,7 +2123,7 @@ def test_highlighting_a_step_dims_the_other_parts_but_never_the_board() -> None:
     would be printing the answer with the question rubbed out."""
     import vtk
 
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     doc = _load_dense()
     lookup = footprint_lookup()
@@ -2167,8 +2167,8 @@ def _actor_colours(ren: object) -> list[tuple[float, float, float]]:
 def test_every_step_gets_a_picture_of_its_own() -> None:
     """PLAN.md §7.2. Keyed by guide.step_focus, which is what guide_export looks them up
     by, so a mismatch here shows as a guide with no illustrations rather than a crash."""
-    from perfboard.guide import all_steps, build_guide, step_focus
-    from perfboard.ui import view3d
+    from perfboard_studio.guide import all_steps, build_guide, step_focus
+    from perfboard_studio.ui import view3d
 
     doc = _load_dense()
     lookup = footprint_lookup()
@@ -2187,8 +2187,8 @@ def test_a_connection_is_photographed_from_the_side_it_is_made_on() -> None:
     """The fault this exists to prevent: almost every connection is made on the solder
     side, and shot from the component side it is behind 1.6 mm of board. The first version
     of the step images produced fourteen pictures of a board with nothing happening."""
-    from perfboard.guide import all_steps, build_guide, step_focus
-    from perfboard.ui import view3d
+    from perfboard_studio.guide import all_steps, build_guide, step_focus
+    from perfboard_studio.ui import view3d
 
     doc = _load_dense()
     guide = build_guide(doc, footprint_lookup())
@@ -2208,7 +2208,7 @@ def test_a_connection_is_photographed_from_the_side_it_is_made_on() -> None:
 
 def test_a_part_is_always_photographed_from_the_component_side() -> None:
     """Parts go in from the top, whatever else is on the board."""
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     doc = _load_dense()
 
@@ -2218,7 +2218,7 @@ def test_a_part_is_always_photographed_from_the_component_side() -> None:
 def test_solder_and_wire_are_not_the_same_grey() -> None:
     """PLAN.md Sec 8.3 makes telling them apart at a glance a requirement of this view.
     They were (0.72, 0.74, 0.77) and (0.85, 0.87, 0.89) -- the same grey."""
-    from perfboard.ui.view3d import BARE_RGB, SOLDER_RGB
+    from perfboard_studio.ui.view3d import BARE_RGB, SOLDER_RGB
 
     difference = sum(abs(a - b) for a, b in zip(SOLDER_RGB, BARE_RGB, strict=True))
     assert difference > 0.5, "solder and tinned wire are still indistinguishable"
@@ -2232,8 +2232,8 @@ def test_a_solder_run_is_the_size_of_a_solder_run() -> None:
     Both ends of that were wrong at 0.34 mm: under half a real run, and thinner than the
     bead drawn at every pad, so the silhouette came out as balls on a stick.
     """
-    from perfboard.geometry import pad_edge_gap_mm
-    from perfboard.ui.view3d import TRACE_JOINT_RADIUS_MM, TRACE_WAIST_RATIO
+    from perfboard_studio.geometry import pad_edge_gap_mm
+    from perfboard_studio.ui.view3d import TRACE_JOINT_RADIUS_MM, TRACE_WAIST_RATIO
 
     board = _load_dense().board
     joint = 2 * TRACE_JOINT_RADIUS_MM
@@ -2248,7 +2248,7 @@ def test_a_solder_run_is_the_size_of_a_solder_run() -> None:
 def test_one_stacking_step_clears_the_widest_pair_that_can_cross() -> None:
     """A wire can cross a solder run, so the step has to clear those two together --
     the widest pair there is. Derived rather than chosen; see STACK_STEP_MM."""
-    from perfboard.ui.view3d import (
+    from perfboard_studio.ui.view3d import (
         BARE_WIRE_RADIUS_MM,
         INSULATED_RADIUS_MM,
         STACK_STEP_MM,
@@ -2271,7 +2271,7 @@ def test_a_run_is_in_the_surface_and_a_wire_is_on_it() -> None:
     clear, which is why a joint drawn at the run's own height sat behind the pad it was
     made on and slid off it from any oblique angle.
     """
-    from perfboard.ui.view3d import conductor_radius, conductor_z, pad_z
+    from perfboard_studio.ui.view3d import conductor_radius, conductor_z, pad_z
 
     board = _load_dense().board
     run = SolderTraceConductor(id="t1", path=(HoleCoord(2, 2), HoleCoord(6, 2)))
@@ -2291,7 +2291,7 @@ def test_a_wire_goes_down_into_the_holes_it_is_soldered_into() -> None:
     A run does NOT do this. It is fused to the copper along its whole length, so it goes
     exactly where the pads are and nowhere else.
     """
-    from perfboard.ui.view3d import _conductor_centreline, conductor_z, pad_z
+    from perfboard_studio.ui.view3d import _conductor_centreline, conductor_z, pad_z
 
     board = _load_dense().board
     copper = pad_z(board, "bottom")
@@ -2315,7 +2315,7 @@ def test_a_run_swells_where_it_is_soldered_and_draws_in_between() -> None:
     joints countable, and counting joints along a run against the real board is what
     somebody following the build guide does.
     """
-    from perfboard.ui.view3d import _conductor_centreline, _trace_swell, pad_z
+    from perfboard_studio.ui.view3d import _conductor_centreline, _trace_swell, pad_z
 
     board = _load_dense().board
     copper = pad_z(board, "bottom")
@@ -2360,8 +2360,8 @@ def _segment_gap(p1, p2, q1, q2):
 
 def _as_drawn(cond, board, level):
     """The centreline and per-point radius view3d actually tubes this conductor at."""
-    from perfboard.model import contacts_every_path_hole
-    from perfboard.ui.view3d import (
+    from perfboard_studio.model import contacts_every_path_hole
+    from perfboard_studio.ui.view3d import (
         TRACE_WAIST_RATIO,
         _conductor_centreline,
         _trace_swell,
@@ -2406,9 +2406,9 @@ def test_no_two_conductors_are_drawn_in_the_same_place(case: str) -> None:
     import itertools
     import math
 
-    from perfboard.geometry import hole_key
-    from perfboard.occupancy import stacking_layers
-    from perfboard.ui.view3d import _xy
+    from perfboard_studio.geometry import hole_key
+    from perfboard_studio.occupancy import stacking_layers
+    from perfboard_studio.ui.view3d import _xy
 
     doc = _golden_document(case)
     if len(doc.conductors) < 2:
@@ -2455,7 +2455,7 @@ def test_the_lights_travel_with_the_camera() -> None:
     """
     import vtk
 
-    from perfboard.ui.view3d import build_renderer
+    from perfboard_studio.ui.view3d import build_renderer
 
     ren, _stats = build_renderer(_load_dense(), footprint_lookup())
     lights = list(ren.GetLights())
@@ -2483,7 +2483,7 @@ def test_one_stacking_step_actually_clears_a_tube_of_the_one_below() -> None:
     The step is derived from the radii now, which only became affordable once
     `occupancy.stacking_layers` stopped lifting conductors that cross nothing.
     """
-    from perfboard.ui.view3d import INSULATED_RADIUS_MM, STACK_STEP_MM, conductor_z
+    from perfboard_studio.ui.view3d import INSULATED_RADIUS_MM, STACK_STEP_MM, conductor_z
 
     doc = _load_dense()
     wire = WireConductor(id="w1", path=(HoleCoord(2, 2), HoleCoord(9, 9)), kind="bare-wire")
@@ -2499,8 +2499,8 @@ def test_the_two_views_agree_about_which_wire_passes_over_which() -> None:
     """Both read `occupancy.stacking_layers`, so they cannot drift. The 2D view used to
     put every solder-side conductor at one z, which left the answer to scene order -- and
     scene order is not what the 3D view is looking at."""
-    from perfboard.occupancy import stacking_layers
-    from perfboard.ui.view2d import BoardScene, ConductorItem
+    from perfboard_studio.occupancy import stacking_layers
+    from perfboard_studio.ui.view2d import BoardScene, ConductorItem
 
     doc = _load_dense()
     layers = stacking_layers(doc)
@@ -2528,7 +2528,7 @@ def test_the_two_views_agree_about_which_wire_passes_over_which() -> None:
 
 def test_both_views_take_their_board_colour_from_one_scheme() -> None:
     """Green in the editor and blue in 3D would undermine the one job the 3D view has."""
-    from perfboard.ui import boardcolors
+    from perfboard_studio.ui import boardcolors
 
     try:
         boardcolors.choose("blue")
@@ -2545,7 +2545,7 @@ def test_both_views_take_their_board_colour_from_one_scheme() -> None:
 def test_the_material_decides_until_someone_chooses() -> None:
     """FR-2 is the brown phenolic board, and the build guide derates the iron for exactly
     that material -- the two should agree on sight."""
-    from perfboard.ui import boardcolors
+    from perfboard_studio.ui import boardcolors
 
     boardcolors.choose(None)
     assert boardcolors.scheme_for("FR4").key == "green"
@@ -2555,8 +2555,8 @@ def test_the_material_decides_until_someone_chooses() -> None:
 def test_every_material_has_a_default_scheme() -> None:
     from typing import get_args
 
-    from perfboard.model import BoardMaterial
-    from perfboard.ui import boardcolors
+    from perfboard_studio.model import BoardMaterial
+    from perfboard_studio.ui import boardcolors
 
     for material in get_args(BoardMaterial):
         assert material in boardcolors.DEFAULT_FOR_MATERIAL
@@ -2564,7 +2564,7 @@ def test_every_material_has_a_default_scheme() -> None:
 
 
 def test_an_unknown_colour_falls_back_to_the_material() -> None:
-    from perfboard.ui import boardcolors
+    from perfboard_studio.ui import boardcolors
 
     try:
         boardcolors.choose("chartreuse")
@@ -2580,8 +2580,8 @@ def test_an_unknown_colour_falls_back_to_the_material() -> None:
 
 
 def _blank_document():
-    from perfboard.commands import create_empty_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
 
     return create_empty_document(
         DocumentMeta(
@@ -2592,8 +2592,8 @@ def _blank_document():
 
 def _featured_document():
     """A board using all three: oblong pads, a printed legend, a corner hole, a connector."""
-    from perfboard.commands import DEFAULT_BOARD, create_empty_document
-    from perfboard.model import BoardLabels, DocumentMeta, EdgeConnector, MountingHole
+    from perfboard_studio.commands import DEFAULT_BOARD, create_empty_document
+    from perfboard_studio.model import BoardLabels, DocumentMeta, EdgeConnector, MountingHole
 
     board = dataclasses.replace(
         DEFAULT_BOARD,
@@ -2634,7 +2634,7 @@ def test_the_pad_grid_leaves_out_the_pads_a_mounting_bore_removed() -> None:
 
 
 def test_the_scene_carries_the_board_features_it_is_given() -> None:
-    from perfboard.ui.view2d import BoardLegendItem, EdgeConnectorItem, MountingHoleItem
+    from perfboard_studio.ui.view2d import BoardLegendItem, EdgeConnectorItem, MountingHoleItem
 
     scene = BoardScene(_featured_document(), footprint_lookup(), show_rulers=False)
     kinds = {type(item) for item in scene.items()}
@@ -2644,7 +2644,7 @@ def test_the_scene_carries_the_board_features_it_is_given() -> None:
 
 
 def test_a_plain_board_draws_no_legend() -> None:
-    from perfboard.ui.view2d import BoardLegendItem
+    from perfboard_studio.ui.view2d import BoardLegendItem
 
     scene = BoardScene(_load_dense(), footprint_lookup(), show_rulers=False)
     assert BoardLegendItem not in {type(item) for item in scene.items()}
@@ -2704,7 +2704,7 @@ def test_the_legend_is_printed_in_the_border_and_not_over_the_pads(monkeypatch) 
     """The reason ``border_mm`` exists. Half a pitch past the outer holes leaves 0.32 mm
     of bare substrate at 2.54 mm pitch, which is not room for a character -- it would be
     drawn under the first row of pads and never seen."""
-    from perfboard.geometry import board_edge_margin_mm, hole_span_mm, pad_extent_mm
+    from perfboard_studio.geometry import board_edge_margin_mm, hole_span_mm, pad_extent_mm
 
     doc = _featured_document()
     board = doc.board
@@ -2742,9 +2742,9 @@ def test_a_legend_on_a_finger_edge_is_printed_outside_the_fingers(monkeypatch) -
     letters. The test above does not catch it: its band runs from the grid pad to the
     board edge, and the middle of a finger is inside that band.
     """
-    from perfboard.commands import create_starter_document
-    from perfboard.geometry import board_edge_margin_mm, hole_span_mm, legend_strip_mm
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.geometry import board_edge_margin_mm, hole_span_mm, legend_strip_mm
+    from perfboard_studio.model import DocumentMeta
 
     doc = create_starter_document(DocumentMeta(name="t", created="", modified=""))
     assert doc.board.labels is not None, "the board this opens on prints its own addresses"
@@ -2771,8 +2771,8 @@ def test_a_legend_on_a_finger_edge_is_printed_outside_the_fingers(monkeypatch) -
 
 
 def test_board_setup_dialog_round_trips_the_new_board_fields() -> None:
-    from perfboard.model import BoardLabels
-    from perfboard.ui.main import BoardSetupDialog
+    from perfboard_studio.model import BoardLabels
+    from perfboard_studio.ui.main import BoardSetupDialog
 
     board = _featured_document().board
     dialog = BoardSetupDialog(board)
@@ -2795,8 +2795,8 @@ def test_board_setup_dialog_round_trips_the_new_board_fields() -> None:
 def test_the_dialog_cannot_produce_an_oblong_pad_the_bus_would_refuse() -> None:
     """A dialog whose only exit is an error message is a worse dialog than one that
     cannot produce the error."""
-    from perfboard.commands import DEFAULT_BOARD, SetBoardPayload
-    from perfboard.ui.main import BoardSetupDialog
+    from perfboard_studio.commands import DEFAULT_BOARD, SetBoardPayload
+    from perfboard_studio.ui.main import BoardSetupDialog
 
     dialog = BoardSetupDialog(DEFAULT_BOARD)
     dialog.pad_shape.setCurrentIndex(dialog.pad_shape.findData("oblong"))
@@ -2807,7 +2807,7 @@ def test_the_dialog_cannot_produce_an_oblong_pad_the_bus_would_refuse() -> None:
 
 
 def test_board_features_dialog_adds_four_corner_holes_as_one_undo_step() -> None:
-    from perfboard.ui.main import BoardFeaturesDialog
+    from perfboard_studio.ui.main import BoardFeaturesDialog
 
     bus = _new_bus(_blank_document())
     dialog = BoardFeaturesDialog(bus)
@@ -2821,7 +2821,7 @@ def test_board_features_dialog_adds_four_corner_holes_as_one_undo_step() -> None
 
 
 def test_board_features_dialog_reports_a_refusal_instead_of_swallowing_it() -> None:
-    from perfboard.ui.main import BoardFeaturesDialog
+    from perfboard_studio.ui.main import BoardFeaturesDialog
 
     bus = _new_bus(_blank_document())
     dialog = BoardFeaturesDialog(bus)
@@ -2833,7 +2833,7 @@ def test_board_features_dialog_reports_a_refusal_instead_of_swallowing_it() -> N
 
 
 def test_board_features_dialog_removes_the_selected_feature() -> None:
-    from perfboard.ui.main import BoardFeaturesDialog
+    from perfboard_studio.ui.main import BoardFeaturesDialog
 
     bus = _new_bus(_featured_document())
     dialog = BoardFeaturesDialog(bus)
@@ -2857,7 +2857,7 @@ def test_the_two_ends_of_the_assembly_slider_mean_different_things() -> None:
     for, and they are not the same state. The first version returned -1 for both, so the
     left-hand end of the slider drew a complete board.
     """
-    from perfboard.ui.main import assembly_step_for
+    from perfboard_studio.ui.main import assembly_step_for
 
     assert assembly_step_for(0, 5) == -1, "nothing fitted yet, and no step to highlight"
     assert assembly_step_for(5, 5) is None, "the finished board, as the panel normally is"
@@ -2866,7 +2866,7 @@ def test_the_two_ends_of_the_assembly_slider_mean_different_things() -> None:
 
 def test_the_slider_counts_things_fitted_not_steps_done() -> None:
     """Value 1 is "one thing on the board", which is step 0 having just been done."""
-    from perfboard.ui.main import assembly_step_for
+    from perfboard_studio.ui.main import assembly_step_for
 
     assert [assembly_step_for(v, 4) for v in (0, 1, 2, 3, 4)] == [-1, 0, 1, 2, None]
 
@@ -2874,8 +2874,8 @@ def test_the_slider_counts_things_fitted_not_steps_done() -> None:
 def test_each_slider_position_shows_what_its_caption_claims() -> None:
     """The property the whole thing rests on: at position N the board carries N things,
     and the step being highlighted is the one that put the last of them there."""
-    from perfboard.guide import all_steps, build_guide, document_at_step, step_focus
-    from perfboard.ui.main import assembly_step_for
+    from perfboard_studio.guide import all_steps, build_guide, document_at_step, step_focus
+    from perfboard_studio.ui.main import assembly_step_for
 
     doc = _load_dense()
     guide = build_guide(doc, footprint_lookup())
@@ -2904,8 +2904,12 @@ def test_each_slider_position_shows_what_its_caption_claims() -> None:
 
 
 def _bus_with_a_part_and_a_net() -> CommandBus:
-    from perfboard.commands import AddNetPayload, PlaceComponentPayload, create_empty_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import (
+        AddNetPayload,
+        PlaceComponentPayload,
+        create_empty_document,
+    )
+    from perfboard_studio.model import DocumentMeta
 
     stamp = "2026-01-01T00:00:00.000Z"
     meta = DocumentMeta(name="t", created=stamp, modified=stamp)
@@ -2955,8 +2959,8 @@ def test_a_click_that_cannot_count_says_why_instead_of_being_dropped() -> None:
 
 
 def test_a_pin_another_net_already_has_is_refused_at_the_click() -> None:
-    from perfboard.commands import AddNetPayload, ConnectPinsPayload
-    from perfboard.model import NetNode
+    from perfboard_studio.commands import AddNetPayload, ConnectPinsPayload
+    from perfboard_studio.model import NetNode
 
     bus = _bus_with_a_part_and_a_net()
     bus.dispatch(
@@ -3053,7 +3057,7 @@ class _StubNetDialog:
 def test_new_net_creates_it_and_goes_straight_into_picking_its_pins(monkeypatch) -> None:
     """Naming a net and then hunting for the command that fills it would be two decisions
     where the user made one, and an empty net does nothing for anybody."""
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     monkeypatch.setattr(main_module, "NetDialog", _StubNetDialog)
@@ -3068,7 +3072,7 @@ def test_new_net_creates_it_and_goes_straight_into_picking_its_pins(monkeypatch)
 
 
 def test_a_refused_new_net_leaves_the_document_alone(monkeypatch) -> None:
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     existing = window.bus.document.nets[0].name
@@ -3137,7 +3141,7 @@ def test_the_panel_keeps_a_net_open_across_the_command_that_empties_a_row() -> N
 
 def test_deleting_a_net_keeps_its_copper_and_releases_the_claim(monkeypatch) -> None:
 
-    from perfboard.commands import AddConductorPayload, NewSolderTraceConductor
+    from perfboard_studio.commands import AddConductorPayload, NewSolderTraceConductor
 
     window = _window_on(_load_dense())
     net = window.bus.document.nets[0]
@@ -3189,8 +3193,8 @@ def test_the_armed_mode_is_named_over_the_board() -> None:
 
 
 def test_the_banner_follows_the_pins_as_they_are_picked() -> None:
-    from perfboard.commands import AddNetPayload
-    from perfboard.geometry import all_pin_holes
+    from perfboard_studio.commands import AddNetPayload
+    from perfboard_studio.geometry import all_pin_holes
 
     window = _window_on(_load_dense())
     window.bus.dispatch("net.add", AddNetPayload(name="HAND", net_class="ground"))
@@ -3217,8 +3221,8 @@ def test_the_banner_follows_the_pins_as_they_are_picked() -> None:
 def test_an_empty_board_says_what_to_do_with_itself() -> None:
     """The application opens on a blank 5 x 7, and every route, check and export needs
     something on it first."""
-    from perfboard.commands import PlaceComponentPayload, create_starter_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import PlaceComponentPayload, create_starter_document
+    from perfboard_studio.model import DocumentMeta
 
     stamp = "2026-01-01T00:00:00.000Z"
     meta = DocumentMeta(name="t", created=stamp, modified=stamp)
@@ -3240,8 +3244,8 @@ def test_an_empty_board_says_what_to_do_with_itself() -> None:
 def test_the_guidance_gets_out_of_the_way_of_a_mode() -> None:
     """Somebody mid-mode is plainly not stuck, and two blocks of text over one board is
     one too many."""
-    from perfboard.commands import create_starter_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
 
     stamp = "2026-01-01T00:00:00.000Z"
     meta = DocumentMeta(name="t", created=stamp, modified=stamp)
@@ -3284,7 +3288,7 @@ def _drc_group(window, key):
 
 
 def _finding_key_role():
-    from perfboard.ui.main import ROLE_FINDING_KEY
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY
 
     return ROLE_FINDING_KEY
 
@@ -3340,7 +3344,7 @@ def test_the_findings_can_be_filtered_down_to_one_rule() -> None:
 
 
 def _board_with_a_corner_bore() -> PerfDocument:
-    from perfboard.model import DocumentMeta, MountingHole
+    from perfboard_studio.model import DocumentMeta, MountingHole
 
     board = Board(
         type="pad-per-hole", cols=16, rows=12, pitch=2.54, thickness=1.6,
@@ -3358,7 +3362,7 @@ def test_the_ghost_goes_red_over_a_mounting_bore() -> None:
     """The bore has destroyed the pad, so there is nothing there to solder a lead into --
     DRC has always called that an error, and the ghost stayed green right up to the click.
     """
-    from perfboard.geometry import consumed_holes, hole_key
+    from perfboard_studio.geometry import consumed_holes, hole_key
 
     doc = _board_with_a_corner_bore()
     bus = _new_bus(doc)
@@ -3381,7 +3385,7 @@ def test_the_ghost_goes_red_over_a_mounting_bore() -> None:
 
 
 def test_a_part_dropped_on_a_bore_says_so_rather_than_only_placing_it() -> None:
-    from perfboard.geometry import consumed_holes, hole_key
+    from perfboard_studio.geometry import consumed_holes, hole_key
 
     window = _window_on(_board_with_a_corner_bore())
     window.scene.arm_placement("r-axial-3")
@@ -3406,7 +3410,7 @@ def test_the_blank_board_guidance_stops_once_a_part_has_ever_been_placed() -> No
     """It is for the first launch. Repeating it forever is the application explaining its
     own front door to somebody who has been through it a hundred times -- and there is
     nowhere to click it away, because the block is transparent to the mouse by design."""
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.model import DocumentMeta
 
     blank = PerfDocument(
         meta=DocumentMeta(name="t", created="2024-01-01T00:00:00.000Z",
@@ -3429,7 +3433,7 @@ def test_the_blank_board_guidance_stops_once_a_part_has_ever_been_placed() -> No
 def _two_traces_side_by_side() -> PerfDocument:
     """Two solder traces on neighbouring rows, on different nets. The commonest shape on
     a routed perfboard, and the one the rule stopped objecting to."""
-    from perfboard.model import ComponentInstance, DocumentMeta, Net, NetNode
+    from perfboard_studio.model import ComponentInstance, DocumentMeta, Net, NetNode
 
     board = Board(
         type="pad-per-hole", cols=20, rows=12, pitch=2.54, thickness=1.6,
@@ -3488,7 +3492,7 @@ def test_two_traces_side_by_side_are_not_the_panel_any_more() -> None:
 def _trace_along_a_dip() -> PerfDocument:
     """A solder run down the column beside a DIP-14's pin row: seven pins of another net,
     each one an orthogonal neighbour. The shape the panel's gathering is actually for."""
-    from perfboard.model import ComponentInstance, DocumentMeta, Net, NetNode
+    from perfboard_studio.model import ComponentInstance, DocumentMeta, Net, NetNode
 
     board = Board(
         type="pad-per-hole", cols=20, rows=16, pitch=2.54, thickness=1.6,
@@ -3542,7 +3546,7 @@ def test_a_run_past_a_row_of_pins_is_one_row_with_every_pad_underneath() -> None
 
 
 def test_a_severity_has_the_same_colour_in_the_tree_as_on_the_status_bar() -> None:
-    from perfboard.ui.theme import ERROR, WARNING
+    from perfboard_studio.ui.theme import ERROR, WARNING
 
     window = _window_on(_load_dense())
     root = window.drc_tree.topLevelItem(0)
@@ -3596,7 +3600,7 @@ def test_a_board_dropped_on_the_window_opens_it(tmp_path) -> None:
 
 
 def test_a_netlist_dropped_on_the_window_is_imported(tmp_path, monkeypatch) -> None:
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     netlist = tmp_path / "circuit.net"
@@ -3723,9 +3727,9 @@ def test_the_findings_can_be_copied_out_as_text() -> None:
 def test_a_closed_window_hands_its_layout_to_the_next_one() -> None:
     """Every one of these used to reset on launch, so the people who use the tool most
     re-arranged it most."""
-    from perfboard.ui.boardcolors import choose as choose_colour
-    from perfboard.ui.boardcolors import chosen_key
-    from perfboard.ui.main import BOARD_COLOUR_KEY, GEOMETRY_KEY, app_settings
+    from perfboard_studio.ui.boardcolors import choose as choose_colour
+    from perfboard_studio.ui.boardcolors import chosen_key
+    from perfboard_studio.ui.main import BOARD_COLOUR_KEY, GEOMETRY_KEY, app_settings
 
     first = _window_on(_load_dense())
     first.act_ratsnest.setChecked(False)
@@ -3754,7 +3758,7 @@ def test_a_closed_window_hands_its_layout_to_the_next_one() -> None:
 
 def test_a_close_the_user_backed_out_of_records_nothing(monkeypatch) -> None:
     """A window that is still open has not been left, and its layout is not a decision."""
-    from perfboard.ui.main import GEOMETRY_KEY, MainWindow, app_settings
+    from perfboard_studio.ui.main import GEOMETRY_KEY, MainWindow, app_settings
 
     window = _window_on(_load_dense())
     monkeypatch.setattr(MainWindow, "_offer_to_save", lambda self: False)
@@ -3783,8 +3787,8 @@ def test_choosing_a_language_records_it_for_the_next_start(monkeypatch) -> None:
     """Applied at the next start rather than live: every label in the window was
     translated once as it was built, and the widgets a rebuild missed would be exactly
     the ones nobody would notice had stayed English."""
-    from perfboard.ui import main as main_module
-    from perfboard.ui.main import LANGUAGE_KEY, app_settings
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui.main import LANGUAGE_KEY, app_settings
 
     window = _window_on(_load_dense())
     told: list[str] = []
@@ -3807,7 +3811,7 @@ def test_a_tick_survives_the_ini_backends_idea_of_a_boolean(tmp_path) -> None:
     every toggle to on and the bug would never show on Windows."""
     from PySide6.QtCore import QSettings
 
-    from perfboard.ui.main import _stored_bool
+    from perfboard_studio.ui.main import _stored_bool
 
     store = QSettings(str(tmp_path / "probe.ini"), QSettings.Format.IniFormat)
     for written, expected in (("false", False), ("true", True), (False, False), (True, True)):
@@ -3893,7 +3897,7 @@ def test_clearing_the_recent_list_empties_the_menu(tmp_path) -> None:
 def test_undo_and_redo_say_whether_there_is_anything_to_do(tmp_path) -> None:
     """The bus has always known both; the window simply never asked, so an undo at the
     bottom of the stack looked identical to one that worked."""
-    from perfboard.commands import AddNetPayload
+    from perfboard_studio.commands import AddNetPayload
 
     window = _window_on(_load_dense())
     assert window.act_undo.isEnabled() is False
@@ -3955,7 +3959,7 @@ def test_a_part_whose_name_the_dock_cannot_fit_carries_it_in_a_tooltip() -> None
 def test_the_shortcut_card_is_read_off_the_real_menu_bar() -> None:
     """A hand-kept list goes stale the first time an action moves, and a stale shortcut
     card teaches something that no longer works."""
-    from perfboard.ui.main import ShortcutsDialog
+    from perfboard_studio.ui.main import ShortcutsDialog
 
     window = _window_on(_load_dense())
 
@@ -3973,7 +3977,7 @@ def test_the_shortcut_card_is_read_off_the_real_menu_bar() -> None:
 def test_no_two_actions_claim_the_same_shortcut() -> None:
     """Two actions on one binding means one of them cannot be reached, and Qt reports it
     only as an "ambiguous shortcut overload" at the moment it is pressed."""
-    from perfboard.ui.main import ShortcutsDialog
+    from perfboard_studio.ui.main import ShortcutsDialog
 
     window = _window_on(_load_dense())
 
@@ -3992,7 +3996,7 @@ def test_no_two_actions_claim_the_same_shortcut() -> None:
 def test_the_board_gestures_are_listed_because_no_menu_carries_them() -> None:
     """Middle-drag to pan, right-click to finish a run, arrows to nudge: none of them is
     an action anywhere, so until this dialog the only way to find out was the source."""
-    from perfboard.ui.main import ShortcutsDialog
+    from perfboard_studio.ui.main import ShortcutsDialog
 
     gestures = dict((keys, what) for keys, what in ShortcutsDialog.BOARD_GESTURES)
 
@@ -4027,7 +4031,7 @@ def test_the_menus_survive_a_garbage_collection() -> None:
 
 
 def _hole_of(window, ref: str, pin: str) -> HoleCoord:
-    from perfboard.geometry import all_pin_holes
+    from perfboard_studio.geometry import all_pin_holes
 
     comp = next(c for c in window.bus.document.components if c.ref == ref)
     footprint = window.lookup(comp.footprint_id)
@@ -4036,7 +4040,7 @@ def _hole_of(window, ref: str, pin: str) -> HoleCoord:
 
 def _free_pins(window) -> list[tuple[str, str]]:
     """Pins on the board that no net has claimed."""
-    from perfboard.geometry import all_pin_holes
+    from perfboard_studio.geometry import all_pin_holes
 
     taken = {(n.component_ref, n.pin) for net in window.bus.document.nets for n in net.nodes}
     return [
@@ -4195,8 +4199,8 @@ def test_arming_another_board_tool_ends_a_connection_in_progress() -> None:
 def test_the_automatic_net_name_counts_from_the_document() -> None:
     """Like next_reference, and for the same reason: a hidden counter would disagree with
     the document after an undo and the bus would refuse the name for an invisible reason."""
-    from perfboard.commands import AddNetPayload
-    from perfboard.ui.view2d import next_net_name
+    from perfboard_studio.commands import AddNetPayload
+    from perfboard_studio.ui.view2d import next_net_name
 
     window = _window_on(_load_dense())
     assert next_net_name(window.bus.document) == "N1"
@@ -4242,7 +4246,7 @@ def test_the_menus_keep_the_full_wording_the_buttons_abbreviate() -> None:
 def test_an_unknown_icon_is_empty_rather_than_an_exception() -> None:
     """A missing picture is a cosmetic fault; taking the window down over one would not
     be."""
-    from perfboard.ui.icons import icon
+    from perfboard_studio.ui.icons import icon
 
     assert icon("no-such-icon").isNull()
     assert not icon("connect").isNull()
@@ -4251,7 +4255,7 @@ def test_an_unknown_icon_is_empty_rather_than_an_exception() -> None:
 def test_every_icon_in_the_set_draws() -> None:
     """They are drawn with QPainter at import-independent sizes, so a broken path shows up
     as an empty pixmap rather than an error anywhere."""
-    from perfboard.ui.icons import DRAWINGS, icon
+    from perfboard_studio.ui.icons import DRAWINGS, icon
 
     for name in DRAWINGS:
         assert not icon(name).isNull(), name
@@ -4268,8 +4272,8 @@ def test_every_archetype_the_model_has_can_be_drawn() -> None:
     gaining an archetype has to fail here rather than ship a blank."""
     import typing
 
-    from perfboard.model import BodyArchetype
-    from perfboard.ui.icons import PART_DRAWINGS
+    from perfboard_studio.model import BodyArchetype
+    from perfboard_studio.ui.icons import PART_DRAWINGS
 
     declared = set(typing.get_args(BodyArchetype))
     # axial-cylinder is drawn by the polarity-aware path rather than the plain table,
@@ -4278,8 +4282,8 @@ def test_every_archetype_the_model_has_can_be_drawn() -> None:
 
 
 def test_every_footprint_in_the_library_gets_a_picture() -> None:
-    from perfboard.footprints import standard_footprints
-    from perfboard.ui.icons import PART_SIZE, part_icon
+    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.ui.icons import PART_SIZE, part_icon
 
     for footprint in standard_footprints().values():
         drawn = part_icon(footprint)
@@ -4291,9 +4295,9 @@ def test_a_part_is_drawn_in_the_colour_the_board_draws_it() -> None:
     """The whole point of the pictures: picking an electrolytic from the list and finding
     it on the board is recognition rather than reading. A second palette here would drift
     from the first the moment either was touched."""
-    from perfboard.footprints import standard_footprints
-    from perfboard.ui.bodies import style_for
-    from perfboard.ui.icons import part_icon
+    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.ui.bodies import style_for
+    from perfboard_studio.ui.icons import part_icon
 
     electrolytic = next(
         f for f in standard_footprints().values() if f.body.archetype == "radial-electrolytic"
@@ -4313,8 +4317,8 @@ def test_a_part_is_drawn_in_the_colour_the_board_draws_it() -> None:
 def test_the_same_part_is_only_drawn_once() -> None:
     """Sixty-one footprints across fifteen archetypes; the list is rebuilt on every
     keystroke in the filter box."""
-    from perfboard.footprints import standard_footprints
-    from perfboard.ui.icons import part_icon
+    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.ui.icons import part_icon
 
     resistors = [
         f for f in standard_footprints().values() if f.body.archetype == "axial-cylinder"
@@ -4400,7 +4404,7 @@ def test_escape_cancels_connecting() -> None:
 
 
 def test_escape_cancels_a_pin_session_without_committing_it() -> None:
-    from perfboard.commands import AddNetPayload
+    from perfboard_studio.commands import AddNetPayload
 
     window = _window_on(_load_dense())
     window.bus.dispatch("net.add", AddNetPayload(name="HAND"))
@@ -4434,7 +4438,7 @@ def test_leaving_a_mode_is_one_method_rather_than_four_call_sites() -> None:
 
 
 def test_the_board_reports_being_in_a_mode_for_each_of_the_four() -> None:
-    from perfboard.commands import AddNetPayload
+    from perfboard_studio.commands import AddNetPayload
 
     window = _window_on(_load_dense())
     window.bus.dispatch("net.add", AddNetPayload(name="HAND"))
@@ -4566,7 +4570,7 @@ def test_the_sheet_actually_puts_ink_on_the_panel() -> None:
     polygons either way. A sheet that painted nothing would still have passed every
     structural test in test_schematic.py.
     """
-    from perfboard.ui.viewsch import SHEET
+    from perfboard_studio.ui.viewsch import SHEET
 
     window = _open_schematic(_golden_document("ne555"))
     item = window.schematic_view.item
@@ -4699,8 +4703,8 @@ def test_the_panel_names_the_rails_it_drew_instead_of_leaving_them_unexplained()
 
 
 def _blank_window():
-    from perfboard.commands import DEFAULT_BOARD
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import DEFAULT_BOARD
+    from perfboard_studio.model import DocumentMeta
 
     document = PerfDocument(
         meta=DocumentMeta(name="blank", created="", modified=""), board=DEFAULT_BOARD
@@ -4712,7 +4716,7 @@ def _blank_window():
 
 
 def _add(window, ref, footprint_id, value=""):
-    from perfboard.commands import AddPartPayload
+    from perfboard_studio.commands import AddPartPayload
 
     result = window.bus.dispatch(
         "part.add", AddPartPayload(ref=ref, footprint_id=footprint_id, value=value)
@@ -4790,8 +4794,8 @@ def test_clicking_the_same_pin_twice_cancels_instead_of_wiring_it_to_itself() ->
 def test_wiring_two_pins_that_are_already_on_different_nets_is_refused() -> None:
     """The refusal comes from the shared decision, so it reads the same here as on the
     board: merging two nets is a change to the circuit, not to two clicks."""
-    from perfboard.commands import AddNetPayload
-    from perfboard.model import NetNode
+    from perfboard_studio.commands import AddNetPayload
+    from perfboard_studio.model import NetNode
 
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
@@ -4925,7 +4929,7 @@ def test_escape_leaves_the_wiring_tool_the_way_it_leaves_every_other_mode() -> N
 def test_the_suggested_reference_counts_the_design_as_well_as_the_board() -> None:
     """Otherwise the dialog offers R1 to somebody who has just drawn R1, and the bus
     refuses it for a reason nothing on screen explains."""
-    from perfboard.ui.view2d import next_reference
+    from perfboard_studio.ui.view2d import next_reference
 
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
@@ -4948,7 +4952,13 @@ def test_the_suggested_reference_counts_the_design_as_well_as_the_board() -> Non
 
 def _custom_document():
     """A board holding one part the library has never heard of."""
-    from perfboard.model import Board, ComponentInstance, DocumentMeta, HoleCoord, PerfDocument
+    from perfboard_studio.model import (
+        Board,
+        ComponentInstance,
+        DocumentMeta,
+        HoleCoord,
+        PerfDocument,
+    )
 
     board = Board(
         type="pad-per-hole", cols=30, rows=20, pitch=2.54, thickness=1.6,
@@ -4975,8 +4985,8 @@ def test_every_family_in_the_dialog_builds_an_id_the_engine_reads_back() -> None
     wired to the wrong generator -- or given a default outside what the grammar accepts --
     fails here rather than by putting an unreadable part in somebody's document.
     """
-    from perfboard.footprints import get_footprint
-    from perfboard.ui.main import CustomPartDialog
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import CustomPartDialog
 
     dialog = CustomPartDialog()
     assert dialog.family.count() >= 9
@@ -4995,7 +5005,7 @@ def test_the_dialog_refuses_a_combination_that_is_not_a_part() -> None:
     steps later as a footprint nothing recognises."""
     from PySide6.QtWidgets import QDialogButtonBox
 
-    from perfboard.ui.main import CustomPartDialog
+    from perfboard_studio.ui.main import CustomPartDialog
 
     dialog = CustomPartDialog()
     dip = next(
@@ -5030,7 +5040,7 @@ def test_the_parts_dock_offers_the_custom_parts_this_board_already_uses() -> Non
         assert "box-4x2-p1-r3-15x10x8" in custom
         assert len(custom["box-4x2-p1-r3-15x10x8"].pins) == 8
 
-        from perfboard.ui.main import ROLE_FOOTPRINT_ID
+        from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID
 
         labels = []
         tree = window.library_tree
@@ -5069,7 +5079,7 @@ def test_editing_a_custom_part_does_not_turn_it_into_a_resistor() -> None:
     Without that the properties dialog opens on whatever happens to be first and pressing
     OK changes the part -- silently, into something with two pins where there were eight.
     """
-    from perfboard.ui.main import AddPartDialog
+    from perfboard_studio.ui.main import AddPartDialog
 
     document = _custom_document()
     dialog = AddPartDialog(document)
@@ -5173,7 +5183,7 @@ def test_a_recovered_board_arrives_unsaved_and_pointed_at_its_own_file(tmp_path)
     """Recovering is not opening. The document did not come from the file it names, so
     saying it did would be the one lie that matters here: the title would show no marker,
     closing would not ask, and the next crash would take it again."""
-    from perfboard.recovery import RecoveryRecord
+    from perfboard_studio.recovery import RecoveryRecord
 
     board = tmp_path / "amp.perf"
     text = persist.serialize_document(_load_dense())
@@ -5199,8 +5209,8 @@ def test_a_recovered_board_arrives_unsaved_and_pointed_at_its_own_file(tmp_path)
 def test_a_record_the_file_already_has_is_dropped_without_asking(tmp_path) -> None:
     """The save landed and the crash beat the deletion to it. There is no decision here, so
     there is no question -- and the record goes, rather than being offered every start."""
-    from perfboard.recovery import RecoveryRecord, format_record
-    from perfboard.ui.autosave import Autosave
+    from perfboard_studio.recovery import RecoveryRecord, format_record
+    from perfboard_studio.ui.autosave import Autosave
 
     board = tmp_path / "amp.perf"
     text = persist.serialize_document(_load_dense())
@@ -5251,7 +5261,7 @@ def _answer_recovery(monkeypatch, label: str) -> list[str]:
 
 def _leave_a_record(window, board: pathlib.Path, document_text: str) -> pathlib.Path:
     """A record from a session that did not come back, for ``board``."""
-    from perfboard.recovery import RecoveryRecord, format_record
+    from perfboard_studio.recovery import RecoveryRecord, format_record
 
     directory = window._autosave.directory
     directory.mkdir(parents=True, exist_ok=True)
@@ -5280,8 +5290,8 @@ def test_accepting_the_offer_opens_the_recovered_board_and_leaves_the_file_alone
     board.write_text("an older board that never parsed", encoding="utf-8")
     recovered = persist.serialize_document(_load_dense())
 
-    from perfboard.commands import create_starter_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
 
     window = _window_on(
         create_starter_document(DocumentMeta(name="untitled", created="", modified=""))
@@ -5310,8 +5320,8 @@ def test_deciding_later_destroys_nothing(tmp_path, monkeypatch) -> None:
     board = tmp_path / "amp.perf"
     board.write_text("an older board", encoding="utf-8")
 
-    from perfboard.commands import create_starter_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
 
     window = _window_on(
         create_starter_document(DocumentMeta(name="untitled", created="", modified=""))
@@ -5336,8 +5346,8 @@ def test_discarding_the_offer_takes_the_record_and_nothing_else(
     board = tmp_path / "amp.perf"
     board.write_text("an older board", encoding="utf-8")
 
-    from perfboard.commands import create_starter_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
 
     window = _window_on(
         create_starter_document(DocumentMeta(name="untitled", created="", modified=""))
@@ -5401,7 +5411,7 @@ def test_picking_a_part_disarms_the_drawing_tool() -> None:
 def test_a_half_drawn_conductor_survives_a_rebuild() -> None:
     """The drawn path is state; the preview is its picture. A flip two clicks into a trace
     used to drop the picture and keep the path, so Enter committed an invisible chain."""
-    from perfboard.ui.view2d import DrawPreviewItem
+    from perfboard_studio.ui.view2d import DrawPreviewItem
 
     document = _load_dense()
     bus = _new_bus(document)
@@ -5422,9 +5432,9 @@ def test_the_ghost_comes_back_under_the_pointer_after_a_placement() -> None:
     """A fresh ghost starts at the origin, and placing a part rebuilds the scene -- so the
     ghost for the NEXT part appeared at A1 until the pointer was jogged, at exactly the
     moment it was being lined up."""
-    from perfboard.commands import create_starter_document
-    from perfboard.model import DocumentMeta
-    from perfboard.ui.main import MainWindow
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
+    from perfboard_studio.ui.main import MainWindow
 
     # A window, because the rebuild after a command is the window's doing.
     window = MainWindow(create_starter_document(DocumentMeta(name="t", created="", modified="")))
@@ -5488,7 +5498,7 @@ def test_the_ghost_is_mirrored_on_the_solder_side() -> None:
     """The anchor is mirrored by hole_to_screen on the solder side and the pins have to be
     mirrored with it. They were painted at their raw offsets, so a DIP's ghost showed its
     pins running one way while the placement put them the other."""
-    from perfboard.ui.view2d import PlacementGhostItem
+    from perfboard_studio.ui.view2d import PlacementGhostItem
 
     document = _load_dense()
     board = document.board
@@ -5520,7 +5530,7 @@ def test_the_ghost_is_mirrored_on_the_solder_side() -> None:
 def test_zoom_lands_on_the_limit_rather_than_stopping_short_of_it() -> None:
     """The last notch before a limit used to do nothing, so the zoom stopped one step
     short of its own bound and the wheel appeared to have died."""
-    from perfboard.ui.view2d import MAX_SCALE, MIN_SCALE, BoardView
+    from perfboard_studio.ui.view2d import MAX_SCALE, MIN_SCALE, BoardView
 
     document = _load_dense()
     scene = BoardScene(document, footprint_lookup(), side="top")
@@ -5540,7 +5550,7 @@ def test_zoom_lands_on_the_limit_rather_than_stopping_short_of_it() -> None:
 def test_a_fit_stays_inside_the_zoom_range() -> None:
     """A fit that lands outside the range leaves every wheel step outside it too, so the
     wheel is dead in both directions. Two pads framed in a large viewport did that."""
-    from perfboard.ui.view2d import MAX_SCALE, BoardView
+    from perfboard_studio.ui.view2d import MAX_SCALE, BoardView
 
     document = _load_dense()
     scene = BoardScene(document, footprint_lookup(), side="top")
@@ -5557,7 +5567,7 @@ def test_a_fit_stays_inside_the_zoom_range() -> None:
 def test_leaving_the_view_clears_the_hovered_hole() -> None:
     """The status bar kept naming the hole the pointer left the board over, and Paste
     from the menu still landed there."""
-    from perfboard.ui.main import MainWindow
+    from perfboard_studio.ui.main import MainWindow
 
     window = MainWindow(_load_dense())
     try:
@@ -5649,7 +5659,7 @@ def test_a_confirmation_puts_cancel_under_enter(monkeypatch) -> None:
 def test_flipping_keeps_the_view_on_the_same_part_of_the_board() -> None:
     """The scene is mirrored about the hole span's midpoint, so a flip while zoomed in on
     the left edge used to show the right edge."""
-    from perfboard.geometry import hole_span_mm
+    from perfboard_studio.geometry import hole_span_mm
 
     window = _window_on(_load_dense())
     try:
@@ -5691,7 +5701,7 @@ def test_undo_and_redo_name_the_command_in_the_menu() -> None:
 def test_save_is_enabled_only_when_there_is_something_to_save(tmp_path) -> None:
     """Ctrl+S on an unmodified board rewrote the file -- a new modified stamp, a new
     mtime -- for nothing."""
-    from perfboard.ui.main import MainWindow
+    from perfboard_studio.ui.main import MainWindow
 
     board = tmp_path / "b.perf"
     board.write_text(persist.serialize_document(_load_dense()), encoding="utf-8")
@@ -5729,8 +5739,8 @@ def test_escape_leaves_the_status_bar_alone_when_there_is_nothing_to_leave() -> 
 
 def test_board_features_remove_needs_a_chosen_row() -> None:
     """With nothing picked the button used to delete the first row, chosen for the user."""
-    from perfboard.commands import AddMountingHolesPayload
-    from perfboard.ui.main import BoardFeaturesDialog
+    from perfboard_studio.commands import AddMountingHolesPayload
+    from perfboard_studio.ui.main import BoardFeaturesDialog
 
     window = _window_on(_load_dense())
     try:
@@ -5760,7 +5770,7 @@ def test_the_window_will_not_close_under_a_running_planner() -> None:
 def test_a_file_change_waits_for_a_running_planner(tmp_path) -> None:
     """The planner captured the document it is planning against; swapping the bus under
     it would commit that plan into a different board."""
-    from perfboard.ui.main import MainWindow
+    from perfboard_studio.ui.main import MainWindow
 
     board = tmp_path / "b.perf"
     board.write_text(persist.serialize_document(_load_dense()), encoding="utf-8")
@@ -5782,8 +5792,8 @@ def test_a_recovery_record_that_will_not_parse_is_dropped_rather_than_offered_fo
 ) -> None:
     from PySide6.QtWidgets import QMessageBox
 
-    from perfboard.commands import create_starter_document
-    from perfboard.model import DocumentMeta
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
 
     board = tmp_path / "amp.perf"
     board.write_text("an older board", encoding="utf-8")
@@ -5871,7 +5881,7 @@ def test_a_refused_new_net_is_said_in_a_dialog_and_the_form_comes_back(monkeypat
     """A duplicate name refused into the status bar threw away everything typed."""
     from PySide6.QtWidgets import QMessageBox
 
-    from perfboard.ui import main as main_module
+    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     existing = window.bus.document.nets[0].name
@@ -5910,7 +5920,7 @@ def test_a_hole_is_drawn_under_the_copper_and_not_over_it() -> None:
     """The bore has to be visible through the pad's hole from either face WITHOUT
     standing above the metal around it -- a cap proud of the copper occludes the pads on
     the rows behind it at every grazing angle, which is what made holes look plugged."""
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     board = _load_dense().board
     top, bottom = view3d.bore_span_z(board)
@@ -5926,9 +5936,9 @@ def test_every_archetype_puts_a_lead_through_every_one_of_its_holes() -> None:
     a part look soldered INTO the board rather than resting on top of it, and it is the
     only evidence the solder side has that anything came through at all.
     """
-    from perfboard.footprints import standard_footprints
-    from perfboard.model import ComponentInstance
-    from perfboard.ui import view3d
+    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.model import ComponentInstance
+    from perfboard_studio.ui import view3d
 
     board = _load_dense().board
     lookup = footprint_lookup()
@@ -5969,8 +5979,8 @@ def test_every_archetype_puts_a_lead_through_every_one_of_its_holes() -> None:
 def test_a_lead_is_thin_enough_to_fit_the_hole_it_goes_down() -> None:
     """A lead wider than the drill would be a part that cannot be fitted, drawn as one
     that has been."""
-    from perfboard.model import ComponentInstance
-    from perfboard.ui import view3d
+    from perfboard_studio.model import ComponentInstance
+    from perfboard_studio.ui import view3d
 
     board = _load_dense().board
     comp = ComponentInstance(
@@ -5998,7 +6008,7 @@ def test_a_lead_is_thin_enough_to_fit_the_hole_it_goes_down() -> None:
 
 def test_the_plate_is_punched_at_every_drilled_hole() -> None:
     """One tile per hole, and the tile has the drill taken out of the middle of it."""
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     board = _load_dense().board
     tile = view3d._tile_with_hole(board)
@@ -6012,7 +6022,7 @@ def test_the_plate_is_punched_at_every_drilled_hole() -> None:
 def test_a_tile_covers_exactly_one_pitch_so_the_surface_is_watertight() -> None:
     """Tiles are laid one per hole. A tile smaller than the pitch leaves a slot between
     every pair of holes; a larger one overlaps its neighbour and z-fights it."""
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     board = _load_dense().board
     bounds = view3d._tile_with_hole(board).GetBounds()
@@ -6022,8 +6032,8 @@ def test_a_tile_covers_exactly_one_pitch_so_the_surface_is_watertight() -> None:
 
 
 def test_a_flush_cut_board_has_no_border_and_a_bordered_one_does() -> None:
-    from perfboard.geometry import STANDARD_PRESETS, board_from_preset
-    from perfboard.ui import view3d
+    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.ui import view3d
 
     flush = _load_dense().board
     assert flush.border_x_mm == 0 and flush.border_y_mm == 0
@@ -6044,9 +6054,9 @@ def test_a_mounting_bore_is_drawn_where_its_offset_puts_it() -> None:
     """The offset is what lets a corner hole sit in the border, and this view was reading
     the hole address alone -- so every corner bore was drawn back on the grid, in the
     middle of four pads that are perfectly intact."""
-    from perfboard.geometry import mounting_hole_centre_mm
-    from perfboard.model import MountingHole
-    from perfboard.ui import view3d
+    from perfboard_studio.geometry import mounting_hole_centre_mm
+    from perfboard_studio.model import MountingHole
+    from perfboard_studio.ui import view3d
 
     document = _load_dense()
     mount = MountingHole(
@@ -6065,9 +6075,9 @@ def test_a_bore_takes_exactly_the_tiles_whose_copper_it_ate() -> None:
     """One bore, one answer. The patch of plate laid over the hole covers the tiles the
     bore reaches into, and those are the holes ``consumed_holes`` reports the copper gone
     from -- so the renderer and DRC cannot disagree about which pads a screw destroyed."""
-    from perfboard.geometry import consumed_holes
-    from perfboard.model import MountingHole
-    from perfboard.ui import view3d
+    from perfboard_studio.geometry import consumed_holes
+    from perfboard_studio.model import MountingHole
+    from perfboard_studio.ui import view3d
 
     document = _load_dense()
     document = dataclasses.replace(
@@ -6080,7 +6090,7 @@ def test_a_bore_takes_exactly_the_tiles_whose_copper_it_ate() -> None:
 def test_taking_a_rectangle_out_of_another_leaves_the_rest_of_it() -> None:
     """The printed border is drawn as rectangles and a bore in it has to be cut out of
     them. Pure arithmetic, and the one part of the plate that is not glyphed."""
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     whole = (0.0, 0.0, 10.0, 10.0)
     assert view3d._rect_without(whole, (20.0, 20.0, 30.0, 30.0)) == [whole], "no overlap"
@@ -6102,9 +6112,9 @@ def test_every_part_stands_exactly_as_tall_as_its_footprint_says() -> None:
     a reader of this view is checking against a case, so it is worth measuring rather than
     squinting at.
     """
-    from perfboard.footprints import standard_footprints
-    from perfboard.model import ComponentInstance
-    from perfboard.ui import view3d
+    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.model import ComponentInstance
+    from perfboard_studio.ui import view3d
 
     board = _load_dense().board
     lookup = footprint_lookup()
@@ -6127,7 +6137,7 @@ def test_every_part_stands_exactly_as_tall_as_its_footprint_says() -> None:
 
 def _piece_top(piece) -> float:
     """The highest point one piece reaches, instanced or not."""
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     actor = view3d._actor_for(piece)
     actor.GetMapper().Update()
@@ -6152,9 +6162,9 @@ def test_a_mounting_hole_is_drawn_where_its_offset_puts_it_in_2d_too() -> None:
     ADDRESS alone, so it drew every corner bore back on the grid -- a whole pad's width
     from where the 3D view and DRC both put it. CLAUDE.md has said not to do that since
     the feature was written."""
-    from perfboard.geometry import mounting_hole_centre_mm
-    from perfboard.model import MountingHole
-    from perfboard.ui.view2d import MountingHoleItem, mm_to_screen
+    from perfboard_studio.geometry import mounting_hole_centre_mm
+    from perfboard_studio.model import MountingHole
+    from perfboard_studio.ui.view2d import MountingHoleItem, mm_to_screen
 
     board = _load_dense().board
     mount = MountingHole(
@@ -6175,9 +6185,9 @@ def test_a_bore_in_the_border_leaves_the_holes_beside_it_alone() -> None:
     it OUT to tile edges -- so a corner hole sitting in the border swallowed the tile
     beside it, and the board came out with a blind hole next to every screw: pad drawn,
     no hole through it."""
-    from perfboard.geometry import consumed_holes
-    from perfboard.model import MountingHole
-    from perfboard.ui import view3d
+    from perfboard_studio.geometry import consumed_holes
+    from perfboard_studio.model import MountingHole
+    from perfboard_studio.ui import view3d
 
     document = _load_dense()
     corner = MountingHole(
@@ -6200,7 +6210,7 @@ def test_the_board_s_copper_is_never_blown_out(tmp_path) -> None:
     """
     from PySide6.QtGui import QImage
 
-    from perfboard.ui import view3d
+    from perfboard_studio.ui import view3d
 
     out = tmp_path / "board.png"
     view3d.render_offscreen(_load_dense(), footprint_lookup(), str(out), width=700, height=500)
@@ -6229,13 +6239,13 @@ def test_the_board_s_copper_is_never_blown_out(tmp_path) -> None:
 
 def _board_with_a_bore_through_a_finger():
     """A board whose corner bore is drilled through an edge-connector finger."""
-    from perfboard.commands import DEFAULT_BOARD, create_empty_document
-    from perfboard.geometry import (
+    from perfboard_studio.commands import DEFAULT_BOARD, create_empty_document
+    from perfboard_studio.geometry import (
         STANDARD_PRESETS,
         board_from_preset,
         preset_edge_connectors,
     )
-    from perfboard.model import DocumentMeta, MountingHole
+    from perfboard_studio.model import DocumentMeta, MountingHole
 
     preset = next(p for p in STANDARD_PRESETS if p.cols == 34 and p.rows == 58 and not p.single_sided)
     board = board_from_preset(preset, DEFAULT_BOARD)
@@ -6253,7 +6263,7 @@ def _board_with_a_bore_through_a_finger():
 
 def test_a_bore_through_a_finger_takes_the_finger_with_it() -> None:
     """A bore does not distinguish between the two shapes of copper it destroys."""
-    from perfboard.geometry import (
+    from perfboard_studio.geometry import (
         consumed_holes,
         edge_connector_holes,
         hole_key,
@@ -6275,9 +6285,9 @@ def test_a_bore_through_a_finger_takes_the_finger_with_it() -> None:
 def test_both_views_draw_the_same_surviving_fingers() -> None:
     """The 2D item and the 3D builder ask one function, so they cannot disagree about
     which contacts the board still has."""
-    from perfboard.geometry import surviving_finger_holes
-    from perfboard.ui import view3d
-    from perfboard.ui.view2d import BoardScene, EdgeConnectorItem
+    from perfboard_studio.geometry import surviving_finger_holes
+    from perfboard_studio.ui import view3d
+    from perfboard_studio.ui.view2d import BoardScene, EdgeConnectorItem
 
     document = _board_with_a_bore_through_a_finger()
     connector = next(c for c in document.edge_connectors if c.edge == "bottom")
@@ -6296,8 +6306,8 @@ def test_both_views_draw_the_same_surviving_fingers() -> None:
 def test_no_letter_is_printed_where_a_bore_was_drilled() -> None:
     """Ink goes ON the substrate, and a mounting hole takes the substrate away -- so the
     label under one is not faint, it is absent, which is what a real board shows."""
-    from perfboard.geometry import printed_label_is_clear
-    from perfboard.model import MountingHole, Point2
+    from perfboard_studio.geometry import printed_label_is_clear
+    from perfboard_studio.model import MountingHole, Point2
 
     document = _load_dense()
     board = document.board

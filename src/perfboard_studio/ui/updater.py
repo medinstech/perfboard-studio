@@ -149,7 +149,7 @@ def installable_asset(release: Release) -> Asset | None:
     Two ways to get ``None`` and they are one answer to the user -- "here are the notes,
     the download is not for you". Either the project publishes nothing for this platform
     (an Intel Mac), or this is not a packaged build at all: an installer is no use to
-    somebody who installed with ``pip``, whose update is ``pip install -U perfboard``.
+    somebody who installed with ``pip``, whose update is ``pip install -U perfboard-studio``.
     """
     if not getattr(sys, "frozen", False):
         return None
@@ -519,7 +519,7 @@ class UpdateBar(QFrame):
             self.act_download.setToolTip(
                 t(
                     "There is no installer for this build. If you installed with pip, the "
-                    "update is “pip install -U perfboard”; the release page carries "
+                    "update is “pip install -U perfboard-studio”; the release page carries "
                     "everything else."
                 )
             )

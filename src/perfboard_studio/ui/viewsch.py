@@ -1,6 +1,6 @@
 """The schematic panel: the sheet ``schematic.py`` generates, on screen and clickable.
 
-WHAT IS EDITABLE HERE IS THE CIRCUIT, NEVER THE DRAWING. ``perfboard.schematic`` derives
+WHAT IS EDITABLE HERE IS THE CIRCUIT, NEVER THE DRAWING. ``perfboard_studio.schematic`` derives
 a whole sheet from the document and stores nothing; this file paints one, reports clicks,
 and hands them back to the window as commands -- add a part, join two pins, place the lot.
 Nothing here moves a SYMBOL, because a moved symbol would have to be remembered, and
@@ -49,8 +49,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from perfboard.model import Point2
-from perfboard.schematic import (
+from perfboard_studio.model import Point2
+from perfboard_studio.schematic import (
     NoConnect,
     Rail,
     SchematicDrawing,
