@@ -1,4 +1,4 @@
-"""Tests for the occupancy index (src/perfstudio/occupancy.py).
+"""Tests for the occupancy index (src/perfboard/occupancy.py).
 
 occupancy.py has no golden fixture of its own -- tools/diffcheck/generate.mjs
 dumps physicalNets/drc/lvs/continuity/isolation/routes, but never the raw
@@ -14,7 +14,7 @@ to know those holes are physically full.
 
 from __future__ import annotations
 
-from perfstudio.model import (
+from perfboard.model import (
     Board,
     BoardSide,
     BodySpec,
@@ -30,7 +30,7 @@ from perfstudio.model import (
     StripConductor,
     WireConductor,
 )
-from perfstudio.occupancy import (
+from perfboard.occupancy import (
     FootprintLookup,
     OccupyingPin,
     build_occupancy,

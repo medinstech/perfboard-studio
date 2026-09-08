@@ -8,7 +8,7 @@
  * tests against a recording stub (see PLAN.md §8.3).
  */
 
-import type { Board, Footprint, HoleCoord, PerfDocument } from '@perfstudio/core';
+import type { Board, Footprint, HoleCoord, PerfDocument } from '@perfboard/core';
 
 import { drawComponent } from './components.js';
 import { drawConductor } from './conductors.js';

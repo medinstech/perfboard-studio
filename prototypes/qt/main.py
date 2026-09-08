@@ -1,4 +1,4 @@
-"""PerfStudio Qt/VTK prototype.
+"""Perfboard Studio Qt/VTK prototype.
 
 Throwaway. It exists to answer three questions before we commit to a stack:
   1. Does QGraphicsView feel right for a grid CAD editor, or are we fighting it?
@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
     def __init__(self, doc: board_model.Document) -> None:
         super().__init__()
         self.doc = doc
-        self.setWindowTitle("PerfStudio — Qt/VTK prototype")
+        self.setWindowTitle("Perfboard Studio — Qt/VTK prototype")
         self.resize(1500, 950)
 
         self.scene = BoardScene(doc)

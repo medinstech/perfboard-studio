@@ -1,7 +1,7 @@
 /**
  * Design Rule Checker (PLAN.md §5.2).
  *
- * This is where PerfStudio earns its keep: a general PCB tool has no idea what
+ * This is where Perfboard Studio earns its keep: a general PCB tool has no idea what
  * "dragging solder along a trace" means, so it cannot warn about the failure modes
  * that actually sink a perfboard build. The rules here fall into two groups:
  *

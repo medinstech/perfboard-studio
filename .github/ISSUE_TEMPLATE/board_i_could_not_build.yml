@@ -7,7 +7,7 @@ body:
       value: |
         This is the most useful issue you can open right now.
 
-        PerfStudio is pre-alpha and its open question is not "does it crash" but "can
+        Perfboard Studio is pre-alpha and its open question is not "does it crash" but "can
         somebody actually build a working circuit with it". A layout the router made a
         mess of, a guide step that did not match the part in your hand, a rule that fired
         when it should not have, or a board you gave up on — all of it counts, and none

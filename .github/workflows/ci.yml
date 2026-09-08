@@ -102,10 +102,10 @@ jobs:
       # of dying, so a non-zero exit here means something is actually wrong again.
       - name: headless render, DRC, LVS and guide
         if: runner.os == 'Linux'
-        run: xvfb-run -a python -m perfstudio.ui.main --headless tools/diffcheck/golden/dense.perf
+        run: xvfb-run -a python -m perfboard.ui.main --headless tools/diffcheck/golden/dense.perf
       - name: headless render, DRC, LVS and guide
         if: runner.os != 'Linux'
-        run: python -m perfstudio.ui.main --headless tools/diffcheck/golden/dense.perf
+        run: python -m perfboard.ui.main --headless tools/diffcheck/golden/dense.perf
 
       - name: Keep what it drew
         if: always()

@@ -1,4 +1,4 @@
-"""Tests for the connection router (src/perfstudio/router.py).
+"""Tests for the connection router (src/perfboard/router.py).
 
 Two layers, in order of importance:
 
@@ -33,16 +33,16 @@ from typing import Any
 
 import pytest
 
-from perfstudio.commands import DEFAULT_BOARD, create_empty_document
-from perfstudio.footprints import footprint_lookup
-from perfstudio.geometry import (
+from perfboard.commands import DEFAULT_BOARD, create_empty_document
+from perfboard.footprints import footprint_lookup
+from perfboard.geometry import (
     coord_to_hole_ref,
     hole_key,
     hole_ref_to_coord,
     segments_touch,
     validate_orthogonal_chain,
 )
-from perfstudio.model import (
+from perfboard.model import (
     Board,
     BodySpec,
     ComponentInstance,
@@ -59,8 +59,8 @@ from perfstudio.model import (
     StripConductor,
     WireConductor,
 )
-from perfstudio.occupancy import build_occupancy
-from perfstudio.router import (
+from perfboard.occupancy import build_occupancy
+from perfboard.router import (
     DEFAULT_ROUTER_COSTS,
     RouteRequest,
     RouterOptions,
@@ -795,7 +795,7 @@ def test_the_proximity_answer_is_worked_out_once_per_hole() -> None:
     calls on a 100 x 60 board, for about two thousand distinct questions per route. The
     answer depends only on the hole, the endpoints and the net index, none of which move
     while a search runs."""
-    from perfstudio.router import _has_foreign_neighbour, _RouteContext
+    from perfboard.router import _has_foreign_neighbour, _RouteContext
 
     board = doc((comp("c1", "A", h(2, 2)), comp("c2", "B", h(8, 2))), ())
     asked: list[HoleCoord] = []
@@ -865,11 +865,11 @@ def test_this_module_keys_its_own_sets_on_coordinates_not_strings() -> None:
     cost. ``geometry.hole_key`` stays the one encoding for everything that crosses a
     module boundary -- occupancy, connectivity, DRC, all of which have golden output --
     and this module, whose sets never leave it, uses a plain tuple."""
-    from perfstudio.router import _key
+    from perfboard.router import _key
 
     assert _key(h(37, 12)) == (37, 12)
     source = (
-        Path(__file__).resolve().parents[1] / "src" / "perfstudio" / "router.py"
+        Path(__file__).resolve().parents[1] / "src" / "perfboard" / "router.py"
     ).read_text(encoding="utf-8")
     # The CALL, not the word: the comments in there discuss hole_key at some length, and
     # a test that failed on a mention would be a test people delete.

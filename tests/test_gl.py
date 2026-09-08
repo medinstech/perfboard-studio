@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from perfstudio.ui.view3d import PROBE_FLAG, offscreen_gl_available
+from perfboard.ui.view3d import PROBE_FLAG, offscreen_gl_available
 
 #: Applied to the tests that put a document through VTK. Everything else in the suite,
 #: including every 2D render, runs on any machine.
@@ -50,7 +50,7 @@ def test_the_probe_flag_answers_and_does_not_start_the_application() -> None:
     """
     started = time.perf_counter()
     completed = subprocess.run(
-        [sys.executable, "-m", "perfstudio.ui.main", PROBE_FLAG],
+        [sys.executable, "-m", "perfboard.ui.main", PROBE_FLAG],
         capture_output=True,
         timeout=180,
     )

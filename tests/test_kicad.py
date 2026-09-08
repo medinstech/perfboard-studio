@@ -1,4 +1,4 @@
-"""Tests for perfstudio.parsers.sexpr and perfstudio.parsers.kicad.
+"""Tests for perfboard.parsers.sexpr and perfboard.parsers.kicad.
 
 `NE555_ASTABLE_NETLIST` below is a byte-for-byte port of the TypeScript fixture at
 packages/parsers/src/__fixtures__/ne555-astable.ts, which
@@ -17,8 +17,8 @@ import pathlib
 
 import pytest
 
-from perfstudio.parsers.kicad import ImportedComponent, infer_net_class, parse_kicad_netlist
-from perfstudio.parsers.sexpr import SExprSyntaxError, parse_sexpr
+from perfboard.parsers.kicad import ImportedComponent, infer_net_class, parse_kicad_netlist
+from perfboard.parsers.sexpr import SExprSyntaxError, parse_sexpr
 
 # ---------------------------------------------------------------------------
 # Fixture: ported verbatim (modulo JS-template-literal -> Python-string syntax) from
@@ -285,7 +285,7 @@ def test_ne555_matches_golden_perf_net_structure() -> None:
     array's id/name/class/node set must match what this importer produces directly
     from the raw netlist text.
     """
-    from perfstudio import persist
+    from perfboard import persist
 
     golden_doc = persist.parse_document_or_throw(GOLDEN_NE555.read_text(encoding="utf-8"))
     golden_by_name = {n.name: n for n in golden_doc.nets}

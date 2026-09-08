@@ -1,5 +1,5 @@
 {
-  "name": "@perfstudio/render2d",
+  "name": "@perfboard/render2d",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,5 +8,5 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": { "build": "tsc -b", "test": "vitest run" },
-  "dependencies": { "@perfstudio/core": "workspace:*" }
+  "dependencies": { "@perfboard/core": "workspace:*" }
 }

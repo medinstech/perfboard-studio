@@ -22,7 +22,7 @@ import type {
   SolderTraceConductor,
   StripConductor,
   WireConductor,
-} from '@perfstudio/core';
+} from '@perfboard/core';
 
 import type { Theme } from './theme.js';
 import type { Viewport } from './transform.js';

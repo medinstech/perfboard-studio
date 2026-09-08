@@ -1,5 +1,5 @@
 /**
- * PerfStudio domain model.
+ * Perfboard Studio domain model.
  *
  * This file is the architectural spine: every other package builds on these types.
  * Design rules encoded here:

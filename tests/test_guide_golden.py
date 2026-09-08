@@ -33,7 +33,7 @@ The VERSION is substituted out (`{VERSION}`) rather than dropped: the generator 
 part of the output and worth pinning, but it is not worth re-blessing four files on every
 release. `test_version.py` is what guards the version itself.
 
-To re-bless after a deliberate change: run this file with PERFSTUDIO_BLESS_GUIDE=1 and
+To re-bless after a deliberate change: run this file with PERFBOARD_BLESS_GUIDE=1 and
 READ THE DIFF. The point of the test is that the diff is readable -- if it is one wording
 change, the change was one wording; if it is four hundred lines, something moved that was
 not meant to.
@@ -50,16 +50,16 @@ from typing import Any
 
 import pytest
 
-from perfstudio import persist
-from perfstudio.autoroute import plan_autoroute
-from perfstudio.command import CommandBus, CommandContext
-from perfstudio.commands import create_document_id_generator, create_standard_registry
-from perfstudio.connectivity import FootprintLookup
-from perfstudio.footprints import footprint_lookup
-from perfstudio.guide import build_guide
-from perfstudio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
-from perfstudio.model import PerfDocument
-from perfstudio.version import __version__
+from perfboard import persist
+from perfboard.autoroute import plan_autoroute
+from perfboard.command import CommandBus, CommandContext
+from perfboard.commands import create_document_id_generator, create_standard_registry
+from perfboard.connectivity import FootprintLookup
+from perfboard.footprints import footprint_lookup
+from perfboard.guide import build_guide
+from perfboard.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
+from perfboard.model import PerfDocument
+from perfboard.version import __version__
 
 GOLDEN_DIR = Path(__file__).resolve().parents[1] / "tools" / "diffcheck" / "golden"
 EXPECTED_DIR = Path(__file__).resolve().parent / "guide_golden"
@@ -163,14 +163,14 @@ def test_the_guide_is_what_was_blessed(name: str) -> None:
     produced = normalise(exports()[name])
     stored = EXPECTED_DIR / name
 
-    if os.environ.get("PERFSTUDIO_BLESS_GUIDE"):
+    if os.environ.get("PERFBOARD_BLESS_GUIDE"):
         EXPECTED_DIR.mkdir(exist_ok=True)
         with stored.open("w", encoding="utf-8", newline="\n") as handle:
             handle.write(produced)
         pytest.skip(f"blessed {name}")
 
     assert stored.exists(), (
-        f"no stored guide for {name}. Run with PERFSTUDIO_BLESS_GUIDE=1 to write one, "
+        f"no stored guide for {name}. Run with PERFBOARD_BLESS_GUIDE=1 to write one, "
         f"after reading what it contains."
     )
     expected = normalise(stored.read_text(encoding="utf-8"))
@@ -200,7 +200,7 @@ def test_every_export_carries_the_version_that_wrote_it() -> None:
     provenance line at the top of one is a row somebody has to delete.
     """
     produced = exports()
-    assert f"PerfStudio {__version__}" in produced["ne555_guide.json"]
+    assert f"Perfboard Studio {__version__}" in produced["ne555_guide.json"]
     assert __version__ in produced["ne555_guide.html"]
     assert __version__ not in produced["ne555_bom.csv"]
     assert __version__ not in produced["ne555_cut_list.csv"]

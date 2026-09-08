@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-PerfStudio is pre-alpha and has not had a tagged release yet. Only `main` is supported.
+Perfboard Studio is pre-alpha and has not had a tagged release yet. Only `main` is supported.
 When releases begin, this section will name the versions that receive fixes.
 
 ## Reporting a vulnerability
@@ -10,7 +10,7 @@ When releases begin, this section will name the versions that receive fixes.
 **Please do not open a public issue.**
 
 Report privately through GitHub:
-[open a security advisory](https://github.com/medinstech/perfstudio/security/advisories/new).
+[open a security advisory](https://github.com/medinstech/perfboard/security/advisories/new).
 
 Please include what you were doing, what happened, and — if it involves a file — the
 smallest input that still reproduces it. You will get an acknowledgement, and a fix or an
@@ -18,7 +18,7 @@ explanation of why it is not one.
 
 ## What the realistic attack surface is
 
-PerfStudio is a desktop application with no network service, no accounts and no
+Perfboard Studio is a desktop application with no network service, no accounts and no
 credentials. It is worth being specific about where untrusted input can actually reach,
 because that is where a report is most likely to be a real finding:
 
@@ -34,7 +34,7 @@ because that is where a report is most likely to be a real finding:
   component names. Those names come from imported netlists, so they are untrusted input;
   everything interpolated into the HTML is escaped, and a way past that escaping is a
   genuine finding.
-- **The MCP server.** `python -m perfstudio.mcp` speaks stdio by default, which has no
+- **The MCP server.** `python -m perfboard.mcp` speaks stdio by default, which has no
   listening socket. `--http` starts a streamable-HTTP server with no authentication of
   its own — it is meant for attaching a local client to an already-open session, and
   should not be exposed beyond the machine it runs on.

@@ -1,4 +1,4 @@
-"""Tests for the MCP surface (src/perfstudio/mcp/).
+"""Tests for the MCP surface (src/perfboard/mcp/).
 
 Almost all of it exercises ``BoardSession`` directly rather than through a client. That
 is deliberate and is why the session exists as its own module: a test that stands up a
@@ -34,8 +34,8 @@ from pathlib import Path
 
 import pytest
 
-from perfstudio.mcp.session import BoardSession, SessionError, new_board
-from perfstudio.model import ComponentInstance, HoleCoord
+from perfboard.mcp.session import BoardSession, SessionError, new_board
+from perfboard.model import ComponentInstance, HoleCoord
 
 from .test_gl import requires_offscreen_gl
 
@@ -557,7 +557,7 @@ def test_a_board_that_cannot_hold_what_is_on_it_is_refused_with_the_reason(sessi
 def test_switching_to_stripboard_changes_what_is_connected(session) -> None:
     """The point of the board type, and the thing an agent cannot see any other way: on
     stripboard the board itself joins the holes along a row."""
-    from perfstudio.connectivity import extract_physical_nets
+    from perfboard.connectivity import extract_physical_nets
 
     session.place_component("R1", "r-axial-4", "B2")
     session.place_component("R2", "r-axial-4", "H2")
@@ -709,7 +709,7 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     somebody has to make on purpose rather than a number that drifts."""
     import asyncio
 
-    from perfstudio.mcp import server
+    from perfboard.mcp import server
 
     tools = asyncio.run(server.mcp.list_tools())
     names = {tool.name for tool in tools}
@@ -820,7 +820,7 @@ def test_every_tool_is_named_in_the_documentation_and_nothing_else_is() -> None:
     import asyncio
     import re
 
-    from perfstudio.mcp import server
+    from perfboard.mcp import server
 
     registered = {tool.name for tool in asyncio.run(server.mcp.list_tools())}
 
@@ -847,7 +847,7 @@ def test_every_tool_is_named_in_the_documentation_and_nothing_else_is() -> None:
 def test_nothing_in_the_mcp_package_writes_to_stdout() -> None:
     """On stdio, stdout IS the protocol. One stray print corrupts the stream and the
     client reports something baffling and unrelated -- PLAN.md Sec 9.1's named trap."""
-    mcp_dir = REPO_ROOT / "src" / "perfstudio" / "mcp"
+    mcp_dir = REPO_ROOT / "src" / "perfboard" / "mcp"
     for source in mcp_dir.glob("*.py"):
         for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
             stripped = line.strip()

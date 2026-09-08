@@ -1,4 +1,4 @@
-"""Tests for the ratsnest (src/perfstudio/ratsnest.py).
+"""Tests for the ratsnest (src/perfboard/ratsnest.py).
 
 The property that carries the module is that links are counted over PHYSICAL GROUPS,
 not over pins: routing part of a net has to shrink the remaining work, and a closed net
@@ -13,8 +13,8 @@ dependency, and the two files are free to diverge as each grows.
 
 from __future__ import annotations
 
-from perfstudio.connectivity import FootprintLookup, PhysicalPinRef
-from perfstudio.model import (
+from perfboard.connectivity import FootprintLookup, PhysicalPinRef
+from perfboard.model import (
     Board,
     BodySpec,
     ComponentInstance,
@@ -30,7 +30,7 @@ from perfstudio.model import (
     SolderTraceConductor,
     WireConductor,
 )
-from perfstudio.ratsnest import all_links, ratsnest, summarize
+from perfboard.ratsnest import all_links, ratsnest, summarize
 
 # ---------------------------------------------------------------------------
 # Fixtures

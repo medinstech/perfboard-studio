@@ -40,11 +40,11 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from perfstudio import persist  # noqa: E402
-from perfstudio.footprints import footprint_lookup  # noqa: E402
-from perfstudio.placer import PlacementOptions, plan_placement  # noqa: E402
-from perfstudio.ui import view3d  # noqa: E402
-from perfstudio.ui.main import MainWindow  # noqa: E402
+from perfboard import persist  # noqa: E402
+from perfboard.footprints import footprint_lookup  # noqa: E402
+from perfboard.placer import PlacementOptions, plan_placement  # noqa: E402
+from perfboard.ui import view3d  # noqa: E402
+from perfboard.ui.main import MainWindow  # noqa: E402
 
 #: The NE555 astable, which is also what ``examples/ne555-astable.net`` imports to. A
 #: recognisable circuit beats a denser but meaningless one: a reader who knows the 555

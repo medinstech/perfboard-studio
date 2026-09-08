@@ -1,4 +1,4 @@
-"""Tests for the generated schematic (src/perfstudio/schematic.py).
+"""Tests for the generated schematic (src/perfboard/schematic.py).
 
 THE THREE PROPERTIES THE MODULE IS BUILT ON, AND WHAT WOULD BREAK THEM.
 
@@ -21,7 +21,7 @@ The two golden dumps (``tests/schematic_golden/``) exist for the reason
 thought to name, and a symbol that quietly moved two columns, a net that stopped being
 drawn, a rail that turned back into a wire is exactly what nobody names. They are OUR
 output -- the TypeScript engine never drew a schematic -- so they live here rather than in
-``tools/diffcheck/golden/``. Re-bless with ``PERFSTUDIO_BLESS_SCHEMATIC=1`` AFTER READING
+``tools/diffcheck/golden/``. Re-bless with ``PERFBOARD_BLESS_SCHEMATIC=1`` AFTER READING
 THE DIFF; coordinates are printed to two decimals, which is finer than anything a person
 would call a change and coarse enough to absorb a last-ULP disagreement between platforms.
 """
@@ -35,9 +35,9 @@ from typing import get_args
 
 import pytest
 
-from perfstudio import persist, schematic_export
-from perfstudio.footprints import footprint_lookup, standard_footprints
-from perfstudio.model import (
+from perfboard import persist, schematic_export
+from perfboard.footprints import footprint_lookup, standard_footprints
+from perfboard.model import (
     Board,
     BodyArchetype,
     BodySpec,
@@ -52,7 +52,7 @@ from perfstudio.model import (
     Point2,
     SchematicPart,
 )
-from perfstudio.schematic import (
+from perfboard.schematic import (
     _KIND_BY_ARCHETYPE,
     _SYMBOL_BUILDERS,
     LEAD_MM,
@@ -982,7 +982,7 @@ def test_the_sheet_is_the_sheet_that_was_blessed(stem: str) -> None:
     produced = dump(drawing_for(EXAMPLES_DIR / f"{stem}.perf"))
     expected_path = EXPECTED_DIR / f"{stem}.txt"
 
-    if os.environ.get("PERFSTUDIO_BLESS_SCHEMATIC"):
+    if os.environ.get("PERFBOARD_BLESS_SCHEMATIC"):
         EXPECTED_DIR.mkdir(exist_ok=True)
         # An explicit LF, the way `test_guide_golden` already writes its own. The
         # repository is LF everywhere, and a bless run on Windows would otherwise put
@@ -991,7 +991,7 @@ def test_the_sheet_is_the_sheet_that_was_blessed(stem: str) -> None:
         pytest.skip(f"blessed {expected_path.name}")
 
     assert expected_path.exists(), (
-        f"{expected_path} is missing. Run with PERFSTUDIO_BLESS_SCHEMATIC=1 to create it."
+        f"{expected_path} is missing. Run with PERFBOARD_BLESS_SCHEMATIC=1 to create it."
     )
     expected = expected_path.read_text(encoding="utf-8")
     if produced != expected:

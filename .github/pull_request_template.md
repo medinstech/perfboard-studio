@@ -5,7 +5,7 @@ Delete anything that does not apply.
 
 ## What this changes
 
-<!-- What does it do for someone using PerfStudio? One or two sentences. -->
+<!-- What does it do for someone using Perfboard Studio? One or two sentences. -->
 
 ## Why
 
@@ -16,7 +16,7 @@ Delete anything that does not apply.
 - [ ] `pytest` passes
 - [ ] `mypy --strict src` passes (`src` only — never `src tests`)
 - [ ] New behaviour has a test; new *rendering* behaviour has a headless run I looked at
-      (`python -m perfstudio.ui.main --headless tools/diffcheck/golden/dense.perf`)
+      (`python -m perfboard.ui.main --headless tools/diffcheck/golden/dense.perf`)
 - [ ] `CHANGELOG.md` updated under `## [Unreleased]`, if a user would notice this
 - [ ] New or changed UI strings have Turkish entries in `ui/i18n.py`
 

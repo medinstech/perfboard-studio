@@ -15,19 +15,19 @@ import dataclasses
 
 import pytest
 
-from perfstudio.command import CommandBus, CommandContext
-from perfstudio.commands import (
+from perfboard.command import CommandBus, CommandContext
+from perfboard.commands import (
     AddCutPayload,
     ApplyStripboardPlanPayload,
     create_document_id_generator,
     create_standard_registry,
 )
-from perfstudio.connectivity import PhysicalPinRef, are_pins_connected, extract_physical_nets
-from perfstudio.drc import run_drc
-from perfstudio.guide import build_guide
-from perfstudio.guide_export import guide_to_html
-from perfstudio.lvs import run_lvs
-from perfstudio.model import (
+from perfboard.connectivity import PhysicalPinRef, are_pins_connected, extract_physical_nets
+from perfboard.drc import run_drc
+from perfboard.guide import build_guide
+from perfboard.guide_export import guide_to_html
+from perfboard.lvs import run_lvs
+from perfboard.model import (
     Board,
     BodySpec,
     ComponentInstance,
@@ -40,7 +40,7 @@ from perfstudio.model import (
     PerfDocument,
     TrackCut,
 )
-from perfstudio.stripboard import (
+from perfboard.stripboard import (
     cut_between,
     cut_holes,
     is_stripboard,
@@ -50,7 +50,7 @@ from perfstudio.stripboard import (
     segments,
     strip_axis,
 )
-from perfstudio.striproute import describe_plan, plan_stripboard
+from perfboard.striproute import describe_plan, plan_stripboard
 
 STRIPBOARD = Board(
     type="stripboard",

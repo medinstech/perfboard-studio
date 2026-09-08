@@ -1,7 +1,7 @@
 /**
  * Coordinate transforms between board millimetres, screen pixels and hole indices.
  *
- * Geometry comes from `@perfstudio/core`; this module owns only the screen/viewport
+ * Geometry comes from `@perfboard/core`; this module owns only the screen/viewport
  * layer on top of it.
  *
  * Note which board measurement the mirror uses: `holeSpanMm`, the first-to-last hole
@@ -17,8 +17,8 @@
  * every caller having to remember to divide out the device pixel ratio.
  */
 
-import type { Board, BoardSide, HoleCoord, Point2 } from '@perfstudio/core';
-import { holeSpanMm, holeToMm } from '@perfstudio/core';
+import type { Board, BoardSide, HoleCoord, Point2 } from '@perfboard/core';
+import { holeSpanMm, holeToMm } from '@perfboard/core';
 
 export { holeToMm };
 

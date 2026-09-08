@@ -107,7 +107,7 @@ function num(path: string, n: number): number {
   if (!Number.isFinite(n)) {
     throw new Error(
       `Cannot serialize non-finite number at ${path}: ${n}. ` +
-        `PerfStudio documents must contain only finite numbers (JSON.stringify would ` +
+        `Perfboard Studio documents must contain only finite numbers (JSON.stringify would ` +
         `otherwise silently write "null" here).`,
     );
   }
@@ -698,8 +698,8 @@ function parseDocument(rawInput: unknown): { readonly document: PerfDocument; re
   if (formatVersion > CURRENT_FORMAT_VERSION) {
     throw new ValidationError(
       'format-too-new',
-      `This file was saved by a newer version of PerfStudio (file format ${formatVersion}); ` +
-        `this build understands up to format ${CURRENT_FORMAT_VERSION}. Please upgrade PerfStudio to open it.`,
+      `This file was saved by a newer version of Perfboard Studio (file format ${formatVersion}); ` +
+        `this build understands up to format ${CURRENT_FORMAT_VERSION}. Please upgrade Perfboard Studio to open it.`,
       'formatVersion',
     );
   }

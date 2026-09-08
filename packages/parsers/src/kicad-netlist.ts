@@ -3,14 +3,14 @@
  *
  * Maps a KiCad 6+ "export" netlist (the S-expression format KiCad writes via
  * File > Export > Netlist, or the equivalent produced from a schematic) onto
- * PerfStudio's `Net` / `NetNode` model, so the router and DRC can consume the
+ * Perfboard Studio's `Net` / `NetNode` model, so the router and DRC can consume the
  * schematic's intent (PLAN.md §5.1, LVS).
  *
  * This module is pure: it takes a string and returns data. Reading the .net file
  * from disk is the caller's job.
  */
 
-import type { Net, NetClass, NetNode } from '@perfstudio/core';
+import type { Net, NetClass, NetNode } from '@perfboard/core';
 
 import { parseSExpr, type SExpr } from './sexpr.js';
 
@@ -197,7 +197,7 @@ function parseNets(netsList: SExpr[] | undefined, warnings: string[]): Net[] {
 
 /**
  * Parse a KiCad netlist (the `(export (version ...) (components ...) (nets ...))`
- * S-expression format) into PerfStudio's component and net model.
+ * S-expression format) into Perfboard Studio's component and net model.
  *
  * Throws only on malformed S-expression syntax (see `parseSExpr`) or if the input
  * has no top-level `export` form. Anything else recoverable — a component missing

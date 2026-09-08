@@ -1,4 +1,4 @@
-"""Tests for parametric component bodies (src/perfstudio/ui/bodies.py).
+"""Tests for parametric component bodies (src/perfboard/ui/bodies.py).
 
 The load-bearing test here is the courtyard invariant: every one of the sixty-one registry
 footprints must produce a body that fits inside its own ``body_outline``. That single check
@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-from perfstudio.footprints import get_footprint, standard_footprints
-from perfstudio.model import BodyArchetype
-from perfstudio.ui.bodies import (
+from perfboard.footprints import get_footprint, standard_footprints
+from perfboard.model import BodyArchetype
+from perfboard.ui.bodies import (
     BODY_STYLES,
     leads_for,
     parse_resistance,

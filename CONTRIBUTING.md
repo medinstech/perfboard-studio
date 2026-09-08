@@ -1,4 +1,4 @@
-# Contributing to PerfStudio
+# Contributing to Perfboard Studio
 
 Thank you for looking. This is a pre-alpha, which means the useful contributions are
 not only code: a board you tried to design and could not, a rule that fired when it
@@ -13,12 +13,12 @@ It is stricter here than in most projects and it is not negotiable.
 Requires Python 3.12+.
 
 ```sh
-git clone https://github.com/medinstech/perfstudio.git
-cd perfstudio
+git clone https://github.com/medinstech/perfboard.git
+cd perfboard
 pip install -e ".[dev,mcp]"
 
 pytest                 # the whole suite, ~2070 tests in under a minute
-perfstudio             # launch the app on a blank board
+perfboard              # launch the app on a blank board
 ```
 
 The suite is fast enough that there is no reason to narrow it except while iterating.
@@ -30,7 +30,7 @@ pytest tests/test_drc.py::test_name -x # one test, stop on first failure
 pytest -k "proximity"                  # by name fragment
 ```
 
-`python -m perfstudio.ui.main --headless tools/diffcheck/golden/dense.perf` renders
+`python -m perfboard.ui.main --headless tools/diffcheck/golden/dense.perf` renders
 2D/3D/PDF into `headless_out/`, runs DRC and LVS and prints timings with no display. It
 is the fastest way to check that a rendering change did not crash, and it never edits a
 document.
@@ -79,7 +79,7 @@ paths on the board → hard error, mutation refused. Overlapping bodies, bridgin
 inadequate copper → reported by `drc.py`, never refused. When deciding where a new check
 belongs, ask whether the result is still a *document* (DRC) or not (command).
 
-**The engine is pure.** `src/perfstudio/` outside `ui/` and `mcp/` has no clock, no RNG,
+**The engine is pure.** `src/perfboard/` outside `ui/` and `mcp/` has no clock, no RNG,
 no filesystem, and no Qt or VTK import. Reading a file is the host's job; timestamps are
 stamped by the host. Breaking this breaks the differential proof below.
 
@@ -113,7 +113,7 @@ There is a longer tour of the architecture, and of why each of these is the way 
 
 ## The licence boundary
 
-PerfStudio is Apache-2.0 and is written **clean-room** with respect to the GPL-licensed
+Perfboard Studio is Apache-2.0 and is written **clean-room** with respect to the GPL-licensed
 tools in this space.
 
 **Do not read, copy, port or adapt source code from DIY Layout Creator or VeroRoute.**
@@ -142,7 +142,7 @@ By contributing you agree that your contributions are licensed under Apache-2.0.
 
 ## Reporting things
 
-- **Bugs and ideas:** open an issue. For a bug, `perfstudio --version` output and the
+- **Bugs and ideas:** open an issue. For a bug, `perfboard --version` output and the
   `.perf` file (or the smallest one that still shows it) are worth more than anything else
   you can send.
 - **Security:** see [SECURITY.md](./SECURITY.md) — do not open a public issue.

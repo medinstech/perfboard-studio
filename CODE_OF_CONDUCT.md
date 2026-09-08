@@ -55,7 +55,7 @@ offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to
 the maintainers by opening a
-[private security advisory](https://github.com/medinstech/perfstudio/security/advisories/new)
+[private security advisory](https://github.com/medinstech/perfboard/security/advisories/new)
 — which is private to the maintainers and is the only private reporting channel this
 repository has — or by contacting [@SinanTufekci](https://github.com/SinanTufekci)
 directly on GitHub.

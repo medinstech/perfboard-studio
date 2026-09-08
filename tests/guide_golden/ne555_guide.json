@@ -1,5 +1,5 @@
 {
-  "generator": "PerfStudio {VERSION}",
+  "generator": "Perfboard Studio {VERSION}",
   "document": "diffcheck",
   "board": {
     "cols": 32,

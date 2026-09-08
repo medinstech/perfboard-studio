@@ -4,7 +4,7 @@ Four circuits, each shipped twice: as the `.net` a schematic tool exports, and a
 `.perf` that importing, placing and routing it produces.
 
 ```sh
-perfstudio examples/lm317-supply.perf     # open the finished board
+perfboard examples/lm317-supply.perf     # open the finished board
 ```
 
 ...or start from the netlist the way you would with your own circuit: **File → Import

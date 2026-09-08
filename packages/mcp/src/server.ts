@@ -1,5 +1,5 @@
 /**
- * The PerfStudio MCP server: tool registration and dispatch.
+ * The Perfboard Studio MCP server: tool registration and dispatch.
  *
  * This first pass is READ-ONLY — every tool here only reads the current document
  * held by the DocumentStore. No tool mutates it.
@@ -25,10 +25,10 @@ import type {
   NetClass,
   PerfDocument,
   Rotation,
-} from '@perfstudio/core';
+} from '@perfboard/core';
 
 import type { DocumentStore } from './document-store.js';
-import { boardSizeMm, coordToHoleRef } from '@perfstudio/core';
+import { boardSizeMm, coordToHoleRef } from '@perfboard/core';
 import { log } from './log.js';
 
 // ---------------------------------------------------------------------------
@@ -348,7 +348,7 @@ export function dispatchToolCall(
 /** Builds the MCP server and registers all read-only tools against `store`. */
 export function createServer(store: DocumentStore): Server {
   const server = new Server(
-    { name: 'perfstudio-mcp', version: '0.1.0' },
+    { name: 'perfboard-mcp', version: '0.1.0' },
     { capabilities: { tools: {} } },
   );
 

@@ -1,4 +1,4 @@
-PerfStudio
+Perfboard Studio
 Copyright 2026 medinstech
 
 This product includes software developed at medinstech.
@@ -20,7 +20,7 @@ limitations under the License.
 Clean-room notice
 -----------------
 
-PerfStudio is developed clean-room with respect to the existing GPL-licensed
+Perfboard Studio is developed clean-room with respect to the existing GPL-licensed
 perfboard and stripboard layout tools (notably DIY Layout Creator and VeroRoute).
 No code from those projects has been read, copied or adapted. Prior art was
 studied only through public descriptions, documentation and user-facing behaviour.

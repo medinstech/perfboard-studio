@@ -1,5 +1,5 @@
 {
-  "name": "@perfstudio/bench-3d",
+  "name": "@perfboard/bench-3d",
   "version": "0.0.0",
   "private": true,
   "type": "module",

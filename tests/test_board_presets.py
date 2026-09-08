@@ -28,17 +28,17 @@ import os
 
 import pytest
 
-from perfstudio import persist
-from perfstudio.command import CommandBus, CommandContext, create_id_generator
-from perfstudio.commands import (
+from perfboard import persist
+from perfboard.command import CommandBus, CommandContext, create_id_generator
+from perfboard.commands import (
     DEFAULT_BOARD,
     AddMountingHolesPayload,
     ApplyBoardPresetPayload,
     create_empty_document,
     create_standard_registry,
 )
-from perfstudio.footprints import footprint_lookup
-from perfstudio.geometry import (
+from perfboard.footprints import footprint_lookup
+from perfboard.geometry import (
     CORNER_HOLE_WEB_MM,
     FINGER_BORE_CLEARANCE_MM,
     STANDARD_PRESETS,
@@ -59,7 +59,7 @@ from perfstudio.geometry import (
     preset_strip_edges,
     undrilled_holes,
 )
-from perfstudio.model import (
+from perfboard.model import (
     Board,
     DocumentMeta,
     EdgeConnector,
@@ -176,8 +176,8 @@ def test_a_single_sided_board_has_copper_on_one_face_only() -> None:
     slab that says nothing about where anything goes."""
     from PySide6.QtWidgets import QApplication
 
-    QApplication.instance() or QApplication(["perfstudio-tests"])
-    from perfstudio.ui.view2d import BoardScene
+    QApplication.instance() or QApplication(["perfboard-tests"])
+    from perfboard.ui.view2d import BoardScene
 
     doc = _doc(dataclasses.replace(BOARD, single_sided=True, material="FR2"))
     top = BoardScene(doc, LOOKUP, side="top", show_rulers=False)
@@ -191,8 +191,8 @@ def test_a_single_sided_board_has_copper_on_one_face_only() -> None:
 def test_a_double_sided_board_has_copper_on_both() -> None:
     from PySide6.QtWidgets import QApplication
 
-    QApplication.instance() or QApplication(["perfstudio-tests"])
-    from perfstudio.ui.view2d import BoardScene
+    QApplication.instance() or QApplication(["perfboard-tests"])
+    from perfboard.ui.view2d import BoardScene
 
     for side in ("top", "bottom"):
         scene = BoardScene(_doc(), LOOKUP, side=side, show_rulers=False)
@@ -481,7 +481,7 @@ def test_swapping_between_two_presets_does_not_keep_the_old_boards_fingers() -> 
 def test_a_preset_still_refuses_to_strand_a_part() -> None:
     """Shrinking is the one thing a preset does that can destroy work, so it goes through
     the same check ``board.set`` uses rather than round it."""
-    from perfstudio.model import ComponentInstance
+    from perfboard.model import ComponentInstance
 
     big = next(p for p in STANDARD_PRESETS if not p.single_sided and p.name == "9 x 15 cm")
     board = board_from_preset(big, DEFAULT_BOARD)

@@ -3,7 +3,7 @@
  *
  * Resolution order for where the document comes from:
  *   1. argv[2] (a bare positional path), if given and non-empty.
- *   2. the PERFSTUDIO_DOCUMENT env var, if set.
+ *   2. the PERFBOARD_DOCUMENT env var, if set.
  *   3. neither: start with a small empty default board, entirely in memory.
  *
  * This module never touches stdout (see log.ts) and always fails loudly — via
@@ -14,8 +14,8 @@
 
 import { readFileSync } from 'node:fs';
 
-import { DOCUMENT_FORMAT_VERSION, STANDARD_PITCH_MM } from '@perfstudio/core';
-import type { PerfDocument } from '@perfstudio/core';
+import { DOCUMENT_FORMAT_VERSION, STANDARD_PITCH_MM } from '@perfboard/core';
+import type { PerfDocument } from '@perfboard/core';
 
 import { log } from './log.js';
 
@@ -141,7 +141,7 @@ export class DocumentStore {
     const env = options.env ?? process.env;
 
     const argPath = argv[2];
-    const path = argPath !== undefined && argPath.length > 0 ? argPath : env['PERFSTUDIO_DOCUMENT'];
+    const path = argPath !== undefined && argPath.length > 0 ? argPath : env['PERFBOARD_DOCUMENT'];
 
     if (path !== undefined) {
       log.info('Loading document from file', { path });
@@ -149,7 +149,7 @@ export class DocumentStore {
       return new DocumentStore(document, { kind: 'file', path });
     }
 
-    log.info('No document path given (argv[2] / PERFSTUDIO_DOCUMENT); starting with an empty default board');
+    log.info('No document path given (argv[2] / PERFBOARD_DOCUMENT); starting with an empty default board');
     return new DocumentStore(createDefaultDocument(), { kind: 'default' });
   }
 

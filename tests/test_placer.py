@@ -1,4 +1,4 @@
-"""Tests for the placement optimiser (src/perfstudio/placer.py).
+"""Tests for the placement optimiser (src/perfboard/placer.py).
 
 Four things have to hold, and they are what this file is organised around:
 
@@ -34,15 +34,15 @@ from pathlib import Path
 
 import pytest
 
-from perfstudio import persist
-from perfstudio.autoroute import plan_autoroute
-from perfstudio.command import CommandBus, CommandContext
-from perfstudio.commands import create_document_id_generator, create_standard_registry
-from perfstudio.connectivity import FootprintLookup
-from perfstudio.drc import DrcViolation, run_drc
-from perfstudio.footprints import footprint_lookup
-from perfstudio.geometry import all_pin_holes, is_inside_board
-from perfstudio.model import (
+from perfboard import persist
+from perfboard.autoroute import plan_autoroute
+from perfboard.command import CommandBus, CommandContext
+from perfboard.commands import create_document_id_generator, create_standard_registry
+from perfboard.connectivity import FootprintLookup
+from perfboard.drc import DrcViolation, run_drc
+from perfboard.footprints import footprint_lookup
+from perfboard.geometry import all_pin_holes, is_inside_board
+from perfboard.model import (
     Board,
     BodyArchetype,
     BodySpec,
@@ -58,7 +58,7 @@ from perfstudio.model import (
     Point2,
     TrackCut,
 )
-from perfstudio.placer import (
+from perfboard.placer import (
     DEFAULT_PLACEMENT_OPTIONS,
     PlacementOptions,
     PlacementWeights,
@@ -78,8 +78,8 @@ from perfstudio.placer import (
     plan_placement,
     summarize_changes,
 )
-from perfstudio.router import DEFAULT_ROUTER_COSTS
-from perfstudio.striproute import plan_stripboard
+from perfboard.router import DEFAULT_ROUTER_COSTS
+from perfboard.striproute import plan_stripboard
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -256,7 +256,7 @@ def test_a_different_seed_explores_differently() -> None:
 def test_restarts_do_not_change_a_run_of_one() -> None:
     """The winning restart's seed is reported, and replaying it alone reproduces the plan.
 
-    This is what makes a result reportable: "PerfStudio 0.4.0, seed 2" is enough for
+    This is what makes a result reportable: "Perfboard Studio 0.4.0, seed 2" is enough for
     someone else to get the same board.
     """
     doc = make_doc(
@@ -622,7 +622,7 @@ def test_the_placer_stops_turning_parts_for_nothing(fixture: str, monkeypatch) -
     Measured against the same search with the tidy-up disabled, because that is the claim:
     fewer parts turned, and the router no worse off for it.
     """
-    from perfstudio import placer as placer_module
+    from perfboard import placer as placer_module
 
     registry = footprint_lookup()
     doc = dataclasses.replace(golden_document(fixture), conductors=())

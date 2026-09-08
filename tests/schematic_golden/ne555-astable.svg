@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="195.58mm" height="116.9mm" viewBox="0 -7.68 195.58 116.9">
 <title>ne555-astable</title>
-<desc>PerfStudio {VERSION}</desc>
+<desc>Perfboard Studio {VERSION}</desc>
 <rect x="0" y="-7.68" width="195.58" height="116.9" fill="#ffffff"/>
 <text x="10.16" y="-4.48" font-size="3.2" fill="#111111" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">ne555-astable</text>
 <g stroke-linecap="round" stroke-linejoin="round">

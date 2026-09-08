@@ -1,13 +1,13 @@
 <p align="center">
   <a href="https://medinstech.com">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/wordmark-white.png">
-      <img alt="Medinstech" src="https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/wordmark-blue.png" height="96">
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/wordmark-white.png">
+      <img alt="Medinstech" src="https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/wordmark-blue.png" height="96">
     </picture>
   </a>
 </p>
 
-<h1 align="center">PerfStudio</h1>
+<h1 align="center">Perfboard Studio</h1>
 
 <p align="center"><b>Delikli plaket üzerinde devre tasarımı ve lehimleme rehberi</b></p>
 
@@ -19,15 +19,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/medinstech/perfstudio/actions/workflows/ci.yml"><img alt="testler" src="https://img.shields.io/github/actions/workflow/status/medinstech/perfstudio/ci.yml?branch=main&style=flat-square&label=tests"></a>
-  <a href="https://github.com/medinstech/perfstudio/releases/latest"><img alt="son sürüm" src="https://img.shields.io/github/v/release/medinstech/perfstudio?style=flat-square&color=0d00ff&label=release"></a>
+  <a href="https://github.com/medinstech/perfboard/actions/workflows/ci.yml"><img alt="testler" src="https://img.shields.io/github/actions/workflow/status/medinstech/perfboard/ci.yml?branch=main&style=flat-square&label=tests"></a>
+  <a href="https://github.com/medinstech/perfboard/releases/latest"><img alt="son sürüm" src="https://img.shields.io/github/v/release/medinstech/perfboard?style=flat-square&color=0d00ff&label=release"></a>
   <a href="./pyproject.toml"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-0d00ff?style=flat-square"></a>
   <a href="./LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-0d00ff?style=flat-square"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/medinstech/perfstudio/releases/latest"><b>İndir</b></a>
-  &nbsp;·&nbsp; <a href="#çalıştırmak"><b>uv tool install perfstudio</b></a>
+  <a href="https://github.com/medinstech/perfboard/releases/latest"><b>İndir</b></a>
+  &nbsp;·&nbsp; <a href="#çalıştırmak"><b>uv tool install perfboard</b></a>
   &nbsp;·&nbsp; <a href="./docs/MCP.md">MCP sunucusu</a>
   &nbsp;·&nbsp; <a href="#ya-da-hazır-bir-kart-açın">Örnek kartlar</a>
   &nbsp;·&nbsp; <a href="./CHANGELOG.md">Changelog</a>
@@ -95,7 +95,7 @@ sebebi tam olarak bu farkı modellemesidir:
 | üst jumper | komponent yüzeyinden atlayan yalıtımlı jumper | görünür, gövde alanı işgal eder |
 
 Komşu pad'e olan 0,6 mm'lik boşluk, lehim yollarını hem bu kadar kullanışlı hem de bu
-kadar kolay yanlış yapılır kılan şeydir. PerfStudio bu riski router'ın maliyet
+kadar kolay yanlış yapılır kılan şeydir. Perfboard Studio bu riski router'ın maliyet
 fonksiyonuna işler ve işaretlenen her noktayı montaj rehberinde bir ölçüm adımına
 dönüştürür.
 
@@ -166,7 +166,7 @@ oynatılarak üretiliyor — yani rehberin gerçekten vermediği bir sırayı g�
 Bu bir masaüstü uygulaması, yani onu edinmenin olağan yolu bir kurulum paketi kurmak.
 Python gerekmiyor.
 
-**[⬇ Son sürümü indirin](https://github.com/medinstech/perfstudio/releases/latest)**
+**[⬇ Son sürümü indirin](https://github.com/medinstech/perfboard/releases/latest)**
 
 | | |
 |---|---|
@@ -187,15 +187,15 @@ Paketi olmayan iki platform için — Intel Mac, ARM üzerinde Linux — ve imza
 geçmek istemeyenler için. **Python 3.12+** gerekir:
 
 ```sh
-uv tool install perfstudio    # ya da: pipx install perfstudio
+uv tool install perfboard    # ya da: pipx install perfboard
 
-perfstudio                    # boş bir kartla başlat
-perfstudio bir/kart.perf      # ...ya da bir doküman aç
-perfstudio --version
+perfboard                    # boş bir kartla başlat
+perfboard bir/kart.perf      # ...ya da bir doküman aç
+perfboard --version
 ```
 
 **Düz `pip install` değil, `uv tool` ya da `pipx`** — çünkü bu bir kütüphane değil,
-uygulama. İkisi de onu kendine ait bir ortama kurar ve `perfstudio`'yu PATH'e koyar;
+uygulama. İkisi de onu kendine ait bir ortama kurar ve `perfboard`'yu PATH'e koyar;
 `pip install` ise ya 400 MB'lık Qt ve VTK'yı ortak bir `site-packages` içine yığar ya da
 Debian, Ubuntu ve Fedora'da sistem Python'ı tarafından doğrudan reddedilir (PEP 668).
 Klondan kurmak için bir virtualenv içinde `pip install -e .`.
@@ -219,7 +219,7 @@ tam olarak bu sıradan çıkıyor — bkz. [`tools/screenshots.py`](./tools/scre
 [Dört örnek](./examples/README.md) hem netlist hem de bitmiş kart olarak geliyor:
 
 ```sh
-perfstudio examples/lm317-supply.perf
+perfboard examples/lm317-supply.perf
 ```
 
 | | neyi göstermek için var |
@@ -238,12 +238,12 @@ MCP sunucusu birebir aynı komut veri yolunu sürer, dolayısıyla geri alma her
 çalışır:
 
 ```sh
-claude mcp add perfstudio -- uvx --from "perfstudio[mcp]" perfstudio-mcp
+claude mcp add perfboard -- uvx --from "perfboard[mcp]" perfboard-mcp
 ```
 
 Önceden bir şey kurmak gerekmiyor — `uvx` paketi kendi önbelleğine indiriyor. Klondan
 çalışırken `pip install -e ".[mcp]"` ve ardından
-`claude mcp add perfstudio -- perfstudio-mcp`.
+`claude mcp add perfboard -- perfboard-mcp`.
 
 Elli bir tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
 (`A1`, `C7`, `AC12`) — hiçbir yerde ham koordinat yok. Tool listesi, diğer istemcilerin
@@ -256,7 +256,7 @@ gerekmeden. Görsel çıktının CI'da sınandığı yol budur ve bir render de�
 şeyi kırmadığını doğrulamanın en hızlı yoludur:
 
 ```sh
-python -m perfstudio.ui.main --headless tools/diffcheck/golden/dense.perf
+python -m perfboard.ui.main --headless tools/diffcheck/golden/dense.perf
 ```
 
 ## Nasıl kurulmuş
@@ -273,15 +273,15 @@ değil, "yerine geçtiği implementasyonla bayt bayt aynı sonucu üretiyor" olm
 `tools/diffcheck/` altındaki golden fixture'lar, son IEEE-754 double'a kadar.
 
 ```
-src/perfstudio/            motor: doküman modeli, komut veri yolu, bağlantısallık,
+src/perfboard/            motor: doküman modeli, komut veri yolu, bağlantısallık,
                            router, autorouter, yerleştirici, DRC, LVS, kalıcılık
-src/perfstudio/guide.py    lehimleme rehberi; HTML/CSV/JSON için guide_export.py
-src/perfstudio/stripboard.py  bakırı baştan bağlı gelen kart; striproute.py onun üstünde
+src/perfboard/guide.py    lehimleme rehberi; HTML/CSV/JSON için guide_export.py
+src/perfboard/stripboard.py  bakırı baştan bağlı gelen kart; striproute.py onun üstünde
                            tasarım yapan kes-ve-bağla planlayıcısı
-src/perfstudio/parsers/    KiCad netlist içe aktarıcı
-src/perfstudio/ui/         Qt uygulaması: 2D editör, VTK 3D görünüm, 1:1 PDF çıktısı,
+src/perfboard/parsers/    KiCad netlist içe aktarıcı
+src/perfboard/ui/         Qt uygulaması: 2D editör, VTK 3D görünüm, 1:1 PDF çıktısı,
                            ve headless.py: CI'ın çıktısını denetlediği ekransız koşu
-src/perfstudio/mcp/        MCP sunucusu (docs/MCP.md)
+src/perfboard/mcp/        MCP sunucusu (docs/MCP.md)
 examples/                  içe aktarılacak bir netlist
 tests/                     ~2080 test; motor mypy --strict temiz
 packages/                  Python portunun karşısında kanıtlandığı referans olarak
@@ -341,7 +341,7 @@ Issue ve pull request'ler memnuniyetle karşılanır. Önce [CONTRIBUTING.md](./
 dosyasını okuyun — test paketinin nasıl çalıştırıldığını, hangi kontrollerin kapı olup
 hangilerinin olmadığını, ve burada çoğu projeden daha çok önem taşıyan bir lisans sınırını
 anlatıyor: **bu alandaki GPL lisanslı araçların kaynak kodunu okumayın ve port etmeyin.**
-PerfStudio onlara karşı clean-room geliştirilmiştir ve bunun böyle kalması gerekiyor.
+Perfboard Studio onlara karşı clean-room geliştirilmiştir ve bunun böyle kalması gerekiyor.
 Kayıt [docs/prior-art.md](./docs/prior-art.md) içinde.
 
 ## Lisans

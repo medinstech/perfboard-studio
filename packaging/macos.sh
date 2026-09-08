@@ -2,10 +2,10 @@
 #
 # Wrap the macOS application bundle in a disk image.
 #
-#     python -m PyInstaller perfstudio.spec --noconfirm
+#     python -m PyInstaller perfboard.spec --noconfirm
 #     packaging/macos.sh
 #
-# The spec builds `dist/PerfStudio.app`; this is only the delivery.  A .dmg is what a Mac
+# The spec builds `dist/PerfboardStudio.app`; this is only the delivery.  A .dmg is what a Mac
 # user expects to download -- it opens to a window with the application on one side and a
 # shortcut to /Applications on the other, and installing is dragging one onto the other.
 # There is nothing to run and nothing to uninstall afterwards but the folder itself.
@@ -19,12 +19,12 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$here"
 
-APP="${APP:-dist/PerfStudio.app}"
+APP="${APP:-dist/PerfboardStudio.app}"
 OUT_DIR="${OUT_DIR:-releases}"
 ARCH="${ARCH:-$(uname -m)}"
 
-version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/perfstudio/version.py)
-[ -n "$version" ] || { echo "cannot read __version__ out of src/perfstudio/version.py" >&2; exit 1; }
+version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/perfboard/version.py)
+[ -n "$version" ] || { echo "cannot read __version__ out of src/perfboard/version.py" >&2; exit 1; }
 [ -d "$APP" ] || { echo "no bundle at $APP - run PyInstaller first" >&2; exit 1; }
 
 # Reported, not imposed.  PyInstaller signs every Mach-O it collects and then the bundle,
@@ -51,13 +51,13 @@ mkdir -p "$staging" "$OUT_DIR"
 ditto "$APP" "$staging/$(basename "$APP")"
 ln -s /Applications "$staging/Applications"
 
-out="$OUT_DIR/perfstudio-${version}-${ARCH}.dmg"
+out="$OUT_DIR/perfboard-${version}-${ARCH}.dmg"
 rm -f "$out"
 # ULFO (LZFSE) rather than UDZO (zlib): it is both smaller and faster to decompress, and
 # the only thing it costs is macOS 10.11 and older, which cannot run an arm64 binary
 # anyway.
 hdiutil create \
-    -volname "PerfStudio $version" \
+    -volname "Perfboard Studio $version" \
     -srcfolder "$staging" \
     -ov -format ULFO \
     "$out"

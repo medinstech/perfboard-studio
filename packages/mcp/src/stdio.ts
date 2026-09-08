@@ -42,10 +42,10 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   await server.connect(transport);
-  log.info('PerfStudio MCP server connected over stdio');
+  log.info('Perfboard Studio MCP server connected over stdio');
 }
 
 main().catch((err: unknown) => {
-  log.error('Fatal error starting the PerfStudio MCP server', { error: describeError(err) });
+  log.error('Fatal error starting the Perfboard Studio MCP server', { error: describeError(err) });
   process.exit(1);
 });

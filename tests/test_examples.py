@@ -17,12 +17,12 @@ import pathlib
 
 import pytest
 
-from perfstudio import persist
-from perfstudio.drc import run_drc
-from perfstudio.footprints import footprint_lookup
-from perfstudio.guide import build_guide
-from perfstudio.lvs import run_lvs
-from perfstudio.parsers.kicad import parse_kicad_netlist
+from perfboard import persist
+from perfboard.drc import run_drc
+from perfboard.footprints import footprint_lookup
+from perfboard.guide import build_guide
+from perfboard.lvs import run_lvs
+from perfboard.parsers.kicad import parse_kicad_netlist
 
 EXAMPLES = pathlib.Path(__file__).resolve().parent.parent / "examples"
 PERF_FILES = sorted(EXAMPLES.glob("*.perf"))

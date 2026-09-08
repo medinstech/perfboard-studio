@@ -1,7 +1,7 @@
 /**
  * Parametric through-hole footprint library.
  *
- * PerfStudio deliberately generates footprints (and, from the same BodySpec, the
+ * Perfboard Studio deliberately generates footprints (and, from the same BodySpec, the
  * matching 3D body) from a handful of numeric parameters rather than shipping a
  * mesh/footprint library: zero assets, guaranteed agreement between the 2D
  * footprint and the 3D body, and no share-alike asset licence to inherit

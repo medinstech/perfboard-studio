@@ -20,14 +20,14 @@ from __future__ import annotations
 import dataclasses
 import json
 
-from perfstudio.command import (
+from perfboard.command import (
     CommandBus,
     CommandContext,
     CommandRecord,
     create_id_generator,
     replay,
 )
-from perfstudio.commands import (
+from perfboard.commands import (
     DEFAULT_BOARD,
     STANDARD_COMMANDS,
     AddConductorPayload,
@@ -64,7 +64,7 @@ from perfstudio.commands import (
     create_empty_document,
     create_standard_registry,
 )
-from perfstudio.model import (
+from perfboard.model import (
     DocumentMeta,
     HoleCoord,
     Net,
@@ -73,7 +73,7 @@ from perfstudio.model import (
     SolderTraceConductor,
     SpineSpec,
 )
-from perfstudio.persist import parse_document_or_throw, serialize_document
+from perfboard.persist import parse_document_or_throw, serialize_document
 
 META = DocumentMeta(
     name="test",

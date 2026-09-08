@@ -22,9 +22,9 @@ from pathlib import Path
 
 import pytest
 
-import perfstudio
-from perfstudio.model import DOCUMENT_FORMAT_VERSION
-from perfstudio.version import (
+import perfboard
+from perfboard.model import DOCUMENT_FORMAT_VERSION
+from perfboard.version import (
     __version__,
     describe,
     is_development_build,
@@ -130,8 +130,8 @@ def test_version_is_wellformed() -> None:
 
 
 def test_package_reexports_the_version() -> None:
-    """``perfstudio.__version__`` is what every other Python package trains people to try."""
-    assert perfstudio.__version__ == __version__
+    """``perfboard.__version__`` is what every other Python package trains people to try."""
+    assert perfboard.__version__ == __version__
 
 
 def test_release_version_drops_the_dev_suffix() -> None:
@@ -172,7 +172,7 @@ def test_pyproject_derives_the_version_from_the_package() -> None:
     assert "version" not in project, "pyproject must not repeat the version; see version.py"
     assert project["dynamic"] == ["version"]
     attr = data["tool"]["setuptools"]["dynamic"]["version"]["attr"]
-    assert attr == "perfstudio.version.__version__"
+    assert attr == "perfboard.version.__version__"
 
 
 def test_every_classifier_is_one_pypi_actually_has() -> None:
@@ -209,7 +209,7 @@ def test_version_module_imports_nothing_at_module_scope() -> None:
     A single top-level import of anything at all would turn a working build into a
     confusing one, so the constraint is checked rather than left to a comment.
     """
-    source = (REPO_ROOT / "src" / "perfstudio" / "version.py").read_text(encoding="utf-8")
+    source = (REPO_ROOT / "src" / "perfboard" / "version.py").read_text(encoding="utf-8")
     module_scope = [
         line
         for line in source.splitlines()

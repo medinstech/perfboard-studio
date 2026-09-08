@@ -35,7 +35,7 @@ from PIL import Image, ImageDraw, ImageFont
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from perfstudio.ui import theme  # noqa: E402
+from perfboard.ui import theme  # noqa: E402
 
 COPPER = "#c8a06a"  # ui/boardcolors.py's tinned pad, for the second half of the rule.
 
@@ -116,7 +116,7 @@ def _card(
         fade_draw.line([(x, 0), (x, height)], fill=int(255 * (1 - x / fade_w) ** 1.15))
     card.paste(Image.new("RGB", (fade_w, height), theme.WINDOW), (width - panel_w, 0), fade)
 
-    draw.text((margin, name_y), "PerfStudio", font=_font("bold", name_size), fill=theme.TEXT)
+    draw.text((margin, name_y), "Perfboard Studio", font=_font("bold", name_size), fill=theme.TEXT)
 
     # A rule in the two colours the product is made of: the interface's accent, and the
     # board's copper.

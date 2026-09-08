@@ -1,7 +1,7 @@
 """3D board view on VTK.
 
 Answers the question the TypeScript/three.js route never got to: can a native Python
-stack carry PerfStudio's 3D requirement (PLAN.md D7)?
+stack carry Perfboard Studio's 3D requirement (PLAN.md D7)?
 
 Three things have to hold:
   1. 6000 hole pads must be ONE instanced actor, not 6000 actors.

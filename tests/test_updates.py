@@ -1,4 +1,4 @@
-"""Tests for the update check's decisions (src/perfstudio/updates.py).
+"""Tests for the update check's decisions (src/perfboard/updates.py).
 
 Every question an update check has to answer is in this file, and none of them needs a
 network: which release is newer, which file suits this machine, when to look again, and
@@ -27,7 +27,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from perfstudio.updates import (
+from perfboard.updates import (
     RELEASES_PAGE_URL,
     Asset,
     Release,
@@ -46,7 +46,7 @@ FEED = json.dumps(
     [
         {
             "tag_name": "v0.8.0",
-            "html_url": "https://github.com/medinstech/perfstudio/releases/tag/v0.8.0",
+            "html_url": "https://github.com/medinstech/perfboard/releases/tag/v0.8.0",
             "published_at": "2026-09-01T10:00:00Z",
             "draft": False,
             "prerelease": False,
@@ -54,17 +54,17 @@ FEED = json.dumps(
             "- **A second thing** happened as well.\n",
             "assets": [
                 {
-                    "name": "PerfStudio_0.8.0_Setup.exe",
+                    "name": "PerfboardStudio_0.8.0_Setup.exe",
                     "browser_download_url": "https://example.invalid/setup.exe",
                     "size": 314_572_800,
                 },
                 {
-                    "name": "perfstudio-0.8.0-x86_64.AppImage",
+                    "name": "perfboard-0.8.0-x86_64.AppImage",
                     "browser_download_url": "https://example.invalid/app.AppImage",
                     "size": 298_000_000,
                 },
                 {
-                    "name": "perfstudio-0.8.0-arm64.dmg",
+                    "name": "perfboard-0.8.0-arm64.dmg",
                     "browser_download_url": "https://example.invalid/app.dmg",
                     "size": 301_000_000,
                 },
@@ -77,7 +77,7 @@ FEED = json.dumps(
         },
         {
             "tag_name": "v0.7.0",
-            "html_url": "https://github.com/medinstech/perfstudio/releases/tag/v0.7.0",
+            "html_url": "https://github.com/medinstech/perfboard/releases/tag/v0.7.0",
             "published_at": "2026-08-25T10:00:00Z",
             "draft": False,
             "prerelease": False,
@@ -149,9 +149,9 @@ def test_the_feed_parses_into_releases() -> None:
     assert newest.published == "2026-09-01T10:00:00Z"
     assert not newest.prerelease
     assert [asset.name for asset in newest.assets] == [
-        "PerfStudio_0.8.0_Setup.exe",
-        "perfstudio-0.8.0-x86_64.AppImage",
-        "perfstudio-0.8.0-arm64.dmg",
+        "PerfboardStudio_0.8.0_Setup.exe",
+        "perfboard-0.8.0-x86_64.AppImage",
+        "perfboard-0.8.0-arm64.dmg",
         "SHA256SUMS",
     ]
     assert newest.assets[0].size == 314_572_800
@@ -237,10 +237,10 @@ def test_a_prerelease_is_not_offered_unless_it_is_asked_for() -> None:
 @pytest.mark.parametrize(
     "platform,machine,expected",
     [
-        ("win32", "AMD64", "PerfStudio_0.8.0_Setup.exe"),
-        ("win32", "x86_64", "PerfStudio_0.8.0_Setup.exe"),
-        ("linux", "x86_64", "perfstudio-0.8.0-x86_64.AppImage"),
-        ("darwin", "arm64", "perfstudio-0.8.0-arm64.dmg"),
+        ("win32", "AMD64", "PerfboardStudio_0.8.0_Setup.exe"),
+        ("win32", "x86_64", "PerfboardStudio_0.8.0_Setup.exe"),
+        ("linux", "x86_64", "perfboard-0.8.0-x86_64.AppImage"),
+        ("darwin", "arm64", "perfboard-0.8.0-arm64.dmg"),
     ],
 )
 def test_each_platform_gets_its_own_installer(
@@ -276,21 +276,21 @@ def test_a_release_with_no_assets_offers_none() -> None:
 # ---------------------------------------------------------------------------
 
 DIGEST = "9f" * 32
-SUMS = f"{DIGEST}  PerfStudio_0.8.0_Setup.exe\n{'ab' * 32} *perfstudio-0.8.0-arm64.dmg\n"
+SUMS = f"{DIGEST}  PerfboardStudio_0.8.0_Setup.exe\n{'ab' * 32} *perfboard-0.8.0-arm64.dmg\n"
 
 
 def test_a_published_digest_is_found_by_asset_name() -> None:
-    assert expected_digest(SUMS, "PerfStudio_0.8.0_Setup.exe") == DIGEST
+    assert expected_digest(SUMS, "PerfboardStudio_0.8.0_Setup.exe") == DIGEST
 
 
 def test_the_binary_mode_asterisk_is_not_part_of_the_name() -> None:
     """coreutils writes ``*name`` for a file it read in binary mode."""
-    assert expected_digest(SUMS, "perfstudio-0.8.0-arm64.dmg") == "ab" * 32
+    assert expected_digest(SUMS, "perfboard-0.8.0-arm64.dmg") == "ab" * 32
 
 
 def test_an_asset_the_sums_file_does_not_mention_has_no_digest() -> None:
     """Not a failure: releases before 0.7.0 published no SHA256SUMS at all."""
-    assert expected_digest(SUMS, "perfstudio-0.8.0-x86_64.AppImage") is None
+    assert expected_digest(SUMS, "perfboard-0.8.0-x86_64.AppImage") is None
 
 
 @pytest.mark.parametrize("junk", ["", "not a checksum file", "zzz  file.exe", "abc file.exe"])

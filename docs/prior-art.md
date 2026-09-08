@@ -1,12 +1,12 @@
 # Prior art and clean-room record
 
-This document records what was studied before PerfStudio was written, and how. It
+This document records what was studied before Perfboard Studio was written, and how. It
 exists so the provenance of the design is auditable, and so contributors know which
 sources they may and may not read.
 
 ## Licence boundaries — read this before contributing
 
-PerfStudio is Apache-2.0. Two existing tools in this space are GPL-3.0:
+Perfboard Studio is Apache-2.0. Two existing tools in this space are GPL-3.0:
 
 - **DIY Layout Creator** (bancika/diy-layout-creator) — GPL-3.0
 - **VeroRoute** (Alex Lawrow, SourceForge) — GPL-3.0
@@ -32,7 +32,7 @@ Its published algorithm description may be referenced and is credited below.
 | VeeCAD | ✓ | partial | partial | ✗ | ✗ | ✗ | ✗ |
 
 No existing tool combines netlist-driven layout, autorouting, design-rule checking,
-a detailed build guide and an agent-facing API. That combination is PerfStudio's
+a detailed build guide and an agent-facing API. That combination is Perfboard Studio's
 reason to exist.
 
 ### Recurring user complaints (from public forums)

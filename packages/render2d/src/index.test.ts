@@ -1,4 +1,4 @@
-import type { Conductor, Footprint, HoleCoord } from '@perfstudio/core';
+import type { Conductor, Footprint, HoleCoord } from '@perfboard/core';
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_THEME, renderBoard } from './index.js';

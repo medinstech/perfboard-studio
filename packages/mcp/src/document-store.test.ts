@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { DOCUMENT_FORMAT_VERSION } from '@perfstudio/core';
-import type { PerfDocument } from '@perfstudio/core';
+import { DOCUMENT_FORMAT_VERSION } from '@perfboard/core';
+import type { PerfDocument } from '@perfboard/core';
 
 import { DocumentStore, DocumentStoreError } from './document-store.js';
 
@@ -35,7 +35,7 @@ describe('DocumentStore', () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'perfstudio-mcp-test-'));
+    dir = mkdtempSync(join(tmpdir(), 'perfboard-mcp-test-'));
   });
 
   afterEach(() => {
@@ -72,11 +72,11 @@ describe('DocumentStore', () => {
     expect(store.document.meta.name).toBe('From file');
   });
 
-  it('falls back to the PERFSTUDIO_DOCUMENT env var when argv[2] is absent', () => {
+  it('falls back to the PERFBOARD_DOCUMENT env var when argv[2] is absent', () => {
     const path = join(dir, 'board.perf');
     writeFileSync(path, JSON.stringify(validDocument({ meta: { name: 'From env', created: 'x', modified: 'x' } })));
 
-    const store = DocumentStore.load({ argv: ['node', 'stdio.js'], env: { PERFSTUDIO_DOCUMENT: path } });
+    const store = DocumentStore.load({ argv: ['node', 'stdio.js'], env: { PERFBOARD_DOCUMENT: path } });
 
     expect(store.document.meta.name).toBe('From env');
   });
@@ -87,7 +87,7 @@ describe('DocumentStore', () => {
     writeFileSync(argvPath, JSON.stringify(validDocument({ meta: { name: 'argv wins', created: 'x', modified: 'x' } })));
     writeFileSync(envPath, JSON.stringify(validDocument({ meta: { name: 'env loses', created: 'x', modified: 'x' } })));
 
-    const store = DocumentStore.load({ argv: ['node', 'stdio.js', argvPath], env: { PERFSTUDIO_DOCUMENT: envPath } });
+    const store = DocumentStore.load({ argv: ['node', 'stdio.js', argvPath], env: { PERFBOARD_DOCUMENT: envPath } });
 
     expect(store.document.meta.name).toBe('argv wins');
   });

@@ -28,7 +28,7 @@ function levelRank(level: LogLevel): number {
 
 /** Reads the configured minimum level fresh on every call so tests can flip it via env. */
 function configuredLevel(): LogLevel {
-  const raw = process.env['PERFSTUDIO_LOG'];
+  const raw = process.env['PERFBOARD_LOG'];
   const normalized = raw?.toLowerCase();
   if (normalized !== undefined && isLogLevel(normalized)) {
     return normalized;

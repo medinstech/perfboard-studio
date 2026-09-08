@@ -1,5 +1,5 @@
 [project]
-name = "perfstudio"
+name = "perfboard"
 # Single-sourced from the package rather than repeated here: see docs/RELEASING.md and
 # the docstring on version.py. A version written down twice is a version that will
 # disagree with itself, usually inside a released artefact.
@@ -47,11 +47,11 @@ dependencies = [
 # PyPI links them individually and a person landing on the page from a search has no other
 # route back to the repository.
 [project.urls]
-Homepage = "https://github.com/medinstech/perfstudio"
-Repository = "https://github.com/medinstech/perfstudio"
-Documentation = "https://github.com/medinstech/perfstudio#where-everything-else-is-written-down"
-Changelog = "https://github.com/medinstech/perfstudio/blob/main/CHANGELOG.md"
-Issues = "https://github.com/medinstech/perfstudio/issues"
+Homepage = "https://github.com/medinstech/perfboard"
+Repository = "https://github.com/medinstech/perfboard"
+Documentation = "https://github.com/medinstech/perfboard#where-everything-else-is-written-down"
+Changelog = "https://github.com/medinstech/perfboard/blob/main/CHANGELOG.md"
+Issues = "https://github.com/medinstech/perfboard/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -76,15 +76,15 @@ dev = [
 mcp = ["mcp>=1.0,<2"]
 
 [project.scripts]
-perfstudio = "perfstudio.ui.main:main"
-perfstudio-mcp = "perfstudio.mcp.server:main"
+perfboard = "perfboard.ui.main:main"
+perfboard-mcp = "perfboard.mcp.server:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.dynamic]
-version = { attr = "perfstudio.version.__version__" }
+version = { attr = "perfboard.version.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -93,7 +93,7 @@ where = ["src"]
 # rather than through include-package-data, so that what ends up in a wheel is a decision
 # rather than whatever happened to be sitting in the tree.
 [tool.setuptools.package-data]
-perfstudio = ["ui/assets/*.png", "ui/assets/*.ico"]
+perfboard = ["ui/assets/*.png", "ui/assets/*.ico"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -105,7 +105,7 @@ strict = true
 mypy_path = "src"
 # The engine is pure and must stay that way; UI code may be looser.
 [[tool.mypy.overrides]]
-module = "perfstudio.ui.*"
+module = "perfboard.ui.*"
 disallow_untyped_defs = false
 
 [tool.ruff]

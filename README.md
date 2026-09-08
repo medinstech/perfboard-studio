@@ -1,13 +1,13 @@
 <p align="center">
   <a href="https://medinstech.com">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/wordmark-white.png">
-      <img alt="Medinstech" src="https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/wordmark-blue.png" height="96">
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/wordmark-white.png">
+      <img alt="Medinstech" src="https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/wordmark-blue.png" height="96">
     </picture>
   </a>
 </p>
 
-<h1 align="center">PerfStudio</h1>
+<h1 align="center">Perfboard Studio</h1>
 
 <p align="center"><b>Perfboard circuit design and soldering guides</b></p>
 
@@ -19,22 +19,22 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/medinstech/perfstudio/actions/workflows/ci.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/medinstech/perfstudio/ci.yml?branch=main&style=flat-square&label=tests"></a>
-  <a href="https://github.com/medinstech/perfstudio/releases/latest"><img alt="latest release" src="https://img.shields.io/github/v/release/medinstech/perfstudio?style=flat-square&color=0d00ff&label=release"></a>
-  <a href="https://github.com/medinstech/perfstudio/blob/main/pyproject.toml"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-0d00ff?style=flat-square"></a>
-  <a href="https://github.com/medinstech/perfstudio/blob/main/LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-0d00ff?style=flat-square"></a>
+  <a href="https://github.com/medinstech/perfboard/actions/workflows/ci.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/medinstech/perfboard/ci.yml?branch=main&style=flat-square&label=tests"></a>
+  <a href="https://github.com/medinstech/perfboard/releases/latest"><img alt="latest release" src="https://img.shields.io/github/v/release/medinstech/perfboard?style=flat-square&color=0d00ff&label=release"></a>
+  <a href="https://github.com/medinstech/perfboard/blob/main/pyproject.toml"><img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-0d00ff?style=flat-square"></a>
+  <a href="https://github.com/medinstech/perfboard/blob/main/LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-0d00ff?style=flat-square"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/medinstech/perfstudio/releases/latest"><b>Download</b></a>
-  &nbsp;·&nbsp; <a href="#running-it"><b>uv tool install perfstudio</b></a>
-  &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfstudio/blob/main/docs/MCP.md">MCP server</a>
+  <a href="https://github.com/medinstech/perfboard/releases/latest"><b>Download</b></a>
+  &nbsp;·&nbsp; <a href="#running-it"><b>uv tool install perfboard</b></a>
+  &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard/blob/main/docs/MCP.md">MCP server</a>
   &nbsp;·&nbsp; <a href="#or-open-one-that-is-already-built">Example boards</a>
-  &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfstudio/blob/main/CHANGELOG.md">Changelog</a>
-  &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfstudio/blob/main/README.tr.md">Türkçe</a>
+  &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard/blob/main/CHANGELOG.md">Changelog</a>
+  &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard/blob/main/README.tr.md">Türkçe</a>
 </p>
 
-![the 2D editor, with an NE555 astable placed and routed](https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/editor-component-side.png)
+![the 2D editor, with an NE555 astable placed and routed](https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/editor-component-side.png)
 
 <p align="center">
   The status bar is the whole claim: fourteen connections across seven nets,<br>
@@ -67,7 +67,7 @@
 
 > **Status: pre-alpha, and end to end.** A netlist goes in and a soldering guide
 > comes out. What is missing is the dogfood test — nobody has yet built a real
-> board by following a generated guide, and [PLAN.md](https://github.com/medinstech/perfstudio/blob/main/PLAN.md) §11
+> board by following a generated guide, and [PLAN.md](https://github.com/medinstech/perfboard/blob/main/PLAN.md) §11
 > says M5 does not close until somebody has. Everything else runs: **v0.10.0**
 > ships an installer for each of the three desktop platforms, none code-signed.
 
@@ -97,7 +97,7 @@ actually solder:
 | top jumper | insulated jumper over the component side | visible, occupies body space |
 
 The 0.6 mm gap to the neighbouring pad is why solder traces are both so useful and so
-easy to get wrong. PerfStudio scores that risk into the router's cost function, and turns
+easy to get wrong. Perfboard Studio scores that risk into the router's cost function, and turns
 every flagged spot into a measurement step in the build guide.
 
 ## Both faces, and the third dimension
@@ -106,13 +106,13 @@ The solder side is where the copper is, so it is a first-class view rather than 
 mode — and copper on the face you are *not* looking at is hatched, because a board is
 opaque and a trace drawn solid says *this is in front of you*.
 
-![The solder side, with far-side copper hatched](https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/editor-solder-side.png)
+![The solder side, with far-side copper hatched](https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/editor-solder-side.png)
 
 The 3D view is a checking tool, not a picture. Three rules exist that a top-down view
 cannot see at all: a part too tall for the case, a jumper trapped under a body that will
 be soldered down on top of it, and a heat-sensitive part sitting too close to a hot one.
 
-![The same board in 3D](https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/board-3d.png)
+![The same board in 3D](https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/board-3d.png)
 
 ## Draw the circuit first
 
@@ -121,7 +121,7 @@ building* — and it is where you say it: **Add Part**, **Wire** two pins, **Pla
 Board**. The circuit comes first and the layout second, which is how every other EDA tool
 works and is the order this one could not do until now.
 
-![The NE555 astable, drawn from its netlist](https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/schematic.png)
+![The NE555 astable, drawn from its netlist](https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/schematic.png)
 
 **The sheet is derived, never stored.** No symbol positions live in the file, so there is
 no second copy of the circuit to keep in step with the netlist and nothing to lay out by
@@ -145,7 +145,7 @@ say which rail sinks and which sources, and a photocopier keeps shapes rather th
 
 ## The guide has an order, and you can watch it
 
-![The NE555 board assembling itself: parts first, then the board turns over and the copper goes on](https://raw.githubusercontent.com/medinstech/perfstudio/main/docs/images/assembly.gif)
+![The NE555 board assembling itself: parts first, then the board turns over and the copper goes on](https://raw.githubusercontent.com/medinstech/perfboard/main/docs/images/assembly.gif)
 
 Parts go in **shortest first** — a tall part fitted early stops the board lying flat on
 the bench while the short ones are soldered. Then the board is turned over and the copper
@@ -164,7 +164,7 @@ actually give you.
 It is a desktop application, so the ordinary way to get it is to install one. No Python
 required.
 
-**[⬇ Download the latest release](https://github.com/medinstech/perfstudio/releases/latest)**
+**[⬇ Download the latest release](https://github.com/medinstech/perfboard/releases/latest)**
 
 | | |
 |---|---|
@@ -175,7 +175,7 @@ required.
 Each is built and smoke-tested by the tag that produced it. **None
 of them is code-signed**, so each warns on first run and the release notes say how to get
 past it — a Windows EV certificate is ~$300/year and Apple notarization $99/year, and
-neither is bought yet. See [docs/RELEASING.md](https://github.com/medinstech/perfstudio/blob/main/docs/RELEASING.md).
+neither is bought yet. See [docs/RELEASING.md](https://github.com/medinstech/perfboard/blob/main/docs/RELEASING.md).
 
 The interface speaks **English and Turkish** (`--lang tr`, or follow the system locale).
 
@@ -185,15 +185,15 @@ For the two platforms with no build — an Intel Mac, Linux on ARM — and for a
 would rather not click past a signing warning. Needs **Python 3.12+**:
 
 ```sh
-uv tool install perfstudio    # or: pipx install perfstudio
+uv tool install perfboard    # or: pipx install perfboard
 
-perfstudio                    # launch on a blank board
-perfstudio some/board.perf    # ...or open a document
-perfstudio --version
+perfboard                    # launch on a blank board
+perfboard some/board.perf    # ...or open a document
+perfboard --version
 ```
 
 **`uv tool` or `pipx`, not a bare `pip install`**, because this is an application and not
-a library. Both put it in an environment of its own and `perfstudio` on your PATH, where
+a library. Both put it in an environment of its own and `perfboard` on your PATH, where
 `pip install` would either put 400 MB of Qt and VTK into a shared `site-packages` or, on
 Debian, Ubuntu and Fedora, be refused outright by the system Python (PEP 668). From a
 clone, `pip install -e .` inside a virtualenv.
@@ -211,14 +211,14 @@ Open the schematic panel (`Ctrl+5`) and draw the circuit: **Add Part** for each 
 With a circuit that already exists, start at **File → Import KiCad Netlist** on
 `examples/ne555-astable.net` and accept the offered placement instead. That is the exact
 sequence the screenshots above come out of — see
-[`tools/screenshots.py`](https://github.com/medinstech/perfstudio/blob/main/tools/screenshots.py).
+[`tools/screenshots.py`](https://github.com/medinstech/perfboard/blob/main/tools/screenshots.py).
 
 ### Or open one that is already built
 
-[Four examples](https://github.com/medinstech/perfstudio/blob/main/examples/README.md) ship as both the netlist and the finished board:
+[Four examples](https://github.com/medinstech/perfboard/blob/main/examples/README.md) ship as both the netlist and the finished board:
 
 ```sh
-perfstudio examples/lm317-supply.perf
+perfboard examples/lm317-supply.perf
 ```
 
 | | what it is there to show |
@@ -236,14 +236,14 @@ All four route to completion, match their schematics under LVS and carry no DRC 
 The MCP server drives the identical command bus, so undo works across both:
 
 ```sh
-claude mcp add perfstudio -- uvx --from "perfstudio[mcp]" perfstudio-mcp
+claude mcp add perfboard -- uvx --from "perfboard[mcp]" perfboard-mcp
 ```
 
 Nothing has to be installed first — `uvx` fetches the package into its own cache. From a
-clone it is `pip install -e ".[mcp]"` and then `claude mcp add perfstudio -- perfstudio-mcp`.
+clone it is `pip install -e ".[mcp]"` and then `claude mcp add perfboard -- perfboard-mcp`.
 
 Fifty-one tools, every hole addressed the way people talk about perfboard (`A1`, `C7`,
-`AC12`) and never as raw coordinates. See [docs/MCP.md](https://github.com/medinstech/perfstudio/blob/main/docs/MCP.md) for the tool list,
+`AC12`) and never as raw coordinates. See [docs/MCP.md](https://github.com/medinstech/perfboard/blob/main/docs/MCP.md) for the tool list,
 the JSON config other clients want, and the rest of the setup.
 
 ### Headless
@@ -253,7 +253,7 @@ how the visual output is exercised in CI, and the fastest way to check that a re
 change did not crash:
 
 ```sh
-python -m perfstudio.ui.main --headless tools/diffcheck/golden/dense.perf
+python -m perfboard.ui.main --headless tools/diffcheck/golden/dense.perf
 ```
 
 ## How it is built
@@ -269,15 +269,15 @@ pass" but "it produces byte-identical results to the implementation it replaces"
 golden fixtures in `tools/diffcheck/`, down to the last IEEE-754 double.
 
 ```
-src/perfstudio/            the engine: document model, command bus, connectivity,
+src/perfboard/            the engine: document model, command bus, connectivity,
                            router, autorouter, placer, DRC, LVS, persistence
-src/perfstudio/guide.py    the soldering guide, and guide_export.py for HTML/CSV/JSON
-src/perfstudio/stripboard.py  the board whose copper arrives joined, and striproute.py
+src/perfboard/guide.py    the soldering guide, and guide_export.py for HTML/CSV/JSON
+src/perfboard/stripboard.py  the board whose copper arrives joined, and striproute.py
                            for the cuts-and-links planner that designs on one
-src/perfstudio/parsers/    KiCad netlist importer
-src/perfstudio/ui/         Qt application: 2D editor, VTK 3D view, 1:1 PDF export,
+src/perfboard/parsers/    KiCad netlist importer
+src/perfboard/ui/         Qt application: 2D editor, VTK 3D view, 1:1 PDF export,
                            and headless.py, the no-display run CI checks the output with
-src/perfstudio/mcp/        the MCP server (docs/MCP.md)
+src/perfboard/mcp/        the MCP server (docs/MCP.md)
 examples/                  a netlist to import
 tests/                     ~2080 tests; the engine is mypy --strict clean
 packages/                  the original TypeScript engine, kept as the reference the
@@ -306,12 +306,12 @@ runs, and the update check that tells you a release exists and fetches it (**Hel
 for Updates**; it verifies the download against the release's `SHA256SUMS` and then hands
 it to you — running it stays your click).
 
-Next, in the order [PLAN.md](https://github.com/medinstech/perfstudio/blob/main/PLAN.md) §11 puts them:
+Next, in the order [PLAN.md](https://github.com/medinstech/perfboard/blob/main/PLAN.md) §11 puts them:
 
 - **The dogfood build (M5).** Somebody has to solder a real board from a generated guide.
   Until that has happened, every claim on this page is a claim about software rather than
   about a working circuit. It is also the one thing on this list that a stranger can do
-  for the project — there is [an issue template for it](https://github.com/medinstech/perfstudio/blob/main/.github/ISSUE_TEMPLATE/board_i_could_not_build.yml).
+  for the project — there is [an issue template for it](https://github.com/medinstech/perfboard/blob/main/.github/ISSUE_TEMPLATE/board_i_could_not_build.yml).
 - **Code signing.** A Windows EV certificate is ~$300/year and Apple notarization
   $99/year, so until then the installers warn on first run and the release notes say how
   to get past it.
@@ -320,24 +320,24 @@ Next, in the order [PLAN.md](https://github.com/medinstech/perfstudio/blob/main/
 
 | | |
 |---|---|
-| [docs/MCP.md](https://github.com/medinstech/perfstudio/blob/main/docs/MCP.md) | the 51 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
-| [examples/README.md](https://github.com/medinstech/perfstudio/blob/main/examples/README.md) | what each of the four example boards is there to demonstrate |
-| [CHANGELOG.md](https://github.com/medinstech/perfstudio/blob/main/CHANGELOG.md) | every release, and what an unreleased build is accumulating towards the next one |
-| [docs/RELEASING.md](https://github.com/medinstech/perfstudio/blob/main/docs/RELEASING.md) | the tag ritual, and what `release.yml` builds out of it on three platforms |
-| [docs/prior-art.md](https://github.com/medinstech/perfstudio/blob/main/docs/prior-art.md) | the tools that already exist in this space, and the licence boundary this project keeps from them |
-| [CONTRIBUTING.md](https://github.com/medinstech/perfstudio/blob/main/CONTRIBUTING.md) | running the suite, which checks are gates and which are reports |
-| [SECURITY.md](https://github.com/medinstech/perfstudio/blob/main/SECURITY.md) · [CODE_OF_CONDUCT.md](https://github.com/medinstech/perfstudio/blob/main/CODE_OF_CONDUCT.md) | reporting a vulnerability, and how people are expected to behave here |
-| [PLAN.md](https://github.com/medinstech/perfstudio/blob/main/PLAN.md) | the original project plan, **written in Turkish** and kept as written, so what was predicted can be read beside what came out |
-| [CLAUDE.md](https://github.com/medinstech/perfstudio/blob/main/CLAUDE.md) | why the code is shaped the way it is. Written for agents working in the repository, and the most useful thing here for a person about to change something |
+| [docs/MCP.md](https://github.com/medinstech/perfboard/blob/main/docs/MCP.md) | the 51 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
+| [examples/README.md](https://github.com/medinstech/perfboard/blob/main/examples/README.md) | what each of the four example boards is there to demonstrate |
+| [CHANGELOG.md](https://github.com/medinstech/perfboard/blob/main/CHANGELOG.md) | every release, and what an unreleased build is accumulating towards the next one |
+| [docs/RELEASING.md](https://github.com/medinstech/perfboard/blob/main/docs/RELEASING.md) | the tag ritual, and what `release.yml` builds out of it on three platforms |
+| [docs/prior-art.md](https://github.com/medinstech/perfboard/blob/main/docs/prior-art.md) | the tools that already exist in this space, and the licence boundary this project keeps from them |
+| [CONTRIBUTING.md](https://github.com/medinstech/perfboard/blob/main/CONTRIBUTING.md) | running the suite, which checks are gates and which are reports |
+| [SECURITY.md](https://github.com/medinstech/perfboard/blob/main/SECURITY.md) · [CODE_OF_CONDUCT.md](https://github.com/medinstech/perfboard/blob/main/CODE_OF_CONDUCT.md) | reporting a vulnerability, and how people are expected to behave here |
+| [PLAN.md](https://github.com/medinstech/perfboard/blob/main/PLAN.md) | the original project plan, **written in Turkish** and kept as written, so what was predicted can be read beside what came out |
+| [CLAUDE.md](https://github.com/medinstech/perfboard/blob/main/CLAUDE.md) | why the code is shaped the way it is. Written for agents working in the repository, and the most useful thing here for a person about to change something |
 
 ## Contributing
 
-Issues and pull requests are welcome. Please read [CONTRIBUTING.md](https://github.com/medinstech/perfstudio/blob/main/CONTRIBUTING.md)
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](https://github.com/medinstech/perfboard/blob/main/CONTRIBUTING.md)
 first — it covers how to run the suite, which checks are gates and which are not, and one
 licence boundary that matters more here than in most projects: **do not read or port code
-from the GPL-licensed tools in this space.** PerfStudio is clean-room with respect to
-them, and that has to stay true. The record is in [docs/prior-art.md](https://github.com/medinstech/perfstudio/blob/main/docs/prior-art.md).
+from the GPL-licensed tools in this space.** Perfboard Studio is clean-room with respect to
+them, and that has to stay true. The record is in [docs/prior-art.md](https://github.com/medinstech/perfboard/blob/main/docs/prior-art.md).
 
 ## Licence
 
-Apache-2.0. See [LICENSE](https://github.com/medinstech/perfstudio/blob/main/LICENSE) and [NOTICE](https://github.com/medinstech/perfstudio/blob/main/NOTICE).
+Apache-2.0. See [LICENSE](https://github.com/medinstech/perfboard/blob/main/LICENSE) and [NOTICE](https://github.com/medinstech/perfboard/blob/main/NOTICE).

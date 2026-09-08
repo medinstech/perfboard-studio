@@ -15,10 +15,10 @@ pytest -k "proximity"             # by name fragment
 mypy --strict src                 # `src` ONLY — see below
 ruff check src tests --statistics # reports; NOT a gate — see below
 
-perfstudio                        # launch on a blank board
-perfstudio some/board.perf        # ...or open a document
-python -m perfstudio.ui.main --headless tools/diffcheck/golden/dense.perf
-python -m perfstudio.mcp          # the MCP server (docs/MCP.md)
+perfboard                          # launch on a blank board
+perfboard some/board.perf          # ...or open a document
+python -m perfboard.ui.main --headless tools/diffcheck/golden/dense.perf
+python -m perfboard.mcp            # the MCP server (docs/MCP.md)
 ```
 
 The suite is ~2000 tests in under a minute, so run all of it; there is no reason to
@@ -68,7 +68,7 @@ finds them by reading the sources, because marking them by hand missed two.
 exports of the routed NE555 fixture whole in `tests/guide_golden/` and compares them whole.
 The targeted assertions in `test_guide.py` can only catch what somebody thought to name;
 a phase that swapped places or a checkpoint that stopped being generated is exactly what
-nobody names. Re-bless with `PERFSTUDIO_BLESS_GUIDE=1` **after reading the diff** — a
+nobody names. Re-bless with `PERFBOARD_BLESS_GUIDE=1` **after reading the diff** — a
 readable diff is the point of the test. Not part of the differential proof below: the
 TypeScript side never had a guide exporter, so these are our own output, like
 `render_signatures.json`, which is why they live under `tests/` and not in
@@ -81,7 +81,7 @@ to one decimal and are compared as text.
 headless PNGs, which nobody opens. It compares the mean colour of each cell of a 6 × 6
 grid against `tests/render_signatures.json` — stable across renderers to a fraction of a
 level, and 20+ levels away from a board that lost its parts. Re-bless with
-`PERFSTUDIO_BLESS_RENDER=1` after looking at the render. The first attempt measured ink
+`PERFBOARD_BLESS_RENDER=1` after looking at the render. The first attempt measured ink
 coverage instead and was nearly useless (a perfboard is mostly board); that is written
 down in the file so nobody tries it again.
 
@@ -138,7 +138,7 @@ a *document* (DRC) or not (command).
 
 ### The engine is pure
 
-`src/perfstudio/` outside `ui/` and `mcp/` has no clock, no RNG, no filesystem, and no Qt
+`src/perfboard/` outside `ui/` and `mcp/` has no clock, no RNG, no filesystem, and no Qt
 or VTK import. `persist.py` turns documents into strings and back; the *host* reads and
 writes files. Timestamps (`meta.modified`) are stamped by the host, never the engine.
 The placer's simulated annealing is seeded, so same document + same seed = same board.
@@ -439,7 +439,7 @@ when the new reference already has those pins wired.
 junction dots, rail glyphs, labels — from `doc.parts`, `doc.components` and `doc.nets`,
 every time. It is an engine module and obeys the engine's rule, so the layout is reachable
 from a test that hands it a document; two sheets are frozen whole in
-`tests/schematic_golden/` (`PERFSTUDIO_BLESS_SCHEMATIC=1`), for the reason
+`tests/schematic_golden/` (`PERFBOARD_BLESS_SCHEMATIC=1`), for the reason
 `test_guide_golden` exists.
 
 **The CIRCUIT is editable and the DRAWING is not, and that is PLAN.md D3 intact rather
@@ -480,7 +480,7 @@ Four decisions carry it, and each has a test that would notice it going:
 **The sheet leaves as SVG, and the PDF and the PNG are made out of that SVG.**
 `schematic_export.py` is the only thing that turns a `SchematicDrawing` into a picture for
 paper — an engine module, so a whole exported sheet is frozen in `tests/schematic_golden/`
-beside the text dumps and blessed by the same `PERFSTUDIO_BLESS_SCHEMATIC=1`.
+beside the text dumps and blessed by the same `PERFBOARD_BLESS_SCHEMATIC=1`.
 `ui/export_schematic.py` renders nothing: it hands that string to Qt to paginate or
 rasterise. Three writers over one drawing would be three chances for the printed sheet, the
 emailed PNG and the embedded SVG to disagree about what the circuit is.
@@ -526,7 +526,7 @@ transport, and the interesting failures are never there.
 
 **The stdout trap (PLAN.md §9.1): on stdio, stdout IS the protocol.** One stray `print`
 corrupts the stream and the client reports something baffling and unrelated. Nothing
-under `perfstudio.mcp` may print; logging is configured to stderr before anything else,
+under `perfboard.mcp` may print; logging is configured to stderr before anything else,
 and the render tools import Qt and VTK *lazily inside the tool* rather than at module
 scope — those imports are the real risk, since the engine itself has no prints.
 
@@ -725,7 +725,7 @@ Engine-generated text (DRC/LVS messages, rule ids, hole addresses, net and compo
 names) is never translated: it is compared byte-for-byte by golden fixtures, and the
 addresses are the tool's vocabulary in every language.
 
-The language is chosen `--lang` → `PERFSTUDIO_LANG` → the View menu's stored choice → the
+The language is chosen `--lang` → `PERFBOARD_LANG` → the View menu's stored choice → the
 system locale (`main._preferred_language`), and applies at the **next start**: every label
 is translated once, as the window is built, so a live re-translation would leave whatever
 a rebuild missed in English.

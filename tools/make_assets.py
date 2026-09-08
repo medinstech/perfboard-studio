@@ -2,8 +2,8 @@
 
     python tools/make_assets.py
 
-Writes `src/perfstudio/ui/assets/`: `perfstudio.png` (256 px, for the AppImage and the
-desktop entry) and `perfstudio.ico` (for the Windows executable and installer).
+Writes `src/perfboard/ui/assets/`: `perfboard.png` (256 px, for the AppImage and the
+desktop entry) and `perfboard.ico` (for the Windows executable and installer).
 
 WHY THIS IS A SCRIPT AND NOT A PAIR OF FILES SOMEBODY DREW. `ui/icons.py` already argues
 the case for the toolbar: an icon drawn in code cannot fall out of step with the palette
@@ -39,9 +39,9 @@ from PySide6.QtGui import (  # noqa: E402
 )
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from perfstudio.ui.boardcolors import BY_KEY  # noqa: E402
+from perfboard.ui.boardcolors import BY_KEY  # noqa: E402
 
-OUT_DIR = REPO_ROOT / "src" / "perfstudio" / "ui" / "assets"
+OUT_DIR = REPO_ROOT / "src" / "perfboard" / "ui" / "assets"
 
 #: The FR-4 board, because it is the one on the front page and the one most people have.
 SCHEME = BY_KEY["green"]
@@ -121,13 +121,13 @@ def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     assert app is not None
 
-    png = OUT_DIR / "perfstudio.png"
+    png = OUT_DIR / "perfboard.png"
     draw(256).save(str(png))
 
     # QImage cannot write a multi-size .ico, and Qt's ICO *writer* is not built into
     # every PySide6 wheel -- so the container is assembled here from PNG-compressed
     # frames, which is what a modern .ico is and what Windows has read since Vista.
-    ico = OUT_DIR / "perfstudio.ico"
+    ico = OUT_DIR / "perfboard.ico"
     _write_ico(ico, [draw(n) for n in ICO_SIZES])
 
     for path in (png, ico):

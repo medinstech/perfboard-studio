@@ -1,8 +1,8 @@
 """Crash recovery: what a record means, and the files it lives in.
 
-Two halves, split the way ``updates.py`` and ``ui/updater.py`` are. ``perfstudio.recovery``
+Two halves, split the way ``updates.py`` and ``ui/updater.py`` are. ``perfboard.recovery``
 is pure -- no clock, no disk, no Qt -- so every decision it makes is reachable by handing it
-a string, which is most of this file. ``perfstudio.ui.autosave`` is the host, and what is
+a string, which is most of this file. ``perfboard.ui.autosave`` is the host, and what is
 worth testing there is the part that has to survive the thing the feature exists for: the
 process stopping in the middle.
 
@@ -22,7 +22,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 
-from perfstudio.recovery import (
+from perfboard.recovery import (
     RECOVERY_SUFFIX,
     RecoveryRecord,
     format_record,
@@ -30,7 +30,7 @@ from perfstudio.recovery import (
     is_worth_offering,
     parse_record,
 )
-from perfstudio.ui.autosave import Autosave, default_directory, disk_state
+from perfboard.ui.autosave import Autosave, default_directory, disk_state
 
 DOCUMENT = '{\n  "meta": {\n    "name": "board"\n  }\n}\n'
 
@@ -88,12 +88,12 @@ def test_the_document_comes_back_byte_for_byte() -> None:
     [
         "",
         "nothing like a record",
-        "PerfStudio recovery 1\nsession: x\nsaved: y\n",  # no separator
-        "PerfStudio recovery 1\nsession: x\n---\n" + DOCUMENT,  # no timestamp
-        "PerfStudio recovery 1\nsaved: y\n---\n" + DOCUMENT,  # no session
-        "PerfStudio recovery 9\nsession: x\nsaved: y\n---\n" + DOCUMENT,  # a later format
-        "PerfStudio recovery x\nsession: x\nsaved: y\n---\n" + DOCUMENT,
-        "PerfStudio recovery 1\nsession: x\nsaved: y\n---\n   \n",  # nothing in it
+        "Perfboard Studio recovery 1\nsession: x\nsaved: y\n",  # no separator
+        "Perfboard Studio recovery 1\nsession: x\n---\n" + DOCUMENT,  # no timestamp
+        "Perfboard Studio recovery 1\nsaved: y\n---\n" + DOCUMENT,  # no session
+        "Perfboard Studio recovery 9\nsession: x\nsaved: y\n---\n" + DOCUMENT,  # a later format
+        "Perfboard Studio recovery x\nsession: x\nsaved: y\n---\n" + DOCUMENT,
+        "Perfboard Studio recovery 1\nsession: x\nsaved: y\n---\n   \n",  # nothing in it
     ],
 )
 def test_anything_that_is_not_a_record_reads_as_nothing(text: str) -> None:
@@ -272,4 +272,4 @@ def test_the_records_directory_is_not_beside_anybodys_board() -> None:
     """
     directory = default_directory()
     assert directory.name == "recovery"
-    assert directory.parent.name == "PerfStudio"
+    assert directory.parent.name == "Perfboard Studio"

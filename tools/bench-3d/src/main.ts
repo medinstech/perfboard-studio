@@ -1,15 +1,15 @@
 /**
- * PerfStudio bench-3d — M0 risk-reduction harness.
+ * Perfboard Studio bench-3d — M0 risk-reduction harness.
  *
  * Renders a realistic worst-case perfboard scene with three.js and measures
  * frame timing, so we can decide whether Tauri's OS webview (WebKitGTK on
- * Linux, in particular) can carry PerfStudio's 3D board view, or whether the
+ * Linux, in particular) can carry Perfboard Studio's 3D board view, or whether the
  * project needs to fall back to Electron. See PLAN.md §8.3/§8.4 and §11 (M0).
  *
  * Domain vocabulary (holes, board sides, solder-trace chains of orthogonally
  * adjacent holes, component body archetypes) mirrors packages/core/src/model.ts.
  * This tool is intentionally standalone (no workspace dependency on
- * @perfstudio/core) so it stays a zero-install, drop-anywhere harness.
+ * @perfboard/core) so it stays a zero-install, drop-anywhere harness.
  */
 
 import * as THREE from 'three';
@@ -348,7 +348,7 @@ const WIRE_COLORS = [0xd23c3c, 0x2f2f2f, 0xf0d030, 0x2e7d32, 0x2255aa, 0xf2f2f2,
 }
 
 // ---------------------------------------------------------------------------
-// Solder traces — the visually distinctive PerfStudio primitive (PLAN.md
+// Solder traces — the visually distinctive Perfboard Studio primitive (PLAN.md
 // §4.6, §8.3). Each trace is a random walk of 4-10 orthogonally-adjacent
 // holes (matches the SolderTraceConductor.path invariant in model.ts):
 // a bead (sphere) at every pad, thinner cylinders between them, bright

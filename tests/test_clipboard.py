@@ -19,9 +19,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 
-from perfstudio.command import CommandBus, CommandContext
-from perfstudio.commands import create_document_id_generator, create_standard_registry
-from perfstudio.model import (
+from perfboard.command import CommandBus, CommandContext
+from perfboard.commands import create_document_id_generator, create_standard_registry
+from perfboard.model import (
     Board,
     ComponentInstance,
     DocumentMeta,
@@ -31,7 +31,7 @@ from perfstudio.model import (
     SolderTraceConductor,
     WireConductor,
 )
-from perfstudio.ui.clipboard import (
+from perfboard.ui.clipboard import (
     CLIPBOARD_KIND,
     block_from_json,
     block_to_json,

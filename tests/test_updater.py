@@ -1,4 +1,4 @@
-"""Tests for the update check as the window performs it (src/perfstudio/ui/updater.py).
+"""Tests for the update check as the window performs it (src/perfboard/ui/updater.py).
 
 ``test_updates.py`` covers every decision; this file covers the parts that need Qt --
 what the strip says in each of its states, what a window does with an answer, and what it
@@ -30,23 +30,23 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QElapsedTimer, QEvent, QEventLoop
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from perfstudio.commands import create_starter_document
-from perfstudio.model import DocumentMeta
-from perfstudio.ui import updater
-from perfstudio.ui.main import MainWindow
-from perfstudio.updates import Asset, Release
+from perfboard.commands import create_starter_document
+from perfboard.model import DocumentMeta
+from perfboard.ui import updater
+from perfboard.ui.main import MainWindow
+from perfboard.updates import Asset, Release
 
 MAIN_SOURCE = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "perfstudio" / "ui" / "main.py"
+    pathlib.Path(__file__).resolve().parents[1] / "src" / "perfboard" / "ui" / "main.py"
 ).read_text(encoding="utf-8")
 
 NEXT_RELEASE = Release(
     version="0.8.0",
     tag="v0.8.0",
-    url="https://github.com/medinstech/perfstudio/releases/tag/v0.8.0",
+    url="https://github.com/medinstech/perfboard/releases/tag/v0.8.0",
     notes="- **Automatic updates.** The installers can now say so.\n",
     assets=(
-        Asset(name="PerfStudio_0.8.0_Setup.exe", url="https://example.invalid/s.exe", size=1024),
+        Asset(name="PerfboardStudio_0.8.0_Setup.exe", url="https://example.invalid/s.exe", size=1024),
         Asset(name="SHA256SUMS", url="https://example.invalid/SHA256SUMS", size=200),
     ),
 )
@@ -54,7 +54,7 @@ NEXT_RELEASE = Release(
 
 @pytest.fixture(scope="session", autouse=True)
 def _app():
-    app = QApplication.instance() or QApplication(["perfstudio-tests"])
+    app = QApplication.instance() or QApplication(["perfboard-tests"])
     yield app
 
 
@@ -63,7 +63,7 @@ def settings(tmp_path, monkeypatch):
     """The session store, in a temporary file. See test_ui.py's own fixture on why."""
     from PySide6.QtCore import QSettings
 
-    from perfstudio.ui import main as main_module
+    from perfboard.ui import main as main_module
 
     store = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
     monkeypatch.setattr(main_module, "app_settings", lambda: store)
@@ -76,7 +76,7 @@ def _nothing_reaches_the_desktop(monkeypatch):
     opened: list[str] = []
     monkeypatch.setattr(updater, "open_url", opened.append)
     monkeypatch.setattr(updater, "open_in_file_manager", opened.append)
-    from perfstudio.ui import main as main_module
+    from perfboard.ui import main as main_module
 
     monkeypatch.setattr(main_module.updater, "open_url", opened.append)
     monkeypatch.setattr(main_module.updater, "open_in_file_manager", opened.append)
@@ -279,7 +279,7 @@ def test_a_packaged_build_is_offered_the_file_for_its_own_machine(monkeypatch) -
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setattr(updater.platform, "machine", lambda: "AMD64")
     asset = updater.installable_asset(NEXT_RELEASE)
-    assert asset is not None and asset.name == "PerfStudio_0.8.0_Setup.exe"
+    assert asset is not None and asset.name == "PerfboardStudio_0.8.0_Setup.exe"
 
 
 def test_the_checksum_file_is_found_by_name() -> None:
@@ -296,10 +296,10 @@ def test_a_download_lands_where_the_user_can_find_it() -> None:
 
 def test_the_finished_file_is_shown_rather_than_run(window, _nothing_reaches_the_desktop) -> None:
     """The last click is the user's. See ui/updater.py on why this stops here."""
-    window._on_update_downloaded("/tmp/PerfStudio_0.8.0_Setup.exe", True)
+    window._on_update_downloaded("/tmp/PerfboardStudio_0.8.0_Setup.exe", True)
     assert "0.8.0_Setup.exe" in window.update_bar.headline.text()
     window.update_bar.act_reveal.click()
-    assert _nothing_reaches_the_desktop == ["/tmp/PerfStudio_0.8.0_Setup.exe"]
+    assert _nothing_reaches_the_desktop == ["/tmp/PerfboardStudio_0.8.0_Setup.exe"]
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +379,7 @@ def pump(condition, timeout_ms: int = 5000) -> None:
 
 def a_local_release(tmp_path, *, sums: str | None) -> Release:
     """A release whose assets are files on this disk."""
-    installer = tmp_path / "PerfStudio_0.8.0_Setup.exe"
+    installer = tmp_path / "PerfboardStudio_0.8.0_Setup.exe"
     installer.write_bytes(PAYLOAD)
     assets = [Asset(name=installer.name, url=installer.as_uri(), size=len(PAYLOAD))]
     if sums is not None:
@@ -438,10 +438,10 @@ def run_download(release, downloads):
 
 def test_a_verified_download_lands_under_its_own_name(tmp_path, downloads) -> None:
     digest = hashlib.sha256(PAYLOAD).hexdigest()
-    release = a_local_release(tmp_path, sums=f"{digest}  PerfStudio_0.8.0_Setup.exe\n")
+    release = a_local_release(tmp_path, sums=f"{digest}  PerfboardStudio_0.8.0_Setup.exe\n")
     outcome = run_download(release, downloads)
     assert outcome[0] == "ok" and outcome[2] is True
-    landed = downloads / "PerfStudio_0.8.0_Setup.exe"
+    landed = downloads / "PerfboardStudio_0.8.0_Setup.exe"
     assert pathlib.Path(outcome[1]) == landed
     assert landed.read_bytes() == PAYLOAD
     assert list(downloads.glob("*.part")) == [], "the partial file is renamed, not left behind"
@@ -453,7 +453,7 @@ def test_a_release_with_no_checksum_still_downloads_and_says_it_was_not_verified
     """Every release before 0.7.0 is in exactly this state, and its installer still works."""
     outcome = run_download(a_local_release(tmp_path, sums=None), downloads)
     assert outcome[0] == "ok" and outcome[2] is False
-    assert (downloads / "PerfStudio_0.8.0_Setup.exe").read_bytes() == PAYLOAD
+    assert (downloads / "PerfboardStudio_0.8.0_Setup.exe").read_bytes() == PAYLOAD
 
 
 def test_a_finished_transfer_leaves_no_checker_behind(tmp_path, downloads) -> None:
@@ -478,7 +478,7 @@ def test_a_download_that_fails_its_checksum_is_deleted(tmp_path, downloads) -> N
     project did not build, and neither is a thing to leave in somebody's Downloads folder
     named like an installer.
     """
-    release = a_local_release(tmp_path, sums=f"{'0' * 64}  PerfStudio_0.8.0_Setup.exe\n")
+    release = a_local_release(tmp_path, sums=f"{'0' * 64}  PerfboardStudio_0.8.0_Setup.exe\n")
     outcome = run_download(release, downloads)
     assert outcome[0] == "failed" and "checksum" in outcome[1]
     assert list(downloads.iterdir()) == [], "neither the file nor its .part survives"
@@ -512,7 +512,7 @@ def test_an_asset_that_is_not_there_is_reported_rather_than_half_written(
 def test_the_window_shows_what_the_transfer_did(window, tmp_path, downloads) -> None:
     """The signals the checker emits are the ones the strip is wired to."""
     digest = hashlib.sha256(PAYLOAD).hexdigest()
-    release = a_local_release(tmp_path, sums=f"{digest}  PerfStudio_0.8.0_Setup.exe\n")
+    release = a_local_release(tmp_path, sums=f"{digest}  PerfboardStudio_0.8.0_Setup.exe\n")
     window._update_release = release
     checker = window._checker()
     finished: list[str] = []

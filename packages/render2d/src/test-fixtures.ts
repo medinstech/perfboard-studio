@@ -3,7 +3,7 @@
  * runtime rendering code.
  */
 
-import type { Board, ComponentInstance, Footprint, FootprintPin, PerfDocument } from '@perfstudio/core';
+import type { Board, ComponentInstance, Footprint, FootprintPin, PerfDocument } from '@perfboard/core';
 
 export function makeBoard(overrides: Partial<Board> = {}): Board {
   return {

@@ -68,7 +68,7 @@ def export_pdf(doc: Document, scene, path: str | Path, mirrored: bool = False) -
     writer.setPageOrientation(QPageLayout.Orientation.Landscape)
     writer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout.Unit.Millimeter)
     writer.setResolution(600)
-    writer.setTitle(f"PerfStudio — {board.cols}x{board.rows} {board.material}")
+    writer.setTitle(f"Perfboard Studio — {board.cols}x{board.rows} {board.material}")
 
     painter = QPainter(writer)
     px_per_mm = writer.resolution() / MM_PER_INCH
@@ -95,7 +95,7 @@ def export_pdf(doc: Document, scene, path: str | Path, mirrored: bool = False) -
     painter.setFont(font)
     painter.setPen(QPen(QColor("#000000")))
     side = "SOLDER SIDE (mirrored)" if mirrored else "COMPONENT SIDE"
-    painter.drawText(QPointF(0, -6), f"PerfStudio  ·  {board.cols}x{board.rows} {board.material}  ·  {side}  ·  printed 1:1")
+    painter.drawText(QPointF(0, -6), f"Perfboard Studio  ·  {board.cols}x{board.rows} {board.material}  ·  {side}  ·  printed 1:1")
     painter.restore()
 
     painter.end()
