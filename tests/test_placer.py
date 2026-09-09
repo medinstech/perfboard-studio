@@ -37,7 +37,12 @@ import pytest
 from perfboard_studio import persist
 from perfboard_studio.autoroute import plan_autoroute
 from perfboard_studio.command import CommandBus, CommandContext
-from perfboard_studio.commands import create_document_id_generator, create_standard_registry
+from perfboard_studio.commands import (
+    ComponentPlacement,
+    MoveComponentsPayload,
+    create_document_id_generator,
+    create_standard_registry,
+)
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.drc import DrcViolation, run_drc
 from perfboard_studio.footprints import footprint_lookup
@@ -56,12 +61,14 @@ from perfboard_studio.model import (
     NetNode,
     PerfDocument,
     Point2,
+    SchematicPart,
     TrackCut,
 )
 from perfboard_studio.placer import (
     DEFAULT_PLACEMENT_OPTIONS,
     PlacementOptions,
     PlacementWeights,
+    _adjacency,
     _anneal,
     _build_cost,
     _build_nets,
@@ -71,11 +78,16 @@ from perfboard_studio.placer import (
     _global_counts,
     _global_delta,
     _initial_state,
+    _make_scorer,
     _propose,
-    _Scorer,
+    _settle_edges,
     _settle_rotations,
+    arrange_document,
     describe,
+    design_entries,
     plan_placement,
+    recommended_board,
+    suggest_boards,
     summarize_changes,
 )
 from perfboard_studio.router import DEFAULT_ROUTER_COSTS
@@ -443,15 +455,7 @@ def _scorer_for(doc: PerfDocument, lookup: FootprintLookup, weights: PlacementWe
     nets, nets_of, pin_nets = _build_nets(doc, parts)
     strips = _build_strips(doc, parts, pin_nets)
     state = _initial_state(doc, parts, strips)
-    scorer = _Scorer(
-        board_pitch=doc.board.pitch,
-        board_cols=doc.board.cols,
-        board_rows=doc.board.rows,
-        weights=weights,
-        nets=nets,
-        nets_of=nets_of,
-        strips=strips,
-    )
+    scorer = _make_scorer(doc.board, weights, nets, nets_of, strips)
     return state, scorer
 
 
@@ -621,27 +625,40 @@ def test_the_placer_stops_turning_parts_for_nothing(fixture: str, monkeypatch) -
 
     Measured against the same search with the tidy-up disabled, because that is the claim:
     fewer parts turned, and the router no worse off for it.
+
+    OVER SEVERAL SEEDS, not one, and that is not the test being lenient. Whether a
+    rotation is gratuitous depends on the board the annealer happened to land on, and
+    since the lane term arrived it depends on it more -- a rotation moves the row a part
+    starts on, so far fewer of them cost exactly zero than used to. On dense the three
+    seeds give 10 -> 8, 12 -> 12 and 11 -> 4. A single seed asserting a strict drop is
+    asserting something about that seed, and the claim is about the pass.
     """
     from perfboard_studio import placer as placer_module
 
     registry = footprint_lookup()
     doc = dataclasses.replace(golden_document(fixture), conductors=())
-    options = PlacementOptions(seed=0)
 
-    monkeypatch.setattr(placer_module, "_settle_rotations", lambda *args, **kwargs: None)
-    churned = plan_placement(doc, registry, options)
-    monkeypatch.undo()
-    settled = plan_placement(doc, registry, options)
+    churned_total = settled_total = 0
+    for seed in range(3):
+        options = PlacementOptions(seed=seed)
+        monkeypatch.setattr(placer_module, "_settle_rotations", lambda *args, **kwargs: None)
+        churned = plan_placement(doc, registry, options)
+        monkeypatch.undo()
+        settled = plan_placement(doc, registry, options)
 
-    turned = sum(1 for c in settled.changes if c.rotated)
-    turned_before = sum(1 for c in churned.changes if c.rotated)
-    assert turned < turned_before, f"{turned} turned, was {turned_before}"
+        turned = sum(1 for c in settled.changes if c.rotated)
+        turned_before = sum(1 for c in churned.changes if c.rotated)
+        assert turned <= turned_before, f"seed {seed}: {turned} turned, was {turned_before}"
+        churned_total += turned_before
+        settled_total += turned
 
-    # ...and it bought that with nothing. The router is the arbiter that chose this board,
-    # so it is the one that has to agree the tidy-up was free.
-    assert plan_autoroute(settled.document, registry).summary.total_cost <= (
-        plan_autoroute(churned.document, registry).summary.total_cost
-    )
+        # ...and it bought that with nothing. The router is the arbiter that chose this
+        # board, so it is the one that has to agree the tidy-up was free.
+        assert plan_autoroute(settled.document, registry).summary.total_cost <= (
+            plan_autoroute(churned.document, registry).summary.total_cost
+        )
+
+    assert settled_total < churned_total, f"{settled_total} turned in all, was {churned_total}"
 
 
 def test_settling_a_rotation_never_makes_the_placement_worse() -> None:
@@ -654,14 +671,7 @@ def test_settling_a_rotation_never_makes_the_placement_worse() -> None:
     parts = _build_parts(doc, registry)
     state = _initial_state(doc, parts)
     nets, nets_of, _pin_nets = _build_nets(doc, parts)
-    scorer = _Scorer(
-        board_pitch=doc.board.pitch,
-        board_cols=doc.board.cols,
-        board_rows=doc.board.rows,
-        weights=options.weights,
-        nets=nets,
-        nets_of=nets_of,
-    )
+    scorer = _make_scorer(doc.board, options.weights, nets, nets_of, None)
     movable = [position for position, part in enumerate(state.parts) if part.movable]
     original = tuple(state.rot)
     _anneal(state, scorer, movable, doc, options, options.iterations or 0, options.seed)
@@ -768,8 +778,11 @@ def test_the_whole_placement_is_one_undo_step() -> None:
 
 
 def test_the_undo_entry_says_what_it_did() -> None:
+    # Scattered down the board on four different rows, so there is certainly something
+    # for the placer to do: four parts of one net standing in one tidy row is a layout
+    # it is now right to leave exactly where it is.
     doc = make_doc(
-        components=tuple(component(f"R{i}", "fp2", hole(2 + i * 3, 2)) for i in range(4)),
+        components=tuple(component(f"R{i}", "fp2", hole(2 + i * 5, 2 + i * 3)) for i in range(4)),
         nets=(net("n1", "SIG", "signal", tuple((f"R{i}", "1") for i in range(4))),),
     )
     plan = plan_placement(doc, LOOKUP, QUICK)
@@ -1226,3 +1239,393 @@ def test_a_stripboard_candidate_is_judged_by_the_planner_that_suits_it() -> None
         DEFAULT_ROUTER_COSTS.top_jumper_fixed
         + DEFAULT_ROUTER_COSTS.top_jumper_per_mm * math.hypot(7, 4) * STRIPBOARD.pitch
     )
+
+
+# ---------------------------------------------------------------------------
+# Lanes: the body half of alignment
+# ---------------------------------------------------------------------------
+
+
+def test_two_parts_starting_on_one_row_are_one_lane() -> None:
+    """The measure, spelled out on the smallest board that can show it."""
+    doc = make_doc(
+        components=(component("R1", "fp2", hole(2, 4)), component("R2", "fp2", hole(9, 4)))
+    )
+    state, _ = _scorer_for(doc, LOOKUP, PlacementWeights())
+    assert state.lane_mm() == pytest.approx(0.0)
+
+    state.set_placement(1, 9, 7, 0)  # R2 down three rows: two lanes now, one of them extra.
+    assert state.lane_mm() == pytest.approx(doc.board.pitch)
+
+
+def test_a_lane_stops_existing_only_when_the_last_part_leaves_it() -> None:
+    """The bookkeeping is a COUNT per lane, not a set of lanes.
+
+    Three parts in one row, one of them moved away, still leaves two parts on that row --
+    and a set would have deleted the lane on the first departure and quietly told the
+    annealer the board got tidier.
+    """
+    doc = make_doc(
+        components=(
+            component("R1", "fp2", hole(2, 4)),
+            component("R2", "fp2", hole(9, 4)),
+            component("R3", "fp2", hole(16, 4)),
+        )
+    )
+    state, _ = _scorer_for(doc, LOOKUP, PlacementWeights())
+    assert state.lane_rows == {4: 3}
+
+    state.set_placement(2, 16, 9, 0)
+    assert state.lane_rows == {4: 2, 9: 1}
+
+    state.set_placement(2, 16, 4, 0)
+    assert state.lane_rows == {4: 3}
+    assert state.lane_mm() == pytest.approx(0.0)
+
+
+def test_the_lane_a_part_is_on_is_its_pins_and_not_its_anchor() -> None:
+    """An anchor is pin 1, which on a part turned 180 degrees is its far corner.
+
+    Two identical parts lying in one row, one of them turned end for end, are on ONE lane
+    -- they occupy the same rows of the board. Keyed on the anchor they would be two, and
+    the annealer would be paying to line up a difference nobody can see.
+    """
+    doc = make_doc(
+        components=(
+            component("R1", "fp2", hole(2, 4)),
+            component("R2", "fp2", hole(12, 4), rotation=180),
+        )
+    )
+    state, _ = _scorer_for(doc, LOOKUP, PlacementWeights())
+    assert state.lane_mm() == pytest.approx(0.0)
+
+
+def test_the_lane_term_lines_scattered_parts_up() -> None:
+    """The claim the term exists for, measured end to end."""
+    registry = footprint_lookup()
+    doc = dataclasses.replace(golden_document("dense"), conductors=())
+
+    def lanes(document) -> int:
+        rows, cols = set(), set()
+        for c in document.components:
+            footprint = registry(c.footprint_id)
+            if footprint is None:
+                continue
+            holes = [at for _pin, at in all_pin_holes(c, footprint)]
+            rows.add(min(at.row for at in holes))
+            cols.add(min(at.col for at in holes))
+        return min(len(rows), len(cols))
+
+    tidy = plan_placement(doc, registry, PlacementOptions(seed=0))
+    scattered = plan_placement(
+        doc, registry, PlacementOptions(seed=0, weights=PlacementWeights(lanes=0.0))
+    )
+    assert lanes(tidy.document) < lanes(scattered.document)
+
+
+# ---------------------------------------------------------------------------
+# The edge, measured from the body
+# ---------------------------------------------------------------------------
+
+
+def test_the_edge_term_measures_the_body_and_not_the_anchor() -> None:
+    """A connector turned about pin 1 has its BODY somewhere else, and the term has to see
+    that.
+
+    The anchor does not move here, so the old term -- which measured the anchor hole -- gave
+    both orientations the same answer: a connector lying towards the edge of the board and
+    the same connector lying away from it scored identically, which is how the NE555's
+    header came out of a full run seven holes inside the board. ``pair_terms`` already
+    refuses to measure heat from an anchor for exactly this reason.
+    """
+    registry = footprint_lookup()
+    doc = make_doc(components=(component("J1", "hdr-1x4", hole(5, 8)),))
+    state, scorer = _scorer_for(doc, registry, PlacementWeights())
+
+    _off, pins_right = scorer.part_terms(state, 0)  # Body lies to the RIGHT of pin 1.
+    state.set_placement(0, 5, 8, 2)  # Turned end for end about the very same hole.
+    _off, pins_left = scorer.part_terms(state, 0)
+
+    assert pins_right != pytest.approx(pins_left)
+    # Turned, the body lies towards the near edge, so there is less board outside it.
+    assert pins_left < pins_right
+
+
+def test_the_edge_term_counts_the_printed_border_as_board() -> None:
+    """A connector on the outermost hole of a board cut with a border is not at the edge
+    of the board -- there are millimetres of substrate outside it, which is where the row
+    numbers are printed and what a plug has to clear."""
+    bordered = dataclasses.replace(BOARD, border_x_mm=3.0, border_y_mm=3.0)
+    doc = dataclasses.replace(
+        make_doc(components=(component("J1", "term", hole(0, 8)),)), board=bordered
+    )
+    state, scorer = _scorer_for(doc, LOOKUP, PlacementWeights())
+    _off, gap = scorer.part_terms(state, 0)
+    assert gap > 3.0
+
+    flush = dataclasses.replace(
+        make_doc(components=(component("J1", "term", hole(0, 8)),)), board=BOARD
+    )
+    flush_state, flush_scorer = _scorer_for(flush, LOOKUP, PlacementWeights())
+    _off, flush_gap = flush_scorer.part_terms(flush_state, 0)
+    assert flush_gap < gap
+
+
+def test_a_connector_ends_up_against_the_edge_of_a_real_board() -> None:
+    """The whole point, on the fixture that showed the old term failing: the NE555's
+    four-pin header used to come out of a full run seven holes inside the board."""
+    registry = footprint_lookup()
+    doc = dataclasses.replace(golden_document("ne555"), conductors=())
+
+    plan = plan_placement(doc, registry, PlacementOptions(seed=0))
+
+    header = next(c for c in plan.document.components if c.ref == "J1")
+    board = plan.document.board
+    holes_in = min(
+        header.anchor.col,
+        board.cols - 1 - header.anchor.col,
+        header.anchor.row,
+        board.rows - 1 - header.anchor.row,
+    )
+    assert holes_in <= 1, f"J1 came out {holes_in} holes inside the board"
+
+
+def test_settling_the_edge_never_makes_the_placement_worse() -> None:
+    """It only ever pushes a connector outward, and only when the total does not go up --
+    a tidy-up, not a second optimiser with an opinion of its own."""
+    registry = footprint_lookup()
+    doc = dataclasses.replace(golden_document("ne555"), conductors=())
+    options = PlacementOptions(seed=0, iterations=3000, restarts=1, score_with_router=False)
+
+    parts = _build_parts(doc, registry)
+    state = _initial_state(doc, parts)
+    nets, nets_of, _pin_nets = _build_nets(doc, parts)
+    scorer = _make_scorer(doc.board, options.weights, nets, nets_of, None)
+    movable = [position for position, part in enumerate(state.parts) if part.movable]
+    _anneal(state, scorer, movable, doc, options, options.iterations or 0, options.seed)
+    before = scorer.full(state).total(options.weights)
+
+    _settle_edges(state, scorer, movable, options)
+
+    assert scorer.full(state).total(options.weights) <= before + 1e-9
+
+
+# ---------------------------------------------------------------------------
+# The constructive arrangement
+# ---------------------------------------------------------------------------
+
+
+def arrangement_of(doc: PerfDocument, lookup: FootprintLookup = None):
+    return arrange_document(doc, lookup or LOOKUP)
+
+
+def test_an_arrangement_places_everything_it_is_given() -> None:
+    doc = make_doc(
+        components=(
+            component("U1", "boxed", hole(0, 0)),
+            component("R1", "fp2", hole(0, 0)),
+            component("C1", "delicate", hole(0, 0)),
+        ),
+        nets=(net("n1", "SIG", "signal", (("U1", "1"), ("R1", "1"))),),
+    )
+    result = arrangement_of(doc)
+    assert result.fits
+    assert {p.ref for p in result.placements} == {"U1", "R1", "C1"}
+
+
+def test_an_arrangement_leaves_no_two_parts_overlapping() -> None:
+    """Every part in its own hole cells, with a hole of board between them -- which is
+    what makes the arrangement a legal document rather than a suggestion."""
+    registry = footprint_lookup()
+    for name in ("ne555", "dense", "random-05"):
+        doc = dataclasses.replace(golden_document(name), conductors=())
+        placed = arrange_document(doc, registry)
+        moved = commit(
+            doc,
+            MoveComponentsPayload(
+                placements=tuple(
+                    ComponentPlacement(id=p.id, anchor=p.anchor, rotation=p.rotation)
+                    for p in placed.placements
+                ),
+                label="arranged",
+            ),
+        )
+        errors = [
+            v for v in run_drc(moved, registry) if v.severity == "error" and v.rule in PLACEMENT_ERRORS
+        ]
+        assert errors == [], f"{name}: {[v.message for v in errors]}"
+
+
+def test_an_arrangement_is_the_same_every_time() -> None:
+    registry = footprint_lookup()
+    doc = dataclasses.replace(golden_document("dense"), conductors=())
+    assert arrange_document(doc, registry) == arrange_document(doc, registry)
+
+
+def test_an_arrangement_puts_the_connectors_on_the_edge() -> None:
+    registry = footprint_lookup()
+    doc = dataclasses.replace(golden_document("ne555"), conductors=())
+    placed = arrange_document(doc, registry)
+
+    header = next(p for p in placed.placements if p.ref == "J1")
+    board = doc.board
+    assert min(header.anchor.col, board.cols - 1 - header.anchor.col) == 0 or min(
+        header.anchor.row, board.rows - 1 - header.anchor.row
+    ) == 0
+
+
+def test_an_arrangement_leaves_a_locked_part_where_it_is() -> None:
+    doc = make_doc(
+        components=(
+            component("U1", "boxed", hole(9, 9), locked=True),
+            component("R1", "fp2", hole(2, 2)),
+        )
+    )
+    placed = arrangement_of(doc)
+    assert {p.ref for p in placed.placements} == {"R1"}
+    # ...and nothing is arranged on top of it.
+    resistor = next(p for p in placed.placements if p.ref == "R1")
+    assert not (9 <= resistor.anchor.col <= 12 and 9 <= resistor.anchor.row <= 12)
+
+
+def test_a_ground_net_does_not_make_every_part_a_neighbour() -> None:
+    """A rail touching everything says nothing about who wants to sit next to whom.
+
+    Without the exclusion the ordering degenerates: every part is bonded to every other
+    with the same weight, the tie-break takes over, and the arrangement is alphabetical
+    again -- which is exactly what it exists to stop being.
+    """
+    refs = ["C1", "R1", "R2", "U1"]
+    rail = net("n1", "GND", "ground", tuple((ref, "1") for ref in refs))
+    signal = net("n2", "OUT", "signal", (("R2", "2"), ("U1", "2")))
+
+    bonds = _adjacency((rail, signal), frozenset(refs))
+    assert bonds["C1"] == {}
+    assert bonds["R2"] == {"U1": 1}
+
+
+def test_a_two_pin_power_net_is_still_a_bond() -> None:
+    """The exclusion is about rails that reach everything, not about the word "power"."""
+    bonds = _adjacency(
+        (net("n1", "+5V", "power", (("U1", "8"), ("C1", "1"))),), frozenset({"U1", "C1"})
+    )
+    assert bonds["U1"] == {"C1": 1}
+
+
+def test_the_constructive_seed_reaches_boards_the_annealer_does_not() -> None:
+    """The case the constructive seed exists for.
+
+    Every restart used to begin from the document's own placement, so the search only
+    sampled basins around wherever the parts already were -- and on a board that is already
+    a decent local minimum it can spend its whole budget without leaving one. The
+    arrangement is a different basin entirely, and ``_pick_best`` routes both and keeps
+    whichever actually builds cheaper.
+
+    Measured over the fixtures in total rather than fixture by fixture, because on any one
+    board the two starts can tie: what is being claimed is that having the second start
+    available does not cost anything and sometimes wins.
+    """
+    registry = footprint_lookup()
+    seeded_cost = unseeded_cost = 0.0
+    for name in ("ne555", "dense", "random-05", "random-09"):
+        doc = dataclasses.replace(golden_document(name), conductors=())
+        for seed in (0, 1):
+            seeded = plan_placement(doc, registry, PlacementOptions(seed=seed))
+            unseeded = plan_placement(
+                doc, registry, PlacementOptions(seed=seed, seed_from_arrangement=False)
+            )
+            seeded_cost += plan_autoroute(seeded.document, registry).summary.total_cost
+            unseeded_cost += plan_autoroute(unseeded.document, registry).summary.total_cost
+
+    assert seeded_cost <= unseeded_cost, f"{seeded_cost:.1f} seeded, {unseeded_cost:.1f} not"
+
+
+def test_the_plan_is_never_worse_than_leaving_the_board_alone() -> None:
+    """The promise a constructive seed would otherwise break.
+
+    A seeded candidate is not descended from the user's board, so nothing stops it being
+    worse than one -- which is why doing nothing is a candidate in its own right, routed
+    alongside the rest.
+    """
+    registry = footprint_lookup()
+    for name in ("ne555", "sparse", "random-05"):
+        doc = dataclasses.replace(golden_document(name), conductors=())
+        plan = plan_placement(doc, registry, PlacementOptions(seed=0))
+        if plan.route_cost is None:
+            continue
+        assert plan.route_cost <= plan_autoroute(doc, registry).summary.total_cost + 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Which board to buy
+# ---------------------------------------------------------------------------
+
+
+def test_a_small_circuit_is_offered_a_small_board() -> None:
+    doc = make_doc(
+        components=(),
+        nets=(net("n1", "SIG", "signal", (("R1", "1"), ("R2", "1"))),),
+    )
+    doc = dataclasses.replace(
+        doc,
+        parts=(
+            SchematicPart(id="p1", ref="R1", value="10k", footprint_id="r-axial-3"),
+            SchematicPart(id="p2", ref="R2", value="10k", footprint_id="r-axial-3"),
+        ),
+    )
+    registry = footprint_lookup()
+    suggestions = suggest_boards(doc.board, design_entries(doc), doc.nets, registry)
+    best = recommended_board(suggestions)
+
+    assert best is not None
+    assert best.preset is min(
+        (s.preset for s in suggestions if s.roomy),
+        key=lambda p: p.width_mm * p.height_mm,
+    )
+
+
+def test_the_suggestions_only_offer_the_family_the_user_is_already_on() -> None:
+    """A phenolic board and a plated double-sided one are different products. A size
+    suggestion is not the place to change which one somebody bought."""
+    registry = footprint_lookup()
+    phenolic = dataclasses.replace(BOARD, single_sided=True, material="FR2")
+    for board in (BOARD, phenolic):
+        suggestions = suggest_boards(board, (), (), registry)
+        assert suggestions
+        assert all(s.board.single_sided == board.single_sided for s in suggestions)
+
+
+def test_a_board_too_small_for_the_circuit_is_not_offered() -> None:
+    """Twelve DIP-14s do not go on a 2 x 8 cm board, and saying they do would send
+    somebody to buy the wrong thing."""
+    registry = footprint_lookup()
+    parts = tuple(
+        SchematicPart(id=f"p{i}", ref=f"U{i}", value="", footprint_id="dip-14")
+        for i in range(12)
+    )
+    doc = dataclasses.replace(make_doc(components=()), parts=parts)
+    suggestions = suggest_boards(doc.board, design_entries(doc), doc.nets, registry)
+
+    smallest = suggestions[0]
+    assert not smallest.fits
+    best = recommended_board(suggestions)
+    assert best is not None and best.fits
+
+
+def test_a_recommendation_leaves_room_to_wire_the_board() -> None:
+    """The smallest board a circuit FITS on is not the smallest board worth buying: a
+    board packed to its last hole has nowhere to run a solder trace."""
+    registry = footprint_lookup()
+    parts = tuple(
+        SchematicPart(id=f"p{i}", ref=f"U{i}", value="", footprint_id="dip-8")
+        for i in range(8)
+    )
+    doc = dataclasses.replace(make_doc(components=()), parts=parts)
+    suggestions = suggest_boards(doc.board, design_entries(doc), doc.nets, registry)
+    best = recommended_board(suggestions)
+
+    assert best is not None and best.roomy
+    tighter = [s for s in suggestions if s.fits and s.preset is not best.preset
+               and s.preset.width_mm * s.preset.height_mm
+               < best.preset.width_mm * best.preset.height_mm]
+    assert all(not s.roomy for s in tighter)

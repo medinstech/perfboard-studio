@@ -330,6 +330,52 @@ must not be allowed to disagree with it:
 `doc.height_limit_mm` is `None` until someone says otherwise, and `component-too-tall` is
 silent until then — with no case chosen there is nothing to be too tall for.
 
+### Placement is arranged first and annealed second
+
+`placer.arrange` builds a placement out of the NETLIST before the annealer ever runs, and
+half the restarts start from it (`PlacementOptions.seed_from_arrangement`). Annealing
+improves an arrangement; it does not invent one, and every restart starting from the
+document's own layout meant the search only ever sampled basins around wherever the parts
+already were. Three rules carry it:
+
+- **Parts are ordered by connectivity** — the best-connected first, then whichever unplaced
+  part is most tied to those already down — and **ground and power nets reaching three or
+  more parts are left out of that graph**. Same call `schematic.py` makes drawing them as
+  rail glyphs: a rail touching everything makes everything adjacent, and the ordering
+  degenerates back to the alphabet it exists to escape.
+- **Connectors take the edge before anything else can have the room**, alternating sides,
+  turned so their pins run along the edge rather than into the board.
+- **Everything else packs into lanes**, one hole of board between parts and a clear row
+  between lanes. `ARRANGEMENT_GAP` is 1 and not 0 because a courtyard is padded by half a
+  pitch: parts in touching hole cells have courtyards meeting *exactly*, and the overlap
+  predicate compares floats.
+
+`ArrangeRequest.mirrored` is not decoration — a part on the solder side has reflected pins,
+and the first cut of this ignored it and laid a mirrored DIP-8 a column off the board.
+
+**Two cost terms answer to two consumers each, the same shape as `heat-proximity`.** The
+`edge` term measures from a part's COURTYARD to the outer edge of the SUBSTRATE
+(`board_edge_margin_mm`, so a printed border counts as board in the way) — never from the
+anchor, which is pin 1 and moves to the far end of a header when it turns. The `lanes` term
+counts the distinct rows, or columns, that parts *start* on, keyed on the pins rather than
+the anchor for the same reason, and is maintained incrementally on `_State` beside the
+collision and strip-conflict counters because it is global in a third way: moving the last
+part off a row deletes a lane every other part was sharing.
+
+Its weight is set from a measurement rather than from taste — most of the tidiness is free
+(1030.2 → 1030.9 of routed cost for 6.20 → 4.57 lanes over ten fixtures and three seeds),
+and past ~1.5 the term starts buying alignment with wire.
+
+**Doing nothing is a candidate in `_pick_best`.** A constructive placement is not descended
+from the user's board, so nothing else would stop it winning the routing comparison while
+still being worse than leaving the board alone.
+
+`placer.suggest_boards` answers which stock board a circuit needs by ARRANGING it on each
+`geometry.STANDARD_PRESETS` size, not by summing footprint areas: a design is limited by its
+biggest part and the lanes it packs into. `ARRANGEMENT_FILL_LIMIT` is what separates "fits"
+from "fits with room to wire it", and `recommended_board` falls back to the smallest board
+that merely fits, because "no board suits this" is not an answer anybody can act on.
+
 ### A pad is not always round, and the board may say where it is
 
 `board.pad_shape` can be `oblong`, which gives a pad **two different neighbour gaps** —

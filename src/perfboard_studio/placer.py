@@ -78,7 +78,7 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 
 from .autoroute import plan_autoroute
@@ -91,6 +91,10 @@ from .commands import (
 )
 from .connectivity import FootprintLookup
 from .geometry import (
+    STANDARD_PRESETS,
+    BoardPreset,
+    board_edge_margin_mm,
+    board_from_preset,
     convex_polygons_overlap,
     format_hole,
     is_axis_aligned_box,
@@ -104,7 +108,10 @@ from .model import (
     Board,
     BodyArchetype,
     ComponentId,
+    ComponentInstance,
+    Footprint,
     HoleCoord,
+    Net,
     PerfDocument,
     Point2,
     Rotation,
@@ -146,6 +153,34 @@ class PlacementWeights:
 
     hpwl: float = 1.0
     alignment: float = 2.0
+    #: Per extra LANE, where a lane is a row (or a column) some part's pins start on.
+    #:
+    #: The body half of ``alignment`` above, which prices only the pins of one NET. A
+    #: board can have every net tidy and still look scattered, because nothing was ever
+    #: asked to line the PARTS up -- and a scattered board is one nobody can read against
+    #: the schematic, count holes on, or check at the bench. Counting distinct lanes is
+    #: the same shape of measure as the net term: parts sharing a starting row cost one
+    #: lane between them, and every part that starts on a row of its own costs another.
+    #:
+    #: Reduced to millimetres like everything else (a lane is a pitch), so this reads as
+    #: "an extra row of parts is worth about a pitch and a half of wire". Deliberately not
+    #: free: a lane the wiring genuinely wants is one the annealer can still buy.
+    #:
+    #: The number is measured, over ten fixtures and three seeds each, against the routed
+    #: cost of the boards it produced:
+    #:
+    #:     weight   routed cost   lanes used
+    #:        0.0        1030.2         6.20
+    #:        1.5        1030.9         4.57
+    #:        3.0        1061.7         4.10
+    #:        5.0        1070.6         4.17
+    #:
+    #: Which says something worth writing down: most of the tidiness is FREE. Lining
+    #: parts up costs nothing in wire until about 1.5, because a scattered board and a
+    #: tidy one of the same circuit are the same length of copper -- and past that the
+    #: term starts buying alignment with wire, at 3% for half a lane. So it is set where
+    #: the curve turns, not where the boards look tidiest.
+    lanes: float = 1.5
     #: Per PAIR of overlapping courtyards, however slightly they overlap.
     #:
     #: Both an area and a count, because they do different jobs. The area gives the
@@ -162,8 +197,16 @@ class PlacementWeights:
     collision: float = 500.0
     #: Per pin hole outside the grid.
     off_board: float = 200.0
-    #: Per mm from the nearest board edge, for edge-seeking parts only.
-    edge: float = 0.6
+    #: Per mm of bare board between an edge-seeking part's COURTYARD and the nearest
+    #: board edge.
+    #:
+    #: Ten times what it was, and measured from the body rather than from the anchor,
+    #: because at 0.6 from an anchor it did not do its job: on the NE555 fixture the
+    #: four-pin header came out of a full run SEVEN holes inside the board, which is a
+    #: connector nothing can be plugged into. A connector is not a preference about wire
+    #: length -- something has to reach it from outside the board -- so it has to be able
+    #: to outbid the two or three nets that would rather it sat in the middle.
+    edge: float = 6.0
     #: Per mm closer than HEAT_CLEARANCE_MM, per (source, sensitive) pair.
     heat: float = 4.0
     #: Per pair of pins on one strip, in different nets, with no hole between them to
@@ -205,6 +248,14 @@ class PlacementOptions:
     #: Whether two parts may exchange anchors. The move that escapes the local minimum
     #: where two parts each want the other's spot.
     allow_swap: bool = True
+    #: Whether half the restarts begin from a placement built out of the NETLIST (see
+    #: :func:`arrange`) rather than from the one the document arrived with.
+    #:
+    #: Half, not all: a board somebody has arranged by hand is a good starting point and
+    #: throwing it away would be the tool overruling them. Half and half means the search
+    #: samples both, and ``_pick_best`` routes the shortlist and keeps whichever actually
+    #: builds cheaper.
+    seed_from_arrangement: bool = True
     #: End temperature as a fraction of the calibrated start. Small enough that the last
     #: tenth of the run is effectively a greedy descent.
     final_temperature_ratio: float = 1e-3
@@ -239,6 +290,8 @@ class PlacementCost:
 
     hpwl_mm: float
     alignment_mm: float
+    #: Extra lanes the parts are spread over, as millimetres (one lane, one pitch).
+    lane_mm: float
     #: Pairs whose courtyards overlap, by exactly the predicate DRC rule 1 uses.
     overlap_pairs: int
     overlap_mm2: float
@@ -253,6 +306,7 @@ class PlacementCost:
         return (
             weights.hpwl * self.hpwl_mm
             + weights.alignment * self.alignment_mm
+            + weights.lanes * self.lane_mm
             + weights.overlap_pair * self.overlap_pairs
             + weights.overlap_area * self.overlap_mm2
             + weights.collision * self.collisions
@@ -463,6 +517,11 @@ class _Part:
     #: Legal anchor range per rotation index: (min_col, max_col, min_row, max_row).
     #: None when the part cannot fit on the board at that rotation at all.
     anchor_bounds: tuple[tuple[int, int, int, int] | None, ...]
+    #: The part's top-left PIN offset per rotation index, which is the lane it starts on
+    #: once the anchor is added. Not the anchor itself: an anchor is pin 1, which on a
+    #: DIP turned 180 degrees is the bottom-right corner -- two DIPs lying in one row
+    #: would then be counted as two lanes for no reason but their orientation.
+    pin_min: tuple[tuple[int, int], ...]
     edge_seeking: bool
     heat_source: bool
     heat_sensitive: bool
@@ -490,6 +549,7 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
         boxes: list[_Box | None] = []
         polys: list[tuple[Point2, ...] | None] = []
         bounds: list[tuple[int, int, int, int] | None] = []
+        pin_min: list[tuple[int, int]] = []
         for rotation in VALID_ROTATIONS:
             placed = tuple(
                 (
@@ -522,8 +582,10 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 lo_row, hi_row = -min_dr, board.rows - 1 - max_dr
                 fits = lo_col <= hi_col and lo_row <= hi_row
                 bounds.append((lo_col, hi_col, lo_row, hi_row) if fits else None)
+                pin_min.append((min_dc, min_dr))
             else:
                 bounds.append((0, board.cols - 1, 0, board.rows - 1))
+                pin_min.append((0, 0))
 
         archetype = footprint.body.archetype
         parts.append(
@@ -538,6 +600,7 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 rel_box=tuple(boxes),
                 rel_poly=tuple(polys),
                 anchor_bounds=tuple(bounds),
+                pin_min=tuple(pin_min),
                 edge_seeking=archetype in EDGE_SEEKING_ARCHETYPES,
                 heat_source=archetype in HEAT_SOURCE_ARCHETYPES,
                 heat_sensitive=archetype in HEAT_SENSITIVE_ARCHETYPES,
@@ -662,11 +725,13 @@ def _conflicts_on_strip(entries: list[tuple[int, int]], cuts: frozenset[int]) ->
 class _State:
     """Anchors and rotations, plus the two things that cannot be evaluated locally.
 
-    ``hole_count``/``collisions`` and ``strip_entries``/``strip_conflicts`` are
-    maintained incrementally through :meth:`set_placement`, because both are global
-    questions -- whether a hole is shared, and which pins end up NEXT to each other along
-    a strip -- and recomputing either one every iteration is a term that would dominate
-    the run. Everything else is local, which is what :meth:`_Scorer.local` relies on.
+    ``hole_count``/``collisions``, ``lane_cols``/``lane_rows`` and
+    ``strip_entries``/``strip_conflicts`` are maintained incrementally through
+    :meth:`set_placement`, because all three are global questions -- whether a hole is
+    shared, how many distinct lanes the whole board is spread over, and which pins end up
+    NEXT to each other along a strip -- and recomputing any of them every iteration is a
+    term that would dominate the run. Everything else is local, which is what
+    :meth:`_Scorer.local` relies on.
 
     The strip half is the more easily got wrong of the two, because it is global in a
     second way: moving one part out from between two others changes whether THOSE two
@@ -678,8 +743,17 @@ class _State:
     col: list[int]
     row: list[int]
     rot: list[int]
+    #: The board's own pitch, because the lane count below is reported in millimetres
+    #: like every other term and a lane is one pitch wide.
+    pitch: float = 2.54
     hole_count: dict[tuple[int, int], int] = field(default_factory=dict)
     collisions: int = 0
+    #: How many parts start on each column and on each row. A COUNT per lane rather than
+    #: a set, because the lane a part leaves stops existing only when the last part on it
+    #: leaves -- which is the whole of the bookkeeping, and the obvious way to get it
+    #: wrong.
+    lane_cols: dict[int, int] = field(default_factory=dict)
+    lane_rows: dict[int, int] = field(default_factory=dict)
     #: None on a pad-per-hole board, and then nothing below is touched at all.
     strips: _Strips | None = None
     #: Per strip index, one ``(position, net)`` entry per pin standing on it. A list
@@ -688,6 +762,35 @@ class _State:
     strip_entries: dict[int, list[tuple[int, int]]] = field(default_factory=dict)
     strip_conflict_of: dict[int, int] = field(default_factory=dict)
     strip_conflicts: int = 0
+
+    def lane_mm(self) -> float:
+        """Extra lanes the parts are spread over, in mm.
+
+        The cheaper of counting rows and counting columns, which is exactly the choice
+        :meth:`_Scorer.net_terms` makes for one net's pins: a board whose parts stand in
+        four columns is as tidy as one whose parts lie in four rows, and demanding both
+        would be asking for a layout no real board has. One lane costs nothing -- every
+        part starting on the same line is as aligned as parts get.
+        """
+        return max(0, min(len(self.lane_cols), len(self.lane_rows)) - 1) * self.pitch
+
+    def _lane_of(self, index: int) -> tuple[int, int]:
+        d_col, d_row = self.parts[index].pin_min[self.rot[index]]
+        return self.col[index] + d_col, self.row[index] + d_row
+
+    def _leave_lanes(self, index: int) -> None:
+        lane_col, lane_row = self._lane_of(index)
+        for lanes, key in ((self.lane_cols, lane_col), (self.lane_rows, lane_row)):
+            count = lanes[key]
+            if count == 1:
+                del lanes[key]
+            else:
+                lanes[key] = count - 1
+
+    def _join_lanes(self, index: int) -> None:
+        lane_col, lane_row = self._lane_of(index)
+        self.lane_cols[lane_col] = self.lane_cols.get(lane_col, 0) + 1
+        self.lane_rows[lane_row] = self.lane_rows.get(lane_row, 0) + 1
 
     def snapshot(self) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
         return tuple(self.col), tuple(self.row), tuple(self.rot)
@@ -720,10 +823,13 @@ class _State:
                 self.hole_count[hole] = count - 1
         if self.strips is not None:
             self._leave_strips(index)
+        self._leave_lanes(index)
 
         self.col[index] = col
         self.row[index] = row
         self.rot[index] = rot
+
+        self._join_lanes(index)
 
         for hole in self.pins(index):
             count = self.hole_count.get(hole, 0)
@@ -785,6 +891,7 @@ def _initial_state(
         col=[doc.components[p.doc_index].anchor.col for p in parts],
         row=[doc.components[p.doc_index].anchor.row for p in parts],
         rot=[_rotation_index(doc.components[p.doc_index].rotation) for p in parts],
+        pitch=doc.board.pitch,
         strips=strips,
     )
     for position in range(len(parts)):
@@ -793,6 +900,7 @@ def _initial_state(
             if count >= 1:
                 state.collisions += 1
             state.hole_count[hole] = count + 1
+        state._join_lanes(position)
         if strips is not None:
             state._join_strips(position)
     return state
@@ -879,6 +987,18 @@ class _Scorer:
     board_pitch: float
     board_cols: int
     board_rows: int
+    #: The substrate's four outer edges, in the same millimetre frame the holes are in
+    #: (hole 0 at 0.0). Half a pitch outside the outermost hole centres PLUS whatever
+    #: printed border the board was cut with, per axis -- ``board_edge_margin_mm`` is the
+    #: one answer to that and this asks it rather than assuming half a pitch, for the
+    #: reason CLAUDE.md gives about ``board_size_mm`` against ``hole_span_mm``: a 5 x 7 cm
+    #: board has ~2.1 mm at the sides and ~4.5 mm top and bottom, and a connector judged
+    #: against the hole grid would be told it is at the edge while 4 mm of bare board
+    #: stands between it and the outside.
+    edge_min_x: float
+    edge_max_x: float
+    edge_min_y: float
+    edge_max_y: float
     weights: PlacementWeights
     nets: list[_NetPins]
     nets_of: list[tuple[int, ...]]
@@ -914,7 +1034,25 @@ class _Scorer:
         return hpwl, spread * self.board_pitch
 
     def part_terms(self, state: _State, position: int) -> tuple[int, float]:
-        """(off-board pins, edge distance mm) for one part."""
+        """(off-board pins, bare board outside this part mm) for one part.
+
+        The edge distance is measured from the part's COURTYARD to the nearest substrate
+        edge, and both halves of that were wrong before.
+
+        From the courtyard, because an anchor is pin 1: on a four-pin header turned 90
+        degrees it is one END of the part, so the same connector reads as three holes
+        further in or three holes further out depending on which way it happens to be
+        facing. ``pair_terms`` already refuses to measure heat from an anchor for exactly
+        this reason, and the two terms have no business disagreeing about where a part is.
+
+        To the SUBSTRATE edge rather than to the outermost hole, because what a connector
+        needs is that nothing stands between it and the outside of the board -- and on a
+        board with a printed border there are millimetres of bare board out there that the
+        hole grid cannot see.
+
+        The number returned is therefore "how much board is outside this part", which is
+        zero for a connector sitting on the edge where it belongs.
+        """
         part = state.parts[position]
         off = 0
         for col, row in state.pins(position):
@@ -922,9 +1060,25 @@ class _Scorer:
                 off += 1
         if not part.edge_seeking:
             return off, 0.0
-        col, row = state.col[position], state.row[position]
-        to_edge = min(col, self.board_cols - 1 - col, row, self.board_rows - 1 - row)
-        return off, max(0, to_edge) * self.board_pitch
+        x = state.col[position] * self.board_pitch
+        y = state.row[position] * self.board_pitch
+        box = part.rel_box[state.rot[position]]
+        if box is None:
+            # No outline to measure from; the anchor hole is the only position it has.
+            return off, max(
+                0.0,
+                min(x - self.edge_min_x, self.edge_max_x - x,
+                    y - self.edge_min_y, self.edge_max_y - y),
+            )
+        return off, max(
+            0.0,
+            min(
+                (x + box.min_x) - self.edge_min_x,
+                self.edge_max_x - (x + box.max_x),
+                (y + box.min_y) - self.edge_min_y,
+                self.edge_max_y - (y + box.max_y),
+            ),
+        )
 
     def pair_terms(self, state: _State, a: int, b: int) -> tuple[int, float, float]:
         """(overlapping? 0/1, courtyard overlap mm^2, heat proximity mm) for one pair.
@@ -1012,6 +1166,7 @@ class _Scorer:
         return PlacementCost(
             hpwl_mm=hpwl,
             alignment_mm=alignment,
+            lane_mm=state.lane_mm(),
             overlap_pairs=pairs,
             overlap_mm2=overlap,
             collisions=state.collisions,
@@ -1062,24 +1217,63 @@ class _Scorer:
         return total
 
 
-def _global_counts(state: _State) -> tuple[int, int]:
-    """The two terms :meth:`_Scorer.local` cannot see, before a move is made."""
-    return state.collisions, state.strip_conflicts
+def _make_scorer(
+    board: Board,
+    weights: PlacementWeights,
+    nets: list[_NetPins],
+    nets_of: list[tuple[int, ...]],
+    strips: _Strips | None,
+) -> _Scorer:
+    """The one place a board becomes a cost function.
+
+    A function rather than four more keyword arguments at every call site: the substrate
+    edges are derived from the board and nothing else, and two callers deriving them
+    separately is how the annealer and a test end up measuring different boards.
+    """
+    margin_x = board_edge_margin_mm(board, "horizontal")
+    margin_y = board_edge_margin_mm(board, "vertical")
+    return _Scorer(
+        board_pitch=board.pitch,
+        board_cols=board.cols,
+        board_rows=board.rows,
+        edge_min_x=-margin_x,
+        edge_max_x=(board.cols - 1) * board.pitch + margin_x,
+        edge_min_y=-margin_y,
+        edge_max_y=(board.rows - 1) * board.pitch + margin_y,
+        weights=weights,
+        nets=nets,
+        nets_of=nets_of,
+        strips=strips,
+    )
+
+
+def _global_counts(state: _State) -> tuple[int, int, float]:
+    """The three terms :meth:`_Scorer.local` cannot see, before a move is made.
+
+    Collisions and strip conflicts are global because they are questions about what ELSE
+    is in a hole or next along a strip. Lanes are global in a third way: moving the last
+    part off a row deletes a lane that every other part was sharing the cost of, so no
+    neighbourhood of the moved part contains the answer.
+    """
+    return state.collisions, state.strip_conflicts, state.lane_mm()
 
 
 def _global_delta(
-    state: _State, before: tuple[int, int], weights: PlacementWeights
+    state: _State, before: tuple[int, int, float], weights: PlacementWeights
 ) -> float:
     """What a move did to them, weighted, to be added to the local delta.
 
     Written as weight-times-difference rather than as a difference of weighted totals so
     that a board with no strips adds an exact ``0.0`` and anneals bit for bit as it did
-    before this term existed. The distinction is not pedantic: the annealer compares a
+    before that term existed. The distinction is not pedantic: the annealer compares a
     delta against ``exp(-delta/T)`` and a rounding difference in the last place is enough
     to flip an acceptance, which would move every golden placement for no reason at all.
+    The lane term follows the same rule, so ``lanes=0`` is exactly the old arithmetic.
     """
-    return weights.collision * (state.collisions - before[0]) + weights.strip_conflict * (
-        state.strip_conflicts - before[1]
+    return (
+        weights.collision * (state.collisions - before[0])
+        + weights.strip_conflict * (state.strip_conflicts - before[1])
+        + weights.lanes * (state.lane_mm() - before[2])
     )
 
 
@@ -1161,6 +1355,574 @@ def _propose(
 
 
 # ---------------------------------------------------------------------------
+# A first arrangement: from the netlist, not from the alphabet
+# ---------------------------------------------------------------------------
+#
+# WHY A CONSTRUCTIVE PLACER SITS IN FRONT OF THE ANNEALER.
+#
+# Annealing improves an arrangement; it does not invent one. Every restart used to begin
+# from the placement the document already had, so the search only ever sampled basins
+# around wherever the parts happened to be -- and on four of this project's own example
+# boards, forty thousand moves across four restarts found nothing at all to change,
+# because the run heated the layout up past the hand-made one it started from and never
+# climbed back. A schematic-first document is the other half of the same problem: the
+# parts arrive in a grid ordered by REFERENCE, which is to say in an order that has
+# nothing to do with the circuit, and the annealer spends its whole budget undoing that.
+#
+# So the netlist gets to say where the parts go first, and the annealer refines it:
+#
+#   * parts are ORDERED by connectivity -- the best-connected part first, then whichever
+#     unplaced part is most tied to the ones already placed. Parts that talk to each other
+#     come out next to each other in the sequence, which is most of what placement is;
+#   * connectors go on the EDGE, before anything else has a chance to take the room;
+#   * everything else is packed into LANES -- rows of parts with a hole of board between
+#     them and a clear row between lanes. That is what a hand-built board looks like, and
+#     it is what the lane term in the cost function is asking for.
+#
+# It is deterministic (every tie broken by reference), pure, and cheap enough to run on
+# every restart. And it is worth having on its own: it is what the schematic panel places
+# a design with, and what suggest_boards tries a circuit against to work out which stock
+# board it needs.
+
+
+#: Nets that join everything to everything, and therefore say nothing about which parts
+#: want to be neighbours.
+#:
+#: The same call ``schematic.py`` makes when it draws ground and power as rail glyphs
+#: rather than wires, for the same reason and with the same consequence if it is not made:
+#: a GND net touching eleven parts makes all eleven mutually adjacent, the ordering below
+#: degenerates to "everything is connected to everything", and the arrangement is back to
+#: being alphabetical. Kept to nets that actually reach three or more parts, so a
+#: two-part +5V is still a real bond between those two parts.
+ARRANGEMENT_RAIL_CLASSES: frozenset[str] = frozenset({"ground", "power"})
+ARRANGEMENT_RAIL_MIN_NODES = 3
+
+#: Holes of bare board left between two parts in a lane, and between one lane and the next.
+#:
+#: One, not zero, and not for looks. A courtyard is padded by half a pitch on every side,
+#: so two parts in touching hole cells have courtyards that meet EXACTLY -- and the
+#: overlap predicate this module shares with DRC compares floats, where "exactly" is
+#: whichever side of zero the last bit lands on. The module docstring says the same thing
+#: about the annealer landing one ULP inside a DRC error. A hole of board also happens to
+#: be where a solder trace goes.
+ARRANGEMENT_GAP = 1
+
+
+@dataclass(frozen=True, slots=True)
+class ArrangedPart:
+    """One part, and where a first arrangement would put it."""
+
+    id: ComponentId
+    ref: str
+    anchor: HoleCoord
+    rotation: Rotation
+
+
+@dataclass(frozen=True, slots=True)
+class Arrangement:
+    """Where a whole design would go on a board, by footprint and netlist alone.
+
+    Carries no document: it describes parts that may be on the board already (the
+    annealer's seed) or may only be in the design (the schematic panel's placement), and
+    those are two different commands over two different lists.
+    """
+
+    placements: tuple[ArrangedPart, ...]
+    #: References that did not fit, or whose footprint the registry does not have.
+    unplaced: tuple[str, ...]
+    #: Hole cells the arrangement covers, out of the whole grid. What
+    #: :func:`suggest_boards` reads to tell a board that fits from one that fits with
+    #: nowhere left to run a wire.
+    cells_used: int
+    cells_total: int
+
+    @property
+    def fits(self) -> bool:
+        return not self.unplaced
+
+    @property
+    def fill(self) -> float:
+        return self.cells_used / self.cells_total if self.cells_total else 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class _Shape:
+    """The hole cells one part covers at one rotation, relative to its anchor."""
+
+    lo_col: int
+    hi_col: int
+    lo_row: int
+    hi_row: int
+
+    @property
+    def cols(self) -> int:
+        return self.hi_col - self.lo_col + 1
+
+    @property
+    def rows(self) -> int:
+        return self.hi_row - self.lo_row + 1
+
+
+@dataclass(frozen=True, slots=True)
+class ArrangeRequest:
+    """One part for :func:`arrange` to find a place for.
+
+    ``mirrored`` is not decoration. A part mounted on the SOLDER side has its pins
+    reflected, so the same footprint covers different holes -- and an arrangement that
+    ignored it laid a mirrored DIP-8 down with its pins a column off the board and put
+    another one on top of its neighbour. A part that is only in the design has not been
+    put on a face yet, which is why it defaults to False rather than being asked for.
+    """
+
+    id: ComponentId
+    ref: str
+    footprint_id: str
+    mirrored: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _Item:
+    component_id: ComponentId
+    ref: str
+    shapes: tuple[_Shape, ...]
+    edge_seeking: bool
+
+
+def _cell_span(low_mm: float, high_mm: float, pitch: float) -> tuple[int, int]:
+    """The hole cells a millimetre span covers, as (first, last).
+
+    A hole's cell is the pitch square centred on it -- exactly the tile ``view3d`` glyphs
+    both faces of the board out of -- so two parts whose cells do not meet have courtyards
+    that at worst touch, and the overlap predicate needs a strict overlap to object.
+    Rounding is outward at both ends on purpose: a cell claimed and not needed costs a
+    hole of slack, and a cell needed and not claimed is a DRC error.
+    """
+    return math.floor(low_mm / pitch + 0.5), math.ceil(high_mm / pitch - 0.5)
+
+
+def _shapes_of(
+    footprint: Footprint, pitch: float, mirrored: bool = False
+) -> tuple[_Shape, ...]:
+    """The four rotations of one footprint, as hole-cell boxes around its anchor.
+
+    The union of the pins and the courtyard, because neither contains the other in
+    general: a courtyard is the pins padded by half a pitch for most parts, and wider than
+    them for a TO-220's tab or a potentiometer's body.
+    """
+    shapes: list[_Shape] = []
+    for rotation in VALID_ROTATIONS:
+        placed = [
+            transform_offset(p.d_col, p.d_row, rotation, mirrored) for p in footprint.pins
+        ]
+        if placed:
+            lo_col = min(int(dc) for dc, _ in placed)
+            hi_col = max(int(dc) for dc, _ in placed)
+            lo_row = min(int(dr) for _, dr in placed)
+            hi_row = max(int(dr) for _, dr in placed)
+        else:
+            lo_col = hi_col = lo_row = hi_row = 0
+        if footprint.body_outline:
+            corners = [
+                transform_offset(point.x, point.y, rotation, mirrored)
+                for point in footprint.body_outline
+            ]
+            xs = [x for x, _ in corners]
+            ys = [y for _, y in corners]
+            box_lo_col, box_hi_col = _cell_span(min(xs), max(xs), pitch)
+            box_lo_row, box_hi_row = _cell_span(min(ys), max(ys), pitch)
+            lo_col, hi_col = min(lo_col, box_lo_col), max(hi_col, box_hi_col)
+            lo_row, hi_row = min(lo_row, box_lo_row), max(hi_row, box_hi_row)
+        shapes.append(_Shape(lo_col, hi_col, lo_row, hi_row))
+    return tuple(shapes)
+
+
+def _lying_rotation(shapes: tuple[_Shape, ...]) -> int:
+    """The rotation that makes a part as FLAT as it goes.
+
+    Lanes are rows, so a part standing on end is a part that makes its whole lane as tall
+    as itself. Ties go to the lowest rotation index, which is the one the user would have
+    got by dropping the part on the board unturned.
+    """
+    return min(range(4), key=lambda r: (shapes[r].rows, shapes[r].cols, r))
+
+
+def _standing_rotation(shapes: tuple[_Shape, ...]) -> int:
+    """The rotation that makes a part as NARROW as it goes -- for a side edge.
+
+    A connector on the left or right edge wants its pins running down the edge, not into
+    the board: every pin is then the same one hole from the outside, which is what makes
+    the thing pluggable, and it takes one column of board instead of four.
+    """
+    return min(range(4), key=lambda r: (shapes[r].cols, shapes[r].rows, r))
+
+
+def _adjacency(nets: Sequence[Net], refs: frozenset[str]) -> dict[str, dict[str, int]]:
+    """How many nets join each pair of parts, rails excluded."""
+    bonds: dict[str, dict[str, int]] = {ref: {} for ref in refs}
+    for net in nets:
+        members = sorted({node.component_ref for node in net.nodes} & refs)
+        if len(members) < 2:
+            continue
+        if (
+            net.net_class in ARRANGEMENT_RAIL_CLASSES
+            and len(members) >= ARRANGEMENT_RAIL_MIN_NODES
+        ):
+            continue
+        for index, one in enumerate(members):
+            for other in members[index + 1 :]:
+                bonds[one][other] = bonds[one].get(other, 0) + 1
+                bonds[other][one] = bonds[other].get(one, 0) + 1
+    return bonds
+
+
+def _connectivity_order(refs: Sequence[str], bonds: dict[str, dict[str, int]]) -> list[str]:
+    """Parts in the order a person would place them: the busiest first, then its
+    neighbours, then theirs.
+
+    Greedy rather than a graph partition, because the annealer is what refines this and a
+    better ordering would buy a fraction of what one more restart does. Every tie is
+    broken by reference, so the sequence is the same on every machine -- which everything
+    downstream of this, goldens included, depends on.
+    """
+    degree = {ref: sum(bonds.get(ref, {}).values()) for ref in refs}
+    remaining = set(refs)
+    order: list[str] = []
+    placed: set[str] = set()
+    while remaining:
+        if not order:
+            pick = min(remaining, key=lambda ref: (-degree[ref], ref))
+        else:
+            pick = min(
+                remaining,
+                key=lambda ref: (
+                    -sum(w for other, w in bonds.get(ref, {}).items() if other in placed),
+                    -degree[ref],
+                    ref,
+                ),
+            )
+        order.append(pick)
+        placed.add(pick)
+        remaining.discard(pick)
+    return order
+
+
+class _Floor:
+    """Which hole cells are spoken for, and whether a part will fit somewhere.
+
+    A set of cells rather than a bitmap: the biggest stock board is 78 x 118 and a design
+    covers a fraction of it, so the set stays smaller than the board and the test is a
+    handful of lookups.
+    """
+
+    def __init__(
+        self, cols: int, rows: int, reserved: frozenset[tuple[int, int]] = frozenset()
+    ) -> None:
+        self.cols = cols
+        self.rows = rows
+        self.taken: set[tuple[int, int]] = set(reserved)
+
+    def fits(self, shape: _Shape, col: int, row: int) -> bool:
+        """Whether the part's cells are on the board and free, with a hole to spare.
+
+        The free test is grown by :data:`ARRANGEMENT_GAP` in every direction and the
+        on-board test is not: a part may sit flush against the edge of the board, and must
+        not sit flush against another part.
+        """
+        if col < 0 or row < 0 or col + shape.cols > self.cols or row + shape.rows > self.rows:
+            return False
+        for c in range(col - ARRANGEMENT_GAP, col + shape.cols + ARRANGEMENT_GAP):
+            for r in range(row - ARRANGEMENT_GAP, row + shape.rows + ARRANGEMENT_GAP):
+                if (c, r) in self.taken:
+                    return False
+        return True
+
+    def occupy(self, shape: _Shape, col: int, row: int) -> None:
+        for c in range(col, col + shape.cols):
+            for r in range(row, row + shape.rows):
+                self.taken.add((c, r))
+
+
+def arrange(
+    board: Board,
+    entries: Sequence[ArrangeRequest],
+    nets: Sequence[Net],
+    lookup: FootprintLookup,
+    reserved: frozenset[tuple[int, int]] = frozenset(),
+) -> Arrangement:
+    """A first placement of ``entries`` on ``board``.
+
+    ``reserved`` is hole cells something else already stands in: the locked components,
+    when the annealer seeds a restart with this, or everything already placed, when a
+    design is being moved onto a board. A part whose footprint the registry does not have,
+    or that will not fit, comes back in ``unplaced`` rather than being dropped silently --
+    the caller has to be able to say so.
+    """
+    pitch = board.pitch
+    items: dict[str, _Item] = {}
+    unplaced: list[str] = []
+    for request in entries:
+        footprint = lookup(request.footprint_id)
+        if footprint is None:
+            unplaced.append(request.ref)
+            continue
+        items[request.ref] = _Item(
+            component_id=request.id,
+            ref=request.ref,
+            shapes=_shapes_of(footprint, pitch, request.mirrored),
+            edge_seeking=footprint.body.archetype in EDGE_SEEKING_ARCHETYPES,
+        )
+
+    order = _connectivity_order(sorted(items), _adjacency(nets, frozenset(items)))
+    floor = _Floor(board.cols, board.rows, reserved)
+    placements: list[ArrangedPart] = []
+
+    # Connectors first, before the rest of the design has a chance to take the edge. They
+    # alternate sides rather than queueing along one, because the common board has power
+    # in at one end and signal out at the other -- and because a connectivity ordering
+    # puts the two ends of a signal chain at opposite ends of the sequence anyway. Which
+    # edge a given connector ends up on is the annealer's to change; all of them on ONE
+    # edge is a hole the annealer would have to dig itself out of.
+    leftovers: list[str] = []
+    for index, ref in enumerate([ref for ref in order if items[ref].edge_seeking]):
+        item = items[ref]
+        sides = ("left", "right") if index % 2 == 0 else ("right", "left")
+        spot = _place_on_an_edge(floor, item, (*sides, "top", "bottom"))
+        if spot is None:
+            leftovers.append(ref)
+            continue
+        rotation, col, row = spot
+        floor.occupy(item.shapes[rotation], col, row)
+        placements.append(_arranged(item, rotation, col, row))
+
+    # Then everything else, packed into lanes.
+    lane_top = 0
+    lane_height = 0
+    cursor = 0
+    for ref in [r for r in order if not items[r].edge_seeking] + leftovers:
+        item = items[ref]
+        rotation = _lying_rotation(item.shapes)
+        shape = item.shapes[rotation]
+        while True:
+            if lane_top + shape.rows > board.rows:
+                unplaced.append(ref)
+                break
+            if cursor + shape.cols <= board.cols and floor.fits(shape, cursor, lane_top):
+                floor.occupy(shape, cursor, lane_top)
+                placements.append(_arranged(item, rotation, cursor, lane_top))
+                cursor += shape.cols + ARRANGEMENT_GAP
+                lane_height = max(lane_height, shape.rows)
+                break
+            cursor += 1
+            if cursor + shape.cols > board.cols:
+                # A new lane, one clear row below the tallest thing in this one. A lane
+                # that never took a part still has to advance, or this loops forever.
+                lane_top += (lane_height or shape.rows) + ARRANGEMENT_GAP
+                lane_height = 0
+                cursor = 0
+
+    return Arrangement(
+        placements=tuple(sorted(placements, key=lambda p: p.ref)),
+        unplaced=tuple(sorted(unplaced)),
+        cells_used=len(floor.taken) - len(reserved),
+        cells_total=board.cols * board.rows,
+    )
+
+
+def _arranged(item: _Item, rotation: int, col: int, row: int) -> ArrangedPart:
+    """One placement, converting the cell box back to the anchor a document stores."""
+    shape = item.shapes[rotation]
+    return ArrangedPart(
+        id=item.component_id,
+        ref=item.ref,
+        anchor=HoleCoord(col=col - shape.lo_col, row=row - shape.lo_row),
+        rotation=VALID_ROTATIONS[rotation],
+    )
+
+
+def _place_on_an_edge(
+    floor: _Floor, item: _Item, sides: Sequence[str]
+) -> tuple[int, int, int] | None:
+    """(rotation, first column, first row) for a connector on the first side with room,
+    or None when none of them have any.
+
+    Walked from the top or from the left rather than from the middle, so a board with
+    three connectors down one edge gets them in a row instead of scattered along it.
+    """
+    for side in sides:
+        vertical = side in ("left", "right")
+        rotation = _standing_rotation(item.shapes) if vertical else _lying_rotation(item.shapes)
+        shape = item.shapes[rotation]
+        if vertical:
+            col = 0 if side == "left" else floor.cols - shape.cols
+            for row in range(floor.rows - shape.rows + 1):
+                if floor.fits(shape, col, row):
+                    return rotation, col, row
+        else:
+            row = 0 if side == "top" else floor.rows - shape.rows
+            for col in range(floor.cols - shape.cols + 1):
+                if floor.fits(shape, col, row):
+                    return rotation, col, row
+    return None
+
+
+def arrange_document(
+    doc: PerfDocument, lookup: FootprintLookup, board: Board | None = None
+) -> Arrangement:
+    """A first arrangement of everything on the board, locked parts left where they are.
+
+    What the annealer seeds half its restarts with.
+    """
+    on = board if board is not None else doc.board
+    reserved: set[tuple[int, int]] = set()
+    movable: list[ArrangeRequest] = []
+    for component in doc.components:
+        if not component.locked:
+            movable.append(
+                ArrangeRequest(
+                    component.id, component.ref, component.footprint_id, component.mirrored
+                )
+            )
+            continue
+        _reserve(reserved, component, on, lookup)
+    return arrange(on, movable, doc.nets, lookup, frozenset(reserved))
+
+
+def arrange_design(
+    doc: PerfDocument, lookup: FootprintLookup, board: Board | None = None
+) -> Arrangement:
+    """A first arrangement of the parts that are in the DESIGN and not on the board yet.
+
+    Everything already placed is reserved rather than moved: putting a design on the board
+    is not the moment to rearrange what somebody has already positioned, and auto-place is
+    a separate gesture with a separate undo step.
+    """
+    on = board if board is not None else doc.board
+    reserved: set[tuple[int, int]] = set()
+    for component in doc.components:
+        _reserve(reserved, component, on, lookup)
+    entries = [ArrangeRequest(part.id, part.ref, part.footprint_id) for part in doc.parts]
+    return arrange(on, entries, doc.nets, lookup, frozenset(reserved))
+
+
+def _reserve(
+    into: set[tuple[int, int]],
+    component: ComponentInstance,
+    board: Board,
+    lookup: FootprintLookup,
+) -> None:
+    """Mark the cells one already-positioned part stands in. A part the registry does not
+    know covers nothing, exactly as it is invisible to every other module here."""
+    footprint = lookup(component.footprint_id)
+    if footprint is None:
+        return
+    shape = _shapes_of(footprint, board.pitch, component.mirrored)[
+        _rotation_index(component.rotation)
+    ]
+    for c in range(shape.lo_col, shape.hi_col + 1):
+        for r in range(shape.lo_row, shape.hi_row + 1):
+            into.add((component.anchor.col + c, component.anchor.row + r))
+
+
+# ---------------------------------------------------------------------------
+# Which board to buy
+# ---------------------------------------------------------------------------
+
+
+#: How much of a board's holes an arrangement may cover and still be a board somebody can
+#: wire.
+#:
+#: Measured rather than guessed: the four worked examples that ship with this project
+#: cover between a tenth and a quarter of their boards' holes, and every one of them
+#: routes without a wire the tool could not place. A third is past all of them and still
+#: leaves two holes in three for copper, which is the ratio a perfboard actually needs --
+#: a solder trace is as wide as the parts are and every run wants a lane of its own.
+ARRANGEMENT_FILL_LIMIT = 0.33
+
+
+@dataclass(frozen=True, slots=True)
+class BoardSuggestion:
+    """One stock board, and what this circuit would look like on it."""
+
+    preset: BoardPreset
+    board: Board
+    arrangement: Arrangement
+
+    @property
+    def fits(self) -> bool:
+        """Whether every part found a place. A board failing this is not an option."""
+        return self.arrangement.fits
+
+    @property
+    def roomy(self) -> bool:
+        """Whether it fits with room left to wire it. What a recommendation needs."""
+        return self.fits and self.arrangement.fill <= ARRANGEMENT_FILL_LIMIT
+
+    @property
+    def fill(self) -> float:
+        return self.arrangement.fill
+
+
+def suggest_boards(
+    base: Board,
+    entries: Sequence[ArrangeRequest],
+    nets: Sequence[Net],
+    lookup: FootprintLookup,
+    presets: Sequence[BoardPreset] = STANDARD_PRESETS,
+) -> tuple[BoardSuggestion, ...]:
+    """Every stock board this circuit could go on, smallest first.
+
+    ANSWERED BY ARRANGING THE CIRCUIT, not by adding up footprint areas. A design is
+    limited by the shape of its biggest part and by the lanes it packs into, not by the
+    sum of its parts: eight resistors and one DIP-40 need a board the DIP fits on. So each
+    candidate is laid out for real, by the same function that lays out the board the user
+    ends up with, and the answer is what actually happened.
+
+    Only boards of the family ``base`` is already on are offered. A phenolic board and a
+    plated double-sided one are different products with different pads, and a size
+    suggestion is not the place to change which one somebody bought.
+    """
+    suggestions: list[BoardSuggestion] = []
+    for preset in sorted(presets, key=lambda p: (p.width_mm * p.height_mm, p.name)):
+        if preset.single_sided != base.single_sided:
+            continue
+        board = board_from_preset(preset, base)
+        suggestions.append(BoardSuggestion(preset, board, arrange(board, entries, nets, lookup)))
+    return tuple(suggestions)
+
+
+def recommended_board(suggestions: Sequence[BoardSuggestion]) -> BoardSuggestion | None:
+    """The smallest board worth buying: the first with room to wire it, or failing that
+    the first the circuit fits on at all.
+
+    The fallback matters. A design that fills every stock board past the comfortable ratio
+    still has to be offered the biggest one rather than nothing -- "no board suits this"
+    is not an answer anybody can act on.
+    """
+    for suggestion in suggestions:
+        if suggestion.roomy:
+            return suggestion
+    for suggestion in suggestions:
+        if suggestion.fits:
+            return suggestion
+    return None
+
+
+def design_entries(doc: PerfDocument) -> tuple[ArrangeRequest, ...]:
+    """The whole design as :func:`arrange` takes it: the parts and the components alike.
+
+    Both lists, because "which board does this circuit need" is a question about the
+    CIRCUIT, and a half-placed document is the normal state of one being designed. A
+    component already on the board keeps whichever face it is on; a part still in the
+    design has not been given one.
+    """
+    return tuple(
+        ArrangeRequest(part.id, part.ref, part.footprint_id) for part in doc.parts
+    ) + tuple(
+        ArrangeRequest(c.id, c.ref, c.footprint_id, c.mirrored) for c in doc.components
+    )
+
+
+# ---------------------------------------------------------------------------
 # Planning
 # ---------------------------------------------------------------------------
 
@@ -1190,15 +1952,7 @@ def plan_placement(
     strips = _build_strips(doc, parts, pin_nets)
     state = _initial_state(doc, parts, strips)
 
-    scorer = _Scorer(
-        board_pitch=doc.board.pitch,
-        board_cols=doc.board.cols,
-        board_rows=doc.board.rows,
-        weights=options.weights,
-        nets=nets,
-        nets_of=nets_of,
-        strips=strips,
-    )
+    scorer = _make_scorer(doc.board, options.weights, nets, nets_of, strips)
     before = scorer.full(state)
     movable = [position for position, part in enumerate(state.parts) if part.movable]
     locked = len(state.parts) - len(movable)
@@ -1215,6 +1969,12 @@ def plan_placement(
         else min(MAX_ITERATIONS, max(MIN_ITERATIONS, ITERATIONS_PER_PART * len(movable)))
     )
 
+    seeded = (
+        arrange_document(doc, lookup)
+        if options.seed_from_arrangement and options.restarts > 1
+        else None
+    )
+
     candidates: list[PlacementPlan] = []
     for attempt in range(max(1, options.restarts)):
         if candidates and should_stop is not None and should_stop():
@@ -1222,10 +1982,14 @@ def plan_placement(
             # placement rather than nothing. Checked between restarts as well as inside
             # the anneal so a cancel lands promptly either way.
             break
-        # Every restart starts from the ORIGINAL placement, not from the last one's
-        # result: restarts exist to sample independent basins, and chaining them would
-        # just be one longer anneal with the temperature reset.
+        # Every restart starts from the original placement or from the constructive one,
+        # never from the last restart's result: restarts exist to sample independent
+        # basins, and chaining them would just be one longer anneal with the temperature
+        # reset. Odd attempts take the constructive seed, so a run of one is still the
+        # document's own layout and "try another arrangement" alternates between them.
         run_state = _initial_state(doc, parts, strips)
+        if seeded is not None and attempt % 2 == 1:
+            _apply_arrangement(run_state, seeded)
         after, accepted = _anneal(
             run_state, scorer, movable, doc, options, iterations, options.seed + attempt,
             should_stop,
@@ -1238,13 +2002,36 @@ def plan_placement(
             )
         )
 
-    winner = _pick_best(candidates, doc, lookup, options)
+    # Leaving the board exactly as it is, as a candidate in its own right. Without it a
+    # constructive seed could win the routing comparison against the other CANDIDATES
+    # while still being worse than doing nothing, and a placer that can hand back a worse
+    # board than it was given is one nobody presses twice.
+    baseline = _plan_from(doc, (), before, before, options, iterations, 0, len(movable), locked, None)
+    winner = _pick_best(candidates, baseline, doc, lookup, options)
     # AFTER the winner is chosen, and only to the winner. Settling every candidate before
     # the choice changes what the router is shown and therefore which candidate wins --
     # measured on the dense fixture, where doing it that way left the mean routed cost
     # 31.5 -> 35.9 while the best was identical. Tidying the one board that won cannot do
     # that, and is checked against the router besides.
     return _settle_winner(winner, doc, lookup, parts, scorer, movable, original_rotations, options)
+
+
+def _apply_arrangement(state: _State, arrangement: Arrangement) -> None:
+    """Move a state's parts to where a constructive arrangement put them.
+
+    Placements the state cannot take are skipped rather than forced: a part the
+    arrangement could not fit stays where it was, which leaves a complete, legal state --
+    the annealer's whole contract with its caller.
+    """
+    at = {part.ref: position for position, part in enumerate(state.parts)}
+    for placed in arrangement.placements:
+        position = at.get(placed.ref)
+        if position is None or not state.parts[position].movable:
+            continue
+        rotation = _rotation_index(placed.rotation)
+        if not _in_bounds(state.parts[position], rotation, placed.anchor.col, placed.anchor.row):
+            continue
+        state.set_placement(position, placed.anchor.col, placed.anchor.row, rotation)
 
 
 def _anneal(
@@ -1365,6 +2152,61 @@ def _settle_rotations(
                 state.set_placement(position, col, row, turned)
 
 
+def _settle_edges(
+    state: _State,
+    scorer: _Scorer,
+    movable: list[int],
+    options: PlacementOptions,
+) -> None:
+    """Push every connector out to the board edge, as far as nothing gets worse.
+
+    The twin of :func:`_settle_rotations`, and it exists for the same reason. The annealer
+    accepts any move whose delta is ``<= 0``, so a connector two holes in from the edge
+    with a flat cost surface between it and the edge wanders: it is as likely to end the
+    run inside as out, and which one it does is noise. When the tool has no reason to
+    prefer a position, the EDGE is the one to keep -- a connector is a thing something
+    gets plugged into, and every hole of board outside it is a hole in the way.
+
+    Non-worsening by construction: a step is taken only when the whole cost does not go
+    up. Greedy, in ``movable`` order, repeated to a fixpoint. It terminates because every
+    accepted step strictly reduces one part's distance to the edge, which is a whole
+    number of holes and cannot go below zero.
+
+    Scored with ``full`` rather than a local delta because it runs once at the end of a
+    run, not a hundred thousand times inside one.
+    """
+    weights = options.weights
+    current = scorer.full(state).total(weights)
+    changed = True
+    while changed:
+        changed = False
+        for position in movable:
+            part = state.parts[position]
+            if not part.edge_seeking:
+                continue
+            col, row, rot = state.col[position], state.row[position], state.rot[position]
+            _off, gap = scorer.part_terms(state, position)
+            if gap <= 0.0:
+                continue  # Already against the edge; there is nowhere further out to go.
+            best: tuple[tuple[float, float], int, int, float] | None = None
+            for d_col, d_row in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                to_col, to_row = col + d_col, row + d_row
+                if not _in_bounds(part, rot, to_col, to_row):
+                    continue
+                state.set_placement(position, to_col, to_row, rot)
+                _off, moved_gap = scorer.part_terms(state, position)
+                total = scorer.full(state).total(weights)
+                state.set_placement(position, col, row, rot)
+                if moved_gap < gap - 1e-9 and total <= current + 1e-9:
+                    key = (moved_gap, total)
+                    if best is None or key < best[0]:
+                        best = (key, to_col, to_row, total)
+            if best is not None:
+                state.set_placement(position, best[1], best[2], rot)
+                current = best[3]
+                changed = True
+
+
 def _calibrate(
     rng: random.Random,
     state: _State,
@@ -1474,6 +2316,7 @@ def _build_cost(doc: PerfDocument, lookup: FootprintLookup) -> tuple[int, float]
 
 def _pick_best(
     candidates: list[PlacementPlan],
+    baseline: PlacementPlan,
     doc: PerfDocument,
     lookup: FootprintLookup,
     options: PlacementOptions,
@@ -1497,7 +2340,8 @@ def _pick_best(
     board has no netlist to route, when scoring is turned off, or beyond that bound.
     """
     legal_first = sorted(
-        candidates, key=lambda plan: (not plan.after.is_legal, plan.after.total(options.weights))
+        [*candidates, baseline],
+        key=lambda plan: (not plan.after.is_legal, plan.after.total(options.weights)),
     )
     routable = options.score_with_router and bool(doc.nets)
     if not routable or options.route_scored_restarts <= 0:
@@ -1507,6 +2351,10 @@ def _pick_best(
     # expensive than scoring, and a candidate the cheap cost already ranks last is not
     # going to win on the expensive one.
     shortlist = legal_first[: options.route_scored_restarts]
+    if not any(plan is baseline for plan in shortlist):
+        # Always routed, however the cheap cost ranked it: it is the promise that the
+        # answer is never worse than the board the user already has.
+        shortlist = [*shortlist, baseline]
     if len(shortlist) < 2:
         return legal_first[0]
 
@@ -1537,19 +2385,26 @@ def _settle_winner(
     original: tuple[int, ...],
     options: PlacementOptions,
 ) -> PlacementPlan:
-    """Give the chosen board back every orientation it was turned for nothing.
+    """Tidy the chosen board: hand back every orientation it was turned for nothing, and
+    push every connector out to the edge it was left short of.
 
-    Kept honest by the same arbiter that chose the board in the first place: if the
-    planner prefers the turned version, the turned version is what ships. So this can
-    remove gratuitous rotations and cannot cost a connection -- across eight fixtures and
-    eight seeds it took the parts turned from 46 to 27 with the routed cost unchanged.
+    Both passes are kept honest by the same arbiter that chose the board in the first
+    place: if the planner prefers what the passes changed away from, that is what ships.
+    So they can remove a gratuitous rotation and a connector stranded two holes in, and
+    neither can cost a connection -- across eight fixtures and eight seeds the rotation
+    pass alone took the parts turned from 46 to 27 with the routed cost unchanged.
 
     Costs one extra planning run on a board that has a netlist, next to the four
     ``_pick_best`` already ran.
     """
-    state = _initial_state(plan.document, parts, scorer.strips)
-    _settle_rotations(state, scorer, movable, original, options)
-    if tuple(state.rot) == tuple(_initial_state(plan.document, parts, scorer.strips).rot):
+    settled_state = _initial_state(plan.document, parts, scorer.strips)
+    _settle_rotations(settled_state, scorer, movable, original, options)
+    _settle_edges(settled_state, scorer, movable, options)
+    state = settled_state
+    was = _initial_state(plan.document, parts, scorer.strips)
+    if (tuple(state.rot), tuple(state.col), tuple(state.row)) == (
+        tuple(was.rot), tuple(was.col), tuple(was.row)
+    ):
         return plan
 
     settled = _plan_from(

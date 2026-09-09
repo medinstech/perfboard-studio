@@ -20,6 +20,61 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **A first arrangement built from the netlist** (`placer.arrange`), and half the
+  annealer's restarts now begin from it. Every restart used to start from the placement
+  the document already had, so the search only sampled basins around wherever the parts
+  happened to be. The arrangement orders parts by connectivity — the best-connected part
+  first, then whichever unplaced part is most tied to those already down — puts the
+  connectors on the edges before anything else can take the room, and packs the rest into
+  lanes with a hole of board between parts and a clear row between lanes. Ground and
+  power nets that reach three or more parts are left out of the connectivity graph, the
+  same call `schematic.py` makes when it draws them as rail glyphs rather than wires: a
+  rail touching everything makes everything adjacent and the ordering degenerates to the
+  alphabet.
+
+  Doing nothing is now a candidate in its own right, routed alongside the rest, because
+  a constructive placement is not descended from the user's board and nothing else would
+  stop it being worse than one.
+
+- **`placer.suggest_boards`** answers which stock board a circuit needs, by arranging the
+  circuit on each one rather than by adding up footprint areas — a design is limited by
+  the shape of its biggest part and the lanes it packs into, not by the sum of its parts.
+  The sizes come from `geometry.STANDARD_PRESETS`, so every suggestion is a board a
+  supplier actually stocks, and only the family the user is already on is offered.
+
+### Changed
+
+- **Auto-place puts connectors on the edge of the board, and lines the rest of the parts
+  up into lanes.** Two things were wrong with the arrangement it produced, and the first
+  one made boards that cannot be used: the edge term measured the ANCHOR hole, which is
+  pin 1, so a four-pin header lying towards the edge and the same header lying away from
+  it scored identically — and on the NE555 fixture the header came out of a full search
+  seven holes inside the board, where nothing can be plugged into it. It is now measured
+  from the part's courtyard to the outer edge of the SUBSTRATE, which is the physical
+  question ("how much board is between this connector and the outside"), and it accounts
+  for the printed border the way `heat-proximity` already accounts for a body being
+  somewhere other than its anchor.
+
+  The second is that nothing had ever asked the parts to line up. `alignment` prices the
+  pins of one NET, so a board could have every net tidy and still look scattered. The new
+  `lanes` term counts the distinct rows — or columns, whichever is fewer — that parts
+  start on, maintained incrementally beside the collision and strip-conflict counters.
+  Its weight is set where the measurement says the curve turns: over ten fixtures and
+  three seeds, alignment is essentially FREE up to 1.5 (1030.2 → 1030.9 of routed cost
+  for 6.20 → 4.57 lanes) and starts being bought with wire past it.
+
+  Together, over the same ten fixtures: connectors ended 3.89 → **1.82** holes from the
+  edge, lanes 5.93 → **4.63**, and the routed cost of the boards produced went up by
+  1.5%. No new DRC errors and no connection that could not be routed.
+
+### Fixed
+
+- **A part mounted on the solder side is arranged with its pins where they actually
+  are.** The first cut of the arrangement ignored `mirrored`, which put a mirrored DIP-8
+  a column off the board and another one on top of its neighbour.
+
 ## [0.11.0] - 2026-09-08
 
 ### Changed
