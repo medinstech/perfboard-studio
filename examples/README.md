@@ -1,7 +1,10 @@
 # Examples
 
-Four circuits, each shipped twice: as the `.net` a schematic tool exports, and as the
-`.perf` that importing, placing and routing it produces.
+Four finished circuits, each shipped twice: as the `.net` a schematic tool exports, and as
+the `.perf` that importing, placing and routing it produces. And one **project** —
+[`ne555-blinker/`](./ne555-blinker/) — which is the other end of the same workflow: a
+circuit that has been drawn and not yet built. Start there if what you want to see is how
+the tool goes from a schematic to a board.
 
 ```sh
 perfboard-studio examples/lm317-supply.perf     # open the finished board
@@ -17,10 +20,13 @@ KiCad Netlist**, accept the placement, `Ctrl+Shift+A` to auto-place, `Ctrl+R` to
 | **lm317-supply** | 11 | 30 × 20, FR-4 | A hot part. The regulator is a TO-220, so the heat-proximity rule has something to measure, and the board carries one `solder-trace-proximity` warning that becomes a checkpoint in the guide. |
 | **lpb1-booster** | 12 | 24 × 18, **FR-2** | The material mattering. Phenolic is what a pedal actually gets built on and it is the board whose pads lift, so the guide drops the iron 30 °C (350 → 320) and cuts the dwell from 3 s to 2 s. |
 | **arduino-io-shield** | 11 | 28 × 20, FR-4 | Headers. Two of them, 8-pin and 6-pin, which is what a shield mostly is — and the case where lead bends and short traces do nearly all the work. |
+| **ne555-blinker/** | 10 | *none yet* | The workflow, rather than its result. Ten parts in the design and nothing on the board, so **Place on the Board** has a board size to suggest and an arrangement to make. Its own [README](./ne555-blinker/README.md) walks through it. |
 
 All four route to completion, match their schematics under LVS, and carry no DRC error.
 `tests/test_examples.py` asserts exactly that on every commit, so an example cannot rot
-quietly.
+quietly — and for the project it asserts the walkthrough its README promises instead:
+that the design is still a design, that a stock board with room to wire it is still
+suggested, and that placing, routing and checking it still comes out clean.
 
 ## Regenerating them
 

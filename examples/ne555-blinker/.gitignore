@@ -1,0 +1,5 @@
+# Everything the tool writes from the document, and the backup autosave keeps beside it.
+# Both are regenerated on demand, so neither belongs in the repository -- and this is also
+# what stops a walkthrough of this example turning into a dirty working tree.
+outputs/
+*.bak

@@ -32,6 +32,7 @@ from perfboard_studio import persist  # noqa: E402
 from perfboard_studio.autoroute import plan_autoroute  # noqa: E402
 from perfboard_studio.command import CommandBus, CommandContext  # noqa: E402
 from perfboard_studio.commands import (  # noqa: E402
+    AddPartPayload,
     ImportNetlistPayload,
     PlaceComponentPayload,
     create_document_id_generator,
@@ -44,7 +45,14 @@ from perfboard_studio.guide import build_guide  # noqa: E402
 from perfboard_studio.lvs import run_lvs  # noqa: E402
 from perfboard_studio.model import Board, DocumentMeta, HoleCoord  # noqa: E402
 from perfboard_studio.parsers.kicad import parse_kicad_netlist  # noqa: E402
-from perfboard_studio.placer import PlacementOptions, plan_placement  # noqa: E402
+from perfboard_studio.placer import (  # noqa: E402
+    PlacementOptions,
+    design_entries,
+    plan_placement,
+    recommended_board,
+    suggest_boards,
+)
+from perfboard_studio.schematic import build_schematic  # noqa: E402
 
 EXAMPLES = REPO_ROOT / "examples"
 
@@ -287,11 +295,144 @@ def build(example: Example, lookup, *, write: bool) -> bool:
     return ok
 
 
+# ---------------------------------------------------------------------------
+# The project example: a design with nothing on the board yet
+# ---------------------------------------------------------------------------
+#
+# The four examples above are FINISHED boards -- placed, routed, checked -- which is what
+# somebody wants to look at before installing anything. This one is the opposite end of
+# the same workflow and there was no example of it: a circuit that has been drawn and not
+# yet built, which is the state a project is actually in when the schematic panel is what
+# you are looking at.
+#
+# It is a PROJECT (a folder) rather than a loose .perf, because that is what it is there to
+# demonstrate: the board, the netlist it came from, and the outputs/ the tool writes, in
+# one place. See project.py for why a project is a directory and the document inside it is
+# still an ordinary .perf.
+
+#: The project example's own folder, its document, and the netlist it is built from.
+PROJECT_STEM = "ne555-blinker"
+PROJECT_TITLE = "NE555 Blinker"
+
+#: Deliberately a board nobody sells: 60 x 40 holes is the blank the application opens on,
+#: and leaving the design on it is what gives "Place on the Board" a real question to ask.
+#: The suggestion it makes -- the smallest stock board with room left to WIRE the circuit --
+#: is the whole point of that step, and it cannot demonstrate itself on a board that is
+#: already right.
+PROJECT_BOARD = Board(
+    type="pad-per-hole",
+    cols=60,
+    rows=40,
+    pitch=2.54,
+    thickness=1.6,
+    material="FR4",
+    pad_diameter=1.9,
+    drill_diameter=1.0,
+)
+
+#: What each part in the netlist really is. Same argument as ``Example.footprints``: a
+#: reference and a pin count is not enough to tell a potentiometer from a TO-92.
+PROJECT_FOOTPRINTS = {
+    "U1": "dip-8",
+    "R1": "r-axial-3",
+    "R2": "r-axial-3",
+    "RV1": "pot-3",
+    "C1": "c-elec-d5-p2",
+    "C2": "c-disc-p2",
+    "C3": "c-disc-p2",
+    "LED1": "led-5mm",
+    "J1": "screw-terminal-2",
+    "J2": "hdr-1x3",
+}
+
+
+def build_project(lookup, *, write: bool) -> bool:
+    """The design, in a project folder, with nothing placed.
+
+    Stops where the other examples begin. Every part goes in through ``part.add`` -- which
+    takes no anchor, because "where does this go" is the question placement answers -- and
+    the netlist through ``netlist.import``, so the document that comes out is a circuit
+    with no board yet. Opening it and pressing Place on the Board is the workflow this
+    example exists to be the start of.
+    """
+    folder = EXAMPLES / PROJECT_STEM
+    parsed = parse_kicad_netlist((folder / "netlist.net").read_text(encoding="utf-8"))
+
+    document = create_empty_document(
+        DocumentMeta(name=PROJECT_TITLE, created=STAMP, modified=STAMP), PROJECT_BOARD
+    )
+    bus = CommandBus(
+        document,
+        create_standard_registry(),
+        CommandContext(next_id=create_document_id_generator(document)),
+    )
+
+    refs = sorted({node.component_ref for net in parsed.nets for node in net.nodes})
+    missing = [ref for ref in refs if ref not in PROJECT_FOOTPRINTS]
+    if missing:
+        print(f"  {PROJECT_STEM}: netlist names {missing} with no footprint")
+        return False
+
+    for ref in refs:
+        footprint_id = PROJECT_FOOTPRINTS[ref]
+        if lookup(footprint_id) is None:
+            print(f"  {PROJECT_STEM}: no such footprint {footprint_id!r} for {ref}")
+            return False
+        result = bus.dispatch(
+            "part.add",
+            AddPartPayload(
+                ref=ref,
+                footprint_id=footprint_id,
+                value=next((c.value or "" for c in parsed.components if c.ref == ref), ""),
+                id=f"p-{ref.lower()}",
+            ),
+        )
+        if not result.ok:
+            print(f"  {PROJECT_STEM}: adding {ref} refused [{result.code}] {result.message}")
+            return False
+
+    result = bus.dispatch("netlist.import", ImportNetlistPayload(nets=parsed.nets))
+    if not result.ok:
+        print(f"  {PROJECT_STEM}: netlist import refused [{result.code}] {result.message}")
+        return False
+
+    document = bus.document
+    drawing = build_schematic(document, lookup)
+    suggestions = suggest_boards(document.board, design_entries(document), document.nets, lookup)
+    best = recommended_board(suggestions)
+
+    print(
+        f"  {PROJECT_STEM:20} {len(document.parts):2} parts  "
+        f"{len(document.nets)} nets  "
+        f"{len(drawing.symbols)} symbol(s) / {len(drawing.rails)} rail(s)  "
+        f"suggests {best.preset.name if best else 'nothing'}"
+    )
+
+    # An undefined symbol means a net names a part nothing defines, which on a design
+    # example is the whole circuit being wrong rather than a note in a panel.
+    undefined = [symbol.ref for symbol in drawing.symbols if symbol.undefined]
+    if undefined:
+        print(f"      the sheet cannot draw {undefined}")
+    ok = not undefined and best is not None and not document.components
+    if not ok and best is None:
+        print("      no stock board suits this circuit")
+
+    if write and ok:
+        document = replace(document, meta=replace(document.meta, modified=STAMP))
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{PROJECT_STEM}.perf").write_text(
+            persist.serialize_document(document), encoding="utf-8", newline="\n"
+        )
+
+    return ok
+
+
 def main(argv: list[str]) -> int:
     write = "--check" not in argv
     lookup = footprint_lookup()
-    print(f"{'building' if write else 'checking'} {len(CATALOGUE)} examples\n")
+    print(f"{'building' if write else 'checking'} {len(CATALOGUE) + 1} examples\n")
     results = [build(example, lookup, write=write) for example in CATALOGUE]
+    results.append(build_project(lookup, write=write))
     failed = results.count(False)
     print()
     if failed:
