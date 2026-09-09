@@ -415,11 +415,10 @@ TURKISH: Mapping[str, str] = {
         "Parçanın referansı ve değeri. Montaj rehberinin malzeme listesi değere göre "
         "gruplanır ve bu değeri pencerede başka hiçbir şey belirleyemez."
     ),
-    "The designator the schematic uses. Renaming one that a net names takes "
-    "it off that net, so rename before importing a netlist rather than after.": (
-        "Şemanın kullandığı tanımlayıcı. Bir netin adıyla andığı parçayı yeniden "
-        "adlandırmak onu o netten çıkarır; bu yüzden netlist içe aktarıldıktan sonra "
-        "değil, öncesinde adlandır."
+    "The designator the schematic uses. Every net this part is wired into "
+    "follows the new name, so a rename is safe at any point.": (
+        "Şemanın kullandığı tanımlayıcı. Parçanın bağlı olduğu her net yeni adı takip "
+        "eder, bu yüzden yeniden adlandırmak her an güvenlidir."
     ),
     "What the part actually is. This is the column the build guide's bill of "
     "materials groups on, so a blank one becomes a line you cannot order.": (
@@ -547,6 +546,62 @@ TURKISH: Mapping[str, str] = {
         "pencereyi kapatmak sayfayı sekmeye geri getirir."
     ),
     "Schematic — {name}": "Şematik — {name}",
+    # -- editing the circuit from the sheet, by right-clicking the thing that is wrong -
+    # Three menus, chosen by what the pointer is over. The accelerators are checked as
+    # three groups in tests/test_i18n.py, since the pin entry shares the symbol's menu.
+    "&Properties…": "Ö&zellikler…",
+    "What this part is, what it is called and what it is worth — including "
+    "swapping its footprint for a different one.": (
+        "Bu parçanın ne olduğu, adı ve değeri — ayak izini bir başkasıyla değiştirmek "
+        "de dahil."
+    ),
+    "Re&name…": "Yeniden Adlandı&r…",
+    "A new designator. Every net it is wired into comes with it.": (
+        "Yeni bir etiket. Bağlı olduğu her net onunla birlikte gelir."
+    ),
+    "D&uplicate": "&Çoğalt",
+    "Another part of the same kind and value, with the next free designator "
+    "and no connections of its own.": (
+        "Aynı türden ve aynı değerde bir parça daha; sıradaki boş etiketle ve kendine "
+        "ait hiçbir bağlantı olmadan."
+    ),
+    "&Arrange This Symbol": "Bu Sembolü &Düzenle",
+    "Give this one symbol back to the layout, leaving the rest where you put them.": (
+        "Yalnızca bu sembolü yerleşime geri verir, diğerlerini koyduğunuz yerde bırakır."
+    ),
+    "Take &off the Board": "Karttan &Al",
+    "Back into the design, with its wiring intact.": (
+        "Bağlantıları bozulmadan tasarıma geri döner."
+    ),
+    "&Remove from the Design": "Tasarımdan Çı&kar",
+    "Out of the design, along with its connections.": (
+        "Bağlantılarıyla birlikte tasarımın dışına."
+    ),
+    "&Disconnect {pin} from {net}": "{pin} pinini {net} netinden A&yır",
+    "Rename Part": "Parçayı Yeniden Adlandır",
+    "New designator": "Yeni etiket",
+    "Re&name Net…": "Neti Yeniden Adlandı&r…",
+    "A new name. The pins on it, and any copper laid for it, stay.": (
+        "Yeni bir ad. Üzerindeki pinler ve onun için döşenmiş bakır yerinde kalır."
+    ),
+    "Rename Net": "Neti Yeniden Adlandır",
+    "New name": "Yeni ad",
+    "Net &Class": "Net &Sınıfı",
+    "&Signal": "&Sinyal",
+    "&Ground": "&Toprak",
+    "&Power": "&Güç",
+    "The name, the class, and what it carries — which is the only way to state a current.": (
+        "Adı, sınıfı ve ne taşıdığı — bir akım belirtmenin tek yolu burası."
+    ),
+    "{ref} is named by a net and is not in the design.": (
+        "{ref} bir netin adıyla anılıyor ama tasarımda değil."
+    ),
+    "&Add Part…": "Parça &Ekle…",
+    "Arran&ge the Sheet": "Sayfayı &Düzenle",
+    "Forget every symbol dragged by hand and lay the whole sheet out again.": (
+        "Elle sürüklenmiş her sembolü unutur ve sayfanın tamamını yeniden dizer."
+    ),
+    "&Fit the Sheet": "Sayfayı &Sığdır",
     # -- board setup: the product first, the consequences behind Advanced ------
     "Advanced": "Gelişmiş",
     "Everything a stocked board already decides: its grid, what it is made of, "

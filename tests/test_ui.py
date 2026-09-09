@@ -5253,6 +5253,375 @@ def test_the_suggested_reference_counts_the_design_as_well_as_the_board() -> Non
 
 
 # ---------------------------------------------------------------------------
+# Editing the circuit by right-clicking the thing that is wrong
+# ---------------------------------------------------------------------------
+#
+# Every command here already existed. What is new is the door: a net was renamed by
+# finding it in a tree of twenty names, and a pin was taken off one by expanding that
+# net and selecting the pin inside it. The sheet is where you can SEE that VOUT is
+# wired to the wrong leg, so it is where the menu belongs.
+#
+# The tests below are about the wiring between a click and a command -- which entry
+# appears over what, and which document it acts on. What each command DOES is tested
+# where the command is.
+
+
+def _sheet_at(window, x: float, y: float):
+    """A viewport position over a point on the sheet, in scene millimetres.
+
+    The transform is reset first so one scene millimetre is one pixel: a fitted view of a
+    400 mm sheet in an unshown offscreen widget can be a few millimetres to the pixel,
+    which is wider than the 1.2 mm a pin is picked within.
+    """
+    from PySide6.QtCore import QPointF
+
+    window.schematic_view.resetTransform()
+    return window.schematic_view.mapFromScene(QPointF(x, y))
+
+
+def _over(window, ref: str):
+    """A viewport position over the middle of a symbol."""
+    symbol = next(s for s in window.schematic_view.item.drawing.symbols if s.ref == ref)
+    return _sheet_at(
+        window, symbol.at.x + symbol.width / 2, symbol.at.y + symbol.height / 2
+    )
+
+
+def _labels(menu) -> list[str]:
+    return [action.text() for action in menu.actions() if action.text()]
+
+
+def _entry(menu, fragment: str):
+    found = [a for a in menu.actions() if fragment in a.text()]
+    assert len(found) == 1, f"{fragment!r} in {[a.text() for a in menu.actions()]}"
+    return found[0]
+
+
+def _wire(window, name: str, *nodes, net_class="signal") -> str:
+    from perfboard_studio.commands import AddNetPayload
+    from perfboard_studio.model import NetNode
+
+    result = window.bus.dispatch(
+        "net.add",
+        AddNetPayload(
+            name=name,
+            net_class=net_class,
+            nodes=tuple(NetNode(component_ref=r, pin=p) for r, p in nodes),
+        ),
+    )
+    assert result.ok, result.message
+    window._refresh_schematic_panel()
+    return next(n.id for n in window.bus.document.nets if n.name == name)
+
+
+def test_a_right_click_on_a_symbol_offers_the_part() -> None:
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3", "10k")
+
+    labels = _labels(window.sheet_menu(_over(window, "R1")))
+
+    assert labels == [
+        "&Properties…",
+        "Re&name…",
+        "D&uplicate",
+        "&Remove from the Design",
+    ]
+    _close(window)
+
+
+def test_a_placed_part_is_taken_off_the_board_and_a_drawn_one_is_deleted() -> None:
+    """The one entry that differs between the two lists, and the difference is the whole
+    reason ``on_schematic_remove`` is two actions behind one button: "I put this in the
+    wrong hole" must not delete the circuit around it."""
+    from perfboard_studio.model import HoleCoord
+
+    window = _blank_window()
+    _keep_the_board(window)
+    _add(window, "R1", "r-axial-3")
+    window._on_part_dropped("R1", HoleCoord(5, 5))
+    window._refresh_schematic_panel()
+
+    assert "Take &off the Board" in _labels(window.sheet_menu(_over(window, "R1")))
+    _close(window)
+
+
+def test_a_right_click_on_bare_sheet_offers_the_sheet() -> None:
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+
+    labels = _labels(window.sheet_menu(_sheet_at(window, -120.0, -120.0)))
+
+    assert labels == ["&Add Part…", "Arran&ge the Sheet", "&Fit the Sheet"]
+    _close(window)
+
+
+def test_the_menu_acts_on_the_symbol_it_was_opened_over_not_on_the_selection() -> None:
+    """``board_menu``'s rule, and it matters more here: Remove reads the panel's own
+    reference, so a menu that left it pointing at the last thing clicked would delete
+    something else entirely."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    window._on_schematic_part_clicked("R1")
+
+    _entry(window.sheet_menu(_over(window, "R2")), "Remove").trigger()
+
+    assert [part.ref for part in window.bus.document.parts] == ["R1"]
+    _close(window)
+
+
+def test_a_reference_only_a_net_names_offers_nothing_to_do() -> None:
+    """A symbol can be drawn for a part nothing defines -- that is what the dashed outline
+    is. Offering five entries that would each refuse says less than one that explains."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _wire(window, "OUT", ("R1", "1"), ("U9", "3"))
+
+    labels = _labels(window.sheet_menu(_over(window, "U9")))
+
+    assert labels == ["U9 is named by a net and is not in the design."]
+    _close(window)
+
+
+def test_renaming_a_symbol_from_the_sheet_carries_its_nets(monkeypatch) -> None:
+    """The only reason a rename is safe to offer in two clicks. R1 wired into six nets and
+    relabelled R7 used to come out connected to nothing."""
+    from PySide6.QtWidgets import QInputDialog
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _wire(window, "OUT", ("R1", "1"))
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("R7", True))
+
+    _entry(window.sheet_menu(_over(window, "R1")), "name…").trigger()
+
+    assert [part.ref for part in window.bus.document.parts] == ["R7"]
+    assert [node.component_ref for node in window.bus.document.nets[0].nodes] == ["R7"]
+    _close(window)
+
+
+def test_a_rename_nobody_finished_changes_nothing(monkeypatch) -> None:
+    from PySide6.QtWidgets import QInputDialog
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    before = window.bus.document
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("R7", False))
+
+    window._rename_symbol("R1")
+
+    assert window.bus.document is before
+    _close(window)
+
+
+def test_duplicating_a_part_copies_what_it_is_and_not_what_it_is_wired_to() -> None:
+    """``ui/clipboard``'s call about a pasted block's net claim, one part at a time: a copy
+    of R1 is not R1, and putting it on R1's nets would tell LVS the design has a part it
+    has never heard of wired in parallel with one it has."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3", "10k")
+    _wire(window, "OUT", ("R1", "1"))
+
+    _entry(window.sheet_menu(_over(window, "R1")), "uplicate").trigger()
+
+    made = {part.ref: part for part in window.bus.document.parts}
+    assert set(made) == {"R1", "R2"}
+    assert made["R2"].footprint_id == "r-axial-3" and made["R2"].value == "10k"
+    assert [node.component_ref for node in window.bus.document.nets[0].nodes] == ["R1"]
+    _close(window)
+
+
+def test_a_duplicate_of_a_placed_part_lands_in_the_design() -> None:
+    """The copy has no position and nothing here is entitled to guess one."""
+    from perfboard_studio.model import HoleCoord
+
+    window = _blank_window()
+    _keep_the_board(window)
+    _add(window, "U1", "dip-8")
+    window._on_part_dropped("U1", HoleCoord(4, 4))
+    window._refresh_schematic_panel()
+
+    window._duplicate_symbol("U1")
+
+    assert [c.ref for c in window.bus.document.components] == ["U1"]
+    assert [part.ref for part in window.bus.document.parts] == ["U2"]
+    _close(window)
+
+
+def test_only_a_symbol_somebody_moved_is_offered_back_to_the_layout() -> None:
+    """On every other symbol the entry would do nothing and say so."""
+    from perfboard_studio.model import SymbolPlacement
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+
+    assert "&Arrange This Symbol" not in _labels(window.sheet_menu(_over(window, "R1")))
+
+    part_id = next(p.id for p in window.bus.document.parts if p.ref == "R1")
+    window._on_symbol_moved("R1", 3, 2)
+    window._refresh_schematic_panel()
+    assert window.bus.document.sheet == (SymbolPlacement(id=part_id, col=3, row=2),)
+
+    assert "&Arrange This Symbol" in _labels(window.sheet_menu(_over(window, "R1")))
+    _close(window)
+
+
+def test_arranging_one_symbol_leaves_the_others_where_they_were_put() -> None:
+    """Undoing one bad drag must not undo an afternoon of good ones, which is the same
+    call ``_apply_pinned_cells`` makes about only moving displaced symbols."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    window._on_symbol_moved("R1", 3, 2)
+    window._on_symbol_moved("R2", 4, 1)
+    window._refresh_schematic_panel()
+    kept = next(p.id for p in window.bus.document.parts if p.ref == "R2")
+
+    _entry(window.sheet_menu(_over(window, "R1")), "Arrange This Symbol").trigger()
+
+    assert [placement.id for placement in window.bus.document.sheet] == [kept]
+    _close(window)
+
+
+def test_a_right_click_on_a_wire_offers_the_net() -> None:
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    _wire(window, "OUT", ("R1", "1"), ("R2", "2"))
+    wire = window.schematic_view.item.drawing.wires[0]
+    middle = wire.path[len(wire.path) // 2]
+
+    labels = _labels(window.sheet_menu(_sheet_at(window, middle.x, middle.y)))
+
+    assert labels == ["Re&name Net…", "Net &Class", "&Edit Net…", "De&lete Net"]
+    _close(window)
+
+
+def test_the_class_submenu_offers_exactly_what_the_net_dialog_does() -> None:
+    """One table, two consumers (``NetDialog.NET_CLASSES``). A class only the dialog knew
+    about would be one you could set and never see; one only the menu knew about would be
+    one you could reach without being told what it costs."""
+    from PySide6.QtWidgets import QMenu
+
+    from perfboard_studio.ui.main import NetDialog
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    net_id = _wire(window, "OUT", ("R1", "1"))
+    menu = QMenu()
+
+    window._add_net_entries(menu, net_id)
+
+    submenu = _entry(menu, "Class").menu()
+    assert [a.text() for a in submenu.actions()] == [
+        row[2] for row in NetDialog.NET_CLASSES
+    ]
+    # The one it already is, ticked -- otherwise the menu is a list of three things to do
+    # rather than a statement of what this net is.
+    assert [a.isChecked() for a in submenu.actions()] == [True, False, False]
+    _close(window)
+
+
+def test_making_a_net_a_ground_draws_it_as_a_rail() -> None:
+    """The class is not a label on this sheet. A ground net becomes rail glyphs and is
+    kept out of the layering graph that decides the columns -- so this entry changes what
+    the drawing looks like, which is why it is worth reaching from the drawing."""
+    from PySide6.QtWidgets import QMenu
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    net_id = _wire(window, "GND", ("R1", "1"), ("R2", "1"))
+    menu = QMenu()
+    window._add_net_entries(menu, net_id)
+
+    next(a for a in _entry(menu, "Class").menu().actions() if "Ground" in a.text()).trigger()
+    window._refresh_schematic_panel()
+
+    assert [net.net_class for net in window.bus.document.nets] == ["ground"]
+    drawing = window.schematic_view.item.drawing
+    assert [rail.net_name for rail in drawing.rails] == ["GND", "GND"]
+    assert drawing.wires == ()
+    _close(window)
+
+
+def test_renaming_a_net_from_the_sheet_keeps_its_pins(monkeypatch) -> None:
+    from PySide6.QtWidgets import QInputDialog, QMenu
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    net_id = _wire(window, "OUT", ("R1", "1"))
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("VOUT", True))
+    menu = QMenu()
+    window._add_net_entries(menu, net_id)
+
+    _entry(menu, "name Net").trigger()
+
+    net = window.bus.document.nets[0]
+    assert net.name == "VOUT"
+    assert [node.component_ref for node in net.nodes] == ["R1"]
+    _close(window)
+
+
+def test_a_pin_on_a_net_can_be_taken_off_it_from_the_sheet() -> None:
+    """The one entry with no other door on this sheet, and the one you ask for while
+    looking at the pin that is wired to the wrong thing."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    _wire(window, "OUT", ("R1", "1"), ("R2", "2"))
+    symbol = next(s for s in window.schematic_view.item.drawing.symbols if s.ref == "R1")
+    pin = next(p for p in symbol.pins if p.number == "1")
+
+    menu = window.sheet_menu(
+        _sheet_at(window, symbol.at.x + pin.at.x, symbol.at.y + pin.at.y)
+    )
+    entry = _entry(menu, "Disconnect")
+    assert entry.text() == "&Disconnect R1.1 from OUT"
+    entry.trigger()
+
+    assert [node.component_ref for node in window.bus.document.nets[0].nodes] == ["R2"]
+    _close(window)
+
+
+def test_a_pin_on_no_net_is_offered_no_way_off_one() -> None:
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    symbol = next(s for s in window.schematic_view.item.drawing.symbols if s.ref == "R1")
+    pin = next(p for p in symbol.pins if p.number == "1")
+
+    labels = _labels(
+        window.sheet_menu(_sheet_at(window, symbol.at.x + pin.at.x, symbol.at.y + pin.at.y))
+    )
+
+    assert not any("Disconnect" in label for label in labels)
+    _close(window)
+
+
+def test_a_right_click_while_wiring_cancels_the_pair_instead_of_opening_a_menu() -> None:
+    """The board's rule about a mode owning the click. A menu here would open over the pin
+    somebody was aiming at and leave the pending pin armed underneath it."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QContextMenuEvent
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    window.act_sch_wire.setChecked(True)
+    window._on_schematic_pin_clicked("R1", "1")
+    asked: list[QPoint] = []
+    window.schematic_view.contextMenuRequested.connect(asked.append)
+
+    window.schematic_view.contextMenuEvent(
+        QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(4, 4), QPoint(4, 4))
+    )
+
+    assert asked == []
+    assert window.schematic_view.pending_pin is None
+    _close(window)
+
+
+# ---------------------------------------------------------------------------
 # A part the library does not have
 # ---------------------------------------------------------------------------
 #

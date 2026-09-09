@@ -83,6 +83,18 @@ def loop_built_labels() -> set[str]:
         for raw in re.findall(r'\(\s*"[A-Za-z0-9-]+",\s*"((?:[^"\\]|\\.)+)"\s*\),\s*$',
                               source, re.MULTILINE)
     }
+    # Three-element rows of the same shape: the value, the label a dialog shows with the
+    # reason attached, and the accelerated one a menu shows. NetDialog.NET_CLASSES is the
+    # only one, and it is one table rather than two on purpose -- see its own comment.
+    pairs |= {
+        ast.literal_eval(f'"{raw}"')
+        for row in re.findall(
+            r'\(\s*"[A-Za-z0-9-]+",\s*"((?:[^"\\]|\\.)+)",\s*"((?:[^"\\]|\\.)+)"\s*\),\s*$',
+            source,
+            re.MULTILINE,
+        )
+        for raw in row
+    }
     return {scheme.label for scheme in SCHEMES} | tools | pairs
 
 
@@ -222,6 +234,18 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
         "routing style": ["&Try each and keep the best", "&Solder trace where possible",
                           "&Balanced", "&Wire where possible",
                           "Bend component &legs where possible"],
+        # The sheet's three context menus (`MainWindow.sheet_menu`). The pin entry is not a
+        # fourth menu -- a pin is always on a symbol, so "Disconnect ..." sits on top of the
+        # symbol's list and shares its letters. The two last entries are alternatives
+        # rather than neighbours, and they are still given different letters: which of them
+        # appears depends on which list the part is in, and a letter that moved with it
+        # would be a letter nobody could learn.
+        "sheet symbol": ["&Disconnect {pin} from {net}", "&Properties…", "Re&name…",
+                         "D&uplicate", "&Arrange This Symbol", "Take &off the Board",
+                         "&Remove from the Design"],
+        "sheet net": ["Re&name Net…", "Net &Class", "&Edit Net…", "De&lete Net"],
+        "sheet net class": ["&Signal", "&Ground", "&Power"],
+        "sheet": ["&Add Part…", "Arran&ge the Sheet", "&Fit the Sheet"],
     }
     for name, keys in groups.items():
         for code, catalogue in CATALOGUES.items():

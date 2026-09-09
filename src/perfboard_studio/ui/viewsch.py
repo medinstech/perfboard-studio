@@ -1,11 +1,18 @@
 """The schematic panel: the sheet ``schematic.py`` generates, on screen and clickable.
 
-WHAT IS EDITABLE HERE IS THE CIRCUIT, NEVER THE DRAWING. ``perfboard_studio.schematic`` derives
-a whole sheet from the document and stores nothing; this file paints one, reports clicks,
-and hands them back to the window as commands -- add a part, join two pins, place the lot.
-Nothing here moves a SYMBOL, because a moved symbol would have to be remembered, and
-remembering it would put schematic geometry into the ``.perf`` format, which PLAN.md D3
-settled against and the byte-for-byte persistence tests would notice immediately.
+WHAT IS EDITABLE HERE IS THE CIRCUIT, AND THE DRAWING IS STILL DERIVED.
+``perfboard_studio.schematic`` builds a whole sheet from the document every time; this file
+paints one, reports clicks, and hands them back to the window as commands -- add a part,
+join two pins, rename a net, place the lot. A symbol can be dragged to another cell, and
+what that sends is a CELL rather than millimetres (``model.SymbolPlacement``), so the
+layout keeps every position and keeps its guarantee that no wire crosses a symbol. That is
+what lets a symbol move without reversing PLAN.md D3 or reopening the byte-for-byte
+``.perf`` format.
+
+NOTHING HERE DECIDES WHAT AN EDIT MEANS. A right-click reports a position and the window
+builds the menu, the same division ``view2d.BoardView.contextMenuRequested`` draws: which
+command a click becomes depends on whether a part is in the design or on the board, and
+this file knows about a drawing.
 
 ONE ITEM PAINTS THE WHOLE SHEET, AND THE HIT TESTING IS DONE BY HAND. A symbol per
 ``QGraphicsItem`` would give hover and selection for free, and would also mean a bounding
@@ -36,6 +43,7 @@ from PySide6.QtCore import QLineF, QMimeData, QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QContextMenuEvent,
     QDrag,
     QDragEnterEvent,
     QDragMoveEvent,
@@ -371,6 +379,11 @@ class SchematicView(QGraphicsView):
     #: on the board it places the part (``view2d.BoardView.partDropped``), dropped here it
     #: rearranges the drawing.
     symbolMoved = Signal(str, int, int)
+    #: The viewport position of a right-click that wants a menu. WHAT is on it is the
+    #: window's business, for the reason ``view2d.BoardView.contextMenuRequested`` says: the
+    #: entries are commands about the circuit, and a view that built its own would be a
+    #: second list of what can be done to a part, free to disagree with the panel's buttons.
+    contextMenuRequested = Signal(QPoint)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -621,6 +634,21 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
         super().mouseDoubleClickEvent(event)
+
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        """Ask the window for a menu, unless wiring has a claim on this click.
+
+        While wiring, a right-click cancels the half-made pair instead -- the gesture every
+        drawing tool uses for "not that one". A menu here would open over the pin somebody
+        was aiming at and leave the pending pin armed underneath it, which is the board's
+        own rule about a mode owning the click (``view2d.BoardView.contextMenuEvent``).
+        """
+        if self.wiring:
+            self.set_pending_pin(None)
+            event.accept()
+            return
+        self.contextMenuRequested.emit(event.pos())
+        event.accept()
 
     def _dragged_ref(self, event: QDragMoveEvent | QDropEvent) -> str | None:
         data = event.mimeData()

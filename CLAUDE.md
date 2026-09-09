@@ -623,6 +623,39 @@ because the import goes the way that does not make a cycle. The workspace's tab 
 `setChangeCurrentOnDrag`, which is what lets a drag cross from the Schematic tab to the
 Board tab at all.
 
+**A right-click on the sheet edits the CIRCUIT, because the drawing has nothing to edit.**
+`MainWindow.sheet_menu` builds one of three menus from what is under the pointer — a symbol
+is a part, a wire is a net, bare sheet is the sheet — and returns it rather than showing it,
+so a test can read what a right-click would offer (`exec` in a headless run waits for a
+click that never comes). It is the same division `board_menu` draws: the view reports a
+position and the window owns the actions.
+
+Three things about it are load-bearing:
+
+- **A pin is asked for before the symbol it is on.** Not merely because it is the smaller
+  target: a pin sits ON the edge of its symbol's box with its wire running away from it, so
+  a click aimed at one misses the symbol and lands on the WIRE — which would offer to delete
+  the net when what was clicked was one pin of it. The pin's entry then sits on TOP of the
+  symbol's list rather than in a fourth menu, since a pin is always on a symbol.
+- **Every entry is a command that already existed, reached from the thing it is about.**
+  Renaming a net meant finding it in a tree of twenty names; here it is the wire you can see
+  is wrong. The one exception is taking a single pin off a net, which has no other door on
+  the sheet at all and is exactly what you ask for while looking at the pin. `Net Class` is
+  not a label either: ground and power are drawn as rail glyphs and kept out of the layering
+  graph, so that entry changes the drawing and the placement, not just what DRC says. Its
+  three classes come from `NetDialog.NET_CLASSES` — one table, two consumers, pinned by a
+  test — and the submenu is built with its parent rather than through `addMenu(title)`,
+  which hands back a menu nothing holds and is collected out from under the entry that shows
+  it.
+- **The menu acts on what it was opened over**, selecting it first the way `board_menu`
+  does. Remove reads the panel's own reference, so a menu that left it pointing at the last
+  thing clicked would delete something else entirely.
+
+`Duplicate` copies what a part IS and not what it is wired to — the same call
+`ui/clipboard.py` makes about a pasted block's net claim — and a duplicate of a placed part
+lands in the DESIGN, because the copy has no position and nothing there is entitled to guess
+one.
+
 Clicking cross-probes: a symbol selects that part on the board, a wire selects its net in
 the Nets dock (which is what already lights it on the board). Routed through that one
 panel deliberately, so three views cannot disagree about what is selected. **Joining two

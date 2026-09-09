@@ -197,6 +197,7 @@ from perfboard_studio.model import (
     PadShape,
     PerfDocument,
     Rotation,
+    SchematicPart,
     SymbolPlacement,
 )
 from perfboard_studio.parsers.kicad import parse_kicad_netlist
@@ -1091,10 +1092,15 @@ class NetDialog(QDialog):
     Both are optional and blank means "not stated", which is a different thing from zero.
     """
 
-    NET_CLASSES: tuple[tuple[NetClass, str], ...] = (
-        ("signal", "Signal"),
-        ("ground", "Ground — routed first, and wants a rail"),
-        ("power", "Power — routed after ground, same reason"),
+    #: The classes a net can be, in the order they are offered: the value, the label
+    #: this dialog shows with the reason attached, and the accelerated label the sheet's
+    #: context menu uses. ONE TABLE, TWO CONSUMERS -- the menu is a fast path to this same
+    #: field, and a class only one of them offered would be one you could set from a dialog
+    #: and never see, or reach from a menu without ever being told what it costs.
+    NET_CLASSES: tuple[tuple[NetClass, str, str], ...] = (
+        ("signal", "Signal", "&Signal"),
+        ("ground", "Ground — routed first, and wants a rail", "&Ground"),
+        ("power", "Power — routed after ground, same reason", "&Power"),
     )
 
     def __init__(
@@ -1119,7 +1125,7 @@ class NetDialog(QDialog):
         form.addRow(t("Name"), self.name)
 
         self.net_class = QComboBox()
-        for value, label in self.NET_CLASSES:
+        for value, label, _accelerated in self.NET_CLASSES:
             self.net_class.addItem(t(label), value)
         index = self.net_class.findData(net_class)
         if index >= 0:
@@ -1219,8 +1225,8 @@ class ComponentDialog(QDialog):
         self.ref.setPlaceholderText("R1, C3, U2…")
         self.ref.setToolTip(
             t(
-                "The designator the schematic uses. Renaming one that a net names takes "
-                "it off that net, so rename before importing a netlist rather than after."
+                "The designator the schematic uses. Every net this part is wired into "
+                "follows the new name, so a rename is safe at any point."
             )
         )
         form.addRow(t("Reference"), self.ref)
@@ -3879,6 +3885,7 @@ class MainWindow(QMainWindow):
         self.schematic_view.pinClicked.connect(self._on_schematic_pin_clicked)
         self.schematic_view.cleared.connect(self._on_schematic_cleared)
         self.schematic_view.symbolMoved.connect(self._on_symbol_moved)
+        self.schematic_view.contextMenuRequested.connect(self._on_sheet_context_menu)
         layout.addWidget(self.schematic_view, 1)
 
         # One row now that the page has the width for it. It was two because a dock can be
@@ -4318,9 +4325,15 @@ class MainWindow(QMainWindow):
         somebody clicking Remove on a placed part almost always means, and deleting the
         circuit around it would be a much larger answer than the question.
         """
-        ref = self._schematic_ref
-        if ref is None:
-            return
+        if self._schematic_ref is not None:
+            self._remove_symbol(self._schematic_ref)
+
+    def _remove_symbol(self, ref: str) -> None:
+        """The body of the above, on a named part rather than on the selection.
+
+        Split out for the context menu, which acts on what the pointer was over. Same rule
+        as ``board_menu``: a menu built over one part must not act on another.
+        """
         component = next((c for c in self.bus.document.components if c.ref == ref), None)
         if component is not None:
             result = self.bus.dispatch("component.unplace", UnplaceComponentPayload(id=component.id))
@@ -4339,6 +4352,144 @@ class MainWindow(QMainWindow):
             self._schematic_ref = None
         self._sync_schematic_highlight()
         self.statusBar().showMessage(result.description, 6000)
+
+    # -- editing the circuit from the sheet ------------------------------------
+    #
+    # WHAT A RIGHT-CLICK ON A SHEET CAN OFFER IS WHAT THE THING UNDER IT *IS*. The drawing
+    # is derived and has nothing to edit; a wire is a net, a symbol is a part, and the
+    # pin under the pointer is one node of one net. So every entry below is a command
+    # about the CIRCUIT, and each of them already existed -- reached from a tree of twenty
+    # net names in the Nets dock, or from a dialog with three fields, rather than from the
+    # thing that is wrong. That is the whole value: same commands, a door where you are
+    # looking.
+    #
+    # Except one. Taking a single pin off a net has no other door on the sheet at all, and
+    # it is exactly the operation you ask for while looking at the pin.
+
+    def _rename_symbol(self, ref: str) -> None:
+        """A new designator, without opening the properties dialog for one field.
+
+        THE WIRING COMES WITH IT (``commands.rename_in_nets``), which is the only reason
+        this is safe to offer from a menu: a rename that dropped the connections would be
+        something to do carefully, not something to do in two clicks. R1 wired into six
+        nets and relabelled R7 used to come out connected to nothing.
+        """
+        document = self.bus.document
+        component = next((c for c in document.components if c.ref == ref), None)
+        part = next((p for p in document.parts if p.ref == ref), None)
+        if component is None and part is None:
+            return
+        chosen, ok = QInputDialog.getText(
+            self, t("Rename Part"), t("New designator"), text=ref
+        )
+        chosen = chosen.strip()
+        if not ok or not chosen or chosen == ref:
+            return
+        if component is not None:
+            result = self.bus.dispatch(
+                "component.update", UpdateComponentPayload(id=component.id, ref=chosen)
+            )
+        else:
+            assert part is not None
+            result = self.bus.dispatch("part.update", UpdatePartPayload(id=part.id, ref=chosen))
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self._schematic_ref = chosen
+        self._sync_schematic_highlight()
+        self.statusBar().showMessage(result.description, 6000)
+
+    def _duplicate_symbol(self, ref: str) -> None:
+        """Another part of the same kind and value, with the next free designator.
+
+        Drawing a circuit is repetitive in a way laying one out is not -- four identical RC
+        pairs, eight identical inputs -- and the only way to state the second one was the
+        Add Part dialog and its three fields again.
+
+        IT ARRIVES IN THE DESIGN, not on the board, even when the part copied is placed:
+        the copy has no position and nothing here is entitled to guess one. And it arrives
+        WIRED TO NOTHING, the same call ``ui/clipboard`` makes about a pasted block's net
+        claim -- a copy of R1 is not R1, and putting it on R1's nets would tell LVS the
+        design has a part it has never heard of wired in parallel with one it has.
+        """
+        document = self.bus.document
+        source: SchematicPart | ComponentInstance | None = next(
+            (part for part in document.parts if part.ref == ref), None
+        )
+        if source is None:
+            source = next((c for c in document.components if c.ref == ref), None)
+        if source is None:
+            return
+        result = self.bus.dispatch(
+            "part.add",
+            AddPartPayload(
+                ref=next_reference(document, source.footprint_id),
+                footprint_id=source.footprint_id,
+                value=source.value,
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self._sync_schematic_highlight()
+        self.statusBar().showMessage(result.description, 6000)
+
+    def _auto_one_symbol(self, part_id: str) -> None:
+        """Give one symbol back to the layout, leaving the rest where they were put.
+
+        The single-symbol form of the Arrange the Sheet button, and it is worth having
+        separately for the reason ``_apply_pinned_cells`` only moves displaced symbols:
+        undoing one bad drag must not undo an afternoon of good ones.
+        """
+        result = self.bus.dispatch("symbol.auto", AutoSymbolsPayload(ids=(part_id,)))
+        self.statusBar().showMessage(
+            result.description if result.ok else f"[{result.code}] {result.message}", 6000
+        )
+
+    def _disconnect_one_pin(self, net_id: NetId, node: NetNode) -> None:
+        """Take one pin off one net.
+
+        The Nets dock can do this from its tree; here it is asked for while looking at the
+        pin, which is where somebody notices that it is wired to the wrong thing.
+        """
+        result = self.bus.dispatch(
+            "net.disconnect", DisconnectPinsPayload(id=net_id, nodes=(node,))
+        )
+        self.statusBar().showMessage(
+            result.description if result.ok else f"[{result.code}] {result.message}", 6000
+        )
+
+    def _rename_net(self, net_id: NetId) -> None:
+        """A net's name, without the dialog that also asks what it carries."""
+        net = next((n for n in self.bus.document.nets if n.id == net_id), None)
+        if net is None:
+            return
+        chosen, ok = QInputDialog.getText(self, t("Rename Net"), t("New name"), text=net.name)
+        chosen = chosen.strip()
+        if not ok or not chosen or chosen == net.name:
+            return
+        result = self.bus.dispatch("net.update", UpdateNetPayload(id=net_id, name=chosen))
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
+
+    def _set_net_class(self, net_id: NetId, net_class: NetClass) -> None:
+        """Signal, ground or power -- which is not a label on this sheet.
+
+        A ground or power net is drawn as RAIL GLYPHS rather than as a wire, and is kept
+        out of the layering graph that decides the columns (a rail touching every part
+        makes every part adjacent to every other, which collapses the sheet into a
+        hairball). The placer reads the same fact for the same reason. So this entry
+        changes what the drawing looks like and what an auto-placement looks like, not
+        just what DRC says -- which is why it is on the menu at all.
+        """
+        result = self.bus.dispatch(
+            "net.update", UpdateNetPayload(id=net_id, net_class=net_class)
+        )
+        self.statusBar().showMessage(
+            result.description if result.ok else f"[{result.code}] {result.message}", 6000
+        )
 
     def on_schematic_place_all(self) -> None:
         """Move the whole design onto the board, arranged. The step this panel exists to
@@ -4744,6 +4895,199 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
             menu.addAction(self.act_board_setup)
         return menu
+
+    def _on_sheet_context_menu(self, pos: QPoint) -> None:
+        self.sheet_menu(pos).exec(self.schematic_view.viewport().mapToGlobal(pos))
+
+    def sheet_menu(self, pos: QPoint) -> QMenu:
+        """The menu for a right-click on the sheet, built around what is under it.
+
+        THREE MENUS, CHOSEN BY WHAT THE POINTER IS OVER, because a sheet has three kinds
+        of thing on it and they take different verbs: a symbol is a part, a wire is a net,
+        and bare sheet is the sheet. A pin is a fourth, and it is not a fourth menu -- it
+        is one entry on top of the symbol's, since a pin is always on a symbol and the
+        thing you want there is to take it off its net.
+
+        Built and returned rather than shown, so a test can read what a right-click at a
+        position would offer: ``exec`` on a menu in a headless run waits for a click that
+        will never come. Same as ``board_menu``, and for the same reason.
+        """
+        view = self.schematic_view
+        where = view.mapToScene(pos)
+        menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+
+        # THE PIN IS ASKED FOR FIRST, and not merely because it is the smaller target: a
+        # pin sits ON the edge of its symbol's box and its wire runs away from it, so a
+        # right-click aimed at a pin misses the symbol and lands on the WIRE -- which would
+        # offer to delete the net when what was clicked was one pin of it.
+        pin = view.pin_at(where)
+        symbol = view.symbol_at(where)
+        ref = pin[0] if pin is not None else symbol.ref if symbol is not None else None
+        if ref is not None:
+            # Right-clicking a symbol nobody selected selects it first, as every editor
+            # does and as ``board_menu`` does -- otherwise Remove takes whatever was
+            # selected three clicks ago, which is somewhere else on the sheet.
+            if self._schematic_ref != ref:
+                self._on_schematic_part_clicked(ref)
+            self._add_pin_entries(menu, pin)
+            self._add_symbol_entries(menu, ref)
+            return menu
+
+        net = view.net_at(where)
+        if net is not None:
+            self._on_schematic_net_clicked(net[0])
+            self._add_net_entries(menu, net[0])
+            return menu
+
+        add = menu.addAction(t("&Add Part…"))
+        add.setToolTip(
+            t("Put a part in the design without deciding where it goes on the board yet.")
+        )
+        add.triggered.connect(self.on_schematic_add_part)
+        menu.addSeparator()
+        arrange = menu.addAction(t("Arran&ge the Sheet"))
+        arrange.setToolTip(
+            t("Forget every symbol dragged by hand and lay the whole sheet out again.")
+        )
+        arrange.triggered.connect(self.on_schematic_auto_layout)
+        fit = menu.addAction(t("&Fit the Sheet"))
+        fit.triggered.connect(view.fit)
+        return menu
+
+    def _add_pin_entries(self, menu: QMenu, pin: tuple[str, str] | None) -> None:
+        """Taking one pin off its net: the entry with no other door on this sheet.
+
+        Named in full -- "Disconnect U1.3 from VOUT" -- because a pin is a small target and
+        the menu is the confirmation. There is no dialog behind it and no undo prompt; the
+        undo stack is the answer to a mis-click, and reading the two names is the answer to
+        not making one.
+        """
+        if pin is None:
+            return
+        ref, number = pin
+        net = next(
+            (
+                n
+                for n in self.bus.document.nets
+                if any(node.component_ref == ref and node.pin == number for node in n.nodes)
+            ),
+            None,
+        )
+        if net is None:
+            return
+        node = NetNode(component_ref=ref, pin=number)
+        action = menu.addAction(
+            t("&Disconnect {pin} from {net}").format(pin=f"{ref}.{number}", net=net.name)
+        )
+        action.triggered.connect(lambda _checked=False, n=net.id: self._disconnect_one_pin(n, node))
+        menu.addSeparator()
+
+    def _add_symbol_entries(self, menu: QMenu, ref: str) -> None:
+        """What can be done to the part a symbol draws.
+
+        The two lists again (``doc.parts`` and ``doc.components``), and the difference
+        shows in exactly one entry: the last one says Remove for a part in the design and
+        Take off the Board for one already placed, which is the split
+        ``on_schematic_remove`` makes and for the same reason -- "I put this in the wrong
+        hole" must not delete the circuit around it.
+        """
+        document = self.bus.document
+        component = next((c for c in document.components if c.ref == ref), None)
+        part = next((p for p in document.parts if p.ref == ref), None)
+        if component is None and part is None:
+            # A reference some net names and nothing defines. There is no part to act on,
+            # so the menu says what it is looking at rather than offering five entries
+            # that would each refuse.
+            note = menu.addAction(
+                t("{ref} is named by a net and is not in the design.").format(ref=ref)
+            )
+            note.setEnabled(False)
+            return
+
+        properties = menu.addAction(t("&Properties…"))
+        properties.setToolTip(
+            t(
+                "What this part is, what it is called and what it is worth — including "
+                "swapping its footprint for a different one."
+            )
+        )
+        properties.triggered.connect(
+            lambda _checked=False, r=ref: self._on_schematic_part_activated(r)
+        )
+
+        rename = menu.addAction(t("Re&name…"))
+        rename.setToolTip(t("A new designator. Every net it is wired into comes with it."))
+        rename.triggered.connect(lambda _checked=False, r=ref: self._rename_symbol(r))
+
+        duplicate = menu.addAction(t("D&uplicate"))
+        duplicate.setToolTip(
+            t(
+                "Another part of the same kind and value, with the next free designator "
+                "and no connections of its own."
+            )
+        )
+        duplicate.triggered.connect(lambda _checked=False, r=ref: self._duplicate_symbol(r))
+
+        part_id = component.id if component is not None else part.id if part is not None else ""
+        if any(placement.id == part_id for placement in document.sheet):
+            # Only offered on a symbol somebody actually moved, because on every other one
+            # it would do nothing and say so.
+            menu.addSeparator()
+            back = menu.addAction(t("&Arrange This Symbol"))
+            back.setToolTip(
+                t("Give this one symbol back to the layout, leaving the rest where you put them.")
+            )
+            back.triggered.connect(lambda _checked=False, i=part_id: self._auto_one_symbol(i))
+
+        menu.addSeparator()
+        if component is not None:
+            remove = menu.addAction(t("Take &off the Board"))
+            remove.setToolTip(t("Back into the design, with its wiring intact."))
+        else:
+            remove = menu.addAction(t("&Remove from the Design"))
+            remove.setToolTip(t("Out of the design, along with its connections."))
+        remove.triggered.connect(lambda _checked=False, r=ref: self._remove_symbol(r))
+
+    def _add_net_entries(self, menu: QMenu, net_id: str) -> None:
+        """What can be done to the net a wire draws.
+
+        The same four commands the Nets dock offers, reached from the wire that is wrong
+        rather than from a tree of twenty names -- the same shape as ``view2d.join_pins``
+        being shared by the board's connect tool and the sheet's.
+        """
+        net = next((n for n in self.bus.document.nets if n.id == net_id), None)
+        if net is None:
+            return
+        rename = menu.addAction(t("Re&name Net…"))
+        rename.setToolTip(t("A new name. The pins on it, and any copper laid for it, stay."))
+        rename.triggered.connect(lambda _checked=False, i=net_id: self._rename_net(i))
+
+        # Built with its parent rather than through ``menu.addMenu(title)``: that
+        # overload hands back a menu nothing on the Python side holds, and it is collected
+        # out from under the entry that shows it -- which is a submenu that raises when it
+        # opens, not merely a test that fails.
+        classes = QMenu(t("Net &Class"), menu)
+        classes.setToolTipsVisible(True)
+        menu.addMenu(classes)
+        for value, description, label in NetDialog.NET_CLASSES:
+            action = classes.addAction(t(label))
+            action.setToolTip(t(description))
+            action.setCheckable(True)
+            action.setChecked(net.net_class == value)
+            action.triggered.connect(
+                lambda _checked=False, i=net_id, v=value: self._set_net_class(i, v)
+            )
+
+        edit = menu.addAction(t("&Edit Net…"))
+        edit.setToolTip(
+            t("The name, the class, and what it carries — which is the only way to state a current.")
+        )
+        edit.triggered.connect(lambda _checked=False, i=net_id: self._edit_net(i))
+
+        menu.addSeparator()
+        delete = menu.addAction(t("De&lete Net"))
+        delete.triggered.connect(lambda _checked=False, i=net_id: self._delete_net(i))
 
     def _on_nets_context_menu(self, pos: QPoint) -> None:
         self.nets_menu().exec(self.nets_tree.viewport().mapToGlobal(pos))
@@ -6979,6 +7323,12 @@ class MainWindow(QMainWindow):
 
     def on_edit_net(self) -> None:
         net_id = self._one_selected_net()
+        if net_id is not None:
+            self._edit_net(net_id)
+
+    def _edit_net(self, net_id: NetId) -> None:
+        """The body of the above, on a named net rather than on the dock's selection, so
+        a right-click on the wire itself opens the same dialog."""
         net = next((n for n in self.bus.document.nets if n.id == net_id), None)
         if net is None:
             return
@@ -7037,6 +7387,10 @@ class MainWindow(QMainWindow):
 
     def on_delete_net(self) -> None:
         net_id = self._one_selected_net()
+        if net_id is not None:
+            self._delete_net(net_id)
+
+    def _delete_net(self, net_id: NetId) -> None:
         net = next((n for n in self.bus.document.nets if n.id == net_id), None)
         if net is None:
             return

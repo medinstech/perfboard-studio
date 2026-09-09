@@ -22,6 +22,19 @@ closed without a bump.
 
 ### Added
 
+- **Right-click the sheet to edit the circuit.** A symbol offers its properties, a rename
+  that carries every net it is wired into, a duplicate, and either `Remove from the Design`
+  or `Take off the Board` depending on which of the two it is in; a pin under the pointer
+  offers to come off its net, named in full — `Disconnect U1.3 from VOUT`; a wire offers its
+  net's name, its class, the full net dialog and delete. All of it existed already, in a
+  tree of twenty net names or behind a dialog with three fields — except taking one pin off
+  a net, which had no door on the sheet at all. A symbol somebody has dragged also offers to
+  go back to the layout on its own, without undoing an afternoon of other drags.
+
+- **The Part Properties dialog no longer apologises for a bug that was fixed.** It said
+  renaming a part takes it off the nets that name it and to rename before importing a
+  netlist rather than after; `rename_in_nets` has carried the wiring for some time.
+
 - **A symbol can be dragged to another cell on the sheet**, and it stays there. The
   drawing is still derived: what the document carries is a CELL per part, not millimetres,
   so the layout keeps every position and keeps its guarantee that no wire crosses a symbol —
