@@ -143,7 +143,9 @@ closed without a bump.
   than as sRGB, which is what stops dark parts washing out. Lighting gained a room to
   reflect — generated in code, not shipped, so there is still no asset library and no
   licence inherited — and contact shadows, so a part sits on the board instead of hovering
-  over it.
+  over it. Moulded cases have their edges broken, the way a part out of an
+  injection tool does, so there is somewhere for a highlight to run; cylinders got enough
+  sides to stop showing facets.
 
 - **The sheet folds thin columns together instead of drawing a strip.** BFS depth is not
   a constraint, it is a hint — the half of that sentence the layout already acted on split a

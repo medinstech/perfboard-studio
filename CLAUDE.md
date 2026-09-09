@@ -503,6 +503,16 @@ Four things here were got wrong first, and each has a test:
 `_dim` and `_pick_out` are a pair, and under PBR the way to push a part back is to ROUGHEN
 it — dropping the old specular did nothing at all once the parts were materials.
 
+**A moulded case has no knife edges, and `_moulded_box` is why a DIP stopped reading as a
+black rectangle.** A `vtkCubeSource` meets its neighbours at a knife edge, and a knife edge
+takes exactly one shade — this face flat, the next face flat, a line between them. An eye
+finds an object's edge in the highlight running along it, and there was nowhere for one to
+sit. Sixteen vertices fix it. Only the HORIZONTAL edges are cut: from anywhere this view is
+looked at the top edge is the one seen against the board, and cutting the four vertical
+corners as well doubles the geometry to change a silhouette nobody is looking at. The
+feature angle on the normals keeps the chamfer a crease rather than smearing it into the
+faces either side, which is the other way to get this wrong — a DIP that looks inflated.
+
 **There is deliberately no golden IMAGE for the 3D view**, unlike `test_render_golden.py`'s
 2D one: VTK draws through whatever OpenGL the machine has, and a mean-colour comparison
 across the three-OS matrix would fail for reasons nobody can act on. What is held still

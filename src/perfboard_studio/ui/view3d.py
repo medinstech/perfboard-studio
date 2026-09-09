@@ -1207,7 +1207,69 @@ def _box(x: float, y: float, z: float) -> Any:
     return cube
 
 
-def _cylinder(radius: float, height: float, resolution: int = 24) -> Any:
+#: How much of a moulded case's edge is broken, in millimetres.
+#:
+#: There is no such thing as a knife edge out of an injection tool: every moulded part has
+#: a break on every edge, and it is what a highlight runs along. Small enough to read as a
+#: highlight rather than as a shape of its own.
+CHAMFER_MM = 0.3
+
+
+def _moulded_box(x: float, y: float, z: float) -> vtk.vtkPolyData:
+    """A box with its top and bottom edges broken, which is what a plastic case has.
+
+    A ``vtkCubeSource`` meets its neighbours at a knife edge, and a knife edge takes exactly
+    one shade: this face is flat, the next face is flat, and the boundary between them is a
+    line. That is most of why a DIP read as a black rectangle rather than as a piece of
+    plastic -- an eye finds an object's edge in the highlight running along it, and there
+    was nowhere for one to sit. It costs 16 vertices.
+
+    Only the HORIZONTAL edges are cut. From anywhere this view is looked at, the top edge
+    is the one seen against the board; cutting the four vertical corners as well doubles the
+    geometry to change a silhouette nobody is looking at.
+    """
+    chamfer = min(CHAMFER_MM, x / 4, y / 4, z / 3)
+    corners = ((0.5, 0.5), (-0.5, 0.5), (-0.5, -0.5), (0.5, -0.5))
+    rings = (
+        (-z / 2, x - 2 * chamfer, y - 2 * chamfer),
+        (-z / 2 + chamfer, x, y),
+        (z / 2 - chamfer, x, y),
+        (z / 2, x - 2 * chamfer, y - 2 * chamfer),
+    )
+    points = vtk.vtkPoints()
+    for height, width, depth in rings:
+        for u, v in corners:
+            points.InsertNextPoint(u * width, v * depth, height)
+    faces = vtk.vtkCellArray()
+    for ring in range(3):
+        low, high = ring * 4, (ring + 1) * 4
+        for index in range(4):
+            nxt = (index + 1) % 4
+            faces.InsertNextCell(4)
+            for point in (low + index, low + nxt, high + nxt, high + index):
+                faces.InsertCellPoint(point)
+    for cap, order in ((0, (0, 3, 2, 1)), (12, (0, 1, 2, 3))):
+        faces.InsertNextCell(4)
+        for index in order:
+            faces.InsertCellPoint(cap + index)
+    box = vtk.vtkPolyData()
+    box.SetPoints(points)
+    box.SetPolys(faces)
+    # Per-face normals, and the feature angle keeps the chamfer a crease rather than
+    # smearing it into the faces either side -- a rounded-looking DIP is the other way to
+    # get this wrong.
+    normals = vtk.vtkPolyDataNormals()
+    normals.SetInputData(box)
+    normals.SetFeatureAngle(30.0)
+    normals.ConsistencyOn()
+    normals.AutoOrientNormalsOn()
+    normals.SplittingOn()
+    normals.Update()
+    result: vtk.vtkPolyData = normals.GetOutput()
+    return result
+
+
+def _cylinder(radius: float, height: float, resolution: int = 32) -> Any:
     cyl = vtk.vtkCylinderSource()
     cyl.SetRadius(radius)
     cyl.SetHeight(height)
@@ -1268,7 +1330,7 @@ def _d_prism(radius: float, flat: float, height: float, resolution: int = 22) ->
     return mesh.data()
 
 
-def _sphere(radius: float, resolution: int = 20) -> Any:
+def _sphere(radius: float, resolution: int = 28) -> Any:
     sphere = vtk.vtkSphereSource()
     sphere.SetRadius(radius)
     sphere.SetThetaResolution(resolution)
@@ -1536,7 +1598,7 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
     radius = min(body.size_x, body.size_y) / 2
     pieces = [
         _Piece(
-            source=_cylinder(radius, body.height, resolution=28),
+            source=_cylinder(radius, body.height, resolution=48),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
             orientation=_ALONG_Z,
@@ -1547,7 +1609,7 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
         # the two capacitors on a board then read as screw heads -- the first person to
         # see it called them mounting holes.
         _Piece(
-            source=_cylinder(radius, 0.22, resolution=28),
+            source=_cylinder(radius, 0.22, resolution=48),
             rgb=_lit(body.style.fill, 1.5),
             position=(body.x, body.y, body.height + _LIFT - 0.11),
             orientation=_ALONG_Z,
@@ -1555,7 +1617,7 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
         ),
         # The top itself is the sleeve, as it is on the real part.
         _Piece(
-            source=_cylinder(radius * 0.93, 0.24, resolution=28),
+            source=_cylinder(radius * 0.93, 0.24, resolution=48),
             rgb=_lit(body.style.fill, 1.12),
             position=(body.x, body.y, body.height + _LIFT - 0.1),
             orientation=_ALONG_Z,
@@ -1620,7 +1682,7 @@ def _disc_pieces(body: _WorldBody) -> list[_Piece]:
     squash = max(thickness / diameter, 0.08)
     return [
         _Piece(
-            source=_sphere(diameter / 2, resolution=24),
+            source=_sphere(diameter / 2, resolution=32),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, diameter / 2 + _LIFT),
             # Flattened across the leads: the disc's faces look sideways, which is how one
@@ -1646,9 +1708,9 @@ def _film_pieces(body: _WorldBody) -> list[_Piece]:
     pieces = [
         _Piece(
             source=(
-                _box(middle, body.across, body.height)
+                _moulded_box(middle, body.across, body.height)
                 if body.axis == "x"
-                else _box(body.across, middle, body.height)
+                else _moulded_box(body.across, middle, body.height)
             ),
             rgb=fill,
             position=(body.x, body.y, body.height / 2 + _LIFT),
@@ -1675,7 +1737,7 @@ def _dip_pieces(body: _WorldBody) -> list[_Piece]:
     round the chip goes."""
     pieces = [
         _Piece(
-            source=_box(body.size_x, body.size_y, body.height),
+            source=_moulded_box(body.size_x, body.size_y, body.height),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
             material=MOULDED,
@@ -1771,7 +1833,7 @@ def _to220_pieces(body: _WorldBody) -> list[_Piece]:
     hole_r = min(body.across, body.along) * 0.16
     return [
         _Piece(
-            source=_box(body.size_x, body.size_y, plastic_h),
+            source=_moulded_box(body.size_x, body.size_y, plastic_h),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, plastic_h / 2 + _LIFT),
             material=MOULDED,
@@ -1816,7 +1878,7 @@ def _led_pieces(body: _WorldBody) -> list[_Piece]:
     surface = body.surface
     pieces = [
         _Piece(
-            source=_cylinder(radius, barrel_h, resolution=24),
+            source=_cylinder(radius, barrel_h, resolution=36),
             rgb=lens,
             position=(body.x, body.y, barrel_h / 2 + _LIFT),
             orientation=_ALONG_Z,
@@ -1851,7 +1913,7 @@ def _header_pieces(body: _WorldBody) -> list[_Piece]:
     pin_h = body.height - moulding_h
     return [
         _Piece(
-            source=_box(body.size_x, body.size_y, moulding_h),
+            source=_moulded_box(body.size_x, body.size_y, moulding_h),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, moulding_h / 2 + _LIFT),
             material=MOULDED,
@@ -1876,7 +1938,7 @@ def _screw_terminal_pieces(body: _WorldBody) -> list[_Piece]:
     """A block with a screw head per way, so the wire entries are where they look."""
     pieces = [
         _Piece(
-            source=_box(body.size_x, body.size_y, body.height),
+            source=_moulded_box(body.size_x, body.size_y, body.height),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
             material=GLOSS,
@@ -1906,14 +1968,14 @@ def _pot_pieces(body: _WorldBody) -> list[_Piece]:
     shaft_h = body.height - body_h
     return [
         _Piece(
-            source=_cylinder(radius, body_h, resolution=28),
+            source=_cylinder(radius, body_h, resolution=48),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body_h / 2 + _LIFT),
             orientation=_ALONG_Z,
             material=GLOSS,
         ),
         _Piece(
-            source=_cylinder(radius * 0.28, shaft_h, resolution=18),
+            source=_cylinder(radius * 0.28, shaft_h, resolution=28),
             rgb=_rgb(body.style.accent),
             position=(body.x, body.y, body_h + shaft_h / 2 + _LIFT),
             orientation=_ALONG_Z,
@@ -1929,7 +1991,7 @@ def _switch_pieces(body: _WorldBody) -> list[_Piece]:
     button_h = body.height - case_h
     return [
         _Piece(
-            source=_box(body.size_x, body.size_y, case_h),
+            source=_moulded_box(body.size_x, body.size_y, case_h),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, case_h / 2 + _LIFT),
             material=MOULDED,
@@ -1998,7 +2060,7 @@ def _box_pieces(body: _WorldBody) -> list[_Piece]:
     surface = body.surface
     return [
         _Piece(
-            source=_box(body.size_x, body.size_y, body.height),
+            source=_moulded_box(body.size_x, body.size_y, body.height),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
             material=_material_of(surface),
