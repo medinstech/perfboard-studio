@@ -525,6 +525,15 @@ TURKISH: Mapping[str, str] = {
         "Otomatik kaydetme artık yalnızca çökme kurtarma kopyası yazıyor; dosyayı Ctrl+S "
         "kaydeder."
     ),
+    # -- board setup: the product first, the consequences behind Advanced ------
+    "Advanced": "Gelişmiş",
+    "Everything a stocked board already decides: its grid, what it is made of, "
+    "its pads and whether it prints its own addresses. Worth opening for a "
+    "board you cut yourself.": (
+        "Hazır satılan bir kartın zaten belirlediği her şey: ızgarası, neyden yapıldığı, "
+        "pedleri ve kendi adreslerini basıp basmadığı. Kendi kestiğiniz bir kart için "
+        "açmaya değer."
+    ),
     # -- projects: the folder a board and everything made from it live in ------
     "New &Project…": "Yeni &Proje…",
     "Name the board, choose what it is built on, and start in the schematic. "

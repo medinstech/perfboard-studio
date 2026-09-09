@@ -70,6 +70,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QStatusBar,
     QToolBar,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -416,14 +417,26 @@ LEGEND_BORDER_MM = 2.0
 
 
 class BoardSetupDialog(QDialog):
-    """Grid size and substrate for a board.
+    """Which board this is, and -- behind Advanced -- everything a product already decides.
 
-    The material is not a cosmetic choice and the dialog says so where the choice is
-    made. FR-2 phenolic -- the cheap brown board most perfboard is actually sold as --
-    lifts its pads under sustained heat, so DRC's pad-lifting rule only fires on it and
-    the build guide drops the iron 30 degrees and cuts the dwell from three seconds to
-    two. Choosing the wrong one here means the tool's most useful safety advice never
-    appears.
+    A PERFBOARD IS BOUGHT, NOT SPECIFIED. The question is which of the dozen things a
+    supplier stocks you have in your hand, and the answer settles the grid, the substrate,
+    whether it is single-sided, the border and the printed legend all at once. Asking those
+    five as separate questions on the way in is asking somebody to describe a product they
+    are holding -- and every wrong answer is a board the tool then reasons about
+    incorrectly, silently.
+
+    So the list of products and the KIND of board are the dialog, and the rest is folded
+    into Advanced. It opens expanded exactly when the board is not one of the products,
+    which is when those fields are the only thing describing it: a custom size typed in
+    now, or a document already on a grid nobody sells.
+
+    THE MATERIAL IS NOT A COSMETIC CHOICE, which is why it stays in the dialog at all
+    rather than being dropped. FR-2 phenolic -- the cheap brown board most perfboard is
+    actually sold as -- lifts its pads under sustained heat, so DRC's pad-lifting rule only
+    fires on it and the build guide drops the iron 30 degrees and cuts the dwell from three
+    seconds to two. Choosing the wrong one means the tool's most useful safety advice never
+    appears; picking the right PRODUCT means never having to choose it.
     """
 
     MATERIALS: tuple[tuple[BoardMaterial, str], ...] = (
@@ -566,19 +579,49 @@ class BoardSetupDialog(QDialog):
         self._pad_diameter = board.pad_diameter
         self._update_note()
 
-        form = QFormLayout()
-        form.addRow(t("Board"), self.preset)
-        form.addRow(t("Type"), self.board_type)
-        form.addRow(t("Strips run"), self.strip_axis)
-        form.addRow(t("Columns"), self.cols)
-        form.addRow(t("Rows"), self.rows)
-        form.addRow(t("Material"), self.material)
-        form.addRow(t("Pad shape"), self.pad_shape)
-        form.addRow(t("Pad length"), self.pad_length)
-        form.addRow(t("Long axis"), self.pad_axis)
-        form.addRow("", self.legend)
-        form.addRow(t("Row digits"), self.row_digits)
-        form.addRow("", self._size_note)
+        # The two questions a person can answer about a board they are holding: which one
+        # is it, and what kind. Everything else is a consequence of those, and lives below.
+        self._chosen = QFormLayout()
+        self._chosen.addRow(t("Board"), self.preset)
+        self._chosen.addRow(t("Type"), self.board_type)
+        self._chosen.addRow(t("Strips run"), self.strip_axis)
+
+        # Shown rather than merely enabled, and the difference matters on a dialog this
+        # short: a greyed-out row still costs a line and still has to be read past to find
+        # out it does not apply. Which way the strips run is a question only stripboard
+        # has an answer to.
+        self.advanced_toggle = QToolButton()
+        self.advanced_toggle.setCheckable(True)
+        self.advanced_toggle.setAutoRaise(True)
+        self.advanced_toggle.setText(t("Advanced"))
+        self.advanced_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.advanced_toggle.setToolTip(
+            t(
+                "Everything a stocked board already decides: its grid, what it is made of, "
+                "its pads and whether it prints its own addresses. Worth opening for a "
+                "board you cut yourself."
+            )
+        )
+        self.advanced_toggle.toggled.connect(self._on_advanced)
+
+        self._advanced = QWidget()
+        advanced = QFormLayout(self._advanced)
+        advanced.setContentsMargins(0, 0, 0, 0)
+        advanced.addRow(t("Columns"), self.cols)
+        advanced.addRow(t("Rows"), self.rows)
+        advanced.addRow(t("Material"), self.material)
+        advanced.addRow(t("Pad shape"), self.pad_shape)
+        advanced.addRow(t("Pad length"), self.pad_length)
+        advanced.addRow(t("Long axis"), self.pad_axis)
+        advanced.addRow("", self.legend)
+        advanced.addRow(t("Row digits"), self.row_digits)
+
+        # Open on a board that is NOT one of the products, because then these fields are
+        # the only thing describing it -- Board Setup on a document already laid out on a
+        # grid nobody sells would otherwise hide the whole board behind a disclosure arrow.
+        self._select_matching_preset(board)
+        self.advanced_toggle.setChecked(_matching_preset(board) is None)
+        self._on_advanced(self.advanced_toggle.isChecked())
         self._update_enabled()
 
         buttons = QDialogButtonBox(
@@ -588,8 +631,45 @@ class BoardSetupDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(form)
+        layout.addLayout(self._chosen)
+        layout.addWidget(self.advanced_toggle)
+        layout.addWidget(self._advanced)
+        # Outside Advanced on purpose: it is what the dialog has just decided, in
+        # millimetres and holes, and it is the one line worth reading whichever way the
+        # board was chosen.
+        layout.addWidget(self._size_note)
         layout.addWidget(buttons)
+
+    def _on_advanced(self, shown: bool) -> None:
+        """Fold the consequences away, and let the dialog shrink back to the question.
+
+        ``adjustSize`` rather than a fixed size constraint: the dialog has to be able to
+        give the space back when it is closed again, and a user who has widened it should
+        keep the width they chose.
+        """
+        self.advanced_toggle.setArrowType(
+            Qt.ArrowType.DownArrow if shown else Qt.ArrowType.RightArrow
+        )
+        self._advanced.setVisible(shown)
+        self.adjustSize()
+
+    def _select_matching_preset(self, board: Board) -> None:
+        """Show the product this board already is, WITHOUT claiming the user chose it.
+
+        The signal is blocked and ``_preset`` is left alone deliberately. ``_preset`` means
+        "a product was picked from the list", which is what tells the caller to rebuild the
+        finger strips and corner holes that come with it -- and re-opening Board Setup on a
+        board that happens to be 14 x 20 is not a request to have its connectors rebuilt.
+        """
+        entry = _matching_preset(board)
+        if entry is None:
+            return
+        index = self.preset.findData(entry.key)
+        if index < 0:
+            return
+        blocked = self.preset.blockSignals(True)
+        self.preset.setCurrentIndex(index)
+        self.preset.blockSignals(blocked)
 
     def _on_preset(self) -> None:
         """Apply a stocked size. Silent when the user picks "Custom size" back again --
@@ -597,6 +677,8 @@ class BoardSetupDialog(QDialog):
         key = self.preset.currentData()
         entry = next((p for p in STANDARD_PRESETS if p.key == key), None)
         if entry is None:
+            # "Custom size": the numbers ARE the choice now, so they had better be visible.
+            self.advanced_toggle.setChecked(True)
             return
         board = board_from_preset(entry, self._board)
         self._board = board
@@ -615,8 +697,7 @@ class BoardSetupDialog(QDialog):
         self.pad_length.setEnabled(oblong)
         self.pad_axis.setEnabled(oblong)
         self.row_digits.setEnabled(self.legend.isChecked())
-        # Which way the strips run is a question only stripboard has an answer to.
-        self.strip_axis.setEnabled(self.board_type.currentData() == "stripboard")
+        self._chosen.setRowVisible(self.strip_axis, self.board_type.currentData() == "stripboard")
         self._update_note()
 
     def _update_note(self) -> None:
@@ -1981,6 +2062,23 @@ class BoardSizeDialog(QDialog):
         if index < 0:
             return None
         return self._suggestions[index]
+
+
+def _matching_preset(board: Board) -> BoardPreset | None:
+    """The stocked product this board IS, if it is one.
+
+    Keyed on the grid and the family and not on the border, because a board that has been
+    given a legend has had its border raised to fit one (see ``BoardSetupDialog.board``)
+    and is still the same product.
+    """
+    for preset in STANDARD_PRESETS:
+        if (
+            preset.cols == board.cols
+            and preset.rows == board.rows
+            and preset.single_sided == board.single_sided
+        ):
+            return preset
+    return None
 
 
 def _preset_features(

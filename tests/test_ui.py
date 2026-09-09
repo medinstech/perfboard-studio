@@ -1720,6 +1720,77 @@ def test_board_setup_dialog_round_trips_a_board() -> None:
     assert changed.pad_diameter == doc.board.pad_diameter
 
 
+def test_board_setup_asks_which_product_and_folds_the_rest_away() -> None:
+    """A perfboard is bought, not specified: the dialog is the list of things a supplier
+    stocks, and the five fields a product already decides are behind Advanced."""
+    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.ui.main import BoardSetupDialog
+
+    stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
+    board = board_from_preset(stock, _load_dense().board)
+    dialog = BoardSetupDialog(board)
+
+    # ...and it opens showing which product this already is, rather than "Custom size".
+    assert dialog.preset.currentData() == stock.key
+    assert not dialog.advanced_toggle.isChecked()
+    dialog.deleteLater()
+
+
+def test_board_setup_opens_expanded_on_a_board_nobody_sells() -> None:
+    """Then those fields are the only thing describing the board, and hiding them behind a
+    disclosure arrow would hide the board."""
+    from perfboard_studio.ui.main import BoardSetupDialog
+
+    doc = _load_dense()  # 40 x 28 is not a size anybody stocks
+    dialog = BoardSetupDialog(doc.board)
+
+    assert dialog.advanced_toggle.isChecked()
+    dialog.deleteLater()
+
+
+def test_choosing_a_custom_size_opens_the_fields_it_is_asking_for() -> None:
+    """Picking "Custom size" and being shown no numbers is the dialog asking a question
+    and hiding the answer."""
+    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.ui.main import BoardSetupDialog
+
+    stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
+    dialog = BoardSetupDialog(board_from_preset(stock, _load_dense().board))
+    assert not dialog.advanced_toggle.isChecked()
+
+    dialog.preset.setCurrentIndex(dialog.preset.findData(""))
+
+    assert dialog.advanced_toggle.isChecked()
+    dialog.deleteLater()
+
+
+def test_showing_a_board_that_is_already_a_product_is_not_choosing_one() -> None:
+    """``_preset`` means "a product was picked from the list", which is what tells the
+    caller to rebuild the finger strips and corner holes that come with it. Re-opening
+    Board Setup on a 14 x 20 board is not a request to have its connectors rebuilt."""
+    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.ui.main import BoardSetupDialog
+
+    stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
+    dialog = BoardSetupDialog(board_from_preset(stock, _load_dense().board))
+
+    assert dialog.preset_features() is None
+    dialog.deleteLater()
+
+
+def test_which_way_the_strips_run_is_only_asked_of_a_stripboard() -> None:
+    """Hidden rather than greyed out: a disabled row still costs a line and still has to
+    be read past to find out it does not apply."""
+    from perfboard_studio.ui.main import BoardSetupDialog
+
+    dialog = BoardSetupDialog(_load_dense().board)
+    assert dialog.strip_axis.isHidden()
+
+    dialog.board_type.setCurrentIndex(dialog.board_type.findData("stripboard"))
+    assert not dialog.strip_axis.isHidden()
+    dialog.deleteLater()
+
+
 def test_every_board_material_is_offered() -> None:
     """FR-2 in particular: it is the board most perfboard is actually sold as, and the
     only one where the pad-lifting rule and the derated iron temperature apply."""

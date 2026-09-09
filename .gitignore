@@ -33,3 +33,16 @@ headless_out/
 # AppImage and the disk image land, and they are hundreds of megabytes each.
 releases/
 *.spec.bak
+
+# Exports written beside an example when somebody walks through one. Every file here is
+# rebuilt from its .perf on demand -- by File > Export, by Save Project, or by
+# tools/build_examples.py -- so none of them belongs in the repository, and without this a
+# `git add -A` after an afternoon of testing sweeps up a 7000-line guide.
+examples/*_guide.html
+examples/*_guide.json
+examples/*_bom.csv
+examples/*_cut_list.csv
+examples/*_schematic.svg
+examples/*_schematic.pdf
+examples/*_schematic.png
+examples/*.perf.bak
