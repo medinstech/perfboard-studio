@@ -75,6 +75,7 @@ from perfboard_studio.placer import (
     _build_parts,
     _build_strips,
     _conflicts_on_strip,
+    _dead_hole_keys,
     _global_counts,
     _global_delta,
     _initial_state,
@@ -82,6 +83,7 @@ from perfboard_studio.placer import (
     _propose,
     _settle_edges,
     _settle_rotations,
+    arrange_design,
     arrange_document,
     describe,
     design_entries,
@@ -455,7 +457,9 @@ def _scorer_for(doc: PerfDocument, lookup: FootprintLookup, weights: PlacementWe
     nets, nets_of, pin_nets = _build_nets(doc, parts)
     strips = _build_strips(doc, parts, pin_nets)
     state = _initial_state(doc, parts, strips)
-    scorer = _make_scorer(doc.board, weights, nets, nets_of, strips)
+    # The dead holes come from the DOCUMENT (its mounting holes and edge connectors),
+    # not from the board, which is why _make_scorer is handed both.
+    scorer = _make_scorer(doc.board, weights, nets, nets_of, strips, _dead_hole_keys(doc))
     return state, scorer
 
 
@@ -1342,9 +1346,9 @@ def test_the_edge_term_measures_the_body_and_not_the_anchor() -> None:
     doc = make_doc(components=(component("J1", "hdr-1x4", hole(5, 8)),))
     state, scorer = _scorer_for(doc, registry, PlacementWeights())
 
-    _off, pins_right = scorer.part_terms(state, 0)  # Body lies to the RIGHT of pin 1.
+    _off, _dead, pins_right = scorer.part_terms(state, 0)  # Body lies to the RIGHT of pin 1.
     state.set_placement(0, 5, 8, 2)  # Turned end for end about the very same hole.
-    _off, pins_left = scorer.part_terms(state, 0)
+    _off, _dead, pins_left = scorer.part_terms(state, 0)
 
     assert pins_right != pytest.approx(pins_left)
     # Turned, the body lies towards the near edge, so there is less board outside it.
@@ -1360,14 +1364,14 @@ def test_the_edge_term_counts_the_printed_border_as_board() -> None:
         make_doc(components=(component("J1", "term", hole(0, 8)),)), board=bordered
     )
     state, scorer = _scorer_for(doc, LOOKUP, PlacementWeights())
-    _off, gap = scorer.part_terms(state, 0)
+    _off, _dead, gap = scorer.part_terms(state, 0)
     assert gap > 3.0
 
     flush = dataclasses.replace(
         make_doc(components=(component("J1", "term", hole(0, 8)),)), board=BOARD
     )
     flush_state, flush_scorer = _scorer_for(flush, LOOKUP, PlacementWeights())
-    _off, flush_gap = flush_scorer.part_terms(flush_state, 0)
+    _off, _dead, flush_gap = flush_scorer.part_terms(flush_state, 0)
     assert flush_gap < gap
 
 
@@ -1629,3 +1633,127 @@ def test_a_recommendation_leaves_room_to_wire_the_board() -> None:
                and s.preset.width_mm * s.preset.height_mm
                < best.preset.width_mm * best.preset.height_mm]
     assert all(not s.roomy for s in tighter)
+
+
+# ---------------------------------------------------------------------------
+# Holes nothing can be soldered into
+# ---------------------------------------------------------------------------
+#
+# A finger is solid copper with no bore and a mounting bore has taken the pad. DRC calls a
+# pin on either an ERROR, so a placement holding one is one this module should never have
+# proposed -- and this is the one pair of terms in the cost function that pull against each
+# other, because a finger strip runs along the board edge and the edge term is what pulls
+# connectors towards it.
+
+
+def stock_document(preset_name: str = "6 x 8 cm") -> PerfDocument:
+    """A real product: the grid, the finger strips and the corner screws it is sold with."""
+    from perfboard_studio.geometry import (
+        STANDARD_PRESETS,
+        board_from_preset,
+        preset_edge_connectors,
+        preset_mounting_holes,
+    )
+
+    preset = next(p for p in STANDARD_PRESETS if p.name == preset_name and not p.single_sided)
+    board = board_from_preset(preset, BOARD)
+    return dataclasses.replace(
+        make_doc(board=board),
+        edge_connectors=preset_edge_connectors(preset, board),
+        mounting_holes=preset_mounting_holes(preset, board),
+    )
+
+
+def dead_keys(document: PerfDocument) -> frozenset[str]:
+    from perfboard_studio.geometry import unusable_holes
+
+    return unusable_holes(document)
+
+
+def pins_of(document: PerfDocument, lookup: FootprintLookup) -> set[str]:
+    holes: set[str] = set()
+    for placed in document.components:
+        footprint = lookup(placed.footprint_id)
+        if footprint is None:
+            continue
+        for _pin, at in all_pin_holes(placed, footprint):
+            holes.add(f"{at.col},{at.row}")
+    return holes
+
+
+def test_a_pin_with_no_pad_under_it_makes_the_placement_illegal() -> None:
+    """``is_legal`` has to agree with DRC about what an error is, or the annealer hands
+    back boards the checker refuses."""
+    registry = footprint_lookup()
+    document = stock_document()
+    dead = sorted(dead_keys(document))[0]
+    col, _, row = dead.partition(",")
+    document = dataclasses.replace(
+        document,
+        components=(
+            ComponentInstance(
+                id="c-j1", ref="J1", value="", footprint_id="hdr-1x1",
+                anchor=hole(int(col), int(row)),
+            ),
+        ),
+    )
+    state, scorer = _scorer_for(document, registry, PlacementWeights())
+
+    cost = scorer.full(state)
+    assert cost.dead_pins == 1
+    assert not cost.is_legal
+
+
+def test_the_placer_keeps_the_connector_off_the_finger_strip() -> None:
+    """The case the term exists for, end to end, on a board a supplier sells."""
+    registry = footprint_lookup()
+    document = dataclasses.replace(
+        stock_document(),
+        components=(
+            ComponentInstance(id="c-j1", ref="J1", value="", footprint_id="hdr-1x4",
+                              anchor=hole(2, 1)),
+            ComponentInstance(id="c-r1", ref="R1", value="", footprint_id="r-axial-3",
+                              anchor=hole(4, 6)),
+            ComponentInstance(id="c-r2", ref="R2", value="", footprint_id="r-axial-3",
+                              anchor=hole(10, 6)),
+        ),
+        nets=(net("n1", "SIG", "signal", (("J1", "1"), ("R1", "1"), ("R2", "1"))),),
+    )
+    dead = dead_keys(document)
+
+    plan = plan_placement(document, registry, PlacementOptions(seed=0))
+
+    assert plan.after.dead_pins == 0
+    assert not (pins_of(plan.document, registry) & dead)
+
+
+def test_the_arrangement_keeps_off_them_before_the_annealer_runs() -> None:
+    """The constructive placer reserves them like any other occupied cell, so the board it
+    lays out is already legal."""
+    registry = footprint_lookup()
+    document = dataclasses.replace(
+        stock_document(),
+        parts=(
+            SchematicPart(id="p1", ref="J1", value="", footprint_id="screw-terminal-2"),
+            SchematicPart(id="p2", ref="J2", value="", footprint_id="hdr-1x4"),
+            SchematicPart(id="p3", ref="U1", value="", footprint_id="dip-8"),
+        ),
+    )
+    dead = dead_keys(document)
+
+    placed = arrange_design(document, registry)
+    assert placed.fits
+
+    footprints = {part.id: part.footprint_id for part in document.parts}
+    on_board = dataclasses.replace(
+        document,
+        components=tuple(
+            ComponentInstance(
+                id=entry.id, ref=entry.ref, value="",
+                footprint_id=footprints[entry.id],
+                anchor=entry.anchor, rotation=entry.rotation,
+            )
+            for entry in placed.placements
+        ),
+    )
+    assert not (pins_of(on_board, registry) & dead)

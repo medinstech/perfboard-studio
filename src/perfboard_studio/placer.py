@@ -99,6 +99,7 @@ from .geometry import (
     format_hole,
     is_axis_aligned_box,
     transform_offset,
+    unusable_holes,
 )
 from .model import (
     HEAT_CLEARANCE_MM,
@@ -197,6 +198,16 @@ class PlacementWeights:
     collision: float = 500.0
     #: Per pin hole outside the grid.
     off_board: float = 200.0
+    #: Per pin standing where nothing can be soldered: a mounting bore has taken the pad,
+    #: or an edge-connector finger is solid copper with no bore at all.
+    #:
+    #: Priced with the collision, not with the overlap, because it is the same KIND of
+    #: fact -- the board cannot be built, rather than probably should not be. And it is
+    #: the term an edge-seeking part most needs: a finger strip runs along the board edge,
+    #: which is exactly where the ``edge`` term above is pulling connectors towards. The
+    #: two are not in tension for long, since a finger takes only the outermost row and
+    #: the connector wants the one behind it.
+    dead_hole: float = 500.0
     #: Per mm of bare board between an edge-seeking part's COURTYARD and the nearest
     #: board edge.
     #:
@@ -297,6 +308,8 @@ class PlacementCost:
     overlap_mm2: float
     collisions: int
     off_board_pins: int
+    #: Pins on a hole nothing can be soldered into. See ``geometry.unusable_holes``.
+    dead_pins: int
     edge_mm: float
     heat_mm: float
     #: Pairs of pins the board joins and no cut can separate. Always 0 off stripboard.
@@ -311,6 +324,7 @@ class PlacementCost:
             + weights.overlap_area * self.overlap_mm2
             + weights.collision * self.collisions
             + weights.off_board * self.off_board_pins
+            + weights.dead_hole * self.dead_pins
             + weights.edge * self.edge_mm
             + weights.heat * self.heat_mm
             + weights.strip_conflict * self.strip_conflicts
@@ -324,6 +338,11 @@ class PlacementCost:
         with any of them is one the tool should not have proposed. Deliberately keyed on
         ``overlap_pairs`` rather than the area, so it agrees with DRC to the last ULP.
 
+        ``dead_pins`` IS here, and for the reason the other three are: DRC calls a pin on
+        a mounting bore or an edge-connector finger an error about physical impossibility
+        rather than likely failure, so a placement holding one is not a placement this
+        module should have proposed.
+
         ``strip_conflicts`` is deliberately NOT here, and the omission is the same
         distinction the whole project rests on: a stripboard whose pins cannot be
         separated is still a legal DOCUMENT -- nothing overlaps, every pin is in a real
@@ -331,7 +350,12 @@ class PlacementCost:
         is priced dearly in :meth:`total` and is what ``striproute`` reports, but "legal"
         here means "breaks no hard rule" and it would stop meaning that if this crept in.
         """
-        return self.overlap_pairs == 0 and self.collisions == 0 and self.off_board_pins == 0
+        return (
+            self.overlap_pairs == 0
+            and self.collisions == 0
+            and self.off_board_pins == 0
+            and self.dead_pins == 0
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -999,6 +1023,10 @@ class _Scorer:
     edge_max_x: float
     edge_min_y: float
     edge_max_y: float
+    #: Holes nothing can be soldered into, in this module's own (col, row) key. The same
+    #: set ``drc.py`` reports a pin on as an error and ``router.py`` refuses to solder in
+    #: -- ``geometry.unusable_holes`` is the one answer all three read.
+    dead_holes: frozenset[tuple[int, int]]
     weights: PlacementWeights
     nets: list[_NetPins]
     nets_of: list[tuple[int, ...]]
@@ -1033,8 +1061,8 @@ class _Scorer:
             spread = len(set(along)) - 1
         return hpwl, spread * self.board_pitch
 
-    def part_terms(self, state: _State, position: int) -> tuple[int, float]:
-        """(off-board pins, bare board outside this part mm) for one part.
+    def part_terms(self, state: _State, position: int) -> tuple[int, int, float]:
+        """(off-board pins, pins on a dead hole, bare board outside this part mm).
 
         The edge distance is measured from the part's COURTYARD to the nearest substrate
         edge, and both halves of that were wrong before.
@@ -1055,22 +1083,25 @@ class _Scorer:
         """
         part = state.parts[position]
         off = 0
+        dead = 0
         for col, row in state.pins(position):
             if not (0 <= col < self.board_cols and 0 <= row < self.board_rows):
                 off += 1
+            elif (col, row) in self.dead_holes:
+                dead += 1
         if not part.edge_seeking:
-            return off, 0.0
+            return off, dead, 0.0
         x = state.col[position] * self.board_pitch
         y = state.row[position] * self.board_pitch
         box = part.rel_box[state.rot[position]]
         if box is None:
             # No outline to measure from; the anchor hole is the only position it has.
-            return off, max(
+            return off, dead, max(
                 0.0,
                 min(x - self.edge_min_x, self.edge_max_x - x,
                     y - self.edge_min_y, self.edge_max_y - y),
             )
-        return off, max(
+        return off, dead, max(
             0.0,
             min(
                 (x + box.min_x) - self.edge_min_x,
@@ -1148,10 +1179,12 @@ class _Scorer:
             alignment += net_align
 
         off_board = 0
+        dead_pins = 0
         edge = 0.0
         for position in range(len(state.parts)):
-            part_off, part_edge = self.part_terms(state, position)
+            part_off, part_dead, part_edge = self.part_terms(state, position)
             off_board += part_off
+            dead_pins += part_dead
             edge += part_edge
 
         pairs = 0
@@ -1171,6 +1204,7 @@ class _Scorer:
             overlap_mm2=overlap,
             collisions=state.collisions,
             off_board_pins=off_board,
+            dead_pins=dead_pins,
             edge_mm=edge,
             heat_mm=heat,
             strip_conflicts=state.strip_conflicts,
@@ -1199,8 +1233,10 @@ class _Scorer:
                 total += weights.hpwl * net_hpwl + weights.alignment * net_align
 
         for position in positions:
-            off, edge = self.part_terms(state, position)
-            total += weights.off_board * off + weights.edge * edge
+            off, dead, edge = self.part_terms(state, position)
+            total += (
+                weights.off_board * off + weights.dead_hole * dead + weights.edge * edge
+            )
 
         count = len(state.parts)
         for a in positions:
@@ -1217,12 +1253,26 @@ class _Scorer:
         return total
 
 
+def _dead_hole_keys(doc: PerfDocument) -> frozenset[tuple[int, int]]:
+    """``geometry.unusable_holes`` in this module's own (col, row) key.
+
+    Translated once per run rather than per hole, for the reason ``router._key`` exists:
+    the inner loops here ask about a hole a great many times and ``hole_key``'s string is
+    the encoding for things that cross a module boundary, not for a hot set.
+    """
+    return frozenset(
+        (int(col), int(row))
+        for col, _, row in (key.partition(",") for key in unusable_holes(doc))
+    )
+
+
 def _make_scorer(
     board: Board,
     weights: PlacementWeights,
     nets: list[_NetPins],
     nets_of: list[tuple[int, ...]],
     strips: _Strips | None,
+    dead_holes: frozenset[tuple[int, int]] = frozenset(),
 ) -> _Scorer:
     """The one place a board becomes a cost function.
 
@@ -1240,6 +1290,7 @@ def _make_scorer(
         edge_max_x=(board.cols - 1) * board.pitch + margin_x,
         edge_min_y=-margin_y,
         edge_max_y=(board.rows - 1) * board.pitch + margin_y,
+        dead_holes=dead_holes,
         weights=weights,
         nets=nets,
         nets_of=nets_of,
@@ -1773,7 +1824,7 @@ def arrange_document(
     What the annealer seeds half its restarts with.
     """
     on = board if board is not None else doc.board
-    reserved: set[tuple[int, int]] = set()
+    reserved: set[tuple[int, int]] = set(_dead_hole_keys(doc))
     movable: list[ArrangeRequest] = []
     for component in doc.components:
         if not component.locked:
@@ -1797,7 +1848,7 @@ def arrange_design(
     a separate gesture with a separate undo step.
     """
     on = board if board is not None else doc.board
-    reserved: set[tuple[int, int]] = set()
+    reserved: set[tuple[int, int]] = set(_dead_hole_keys(doc))
     for component in doc.components:
         _reserve(reserved, component, on, lookup)
     entries = [ArrangeRequest(part.id, part.ref, part.footprint_id) for part in doc.parts]
@@ -1831,11 +1882,12 @@ def _reserve(
 #: How much of a board's holes an arrangement may cover and still be a board somebody can
 #: wire.
 #:
-#: Measured rather than guessed: the four worked examples that ship with this project
-#: cover between a tenth and a quarter of their boards' holes, and every one of them
-#: routes without a wire the tool could not place. A third is past all of them and still
-#: leaves two holes in three for copper, which is the ratio a perfboard actually needs --
-#: a solder trace is as wide as the parts are and every run wants a lane of its own.
+#: Measured rather than guessed: the four worked examples that ship with this project sit
+#: between 21% and 30% on the stock boards this application itself recommended for them,
+#: and every one routes with no connection the tool could not make. A third is past all of
+#: them and still leaves two holes in three for copper, which is the ratio a perfboard
+#: actually needs -- a solder trace is as wide as the parts are and every run wants a lane
+#: of its own.
 ARRANGEMENT_FILL_LIMIT = 0.33
 
 
@@ -1952,7 +2004,9 @@ def plan_placement(
     strips = _build_strips(doc, parts, pin_nets)
     state = _initial_state(doc, parts, strips)
 
-    scorer = _make_scorer(doc.board, options.weights, nets, nets_of, strips)
+    scorer = _make_scorer(
+        doc.board, options.weights, nets, nets_of, strips, _dead_hole_keys(doc)
+    )
     before = scorer.full(state)
     movable = [position for position, part in enumerate(state.parts) if part.movable]
     locked = len(state.parts) - len(movable)
@@ -2185,7 +2239,7 @@ def _settle_edges(
             if not part.edge_seeking:
                 continue
             col, row, rot = state.col[position], state.row[position], state.rot[position]
-            _off, gap = scorer.part_terms(state, position)
+            _off, _dead, gap = scorer.part_terms(state, position)
             if gap <= 0.0:
                 continue  # Already against the edge; there is nowhere further out to go.
             best: tuple[tuple[float, float], int, int, float] | None = None
@@ -2194,7 +2248,7 @@ def _settle_edges(
                 if not _in_bounds(part, rot, to_col, to_row):
                     continue
                 state.set_placement(position, to_col, to_row, rot)
-                _off, moved_gap = scorer.part_terms(state, position)
+                _off, _dead, moved_gap = scorer.part_terms(state, position)
                 total = scorer.full(state).total(weights)
                 state.set_placement(position, col, row, rot)
                 if moved_gap < gap - 1e-9 and total <= current + 1e-9:

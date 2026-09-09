@@ -81,6 +81,63 @@ def test_example_produces_a_guide_with_checkpoints(path: pathlib.Path) -> None:
     assert guide.checkpoint_count > 0
 
 
+@pytest.mark.parametrize("path", PERF_FILES, ids=lambda p: p.stem)
+def test_example_is_on_a_board_somebody_sells(path: pathlib.Path) -> None:
+    """The examples used to be on grids nobody stocks -- 32 x 22, 30 x 20, 24 x 18 -- which
+    taught two wrong things at once: that perfboard comes in whatever size you like, and
+    that the finger strips and corner screw holes a real board arrives with are somebody
+    else's problem. They are not; a finger is solid copper with no bore, and the placer and
+    the router had to learn that before these boards could carry one."""
+    from perfboard_studio.geometry import STANDARD_PRESETS, board_size_mm
+
+    document = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    board = document.board
+    preset = next(
+        (
+            p
+            for p in STANDARD_PRESETS
+            if p.cols == board.cols
+            and p.rows == board.rows
+            and p.single_sided == board.single_sided
+        ),
+        None,
+    )
+    assert preset is not None, f"{board.cols}x{board.rows} is not a size anybody stocks"
+
+    # ...and it is that product to the tenth of a millimetre, not merely its hole count.
+    width, height = board_size_mm(board)
+    assert width == pytest.approx(preset.width_mm, abs=0.05)
+    assert height == pytest.approx(preset.height_mm, abs=0.05)
+    assert document.edge_connectors, "a stocked board is sold with its finger strips"
+
+
+@pytest.mark.parametrize("path", PERF_FILES, ids=lambda p: p.stem)
+def test_nothing_is_soldered_where_there_is_no_pad(path: pathlib.Path) -> None:
+    """The property the examples exist to prove now that they carry real products: neither
+    planner puts anything on a finger or on a hole a mounting bore has taken.
+
+    Asserted separately from ``test_example_has_no_drc_errors`` even though DRC covers it,
+    because that test would report a change here as one of a list and this one names it.
+    """
+    from perfboard_studio.geometry import all_pin_holes, hole_key, unusable_holes
+
+    document = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    lookup = footprint_lookup()
+    dead = unusable_holes(document)
+    assert dead, "a stocked board has fingers, so there is something to keep off"
+
+    for component in document.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is None:
+            continue
+        for pin, at in all_pin_holes(component, footprint):
+            assert hole_key(at) not in dead, f"{component.ref} pin {pin.number} has no pad"
+
+    for conductor in document.conductors:
+        for at in conductor.path:
+            assert hole_key(at) not in dead, f"{conductor.id} runs over a hole with no pad"
+
+
 @pytest.mark.parametrize("path", NET_FILES, ids=lambda p: p.stem)
 def test_netlist_parses(path: pathlib.Path) -> None:
     """Parses, and complains about nothing except the one thing every real export has.

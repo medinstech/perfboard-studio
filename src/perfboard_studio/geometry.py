@@ -384,6 +384,31 @@ def undrilled_holes(doc: PerfDocument) -> frozenset[str]:
     )
 
 
+def unusable_holes(doc: PerfDocument) -> frozenset[str]:
+    """Every hole nothing can be soldered into, as :func:`hole_key` strings.
+
+    The union of the two things DRC reports as ERRORS rather than warnings, because both
+    describe a board that cannot work rather than one that probably will not: a mounting
+    bore has destroyed the pad (:func:`consumed_holes`), or an edge-connector finger is
+    solid copper with no bore at all (:func:`undrilled_holes`).
+
+    ONE FUNCTION BECAUSE IT HAS THREE CONSUMERS AND THEY ARE NOT ALLOWED TO DISAGREE.
+    ``drc.py`` reports a pin or a run on one of these; ``placer.py`` must not put a pin
+    there and ``router.py`` must not solder there. Both planners used to do exactly that,
+    and it showed the moment the examples were moved onto the boards suppliers actually
+    sell: a 6 x 8 cm board comes with a finger strip down two of its edges, the placer put
+    a terminal block on it because a board edge is where a terminal block belongs, and DRC
+    then called the result five errors. A planner that produces what the checker rejects
+    is a planner nobody can use -- the same rule ``jumper-under-body`` already holds the
+    router to.
+
+    A CUT track is deliberately not here. A cut destroys the copper and leaves the hole,
+    so a lead still fits; what it would be soldered to is nothing, which is
+    ``cut-track-conflict`` and a different question with a different answer.
+    """
+    return consumed_holes(doc) | undrilled_holes(doc)
+
+
 def mounting_hole_centre_mm(hole_mount: MountingHole, board: Board) -> Point2:
     """Where the bore actually is, in board-space mm.
 

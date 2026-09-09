@@ -14,12 +14,19 @@ perfboard-studio examples/lm317-supply.perf     # open the finished board
 KiCad Netlist**, accept the placement, `Ctrl+Shift+A` to auto-place, `Ctrl+R` to route,
 `Ctrl+B` for the build guide.
 
+Every board below is one a supplier stocks, in the exact size on the packet, with the
+finger strips down two edges and the screw hole in each corner it is sold with — and it is
+the size this application's own **Place on the Board** would have suggested for that
+circuit. They used to be on grids nobody sells (32 × 22, 30 × 20), which taught two wrong
+things at once: that perfboard comes in whatever size you like, and that the fingers a real
+one arrives with are somebody else's problem.
+
 | | parts | board | what it is there to show |
 |---|---|---|---|
-| **ne555-astable** | 8 | 32 × 22, FR-4 | The starting point. A 555 flashing an LED — the circuit everybody has built. |
-| **lm317-supply** | 11 | 30 × 20, FR-4 | A hot part. The regulator is a TO-220, so the heat-proximity rule has something to measure, and the board carries one `solder-trace-proximity` warning that becomes a checkpoint in the guide. |
-| **lpb1-booster** | 12 | 24 × 18, **FR-2** | The material mattering. Phenolic is what a pedal actually gets built on and it is the board whose pads lift, so the guide drops the iron 30 °C (350 → 320) and cuts the dwell from 3 s to 2 s. |
-| **arduino-io-shield** | 11 | 28 × 20, FR-4 | Headers. Two of them, 8-pin and 6-pin, which is what a shield mostly is — and the case where lead bends and short traces do nearly all the work. |
+| **ne555-astable** | 8 | **4 × 6 cm**, 14 × 20, FR-4 | The starting point. A 555 flashing an LED — the circuit everybody has built. |
+| **lm317-supply** | 11 | **6 × 8 cm**, 22 × 30, FR-4 | A hot part. The regulator is a TO-220, so the heat-proximity rule has something to measure. |
+| **lpb1-booster** | 12 | **7 × 9 cm**, 27 × 35, **FR-2** | The material mattering. Phenolic is what a pedal actually gets built on and it is the board whose pads lift, so the guide drops the iron 30 °C (350 → 320) and cuts the dwell from 3 s to 2 s. |
+| **arduino-io-shield** | 11 | **5 × 7 cm**, 18 × 24, FR-4 | Headers. Two of them, 8-pin and 6-pin, which is what a shield mostly is — and the case where lead bends and short traces do nearly all the work. |
 | **ne555-blinker/** | 10 | *none yet* | The workflow, rather than its result. Ten parts in the design and nothing on the board, so **Place on the Board** has a board size to suggest and an arrangement to make. Its own [README](./ne555-blinker/README.md) walks through it. |
 
 All four route to completion, match their schematics under LVS, and carry no DRC error.

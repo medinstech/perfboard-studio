@@ -22,6 +22,12 @@ closed without a bump.
 
 ### Added
 
+- **`geometry.unusable_holes`** — every hole nothing can be soldered into, which is a
+  mounting bore that has taken the pad or an edge-connector finger that is solid copper
+  with no bore. One fact with three consumers that were not allowed to disagree and did:
+  DRC reported a pin or a run on one as an error while the placer and the router happily
+  produced them.
+
 - **A project is a folder, and the board inside it is still an ordinary `.perf`.**
   `File ▸ New Project…` names the board, asks what it is built on, makes the directory and
   saves it immediately — so it has somewhere to autosave to, somewhere to put a build guide
@@ -83,6 +89,18 @@ closed without a bump.
 
 ### Changed
 
+- **Every example ships on a board a supplier stocks**, in the exact advertised size, with
+  the finger strips and corner screw holes it is sold with — and on the size this
+  application's own board suggestion would have picked for that circuit. They were on grids
+  nobody sells (32 × 22, 30 × 20, 24 × 18), which taught two wrong things at once: that
+  perfboard comes in whatever size you like, and that the fingers a real board arrives with
+  are somebody else's problem.
+
+- **The `.perf` file type reads the same in both languages.** "Perfboard Studio kartı" put
+  a Turkish suffix on an English product noun; a file-type description sits beside "PNG
+  image" in a file manager and is read as part of the product's name, which is the same
+  call the application's own catalogue makes about "Perfboard Studio" itself.
+
 - **Autosave writes the document itself, not only a crash-recovery record**
   (`File ▸ Autosave to the &File`, on by default). This is the one thing the application
   does to somebody's file without being told to, so it is hedged three ways and each one
@@ -129,6 +147,20 @@ closed without a bump.
   1.5%. No new DRC errors and no connection that could not be routed.
 
 ### Fixed
+
+- **The placer and the router keep off holes with no pad.** It surfaced the moment the
+  shipped examples were moved onto the boards suppliers actually sell: a 6 × 8 cm board
+  comes with a finger strip down two of its edges, a board edge is exactly where the
+  placer's `edge` term pulls connectors, and the result was five DRC errors on a board the
+  tool had just laid out and routed. A pin on one now costs what a collision costs and
+  makes the placement illegal; a solder trace will not pass through one, and a route to one
+  is refused with a reason rather than searched for.
+
+- **The Windows installer removes the ProgID left behind by the rename.** A machine that
+  had a build from before "Perfboard Studio" still had `PerfStudio.Board` answering for
+  `.perf`, so the shell went on calling a board a "PerfStudio kartı" two releases after
+  nothing was called that. The installer now deletes it, and the uninstaller takes the
+  extension back from it too.
 
 - **A part mounted on the solder side is arranged with its pins where they actually
   are.** The first cut of the arrangement ignored `mirrored`, which put a mirrored DIP-8

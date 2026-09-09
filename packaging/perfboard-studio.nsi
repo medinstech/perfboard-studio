@@ -123,8 +123,13 @@ LangString S_RunNow       ${LANG_ENGLISH} "Run Perfboard Studio"
 LangString S_RunNow       ${LANG_TURKISH} "Perfboard Studio'yu çalıştır"
 LangString S_OpenExamples ${LANG_ENGLISH} "Open the example boards"
 LangString S_OpenExamples ${LANG_TURKISH} "Örnek kartları aç"
+; The one string here that is deliberately NOT translated, and the same call the
+; application's own catalogue makes about "Perfboard Studio": this names a document TYPE,
+; which in a file manager sits beside "PNG image" and "Python Source File" and is read as
+; part of the product's name rather than as a sentence. "Perfboard Studio kartı" put a
+; Turkish suffix on an English product noun and read as neither.
 LangString S_FileType     ${LANG_ENGLISH} "Perfboard Studio board"
-LangString S_FileType     ${LANG_TURKISH} "Perfboard Studio kartı"
+LangString S_FileType     ${LANG_TURKISH} "Perfboard Studio board"
 
 LangString S_RemovingOld  ${LANG_ENGLISH} "Removing the previous version..."
 LangString S_RemovingOld  ${LANG_TURKISH} "Önceki sürüm kaldırılıyor..."
@@ -298,6 +303,16 @@ SectionEnd
 ; section, because a machine with two versions side by side should not have this decided
 ; for it.
 Section "$(S_SecAssoc)" SecAssoc
+  ; The ProgID this application used before it was called Perfboard Studio. Left behind by
+  ; the rename on every machine that had a build from before it, which is why the shell
+  ; still says "PerfStudio kartı" over a document written by a version that has not been
+  ; called that for two releases: the new installer wrote its own key and never removed the
+  ; old one, and a stale ProgID keeps answering for the extension until something does.
+  ;
+  ; Removed unconditionally, unlike the uninstall below, because there is no other product
+  ; it could belong to -- it is this program's own discarded name.
+  DeleteRegKey HKCR "PerfStudio.Board"
+
   WriteRegStr HKCR ".perf" "" "PerfboardStudio.Board"
   WriteRegStr HKCR "PerfboardStudio.Board" "" "$(S_FileType)"
   WriteRegStr HKCR "PerfboardStudio.Board\DefaultIcon" "" "$INSTDIR\${EXE_NAME},0"
@@ -330,8 +345,13 @@ Section "Uninstall"
   ReadRegStr $R0 HKCR ".perf" ""
   ${If} $R0 == "PerfboardStudio.Board"
     DeleteRegKey HKCR ".perf"
+  ${ElseIf} $R0 == "PerfStudio.Board"
+    ; Ours too, under the name this program used to have. An uninstall that left it would
+    ; leave the extension pointing at a ProgID whose command line is a deleted exe.
+    DeleteRegKey HKCR ".perf"
   ${EndIf}
   DeleteRegKey HKCR "PerfboardStudio.Board"
+  DeleteRegKey HKCR "PerfStudio.Board"
 
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
   DeleteRegKey HKLM "Software\${APP_VENDOR}\${APP_NAME}"

@@ -41,6 +41,14 @@ from perfboard_studio.commands import (  # noqa: E402
 )
 from perfboard_studio.drc import run_drc  # noqa: E402
 from perfboard_studio.footprints import footprint_lookup  # noqa: E402
+from perfboard_studio.geometry import (  # noqa: E402
+    STANDARD_PRESETS,
+    BoardFamily,
+    BoardPreset,
+    board_from_preset,
+    preset_edge_connectors,
+    preset_mounting_holes,
+)
 from perfboard_studio.guide import build_guide  # noqa: E402
 from perfboard_studio.lvs import run_lvs  # noqa: E402
 from perfboard_studio.model import Board, DocumentMeta, HoleCoord  # noqa: E402
@@ -63,24 +71,34 @@ STAMP = "2026-01-01T00:00:00Z"
 
 
 class Example:
-    """One example: its netlist, the board to put it on, and what each part really is."""
+    """One example: its netlist, the BOARD PRODUCT to put it on, and what each part is.
+
+    A product, not a hole count. Every example used to be on a grid nobody sells -- 32 x 22,
+    30 x 20, 24 x 18 -- which quietly taught the wrong thing twice over: that a perfboard
+    comes in whatever size you like, and that the finger strips and corner holes a real one
+    arrives with are somebody else's problem. They are not: a finger is solid copper with no
+    bore, and until the placer and the router were taught that (``geometry.unusable_holes``)
+    putting these examples on real boards produced five DRC errors.
+
+    ``preset`` is the name in ``geometry.STANDARD_PRESETS``, which is also what the size
+    suggestion offers a user -- so every example ships on a board this application would
+    have recommended for it, and on a board a supplier actually stocks.
+    """
 
     def __init__(
         self,
         stem: str,
         title: str,
-        cols: int,
-        rows: int,
+        preset: str,
         footprints: dict[str, str],
-        material: str = "FR4",
+        family: BoardFamily = "double-sided-fr4",
         seed: int = 0,
     ) -> None:
         self.stem = stem
         self.title = title
-        self.cols = cols
-        self.rows = rows
+        self.preset = preset
         self.footprints = footprints
-        self.material = material
+        self.family = family
         self.seed = seed
 
 
@@ -88,8 +106,7 @@ CATALOGUE: tuple[Example, ...] = (
     Example(
         stem="ne555-astable",
         title="NE555 Astable",
-        cols=32,
-        rows=22,
+        preset="4 x 6 cm",
         footprints={
             "U1": "dip-8",
             "R1": "r-axial-3",
@@ -104,8 +121,7 @@ CATALOGUE: tuple[Example, ...] = (
     Example(
         stem="lm317-supply",
         title="LM317 Adjustable Supply",
-        cols=30,
-        rows=20,
+        preset="6 x 8 cm",
         footprints={
             # A TO-220 on its own, which is the whole reason this file names footprints:
             # the regulator is the hot part, and heat-proximity measures from its body
@@ -127,12 +143,11 @@ CATALOGUE: tuple[Example, ...] = (
     Example(
         stem="lpb1-booster",
         title="One-Transistor Guitar Booster",
-        cols=24,
-        rows=18,
+        preset="7 x 9 cm",
         # FR-2 phenolic, deliberately: this is the board a pedal actually gets built on,
         # and it is the material whose pads lift. Choosing it here is what makes the
         # guide drop the iron temperature and DRC's pad-lifting rule speak up at all.
-        material="FR2",
+        family="single-sided-phenolic",
         footprints={
             "Q1": "to92",
             "R1": "r-axial-3",
@@ -151,8 +166,7 @@ CATALOGUE: tuple[Example, ...] = (
     Example(
         stem="arduino-io-shield",
         title="Arduino I/O Shield",
-        cols=28,
-        rows=20,
+        preset="5 x 7 cm",
         footprints={
             "J1": "hdr-1x8",
             "J2": "hdr-1x6",
@@ -170,26 +184,49 @@ CATALOGUE: tuple[Example, ...] = (
 )
 
 
+#: The parts of a board a preset does not decide: the pitch every one of these products
+#: is drilled on, the substrate thickness, and the pad and drill diameters. Everything else
+#: -- the grid, the material, whether it is single-sided, the border and the printed legend
+#: -- comes from the product.
+BASE_BOARD = Board(
+    type="pad-per-hole",
+    cols=60,
+    rows=40,
+    pitch=2.54,
+    thickness=1.6,
+    material="FR4",
+    pad_diameter=1.9,
+    drill_diameter=0.8,
+)
+
+
+def _preset(example: Example) -> BoardPreset:
+    for preset in STANDARD_PRESETS:
+        if preset.name == example.preset and preset.family == example.family:
+            return preset
+    raise KeyError(f"no {example.family} preset called {example.preset!r}")
+
+
 def _board(example: Example) -> Board:
-    return Board(
-        type="pad-per-hole",
-        cols=example.cols,
-        rows=example.rows,
-        pitch=2.54,
-        thickness=1.6,
-        material=example.material,  # type: ignore[arg-type]
-        pad_diameter=1.9,
-        drill_diameter=0.8,
-    )
+    return board_from_preset(_preset(example), BASE_BOARD)
 
 
 def build(example: Example, lookup, *, write: bool) -> bool:
     net_path = EXAMPLES / f"{example.stem}.net"
     parsed = parse_kicad_netlist(net_path.read_text(encoding="utf-8"))
 
-    document = create_empty_document(
-        DocumentMeta(name=example.title, created=STAMP, modified=STAMP),
-        _board(example),
+    preset = _preset(example)
+    board = _board(example)
+    # The whole product, not just the grid: the finger strips down two edges and the screw
+    # hole in each corner are what arrives in the envelope, and leaving them off would make
+    # these examples boards nobody has. They are also the reason the placer and the router
+    # had to learn about holes nothing can be soldered into -- see geometry.unusable_holes.
+    document = replace(
+        create_empty_document(
+            DocumentMeta(name=example.title, created=STAMP, modified=STAMP), board
+        ),
+        edge_connectors=preset_edge_connectors(preset, board),
+        mounting_holes=preset_mounting_holes(preset, board),
     )
     bus = CommandBus(
         document,
@@ -232,7 +269,7 @@ def build(example: Example, lookup, *, write: bool) -> bool:
             print(f"  {example.stem}: placing {ref} refused [{result.code}] {result.message}")
             return False
         row += 3
-        if row >= example.rows - 2:
+        if row >= board.rows - 2:
             row = 0
             col += 4
 
@@ -263,7 +300,7 @@ def build(example: Example, lookup, *, write: bool) -> bool:
 
     routing = plan.summary
     status = (
-        f"  {example.stem:20} {len(document.components):2} parts  "
+        f"  {example.stem:20} {preset.name:>10}  {len(document.components):2} parts  "
         f"{len(document.conductors):2} conductors  "
         f"{routing.nets_closed}/{routing.nets_considered} nets closed  "
         f"DRC {len(errors)} err / {len(violations) - len(errors)} warn  "

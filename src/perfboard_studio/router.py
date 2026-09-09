@@ -90,6 +90,7 @@ from .geometry import (
     path_length_mm,
     same_hole,
     segments_touch,
+    unusable_holes,
 )
 from .model import (
     Board,
@@ -431,6 +432,20 @@ def route_connection(
 
     if not is_inside_board(from_, doc.board) or not is_inside_board(to, doc.board):
         return RouteResult(ok=False, alternatives=(), reason="Endpoint is outside the board.")
+    dead = _dead_hole_keys(doc)
+    for endpoint in (from_, to):
+        # Refused here rather than routed around, because there is nothing to route TO: a
+        # finger has no bore and a bore has taken the pad, so no conductor of any kind can
+        # be soldered at that end. The answer is to move the part, which is placement.
+        if _key(endpoint) in dead:
+            return RouteResult(
+                ok=False,
+                alternatives=(),
+                reason=(
+                    f"{format_hole(endpoint)} has no pad to solder to — a mounting bore or "
+                    f"an edge-connector finger is there. Move the part."
+                ),
+            )
     if same_hole(from_, to):
         return RouteResult(ok=False, alternatives=(), reason="Start and end are the same hole.")
 
@@ -448,6 +463,7 @@ def route_connection(
         ),
         blocked_segments=_blocked_segments(doc),
         swept_blocked_holes=_trace_blocked_holes(doc),
+        unusable_holes=dead,
         opts_from_pin=request.from_pin,
     )
 
@@ -524,6 +540,10 @@ class _RouteContext:
     #: Hole keys those segments sweep across, including the ones a wire merely passes over.
     #: Precomputed so the trace search can reject them in constant time.
     swept_blocked_holes: frozenset[tuple[int, int]] = frozenset()
+    #: Holes nothing can be soldered into at all -- a mounting bore has taken the pad, or
+    #: an edge-connector finger is solid copper with no bore. See geometry.unusable_holes,
+    #: which is the same set drc.py reports a run on as an error.
+    unusable_holes: frozenset[tuple[int, int]] = frozenset()
     #: Physical net ids those declared holes already sit in -- precomputed here rather
     #: than rediscovered per neighbour, since the set is fixed for the whole search.
     declared_own_nets: frozenset[str] = frozenset()
@@ -546,6 +566,20 @@ class _RouteContext:
     #: neighbour that leads to it. The million calls above were about 2,000 distinct
     #: questions per search, asked over and over.
     risky_holes: dict[tuple[int, int, int, int, int, int], bool] = field(default_factory=dict)
+
+
+def _dead_hole_keys(doc: PerfDocument) -> frozenset[tuple[int, int]]:
+    """``geometry.unusable_holes`` in this module's own (col, row) key.
+
+    Translated once per route rather than per hole, for the reason :func:`_key` exists and
+    which ``test_this_module_keys_its_own_sets_on_coordinates_not_strings`` pins: the
+    trace search asks about a hole millions of times on a large board, and ``hole_key``'s
+    string is the encoding for things that cross a module boundary, not for a hot set.
+    """
+    return frozenset(
+        (int(col), int(row))
+        for col, _, row in (key.partition(",") for key in unusable_holes(doc))
+    )
 
 
 def _key(hole: HoleCoord) -> tuple[int, int]:
@@ -1013,6 +1047,11 @@ def _is_traversable_by_trace(ctx: _RouteContext, hole: HoleCoord) -> bool:
     # which DRC's conductor-crossing rule then, correctly, calls an error. A router must not
     # produce what the checker rejects.
     if _key(hole) in ctx.swept_blocked_holes:
+        return False
+    # A solder trace is soldered down at EVERY pad it crosses, so a hole with no pad
+    # breaks the run part-way along. Exactly the set drc.py calls an error, read from the
+    # one function both of them share.
+    if _key(hole) in ctx.unusable_holes:
         return False
     pin = ctx.occupancy.pin_at(hole)
     # A foreign pin in the way is a hard stop: soldering across it would short it in. A pin

@@ -406,7 +406,19 @@ draw as nothing while reporting no error.
 `mounting_holes` and `edge_connectors` sit on the *document* (like `cuts`), so each is its
 own command and its own undo step. A mounting bore removes copper from pads it was not
 drilled on — `geometry.consumed_holes` is the single answer to which — and a pin left on
-one is the only DRC *error* about physical impossibility rather than likely failure.
+one is a DRC *error* about physical impossibility rather than likely failure.
+
+**`geometry.unusable_holes` is that fact plus the fingers, and it has THREE consumers.** A
+bore has taken the pad, or a finger is solid copper with no bore at all
+(`undrilled_holes`); either way nothing can be soldered there. `drc.py` reports a pin or a
+run on one, `placer.py` prices it beside a collision and refuses to call such a placement
+legal, and `router.py` treats it as a wall and refuses an endpoint on one. All three used
+to disagree: the planners produced boards the checker called errors, which surfaced the
+moment the shipped examples moved onto the boards suppliers actually sell — a 6 × 8 cm
+board has a finger strip down two edges, and a board edge is exactly where the placer's
+`edge` term is pulling the connectors. A CUT is deliberately not in the set: a cut destroys
+the copper and leaves the hole, so a lead still fits and what it is soldered to is nothing,
+which is `cut-track-conflict` and a different question.
 
 Three things here were got wrong first and corrected against photographs of real boards;
 they are easy to get wrong the same way again:

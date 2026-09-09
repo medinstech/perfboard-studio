@@ -874,3 +874,80 @@ def test_this_module_keys_its_own_sets_on_coordinates_not_strings() -> None:
     # The CALL, not the word: the comments in there discuss hole_key at some length, and
     # a test that failed on a mention would be a test people delete.
     assert "hole_key(" not in source, "router.py is building hole-key strings again"
+
+
+# ---------------------------------------------------------------------------
+# Holes nothing can be soldered into
+# ---------------------------------------------------------------------------
+#
+# A finger is solid copper with no bore, and a mounting bore has taken the pad. DRC calls a
+# run on either an ERROR -- physical impossibility rather than likely failure -- so a router
+# that lays one is a router producing what the checker rejects. It did, and it showed the
+# moment the shipped examples were moved onto the boards suppliers actually sell.
+
+
+def _stock_document():
+    """A 6 x 8 cm double-sided board as it is actually sold: fingers and corner screws."""
+    from perfboard_studio.geometry import (
+        STANDARD_PRESETS,
+        board_from_preset,
+        preset_edge_connectors,
+        preset_mounting_holes,
+    )
+
+    preset = next(p for p in STANDARD_PRESETS if p.name == "6 x 8 cm" and not p.single_sided)
+    board = board_from_preset(preset, DEFAULT_BOARD)
+    base = create_empty_document(_META, board)
+    return dataclasses.replace(
+        base,
+        edge_connectors=preset_edge_connectors(preset, board),
+        mounting_holes=preset_mounting_holes(preset, board),
+    )
+
+
+def _dead_keys(document) -> frozenset[str]:
+    from perfboard_studio.geometry import unusable_holes
+
+    return unusable_holes(document)
+
+
+def test_a_stock_board_has_holes_nothing_can_be_soldered_into() -> None:
+    """The fact itself, before anything acts on it."""
+    assert _dead_keys(_stock_document())
+
+
+def test_an_endpoint_with_no_pad_is_refused_rather_than_routed_to() -> None:
+    """There is nothing to route TO. The answer is to move the part, which is placement,
+    so the router says so instead of searching for a path that cannot end."""
+    document = _stock_document()
+    dead = sorted(_dead_keys(document))[0]
+    col, _, row = dead.partition(",")
+
+    result = route_connection(
+        document, _lookup, RouteRequest(from_=h(int(col), int(row)), to=h(8, 10))
+    )
+
+    assert not result.ok
+    assert "no pad" in (result.reason or "")
+
+
+def test_a_trace_is_not_run_through_a_finger() -> None:
+    """The search itself has to treat them as walls: refusing the endpoints is not enough,
+    because a solder trace is soldered down at every pad it crosses."""
+    document = _stock_document()
+    dead = _dead_keys(document)
+    strip_rows = sorted({int(key.split(",")[1]) for key in dead})
+    # Two holes either side of the finger strip, so the straight path crosses it.
+    top_row = strip_rows[0]
+
+    result = route_connection(
+        document, _lookup, RouteRequest(from_=h(6, top_row + 1), to=h(6, top_row + 3))
+    )
+    assert result.ok, result.reason
+
+    for candidate in result.alternatives:
+        for conductor in candidate.conductors:
+            for at in conductor.path:
+                assert f"{at.col},{at.row}" not in dead, (
+                    f"{candidate.strategy} was routed through a finger at {at}"
+                )
