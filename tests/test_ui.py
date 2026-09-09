@@ -6413,3 +6413,204 @@ def test_no_letter_is_printed_where_a_bore_was_drilled() -> None:
     assert not printed_label_is_clear(drilled, where, board.pitch * 0.9, 1.0)
     # ...and a letter well away from it is untouched.
     assert printed_label_is_clear(drilled, Point2(12 * board.pitch, -1.2), board.pitch * 0.9, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Projects, and autosave that writes the file itself
+# ---------------------------------------------------------------------------
+
+
+def test_save_project_writes_the_board_and_the_generated_files_beside_it(tmp_path) -> None:
+    """One gesture for the board and everything made from it. The generated half lands in
+    outputs/ so a folder where half the files are yours and half are the tool's does not
+    become a folder nobody dares tidy."""
+    window = _window_on(_load_dense())
+    window.current_path = tmp_path / "dense.perf"
+
+    assert window.on_save_project()
+
+    assert (tmp_path / "dense.perf").exists()
+    outputs = tmp_path / "outputs"
+    assert outputs.is_dir()
+    names = {path.name for path in outputs.iterdir()}
+    assert "dense-guide.html" in names
+    assert "dense-bom.csv" in names
+    _close(window)
+
+
+def test_save_project_leaves_the_window_unmodified_and_in_the_recent_list(tmp_path) -> None:
+    window = _window_on(_load_dense())
+    window.current_path = tmp_path / "dense.perf"
+
+    window.on_save_project()
+
+    assert not window.is_modified
+    assert str(tmp_path / "dense.perf") in window._recent_paths()
+    _close(window)
+
+
+def test_opening_a_folder_with_two_boards_in_it_is_refused(tmp_path, monkeypatch) -> None:
+    """A project is a folder built around ONE board. Guessing which of two was meant is a
+    guess that opens the wrong board on the day it matters."""
+    (tmp_path / "one.perf").write_text("{}", encoding="utf-8")
+    (tmp_path / "two.perf").write_text("{}", encoding="utf-8")
+    window = _blank_window()
+    monkeypatch.setattr(
+        "perfboard_studio.ui.main.QFileDialog.getExistingDirectory",
+        staticmethod(lambda *args, **kwargs: str(tmp_path)),
+    )
+    warned: list[str] = []
+    monkeypatch.setattr(
+        "perfboard_studio.ui.main.QMessageBox.warning",
+        staticmethod(lambda *args, **kwargs: warned.append(args[1])),
+    )
+
+    window.on_open_project()
+
+    assert warned
+    assert window.current_path is None
+    _close(window)
+
+
+def test_opening_a_project_opens_the_board_inside_it(tmp_path, monkeypatch) -> None:
+    board = tmp_path / "preamp.perf"
+    board.write_text(GOLDEN.read_text(encoding='utf-8'), encoding="utf-8")
+    (tmp_path / "outputs").mkdir()
+    window = _blank_window()
+    monkeypatch.setattr(
+        "perfboard_studio.ui.main.QFileDialog.getExistingDirectory",
+        staticmethod(lambda *args, **kwargs: str(tmp_path)),
+    )
+
+    window.on_open_project()
+
+    assert window.current_path == board
+    assert window.bus.document.components
+    _close(window)
+
+
+def test_autosave_writes_the_file_itself_and_keeps_the_last_real_save_as_bak(
+    tmp_path,
+) -> None:
+    """The whole safety of writing over somebody's document without being told to.
+
+    The backup holds what the user last chose to keep, not what autosave last happened to
+    write -- so it is taken once per real save and not once per tick. Refreshing it every
+    half minute would mean that half a minute after a mistake there was nothing left to go
+    back to, which is the failure this exists to protect against.
+    """
+    path = tmp_path / "board.perf"
+    window = _window_on(_load_dense())
+    window.current_path = path
+    assert window._save_to(path)
+    saved = path.read_text(encoding="utf-8")
+
+    window.bus.dispatch(
+        "component.move",
+        MoveComponentPayload(id=window.bus.document.components[0].id, anchor=HoleCoord(1, 1)),
+    )
+    window._on_autosave_tick()
+
+    assert path.read_text(encoding="utf-8") != saved
+    assert (tmp_path / "board.perf.bak").read_text(encoding="utf-8") == saved
+    assert not window.is_modified
+
+    # A second tick must not overwrite the backup with what autosave just wrote.
+    window.bus.dispatch(
+        "component.move",
+        MoveComponentPayload(id=window.bus.document.components[1].id, anchor=HoleCoord(2, 2)),
+    )
+    window._on_autosave_tick()
+    assert (tmp_path / "board.perf.bak").read_text(encoding="utf-8") == saved
+    _close(window)
+
+
+def test_autosave_writes_nothing_of_the_users_when_it_is_switched_off(tmp_path) -> None:
+    path = tmp_path / "board.perf"
+    window = _window_on(_load_dense())
+    window.current_path = path
+    window._save_to(path)
+    saved = path.read_text(encoding="utf-8")
+    window.on_autosave_to_file_toggled(False)
+
+    window.bus.dispatch(
+        "component.move",
+        MoveComponentPayload(id=window.bus.document.components[0].id, anchor=HoleCoord(1, 1)),
+    )
+    window._on_autosave_tick()
+
+    assert path.read_text(encoding="utf-8") == saved
+    assert window.is_modified  # ...and the crash record is what protects it instead.
+    _close(window)
+
+
+def test_autosave_never_touches_a_board_that_has_no_file(tmp_path) -> None:
+    """The board with the most to lose is the one that has never been saved, and it has
+    nowhere to be written. That is the recovery record's job, and it keeps it."""
+    window = _window_on(_load_dense())
+    assert window.current_path is None
+
+    window.bus.dispatch(
+        "component.move",
+        MoveComponentPayload(id=window.bus.document.components[0].id, anchor=HoleCoord(1, 1)),
+    )
+    window._on_autosave_tick()
+
+    assert window.is_modified
+    assert window._autosave.written
+    _close(window)
+
+
+def test_the_welcome_dialog_is_not_offered_over_a_board(tmp_path) -> None:
+    """It is about what to do FIRST, and there is no first left once there is a board on
+    the screen -- a document opened from the command line, or handed back by recovery."""
+    window = _window_on(_load_dense())
+    shown: list[int] = []
+    monkeypatch_exec(window, shown)
+
+    window.offer_welcome()
+
+    assert shown == []
+    _close(window)
+
+
+def monkeypatch_exec(window, shown: list[int]) -> None:
+    """Count the times a welcome dialog would have been shown, without showing one."""
+    import perfboard_studio.ui.main as main_module
+
+    class _Counted(main_module.WelcomeDialog):
+        def exec(self) -> int:
+            shown.append(1)
+            return 0
+
+    main_module.WelcomeDialog = _Counted  # type: ignore[misc]
+
+
+def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatch) -> None:
+    """New Project makes the directory, saves the board into it immediately and starts in
+    the schematic. A board with a home has somewhere to autosave to and something to put
+    in the recent list; an untitled one has neither until it is saved."""
+    window = _blank_window()
+    monkeypatch.setattr(
+        "perfboard_studio.ui.main.QInputDialog.getText",
+        staticmethod(lambda *args, **kwargs: ("NE555 Astable", True)),
+    )
+    monkeypatch.setattr(
+        "perfboard_studio.ui.main.QFileDialog.getExistingDirectory",
+        staticmethod(lambda *args, **kwargs: str(tmp_path)),
+    )
+    import perfboard_studio.ui.main as main_module
+
+    monkeypatch.setattr(
+        "perfboard_studio.ui.main.BoardSetupDialog.exec",
+        lambda self: int(main_module.QDialog.DialogCode.Accepted),
+    )
+
+    window.on_new_project()
+
+    folder = tmp_path / "ne555-astable"
+    assert (folder / "ne555-astable.perf").is_file()
+    assert window.current_path == folder / "ne555-astable.perf"
+    assert not window.is_modified
+    assert not window.dock_schematic.isHidden()
+    _close(window)

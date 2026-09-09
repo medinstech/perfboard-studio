@@ -56,6 +56,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -201,6 +202,7 @@ from perfboard_studio.placer import (
 from perfboard_studio.placer import (
     summarize_changes as summarize_placement,
 )
+from perfboard_studio.project import DOCUMENT_SUFFIX, document_in, project_name
 from perfboard_studio.ratsnest import NetRatsnest, ratsnest, summarize
 from perfboard_studio.recovery import RecoveryRecord, is_worth_offering
 from perfboard_studio.router import RoutingStyle, options_for_style
@@ -224,6 +226,7 @@ from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .i18n import language as current_language
 from .i18n import set_language, t
+from .project import write_project
 from .theme import ERROR, OK, STYLESHEET, TEXT_DIM, WARNING
 from .view2d import (
     BoardScene,
@@ -252,10 +255,38 @@ def app_settings() -> QSettings:
 
 RECENT_FILES_KEY = "recentFiles"
 
+#: Where the last project was made or opened, so the next dialog starts in the same place
+#: rather than in whatever directory the process happens to have been launched from.
+PROJECT_HOME_KEY = "projectHome"
+
+#: Whether the welcome dialog is offered on a start that opened nothing.
+SHOW_WELCOME_KEY = "showWelcome"
+
+#: Whether autosave writes the DOCUMENT as well as the crash-recovery record.
+#:
+#: On by default, which is a decision rather than a default. Writing over somebody's file
+#: without being told to is the one thing this application does that it cannot take back,
+#: and it is hedged accordingly (see ``_autosave_to_the_file``): never on an unsaved board,
+#: never without keeping the last deliberate save as a ``.bak``, and never at all if that
+#: backup could not be written. What tipped it is that a board is worked on for hours at a
+#: bench with the window untouched, and "I forgot to press Ctrl+S" is a sentence this tool
+#: should not be able to produce.
+AUTOSAVE_TO_FILE_KEY = "autosaveToFile"
+
+#: Appended to the document's own file name, so a board saved as ``preamp.perf`` keeps its
+#: last deliberate save in ``preamp.perf.bak``. Appended rather than substituted, so the
+#: backup is never mistaken for a board -- by a file dialog, by a project directory, or by
+#: the person looking at the folder.
+BACKUP_SUFFIX = ".bak"
+
 #: How long after the window appears the recovery question is asked. Long enough for the
 #: board to be drawn -- a modal over a blank window looks like a startup error -- and far
 #: shorter than the update check, because this one is about work that already exists.
 RECOVERY_OFFER_DELAY_MS = 400
+
+#: How long after that the welcome dialog is offered. After the recovery question has been
+#: asked and answered, because a recovered board is already an answer to this one.
+WELCOME_OFFER_DELAY_MS = 500
 
 
 def _stored_bool(settings: QSettings, key: str, default: bool) -> bool:
@@ -1765,6 +1796,93 @@ def _plain(label: str) -> str:
     return label.replace("&", "").removesuffix("…").strip()
 
 
+class WelcomeDialog(QDialog):
+    """What to do first, offered over the window once it is up.
+
+    NOT A SPLASH SCREEN. It appears after the board is drawn, not instead of it, and it is
+    a list of things to press rather than a logo — so dismissing it leaves somebody
+    looking at the application rather than at nothing.
+
+    IT EXISTS BECAUSE THE RECENT LIST WAS INVISIBLE. A perfboard project is worked on
+    across evenings, and the way back to last night's board was two menus deep in a
+    submenu that had to be opened to be read. Everything here was already reachable; none
+    of it was reachable in the two seconds after a launch, which is when it is wanted.
+
+    The checkbox is honest about what it does and defaults to on. A first-run dialog that
+    cannot be turned off is a first-run dialog people learn to click through without
+    reading, which costs more than it ever saves.
+    """
+
+    def __init__(self, recent: Sequence[Path], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(t("Perfboard Studio"))
+        self.setMinimumWidth(460)
+        #: What the caller should do, set by whichever button was pressed. None means the
+        #: dialog was dismissed and the blank board it opened on is the answer.
+        self.choice: Literal["new-project", "open", "open-project", "recent"] | None = None
+        self.chosen_path: Path | None = None
+
+        layout = QVBoxLayout(self)
+        heading = QLabel(f"<b>{t('Perfboard Studio')}</b>")
+        layout.addWidget(heading)
+        blurb = QLabel(
+            t(
+                "Draw the circuit, let the tool arrange it on a board a supplier stocks, "
+                "and build it from the guide it writes."
+            )
+        )
+        blurb.setWordWrap(True)
+        blurb.setStyleSheet(f"color: {TEXT_DIM};")
+        layout.addWidget(blurb)
+
+        buttons = QHBoxLayout()
+        for label, tip, choice in (
+            (
+                t("New Project…"),
+                t("A folder for the board and everything generated from it."),
+                "new-project",
+            ),
+            (t("Open Project…"), t("A folder built around one board."), "open-project"),
+            (t("Open a Board…"), t("A single .perf file."), "open"),
+        ):
+            button = QPushButton(label)
+            button.setToolTip(tip)
+            button.clicked.connect(lambda _checked=False, c=choice: self._pick(c))
+            buttons.addWidget(button)
+        layout.addLayout(buttons)
+
+        self.recent = QListWidget()
+        self.recent.setAlternatingRowColors(True)
+        for path in recent:
+            item = QListWidgetItem(f"{path.stem}    {path.parent}")
+            item.setToolTip(str(path))
+            item.setData(Qt.ItemDataRole.UserRole, str(path))
+            self.recent.addItem(item)
+        if recent:
+            layout.addWidget(QLabel(t("Where you left off")))
+            layout.addWidget(self.recent, 1)
+            self.recent.itemActivated.connect(self._pick_recent)
+            self.recent.itemDoubleClicked.connect(self._pick_recent)
+        else:
+            self.recent.hide()
+
+        self.remember = QCheckBox(t("Show this when Perfboard Studio starts"))
+        self.remember.setChecked(True)
+        layout.addWidget(self.remember)
+
+        close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(self.reject)
+        layout.addWidget(close)
+
+    def _pick(self, choice: str) -> None:
+        self.choice = cast('Literal["new-project", "open", "open-project", "recent"]', choice)
+        self.accept()
+
+    def _pick_recent(self, item: QListWidgetItem) -> None:
+        self.chosen_path = Path(str(item.data(Qt.ItemDataRole.UserRole)))
+        self._pick("recent")
+
+
 class BoardSizeDialog(QDialog):
     """Which stock board this circuit should go on, asked once, on the way from the
     schematic to the board.
@@ -1992,6 +2110,12 @@ class MainWindow(QMainWindow):
         #: failure this feature cannot have -- but saying so repeatedly would make the
         #: status bar useless for anything else.
         self._autosave_complained = False
+        #: Whether autosave may write the document itself, not only a recovery record.
+        self._autosave_to_file = _stored_bool(app_settings(), AUTOSAVE_TO_FILE_KEY, True)
+        #: Whether the file's last DELIBERATE save has been copied to its .bak yet. Reset
+        #: by every real save, so the backup always holds what the user last chose to
+        #: keep rather than what autosave last happened to write.
+        self._autosave_backed_up = False
         #: True while _run_planner is on the stack. The planner pumps the event loop so
         #: the window can repaint and offer Cancel, which also lets the file watcher and
         #: the close button fire in the middle of it -- see both for what they do then.
@@ -2390,12 +2514,30 @@ class MainWindow(QMainWindow):
         menu = self.menuBar()
 
         file_menu = menu.addMenu(t("&File"))
+        # A project first, a bare board second, and that order is the recommendation.
+        # A board with a home has somewhere to autosave to, somewhere to put its build
+        # guide and something to put in the recent list; an untitled one has none of the
+        # three until it is saved, which is usually after the evening it needed them.
+        act_new_project = file_menu.addAction(t("New &Project…"))
+        act_new_project.setToolTip(
+            t(
+                "Name the board, choose what it is built on, and start in the schematic. "
+                "Makes a folder to keep the board and everything generated from it."
+            )
+        )
+        act_new_project.triggered.connect(self.on_new_project)
         act_new = file_menu.addAction(t("&New Board…"))
         act_new.setShortcut(QKeySequence.StandardKey.New)
+        act_new.setToolTip(t("A blank board with no home on disk yet."))
         act_new.triggered.connect(self.on_new)
         act_open = file_menu.addAction(t("&Open…"))
         act_open.setShortcut(QKeySequence.StandardKey.Open)
         act_open.triggered.connect(self.on_open)
+        act_open_project = file_menu.addAction(t("Open P&roject…"))
+        act_open_project.setToolTip(
+            t("Open the board inside a project folder. A folder with two boards in it is not one.")
+        )
+        act_open_project.triggered.connect(self.on_open_project)
         # Between Open and Save, where every editor puts it. A perfboard project is worked
         # on across evenings, and hunting the same file out of a directory tree every time
         # is friction the application was adding for no reason.
@@ -2416,9 +2558,33 @@ class MainWindow(QMainWindow):
         act_save_as = file_menu.addAction(t("Save &As…"))
         act_save_as.setShortcut(QKeySequence.StandardKey.SaveAs)
         act_save_as.triggered.connect(self.on_save_as)
+        act_save_project = file_menu.addAction(t("Save Pro&ject"))
+        # Ctrl+Alt+S, because Ctrl+Shift+S is what Qt's own StandardKey.SaveAs is on
+        # Windows and Linux -- and Qt reports a double-claimed binding only as an
+        # "ambiguous shortcut overload" at the moment somebody presses it.
+        act_save_project.setShortcut(QKeySequence("Ctrl+Alt+S"))
+        act_save_project.setToolTip(
+            t(
+                "Save the board and rewrite everything generated from it — the 1:1 sheets, "
+                "the schematic, the build guide, the bill of materials — into outputs/ "
+                "beside it."
+            )
+        )
+        act_save_project.triggered.connect(lambda: self.on_save_project())
         # The manual half of the file watcher. A window with unsaved edits is never
         # reloaded behind the user's back, so there has to be a way to say "take the
         # file's version" -- which is what an agent editing the same board needs.
+        self.act_autosave_file = file_menu.addAction(t("Autosave to the &File"))
+        self.act_autosave_file.setCheckable(True)
+        self.act_autosave_file.setChecked(self._autosave_to_file)
+        self.act_autosave_file.setToolTip(
+            t(
+                "Write the board to its own file every half minute, keeping the last save "
+                "you made yourself as a .bak beside it. Off, autosave still writes a "
+                "crash-recovery copy elsewhere, and nothing reaches your file until Ctrl+S."
+            )
+        )
+        self.act_autosave_file.toggled.connect(self.on_autosave_to_file_toggled)
         act_reload = file_menu.addAction(t("Re&load from Disk"))
         act_reload.setShortcut(QKeySequence("F5"))
         act_reload.setToolTip(
@@ -6004,6 +6170,201 @@ class MainWindow(QMainWindow):
         )
         self._refresh_recent_menu()
 
+    # -- projects -------------------------------------------------------------
+    #
+    # A PROJECT IS A DIRECTORY, and the board inside it is an ordinary .perf (project.py
+    # argues the whole case). Nothing here changes what a document is or how it is saved;
+    # it puts the files that belong together in one place and keeps the generated half of
+    # them up to date, which is the point at which a board stops being one file.
+
+    def on_new_project(self) -> None:
+        """Name a project, choose the board it goes on, and start in the schematic.
+
+        A DIRECTORY IS CREATED AND THE DOCUMENT IS SAVED IMMEDIATELY, which is the whole
+        difference between this and File ▸ New Board. An untitled board has nowhere to
+        autosave to, nowhere to put a build guide and nothing to put in the recent list --
+        every one of which starts working the moment it has a home.
+        """
+        if not self._offer_to_save():
+            return
+        name, ok = QInputDialog.getText(
+            self, t("New Project"), t("What is this board called?"), text=t("My Board")
+        )
+        if not ok or not name.strip():
+            return
+        folder = project_name(name)
+
+        parent_str = QFileDialog.getExistingDirectory(
+            self, t("Where should the project go?"), str(self._project_home())
+        )
+        if not parent_str:
+            return
+        app_settings().setValue(PROJECT_HOME_KEY, parent_str)
+        directory = Path(parent_str) / folder
+        if directory.exists() and any(directory.iterdir()):
+            QMessageBox.warning(
+                self,
+                t("That folder is not empty"),
+                t("{path} already has something in it. Pick another place, or another name.")
+                .format(path=directory),
+            )
+            return
+
+        starter = create_starter_document(
+            DocumentMeta(name=name.strip(), created=_now_iso(), modified=_now_iso())
+        )
+        dialog = BoardSetupDialog(starter.board, self, title=t("Board for {name}").format(name=name.strip()))
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        document = create_empty_document(
+            DocumentMeta(name=name.strip(), created=_now_iso(), modified=_now_iso()),
+            dialog.board(),
+        )
+        features = dialog.preset_features()
+        if features is not None:
+            connectors, holes = features
+            document = dataclasses.replace(
+                document, edge_connectors=connectors, mounting_holes=holes
+            )
+
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError as err:
+            QMessageBox.critical(self, t("Could not make the folder"), str(err))
+            return
+
+        self.current_path = directory / f"{folder}{DOCUMENT_SUFFIX}"
+        self._disk_text = None
+        self.bus = self._new_bus(document)
+        self._subscribe_bus()
+        self.scene.bus = self.bus
+        self._forget_the_previous_document()
+        self.on_bus_changed(self.bus.document, None)
+        if not self._save_to(self.current_path):
+            return
+        self._watch_current_path()
+        self.view.fit_board()
+        self._open_the_schematic_on_an_empty_design()
+        self.statusBar().showMessage(
+            t("New project in {path}. Draw the circuit, then Place on the Board.").format(
+                path=directory
+            ),
+            12000,
+        )
+
+    def on_open_project(self) -> None:
+        """Open the board inside a project directory.
+
+        Refuses a directory with two boards in it rather than guessing which one was
+        meant. That guess belongs to nobody but the user, and a dialog that makes it
+        silently opens the wrong board on the day it matters.
+        """
+        if not self._offer_to_save():
+            return
+        directory_str = QFileDialog.getExistingDirectory(
+            self, t("Open a project"), str(self._project_home())
+        )
+        if not directory_str:
+            return
+        directory = Path(directory_str)
+        app_settings().setValue(PROJECT_HOME_KEY, str(directory.parent))
+        try:
+            names = [entry.name for entry in directory.iterdir()]
+        except OSError as err:
+            QMessageBox.critical(self, t("Could not open the project"), str(err))
+            return
+        document = document_in(names)
+        if document is None:
+            QMessageBox.warning(
+                self,
+                t("Not a project"),
+                t(
+                    "A project is a folder built around exactly one board. {path} has "
+                    "{count} of them."
+                ).format(path=directory, count=len([n for n in names if n.endswith(DOCUMENT_SUFFIX)])),
+            )
+            return
+        self._load_path(directory / document)
+
+    def on_save_project(self) -> bool:
+        """Save the board and rewrite everything the tool generates from it.
+
+        The eight generated files land in ``outputs/`` beside the board, and every one of
+        them is rewritten from the document -- so nothing in there is worth editing and
+        nothing in there is lost by deleting it. That is why they are in a subdirectory
+        rather than beside the board: a folder where half the files are yours and half are
+        the tool's is a folder nobody dares tidy.
+
+        A document with no path is saved first, through the ordinary dialog, because a
+        project needs somewhere to be.
+        """
+        if self.current_path is None and not self.on_save_as():
+            return False
+        assert self.current_path is not None
+
+        document = self.bus.document
+        # Rendered before anything is written and only where there is something to render
+        # into: on a machine with no offscreen GL, VTK does not raise, it ends the process
+        # -- and taking the application down from inside Save is the one place that must
+        # not happen. A guide without pictures is still a complete guide.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            images = (
+                view3d.render_step_images(document, build_guide(document, self.lookup), self.lookup)
+                if view3d.offscreen_gl_available()
+                else {}
+            )
+            try:
+                result = write_project(
+                    self.current_path,
+                    document,
+                    persist.serialize_document(self._stamped(document)),
+                    self.lookup,
+                    self.scene,
+                    images,
+                )
+            except OSError as err:
+                QMessageBox.critical(
+                    self, t("Could not save the project"), t("The board itself: {err}").format(err=err)
+                )
+                return False
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        self._disk_text = self.current_path.read_text(encoding="utf-8")
+        self._mark_saved()
+        self._remember_path(self.current_path)
+        note = ""
+        if result.skipped:
+            note = "; " + t("{count} not written").format(count=len(result.skipped))
+        self.statusBar().showMessage(
+            t("Project saved to {path}: the board and {count} generated file(s){note}").format(
+                path=result.directory, count=len(result.written), note=note
+            ),
+            0,
+        )
+        if result.skipped:
+            # Named rather than counted, because each line is a file somebody may be
+            # looking for, and "the schematic has no parts yet" is an answer.
+            lines = "\n".join(f"  • {name} — {why}" for name, why in result.skipped)
+            QMessageBox.information(
+                self,
+                t("Some files were not written"),
+                t("Everything else is saved. These had nothing to write:\n\n{lines}").format(
+                    lines=lines
+                ),
+            )
+        return True
+
+    def _project_home(self) -> Path:
+        """Where a project dialog opens: beside the current board, or the last one used."""
+        if self.current_path is not None:
+            return self.current_path.parent.parent
+        stored = app_settings().value(PROJECT_HOME_KEY, "")
+        if isinstance(stored, str) and stored and Path(stored).is_dir():
+            return Path(stored)
+        return Path.home()
+
     def _refresh_recent_menu(self) -> None:
         """Rebuild the submenu from the stored list, skipping files that are gone.
 
@@ -6749,6 +7110,12 @@ class MainWindow(QMainWindow):
             if self._autosave.written:
                 self._autosave.clear()
             return
+        # The document first, because it is the copy that is worth having: a recovery
+        # record is a question asked at the next start, and a saved file is the board.
+        if self._autosave_to_the_file(persist.serialize_document(self._stamped(self.bus.document))):
+            if self._autosave.written:
+                self._autosave.clear()
+            return
         text = persist.serialize_document(self.bus.document)
         if self._autosave.write(text, self.current_path):
             if self._autosave_complained:
@@ -6766,6 +7133,91 @@ class MainWindow(QMainWindow):
                 f'<span style="color:{WARNING}">'
                 f"{t('Could not write the recovery file — save your work yourself.')}</span>"
             )
+
+    def offer_welcome(self) -> None:
+        """Offer the way back to last night's board, once, over a window that is already up.
+
+        Skipped on a document that has anything in it -- opened from the command line,
+        restored from a crash record, or already worked on. The dialog is about what to do
+        FIRST, and there is no first left once there is a board on the screen.
+        """
+        if not _stored_bool(app_settings(), SHOW_WELCOME_KEY, True):
+            return
+        document = self.bus.document
+        if (
+            self.current_path is not None
+            or self.is_modified
+            or document.components
+            or document.parts
+            or document.nets
+        ):
+            return
+
+        recent = [Path(entry) for entry in self._recent_paths() if Path(entry).is_file()]
+        dialog = WelcomeDialog(recent[:8], self)
+        answer = dialog.exec()
+        app_settings().setValue(SHOW_WELCOME_KEY, dialog.remember.isChecked())
+        if answer != QDialog.DialogCode.Accepted:
+            return
+        if dialog.choice == "new-project":
+            self.on_new_project()
+        elif dialog.choice == "open-project":
+            self.on_open_project()
+        elif dialog.choice == "open":
+            self.on_open()
+        elif dialog.choice == "recent" and dialog.chosen_path is not None:
+            self.on_open_recent(dialog.chosen_path)
+
+    def _autosave_to_the_file(self, text: str) -> bool:
+        """Put the board back in its own file, if that is what the user asked for.
+
+        THIS IS THE ONE PLACE THE APPLICATION WRITES OVER SOMEBODY'S DOCUMENT WITHOUT
+        BEING TOLD TO, so it is hedged three ways and every one of them is load-bearing:
+
+          - it never runs on a board with no path. There is nowhere to write, and the
+            board with the most to lose is exactly the one that has never been saved --
+            which is what the recovery record is for, and it keeps doing that job.
+          - the file's last DELIBERATELY saved contents are copied to a ``.bak`` first,
+            and only once per save. Refreshing the backup on every tick would mean that
+            half a minute after a mistake there was nothing left to go back to, which is
+            the whole failure this is meant to protect against.
+          - if the backup cannot be written, nothing is. A copy that could not be made is
+            not a reason to go ahead and overwrite the only one there is.
+
+        Returns whether the file now holds the document.
+        """
+        path = self.current_path
+        if path is None or not self._autosave_to_file:
+            return False
+        if not self._autosave_backed_up:
+            previous = self._disk_text
+            if previous is not None:
+                try:
+                    path.with_name(path.name + BACKUP_SUFFIX).write_text(
+                        previous, encoding="utf-8"
+                    )
+                except OSError:
+                    return False
+            self._autosave_backed_up = True
+        try:
+            path.write_text(text, encoding="utf-8")
+        except OSError:
+            return False
+        # Remembered so the file watcher can tell this write from somebody else's, exactly
+        # as _save_to does -- otherwise the window reloads itself off its own autosave.
+        self._disk_text = text
+        self._mark_saved()
+        return True
+
+    def on_autosave_to_file_toggled(self, enabled: bool) -> None:
+        self._autosave_to_file = enabled
+        app_settings().setValue(AUTOSAVE_TO_FILE_KEY, enabled)
+        self.statusBar().showMessage(
+            t("Autosave writes the file itself every half minute; the previous save is kept as .bak.")
+            if enabled
+            else t("Autosave now only writes a crash-recovery copy; Ctrl+S saves the file."),
+            8000,
+        )
 
     def offer_recovery(self) -> None:
         """Ask about work left behind by a session that did not come back.
@@ -6919,13 +7371,21 @@ class MainWindow(QMainWindow):
             for name, action in self.act_style.items():
                 action.setChecked(name == style)
 
+    def _stamped(self, document: PerfDocument) -> PerfDocument:
+        """The document as it goes to disk, with the host's timestamp on it.
+
+        meta.modified is host-stamped, not part of any command (core has no clock -- see
+        persist.py/commands.py), so this replaces the meta for the SERIALIZED copy only
+        without pushing that change through the bus. One function because Save and Save
+        Project both need it, and two of them would eventually disagree about what a saved
+        document looks like.
+        """
+        return dataclasses.replace(
+            document, meta=dataclasses.replace(document.meta, modified=_now_iso())
+        )
+
     def _save_to(self, path: Path) -> bool:
-        # meta.modified is host-stamped, not part of any command (core has no clock --
-        # see persist.py/commands.py) -- so this replaces the document's meta for the
-        # SERIALIZED copy only, without pushing that change through the bus.
-        doc = self.bus.document
-        stamped = dataclasses.replace(doc, meta=dataclasses.replace(doc.meta, modified=_now_iso()))
-        text = persist.serialize_document(stamped)
+        text = persist.serialize_document(self._stamped(self.bus.document))
         # The one write that must not fail quietly -- and it was the one write with no
         # handler at all, so a read-only folder or a full disk was a traceback with the
         # board still unsaved behind it. Said in a dialog, and reported to the close
@@ -6945,6 +7405,7 @@ class MainWindow(QMainWindow):
         # changes the file, and a window that reloaded itself after every save would
         # throw away its own undo history for nothing.
         self._disk_text = text
+        self._autosave_backed_up = False
         self._mark_saved()
         self._remember_path(path)
         self._watch_current_path()
@@ -7491,6 +7952,10 @@ def main() -> int:
     # question arrives over a board rather than instead of one.
     window.start_autosave()
     QTimer.singleShot(RECOVERY_OFFER_DELAY_MS, window.offer_recovery)
+    # After the recovery question, and it checks whether one was answered: a board handed
+    # back from a crashed session IS the answer to "what should I open", and asking again
+    # over the top of it would be the application talking past the user.
+    QTimer.singleShot(WELCOME_OFFER_DELAY_MS, window.offer_welcome)
     return app.exec()
 
 

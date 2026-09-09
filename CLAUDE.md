@@ -739,6 +739,43 @@ Five decisions carry it, each with a test:
 file it names, so it arrives modified with `_disk_text = None`, and Ctrl+S is the gesture
 that puts it back.
 
+**Autosave also writes the DOCUMENT now** (`MainWindow._autosave_to_the_file`, the
+`File ▸ Autosave to the File` toggle, on by default), and it is the one place this
+application writes over somebody's file without being told to. Three hedges, each with a
+test: never on a board with no path — that board is what the recovery record is for; the
+file's last *deliberately* saved contents go to a `.bak` first and only once per save, so
+the backup holds what the user chose to keep rather than what autosave last wrote; and if
+the backup cannot be written, nothing is. It sets `_disk_text` exactly as `_save_to` does,
+or the watcher reloads the window off its own autosave.
+
+### A project is a folder, and the board in it is still a plain `.perf`
+
+`project.py` says what a project contains without touching a filesystem — the names, the
+layout, whether a directory is one — and `ui/project.py` has the disk and Qt's PDF writer.
+The same split as `recovery.py`/`ui/autosave.py` and `updates.py`/`ui/updater.py`.
+
+Not an archive, not a manifest, not a format: the byte-for-byte `.perf` does not move, the
+document still opens in a text editor and an agent's file tools (PLAN.md §9.3), and
+deleting the folder loses nothing the tool cannot write again. Everything generated lives
+under `outputs/` and is rewritten wholesale on every project save, which is what makes it
+safe to delete and pointless to edit — a folder where half the files are yours and half are
+the tool's is a folder nobody dares tidy.
+
+Three rules carry the writer:
+
+- **The document is written first and alone.** It is the only file that cannot be
+  regenerated, so it is not allowed to share a failure with the eight that can:
+  `write_project` raises only if the BOARD could not be written.
+- **Every export fails on its own and comes back named.** A circuit with no parts has no
+  sheet to draw and a machine with no offscreen GL has no step images — a save that stopped
+  at the first of those would stop working exactly as a project starts to have things in it.
+- **The exports are named after the FILE, not after `meta.name`.** Renaming the `.perf` and
+  saving again renames its outputs to match instead of leaving a set behind under the old
+  name.
+
+A folder with two boards in it is not a project (`project.is_project_dir`), because opening
+it would mean guessing which one was meant.
+
 **`router.py` keys its own sets on `(col, row)` tuples, not `geometry.hole_key`**, and
 memoises the R5' proximity answer per hole. Both are measured (33% off a 100 × 60 board;
 the numbers are in the module docstring) and neither may change a route: `hole_key` stays

@@ -22,6 +22,28 @@ closed without a bump.
 
 ### Added
 
+- **A project is a folder, and the board inside it is still an ordinary `.perf`.**
+  `File ▸ New Project…` names the board, asks what it is built on, makes the directory and
+  saves it immediately — so it has somewhere to autosave to, somewhere to put a build guide
+  and something to put in the recent list from the first minute rather than from whenever
+  it was first saved. `File ▸ Save Pro&ject` (Ctrl+Alt+S) writes the board and rewrites
+  everything generated from it — the 1:1 sheets, the schematic as SVG/PDF/PNG, the build
+  guide, the bill of materials, the cut list — into `outputs/` beside it. `File ▸ Open
+  Project…` opens the board inside one, and refuses a folder with two boards in it rather
+  than guessing which was meant.
+
+  Not an archive, not a manifest, not a new format. The byte-for-byte `.perf` does not
+  move, the document still opens in a text editor and an agent's file tools, and throwing
+  the folder away loses nothing but files the tool can write again. `project.py` decides
+  what a project contains without a filesystem and `ui/project.py` has the disk, the same
+  split as `recovery.py`/`ui/autosave.py`.
+
+- **A welcome dialog offers the way back to last night's board**, over a window that is
+  already up rather than instead of one. Everything on it was already reachable; none of
+  it was reachable in the two seconds after a launch, which is when it is wanted. Skipped
+  entirely on a document that has anything in it — one opened from the command line, or
+  handed back by crash recovery — and it has a checkbox that means what it says.
+
 - **The schematic panel opens by itself on a document with nothing in it**, and the
   board's empty hint now leads with the circuit rather than with the Parts panel. The
   order this application recommends is the order every EDA tool works in — draw the
@@ -60,6 +82,15 @@ closed without a bump.
   supplier actually stocks, and only the family the user is already on is offered.
 
 ### Changed
+
+- **Autosave writes the document itself, not only a crash-recovery record**
+  (`File ▸ Autosave to the &File`, on by default). This is the one thing the application
+  does to somebody's file without being told to, so it is hedged three ways and each one
+  is load-bearing: never on a board with no path — that board is exactly what the recovery
+  record is for, and it keeps doing that job; the file's last **deliberately** saved
+  contents are copied to a `.bak` first and only once per save, because a backup refreshed
+  every tick would mean that half a minute after a mistake there was nothing left to go
+  back to; and if the backup cannot be written, nothing is.
 
 - **"Place on the Board" arranges the design instead of dropping it in a grid.** The
   argument for the grid was real — working out where parts go is the one step of this

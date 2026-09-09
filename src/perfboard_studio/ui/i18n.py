@@ -490,6 +490,90 @@ TURKISH: Mapping[str, str] = {
         "kenara, geri kalanı bağlantılarına göre hizalı. Kart boşken önce hazır satılan "
         "bir kart boyutu önerir. Tamamı tek geri alma adımı."
     ),
+    # -- the welcome dialog, and autosave that writes the file itself ----------
+    # "Perfboard Studio" is deliberately absent: it is the product's name, and a name is
+    # the one string that must read the same in every language.
+    "Draw the circuit, let the tool arrange it on a board a supplier stocks, "
+    "and build it from the guide it writes.": (
+        "Devreyi çiz, aracın onu satılan hazır bir kart üzerine yerleştirmesine izin ver "
+        "ve yazdığı kılavuza bakarak kur."
+    ),
+    "New Project…": "Yeni Proje…",
+    "A folder for the board and everything generated from it.": (
+        "Kart ve ondan üretilen her şey için bir klasör."
+    ),
+    "Open Project…": "Proje Aç…",
+    "A folder built around one board.": "Tek bir kartın etrafında kurulmuş klasör.",
+    "Open a Board…": "Kart Aç…",
+    "A single .perf file.": "Tek bir .perf dosyası.",
+    "Where you left off": "Kaldığın yer",
+    "Show this when Perfboard Studio starts": "Perfboard Studio açılırken bunu göster",
+    "Autosave to the &File": "&Dosyaya Otomatik Kaydet",
+    "Write the board to its own file every half minute, keeping the last save "
+    "you made yourself as a .bak beside it. Off, autosave still writes a "
+    "crash-recovery copy elsewhere, and nothing reaches your file until Ctrl+S.": (
+        "Kartı yarım dakikada bir kendi dosyasına yazar; kendi elinizle yaptığınız son "
+        "kaydı yanında .bak olarak saklar. Kapalıyken otomatik kaydetme yalnızca başka "
+        "bir yere çökme kurtarma kopyası yazar ve Ctrl+S'e basana dek dosyanıza hiçbir "
+        "şey yazılmaz."
+    ),
+    "Autosave writes the file itself every half minute; the previous save is kept as .bak.": (
+        "Otomatik kaydetme yarım dakikada bir dosyanın kendisine yazıyor; önceki kayıt "
+        ".bak olarak saklanıyor."
+    ),
+    "Autosave now only writes a crash-recovery copy; Ctrl+S saves the file.": (
+        "Otomatik kaydetme artık yalnızca çökme kurtarma kopyası yazıyor; dosyayı Ctrl+S "
+        "kaydeder."
+    ),
+    # -- projects: the folder a board and everything made from it live in ------
+    "New &Project…": "Yeni &Proje…",
+    "Name the board, choose what it is built on, and start in the schematic. "
+    "Makes a folder to keep the board and everything generated from it.": (
+        "Karta bir ad ver, neyin üzerine kurulacağını seç ve şematikten başla. Kartı ve "
+        "ondan üretilen her şeyi bir arada tutacak bir klasör oluşturur."
+    ),
+    "A blank board with no home on disk yet.": "Diskte henüz bir yeri olmayan boş kart.",
+    "Open P&roject…": "P&roje Aç…",
+    "Open the board inside a project folder. A folder with two boards in it is not one.": (
+        "Bir proje klasöründeki kartı açar. İçinde iki kart olan klasör proje değildir."
+    ),
+    "Save Pro&ject": "Pro&jeyi Kaydet",
+    "Save the board and rewrite everything generated from it — the 1:1 sheets, "
+    "the schematic, the build guide, the bill of materials — into outputs/ "
+    "beside it.": (
+        "Kartı kaydeder ve ondan üretilen her şeyi — 1:1 baskıları, şematiği, montaj "
+        "kılavuzunu, malzeme listesini — yanındaki outputs/ klasörüne yeniden yazar."
+    ),
+    "New Project": "Yeni Proje",
+    "What is this board called?": "Bu kartın adı ne?",
+    "My Board": "Kartım",
+    "Where should the project go?": "Proje nereye kurulsun?",
+    "That folder is not empty": "O klasör boş değil",
+    "{path} already has something in it. Pick another place, or another name.": (
+        "{path} içinde zaten bir şeyler var. Başka bir yer ya da başka bir ad seçin."
+    ),
+    "Board for {name}": "{name} için kart",
+    "Could not make the folder": "Klasör oluşturulamadı",
+    "New project in {path}. Draw the circuit, then Place on the Board.": (
+        "{path} içinde yeni proje. Devreyi çiz, sonra Kart Üzerine Yerleştir."
+    ),
+    "Open a project": "Bir proje aç",
+    "Could not open the project": "Proje açılamadı",
+    "Not a project": "Proje değil",
+    "A project is a folder built around exactly one board. {path} has {count} of them.": (
+        "Proje, tam olarak bir kartın etrafında kurulmuş bir klasördür. {path} içinde "
+        "{count} tane var."
+    ),
+    "Could not save the project": "Proje kaydedilemedi",
+    "The board itself: {err}": "Kartın kendisi: {err}",
+    "{count} not written": "{count} tanesi yazılmadı",
+    "Project saved to {path}: the board and {count} generated file(s){note}": (
+        "Proje {path} konumuna kaydedildi: kart ve {count} üretilmiş dosya{note}"
+    ),
+    "Some files were not written": "Bazı dosyalar yazılmadı",
+    "Everything else is saved. These had nothing to write:\n\n{lines}": (
+        "Diğer her şey kaydedildi. Bunların yazacak bir şeyi yoktu:\n\n{lines}"
+    ),
     # -- choosing the board the circuit goes on --------------------------------
     "Which board is this going on?": "Bu devre hangi karta girecek?",
     "Every size below was tried with your circuit actually laid out on it. "
