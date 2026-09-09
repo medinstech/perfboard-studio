@@ -103,19 +103,41 @@ class Surface:
     changes in the editor, in the 3D view and in the guide's step images together.
     """
 
-    #: VTK specular reflectance and its exponent.
+    #: VTK specular reflectance and its exponent. Kept for the 2D view's gradient and
+    #: for any renderer that has no PBR: they are a description of a HIGHLIGHT, which is
+    #: all Phong has.
     specular: float
     specular_power: float
     #: 0..1, how strong a highlight the 2D view sweeps across the top of the body. Flat
     #: fill is what made every 2D part read as a sticker rather than an object.
     sheen: float
+    #: WHAT THE THING IS MADE OF, for the 3D view's PBR shading, and the reason the render
+    #: stopped looking like painted card. Two numbers rather than a highlight:
+    #:
+    #: ``metallic`` is 0 or 1 and nothing between -- a material either conducts and tints
+    #: its own reflection or it does not -- and it is the single largest difference between
+    #: a crystal can and a DIP. Phong has no way to say it at all, so a metal can was a grey
+    #: plastic case with a brighter dot on it.
+    #:
+    #: ``roughness`` is what separates two parts of the SAME class on a bench: moulded
+    #: epoxy scatters wide, a tinned can throws one long highlight down its length. It is
+    #: also the number a person recognises without being told, which is why guessing at
+    #: specular exponents never converged.
+    metallic: float
+    roughness: float
 
 
-_PLASTIC_SURFACE = Surface(specular=0.18, specular_power=12.0, sheen=0.14)
-_METAL_SURFACE = Surface(specular=0.85, specular_power=50.0, sheen=0.40)
+_PLASTIC_SURFACE = Surface(
+    specular=0.18, specular_power=12.0, sheen=0.14, metallic=0.0, roughness=0.55
+)
+_METAL_SURFACE = Surface(
+    specular=0.85, specular_power=50.0, sheen=0.40, metallic=1.0, roughness=0.30
+)
 #: A lens is brighter than metal and tighter than plastic: it is transmitting, not
 #: reflecting, and the highlight is the thing that says "this is glass, not paint".
-_LENS_SURFACE = Surface(specular=0.9, specular_power=70.0, sheen=0.55)
+_LENS_SURFACE = Surface(
+    specular=0.9, specular_power=70.0, sheen=0.55, metallic=0.0, roughness=0.06
+)
 
 
 def surface_for(style: BodyStyle) -> Surface:

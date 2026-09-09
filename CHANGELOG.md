@@ -133,6 +133,18 @@ closed without a bump.
 
 ### Changed
 
+- **The 3D view now shades parts as materials rather than as highlights.** Everything on
+  the board was lit by a hand-picked specular value and an exponent, which describe a
+  highlight and say nothing about what a thing is made of — so a metal can was a grey
+  plastic case with a brighter dot on it, and the whole board read as painted card. Each
+  material is now a metallic/roughness pair named once: moulded epoxy, glossy nylon,
+  ceramic, an electrolytic's printed sleeve, tinned copper, solder, bare steel, a plated
+  pin, silkscreen ink, solder mask, raw laminate. Colours reach the shader as albedo rather
+  than as sRGB, which is what stops dark parts washing out. Lighting gained a room to
+  reflect — generated in code, not shipped, so there is still no asset library and no
+  licence inherited — and contact shadows, so a part sits on the board instead of hovering
+  over it.
+
 - **The sheet folds thin columns together instead of drawing a strip.** BFS depth is not
   a constraint, it is a hint — the half of that sentence the layout already acted on split a
   layer too TALL, and a real circuit produces the opposite: a signal chain twelve hops deep

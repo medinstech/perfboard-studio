@@ -449,6 +449,67 @@ Every lead is drawn through its hole and trimmed just past the far copper
 (`view3d._through_hole_pieces`), which is the only evidence the solder side has that
 anything came through it.
 
+### Parts are shaded as materials, and the room is generated too
+
+**Phong describes a HIGHLIGHT and says nothing about what a thing is made of.** That was
+why the 3D board looked like painted card whatever numbers were tried: thirty call sites
+each guessed a specular reflectance and an exponent, and there is no value of those two
+that makes aluminium look like aluminium — what separates a crystal can from a DIP is that
+one is a conductor and reflects the room in its own colour and the other scatters.
+`view3d._finish` is now the single place a property is set, and it says it in two numbers
+a person can check against a part in their hand: `metallic`, which is 0 or 1 and never
+between, and `roughness`, which is the whole difference between moulded epoxy and glossy
+nylon, or between a solder fillet and the tinned wire running into it. The materials
+actually on a perfboard are named once at the top of the file; a builder names one rather
+than inventing numbers, which is what stops a solder run and the bead at its end being
+given two finishes and drawing a seam that is not there.
+
+`bodies.Surface` carries the pair for the archetype-level answer, beside the Phong numbers
+the 2D view still uses for its gradient — one table, two renderers, as before.
+
+Four things here were got wrong first, and each has a test:
+
+- **A colour reaches the shader as ALBEDO, not as sRGB.** `BODY_STYLES` is picked as hex,
+  which is sRGB; a physical shader multiplies the fraction of light a surface returns, and
+  the two differ by a gamma curve. A DIP's `#24262d` is 0.14 one way and 0.017 the other,
+  so handing over the first number renders black epoxy as mid grey — every part on the
+  board washed out together, which reads as "the lighting is wrong" rather than "the
+  colours are wrong". `_finish` converts, which is why it must be called AFTER `SetColor`.
+- **A PBR material with nothing to reflect is a flat colour.** Metallic and roughness
+  describe how a surface answers its SURROUNDINGS, and two lamps in the void are not
+  surroundings — a tinned can under them comes back darker than it was under Phong,
+  because a mirror pointed at nothing is black. `apply_environment` gives every surface a
+  whole room, and **the room is BUILT, not downloaded**: PLAN.md D6 applied to lighting
+  rather than to geometry. Six small float faces of gradient plus one bright rectangle
+  overhead, which is the only room this view is ever set in. The rectangle is the part that
+  matters — a cylinder under a point light has a round dot on it and a cylinder under a
+  softbox has a long streak, and the streak is what the eye reads as a photograph. Values
+  run past 1.0 because the lamp has to be brighter than the room or a smooth surface has
+  nothing to pick out.
+- **`SetColorModeToDirectScalars` is the one call without which this is a rainbow.** A
+  `vtkTexture` maps scalars through a lookup table by default and VTK's default table is
+  the jet colormap, so the room came back as a spectrum and every metal part reflected it.
+  And `SetEnvironmentUp` is the one that is easy to leave out and hard to see the absence
+  of: VTK's environment frame is Y-up and this world is Z-up, so without it the lamp sits
+  off to one side and everything is lit from the wrong place — consistently, which makes it
+  look odd rather than broken.
+- **Contact shadows are what make a part sit on the board.** Every solid is lit as though
+  nothing else were in the scene, so a DIP and the board under it were two objects at the
+  same brightness meeting at a line. `apply_contact_shadows` is one SSAO pass and its
+  radius is in millimetres; it RETURNS whether it took, because it is the one piece of the
+  render that is a luxury and a machine whose OpenGL is too old should get a flatter board
+  rather than no board.
+
+`_dim` and `_pick_out` are a pair, and under PBR the way to push a part back is to ROUGHEN
+it — dropping the old specular did nothing at all once the parts were materials.
+
+**There is deliberately no golden IMAGE for the 3D view**, unlike `test_render_golden.py`'s
+2D one: VTK draws through whatever OpenGL the machine has, and a mean-colour comparison
+across the three-OS matrix would fail for reasons nobody can act on. What is held still
+instead is every decision above, including "no actor is left on Phong" — a scene with both
+models in it lights its two halves by different rules, and the leftover half reads as a
+sticker stuck onto the picture.
+
 ### The guide's order is physical, and its checks are derived
 
 `guide.py` has nine phases (`PHASE_TITLES`, 0–8) and the order is not editorial: parts go

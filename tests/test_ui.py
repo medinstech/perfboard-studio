@@ -520,6 +520,161 @@ def test_repopulating_replaces_the_actors_and_keeps_the_light() -> None:
     assert renderer.GetLights().GetNumberOfItems() == lights
 
 
+# ---------------------------------------------------------------------------
+# The board is shaded as materials, not as highlights
+# ---------------------------------------------------------------------------
+#
+# There is deliberately no golden IMAGE for the 3D view, unlike the 2D one: VTK draws
+# through the machine's own OpenGL, and a mean-colour comparison across three operating
+# systems and whatever driver is installed would be a test that fails for reasons nobody
+# can act on. What CAN be held still is every decision the render rests on, and each of
+# the tests below is one bug that actually happened while it was being built.
+
+
+def _all_props():
+    from perfboard_studio.ui import view3d
+
+    renderer, _stats = view3d.build_renderer(_load_dense(), footprint_lookup())
+    actors = renderer.GetActors()
+    actors.InitTraversal()
+    return [actors.GetNextActor().GetProperty() for _ in range(actors.GetNumberOfItems())]
+
+
+def test_every_actor_is_shaded_as_a_material_or_deliberately_unlit() -> None:
+    """One scene, one lighting model. A leftover Phong actor beside PBR ones is not a
+    slightly different finish -- the two answer light by different rules, and the leftover
+    reads as a sticker stuck onto the picture. Only annotation is exempt, and it is exempt
+    by being UNLIT rather than by being on the old model."""
+    import vtkmodules.all as vtk
+
+    stragglers = [
+        prop
+        for prop in _all_props()
+        if prop.GetInterpolation() != vtk.VTK_PBR and prop.GetLighting()
+    ]
+
+    assert stragglers == []
+
+
+def test_a_colour_reaches_the_shader_as_albedo_and_not_as_srgb() -> None:
+    """The bug that washed out every part on the board at once. ``BODY_STYLES`` is picked
+    as hex, which is sRGB; a physical shader multiplies ALBEDO, and the two differ by a
+    gamma curve. A DIP's own #24262d is 0.14 one way and 0.017 the other, and handing over
+    the first number renders black epoxy as mid grey."""
+    import vtkmodules.all as vtk
+
+    from perfboard_studio.ui import view3d
+
+    prop = vtk.vtkProperty()
+    prop.SetColor(0.14, 0.14, 0.14)
+
+    view3d._finish(prop, view3d.MOULDED)
+
+    assert prop.GetColor()[0] == pytest.approx(0.0168, abs=0.001)
+    assert prop.GetInterpolation() == vtk.VTK_PBR
+
+
+def test_a_material_is_metal_or_it_is_not() -> None:
+    """``metallic`` is the one PBR input with no meaningful middle: a material either
+    conducts and tints its own reflection or it does not. A table with 0.5 in it is a table
+    somebody has started tuning by ear, which is what the whole change was to get away
+    from."""
+    from perfboard_studio.ui import view3d
+
+    materials = {
+        name: value
+        for name, value in vars(view3d).items()
+        if name.isupper() and isinstance(value, tuple) and len(value) == 2
+        and all(isinstance(number, float) for number in value)
+    }
+    assert len(materials) >= 10, sorted(materials)
+    for name, (metallic, roughness) in materials.items():
+        assert metallic in (0.0, 1.0), f"{name} is {metallic} metallic"
+        assert 0.0 < roughness <= 1.0, f"{name} is {roughness} rough"
+
+
+def test_the_room_is_a_float_cube_map_read_as_colour() -> None:
+    """Two mistakes in one call, and the second is spectacular. A vtkTexture's DEFAULT
+    colour mode maps scalars through a lookup table, and VTK's default table is the jet
+    colormap -- so the room came back as a rainbow and every metal part on the board
+    reflected it. And the faces have to be FLOAT: the bench lamp is brighter than white,
+    which is the entire reason a smooth surface has anything to pick out."""
+    import vtkmodules.all as vtk
+
+    from perfboard_studio.ui import view3d
+
+    texture = view3d.environment_texture()
+
+    assert texture.GetCubeMap()
+    assert texture.GetColorMode() == vtk.VTK_COLOR_MODE_DIRECT_SCALARS
+    faces = [texture.GetInputDataObject(index, 0) for index in range(6)]
+    assert all(face is not None for face in faces)
+    brightest = max(
+        face.GetPointData().GetScalars().GetRange(component)[1]
+        for face in faces
+        for component in range(3)
+    )
+    assert brightest > 1.5, f"nothing in the room is brighter than white ({brightest})"
+
+
+def test_the_room_is_built_once() -> None:
+    """It is the same room every time and filling six faces in Python is the one part of a
+    rebuild worth noticing -- and a refresh happens on every edit."""
+    from perfboard_studio.ui import view3d
+
+    assert view3d.environment_texture() is view3d.environment_texture()
+
+
+def test_the_lamp_is_overhead_in_the_worlds_own_up() -> None:
+    """The call that is easy to leave out and hard to see the absence of: VTK's environment
+    frame is Y-up and this application's world is Z-up, so without saying so the bench lamp
+    sits off to one side and every part is lit from the wrong place -- consistently, which
+    makes it look odd rather than broken."""
+    from perfboard_studio.ui import view3d
+
+    renderer, _stats = view3d.build_renderer(_load_dense(), footprint_lookup())
+
+    up = [0.0, 0.0, 0.0]
+    renderer.GetEnvironmentUp(up)
+    assert up == [0.0, 0.0, 1.0]
+    assert renderer.GetUseImageBasedLighting()
+
+
+def test_contact_shadows_say_whether_they_took() -> None:
+    """The one piece of the render that is a luxury. A machine whose OpenGL cannot do it
+    should get a slightly flatter board, not no board -- so this reports rather than
+    raises, and the report has to be true."""
+    import vtkmodules.all as vtk
+
+    from perfboard_studio.ui import view3d
+
+    renderer = vtk.vtkRenderer()
+
+    assert view3d.apply_contact_shadows(renderer) is True
+    assert renderer.GetPass() is not None
+
+
+def test_dimming_a_part_takes_its_highlight_and_not_its_shape() -> None:
+    """``_dim`` and ``_pick_out`` are a pair: a guide step darkens everything that is not
+    its subject, and under PBR the way to push something back is to ROUGHEN it. Dropping
+    the old specular did nothing at all once the parts were materials."""
+    import vtkmodules.all as vtk
+
+    from perfboard_studio.ui import view3d
+
+    prop = vtk.vtkProperty()
+    prop.SetColor(0.5, 0.5, 0.5)
+    view3d._finish(prop, view3d.GLOSS)
+    before = prop.GetRoughness()
+
+    actor = vtk.vtkActor()
+    actor.SetProperty(prop)
+    view3d._dim(actor)
+
+    assert prop.GetRoughness() > before
+    assert prop.GetColor()[0] < 0.5
+
+
 def test_apply_default_camera_is_the_only_thing_that_reframes() -> None:
     from perfboard_studio.ui import view3d
 

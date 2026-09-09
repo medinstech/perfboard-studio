@@ -495,6 +495,7 @@ def build_substrate(doc: PerfDocument) -> list[vtk.vtkActor]:
     actors.append(edges)
     for actor in actors:
         actor.GetProperty().SetColor(*rgb)
+        _finish(actor.GetProperty(), MASK)
     return actors
 
 
@@ -518,16 +519,114 @@ BORE_UNDER_PAD_MM = 0.015
 LEAD_TRIM_MM = 0.07
 
 
-#: How tight the highlight on the board's own copper is.
-#:
-#: VTK's DEFAULT IS 1.0, which is not a highlight at all: it adds the specular term flat
-#: across the whole surface, so a pad carrying 0.4 of it rendered a fifth brighter than its
-#: own colour and CLIPPED -- a pad measured (255, 255, 125) against the very same
-#: `#c8a951` the 2D view paints from the same table. Clipping does not merely shift the
-#: hue, it flattens the shading off the copper, which is why the 3D board came out a grid
-#: of flat yellow rings while the 2D one looked like metal. Measured, not chosen: at this
-#: power the pad renders within a few levels of the 2D view's.
-COPPER_SPECULAR_POWER = 30.0
+# ---------------------------------------------------------------------------
+# What things are made of
+# ---------------------------------------------------------------------------
+#
+# WHY THE BOARD USED TO LOOK LIKE PAINTED CARD. Every actor was shaded with Phong and a
+# pair of hand-picked numbers -- a specular reflectance and an exponent -- which between
+# them describe a HIGHLIGHT and say nothing about the material under it. There is no value
+# of those two that makes aluminium look like aluminium, because what separates a crystal
+# can from a DIP is not the size of its highlight: it is that one of them is a conductor
+# and reflects the room in its own colour and the other scatters. Thirty call sites each
+# guessed a pair, and the render came out uniformly matte whatever was guessed.
+#
+# PBR says it in two numbers instead, and both are ones a person can check against a part
+# in their hand:
+#
+#   * ``metallic`` is 0 or 1 and never between. A material either conducts -- tinting what
+#     it reflects and having no diffuse colour of its own -- or it does not.
+#   * ``roughness`` is how wide it scatters. It is the whole difference between two parts
+#     of the same class: moulded epoxy against glossy nylon, a solder fillet against the
+#     tinned wire running into it.
+#
+# The pairs below are the materials actually on a perfboard, named once. A part builder
+# names a material rather than inventing numbers, which is what stops two pieces of the
+# same physical object -- a solder run and the bead at its end -- being given two finishes
+# and drawing a seam that is not there.
+
+#: Moulded epoxy and ABS: a DIP's body, a TO-92, a header's shroud, a switch case.
+MOULDED = (0.0, 0.62)
+#: Glossy injection-moulded nylon: a screw terminal, a relay case, a potentiometer body.
+GLOSS = (0.0, 0.30)
+#: Ceramic and phenolic: a disc capacitor, a resistor's own body, the bands printed on it.
+CERAMIC = (0.0, 0.66)
+#: The printed PVC sleeve shrunk over an electrolytic's can.
+SLEEVE = (0.0, 0.28)
+#: Tinned copper: a pad, a trimmed lead, a strip of stripboard.
+TINNED = (1.0, 0.34)
+#: Bright tinned wire, which is what a bare-wire link is. Tighter than a pad because it is
+#: drawn wire rather than plated foil.
+BRIGHT_TIN = (1.0, 0.18)
+#: Solder, and it is ROUGH metal. Making it smooth is what once made a run look like wire,
+#: which is the one thing it must not look like.
+SOLDER_MAT = (1.0, 0.44)
+#: Bare steel and aluminium: a TO-220 tab, a screw head, an electrolytic's crimped rim.
+STEEL = (1.0, 0.30)
+#: A plated pin. The one part of a board with a mirror finish on it.
+PLATED = (1.0, 0.20)
+#: Silkscreen ink and the printing on a sleeve: matte, and the only thing on a board that
+#: reflects nothing at all.
+INK = (0.0, 0.88)
+#: Solder mask over laminate. Glossier than anything else large on the board, which is
+#: what makes a bare board read as a board.
+MASK = (0.0, 0.36)
+#: The cut edge of the laminate and the wall of a drilled hole: raw glass-epoxy.
+LAMINATE = (0.0, 0.74)
+#: PVC insulation on a hook-up wire.
+INSULATION = (0.0, 0.40)
+
+
+def _to_linear(channel: float) -> float:
+    """One sRGB channel as the linear light a physical shader multiplies.
+
+    THE COLOURS IN ``bodies.BODY_STYLES`` ARE sRGB, because they were picked as hex the way
+    every colour in this application is picked, and sRGB is what a 2D fill wants. A PBR
+    shader wants ALBEDO -- the fraction of light a surface returns -- and the two differ by
+    a gamma curve, which is not a small correction: a DIP's #24262d is 0.14 as sRGB and
+    0.017 as albedo, and handing the shader the first number renders black epoxy as mid
+    grey. Every part on the board came out washed out together, which is the shape of
+    mistake that reads as "the lighting is wrong" rather than "the colours are wrong".
+    """
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
+def _finish(prop: Any, material: tuple[float, float]) -> None:
+    """Shade one actor as a material rather than as a highlight.
+
+    The single place ``SetInterpolationToPBR`` is called, so no actor can be left behind on
+    the old model: a scene with both in it lights the two halves by different rules, and
+    the half still on Phong reads as a sticker beside the half that is not.
+
+    IT ALSO CONVERTS THE COLOUR, which is why it must be called AFTER ``SetColor`` and not
+    before -- see ``_to_linear``. Doing it here rather than at every call site is what makes
+    "shaded as a material" and "given an albedo" the same single act: an actor that got one
+    without the other is exactly the washed-out part this is here to prevent.
+    """
+    prop.SetInterpolationToPBR()
+    prop.SetMetallic(material[0])
+    prop.SetRoughness(material[1])
+    prop.SetColor(*(_to_linear(channel) for channel in prop.GetColor()))
+
+
+def _material_of(surface: Surface) -> tuple[float, float]:
+    """The archetype-level material ``bodies.surface_for`` already decided."""
+    return (surface.metallic, surface.roughness)
+
+
+#: How far a contact shadow reaches, in millimetres of board. One hole's width: see
+#: ``apply_contact_shadows`` for why it is the whole setting.
+CONTACT_SHADOW_MM = 4.0
+#: Enough to keep a flat face from shadowing itself, small next to anything real on a board.
+CONTACT_SHADOW_BIAS_MM = 0.02
+#: Samples per pixel. 32 is where the noise stops showing through the blur on a dense board.
+CONTACT_SHADOW_SAMPLES = 32
+
+#: How much rougher a part goes when it is not the subject of a guide step, and how
+#: smooth the one that IS goes. See ``_dim`` and ``_pick_out``; they are a pair and the
+#: numbers only mean anything against each other.
+DIM_ROUGHEN = 0.30
+PICK_OUT_ROUGHNESS = 0.30
 
 
 def pad_z(board: Board, side: BoardSide) -> float:
@@ -777,8 +876,7 @@ def build_drills(board: Board, consumed: frozenset[str] = frozenset()) -> vtk.vt
     # The cut edge of the laminate, in shadow: darker than the face, and the same hue --
     # a hole in a brown phenolic board is not the same colour as one in green FR-4.
     prop.SetColor(*(channel * 0.55 for channel in scheme_for(board.material).rgb))
-    prop.SetSpecular(0.0)
-    prop.SetAmbient(0.15)
+    _finish(prop, LAMINATE)
     return actor
 
 
@@ -814,8 +912,7 @@ def build_pads(
     actor = vtk.vtkActor()
     actor.SetMapper(glyph)
     actor.GetProperty().SetColor(*scheme_for(board.material).pad_rgb)
-    actor.GetProperty().SetSpecular(0.4)
-    actor.GetProperty().SetSpecularPower(COPPER_SPECULAR_POWER)
+    _finish(actor.GetProperty(), TINNED)
     return actor
 
 
@@ -851,8 +948,7 @@ def build_strips(doc: PerfDocument) -> list[vtk.vtkActor]:
         actor.SetMapper(mapper)
         actor.SetPosition((first_x + last_x) / 2, (first_y + last_y) / 2, z)
         actor.GetProperty().SetColor(*scheme_for(board.material).pad_rgb)
-        actor.GetProperty().SetSpecular(0.4)
-        actor.GetProperty().SetSpecularPower(COPPER_SPECULAR_POWER)
+        _finish(actor.GetProperty(), TINNED)
         actors.append(actor)
     return actors
 
@@ -876,8 +972,7 @@ def build_mounting_holes(doc: PerfDocument) -> list[vtk.vtkActor]:
         actor = _glyphed(points, _hole_wall(board, bore.radius))
         prop = actor.GetProperty()
         prop.SetColor(*(channel * 0.55 for channel in scheme_for(board.material).rgb))
-        prop.SetSpecular(0.0)
-        prop.SetAmbient(0.15)
+        _finish(prop, LAMINATE)
         actors.append(actor)
     return actors
 
@@ -919,8 +1014,7 @@ def build_edge_connectors(doc: PerfDocument) -> list[vtk.vtkActor]:
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
             actor.GetProperty().SetColor(*scheme_for(board.material).pad_rgb)
-            actor.GetProperty().SetSpecular(0.4)
-            actor.GetProperty().SetSpecularPower(COPPER_SPECULAR_POWER)
+            _finish(actor.GetProperty(), TINNED)
             actors.append(actor)
     return actors
 
@@ -1043,8 +1137,7 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
         # ink: unlit and matte, so it does not catch highlights the way copper does.
         actor.SetPosition(0.0, 0.0, 0.02 if face == "top" else -board.thickness - 0.02)
         actor.GetProperty().SetColor(*LEGEND_RGB)
-        actor.GetProperty().SetAmbient(0.6)
-        actor.GetProperty().SetSpecular(0.0)
+        _finish(actor.GetProperty(), INK)
         actors.append(actor)
     return actors
 
@@ -1074,8 +1167,9 @@ class _Piece:
     scale: tuple[float, float, float] = (1.0, 1.0, 1.0)
     #: Euler angles in degrees, as VTK's actor orientation.
     orientation: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    specular: float = 0.25
-    specular_power: float = 20.0
+    #: What the solid is made of, as ``(metallic, roughness)`` -- one of the named pairs
+    #: above, never two numbers invented here. See the material table's own comment.
+    material: tuple[float, float] = MOULDED
     opacity: float = 1.0
     #: When set, the source is glyphed at each of these world positions in ONE actor and
     #: ``position`` is ignored. For repeated identical solids -- a header's pins -- where an
@@ -1304,8 +1398,7 @@ def _through_hole_pieces(
             else _upright_cylinder(radius, height),
             rgb=LEAD_RGB,
             position=(0.0, 0.0, 0.0),
-            specular=0.6,
-            specular_power=30.0,
+            material=TINNED,
             instances=tuple((pin_x, pin_y, bottom + height / 2) for pin_x, pin_y in body.pins),
         )
     ]
@@ -1334,7 +1427,7 @@ def _lead_pieces(body: _WorldBody, radius: float = 0.28) -> list[_Piece]:
                     rgb=LEAD_RGB,
                     position=(centre, pin_y, z),
                     orientation=_ALONG_X,
-                    specular=0.6,
+                    material=TINNED,
                 )
             )
         else:
@@ -1349,7 +1442,7 @@ def _lead_pieces(body: _WorldBody, radius: float = 0.28) -> list[_Piece]:
                     rgb=LEAD_RGB,
                     position=(pin_x, centre, z),
                     orientation=_ALONG_Y,
-                    specular=0.6,
+                    material=TINNED,
                 )
             )
     # The drop is added for EVERY pin, including the ones with no horizontal run: a pin
@@ -1381,8 +1474,7 @@ def _axial_pieces(body: _WorldBody) -> list[_Piece]:
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, z),
             orientation=orientation,
-            specular=surface.specular,
-            specular_power=surface.specular_power,
+            material=_material_of(surface),
         )
     ]
     for end in (-1.0, 1.0):
@@ -1397,8 +1489,7 @@ def _axial_pieces(body: _WorldBody) -> list[_Piece]:
                 scale=(
                     (dome / radius, 1.0, 1.0) if along else (1.0, dome / radius, 1.0)
                 ),
-                specular=surface.specular,
-                specular_power=surface.specular_power,
+                material=_material_of(surface),
             )
         )
 
@@ -1414,7 +1505,7 @@ def _axial_pieces(body: _WorldBody) -> list[_Piece]:
                 rgb=_rgb(colour),
                 position=_offset_along(body, (fraction - 0.5) * body.along, z),
                 orientation=orientation,
-                specular=surface.specular * 0.6,
+                material=CERAMIC,
             )
         )
 
@@ -1429,7 +1520,7 @@ def _axial_pieces(body: _WorldBody) -> list[_Piece]:
                 rgb=_rgb(body.style.accent),
                 position=_offset_along(body, offset, z),
                 orientation=orientation,
-                specular=0.2,
+                material=CERAMIC,
             )
         )
     return pieces + _lead_pieces(body)
@@ -1449,7 +1540,7 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
             orientation=_ALONG_Z,
-            specular=0.35,
+            material=SLEEVE,
         ),
         # The crimped rim at the top, where the sleeve is folded over the can. A thin
         # bright ring and nothing more: this was a WHITE DISC across the whole top, and
@@ -1460,8 +1551,7 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
             rgb=_lit(body.style.fill, 1.5),
             position=(body.x, body.y, body.height + _LIFT - 0.11),
             orientation=_ALONG_Z,
-            specular=0.55,
-            specular_power=35.0,
+            material=STEEL,
         ),
         # The top itself is the sleeve, as it is on the real part.
         _Piece(
@@ -1469,7 +1559,7 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
             rgb=_lit(body.style.fill, 1.12),
             position=(body.x, body.y, body.height + _LIFT - 0.1),
             orientation=_ALONG_Z,
-            specular=0.3,
+            material=SLEEVE,
         ),
     ]
     # The vent, scored into that top rather than printed on it: two shallow grooves, which
@@ -1484,7 +1574,7 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
                 ),
                 rgb=_lit(body.style.fill, 0.55),
                 position=(body.x, body.y, body.height + _LIFT - 0.02),
-                specular=0.05,
+                material=SLEEVE,
             )
         )
     if body.polarity is not None:
@@ -1509,7 +1599,7 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
                 position=_offset_along(
                     body, direction * (radius - thickness * 0.45), body.height / 2 + _LIFT
                 ),
-                specular=0.1,
+                material=INK,
             )
         )
     # Under the can, so only the hole and the solder side ever show them -- which is
@@ -1536,7 +1626,7 @@ def _disc_pieces(body: _WorldBody) -> list[_Piece]:
             # Flattened across the leads: the disc's faces look sideways, which is how one
             # is fitted and why two of them side by side need the room they do.
             scale=(1.0, squash, 1.0) if body.axis == "x" else (squash, 1.0, 1.0),
-            specular=0.15,
+            material=CERAMIC,
         ),
         *_lead_pieces(body),
     ]
@@ -1562,8 +1652,7 @@ def _film_pieces(body: _WorldBody) -> list[_Piece]:
             ),
             rgb=fill,
             position=(body.x, body.y, body.height / 2 + _LIFT),
-            specular=surface.specular,
-            specular_power=surface.specular_power,
+            material=_material_of(surface),
         )
     ]
     for end in (-1.0, 1.0):
@@ -1575,8 +1664,7 @@ def _film_pieces(body: _WorldBody) -> list[_Piece]:
                     body, end * (body.along / 2 - radius), body.height / 2 + _LIFT
                 ),
                 orientation=_ALONG_Z,
-                specular=surface.specular,
-                specular_power=surface.specular_power,
+                material=_material_of(surface),
             )
         )
     return pieces + _lead_pieces(body)
@@ -1590,7 +1678,7 @@ def _dip_pieces(body: _WorldBody) -> list[_Piece]:
             source=_box(body.size_x, body.size_y, body.height),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
-            specular=0.12,
+            material=MOULDED,
         )
     ]
     if body.polarity is not None:
@@ -1607,7 +1695,7 @@ def _dip_pieces(body: _WorldBody) -> list[_Piece]:
                 rgb=_lit(body.style.fill, 0.55),
                 position=(dot_x, dot_y, body.height + _LIFT - 0.06),
                 orientation=_ALONG_Z,
-                specular=0.05,
+                material=MOULDED,
             )
         )
         # AND the notch at the pin-1 end, which is the marking people actually use: the
@@ -1627,7 +1715,7 @@ def _dip_pieces(body: _WorldBody) -> list[_Piece]:
                     body.height / 2 + _LIFT,
                 ),
                 orientation=_ALONG_Z,
-                specular=0.02,
+                material=MOULDED,
             )
         )
     # From half way up the package, because a DIP's rows are wider than its body: the pins
@@ -1661,7 +1749,7 @@ def _to92_pieces(body: _WorldBody) -> list[_Piece]:
             # The profile is built with its flat towards +y; a part whose pins run along y
             # wants it towards +x instead.
             orientation=(0.0, 0.0, 0.0) if body.axis == "x" else (0.0, 0.0, 90.0),
-            specular=0.15,
+            material=MOULDED,
         ),
         *_lead_pieces(body),
     ]
@@ -1686,7 +1774,7 @@ def _to220_pieces(body: _WorldBody) -> list[_Piece]:
             source=_box(body.size_x, body.size_y, plastic_h),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, plastic_h / 2 + _LIFT),
-            specular=0.12,
+            material=MOULDED,
         ),
         _Piece(
             source=(
@@ -1696,8 +1784,7 @@ def _to220_pieces(body: _WorldBody) -> list[_Piece]:
             ),
             rgb=_rgb(body.style.accent),
             position=(body.x + offset_x, body.y + offset_y, plastic_h + tab_h / 2 + _LIFT),
-            specular=0.7,
-            specular_power=40.0,
+            material=STEEL,
         ),
         # The bolt hole, as a dark disc through the tab rather than a hole cut in it: this
         # is a 3 mm feature on a vertical face, where the board's own holes are the surface
@@ -1712,7 +1799,7 @@ def _to220_pieces(body: _WorldBody) -> list[_Piece]:
                 plastic_h + tab_h * 0.62 + _LIFT,
             ),
             orientation=_ALONG_Y if body.axis == "x" else _ALONG_X,
-            specular=0.1,
+            material=STEEL,
         ),
         *_through_hole_pieces(body, _LIFT + 0.15),
     ]
@@ -1733,15 +1820,13 @@ def _led_pieces(body: _WorldBody) -> list[_Piece]:
             rgb=lens,
             position=(body.x, body.y, barrel_h / 2 + _LIFT),
             orientation=_ALONG_Z,
-            specular=surface.specular,
-            specular_power=surface.specular_power,
+            material=_material_of(surface),
         ),
         _Piece(
             source=_sphere(radius),
             rgb=lens,
             position=(body.x, body.y, barrel_h + _LIFT),
-            specular=surface.specular,
-            specular_power=surface.specular_power,
+            material=_material_of(surface),
         ),
         # The flange at the base is the flat that marks the cathode on a real LED.
         _Piece(
@@ -1749,7 +1834,7 @@ def _led_pieces(body: _WorldBody) -> list[_Piece]:
             rgb=lens,
             position=(body.x, body.y, radius * 0.11 + _LIFT),
             orientation=_ALONG_Z,
-            specular=surface.specular * 0.6,
+            material=_material_of(surface),
         ),
     ]
     return pieces + _lead_pieces(body)
@@ -1769,14 +1854,13 @@ def _header_pieces(body: _WorldBody) -> list[_Piece]:
             source=_box(body.size_x, body.size_y, moulding_h),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, moulding_h / 2 + _LIFT),
-            specular=0.1,
+            material=MOULDED,
         ),
         _Piece(
             source=_box(0.64, 0.64, pin_h),
             rgb=_rgb(body.style.accent),
             position=(0.0, 0.0, 0.0),
-            specular=0.75,
-            specular_power=40.0,
+            material=PLATED,
             instances=tuple(
                 (pin_x, pin_y, moulding_h + pin_h / 2 + _LIFT) for pin_x, pin_y in body.pins
             ),
@@ -1795,7 +1879,7 @@ def _screw_terminal_pieces(body: _WorldBody) -> list[_Piece]:
             source=_box(body.size_x, body.size_y, body.height),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
-            specular=0.15,
+            material=GLOSS,
         )
     ]
     head_r = min(body.across * 0.28, 1.6)
@@ -1809,8 +1893,7 @@ def _screw_terminal_pieces(body: _WorldBody) -> list[_Piece]:
                 # the case check are both working from.
                 position=(pin_x, pin_y, body.height + _LIFT - 0.25),
                 orientation=_ALONG_Z,
-                specular=0.7,
-                specular_power=35.0,
+                material=STEEL,
             )
         )
     return pieces + _through_hole_pieces(body, _LIFT + 0.15)
@@ -1827,15 +1910,14 @@ def _pot_pieces(body: _WorldBody) -> list[_Piece]:
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body_h / 2 + _LIFT),
             orientation=_ALONG_Z,
-            specular=0.2,
+            material=GLOSS,
         ),
         _Piece(
             source=_cylinder(radius * 0.28, shaft_h, resolution=18),
             rgb=_rgb(body.style.accent),
             position=(body.x, body.y, body_h + shaft_h / 2 + _LIFT),
             orientation=_ALONG_Z,
-            specular=0.6,
-            specular_power=35.0,
+            material=STEEL,
         ),
         *_through_hole_pieces(body, _LIFT + 0.15),
     ]
@@ -1850,14 +1932,14 @@ def _switch_pieces(body: _WorldBody) -> list[_Piece]:
             source=_box(body.size_x, body.size_y, case_h),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, case_h / 2 + _LIFT),
-            specular=0.12,
+            material=MOULDED,
         ),
         _Piece(
             source=_cylinder(min(body.size_x, body.size_y) * 0.22, button_h, resolution=18),
             rgb=_rgb(body.style.accent),
             position=(body.x, body.y, case_h + button_h / 2 + _LIFT),
             orientation=_ALONG_Z,
-            specular=0.3,
+            material=GLOSS,
         ),
         *_through_hole_pieces(body, _LIFT + 0.15),
     ]
@@ -1890,16 +1972,14 @@ def _crystal_pieces(body: _WorldBody) -> list[_Piece]:
             position=(body.x, body.y, barrel / 2 + _LIFT),
             orientation=_ALONG_Z,
             scale=_upright_scale(scale),
-            specular=surface.specular,
-            specular_power=surface.specular_power,
+            material=_material_of(surface),
         ),
         _Piece(
             source=_sphere(radius, resolution=24),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, barrel + _LIFT),
             scale=(scale[0], scale[1], dome / radius),
-            specular=surface.specular,
-            specular_power=surface.specular_power,
+            material=_material_of(surface),
         ),
         _Piece(
             source=_cylinder(radius * 1.06, 0.35, resolution=24),
@@ -1907,7 +1987,7 @@ def _crystal_pieces(body: _WorldBody) -> list[_Piece]:
             position=(body.x, body.y, 0.35 / 2 + _LIFT),
             orientation=_ALONG_Z,
             scale=_upright_scale(scale),
-            specular=surface.specular * 0.7,
+            material=_material_of(surface),
         ),
         *_lead_pieces(body),
     ]
@@ -1921,8 +2001,7 @@ def _box_pieces(body: _WorldBody) -> list[_Piece]:
             source=_box(body.size_x, body.size_y, body.height),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
-            specular=surface.specular,
-            specular_power=surface.specular_power,
+            material=_material_of(surface),
         ),
         *_lead_pieces(body),
     ]
@@ -2017,8 +2096,7 @@ def _actor_for(piece: _Piece) -> vtk.vtkActor:
         actor.SetPosition(*piece.position)
     prop = actor.GetProperty()
     prop.SetColor(*piece.rgb)
-    prop.SetSpecular(piece.specular)
-    prop.SetSpecularPower(piece.specular_power)
+    _finish(prop, piece.material)
     prop.SetOpacity(piece.opacity)
     return actor
 
@@ -2171,25 +2249,16 @@ def build_conductor(
         fallback = BARE_RGB
     rgb = _hex_rgb(getattr(cond, "color", None), fallback)
     actor.GetProperty().SetColor(*rgb)
+    # Solder is metal and it is ROUGH metal -- a broad soft sheen rather than the tight
+    # glint tinned wire gives. Making it smooth is what once made a run look like wire,
+    # which is the one thing it must not look like; leaving it matte is what made it look
+    # like grey plumbing, which is not better. The difference is one number now.
     if is_trace:
-        # Solder is metal, and it is ROUGH metal: a broad soft sheen rather than the tight
-        # glint tinned wire gives. Making it shiny is what once made it look like wire,
-        # which is the one thing it must not look like -- but leaving it at a matte 0.25
-        # with no ambient is what made it look like grey plumbing, which is not better.
-        # A little ambient so a fillet turned away from the lamp is still a fillet.
-        actor.GetProperty().SetSpecular(0.42)
-        actor.GetProperty().SetSpecularPower(16.0)
-        actor.GetProperty().SetDiffuse(0.8)
-        actor.GetProperty().SetAmbient(0.16)
+        _finish(actor.GetProperty(), SOLDER_MAT)
     elif insulated:
-        actor.GetProperty().SetSpecular(0.35)
-        actor.GetProperty().SetSpecularPower(25.0)
-        actor.GetProperty().SetAmbient(0.14)
+        _finish(actor.GetProperty(), INSULATION)
     else:
-        # Tinned copper: a tight bright glint, which is exactly what solder must not have.
-        actor.GetProperty().SetSpecular(0.9)
-        actor.GetProperty().SetSpecularPower(60.0)
-        actor.GetProperty().SetAmbient(0.12)
+        _finish(actor.GetProperty(), BRIGHT_TIN)
     actors = [actor]
 
     # The distinction that matters: a trace is soldered at EVERY pad it crosses, a wire
@@ -2228,10 +2297,7 @@ def build_conductor(
     beads.GetProperty().SetColor(*SOLDER_RGB)
     # The same material as the run it swells out of -- a joint and the solder leading into
     # it are one piece of metal, and two finishes would draw a seam that is not there.
-    beads.GetProperty().SetSpecular(0.42)
-    beads.GetProperty().SetSpecularPower(16.0)
-    beads.GetProperty().SetDiffuse(0.8)
-    beads.GetProperty().SetAmbient(0.16)
+    _finish(beads.GetProperty(), SOLDER_MAT)
     actors.append(beads)
     return actors
 
@@ -2312,8 +2378,10 @@ def build_drop_lines(
     prop = actor.GetProperty()
     prop.SetColor(*LEADER_RGB)
     prop.SetLineWidth(1.0)
-    prop.SetAmbient(1.0)
-    prop.SetDiffuse(0.0)
+    # A leader is an ANNOTATION, not an object: it is drawn at its own colour whatever the
+    # room is doing. ``SetLighting(False)`` says that in one call and keeps saying it under
+    # PBR, where the ambient/diffuse pair this used to set is simply ignored.
+    prop.SetLighting(False)
     return actor
 
 
@@ -2328,12 +2396,17 @@ def _lift(actor: vtk.vtkActor, dz: float) -> vtk.vtkActor:
 
 
 def _dim(actor: vtk.vtkActor) -> vtk.vtkActor:
-    """Push an actor back so something else can come forward. Keeps its hue -- a dimmed
-    resistor still reads as a resistor -- and drops the specular, since a highlight on a
-    part that is not the subject is exactly what the eye goes to."""
+    """Push an actor back so something else can come forward.
+
+    Keeps its hue -- a dimmed resistor still reads as a resistor -- and ROUGHENS it, which
+    is how a material is taken out of the foreground now that the parts are shaded as
+    materials: a highlight on something that is not the subject is exactly where the eye
+    goes, and roughness is the number that takes the highlight away without taking the
+    shape with it.
+    """
     prop = actor.GetProperty()
     prop.SetColor(*(channel * DIM_FACTOR for channel in prop.GetColor()))
-    prop.SetSpecular(0.0)
+    prop.SetRoughness(min(1.0, prop.GetRoughness() + DIM_ROUGHEN))
     return actor
 
 
@@ -2352,15 +2425,18 @@ HIGHLIGHT_MIX: float = 0.75
 def _pick_out(actor: vtk.vtkActor) -> vtk.vtkActor:
     """The one thing this step is about. The caption names the part; this says WHERE."""
     prop = actor.GetProperty()
+    # Mixed in LINEAR light, because that is what the actor's colour already is by the
+    # time this runs (``_finish`` converted it) -- mixing an sRGB constant into a linear
+    # colour tints towards something much brighter than the constant names.
     prop.SetColor(
         *(
-            channel * (1 - HIGHLIGHT_MIX) + target * HIGHLIGHT_MIX
+            channel * (1 - HIGHLIGHT_MIX) + _to_linear(target) * HIGHLIGHT_MIX
             for channel, target in zip(prop.GetColor(), HIGHLIGHT_RGB, strict=True)
         )
     )
-    prop.SetAmbient(0.45)
-    prop.SetSpecular(0.15)
-    prop.SetSpecularPower(COPPER_SPECULAR_POWER)
+    # Polished as well as tinted, for the opposite reason ``_dim`` roughens: the subject
+    # of a step is the one thing in the picture allowed to catch the light.
+    prop.SetRoughness(PICK_OUT_ROUGHNESS)
     return actor
 
 
@@ -2482,6 +2558,119 @@ def apply_default_camera(ren: vtk.vtkRenderer, flipped: bool = False) -> None:
     ren.ResetCameraClippingRange()
 
 
+# ---------------------------------------------------------------------------
+# The room, generated rather than shipped
+# ---------------------------------------------------------------------------
+#
+# A PBR MATERIAL WITH NOTHING TO REFLECT IS A FLAT COLOUR. That is the half of the change
+# that is easy to leave out: metallic/roughness describe how a surface answers its
+# surroundings, and a scene lit only by two lamps has no surroundings -- so a tinned can
+# comes back darker than it was under Phong rather than looking like metal. Image-based
+# lighting gives every surface a whole environment to answer, and it is what puts the long
+# soft highlight down a capacitor and the sheen across a solder-masked board.
+#
+# THE ENVIRONMENT IS BUILT, NOT DOWNLOADED, which is PLAN.md D6 applied to lighting rather
+# than to geometry: no asset, no licence to inherit, nothing to ship and nothing to go
+# missing from a frozen build. What it describes is the only room this view is ever set
+# in -- somebody at a bench with a lamp over it -- so six small faces of gradient plus one
+# bright rectangle overhead say all of it. The rectangle is the part that matters: a
+# cylinder under a POINT light has a round dot on it and a cylinder under a softbox has a
+# long streak, and the streak is what the eye reads as "photograph".
+#
+# Values run past 1.0 on purpose. The lamp has to be brighter than the room or there is
+# nothing for a smooth surface to pick out, which is what an HDR environment is for, so
+# the faces are float and not bytes.
+
+#: Face size. IBL blurs this heavily to build its roughness mip chain, so detail here is
+#: wasted; what matters is that the gradient is smooth and the lamp has soft edges.
+_ENV_FACE_PX = 64
+
+#: The room, in the texture's own frame: +Y is up, and ``SetEnvironmentUp`` below tells the
+#: renderer that our world's up is +Z instead.
+_ENV_SKY = (1.05, 1.10, 1.22)
+_ENV_HORIZON = (0.60, 0.62, 0.68)
+_ENV_FLOOR = (0.16, 0.16, 0.18)
+#: The bench lamp. Wide and shallow, like a real softbox, so a can gets a streak.
+_ENV_LAMP = 8.0
+_ENV_LAMP_WIDE = 0.85
+_ENV_LAMP_DEEP = 0.30
+
+
+def _env_colour(x: float, y: float, z: float) -> tuple[float, float, float]:
+    """What the room looks like in one direction. ``y`` is up in the texture's own frame."""
+    length = math.sqrt(x * x + y * y + z * z) or 1.0
+    x, y, z = x / length, y / length, z / length
+    if y >= 0.0:
+        # Smoothstep from the horizon to the sky, so the gradient has no visible band in it.
+        t = y * y * (3.0 - 2.0 * y)
+        base = [h + (s - h) * t for h, s in zip(_ENV_HORIZON, _ENV_SKY, strict=True)]
+    else:
+        t = (-y) ** 0.6
+        base = [h + (f - h) * t for h, f in zip(_ENV_HORIZON, _ENV_FLOOR, strict=True)]
+    if y > 0.25:
+        # An elliptical patch overhead, falling off smoothly rather than cut out: a hard
+        # edge on a light source shows up as a hard edge in every reflection of it.
+        d = math.sqrt((x / _ENV_LAMP_WIDE) ** 2 + (z / _ENV_LAMP_DEEP) ** 2)
+        if d < 1.0:
+            glow = (1.0 - d) ** 2 * _ENV_LAMP * min(1.0, (y - 0.25) / 0.35)
+            base = [channel + glow for channel in base]
+    return (base[0], base[1], base[2])
+
+
+#: OpenGL's cube-map convention: +X, -X, +Y, -Y, +Z, -Z, and each face's own axes.
+_ENV_FACES = (
+    ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, -1.0, 0.0)),
+    ((-1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, -1.0, 0.0)),
+    ((0.0, 1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+    ((0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+    ((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, -1.0, 0.0)),
+    ((0.0, 0.0, -1.0), (-1.0, 0.0, 0.0), (0.0, -1.0, 0.0)),
+)
+
+_environment: vtk.vtkTexture | None = None
+
+
+def environment_texture() -> vtk.vtkTexture:
+    """The cube map above, built once and shared by every renderer in the process.
+
+    Built once because it is the same room every time and filling six faces in Python is
+    the one part of a rebuild that would be worth noticing -- a refresh happens on every
+    edit, and this does not change between them.
+    """
+    global _environment
+    if _environment is not None:
+        return _environment
+    texture = vtk.vtkTexture()
+    texture.CubeMapOn()
+    texture.InterpolateOn()
+    texture.MipmapOn()
+    # THE ONE CALL WITHOUT WHICH THIS IS A RAINBOW. A vtkTexture's default colour mode maps
+    # scalars through a lookup table, and VTK's default table is the jet colormap -- so the
+    # room came back as a spectrum and every metal part on the board reflected it. Direct
+    # scalars says "these ARE the colours", which is the only reading a float environment
+    # map has.
+    texture.SetColorModeToDirectScalars()
+    half = (_ENV_FACE_PX - 1) / 2.0
+    for index, (forward, right, up) in enumerate(_ENV_FACES):
+        image = vtk.vtkImageData()
+        image.SetDimensions(_ENV_FACE_PX, _ENV_FACE_PX, 1)
+        image.AllocateScalars(vtk.VTK_FLOAT, 3)
+        for row in range(_ENV_FACE_PX):
+            v = (row - half) / half
+            for col in range(_ENV_FACE_PX):
+                u = (col - half) / half
+                rgb = _env_colour(
+                    forward[0] + right[0] * u + up[0] * v,
+                    forward[1] + right[1] * u + up[1] * v,
+                    forward[2] + right[2] * u + up[2] * v,
+                )
+                for channel in range(3):
+                    image.SetScalarComponentFromFloat(col, row, 0, channel, rgb[channel])
+        texture.SetInputDataObject(index, image)
+    _environment = texture
+    return texture
+
+
 def build_renderer(
     doc: PerfDocument,
     lookup: FootprintLookup,
@@ -2498,7 +2687,64 @@ def build_renderer(
     apply_default_camera(ren, flipped)
 
     apply_default_lighting(ren)
+    apply_environment(ren)
+    apply_contact_shadows(ren)
     return ren, stats
+
+
+def apply_environment(ren: vtk.vtkRenderer) -> None:
+    """Give the materials a room to reflect.
+
+    Without this the PBR shading above is a downgrade rather than an upgrade: metallic and
+    roughness describe how a surface answers its SURROUNDINGS, and two lamps in the void
+    are not surroundings -- a tinned can under them comes back darker than it was under
+    Phong, because a mirror pointed at nothing is black.
+
+    ``SetEnvironmentUp`` is the call it is easy to leave out and hard to see the absence
+    of: VTK's default frame is Y-up and this application's world is Z-up, so without it the
+    bench lamp sits somewhere off to the side of the board and every part is lit from the
+    wrong place -- consistently, which is what makes it look merely odd rather than broken.
+    """
+    ren.SetEnvironmentTexture(environment_texture())
+    ren.SetEnvironmentUp(0.0, 0.0, 1.0)
+    ren.SetEnvironmentRight(1.0, 0.0, 0.0)
+    ren.UseImageBasedLightingOn()
+    # VTK cannot project a FLOAT cube map onto spherical harmonics and says so, once per
+    # render, on stderr. It falls back to the irradiance texture, which is what this wants
+    # anyway -- so ask for that rather than let it warn its way there. The environment has
+    # to be float: the bench lamp is brighter than white, and that is the whole point of it.
+    ren.UseSphericalHarmonicsOff()
+
+
+def apply_contact_shadows(ren: vtk.vtkRenderer) -> bool:
+    """Darken the creases where one solid meets another. Says whether it took.
+
+    THE THING THAT MAKES A PART SIT ON THE BOARD. Every solid here is lit as though nothing
+    else were in the scene, so a DIP and the board under it were two objects at the same
+    brightness meeting at a line -- which reads as a sticker, however good the material is.
+    Screen-space ambient occlusion costs one pass and puts a soft shadow in every corner:
+    under each part, inside each bore, along each solder fillet.
+
+    The radius is in WORLD units, so it is millimetres here, and it is the whole setting:
+    much under a pitch and the shadow hugs the outline too tightly to read, much over and
+    a dense board turns into a grey wash. One hole's width is what a part actually casts
+    onto a bench.
+
+    Returns False rather than raising if the driver cannot do it: this is the one piece of
+    the render that is a luxury, and a machine whose OpenGL is too old for it should get a
+    board that looks slightly flatter rather than no board at all.
+    """
+    try:
+        occlusion = vtk.vtkSSAOPass()
+        occlusion.SetDelegatePass(vtk.vtkRenderStepsPass())
+        occlusion.SetRadius(CONTACT_SHADOW_MM)
+        occlusion.SetBias(CONTACT_SHADOW_BIAS_MM)
+        occlusion.SetKernelSize(CONTACT_SHADOW_SAMPLES)
+        occlusion.BlurOn()
+        ren.SetPass(occlusion)
+    except (AttributeError, TypeError):  # pragma: no cover - driver-dependent
+        return False
+    return True
 
 
 def apply_default_lighting(ren: vtk.vtkRenderer) -> None:
@@ -2527,14 +2773,19 @@ def apply_default_lighting(ren: vtk.vtkRenderer) -> None:
     key.SetLightTypeToCameraLight()
     key.SetPosition(-0.45, 0.55, 1.0)  # relative to the camera, in its own frame
     key.SetFocalPoint(0.0, 0.0, 0.0)
-    key.SetIntensity(0.95)
+    # Dimmer than they were, and deliberately: with ``apply_environment`` there is now a
+    # whole room doing the general lighting, and lamps left at their old strength on top of
+    # it blow out every light-coloured part. What these two are still for is DIRECTION --
+    # the shape of a solder fillet, which an environment lights evenly and therefore
+    # flattens.
+    key.SetIntensity(0.78)
     ren.AddLight(key)
 
     fill = vtk.vtkLight()
     fill.SetLightTypeToCameraLight()
     fill.SetPosition(0.6, -0.4, 0.7)
     fill.SetFocalPoint(0.0, 0.0, 0.0)
-    fill.SetIntensity(0.45)
+    fill.SetIntensity(0.32)
     ren.AddLight(fill)
 
 
