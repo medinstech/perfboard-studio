@@ -518,7 +518,14 @@ Four decisions carry it, and each has a test that would notice it going:
   otherwise make every part adjacent to every other and collapse the columns — the same
   hairball the glyphs prevent, arriving by the back door.
 - **Symbols live in grid cells and wires only in the channels between them**, so no wire
-  can cross a symbol; channels widen to fit whatever a left-edge sweep assigns them. Rail
+  can cross a symbol; channels widen to fit whatever a left-edge sweep assigns them.
+  `schematic.column_cap` is the single answer to how tall a column should be and it has
+  three consumers — a layer too tall is split at it, consecutive layers too thin are folded
+  together up to it, and the block of parts no net reaches is packed at it; two of those
+  disagreeing would split a column and immediately merge it back. It divides by
+  `CELL_ASPECT`, which is not taste: a symbol is wide and short and the horizontal channels
+  sit between the ROWS, so a row costs far more height than a column costs width, and a
+  square grid of cells draws a sheet taller than it is wide. Rail
   anchors come out of the **same** track pool as the trunks, because a crossing carries no
   dot and reads correctly while a line lying along a ground symbol's bars does not.
   `RAIL_GLYPH_MM`/`RAIL_GLYPH_DEPTH_MM` are the layout's contract with the renderer — one

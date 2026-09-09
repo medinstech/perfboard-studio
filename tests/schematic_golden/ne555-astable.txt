@@ -1,14 +1,14 @@
-sheet 195.58 x 109.22
+sheet 165.10 x 109.22
 symbol C1 polarised-capacitor c-elec-d5-p2 at 63.50,20.32 size 20.32x10.16 value='10uF'
     pin 1 name='+' left 0.00,5.08
     pin 2 name='-' right 20.32,5.08
 symbol C2 capacitor c-disc-p2 at 63.50,78.74 size 20.32x10.16 value='0.01uF'
     pin 1 name=None left 0.00,5.08
     pin 2 name=None right 20.32,5.08
-symbol J1 connector hdr-1x2 at 154.94,48.26 size 20.32x15.24 value='Conn_01x02'
+symbol J1 connector hdr-1x2 at 124.46,48.26 size 20.32x15.24 value='Conn_01x02'
     pin 1 name=None left 0.00,5.08
     pin 2 name=None left 0.00,10.16
-symbol LED1 led led-5mm at 124.46,50.80 size 20.32x10.16 value='LED'
+symbol LED1 led led-5mm at 93.98,78.74 size 20.32x10.16 value='LED'
     pin 2 name='K' left 0.00,5.08
     pin 1 name='A' right 20.32,5.08
 symbol R1 resistor r-axial-3 at 63.50,50.80 size 20.32x10.16 value='10k'
@@ -32,9 +32,9 @@ symbol U1 ic dip-8 at 20.32,43.18 size 30.48x25.40 value='NE555'
 wire OUT [signal] 20.32,58.42 -> 12.70,58.42 -> 12.70,73.66
 wire OUT [signal] 93.98,55.88 -> 88.90,55.88 -> 88.90,73.66
 wire OUT [signal] 12.70,73.66 -> 88.90,73.66
-wire LED_A [signal] 114.30,55.88 -> 119.38,55.88 -> 119.38,73.66
-wire LED_A [signal] 144.78,55.88 -> 147.32,55.88 -> 147.32,73.66
-wire LED_A [signal] 119.38,73.66 -> 147.32,73.66
+wire LED_A [signal] 114.30,55.88 -> 116.84,55.88 -> 116.84,71.12
+wire LED_A [signal] 114.30,83.82 -> 121.92,83.82 -> 121.92,71.12
+wire LED_A [signal] 116.84,71.12 -> 121.92,71.12
 wire THRESH [signal] 20.32,53.34 -> 12.70,53.34 -> 12.70,33.02
 wire THRESH [signal] 50.80,58.42 -> 55.88,58.42 -> 55.88,33.02
 wire THRESH [signal] 114.30,25.40 -> 116.84,25.40 -> 116.84,33.02
@@ -49,12 +49,12 @@ wire CTRL [signal] 63.50,83.82 -> 55.88,83.82 -> 55.88,71.12
 wire CTRL [signal] 53.34,71.12 -> 55.88,71.12
 rail VCC [power] up 50.80,48.26 -> 58.42,48.26 -> 58.42,38.10
 rail VCC [power] up 63.50,55.88 -> 53.34,55.88 -> 53.34,35.56
-rail VCC [power] up 154.94,53.34 -> 147.32,53.34 -> 147.32,33.02
+rail VCC [power] up 124.46,53.34 -> 116.84,53.34 -> 116.84,35.56
 rail GND [ground] down 20.32,48.26 -> 15.24,48.26 -> 15.24,71.12
 rail GND [ground] down 83.82,25.40 -> 86.36,25.40 -> 86.36,35.56
 rail GND [ground] down 83.82,83.82 -> 86.36,83.82 -> 86.36,91.44
-rail GND [ground] down 124.46,55.88 -> 116.84,55.88 -> 116.84,71.12
-rail GND [ground] down 154.94,58.42 -> 149.86,58.42 -> 149.86,71.12
+rail GND [ground] down 93.98,83.82 -> 88.90,83.82 -> 88.90,93.98
+rail GND [ground] down 124.46,58.42 -> 119.38,58.42 -> 119.38,73.66
 junction net-5 55.88,33.02
 junction net-5 53.34,33.02
 junction net-6 86.36,40.64
@@ -63,12 +63,12 @@ label [ref/centre] 73.66,18.41 C1
 label [value/centre] 73.66,31.50 10uF
 label [ref/centre] 73.66,76.83 C2
 label [value/centre] 73.66,89.92 0.01uF
-label [ref/centre] 165.10,46.35 J1
-label [value/centre] 165.10,64.52 Conn_01x02
-label [pin/left] 161.29,53.34 1
-label [pin/left] 161.29,58.42 2
-label [ref/centre] 134.62,48.89 LED1
-label [value/centre] 134.62,61.98 LED
+label [ref/centre] 134.62,46.35 J1
+label [value/centre] 134.62,64.52 Conn_01x02
+label [pin/left] 130.81,53.34 1
+label [pin/left] 130.81,58.42 2
+label [ref/centre] 104.14,76.83 LED1
+label [value/centre] 104.14,89.92 LED
 label [ref/centre] 73.66,48.89 R1
 label [value/centre] 73.66,61.98 10k
 label [ref/centre] 104.14,18.41 R2
@@ -86,7 +86,7 @@ label [pin/right] 44.45,53.34 7
 label [pin/right] 44.45,58.42 6
 label [pin/right] 44.45,63.50 5
 label [net/left] 17.27,72.77 OUT
-label [net/left] 120.14,72.77 LED_A
+label [net/left] 117.60,70.23 LED_A
 label [net/left] 13.46,32.13 THRESH
 label [net/left] 61.72,39.75 DISCH
 label [net/left] 54.10,70.23 CTRL

@@ -103,6 +103,13 @@ closed without a bump.
 
 ### Changed
 
+- **The sheet folds thin columns together instead of drawing a strip.** BFS depth is not
+  a constraint, it is a hint — the half of that sentence the layout already acted on split a
+  layer too TALL, and a real circuit produces the opposite: a signal chain twelve hops deep
+  and one part wide at every hop. The ATmega example came out 462 × 284 mm with 24 symbols
+  on it and six of its twelve columns holding a single part; it is 292 × 279 mm now, and
+  the six sheets in this repository lost a fifth of their total area between them.
+
 - **The schematic is a view over the whole workspace, not a dock down the side**, and it
   detaches into a window of its own so a sheet and a board can sit side by side on a second
   monitor. It was a panel on the right edge — a whole circuit in a third of the window, with

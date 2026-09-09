@@ -1067,6 +1067,35 @@ def _collect_symbols(
     return symbols
 
 
+#: How much wider than tall a sheet wants its GRID OF CELLS to be.
+#:
+#: Not the sheet's aspect ratio and not a taste: it is the ratio between how much width a
+#: column costs and how much height a row costs, and they are not the same. A symbol is
+#: wide and short -- a resistor is 20 mm across and 6 mm tall -- and the horizontal channels
+#: that carry the trunks sit between the ROWS, so a row costs far more height than a column
+#: costs width. A square grid of cells therefore draws a sheet taller than it is wide, which
+#: is what the ATmega example did: 24 symbols in a 5-tall grid came out 257 x 312 mm.
+#:
+#: Two is measured, over the six circuits this repository ships. Against a square grid it
+#: takes the big sheet from 257 x 312 to 292 x 279 -- landscape rather than portrait, which
+#: is the way a schematic is read and printed -- and the total area of all six down as well.
+CELL_ASPECT = 2.0
+
+
+def column_cap(group_size: int) -> int:
+    """How many symbols belong in one column of a group of ``group_size``.
+
+    ONE ANSWER, THREE CONSUMERS, which is the whole reason it is a function: a layer too
+    tall is split at this (:func:`_split_tall_layers`), consecutive layers too thin are
+    folded together up to it (:func:`_merge_thin_columns`), and the block of parts no net
+    reaches is packed at it. Two of those disagreeing would produce a layout that splits a
+    column and immediately merges it back, and the third is the one people notice.
+
+    Never below three, so a small circuit is not spread into a strip.
+    """
+    return max(3, math.ceil(math.sqrt(group_size / CELL_ASPECT))) if group_size else 3
+
+
 def _split_tall_layers(layers: list[list[str]], group_size: int) -> list[list[str]]:
     """Break a layer that is too tall to read into consecutive columns of its own.
 
@@ -1078,19 +1107,47 @@ def _split_tall_layers(layers: list[list[str]], group_size: int) -> list[list[st
     a schematic has no precedence to respect, so a part moved one column further out only
     makes its own wire span one more channel.
 
-    The cap is the side of a square: a group of n parts wants about sqrt(n) of them in a
-    column, which is the same arithmetic the loose-parts block below already uses, and
-    never fewer than three, so a small circuit is not spread into a strip. Chunks are
-    consecutive in the reference order the layer already carries, which keeps R1 beside R2
-    rather than scattering a group of equals, and is deterministic for the reason
-    everything here is.
+    The cap is :func:`column_cap`, which every other decision about column height reads
+    too. Chunks are consecutive in the reference order the layer already carries, which
+    keeps R1 beside R2 rather than scattering a group of equals, and is deterministic for
+    the reason everything here is.
     """
-    cap = max(3, math.ceil(math.sqrt(group_size)))
+    cap = column_cap(group_size)
     out: list[list[str]] = []
     for layer in layers:
         for start in range(0, len(layer), cap):
             out.append(layer[start : start + cap])
     return out
+
+
+def _merge_thin_columns(columns: list[list[str]], group_size: int) -> list[list[str]]:
+    """Fold consecutive columns into one while they still fit under the height cap.
+
+    THE OTHER HALF OF :func:`_split_tall_layers`, and the same sentence: BFS depth is not
+    a constraint, it is a hint. That function breaks a layer too TALL to read; this one
+    joins layers too THIN to be worth a column, and the second case is the one a real
+    circuit produces. A signal chain -- U1 to R1 to Q1 to K1 to J2 -- is twelve hops deep
+    and one part wide at every hop, which is a correct layering and a sheet half a metre
+    long: the ATmega example came out 462 x 284 mm with 24 symbols in it, six of its twelve
+    columns holding a single part.
+
+    Nothing is violated by folding them. A schematic has no precedence to respect, and two
+    parts in one column are two parts a channel away from each other rather than a column
+    away -- which is where a decoupling capacitor belongs anyway.
+
+    The cap is :func:`column_cap`, the one :func:`_split_tall_layers` splits at, so the
+    two cannot disagree about how tall a column should be -- a layout that split a column
+    and immediately merged it back would depend on which ran last. Merging is left to right
+    and consecutive, which keeps the layering's order and is deterministic.
+    """
+    cap = column_cap(group_size)
+    merged: list[list[str]] = []
+    for column in columns:
+        if merged and len(merged[-1]) + len(column) <= cap:
+            merged[-1].extend(column)
+        else:
+            merged.append(list(column))
+    return merged
 
 
 def _assign_cells(
@@ -1146,11 +1203,12 @@ def _assign_cells(
             local[depth[ref]].append(ref)
         columns.extend(_split_tall_layers(local, len(group)))
 
+    columns = _merge_thin_columns(columns, len(visited) - len(alone))
     _barycentre_sweeps(columns, adjacency)
 
     if alone:
         tall = max((len(column) for column in columns), default=0)
-        per_column = max(tall, math.ceil(math.sqrt(len(alone))))
+        per_column = max(tall, column_cap(len(alone)))
         for start in range(0, len(alone), per_column):
             columns.append(alone[start : start + per_column])
 
