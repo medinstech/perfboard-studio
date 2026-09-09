@@ -71,7 +71,10 @@ from perfboard_studio.schematic import (
     SchematicOptions,
     Symbol,
     SymbolKind,
+    _PinSpec,
+    _relay_sides,
     _split_tall_layers,
+    _switch_poles,
     build_schematic,
     cell_at,
     symbol_kind_for,
@@ -686,6 +689,117 @@ def test_a_to92_is_a_box_and_that_is_the_decision_not_an_omission() -> None:
     real = standard_footprints()["to92"]
     assert all(pin.name is None for pin in real.pins)
     assert symbol_kind_for(real, len(real.pins)) == "box"
+
+
+def test_a_to220_is_a_box_for_the_same_reason_and_the_tab_says_nothing() -> None:
+    """The other refusal, and the one most likely to be argued with: a TO-220 is a
+    regulator often enough that drawing one looks safe. It is also a transistor, a MOSFET
+    and a bridge rectifier, and a 7805 and an LM317 do not even agree on which leg is
+    which. The package is a heatsink tab, not a pinout."""
+    real = standard_footprints()["to220"]
+    assert all(pin.name is None for pin in real.pins)
+    assert symbol_kind_for(real, len(real.pins)) == "box"
+
+
+def test_a_tactile_switch_is_drawn_as_a_switch() -> None:
+    """The one lead assignment a package really does make. Four legs in two pairs, the
+    pair on each side bonded inside the part -- which is what the part IS rather than what
+    a manufacturer chose, and the whole difference from a TO-92's base."""
+    real = standard_footprints()["sw-tactile"]
+
+    assert _switch_poles(real) == (("1", "2"), ("3", "4"))
+    assert symbol_kind_for(real, len(real.pins)) == "switch"
+
+
+def test_both_legs_of_a_switch_pole_are_drawn_and_meet() -> None:
+    """All four have to be there -- a net can be wired to any of them -- and the two of a
+    pair have to arrive at one point, or somebody wires across a pair that is already
+    shorted and wonders why the switch does nothing."""
+    real = standard_footprints()["sw-tactile"]
+    body = _SYMBOL_BUILDERS["switch"](
+        tuple(_PinSpec(number=pin.number, name=pin.name) for pin in real.pins), real
+    )
+
+    assert [(pin.number, pin.side) for pin in body.pins] == [
+        ("1", "left"),
+        ("2", "left"),
+        ("3", "right"),
+        ("4", "right"),
+    ]
+    # The two leads of a pole share their last vertex, which is the join.
+    left_leads = [
+        shape.points[-1]
+        for shape in body.shapes
+        if shape.kind == "polyline" and len(shape.points) == 3 and shape.points[0].x == 0.0
+    ]
+    assert len(left_leads) == 2 and left_leads[0] == left_leads[1]
+
+
+def test_a_four_pin_part_that_is_not_two_bonded_pairs_is_a_box() -> None:
+    """The helper refuses to guess, and the refusal has to reach the drawing."""
+    scattered = dataclasses.replace(
+        standard_footprints()["sw-tactile"],
+        id="sw-odd",
+        pins=tuple(
+            FootprintPin(number=str(n + 1), d_col=n, d_row=0) for n in range(4)
+        ),
+    )
+
+    assert _switch_poles(scattered) is None
+    assert symbol_kind_for(scattered, 4) == "box"
+
+
+def test_a_relay_is_a_coil_and_a_contact_block() -> None:
+    """Which side is the winding is the COUNT -- two pins along one side -- and that much
+    is true of every relay this tool can hold a footprint for."""
+    real = standard_footprints()["relay-spdt"]
+
+    assert _relay_sides(real) == (("1", "2"), ("3", "4", "5"))
+    assert symbol_kind_for(real, len(real.pins)) == "relay"
+
+
+def test_the_relay_symbol_never_says_which_contact_is_the_common_one() -> None:
+    """Songle and Omron disagree about it on packages of the same outline, so a sheet that
+    named one would be a board built normally-closed when it was meant to be
+    normally-open -- and it would look right the whole way. The contacts are numbered leads
+    out of a block, and the numbers are drawn, or the refusal is not honest."""
+    document = PerfDocument(
+        meta=DocumentMeta(name="relay", created="", modified=""),
+        board=Board(
+            type="pad-per-hole",
+            cols=20,
+            rows=20,
+            pitch=2.54,
+            thickness=1.6,
+            material="FR4",
+            pad_diameter=1.9,
+            drill_diameter=0.8,
+        ),
+        parts=(SchematicPart(id="p1", ref="K1", value="", footprint_id="relay-spdt"),),
+    )
+    drawing = build_schematic(document, REGISTRY)
+
+    symbol = drawing.symbols[0]
+    assert symbol.kind == "relay"
+    assert all(pin.name is None for pin in symbol.pins)
+    printed = {label.text for label in drawing.labels if label.kind == "pin"}
+    assert printed == {"1", "2", "3", "4", "5"}
+
+
+def test_a_part_with_no_two_pin_side_is_not_a_relay() -> None:
+    both_pairs = dataclasses.replace(
+        standard_footprints()["relay-spdt"],
+        id="relay-dpst",
+        pins=(
+            FootprintPin(number="1", d_col=0, d_row=0),
+            FootprintPin(number="2", d_col=0, d_row=2),
+            FootprintPin(number="3", d_col=5, d_row=0),
+            FootprintPin(number="4", d_col=5, d_row=2),
+        ),
+    )
+
+    assert _relay_sides(both_pairs) is None
+    assert symbol_kind_for(both_pairs, 4) == "box"
 
 
 def test_a_two_terminal_archetype_with_the_wrong_pin_count_falls_back_to_a_box() -> None:

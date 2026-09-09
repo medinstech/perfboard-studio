@@ -22,6 +22,14 @@ closed without a bump.
 
 ### Added
 
+- **A tactile switch is drawn as a pushbutton and a relay as a coil and a contact block**,
+  instead of both being boxes with numbered pins. Both shapes come from what the PACKAGE
+  says about itself — a 6 mm switch's four legs are two bonded pairs, and a relay's winding
+  is the pair of pins along one side — read off the footprint's own geometry rather than
+  assumed. The relay deliberately stops there: which contact is common is a fact about the
+  part and not the package, so the contacts stay numbered leads out of a block. A TO-92 and
+  a TO-220 stay boxes for the same reason, and there is now a test saying so for each.
+
 - **Right-click the sheet to edit the circuit.** A symbol offers its properties, a rename
   that carries every net it is wired into, a duplicate, and either `Remove from the Design`
   or `Take off the Board` depending on which of the two it is in; a pin under the pointer

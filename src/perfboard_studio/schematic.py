@@ -167,6 +167,8 @@ SymbolKind: TypeAlias = Literal[  # noqa: UP040
     "led",
     "crystal",
     "potentiometer",
+    "switch",
+    "relay",
     "ic",
     "connector",
     "box",
@@ -535,6 +537,64 @@ def _positive_pin_number(pins: tuple[_PinSpec, ...], polarized: bool) -> str | N
     return None
 
 
+def _switch_poles(
+    footprint: Footprint | None,
+) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    """The two nodes of a four-legged tactile switch, as pin numbers, or ``None``.
+
+    THE ONE THING A SWITCH PACKAGE DOES SAY ABOUT ITSELF. A 6 mm tactile switch has four
+    legs in two pairs and the pair on each SIDE of the body is bonded together inside it --
+    that is what the part IS, not what one manufacturer chose, which is exactly the
+    difference from a TO-92's base. So this symbol may exist where a transistor's may not.
+
+    Read off the footprint's own GEOMETRY rather than off pin numbers: a package that
+    numbered its legs some other way gets a box instead of a lie, and the columns are what
+    the physical part is bonded along.
+    """
+    if footprint is None or len(footprint.pins) != 4:
+        return None
+    columns = sorted({pin.d_col for pin in footprint.pins})
+    if len(columns) != 2:
+        return None
+    left = tuple(pin.number for pin in footprint.pins if pin.d_col == columns[0])
+    right = tuple(pin.number for pin in footprint.pins if pin.d_col == columns[1])
+    if len(left) != 2 or len(right) != 2:
+        return None
+    return left, right
+
+
+def _relay_sides(
+    footprint: Footprint | None,
+) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    """The coil's pins and the contact set's, as pin numbers, or ``None``.
+
+    A PCB relay's coil is a PAIR of pins along one side of the body and its contacts are
+    the several along the other; which side is which is the count, and that much is true of
+    every relay this tool can hold a footprint for.
+
+    WHICH CONTACT IS THE COMMON ONE IS NOT, and this deliberately does not say. Songle and
+    Omron disagree about it on packages of the same outline, so the symbol draws the
+    contacts as numbered leads out of a contact block rather than as a blade resting on one
+    of them: a sheet that named the wrong pin COM is a board built normally-closed when it
+    was meant to be normally-open, and it would look right the whole way.
+    """
+    if footprint is None or len(footprint.pins) < 4:
+        return None
+    columns = sorted({pin.d_col for pin in footprint.pins})
+    if len(columns) != 2:
+        return None
+    sides = [
+        tuple(pin.number for pin in footprint.pins if pin.d_col == column) for column in columns
+    ]
+    coils = [side for side in sides if len(side) == 2]
+    if len(coils) != 1:
+        # Both sides a pair, or neither: nothing here says which one is the winding.
+        return None
+    coil = coils[0]
+    contacts = next(side for side in sides if side is not coil)
+    return coil, contacts
+
+
 # -- two-terminal geometry ---------------------------------------------------
 #
 # Every two-lead symbol is the same size and sits on the same axis, so a row of them lines
@@ -783,6 +843,154 @@ def _potentiometer_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None)
     return _SymbolBody(shapes=shapes, pins=drawn, width=_TWO_W, height=height)
 
 
+def _switch_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    """A momentary pushbutton: two terminals, a gap, and a plunger over it.
+
+    Each terminal carries BOTH of its legs, joined by a bar, because they are one node
+    inside the part -- see ``_switch_poles``. Drawing them as four separate leads would
+    make somebody wire across a pair that is already shorted and wonder why the switch does
+    nothing.
+    """
+    poles = _switch_poles(footprint)
+    by_number = {pin.number: pin for pin in pins}
+    assert poles is not None, "symbol_kind_for only asks for a switch it can read"
+    height = 5 * GRID_MM
+    axis = 2.5 * GRID_MM
+    rows = (1.5 * GRID_MM, 3.5 * GRID_MM)
+    # The two legs of a pole MEET at a point rather than being bridged by a bar. A bar plus
+    # two leads draws three sides of a rectangle, which is the box this symbol exists to
+    # stop being -- and a join is what "these are one node" looks like everywhere else on a
+    # schematic.
+    lead_ends = (1.0 * GRID_MM, 7.0 * GRID_MM)
+    joins = (2.0 * GRID_MM, 6.0 * GRID_MM)
+    gaps = (3.0 * GRID_MM, 5.0 * GRID_MM)
+    plunger_y = axis - 1.2 * GRID_MM
+
+    shapes: list[SymbolShape] = []
+    drawn: list[SymbolPin] = []
+    for side_index, numbers in enumerate(poles):
+        edge_x = 0.0 if side_index == 0 else _TWO_W
+        lead_end, join_x, gap_x = lead_ends[side_index], joins[side_index], gaps[side_index]
+        for row_index, number in enumerate(numbers):
+            y = rows[row_index]
+            shapes.append(
+                SymbolShape(
+                    kind="polyline",
+                    points=(_p(edge_x, y), _p(lead_end, y), _p(join_x, axis)),
+                )
+            )
+            spec = by_number.get(number)
+            drawn.append(
+                SymbolPin(
+                    number=number,
+                    name=spec.name if spec is not None else None,
+                    at=_p(edge_x, y),
+                    side="left" if side_index == 0 else "right",
+                )
+            )
+        shapes.append(SymbolShape(kind="polyline", points=(_p(join_x, axis), _p(gap_x, axis))))
+        shapes.append(
+            SymbolShape(kind="circle", points=(_p(gap_x, axis),), radius=0.3 * GRID_MM)
+        )
+    shapes.append(
+        SymbolShape(
+            kind="polyline",
+            points=(_p(2.6 * GRID_MM, plunger_y), _p(5.4 * GRID_MM, plunger_y)),
+        )
+    )
+    shapes.append(
+        SymbolShape(
+            kind="polyline",
+            points=(_p(4 * GRID_MM, plunger_y), _p(4 * GRID_MM, plunger_y - 0.8 * GRID_MM)),
+        )
+    )
+    return _SymbolBody(
+        shapes=tuple(shapes), pins=tuple(drawn), width=_TWO_W, height=height
+    )
+
+
+def _relay_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    """A coil, a mechanical link, and a contact block with its leads numbered.
+
+    The link is drawn as separate short strokes rather than one line, because a line
+    between a coil and a contact set is what a WIRE looks like, and this is the one part of
+    a relay symbol that must not read as copper. ``SymbolShape`` has no dash style and
+    should not grow one for this: three segments are three segments in every renderer.
+
+    The contact block stays a block for the reason ``_relay_sides`` gives -- naming the
+    common pin is the claim that would put somebody's motor on the wrong throw.
+    """
+    sides = _relay_sides(footprint)
+    assert sides is not None, "symbol_kind_for only asks for a relay it can read"
+    coil_numbers, contact_numbers = sides
+    by_number = {pin.number: pin for pin in pins}
+
+    rows = max(len(contact_numbers), 2)
+    height = (rows + 1) * PIN_PITCH_MM
+    width = 12.5 * GRID_MM
+    coil_left, coil_right = 2 * GRID_MM, 4.5 * GRID_MM
+    block_left, block_right = 7 * GRID_MM, 10.5 * GRID_MM
+    top, bottom = PIN_PITCH_MM / 2, height - PIN_PITCH_MM / 2
+
+    coil_ys = (PIN_PITCH_MM, rows * PIN_PITCH_MM)
+    shapes: list[SymbolShape] = [
+        SymbolShape(
+            kind="polygon",
+            points=(
+                _p(coil_left, coil_ys[0]),
+                _p(coil_right, coil_ys[0]),
+                _p(coil_right, coil_ys[1]),
+                _p(coil_left, coil_ys[1]),
+            ),
+        ),
+        SymbolShape(
+            kind="polygon",
+            points=(
+                _p(block_left, top),
+                _p(block_right, top),
+                _p(block_right, bottom),
+                _p(block_left, bottom),
+            ),
+        ),
+    ]
+    drawn: list[SymbolPin] = []
+    for index, number in enumerate(coil_numbers):
+        y = coil_ys[index]
+        shapes.append(SymbolShape(kind="polyline", points=(_p(0.0, y), _p(coil_left, y))))
+        spec = by_number.get(number)
+        drawn.append(
+            SymbolPin(
+                number=number,
+                name=spec.name if spec is not None else None,
+                at=_p(0.0, y),
+                side="left",
+            )
+        )
+    for index, number in enumerate(contact_numbers):
+        y = (index + 1) * PIN_PITCH_MM
+        shapes.append(SymbolShape(kind="polyline", points=(_p(block_right, y), _p(width, y))))
+        spec = by_number.get(number)
+        drawn.append(
+            SymbolPin(
+                number=number,
+                name=spec.name if spec is not None else None,
+                at=_p(width, y),
+                side="right",
+            )
+        )
+
+    link_y = height / 2
+    stroke = 0.35 * GRID_MM
+    x = coil_right + 0.4 * GRID_MM
+    while x + stroke <= block_left:
+        shapes.append(SymbolShape(kind="polyline", points=(_p(x, link_y), _p(x + stroke, link_y))))
+        x += stroke * 2
+
+    return _SymbolBody(
+        shapes=tuple(shapes), pins=tuple(drawn), width=width, height=height
+    )
+
+
 # -- everything else is a box, and the box says what it knows -----------------
 
 
@@ -871,7 +1079,7 @@ def _connector_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> 
 
 
 def _box_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
-    """The honest fallback: a TO-92, a tactile switch, a relay, an unplaced part.
+    """The honest fallback: a TO-92, a TO-220, a part nothing in the document defines.
 
     Five pins or fewer go down one side, because a three-lead part with one pin on the left
     and two on the right invites the reader to see a transistor -- which is precisely the
@@ -891,6 +1099,8 @@ _SYMBOL_BUILDERS: dict[
     "led": _led_body,
     "crystal": _crystal_body,
     "potentiometer": _potentiometer_body,
+    "switch": _switch_body,
+    "relay": _relay_body,
     "ic": _ic_body,
     "connector": _connector_body,
     "box": _box_body,
@@ -911,9 +1121,9 @@ _KIND_BY_ARCHETYPE: dict[BodyArchetype, SymbolKind] = {
     "pin-header": "connector",
     "screw-terminal": "connector",
     "potentiometer": "potentiometer",
-    "tactile-switch": "box",  # which pins are the same pole is not recorded anywhere
+    "tactile-switch": "switch",  # the legs on one side are bonded; see _switch_poles
     "crystal-hc49": "crystal",
-    "relay-box": "box",
+    "relay-box": "relay",  # the coil is the pair of pins; the contacts stay numbered
     "generic-box": "box",
 }
 
@@ -937,6 +1147,13 @@ def symbol_kind_for(footprint: Footprint | None, pin_count: int) -> SymbolKind:
     if kind in _TWO_TERMINAL_KINDS and pin_count != 2:
         return "box"
     if kind == "potentiometer" and pin_count != 3:
+        return "box"
+    # The last two ask the PACKAGE whether it knows enough, rather than counting pins: a
+    # switch is only a switch if its legs come in two bonded pairs, and a relay is only a
+    # relay if one side of it is a two-pin winding. Neither helper will guess.
+    if kind == "switch" and (_switch_poles(footprint) is None or pin_count != 4):
+        return "box"
+    if kind == "relay" and (_relay_sides(footprint) is None or pin_count != len(footprint.pins)):
         return "box"
     return kind
 
@@ -1754,7 +1971,13 @@ def build_schematic(
                     anchor="centre",
                 )
             )
-        if options.show_pin_numbers and placed.kind in ("ic", "connector", "box"):
+        # A relay is numbered like a box because its contacts ARE numbered and nothing
+        # else on the symbol says which is which -- that refusal is only honest if the
+        # numbers are there to read. A switch deliberately is not: its two legs per side
+        # are one node inside the part, so which of them a net lands on is a question about
+        # holes and not about the circuit, and two labels at the join would sit on top of
+        # the lines that say they are joined.
+        if options.show_pin_numbers and placed.kind in ("ic", "connector", "box", "relay"):
             for pin in placed.body.pins:
                 inset = LEAD_MM + 0.5 * GRID_MM
                 if pin.side == "left":

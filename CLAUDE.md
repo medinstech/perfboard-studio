@@ -554,13 +554,30 @@ Four decisions carry it, and each has a test that would notice it going:
   `RAIL_GLYPH_MM`/`RAIL_GLYPH_DEPTH_MM` are the layout's contract with the renderer — one
   fact, two consumers, and both must stay under `TRACK_PITCH_MM` or the guarantee needs
   another allocation pass.
-- **A symbol gets its real shape only where the registry knows what every lead IS.**
-  Polarity is read from the pin NAMES with pin 1 as the cathode for an unnamed polarised
-  part — the same rule as `guide._polarity_note`, and the two must not drift: an LED's pin
-  1 is its anode and a diode's is its cathode. A TO-92 has no E/B/C anywhere in this
-  codebase, so it is a box with numbered pins; drawing a transistor asserts a pinout
-  nothing here holds. The one assumption the registry does not back is written at
-  `_potentiometer_body`.
+- **A symbol gets its real shape only where something knows what every lead IS**, and the
+  question is always whether the fact belongs to the PACKAGE or to the PART. Polarity is
+  read from the pin NAMES with pin 1 as the cathode for an unnamed polarised part — the
+  same rule as `guide._polarity_note`, and the two must not drift: an LED's pin 1 is its
+  anode and a diode's is its cathode.
+  - A TO-92 has no E/B/C anywhere in this codebase and a TO-220 no IN/GND/OUT, so both are
+    boxes with numbered pins. That is not a gap in the registry: BC547 and 2N3904 share the
+    package and disagree about the pinout, and a TO-220 is a regulator, a transistor, a
+    MOSFET and a bridge rectifier. The pinout is a fact about the PART, and a symbol that
+    asserted one would be wrong for half the parts using the package — silently, and all
+    the way to the bench.
+  - A tactile switch and a relay get real shapes because the fact IS the package.
+    `_switch_poles` reads four legs in two bonded pairs off the footprint's own geometry
+    (the legs on one side of a 6 mm switch are bonded inside it, on every one ever made),
+    and `_relay_sides` reads the winding off the COUNT — two pins along one side. Both
+    helpers return `None` rather than guessing, and `symbol_kind_for` falls back to a box
+    when they do.
+  - **The relay stops exactly where the package stops.** Which contact is COM is not a
+    package fact — Songle and Omron disagree on the same outline — so the contacts are
+    numbered leads out of a block rather than a blade resting on one of them, and the
+    numbers are printed (`show_pin_numbers` includes `relay`) or the refusal is not honest.
+    A sheet that named the wrong pin builds a board normally-closed that was meant to be
+    normally-open, and it looks right the whole way.
+  - The one assumption the registry does not back is written at `_potentiometer_body`.
 - **Everything is deterministic.** BFS layering, barycentre sweeps and track packing each
   have ties, and every one is broken by reference or net id — otherwise the goldens are
   unblessable and the sheet rearranges itself between runs.
