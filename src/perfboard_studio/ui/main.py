@@ -120,6 +120,7 @@ from perfboard_studio.commands import (
     create_empty_document,
     create_standard_registry,
     create_starter_document,
+    place_parts,
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.drc import DrcViolation, run_drc
@@ -185,9 +186,14 @@ from perfboard_studio.model import (
 )
 from perfboard_studio.parsers.kicad import parse_kicad_netlist
 from perfboard_studio.placer import (
+    BoardSuggestion,
     PlacementOptions,
     PlacementPlan,
+    arrange_design,
+    design_entries,
     plan_placement,
+    recommended_board,
+    suggest_boards,
 )
 from perfboard_studio.placer import (
     describe as describe_placement,
@@ -1759,6 +1765,106 @@ def _plain(label: str) -> str:
     return label.replace("&", "").removesuffix("…").strip()
 
 
+class BoardSizeDialog(QDialog):
+    """Which stock board this circuit should go on, asked once, on the way from the
+    schematic to the board.
+
+    THE QUESTION HAS TO BE ASKED HERE OR NOT AT ALL. A perfboard is bought before it is
+    populated, and by the time somebody has dragged eleven parts into position they have
+    already chosen -- so the moment a design first moves onto a board is the only moment
+    the answer is still free. Before that there is nothing to size the board against; the
+    circuit is what says how much board it needs.
+
+    ANSWERED BY ARRANGING THE CIRCUIT ON EACH BOARD, not by adding up footprint areas
+    (``placer.suggest_boards``). Every row below is a board a supplier actually stocks,
+    laid out for real, and what the row says is what happened -- so a board that says the
+    circuit fits is one the circuit has already been fitted on.
+
+    The recommendation is the smallest board with room left to WIRE it, which is not the
+    smallest board it fits on: a board packed to its last hole has nowhere to run a solder
+    trace. Everything bigger is offered too, and so is the board the user already has --
+    somebody who has the 7 x 9 in a drawer is not helped by being told to buy the 5 x 7.
+    """
+
+    def __init__(
+        self,
+        suggestions: Sequence[BoardSuggestion],
+        current: Board,
+        recommended: BoardSuggestion | None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(t("Which board is this going on?"))
+        self.setMinimumWidth(520)
+        self._suggestions = tuple(suggestions)
+
+        layout = QVBoxLayout(self)
+        blurb = QLabel(
+            t(
+                "Every size below was tried with your circuit actually laid out on it. "
+                "The suggested one is the smallest with room left to wire the board, "
+                "which is not the same as the smallest it fits on."
+            )
+        )
+        blurb.setWordWrap(True)
+        blurb.setStyleSheet(f"color: {TEXT_DIM};")
+        layout.addWidget(blurb)
+
+        self.choices = QListWidget()
+        self.choices.setAlternatingRowColors(True)
+        layout.addWidget(self.choices, 1)
+
+        keep = QListWidgetItem(
+            t("Keep the board I have  ·  {cols} × {rows}").format(cols=current.cols, rows=current.rows)
+        )
+        keep.setData(Qt.ItemDataRole.UserRole, -1)
+        self.choices.addItem(keep)
+
+        for index, suggestion in enumerate(self._suggestions):
+            preset = suggestion.preset
+            if suggestion.fits:
+                note = t("fits, {percent}% full").format(
+                    percent=round(suggestion.fill * 100)
+                )
+            else:
+                note = t("too small — {count} part(s) will not fit").format(
+                    count=len(suggestion.arrangement.unplaced)
+                )
+            label = f"{preset.name}  ·  {preset.cols} × {preset.rows}  ·  {note}"
+            if recommended is not None and suggestion.preset is recommended.preset:
+                label = t("Suggested:  ") + label
+            item = QListWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, index)
+            if not suggestion.fits:
+                # Left visible rather than hidden: "the 4 x 6 is too small" is the useful
+                # half of the answer, and a list that silently starts at the 6 x 8 looks
+                # like the small boards do not exist.
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+            self.choices.addItem(item)
+            if recommended is not None and suggestion.preset is recommended.preset:
+                self.choices.setCurrentItem(item)
+
+        if self.choices.currentRow() < 0:
+            self.choices.setCurrentRow(0)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def chosen(self) -> BoardSuggestion | None:
+        """The board to switch to, or None to keep the one the document already has."""
+        item = self.choices.currentItem()
+        if item is None:
+            return None
+        index = int(item.data(Qt.ItemDataRole.UserRole))
+        if index < 0:
+            return None
+        return self._suggestions[index]
+
+
 def _preset_features(
     preset: BoardPreset | None, board: Board
 ) -> tuple[tuple[EdgeConnector, ...], tuple[MountingHole, ...]] | None:
@@ -3291,6 +3397,24 @@ class MainWindow(QMainWindow):
         self._has_placed_a_part = True
         app_settings().setValue(HAS_PLACED_KEY, True)
 
+    def _open_the_schematic_on_an_empty_design(self) -> None:
+        """Show the Schematic panel when there is nothing to show on the board.
+
+        The order this application now recommends is the order every EDA tool works in --
+        draw the circuit, then put it on a board -- and a panel that has to be found in a
+        menu before the recommendation can make sense is a recommendation nobody reads.
+
+        Only on a document with NOTHING in it: no parts, no components, no nets, no
+        copper. So it never overrules a layout somebody saved, and never fights a restored
+        session on a real board. ``raise_`` because the panel shares a tab group with the
+        3D view and the build guide, and a tab behind two others is still hidden.
+        """
+        document = self.bus.document
+        if document.components or document.parts or document.nets or document.conductors:
+            return
+        self.dock_schematic.show()
+        self.dock_schematic.raise_()
+
     def _refresh_empty_hint(self) -> None:
         """Tell a blank board what to do with itself, the first time round.
 
@@ -3310,8 +3434,11 @@ class MainWindow(QMainWindow):
             return
         self.view.set_empty_hint(
             f"<b>{t('Nothing on this board yet.')}</b><br><br>"
-            f"{t('Pick a part from the Parts panel and click a hole to place it.')}<br>"
-            f"{t('Then Net ▸ New Net… to say what joins what, and Route ▸ Autoroute.')}<br><br>"
+            f"{t('Start with the circuit, in the Schematic panel beside this one (Ctrl+5).')}<br>"
+            f"{t('Add Part… describes a part, Wire joins two pins, and Place on the Board '
+                 'suggests a board to suit the circuit and arranges it.')}<br><br>"
+            f"{t('Or place parts straight onto the board from the Parts panel, and use '
+                 'Net ▸ New Net… to say what joins what.')}<br>"
             f"{t('An existing circuit comes in through File ▸ Import KiCad Netlist.')}"
         )
 
@@ -3458,9 +3585,9 @@ class MainWindow(QMainWindow):
         self.act_sch_place = QPushButton(t("Place on the Board"))
         self.act_sch_place.setToolTip(
             t(
-                "Move every part that is only in the design onto the board, in a grid to "
-                "drag from. One undo step for the lot. Auto-place (Ctrl+Shift+A) arranges "
-                "them properly afterwards."
+                "Put the whole design on the board, arranged: connectors on the edge, the "
+                "rest lined up by what they connect to. Suggests a stock board size first, "
+                "while the board is still empty. One undo step for the lot."
             )
         )
         self.act_sch_place.clicked.connect(self.on_schematic_place_all)
@@ -3731,19 +3858,50 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(result.description, 6000)
 
     def on_schematic_place_all(self) -> None:
-        """Move the whole design onto the board. The step this panel exists to lead to.
+        """Move the whole design onto the board, arranged. The step this panel exists to
+        lead to.
 
-        A GRID, not an arrangement. Working out where parts should go is
-        ``placer.py``'s job and it is a second of simulated annealing; doing it silently
-        inside a button called "Place on the Board" would hide the one step of this
-        application somebody most wants to watch and re-run. So the parts land somewhere
-        obvious and the message says what to press next.
+        THIS USED TO PUT THE PARTS IN A GRID and tell the user to press Ctrl+Shift+A. The
+        argument for that was real -- working out where parts go is the one step of this
+        application somebody most wants to watch and re-run, and hiding it inside a button
+        called "Place on the Board" hides it. What it missed is that the grid is not a
+        neutral starting point: it is ordered by REFERENCE, which is to say by nothing at
+        all, and handing somebody a board laid out by the alphabet as the first thing they
+        see of their own circuit is a worse introduction than a second of waiting. The
+        button now does the whole job, and Ctrl+Shift+A is still there to do it again from
+        a different seed on a board the user has since changed.
+
+        TWO DECISIONS, IN THE ORDER A PERSON MAKES THEM. Which board to buy comes first,
+        because a perfboard is bought before it is populated and this is the last moment
+        the answer is still free -- and only when the board is still empty, since a board
+        with parts on it has already been chosen. Then the arrangement.
+
+        ONE UNDO STEP for the placement, which is what makes the whole thing safe to try:
+        the optimised anchors are worked out on a PREVIEW document and committed as a
+        single ``part.place``. Changing the board is its own decision and stays its own
+        step.
+
+        Parts already on the board are not moved. Putting a design on the board is not the
+        moment to rearrange what somebody has already positioned -- that is auto-place,
+        and it is a separate gesture the user asks for by name.
         """
-        parts = self.bus.document.parts
+        document = self.bus.document
+        parts = document.parts
         if not parts:
             self.statusBar().showMessage(t("Every part in the design is already on the board."), 6000)
             return
-        placements = self._grid_placements(parts)
+
+        if not document.components and not self._offer_a_board_size(document):
+            return
+        document = self.bus.document  # The board may have changed under us.
+
+        plan = self._run_planner(
+            t("Arranging the circuit on the board…"),
+            lambda should_stop: self._arranged_placements(document, should_stop),
+        )
+        if plan is None:
+            return
+        placements, unplaced = plan
         if not placements:
             self.statusBar().showMessage(
                 t("No room on this board for the parts in the design. Make it bigger, or "
@@ -3751,51 +3909,113 @@ class MainWindow(QMainWindow):
                 8000,
             )
             return
+
         result = self.bus.dispatch(
             "part.place",
             PlacePartsPayload(
                 placements=tuple(placements),
-                label=f"Place {len(placements)} part(s) from the schematic",
+                label=f"Place and arrange {len(placements)} part(s) from the schematic",
             ),
         )
         if not result.ok:
             self.statusBar().showMessage(f"[{result.code}] {result.message}", 10000)
             return
-        left = len(parts) - len(placements)
-        note = f"; {left} would not fit" if left else ""
+        note = f"; {unplaced} would not fit" if unplaced else ""
         self.statusBar().showMessage(
-            f"{result.description}{note}. Auto-place (Ctrl+Shift+A) arranges them, "
-            f"then Ctrl+R routes.",
+            f"{result.description}{note}. Ctrl+R routes it; Ctrl+Shift+A arranges it again "
+            f"from a different seed.",
             12000,
         )
         self._sync_schematic_highlight()
 
-    def _grid_placements(self, parts: Sequence[Any]) -> list[PartPlacement]:
-        """Lay parts out left to right in rows, skipping what will not fit.
+    def _offer_a_board_size(self, document: PerfDocument) -> bool:
+        """Ask which stock board the circuit is going on. False means the user cancelled.
 
-        The same shape as ``_place_parts_in_grid`` and deliberately not shared with it:
-        that one builds ``PlaceComponentPayload`` for parts the document does not have
-        yet, this one builds ``PartPlacement`` for parts it does, and the two payloads have
-        nothing in common but the arithmetic.
+        Silent when nothing can be suggested -- a design of parts the registry does not
+        know, or a board family with no stock sizes -- because a dialog with nothing in it
+        is a dialog that only wastes a decision.
         """
-        board = self.bus.document.board
-        placements: list[PartPlacement] = []
-        col, row, row_height = 1, 1, 0
-        for part in sorted(parts, key=lambda p: p.ref):
-            footprint = self.lookup(part.footprint_id)
-            if footprint is None:
-                continue
-            width = max((p.d_col for p in footprint.pins), default=0) + 2
-            height = max((p.d_row for p in footprint.pins), default=0) + 2
-            if col + width >= board.cols:
-                col, row = 1, row + row_height + 1
-                row_height = 0
-            if row + height >= board.rows:
-                break  # Out of board; the rest stay in the design and the caller says so.
-            placements.append(PartPlacement(id=part.id, anchor=HoleCoord(col=col, row=row)))
-            col += width
-            row_height = max(row_height, height)
-        return placements
+        suggestions = suggest_boards(
+            document.board, design_entries(document), document.nets, self.lookup
+        )
+        if not suggestions:
+            return True
+        dialog = BoardSizeDialog(
+            suggestions, document.board, recommended_board(suggestions), self
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+        chosen = dialog.chosen()
+        if chosen is None:
+            return True
+
+        connectors = preset_edge_connectors(chosen.preset, chosen.board)
+        holes = preset_mounting_holes(chosen.preset, chosen.board)
+        result = self.bus.dispatch(
+            "board.applyPreset",
+            ApplyBoardPresetPayload(
+                board=chosen.board,
+                edge_connectors=connectors,
+                mounting_holes=holes,
+                label=f"Use a {chosen.preset.name} board",
+            ),
+        )
+        if not result.ok:
+            QMessageBox.warning(self, t("Board refused"), f"[{result.code}] {result.message}")
+            return False
+        self.view.fit_board()
+        return True
+
+    def _arranged_placements(
+        self, document: PerfDocument, should_stop: Callable[[], bool]
+    ) -> tuple[list[PartPlacement], int]:
+        """Where every part in the design should go, optimised, as one batch to commit.
+
+        Worked out on a PREVIEW document rather than on the bus: the parts have to be on
+        the board before the placer can score them, and doing that for real would put a
+        grid on the undo stack that nobody asked for and that the next command replaces.
+        The preview is built through the real ``part.place``, so it is the document the
+        bus would have produced.
+
+        Components already on the board are LOCKED in the preview, not left movable. It is
+        the difference between "place my design" and "rearrange my board", and only the
+        second is a thing the user asked for here.
+        """
+        arrangement = arrange_design(document, self.lookup)
+        if not arrangement.placements:
+            return [], len(arrangement.unplaced)
+
+        seeded = PlacePartsPayload(
+            placements=tuple(
+                PartPlacement(id=p.id, anchor=p.anchor, rotation=p.rotation)
+                for p in arrangement.placements
+            ),
+            label="preview",
+        )
+        preview = place_parts.apply(
+            document, seeded, CommandContext(next_id=create_document_id_generator(document))
+        )
+        arranged_ids = {p.id for p in arrangement.placements}
+        preview = dataclasses.replace(
+            preview,
+            components=tuple(
+                c if c.id in arranged_ids else dataclasses.replace(c, locked=True)
+                for c in preview.components
+            ),
+        )
+
+        plan = plan_placement(
+            preview, self.lookup, PlacementOptions(seed=self._place_seed), should_stop=should_stop
+        )
+        final = {c.id: c for c in plan.document.components}
+        placements = [
+            PartPlacement(
+                id=part.id, anchor=final[part.id].anchor, rotation=final[part.id].rotation
+            )
+            for part in arrangement.placements
+            if part.id in final
+        ]
+        return placements, len(arrangement.unplaced)
 
     def _on_schematic_net_clicked(self, net_id: str) -> None:
         """Selecting the net in the dock is what lights it up everywhere else.
@@ -5703,6 +5923,7 @@ class MainWindow(QMainWindow):
         self.on_bus_changed(self.bus.document, None)
         self._mark_saved()
         self.view.fit_board()
+        self._open_the_schematic_on_an_empty_design()
         self.statusBar().showMessage(
             t("New {cols}×{rows} {material} board").format(
                 cols=document.board.cols, rows=document.board.rows, material=document.board.material
@@ -6683,6 +6904,7 @@ class MainWindow(QMainWindow):
         # position come back with the rest of the state, so opening it lands where they
         # put it. See _build_3d_dock for the three costs this avoids.
         self.dock_3d.hide()
+        self._open_the_schematic_on_an_empty_design()
 
         colour = settings.value(BOARD_COLOUR_KEY, "")
         if isinstance(colour, str) and colour in self.act_colour:

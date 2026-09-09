@@ -4840,8 +4840,19 @@ def test_a_missed_click_while_wiring_cancels_the_half_made_pair() -> None:
     _close(window)
 
 
-def test_place_on_the_board_moves_the_whole_design_in_one_undo_step() -> None:
+def _keep_the_board(window) -> None:
+    """Answer the board-size question with "keep the one I have".
+
+    Stubbed on the METHOD, not on the dialog, for the reason ``_confirm`` is: a test that
+    reaches past the window into QDialog is a test that breaks when the question is asked
+    a different way, and this is the question, whatever it looks like.
+    """
+    type(window)._offer_a_board_size = lambda self, document: True
+
+
+def test_place_on_the_board_arranges_the_whole_design_in_one_undo_step() -> None:
     window = _blank_window()
+    _keep_the_board(window)
     _add(window, "U1", "dip-8")
     _add(window, "R1", "r-axial-3")
     _add(window, "R2", "r-axial-3")
@@ -4850,9 +4861,9 @@ def test_place_on_the_board_moves_the_whole_design_in_one_undo_step() -> None:
 
     assert window.bus.document.parts == ()
     assert {c.ref for c in window.bus.document.components} == {"U1", "R1", "R2"}
-    # It says what to press next rather than quietly optimising the arrangement, which is
-    # a second of annealing and the one step somebody most wants to watch.
-    assert "Ctrl+Shift+A" in window.statusBar().currentMessage()
+    # Arranged, not dropped in a grid: the button does the whole job now, and says what
+    # the next step is rather than what the missing one was.
+    assert "Ctrl+R" in window.statusBar().currentMessage()
 
     window.bus.undo()
     assert len(window.bus.document.parts) == 3
@@ -4860,8 +4871,83 @@ def test_place_on_the_board_moves_the_whole_design_in_one_undo_step() -> None:
     _close(window)
 
 
+def test_placing_a_design_leaves_the_parts_already_on_the_board_alone() -> None:
+    """Putting a design on the board is not the moment to rearrange what somebody has
+    already positioned. That is auto-place, and it is a gesture they ask for by name."""
+    window = _blank_window()
+    _keep_the_board(window)
+    _add(window, "U1", "dip-8")
+    window.on_schematic_place_all()
+    settled = {c.ref: (c.anchor, c.rotation) for c in window.bus.document.components}
+
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    window.on_schematic_place_all()
+
+    after = {c.ref: (c.anchor, c.rotation) for c in window.bus.document.components}
+    assert after["U1"] == settled["U1"]
+    assert {"R1", "R2"} <= set(after)
+    _close(window)
+
+
+def test_a_connector_in_the_design_is_placed_on_the_edge_of_the_board() -> None:
+    """The whole reason the button arranges rather than laying a grid: a header dropped
+    in the middle of a board is a header nothing can be plugged into."""
+    window = _blank_window()
+    _keep_the_board(window)
+    _add(window, "J1", "hdr-1x4")
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+
+    window.on_schematic_place_all()
+
+    board = window.bus.document.board
+    header = next(c for c in window.bus.document.components if c.ref == "J1")
+    assert (
+        min(
+            header.anchor.col,
+            board.cols - 1 - header.anchor.col,
+            header.anchor.row,
+            board.rows - 1 - header.anchor.row,
+        )
+        <= 1
+    )
+    _close(window)
+
+
+def test_the_board_size_dialog_offers_the_stock_sizes_and_the_board_you_have() -> None:
+    """Built and read without exec(): the question is which board, and the answer is a
+    row in a list, so neither needs an event loop to be tested."""
+    from perfboard_studio.geometry import STANDARD_PRESETS
+    from perfboard_studio.model import SchematicPart
+    from perfboard_studio.placer import design_entries, recommended_board, suggest_boards
+    from perfboard_studio.ui.main import BoardSizeDialog
+
+    window = _blank_window()
+    document = window.bus.document
+    parts = tuple(
+        SchematicPart(id=f"p{i}", ref=f"U{i}", value="", footprint_id="dip-8")
+        for i in range(4)
+    )
+    document = dataclasses.replace(document, parts=parts)
+    suggestions = suggest_boards(
+        document.board, design_entries(document), document.nets, window.lookup
+    )
+    best = recommended_board(suggestions)
+    dialog = BoardSizeDialog(suggestions, document.board, best, window)
+
+    # Row 0 is always "keep the board I have", and it answers with None.
+    dialog.choices.setCurrentRow(0)
+    assert dialog.chosen() is None
+    # ...and the recommendation is preselected, on a board a supplier stocks.
+    assert best is not None
+    assert best.preset in {entry for entry in STANDARD_PRESETS}
+    _close(window)
+
+
 def test_placing_with_nothing_left_in_the_design_says_so_rather_than_doing_nothing() -> None:
     window = _blank_window()
+    _keep_the_board(window)
 
     window.on_schematic_place_all()
 
@@ -4874,6 +4960,7 @@ def test_remove_deletes_a_part_in_the_design_and_unplaces_one_on_the_board() -> 
     Somebody clicking Remove on a placed part means "wrong hole", not "delete the
     circuit around it"."""
     window = _blank_window()
+    _keep_the_board(window)
     _add(window, "R1", "r-axial-3")
     _add(window, "R2", "r-axial-3")
     window.on_schematic_place_all()

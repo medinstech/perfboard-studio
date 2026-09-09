@@ -242,10 +242,18 @@ TURKISH: Mapping[str, str] = {
     "Enter or right-click finishes, Esc cancels": "Enter veya sağ tık bitirir, Esc iptal eder",
     "no pins yet": "henüz pin yok",
     "Nothing on this board yet.": "Bu kartta henüz bir şey yok.",
-    "Pick a part from the Parts panel and click a hole to place it.":
-        "Parçalar panelinden bir parça seç ve yerleştirmek için bir deliğe tıkla.",
-    "Then Net ▸ New Net… to say what joins what, and Route ▸ Autoroute.":
-        "Sonra Netler ▸ Yeni Net… ile neyin neye bağlanacağını söyle, ardından Yol ▸ Otomatik.",
+    "Start with the circuit, in the Schematic panel beside this one (Ctrl+5).":
+        "Devreyle başla: yanındaki Şematik panelinden (Ctrl+5).",
+    "Add Part… describes a part, Wire joins two pins, and Place on the Board "
+    "suggests a board to suit the circuit and arranges it.": (
+        "Parça Ekle… bir parçayı tanımlar, Bağla iki pini birleştirir, Kart Üzerine "
+        "Yerleştir ise devreye uygun bir kart önerip yerleşimi yapar."
+    ),
+    "Or place parts straight onto the board from the Parts panel, and use "
+    "Net ▸ New Net… to say what joins what.": (
+        "Ya da Parçalar panelinden doğrudan kart üzerine yerleştir ve neyin neye "
+        "bağlandığını Netler ▸ Yeni Net… ile söyle."
+    ),
     "An existing circuit comes in through File ▸ Import KiCad Netlist.":
         "Mevcut bir devre Dosya ▸ KiCad Netlist İçe Aktar ile gelir.",
     "Filter nets…  (gnd, power, U1)": "Netleri süz…  (gnd, power, U1)",
@@ -475,13 +483,28 @@ TURKISH: Mapping[str, str] = {
         "parça ise karttan alınır ve tasarımda kalır."
     ),
     "Place on the Board": "Kart Üzerine Yerleştir",
-    "Move every part that is only in the design onto the board, in a grid to "
-    "drag from. One undo step for the lot. Auto-place (Ctrl+Shift+A) arranges "
-    "them properly afterwards.": (
-        "Yalnızca tasarımda olan her parçayı, sürüklemeye hazır bir ızgara hâlinde kart "
-        "üzerine taşır. Tamamı tek geri alma adımı. Sonrasında düzgün yerleşimi "
-        "Otomatik Yerleştir (Ctrl+Shift+A) yapar."
+    "Put the whole design on the board, arranged: connectors on the edge, the "
+    "rest lined up by what they connect to. Suggests a stock board size first, "
+    "while the board is still empty. One undo step for the lot.": (
+        "Tasarımın tamamını yerleşimi yapılmış hâlde kart üzerine koyar: konnektörler "
+        "kenara, geri kalanı bağlantılarına göre hizalı. Kart boşken önce hazır satılan "
+        "bir kart boyutu önerir. Tamamı tek geri alma adımı."
     ),
+    # -- choosing the board the circuit goes on --------------------------------
+    "Which board is this going on?": "Bu devre hangi karta girecek?",
+    "Every size below was tried with your circuit actually laid out on it. "
+    "The suggested one is the smallest with room left to wire the board, "
+    "which is not the same as the smallest it fits on.": (
+        "Aşağıdaki her boy, devreniz gerçekten üzerine yerleştirilerek denendi. "
+        "Önerilen, kartı tellemeye yer kalan en küçük boy — ki bu, devrenin sığdığı "
+        "en küçük boyla aynı şey değildir."
+    ),
+    "Keep the board I have  ·  {cols} × {rows}": "Mevcut kartım kalsın  ·  {cols} × {rows}",
+    "fits, {percent}% full": "sığıyor, %{percent} dolu",
+    "too small — {count} part(s) will not fit": "çok küçük — {count} parça sığmıyor",
+    "Suggested:  ": "Önerilen:  ",
+    "Arranging the circuit on the board…": "Devre kart üzerine yerleştiriliyor…",
+    "Board refused": "Kart reddedildi",
     "Every part in the design is already on the board.": (
         "Tasarımdaki her parça zaten kart üzerinde."
     ),

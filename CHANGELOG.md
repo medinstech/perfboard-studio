@@ -22,6 +22,21 @@ closed without a bump.
 
 ### Added
 
+- **The schematic panel opens by itself on a document with nothing in it**, and the
+  board's empty hint now leads with the circuit rather than with the Parts panel. The
+  order this application recommends is the order every EDA tool works in — draw the
+  circuit, then put it on a board — and a panel that has to be found in a menu before the
+  recommendation makes sense is a recommendation nobody reads. Only on a document with no
+  parts, no components, no nets and no copper, so it never overrules a saved layout.
+
+- **"Place on the Board" suggests a stock board size first**, while the board is still
+  empty and the answer is still free. Every size offered is one a supplier stocks
+  (`geometry.STANDARD_PRESETS`) and every row was measured by laying the circuit out on
+  that board for real, so "fits, 18% full" means it has been fitted. The recommendation is
+  the smallest board with room left to WIRE it, everything larger is offered, and so is
+  the board the user already has — somebody with a 7 × 9 in a drawer is not helped by
+  being told to buy the 5 × 7.
+
 - **A first arrangement built from the netlist** (`placer.arrange`), and half the
   annealer's restarts now begin from it. Every restart used to start from the placement
   the document already had, so the search only sampled basins around wherever the parts
@@ -45,6 +60,19 @@ closed without a bump.
   supplier actually stocks, and only the family the user is already on is offered.
 
 ### Changed
+
+- **"Place on the Board" arranges the design instead of dropping it in a grid.** The
+  argument for the grid was real — working out where parts go is the one step of this
+  application somebody most wants to watch and re-run, and hiding it inside a button hides
+  it. What it missed is that the grid is not a neutral starting point: it is ordered by
+  REFERENCE, which is to say by nothing at all, and a board laid out by the alphabet is a
+  worse first sight of your own circuit than a second of waiting. Ctrl+Shift+A is still
+  there to do it again from another seed.
+
+  Still one undo step: the optimised anchors are worked out on a preview document and
+  committed as a single `part.place`. Parts already on the board are locked while it runs
+  — putting a design on the board is not the moment to rearrange what somebody has already
+  positioned.
 
 - **Auto-place puts connectors on the edge of the board, and lines the rest of the parts
   up into lanes.** Two things were wrong with the arrangement it produced, and the first
