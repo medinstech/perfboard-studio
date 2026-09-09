@@ -133,6 +133,11 @@ closed without a bump.
 
 ### Changed
 
+- **`PERFBOARD_STUDIO_SIMPLE_3D=1` turns off image-based lighting and contact shadows.**
+  They are the only two things in the 3D view that ask a graphics driver for anything
+  unusual, and VTK ends the process rather than raising when one cannot oblige — so there
+  is now a way to run without them. Parts keep their materials and their real shapes.
+
 - **Through-hole parts are drawn as the real packages**, borrowed from KiCad's model
   library: a TO-220 with its tab and bolt hole, a DIP with gull-wing leads and a moulded
   notch, an electrolytic with its crimped rim and relief cross, a screw terminal with slots

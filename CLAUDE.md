@@ -494,6 +494,16 @@ Four things here were got wrong first, and each has a test:
   of: VTK's environment frame is Y-up and this world is Z-up, so without it the lamp sits
   off to one side and everything is lit from the wrong place — consistently, which makes it
   look odd rather than broken.
+- **Both of these can be turned off, and only these.** `PERFBOARD_STUDIO_SIMPLE_3D=1`
+  makes `apply_environment` and `apply_contact_shadows` do nothing. They are the only
+  things in this view that ask a driver for anything unusual — a float cube map with a
+  prefiltered mip chain, and a second render pass with its own framebuffers — and VTK does
+  not raise when a driver cannot do something, it ends the process, which is the whole
+  reason `offscreen_gl_available` spends its crash in a child. What is lost is the room and
+  the shadows; every material and every borrowed package stays, which is still a great deal
+  more than the flat shading this replaced. Read from the environment on every call rather
+  than cached, because a variable somebody can set and restart with is the only tool they
+  have against a crash that happens before anything is logged.
 - **Contact shadows are what make a part sit on the board.** Every solid is lit as though
   nothing else were in the scene, so a DIP and the board under it were two objects at the
   same brightness meeting at a line. `apply_contact_shadows` is one SSAO pass and its

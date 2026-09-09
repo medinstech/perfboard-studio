@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import functools
 import math
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -2923,6 +2924,33 @@ def build_renderer(
     return ren, stats
 
 
+#: The environment variable that turns the two GPU-heavy parts of this view off.
+#:
+#: IMAGE-BASED LIGHTING AND THE AMBIENT-OCCLUSION PASS ARE THE ONLY THINGS HERE THAT ASK
+#: THE DRIVER FOR ANYTHING UNUSUAL -- a float cube map with a prefiltered mip chain, and a
+#: second render pass with its own framebuffers. Everything else in this module is
+#: triangles and a colour. VTK does not raise when a driver cannot do something: it ends
+#: the process (see ``offscreen_gl_available``, which exists for exactly that), so the one
+#: honest thing to offer somebody whose machine goes down is a way to run without them.
+#:
+#: What is lost is the room and the contact shadows. What is kept is every material, every
+#: borrowed package and both lamps, which is still a great deal more than the flat shading
+#: this replaced.
+#:
+#:     PERFBOARD_STUDIO_SIMPLE_3D=1 perfboard-studio
+SIMPLE_3D_ENV = "PERFBOARD_STUDIO_SIMPLE_3D"
+
+
+def rich_shading_wanted() -> bool:
+    """Whether to ask the driver for image-based lighting and contact shadows.
+
+    Read from the environment on every call rather than cached, so a person can answer the
+    question "is it this?" by setting a variable and starting the application again, which
+    is the only tool somebody has for a crash that happens before anything is logged.
+    """
+    return os.environ.get(SIMPLE_3D_ENV, "").strip() not in ("1", "true", "yes", "on")
+
+
 def apply_environment(ren: vtk.vtkRenderer) -> None:
     """Give the materials a room to reflect.
 
@@ -2936,6 +2964,8 @@ def apply_environment(ren: vtk.vtkRenderer) -> None:
     bench lamp sits somewhere off to the side of the board and every part is lit from the
     wrong place -- consistently, which is what makes it look merely odd rather than broken.
     """
+    if not rich_shading_wanted():
+        return
     ren.SetEnvironmentTexture(environment_texture())
     ren.SetEnvironmentUp(0.0, 0.0, 1.0)
     ren.SetEnvironmentRight(1.0, 0.0, 0.0)
@@ -2965,6 +2995,8 @@ def apply_contact_shadows(ren: vtk.vtkRenderer) -> bool:
     the render that is a luxury, and a machine whose OpenGL is too old for it should get a
     board that looks slightly flatter rather than no board at all.
     """
+    if not rich_shading_wanted():
+        return False
     try:
         occlusion = vtk.vtkSSAOPass()
         occlusion.SetDelegatePass(vtk.vtkRenderStepsPass())

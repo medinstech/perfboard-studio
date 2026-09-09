@@ -654,6 +654,34 @@ def test_contact_shadows_say_whether_they_took() -> None:
     assert renderer.GetPass() is not None
 
 
+def test_the_two_gpu_heavy_parts_can_be_turned_off(monkeypatch) -> None:
+    """VTK does not raise when a driver cannot do something -- it ends the process, which
+    is what ``offscreen_gl_available`` exists for. Image-based lighting and the occlusion
+    pass are the only things in this view that ask for anything unusual, so the one honest
+    thing to offer somebody whose machine goes down is a way to run without them. What is
+    lost is the room and the contact shadows; every material and every borrowed package
+    stays.
+    """
+    import vtkmodules.all as vtk
+
+    from perfboard_studio.ui import view3d
+
+    monkeypatch.setenv(view3d.SIMPLE_3D_ENV, "1")
+    renderer = vtk.vtkRenderer()
+
+    view3d.apply_environment(renderer)
+
+    assert view3d.rich_shading_wanted() is False
+    assert renderer.GetUseImageBasedLighting() is False
+    assert view3d.apply_contact_shadows(renderer) is False
+    assert renderer.GetPass() is None
+    # The parts are still shaded as materials -- that is not the expensive half.
+    prop = vtk.vtkProperty()
+    prop.SetColor(0.5, 0.5, 0.5)
+    view3d._finish(prop, view3d.STEEL)
+    assert prop.GetInterpolation() == vtk.VTK_PBR
+
+
 def test_dimming_a_part_takes_its_highlight_and_not_its_shape() -> None:
     """``_dim`` and ``_pick_out`` are a pair: a guide step darkens everything that is not
     its subject, and under PBR the way to push something back is to ROUGHEN it. Dropping
