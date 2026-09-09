@@ -583,6 +583,16 @@ per square on a 460 mm sheet is nine thousand things to hold, transform and hit-
 something nothing will ever click. The minor grid gives up before the major one does, so
 zooming out reads instead of greying over.
 
+**Dragging a symbol onto the board places that one part.** The other half of "Place on the
+Board", which moves the whole design: `view2d.PART_MIME` is the format the drag carries, the
+board is the drop target (`BoardView.partDropped`), and the WINDOW decides which command it
+is — `part.place` for a part in the design, `component.move` for one already down, the same
+split `on_schematic_remove` makes. The constant lives in `view2d` because that is the side
+that receives it and already owns the vocabulary a drop lands in (`screen_to_hole`), and
+because the import goes the way that does not make a cycle. The workspace's tab bar takes
+`setChangeCurrentOnDrag`, which is what lets a drag cross from the Schematic tab to the
+Board tab at all.
+
 Clicking cross-probes: a symbol selects that part on the board, a wire selects its net in
 the Nets dock (which is what already lights it on the board). Routed through that one
 panel deliberately, so three views cannot disagree about what is selected. **Joining two

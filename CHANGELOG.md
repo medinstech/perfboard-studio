@@ -22,6 +22,13 @@ closed without a bump.
 
 ### Added
 
+- **Drag a symbol onto the board to place that one part.** "Place on the Board" moves the
+  whole design; until now there was no way to put down a single part from the sheet at all
+  — double-clicking a symbol opened its properties. Dropping one whose part is already on
+  the board moves it instead, because that is the only thing the gesture can mean. Dragging
+  onto the Board tab switches to it and lets the drag carry on, so it works whether the
+  sheet is a tab or a window of its own.
+
 - **A fifth, much larger example: `atmega328-relay`.** An ATmega328 with a 7805, a
   crystal, a relay and four connectors — 24 parts, 24 nets, 52 conductors and a 76-step
   guide with 104 checkpoints, on a 9 × 15 cm board. The four existing examples are between

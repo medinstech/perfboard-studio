@@ -32,10 +32,11 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 
-from PySide6.QtCore import QLineF, QPointF, QRect, QRectF, Qt, Signal
+from PySide6.QtCore import QLineF, QMimeData, QPoint, QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QDrag,
     QMouseEvent,
     QPainter,
     QPen,
@@ -43,6 +44,7 @@ from PySide6.QtGui import (
     QWheelEvent,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QGraphicsItem,
     QGraphicsScene,
     QGraphicsView,
@@ -65,6 +67,10 @@ from perfboard_studio.schematic import (
 from . import theme
 from .i18n import t
 from .scenetext import draw_label
+
+# The drag's format lives with the board, which is what receives it and which already
+# owns the vocabulary a drop lands in (screen_to_hole). One constant, two views.
+from .view2d import PART_MIME
 
 # ---------------------------------------------------------------------------
 # Colours
@@ -366,6 +372,11 @@ class SchematicView(QGraphicsView):
         self.wiring = False
         self.pending_pin: tuple[str, str] | None = None
         self.setBackgroundBrush(QBrush(QColor(SHEET)))
+        #: Where the press that might become a drag happened, in viewport coordinates, and
+        #: which symbol was under it. Held because a drag is a press PLUS movement: acting
+        #: on the press alone would make every click on a symbol start one.
+        self._press_at: QPoint | None = None
+        self._press_ref: str | None = None
         self.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
@@ -598,6 +609,35 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
         super().mouseDoubleClickEvent(event)
+
+    def _maybe_start_drag(self, event: QMouseEvent) -> bool:
+        """Begin dragging a symbol towards the board, if this move is far enough to mean it.
+
+        WHAT IS DRAGGED IS THE PART, not the symbol: the sheet is derived and nothing on it
+        moves. The drop lands on a HOLE, which is the only position a part has -- so this is
+        the schematic's half of "put this one part there", and the board's half is an
+        ordinary ``part.place``.
+
+        ``startDragDistance`` rather than any movement at all, because a click on a symbol
+        to select it always carries a pixel or two of drift with it.
+        """
+        if self._press_at is None or self._press_ref is None:
+            return False
+        if (event.pos() - self._press_at).manhattanLength() < QApplication.startDragDistance():
+            return False
+
+        ref = self._press_ref
+        self._press_at = None
+        self._press_ref = None
+        data = QMimeData()
+        data.setData(PART_MIME, ref.encode("utf-8"))
+        # Plain text as well, so dropping one on a text field or another application says
+        # something useful rather than nothing.
+        data.setText(ref)
+        drag = QDrag(self)
+        drag.setMimeData(data)
+        drag.exec(Qt.DropAction.CopyAction)
+        return True
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         where = self.mapToScene(event.position().toPoint())

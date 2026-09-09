@@ -116,6 +116,7 @@ from perfboard_studio.commands import (
     DisconnectPinsPayload,
     ImportNetlistPayload,
     MirrorComponentPayload,
+    MoveComponentPayload,
     PartPlacement,
     PlaceBlockPayload,
     PlaceComponentPayload,
@@ -2300,6 +2301,7 @@ class MainWindow(QMainWindow):
         self.scene.componentPlaced.connect(self._on_component_placed)
         self.scene.componentActivated.connect(self.on_component_properties)
         self.view.contextMenuRequested.connect(self._on_board_context_menu)
+        self.view.partDropped.connect(self._on_part_dropped)
         self.scene.measureArmed.connect(self._on_measure_armed)
         self.scene.measured.connect(self._on_measured)
         self.scene.cutArmed.connect(self._on_cut_armed)
@@ -2330,6 +2332,11 @@ class MainWindow(QMainWindow):
         self.schematic_page = self._build_schematic_page()
         self.workspace.addTab(self.schematic_page, t("Schematic"))
         self.workspace.currentChanged.connect(self._on_workspace_changed)
+        # Dragging a symbol onto the Board tab switches to it and lets the drag carry on,
+        # which is what makes drag-and-drop work at all while the two are tabs rather than
+        # windows. Every tabbed editor does this and it is invisible until it is missing.
+        self.workspace.tabBar().setAcceptDrops(True)
+        self.workspace.tabBar().setChangeCurrentOnDrag(True)
         #: The sheet's own window while it is detached, and None while it is a tab.
         self._schematic_window: _DetachedSheet | None = None
 
@@ -4109,6 +4116,43 @@ class MainWindow(QMainWindow):
             )
             return
         self.go_to_component(component.id)
+        self._sync_schematic_highlight()
+
+    def _on_part_dropped(self, ref: str, hole: object) -> None:
+        """A symbol was dragged off the sheet and dropped on a hole.
+
+        TWO COMMANDS BEHIND ONE GESTURE, and which one it is depends on which list the part
+        is in -- the same split ``on_schematic_remove`` already makes. A part in the design
+        is PLACED there; one already on the board is MOVED there, because dragging a symbol
+        whose part is already down can only mean "put it here instead".
+
+        The hole is whatever was under the pointer. It is checked by the command rather than
+        here: ``part.place`` and ``component.move`` both refuse a part that would hang off
+        the board, and a second opinion in the view is a second thing to keep in step.
+        """
+        if not isinstance(hole, HoleCoord):
+            return
+        document = self.bus.document
+        component = next((c for c in document.components if c.ref == ref), None)
+        if component is not None:
+            result = self.bus.dispatch(
+                "component.move", MoveComponentPayload(id=component.id, anchor=hole)
+            )
+        else:
+            part = next((p for p in document.parts if p.ref == ref), None)
+            if part is None:
+                return
+            result = self.bus.dispatch(
+                "part.place",
+                PlacePartsPayload(
+                    placements=(PartPlacement(id=part.id, anchor=hole),),
+                    label=f"Place {ref} at {format_hole(hole)}",
+                ),
+            )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
         self._sync_schematic_highlight()
 
     def _on_schematic_part_activated(self, ref: str) -> None:

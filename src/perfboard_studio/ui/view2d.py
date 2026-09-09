@@ -25,11 +25,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, cast
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
     QCursor,
+    QDragEnterEvent,
+    QDragLeaveEvent,
+    QDragMoveEvent,
+    QDropEvent,
     QPainter,
     QPainterPath,
     QPainterPathStroker,
@@ -3488,6 +3492,17 @@ EMPTY_HINT_STYLE = f"""
 """
 
 
+#: What a symbol dragged off the schematic carries. Its own type rather than plain text:
+#: a board must not accept an arbitrary string dropped on it, and Qt only offers a target
+#: the formats the source actually declared.
+#:
+#: Here rather than in viewsch because this is the side that RECEIVES it, and because this
+#: module already owns the vocabulary a drop lands in -- screen_to_hole, and a hole is the
+#: only position a part has. One constant, two views, and the import goes the way that does
+#: not make a cycle.
+PART_MIME = "application/x-perfboard-studio-part"
+
+
 class BoardView(QGraphicsView):
     #: Gap between the top of the viewport and the mode banner.
     BANNER_MARGIN_PX = 10
@@ -3498,8 +3513,17 @@ class BoardView(QGraphicsView):
     #: menu bar about which of them are available.
     contextMenuRequested = Signal(QPoint)
 
+    #: A part was dragged off the schematic and dropped on a hole. Carries the reference
+    #: and the hole. The VIEW does not place it: which command that is depends on whether
+    #: the part is in the design or already on the board, and that is the window's to know
+    #: -- the same division contextMenuRequested above is drawn on.
+    partDropped = Signal(str, object)
+
     def __init__(self, scene: BoardScene) -> None:
         super().__init__(scene)
+        # A symbol dragged from the sheet lands on a hole, which is the only position a
+        # part has. See viewsch.PART_MIME.
+        self.setAcceptDrops(True)
         self.board_scene = scene
         self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
@@ -3515,6 +3539,59 @@ class BoardView(QGraphicsView):
         self.mode_banner = ViewOverlay(self.viewport(), MODE_BANNER_STYLE)
         self.empty_hint = ViewOverlay(self.viewport(), EMPTY_HINT_STYLE)
         self.viewport().installEventFilter(self)
+
+    # -- a part dropped from the sheet ---------------------------------------
+
+    def _dropped_ref(self, event: QDropEvent | QDragMoveEvent) -> str | None:
+        """The reference being dragged, if this is a part from the schematic."""
+        return self._dropped_ref_from(event.mimeData())
+
+    @staticmethod
+    def _dropped_ref_from(data: QMimeData | None) -> str | None:
+        """Split out from the event so it can be exercised without one: constructing a
+        real QDropEvent needs a live drag, and what is being decided here is only whether
+        the payload is ours."""
+        if data is None or not data.hasFormat(PART_MIME):
+            return None
+        # ``QMimeData.text`` alongside the typed payload: the drag sets both, and the
+        # string one needs no decoding dance to read back.
+        text = data.text().strip()
+        return text or None
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if self._dropped_ref(event) is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        ref = self._dropped_ref(event)
+        if ref is None:
+            event.ignore()
+            return
+        # Said while the pointer is still moving, because the whole question during a drag
+        # is "which hole is this going into" and the answer is otherwise invisible.
+        hole = self._hole_under(event.position().toPoint())
+        self.show_mode(f"{ref} → {format_hole(hole)}")
+        event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
+        self.show_mode("")
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        ref = self._dropped_ref(event)
+        self.show_mode("")
+        if ref is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        self.partDropped.emit(ref, self._hole_under(event.position().toPoint()))
+
+    def _hole_under(self, point: QPoint) -> HoleCoord:
+        return screen_to_hole(
+            self.mapToScene(point), self.board_scene.document.board, self.board_scene.side
+        )
 
     # -- overlays ------------------------------------------------------------
 

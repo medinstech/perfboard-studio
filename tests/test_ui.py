@@ -4608,6 +4608,80 @@ def _open_schematic(doc):
     return window
 
 
+def test_a_symbol_dragged_onto_the_board_places_that_one_part() -> None:
+    """The other half of "Place on the Board": that button moves the WHOLE design, and
+    until now there was no way to put down one part from the sheet at all -- double-clicking
+    a symbol opened its properties."""
+    from perfboard_studio.model import HoleCoord
+
+    window = _blank_window()
+    _keep_the_board(window)
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+
+    window._on_part_dropped("R1", HoleCoord(5, 5))
+
+    placed = {c.ref: c.anchor for c in window.bus.document.components}
+    assert placed == {"R1": HoleCoord(5, 5)}
+    assert [p.ref for p in window.bus.document.parts] == ["R2"]
+    _close(window)
+
+
+def test_dragging_a_symbol_whose_part_is_already_down_moves_it() -> None:
+    """Two commands behind one gesture, and which one it is depends on which list the part
+    is in -- the same split Remove already makes. Dragging a symbol whose part is already
+    on the board can only mean "put it here instead"."""
+    from perfboard_studio.model import HoleCoord
+
+    window = _blank_window()
+    _keep_the_board(window)
+    _add(window, "R1", "r-axial-3")
+    window._on_part_dropped("R1", HoleCoord(4, 4))
+
+    window._on_part_dropped("R1", HoleCoord(9, 7))
+
+    assert window.bus.document.parts == ()
+    assert [c.anchor for c in window.bus.document.components] == [HoleCoord(9, 7)]
+    _close(window)
+
+
+def test_a_drop_the_board_refuses_says_so_rather_than_half_placing() -> None:
+    """The command checks the hole, not the view: a second opinion in the view is a second
+    thing to keep in step with what the bus actually allows."""
+    from perfboard_studio.model import HoleCoord
+
+    window = _blank_window()
+    _keep_the_board(window)
+    _add(window, "U1", "dip-28")
+
+    window._on_part_dropped("U1", HoleCoord(-4, -4))
+
+    assert window.bus.document.components == ()
+    assert [p.ref for p in window.bus.document.parts] == ["U1"]
+    assert window.statusBar().currentMessage()
+    _close(window)
+
+
+def test_a_dragged_part_carries_its_reference_in_a_format_of_its_own() -> None:
+    """Its own MIME type rather than plain text: a board must not accept an arbitrary
+    string dropped on it, and Qt only offers a target the formats the source declared."""
+    from PySide6.QtCore import QMimeData
+
+    from perfboard_studio.ui.view2d import PART_MIME
+
+    window = _open_schematic(_golden_document("ne555"))
+    data = QMimeData()
+    data.setText("nonsense")
+
+    assert not data.hasFormat(PART_MIME)
+    assert window.view._dropped_ref_from(data) is None
+
+    data.setData(PART_MIME, b"R1")
+    data.setText("R1")
+    assert window.view._dropped_ref_from(data) == "R1"
+    _close(window)
+
+
 def test_the_schematic_is_a_view_of_its_own_not_a_panel_down_the_side() -> None:
     """It was a dock on the right edge, which put a whole circuit into a third of the
     window and left the other two thirds showing a board nobody was looking at. A
