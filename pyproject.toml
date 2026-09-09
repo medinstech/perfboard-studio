@@ -16,7 +16,16 @@ description = "Perfboard layout designer: netlist-driven placement and routing, 
 # links, because nothing packages it.
 readme = "README.md"
 requires-python = ">=3.12"
-license = "Apache-2.0"
+# The CODE is Apache-2.0. The wheel also carries the through-hole package meshes in
+# ui/models/, which are derived from KiCad's packages3D library and are CC-BY-SA 4.0 --
+# so the expression is compound, because a wheel that said only "Apache-2.0" would be
+# telling somebody the wrong thing about a file it contains. Their own licence and notice
+# ship beside them; see src/perfboard_studio/ui/models/LICENSE.
+license = "Apache-2.0 AND CC-BY-SA-4.0"
+# Both licences travel in the wheel's own metadata, so somebody reading the PyPI page can
+# see the second one without downloading anything. The models' copy also ships inside the
+# package, beside the meshes it covers, because that is the copy a fork carries.
+license-files = ["LICENSE", "NOTICE", "src/perfboard_studio/ui/models/LICENSE"]
 # "perf" in the name is what PLAN.md §12 chose it for; these are the rest of the
 # discoverability, and the classifier list is the only place a package says which field it
 # belongs to. No `License ::` classifier: `license` above is an SPDX expression (PEP 639)
@@ -93,7 +102,16 @@ where = ["src"]
 # rather than through include-package-data, so that what ends up in a wheel is a decision
 # rather than whatever happened to be sitting in the tree.
 [tool.setuptools.package-data]
-perfboard_studio = ["ui/assets/*.png", "ui/assets/*.ico"]
+perfboard_studio = [
+    "ui/assets/*.png",
+    "ui/assets/*.ico",
+    # The through-hole package meshes and what they are. Data, and the only part of
+    # this distribution that is not Apache-2.0 -- see ui/models/LICENSE beside them.
+    "ui/models/*.ply",
+    "ui/models/index.json",
+    "ui/models/LICENSE",
+    "ui/models/NOTICE.md",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -217,9 +217,10 @@ than locking the user out of their own project.
 ### Footprints are generated, not shipped
 
 `footprints.py` computes all 61 footprints from a handful of numeric parameters — zero
-assets, no mesh library, no share-alike licence to inherit (PLAN.md D6). The same
-`BodySpec` that a footprint carries is what `ui/bodies.py` extrudes in 3D, so the 2D
-footprint and the 3D body cannot disagree.
+assets, and it is still the whole answer for what a part IS. The same `BodySpec` that a
+footprint carries is what `ui/bodies.py` extrudes in 3D, so the 2D footprint and the 3D
+body cannot disagree. **PLAN.md D6 moved for the 3D SHAPE only** — see "Packages borrowed
+from KiCad" below — and the generated body is still the fallback for every part.
 
 Three conventions here are load-bearing:
 
@@ -519,6 +520,66 @@ across the three-OS matrix would fail for reasons nobody can act on. What is hel
 instead is every decision above, including "no actor is left on Phong" — a scene with both
 models in it lights its two halves by different rules, and the leftover half reads as a
 sticker stuck onto the picture.
+
+### Packages borrowed from KiCad, and what was NOT borrowed
+
+**PLAN.md D6 chose parametric generation and gave three reasons: zero assets, a body that
+cannot disagree with its own footprint, and no share-alike licence inherited into an
+Apache-2.0 project. Two of them are untouched.** The third did not survive looking at the
+result — a potentiometer generated from a diameter and a height is a disc with a peg on it,
+a relay is a box, a screw terminal is a block with no screws in it. `ui/partmodels.py` reads
+meshes of the real packages, converted from KiCad's `packages3D` library by
+`tools/import_kicad_models.py`.
+
+What keeps everything D6 was protecting:
+
+- **The generated body is still the fallback, for every part.** A footprint nobody mapped, a
+  part asked for by a generated id, a build that shipped without the meshes — all of them
+  draw exactly as they did. `test_a_board_still_renders_with_no_models_at_all` is the pin.
+- **Only the shape ABOVE the board is borrowed.** The converter cuts every model at the
+  board surface and this application draws the leads, because it knows the board's
+  thickness, where the copper is and how far past it a trimmed lead stands. A model's own
+  legs are drawn untrimmed for a 1.6 mm board and would hang out of the solder side.
+- **The body keeps OUR colour.** `bodies.BODY_STYLES` is one table for the 2D view, the 3D
+  view and the guide's step images; a red LED coming out a different red in two of the three
+  would be giving that up for a borrowed mesh. The converter marks the biggest non-metal
+  piece as the body and it is painted from our table. Leads, tabs, bands and the gold on a
+  header pin keep the colour they were drawn with, because our table has no opinion there.
+- **Materials are ours**, so a borrowed mesh answers light by the same rules as a generated
+  one. The index names one of `view3d.MODEL_MATERIALS`; a name the renderer does not have is
+  caught by a test rather than shaded as plastic in silence.
+- **What is printed is still ours.** A KiCad resistor is a bare barrel — the library has no
+  way to know what value a part is and this application does — so `_axial_markings` prints
+  the colour code and the cathode band on the borrowed body. It takes the BARREL's own
+  radius and length from the mesh, because a footprint describes a package family and a
+  model is one part in it: printing at the footprint's size puts the bands inside the body,
+  where they simply vanish.
+
+Three things about the mapping:
+
+- **A model is only named when it IS the package the footprint describes.** The converter
+  prints the courtyard against the model's own size for every entry, and where nothing
+  matched — the 16 mm potentiometer, the 0.3-inch 40-pin DIP — there is no entry and the
+  generated body stands. A model whose leads are 5 mm apart on a footprint whose holes are
+  2.54 mm apart is a part standing on nothing.
+- **Position is not measured, because it is already right.** A KiCad through-hole model's
+  origin is pin 1 and its axes run the way this world does — x with the column, y against
+  the row. Both follow the footprint, and this project's convention is written down as "the
+  anchor is pin 1, at grid offset (0, 0)". A quarter turn of a component is minus a quarter
+  turn about world z: the footprint frame counts rows downward and the world counts them
+  up-negative.
+- **A header is the one package that is a repetition.** KiCad ships a model per length,
+  forty per row count; one pin mesh glyphed at the holes is the same picture for a fortieth
+  of the library, and it is what lets a header of a length nobody shipped a model for be
+  drawn at all — which matters, because header footprints are generated on demand.
+
+**The meshes are the only part of this repository that is not Apache-2.0.** They are
+CC-BY-SA 4.0 with KiCad's design exception, and their `LICENSE` and `NOTICE.md` live in
+`src/perfboard_studio/ui/models/` and travel with them. The exception means a board designed
+with this tool is unaffected; redistribution means keeping that directory intact. The wheel
+declares `Apache-2.0 AND CC-BY-SA-4.0` and `release.yml` checks the meshes and their licence
+are actually in it, because a wheel without them still draws every board — which is exactly
+why nothing else would notice them going missing.
 
 ### The guide's order is physical, and its checks are derived
 

@@ -284,9 +284,17 @@ packages/                  the original TypeScript engine, kept as the reference
                            Python port is proved against
 ```
 
-The 61 THT footprints are **generated from numeric parameters**, not shipped as assets —
-no mesh library, no share-alike licence to inherit. The same spec that draws a part in 2D
-extrudes its body in 3D, so the two cannot disagree.
+The 61 THT footprints are **generated from numeric parameters**, not shipped as assets.
+The same spec that draws a part in 2D extrudes its body in 3D, so the two cannot disagree,
+and a part nobody has a model for is still a whole part.
+
+**The 3D view borrows the real shape of the packages KiCad has one for** — a TO-220 with
+its tab and bolt hole, a relay, a screw terminal with slots in its screws — because a
+potentiometer generated from a diameter and a height is a disc with a peg on it. Only the
+shape above the board is borrowed: the leads through the holes are drawn from *your*
+board's thickness, the body keeps its colour from this project's own table, and every part
+without a model draws exactly as it did. **Those meshes are the one part of this repository
+that is not Apache-2.0** — see [Licence](#licence).
 
 **A part that is not among the 61 is described, not installed.** *Custom Part…* asks for a
 pin grid and three dimensions and hands back an identifier that carries them:
@@ -340,4 +348,23 @@ them, and that has to stay true. The record is in [docs/prior-art.md](https://gi
 
 ## Licence
 
-Apache-2.0. See [LICENSE](https://github.com/medinstech/perfboard-studio/blob/main/LICENSE) and [NOTICE](https://github.com/medinstech/perfboard-studio/blob/main/NOTICE).
+**The code is Apache-2.0.** See [LICENSE](https://github.com/medinstech/perfboard-studio/blob/main/LICENSE) and [NOTICE](https://github.com/medinstech/perfboard-studio/blob/main/NOTICE).
+
+**The 3D package meshes in `src/perfboard_studio/ui/models/` are CC-BY-SA 4.0**, because
+they are derived from the [KiCad packages3D library](https://gitlab.com/kicad/libraries/kicad-packages3D).
+They are the only part of this distribution that is not Apache-2.0, and they carry their
+own [LICENSE](https://github.com/medinstech/perfboard-studio/blob/main/src/perfboard_studio/ui/models/LICENSE)
+and [NOTICE.md](https://github.com/medinstech/perfboard-studio/blob/main/src/perfboard_studio/ui/models/NOTICE.md)
+in that directory.
+
+Two questions people actually have:
+
+- **Does this affect a board I design?** No. KiCad's licence has an exception for exactly
+  this: designs made with the library, and files generated from them, are not covered. Your
+  `.perf`, your schematic, your build guide and the board on your bench are yours, on
+  whatever terms you like. It is the same position as anybody using KiCad itself.
+- **Does it affect a fork, or a build I ship?** Only that directory, and only in the usual
+  CC-BY-SA way: keep its `LICENSE` and `NOTICE.md` with it. The rest of the tree stays
+  Apache-2.0. `tools/import_kicad_models.py` regenerates the meshes from a KiCad
+  installation if you would rather build them yourself, and deleting them costs nothing but
+  the shapes — every part falls back to its generated body.

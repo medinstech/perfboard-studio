@@ -133,6 +133,22 @@ closed without a bump.
 
 ### Changed
 
+- **Through-hole parts are drawn as the real packages**, borrowed from KiCad's model
+  library: a TO-220 with its tab and bolt hole, a DIP with gull-wing leads and a moulded
+  notch, an electrolytic with its crimped rim and relief cross, a screw terminal with slots
+  in its screws, a tactile switch, a relay, a crystal can. Only the shape above the board is
+  borrowed — the leads through the holes are still drawn from your board's own thickness,
+  the body still takes its colour from this project's table so the 2D and 3D views agree,
+  and a resistor still gets its colour code printed on the borrowed barrel. Every part
+  without a model draws exactly as it did, which is most of the library and all of the
+  custom parts.
+
+  **These meshes are the one part of the distribution that is not Apache-2.0.** They are
+  CC-BY-SA 4.0, derived from KiCad's packages3D library, and they carry their own licence
+  and notice in `src/perfboard_studio/ui/models/`. KiCad's exception means a board you
+  design is unaffected; a fork keeps that directory intact. `tools/import_kicad_models.py`
+  rebuilds them from a KiCad installation.
+
 - **The 3D view now shades parts as materials rather than as highlights.** Everything on
   the board was lit by a hand-picked specular value and an exponent, which describe a
   highlight and say nothing about what a thing is made of — so a metal can was a grey

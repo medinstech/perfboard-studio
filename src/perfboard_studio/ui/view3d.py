@@ -19,6 +19,7 @@ import math
 import subprocess
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from itertools import pairwise
 from typing import Any
 
@@ -67,6 +68,8 @@ from .bodies import (
     style_for,
     surface_for,
 )
+from .partmodels import PartModel, header_pin_model
+from .partmodels import model_for as _model_for
 
 SUBSTRATE_RGB = {
     "FR4": (0.16, 0.36, 0.21),
@@ -575,6 +578,23 @@ MASK = (0.0, 0.36)
 LAMINATE = (0.0, 0.74)
 #: PVC insulation on a hook-up wire.
 INSULATION = (0.0, 0.40)
+#: An LED's epoxy lens: smoother than anything else on the board, because it is cast rather
+#: than moulded and it is transmitting rather than reflecting.
+LENS = (0.0, 0.06)
+
+#: The names ``ui/models/index.json`` uses for the materials above. A borrowed mesh answers
+#: light by the same rules a generated body does, which is the point of not borrowing the
+#: source model's own shading.
+MODEL_MATERIALS: dict[str, tuple[float, float]] = {
+    "moulded": MOULDED,
+    "gloss": GLOSS,
+    "ceramic": CERAMIC,
+    "sleeve": SLEEVE,
+    "tinned": TINNED,
+    "steel": STEEL,
+    "plated": PLATED,
+    "lens": LENS,
+}
 
 
 def _to_linear(channel: float) -> float:
@@ -1555,17 +1575,38 @@ def _axial_pieces(body: _WorldBody) -> list[_Piece]:
             )
         )
 
-    # The printed colour code, as rings standing a hair proud of the body. Same layout as
-    # the 2D view draws (bodies.resistor_bands is the shared source): three bands in the
-    # near half and the tolerance band at the far end, because that asymmetry is what says
-    # which way round to read them.
+    return pieces + _axial_markings(body) + _lead_pieces(body)
+
+
+def _axial_markings(
+    body: _WorldBody, barrel: tuple[float, float, float] | None = None
+) -> list[_Piece]:
+    """What is PRINTED on a lying cylinder: the colour code, or the cathode band.
+
+    Separate from the body it is printed on because a borrowed mesh needs it too. A KiCad
+    resistor is a bare beige barrel -- the library has no way to know what value a part is,
+    and this application does (``bodies.resistor_bands`` reads the document's own value), so
+    the shape comes from there and the marking from here. A diode without its band is worse
+    than a diode drawn as a box: it is a part whose one distinguishing feature the picture
+    has quietly dropped.
+    """
+    # ``barrel`` is the borrowed mesh's own (radius, centre height, length), because a
+    # KiCad DIN0207 is 2.5 mm across and 6.3 mm long where this footprint's placement says
+    # 2.0 and 5.0 -- a footprint describes a package family and a model is one part in it.
+    # Printing at the footprint's size puts the bands INSIDE the barrel, which is not a
+    # subtle failure: they vanish.
+    radius, z, along = barrel or (body.across / 2, body.across / 2 + _LIFT, body.along)
+    orientation = _ALONG_X if body.axis == "x" else _ALONG_Y
+    pieces: list[_Piece] = []
+    # Same layout as the 2D view draws: three bands in the near half and the tolerance band
+    # at the far end, because that asymmetry is what says which way round to read them.
     for index, colour in enumerate(body.bands):
         fraction = 0.16 + index * 0.15 if index < len(body.bands) - 1 else 0.80
         pieces.append(
             _Piece(
-                source=_cylinder(radius * 1.03, body.along * 0.11, resolution=20),
+                source=_cylinder(radius * 1.03, along * 0.11, resolution=20),
                 rgb=_rgb(colour),
-                position=_offset_along(body, (fraction - 0.5) * body.along, z),
+                position=_offset_along(body, (fraction - 0.5) * along, z),
                 orientation=orientation,
                 material=CERAMIC,
             )
@@ -1574,8 +1615,8 @@ def _axial_pieces(body: _WorldBody) -> list[_Piece]:
     if body.polarity is not None:
         # A band at the end nearest the marked pin, standing very slightly proud so it is
         # visible against the body rather than fighting it for the same pixels.
-        band_width = max(body.along * 0.16, 0.5)
-        offset = (body.along / 2 - band_width) * _towards(body, body.polarity)
+        band_width = max(along * 0.16, 0.5)
+        offset = (along / 2 - band_width) * _towards(body, body.polarity)
         pieces.append(
             _Piece(
                 source=_cylinder(radius * 1.04, band_width),
@@ -1585,7 +1626,7 @@ def _axial_pieces(body: _WorldBody) -> list[_Piece]:
                 material=CERAMIC,
             )
         )
-    return pieces + _lead_pieces(body)
+    return pieces
 
 
 def _can_pieces(body: _WorldBody) -> list[_Piece]:
@@ -2100,6 +2141,86 @@ def _offset_along(body: _WorldBody, offset: float, z: float) -> tuple[float, flo
     return (body.x, body.y + offset, z)
 
 
+@lru_cache(maxsize=128)
+def _mesh(path: str) -> vtk.vtkPolyData:
+    """One borrowed mesh, read once and shared by every part that uses it.
+
+    Cached because a board is mostly the same twenty parts over and over and the whole
+    scene is rebuilt on every edit -- re-reading a DIP-8 forty times per keystroke is the
+    same mistake the pad grid exists not to make. ``SetInputData`` downstream then takes a
+    real reference, so nothing here can be collected out from under a mapper.
+    """
+    reader = vtk.vtkPLYReader()
+    reader.SetFileName(path)
+    reader.Update()
+    data = vtk.vtkPolyData()
+    data.DeepCopy(reader.GetOutput())
+    return data
+
+
+def _model_pieces(body: _WorldBody, model: PartModel, comp: Any, board: Board) -> list[_Piece]:
+    """A borrowed package, placed on its holes.
+
+    NOTHING IS MEASURED HERE, and that is the point: a KiCad through-hole model's origin is
+    pin 1 and its axes run the way this world does -- x with the column, y against the row --
+    so the mesh goes down at the anchor and the placement is the component's own rotation.
+    Both conventions follow the footprint, and this project's is written down as "the anchor
+    is pin 1, at grid offset (0, 0)".
+
+    A quarter turn of a component is a quarter turn CLOCKWISE seen from above, which is
+    minus a quarter turn about world z: the footprint frame counts rows downward and the
+    world counts them up-negative, and the sign is the difference between the two.
+
+    The body piece is painted from ``bodies.BODY_STYLES`` rather than from the colour the
+    model was drawn with -- see ``partmodels`` for why -- and every piece takes one of this
+    module's own materials.
+    """
+    x, y = _xy(board, comp.anchor)
+    turn = (0.0, 0.0, -float(comp.rotation))
+    # A mirrored part is reflected about the anchor's vertical axis, the same rule
+    # ``geometry.transform_offset`` states for its pins, so the mesh is scaled by -1 in x
+    # rather than being rebuilt. VTK scales before it orients, which is also the order a
+    # part is physically flipped and then turned.
+    scale = (-1.0, 1.0, 1.0) if comp.mirrored else (1.0, 1.0, 1.0)
+    pieces = []
+    for piece in model.pieces:
+        pieces.append(
+            _Piece(
+                source=_mesh(str(piece.path)),
+                rgb=_rgb(body.style.fill if piece.is_body else piece.color),
+                position=(x, y, 0.0),
+                orientation=turn,
+                scale=scale,
+                material=MODEL_MATERIALS.get(piece.material, MOULDED),
+            )
+        )
+    return pieces
+
+
+def _header_model_pieces(body: _WorldBody, model: PartModel) -> list[_Piece]:
+    """A header, as one borrowed pin drawn at every hole.
+
+    THE ONE PACKAGE THAT IS A REPETITION. KiCad ships a model per length -- forty of them
+    per row count -- and they are the same pin over and over, so one mesh glyphed at the
+    holes is the same picture for a fortieth of the library. It is also what lets a header
+    of a length nobody shipped a model for be drawn at all, which matters because this
+    application generates header footprints on demand.
+
+    The pin is square and its shroud is square, so a turned header needs no turn here: the
+    positions already carry it.
+    """
+    return [
+        _Piece(
+            source=_mesh(str(piece.path)),
+            rgb=_rgb(body.style.fill if piece.is_body else piece.color),
+            position=(0.0, 0.0, 0.0),
+            material=MODEL_MATERIALS.get(piece.material, MOULDED),
+            instances=tuple((px, py, 0.0) for px, py in body.pins),
+        )
+        for piece in model.pieces
+    ]
+
+
 def build_component(lookup: FootprintLookup, comp: Any, board: Board) -> list[vtk.vtkActor]:
     """Every solid making up one placed component.
 
@@ -2113,8 +2234,56 @@ def build_component(lookup: FootprintLookup, comp: Any, board: Board) -> list[vt
         return []
     footprint = lookup(comp.footprint_id)
     assert footprint is not None  # _world_body already returned None otherwise.
+    pieces = _pieces_for(body, footprint, comp, board)
+    return [_actor_for(piece) for piece in pieces]
+
+
+def _barrel_of(model: PartModel) -> tuple[float, float, float] | None:
+    """A lying cylinder's radius, height off the board and length, measured off the mesh.
+
+    From the BODY piece rather than the whole model, because the leads run out past both
+    ends and would give a barrel three times too long.
+    """
+    piece = model.body
+    if piece is None or len(piece.bounds) != 6:
+        return None
+    x0, _y0, z0, x1, _y1, z1 = piece.bounds
+    return ((z1 - z0) / 2, (z0 + z1) / 2, x1 - x0)
+
+
+def _pieces_for(
+    body: _WorldBody, footprint: Any, comp: Any, board: Board
+) -> list[_Piece]:
+    """The solids of one part: a borrowed package where there is one, generated otherwise.
+
+    THE GENERATED BODY IS STILL THE ANSWER FOR EVERYTHING ELSE and it is still the fallback
+    here -- a footprint nobody mapped, a part asked for by a generated id, a build that
+    shipped without the meshes. Nothing depends on a model existing, which is what lets the
+    borrowed ones be an improvement rather than a requirement.
+
+    Leads are ours either way. A model is cut off at the board surface by the converter, and
+    what goes through the hole and stands trimmed on the solder side is drawn from the
+    board's own thickness -- see ``_through_hole_pieces``.
+    """
+    if footprint.body.archetype == "pin-header":
+        header = header_pin_model()
+        if header is not None:
+            return _header_model_pieces(body, header)
+    model = _model_for(comp.footprint_id)
+    if model is not None:
+        markings = (
+            _axial_markings(body, _barrel_of(model))
+            if footprint.body.archetype == "axial-cylinder"
+            else []
+        )
+        return [
+            *_model_pieces(body, model, comp, board),
+            *markings,
+            *_through_hole_pieces(body, 0.0),
+        ]
     builder = _BUILDERS.get(footprint.body.archetype, _box_pieces)
-    return [_actor_for(piece) for piece in builder(body)]
+    generated: list[_Piece] = builder(body)
+    return generated
 
 
 def _attach(mapper: Any, source: Any, *, glyph: bool = False) -> None:

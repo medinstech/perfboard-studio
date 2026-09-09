@@ -34,9 +34,35 @@ doğruluğunu makine ile kanıtla, ve kullanıcının eline **adım adım lehiml
 | D3 | Devre girişi | **Netlist import + görsel düzenleme** | Şema editörü yazma yükü yok; LVS gücü kazanılıyor |
 | D4 | Rehber çıktısı | **4'ü birden**: interaktif offline HTML · 1:1 PDF · doğrulama kontrol listesi · CSV kesim listesi + BOM | Rehber projenin farklılaştırıcısı; yarım bırakılmaz |
 | D5 | Masaüstü çatısı | **Tauri v2**, Electron kaçış yolu açık | ~10MB kurulum, düşük RAM, Rust router yolu doğal. Platform adaptörü ince tutulacak |
-| D6 | 3D modeller | **Parametrik üretim** | Sıfır asset, footprint ile garantili tutarlılık, temiz lisans |
+| D6 | 3D modeller | **Parametrik üretim + KiCad'den ödünç THT paketleri** | Aşağıya bak — karar kısmen değişti |
 | D7 | 3D kapsamı | **Tam** — montaj animasyonu + patlatılmış görünüm dahil | 3D'yi dekorasyondan öğretim aracına çeviren şey bu |
 | D8 | Lehim yolu | **Birinci sınıf yol çekme primitifi** (cezalı özel durum değil) | TR delikli plaket pratiğinde asıl yöntem; güç/toprak rayları böyle çekiliyor |
+
+**D6 nerede durdu.** Karar üç gerekçeye dayanıyordu: sıfır asset, footprint ile garantili
+tutarlılık, temiz lisans. **İkisi aynen duruyor, üçüncüsü kısmen bırakıldı.**
+
+Bırakılma sebebi tartışma değil, sonuca bakmaktı: bir çaptan ve bir yükseklikten üretilen
+potansiyometre, üstünde çubuk olan bir disktir; röle bir kutudur; vidalı klemens vidasız
+bir bloktur. Hiçbir gölgelendirme bunları o parça yapmıyor. KiCad'in `packages3D`
+kütüphanesinde gerçeği var, ve lisansı yeniden dağıtıma açık.
+
+Ödünç alınan şeyin sınırları, D6'nın koruduğu şeyleri koruyacak biçimde çizildi:
+
+- **Üretilmiş gövde hâlâ her şeyin cevabı ve hâlâ yedek.** Eşlenmemiş bir footprint,
+  gramerle istenmiş bir id (`box-4x2-p1-r3-15x10x8`), mesh'siz bir build — hepsi eskisi
+  gibi çiziliyor. Hiçbir şey bir modelin varlığına bağlı değil.
+- **Yalnızca kartın ÜSTÜNDEKİ şekil alınıyor.** Bacaklar bizim: deliklerden geçen ve lehim
+  tarafında kesilmiş duran kısım, kartın kendi kalınlığından çiziliyor.
+- **Gövdenin rengi bizim tablomuzdan.** `bodies.BODY_STYLES` 2D görünüm, 3D görünüm ve
+  rehberin adım görselleri için tek tablo; ödünç bir mesh uğruna bundan vazgeçilmedi.
+- **Malzemeler bizim.** Ödünç mesh, üretilmiş gövdeyle aynı kurallarla ışığa cevap veriyor.
+
+**Lisans açıkça yazıldı, çünkü değişen şey bu.** Mesh'ler CC-BY-SA 4.0 — bu dağıtımın
+Apache-2.0 olmayan tek parçası — ve kendi `LICENSE`/`NOTICE.md` dosyalarıyla birlikte
+`src/perfboard_studio/ui/models/` içinde duruyorlar. KiCad'in istisnası tasarımları muaf
+tutuyor: **bu araçla çizilen kart, şematik ve rehber etkilenmiyor.** Yeniden dağıtan o
+dizini olduğu gibi taşır. §13'ün "lisans bulaşması" riski böyle sınırlandı: kod değil veri,
+tek dizin, kendi lisansıyla.
 
 **D3 nerede durdu.** Karar aynen geçerli ve genişledi: **devre önce çizilir, kart sonra
 yerleştirilir** — diğer her EDA aracının çalıştığı sıra. `doc.parts` karta konmamış

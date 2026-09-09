@@ -17,6 +17,20 @@ limitations under the License.
 
 ---
 
+Third-party content
+
+The 3D package meshes in src/perfboard_studio/ui/models/ are NOT covered by the Apache
+License above. They are derived from the KiCad packages3D library
+(https://gitlab.com/kicad/libraries/kicad-packages3D) and are licensed CC-BY-SA 4.0 with
+KiCad's design exception. Their licence and the record of what was derived are in
+src/perfboard_studio/ui/models/LICENSE and src/perfboard_studio/ui/models/NOTICE.md, which
+travel with the files.
+
+Nothing else in this distribution is affected, and neither is any board designed with it:
+KiCad's exception waives share-alike for designs made using the library.
+
+---
+
 Clean-room notice
 -----------------
 

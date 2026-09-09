@@ -675,6 +675,230 @@ def test_dimming_a_part_takes_its_highlight_and_not_its_shape() -> None:
     assert prop.GetColor()[0] < 0.5
 
 
+# ---------------------------------------------------------------------------
+# Packages borrowed from KiCad, and the rules that keep them honest
+# ---------------------------------------------------------------------------
+#
+# PLAN.md D6 chose parametric generation and gave three reasons. Two are untouched; the
+# third -- that a generated body cannot disagree with its footprint -- is what these tests
+# are for, because a borrowed one CAN. See ui/partmodels.py.
+
+
+def _one_part_board(footprint_id: str, ref: str = "U1", col: int = 4, row: int = 4):
+    from perfboard_studio.command import CommandBus, CommandContext
+    from perfboard_studio.commands import (
+        DEFAULT_BOARD,
+        PlaceComponentPayload,
+        create_document_id_generator,
+        create_standard_registry,
+    )
+    from perfboard_studio.model import DocumentMeta, HoleCoord, PerfDocument
+
+    document = PerfDocument(
+        meta=DocumentMeta(name="one", created="", modified=""), board=DEFAULT_BOARD
+    )
+    bus = CommandBus(
+        document,
+        create_standard_registry(),
+        CommandContext(next_id=create_document_id_generator(document)),
+    )
+    result = bus.dispatch(
+        "component.place",
+        PlaceComponentPayload(
+            ref=ref, footprint_id=footprint_id, value="", anchor=HoleCoord(col, row)
+        ),
+    )
+    assert result.ok, result.message
+    return bus.document
+
+
+def test_a_package_with_a_model_is_drawn_from_it_and_one_without_is_generated() -> None:
+    """The fallback is the whole reason borrowing is safe: a footprint nobody mapped, or a
+    part asked for by a generated id, draws exactly as it did before."""
+    from perfboard_studio.ui import partmodels
+
+    assert partmodels.model_for("dip-8") is not None
+    assert partmodels.model_for("box-4x2-p1-r3-15x10x8") is None
+    assert partmodels.model_for(None) is None
+
+
+def test_every_mesh_the_index_names_is_actually_there() -> None:
+    """An index entry with no file behind it is a part that raises when somebody looks at
+    it, and only that part -- which is the kind of thing a render test would find on one
+    board and miss on the next."""
+    from perfboard_studio.ui import partmodels
+
+    missing = [
+        piece.mesh
+        for model in partmodels._index().values()
+        for piece in model.pieces
+        if not piece.path.is_file()
+    ]
+    assert missing == []
+
+
+def test_a_borrowed_package_stops_at_the_board_surface() -> None:
+    """THE RULE THAT LETS THE LEADS STAY OURS. A KiCad model's legs are drawn untrimmed for
+    a 1.6 mm board and would hang nine millimetres out of the solder side; the converter
+    cuts everything below the surface, and this application draws the rest from the board's
+    own thickness."""
+    from perfboard_studio.ui import partmodels, view3d
+
+    deepest = 0.0
+    for model in partmodels._index().values():
+        for piece in model.pieces:
+            bounds = view3d._mesh(str(piece.path)).GetBounds()
+            deepest = min(deepest, bounds[4])
+    assert deepest > -0.2, f"a borrowed mesh reaches {deepest:.2f} mm below the board"
+
+
+def test_a_borrowed_package_sits_on_the_hole_it_was_placed_on() -> None:
+    """A KiCad through-hole model's origin is pin 1 and so is this application's anchor.
+    Nothing is measured or fitted; if the two conventions ever disagree, every borrowed
+    part on every board is offset by the same amount and nothing else says so."""
+    from perfboard_studio.ui import partmodels
+
+    # Checked on every model rather than on one, because the claim is about the CONVENTION:
+    # pin 1 at the origin, the package running +x with the column and -y against the row.
+    # A model that broke it would be offset by its own length and nothing else would say so.
+    wrong = []
+    for footprint_id, model in sorted(partmodels._index().items()):
+        boxes = [piece.bounds for piece in model.pieces if len(piece.bounds) == 6]
+        if not boxes:
+            continue
+        low_x, low_y = min(b[0] for b in boxes), min(b[1] for b in boxes)
+        high_x, high_y = max(b[3] for b in boxes), max(b[4] for b in boxes)
+        # The origin has to be INSIDE the package, because the origin is pin 1 and a pin is
+        # part of the part. A model placed by its CENTRE instead -- which is how a good many
+        # surface-mount ones are drawn -- puts the origin outside, and that is the failure
+        # this catches: it would offset the whole package by half its own length.
+        if not (low_x <= 0.5 <= high_x and low_y <= 0.5 and high_y >= -0.5):
+            wrong.append((footprint_id, [round(v, 2) for v in (low_x, low_y, high_x, high_y)]))
+    assert wrong == []
+
+
+def test_a_borrowed_body_is_painted_from_our_own_table() -> None:
+    """``bodies.BODY_STYLES`` is one table for the 2D view, the 3D view and the guide's step
+    images. A red LED coming out a different red in two of the three would be giving that
+    up for a borrowed mesh, so the body piece takes the style's fill and only the leads,
+    tabs and bands keep the colour they were drawn with."""
+    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.ui import partmodels, view3d
+    from perfboard_studio.ui.bodies import style_for
+
+    model = partmodels.model_for("led-5mm")
+    assert model is not None and model.body is not None
+    fill = style_for(standard_footprints()["led-5mm"]).fill
+
+    document = _one_part_board("led-5mm", ref="D1")
+    actors = view3d.build_component(footprint_lookup(), document.components[0], document.board)
+    wanted = tuple(view3d._to_linear(c) for c in view3d._rgb(fill))
+
+    assert any(
+        actor.GetProperty().GetColor() == pytest.approx(wanted, abs=1e-6) for actor in actors
+    )
+
+
+def test_a_borrowed_resistor_still_shows_its_colour_code() -> None:
+    """KiCad has no way to know what value a part is and this application does. The barrel
+    comes from the model and the bands from the document, printed at the BORROWED barrel's
+    size -- a footprint describes a package family and a model is one part in it, so
+    printing at the footprint's size puts the bands inside the body and they vanish."""
+    from perfboard_studio.command import CommandBus, CommandContext
+    from perfboard_studio.commands import (
+        DEFAULT_BOARD,
+        PlaceComponentPayload,
+        create_document_id_generator,
+        create_standard_registry,
+    )
+    from perfboard_studio.model import DocumentMeta, HoleCoord, PerfDocument
+    from perfboard_studio.ui import partmodels, view3d
+
+    document = PerfDocument(
+        meta=DocumentMeta(name="r", created="", modified=""), board=DEFAULT_BOARD
+    )
+    bus = CommandBus(
+        document,
+        create_standard_registry(),
+        CommandContext(next_id=create_document_id_generator(document)),
+    )
+    assert bus.dispatch(
+        "component.place",
+        PlaceComponentPayload(
+            ref="R1", footprint_id="r-axial-3", value="10k", anchor=HoleCoord(4, 4)
+        ),
+    ).ok
+    component = bus.document.components[0]
+
+    body = view3d._world_body(footprint_lookup(), component, DEFAULT_BOARD)
+    assert body is not None and body.bands
+    model = partmodels.model_for("r-axial-3")
+    assert model is not None
+    barrel = view3d._barrel_of(model)
+    assert barrel is not None
+    radius, _z, _along = barrel
+
+    # The bands have to be printed OUTSIDE the barrel they are printed on.
+    assert radius > body.across / 2, "the borrowed barrel is not the footprint's"
+    marks = view3d._axial_markings(body, barrel)
+    assert len(marks) == len(body.bands)
+    for mark in marks:
+        assert mark.source.GetRadius() > radius
+
+
+def test_every_material_the_index_names_is_one_this_module_has() -> None:
+    """The index is written by a tool that is not run here. A material it names and the
+    renderer does not have is a part shaded as plastic without anything saying so."""
+    from perfboard_studio.ui import partmodels, view3d
+
+    named = {piece.material for model in partmodels._index().values() for piece in model.pieces}
+
+    assert named <= set(view3d.MODEL_MATERIALS), sorted(named - set(view3d.MODEL_MATERIALS))
+
+
+def test_a_board_still_renders_with_no_models_at_all(monkeypatch) -> None:
+    """A build that shipped without the meshes draws a complete board rather than refusing
+    to draw one -- which is what makes the borrowed packages an improvement rather than a
+    requirement, and what the whole fallback exists for."""
+    from perfboard_studio.ui import partmodels, view3d
+
+    def triangles(actors):
+        total = 0
+        for actor in actors:
+            data = actor.GetMapper().GetInput()
+            total += data.GetNumberOfCells() if data is not None else 0
+        return total
+
+    document = _one_part_board("dip-8")
+    borrowed = triangles(
+        view3d.build_component(footprint_lookup(), document.components[0], document.board)
+    )
+    monkeypatch.setattr(partmodels, "_index", lambda: {})
+
+    actors = view3d.build_component(footprint_lookup(), document.components[0], document.board)
+
+    assert actors
+    # A borrowed DIP is a real package with gull-wing leads and a moulded notch; the
+    # generated one is a chamfered box. Both are a whole part, and they are not the same
+    # thing -- which is the point of the fallback still being there.
+    assert triangles(actors) < borrowed / 2
+
+
+def test_the_borrowed_meshes_carry_their_own_licence() -> None:
+    """They are the only part of this distribution that is not Apache-2.0, and CC-BY-SA is
+    a licence you may redistribute under precisely BECAUSE the attribution travels with the
+    files. A directory that lost these is a directory nobody may ship."""
+    from perfboard_studio.ui import partmodels
+
+    licence = partmodels.MODELS_DIR / "LICENSE"
+    notice = partmodels.MODELS_DIR / "NOTICE.md"
+
+    assert licence.is_file() and notice.is_file()
+    text = licence.read_text(encoding="utf-8")
+    assert "CC-BY-SA 4.0" in text
+    assert "kicad-packages3D" in notice.read_text(encoding="utf-8")
+
+
 def test_apply_default_camera_is_the_only_thing_that_reframes() -> None:
     from perfboard_studio.ui import view3d
 

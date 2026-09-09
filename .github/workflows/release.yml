@@ -97,6 +97,13 @@ jobs:
               missing.append("the .ico application mark")
           if not any(n.endswith(".png") and "/ui/assets/" in n for n in names):
               missing.append("the .png application marks")
+          # The borrowed package meshes. A wheel without them still draws every board --
+          # the generated bodies are the fallback -- which is exactly why nothing else
+          # would notice they had stopped shipping.
+          if not any(n.endswith(".ply") and "/ui/models/" in n for n in names):
+              missing.append("the through-hole package meshes")
+          if not any(n.endswith("/ui/models/LICENSE") for n in names):
+              missing.append("the model library's own licence")
           for expected in ("perfboard_studio/schematic.py", "perfboard_studio/mcp/server.py",
                            "perfboard_studio/ui/main.py", "perfboard_studio/parsers/kicad.py"):
               if expected not in names:
