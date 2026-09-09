@@ -181,6 +181,42 @@ CATALOGUE: tuple[Example, ...] = (
             "C1": "c-disc-p2",
         },
     ),
+    Example(
+        stem="atmega328-relay",
+        title="ATmega328 Relay Board",
+        preset="9 x 15 cm",
+        footprints={
+            "U1": "dip-28",
+            "U2": "to220",
+            "K1": "relay-spdt",
+            "Y1": "xtal-hc49",
+            "Q1": "to92",
+            "D1": "d-do41",
+            "D2": "d-do35",
+            "LED1": "led-5mm",
+            "C1": "c-disc-p2",
+            "C2": "c-disc-p2",
+            "C3": "c-disc-p2",
+            "C4": "c-disc-p2",
+            "C5": "c-elec-d10-p3",
+            "C6": "c-elec-d8-p3",
+            "C7": "c-disc-p2",
+            "R1": "r-axial-3",
+            "R2": "r-axial-3",
+            "R3": "r-axial-3",
+            "RV1": "pot-3",
+            "SW1": "sw-tactile",
+            "J1": "screw-terminal-2",
+            "J2": "screw-terminal-3",
+            "J3": "hdr-1x6",
+            "J4": "hdr-1x8",
+        },
+        # Swept, not picked: annealing is a random walk and the outcome genuinely varies.
+        # Over six seeds this board came out between 742 and 788 of routed cost and between
+        # 44 and 52 wires -- every one of them routing all 24 nets with no DRC error, which
+        # is the reassuring half of that measurement. This is the cheapest of them.
+        seed=5,
+    ),
 )
 
 

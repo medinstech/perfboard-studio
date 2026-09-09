@@ -22,6 +22,13 @@ closed without a bump.
 
 ### Added
 
+- **A fifth, much larger example: `atmega328-relay`.** An ATmega328 with a 7805, a
+  crystal, a relay and four connectors — 24 parts, 24 nets, 52 conductors and a 76-step
+  guide with 104 checkpoints, on a 9 × 15 cm board. The four existing examples are between
+  8 and 12 parts, which is the size at which everything works; this is the size at which
+  the interesting rules all fire at once, and it is what the placer, the router and the
+  build guide now have to keep working against.
+
 - **`geometry.unusable_holes`** — every hole nothing can be soldered into, which is a
   mounting bore that has taken the pad or an edge-connector finger that is solid copper
   with no bore. One fact with three consumers that were not allowed to disagree and did:

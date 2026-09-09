@@ -131,6 +131,21 @@ def _n(value: float) -> str:
     return "0" if text in ("", "-0") else text
 
 
+def _ceil_to_written(value: float) -> float:
+    """``value`` raised until :func:`_n` can write it without losing anything off the end.
+
+    Stated by DOING it rather than by arithmetic on the exponent, because the property
+    wanted is exactly "what comes out of ``_n`` is not less than what went in" and every
+    cleverer version got the tolerance wrong: ``_n`` rounds to nearest, so a value a float
+    ULP above a thousandth (462.2800000000001, which is what a 24-part circuit's sheet
+    width came to) is written 462.28 and the viewBox no longer contains its own contents.
+
+    Still a float, so it adds and compares as one.
+    """
+    written = float(_n(value))
+    return written if written >= value else written + 0.001
+
+
 def _pt(point: Point2) -> str:
     return f"{_n(point.x)},{_n(point.y)}"
 
@@ -302,8 +317,13 @@ def drawing_to_svg(
     ``guide_to_json`` does: an exported file outlives the session that produced it, and the
     first question about a sheet that looks wrong is which build drew it.
     """
-    sheet_w = max(drawing.width, 2 * MARGIN_MM)
-    sheet_h = max(drawing.height, 2 * MARGIN_MM)
+    # Rounded OUTWARD to the thousandth _n writes, not to the nearest one. A viewBox short
+    # of the drawing crops it, and _n rounds to three decimals -- so a sheet whose width
+    # lands a float ULP above a thousandth (462.2800000000001, which is what a 24-part
+    # circuit produced) was written as 462.28 and cropped by a nanometre. Invisible, and
+    # still a viewBox that does not contain its own contents.
+    sheet_w = _ceil_to_written(max(drawing.width, 2 * MARGIN_MM))
+    sheet_h = _ceil_to_written(max(drawing.height, 2 * MARGIN_MM))
 
     title_band = ink.title_mm * _TITLE_BAND if title else 0.0
     notes_band = (

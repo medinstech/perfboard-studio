@@ -1,0 +1,2026 @@
+{
+  "formatVersion": 1,
+  "meta": {
+    "name": "ATmega328 Relay Board",
+    "created": "2026-01-01T00:00:00Z",
+    "modified": "2026-01-01T00:00:00Z"
+  },
+  "board": {
+    "type": "pad-per-hole",
+    "cols": 34,
+    "rows": 58,
+    "pitch": 2.54,
+    "thickness": 1.6,
+    "material": "FR4",
+    "padDiameter": 1.9,
+    "drillDiameter": 0.8,
+    "borderXMm": 1.82,
+    "borderYMm": 1.34,
+    "labels": {
+      "face": "both",
+      "rowDigits": 2,
+      "allEdges": true
+    }
+  },
+  "components": [
+    {
+      "id": "c-c1",
+      "ref": "C1",
+      "value": "22pF",
+      "footprintId": "c-disc-p2",
+      "anchor": {
+        "col": 24,
+        "row": 24
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-c2",
+      "ref": "C2",
+      "value": "22pF",
+      "footprintId": "c-disc-p2",
+      "anchor": {
+        "col": 29,
+        "row": 27
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-c3",
+      "ref": "C3",
+      "value": "100nF",
+      "footprintId": "c-disc-p2",
+      "anchor": {
+        "col": 22,
+        "row": 27
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-c4",
+      "ref": "C4",
+      "value": "100nF",
+      "footprintId": "c-disc-p2",
+      "anchor": {
+        "col": 13,
+        "row": 27
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-c5",
+      "ref": "C5",
+      "value": "470uF",
+      "footprintId": "c-elec-d10-p3",
+      "anchor": {
+        "col": 13,
+        "row": 22
+      },
+      "rotation": 0,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-c6",
+      "ref": "C6",
+      "value": "100uF",
+      "footprintId": "c-elec-d8-p3",
+      "anchor": {
+        "col": 20,
+        "row": 41
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-c7",
+      "ref": "C7",
+      "value": "100nF",
+      "footprintId": "c-disc-p2",
+      "anchor": {
+        "col": 1,
+        "row": 34
+      },
+      "rotation": 0,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-d1",
+      "ref": "D1",
+      "value": "1N4007",
+      "footprintId": "d-do41",
+      "anchor": {
+        "col": 11,
+        "row": 29
+      },
+      "rotation": 180,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-d2",
+      "ref": "D2",
+      "value": "1N4148",
+      "footprintId": "d-do35",
+      "anchor": {
+        "col": 24,
+        "row": 45
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-j1",
+      "ref": "J1",
+      "value": "DC IN",
+      "footprintId": "screw-terminal-2",
+      "anchor": {
+        "col": 2,
+        "row": 29
+      },
+      "rotation": 180,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-j2",
+      "ref": "J2",
+      "value": "RELAY",
+      "footprintId": "screw-terminal-3",
+      "anchor": {
+        "col": 33,
+        "row": 43
+      },
+      "rotation": 180,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-j3",
+      "ref": "J3",
+      "value": "FTDI",
+      "footprintId": "hdr-1x6",
+      "anchor": {
+        "col": 6,
+        "row": 32
+      },
+      "rotation": 180,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-j4",
+      "ref": "J4",
+      "value": "PORTB",
+      "footprintId": "hdr-1x8",
+      "anchor": {
+        "col": 31,
+        "row": 28
+      },
+      "rotation": 180,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-k1",
+      "ref": "K1",
+      "value": "SRD-05VDC-SL-C",
+      "footprintId": "relay-spdt",
+      "anchor": {
+        "col": 24,
+        "row": 48
+      },
+      "rotation": 0,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-led1",
+      "ref": "LED1",
+      "value": "LED",
+      "footprintId": "led-5mm",
+      "anchor": {
+        "col": 16,
+        "row": 36
+      },
+      "rotation": 0,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-q1",
+      "ref": "Q1",
+      "value": "BC547",
+      "footprintId": "to92",
+      "anchor": {
+        "col": 24,
+        "row": 40
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-r1",
+      "ref": "R1",
+      "value": "1k",
+      "footprintId": "r-axial-3",
+      "anchor": {
+        "col": 24,
+        "row": 33
+      },
+      "rotation": 90,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-r2",
+      "ref": "R2",
+      "value": "10k",
+      "footprintId": "r-axial-3",
+      "anchor": {
+        "col": 4,
+        "row": 39
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-r3",
+      "ref": "R3",
+      "value": "470",
+      "footprintId": "r-axial-3",
+      "anchor": {
+        "col": 13,
+        "row": 39
+      },
+      "rotation": 0,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-rv1",
+      "ref": "RV1",
+      "value": "10k",
+      "footprintId": "pot-3",
+      "anchor": {
+        "col": 32,
+        "row": 36
+      },
+      "rotation": 180,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-sw1",
+      "ref": "SW1",
+      "value": "RESET",
+      "footprintId": "sw-tactile",
+      "anchor": {
+        "col": 1,
+        "row": 36
+      },
+      "rotation": 90,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-u1",
+      "ref": "U1",
+      "value": "ATmega328P-PU",
+      "footprintId": "dip-28",
+      "anchor": {
+        "col": 16,
+        "row": 32
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-u2",
+      "ref": "U2",
+      "value": "L7805",
+      "footprintId": "to220",
+      "anchor": {
+        "col": 13,
+        "row": 33
+      },
+      "rotation": 270,
+      "mirrored": false,
+      "locked": false
+    },
+    {
+      "id": "c-y1",
+      "ref": "Y1",
+      "value": "16MHz",
+      "footprintId": "xtal-hc49",
+      "anchor": {
+        "col": 24,
+        "row": 26
+      },
+      "rotation": 0,
+      "mirrored": false,
+      "locked": false
+    }
+  ],
+  "conductors": [
+    {
+      "id": "cond-1",
+      "kind": "solder-trace-wired",
+      "path": [
+        {
+          "col": 13,
+          "row": 25
+        },
+        {
+          "col": 14,
+          "row": 25
+        },
+        {
+          "col": 15,
+          "row": 25
+        },
+        {
+          "col": 16,
+          "row": 25
+        },
+        {
+          "col": 17,
+          "row": 25
+        },
+        {
+          "col": 18,
+          "row": 25
+        },
+        {
+          "col": 19,
+          "row": 25
+        },
+        {
+          "col": 20,
+          "row": 25
+        },
+        {
+          "col": 21,
+          "row": 25
+        },
+        {
+          "col": 22,
+          "row": 25
+        },
+        {
+          "col": 22,
+          "row": 24
+        },
+        {
+          "col": 22,
+          "row": 23
+        },
+        {
+          "col": 23,
+          "row": 23
+        },
+        {
+          "col": 23,
+          "row": 22
+        },
+        {
+          "col": 24,
+          "row": 22
+        },
+        {
+          "col": 25,
+          "row": 22
+        },
+        {
+          "col": 26,
+          "row": 22
+        },
+        {
+          "col": 27,
+          "row": 22
+        },
+        {
+          "col": 28,
+          "row": 22
+        },
+        {
+          "col": 29,
+          "row": 22
+        },
+        {
+          "col": 29,
+          "row": 23
+        },
+        {
+          "col": 29,
+          "row": 24
+        },
+        {
+          "col": 29,
+          "row": 25
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0,
+      "buildup": "normal",
+      "spine": {
+        "material": "tinned-copper",
+        "gauge": 0.6
+      }
+    },
+    {
+      "id": "cond-10",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 6,
+          "row": 32
+        },
+        {
+          "col": 0,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-11",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 0,
+          "row": 29
+        },
+        {
+          "col": 0,
+          "row": 36
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-12",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 13,
+          "row": 32
+        },
+        {
+          "col": 6,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-13",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 31,
+          "row": 28
+        },
+        {
+          "col": 32,
+          "row": 36
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-14",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 24,
+          "row": 28
+        },
+        {
+          "col": 24,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-15",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 22,
+          "row": 27
+        },
+        {
+          "col": 24,
+          "row": 28
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-16",
+      "kind": "solder-trace",
+      "path": [
+        {
+          "col": 24,
+          "row": 45
+        },
+        {
+          "col": 24,
+          "row": 46
+        },
+        {
+          "col": 24,
+          "row": 47
+        },
+        {
+          "col": 24,
+          "row": 48
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0,
+      "buildup": "normal"
+    },
+    {
+      "id": "cond-17",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 24,
+          "row": 29
+        },
+        {
+          "col": 22,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-18",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 13,
+          "row": 27
+        },
+        {
+          "col": 13,
+          "row": 31
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-19",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 20,
+          "row": 41
+        },
+        {
+          "col": 24,
+          "row": 45
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-2",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 22,
+          "row": 29
+        },
+        {
+          "col": 23,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-20",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 4,
+          "row": 39
+        },
+        {
+          "col": 4,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-21",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 13,
+          "row": 39
+        },
+        {
+          "col": 20,
+          "row": 41
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-22",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 13,
+          "row": 31
+        },
+        {
+          "col": 13,
+          "row": 39
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-23",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 22,
+          "row": 32
+        },
+        {
+          "col": 30,
+          "row": 36
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-24",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 22,
+          "row": 27
+        },
+        {
+          "col": 13,
+          "row": 27
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-25",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 13,
+          "row": 39
+        },
+        {
+          "col": 4,
+          "row": 39
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-2",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-26",
+      "kind": "solder-trace",
+      "path": [
+        {
+          "col": 3,
+          "row": 34
+        },
+        {
+          "col": 4,
+          "row": 34
+        },
+        {
+          "col": 4,
+          "row": 35
+        },
+        {
+          "col": 4,
+          "row": 36
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-5",
+      "layerZ": 0,
+      "buildup": "normal"
+    },
+    {
+      "id": "cond-27",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 3,
+          "row": 34
+        },
+        {
+          "col": 1,
+          "row": 36
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-5",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-28",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 4,
+          "row": 36
+        },
+        {
+          "col": 16,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-5",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-29",
+      "kind": "solder-trace-wired",
+      "path": [
+        {
+          "col": 24,
+          "row": 40
+        },
+        {
+          "col": 24,
+          "row": 41
+        },
+        {
+          "col": 24,
+          "row": 42
+        },
+        {
+          "col": 24,
+          "row": 43
+        },
+        {
+          "col": 25,
+          "row": 43
+        },
+        {
+          "col": 25,
+          "row": 44
+        },
+        {
+          "col": 26,
+          "row": 44
+        },
+        {
+          "col": 26,
+          "row": 45
+        },
+        {
+          "col": 26,
+          "row": 46
+        },
+        {
+          "col": 26,
+          "row": 47
+        },
+        {
+          "col": 26,
+          "row": 48
+        },
+        {
+          "col": 26,
+          "row": 49
+        },
+        {
+          "col": 26,
+          "row": 50
+        },
+        {
+          "col": 25,
+          "row": 50
+        },
+        {
+          "col": 24,
+          "row": 50
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-13",
+      "layerZ": 0,
+      "buildup": "normal",
+      "spine": {
+        "material": "tinned-copper",
+        "gauge": 0.6
+      }
+    },
+    {
+      "id": "cond-3",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 20,
+          "row": 38
+        },
+        {
+          "col": 17,
+          "row": 36
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-30",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 11,
+          "row": 29
+        },
+        {
+          "col": 13,
+          "row": 33
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-3",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-31",
+      "kind": "solder-trace-wired",
+      "path": [
+        {
+          "col": 13,
+          "row": 22
+        },
+        {
+          "col": 12,
+          "row": 22
+        },
+        {
+          "col": 12,
+          "row": 23
+        },
+        {
+          "col": 11,
+          "row": 23
+        },
+        {
+          "col": 11,
+          "row": 24
+        },
+        {
+          "col": 11,
+          "row": 25
+        },
+        {
+          "col": 11,
+          "row": 26
+        },
+        {
+          "col": 11,
+          "row": 27
+        },
+        {
+          "col": 11,
+          "row": 28
+        },
+        {
+          "col": 11,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-3",
+      "layerZ": 0,
+      "buildup": "normal",
+      "spine": {
+        "material": "tinned-copper",
+        "gauge": 0.6
+      }
+    },
+    {
+      "id": "cond-32",
+      "kind": "solder-trace",
+      "path": [
+        {
+          "col": 24,
+          "row": 24
+        },
+        {
+          "col": 24,
+          "row": 25
+        },
+        {
+          "col": 24,
+          "row": 26
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-6",
+      "layerZ": 0,
+      "buildup": "normal"
+    },
+    {
+      "id": "cond-33",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 24,
+          "row": 26
+        },
+        {
+          "col": 24,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-6",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-34",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 29,
+          "row": 27
+        },
+        {
+          "col": 26,
+          "row": 26
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-7",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-35",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 26,
+          "row": 26
+        },
+        {
+          "col": 25,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-7",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-36",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 31,
+          "row": 36
+        },
+        {
+          "col": 21,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-14",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-37",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 1,
+          "row": 34
+        },
+        {
+          "col": 1,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-10",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-38",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 16,
+          "row": 36
+        },
+        {
+          "col": 16,
+          "row": 39
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-15",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-39",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 30,
+          "row": 28
+        },
+        {
+          "col": 29,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-16",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-4",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 29,
+          "row": 25
+        },
+        {
+          "col": 31,
+          "row": 28
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-40",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 29,
+          "row": 28
+        },
+        {
+          "col": 29,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-17",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-41",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 28,
+          "row": 28
+        },
+        {
+          "col": 28,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-18",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-42",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 27,
+          "row": 28
+        },
+        {
+          "col": 27,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-19",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-43",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 26,
+          "row": 28
+        },
+        {
+          "col": 26,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-20",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-44",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 25,
+          "row": 28
+        },
+        {
+          "col": 25,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-21",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-45",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 24,
+          "row": 39
+        },
+        {
+          "col": 24,
+          "row": 36
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-12",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-46",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 33,
+          "row": 43
+        },
+        {
+          "col": 29,
+          "row": 48
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-22",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-47",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 24,
+          "row": 33
+        },
+        {
+          "col": 28,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-11",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-48",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 31,
+          "row": 43
+        },
+        {
+          "col": 29,
+          "row": 49
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-23",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-49",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 29,
+          "row": 43
+        },
+        {
+          "col": 29,
+          "row": 50
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-24",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-5",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 22,
+          "row": 25
+        },
+        {
+          "col": 22,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-50",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 3,
+          "row": 32
+        },
+        {
+          "col": 17,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-8",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-51",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 2,
+          "row": 32
+        },
+        {
+          "col": 18,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-9",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-52",
+      "kind": "solder-trace",
+      "path": [
+        {
+          "col": 7,
+          "row": 29
+        },
+        {
+          "col": 6,
+          "row": 29
+        },
+        {
+          "col": 5,
+          "row": 29
+        },
+        {
+          "col": 4,
+          "row": 29
+        },
+        {
+          "col": 3,
+          "row": 29
+        },
+        {
+          "col": 2,
+          "row": 29
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-4",
+      "layerZ": 0,
+      "buildup": "normal"
+    },
+    {
+      "id": "cond-6",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 24,
+          "row": 38
+        },
+        {
+          "col": 20,
+          "row": 38
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-7",
+      "kind": "solder-trace-wired",
+      "path": [
+        {
+          "col": 13,
+          "row": 25
+        },
+        {
+          "col": 13,
+          "row": 24
+        },
+        {
+          "col": 14,
+          "row": 24
+        },
+        {
+          "col": 14,
+          "row": 23
+        },
+        {
+          "col": 15,
+          "row": 23
+        },
+        {
+          "col": 15,
+          "row": 22
+        },
+        {
+          "col": 16,
+          "row": 22
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0,
+      "buildup": "normal",
+      "spine": {
+        "material": "tinned-copper",
+        "gauge": 0.6
+      }
+    },
+    {
+      "id": "cond-8",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 17,
+          "row": 36
+        },
+        {
+          "col": 13,
+          "row": 32
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-9",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 23,
+          "row": 32
+        },
+        {
+          "col": 24,
+          "row": 38
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 1
+    }
+  ],
+  "cuts": [],
+  "mountingHoles": [
+    {
+      "id": "mh-1",
+      "at": {
+        "col": 0,
+        "row": 0
+      },
+      "offsetXMm": 0,
+      "offsetYMm": 0,
+      "diameter": 2.2,
+      "headDiameter": 4.4
+    },
+    {
+      "id": "mh-2",
+      "at": {
+        "col": 33,
+        "row": 0
+      },
+      "offsetXMm": 0,
+      "offsetYMm": 0,
+      "diameter": 2.2,
+      "headDiameter": 4.4
+    },
+    {
+      "id": "mh-3",
+      "at": {
+        "col": 0,
+        "row": 57
+      },
+      "offsetXMm": 0,
+      "offsetYMm": 0,
+      "diameter": 2.2,
+      "headDiameter": 4.4
+    },
+    {
+      "id": "mh-4",
+      "at": {
+        "col": 33,
+        "row": 57
+      },
+      "offsetXMm": 0,
+      "offsetYMm": 0,
+      "diameter": 2.2,
+      "headDiameter": 4.4
+    }
+  ],
+  "edgeConnectors": [
+    {
+      "id": "ec-bottom",
+      "edge": "bottom",
+      "start": 1,
+      "count": 32,
+      "fingerWidth": 2,
+      "insetMm": 1.5,
+      "face": "both"
+    },
+    {
+      "id": "ec-top",
+      "edge": "top",
+      "start": 1,
+      "count": 32,
+      "fingerWidth": 2,
+      "insetMm": 1.5,
+      "face": "both"
+    }
+  ],
+  "nets": [
+    {
+      "id": "net-1",
+      "name": "GND",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "8"
+        },
+        {
+          "componentRef": "U1",
+          "pin": "22"
+        },
+        {
+          "componentRef": "U2",
+          "pin": "2"
+        },
+        {
+          "componentRef": "Q1",
+          "pin": "3"
+        },
+        {
+          "componentRef": "C1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "C2",
+          "pin": "2"
+        },
+        {
+          "componentRef": "C3",
+          "pin": "2"
+        },
+        {
+          "componentRef": "C4",
+          "pin": "2"
+        },
+        {
+          "componentRef": "C5",
+          "pin": "2"
+        },
+        {
+          "componentRef": "C6",
+          "pin": "2"
+        },
+        {
+          "componentRef": "LED1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "RV1",
+          "pin": "1"
+        },
+        {
+          "componentRef": "SW1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "J1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "J3",
+          "pin": "1"
+        },
+        {
+          "componentRef": "J4",
+          "pin": "1"
+        }
+      ],
+      "class": "ground"
+    },
+    {
+      "id": "net-10",
+      "name": "DTR",
+      "nodes": [
+        {
+          "componentRef": "J3",
+          "pin": "6"
+        },
+        {
+          "componentRef": "C7",
+          "pin": "1"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-11",
+      "name": "RELAY_DRIVE",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "13"
+        },
+        {
+          "componentRef": "R1",
+          "pin": "1"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-12",
+      "name": "Q1_BASE",
+      "nodes": [
+        {
+          "componentRef": "R1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "Q1",
+          "pin": "2"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-13",
+      "name": "COIL",
+      "nodes": [
+        {
+          "componentRef": "Q1",
+          "pin": "1"
+        },
+        {
+          "componentRef": "K1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "D2",
+          "pin": "2"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-14",
+      "name": "AIN0",
+      "nodes": [
+        {
+          "componentRef": "RV1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "U1",
+          "pin": "23"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-15",
+      "name": "LED_A",
+      "nodes": [
+        {
+          "componentRef": "R3",
+          "pin": "2"
+        },
+        {
+          "componentRef": "LED1",
+          "pin": "1"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-16",
+      "name": "PB0",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "14"
+        },
+        {
+          "componentRef": "J4",
+          "pin": "2"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-17",
+      "name": "PB1",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "15"
+        },
+        {
+          "componentRef": "J4",
+          "pin": "3"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-18",
+      "name": "PB2",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "16"
+        },
+        {
+          "componentRef": "J4",
+          "pin": "4"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-19",
+      "name": "PB3",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "17"
+        },
+        {
+          "componentRef": "J4",
+          "pin": "5"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-2",
+      "name": "+5V",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "7"
+        },
+        {
+          "componentRef": "U1",
+          "pin": "20"
+        },
+        {
+          "componentRef": "U2",
+          "pin": "3"
+        },
+        {
+          "componentRef": "C3",
+          "pin": "1"
+        },
+        {
+          "componentRef": "C4",
+          "pin": "1"
+        },
+        {
+          "componentRef": "C6",
+          "pin": "1"
+        },
+        {
+          "componentRef": "R2",
+          "pin": "1"
+        },
+        {
+          "componentRef": "R3",
+          "pin": "1"
+        },
+        {
+          "componentRef": "RV1",
+          "pin": "3"
+        },
+        {
+          "componentRef": "K1",
+          "pin": "1"
+        },
+        {
+          "componentRef": "D2",
+          "pin": "1"
+        },
+        {
+          "componentRef": "J3",
+          "pin": "3"
+        },
+        {
+          "componentRef": "J4",
+          "pin": "8"
+        }
+      ],
+      "class": "power"
+    },
+    {
+      "id": "net-20",
+      "name": "PB4",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "18"
+        },
+        {
+          "componentRef": "J4",
+          "pin": "6"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-21",
+      "name": "PB5",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "19"
+        },
+        {
+          "componentRef": "J4",
+          "pin": "7"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-22",
+      "name": "RELAY_COM",
+      "nodes": [
+        {
+          "componentRef": "K1",
+          "pin": "3"
+        },
+        {
+          "componentRef": "J2",
+          "pin": "1"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-23",
+      "name": "RELAY_NC",
+      "nodes": [
+        {
+          "componentRef": "K1",
+          "pin": "4"
+        },
+        {
+          "componentRef": "J2",
+          "pin": "2"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-24",
+      "name": "RELAY_NO",
+      "nodes": [
+        {
+          "componentRef": "K1",
+          "pin": "5"
+        },
+        {
+          "componentRef": "J2",
+          "pin": "3"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-3",
+      "name": "VRAW",
+      "nodes": [
+        {
+          "componentRef": "D1",
+          "pin": "1"
+        },
+        {
+          "componentRef": "C5",
+          "pin": "1"
+        },
+        {
+          "componentRef": "U2",
+          "pin": "1"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-4",
+      "name": "VIN",
+      "nodes": [
+        {
+          "componentRef": "J1",
+          "pin": "1"
+        },
+        {
+          "componentRef": "D1",
+          "pin": "2"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-5",
+      "name": "RESET",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "1"
+        },
+        {
+          "componentRef": "R2",
+          "pin": "2"
+        },
+        {
+          "componentRef": "SW1",
+          "pin": "1"
+        },
+        {
+          "componentRef": "C7",
+          "pin": "2"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-6",
+      "name": "XTAL1",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "9"
+        },
+        {
+          "componentRef": "Y1",
+          "pin": "1"
+        },
+        {
+          "componentRef": "C1",
+          "pin": "1"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-7",
+      "name": "XTAL2",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "10"
+        },
+        {
+          "componentRef": "Y1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "C2",
+          "pin": "1"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-8",
+      "name": "RXD",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "2"
+        },
+        {
+          "componentRef": "J3",
+          "pin": "4"
+        }
+      ],
+      "class": "signal"
+    },
+    {
+      "id": "net-9",
+      "name": "TXD",
+      "nodes": [
+        {
+          "componentRef": "U1",
+          "pin": "3"
+        },
+        {
+          "componentRef": "J3",
+          "pin": "5"
+        }
+      ],
+      "class": "signal"
+    }
+  ]
+}
