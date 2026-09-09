@@ -67,6 +67,7 @@ from .model import (
     SolderTraceConductor,
     SpineSpec,
     StripConductor,
+    SymbolPlacement,
     TrackCut,
     WireConductor,
 )
@@ -197,7 +198,9 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "heightLimitMm",
     "parts",
     "nets",
+    "sheet",
 )
+SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "col", "row")
 META_KEY_ORDER: tuple[str, ...] = ("name", "created", "modified")
 BOARD_KEY_ORDER: tuple[str, ...] = (
     "type",
@@ -445,6 +448,18 @@ def _ordered_cut(c: TrackCut, index: int) -> JsonObj:
     )
 
 
+def _ordered_symbol_placement(placement: SymbolPlacement, index: int) -> JsonObj:
+    path = _index_path("sheet", index)
+    return _build_ordered(
+        SYMBOL_PLACEMENT_KEY_ORDER,
+        {
+            "id": placement.id,
+            "col": _num(_field_path(path, "col"), placement.col),
+            "row": _num(_field_path(path, "row"), placement.row),
+        },
+    )
+
+
 def _ordered_net(n: Net, index: int) -> JsonObj:
     path = _index_path("nets", index)
     values: dict[str, JsonValue] = {
@@ -476,6 +491,7 @@ def serialize_document(doc: PerfDocument) -> str:
     edge_connectors = sorted(doc.edge_connectors, key=lambda e: e.id)
     parts = sorted(doc.parts, key=lambda part: part.id)
     nets = sorted(doc.nets, key=lambda n: n.id)
+    sheet = sorted(doc.sheet, key=lambda placement: placement.id)
 
     root = _build_ordered(
         DOCUMENT_KEY_ORDER,
@@ -528,6 +544,21 @@ def serialize_document(doc: PerfDocument) -> str:
             **(
                 {"parts": [_ordered_part(part, i) for i, part in enumerate(parts)]}
                 if parts
+                else {}
+            ),
+            # Omitted when empty for the same reason again, and here it is the reason the
+            # feature is allowed to exist at all: a sheet nobody has rearranged says
+            # nothing, so every document that predates symbol positioning -- which is all
+            # fifteen fixtures and every board anyone has saved -- serializes to exactly
+            # the bytes it did before. The drawing stays derived; this is an override.
+            **(
+                {
+                    "sheet": [
+                        _ordered_symbol_placement(placement, i)
+                        for i, placement in enumerate(sheet)
+                    ]
+                }
+                if sheet
                 else {}
             ),
         },
@@ -1017,6 +1048,16 @@ def _parse_part(raw: object, path: str, warnings: list[str]) -> SchematicPart:
     )
 
 
+def _parse_symbol_placement(raw: object, path: str, warnings: list[str]) -> SymbolPlacement:
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, SYMBOL_PLACEMENT_KEY_ORDER, path, warnings)
+    return SymbolPlacement(
+        id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
+        col=_expect_integer(_require_field(obj, "col", path), _field_path(path, "col")),
+        row=_expect_integer(_require_field(obj, "row", path), _field_path(path, "row")),
+    )
+
+
 def _validate_solder_trace_chain(c: SolderTraceConductor, path: str, warnings: list[str]) -> None:
     """Checks a solder-trace path against the orthogonal-chain invariant -- solder
     cannot reliably span a diagonal gap (PLAN.md Section 4.6, and the path doc comment
@@ -1304,6 +1345,30 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
     nets_raw = _expect_array(_require_field(migrated, "nets", ""), "nets")
     nets = tuple(_parse_net(item, _index_path("nets", i), warnings) for i, item in enumerate(nets_raw))
 
+    sheet_raw = _expect_array(migrated.get("sheet", []), "sheet")
+    sheet: list[SymbolPlacement] = []
+    positioned: set[str] = set()
+    for index, item in enumerate(sheet_raw):
+        placement = _parse_symbol_placement(item, _index_path("sheet", index), warnings)
+        if placement.id not in seen_ids:
+            # A position for a part the document no longer has. A warning and a drop
+            # rather than a refusal, following the same rule as a diagonal solder step: a
+            # hand-edited or half-merged file must still open, and a cell nobody can see
+            # is not a reason to lock somebody out of their circuit.
+            warnings.append(
+                f'The sheet places a symbol for "{placement.id}", which is not a part or '
+                f"a component in this document. Ignored."
+            )
+            continue
+        if placement.id in positioned:
+            warnings.append(
+                f'The sheet places the symbol for "{placement.id}" more than once; only '
+                f"the first is kept."
+            )
+            continue
+        positioned.add(placement.id)
+        sheet.append(placement)
+
     height_limit_raw = migrated.get("heightLimitMm")
     height_limit_mm = (
         None if height_limit_raw is None else _expect_number(height_limit_raw, "heightLimitMm")
@@ -1327,6 +1392,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         parts=parts,
         cuts=cuts,
         nets=nets,
+        sheet=tuple(sheet),
         mounting_holes=mounting_holes,
         edge_connectors=edge_connectors,
         height_limit_mm=height_limit_mm,

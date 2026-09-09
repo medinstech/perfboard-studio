@@ -227,6 +227,12 @@ class Symbol:
     #: footprint is a guess. That is a real hole in the design, unlike ``unplaced``, and
     #: it is what the dashed outline and the note are for.
     undefined: bool = False
+    #: The cell this symbol was put in. Carried out of the layout because it is what
+    #: ``model.SymbolPlacement`` names and therefore what a user dragging a symbol has to
+    #: be able to say -- ``cell_at`` below is how a point on the sheet becomes one. Not a
+    #: position: the millimetres are ``at``, and they stay the layout's to decide.
+    col: int = 0
+    row: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,6 +370,36 @@ class SchematicDrawing:
 #: is the convention, and the shrinking is what makes the glyph read as a ground rather than
 #: as three wires that happen to be stacked.
 _GROUND_BARS: tuple[tuple[float, float], ...] = ((1.0, 0.0), (0.6, 0.35), (0.25, 0.70))
+
+
+def cell_at(drawing: SchematicDrawing, point: Point2) -> tuple[int, int]:
+    """Which cell a point on the sheet is in, for a drawing that already exists.
+
+    THE INVERSE OF THE LAYOUT, ANSWERED FROM ITS OUTPUT rather than from its arithmetic:
+    the column and row boundaries are a consequence of every symbol width and every
+    channel on the sheet, and a second implementation of that in the view would be a
+    second thing to keep in step. What the drawing carries is enough -- each symbol knows
+    its cell and its millimetres, so a point falls in the cell of whichever column and row
+    it is nearest to.
+
+    Columns and rows are taken separately, which is what makes an EMPTY cell reachable: a
+    point below the last symbol of column 2 and level with row 4 is (2, 4) even though
+    nothing is drawn there, and dropping a symbol into a gap is most of what rearranging a
+    sheet is.
+
+    (0, 0) for a drawing with no symbols, which is the only cell such a sheet has.
+    """
+    if not drawing.symbols:
+        return (0, 0)
+    col = min(
+        drawing.symbols,
+        key=lambda symbol: (abs(point.x - (symbol.at.x + symbol.width / 2)), symbol.col),
+    ).col
+    row = min(
+        drawing.symbols,
+        key=lambda symbol: (abs(point.y - (symbol.at.y + symbol.height / 2)), symbol.row),
+    ).row
+    return (col, row)
 
 
 def no_connect_arms(mark: NoConnect) -> tuple[tuple[Point2, Point2], tuple[Point2, Point2]]:
@@ -1120,6 +1156,65 @@ def _split_tall_layers(layers: list[list[str]], group_size: int) -> list[list[st
     return out
 
 
+def _apply_pinned_cells(
+    symbols: dict[str, _Placed], pinned: dict[str, tuple[int, int]]
+) -> tuple[int, int]:
+    """Put the symbols somebody positioned in their cells, and re-pack whatever that
+    displaced. Returns the grid size the result needs.
+
+    A CELL AND NOT A POSITION, which is what lets this exist at all: the layout still owns
+    every millimetre, so the guarantee that wires run only in the channels between symbols
+    survives somebody rearranging the sheet. See ``model.SymbolPlacement``.
+
+    THE AUTOMATIC LAYOUT IS KEPT FOR EVERYTHING ELSE. Only a symbol whose cell was taken
+    moves; the rest stay exactly where the layering and the barycentre sweeps put them, so
+    positioning one part does not rearrange the twenty around it -- which is the behaviour
+    that makes a manual tweak worth making.
+
+    Every tie is broken by reference: which of two symbols asking for one cell gets it,
+    and the order the displaced are re-packed in. A sheet that rearranged itself between
+    runs would be unblessable, and worse, unrecognisable.
+    """
+    taken: dict[tuple[int, int], str] = {}
+    for ref in sorted(pinned, key=_ref_sort_key):
+        if ref not in symbols or pinned[ref] in taken:
+            continue
+        cell = pinned[ref]
+        taken[cell] = ref
+        symbols[ref].col, symbols[ref].row = cell
+
+    displaced: list[str] = []
+    for ref in sorted(symbols, key=_ref_sort_key):
+        cell = (symbols[ref].col, symbols[ref].row)
+        if taken.get(cell) == ref:
+            continue
+        if cell in taken:
+            displaced.append(ref)
+        else:
+            taken[cell] = ref
+
+    if displaced:
+        rows = max(row for _, row in taken) + 1
+        cursor_col = 0
+        cursor_row = 0
+        for ref in displaced:
+            # Down a column and then on to the next, which is the order the layout reads
+            # in and the order a reader follows. The grid grows a column at a time rather
+            # than being sized in advance, so a sheet gains exactly the width it needs.
+            while (cursor_col, cursor_row) in taken:
+                cursor_row += 1
+                if cursor_row >= rows:
+                    cursor_row = 0
+                    cursor_col += 1
+            taken[(cursor_col, cursor_row)] = ref
+            symbols[ref].col, symbols[ref].row = cursor_col, cursor_row
+
+    return (
+        max(col for col, _ in taken) + 1,
+        max(row for _, row in taken) + 1,
+    )
+
+
 def _merge_thin_columns(columns: list[list[str]], group_size: int) -> list[list[str]]:
     """Fold consecutive columns into one while they still fit under the height cap.
 
@@ -1346,6 +1441,16 @@ def build_schematic(
     """
     notes: list[str] = []
     symbols = _collect_symbols(doc, lookup, notes)
+    # doc.sheet is keyed on the part's ID -- so a position survives a rename, and survives
+    # a part moving between doc.parts and doc.components -- and everything from here on is
+    # keyed on the reference, which is what the drawing speaks.
+    ref_of = {part.id: part.ref for part in doc.parts}
+    ref_of.update({component.id: component.ref for component in doc.components})
+    pinned = {
+        ref_of[placement.id]: (placement.col, placement.row)
+        for placement in doc.sheet
+        if placement.id in ref_of
+    }
     if not symbols:
         return SchematicDrawing(
             notes=("Nothing to draw: the document has no parts and no netlist.",)
@@ -1396,6 +1501,8 @@ def build_schematic(
                 adjacency[touched[second]].add(touched[first])
 
     ncols, nrows = _assign_cells(symbols, adjacency)
+    if pinned:
+        ncols, nrows = _apply_pinned_cells(symbols, pinned)
 
     column_width = [0.0] * ncols
     row_height = [0.0] * nrows
@@ -1674,6 +1781,8 @@ def build_schematic(
             height=placed.body.height,
             unplaced=placed.unplaced,
             undefined=placed.undefined,
+            col=placed.col,
+            row=placed.row,
         )
         for placed in ordered
     )

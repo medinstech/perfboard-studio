@@ -37,6 +37,9 @@ from PySide6.QtGui import (
     QBrush,
     QColor,
     QDrag,
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
     QMouseEvent,
     QPainter,
     QPen,
@@ -60,6 +63,7 @@ from perfboard_studio.schematic import (
     SchematicDrawing,
     Symbol,
     Wire,
+    cell_at,
     no_connect_arms,
     rail_glyph_bars,
 )
@@ -362,6 +366,11 @@ class SchematicView(QGraphicsView):
     pinClicked = Signal(str, str)
     #: Nothing was clicked.
     cleared = Signal()
+    #: A symbol was dragged to another cell ON THE SHEET. Carries the reference and the
+    #: cell. ONE GESTURE, TWO DESTINATIONS, decided by where the pointer is let go: dropped
+    #: on the board it places the part (``view2d.BoardView.partDropped``), dropped here it
+    #: rearranges the drawing.
+    symbolMoved = Signal(str, int, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -383,6 +392,9 @@ class SchematicView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setMouseTracking(True)
+        # The sheet is a drop target for its own symbols, which is what lets a drag that
+        # started here end here.
+        self.setAcceptDrops(True)
 
     #: How many grid squares make a major line. Five, which is what squared paper and every
     #: schematic tool uses, and it is the count the eye can take in without counting.
@@ -609,6 +621,34 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
         super().mouseDoubleClickEvent(event)
+
+    def _dragged_ref(self, event: QDragMoveEvent | QDropEvent) -> str | None:
+        data = event.mimeData()
+        if data is None or not data.hasFormat(PART_MIME):
+            return None
+        return data.text().strip() or None
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if self._dragged_ref(event) is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if self._dragged_ref(event) is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        ref = self._dragged_ref(event)
+        if ref is None or self.item is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        where = self.mapToScene(event.position().toPoint())
+        col, row = cell_at(self.item.drawing, Point2(x=where.x(), y=where.y()))
+        self.symbolMoved.emit(ref, col, row)
 
     def _maybe_start_drag(self, event: QMouseEvent) -> bool:
         """Begin dragging a symbol towards the board, if this move is far enough to mean it.

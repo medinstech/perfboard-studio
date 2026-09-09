@@ -22,6 +22,15 @@ closed without a bump.
 
 ### Added
 
+- **A symbol can be dragged to another cell on the sheet**, and it stays there. The
+  drawing is still derived: what the document carries is a CELL per part, not millimetres,
+  so the layout keeps every position and keeps its guarantee that no wire crosses a symbol —
+  which is what lets this exist without reversing PLAN.md D3. Positioning one symbol leaves
+  every other one exactly where it was, `Arrange the Sheet` hands the whole lot back to the
+  layout in one step, and a document nobody has rearranged serializes to exactly the bytes
+  it did before, so all fifteen golden fixtures are untouched and the format version has not
+  moved.
+
 - **Drag a symbol onto the board to place that one part.** "Place on the Board" moves the
   whole design; until now there was no way to put down a single part from the sheet at all
   — double-clicking a symbol opened its properties. Dropping one whose part is already on

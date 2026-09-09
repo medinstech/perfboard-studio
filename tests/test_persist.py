@@ -26,8 +26,10 @@ from perfboard_studio.model import (
     HoleCoord,
     Net,
     PerfDocument,
+    SchematicPart,
     SolderTraceConductor,
     SpineSpec,
+    SymbolPlacement,
     WireConductor,
 )
 
@@ -602,3 +604,47 @@ def test_a_missing_field_is_named_by_its_full_path_in_the_message() -> None:
     assert result.ok is False
     assert result.code == "missing-field"
     assert '"board.cols"' in result.message
+
+
+def _document_with_a_part() -> PerfDocument:
+    """A document holding one schematic part, so a sheet cell has something to be about."""
+    return _minimal_document(
+        parts=(SchematicPart(id="p1", ref="R1", value="10k", footprint_id="r-axial-3"),)
+    )
+
+
+def test_a_sheet_nobody_rearranged_leaves_no_trace_in_the_file() -> None:
+    """The reason symbol positioning is allowed to exist. An array emitted unconditionally
+    would change all fifteen golden fixtures and break the differential proof this port
+    rests on -- the same rule ``stripAxis`` and ``parts`` already follow."""
+    document = _document_with_a_part()
+    assert '"sheet"' not in persist.serialize_document(document)
+
+
+def test_a_positioned_symbol_round_trips() -> None:
+    document = dataclasses.replace(
+        _document_with_a_part(), sheet=(SymbolPlacement(id="p1", col=3, row=2),)
+    )
+    text = persist.serialize_document(document)
+
+    assert '"sheet"' in text
+    result = persist.deserialize_document(text)
+    assert result.ok, result.message
+    assert result.document.sheet == document.sheet
+    assert persist.serialize_document(result.document) == text
+
+
+def test_a_cell_for_a_part_the_document_lost_is_dropped_with_a_warning() -> None:
+    """A hand-edited or half-merged file must still open, following the same rule as a
+    diagonal solder step: a cell nobody can see is not a reason to lock somebody out of
+    their circuit."""
+    document = dataclasses.replace(
+        _document_with_a_part(), sheet=(SymbolPlacement(id="gone", col=1, row=1),)
+    )
+    text = persist.serialize_document(document)
+
+    result = persist.deserialize_document(text)
+
+    assert result.ok
+    assert result.document.sheet == ()
+    assert any("not a part or a component" in w for w in result.warnings)

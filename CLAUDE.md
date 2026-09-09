@@ -500,11 +500,34 @@ from a test that hands it a document; two sheets are frozen whole in
 `tests/schematic_golden/` (`PERFBOARD_STUDIO_BLESS_SCHEMATIC=1`), for the reason
 `test_guide_golden` exists.
 
-**The CIRCUIT is editable and the DRAWING is not, and that is PLAN.md D3 intact rather
-than reversed.** D3 declined to write a geometric schematic editor — symbols you position,
-wires you route — because that is a year of work whose output this tool already accepts
-from KiCad. A moved symbol would be state, state would be a document field, and a document
-field would reopen the byte-for-byte `.perf` format. Same reasoning as `ui/boardcolors.py`.
+**The CIRCUIT is editable and the DRAWING is derived, and a symbol can be moved without
+reversing PLAN.md D3.** D3 declined to write a geometric schematic editor — symbols you
+position freely, wires you route by hand — because that is a year of work whose output this
+tool already accepts from KiCad. What `doc.sheet` carries is not that: it is a **CELL** per
+part (`model.SymbolPlacement`), so the layout still owns every millimetre and still
+guarantees that wires run only in the channels between symbols. Storing millimetres would
+have handed that away — a symbol dropped between two columns is a symbol with wires through
+it, and the sheet would stop being readable in exactly the case somebody was trying to make
+it more readable.
+
+Four things keep it honest:
+
+- **It is keyed on the part's ID**, so a position survives a rename and survives
+  `part.place` / `component.unplace` moving a part between the two lists.
+- **It is omitted from the file when empty**, the `stripAxis` rule, which is why all fifteen
+  golden fixtures are untouched and `DOCUMENT_FORMAT_VERSION` did not move. A sheet nobody
+  has rearranged says nothing.
+- **Only a displaced symbol moves.** `_apply_pinned_cells` puts the pinned ones in their
+  cells and leaves every other symbol exactly where the layering and the sweeps put it —
+  positioning one part must not rearrange the twenty around it, or nobody will position one.
+- **`symbol.auto` is its own command**, not an undo: undo takes back the last move, and
+  handing the sheet back after an afternoon of tidying is a great many moves and one
+  decision.
+
+`schematic.cell_at` is the inverse — a point on the sheet to a cell — answered from the
+DRAWING's own output rather than by re-deriving the column arithmetic in the view, which
+would be a second thing to keep in step. Columns and rows are taken separately so an EMPTY
+cell is reachable, since dropping a symbol into a gap is most of what rearranging is.
 
 `Symbol.unplaced` and `Symbol.undefined` are different things and only the second is a
 defect: unplaced is every part on a sheet being drawn, so it is counted in the panel's

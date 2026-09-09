@@ -80,6 +80,7 @@ from .model import (
     SolderTraceConductor,
     SpineSpec,
     StripConductor,
+    SymbolPlacement,
     TrackCut,
     WireConductor,
 )
@@ -635,6 +636,30 @@ class PlacePartsPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class MoveSymbolsPayload:
+    """Cells on the SHEET for one or more symbols. See ``model.SymbolPlacement``.
+
+    A batch for the reason every other batch here is one: dragging is one gesture and a
+    tidy-up is one decision, and either dispatched per symbol would bury the undo stack.
+    """
+
+    placements: tuple[SymbolPlacement, ...]
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AutoSymbolsPayload:
+    """Hand symbols back to the layout. Empty ``ids`` means the whole sheet.
+
+    The inverse of ``symbol.move``, and it has to exist as its own command rather than as
+    a position meaning "automatic": there is no cell that means "you choose", and a user
+    who has moved four symbols and wants the sheet back needs one gesture, not four.
+    """
+
+    ids: tuple[ComponentId, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class AddConductorPayload:
     conductor: NewConductor
     id: ConductorId | None = None
@@ -1179,6 +1204,11 @@ class _DeleteComponent:
                 for c in doc.conductors
                 if not (c.kind == "lead-bend" and c.component_id == p.id)
             ),
+            # Unlike the conductors above, the sheet cell goes: it names an id nothing in
+            # the document has any more, which persist would drop with a warning on the
+            # next load. A component.delete removes the part from the DESIGN as well --
+            # there is no schematic symbol left for the cell to be about.
+            sheet=tuple(placement for placement in doc.sheet if placement.id != p.id),
         )
 
     def describe(self, p: DeleteComponentPayload, doc: PerfDocument) -> str:
@@ -1274,7 +1304,13 @@ class _DeletePart:
             for net in doc.nets
         )
         return dataclasses.replace(
-            doc, parts=tuple(part for part in doc.parts if part.id != p.id), nets=nets
+            doc,
+            parts=tuple(part for part in doc.parts if part.id != p.id),
+            nets=nets,
+            # And its cell on the sheet, which is the only thing that could still name it.
+            # persist drops such an entry with a warning on load; leaving one here would
+            # mean a document this application itself wrote loaded with a complaint.
+            sheet=tuple(placement for placement in doc.sheet if placement.id != p.id),
         )
 
     def describe(self, p: DeletePartPayload, doc: PerfDocument) -> str:
@@ -1710,6 +1746,84 @@ class _ApplyBoardPreset:
         if p.label:
             return p.label
         return f"Use a {p.board.cols}x{p.board.rows} {p.board.material} board"
+
+
+class _MoveSymbols:
+    """Put symbols in particular cells on the sheet.
+
+    Replaces by id and keeps everything else, so moving one symbol does not disturb the
+    three somebody positioned last week. A part the document does not have is refused: a
+    cell for a symbol nothing draws is a line in the file that can never be seen, and the
+    caller handing one over has a bug rather than a preference.
+
+    The cell is NOT validated against the sheet's size, and deliberately: the sheet is
+    derived and its size is a consequence of the layout, so there is no grid to be off the
+    edge of until the drawing is built. ``schematic.py`` grows to fit what it is given.
+    """
+
+    type = "symbol.move"
+
+    def apply(
+        self, doc: PerfDocument, p: MoveSymbolsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not p.placements:
+            raise CommandError(
+                "empty-batch",
+                "symbol.move needs at least one placement; an empty batch would put a "
+                "no-op on the undo stack.",
+            )
+        known = {part.id for part in doc.parts} | {c.id for c in doc.components}
+        seen: set[ComponentId] = set()
+        for placement in p.placements:
+            if placement.id not in known:
+                raise CommandError(
+                    "unknown-part",
+                    f'No part or component with id "{placement.id}" to put on the sheet.',
+                )
+            if placement.id in seen:
+                raise CommandError(
+                    "duplicate-id",
+                    f'Symbol "{placement.id}" is placed twice in one batch.',
+                )
+            seen.add(placement.id)
+
+        kept = [placement for placement in doc.sheet if placement.id not in seen]
+        return dataclasses.replace(doc, sheet=tuple(kept) + tuple(p.placements))
+
+    def describe(self, p: MoveSymbolsPayload, doc: PerfDocument) -> str:
+        if p.label:
+            return p.label
+        if len(p.placements) == 1:
+            return f"Move {p.placements[0].id} on the sheet"
+        return f"Move {len(p.placements)} symbol(s) on the sheet"
+
+
+class _AutoSymbols:
+    """Give symbols back to the layout, by forgetting where somebody put them."""
+
+    type = "symbol.auto"
+
+    def apply(
+        self, doc: PerfDocument, p: AutoSymbolsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not doc.sheet:
+            raise CommandError(
+                "nothing-to-do", "No symbol on this sheet has been positioned by hand."
+            )
+        if not p.ids:
+            return dataclasses.replace(doc, sheet=())
+        dropped = set(p.ids)
+        kept = tuple(placement for placement in doc.sheet if placement.id not in dropped)
+        if len(kept) == len(doc.sheet):
+            raise CommandError(
+                "nothing-to-do", "None of those symbols has been positioned by hand."
+            )
+        return dataclasses.replace(doc, sheet=kept)
+
+    def describe(self, p: AutoSymbolsPayload, doc: PerfDocument) -> str:
+        if not p.ids:
+            return "Lay the whole sheet out automatically"
+        return f"Lay {len(p.ids)} symbol(s) out automatically"
 
 
 class _ImportNetlist:
@@ -2279,6 +2393,8 @@ add_part: CommandDefinition[AddPartPayload] = _AddPart()
 update_part: CommandDefinition[UpdatePartPayload] = _UpdatePart()
 delete_part: CommandDefinition[DeletePartPayload] = _DeletePart()
 place_parts: CommandDefinition[PlacePartsPayload] = _PlaceParts()
+move_symbols: CommandDefinition[MoveSymbolsPayload] = _MoveSymbols()
+auto_symbols: CommandDefinition[AutoSymbolsPayload] = _AutoSymbols()
 add_conductor: CommandDefinition[AddConductorPayload] = _AddConductor()
 add_conductors: CommandDefinition[AddConductorsPayload] = _AddConductors()
 set_conductor_path: CommandDefinition[SetConductorPathPayload] = _SetConductorPath()
@@ -2320,6 +2436,8 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     update_part,
     delete_part,
     place_parts,
+    move_symbols,
+    auto_symbols,
     add_conductor,
     add_conductors,
     set_conductor_path,

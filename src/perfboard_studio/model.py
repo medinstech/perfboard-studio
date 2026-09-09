@@ -402,6 +402,34 @@ class SchematicPart:
     footprint_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class SymbolPlacement:
+    """Where one part's SYMBOL sits on the sheet, once somebody has said.
+
+    A CELL, NOT A POSITION, and that is the whole safety of the feature.
+    ``schematic.py`` guarantees that symbols live in grid cells and wires only in the
+    channels between them, so no wire can ever cross a symbol — a guarantee that holds
+    because the layout owns every position on the sheet. Storing millimetres would hand
+    that away: a symbol dropped between two columns is a symbol with wires through it, and
+    the sheet would stop being readable in exactly the case somebody was trying to make it
+    more readable. A cell is a choice the layout can honour and still route around.
+
+    Keyed on the part's ID rather than its reference, so it survives a rename — and so it
+    survives ``part.place`` and ``component.unplace``, which move a part between the two
+    lists and keep the id. A symbol you positioned does not jump back when the part goes
+    on the board.
+
+    THE SHEET IS STILL DERIVED. This is an override on one part, absent by default and
+    absent from the file when nothing has been moved (see ``persist``), which is what keeps
+    PLAN.md D3 intact: the drawing is not state, and a document nobody has rearranged
+    serializes to exactly the bytes it did before this existed.
+    """
+
+    id: ComponentId
+    col: int
+    row: int
+
+
 # ---------------------------------------------------------------------------
 # Conductors — the heart of the model
 # ---------------------------------------------------------------------------
@@ -565,6 +593,10 @@ class PerfDocument:
     #: Schematic intent, imported from a netlist or drawn on the schematic. Empty until
     #: one or the other has happened.
     nets: tuple[Net, ...] = ()
+    #: Sheet cells somebody has chosen for particular symbols — see ``SymbolPlacement``.
+    #: Empty on every document the layout has been left to arrange, which is most of them,
+    #: and empty is what the file then says by saying nothing.
+    sheet: tuple[SymbolPlacement, ...] = ()
     #: Mechanical features of the board. They sit on the document rather than on
     #: ``board`` — following ``cuts``, which is the same kind of thing — so that adding
     #: one is its own command and its own undo step instead of a wholesale board

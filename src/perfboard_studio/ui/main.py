@@ -107,6 +107,7 @@ from perfboard_studio.commands import (
     AddNetPayload,
     AddPartPayload,
     ApplyBoardPresetPayload,
+    AutoSymbolsPayload,
     DeleteComponentPayload,
     DeleteConductorsPayload,
     DeleteEdgeConnectorPayload,
@@ -117,6 +118,7 @@ from perfboard_studio.commands import (
     ImportNetlistPayload,
     MirrorComponentPayload,
     MoveComponentPayload,
+    MoveSymbolsPayload,
     PartPlacement,
     PlaceBlockPayload,
     PlaceComponentPayload,
@@ -195,6 +197,7 @@ from perfboard_studio.model import (
     PadShape,
     PerfDocument,
     Rotation,
+    SymbolPlacement,
 )
 from perfboard_studio.parsers.kicad import parse_kicad_netlist
 from perfboard_studio.placer import (
@@ -3875,6 +3878,7 @@ class MainWindow(QMainWindow):
         self.schematic_view.netClicked.connect(self._on_schematic_net_clicked)
         self.schematic_view.pinClicked.connect(self._on_schematic_pin_clicked)
         self.schematic_view.cleared.connect(self._on_schematic_cleared)
+        self.schematic_view.symbolMoved.connect(self._on_symbol_moved)
         layout.addWidget(self.schematic_view, 1)
 
         # One row now that the page has the width for it. It was two because a dock can be
@@ -3931,6 +3935,17 @@ class MainWindow(QMainWindow):
         )
         fit.clicked.connect(self.schematic_view.fit)
         row.addWidget(fit)
+
+        self.act_sch_auto = QPushButton(t("Arrange the Sheet"))
+        self.act_sch_auto.setToolTip(
+            t(
+                "Forget every symbol you have dragged and lay the sheet out again. Drag a "
+                "symbol to another cell to place it yourself; the wires still route "
+                "themselves around it."
+            )
+        )
+        self.act_sch_auto.clicked.connect(self.on_schematic_auto_layout)
+        row.addWidget(self.act_sch_auto)
 
         self.act_sch_detach = QPushButton(t("Open in a Window"))
         self.act_sch_detach.setToolTip(
@@ -4117,6 +4132,44 @@ class MainWindow(QMainWindow):
             return
         self.go_to_component(component.id)
         self._sync_schematic_highlight()
+
+    def _on_symbol_moved(self, ref: str, col: int, row: int) -> None:
+        """A symbol was dragged to another cell on the sheet.
+
+        A CELL, not a position, which is what lets the sheet stay derived and still be
+        rearranged: ``schematic.py`` keeps every millimetre and therefore keeps its
+        guarantee that no wire crosses a symbol. See ``model.SymbolPlacement``.
+        """
+        document = self.bus.document
+        target = next((p for p in document.parts if p.ref == ref), None) or next(
+            (c for c in document.components if c.ref == ref), None
+        )
+        if target is None:
+            return
+        result = self.bus.dispatch(
+            "symbol.move",
+            MoveSymbolsPayload(
+                placements=(SymbolPlacement(id=target.id, col=col, row=row),),
+                label=f"Move {ref} on the sheet",
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+
+    def on_schematic_auto_layout(self) -> None:
+        """Hand the whole sheet back to the layout.
+
+        Its own gesture rather than an undo, because the two are different questions: undo
+        takes back the last move, and this takes back the arrangement -- which after an
+        afternoon of tidying is a great many moves and one decision.
+        """
+        result = self.bus.dispatch("symbol.auto", AutoSymbolsPayload())
+        if not result.ok:
+            self.statusBar().showMessage(
+                t("Nothing on this sheet has been moved by hand."), 6000
+            )
+            return
+        self.statusBar().showMessage(result.description, 6000)
 
     def _on_part_dropped(self, ref: str, hole: object) -> None:
         """A symbol was dragged off the sheet and dropped on a hole.

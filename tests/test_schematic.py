@@ -28,6 +28,7 @@ would call a change and coarse enough to absorb a last-ULP disagreement between 
 
 from __future__ import annotations
 
+import dataclasses
 import difflib
 import os
 from pathlib import Path
@@ -51,6 +52,7 @@ from perfboard_studio.model import (
     PerfDocument,
     Point2,
     SchematicPart,
+    SymbolPlacement,
 )
 from perfboard_studio.schematic import (
     _KIND_BY_ARCHETYPE,
@@ -71,6 +73,7 @@ from perfboard_studio.schematic import (
     SymbolKind,
     _split_tall_layers,
     build_schematic,
+    cell_at,
     symbol_kind_for,
 )
 
@@ -1023,3 +1026,107 @@ def test_the_frozen_boards_still_cover_what_they_were_chosen_for() -> None:
         classes |= {wire.net_class for wire in drawing.wires}
     assert len(kinds) >= 9, sorted(kinds)
     assert classes == {"ground", "power", "signal"}
+
+
+# ---------------------------------------------------------------------------
+# Symbols somebody positioned
+# ---------------------------------------------------------------------------
+#
+# The sheet is still DERIVED. What doc.sheet carries is a CELL per part, which is what
+# lets the layout keep every millimetre -- and therefore keep the guarantee that wires run
+# only in the channels between symbols, so no wire can cross one. A position in millimetres
+# would have handed that away.
+
+
+def _with_cell(document: PerfDocument, ref: str, col: int, row: int) -> PerfDocument:
+    target = next(
+        (p for p in document.parts if p.ref == ref),
+        next((c for c in document.components if c.ref == ref), None),
+    )
+    assert target is not None, ref
+    return dataclasses.replace(
+        document, sheet=(*document.sheet, SymbolPlacement(id=target.id, col=col, row=row))
+    )
+
+
+def test_a_symbol_goes_where_it_was_put() -> None:
+    document = load(GOLDEN_DIR / "ne555.perf")
+    moved = _with_cell(document, "U1", 3, 2)
+
+    symbol = next(s for s in build_schematic(moved, REGISTRY).symbols if s.ref == "U1")
+
+    assert (symbol.col, symbol.row) == (3, 2)
+
+
+def test_positioning_one_symbol_leaves_the_others_where_they_were() -> None:
+    """The behaviour that makes a manual tweak worth making. Only a symbol whose cell was
+    taken moves; the rest stay exactly where the layering and the sweeps put them."""
+    document = load(GOLDEN_DIR / "ne555.perf")
+    before = {s.ref: (s.col, s.row) for s in build_schematic(document, REGISTRY).symbols}
+    # A cell no symbol is in, so nothing is displaced at all.
+    free = next(
+        (col, row)
+        for col in range(8)
+        for row in range(8)
+        if (col, row) not in set(before.values())
+    )
+    moved = _with_cell(document, "R1", *free)
+
+    after = {s.ref: (s.col, s.row) for s in build_schematic(moved, REGISTRY).symbols}
+
+    assert after["R1"] == free
+    assert {ref: cell for ref, cell in after.items() if ref != "R1"} == {
+        ref: cell for ref, cell in before.items() if ref != "R1"
+    }
+
+
+def test_a_symbol_pushed_out_of_its_cell_is_re_packed_not_stacked() -> None:
+    """Two symbols in one cell is two symbols drawn on top of each other."""
+    document = load(GOLDEN_DIR / "ne555.perf")
+    before = {s.ref: (s.col, s.row) for s in build_schematic(document, REGISTRY).symbols}
+    taken = before["C1"]
+    moved = _with_cell(document, "R1", *taken)
+
+    cells = [(s.col, s.row) for s in build_schematic(moved, REGISTRY).symbols]
+
+    assert len(cells) == len(set(cells)), "two symbols ended up in one cell"
+
+
+def test_the_same_document_draws_the_same_sheet_however_it_was_arranged() -> None:
+    """Every tie is broken by reference. A sheet that rearranged itself between runs would
+    be unblessable, and worse, unrecognisable."""
+    moved = _with_cell(_with_cell(load(GOLDEN_DIR / "ne555.perf"), "U1", 3, 2), "R1", 0, 0)
+    assert build_schematic(moved, REGISTRY) == build_schematic(moved, REGISTRY)
+
+
+def test_a_cell_is_found_for_a_point_on_the_sheet() -> None:
+    """``cell_at`` is the inverse of the layout, answered from its OUTPUT -- a second
+    implementation of the column arithmetic in the view would be a second thing to keep in
+    step."""
+    drawing = build_schematic(load(GOLDEN_DIR / "ne555.perf"), REGISTRY)
+    for symbol in drawing.symbols:
+        centre = Point2(x=symbol.at.x + symbol.width / 2, y=symbol.at.y + symbol.height / 2)
+        assert cell_at(drawing, centre) == (symbol.col, symbol.row), symbol.ref
+
+
+def test_an_empty_cell_is_reachable() -> None:
+    """Columns and rows are taken separately, which is the whole point: dropping a symbol
+    into a gap is most of what rearranging a sheet is."""
+    drawing = build_schematic(load(GOLDEN_DIR / "ne555.perf"), REGISTRY)
+    occupied = {(s.col, s.row) for s in drawing.symbols}
+    cols = {s.col for s in drawing.symbols}
+    rows = {s.row for s in drawing.symbols}
+    empty = next(((c, r) for c in cols for r in rows if (c, r) not in occupied), None)
+    assert empty is not None, "the fixture has no gap to aim at"
+
+    column = next(s for s in drawing.symbols if s.col == empty[0])
+    line = next(s for s in drawing.symbols if s.row == empty[1])
+    point = Point2(
+        x=column.at.x + column.width / 2, y=line.at.y + line.height / 2
+    )
+
+    assert cell_at(drawing, point) == empty
+
+
+def test_a_sheet_with_nothing_on_it_has_one_cell() -> None:
+    assert cell_at(SchematicDrawing(), Point2(x=40.0, y=40.0)) == (0, 0)

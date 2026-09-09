@@ -528,6 +528,17 @@ TURKISH: Mapping[str, str] = {
     # -- the schematic as a view of its own, not a panel down the side ---------
     "&Schematic": "&Şematik",
     # "Board" is already in this catalogue, as the Board Setup dialog's own label.
+    "Arrange the Sheet": "Sayfayı Düzenle",
+    "Forget every symbol you have dragged and lay the sheet out again. Drag a "
+    "symbol to another cell to place it yourself; the wires still route "
+    "themselves around it.": (
+        "Sürüklediğiniz her sembolü unutur ve sayfayı yeniden dizer. Bir sembolü başka "
+        "bir hücreye sürükleyerek kendiniz yerleştirebilirsiniz; teller yine kendiliğinden "
+        "etrafından dolaşır."
+    ),
+    "Nothing on this sheet has been moved by hand.": (
+        "Bu sayfada elle taşınmış bir şey yok."
+    ),
     "Open in a Window": "Ayrı Pencerede Aç",
     "Back to a Tab": "Sekmeye Geri Al",
     "Put the sheet in a window of its own, so it and the board can sit side by "
