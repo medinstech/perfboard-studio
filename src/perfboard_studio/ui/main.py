@@ -42,8 +42,16 @@ from PySide6.QtCore import (
     QThread,
     QTimer,
     QUrl,
+    Signal,
 )
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QKeySequence
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QColor,
+    QDesktopServices,
+    QIcon,
+    QKeySequence,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -69,6 +77,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QSpinBox,
     QStatusBar,
+    QTabWidget,
     QToolBar,
     QToolButton,
     QTreeWidget,
@@ -414,6 +423,31 @@ def read_document_text(path: Path) -> tuple[str | None, str | None]:
 #: Substrate to add outside the hole grid when a board carries a printed legend, so the
 #: characters have somewhere to go. Roughly what the boards being modelled have.
 LEGEND_BORDER_MM = 2.0
+
+
+class _DetachedSheet(QWidget):
+    """The schematic in a window of its own.
+
+    A plain top-level widget rather than a QDialog: it is a second view of the document,
+    not a question, so it must not be modal, must not take Escape, and must appear in the
+    window list where somebody can put it beside the main window -- which is the whole
+    reason it exists.
+    """
+
+    closed = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        # Qt.Window rather than the default child flag: a widget with a parent is drawn
+        # INSIDE it unless it is told it is a window, and the parent is kept so the sheet
+        # is raised and closed with the application rather than stranded behind it.
+        super().__init__(parent, Qt.WindowType.Window)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        # The page has to go back to the tab however the window went away, including from
+        # the title bar's own button -- so the signal is emitted here rather than from
+        # whatever asked for the close.
+        self.closed.emit()
+        super().closeEvent(event)
 
 
 class BoardSetupDialog(QDialog):
@@ -2285,12 +2319,26 @@ class MainWindow(QMainWindow):
         self.update_bar.cancelRequested.connect(self._on_update_cancel)
         self.update_bar.closeRequested.connect(self._on_update_closed)
         self.update_bar.dismissed.connect(self._on_update_dismissed)
+        # THE WORKSPACE, not a board with panels around it. A schematic and a layout are
+        # the two things this application is for, and the sheet used to be a dock on the
+        # right edge -- a whole circuit in a third of the window, with the other two thirds
+        # showing a board nobody was looking at while they drew. Two tabs, each getting the
+        # whole area, and either can be pulled out into a window of its own.
+        self.workspace = QTabWidget()
+        self.workspace.setDocumentMode(True)
+        self.workspace.addTab(self.view, t("Board"))
+        self.schematic_page = self._build_schematic_page()
+        self.workspace.addTab(self.schematic_page, t("Schematic"))
+        self.workspace.currentChanged.connect(self._on_workspace_changed)
+        #: The sheet's own window while it is detached, and None while it is a tab.
+        self._schematic_window: _DetachedSheet | None = None
+
         centre = QWidget(self)
         column = QVBoxLayout(centre)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(0)
         column.addWidget(self.update_bar)
-        column.addWidget(self.view, 1)
+        column.addWidget(self.workspace, 1)
         self.setCentralWidget(centre)
 
         # Docks before menus: the View menu offers each dock's own toggleViewAction, so the
@@ -2299,12 +2347,10 @@ class MainWindow(QMainWindow):
         self._build_nets_dock()
         self._build_3d_dock()
         self._build_guide_dock()
-        self._build_schematic_dock()
         self._build_drc_dock()
-        # Three panels of the same width on the same edge, so they share it as tabs rather
-        # than each getting a third. All start closed; whichever is opened takes the space.
+        # Two panels of the same width on the same edge, so they share it as tabs rather
+        # than each getting half. Both start closed; whichever is opened takes the space.
         self.tabifyDockWidget(self.dock_3d, self.dock_guide)
-        self.tabifyDockWidget(self.dock_guide, self.dock_schematic)
         self._build_menu()
         self._build_toolbar()
         self._build_status_bar()
@@ -3145,7 +3191,8 @@ class MainWindow(QMainWindow):
             )
         )
         view_menu.addAction(self.act_guide_panel)
-        self.act_schematic = self.dock_schematic.toggleViewAction()
+        self.act_schematic = QAction(t("&Schematic"), self)
+        self.act_schematic.triggered.connect(self.show_schematic)
         self.act_schematic.setText(t("Show &Schematic"))
         self.act_schematic.setShortcut(QKeySequence("Ctrl+5"))
         self.act_schematic.setToolTip(
@@ -3676,8 +3723,7 @@ class MainWindow(QMainWindow):
         document = self.bus.document
         if document.components or document.parts or document.nets or document.conductors:
             return
-        self.dock_schematic.show()
-        self.dock_schematic.raise_()
+        self.show_schematic()
 
     def _refresh_empty_hint(self) -> None:
         """Tell a blank board what to do with itself, the first time round.
@@ -3793,9 +3839,21 @@ class MainWindow(QMainWindow):
     # selection made over there lights up here. Two views of one document, which is worth
     # more on a perfboard than a second editor would be.
 
-    def _build_schematic_dock(self) -> None:
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
+    # -- the schematic, in the workspace rather than down the side --------------
+    #
+    # IT IS A VIEW, NOT A PANEL. It was a dock on the right edge, which put a whole
+    # circuit into a third of the window and left the other two thirds showing a board
+    # nobody was looking at while they drew. A schematic and a layout are the two things
+    # this application is for, and the way every EDA tool arranges them is the way this
+    # does now: one workspace, two tabs, each getting the whole area.
+    #
+    # And it detaches. Somebody who genuinely wants both at once -- probing a net on the
+    # board while reading the sheet -- gets two real windows to put side by side, which is
+    # what a second monitor is for and what a 300-pixel dock was never going to be.
+
+    def _build_schematic_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(6)
 
@@ -3812,16 +3870,16 @@ class MainWindow(QMainWindow):
         self.schematic_view.cleared.connect(self._on_schematic_cleared)
         layout.addWidget(self.schematic_view, 1)
 
-        # Two rows of buttons rather than a toolbar: this is a dock that can be a third of
-        # the window wide, and a toolbar in one elides its way down to icons nobody can
-        # tell apart.
-        top_row = QHBoxLayout()
+        # One row now that the page has the width for it. It was two because a dock can be
+        # a third of the window wide and a toolbar in one elides down to icons nobody can
+        # tell apart -- which stopped being the situation when this stopped being a dock.
+        row = QHBoxLayout()
         self.act_sch_add = QPushButton(t("Add Part…"))
         self.act_sch_add.setToolTip(
             t("Put a part in the design without deciding where it goes on the board yet.")
         )
         self.act_sch_add.clicked.connect(self.on_schematic_add_part)
-        top_row.addWidget(self.act_sch_add)
+        row.addWidget(self.act_sch_add)
 
         self.act_sch_wire = QPushButton(t("Wire"))
         self.act_sch_wire.setCheckable(True)
@@ -3832,7 +3890,7 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_wire.toggled.connect(self.on_schematic_wire_mode)
-        top_row.addWidget(self.act_sch_wire)
+        row.addWidget(self.act_sch_wire)
 
         self.act_sch_delete = QPushButton(t("Remove"))
         self.act_sch_delete.setToolTip(
@@ -3842,10 +3900,10 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_delete.clicked.connect(self.on_schematic_remove)
-        top_row.addWidget(self.act_sch_delete)
-        layout.addLayout(top_row)
+        row.addWidget(self.act_sch_delete)
 
-        bottom_row = QHBoxLayout()
+        row.addStretch(1)
+
         self.act_sch_place = QPushButton(t("Place on the Board"))
         self.act_sch_place.setToolTip(
             t(
@@ -3855,17 +3913,27 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_place.clicked.connect(self.on_schematic_place_all)
-        bottom_row.addWidget(self.act_sch_place)
+        row.addWidget(self.act_sch_place)
 
         fit = QPushButton(t("Fit the Sheet"))
         fit.setToolTip(
             t(
-                "Put the whole schematic back in the panel. The sheet is not re-fitted "
+                "Put the whole schematic back in the view. The sheet is not re-fitted "
                 "when the board changes, so an edit cannot move what you were looking at."
             )
         )
         fit.clicked.connect(self.schematic_view.fit)
-        bottom_row.addWidget(fit)
+        row.addWidget(fit)
+
+        self.act_sch_detach = QPushButton(t("Open in a Window"))
+        self.act_sch_detach.setToolTip(
+            t(
+                "Put the sheet in a window of its own, so it and the board can sit side by "
+                "side. Closing that window brings it back as a tab."
+            )
+        )
+        self.act_sch_detach.clicked.connect(self.on_schematic_detach)
+        row.addWidget(self.act_sch_detach)
 
         export_sheet = QPushButton(t("Export…"))
         export_sheet.setToolTip(
@@ -3875,30 +3943,84 @@ class MainWindow(QMainWindow):
             )
         )
         export_sheet.clicked.connect(self.on_export_schematic)
-        bottom_row.addWidget(export_sheet)
-        layout.addLayout(bottom_row)
+        row.addWidget(export_sheet)
+        layout.addLayout(row)
+        return page
 
-        dock = QDockWidget(t("Schematic"), self)
-        dock.setObjectName("dockSchematic")
-        dock.setWidget(panel)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
-        self.dock_schematic = dock
-        dock.hide()
-        dock.visibilityChanged.connect(self._on_schematic_visibility_changed)
+    def on_schematic_detach(self) -> None:
+        """Move the sheet into a window of its own, or bring it back.
 
-    def _on_schematic_visibility_changed(self, visible: bool) -> None:
-        if visible and self._schematic_stale:
+        The PAGE is reparented rather than a second view being built, which is the whole
+        point: a copy would be a second thing to keep in step with the document, and the
+        two would disagree the first time one of them missed a refresh. There is one
+        schematic view in this application and it is either in the tab or in the window.
+        """
+        if self._schematic_window is not None:
+            self._schematic_window.close()
+            return
+
+        page = self.schematic_page
+        index = self.workspace.indexOf(page)
+        if index >= 0:
+            self.workspace.removeTab(index)
+
+        window = _DetachedSheet(self)
+        window.setWindowTitle(t("Schematic — {name}").format(name=self.bus.document.meta.name))
+        column = QVBoxLayout(window)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.addWidget(page)
+        page.show()
+        window.resize(900, 700)
+        window.closed.connect(self._on_schematic_window_closed)
+        self._schematic_window = window
+        self.act_sch_detach.setText(t("Back to a Tab"))
+        window.show()
+        self.schematic_view.fit()
+        self._refresh_schematic_panel()
+
+    def _on_schematic_window_closed(self) -> None:
+        """Take the page back as a tab. Called however the window went away, including
+        from the title bar's own close button, which is why it hangs off a signal rather
+        than off the button that opened it."""
+        self._schematic_window = None
+        self.act_sch_detach.setText(t("Open in a Window"))
+        self.workspace.addTab(self.schematic_page, t("Schematic"))
+        self.workspace.setCurrentWidget(self.schematic_page)
+        self._refresh_schematic_panel()
+
+    def show_schematic(self) -> None:
+        """Bring the sheet to the front, wherever it currently lives."""
+        if self._schematic_window is not None:
+            self._schematic_window.raise_()
+            self._schematic_window.activateWindow()
+        else:
+            self.workspace.setCurrentWidget(self.schematic_page)
+        self._refresh_schematic_panel()
+
+    def schematic_is_showing(self) -> bool:
+        """Whether the sheet is in front of the user, in a tab or in its own window.
+
+        ``isHidden`` rather than ``isVisible`` on the window, for the trap the guide panel
+        documents: a widget is "visible" only once every ancestor is, so during
+        construction and in any headless run a page that HAS been shown is not yet visible
+        -- and the view would refuse to fill itself while sitting open in front of the user.
+        """
+        if self._schematic_window is not None:
+            return not self._schematic_window.isHidden()
+        return self.workspace.currentWidget() is self.schematic_page
+
+    def _on_workspace_changed(self, _index: int) -> None:
+        if self._schematic_stale and self.schematic_is_showing():
             self._refresh_schematic_panel()
 
     def _refresh_schematic_panel(self) -> None:
         """Redraw the sheet, or mark it stale and do nothing.
 
-        ``isHidden()`` rather than ``isVisible()``, for the trap the guide panel documents:
-        a widget is "visible" only once every ancestor is, so during construction and in
-        any headless run a dock that HAS been shown is not yet visible -- and the panel
-        would refuse to fill itself while sitting open in front of the user.
+        Rebuilt only while it is in front of somebody: ``build_schematic`` lays out the
+        whole sheet, and paying for that on every keystroke to fill a tab nobody has
+        selected is the mistake the 3D panel and the build guide both already avoid.
         """
-        if not hasattr(self, "schematic_view") or self.dock_schematic.isHidden():
+        if not hasattr(self, "schematic_view") or not self.schematic_is_showing():
             self._schematic_stale = True
             return
         self._schematic_stale = False

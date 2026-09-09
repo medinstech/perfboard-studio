@@ -525,6 +525,17 @@ TURKISH: Mapping[str, str] = {
         "Otomatik kaydetme artık yalnızca çökme kurtarma kopyası yazıyor; dosyayı Ctrl+S "
         "kaydeder."
     ),
+    # -- the schematic as a view of its own, not a panel down the side ---------
+    "&Schematic": "&Şematik",
+    # "Board" is already in this catalogue, as the Board Setup dialog's own label.
+    "Open in a Window": "Ayrı Pencerede Aç",
+    "Back to a Tab": "Sekmeye Geri Al",
+    "Put the sheet in a window of its own, so it and the board can sit side by "
+    "side. Closing that window brings it back as a tab.": (
+        "Sayfayı kendi penceresine alır, böylece kartla yan yana durabilirler. O "
+        "pencereyi kapatmak sayfayı sekmeye geri getirir."
+    ),
+    "Schematic — {name}": "Şematik — {name}",
     # -- board setup: the product first, the consequences behind Advanced ------
     "Advanced": "Gelişmiş",
     "Everything a stocked board already decides: its grid, what it is made of, "
@@ -620,7 +631,7 @@ TURKISH: Mapping[str, str] = {
         "Parçanın üzerinde yazan değer. Malzeme listesine, rehberin adım metnine ve 3D'de "
         "bir direncin renk bantlarına kadar gider; doldurmaya değer."
     ),
-    "Put the whole schematic back in the panel. The sheet is not re-fitted "
+    "Put the whole schematic back in the view. The sheet is not re-fitted "
     "when the board changes, so an edit cannot move what you were looking at.": (
         "Şemanın tamamını panele geri sığdırır. Kart değiştiğinde sayfa yeniden "
         "sığdırılmaz; böylece bir düzenleme baktığınız yeri kaydıramaz."

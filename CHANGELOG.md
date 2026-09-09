@@ -96,6 +96,16 @@ closed without a bump.
 
 ### Changed
 
+- **The schematic is a view over the whole workspace, not a dock down the side**, and it
+  detaches into a window of its own so a sheet and a board can sit side by side on a second
+  monitor. It was a panel on the right edge — a whole circuit in a third of the window, with
+  the other two thirds showing a board nobody was looking at while they drew. Ctrl+5 brings
+  it to the front wherever it is.
+
+- **The sheet is drawn on a grid**, at the layout's own 2.54 mm pitch, so the squares mean
+  something. A schematic without one is a drawing floating in the dark: nothing says how big
+  the sheet is, nothing says whether two symbols line up, and a pan has no landmarks.
+
 - **Every example ships on a board a supplier stocks**, in the exact advertised size, with
   the finger strips and corner screw holes it is sold with — and on the size this
   application's own board suggestion would have picked for that circuit. They were on grids

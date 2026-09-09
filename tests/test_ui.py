@@ -4604,15 +4604,98 @@ def test_a_hatched_conductor_still_marks_every_joint() -> None:
 
 def _open_schematic(doc):
     window = _window_on(doc)
-    window.dock_schematic.show()
-    window._refresh_schematic_panel()
+    window.show_schematic()
     return window
 
 
-def test_a_closed_schematic_panel_costs_nothing() -> None:
-    """Same rule as the guide and 3D docks: a panel nobody has open builds nothing."""
+def test_the_schematic_is_a_view_of_its_own_not_a_panel_down_the_side() -> None:
+    """It was a dock on the right edge, which put a whole circuit into a third of the
+    window and left the other two thirds showing a board nobody was looking at. A
+    schematic and a layout are the two things this application is for."""
     window = _window_on(_golden_document("ne555"))
-    assert window.dock_schematic.isVisible() is False
+
+    assert window.workspace.count() == 2
+    assert window.workspace.widget(0) is window.view
+    assert window.workspace.widget(1) is window.schematic_page
+    # ...and the board is what it opens on.
+    assert window.workspace.currentWidget() is window.view
+    _close(window)
+
+
+def test_the_sheet_detaches_into_a_window_and_comes_back() -> None:
+    """Somebody who genuinely wants both at once gets two real windows to put side by
+    side. The PAGE is reparented rather than a second view built: a copy would be a second
+    thing to keep in step with the document, and the two would disagree the first time one
+    of them missed a refresh."""
+    window = _open_schematic(_golden_document("ne555"))
+    view = window.schematic_view
+
+    window.on_schematic_detach()
+
+    assert window._schematic_window is not None
+    assert window.workspace.count() == 1  # ...the board, alone
+    assert window.schematic_view is view  # ...and the same view, moved
+    assert window.schematic_is_showing()
+
+    window._schematic_window.close()
+
+    assert window._schematic_window is None
+    assert window.workspace.count() == 2
+    assert window.workspace.currentWidget() is window.schematic_page
+    _close(window)
+
+
+def test_the_sheet_is_drawn_on_a_grid() -> None:
+    """A schematic without one is a drawing floating in the dark: nothing says how big the
+    sheet is, nothing says whether two symbols line up, and a pan has no landmarks."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QImage, QPainter
+
+    from perfboard_studio.schematic import GRID_MM
+
+    window = _open_schematic(_golden_document("ne555"))
+    view = window.schematic_view
+
+    # Painted at a zoom where a square is comfortably wider than the cutoff.
+    view.resetTransform()
+    view.scale(4.0, 4.0)
+    image = QImage(200, 200, QImage.Format.Format_ARGB32)
+    painter = QPainter(image)
+    view.drawBackground(painter, QRectF(0.0, 0.0, 10 * GRID_MM, 10 * GRID_MM))
+    painter.end()
+
+    colours = {image.pixel(x, y) for x in range(0, 200, 3) for y in range(0, 200, 3)}
+    assert len(colours) > 1, "the background came out one flat colour"
+    _close(window)
+
+
+def test_the_grid_gives_up_before_it_becomes_a_grey_wash() -> None:
+    """A grid finer than the eye can separate is not a grid. At a fit-to-window zoom on a
+    big sheet, 2.54 mm is exactly that."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QImage, QPainter
+
+    window = _open_schematic(_golden_document("ne555"))
+    view = window.schematic_view
+
+    view.resetTransform()
+    view.scale(0.05, 0.05)  # far past MIN_GRID_PX for both the minor and the major line
+    image = QImage(120, 120, QImage.Format.Format_ARGB32)
+    painter = QPainter(image)
+    view.drawBackground(painter, QRectF(0.0, 0.0, 2000.0, 2000.0))
+    painter.end()
+
+    colours = {image.pixel(x, y) for x in range(0, 120, 2) for y in range(0, 120, 2)}
+    assert len(colours) == 1, "the grid was still drawn where it cannot be read"
+    _close(window)
+
+
+def test_a_schematic_tab_nobody_has_selected_costs_nothing() -> None:
+    """Same rule as the guide and 3D docks: a view nobody is looking at builds nothing.
+    build_schematic lays out a whole sheet, and paying for that on every keystroke to fill
+    a tab behind the board is the mistake both of those already avoid."""
+    window = _window_on(_golden_document("ne555"))
+    assert window.schematic_is_showing() is False
     assert window._schematic_stale is True
 
     window.on_bus_changed(window.bus.document, None)
@@ -4781,8 +4864,7 @@ def _blank_window():
         meta=DocumentMeta(name="blank", created="", modified=""), board=DEFAULT_BOARD
     )
     window = _window_on(document)
-    window.dock_schematic.show()
-    window._refresh_schematic_panel()
+    window.show_schematic()
     return window
 
 
@@ -6683,5 +6765,5 @@ def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatc
     assert (folder / "ne555-astable.perf").is_file()
     assert window.current_path == folder / "ne555-astable.perf"
     assert not window.is_modified
-    assert not window.dock_schematic.isHidden()
+    assert window.schematic_is_showing()
     _close(window)

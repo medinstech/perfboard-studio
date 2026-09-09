@@ -29,9 +29,10 @@ the fitted view -- the one people actually look at -- the one view that says not
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Sequence
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QLineF, QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -51,6 +52,7 @@ from PySide6.QtWidgets import (
 
 from perfboard_studio.model import Point2
 from perfboard_studio.schematic import (
+    GRID_MM,
     NoConnect,
     Rail,
     SchematicDrawing,
@@ -77,6 +79,15 @@ from .scenetext import draw_label
 SHEET = "#161a21"
 INK = "#c8d0de"
 INK_DIM = "#7d8698"
+#: The grid, and the every-fifth line that lets you count squares without counting them.
+#:
+#: A schematic without one is a drawing floating in the dark: nothing says how big the
+#: sheet is, nothing says whether two symbols are aligned, and the pan has no landmarks --
+#: which is what "there is nowhere to look" feels like on an empty document. It is drawn at
+#: the layout's OWN pitch (``schematic.GRID_MM``, 2.54 mm, the same pitch as the board),
+#: so the squares mean something rather than being wallpaper.
+GRID = "#1e2531"
+GRID_MAJOR = "#28313f"
 SIGNAL = "#7fb2e5"
 POWER = "#e0a33c"
 GROUND = "#8f97a8"
@@ -361,6 +372,59 @@ class SchematicView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setMouseTracking(True)
+
+    #: How many grid squares make a major line. Five, which is what squared paper and every
+    #: schematic tool uses, and it is the count the eye can take in without counting.
+    GRID_MAJOR_EVERY = 5
+
+    #: Below this many device pixels per square the grid is not drawn at all. A grid finer
+    #: than the eye can separate is not a grid, it is a grey wash over the drawing -- and at
+    #: a fit-to-window zoom on a big sheet that is exactly what 2.54 mm comes to.
+    MIN_GRID_PX = 4.0
+
+    def drawBackground(self, painter: QPainter, rect: QRectF | QRect) -> None:
+        """The sheet, and the grid on it.
+
+        Painted here rather than as items for the reason the whole sheet is one item: a
+        line per grid square on a 460 mm sheet is nine thousand items to hold, transform
+        and hit-test, for something nothing will ever click on. ``drawBackground`` is given
+        the exposed rectangle, so the cost is what is on screen and not what exists.
+
+        The minor grid disappears before the major one does, which is what makes zooming
+        out readable instead of grey.
+        """
+        # Qt's own signature allows either; every caller in practice hands over a QRectF,
+        # and the arithmetic below wants one.
+        rect = QRectF(rect)
+        painter.fillRect(rect, QColor(SHEET))
+        scale = self.current_scale()
+        minor = GRID_MM * scale
+        major = minor * self.GRID_MAJOR_EVERY
+        if major < self.MIN_GRID_PX:
+            return
+
+        # Cosmetic pens: a grid line is one pixel at every zoom, like a ruler's, rather
+        # than something that thickens as you come in. Same call scenetext makes about
+        # annotation holding a screen size.
+        for step, colour in ((GRID_MM, GRID), (GRID_MM * self.GRID_MAJOR_EVERY, GRID_MAJOR)):
+            if step * scale < self.MIN_GRID_PX:
+                continue
+            pen = QPen(QColor(colour))
+            pen.setCosmetic(True)
+            pen.setWidth(1)
+            painter.setPen(pen)
+            first_x = math.floor(rect.left() / step) * step
+            first_y = math.floor(rect.top() / step) * step
+            lines = []
+            x = first_x
+            while x <= rect.right():
+                lines.append(QLineF(x, rect.top(), x, rect.bottom()))
+                x += step
+            y = first_y
+            while y <= rect.bottom():
+                lines.append(QLineF(rect.left(), y, rect.right(), y))
+                y += step
+            painter.drawLines(lines)
 
     def set_drawing(self, drawing: SchematicDrawing) -> None:
         refs = self.item.highlight_refs if self.item else frozenset()

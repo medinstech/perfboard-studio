@@ -567,6 +567,22 @@ Three things there are load-bearing:
 `--headless` writes the sheet too. It is the only place the writer, Qt's SVG renderer and a
 real board meet on all three operating systems, and the only export that needs no GL.
 
+**The sheet is a VIEW, not a panel.** `MainWindow.workspace` is a two-tab `QTabWidget` over
+the whole central area — Board and Schematic — and either can be pulled out into a window
+of its own (`_DetachedSheet`, `on_schematic_detach`). It was a dock on the right edge, which
+put a whole circuit into a third of the window and left the other two thirds showing a
+board nobody was looking at while they drew. The PAGE is reparented when it detaches rather
+than a second view being built: a copy would be a second thing to keep in step with the
+document, and the two would disagree the first time one missed a refresh. `show_schematic`
+and `schematic_is_showing` are the two questions the rest of the window asks; the tab still
+fills itself only while it is in front of somebody, the same rule the 3D panel and the
+build guide follow.
+
+`viewsch` paints the grid in `drawBackground` at `schematic.GRID_MM`, not as items: a line
+per square on a 460 mm sheet is nine thousand things to hold, transform and hit-test for
+something nothing will ever click. The minor grid gives up before the major one does, so
+zooming out reads instead of greying over.
+
 Clicking cross-probes: a symbol selects that part on the board, a wire selects its net in
 the Nets dock (which is what already lights it on the board). Routed through that one
 panel deliberately, so three views cannot disagree about what is selected. **Joining two
