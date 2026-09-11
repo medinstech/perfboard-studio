@@ -141,9 +141,10 @@ able to try something drastic and get back out.
 `render_schematic` is the third picture and it answers a different question from the
 other two. They show COPPER, which is what a circuit was turned *into*; an agent that has
 just called `connect_pins` eleven times has changed the circuit itself and, until this
-tool, had no way to look at what it built. The sheet is generated from the nets every
-time and nothing about it is stored (see PLAN.md D3), so there is no layout to keep in
-step — and the notes come back beside the picture, because a pin the netlist names that
+tool, had no way to look at what it built. The sheet is generated from the nets unless
+somebody has drawn on it in the application, and either way there is no second answer to
+what is connected: what a hand-drawn wire JOINS is still whichever net holds both of its
+ends — and the notes come back beside the picture, because a pin the netlist names that
 the footprint does not have is a hole in the design that a drawing alone would hide.
 
 `reroute` is `autoroute`'s replacement half. `autoroute` ADDS copper, so calling it again
