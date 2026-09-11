@@ -20,6 +20,8 @@ closed without a bump.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-11
+
 ### Added
 
 - **The schematic is an editor now.** Symbols are dragged where you want them, turned a
@@ -3019,7 +3021,8 @@ was introduced during 0.4.0 development, so they are accurate but were not writt
 release time. Their compare links point at commits rather than tags for the same reason;
 from v0.4.0 onwards every release is tagged.
 
-[Unreleased]: https://github.com/medinstech/perfboard-studio/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/medinstech/perfboard-studio/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/medinstech/perfboard-studio/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/medinstech/perfboard-studio/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/medinstech/perfboard-studio/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/medinstech/perfboard-studio/compare/v0.8.1...v0.9.0
