@@ -666,6 +666,14 @@ class SchematicView(QGraphicsView):
         self._scene.clear()
         self.item = SheetItem(drawing)
         self.item.set_highlight(refs, nets)
+        # The SELECTION survives a rebuild, which the old panel never had to think about:
+        # a drawing is rebuilt after every command, and a selection that vanished each time
+        # would mean turning a symbol twice took two clicks on it. The refs are kept on the
+        # VIEW rather than on the item for exactly that reason -- the item is thrown away.
+        self.item.set_selection(
+            [ref for ref in self.selected_refs if any(s.ref == ref for s in drawing.symbols)],
+            {f"n{index}" for index in self.selected_notes},
+        )
         self.item.pending_pin = self.pending_pin
         self._scene.addItem(self.item)
         self._scene.setSceneRect(self.item.boundingRect())
@@ -873,14 +881,7 @@ class SchematicView(QGraphicsView):
         self._press_scene = where
 
         if self.tool == "wire":
-            pin = self.pin_at(where)
-            if pin is not None:
-                self.pinClicked.emit(pin[0], pin[1])
-            else:
-                # A miss cancels the half-made pair rather than leaving it armed. The
-                # alternative is a stale first pin joining itself to whatever is clicked
-                # three gestures later.
-                self.set_pending_pin(None)
+            self._wire_click(self.pin_at(where))
             event.accept()
             return
 
@@ -936,6 +937,40 @@ class SchematicView(QGraphicsView):
         self.selectionChanged.emit([])
         self.cleared.emit()
         event.accept()
+
+    def _wire_click(self, pin: tuple[str, str] | None) -> None:
+        """One click of the wire tool: take the first pin, or draw to the second.
+
+        THE PATH IS DECIDED HERE, which is what makes the wire tool draw a wire rather than
+        merely connect two pins. It used to hand both clicks to the window, which joined the
+        pins through the board's own connect tool and left no line on the sheet at all --
+        the connection was made and the drawing said nothing about it.
+
+        The window is still told about the first click (``pinClicked``), because what the
+        status bar says about a half-made pair is its business.
+        """
+        if pin is None:
+            # A miss cancels the half-made pair rather than leaving it armed. The
+            # alternative is a stale first pin joining itself to whatever is clicked three
+            # gestures later.
+            self.set_pending_pin(None)
+            self.pinClicked.emit("", "")
+            return
+        pending = self.pending_pin
+        if pending is None or pending == pin:
+            self.set_pending_pin(None if pending == pin else pin)
+            self.pinClicked.emit(*(("", "") if pending == pin else pin))
+            return
+        if self.item is None:
+            return
+        start = pin_anchor(self.item.drawing, *pending)
+        end = pin_anchor(self.item.drawing, *pin)
+        self.set_pending_pin(None)
+        self._clear_ghosts()
+        if start is None or end is None:
+            return
+        path = [(point.x(), point.y()) for point in _elbow(start, end)]
+        self.wireDrawn.emit(pending[0], pending[1], pin[0], pin[1], path)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if self._panning:
@@ -1067,6 +1102,25 @@ class SchematicView(QGraphicsView):
                 self._clear_ghosts()
                 self.set_selection([], [])
                 self.selectionChanged.emit([])
+            event.accept()
+            return
+        step = {
+            Qt.Key.Key_Left: (-GRID_MM, 0.0),
+            Qt.Key.Key_Right: (GRID_MM, 0.0),
+            Qt.Key.Key_Up: (0.0, -GRID_MM),
+            Qt.Key.Key_Down: (0.0, GRID_MM),
+        }.get(Qt.Key(event.key()))
+        if step is not None and self.selected_refs and self.item is not None:
+            # ONE GRID SQUARE, and the same command a drag ends in -- so it undoes and
+            # redoes as one thing, which is the rule the board's own nudge follows.
+            dx, dy = step
+            self.symbolsMoved.emit(
+                [
+                    (symbol.ref, symbol.at.x + dx, symbol.at.y + dy)
+                    for symbol in self.item.drawing.symbols
+                    if symbol.ref in self.selected_refs
+                ]
+            )
             event.accept()
             return
         deleting = event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)

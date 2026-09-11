@@ -262,7 +262,6 @@ from .view2d import (
     BoardView,
     ConductorItem,
     hole_to_screen,
-    join_pins,
     next_reference,
 )
 from .viewsch import SchematicView, SheetTool
@@ -5119,31 +5118,20 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(result.description, 6000)
 
     def _on_schematic_pin_clicked(self, ref: str, pin: str) -> None:
-        """Take the first pin, or join the second to it.
+        """Say what the half-made pair is waiting for, and nothing else.
 
-        The decision about what joining two pins MEANS is ``view2d.join_pins``, shared with
-        the board's connect tool. Two surfaces that could disagree about whether a click on
-        a rail pin extends the rail or starts a new net would be two different applications
-        in one window.
+        THE VIEW DECIDES WHAT A SECOND CLICK MEANS now, because a wire tool that draws a
+        wire has to know where the line goes -- and where it goes is the two pin anchors,
+        which only the drawing has. What it emits then is ``wireDrawn``, which is one
+        command that joins the pins AND stores the line. This is left with the half of the
+        gesture that is a message.
         """
-        pending = self.schematic_view.pending_pin
-        if pending is None:
-            self.schematic_view.set_pending_pin((ref, pin))
-            self.statusBar().showMessage(f"From {ref}.{pin} — click the pin it joins.", 0)
-            return
-        if pending == (ref, pin):
-            self.schematic_view.set_pending_pin(None)
+        if not ref:
             self.statusBar().showMessage(t("Cancelled."), 4000)
             return
-        result, refusal = join_pins(self.bus, pending, (ref, pin))
-        self.schematic_view.set_pending_pin(None)
-        if refusal is not None:
-            self.statusBar().showMessage(refusal, 8000)
-            return
-        if result is not None:
-            self.statusBar().showMessage(
-                result.description if result.ok else f"[{result.code}] {result.message}", 6000
-            )
+        self.statusBar().showMessage(
+            t("From {pin} — click the pin it joins.").format(pin=f"{ref}.{pin}"), 0
+        )
 
     def on_schematic_remove(self) -> None:
         """Take the selected part out of the design, or off the board.

@@ -48,6 +48,10 @@ closed without a bump.
   keeps LVS, the router, the placer, the build guide and the board from having to learn
   anything about geometry.
 
+  Arrow keys nudge the selection one grid square, through the same command a drag ends in,
+  so it undoes as one thing. A selection survives the redraw every command causes — turning
+  a symbol twice takes one click on it.
+
   Right-clicking a wire offers **Rub Out This Wire**, which takes the line off the sheet
   and leaves the pins connected — the net says so by name instead. It is a separate entry
   from Delete Net on purpose: deleting the picture of a join is not the same decision as

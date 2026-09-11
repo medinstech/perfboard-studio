@@ -762,6 +762,7 @@ TURKISH: Mapping[str, str] = {
         "Bu kartta tasarımdaki parçalar için yer yok. Kartı büyütün ya da parçaları "
         "teker teker yerleştirin."
     ),
+    "From {pin} — click the pin it joins.": "{pin} pininden — birleşeceği pine tıklayın.",
     "Cancelled.": "İptal edildi.",
     "Add a Part": "Parça Ekle",
     "Edit a Part": "Parçayı Düzenle",

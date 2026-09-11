@@ -5642,29 +5642,52 @@ def test_the_panel_counts_what_is_not_on_the_board_yet() -> None:
     _close(window)
 
 
-def test_clicking_two_pins_wires_them_and_a_third_joins_the_same_net() -> None:
-    """Through the panel's own handler, so it exercises the shared `join_pins` the board's
-    connect tool uses. Two surfaces that disagreed about what a click on a rail pin means
-    would be two applications in one window."""
+def test_clicking_two_pins_wires_them_and_leaves_a_line_saying_so() -> None:
+    """Through the VIEW's own handler, which is where the gesture lives: a wire tool that
+    joined two pins and drew nothing would be a connect tool with a pencil icon."""
     window = _blank_window()
     _add(window, "U1", "dip-8")
     _add(window, "R1", "r-axial-3")
     _add(window, "R2", "r-axial-3")
+    view = window.schematic_view
 
-    window.on_schematic_wire_mode(True)
-    window._on_schematic_pin_clicked("R1", "2")
-    assert window.schematic_view.pending_pin == ("R1", "2")
-    window._on_schematic_pin_clicked("U1", "6")
+    window.on_sheet_tool("wire")
+    view._wire_click(("R1", "2"))
+    assert view.pending_pin == ("R1", "2")
+    view._wire_click(("U1", "6"))
 
     assert len(window.bus.document.nets) == 1
-    assert window.schematic_view.pending_pin is None
+    assert len(window.bus.document.sheet_wires) == 1
+    assert view.pending_pin is None
 
     # A third pin joins the net that already exists rather than starting another.
-    window._on_schematic_pin_clicked("R2", "1")
-    window._on_schematic_pin_clicked("U1", "6")
+    window._refresh_schematic_panel()
+    view._wire_click(("R2", "1"))
+    view._wire_click(("U1", "6"))
 
     assert len(window.bus.document.nets) == 1
     assert len(window.bus.document.nets[0].nodes) == 3
+    assert len(window.bus.document.sheet_wires) == 2
+    _close(window)
+
+
+def test_a_drawn_wire_turns_once_and_always_the_same_way() -> None:
+    """A wire tool that picked its corner by whichever leg was longer would flip the route
+    while the pointer moved, which makes it impossible to aim."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    view = window.schematic_view
+    window.on_sheet_tool("wire")
+
+    view._wire_click(("R1", "2"))
+    view._wire_click(("R2", "1"))
+
+    wire = window.bus.document.sheet_wires[0]
+    assert 2 <= len(wire.path) <= 3
+    # Every segment is orthogonal, which is what "a schematic" means.
+    for start, end in zip(wire.path, wire.path[1:], strict=False):
+        assert start.x == end.x or start.y == end.y
     _close(window)
 
 
@@ -5672,9 +5695,9 @@ def test_clicking_the_same_pin_twice_cancels_instead_of_wiring_it_to_itself() ->
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
 
-    window.on_schematic_wire_mode(True)
-    window._on_schematic_pin_clicked("R1", "2")
-    window._on_schematic_pin_clicked("R1", "2")
+    window.on_sheet_tool("wire")
+    window.schematic_view._wire_click(("R1", "2"))
+    window.schematic_view._wire_click(("R1", "2"))
 
     assert window.bus.document.nets == ()
     assert window.schematic_view.pending_pin is None
@@ -5682,8 +5705,8 @@ def test_clicking_the_same_pin_twice_cancels_instead_of_wiring_it_to_itself() ->
 
 
 def test_wiring_two_pins_that_are_already_on_different_nets_is_refused() -> None:
-    """The refusal comes from the shared decision, so it reads the same here as on the
-    board: merging two nets is a change to the circuit, not to two clicks."""
+    """Merging two nets is a change to the circuit, not to two clicks -- and the refusal
+    reads the same here as on the board, because both come from ``plan_pin_join``."""
     from perfboard_studio.commands import AddNetPayload
     from perfboard_studio.model import NetNode
 
@@ -5694,11 +5717,12 @@ def test_wiring_two_pins_that_are_already_on_different_nets_is_refused() -> None
     window.bus.dispatch("net.add", AddNetPayload(name="B", nodes=(NetNode("R2", "1"),)))
     window._refresh_schematic_panel()
 
-    window.on_schematic_wire_mode(True)
-    window._on_schematic_pin_clicked("R1", "1")
-    window._on_schematic_pin_clicked("R2", "1")
+    window.on_sheet_tool("wire")
+    window.schematic_view._wire_click(("R1", "1"))
+    window.schematic_view._wire_click(("R2", "1"))
 
     assert len(window.bus.document.nets) == 2
+    assert window.bus.document.sheet_wires == ()
     assert "disconnect one of the pins first" in window.statusBar().currentMessage()
     _close(window)
 
@@ -6255,6 +6279,49 @@ def test_a_click_on_bare_sheet_is_offered_no_wire_to_rub_out() -> None:
     _add(window, "R1", "r-axial-3")
 
     assert window._drawn_wire_at(Point2(x=999.0, y=999.0)) is None
+    _close(window)
+
+
+def test_a_selection_on_the_sheet_survives_the_redraw_a_command_causes() -> None:
+    """The drawing is rebuilt after every command. A selection that vanished each time
+    would mean turning a symbol twice took two clicks on it."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    window.schematic_view.set_selection(["R1"])
+
+    window.on_schematic_rotate(1)
+    window._refresh_schematic_panel()
+
+    assert window.schematic_view.selected_refs == ["R1"]
+    assert window.schematic_view.item.selected_refs == frozenset({"R1"})
+    # ...and a second turn lands on the same symbol.
+    window.on_schematic_rotate(1)
+    assert next(p for p in window.bus.document.sheet if p.rotation).rotation == 180
+    _close(window)
+
+
+def test_an_arrow_key_nudges_the_selection_one_grid_square() -> None:
+    """The same command a drag ends in, so it undoes and redoes as one thing -- the rule
+    the board's own nudge follows."""
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QKeyEvent
+
+    from perfboard_studio.schematic import GRID_MM
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    view = window.schematic_view
+    view.set_selection(["R1"])
+    before = next(s for s in view.item.drawing.symbols if s.ref == "R1").at.x
+
+    view.keyPressEvent(
+        QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Right, Qt.KeyboardModifier.NoModifier)
+    )
+    window._refresh_schematic_panel()
+
+    after = next(s for s in view.item.drawing.symbols if s.ref == "R1").at.x
+    assert round(after - before, 6) == round(GRID_MM, 6)
     _close(window)
 
 
