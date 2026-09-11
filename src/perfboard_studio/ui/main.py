@@ -35,6 +35,7 @@ from typing import Any, Literal, cast
 from PySide6.QtCore import (
     QEventLoop,
     QFileSystemWatcher,
+    QMimeData,
     QPoint,
     QPointF,
     QSettings,
@@ -48,11 +49,13 @@ from PySide6.QtGui import (
     QAction,
     QColor,
     QDesktopServices,
+    QDrag,
     QIcon,
     QKeySequence,
     QShowEvent,
 )
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -244,6 +247,7 @@ from .i18n import set_language, t
 from .project import write_project
 from .theme import ERROR, OK, STYLESHEET, TEXT_DIM, WARNING
 from .view2d import (
+    FOOTPRINT_MIME,
     BoardScene,
     BoardView,
     ConductorItem,
@@ -439,6 +443,51 @@ def read_document_text(path: Path) -> tuple[str | None, str | None]:
 #: Substrate to add outside the hole grid when a board carries a printed legend, so the
 #: characters have somewhere to go. Roughly what the boards being modelled have.
 LEGEND_BORDER_MM = 2.0
+
+
+class PartTree(QTreeWidget):
+    """The library's list, with its rows draggable onto the board and onto the sheet.
+
+    PICKING A PART AND CLICKING WHERE IT GOES IS STILL THE WAY TO PLACE A RUN of them --
+    five 10k resistors, one after another, without going back to the list -- and it was the
+    ONLY way, which is the problem. Dragging is what everybody tries first, it is what every
+    other editor does, and there was nothing to discover that it was not supported: the
+    pointer simply did nothing over a list that looks exactly like a list you can drag from.
+
+    The drag carries a FOOTPRINT id in a format of its own (``view2d.FOOTPRINT_MIME``), not
+    plain text: a board must not accept an arbitrary string dropped on it, and Qt only
+    offers a target the formats the source declared.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+
+    def mimeTypes(self) -> list[str]:
+        return [FOOTPRINT_MIME, "text/plain"]
+
+    def startDrag(self, supportedActions: Qt.DropAction) -> None:
+        item = self.currentItem()
+        footprint_id = item.data(0, ROLE_FOOTPRINT_ID) if item is not None else None
+        if not isinstance(footprint_id, str) or not footprint_id:
+            # A group heading. They are not selectable either, so this is the case where
+            # the press landed on one and the pointer moved -- nothing to drag.
+            return
+        data = QMimeData()
+        data.setData(FOOTPRINT_MIME, footprint_id.encode("utf-8"))
+        # Plain text as well, so dropping one on a text field or another application says
+        # something useful rather than nothing.
+        data.setText(footprint_id)
+        drag = QDrag(self)
+        drag.setMimeData(data)
+        # The row's own picture, so what is under the pointer is the part -- the same
+        # drawing the list, the board and the 3D view use (icons.part_icon).
+        picture = item.icon(0).pixmap(icons.PART_SIZE * 2, icons.PART_SIZE * 2)
+        if not picture.isNull():
+            drag.setPixmap(picture)
+            drag.setHotSpot(picture.rect().center())
+        drag.exec(Qt.DropAction.CopyAction)
 
 
 class BoardSetupDialog(QDialog):
@@ -2305,6 +2354,7 @@ class MainWindow(QMainWindow):
         self.scene.componentActivated.connect(self.on_component_properties)
         self.view.contextMenuRequested.connect(self._on_board_context_menu)
         self.view.partDropped.connect(self._on_part_dropped)
+        self.view.footprintDropped.connect(self._on_footprint_dropped)
         self.scene.measureArmed.connect(self._on_measure_armed)
         self.scene.measured.connect(self._on_measured)
         self.scene.cutArmed.connect(self._on_cut_armed)
@@ -3765,7 +3815,7 @@ class MainWindow(QMainWindow):
         self.library_value.textChanged.connect(self._on_placement_value_changed)
         layout.addWidget(self.library_value)
 
-        self.library_tree = QTreeWidget()
+        self.library_tree = PartTree()
         self.library_tree.setHeaderLabels([t("Part"), t("Pins")])
         self.library_tree.setRootIsDecorated(True)
         self.library_tree.setIconSize(QSize(icons.PART_SIZE, icons.PART_SIZE))
@@ -3788,7 +3838,9 @@ class MainWindow(QMainWindow):
         self.button_custom_part.clicked.connect(self.on_custom_part)
         layout.addWidget(self.button_custom_part)
 
-        self.label_place_hint = QLabel(t("Pick a part, then click the board. Esc cancels."))
+        self.label_place_hint = QLabel(
+            t("Drag a part onto the board or the sheet — or pick one and click. Esc cancels.")
+        )
         self.label_place_hint.setWordWrap(True)
         self.label_place_hint.setStyleSheet(f"color: {TEXT_DIM};")
         layout.addWidget(self.label_place_hint)
@@ -4538,6 +4590,25 @@ class MainWindow(QMainWindow):
             return
         self.statusBar().showMessage(result.description, 6000)
         self._sync_schematic_highlight()
+
+    def _on_footprint_dropped(self, footprint_id: str, hole: object) -> None:
+        """A row was dragged out of the Parts panel and dropped on a hole.
+
+        THROUGH THE SAME ARMING the list has always used, rather than dispatching
+        ``component.place`` here: ``place_armed`` is where the next free reference, the
+        typed value, the "this hole is already taken" warning and the placed signal all
+        live, and a second route into the document would be a second place for any of them
+        to be forgotten. So the drop selects the part -- which arms it -- and then places
+        it, and the part stays armed afterwards so the next one can be clicked down without
+        going back to the list.
+        """
+        if not isinstance(hole, HoleCoord):
+            return
+        self._select_library_footprint(footprint_id)
+        if self.scene.armed_footprint_id != footprint_id:
+            # A generated or custom part that is not in the list -- arm it directly.
+            self.scene.arm_placement(footprint_id)
+        self.scene.place_armed(hole)
 
     def _on_schematic_part_activated(self, ref: str) -> None:
         component = next((c for c in self.bus.document.components if c.ref == ref), None)

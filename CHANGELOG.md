@@ -22,6 +22,15 @@ closed without a bump.
 
 ### Added
 
+- **Parts are dragged out of the Parts panel onto the board.** Picking a part and then
+  clicking where it goes is still the way to put down a run of them — five 10k resistors,
+  one after another, without going back to the list — and it was the ONLY way, which is the
+  problem: dragging is what everybody tries first, and there was nothing to discover that it
+  was not supported. The row simply did nothing. The drop goes through the same arming the
+  list has always used, so the next free reference, the typed value and the "this hole is
+  already taken" warning are all the ones that were already there, and the part stays armed
+  afterwards.
+
 - **The board is a panel now, and so is the schematic.** Everything else in the window
   could be moved, floated, stacked or closed; the two views this application exists for
   were the one pair nailed down — a central widget with a tab beside it — so "board on the
@@ -276,6 +285,13 @@ closed without a bump.
   1.5%. No new DRC errors and no connection that could not be routed.
 
 ### Fixed
+
+- **A symbol could not be dragged at all.** The sheet documented the gesture in three
+  places — drag one to another cell, drag one onto the board to place that one part — and
+  the view never recorded a press or called the method that starts the drag. Both halves
+  were unreachable from the first commit that described them. The pointer now carries a
+  picture of the symbol it is dragging, drawn by the sheet itself so it cannot disagree
+  with what is on screen.
 
 - **Autoplace could never move anything on a board that had already been routed.** It
   scored each arrangement by routing it — but the board you have keeps its copper, so the

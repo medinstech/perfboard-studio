@@ -3502,6 +3502,15 @@ EMPTY_HINT_STYLE = f"""
 #: not make a cycle.
 PART_MIME = "application/x-perfboard-studio-part"
 
+#: What a row dragged out of the Parts panel carries: a FOOTPRINT id, which is a part that
+#: does not exist yet -- as against ``PART_MIME``, which is a part that does.
+#:
+#: Two formats and not one flag, because the two drops are different commands onto
+#: different lists: a footprint dropped on the board is ``component.place`` and a new
+#: reference, a footprint dropped on the sheet is ``part.add``. A target that had to read
+#: the payload to find out which it was would be a target that could get it wrong.
+FOOTPRINT_MIME = "application/x-perfboard-studio-footprint"
+
 
 class BoardView(QGraphicsView):
     #: Gap between the top of the viewport and the mode banner.
@@ -3518,6 +3527,11 @@ class BoardView(QGraphicsView):
     #: the part is in the design or already on the board, and that is the window's to know
     #: -- the same division contextMenuRequested above is drawn on.
     partDropped = Signal(str, object)
+
+    #: A row was dragged out of the Parts panel and dropped on a hole. Carries the footprint
+    #: id and the hole. Same division as ``partDropped``: the view reports what landed where
+    #: and the window decides which command that is.
+    footprintDropped = Signal(str, object)
 
     def __init__(self, scene: BoardScene) -> None:
         super().__init__(scene)
@@ -3547,32 +3561,45 @@ class BoardView(QGraphicsView):
         return self._dropped_ref_from(event.mimeData())
 
     @staticmethod
-    def _dropped_ref_from(data: QMimeData | None) -> str | None:
+    def _payload_from(data: QMimeData | None, fmt: str) -> str | None:
         """Split out from the event so it can be exercised without one: constructing a
         real QDropEvent needs a live drag, and what is being decided here is only whether
-        the payload is ours."""
-        if data is None or not data.hasFormat(PART_MIME):
+        the payload is ours.
+
+        ``QMimeData.text`` alongside the typed payload: every drag this application starts
+        sets both, and the string one needs no decoding dance to read back.
+        """
+        if data is None or not data.hasFormat(fmt):
             return None
-        # ``QMimeData.text`` alongside the typed payload: the drag sets both, and the
-        # string one needs no decoding dance to read back.
         text = data.text().strip()
         return text or None
 
+    @classmethod
+    def _dropped_ref_from(cls, data: QMimeData | None) -> str | None:
+        return cls._payload_from(data, PART_MIME)
+
+    @classmethod
+    def _dropped_footprint_from(cls, data: QMimeData | None) -> str | None:
+        return cls._payload_from(data, FOOTPRINT_MIME)
+
+    def _dropped_footprint(self, event: QDropEvent | QDragMoveEvent) -> str | None:
+        return self._dropped_footprint_from(event.mimeData())
+
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        if self._dropped_ref(event) is None:
+        if self._dropped_ref(event) is None and self._dropped_footprint(event) is None:
             event.ignore()
             return
         event.acceptProposedAction()
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
-        ref = self._dropped_ref(event)
-        if ref is None:
+        what = self._dropped_ref(event) or self._dropped_footprint(event)
+        if what is None:
             event.ignore()
             return
         # Said while the pointer is still moving, because the whole question during a drag
         # is "which hole is this going into" and the answer is otherwise invisible.
         hole = self._hole_under(event.position().toPoint())
-        self.show_mode(f"{ref} → {format_hole(hole)}")
+        self.show_mode(f"{what} \u2192 {format_hole(hole)}")
         event.acceptProposedAction()
 
     def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
@@ -3580,13 +3607,19 @@ class BoardView(QGraphicsView):
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event: QDropEvent) -> None:
-        ref = self._dropped_ref(event)
         self.show_mode("")
-        if ref is None:
-            event.ignore()
+        hole = self._hole_under(event.position().toPoint())
+        ref = self._dropped_ref(event)
+        if ref is not None:
+            event.acceptProposedAction()
+            self.partDropped.emit(ref, hole)
             return
-        event.acceptProposedAction()
-        self.partDropped.emit(ref, self._hole_under(event.position().toPoint()))
+        footprint_id = self._dropped_footprint(event)
+        if footprint_id is not None:
+            event.acceptProposedAction()
+            self.footprintDropped.emit(footprint_id, hole)
+            return
+        event.ignore()
 
     def _hole_under(self, point: QPoint) -> HoleCoord:
         return screen_to_hole(

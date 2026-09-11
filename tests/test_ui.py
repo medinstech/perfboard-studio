@@ -5114,6 +5114,126 @@ def test_a_drop_the_board_refuses_says_so_rather_than_half_placing() -> None:
     _close(window)
 
 
+def test_a_row_dragged_out_of_the_parts_panel_carries_a_footprint() -> None:
+    """Its own format, not plain text: a board must not accept an arbitrary string dropped
+    on it, and a FOOTPRINT is a different drop from a PART -- one is component.place and a
+    new reference, the other is a part that already exists moving to a hole."""
+    from PySide6.QtCore import QMimeData
+
+    from perfboard_studio.ui.view2d import FOOTPRINT_MIME, PART_MIME
+
+    window = _blank_window()
+    data = QMimeData()
+    data.setData(FOOTPRINT_MIME, b"r-axial-3")
+    data.setText("r-axial-3")
+
+    assert window.view._dropped_footprint_from(data) == "r-axial-3"
+    # ...and it is not mistaken for a symbol dragged off the sheet.
+    assert window.view._dropped_ref_from(data) is None
+    assert not data.hasFormat(PART_MIME)
+    _close(window)
+
+
+def test_a_footprint_dropped_on_the_board_places_that_part() -> None:
+    """Dragging is what everybody tries first and it did nothing at all: the only way to
+    put a part down was to pick it in the list and then click the board."""
+    from perfboard_studio.model import HoleCoord
+
+    window = _blank_window()
+    window.library_value.setText("10k")
+
+    window._on_footprint_dropped("r-axial-3", HoleCoord(6, 4))
+
+    placed = window.bus.document.components
+    assert [(c.footprint_id, c.anchor, c.value) for c in placed] == [
+        ("r-axial-3", HoleCoord(6, 4), "10k")
+    ]
+    # ...and the part stays armed, so a run of them can be clicked down afterwards.
+    assert window.scene.armed_footprint_id == "r-axial-3"
+    _close(window)
+
+
+def test_a_dropped_footprint_the_library_does_not_list_is_still_placed() -> None:
+    """A generated id carries its own dimensions and is not in the tree, so arming it by
+    selecting a row cannot work. It is armed directly instead."""
+    from perfboard_studio.model import HoleCoord
+
+    window = _blank_window()
+
+    window._on_footprint_dropped("box-4x2-p1-r3-15x10x8", HoleCoord(3, 3))
+
+    assert [c.footprint_id for c in window.bus.document.components] == [
+        "box-4x2-p1-r3-15x10x8"
+    ]
+    _close(window)
+
+
+def test_pressing_a_symbol_and_moving_begins_a_drag() -> None:
+    """The gesture the sheet documented and never had: _maybe_start_drag existed, and
+    nothing in the view ever recorded a press or called it -- so a symbol could not be
+    dragged to another cell, and could not be dragged onto the board either."""
+    from PySide6.QtCore import QEvent, QPoint, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    window = _open_schematic(_golden_document("ne555"))
+    view = window.schematic_view
+    symbol = next(s for s in view.item.drawing.symbols if s.ref == "R1")
+    centre = view.mapFromScene(
+        QPointF(symbol.at.x + symbol.width / 2, symbol.at.y + symbol.height / 2)
+    )
+
+    def mouse(kind, pos):
+        return QMouseEvent(
+            kind,
+            QPointF(pos),
+            QPointF(pos),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+
+    view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, centre))
+
+    assert view._press_ref == "R1"
+
+    view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, centre + QPoint(60, 40)))
+
+    # The drag ran and ended (offscreen it ends at once); what matters is that the press
+    # was consumed, which is the half that was missing.
+    assert view._press_at is None
+    assert view._press_ref is None
+    _close(window)
+
+
+def test_a_press_that_does_not_move_far_enough_is_not_a_drag() -> None:
+    """A click on a symbol to select it always carries a pixel or two of drift with it."""
+    from PySide6.QtCore import QEvent, QPoint, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    window = _open_schematic(_golden_document("ne555"))
+    view = window.schematic_view
+    symbol = next(s for s in view.item.drawing.symbols if s.ref == "R1")
+    centre = view.mapFromScene(
+        QPointF(symbol.at.x + symbol.width / 2, symbol.at.y + symbol.height / 2)
+    )
+
+    def mouse(kind, pos):
+        return QMouseEvent(
+            kind,
+            QPointF(pos),
+            QPointF(pos),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+
+    view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, centre))
+    view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, centre + QPoint(1, 1)))
+
+    assert view._press_ref == "R1"
+    _close(window)
+
+
 def test_a_dragged_part_carries_its_reference_in_a_format_of_its_own() -> None:
     """Its own MIME type rather than plain text: a board must not accept an arbitrary
     string dropped on it, and Qt only offers a target the formats the source declared."""

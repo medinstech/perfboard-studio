@@ -51,6 +51,7 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPainter,
     QPen,
+    QPixmap,
     QPolygonF,
     QWheelEvent,
 )
@@ -610,6 +611,12 @@ class SchematicView(QGraphicsView):
             where = self.mapToScene(event.position().toPoint())
             symbol = self.symbol_at(where)
             if symbol is not None:
+                # A PRESS IS NOT YET A DRAG. Remembered here and acted on in
+                # mouseMoveEvent, once the pointer has gone far enough to mean it -- every
+                # click on a symbol carries a pixel or two of drift, and starting a drag on
+                # the press alone would make selecting one impossible.
+                self._press_at = event.position().toPoint()
+                self._press_ref = symbol.ref
                 self.partClicked.emit(symbol.ref)
                 event.accept()
                 return
@@ -620,6 +627,13 @@ class SchematicView(QGraphicsView):
                 return
             self.cleared.emit()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """Forget the press. Without this a click on a symbol, then a pan from somewhere
+        else, would start a drag of whatever was clicked three gestures ago."""
+        self._press_at = None
+        self._press_ref = None
+        super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
         if self.wiring:
@@ -691,7 +705,8 @@ class SchematicView(QGraphicsView):
         """
         if self._press_at is None or self._press_ref is None:
             return False
-        if (event.pos() - self._press_at).manhattanLength() < QApplication.startDragDistance():
+        moved = event.position().toPoint() - self._press_at
+        if moved.manhattanLength() < QApplication.startDragDistance():
             return False
 
         ref = self._press_ref
@@ -704,10 +719,49 @@ class SchematicView(QGraphicsView):
         data.setText(ref)
         drag = QDrag(self)
         drag.setMimeData(data)
+        picture = self._symbol_pixmap(ref)
+        if picture is not None:
+            drag.setPixmap(picture)
+            drag.setHotSpot(picture.rect().center())
         drag.exec(Qt.DropAction.CopyAction)
         return True
 
+    #: How big the picture under the pointer may get while a symbol is being dragged. A
+    #: 40-pin DIP at sheet scale is most of the panel, and a drag whose cursor covers what
+    #: it is being aimed at is a drag you cannot aim.
+    DRAG_PICTURE_PX = 120
+
+    def _symbol_pixmap(self, ref: str) -> QPixmap | None:
+        """The symbol itself, rendered small, to carry under the pointer.
+
+        The SHEET ITEM draws it rather than a second drawing being made: one item paints
+        the whole sheet, so asking it to paint a rectangle of itself is the only way to get
+        a picture of one symbol that cannot disagree with the symbol on screen.
+        """
+        if self.item is None:
+            return None
+        symbol = next((s for s in self.item.drawing.symbols if s.ref == ref), None)
+        if symbol is None:
+            return None
+        box = QRectF(symbol.at.x, symbol.at.y, symbol.width, symbol.height)
+        if box.isEmpty():
+            return None
+        scale = min(
+            self.DRAG_PICTURE_PX / box.width(), self.DRAG_PICTURE_PX / box.height(), 12.0
+        )
+        picture = QPixmap(max(1, round(box.width() * scale)), max(1, round(box.height() * scale)))
+        picture.fill(QColor(SHEET))
+        painter = QPainter(picture)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.scale(scale, scale)
+        painter.translate(-box.left(), -box.top())
+        self.item.paint(painter, QStyleOptionGraphicsItem(), None)
+        painter.end()
+        return picture
+
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if event.buttons() & Qt.MouseButton.LeftButton and self._maybe_start_drag(event):
+            return
         where = self.mapToScene(event.position().toPoint())
         self.setToolTip(self.describe(where))
         super().mouseMoveEvent(event)
