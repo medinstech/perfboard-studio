@@ -43,15 +43,14 @@ from PySide6.QtCore import (
     QThread,
     QTimer,
     QUrl,
-    Signal,
 )
 from PySide6.QtGui import (
     QAction,
-    QCloseEvent,
     QColor,
     QDesktopServices,
     QIcon,
     QKeySequence,
+    QShowEvent,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -328,6 +327,17 @@ def _stored_bool(settings: QSettings, key: str, default: bool) -> bool:
 #: this application opens what it is given.
 GEOMETRY_KEY = "session/geometry"
 WINDOW_STATE_KEY = "session/windowState"
+#: Which arrangement of docks the stored state describes, handed to ``saveState`` and
+#: ``restoreState``.
+#:
+#: BUMPED WHEN A DOCK IS ADDED OR REMOVED, and it is the only way to be honest about what
+#: a saved layout can say. ``restoreState`` puts back the docks it knows and leaves the
+#: ones it has never heard of wherever the constructor put them -- so a layout saved before
+#: the board was a panel had the board and the schematic landing at whatever coordinates
+#: were left over, off the side of the window in the case that found this. Refusing the old
+#: state outright costs one person one rearranged window, once; honouring it costs them a
+#: window with two views missing from it.
+WINDOW_STATE_VERSION = 2
 BOARD_COLOUR_KEY = "session/boardColour"
 RATSNEST_KEY = "session/showRatsnest"
 RULERS_KEY = "session/showRulers"
@@ -429,31 +439,6 @@ def read_document_text(path: Path) -> tuple[str | None, str | None]:
 #: Substrate to add outside the hole grid when a board carries a printed legend, so the
 #: characters have somewhere to go. Roughly what the boards being modelled have.
 LEGEND_BORDER_MM = 2.0
-
-
-class _DetachedSheet(QWidget):
-    """The schematic in a window of its own.
-
-    A plain top-level widget rather than a QDialog: it is a second view of the document,
-    not a question, so it must not be modal, must not take Escape, and must appear in the
-    window list where somebody can put it beside the main window -- which is the whole
-    reason it exists.
-    """
-
-    closed = Signal()
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        # Qt.Window rather than the default child flag: a widget with a parent is drawn
-        # INSIDE it unless it is told it is a window, and the parent is kept so the sheet
-        # is raised and closed with the application rather than stranded behind it.
-        super().__init__(parent, Qt.WindowType.Window)
-
-    def closeEvent(self, event: QCloseEvent) -> None:
-        # The page has to go back to the tab however the window went away, including from
-        # the title bar's own button -- so the signal is emitted here rather than from
-        # whatever asked for the close.
-        self.closed.emit()
-        super().closeEvent(event)
 
 
 class BoardSetupDialog(QDialog):
@@ -2286,6 +2271,14 @@ class MainWindow(QMainWindow):
         #: The document as it last hit disk. Identity comparison against the bus's
         #: current document is what "modified" means here -- see is_modified.
         self._saved_document = document
+        #: Whether a saved panel layout was put back, and whether the opening proportions
+        #: have been applied yet. Both are about ONE moment: resizeDocks divides the room
+        #: the window has, and in the constructor it has none -- so the defaults wait for
+        #: showEvent, and stand down entirely when a saved layout arrived first.
+        self._restored_layout = False
+        self._sized_layout = False
+        #: Which of a tab group of view panels is in front. See ``schematic_is_showing``.
+        self._raised_dock: QDockWidget | None = None
         self.setWindowTitle(window_title(path))
         self.resize(1500, 950)
         self.setStyleSheet(STYLESHEET)
@@ -2331,43 +2324,33 @@ class MainWindow(QMainWindow):
         self.update_bar.cancelRequested.connect(self._on_update_cancel)
         self.update_bar.closeRequested.connect(self._on_update_closed)
         self.update_bar.dismissed.connect(self._on_update_dismissed)
-        # THE WORKSPACE, not a board with panels around it. A schematic and a layout are
-        # the two things this application is for, and the sheet used to be a dock on the
-        # right edge -- a whole circuit in a third of the window, with the other two thirds
-        # showing a board nobody was looking at while they drew. Two tabs, each getting the
-        # whole area, and either can be pulled out into a window of its own.
-        self.workspace = QTabWidget()
-        self.workspace.setDocumentMode(True)
-        self.workspace.addTab(self.view, t("Board"))
-        self.schematic_page = self._build_schematic_page()
-        self.workspace.addTab(self.schematic_page, t("Schematic"))
-        self.workspace.currentChanged.connect(self._on_workspace_changed)
-        # Dragging a symbol onto the Board tab switches to it and lets the drag carry on,
-        # which is what makes drag-and-drop work at all while the two are tabs rather than
-        # windows. Every tabbed editor does this and it is invisible until it is missing.
-        self.workspace.tabBar().setAcceptDrops(True)
-        self.workspace.tabBar().setChangeCurrentOnDrag(True)
-        #: The sheet's own window while it is detached, and None while it is a tab.
-        self._schematic_window: _DetachedSheet | None = None
-
-        centre = QWidget(self)
-        column = QVBoxLayout(centre)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.setSpacing(0)
-        column.addWidget(self.update_bar)
-        column.addWidget(self.workspace, 1)
-        self.setCentralWidget(centre)
+        # EVERY VIEW IS A PANEL, INCLUDING THE BOARD. The board was the central widget and
+        # the sheet a tab beside it, which made the two of them the one pair in the window
+        # that could not be arranged: not side by side, not stacked, not torn off. They are
+        # both dock widgets now, like the 3D view and the build guide -- so "board left,
+        # sheet right" is a drag rather than a feature, floating one is its title bar's own
+        # button, and ``restoreState`` brings back whatever was arrived at. The toolbar
+        # carries a button per panel next to 3D, which is the only part of this that has to
+        # be discovered rather than tried.
+        #
+        # QMainWindow surrounds a central widget with docks, so for the panels to have the
+        # whole window there must be nothing in the middle. ``_central_hint`` is that
+        # nothing: capped to zero while any view is open, and the one screen that says what
+        # to press when they are all shut.
+        self.setDockNestingEnabled(True)
+        self.setCentralWidget(self._build_central_hint())
 
         # Docks before menus: the View menu offers each dock's own toggleViewAction, so the
         # docks have to exist for the menu to be able to name them.
+        self._build_update_strip()
+        self._build_board_dock()
+        self._build_schematic_dock()
         self._build_library_dock()
         self._build_nets_dock()
         self._build_3d_dock()
         self._build_guide_dock()
         self._build_drc_dock()
-        # Two panels of the same width on the same edge, so they share it as tabs rather
-        # than each getting half. Both start closed; whichever is opened takes the space.
-        self.tabifyDockWidget(self.dock_3d, self.dock_guide)
+        self._arrange_docks()
         self._build_menu()
         self._build_toolbar()
         self._build_status_bar()
@@ -2417,6 +2400,295 @@ class MainWindow(QMainWindow):
 
     # -- 3D dock -------------------------------------------------------------
 
+    # -- the window is panels all the way down ------------------------------
+    #
+    # THE BOARD IS A PANEL AND SO IS THE SHEET. Everything else in this window could be
+    # moved, floated, stacked or closed; the two views the application exists for were the
+    # one pair nailed down -- a central widget with a tab beside it. So "board on the left,
+    # schematic on the right" was not something a user could ask for, and wanting both at
+    # once meant a second window built by a button.
+    #
+    # Making them docks deletes all of that. Side by side is a drag. A window of its own is
+    # the title bar's float button. Tabbed is a drag onto the other one. And none of it has
+    # to be remembered by this file, because ``restoreState`` already remembers every dock
+    # in the window by ``objectName`` -- which is why the two new ones have theirs.
+
+    #: Qt's own "no maximum", which PySide does not export. The central widget is capped to
+    #: zero while any view panel is open, which is how the docks get the whole window; this
+    #: is what the cap is lifted back to when they are all shut.
+    UNCAPPED = (1 << 24) - 1
+
+    def _build_update_strip(self) -> None:
+        """The update bar, above the panels rather than in among them.
+
+        It used to sit in the central widget, which is where the board was. With the board
+        a dock the middle of the window is a sliver between panels, and a strip announcing
+        a release is not something to squeeze into one. The top dock area spans the window
+        above every other panel, which is where news about the application belongs.
+
+        A DOCK AND NOT A TOOLBAR, which was the first attempt and is the one worth writing
+        down: a QToolBar lays its widgets out itself, and a toolbar with no geometry yet --
+        a window that has not been shown, which is every window in the test suite -- decides
+        the strip does not fit and HIDES it, in the middle of the call that was putting it
+        up. This dock carries none of that: no title bar, no features, nothing to drag or
+        close, and its whole job is to be the width of the window and the height of what is
+        inside it.
+        """
+        strip = QDockWidget(t("Update"), self)
+        strip.setObjectName("dockUpdate")
+        strip.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        strip.setTitleBarWidget(QWidget(strip))
+        # ``setWidget`` SHOWS what it is given, so the bar's own "nothing to announce"
+        # state has to be put back afterwards -- otherwise the strip is down and the bar
+        # inside it reads as up, which is the difference between "no update" and "an update
+        # nobody can see".
+        announcing = not self.update_bar.isHidden()
+        strip.setWidget(self.update_bar)
+        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, strip)
+        self.update_strip = strip
+        # Followed rather than told: the bar puts ITSELF up and down as the check moves
+        # through its states, and a second place deciding when it is up would be a second
+        # place to forget one of them.
+        self.update_bar.visibilityChanged.connect(strip.setVisible)
+        self.update_bar.setVisible(announcing)
+
+    def _build_central_hint(self) -> QWidget:
+        """The one screen for a window with every view closed.
+
+        A dock can be closed, and two of the closable ones are now the board and the
+        schematic -- so a blank grey window is reachable in one click, and it is the single
+        screen in this application where nothing at all says what to do. It says which
+        buttons bring a view back, and it occupies nothing whenever one is open
+        (``_sync_central_hint``).
+        """
+        widget = QWidget(self)
+        column = QVBoxLayout(widget)
+        column.setContentsMargins(24, 24, 24, 24)
+        self.central_hint = QLabel()
+        self.central_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.central_hint.setWordWrap(True)
+        self.central_hint.setStyleSheet(f"color: {TEXT_DIM}; font-size: 13px;")
+        self.central_hint.setText(
+            t(
+                "Every view is closed. Board (Ctrl+1) and Schematic (Ctrl+2) are on the "
+                "toolbar, beside 3D \u2014 and each of them can be dragged anywhere in "
+                "the window, or out of it."
+            )
+        )
+        column.addWidget(self.central_hint)
+        return widget
+
+    def _sync_central_hint(self) -> None:
+        """Give the middle of the window to the panels, or to the hint.
+
+        Qt gives the central widget whatever the docks leave, and a maximum of zero is how
+        you say "leave it nothing" -- there is no other way to let docks have the whole
+        window. The cap comes off the moment there is nothing else to show.
+        """
+        hint = self.centralWidget()
+        if hint is None:
+            return
+        panels = (
+            getattr(self, "dock_board", None),
+            getattr(self, "dock_schematic", None),
+            getattr(self, "dock_3d", None),
+            getattr(self, "dock_guide", None),
+        )
+        # ``isHidden`` and not ``isVisible``, the trap this file meets everywhere: nothing
+        # is visible in a window that has not been shown yet, and the question is whether a
+        # panel has been CLOSED.
+        anything_open = any(dock is not None and not dock.isHidden() for dock in panels)
+        if anything_open:
+            hint.setMaximumSize(0, 0)
+        else:
+            hint.setMaximumSize(self.UNCAPPED, self.UNCAPPED)
+
+    def _build_board_dock(self) -> None:
+        """The board, in a panel of its own.
+
+        It carries no extra chrome: the toolbar, the menus and the status bar already
+        belong to the board and are the window's, not the panel's. What it gains by being a
+        dock is only that it can be moved, and that is the whole point.
+        """
+        dock = QDockWidget(t("Board"), self)
+        # Named because QMainWindow.restoreState matches docks BY objectName and silently
+        # drops the ones without one.
+        dock.setObjectName("dockBoard")
+        dock.setWidget(self.view)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        dock.visibilityChanged.connect(self._on_view_dock_visibility)
+        dock.dockLocationChanged.connect(self._on_view_dock_moved)
+        dock.topLevelChanged.connect(self._on_view_dock_moved)
+        self.dock_board = dock
+
+    def _build_schematic_dock(self) -> None:
+        dock = QDockWidget(t("Schematic"), self)
+        dock.setObjectName("dockSchematic")
+        self.schematic_page = self._build_schematic_page()
+        dock.setWidget(self.schematic_page)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        dock.visibilityChanged.connect(self._on_view_dock_visibility)
+        dock.dockLocationChanged.connect(self._on_view_dock_moved)
+        dock.topLevelChanged.connect(self._on_view_dock_moved)
+        self.dock_schematic = dock
+
+    def _on_view_dock_visibility(self, visible: bool) -> None:
+        # WHICH OF A TAB GROUP IS IN FRONT, recorded as Qt says so. A dock stacked behind
+        # another reports itself invisible and the one brought forward reports itself
+        # visible, which is the only notice this window gets that somebody clicked a tab.
+        dock = self.sender()
+        if visible and isinstance(dock, QDockWidget):
+            self._raised_dock = dock
+        self._sync_central_hint()
+        if self._schematic_stale and self.schematic_is_showing():
+            self._refresh_schematic_panel()
+
+    def _on_view_dock_moved(self, _where: object = None) -> None:
+        self._sync_dock_titlebars()
+        self._refresh_schematic_float_button()
+
+    #: What the default layout gives each panel, in pixels, on a window the size this one
+    #: opens at. Proportions rather than promises -- they are applied once and the user
+    #: owns the layout afterwards -- but the ratios between them are the layout, so they
+    #: live together in one place.
+    LAYOUT_LEFT_WIDTH = 300
+    LAYOUT_RIGHT_WIDTH = 460
+    LAYOUT_DRC_HEIGHT = 200
+
+    def _arrange_docks(self) -> None:
+        """The layout a window opens on the first time, before anyone has rearranged it.
+
+        It is close to the layout the application had when the board was a central widget:
+        parts and nets down the left, the board filling the middle with the sheet stacked on
+        it, the two expensive panels to the right. Everything here is a default that
+        ``restoreState`` overwrites on every later start.
+        """
+        # EVERY SPLIT BEFORE EVERY TABIFY, and the order is not taste. Qt's
+        # splitDockWidget, handed a dock that is already in a tab group, adds the second
+        # one to that GROUP instead of splitting -- so a DRC panel asked for underneath the
+        # board arrived as a third tab behind it, present, checked and invisible.
+        #
+        # DRC UNDER THE BOARD, NOT ACROSS THE BOTTOM OF THE WINDOW, and that is a layout
+        # fact rather than a preference. A window whose central widget is capped to nothing
+        # -- which is what gives the panels the whole of it -- hands every leftover pixel of
+        # HEIGHT to the bottom dock area: a findings list with four rows in it opened
+        # 556 px tall and squeezed the board into 302, and no resizeDocks, size hint or
+        # size policy would take it back. Split into the same area as the board, the two
+        # divide their column the way any splitter does. It also puts the findings directly
+        # under the thing they are findings about.
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_drc)
+        self.splitDockWidget(self.dock_board, self.dock_drc, Qt.Orientation.Vertical)
+        # ...and the two expensive panels to the RIGHT of that column rather than tabbed
+        # with the board: a 3D view stacked behind it is a 3D view nobody can check the
+        # board against, which is the only reason to open one.
+        self.splitDockWidget(self.dock_board, self.dock_3d, Qt.Orientation.Horizontal)
+        self.tabifyDockWidget(self.dock_3d, self.dock_guide)
+        # Board and sheet stacked on one another, so the pair opens looking exactly like
+        # the tabs it replaces -- and a dock area's tab bar is the "more distinct
+        # transition" the two never had while they were a thin document-mode tab strip.
+        self.tabifyDockWidget(self.dock_board, self.dock_schematic)
+        # Tabs on top, where a tab bar is: Qt puts a dock area's at the bottom by default,
+        # which is where nobody looks for the switch between two views.
+        for area in (
+            Qt.DockWidgetArea.LeftDockWidgetArea,
+            Qt.DockWidgetArea.RightDockWidgetArea,
+            Qt.DockWidgetArea.TopDockWidgetArea,
+            Qt.DockWidgetArea.BottomDockWidgetArea,
+        ):
+            self.setTabPosition(area, QTabWidget.TabPosition.North)
+        self._raise_view(self.dock_board)
+        self._sync_dock_titlebars()
+        self._sync_central_hint()
+
+    def _apply_default_sizes(self) -> None:
+        """The opening proportions, pinned once the window has a size to divide.
+
+        BY CAPPING AND LETTING GO, because ``resizeDocks`` does nothing here. It divides
+        the room the window HAS, and a window that is not on screen yet has none -- so
+        during construction the numbers land on a default-sized window and are thrown away
+        by the first real resize, and after the layout has settled the call is simply
+        ignored. A maximum IS honoured, at any moment: the dock is squeezed to it, the
+        splitters either side of it move, and when the maximum comes off on the next turn
+        of the event loop the splitters stay where they were put. That is the whole trick,
+        and it is why the release is a timer rather than the next line.
+        """
+        # TWO HOPS, and both of them are needed. The cap has to land on a window that has
+        # already been laid out once -- applied from inside showEvent it is undone by the
+        # very first layout pass that follows -- and the release has to come a turn after
+        # that, or the splitters never move to where the cap put them.
+        QTimer.singleShot(0, self._pin_default_sizes)
+
+    def _pin_default_sizes(self) -> None:
+        self._cap_for_default_sizes(True)
+        QTimer.singleShot(0, self._release_default_sizes)
+
+    def _release_default_sizes(self) -> None:
+        """Take the caps off without the layout springing back.
+
+        A dock squeezed by a maximum and then let go does not always stay squeezed: one
+        sharing a splitter with another dock does, and one that is the only thing in its
+        dock area springs straight back to whatever width Qt would have given it. So the
+        arrangement is photographed while the caps are still on and put back afterwards --
+        ``restoreState`` is the one call in Qt that sets dock sizes and means it, which is
+        also why a saved session comes back to the pixel and this does not.
+        """
+        state = self.saveState(WINDOW_STATE_VERSION)
+        self._cap_for_default_sizes(False)
+        self.restoreState(state, WINDOW_STATE_VERSION)
+        self._sync_dock_titlebars()
+        self._sync_central_hint()
+
+    def _cap_for_default_sizes(self, on: bool) -> None:
+        for dock, width, height in (
+            (self.dock_library, self.LAYOUT_LEFT_WIDTH, None),
+            (self.dock_3d, self.LAYOUT_RIGHT_WIDTH, None),
+            (self.dock_drc, None, self.LAYOUT_DRC_HEIGHT),
+        ):
+            if width is not None:
+                dock.setMinimumWidth(width if on else 0)
+                dock.setMaximumWidth(width if on else self.UNCAPPED)
+            if height is not None:
+                dock.setMinimumHeight(height if on else 0)
+                dock.setMaximumHeight(height if on else self.UNCAPPED)
+        if on:
+            # The 3D panel is shut on a first run, so capping it changes nothing; the
+            # minimum it carries for its own sake is put back either way.
+            self.dock_3d.setMinimumWidth(280)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        if self._sized_layout:
+            return
+        self._sized_layout = True
+        if not self._restored_layout:
+            self._apply_default_sizes()
+
+    #: The view panels, in the order the toolbar offers them. One tuple, so a rule about
+    #: "the panels" cannot be applied to three of the four.
+    def _view_docks(self) -> tuple[QDockWidget, ...]:
+        return (self.dock_board, self.dock_schematic, self.dock_3d, self.dock_guide)
+
+    def _sync_dock_titlebars(self) -> None:
+        """A tabbed panel has no title bar, because its tab already is one.
+
+        Qt draws both: the tab bar for the group and, under it, the current dock's own
+        title -- the same word twice, on two rows, above a view that wanted the height.
+        Dragging the TAB moves the panel and the toolbar button closes it, so nothing is
+        lost by taking the second row away while it is stacked; the moment a panel is
+        pulled out beside another the title bar comes back, because then it is the only
+        handle it has.
+        """
+        for dock in self._view_docks():
+            stacked = bool(self.tabifiedDockWidgets(dock)) and not dock.isFloating()
+            current = dock.titleBarWidget()
+            if stacked and current is None:
+                dock.setTitleBarWidget(QWidget(dock))
+            elif not stacked and current is not None:
+                # None is what Qt's own C++ signature takes to mean "give it back the
+                # default title bar"; PySide's stub says QWidget, so it is said in a cast.
+                dock.setTitleBarWidget(cast("QWidget", None))
+                current.deleteLater()
+
     def _build_3d_dock(self) -> None:
         """A closable panel, and nothing inside it until it is first opened.
 
@@ -2441,7 +2713,6 @@ class MainWindow(QMainWindow):
         self.dock_3d.setWidget(container)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_3d)
         self.dock_3d.setMinimumWidth(280)
-        self.resizeDocks([self.dock_3d], [480], Qt.Orientation.Horizontal)
         self.dock_3d.hide()
         self.dock_3d.visibilityChanged.connect(self._on_3d_visibility_changed)
 
@@ -3188,6 +3459,30 @@ class MainWindow(QMainWindow):
         act_go_to.triggered.connect(self.on_go_to_part)
         view_menu.addSeparator()
 
+        # THE FOUR VIEWS OF THE DESIGN FIRST, AND THEY ARE NUMBERED IN THAT ORDER.
+        # Board, schematic, 3D, guide -- the things this application is FOR -- then the
+        # three panels that describe them. The board and the sheet used to be the two with
+        # no number at all, because they were the two that were not panels.
+        self.act_board_panel = self.dock_board.toggleViewAction()
+        self.act_board_panel.setText(t("Show &Board"))
+        self.act_board_panel.setShortcut(QKeySequence("Ctrl+1"))
+        self.act_board_panel.setToolTip(
+            t(
+                "The board itself (Ctrl+1). A panel like every other one: drag it beside "
+                "the schematic, or out of the window altogether."
+            )
+        )
+        view_menu.addAction(self.act_board_panel)
+        self.act_schematic = self.dock_schematic.toggleViewAction()
+        self.act_schematic.setText(t("Show &Schematic"))
+        self.act_schematic.setShortcut(QKeySequence("Ctrl+2"))
+        self.act_schematic.setToolTip(
+            t(
+                "The circuit (Ctrl+2). Clicking a symbol selects that part on the board; "
+                "clicking a wire highlights its net."
+            )
+        )
+        view_menu.addAction(self.act_schematic)
         self.act_3d = self.dock_3d.toggleViewAction()
         self.act_3d.setText(t("Show &3D View"))
         self.act_3d.setShortcut(QKeySequence("Ctrl+3"))
@@ -3208,31 +3503,32 @@ class MainWindow(QMainWindow):
             )
         )
         view_menu.addAction(self.act_guide_panel)
-        self.act_schematic = QAction(t("&Schematic"), self)
-        self.act_schematic.triggered.connect(self.show_schematic)
-        self.act_schematic.setText(t("Show &Schematic"))
-        self.act_schematic.setShortcut(QKeySequence("Ctrl+5"))
-        self.act_schematic.setToolTip(
-            t(
-                "The netlist drawn as a circuit, generated from the document. Clicking a "
-                "symbol selects that part on the board; clicking a wire highlights its net."
-            )
-        )
-        view_menu.addAction(self.act_schematic)
-        # The other three panels. Closing one from its title bar used to leave no route
-        # back but a right-click on the menu bar, which nobody finds.
+        view_menu.addSeparator()
+        # The three that describe the design rather than draw it. Closing one from its
+        # title bar used to leave no route back but a right-click on the menu bar, which
+        # nobody finds.
         self.act_parts_panel = self.dock_library.toggleViewAction()
         self.act_parts_panel.setText(t("Show &Parts"))
-        self.act_parts_panel.setShortcut(QKeySequence("Ctrl+1"))
+        self.act_parts_panel.setShortcut(QKeySequence("Ctrl+5"))
         view_menu.addAction(self.act_parts_panel)
         self.act_nets_panel = self.dock_nets.toggleViewAction()
         self.act_nets_panel.setText(t("Show &Nets"))
-        self.act_nets_panel.setShortcut(QKeySequence("Ctrl+2"))
+        self.act_nets_panel.setShortcut(QKeySequence("Ctrl+6"))
         view_menu.addAction(self.act_nets_panel)
         self.act_drc_panel = self.dock_drc.toggleViewAction()
         self.act_drc_panel.setText(t("Show DRC / L&VS"))
-        self.act_drc_panel.setShortcut(QKeySequence("Ctrl+6"))
+        self.act_drc_panel.setShortcut(QKeySequence("Ctrl+7"))
         view_menu.addAction(self.act_drc_panel)
+        view_menu.addSeparator()
+        act_reset_layout = view_menu.addAction(t("&Reset the Panel Layout"))
+        act_reset_layout.setToolTip(
+            t(
+                "Put every panel back where it opens on a new installation. A window "
+                "rearranged into a corner has no other way back."
+            )
+        )
+        act_reset_layout.triggered.connect(self.on_reset_layout)
+        view_menu.addSeparator()
         self.act_exploded = view_menu.addAction(t("&Exploded View"))
         self.act_exploded.setCheckable(True)
         self.act_exploded.setToolTip(
@@ -3363,6 +3659,8 @@ class MainWindow(QMainWindow):
             (self.act_delete, t("Delete")),
             (self.act_flip, t("Flip")),
             (self.act_ratsnest, t("Ratsnest")),
+            (self.act_board_panel, t("Board")),
+            (self.act_schematic, t("Schematic")),
             (self.act_3d, t("3D")),
             (self.act_fit, t("Fit")),
         ):
@@ -3408,12 +3706,23 @@ class MainWindow(QMainWindow):
         bar.addSeparator()
         self.act_flip.setIcon(icons.icon("flip"))
         self.act_ratsnest.setIcon(icons.icon("ratsnest"))
-        self.act_3d.setIcon(icons.icon("3d"))
         self.act_fit.setIcon(icons.icon("fit"))
         bar.addAction(self.act_flip)
         bar.addAction(self.act_ratsnest)
-        bar.addAction(self.act_3d)
         bar.addAction(self.act_fit)
+
+        # THE PANELS, LAST AND TOGETHER. Each is its dock's own toggleViewAction, so the
+        # button is checkable, it is lit while the panel is open, and pressing it does
+        # exactly what the View menu entry and the panel's own close button do -- one
+        # switch per panel rather than three ways of asking for the same thing that can
+        # disagree about whether it happened.
+        bar.addSeparator()
+        self.act_board_panel.setIcon(icons.icon("board"))
+        self.act_schematic.setIcon(icons.icon("schematic"))
+        self.act_3d.setIcon(icons.icon("3d"))
+        bar.addAction(self.act_board_panel)
+        bar.addAction(self.act_schematic)
+        bar.addAction(self.act_3d)
 
         # The menu entries carry the same pictures. A toolbar that teaches one icon and a
         # menu that shows another teaches nothing.
@@ -3839,9 +4148,6 @@ class MainWindow(QMainWindow):
         dock.setWidget(panel)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
         self.dock_nets = dock
-        # 340 rather than 300: at 300 the parts library elides half its names, and the two
-        # left-hand docks share a column.
-        self.resizeDocks([dock], [340], Qt.Orientation.Horizontal)
 
     # -- the schematic, in the window -----------------------------------------
     #
@@ -3856,27 +4162,35 @@ class MainWindow(QMainWindow):
     # selection made over there lights up here. Two views of one document, which is worth
     # more on a perfboard than a second editor would be.
 
-    # -- the schematic, in the workspace rather than down the side --------------
+    # -- the schematic panel -------------------------------------------------
     #
-    # IT IS A VIEW, NOT A PANEL. It was a dock on the right edge, which put a whole
-    # circuit into a third of the window and left the other two thirds showing a board
-    # nobody was looking at while they drew. A schematic and a layout are the two things
-    # this application is for, and the way every EDA tool arranges them is the way this
-    # does now: one workspace, two tabs, each getting the whole area.
-    #
-    # And it detaches. Somebody who genuinely wants both at once -- probing a net on the
-    # board while reading the sheet -- gets two real windows to put side by side, which is
-    # what a second monitor is for and what a 300-pixel dock was never going to be.
+    # IT IS A VIEW, NOT A PANEL DOWN THE SIDE. It was a dock on the right edge, which put a
+    # whole circuit into a third of the window and left the other two thirds showing a
+    # board nobody was looking at while they drew. It is a dock again -- but so is the
+    # board, which is the difference: neither of them is furniture around the other, and
+    # where they sit relative to one another is the user's to decide and Qt's to remember.
 
     def _build_schematic_page(self) -> QWidget:
+        """The sheet, its tools and its one line of summary.
+
+        A TOOLBAR AND NOT A ROW OF BUTTONS, and the reason is measured rather than
+        aesthetic: nine push buttons side by side gave this panel a MINIMUM width of
+        1362 px, which a panel inherits from whatever it contains -- so the window could not
+        be narrower than the row, the panels beside it were pinned at their own minimums
+        too, and nothing in the layout could be resized at all. A QToolBar folds what does
+        not fit into an overflow menu, which is the whole difference between a panel that
+        can be made narrow and one that dictates the size of the window.
+        """
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(6)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        layout.addWidget(self._build_schematic_toolbar())
 
         self.schematic_summary = QLabel()
         self.schematic_summary.setWordWrap(True)
-        self.schematic_summary.setStyleSheet(f"color: {TEXT_DIM};")
+        self.schematic_summary.setStyleSheet(f"color: {TEXT_DIM}; padding: 0 8px;")
         layout.addWidget(self.schematic_summary)
 
         self.schematic_view = SchematicView()
@@ -3888,19 +4202,24 @@ class MainWindow(QMainWindow):
         self.schematic_view.symbolMoved.connect(self._on_symbol_moved)
         self.schematic_view.contextMenuRequested.connect(self._on_sheet_context_menu)
         layout.addWidget(self.schematic_view, 1)
+        return page
 
-        # One row now that the page has the width for it. It was two because a dock can be
-        # a third of the window wide and a toolbar in one elides down to icons nobody can
-        # tell apart -- which stopped being the situation when this stopped being a dock.
-        row = QHBoxLayout()
-        self.act_sch_add = QPushButton(t("Add Part…"))
+    def _build_schematic_toolbar(self) -> QToolBar:
+        bar = QToolBar(t("Schematic"), self)
+        bar.setObjectName("schematicToolbar")
+        bar.setMovable(False)
+        bar.setFloatable(False)
+        bar.setIconSize(QSize(icons.SIZE, icons.SIZE))
+        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+
+        self.act_sch_add = QAction(icons.icon("sch-add"), t("Add Part…"), self)
         self.act_sch_add.setToolTip(
             t("Put a part in the design without deciding where it goes on the board yet.")
         )
-        self.act_sch_add.clicked.connect(self.on_schematic_add_part)
-        row.addWidget(self.act_sch_add)
+        self.act_sch_add.triggered.connect(self.on_schematic_add_part)
+        bar.addAction(self.act_sch_add)
 
-        self.act_sch_wire = QPushButton(t("Wire"))
+        self.act_sch_wire = QAction(icons.icon("connect"), t("Wire"), self)
         self.act_sch_wire.setCheckable(True)
         self.act_sch_wire.setToolTip(
             t(
@@ -3909,42 +4228,21 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_wire.toggled.connect(self.on_schematic_wire_mode)
-        row.addWidget(self.act_sch_wire)
+        bar.addAction(self.act_sch_wire)
 
-        self.act_sch_delete = QPushButton(t("Remove"))
+        self.act_sch_delete = QAction(icons.icon("delete"), t("Remove"), self)
         self.act_sch_delete.setToolTip(
             t(
                 "Take the selected part out of the design, along with its connections. A "
                 "part that is on the board comes off it and stays in the design instead."
             )
         )
-        self.act_sch_delete.clicked.connect(self.on_schematic_remove)
-        row.addWidget(self.act_sch_delete)
+        self.act_sch_delete.triggered.connect(self.on_schematic_remove)
+        bar.addAction(self.act_sch_delete)
 
-        row.addStretch(1)
+        bar.addSeparator()
 
-        self.act_sch_place = QPushButton(t("Place on the Board"))
-        self.act_sch_place.setToolTip(
-            t(
-                "Put the whole design on the board, arranged: connectors on the edge, the "
-                "rest lined up by what they connect to. Suggests a stock board size first, "
-                "while the board is still empty. One undo step for the lot."
-            )
-        )
-        self.act_sch_place.clicked.connect(self.on_schematic_place_all)
-        row.addWidget(self.act_sch_place)
-
-        fit = QPushButton(t("Fit the Sheet"))
-        fit.setToolTip(
-            t(
-                "Put the whole schematic back in the view. The sheet is not re-fitted "
-                "when the board changes, so an edit cannot move what you were looking at."
-            )
-        )
-        fit.clicked.connect(self.schematic_view.fit)
-        row.addWidget(fit)
-
-        self.act_sch_auto = QPushButton(t("Arrange the Sheet"))
+        self.act_sch_auto = QAction(icons.icon("autoplace"), t("Arrange"), self)
         self.act_sch_auto.setToolTip(
             t(
                 "Forget every symbol you have dragged and lay the sheet out again. Drag a "
@@ -3952,96 +4250,121 @@ class MainWindow(QMainWindow):
                 "themselves around it."
             )
         )
-        self.act_sch_auto.clicked.connect(self.on_schematic_auto_layout)
-        row.addWidget(self.act_sch_auto)
+        self.act_sch_auto.triggered.connect(self.on_schematic_auto_layout)
+        bar.addAction(self.act_sch_auto)
 
-        self.act_sch_detach = QPushButton(t("Open in a Window"))
-        self.act_sch_detach.setToolTip(
+        self.act_sch_fit = QAction(icons.icon("fit"), t("Fit"), self)
+        self.act_sch_fit.setToolTip(
             t(
-                "Put the sheet in a window of its own, so it and the board can sit side by "
-                "side. Closing that window brings it back as a tab."
+                "Put the whole schematic back in the view. The sheet is not re-fitted "
+                "when the board changes, so an edit cannot move what you were looking at."
             )
         )
-        self.act_sch_detach.clicked.connect(self.on_schematic_detach)
-        row.addWidget(self.act_sch_detach)
+        self.act_sch_fit.triggered.connect(lambda: self.schematic_view.fit())
+        bar.addAction(self.act_sch_fit)
 
-        export_sheet = QPushButton(t("Export…"))
-        export_sheet.setToolTip(
+        bar.addSeparator()
+
+        self.act_sch_place = QAction(icons.icon("sch-place"), t("Place on the Board"), self)
+        self.act_sch_place.setToolTip(
+            t(
+                "Put the whole design on the board, arranged: connectors on the edge, the "
+                "rest lined up by what they connect to. Suggests a stock board size first, "
+                "while the board is still empty. One undo step for the lot."
+            )
+        )
+        self.act_sch_place.triggered.connect(self.on_schematic_place_all)
+        bar.addAction(self.act_sch_place)
+
+        self.act_sch_float = QAction(icons.icon("float"), t("Float the Panel"), self)
+        self.act_sch_float.setToolTip(
+            t(
+                "Put the sheet in a window of its own, so it and the board can sit side by "
+                "side. Dragging its title bar does the same, and so does dropping it back."
+            )
+        )
+        self.act_sch_float.triggered.connect(self.on_schematic_float)
+        bar.addAction(self.act_sch_float)
+
+        self.act_sch_export = QAction(icons.icon("export"), t("Export…"), self)
+        self.act_sch_export.setToolTip(
             t(
                 "Write the sheet beside the document as SVG, PDF and PNG. All three are "
                 "drawn from the same file, so they cannot disagree about the circuit."
             )
         )
-        export_sheet.clicked.connect(self.on_export_schematic)
-        row.addWidget(export_sheet)
-        layout.addLayout(row)
-        return page
+        self.act_sch_export.triggered.connect(self.on_export_schematic)
+        bar.addAction(self.act_sch_export)
 
-    def on_schematic_detach(self) -> None:
-        """Move the sheet into a window of its own, or bring it back.
+        self.schematic_toolbar = bar
+        return bar
 
-        The PAGE is reparented rather than a second view being built, which is the whole
-        point: a copy would be a second thing to keep in step with the document, and the
-        two would disagree the first time one of them missed a refresh. There is one
-        schematic view in this application and it is either in the tab or in the window.
+    def on_schematic_float(self) -> None:
+        """Float the sheet's panel, or drop it back into the window.
+
+        There is nothing here but the dock's own state. The panel used to be reparented
+        into a ``QWidget(Qt.Window)`` built for the purpose and handed back on close, with
+        a signal to notice the title bar's own close button -- all of which is what a
+        QDockWidget already is, and none of which could be undone by dragging.
         """
-        if self._schematic_window is not None:
-            self._schematic_window.close()
+        dock = self.dock_schematic
+        dock.setFloating(not dock.isFloating())
+        if dock.isFloating():
+            dock.resize(900, 700)
+        dock.show()
+        dock.raise_()
+        self._refresh_schematic_float_button()
+        self._refresh_schematic_panel()
+
+    def _refresh_schematic_float_button(self) -> None:
+        if not hasattr(self, "act_sch_float"):
             return
-
-        page = self.schematic_page
-        index = self.workspace.indexOf(page)
-        if index >= 0:
-            self.workspace.removeTab(index)
-
-        window = _DetachedSheet(self)
-        window.setWindowTitle(t("Schematic — {name}").format(name=self.bus.document.meta.name))
-        column = QVBoxLayout(window)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.addWidget(page)
-        page.show()
-        window.resize(900, 700)
-        window.closed.connect(self._on_schematic_window_closed)
-        self._schematic_window = window
-        self.act_sch_detach.setText(t("Back to a Tab"))
-        window.show()
-        self.schematic_view.fit()
-        self._refresh_schematic_panel()
-
-    def _on_schematic_window_closed(self) -> None:
-        """Take the page back as a tab. Called however the window went away, including
-        from the title bar's own close button, which is why it hangs off a signal rather
-        than off the button that opened it."""
-        self._schematic_window = None
-        self.act_sch_detach.setText(t("Open in a Window"))
-        self.workspace.addTab(self.schematic_page, t("Schematic"))
-        self.workspace.setCurrentWidget(self.schematic_page)
-        self._refresh_schematic_panel()
+        floating = self.dock_schematic.isFloating()
+        self.act_sch_float.setText(
+            t("Back to the Window") if floating else t("Float the Panel")
+        )
 
     def show_schematic(self) -> None:
-        """Bring the sheet to the front, wherever it currently lives."""
-        if self._schematic_window is not None:
-            self._schematic_window.raise_()
-            self._schematic_window.activateWindow()
-        else:
-            self.workspace.setCurrentWidget(self.schematic_page)
+        """Bring the sheet to the front, wherever its panel currently lives."""
+        self._raise_view(self.dock_schematic)
         self._refresh_schematic_panel()
 
+    def show_board(self) -> None:
+        """The same, for the board -- because a panel can be closed, and the board is one."""
+        self._raise_view(self.dock_board)
+
+    def _raise_view(self, dock: QDockWidget) -> None:
+        dock.show()
+        dock.raise_()
+        self._raised_dock = dock
+        if dock.isFloating():
+            dock.activateWindow()
+        # Said here as well as from the signal: Qt emits visibilityChanged only for a
+        # window that is on screen, and a headless run has none.
+        self._sync_central_hint()
+
     def schematic_is_showing(self) -> bool:
-        """Whether the sheet is in front of the user, in a tab or in its own window.
+        """Whether the sheet is in front of the user.
 
-        ``isHidden`` rather than ``isVisible`` on the window, for the trap the guide panel
-        documents: a widget is "visible" only once every ancestor is, so during
-        construction and in any headless run a page that HAS been shown is not yet visible
-        -- and the view would refuse to fill itself while sitting open in front of the user.
+        ``isHidden`` rather than ``isVisible``, for the trap the guide panel documents: a
+        widget is "visible" only once every ancestor is, so during construction and in any
+        headless run a panel that HAS been shown is not yet visible -- and the view would
+        refuse to fill itself while sitting open in front of the user.
+
+        The second half is the one a tab widget answered for free: a dock stacked BEHIND
+        another is not hidden, so ``isHidden`` alone would have the sheet rebuilding itself
+        behind the board, which is the cost the whole stale/refresh dance exists to avoid.
+        ``_raised_dock`` is that answer, and it is kept by ``_on_view_dock_visibility``
+        from Qt's own notice rather than measured -- a measurement (``visibleRegion``)
+        reads "behind" for every panel in a window nobody has shown yet, which is every
+        window in the test suite and every headless run.
         """
-        if self._schematic_window is not None:
-            return not self._schematic_window.isHidden()
-        return self.workspace.currentWidget() is self.schematic_page
-
-    def _on_workspace_changed(self, _index: int) -> None:
-        if self._schematic_stale and self.schematic_is_showing():
-            self._refresh_schematic_panel()
+        dock = getattr(self, "dock_schematic", None)
+        if dock is None or dock.isHidden():
+            return False
+        if dock.isFloating() or not self.tabifiedDockWidgets(dock):
+            return True
+        return self._raised_dock is dock
 
     def _refresh_schematic_panel(self) -> None:
         """Redraw the sheet, or mark it stale and do nothing.
@@ -4816,9 +5139,9 @@ class MainWindow(QMainWindow):
         dock.setWidget(panel)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
         # A clean board is four rows, and this panel was opening a quarter of the window
-        # tall to show them -- taken off the board, which is the thing being worked on.
+        # tall to show them -- taken off the board, which is the thing being worked on. How
+        # tall it actually opens is settled with every other panel in _arrange_docks.
         self.dock_drc = dock
-        self.resizeDocks([dock], [190], Qt.Orientation.Vertical)
 
     def _on_drc_filter_changed(self, _text: str) -> None:
         if self._last_lvs is not None:
@@ -8025,7 +8348,7 @@ class MainWindow(QMainWindow):
     def _save_session(self) -> None:
         settings = app_settings()
         settings.setValue(GEOMETRY_KEY, self.saveGeometry())
-        settings.setValue(WINDOW_STATE_KEY, self.saveState())
+        settings.setValue(WINDOW_STATE_KEY, self.saveState(WINDOW_STATE_VERSION))
         settings.setValue(BOARD_COLOUR_KEY, chosen_board_colour() or "")
         settings.setValue(RATSNEST_KEY, self.act_ratsnest.isChecked())
         settings.setValue(RULERS_KEY, self.act_rulers.isChecked())
@@ -8048,13 +8371,27 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(geometry)
         state = settings.value(WINDOW_STATE_KEY)
         if state is not None:
-            self.restoreState(state)
+            self._restored_layout = self.restoreState(state, WINDOW_STATE_VERSION)
         # ...and then shut the 3D panel regardless of how it was left. Restoring it open
         # would build VTK's whole pipeline during startup -- an OpenGL context and a few
         # thousand actors -- to show a board the user has not looked at yet. Its SIZE and
         # position come back with the rest of the state, so opening it lands where they
         # put it. See _build_3d_dock for the three costs this avoids.
         self.dock_3d.hide()
+        # A saved layout from before the board was a panel names no dockBoard, so
+        # restoreState leaves it wherever _arrange_docks put it -- which is right -- but a
+        # layout saved with it CLOSED would open this application on the hint screen. The
+        # board comes back if nothing else did; the hint is for a window somebody emptied
+        # on purpose during this session, not for one that starts empty.
+        if all(
+            dock.isHidden()
+            for dock in (self.dock_board, self.dock_schematic, self.dock_3d, self.dock_guide)
+        ):
+            self.dock_board.show()
+        self._restore_update_strip()
+        self._refresh_schematic_float_button()
+        self._sync_dock_titlebars()
+        self._sync_central_hint()
         self._open_the_schematic_on_an_empty_design()
 
         colour = settings.value(BOARD_COLOUR_KEY, "")
@@ -8069,6 +8406,52 @@ class MainWindow(QMainWindow):
             self._routing_style = cast("StylePreference", style)
             for name, action in self.act_style.items():
                 action.setChecked(name == style)
+
+    def _restore_update_strip(self) -> None:
+        """Keep the update strip's toolbar in step with the bar inside it after a restore.
+
+        ``restoreState`` puts toolbars back as they were, and a toolbar that was up when
+        the window last closed comes back up -- wrapping a hidden bar, as a few pixels of
+        ruled line across the top of a window with no news in it.
+        """
+        strip = getattr(self, "update_strip", None)
+        if strip is not None:
+            strip.setVisible(not self.update_bar.isHidden())
+
+    def on_reset_layout(self) -> None:
+        """Put every panel back where a new installation opens it.
+
+        A window whose panels can all be moved, floated and closed is a window that can be
+        got into a state with no way out -- a floating board behind the main window, a
+        schematic dragged to a monitor that is no longer attached. This is the way out, and
+        it is the reason the arrangement lives in one method rather than in the constructor.
+        """
+        for dock in (
+            self.dock_board,
+            self.dock_schematic,
+            self.dock_library,
+            self.dock_nets,
+            self.dock_drc,
+            self.dock_3d,
+            self.dock_guide,
+        ):
+            dock.setFloating(False)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_library)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_nets)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_board)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_schematic)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_3d)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_guide)
+        self._arrange_docks()
+        for dock in (self.dock_board, self.dock_library, self.dock_nets, self.dock_drc):
+            dock.show()
+        # The two that cost something to fill stay shut, exactly as they do on a first run.
+        self.dock_3d.hide()
+        self.dock_guide.hide()
+        self._apply_default_sizes()
+        self._refresh_schematic_float_button()
+        self._sync_central_hint()
+        self.statusBar().showMessage(t("Panels put back where they started."), 6000)
 
     def _stamped(self, document: PerfDocument) -> PerfDocument:
         """The document as it goes to disk, with the host's timestamp on it.

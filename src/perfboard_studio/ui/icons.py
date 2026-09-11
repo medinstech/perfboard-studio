@@ -302,6 +302,112 @@ def _guide(p: QPainter) -> None:
         p.drawLine(QPointF(32, y), QPointF(68, y))
 
 
+def _board(p: QPainter) -> None:
+    """The board: a rectangle of substrate with a grid of holes punched through it.
+
+    Holes and not parts, because what distinguishes this panel from the schematic is the
+    perfboard itself -- the grid is the whole picture at 22 px, where a resistor is four
+    grey pixels.
+    """
+    p.drawRoundedRect(QRectF(12, 18, 76, 64), 6, 6)
+    p.setPen(_pen(ACCENT, 6))
+    for x in (30, 50, 70):
+        for y in (36, 50, 64):
+            p.drawEllipse(QPointF(x, y), 5, 5)
+
+
+def _schematic(p: QPainter) -> None:
+    """The sheet: a resistor zig-zag between two leads, which is the one symbol nobody
+    mistakes for anything else at this size."""
+    p.drawLine(QPointF(10, 50), QPointF(26, 50))
+    path = QPainterPath(QPointF(26, 50))
+    for i, y in enumerate((26, 74, 26, 74, 26, 74)):
+        path.lineTo(QPointF(32 + i * 8, y))
+    path.lineTo(QPointF(80, 50))
+    p.drawPath(path)
+    p.setPen(_pen(ACCENT, 7))
+    p.drawLine(QPointF(80, 50), QPointF(90, 50))
+
+
+def _sch_add(p: QPainter) -> None:
+    """Adding a part to the design: a symbol outline and a plus."""
+    p.drawRect(QRectF(14, 30, 46, 40))
+    p.drawLine(QPointF(6, 50), QPointF(14, 50))
+    p.drawLine(QPointF(60, 50), QPointF(68, 50))
+    p.setPen(_pen(ACCENT, 9))
+    p.drawLine(QPointF(80, 20), QPointF(80, 52))
+    p.drawLine(QPointF(64, 36), QPointF(96, 36))
+
+
+def _sch_place(p: QPainter) -> None:
+    """The design going onto the board: a symbol, an arrow, a grid of holes."""
+    p.drawRect(QRectF(8, 34, 28, 26))
+    p.drawRoundedRect(QRectF(60, 26, 34, 44), 4, 4)
+    for x in (70, 84):
+        for y in (38, 50, 62):
+            p.drawEllipse(QPointF(x, y), 3.5, 3.5)
+    p.setPen(_pen(ACCENT, 7))
+    p.drawLine(QPointF(38, 47), QPointF(54, 47))
+    _arrow_head(p, QPointF(56, 47), -12, -7)
+
+
+def _float(p: QPainter) -> None:
+    """A panel coming out of the window: a frame, and a smaller one lifted off it."""
+    p.drawRect(QRectF(10, 24, 50, 46))
+    p.setPen(_pen(ACCENT, 7))
+    p.drawRect(QRectF(44, 44, 46, 38))
+    p.drawLine(QPointF(44, 54), QPointF(90, 54))
+
+
+def _export(p: QPainter) -> None:
+    """A sheet and an arrow leaving it."""
+    p.drawRoundedRect(QRectF(12, 14, 46, 72), 5, 5)
+    p.setPen(_pen(ACCENT, 7))
+    p.drawLine(QPointF(52, 50), QPointF(90, 50))
+    _arrow_head(p, QPointF(92, 50), -16, -8)
+
+
+def _label(p: QPainter) -> None:
+    """A net label: the pointed tag a name is written in, on a stub of wire."""
+    p.drawLine(QPointF(8, 50), QPointF(24, 50))
+    path = QPainterPath(QPointF(24, 32))
+    path.lineTo(QPointF(78, 32))
+    path.lineTo(QPointF(94, 50))
+    path.lineTo(QPointF(78, 68))
+    path.lineTo(QPointF(24, 68))
+    path.closeSubpath()
+    p.drawPath(path)
+
+
+def _text(p: QPainter) -> None:
+    """A capital A, which is what every drawing tool marks its text tool with."""
+    path = QPainterPath(QPointF(20, 84))
+    path.lineTo(QPointF(50, 18))
+    path.lineTo(QPointF(80, 84))
+    p.drawPath(path)
+    p.drawLine(QPointF(32, 60), QPointF(68, 60))
+
+
+def _shape(p: QPainter) -> None:
+    """A rectangle and a circle: the two shapes an annotation is made of."""
+    p.drawRect(QRectF(10, 28, 48, 40))
+    p.setPen(_pen(ACCENT, 7))
+    p.drawEllipse(QPointF(70, 62), 22, 22)
+
+
+def _arrow(p: QPainter) -> None:
+    """The pointer: the tool that is no tool, which every editor needs a way back to."""
+    path = QPainterPath(QPointF(26, 12))
+    path.lineTo(QPointF(26, 82))
+    path.lineTo(QPointF(44, 64))
+    path.lineTo(QPointF(56, 90))
+    path.lineTo(QPointF(68, 84))
+    path.lineTo(QPointF(56, 58))
+    path.lineTo(QPointF(80, 54))
+    path.closeSubpath()
+    p.drawPath(path)
+
+
 #: Name -> drawing. The names are what the toolbar and the menus ask for.
 DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "save": _save,
@@ -323,6 +429,16 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "flip": _flip,
     "ratsnest": _ratsnest,
     "3d": _cube,
+    "board": _board,
+    "schematic": _schematic,
+    "sch-add": _sch_add,
+    "sch-place": _sch_place,
+    "float": _float,
+    "export": _export,
+    "label": _label,
+    "text": _text,
+    "shape": _shape,
+    "arrow": _arrow,
     "fit": _fit,
     "delete": _delete,
 }

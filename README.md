@@ -116,7 +116,7 @@ be soldered down on top of it, and a heat-sensitive part sitting too close to a 
 
 ## Draw the circuit first
 
-The board says where everything goes. The schematic panel (`Ctrl+5`) says *what you are
+The board says where everything goes. The schematic panel (`Ctrl+2`) says *what you are
 building* — and it is where you say it: **Add Part**, **Wire** two pins, **Place on the
 Board**. The circuit comes first and the layout second, which is how every other EDA tool
 works and is the order this one could not do until now.
@@ -203,7 +203,7 @@ checking tool the application depends on rather than an optional extra.
 
 ### A board from nothing
 
-Open the schematic panel (`Ctrl+5`) and draw the circuit: **Add Part** for each part,
+Open the schematic panel (`Ctrl+2`) and draw the circuit: **Add Part** for each part,
 **Wire** to click two pins together, then **Place on the Board**. From there
 **Place → Auto-place Board** (`Ctrl+Shift+A`), **`Ctrl+R`** to route, and
 **File → Export Build Guide** (`Ctrl+B`). No KiCad anywhere in that.

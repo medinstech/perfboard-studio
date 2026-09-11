@@ -793,16 +793,68 @@ Three things there are load-bearing:
 `--headless` writes the sheet too. It is the only place the writer, Qt's SVG renderer and a
 real board meet on all three operating systems, and the only export that needs no GL.
 
-**The sheet is a VIEW, not a panel.** `MainWindow.workspace` is a two-tab `QTabWidget` over
-the whole central area — Board and Schematic — and either can be pulled out into a window
-of its own (`_DetachedSheet`, `on_schematic_detach`). It was a dock on the right edge, which
-put a whole circuit into a third of the window and left the other two thirds showing a
-board nobody was looking at while they drew. The PAGE is reparented when it detaches rather
-than a second view being built: a copy would be a second thing to keep in step with the
-document, and the two would disagree the first time one missed a refresh. `show_schematic`
-and `schematic_is_showing` are the two questions the rest of the window asks; the tab still
-fills itself only while it is in front of somebody, the same rule the 3D panel and the
-build guide follow.
+### The window is panels all the way down
+
+**The board is a dock widget and so is the schematic**, exactly like the 3D view and the
+build guide. Everything else in the window could be moved, floated, stacked or closed; the
+two views this application exists for were the one pair nailed down — a central widget with
+a `QTabWidget` beside it — so "board left, sheet right" was not something a user could ask
+for, and wanting both at once meant a second top-level window (`_DetachedSheet`) built by a
+button and handed back on close. All of that is what a `QDockWidget` already is, and none
+of it could be undone by dragging.
+
+Six things follow, and each has a test:
+
+- **The central widget is capped to nothing** (`_sync_central_hint`, `UNCAPPED`). QMainWindow
+  surrounds a central widget with dock areas, so for the panels to have the whole window
+  there must be nothing in the middle; a maximum of `(0, 0)` is the only way to say that.
+  The cap comes off when every view panel is shut, and what shows then is the one screen in
+  this application that would otherwise say nothing at all.
+- **Every split comes before every tabify** in `_arrange_docks`. Qt's `splitDockWidget`,
+  handed a dock that is already in a tab group, adds the second one to that GROUP instead of
+  splitting — so the DRC panel asked for underneath the board arrived as a third tab behind
+  it: present, checked and invisible.
+- **DRC opens under the board, not across the bottom of the window.** A window with no
+  central widget hands every leftover pixel of HEIGHT to the bottom dock area, and no
+  `resizeDocks`, size hint or size policy takes it back: a findings list with four rows in
+  it opened 556 px tall and squeezed the board into 302.
+- **`_apply_default_sizes` caps and lets go**, from `showEvent` and through two turns of the
+  event loop, because `resizeDocks` does nothing useful here — it divides the room the
+  window HAS, and a window that is not on screen yet has none. A maximum is honoured at any
+  moment; the splitters move to it; and the arrangement is photographed with `saveState`
+  and put back afterwards, because a dock that is the only thing in its area springs
+  straight back when the cap comes off.
+- **A tabbed panel drops its own title bar** (`_sync_dock_titlebars`). Qt draws both the tab
+  bar for the group and the current dock's title under it — the same word twice, on two
+  rows, above a view that wanted the height. Dragging the tab moves the panel and the
+  toolbar button closes it, so nothing is lost; the title bar comes back the moment the
+  panel is pulled out beside another and is the only handle it has.
+- **`WINDOW_STATE_VERSION` is bumped when a dock is added or removed.** `restoreState` puts
+  back the docks it knows and leaves the ones it has never heard of wherever the constructor
+  put them, which landed the board and the sheet off the side of the window for anybody with
+  a saved layout. Refusing the old state costs one person one rearranged window, once.
+
+**`schematic_is_showing` needs `_raised_dock`, which a tab widget answered for free.** The
+panel fills itself only while it is in front of somebody, the same rule the 3D panel and the
+build guide follow — and a dock stacked BEHIND another is not `isHidden`, so that test alone
+would have the sheet rebuilding itself behind the board. Measuring it (`visibleRegion`) is
+not an option either: it reads "behind" for every panel in a window nobody has shown, which
+is every window in the test suite. So `_on_view_dock_visibility` records what Qt says came
+forward, and that is the answer.
+
+The update strip is a dock too, in the top area, with no title bar and no features
+(`_build_update_strip`). It was a band inside the central widget, which is where the board
+used to be. It is **not** a `QToolBar`, which was the first attempt and is worth writing
+down: a toolbar lays its own widgets out, and one with no geometry yet — a window that has
+not been shown, which is every window in the test suite — decides the strip does not fit and
+HIDES it, in the middle of the call that was putting it up. `UpdateBar.visibilityChanged`
+exists for the strip to follow, and it is emitted from `setVisible` rather than `showEvent`
+because Qt sends no show event to a widget whose parent is hidden.
+
+**The schematic panel's tools are a `QToolBar`, and that is a layout fix.** Nine push buttons
+in a row gave the panel a minimum width of 1362 px — a panel inherits its minimum from
+whatever is in it — so the window could not be made narrower than the row and nothing in the
+layout could be resized at all.
 
 `viewsch` paints the grid in `drawBackground` at `schematic.GRID_MM`, not as items: a line
 per square on a 460 mm sheet is nine thousand things to hold, transform and hit-test for
@@ -815,9 +867,9 @@ board is the drop target (`BoardView.partDropped`), and the WINDOW decides which
 is — `part.place` for a part in the design, `component.move` for one already down, the same
 split `on_schematic_remove` makes. The constant lives in `view2d` because that is the side
 that receives it and already owns the vocabulary a drop lands in (`screen_to_hole`), and
-because the import goes the way that does not make a cycle. The workspace's tab bar takes
-`setChangeCurrentOnDrag`, which is what lets a drag cross from the Schematic tab to the
-Board tab at all.
+because the import goes the way that does not make a cycle. With the two views as panels
+a drag can simply cross from one to the other when they sit side by side; stacked, the dock
+area's tab bar is the thing to drag over.
 
 **A right-click on the sheet edits the CIRCUIT, because the drawing has nothing to edit.**
 `MainWindow.sheet_menu` builds one of three menus from what is under the pointer — a symbol

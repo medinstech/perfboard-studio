@@ -454,12 +454,34 @@ TURKISH: Mapping[str, str] = {
     # -- the schematic, in the window ------------------------------------------
     "Schematic": "Şema",
     "Show &Schematic": "&Şemayı Göster",
-    "The netlist drawn as a circuit, generated from the document. Clicking a "
-    "symbol selects that part on the board; clicking a wire highlights its net.": (
-        "Netlist'in devre olarak çizimi; belgeden üretilir. Bir sembole tıklamak o parçayı "
-        "kart üzerinde seçer, bir hatta tıklamak ait olduğu neti vurgular."
+    "The circuit (Ctrl+2). Clicking a symbol selects that part on the board; "
+    "clicking a wire highlights its net.": (
+        "Devre (Ctrl+2). Bir sembole tıklamak o parçayı kart üzerinde seçer, bir hatta "
+        "tıklamak ait olduğu neti vurgular."
     ),
-    "Fit the Sheet": "Sayfayı Sığdır",
+    "Show &Board": "&Kartı Göster",
+    "The board itself (Ctrl+1). A panel like every other one: drag it beside "
+    "the schematic, or out of the window altogether.": (
+        "Kartın kendisi (Ctrl+1). Diğer her panel gibi bir panel: şemayla yan yana "
+        "sürükleyin ya da tamamen pencerenin dışına çıkarın."
+    ),
+    "&Reset the Panel Layout": "Panel Düzenini Sıfı&rla",
+    "Put every panel back where it opens on a new installation. A window "
+    "rearranged into a corner has no other way back.": (
+        "Her paneli yeni bir kurulumda açıldığı yere geri koyar. Bir köşeye sıkıştırılmış "
+        "bir pencerenin başka dönüş yolu yoktur."
+    ),
+    "Panels put back where they started.": "Paneller başlangıç yerlerine kondu.",
+    "Every view is closed. Board (Ctrl+1) and Schematic (Ctrl+2) are on the "
+    "toolbar, beside 3D — and each of them can be dragged anywhere in "
+    "the window, or out of it.": (
+        "Bütün görünümler kapalı. Kart (Ctrl+1) ve Şema (Ctrl+2) araç çubuğunda, 3B'nin "
+        "yanında — ve her biri pencerenin herhangi bir yerine ya da dışına "
+        "sürüklenebılir."
+    ),
+    # The strip the update check puts across the top. Its title is never drawn -- the panel
+    # has no title bar -- but it is what Qt calls the dock, so it is named like one.
+    "Update": "Güncelleme",
     "Export…": "Dışa Aktar…",
     "Write the sheet beside the document as SVG, PDF and PNG. All three are "
     "drawn from the same file, so they cannot disagree about the circuit.": (
@@ -525,9 +547,8 @@ TURKISH: Mapping[str, str] = {
         "kaydeder."
     ),
     # -- the schematic as a view of its own, not a panel down the side ---------
-    "&Schematic": "&Şematik",
     # "Board" is already in this catalogue, as the Board Setup dialog's own label.
-    "Arrange the Sheet": "Sayfayı Düzenle",
+    "Arrange": "Diz",
     "Forget every symbol you have dragged and lay the sheet out again. Drag a "
     "symbol to another cell to place it yourself; the wires still route "
     "themselves around it.": (
@@ -538,14 +559,13 @@ TURKISH: Mapping[str, str] = {
     "Nothing on this sheet has been moved by hand.": (
         "Bu sayfada elle taşınmış bir şey yok."
     ),
-    "Open in a Window": "Ayrı Pencerede Aç",
-    "Back to a Tab": "Sekmeye Geri Al",
+    "Float the Panel": "Paneli Ayır",
+    "Back to the Window": "Pencereye Geri Al",
     "Put the sheet in a window of its own, so it and the board can sit side by "
-    "side. Closing that window brings it back as a tab.": (
-        "Sayfayı kendi penceresine alır, böylece kartla yan yana durabilirler. O "
-        "pencereyi kapatmak sayfayı sekmeye geri getirir."
+    "side. Dragging its title bar does the same, and so does dropping it back.": (
+        "Sayfayı kendi penceresine alır, böylece kartla yan yana durabilirler. Başlık "
+        "çubuğundan sürüklemek de aynı işi yapar, geri bırakmak da."
     ),
-    "Schematic — {name}": "Şematik — {name}",
     # -- editing the circuit from the sheet, by right-clicking the thing that is wrong -
     # Three menus, chosen by what the pointer is over. The accelerators are checked as
     # three groups in tests/test_i18n.py, since the pin entry shares the symbol's menu.

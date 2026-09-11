@@ -5134,40 +5134,76 @@ def test_a_dragged_part_carries_its_reference_in_a_format_of_its_own() -> None:
     _close(window)
 
 
-def test_the_schematic_is_a_view_of_its_own_not_a_panel_down_the_side() -> None:
-    """It was a dock on the right edge, which put a whole circuit into a third of the
-    window and left the other two thirds showing a board nobody was looking at. A
-    schematic and a layout are the two things this application is for."""
+def test_the_board_and_the_sheet_are_both_panels() -> None:
+    """They were a central widget and a tab beside it -- the one pair in the window that
+    could not be arranged. Side by side, stacked, floated or closed is now a drag, and Qt
+    remembers wherever it was left."""
     window = _window_on(_golden_document("ne555"))
 
-    assert window.workspace.count() == 2
-    assert window.workspace.widget(0) is window.view
-    assert window.workspace.widget(1) is window.schematic_page
-    # ...and the board is what it opens on.
-    assert window.workspace.currentWidget() is window.view
+    assert window.dock_board.widget() is window.view
+    assert window.dock_schematic.widget() is window.schematic_page
+    # Stacked on one another to start with, so the pair opens looking like the tabs it
+    # replaces...
+    assert window.dock_schematic in window.tabifiedDockWidgets(window.dock_board)
+    # ...and the board is the one in front.
+    assert window.schematic_is_showing() is False
     _close(window)
 
 
-def test_the_sheet_detaches_into_a_window_and_comes_back() -> None:
-    """Somebody who genuinely wants both at once gets two real windows to put side by
-    side. The PAGE is reparented rather than a second view built: a copy would be a second
-    thing to keep in step with the document, and the two would disagree the first time one
-    of them missed a refresh."""
+def test_a_tabbed_panel_drops_its_own_title_bar() -> None:
+    """Qt draws both: the tab bar for the group, and under it the current dock's title --
+    the same word twice, on two rows, above a view that wanted the height."""
+    window = _window_on(_golden_document("ne555"))
+
+    assert window.dock_board.titleBarWidget() is not None
+
+    window.dock_schematic.setFloating(True)
+    window._on_view_dock_moved()
+
+    # ...and back the moment it is the only handle the panel has.
+    assert window.dock_schematic.titleBarWidget() is None
+    _close(window)
+
+
+def test_the_sheet_floats_into_a_window_and_comes_back() -> None:
+    """Somebody who wants both at once gets two real windows to put side by side. It is
+    the dock's own state and nothing else: the panel used to be reparented into a widget
+    built for the purpose and handed back on close, none of which could be undone by
+    dragging."""
     window = _open_schematic(_golden_document("ne555"))
     view = window.schematic_view
 
-    window.on_schematic_detach()
+    window.on_schematic_float()
 
-    assert window._schematic_window is not None
-    assert window.workspace.count() == 1  # ...the board, alone
+    assert window.dock_schematic.isFloating()
     assert window.schematic_view is view  # ...and the same view, moved
     assert window.schematic_is_showing()
 
-    window._schematic_window.close()
+    window.on_schematic_float()
 
-    assert window._schematic_window is None
-    assert window.workspace.count() == 2
-    assert window.workspace.currentWidget() is window.schematic_page
+    assert not window.dock_schematic.isFloating()
+    assert window.schematic_is_showing()
+    _close(window)
+
+
+def test_closing_every_view_says_which_button_brings_one_back() -> None:
+    """A dock can be closed and two of the closable ones are now the board and the sheet,
+    so a blank grey window is reachable in one click -- the single screen in this
+    application where nothing at all says what to do."""
+    window = _window_on(_golden_document("ne555"))
+    hint = window.centralWidget()
+
+    assert hint is not None and hint.maximumSize().width() == 0
+
+    for dock in (window.dock_board, window.dock_schematic, window.dock_3d, window.dock_guide):
+        dock.hide()
+
+    assert hint.maximumSize().width() > 0
+    assert "Ctrl+1" in window.central_hint.text()
+
+    window.show_board()
+
+    assert hint.maximumSize().width() == 0
     _close(window)
 
 

@@ -419,6 +419,14 @@ class UpdateBar(QFrame):
     #: to skip: the file is already downloaded, or the download failed.
     closeRequested = Signal()
     revealRequested = Signal()
+    #: Up or down. The strip puts ITSELF up and down as the check moves through its states,
+    #: and whatever contains it has to follow -- see ``main._build_update_strip``, where the
+    #: whole toolbar goes when the strip does.
+    #:
+    #: Emitted from ``setVisible`` rather than from ``showEvent``, which is the trap: Qt
+    #: sends no show event to a widget whose parent is hidden, so a strip put up while its
+    #: toolbar was down announced nothing and the toolbar stayed down forever.
+    visibilityChanged = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -482,6 +490,10 @@ class UpdateBar(QFrame):
             self.act_close,
         ):
             row.addWidget(button)
+
+    def setVisible(self, visible: bool) -> None:
+        super().setVisible(visible)
+        self.visibilityChanged.emit(visible)
 
     # -- states --------------------------------------------------------------
 

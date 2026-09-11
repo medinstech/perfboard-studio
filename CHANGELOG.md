@@ -22,6 +22,23 @@ closed without a bump.
 
 ### Added
 
+- **The board is a panel now, and so is the schematic.** Everything else in the window
+  could be moved, floated, stacked or closed; the two views this application exists for
+  were the one pair nailed down — a central widget with a tab beside it — so "board on the
+  left, sheet on the right" was not something anybody could ask for, and wanting both at
+  once meant a second window built by a button. They are dock widgets like the 3D view and
+  the build guide: side by side is a drag, a window of its own is the title bar's float
+  button, stacked is a drag onto the other one, and Qt remembers whatever it was left as.
+  The toolbar carries a button per panel beside 3D, and `View ▸ Reset the Panel Layout`
+  puts everything back where a new installation opens it.
+
+  The panel shortcuts are renumbered around the four views of the design: `Ctrl+1` Board,
+  `Ctrl+2` Schematic, `Ctrl+3` 3D, `Ctrl+4` Build Guide, then `Ctrl+5` Parts, `Ctrl+6` Nets
+  and `Ctrl+7` DRC / LVS. Saved window layouts from before this are ignored once, on
+  purpose: `restoreState` puts back the docks it knows and leaves the ones it has never
+  heard of wherever the constructor put them, which landed the two new panels off the side
+  of the window.
+
 - **A tactile switch is drawn as a pushbutton and a relay as a coil and a contact block**,
   instead of both being boxes with numbered pins. Both shapes come from what the PACKAGE
   says about itself — a 6 mm switch's four legs are two bonded pairs, and a relay's winding
@@ -132,6 +149,22 @@ closed without a bump.
   supplier actually stocks, and only the family the user is already on is offered.
 
 ### Changed
+
+- **The DRC / LVS panel opens under the board rather than across the bottom of the
+  window**, which is a layout fact rather than a preference. A window whose central widget
+  is capped to nothing — which is what gives the panels the whole of it — hands every
+  leftover pixel of height to the bottom dock area: a findings list with four rows in it
+  opened 556 px tall and squeezed the board into 302, and no `resizeDocks`, size hint or
+  size policy would take it back. It also puts the findings directly under the thing they
+  are findings about.
+
+- **The schematic panel's tools are a toolbar**, not a row of nine push buttons. That row
+  gave the panel a minimum width of 1362 px — a panel inherits its minimum from whatever is
+  in it — so the window could not be made narrower than the row and nothing in the layout
+  could be resized at all.
+
+- **The update strip is a panel across the top of the window** rather than a band inside
+  the central widget, which is where the board used to be.
 
 - **`PERFBOARD_STUDIO_SIMPLE_3D=1` turns off image-based lighting and contact shadows.**
   They are the only two things in the 3D view that ask a graphics driver for anything

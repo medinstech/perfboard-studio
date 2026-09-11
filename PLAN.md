@@ -68,7 +68,7 @@ tek dizin, kendi lisansıyla.
 yerleştirilir** — diğer her EDA aracının çalıştığı sıra. `doc.parts` karta konmamış
 parçaları tutar (`part.add` / `part.update` / `part.delete` / `part.place`,
 `component.unplace`), `net.connect` bir parçanın kart üzerinde olmasını hiç istemiyordu,
-ve şema paneli (`Ctrl+5`) bu ikisini bir araya getiriyor. D3'ün yazmamaya karar verdiği
+ve şema paneli (`Ctrl+2`) bu ikisini bir araya getiriyor. D3'ün yazmamaya karar verdiği
 şey hâlâ yazılmadı ve yazılmayacak: **geometrik şema editörü** — sembolü sürüklediğiniz,
 telin köşesini kendiniz kırdığınız, sayfa koordinatını dosyaya yazan tür. Sayfa her
 seferinde `schematic.py` tarafından belgeden türetiliyor; saklanan hiçbir çizim koordinatı

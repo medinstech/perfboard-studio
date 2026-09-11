@@ -118,7 +118,7 @@ duran ısıya duyarlı bir parça.
 
 ## Önce devreyi çizin
 
-Kart neyin nereye gideceğini söyler. Şema paneli (`Ctrl+5`) *ne inşa ettiğinizi* söyler —
+Kart neyin nereye gideceğini söyler. Şema paneli (`Ctrl+2`) *ne inşa ettiğinizi* söyler —
 ve onu söylediğiniz yer de burasıdır: **Parça Ekle**, iki pini **Bağla**, **Kart Üzerine
 Yerleştir**. Önce devre, sonra yerleşim; diğer her EDA aracının çalıştığı sıra ve bu aracın
 şimdiye kadar yapamadığı şey.
@@ -205,7 +205,7 @@ ek değil, uygulamanın dayandığı bir kontrol aracı.
 
 ### Sıfırdan bir kart
 
-Şema panelini açın (`Ctrl+5`) ve devreyi çizin: her parça için **Parça Ekle**, iki pini
+Şema panelini açın (`Ctrl+2`) ve devreyi çizin: her parça için **Parça Ekle**, iki pini
 birleştirmek için **Bağla**, sonra **Kart Üzerine Yerleştir**. Oradan **Yerleştir →
 Otomatik Yerleştir** (`Ctrl+Shift+A`), route için **`Ctrl+R`**, ardından **Dosya → Montaj
 Rehberini Dışa Aktar** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
