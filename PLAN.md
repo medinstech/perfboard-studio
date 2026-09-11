@@ -70,13 +70,18 @@ genişledi: **devre önce çizilir, kart sonra yerleştirilir** — diğer her E
 `part.delete` / `part.place`, `component.unplace`), `net.connect` bir parçanın kart üzerinde
 olmasını hiç istemiyordu, ve şema paneli (`Ctrl+2`) bu ikisini bir araya getiriyor.
 
-İkinci yarısı — **geometrik şema editörü yazılmayacak** — geri alındı, ve gerekçesi kararın
-kendi gerekçesini tartmasıydı. D3 "bu bir yıllık iş ve çıktısını bu araç zaten KiCad'den
-kabul ediyor" diyordu; tartmadığı şey şuydu: **devreyi yakalayabilen ama ÇİZEMEYEN bir araç,
-insanı zaten KiCad'e geri gönderir.** Sembol sürüklenir, çeyrek çeyrek döndürülür, aynalanır;
-tel pinden pine elle çekilir; tel çekilmeyen pin **ada göre** bağlanır — hangi şemanın
-sayfayı boydan boya kesen bir reset hattını çizdiği yerine yaptığı şey; ve çizimin üzerine
-metin, kutu, çizgi, daire konabilir.
+İkinci yarısı — **şema editörü yazma yükü alınmayacak** — geri alındı. D3'ün tabloda yazan
+gerekçesi buydu ve tek satırdı; "çıktısını bu araç zaten KiCad'den alıyor" cümlesi sonradan
+CLAUDE.md'de eklenmiş bir yorumdur, kararın kendisinde geçmez, ve **yanlıştır**: KiCad'den
+alınan şey bir netlist, yani bir bağlantı listesi. Netlist'in geometrisi yoktur — sayfayı
+bu araç zaten kendisi üretmek zorundaydı, `schematic.py` bunun için var. Dolayısıyla ortada
+"zaten KiCad'den gelen bir şema" hiç olmadı; olan şey, çizilemeyen bir şemaydı.
+
+Alınan gerçek yük de bir yıl değildi: çizim geometrisi netlist'in DIŞINDA tutulduğu için
+(çizilen telin net kimliği yok, iki ucunu tutan net neyse odur) LVS, router, placer, rehber
+ve kart tarafında tek satır değişmedi. Sembol sürüklenir, çeyrek çeyrek döndürülür,
+aynalanır; tel pinden pine elle çekilir; tel çekilmeyen pin **ada göre** bağlanır; ve çizimin
+üzerine metin, kutu, çizgi, daire konabilir.
 
 **İki tür sayfa var ve hangisi olduğuna belge karar veriyor.** `doc.sheet` boşsa çizimin
 tamamı eskisi gibi türetilir — semboller hücrelerde, teller yalnızca aralarındaki

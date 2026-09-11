@@ -681,10 +681,13 @@ from a test that hands it a document; two sheets are frozen whole in
 
 ### Two kinds of sheet, and the document decides which
 
-**PLAN.md D3 is reversed, and only half of it.** D3 declined to write a geometric schematic
-editor — symbols you position freely, wires you route by hand — because that is a year of
-work whose output this tool already accepts from KiCad. What it did not weigh is that a tool
-which can capture a circuit and cannot DRAW one sends people back to KiCad anyway.
+**PLAN.md D3 is reversed, and only half of it.** What D3 actually says is one table row —
+"netlist import plus visual editing; no cost of writing a schematic editor, and the power of
+LVS". The "its output already comes from KiCad" argument is a later gloss and it was wrong:
+what comes from KiCad is a NETLIST, which has no geometry at all, which is why `schematic.py`
+had to derive a sheet in the first place. There was never a drawing arriving from anywhere.
+The cost was real but it was not a year: the drawing's geometry is kept OUT of the netlist,
+so nothing downstream of `doc.nets` changed by a line.
 
 So `build_schematic` has two paths, chosen by whether `doc.sheet` is empty:
 
