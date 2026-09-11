@@ -1226,6 +1226,46 @@ def test_it_moves_parts_off_a_run_it_cannot_separate() -> None:
                 if p.code == "cannot-separate"]
 
 
+def test_what_a_placement_costs_to_build_ignores_the_copper_already_on_it() -> None:
+    """EVERY ARRANGEMENT HAS TO BE ASKED THE SAME QUESTION, and the question is "what would
+    it cost to BUILD this" -- which is only an answer if they all start from a bare board.
+
+    They did not. The baseline is the user's own document, whose copper still fits its own
+    parts, so the router found nothing left to do; every candidate has moved those parts, so
+    its copper is stale and the router priced the whole board again. On ``atmega328-relay``
+    with one part shoved into a corner the baseline scored 119 against 936-959 for four
+    arrangements that beat it on every other measure, and the result was that **autoplace
+    could never move anything on a board that had been routed** -- which is every board
+    anybody would think to ask about.
+    """
+    doc = golden_document("dense")
+    assert doc.conductors, "this fixture has to carry copper for the test to mean anything"
+    # The registry, not this file's handful of stand-ins: the point is a realistic board
+    # whose nets the router has real work to do on.
+    registry = footprint_lookup()
+
+    routed = _build_cost(doc, registry)
+    bare = _build_cost(dataclasses.replace(doc, conductors=()), registry)
+
+    assert routed == bare
+    assert routed[1] > 0, "a board with connections to make cannot cost nothing to build"
+
+
+def test_an_unchanged_placement_says_what_it_compared() -> None:
+    """Ten seconds of work reported as "unchanged" is indistinguishable from a broken
+    button. The same ten seconds with the two numbers beside each other is an answer, and
+    one somebody can disagree with by asking for another arrangement."""
+    doc = golden_document("dense")
+
+    plan = plan_placement(
+        doc, footprint_lookup(), PlacementOptions(seed=3, iterations=200, restarts=2)
+    )
+
+    if plan.is_empty and plan.route_runner_up is not None:
+        assert "cheaper to build than the board you have" in describe(plan)
+        assert f"{plan.route_cost:.0f}" in describe(plan)
+
+
 def test_a_stripboard_candidate_is_judged_by_the_planner_that_suits_it() -> None:
     """A stripboard is not routed by autoroute.py at all: its copper is subtracted, and a
     wire on its solder side shorts every strip it crosses. Scoring one with the

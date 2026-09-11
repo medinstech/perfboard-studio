@@ -244,6 +244,17 @@ closed without a bump.
 
 ### Fixed
 
+- **Autoplace could never move anything on a board that had already been routed.** It
+  scored each arrangement by routing it — but the board you have keeps its copper, so the
+  router found nothing left to do and priced it at almost nothing, while every alternative
+  had to be routed from scratch. On the ATmega example with one part shoved into a corner
+  the comparison was 119 against 936. Arrangements are now all costed from a bare board,
+  which is the only way the question "what would this cost to build" has one answer.
+
+- **"Placement unchanged" now says what it compared** — what the board you have would cost
+  to build against the best arrangement found — instead of leaving you to guess whether the
+  button worked.
+
 - **Moving a part and then autorouting could kill the application.** Not reliably — about
   half the time, and only in a real window. `_run_planner` runs the placer and the router
   on a worker thread while the UI thread pumps Qt, and Python's cyclic garbage collector

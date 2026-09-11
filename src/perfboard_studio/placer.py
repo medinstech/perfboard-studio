@@ -409,6 +409,11 @@ class PlacementPlan:
     #: Connections the planner could not make on this placement. The first thing a
     #: candidate is judged on, because a board that cannot be finished is not a board.
     route_unrouted: int | None = None
+    #: What the best arrangement that LOST would have cost to build. Kept for one reason:
+    #: when the winner is the board the user already has, "placement unchanged" on its own
+    #: reads as a tool that did not work. The two numbers beside each other say that it
+    #: looked, and what it decided.
+    route_runner_up: float | None = None
 
     def payload(self) -> MoveComponentsPayload:
         """The one command that commits this plan, as a single undo step."""
@@ -445,9 +450,20 @@ class PlacementPlan:
 def describe(plan: PlacementPlan) -> str:
     """One line for a status bar. Leads with the estimate, not the cost function."""
     if plan.is_empty:
+        # WHY it is unchanged, when the comparison can say. Ten seconds of work reported as
+        # "unchanged" is indistinguishable from a broken button; the same ten seconds
+        # reported as "nothing found would be cheaper to build than what you have, 796
+        # against 845" is an answer, and it is one somebody can disagree with by asking for
+        # another arrangement.
+        because = ""
+        if plan.route_cost is not None and plan.route_runner_up is not None:
+            because = (
+                f" — nothing found would be cheaper to build than the board you have "
+                f"({plan.route_cost:.0f} against {plan.route_runner_up:.0f})"
+            )
         return (
             f"Placement unchanged ({plan.movable} movable part(s), "
-            f"{plan.iterations} moves tried)"
+            f"{plan.iterations} moves tried){because}"
         )
     turned = sum(1 for c in plan.changes if c.rotated)
     parts = [f"{len(plan.changes)} part(s) placed"]
@@ -2349,7 +2365,7 @@ def _strip_build_cost(plan: StripboardPlan, board: Board) -> float:
 
 
 def _build_cost(doc: PerfDocument, lookup: FootprintLookup) -> tuple[int, float]:
-    """(connections this placement cannot finish, what finishing it would cost).
+    """(connections this placement cannot finish, what BUILDING it would cost).
 
     The two numbers a candidate is judged on, from the planner that suits the board.
     Which planner that is, is not a detail: a stripboard is not routed by ``autoroute.py``
@@ -2357,7 +2373,20 @@ def _build_cost(doc: PerfDocument, lookup: FootprintLookup) -> tuple[int, float]
     side shorts every strip it crosses -- so scoring one with the pad-per-hole router
     ranks candidates by a build process nobody is going to follow, and would happily
     prefer a board ``striproute`` then refuses to wire.
+
+    **THE COPPER ALREADY ON THE BOARD IS TAKEN OFF FIRST, AND THAT IS THE WHOLE POINT.**
+    Every arrangement here is asked one question -- what would it cost to build this? -- and
+    it is only an answer if all of them are asked it from the same starting board. They were
+    not: the baseline is the user's own document, whose copper still fits its own parts, so
+    the router found nothing left to do and returned almost nothing; every candidate has
+    moved those parts, so its copper is stale and the router priced the whole board again.
+
+    Measured on ``atmega328-relay`` with one part shoved into a corner: the baseline scored
+    119 against 936-959 for four arrangements that were all better on every other measure.
+    The result was that **autoplace could never move anything on a board that had been
+    routed** -- which is every board anybody would think to ask.
     """
+    doc = replace(doc, conductors=())
     if is_stripboard(doc.board):
         plan = plan_stripboard(doc, lookup)
         # Every problem, not only the inseparable pairs: a pin the planner could not find
@@ -2412,21 +2441,31 @@ def _pick_best(
     if len(shortlist) < 2:
         return legal_first[0]
 
-    best: PlacementPlan | None = None
-    best_key: tuple[int, int, float, float] | None = None
+    scored: list[tuple[tuple[int, int, float, float], PlacementPlan]] = []
     for plan in shortlist:
         unfinished, cost = _build_cost(plan.document, lookup)
-        key = (
-            0 if plan.after.is_legal else 1,
-            unfinished,
-            cost,
-            plan.after.total(options.weights),  # Deterministic tie-break.
+        scored.append(
+            (
+                (
+                    0 if plan.after.is_legal else 1,
+                    unfinished,
+                    cost,
+                    plan.after.total(options.weights),  # Deterministic tie-break.
+                ),
+                plan,
+            )
         )
-        if best_key is None or key < best_key:
-            best, best_key = plan, key
-
-    assert best is not None and best_key is not None
-    return replace(best, route_cost=best_key[2], route_unrouted=best_key[1])
+    # Sorted on the KEY alone, and stably, so two arrangements that cost the same to build
+    # keep the shortlist's own order rather than being compared as objects.
+    scored.sort(key=lambda item: item[0])
+    best_key, best = scored[0]
+    runner_up = scored[1][0][2] if len(scored) > 1 else None
+    return replace(
+        best,
+        route_cost=best_key[2],
+        route_unrouted=best_key[1],
+        route_runner_up=runner_up,
+    )
 
 
 def _settle_winner(

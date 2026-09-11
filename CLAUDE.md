@@ -385,6 +385,25 @@ Its weight is set from a measurement rather than from taste — most of the tidi
 (1030.2 → 1030.9 of routed cost for 6.20 → 4.57 lanes over ten fixtures and three seeds),
 and past ~1.5 the term starts buying alignment with wire.
 
+**`_build_cost` strips the board's copper before scoring, and that is the whole meaning of
+the comparison.** Every arrangement is asked one question — what would it cost to BUILD
+this — and it is only an answer if all of them are asked it from the same starting board.
+They were not: the baseline is the user's own document, whose copper still fits its own
+parts, so the router found nothing left to do and returned almost nothing, while every
+candidate has moved those parts, so its copper is stale and the router priced the whole
+board again. On `atmega328-relay` with one part shoved into a corner the baseline scored
+119 against 936–959 for four arrangements that beat it on every other measure. **Autoplace
+could therefore never move anything on a board that had been routed** — which is every
+board anybody would think to ask about. Pinned by
+`test_what_a_placement_costs_to_build_ignores_the_copper_already_on_it`.
+
+**An unchanged placement says what it compared.** `PlacementPlan.route_runner_up` carries
+what the best REJECTED arrangement would have cost, for one reason: ten seconds of work
+reported as "Placement unchanged" is indistinguishable from a broken button, and the same
+ten seconds reported as "nothing found would be cheaper to build than the board you have
+(796 against 845)" is an answer somebody can disagree with by asking for another
+arrangement.
+
 **Doing nothing is a candidate in `_pick_best`.** A constructive placement is not descended
 from the user's board, so nothing else would stop it winning the routing comparison while
 still being worse than leaving the board alone.
