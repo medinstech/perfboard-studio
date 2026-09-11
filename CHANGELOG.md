@@ -48,6 +48,11 @@ closed without a bump.
   keeps LVS, the router, the placer, the build guide and the board from having to learn
   anything about geometry.
 
+  Right-clicking a wire offers **Rub Out This Wire**, which takes the line off the sheet
+  and leaves the pins connected — the net says so by name instead. It is a separate entry
+  from Delete Net on purpose: deleting the picture of a join is not the same decision as
+  taking a pin off one.
+
   `.perf` files are untouched by all of this unless somebody draws on the sheet: `sheet`,
   `sheetWires` and `sheetNotes` are omitted when empty, so all fifteen golden fixtures
   serialize to exactly the bytes they did before and `DOCUMENT_FORMAT_VERSION` has still

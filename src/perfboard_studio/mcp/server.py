@@ -189,8 +189,9 @@ def render_schematic(px_per_mm: int = 8) -> Image:
     wiring to check that what you connected is the circuit you meant — the board renders
     show copper, which is what the circuit was turned into, not what it is.
 
-    The sheet is generated from the document every time; nothing about it is stored, so
-    there is no layout to keep in step and no way for it to disagree with the netlist.
+    The sheet is generated from the document every time unless somebody has drawn on it in
+    the application, and either way there is no second answer to what is connected: what a
+    hand-drawn wire JOINS is still whichever net holds both of its ends.
     """
     png, meta = session.render_schematic(px_per_mm=px_per_mm)
     log.info(

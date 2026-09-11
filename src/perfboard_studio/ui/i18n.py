@@ -654,6 +654,11 @@ TURKISH: Mapping[str, str] = {
     "&Disconnect {pin} from {net}": "{pin} pinini {net} netinden A&yır",
     "Rename Part": "Parçayı Yeniden Adlandır",
     "New designator": "Yeni etiket",
+    "&Rub Out This Wire": "Bu Teli &Sil",
+    "Take the line off the sheet. The pins stay connected — the net says so by "
+    "name instead.": (
+        "Çizgiyi sayfadan kaldırır. Pinler bağlı kalır — net bunu artık adıyla söyler."
+    ),
     "Re&name Net…": "Neti Yeniden Adlandı&r…",
     "A new name. The pins on it, and any copper laid for it, stay.": (
         "Yeni bir ad. Üzerindeki pinler ve onun için döşenmiş bakır yerinde kalır."

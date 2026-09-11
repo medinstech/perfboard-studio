@@ -6225,6 +6225,39 @@ def test_drawing_a_wire_on_a_sheet_nobody_has_touched_fixes_the_layout_first() -
     _close(window)
 
 
+def test_a_drawn_wire_can_be_rubbed_out_without_disconnecting_anything() -> None:
+    """A wire is how a join was DRAWN. Deleting the picture of a join is not the same
+    decision as taking a pin off a net -- rubbed out, the two pins stay connected and the
+    sheet goes back to saying so by name."""
+    from perfboard_studio.model import Point2
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    window._on_sheet_wire_drawn("R1", "2", "R2", "1", [(0.0, 0.0), (10.16, 0.0)])
+    window._refresh_schematic_panel()
+    wire = window.bus.document.sheet_wires[0]
+    nets_before = window.bus.document.nets
+
+    # The menu finds it by where the click landed, the same distance the panel picks with.
+    assert window._drawn_wire_at(Point2(x=wire.path[0].x, y=wire.path[0].y)) == wire
+    window._rub_out_wire(wire)
+
+    assert window.bus.document.sheet_wires == ()
+    assert window.bus.document.nets == nets_before
+    _close(window)
+
+
+def test_a_click_on_bare_sheet_is_offered_no_wire_to_rub_out() -> None:
+    from perfboard_studio.model import Point2
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+
+    assert window._drawn_wire_at(Point2(x=999.0, y=999.0)) is None
+    _close(window)
+
+
 def test_a_note_is_put_on_the_sheet_and_taken_off_it() -> None:
     window = _blank_window()
     _add(window, "R1", "r-axial-3")

@@ -121,6 +121,7 @@ from perfboard_studio.commands import (
     DeleteNetPayload,
     DeletePartPayload,
     DeleteSheetNotesPayload,
+    DeleteSheetWiresPayload,
     DisconnectPinsPayload,
     DrawSheetWirePayload,
     ImportNetlistPayload,
@@ -265,6 +266,22 @@ from .view2d import (
     next_reference,
 )
 from .viewsch import SchematicView, SheetTool
+
+#: How close a click has to land to a drawn wire to be about that wire, in millimetres of
+#: sheet. The panel's own ``PICK_MM``, which is what the click that opened the menu was
+#: measured against -- two different distances would mean a menu offering to rub out a wire
+#: the click did not select.
+SHEET_PICK_MM = 1.6
+
+
+def _distance_to_segment(point: Point2, start: Point2, end: Point2) -> float:
+    dx, dy = end.x - start.x, end.y - start.y
+    length = dx * dx + dy * dy
+    if length <= 1e-12:
+        return math.hypot(point.x - start.x, point.y - start.y)
+    t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / length
+    t = max(0.0, min(1.0, t))
+    return math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
 
 
 def _turned(rotation: Rotation, quarter_turns: int) -> Rotation:
@@ -5750,6 +5767,7 @@ class MainWindow(QMainWindow):
         net = view.net_at(where)
         if net is not None:
             self._on_schematic_net_clicked(net[0])
+            self._add_drawn_wire_entries(menu, Point2(x=where.x(), y=where.y()))
             self._add_net_entries(menu, net[0])
             return menu
 
@@ -5861,6 +5879,54 @@ class MainWindow(QMainWindow):
             remove = menu.addAction(t("&Remove from the Design"))
             remove.setToolTip(t("Out of the design, along with its connections."))
         remove.triggered.connect(lambda _checked=False, r=ref: self._remove_symbol(r))
+
+    def _add_drawn_wire_entries(self, menu: QMenu, where: Point2) -> None:
+        """Rubbing out a line somebody drew, without disconnecting anything.
+
+        THE ONLY DOOR TO IT, and a separate one from Delete Net on purpose: a wire is how a
+        join was DRAWN, and deleting the picture of a join is not the same decision as
+        taking a pin off a net. Rubbed out, the two pins stay connected and the sheet goes
+        back to saying so by name -- which is exactly what you want when a line was going
+        the long way round.
+        """
+        drawn = self._drawn_wire_at(where)
+        if drawn is None:
+            return
+        action = menu.addAction(t("&Rub Out This Wire"))
+        action.setToolTip(
+            t(
+                "Take the line off the sheet. The pins stay connected — the net says so by "
+                "name instead."
+            )
+        )
+        action.triggered.connect(
+            lambda _checked=False, wire=drawn: self._rub_out_wire(wire)
+        )
+        menu.addSeparator()
+
+    def _drawn_wire_at(self, where: Point2) -> SheetWire | None:
+        """Which hand-drawn wire a point on the sheet is nearest, within picking distance.
+
+        Measured against the path as DRAWN in the document rather than as re-anchored for
+        the drawing, which is close enough for a menu and keeps this from needing the
+        drawing at all.
+        """
+        best: tuple[float, SheetWire] | None = None
+        for wire in self.bus.document.sheet_wires:
+            for start, end in zip(wire.path, wire.path[1:], strict=False):
+                distance = _distance_to_segment(where, start, end)
+                if distance <= SHEET_PICK_MM and (best is None or distance < best[0]):
+                    best = (distance, wire)
+        return best[1] if best is not None else None
+
+    def _rub_out_wire(self, wire: SheetWire) -> None:
+        result = self.bus.dispatch(
+            "sheet.wire.delete", DeleteSheetWiresPayload(wires=(wire,))
+        )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
 
     def _add_net_entries(self, menu: QMenu, net_id: str) -> None:
         """What can be done to the net a wire draws.
