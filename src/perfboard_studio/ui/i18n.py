@@ -603,12 +603,15 @@ TURKISH: Mapping[str, str] = {
     # -- the schematic as a view of its own, not a panel down the side ---------
     # "Board" is already in this catalogue, as the Board Setup dialog's own label.
     "Arrange": "Diz",
-    "Forget every symbol you have dragged and lay the sheet out again. Drag a "
-    "symbol to another cell to place it yourself; the wires still route "
-    "themselves around it.": (
-        "Sürüklediğiniz her sembolü unutur ve sayfayı yeniden dizer. Bir sembolü başka "
-        "bir hücreye sürükleyerek kendiniz yerleştirebilirsiniz; teller yine kendiliğinden "
-        "etrafından dolaşır."
+    "Hand the whole sheet back to the layout: every symbol you moved and every "
+    "wire you drew. What is connected is not touched — only how it was drawn.": (
+        "Sayfanın tamamını düzene geri verir: taşıdığınız her sembol ve çizdiğiniz her tel. "
+        "Neyin bağlı olduğuna dokunulmaz — yalnızca nasıl çizildiğine."
+    ),
+    "Hand the whole sheet back to the layout: every symbol you moved and every "
+    "wire you drew. What is connected is not touched.": (
+        "Sayfanın tamamını düzene geri verir: taşıdığınız her sembol ve çizdiğiniz her tel. "
+        "Neyin bağlı olduğuna dokunulmaz."
     ),
     "Nothing on this sheet has been moved by hand.": (
         "Bu sayfada elle taşınmış bir şey yok."
@@ -677,9 +680,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "&Add Part…": "Parça &Ekle…",
     "Arran&ge the Sheet": "Sayfayı &Düzenle",
-    "Forget every symbol dragged by hand and lay the whole sheet out again.": (
-        "Elle sürüklenmiş her sembolü unutur ve sayfanın tamamını yeniden dizer."
-    ),
     "&Fit the Sheet": "Sayfayı &Sığdır",
     # -- board setup: the product first, the consequences behind Advanced ------
     "Advanced": "Gelişmiş",

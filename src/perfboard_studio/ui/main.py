@@ -4413,9 +4413,8 @@ class MainWindow(QMainWindow):
         self.act_sch_auto = QAction(icons.icon("autoplace"), t("Arrange"), self)
         self.act_sch_auto.setToolTip(
             t(
-                "Forget every symbol you have dragged and lay the sheet out again. Drag a "
-                "symbol to another cell to place it yourself; the wires still route "
-                "themselves around it."
+                "Hand the whole sheet back to the layout: every symbol you moved and every "
+                "wire you drew. What is connected is not touched — only how it was drawn."
             )
         )
         self.act_sch_auto.triggered.connect(self.on_schematic_auto_layout)
@@ -5767,7 +5766,10 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
         arrange = menu.addAction(t("Arran&ge the Sheet"))
         arrange.setToolTip(
-            t("Forget every symbol dragged by hand and lay the whole sheet out again.")
+            t(
+                "Hand the whole sheet back to the layout: every symbol you moved and every "
+                "wire you drew. What is connected is not touched."
+            )
         )
         arrange.triggered.connect(self.on_schematic_auto_layout)
         fit = menu.addAction(t("&Fit the Sheet"))
