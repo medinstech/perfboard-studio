@@ -4,16 +4,20 @@
 > çizmeyi ve bundan **çok detaylı bir lehim rehberi** üretmeyi sağlayan açık kaynak
 > masaüstü uygulaması.
 >
-> **Durum:** uçtan uca çalışıyor ve yayında — **v0.10.0**, PyPI'da ve üç masaüstü
+> **Durum:** uçtan uca çalışıyor ve yayında — **v0.12.0-dev**, PyPI'da ve üç masaüstü
 > platformu için kurulum paketi olarak. Açık kalan iki şey var ve ikisi de kod değil:
-> M5'in dogfood testi (§11) ve kod imzalama (§12).
-> **Sahip:** medinstech · **Lisans:** Apache-2.0 · **İsim:** Perfboard Studio — §12'de
-> PerfStudio seçilmişti, v0.11'de değişti
+> dogfood testi (§11) ve kod imzalama (§12).
+> **Sahip:** medinstech · **Lisans:** Apache-2.0 · **İsim:** Perfboard Studio
 >
-> Bu belge **planın kendisidir** ve yazıldığı hâlde duruyor, ki neyin öngörüldüğü ile
-> neyin çıktığı yan yana okunabilsin — M0'ın Tauri/WebGL şeridi örneğin alınmadı,
-> uygulama PySide6 + VTK oldu. Gerçekleşen durum §11'in altındaki notlarda, §13'te ve
-> §14'te tutuluyor. Nasıl inşa edildiğinin anlatısı `CLAUDE.md`'de.
+> **Bu belge yaşayan bir plandır, dondurulmuş bir kehanet değil.** Bir süre öyleydi:
+> "yazıldığı hâlde duruyor" diye bir notu vardı, ve bunun bedeli ödendi — burada duran
+> eskimiş bir satır, sonradan yapılmayacak şeylerin gerekçesi olarak anıldı. Plan
+> değişebilir; değişince burası da değişir. Bir öngörü tutmadıysa ne olduğu bir cümleyle
+> yazılır ve devam edilir, çünkü tutmayan öngörü tutan öngörü kadar bilgi taşır.
+>
+> Ne nerede: **burası** ne yapılacağı ve neyin bilerek yapılmadığı. **`CLAUDE.md`** nasıl
+> inşa edildiği ve neden öyle. **`CHANGELOG.md`** ne zaman ne değişti. Aynı şeyi üç yerde
+> anlatmamak için buradaki bölümler kısa tutulur ve ayrıntı için oraya işaret edilir.
 
 ---
 
@@ -32,7 +36,7 @@ doğruluğunu makine ile kanıtla, ve kullanıcının eline **adım adım lehiml
 | D1 | v1 kart tipi | **Ada bakırlı delikli plaket** (pad-per-hole) | TR'de en yaygın, en az desteklenen. Veri modeli üçünü de destekler, cila burada |
 | D2 | Lisans | **Apache-2.0** | Şirket dostu, patent koruması. GPL'li DIYLC/VeroRoute kodundan tamamen bağımsız kalınacak |
 | D4 | Rehber çıktısı | **4'ü birden**: interaktif offline HTML · 1:1 PDF · doğrulama kontrol listesi · CSV kesim listesi + BOM | Rehber projenin farklılaştırıcısı; yarım bırakılmaz |
-| D5 | Masaüstü çatısı | **Tauri v2**, Electron kaçış yolu açık | ~10MB kurulum, düşük RAM, Rust router yolu doğal. Platform adaptörü ince tutulacak |
+| D5 | Masaüstü çatısı | ~~Tauri v2~~ → **PySide6 + VTK** | Aşağıya bak — karar tamamen değişti |
 | D6 | 3D modeller | **Parametrik üretim + KiCad'den ödünç THT paketleri** | Aşağıya bak — karar kısmen değişti |
 | D7 | 3D kapsamı | **Tam** — montaj animasyonu + patlatılmış görünüm dahil | 3D'yi dekorasyondan öğretim aracına çeviren şey bu |
 | D8 | Lehim yolu | **Birinci sınıf yol çekme primitifi** (cezalı özel durum değil) | TR delikli plaket pratiğinde asıl yöntem; güç/toprak rayları böyle çekiliyor |
@@ -43,6 +47,18 @@ diye bir satırdı. Kimin koyduğu kayıtlı değil — bu dosya ilk commit'te, 
 söylüyor. Gerekçesi de tutmadı: bakınız aşağıdaki "Devre girişi". Kalan numaralar olduğu
 gibi bırakıldı; D4'ü D3 yapmak CHANGELOG'daki ve kaynaktaki her D4..D8 atfını sessizce
 yanlışlardı.
+
+**D5 nerede durdu.** Tauri v2 + React + three.js seçilmişti; uygulama **PySide6 + VTK**
+oldu ve çatı kadar dil de değişti — çekirdek TypeScript'ten Python'a taşındı. Sebep
+gerekçenin kendisiydi: D5'in üç dayanağından biri "Linux WebKitGTK'da WebGL yeter mi"
+sorusuydu ve §13'te risk olarak duruyordu. `tools/bench-3d` tam olarak bunu ölçmek için
+yazıldı, ölçtü, ve cevabı "bu riski taşımaya değmez" çıktı. Qt'nin kendi OpenGL'i ve
+VTK'nın bilimsel görselleştirme yığını aynı işi platform sorusu olmadan yapıyor.
+
+TypeScript motoru silinmedi: `packages/` altında duruyor ve **diferansiyel kanıt** olarak
+kullanılıyor — Python portunun çıktısı onun altın dosyalarına bayt bayt uyuyor. "Bütün
+testler geçiyor" yerine "değiştirdiğimiz şeyle aynı sonucu üretiyor" diyebilmenin bedeli
+bu. Ayrıntı `CLAUDE.md`'de.
 
 **D6 nerede durdu.** Karar üç gerekçeye dayanıyordu: sıfır asset, footprint ile garantili
 tutarlılık, temiz lisans. **İkisi aynen duruyor, üçüncüsü kısmen bırakıldı.**
@@ -127,68 +143,87 @@ fikstür bayt bayt aynı, `DOCUMENT_FORMAT_VERSION` hâlâ 1.
    "Acaba doğru mu?" sorusunun makine cevabı.
 3. **Ajan-yerel mimari.** MCP sunucusu + headless CLI + git-diff'lenebilir proje dosyası.
 
+**Sonradan bir dördüncüsü eklendi: devrenin kendisi burada çizilebiliyor.** Tabloda
+"Netlist import" sütunu duruyor ve doğru, ama artık tek kapı o değil — şema sayfasında
+sembol yerleştirilir, döndürülür, tel çekilir, pin adına göre nete bağlanır. Sebebi §11'de
+yazılı: devreyi yakalayıp çizemeyen bir araç, insanı zaten başka bir araca gönderiyor.
+
 ---
 
 ## 4. Alan Modeli (Çekirdek)
 
 ### 4.1 Delik adresleme
 Sütun harfi + satır numarası (**A1, B7, AC12**) — insanların delikli plaket hakkında
-konuşma biçimi. Rehberin dili bu olacak, dolayısıyla birinci sınıf kavram.
+konuşma biçimi, ve rehberin dili — dolayısıyla bir biçimlendirme ayrıntısı değil,
+birinci sınıf kavram. `geometry.py` çeviriyi sahipleniyor: `coord_to_hole_ref` katı ve
+gidiş dönüş yapıyor, `format_hole` ise hiç hata fırlatmıyor — kart dışı koordinat
+tanımı gereği negatiftir ve hata veren denetleyicinin basması gereken tam olarak odur.
 
 ### 4.2 Kart
-```ts
-interface Board {
-  type: 'pad-per-hole' | 'stripboard' | 'plain'   // v1: pad-per-hole
-  cols: number; rows: number
-  pitch: 2.54                      // mm
-  thickness: 1.6                   // mm
-  material: 'FR4' | 'FR2' | 'FR1'
-  padDiameter: number; drillDiameter: number
-  stripAxis?: 'horizontal' | 'vertical'           // v2, stripboard
-}
+`model.Board`. Kart tipi bir görüntü ayarı değil: stripboard'da satırlar zaten birleşik
+gelir, dolayısıyla connectivity, DRC, router ve rehber farklı cevap verir.
+
+```python
+type BoardType = Literal["pad-per-hole", "stripboard", "plain"]
+type BoardMaterial = Literal["FR4", "FR2", "FR1"]
+
+@dataclass(frozen=True, slots=True)
+class Board:
+    type: BoardType
+    cols: int
+    rows: int
+    pitch: Mm                       # 2.54
+    thickness: Mm                   # 1.6
+    material: BoardMaterial
+    pad_diameter: Mm
+    drill_diameter: Mm
+    strip_axis: Literal["horizontal", "vertical"] | None = None
+    ...                             # pad şekli, kenar payı, basılı legend
 ```
+
+Planda olmayıp sonradan gelenler, hepsi gerçek karttan: **oblong pad** (kenar şeridinde,
+iki farklı komşuluk boşluğu demek — R5'in konusu), **eksen başına kenar payı** (5 × 7 cm
+kart kenarlarda ~2.1 mm, üstte/altta ~4.5 mm), **basılı legend**, **tek yüzlü kart**,
+**montaj delikleri** ve **kenar konnektörü parmakları**. `geometry.STANDARD_PRESETS`
+tedarikçilerin sattığı boyutları tutuyor; kenar payı boyuttan ve delik sayısından
+*çözülüyor*, ezberden yazılmıyor.
 
 ### 4.3 Komponent
-```ts
-interface ComponentInstance {
-  id: string; ref: string; value: string          // R1 / 10k
-  footprintId: string; bodyId: string             // 2D footprint + 3D parametrik gövde
-  anchor: HoleCoord                               // "A1"
-  rotation: 0 | 90 | 180 | 270
-  mirrored: boolean; locked: boolean
-}
+`model.ComponentInstance` + `model.Footprint`. Footprint'ler **üretiliyor**, paketlenmiyor
+— 61 tanesi bir avuç sayısal parametreden `footprints.py` içinde hesaplanıyor, sıfır
+asset. Kütüphanede olmayan bir parça, parametrelerini kendi adında taşıyan bir id ile
+isteniyor (`box-4x2-p1-r3-15x10x8`), böylece `.perf` formatı kımıldamıyor ve kart bir
+yabancıda da aynı parçayla açılıyor.
 
-interface Footprint {                             // THT, grid'e hizalı
-  pins: { number: string; name?: string; dx: number; dy: number }[]
-  bodyOutline: Polygon                            // mm — çakışma kontrolü
-  bodyHeight: number                              // 3D + gabari kontrolü
-  bodyParams: BodyParams                          // parametrik 3D üretimi
-  leadDiameter: number; polarized: boolean; pin1Marker: HoleCoord
-}
-```
+**Çapa pin 1'dir ve grid ofseti (0, 0)'dır** — iki bacaklıda da, TO-220'de de, DIP'te de.
+Geometrik merkez değil, gerçek bir fiziksel pin. `body_outline` ise **courtyard**'dır,
+gövde değil: yarım grid adımı paylı, çünkü çakışma DRC'sinin ihtiyacı bu.
 
 ### 4.4 İletken — mimarinin kalbi
 Delikli plakette bağlantı tek tip değil. Her iletken bir **tür**, bir **katman** ve
 bir **maliyet** taşır:
 
-```ts
-type ConductorKind =
-  | 'lead-bend'           // komponent bacağı uzatılmış  → maliyet ~0, max 3-4 delik
-  | 'solder-trace'        // LEHİM YOLU, saf lehim       → çok düşük/adım, uzunluk sınırlı
-  | 'solder-trace-wired'  // LEHİM YOLU, omurgalı        → düşük + sabit hazırlık, sınırsız
-  | 'bare-wire'           // lehim yüzü çıplak tel       → uzunluk×k, KESİŞEMEZ
-  | 'insulated-wire'      // lehim yüzü izoleli tel      → uzunluk×k + sabit ceza, kesişebilir
-  | 'top-jumper'          // üst yüz jumper              → yüksek ceza, gövde alanı işgal eder
-  | 'strip'               // (v2) hazır bakır şerit      → bedava, kesim gerektirir
-
-interface Conductor {
-  id: string; kind: ConductorKind
-  path: HoleCoord[]                 // düğüm dizisi
-  netId?: string
-  gauge?: number; color?: string    // AWG + renk konvansiyonu
-  layerZ: number                    // 3D istif seviyesi (fiziksel çakışma önleme)
-}
+```python
+type ConductorKind = Literal[
+    "lead-bend",           # komponent bacağı uzatılmış  → maliyet ~0, max 3-4 delik
+    "solder-trace",        # LEHİM YOLU, saf lehim       → çok düşük/adım, uzunluk sınırlı
+    "solder-trace-wired",  # LEHİM YOLU, omurgalı        → düşük + sabit hazırlık, sınırsız
+    "bare-wire",           # lehim yüzü çıplak tel       → uzunluk×k, KESİŞEMEZ
+    "insulated-wire",      # lehim yüzü izoleli tel      → uzunluk×k + sabit ceza, kesişebilir
+    "top-jumper",          # üst yüz jumper              → yüksek ceza, gövde alanı işgal eder
+    "strip",               # hazır bakır şerit           → bedava, kesim gerektirir
+]
 ```
+
+Bütün ağırlığı taşıyan iki yüklem `model.py`'da:
+
+- `contacts_every_path_hole` — lehim yolu geçtiği **her** padde lehimlidir; tel yalnızca
+  iki ucuna değer, aradaki deliklerin üzerinden geçer. Bunu yanlış bilmek, ekranda
+  görünenden başka türlü bağlanmış bir kart üretir ve hiçbir yerde ses çıkarmaz.
+- `is_crossing_blocked` — bakır düzlemini işgal eden, dolayısıyla kesişemeyen iletkenler.
+
+Bu yüzden `connectivity.py` ("elektriksel olarak ne birleşik") ile `occupancy.py`
+("fiziksel olarak ne yolda") ayrı modüller.
 
 > `solder-bridge` ayrı bir tür değil — **iki padlik `solder-trace`**. Tek bir kavram,
 > tek bir kural seti.
@@ -210,14 +245,18 @@ Bitişik padlerin lehimle birleştirilerek oluşturulan iletken yol. TR pratiği
 | **`solder-trace`** (saf) | Padler arasına doğrudan lehim akıtılır | Kısa yerel bağlantılar |
 | **`solder-trace-wired`** (omurgalı) | Kalaylı bakır tel veya bacak kırpıntısı padler boyunca yatırılıp her padde lehimlenir | Güç/toprak rayları, uzun yollar |
 
-```ts
-interface SolderTrace extends Conductor {
-  kind: 'solder-trace' | 'solder-trace-wired'
-  path: HoleCoord[]                     // INVARIANT: 4-komşu bitişik zincir
-  spine?: { material: 'tinned-copper' | 'lead-offcut'; gauge: number }
-  buildup: 'light' | 'normal' | 'heavy' // kesit tahmini
-}
+```python
+@dataclass(frozen=True, slots=True)
+class SolderTraceConductor:
+    kind: Literal["solder-trace", "solder-trace-wired"]
+    path: tuple[HoleCoord, ...]       # INVARIANT: 4-komşu bitişik zincir
+    spine: SpineSpec | None = None    # kalaylı bakır / bacak kırpıntısı + kesit
+    buildup: SolderBuildup = "normal" # kesit tahmini
 ```
+
+`geometry.validate_orthogonal_chain` bu koddaki tek komşuluk denetimi. Elle düzenlenmiş
+bir dosya bunu ihlal ederse **uyarıyla** açılır ve DRC raporlar — kullanıcıyı kendi
+projesinden kilitlemek yerine.
 
 **Geometrik kısıt — router'ı doğrudan belirler.**
 2.54 mm pitch'te tipik pad çapı ~1.9 mm →
@@ -238,7 +277,7 @@ Lehim özdirenci ≈ 15 µΩ·cm (Sn63Pb37) / ≈ 13 µΩ·cm (SAC305) — bakı
 
 Omurgalı satır **paralel direnç** olarak hesaplanır: bakır omurga ve çevresindeki lehim
 aynı boy üzerinde birbirine yapışıktır, ikisi de akım taşır. Yalnız bakırı saymak
-1.51 mΩ verirdi; lehim dalı bunu 1.35 mΩ'a çeker. `drc.ts` bu modeli kullanıyor.
+1.51 mΩ verirdi; lehim dalı bunu 1.35 mΩ'a çeker. `drc.py` bu modeli kullanıyor.
 
 → **Omurga, direnci yaklaşık bir mertebe düşürüyor.** Araç bunu hesaplayıp söylemeli:
 *"Bu net 3 A taşıyor, saf lehim yolu sınırda — omurga ekle."*
@@ -265,27 +304,53 @@ Fiziksel net listesi ↔ şema net listesi izomorfizmi. Üç hata sınıfı:
 - **SHORT** — şemada ayrı net, kartta birleşik → kısa devre
 - **FLOATING** — hiçbir nete bağlanmayan iletken
 
-### 5.2 DRC kuralları (v1)
-| # | Kural | Seviye |
-|---|---|---|
-| 1 | Gövde çakışması (courtyard overlap) | hata |
-| 2 | Kart sınırı dışı yerleşim | hata |
-| 3 | Aynı deliğe iki pin | hata |
-| 4 | Çıplak tel kesişimi | hata |
-| 5 | Komşu farklı-net adalar arasında dar geçit (köprü riski) | uyarı |
-| **5'** | **Lehim yolu komşuluk riski**: yol, farklı nete ait bir padin ortogonal komşusundan geçiyor (≈0.6 mm) | **uyarı, yüksek öncelik** |
-| **5''** | **Pad kalkma riski**: FR-2/pertinaks + saf lehim yolu uzunluğu > eşik | uyarı |
-| **5'''** | Saf lehim yolu uzunluğu > 5-6 pad (yapılabilirlik/güvenilirlik) → omurga öner | uyarı |
-| **5''''** | Lehim yolu çapraz adım içeriyor (varsayılan kapalı) | uyarı |
-| 6 | Akım kapasitesi: net akımı vs. tel kesiti / **lehim yolu etkin kesiti** | uyarı |
-| **6'** | Lehim yolu direnç/gerilim düşümü hesabı net akımına göre eşiği aşıyor | uyarı |
-| 7 | Creepage: 2.54 mm delik aralığı ≈ 300 V sınırı — şebeke devrelerinde | **uyarı, kalın** |
-| 8 | Yükseklik / gabari çakışması (3D'den) | uyarı |
-| 9 | Isı yakınlığı: TO-220 / güç direnci yanında elektrolitik | uyarı |
-| 10 | Aşırı uzun bacak bükümü (`lead-bend` > N delik) | uyarı |
-| 11 | Bağlanmamış pin veya net (netlist karşılaştırması) | hata |
+### 5.2 DRC kuralları
+
+Planda 11 kural ve dört alt kural vardı; gerçekleşen 22. Numaralar tabloda kaldı çünkü
+kaynakta ve `CHANGELOG`'da onlarla anılıyorlar; yanlarında kuralın **gerçek id'si** var,
+`drc.py` bunları o adla raporluyor.
+
+| # | id | Kural | Seviye |
+|---|---|---|---|
+| 1 | `component-body-overlap` | Gövde çakışması (courtyard) | hata |
+| 2 | `component-off-board` | Kart sınırı dışı yerleşim | hata |
+| 3 | `pin-not-connected` | Bağlanmamış pin (netlist karşılaştırması) | hata |
+| 4 | `conductor-crossing` | Bakır düzlemini paylaşan iletkenlerin kesişimi | hata |
+| — | `conductor-off-board` | Kart dışına çıkan iletken | hata |
+| — | `solder-trace-invalid-path` | Lehim yolu ortogonal zincir değil | hata |
+| — | `cut-track-conflict` | Kesilmiş strip deliğinde pin — hiçbir şeye lehimli | hata |
+| — | `mounting-hole-conflict` | Montaj deliğinin yediği padde pin | hata |
+| — | `edge-connector-conflict` | Delinmemiş parmakta pin | hata |
+| — | `unknown-footprint` | Kütüphanenin tanımadığı footprint | hata |
+| **5'** | `solder-trace-proximity` | **Lehim yolu komşuluk riski**: yol, farklı nete ait bir padin ortogonal komşusundan geçiyor (≈0.6 mm) | **uyarı, yüksek öncelik** |
+| **5''** | `pad-lifting-risk` | FR-2/pertinaks + saf lehim yolu uzunluğu > eşik | uyarı |
+| **5'''** | `solder-trace-too-long` | Saf lehim yolu > 5-6 pad → omurga öner | uyarı |
+| 6 | `current-capacity` | Net akımı vs. tel kesiti / lehim yolu etkin kesiti | uyarı |
+| 7 | `creepage-clearance` | 2.54 mm ≈ 300 V sınırı — şebeke devrelerinde | **uyarı, kalın** |
+| 8 | `component-too-tall` | Yükseklik / gabari çakışması (3D'den) | uyarı |
+| 9 | `heat-proximity` | TO-220 / güç direnci yanında elektrolitik | uyarı |
+| 10 | `lead-bend-too-long` | Aşırı uzun bacak bükümü | uyarı |
+| — | `jumper-under-body` | Bir gövdenin altında kalan üst yüz jumper'ı | uyarı |
+| — | `mounting-hole-clearance` | Montaj deliği başına yer yok | uyarı |
+
+**Komutlar belgeyi tutarlı tutar, DRC tasarım kalitesini raporlar.** Id'ler tekil,
+referanslar çözülür, yollar kartın üstünde, model değişmezleri geçerli → **hata, mutasyon
+reddedilir**. Çakışan gövdeler, köprüleme riski, yetersiz bakır → **DRC raporlar, asla
+reddetmez.** Yeni bir denetimin nereye ait olduğu buradan bakılır: sonuç hâlâ bir *belge*
+mi (DRC), değil mi (komut).
+
+**Beşinci kural — `solder-trace-proximity` — bu dosyadaki en değerli kural**, ve nerede
+öttüğü ince ayarlıdır: bir **pinin** yanından geçen yolda öter, başka bir yolun yanından
+geçende değil, ve fiziksel çift başına bir kez. İkisinde de boşluk aynı 0.6 mm; fark
+dikkattir. Yolun yanındaki yol, şu an sizin çektiğiniz, baktığınız yüzde, aynı fazda olan
+bir yoldur — ve paralel dönüşler yoğun delikli plaketin kurulma biçimidir. NE555 önce
+lehimle route edilince aracın az önce route ettiği kartta **51 bulgu** çıkıyordu; 30'u yol
+yanı yol, 20'si aynı boşluğun iki uçtan iki kez sayılması. Router riski hâlâ fiyatlıyor,
+yani etrafından dolaşıyor; sadece söylediğiniz stille artık tartışmıyor.
 
 ---
+
+## 6. Algoritmalar---
 
 ## 6. Algoritmalar
 
@@ -317,7 +382,7 @@ uyarı olarak değil).
 
 GND ve V+ gibi çok bacaklı netler nokta-nokta route edilmez. Delikli plakette standart
 pratik: bir satır/sütun boyunca **omurgalı lehim yolu rayı** çekip pinleri kısa saplarla
-raya bağlamak. Router bunu ayrı bir strateji olarak tanıyacak:
+raya bağlamak. Router bunu ayrı bir strateji olarak tanıyor:
 
 1. Net fan-out'u eşiği aşarsa ray moduna geç
 2. Pin bulutuna en iyi uyan satır/sütunu seç (medyan eksen)
@@ -327,20 +392,43 @@ raya bağlamak. Router bunu ayrı bir strateji olarak tanıyacak:
 ### 6.3 Yerleştirme optimizasyonu
 
 Simulated annealing. Hamleler: ötele / döndür / iki komponenti takasla.
-Maliyet: HPWL (yarım-çevre tel uzunluğu) + DRC cezaları + mekanik kısıtlar
-(konnektör ve potansiyometreler kenarda, soğutuculu parçalara boşluk)
-+ **lehim yolu hizalanabilirliği** (pinleri aynı satır/sütuna düşüren yerleşimler
-ödüllendirilir — kısa lehim yolu, uzun telden iyidir).
+**Determinizm zorunlu:** tohumlu RNG, aynı girdi → aynı layout.
 
-**Determinizm zorunlu:** tohumlu RNG. Aynı girdi → aynı layout. Test edilebilirlik
-ve kullanıcı güveni için pazarlık konusu değil.
+Planda maliyet **HPWL** (yarım-çevre tel uzunluğu) + DRC cezaları + mekanik kısıtlar diye
+yazılmıştı. İki yerde daha ileri gitti, ikisi de kullanımdan çıktı:
+
+**Önce dizilir, sonra tavlanır.** `placer.arrange` tavlayıcı hiç koşmadan **netlist'ten**
+bir yerleşim kuruyor ve yeniden başlatmaların yarısı ondan başlıyor. Tavlama bir dizilişi
+iyileştirir, dizilişi icat etmez — ve her yeniden başlatmanın kullanıcının kendi
+yerleşiminden başlaması, aramanın hep parçaların zaten bulunduğu yerin etrafını
+örneklemesi demekti. Parçalar bağlantıya göre sıralanıyor, üç ya da daha çok parçaya
+uzanan güç/toprak netleri o grafiğin dışında bırakılıyor (her şeye değen bir ray her şeyi
+komşu yapar), konnektörler kenarı önce alıyor, geri kalanı şeritlere paketleniyor.
+
+**Maliyet HPWL değil, "bunu kurmak ne tutar".** Her aday route ediliyor ve route
+maliyetiyle ölçülüyor. Bunun bir tuzağı var ve pahalıya patladı: karşılaştırma ancak
+hepsi **aynı boş karttan** sorulursa bir cevap. Değildi — temel, kullanıcının kendi
+belgesi, bakırı hâlâ kendi parçalarına uyuyor, dolayısıyla router yapacak bir şey bulamıyor
+ve neredeyse sıfır dönüyordu; her aday ise parçaları oynattığı için bütün kartı yeniden
+fiyatlandırıyordu. Sonuç: **otomatik yerleştirme, route edilmiş bir kartta hiçbir şeyi asla
+oynatamıyordu** — yani insanın sormayı düşüneceği her kartta. `_build_cost` artık
+karşılaştırmadan önce bakırı soyuyor.
+
+**Bir şey yapmamak da bir aday.** Ve değişmeyen bir yerleşim neyi karşılaştırdığını
+söylüyor: on saniyelik iş "yerleşim değişmedi" diye raporlanınca bozuk bir düğmeden
+ayırt edilemiyor, "kurması elinizdekinden daha ucuz bir şey bulunamadı (796'ya karşı 845)"
+diye raporlanınca insanın itiraz edebileceği bir cevap oluyor.
 
 ### 6.4 Beklenti yönetimi
 
-"Butona bas, mükemmel layout" vaadi verilmeyecek. Hedef
-**interaktif asistan**: kullanıcı parçayı sürükler, etkilenen netler < 100 ms'de
-yeniden route edilir, DRC canlı çalışır. Forumlardaki asıl şikâyet
+"Butona bas, mükemmel layout" vaadi verilmiyor. Hedef **interaktif asistan**: route
+edilemeyen netler açıkça raporlanır, sessizce bırakılmaz. Forumlardaki asıl şikâyet
 ("4 bağlantıyı bağlayamadan bıraktı") tam olarak bu tuzağa düşmekten kaynaklanıyor.
+
+Plandaki "< 100 ms'de yeniden route" tutmadı ve tutturulmaya da çalışılmadı: tam bir
+autoroute saniyeler sürüyor, bir `QThread`'de koşuyor ve ilerleme gösteriyor. Karşılığında
+**`reroute`** var — yalnızca etkilenen netleri yeniden çeken ayrı bir komut — ve canlı
+çalışan DRC. Verilen söz hız değil, ne yapamadığını söylemek.
 
 ---
 
@@ -363,7 +451,7 @@ Faz 7  Uzun teller     izoleli bağlantılar
 Faz 8  Kapanış         IC'leri sokete tak, son kontrol, kontrollü güç verme prosedürü
 ```
 
-### 7.2 Her adım kartında bulunacaklar
+### 7.2 Her adım kartında bulunanlar
 - Ref, değer, footprint, **tam delik koordinatları** (`R3: C7 → C11, 4 delik açıklık`)
 - Polarite / oryantasyon uyarısı + pin-1 işareti
 - **Bacak bükme şablonu** (`10.16 mm / 4 delik`)
@@ -440,38 +528,56 @@ Netlist'ten deterministik üretilir:
 Bu tek karardan bedava gelenler: undo/redo · makro kaydı · **deterministik replay
 testleri** · oturum kaydı · ajanın ve kullanıcının aynı belgeyi eşzamanlı sürmesi.
 
-### 8.2 Monorepo (pnpm workspaces)
+### 8.2 Paket düzeni
+
 ```
-packages/core        saf TS: doküman, command bus, connectivity (union-find),
-                     router, placer, DRC, LVS, guide generator   ← DOM yok, Tauri yok
-packages/parsers     KiCad netlist / footprint, SPICE netlist
-packages/render2d    Canvas2D renderer            (headless çalışabilir)
-packages/render3d    three.js sahne kurucu + parametrik gövde üreticileri
-                                                  (headless PNG render)
-packages/guide       HTML / PDF / CSV üretici (2D+3D render'ları gömer)
-packages/mcp         MCP sunucusu (stdio + streamable HTTP)
-apps/desktop         Tauri v2 + React             ← platform adaptörü ince
-apps/cli             headless
+src/perfboard_studio/
+  model.py          doküman: her dataclass frozen, hiçbir şey yerinde değişmez
+  command.py        command bus + undo/redo + journal
+  commands.py       her mutasyon burada bir CommandDefinition
+  geometry.py       delik adresleme, ızgara komşuluğu, kart ölçüleri, hazır kart boyları
+  footprints.py     61 footprint, hepsi üretiliyor — sıfır asset
+  connectivity.py   union-find: ne elektriksel olarak birleşik
+  occupancy.py      ne fiziksel olarak yolda
+  drc.py  lvs.py    doğrulama katmanı (§5)
+  router.py  autoroute.py  placer.py  ratsnest.py      algoritmalar (§6)
+  stripboard.py  striproute.py                         stripboard geometrisi ve router'ı
+  schematic.py  schematic_export.py                    devre şeması, türetilen ve çizilen
+  guide.py  guide_export.py                            lehim rehberi (§7)
+  persist.py        .perf okuma/yazma — bayt bayt sabit
+  parsers/          KiCad netlist (saf metin → veri)
+  ui/               PySide6 + VTK; motor burayı hiç bilmez
+  mcp/              MCP sunucusu (§9)
 ```
 
-**Headless render pazarlık konusu değil** — MCP `render_3d_view`, rehber üretimi ve
-CI görsel testleri GUI olmadan çalışmalı.
+**Motor saftır.** `ui/` ve `mcp/` dışında saat yok, RNG yok, dosya sistemi yok, Qt ve VTK
+import'u yok. `persist.py` dokümanı metne çevirir; dosyayı **host** okur ve yazar.
+Zaman damgasını host basar. Yerleştiricinin simulated annealing'i tohumlu: aynı doküman +
+aynı tohum = aynı kart. Bunu bozmak §2'deki diferansiyel kanıtı bozar.
+
+**Headless render pazarlık konusu değil** — MCP'nin render tool'ları, rehber üretimi ve
+CI görsel testleri GUI olmadan çalışmalı. `--headless` (`ui/headless.py`) 2D/3D/PDF ve
+şemayı üretip DRC + LVS koşuyor; üç işletim sisteminde de.
 
 ### 8.3 2D / 3D
-- **2D — authoring görünümü.** Canvas2D, viewport culling, grid'e snap.
-  Perf yetmezse PixiJS/WebGL'e geçilir (renderer arayüzü izole tutulacak).
-- **3D — doğrulama ve iletişim görünümü.** three.js + react-three-fiber.
-  Delik ızgarası **instanced mesh** (100×60 kart = 6000 delik; instancing olmadan perf çöker).
-  Basit materyal, ağır post-processing yok. Hedef "doğru ve anlaşılır", "fotogerçekçi" değil.
-- **Lehim yolu görselleştirmesi (2D + 3D).** Yuvarlak telden ayrı bir görünüm gerekir:
-  padlerde şişkinleşen, aralarda incelen kabarık bir zincir. `buildup` profili yüksekliği
-  belirler; parametrik bir süpürme geometrisi. 3D'de metalik/parlak materyal — lehim
-  yolları ile telleri bir bakışta ayırt etmek lehim yüzü görünümünün okunabilirliği
-  için şart. 2D'de R5' risk noktaları kırmızı halka ile işaretlenir.
+- **2D — authoring görünümü.** `QGraphicsView`, sahne birimi = 1 mm (1:1 PDF'in fudge
+  faktörü olmamasının sebebi bu). Delik ızgarası **önceden rasterlenmiş tek bir pad
+  pixmap'i** olarak basılıyor: 6000 deliği alışılmış yoldan çizmek kare başına 124 ms,
+  tek bir even-odd `QPainterPath` ise 5.8 s sürüyordu.
+- **3D — doğrulama ve iletişim görünümü.** VTK. Kart **delinir, boyanmaz**: bir yüz, deliği
+  çıkarılmış tek bir kiremitin her delikte yinelenmesidir — 945 delikli bir kartın iki yüzü
+  böylece iki actor, delik başına boolean çıkarma ile iki bine yakın olurdu.
+- **Parçalar malzeme olarak gölgelendirilir.** Phong bir *parlama* tarif eder, bir şeyin
+  neden yapıldığını söylemez; `metallic` (0 ya da 1, arası yok) ve `roughness` ise
+  söyler. Yansıyacak bir şey olması için oda da **üretilir**, indirilmez.
+- **Lehim yolu görselleştirmesi.** Lehim bakırı ıslatır: 3D'de bir yolun merkez çizgisi
+  pad düzleminin kendisidir ve yalnız dış yarısı görünür; tel ise bir yarıçap yukarıdadır
+  ve iki ucu deliklere iner. Yol **tek bir değişken yarıçaplı tüp** — her lehim noktasında
+  şişip aralarda incelen. Bu incelme süs değil: rehberi takip eden insan yol boyunca lehim
+  noktalarını sayar.
 - Seçim/hover durumu iki yönlü paylaşılır. 2D'de yüz toggle'ı, 3D'de gerçek çevirme.
-- **Parametrik gövdeler (~25 tip):** aksiyel direnç, DO-41 diyot, radyal elektrolitik,
-  disk seramik, film kondansatör, DIP-N, TO-92, TO-220, LED 3/5/10 mm, header, klemens,
-  pot, buton, kristal, röle, trafo, ...
+- **Gövdeler:** parametrik üretim **artı** KiCad'den ödünç alınmış gerçek THT paketleri
+  (D6). Üretilen gövde her parça için hâlâ geri düşüş.
 
 ### 8.4 3D'nin işlevsel gerekçeleri
 1. Yükseklik/çarpışma kontrolü (DRC #8) — 2D'de görünmez
@@ -489,22 +595,28 @@ CI görsel testleri GUI olmadan çalışmalı.
   headless döner, CI'da koşar.
 - **Streamable HTTP (localhost).** Açık duran GUI'ye bağlanmak için; ajan düzenler,
   kullanıcı canlı görür. **Yeni SSE-only sunucu yazılmayacak** (deprecated).
-- **Tuzak:** tüm log **stderr**'e. Kaçak bir `console.log` stdout'u kirletip protokolü
-  sessizce bozar — bilinen ve yaygın hata.
+- **Tuzak:** tüm log **stderr**'e. Kaçak bir `print` stdout'u kirletir ve istemci
+  alakasız, anlaşılmaz bir hata gösterir. `perfboard_studio.mcp` altında hiçbir şey
+  yazdırmaz; Qt ve VTK import'ları bile modül seviyesinde değil, tool'un içinde
+  yapılır — asıl risk onlar, motorun kendisinde zaten `print` yok.
 
-### 9.2 Tool yüzeyi (~25)
-| Kategori | Tool'lar |
-|---|---|
-| Okuma | `get_board_info` · `list_components` · `get_component` · `get_nets` · `get_net_connections` |
-| **Görme** | `render_2d_view(side, region, dpi)` · `render_3d_view(camera, exploded)` → PNG |
-| Yazma | `place_component` · `move_component` · `rotate_component` · `route_net` · `add_wire` · `add_solder_bridge` · `autoroute` · `optimize_placement` |
-| Doğrulama | `run_drc` · `run_lvs` · `check_heights` |
-| Çıktı | `generate_guide` · `export_pdf` · `export_csv` |
-| Durum | `snapshot` · `restore` · `undo` · `redo` |
+### 9.2 Tool yüzeyi
 
-**En kritik ikisi:**
+**Gerçekleşen: 51 tool**, plandaki "~25"e karşı. Tavan tutmadı, kural tuttu ve asıl
+istenen kuraldı: her tool `docs/MCP.md`'de bir gruba ve bir gerekçeye bağlı, ve
+`test_mcp.py` bunu iki yönden birden denetliyor — dokümante edilmemiş bir tool kimsenin
+savunmadığı bir tool, artık var olmayan bir dokümante tool ise ajanı olmayan bir şeye
+gönderir. Tool eklemek, satırını ve paragrafını eklemek demek. Liste `docs/MCP.md`'de;
+burada tekrarlanmıyor, çünkü iki yerde tutulan bir liste bir kere kaydı bile.
+
+**En kritik ikisi hâlâ aynı:**
 - `render_*` — görsel geri bildirim olmadan ajan kör çalışır. Kartı *görebilmeli*.
 - `snapshot`/`restore` — ajan deneyip geri alabilmeli.
+
+**Reddedilen bir komut sessizce patlamaz.** Sınırı geçen her sonuç düz JSON, her delik
+**adresiyle** (`"C7"`) veriliyor, ve reddedilen bir komut `{"ok": false, "code": ...}`
+dönüyor — `CommandBus.dispatch`'in sözleşmesiyle aynı. Ajan bir şey deneyip "hayır"
+cevabını alabilmeli.
 
 ### 9.3 Proje dosyası ajan-dostu
 Stabil anahtar sıralamalı, pretty-print JSON (`.perf` uzantısı, içi JSON).
@@ -515,70 +627,95 @@ Git-diff'lenebilir. Uygulama dosyayı izler ve hot-reload eder →
 
 ## 10. Test ve Doğrulama Stratejisi
 
+~2340 test, bir dakikanın altında. Daraltmaya gerek yok, hepsi koşulur.
+
 | Tür | Kapsam |
 |---|---|
-| **Property test** | Rastgele netlist → autoroute → **LVS geçmek ZORUNDA**. Router'ın doğruluğu makine ile kanıtlanabilir |
-| Altın dosya | Router çıktıları, connectivity motoru (tohumlu RNG sayesinde stabil) |
+| **Diferansiyel** | Python motorunun çıktısı, yerini aldığı TypeScript motorunun altın dosyalarına **bayt bayt** uyuyor. "Bütün testler geçiyor" değil, "değiştirdiğimiz şeyle aynı sonucu üretiyor" |
+| **Property test** | Rastgele netlist → autoroute → **LVS geçmek ZORUNDA** |
+| Altın dosya | Router çıktıları, connectivity, footprint'ler (son IEEE-754 basamağına kadar), rehberin dört çıktısı, şema sayfası |
 | Birim | Union-find bağlantı motoru — en kritik bileşen, ayrı suit |
-| Round-trip | doküman → kaydet → yükle → bit-birebir aynı |
-| Görsel regresyon | Headless 2D/3D PNG + piksel diff |
-| Perf | CI'da 3 platformda 3D benchmark: 6000 delik + 60 komponent + 200 tel @ 60 fps |
+| Round-trip | doküman → kaydet → yükle → **bayt birebir** aynı, 15 altın dosyanın hepsinde |
+| Görsel regresyon | 2D render'ın 6 × 6 hücresinin ortalama rengi (`test_render_golden.py`). Mürekkep kapsamını ölçen ilk deneme neredeyse işe yaramazdı — delikli plaket zaten çoğunlukla kart |
 | Replay | Kaydedilmiş komut logu → aynı doküman (command bus'tan bedava) |
+| Tipler | `mypy --strict src` — motor katı-temiz ve öyle kalmalı. Testler değil, hiç olmadı |
+
+**3D için altın görüntü bilerek yok.** VTK makinede ne OpenGL varsa onunla çiziyor;
+üç işletim sistemi matrisinde ortalama-renk karşılaştırması kimsenin elinden bir şey
+gelmeyen sebeplerle patlardı. Yerine kararların kendisi sabitleniyor.
+
+**VTK'ya dokunan her test `@requires_offscreen_gl` taşımak zorunda.** GL bağlamı yokken
+VTK hata fırlatmaz, süreci öldürür — işaretlenmemiş bir test başarısız olmaz, koşuyu
+ortasından özetsiz keser.
+
+CI her push'ta üç işletim sistemi matrisini koşuyor ve bunu ilk günden hak etti: ilk tam
+matris Windows'ta bir VTK abort'u ve macOS arm64'te son ULP'de ayrışan iki footprint
+altın dosyası buldu — ikisini de Linux göremez.
 
 ---
 
 ## 11. Yol Haritası
 
-4 kişi, paralel şeritler: **A = Çekirdek** (2 kişi) · **B = UI/3D** (1) · **C = Entegrasyon** (1)
+Plandaki hâli **4 kişi, paralel üç şerit, M0–M7, ~5.5 ay part-time** idi. Ekip o
+büyüklükte olmadı ve şeritler paralel gitmedi; buna rağmen M0–M7'nin **kapsamı** sırayla
+karşılandı, tek istisnası aşağıda. Hangi sürümde ne geldiği `CHANGELOG.md`'de duruyor, o
+yüzden burada yalnızca **ne kaldığı** yazılı.
 
-| Milestone | Süre | Kapsam | Çıkış kriteri |
-|---|---|---|---|
-| **M0** Risk düşürme | 2-3 hf | 3 platformda three.js stres testi · command bus + doküman iskeleti · dikey dilim | GUI'de yerleştir → MCP'den yerleştir → 3D'de gör. **Linux WebGL kararı verilmiş** |
-| **M1** Editör + kütüphane | 4 hf | 2D grid editör, THT footprint kütüphanesi, parametrik gövdeler, yerleştirme, kaydet/yükle | 30 parçalı kart elle tasarlanabiliyor, 3D'de doğru görünüyor |
-| **M2** Bağlantı + doğrulama | 4 hf | Union-find motoru, KiCad netlist import, ratsnest, DRC v1 (**R5' komşuluk riski dahil**), **LVS**, lehim yolu elektriksel modeli | Bilinen hatalı bir layout'ta OPEN/SHORT doğru raporlanıyor; R5' riskleri doğru işaretleniyor |
-| **M3** Router + yerleştirme | 6 hf | A\*/Lee + rip-up&reroute, **lehim yolu primitifi + ray stratejisi**, SA yerleştirme, maliyet modeli ayarı, interaktif yeniden route | Property test: 100 rastgele netlist, autoroute sonrası %100 LVS geçiyor. Sürükleme < 100 ms. GND/V+ otomatik ray olarak çekiliyor |
-| **M4** 3D tam | 4 hf | Montaj animasyonu, patlatılmış görünüm, yükseklik/çarpışma DRC, headless render | Rehber adımları 3D'de oynatılabiliyor, adım görselleri otomatik üretiliyor |
-| **M5** Lehim rehberi | 4 hf | Sıralama motoru, adım kartları, tel kesim listesi, **doğrulama kontrol noktaları**, HTML+PDF+CSV | Gerçek bir devre bu rehberle sıfırdan lehimlenip çalıştırıldı (dogfood testi) |
-| **M6** MCP + CLI sertleştirme | 2 hf | ~25 tool (gerçekleşen: 51 — §13'e bak), iki taşıma, dosya izleme, snapshot/restore | Claude Code **ve** Antigravity'den uçtan uca bir kart tasarlanıp rehber üretiliyor |
-| **M7** Lansman | 3 hf | TR/EN i18n, dokümantasyon, örnek projeler, CI, paketleme, imzalama | GitHub'da yayında |
+| Milestone | Kapsam | Durum |
+|---|---|---|
+| **M0** Risk düşürme | 3D stres testi · command bus + doküman iskeleti · dikey dilim | ✅ — sonucu D5'i değiştirdi (`tools/bench-3d`) |
+| **M1** Editör + kütüphane | 2D grid editör, THT footprint kütüphanesi, parametrik gövdeler, kaydet/yükle | ✅ |
+| **M2** Bağlantı + doğrulama | Union-find, KiCad netlist import, ratsnest, DRC v1 (**R5' dahil**), **LVS**, lehim yolu elektriksel modeli | ✅ |
+| **M3** Router + yerleştirme | A\*/Lee + rip-up & reroute, lehim yolu primitifi + ray stratejisi, SA yerleştirme | ✅ |
+| **M4** 3D tam | Montaj animasyonu, patlatılmış görünüm, yükseklik/çarpışma DRC, headless render | ✅ |
+| **M5** Lehim rehberi | Sıralama motoru, adım kartları, tel kesim listesi, **doğrulama kontrol noktaları**, HTML+PDF+CSV | Kod ✅ · **dogfood ❌** |
+| **M6** MCP + CLI | 51 tool, iki taşıma, dosya izleme, snapshot/restore | ✅ |
+| **M7** Lansman | TR/EN i18n, dokümantasyon, örnek projeler, CI, paketleme, imzalama | İmzalama dışında ✅ (§14) |
 
-**Takvim:** paralel şeritlerle ~**5-5.5 ay** part-time. Şeritler serileşirse ~7 ay.
-(D8 lehim yolu M2/M3/M5'e yayılmış ~1.5 hafta ekliyor.)
+**Kalan tek kapsam maddesi: M5'in dogfood testi.** Rehberi takip ederek gerçek bir kart
+sıfırdan lehimlenip çalıştırılmadı. Pazarlık konusu değil, ve duyuru (§14) bundan önce
+yapılmaz: bu araç insanları havyanın başına gönderiyor, ve rehberin doğru olduğunu
+söyleyen tek şey şu an testler.
 
-**Dogfood testi (M5) pazarlık konusu değil.** Ekipten biri rehberi takip ederek gerçek
-bir kartı sıfırdan lehimlemeden M5 kapanmaz.
+### Sonraki işler
+
+Plandan gelmeyen, kullanımdan gelen işler. Sıra bağlayıcı değil.
+
+- **Şema sayfasında dal (T) bağlantısı.** Çizilen tel tam olarak iki pin arasında; dört
+  pinli bir net üç telle çiziliyor. Bir telin ortasına bağlanmak dördüncü bir uç türü
+  ister ve iki uçtan biri her oynadığında yerinden kayar — çözülebilir, çözülmedi.
+- **Hiyerarşik sayfa ve bus.** Yok. 24 parçalık kartlarda ihtiyaç duyulmadı.
+- **`docs/` Türkçesi.** Arayüz tam Türkçe, `README` iki dilde; `docs/` yalnız İngilizce.
+- **Kod imzalama** — §12.
 
 ---
 
 ## 12. Açık Konular
 
-**İsim.** Açık kaynak keşfedilebilirliği için isimde "perf" geçmesi değerli.
-Adaylar: **PerfStudio** · **PadPilot** · **Protoforge** · **SolderPlan**
-Repo: `github.com/medinstech/<isim>`
+Kapanmış olanlar da duruyor, cevaplarıyla — bir sorunun nasıl kapandığı, kapalı olduğu
+bilgisinden fazlasını taşıyor.
 
-> **Gerçekleşen: Perfboard Studio**, paket ve komut adı `perfboard-studio`, Python modülü
-> `perfboard_studio`. PerfStudio on sürüm taşıdı ve iki sebeple bırakıldı, ikincisi
-> birincisinden ağır bastı. Okunuşu bir; "perf" ile "perv" arasında tek harf var ve ilk
-> bakışta okunan hep aynı olmuyor. Asıl sebep ise kısaltmanın yazılımdaki anlamı: "perf"
-> performans demek — Linux'ta profiler'ın adı, ve AMD yıllarca **GPU PerfStudio** adlı bir
-> grafik profiler'ı yayınladı. Yani ismi seçtiren gerekçe — keşfedilebilirlik — tam da
-> kendi aleyhine çalışıyordu: "perfstudio" araması delikli plakete değil, profiling
-> araçlarının arasına düşürüyordu.
->
-> Tanıtıcının `perfboard` değil `perfboard-studio` olması ayrı bir karar: `perfboard`
-> plaketin kendi adı, bu programın değil. Jenerik kelimeyi paket adı olarak sahiplenmek
-> ürünle malzemeyi karıştırır, ve `perfboard` bu depoda prose'da geçen gerçek bir kelime —
-> ikisinin aynı yazılması, ismin geçtiği her satırı elle ayıklanması gereken bir metin
-> hâline getiriyordu. `.perf` uzantısı ve `DOCUMENT_FORMAT_VERSION` kıpırdamadı; isim
-> değişikliği tek bir baytlık dosya formatına dokunmuyor.
+**İsim — kapandı: Perfboard Studio.** Adaylar PerfStudio · PadPilot · Protoforge ·
+SolderPlan idi; PerfStudio seçildi, on sürüm taşıdı ve v0.11'de bırakıldı. Okunuşu bir
+sebep ("perf" ile "perv" arasında tek harf var), ama asıl sebep kısaltmanın yazılımdaki
+anlamı: "perf" performans demek — Linux'ta profiler'ın adı, ve AMD yıllarca **GPU
+PerfStudio** adlı bir grafik profiler'ı yayınladı. Yani ismi seçtiren gerekçe —
+keşfedilebilirlik — tam da kendi aleyhine çalışıyordu.
 
-**Kod imzalama.** Windows EV sertifikası ~$300/yıl, Apple notarization $99/yıl.
-Başta imzasız yayınlanabilir (SmartScreen uyarısı kabul edilir) ama planlanmalı.
+Tanıtıcının `perfboard` değil `perfboard-studio` olması ayrı bir karar: `perfboard`
+plaketin kendi adı, bu programın değil. Jenerik kelimeyi paket adı olarak sahiplenmek
+ürünle malzemeyi karıştırır. `.perf` uzantısı ve `DOCUMENT_FORMAT_VERSION` kıpırdamadı.
 
-**Footprint kütüphanesi kaynağı.** THT footprint'ler parametrik olarak üretilebilir
-(pitch + pad çapı + drill). Alternatif: KiCad footprint'lerini atıflı bundle etmek —
-CC-BY-SA-4.0 yükümlülüğü Apache-2.0 kodu bulaştırmaz ama ayrı lisanslı klasör gerekir.
-**M1'de karar verilecek.**
+**Footprint kütüphanesi kaynağı — kapandı: üretiliyor.** "M1'de karar verilecek" diyordu;
+61 footprint bir avuç parametreden hesaplanıyor, sıfır asset, ve kütüphanede olmayan bir
+parça parametrelerini adında taşıyan bir id ile isteniyor. KiCad footprint'lerini bundle
+etme alternatifi alınmadı — ama 3D **gövdeler** için tam olarak o yapıldı (D6), ve
+CC-BY-SA klasörü orada duruyor.
+
+**Kod imzalama — hâlâ açık.** Windows EV sertifikası ~$300/yıl, Apple notarization
+$99/yıl. Şu an imzasız yayınlanıyor: Windows'ta SmartScreen uyarısı çıkıyor, macOS paketi
+ad-hoc imzalı ama notarize değil. Kabul edilmiş bir durum, çözülmüş değil — ve otomatik
+güncellemenin kurulumu **başlatmamasının** sebeplerinden biri de bu (§14).
 
 ---
 
@@ -586,11 +723,11 @@ CC-BY-SA-4.0 yükümlülüğü Apache-2.0 kodu bulaştırmaz ama ayrı lisanslı
 
 | Risk | Etki | Azaltma |
 |---|---|---|
-| Linux WebKitGTK'da WebGL yetersiz | Orta | M0'da ölç; platform adaptörü sayesinde Electron'a geçiş günler sürer |
+| ~~Linux WebKitGTK'da WebGL yetersiz~~ | — | **Kapandı, riskten kaçınılarak.** M0 ölçtü ve cevap "bu riski taşımaya değmez" çıktı: çatı Qt + VTK oldu (D5), platform sorusu ortadan kalktı. Yerini alan risk, sürücünün VTK'ya yetmemesi — `PERFBOARD_STUDIO_SIMPLE_3D=1` onun kaçış yolu |
 | Autorouter beklenti tuzağı | **Yüksek** | "Interaktif asistan" konumlandırması; route edilemeyen netler açıkça raporlanır, sessizce bırakılmaz |
-| 3D'de fotogerçekçilik scope creep | Orta | Hedef sabit: "doğru ve anlaşılır". Basit materyal, gölge bütçesi sınırlı |
+| 3D'de fotogerçekçilik scope creep | Orta | Hedef sabit: "doğru ve anlaşılır". **Hedef bir kez bilerek yükseltildi:** parçalar Phong yerine malzeme olarak gölgelendiriliyor, çünkü hiçbir Phong değeri alüminyumu alüminyum göstermiyordu — ve bir DIP ile kristal kutuyu ayırt edememek doğruluk sorunuydu, süs sorunu değil. Bütçe hâlâ sınırlı: iki ağır parçanın ikisi de kapatılabiliyor |
 | MCP tool sayısı patlaması | Orta | **Gerçekleşen: 51 tool.** Tavan tutmadı, kural tuttu: her tool `docs/MCP.md`'de bir gruba ve bir gerekçeye bağlı (11 grup; sonuncusu "tasarım", yukarıdaki "Devre girişi" notuna bak). ~25 sayısı yüzey bilinmeden atılmış bir tahmindi; korumaya çalıştığı şey sayı değil gerekçe zorunluluğuydu ve o yürürlükte. Kuralın bir kez kaydığı da ölçüldü: `reroute` sunucuda vardı, dokümanda yoktu — sayıyı üç yerde üç farklı yapan buydu, ve artık `test_mcp.py` kaymayı bir daha bırakmıyor |
-| Lisans kirlenmesi (GPL'li rakip kod) | **Yüksek** | Clean-room: DIYLC/VeroRoute kaynağına bakılmayacak. Sadece striprouter (MIT) referans alınabilir |
+| Lisans kirlenmesi (GPL'li rakip kod) | **Yüksek** | Clean-room tutuldu: DIYLC/VeroRoute kaynağına bakılmadı; `docs/prior-art.md` neye bakıldığını yazıyor. Apache-2.0 olmayan tek parça KiCad'in 3D mesh'leri (D6), kendi lisansıyla tek klasörde |
 | Kapsamın 3 kart tipine yayılması | Orta | v1 sadece pad-per-hole. Stripboard artık uçtan uca: `stripboard.py` geometri, `striproute.py` router, 2D'de kesme modu, ve `placer.py` strip hizasını skorluyor |
 | **Lehim yolu güvenilirliği**: araç kullanıcıyı kırılgan yapıya teşvik edebilir | **Yüksek** | DRC bilgilendirir, engellemez: uzun saf yolda omurga önerir, FR-2'de ısı uyarısı verir, R5' risklerini test adımına çevirir. Karar kullanıcının, veri aracın |
 
