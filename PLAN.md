@@ -31,12 +31,18 @@ doğruluğunu makine ile kanıtla, ve kullanıcının eline **adım adım lehiml
 |---|---|---|---|
 | D1 | v1 kart tipi | **Ada bakırlı delikli plaket** (pad-per-hole) | TR'de en yaygın, en az desteklenen. Veri modeli üçünü de destekler, cila burada |
 | D2 | Lisans | **Apache-2.0** | Şirket dostu, patent koruması. GPL'li DIYLC/VeroRoute kodundan tamamen bağımsız kalınacak |
-| D3 | Devre girişi | **Netlist import + görsel düzenleme**; sonradan genişletildi: sayfa elle de çizilebiliyor (bkz. "D3 nerede durdu") | LVS gücü; editör yükü ise çizim geometrisini netlistin dışında tutarak sınırlandı |
 | D4 | Rehber çıktısı | **4'ü birden**: interaktif offline HTML · 1:1 PDF · doğrulama kontrol listesi · CSV kesim listesi + BOM | Rehber projenin farklılaştırıcısı; yarım bırakılmaz |
 | D5 | Masaüstü çatısı | **Tauri v2**, Electron kaçış yolu açık | ~10MB kurulum, düşük RAM, Rust router yolu doğal. Platform adaptörü ince tutulacak |
 | D6 | 3D modeller | **Parametrik üretim + KiCad'den ödünç THT paketleri** | Aşağıya bak — karar kısmen değişti |
 | D7 | 3D kapsamı | **Tam** — montaj animasyonu + patlatılmış görünüm dahil | 3D'yi dekorasyondan öğretim aracına çeviren şey bu |
 | D8 | Lehim yolu | **Birinci sınıf yol çekme primitifi** (cezalı özel durum değil) | TR delikli plaket pratiğinde asıl yöntem; güç/toprak rayları böyle çekiliyor |
+
+**D3 yoktu, kaldırıldı.** "Devre girişi: netlist import, şema editörü yazma yükü yok"
+diye bir satırdı. Kimin koyduğu kayıtlı değil — bu dosya ilk commit'te, projenin
+`Co-Authored-By` geleneğinden önce geldi — ve proje sahibi böyle bir karar vermediğini
+söylüyor. Gerekçesi de tutmadı: bakınız aşağıdaki "Devre girişi". Kalan numaralar olduğu
+gibi bırakıldı; D4'ü D3 yapmak CHANGELOG'daki ve kaynaktaki her D4..D8 atfını sessizce
+yanlışlardı.
 
 **D6 nerede durdu.** Karar üç gerekçeye dayanıyordu: sıfır asset, footprint ile garantili
 tutarlılık, temiz lisans. **İkisi aynen duruyor, üçüncüsü kısmen bırakıldı.**
@@ -64,22 +70,21 @@ tutuyor: **bu araçla çizilen kart, şematik ve rehber etkilenmiyor.** Yeniden 
 dizini olduğu gibi taşır. §13'ün "lisans bulaşması" riski böyle sınırlandı: kod değil veri,
 tek dizin, kendi lisansıyla.
 
-**D3 nerede durdu, ve nerede geri alındı.** Kararın birinci yarısı aynen geçerli ve
-genişledi: **devre önce çizilir, kart sonra yerleştirilir** — diğer her EDA aracının
-çalıştığı sıra. `doc.parts` karta konmamış parçaları tutar (`part.add` / `part.update` /
-`part.delete` / `part.place`, `component.unplace`), `net.connect` bir parçanın kart üzerinde
-olmasını hiç istemiyordu, ve şema paneli (`Ctrl+2`) bu ikisini bir araya getiriyor.
+**Devre girişi: iki yol, ve ikisi de birinci sınıf.** Ya bir netlist içe aktarılır, ya
+devre burada çizilir. Sıra her iki durumda da aynı: **devre önce, kart sonra** — diğer her
+EDA aracının çalıştığı sıra. `doc.parts` karta konmamış parçaları tutar (`part.add` /
+`part.update` / `part.delete` / `part.place`, `component.unplace`), `net.connect` bir
+parçanın kart üzerinde olmasını hiç istemiyordu, ve şema paneli (`Ctrl+2`) bu ikisini bir
+araya getiriyor.
 
-İkinci yarısı — **şema editörü yazma yükü alınmayacak** — geri alındı. D3'ün tabloda yazan
-gerekçesi buydu ve tek satırdı; "çıktısını bu araç zaten KiCad'den alıyor" cümlesi sonradan
-CLAUDE.md'de eklenmiş bir yorumdur, kararın kendisinde geçmez, ve **yanlıştır**: KiCad'den
-alınan şey bir netlist, yani bir bağlantı listesi. Netlist'in geometrisi yoktur — sayfayı
-bu araç zaten kendisi üretmek zorundaydı, `schematic.py` bunun için var. Dolayısıyla ortada
-"zaten KiCad'den gelen bir şema" hiç olmadı; olan şey, çizilemeyen bir şemaydı.
+**Çizmek neden gerekti.** Netlist bir bağlantı listesidir; geometrisi yoktur. Sayfayı bu
+araç zaten kendisi üretmek zorundaydı — `schematic.py` bunun için var — yani ortada
+"başka yerden gelen bir şema" hiç olmadı. Olan şey, bakılabilen ama çizilemeyen bir
+şemaydı: sembol taşınamıyor, döndürülemiyor, tel elle çekilemiyordu.
 
-Alınan gerçek yük de bir yıl değildi: çizim geometrisi netlist'in DIŞINDA tutulduğu için
-(çizilen telin net kimliği yok, iki ucunu tutan net neyse odur) LVS, router, placer, rehber
-ve kart tarafında tek satır değişmedi. Sembol sürüklenir, çeyrek çeyrek döndürülür,
+**Alınan yük ne kadardı.** Bir yıl değil. Çizim geometrisi netlist'in DIŞINDA tutulduğu için
+— çizilen telin net kimliği yok, iki ucunu tutan net neyse odur — LVS, router, placer,
+rehber ve kart tarafında tek satır değişmedi. Sembol sürüklenir, çeyrek çeyrek döndürülür,
 aynalanır; tel pinden pine elle çekilir; tel çekilmeyen pin **ada göre** bağlanır; ve çizimin
 üzerine metin, kutu, çizgi, daire konabilir.
 
@@ -584,7 +589,7 @@ CC-BY-SA-4.0 yükümlülüğü Apache-2.0 kodu bulaştırmaz ama ayrı lisanslı
 | Linux WebKitGTK'da WebGL yetersiz | Orta | M0'da ölç; platform adaptörü sayesinde Electron'a geçiş günler sürer |
 | Autorouter beklenti tuzağı | **Yüksek** | "Interaktif asistan" konumlandırması; route edilemeyen netler açıkça raporlanır, sessizce bırakılmaz |
 | 3D'de fotogerçekçilik scope creep | Orta | Hedef sabit: "doğru ve anlaşılır". Basit materyal, gölge bütçesi sınırlı |
-| MCP tool sayısı patlaması | Orta | **Gerçekleşen: 51 tool.** Tavan tutmadı, kural tuttu: her tool `docs/MCP.md`'de bir gruba ve bir gerekçeye bağlı (11 grup; sonuncusu "tasarım", D3 notuna bak). ~25 sayısı yüzey bilinmeden atılmış bir tahmindi; korumaya çalıştığı şey sayı değil gerekçe zorunluluğuydu ve o yürürlükte. Kuralın bir kez kaydığı da ölçüldü: `reroute` sunucuda vardı, dokümanda yoktu — sayıyı üç yerde üç farklı yapan buydu, ve artık `test_mcp.py` kaymayı bir daha bırakmıyor |
+| MCP tool sayısı patlaması | Orta | **Gerçekleşen: 51 tool.** Tavan tutmadı, kural tuttu: her tool `docs/MCP.md`'de bir gruba ve bir gerekçeye bağlı (11 grup; sonuncusu "tasarım", yukarıdaki "Devre girişi" notuna bak). ~25 sayısı yüzey bilinmeden atılmış bir tahmindi; korumaya çalıştığı şey sayı değil gerekçe zorunluluğuydu ve o yürürlükte. Kuralın bir kez kaydığı da ölçüldü: `reroute` sunucuda vardı, dokümanda yoktu — sayıyı üç yerde üç farklı yapan buydu, ve artık `test_mcp.py` kaymayı bir daha bırakmıyor |
 | Lisans kirlenmesi (GPL'li rakip kod) | **Yüksek** | Clean-room: DIYLC/VeroRoute kaynağına bakılmayacak. Sadece striprouter (MIT) referans alınabilir |
 | Kapsamın 3 kart tipine yayılması | Orta | v1 sadece pad-per-hole. Stripboard artık uçtan uca: `stripboard.py` geometri, `striproute.py` router, 2D'de kesme modu, ve `placer.py` strip hizasını skorluyor |
 | **Lehim yolu güvenilirliği**: araç kullanıcıyı kırılgan yapıya teşvik edebilir | **Yüksek** | DRC bilgilendirir, engellemez: uzun saf yolda omurga önerir, FR-2'de ısı uyarısı verir, R5' risklerini test adımına çevirir. Karar kullanıcının, veri aracın |

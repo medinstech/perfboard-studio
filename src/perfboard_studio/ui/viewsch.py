@@ -3,11 +3,9 @@
 WHAT IS EDITABLE HERE IS THE CIRCUIT, AND THE DRAWING IS STILL DERIVED.
 ``perfboard_studio.schematic`` builds a whole sheet from the document every time; this file
 paints one, reports clicks, and hands them back to the window as commands -- add a part,
-join two pins, rename a net, place the lot. A symbol can be dragged to another cell, and
-what that sends is a CELL rather than millimetres (``model.SymbolPlacement``), so the
-layout keeps every position and keeps its guarantee that no wire crosses a symbol. That is
-what lets a symbol move without reversing PLAN.md D3 or reopening the byte-for-byte
-``.perf`` format.
+move it, turn it, draw a wire, name a net, place the lot. What a gesture SENDS is always a
+position or a pair of pins, never a change to the document: every edit on this sheet is a
+command like any other, so the drawing has no state of its own to get out of step.
 
 NOTHING HERE DECIDES WHAT AN EDIT MEANS. A right-click reports a position and the window
 builds the menu, the same division ``view2d.BoardView.contextMenuRequested`` draws: which

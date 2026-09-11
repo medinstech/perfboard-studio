@@ -289,9 +289,11 @@ Three things hold it together:
   the electrolytic, disc and film capacitors gained their missing dimension: an auto-id
   that dropped the can height meant two different parts could be given one id, which
   `_build_standard_footprints` would have refused as a duplicate.
-- **`generic_box_footprint` is not a shape editor**, and for the reason D3 declined a
-  schematic editor: an arbitrary outline would be state, state would be a document field,
-  and a document field reopens the byte-for-byte format. A pin grid and three millimetre
+- **`generic_box_footprint` is not a shape editor**, and the reason is the format rather
+  than the effort: an arbitrary outline would be state, state would be a document field,
+  and a document field reopens the byte-for-byte format. (The sheet's own geometry pays
+  that price deliberately and in one place — see "Two kinds of sheet" — which is exactly
+  why a second field, for a shape nobody asked for, is not worth it.) A pin grid and three millimetre
   dimensions is what fits in an id. Its pins are numbered ROW BY ROW, which is a module's
   silkscreen convention and not a DIP's — `dip_footprint` is for when the answer is the
   other one.
@@ -681,13 +683,13 @@ from a test that hands it a document; two sheets are frozen whole in
 
 ### Two kinds of sheet, and the document decides which
 
-**PLAN.md D3 is reversed, and only half of it.** What D3 actually says is one table row —
-"netlist import plus visual editing; no cost of writing a schematic editor, and the power of
-LVS". The "its output already comes from KiCad" argument is a later gloss and it was wrong:
-what comes from KiCad is a NETLIST, which has no geometry at all, which is why `schematic.py`
-had to derive a sheet in the first place. There was never a drawing arriving from anywhere.
-The cost was real but it was not a year: the drawing's geometry is kept OUT of the netlist,
-so nothing downstream of `doc.nets` changed by a line.
+**The sheet used to be a picture you could look at and not draw**, and the reason given for
+that was a line in PLAN.md declining the cost of a schematic editor. The line is gone (see
+"Devre girişi" there): what a netlist import brings is a list of CONNECTIONS with no geometry
+in it at all, which is why `schematic.py` had to derive a sheet from nothing in the first
+place — no drawing was ever arriving from anywhere. And the cost it was guarding against is
+bounded by keeping the drawing's geometry OUT of the netlist, which is the whole design
+below: nothing downstream of `doc.nets` changed by a line.
 
 So `build_schematic` has two paths, chosen by whether `doc.sheet` is empty:
 

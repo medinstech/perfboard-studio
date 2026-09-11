@@ -406,14 +406,13 @@ class SchematicPart:
 class SymbolPlacement:
     """Where one part's symbol sits on the sheet, and which way round it is.
 
-    MILLIMETRES, AND PLAN.md D3 IS REVERSED ON PURPOSE. This used to be a CELL in a grid
-    the layout owned, which is what let the sheet stay derived: wires ran only in the
-    channels between cells, so no wire could cross a symbol. That guarantee is real and it
-    is also the reason the sheet was not a schematic editor -- a symbol could be moved to
-    another cell and nowhere else, it could not be turned, and a wire could not be drawn at
-    all. D3 declined to write a geometric editor because that is a year of work whose
-    output this tool already accepts from KiCad; what it did not weigh is that a tool which
-    can capture a circuit and cannot DRAW one is asking people to keep KiCad open beside it.
+    MILLIMETRES, AND THAT IS THE WHOLE OF IT. This used to be a CELL in a grid the layout
+    owned, which is what let the sheet stay derived: wires ran only in the channels between
+    cells, so no wire could cross a symbol. That guarantee is real and it is also the reason
+    the sheet was not a schematic editor -- a symbol could be moved to another cell and
+    nowhere else, it could not be turned, and a wire could not be drawn at all. A tool that
+    can capture a circuit and cannot DRAW one is asking people to keep another one open
+    beside it.
 
     So the sheet has two states, and which one a document is in is decided by whether this
     tuple is empty. Empty, the whole drawing is derived exactly as before, and every one of

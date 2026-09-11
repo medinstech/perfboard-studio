@@ -6,24 +6,28 @@ the copper, and both of those are statements about a net the user has no way to 
 This module is that view: it takes ``doc.nets`` -- the schematic's intent, the thing every
 other module derives from -- and produces a drawing of it.
 
-**It is generated, not stored, and that is the decision footprints already made.** A
-``.perf`` file carries no symbol positions and neither does a KiCad netlist, so there is
-nothing to read; and adding symbol coordinates to the document would reopen the
-byte-for-byte format (``test_persist.py::test_golden_round_trip_byte_identical``) for
-something no user edits. Same document in, same drawing out -- pure, no clock, no RNG, no
-filesystem, ties broken by reference and net id -- which is also what lets the layout be
-compared against a golden file rather than looked at.
+**It is generated unless somebody has drawn on it.** A KiCad netlist carries no symbol
+positions, so on the way in there is nothing to read and the sheet has to be laid out from
+the connections alone; that is what most of this module does. A document somebody has
+arranged carries its own positions, and they are omitted from the file when empty, which is
+what keeps the byte-for-byte format
+(``test_persist.py::test_golden_round_trip_byte_identical``) intact for every document that
+has not been drawn on. Either way: same document in, same drawing out -- pure, no clock, no
+RNG, no filesystem, ties broken by reference and net id -- which is also what lets the
+layout be compared against a golden file rather than looked at.
 
-**THE CIRCUIT IS EDITABLE AND THE SHEET IS NOT, and PLAN.md D3 is why.** The design
+**THE CIRCUIT IS ``doc.nets``, AND THE SHEET IS ONLY HOW IT WAS DRAWN.** The design
 itself — which parts exist (``doc.parts``), what they are, what is wired to what
-(``doc.nets``) — is edited through the command bus like everything else, and the panel
-over this module is where a circuit gets drawn before a board is laid out. What cannot be
-edited is the DRAWING: nothing here moves a symbol, chooses a corner for a wire or
-remembers a sheet position, because that would be state, state would be a document field,
-and a document field would be the geometric schematic editor D3 declined to write — a
-year of work whose output this tool already accepts from KiCad. Every sheet is derived
-afresh, so there is nothing to keep in step with the netlist and nothing to lay out by
-hand.
+(``doc.nets``) — is edited through the command bus like everything else, and that is the
+one answer to what is connected: LVS, the router, the placer, the guide and the board all
+read it and none of them knows anything about a sheet.
+
+The DRAWING can be either derived or stored, and which one a document gets is decided by
+whether ``doc.sheet`` is empty — see "The sheet somebody drew" below. Derived is the
+default and is what every netlist import produces: a sheet nobody has touched is laid out
+from the netlist every time, so there is nothing to keep in step. Stored is what a person
+gets the moment they move, turn or wire anything, and it still adds no second answer about
+connectivity, because a stored wire carries no net id.
 
 THREE DECISIONS CARRY THE LEGIBILITY, AND EACH IS THE ONE THAT KEEPS IT FROM BEING A
 HAIRBALL.

@@ -760,7 +760,7 @@ def relay_footprint(
 # IT IS DELIBERATELY NOT A SHAPE EDITOR. An arbitrary outline would have to be STORED, and
 # stored geometry is a document field, and a document field reopens the byte-for-byte .perf
 # format for something that can be computed -- the same argument PLAN.md D6 makes about
-# meshes and D3 makes about symbol positions. A box, a pin grid and three millimetre
+# meshes makes about a shipped library. A box, a pin grid and three millimetre
 # dimensions is what fits in an id, and an id is what a document already carries.
 
 

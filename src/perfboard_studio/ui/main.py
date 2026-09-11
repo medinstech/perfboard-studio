@@ -1575,7 +1575,7 @@ class CustomPartDialog(QDialog):
     is no outline to draw and nothing is saved anywhere -- because a drawn outline would be
     STATE, state would be a document field, and a document field would reopen the
     byte-for-byte .perf format for something that can be computed. That is PLAN.md D6's
-    argument about meshes and D3's about symbol positions, arriving a third time.
+    argument about meshes makes about a library, arriving again.
 
     What comes out is an ID that carries its own parameters, so the part travels with the
     board: mail somebody a .perf using ``box-4x2-p1-r3-15x10x8`` and it opens as the same
@@ -4239,11 +4239,11 @@ class MainWindow(QMainWindow):
     # is a way of building -- was only ever a tree of net names in a dock. LVS could say
     # "VOUT is open" to somebody with no way to look at what VOUT is.
     #
-    # It draws the netlist and it does not edit it (PLAN.md D3, and `schematic.py`'s own
-    # header). What it does instead is cross-probe: click a symbol and that part is
+    # It began as a picture you could look at and not draw, and what it kept from then is
+    # the half that is worth keeping: cross-probing. Click a symbol and that part is
     # selected on the board, click a wire and its net lights up in both places, and a
     # selection made over there lights up here. Two views of one document, which is worth
-    # more on a perfboard than a second editor would be.
+    # more on a perfboard than two editors would be.
 
     # -- the schematic panel -------------------------------------------------
     #
@@ -8379,10 +8379,10 @@ class MainWindow(QMainWindow):
     def on_import_netlist(self) -> None:
         """Bring in the schematic's intent, which is how connections get defined at all.
 
-        PLAN.md D3 settles this deliberately: a netlist import plus visual editing, rather than
-        a schematic editor. The parser and the ``netlist.import`` command have both existed from
-        the start with nothing able to reach them, so until now nets could only arrive by
-        hand-editing a .perf file.
+        ONE OF THE TWO WAYS IN, and the one for a circuit that already exists somewhere else;
+        the other is drawing it on the sheet. The parser and the ``netlist.import`` command
+        both existed from the first commit with nothing able to reach them, so for a while
+        nets could only arrive by hand-editing a .perf file.
         """
         start_dir = str(self.current_path.parent) if self.current_path else str(Path.cwd())
         path_str, _ = QFileDialog.getOpenFileName(
