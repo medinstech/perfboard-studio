@@ -23,6 +23,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import datetime
+import gc
 import math
 import os
 import sys
@@ -5719,6 +5720,25 @@ class MainWindow(QMainWindow):
         ``work`` is handed a ``should_stop`` predicate. Cancelling asks the planner to
         stop and return its best result so far rather than discarding it, which for the
         placer means a worse placement, never an invalid one.
+
+        **THE CYCLIC COLLECTOR IS HELD OFF FOR THE DURATION, AND THAT IS NOT AN
+        OPTIMISATION.** This is the one place in the application where Python runs on two
+        threads at once: the planner allocates hard on the worker while this loop pumps Qt
+        on the UI thread. Python's cyclic collector runs on whichever thread happens to
+        trip the allocation threshold, so it runs on the PLANNER -- and it finalises
+        whatever it finds, including PySide wrappers whose C++ objects the UI thread is at
+        that instant painting with. The process does not raise; it dies.
+
+        Measured, not feared. Forty rounds of "move a part, autoroute" crashed in roughly
+        half of the runs, with ``faulthandler`` showing the worker inside a dataclass
+        ``__init__`` marked *Garbage-collecting* and the main thread inside
+        ``view2d.BoardScene`` painting. Three runs of the same forty with the collector off
+        finished clean. It was never about the 3D view, or the router, or what was being
+        routed -- only about two threads and one collector.
+
+        Held off rather than tuned: refcounting still frees everything acyclic as it always
+        did, only cycles wait, and they wait for the length of one route. ``gc.collect()``
+        on the way out is what pays for it, once, on the thread that is allowed to.
         """
         cancelled = False
 
@@ -5743,6 +5763,8 @@ class MainWindow(QMainWindow):
         # while a planner is already running against the same document.
         self.setEnabled(False)
         self._planner_running = True
+        collecting = gc.isenabled()
+        gc.disable()
         try:
             worker.start()
             while not worker.isFinished():
@@ -5775,6 +5797,12 @@ class MainWindow(QMainWindow):
             worker.wait()
         finally:
             self._planner_running = False
+            # Back on, and swept once, before anything else can allocate: the cycles of a
+            # whole route are waiting, and the thread that collects them here is the only
+            # thread there is.
+            if collecting:
+                gc.enable()
+                gc.collect()
             if progress is not None:
                 progress.close()
             self.setEnabled(True)

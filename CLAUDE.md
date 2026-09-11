@@ -85,6 +85,24 @@ level, and 20+ levels away from a board that lost its parts. Re-bless with
 coverage instead and was nearly useless (a perfboard is mostly board); that is written
 down in the file so nobody tries it again.
 
+**`_run_planner` holds the cyclic collector off, and that is a crash fix rather than an
+optimisation.** It is the one place in this application where Python runs on two threads at
+once: the placer or the router allocates hard on a `QThread` while the UI thread pumps Qt
+in a loop. Python's cyclic collector runs on **whichever thread trips the allocation
+threshold**, so it runs on the planner — and it finalises what it finds, including PySide
+wrappers whose C++ objects the UI thread is at that instant painting with. The process does
+not raise; it dies.
+
+Measured, not feared: forty rounds of "move a part, autoroute" crashed in about half the
+runs, `faulthandler` putting the worker inside a dataclass `__init__` marked
+*Garbage-collecting* and the main thread inside `view2d`'s `paint`. The same forty with the
+collector off finished clean, four times over. It had nothing to do with the 3D view, the
+router, or what was being routed — only with two threads and one collector. Refcounting
+still frees everything acyclic; only cycles wait, for the length of one route, and
+`gc.collect()` on the way out pays for it once on the only thread there is. Two tests pin
+it, including the failure path — a collector left disabled would be a memory leak traded
+for a crash.
+
 **Every destructive question in the window goes through `MainWindow._confirm`**, whose
 button carries the verb and whose default is Cancel — `QMessageBox.question` with no
 buttons named puts Yes under Enter. A test that needs the answer stubs

@@ -244,6 +244,13 @@ closed without a bump.
 
 ### Fixed
 
+- **Moving a part and then autorouting could kill the application.** Not reliably — about
+  half the time, and only in a real window. `_run_planner` runs the placer and the router
+  on a worker thread while the UI thread pumps Qt, and Python's cyclic garbage collector
+  runs on whichever thread happens to trip its threshold: on the worker, where it would
+  finalise Qt wrappers the UI thread was painting with at that moment. The collector is now
+  held off for the length of a planner run and swept once when it finishes.
+
 - **The placer and the router keep off holes with no pad.** It surfaced the moment the
   shipped examples were moved onto the boards suppliers actually sell: a 6 × 8 cm board
   comes with a finger strip down two of its edges, a board edge is exactly where the

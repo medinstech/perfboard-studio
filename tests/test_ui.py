@@ -1394,6 +1394,51 @@ def _close(window) -> None:
     window.close()
 
 
+def test_the_cyclic_collector_is_held_off_while_a_planner_runs() -> None:
+    """THE ONE PLACE THIS APPLICATION RUNS PYTHON ON TWO THREADS AT ONCE, and the reason
+    it crashed.
+
+    ``_run_planner`` pumps Qt on the UI thread while the planner allocates hard on a
+    worker. Python's cyclic collector runs on whichever thread trips the threshold -- so it
+    runs on the PLANNER, and finalises whatever it finds, including PySide wrappers whose
+    C++ objects the UI thread is at that instant painting with. The process does not raise;
+    it dies. Forty rounds of "move a part, autoroute" crashed in about half the runs, and
+    ``faulthandler`` put the worker inside a dataclass ``__init__`` marked
+    *Garbage-collecting* with the main thread inside the board's ``paint``.
+
+    So this pins both halves: off while the worker runs, and back ON afterwards -- a
+    collector left disabled would be a memory leak traded for a crash.
+    """
+    import gc
+
+    window = _window_on(_load_dense())
+    seen: list[bool] = []
+
+    window._run_planner("planning", lambda _should_stop: seen.append(gc.isenabled()))
+
+    assert seen == [False], "the collector was live while the planner thread ran"
+    assert gc.isenabled(), "the collector was never turned back on"
+    _close(window)
+
+
+def test_a_planner_that_raises_still_turns_the_collector_back_on() -> None:
+    """The failure path is the one that matters: an exception here used to leave the
+    window disabled, and would now leave the collector off for the rest of the session."""
+    import gc
+
+    window = _window_on(_load_dense())
+
+    def boom(_should_stop):
+        raise RuntimeError("planner gave up")
+
+    with pytest.raises(RuntimeError):
+        window._run_planner("boom", boom)
+
+    assert gc.isenabled()
+    assert window.isEnabled()
+    _close(window)
+
+
 def test_autoplace_asks_before_moving_the_users_board(monkeypatch) -> None:
     """Routing adds copper to a board the user arranged; placement MOVES it. So the
     confirmation is not a formality, and cancelling has to leave the document alone."""
