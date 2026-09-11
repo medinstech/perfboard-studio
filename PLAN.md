@@ -31,7 +31,7 @@ doğruluğunu makine ile kanıtla, ve kullanıcının eline **adım adım lehiml
 |---|---|---|---|
 | D1 | v1 kart tipi | **Ada bakırlı delikli plaket** (pad-per-hole) | TR'de en yaygın, en az desteklenen. Veri modeli üçünü de destekler, cila burada |
 | D2 | Lisans | **Apache-2.0** | Şirket dostu, patent koruması. GPL'li DIYLC/VeroRoute kodundan tamamen bağımsız kalınacak |
-| D3 | Devre girişi | **Netlist import + görsel düzenleme** | Şema editörü yazma yükü yok; LVS gücü kazanılıyor |
+| D3 | Devre girişi | **Netlist import + görsel düzenleme**; sonradan genişletildi: sayfa elle de çizilebiliyor (bkz. "D3 nerede durdu") | LVS gücü; editör yükü ise çizim geometrisini netlistin dışında tutarak sınırlandı |
 | D4 | Rehber çıktısı | **4'ü birden**: interaktif offline HTML · 1:1 PDF · doğrulama kontrol listesi · CSV kesim listesi + BOM | Rehber projenin farklılaştırıcısı; yarım bırakılmaz |
 | D5 | Masaüstü çatısı | **Tauri v2**, Electron kaçış yolu açık | ~10MB kurulum, düşük RAM, Rust router yolu doğal. Platform adaptörü ince tutulacak |
 | D6 | 3D modeller | **Parametrik üretim + KiCad'den ödünç THT paketleri** | Aşağıya bak — karar kısmen değişti |
@@ -64,16 +64,32 @@ tutuyor: **bu araçla çizilen kart, şematik ve rehber etkilenmiyor.** Yeniden 
 dizini olduğu gibi taşır. §13'ün "lisans bulaşması" riski böyle sınırlandı: kod değil veri,
 tek dizin, kendi lisansıyla.
 
-**D3 nerede durdu.** Karar aynen geçerli ve genişledi: **devre önce çizilir, kart sonra
-yerleştirilir** — diğer her EDA aracının çalıştığı sıra. `doc.parts` karta konmamış
-parçaları tutar (`part.add` / `part.update` / `part.delete` / `part.place`,
-`component.unplace`), `net.connect` bir parçanın kart üzerinde olmasını hiç istemiyordu,
-ve şema paneli (`Ctrl+2`) bu ikisini bir araya getiriyor. D3'ün yazmamaya karar verdiği
-şey hâlâ yazılmadı ve yazılmayacak: **geometrik şema editörü** — sembolü sürüklediğiniz,
-telin köşesini kendiniz kırdığınız, sayfa koordinatını dosyaya yazan tür. Sayfa her
-seferinde `schematic.py` tarafından belgeden türetiliyor; saklanan hiçbir çizim koordinatı
-yok, dolayısıyla netlist ile senkron tutulacak ikinci bir gerçek de yok. Kazanılan LVS
-gücü aynen duruyor, üstelik artık KiCad'siz de.
+**D3 nerede durdu, ve nerede geri alındı.** Kararın birinci yarısı aynen geçerli ve
+genişledi: **devre önce çizilir, kart sonra yerleştirilir** — diğer her EDA aracının
+çalıştığı sıra. `doc.parts` karta konmamış parçaları tutar (`part.add` / `part.update` /
+`part.delete` / `part.place`, `component.unplace`), `net.connect` bir parçanın kart üzerinde
+olmasını hiç istemiyordu, ve şema paneli (`Ctrl+2`) bu ikisini bir araya getiriyor.
+
+İkinci yarısı — **geometrik şema editörü yazılmayacak** — geri alındı, ve gerekçesi kararın
+kendi gerekçesini tartmasıydı. D3 "bu bir yıllık iş ve çıktısını bu araç zaten KiCad'den
+kabul ediyor" diyordu; tartmadığı şey şuydu: **devreyi yakalayabilen ama ÇİZEMEYEN bir araç,
+insanı zaten KiCad'e geri gönderir.** Sembol sürüklenir, çeyrek çeyrek döndürülür, aynalanır;
+tel pinden pine elle çekilir; tel çekilmeyen pin **ada göre** bağlanır — hangi şemanın
+sayfayı boydan boya kesen bir reset hattını çizdiği yerine yaptığı şey; ve çizimin üzerine
+metin, kutu, çizgi, daire konabilir.
+
+**İki tür sayfa var ve hangisi olduğuna belge karar veriyor.** `doc.sheet` boşsa çizimin
+tamamı eskisi gibi türetilir — semboller hücrelerde, teller yalnızca aralarındaki
+kanallarda, hiçbir tel bir sembolü kesemez — ve her netlist içe aktarımı, her yeni belge ve
+her `Arrange` basışı bunu üretir. İçinde bir şey varsa sayfa artık **çizilmiş** bir sayfadır
+ve hiçbir şey düzenlenmez.
+
+**Netlist hâlâ "neyin bağlı olduğu"nun tek cevabı.** Çizilen telin net kimliği yoktur:
+hangi nete ait olduğu, iki ucunu birden tutan nettir ve her seferinde bakılır. LVS, router,
+placer, rehber ve kart `doc.nets` okur; hiçbiri geometri öğrenmek zorunda değil, ve
+kullanıcının sonradan kopardığı bir bağlantının teli sessizce "hâlâ bağlı" demek yerine
+çizilmez olur. `.perf` biçimi kımıldamadı: üç dizi de boşken dosyadan düşüyor, on beş altın
+fikstür bayt bayt aynı, `DOCUMENT_FORMAT_VERSION` hâlâ 1.
 
 **Ek kararlar (tartışmaya açık ama varsayılan):**
 - Uygulama içi AI paneli **v1 kapsamında değil**. Çekirdek motor asla AI'a bağımlı olmayacak — API anahtarı olmadan araç tam işlevli kalır.

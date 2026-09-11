@@ -22,6 +22,37 @@ closed without a bump.
 
 ### Added
 
+- **The schematic is an editor now.** Symbols are dragged where you want them, turned a
+  quarter at a time and flipped; wires are drawn from pin to pin by hand; a pin can be
+  joined to a net by NAME instead, with a label at the pin, which is how every schematic
+  ever drawn handles a reset line reaching six parts; and text, boxes, lines and circles can
+  be put on the drawing. Parts are dragged onto the sheet out of the Parts panel, and
+  `Delete` takes what is selected out of the design. The sheet's own toolbar carries the
+  tools; `Escape` always comes back to the pointer; the middle button pans in every tool.
+
+  **PLAN.md D3 is reversed on purpose, and only half of it.** D3 declined to write a
+  geometric schematic editor because that is a year of work whose output this tool already
+  accepts from KiCad. What it did not weigh is that a tool which can capture a circuit and
+  cannot DRAW one sends people back to KiCad anyway. So there are two kinds of sheet and the
+  document decides which: with `doc.sheet` empty the whole drawing is derived exactly as
+  before — symbols in cells, wires in the channels between them, no wire able to cross a
+  symbol — and that is still what every imported netlist, every fresh document and every
+  press of `Arrange` produces. The moment anything is moved, turned or wired, every symbol
+  gets a position of its own in one command, and from then on the sheet is the drawing
+  somebody made.
+
+  **The netlist is still the one answer to what is connected.** A drawn wire carries no net
+  id: which net it belongs to is whichever net holds both of its ends, looked up every time.
+  That is what makes a wire left over from a connection somebody has since removed stop
+  being drawn instead of quietly asserting a join that no longer exists — and it is what
+  keeps LVS, the router, the placer, the build guide and the board from having to learn
+  anything about geometry.
+
+  `.perf` files are untouched by all of this unless somebody draws on the sheet: `sheet`,
+  `sheetWires` and `sheetNotes` are omitted when empty, so all fifteen golden fixtures
+  serialize to exactly the bytes they did before and `DOCUMENT_FORMAT_VERSION` has still
+  never moved.
+
 - **Parts are dragged out of the Parts panel onto the board.** Picking a part and then
   clicking where it goes is still the way to put down a run of them — five 10k resistors,
   one after another, without going back to the list — and it was the ONLY way, which is the
@@ -285,6 +316,11 @@ closed without a bump.
   1.5%. No new DRC errors and no connection that could not be routed.
 
 ### Fixed
+
+- **A `sheet` written while positions were cells is dropped with a warning rather than
+  refusing to open the document.** A cell means nothing without the layout that produced
+  it, so it cannot be converted; what is lost is where somebody dragged one symbol, and
+  what replaces it is the derived sheet they had before they dragged it.
 
 - **A symbol could not be dragged at all.** The sheet documented the gesture in three
   places — drag one to another cell, drag one onto the board to place that one part — and

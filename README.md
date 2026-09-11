@@ -203,8 +203,9 @@ checking tool the application depends on rather than an optional extra.
 
 ### A board from nothing
 
-Open the schematic panel (`Ctrl+2`) and draw the circuit: **Add Part** for each part,
-**Wire** to click two pins together, then **Place on the Board**. From there
+Open the schematic panel (`Ctrl+2`) and draw the circuit: drag parts onto the sheet out
+of the Parts panel, move and turn them where you want them, **Wire** from pin to pin — or
+**Label** a pin to join it to a net by name — then **Place on the Board**. From there
 **Place → Auto-place Board** (`Ctrl+Shift+A`), **`Ctrl+R`** to route, and
 **File → Export Build Guide** (`Ctrl+B`). No KiCad anywhere in that.
 

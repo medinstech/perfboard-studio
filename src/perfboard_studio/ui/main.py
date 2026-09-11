@@ -47,6 +47,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAction,
+    QActionGroup,
     QColor,
     QDesktopServices,
     QDrag,
@@ -109,15 +110,19 @@ from perfboard_studio.commands import (
     AddMountingHolesPayload,
     AddNetPayload,
     AddPartPayload,
+    AddSheetNotePayload,
     ApplyBoardPresetPayload,
     AutoSymbolsPayload,
+    ConnectPinsPayload,
     DeleteComponentPayload,
     DeleteConductorsPayload,
     DeleteEdgeConnectorPayload,
     DeleteMountingHolePayload,
     DeleteNetPayload,
     DeletePartPayload,
+    DeleteSheetNotesPayload,
     DisconnectPinsPayload,
+    DrawSheetWirePayload,
     ImportNetlistPayload,
     MirrorComponentPayload,
     MoveComponentPayload,
@@ -181,6 +186,7 @@ from perfboard_studio.guide import describe as describe_guide
 from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
 from perfboard_studio.lvs import LvsIssue, LvsResult, run_lvs, stale_conductor_ids
 from perfboard_studio.model import (
+    VALID_ROTATIONS,
     Board,
     BoardEdge,
     BoardLabels,
@@ -199,8 +205,11 @@ from perfboard_studio.model import (
     PadAxis,
     PadShape,
     PerfDocument,
+    Point2,
     Rotation,
     SchematicPart,
+    SheetNoteKind,
+    SheetWire,
     SymbolPlacement,
 )
 from perfboard_studio.parsers.kicad import parse_kicad_netlist
@@ -224,7 +233,7 @@ from perfboard_studio.project import DOCUMENT_SUFFIX, document_in, project_name
 from perfboard_studio.ratsnest import NetRatsnest, ratsnest, summarize
 from perfboard_studio.recovery import RecoveryRecord, is_worth_offering
 from perfboard_studio.router import RoutingStyle, options_for_style
-from perfboard_studio.schematic import build_schematic
+from perfboard_studio.schematic import build_schematic, snap_to_grid
 from perfboard_studio.schematic_export import drawing_to_svg
 from perfboard_studio.stripboard import is_stripboard
 from perfboard_studio.striproute import StripboardPlan, plan_stripboard
@@ -255,7 +264,13 @@ from .view2d import (
     join_pins,
     next_reference,
 )
-from .viewsch import SchematicView
+from .viewsch import SchematicView, SheetTool
+
+
+def _turned(rotation: Rotation, quarter_turns: int) -> Rotation:
+    """A rotation a quarter of a turn on, wrapping. The one place the sheet does this."""
+    return VALID_ROTATIONS[(VALID_ROTATIONS.index(rotation) + quarter_turns) % 4]
+
 
 #: What the Preferred Connection menu can be set to: one of the router's styles, or "best"
 #: to route with every style and keep whichever produces the board that is least work to
@@ -4251,7 +4266,13 @@ class MainWindow(QMainWindow):
         self.schematic_view.netClicked.connect(self._on_schematic_net_clicked)
         self.schematic_view.pinClicked.connect(self._on_schematic_pin_clicked)
         self.schematic_view.cleared.connect(self._on_schematic_cleared)
-        self.schematic_view.symbolMoved.connect(self._on_symbol_moved)
+        self.schematic_view.symbolsMoved.connect(self._on_symbols_moved)
+        self.schematic_view.selectionChanged.connect(self._on_sheet_selection_changed)
+        self.schematic_view.wireDrawn.connect(self._on_sheet_wire_drawn)
+        self.schematic_view.labelRequested.connect(self.on_sheet_label)
+        self.schematic_view.noteDrawn.connect(self.on_sheet_note_drawn)
+        self.schematic_view.deleteRequested.connect(self.on_sheet_delete)
+        self.schematic_view.footprintDropped.connect(self._on_sheet_footprint_dropped)
         self.schematic_view.contextMenuRequested.connect(self._on_sheet_context_menu)
         layout.addWidget(self.schematic_view, 1)
         return page
@@ -4271,16 +4292,95 @@ class MainWindow(QMainWindow):
         self.act_sch_add.triggered.connect(self.on_schematic_add_part)
         bar.addAction(self.act_sch_add)
 
-        self.act_sch_wire = QAction(icons.icon("connect"), t("Wire"), self)
-        self.act_sch_wire.setCheckable(True)
-        self.act_sch_wire.setToolTip(
-            t(
-                "Click a pin, then the pin it joins. Neither on a net yet? One gets made. "
-                "Exactly what the board's connect tool does, because it is the same code."
+        bar.addSeparator()
+
+        # THE TOOLS, AS A GROUP OF ONE. Every drawing application in the world has this
+        # row and this behaviour -- exactly one is armed, pressing another swaps it, and
+        # Escape comes back to the pointer. Select is IN the group rather than being the
+        # absence of a tool, which is what makes Escape mean one thing everywhere.
+        self.act_sheet_tool: dict[str, QAction] = {}
+        tools = QActionGroup(self)
+        tools.setExclusive(True)
+        for name, icon_name, label, tip in (
+            (
+                "select",
+                "arrow",
+                t("Select"),
+                t(
+                    "Pick symbols up, move them, rubber-band several at once. Delete takes "
+                    "the selection out of the design."
+                ),
+            ),
+            (
+                "wire",
+                "connect",
+                t("Wire"),
+                t(
+                    "Click a pin, then the pin it joins. Neither on a net yet? One gets "
+                    "made. Exactly what the board's connect tool does, because it is the "
+                    "same code."
+                ),
+            ),
+            (
+                "label",
+                "label",
+                t("Label"),
+                t(
+                    "Join a pin to a net by NAME instead of drawing a line to it. Two pins "
+                    "carrying one name are one net — which here is simply true, because "
+                    "the name is printed from the net."
+                ),
+            ),
+            (
+                "text",
+                "text",
+                t("Text"),
+                t("Write on the drawing. Nothing derives anything from it."),
+            ),
+            (
+                "rectangle",
+                "shape",
+                t("Box"),
+                t("Draw a box round a block of the circuit. Drag for a line or a circle."),
+            ),
+        ):
+            action = QAction(icons.icon(icon_name), label, self)
+            action.setCheckable(True)
+            action.setToolTip(tip)
+            action.triggered.connect(
+                lambda _checked=False, which=name: self.on_sheet_tool(which)
             )
+            tools.addAction(action)
+            bar.addAction(action)
+            self.act_sheet_tool[name] = action
+        self.act_sheet_tool["select"].setChecked(True)
+        self.act_sheet_tools = tools
+
+        # The two shapes the Box button does not have room for, on a menu under it.
+        shapes = QMenu(bar)
+        for name, label in (("line", t("Line")), ("circle", t("Circle"))):
+            entry = shapes.addAction(label)
+            entry.triggered.connect(
+                lambda _checked=False, which=name: self.on_sheet_tool(which)
+            )
+        self.act_sheet_tool["rectangle"].setMenu(shapes)
+
+        bar.addSeparator()
+
+        self.act_sch_rotate = QAction(icons.icon("rotate"), t("Turn"), self)
+        self.act_sch_rotate.setShortcut(QKeySequence("R"))
+        self.act_sch_rotate.setToolTip(
+            t("Turn the selected symbols a quarter clockwise. R does the same.")
         )
-        self.act_sch_wire.toggled.connect(self.on_schematic_wire_mode)
-        bar.addAction(self.act_sch_wire)
+        self.act_sch_rotate.triggered.connect(lambda: self.on_schematic_rotate(1))
+        bar.addAction(self.act_sch_rotate)
+
+        self.act_sch_mirror = QAction(icons.icon("mirror"), t("Flip"), self)
+        self.act_sch_mirror.setToolTip(
+            t("Flip the selected symbols about their own centre, so their pins swap sides.")
+        )
+        self.act_sch_mirror.triggered.connect(self.on_schematic_mirror)
+        bar.addAction(self.act_sch_mirror)
 
         self.act_sch_delete = QAction(icons.icon("delete"), t("Remove"), self)
         self.act_sch_delete.setToolTip(
@@ -4516,28 +4616,284 @@ class MainWindow(QMainWindow):
         self.go_to_component(component.id)
         self._sync_schematic_highlight()
 
-    def _on_symbol_moved(self, ref: str, col: int, row: int) -> None:
-        """A symbol was dragged to another cell on the sheet.
+    def _id_of(self, ref: str) -> str | None:
+        """The document id of whichever list a reference is in, or None.
 
-        A CELL, not a position, which is what lets the sheet stay derived and still be
-        rearranged: ``schematic.py`` keeps every millimetre and therefore keeps its
-        guarantee that no wire crosses a symbol. See ``model.SymbolPlacement``.
+        The sheet speaks references and ``doc.sheet`` is keyed on ids, which is what makes a
+        position survive a rename and survive a part moving between the two lists.
         """
         document = self.bus.document
-        target = next((p for p in document.parts if p.ref == ref), None) or next(
+        found = next((p for p in document.parts if p.ref == ref), None) or next(
             (c for c in document.components if c.ref == ref), None
         )
-        if target is None:
+        return found.id if found is not None else None
+
+    def _sheet_placements(self, moved: dict[str, Point2]) -> tuple[SymbolPlacement, ...]:
+        """A position for EVERY symbol, with ``moved`` applied on top.
+
+        THIS IS HOW A SHEET IS FROZEN, and it is one command so it is one undo step. A
+        document with nothing in ``doc.sheet`` is drawn by the layout; the moment somebody
+        moves, turns or wires anything, every symbol needs a position of its own or the
+        other twenty would rearrange themselves around the one that moved. The positions
+        are read off the drawing already on screen, so nothing jumps.
+
+        A symbol whose part is not in the document -- a reference only a net names -- has no
+        id to key a position on and is left out. It is drawn wherever the sheet puts it,
+        which is the honest answer for something nothing defines.
+        """
+        drawing = self.schematic_view.item.drawing if self.schematic_view.item else None
+        if drawing is None:
+            return ()
+        placements: list[SymbolPlacement] = []
+        for symbol in drawing.symbols:
+            part_id = self._id_of(symbol.ref)
+            if part_id is None:
+                continue
+            at = moved.get(symbol.ref, symbol.at)
+            placements.append(
+                SymbolPlacement(
+                    id=part_id,
+                    at=snap_to_grid(at),
+                    rotation=symbol.rotation,
+                    mirrored=symbol.mirrored,
+                )
+            )
+        return tuple(placements)
+
+    def _on_symbols_moved(self, moved: object) -> None:
+        """Symbols were dragged to new places on the sheet."""
+        if not isinstance(moved, list) or not moved:
             return
+        places = {
+            str(ref): Point2(x=float(x), y=float(y))
+            for ref, x, y in moved
+            if self._id_of(str(ref)) is not None
+        }
+        if not places:
+            return
+        label = (
+            f"Move {next(iter(places))} on the sheet"
+            if len(places) == 1
+            else f"Move {len(places)} symbols on the sheet"
+        )
+        self._dispatch_sheet_layout(places, label)
+
+    def _dispatch_sheet_layout(self, moved: dict[str, Point2], label: str) -> None:
+        placements = self._sheet_placements(moved)
+        if not placements:
+            return
+        result = self.bus.dispatch(
+            "symbol.move", MoveSymbolsPayload(placements=placements, label=label)
+        )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+
+    def on_schematic_rotate(self, quarter_turns: int = 1) -> None:
+        """Turn the selected symbols a quarter at a time.
+
+        Through the same ``symbol.move`` as a drag, because a position and an orientation
+        are one fact about a symbol: two commands would mean a rotate that could land
+        between two halves of a move on the undo stack.
+        """
+        refs = self._sheet_selection()
+        if not refs:
+            self.statusBar().showMessage(t("Select a symbol on the sheet first."), 5000)
+            return
+        placements = {p.id: p for p in self._sheet_placements({})}
+        turned: list[SymbolPlacement] = []
+        for placement in placements.values():
+            ref = self._ref_of_id(placement.id)
+            if ref in refs:
+                turned.append(
+                    dataclasses.replace(
+                        placement,
+                        rotation=_turned(placement.rotation, quarter_turns),
+                    )
+                )
+            else:
+                turned.append(placement)
         result = self.bus.dispatch(
             "symbol.move",
             MoveSymbolsPayload(
-                placements=(SymbolPlacement(id=target.id, col=col, row=row),),
-                label=f"Move {ref} on the sheet",
+                placements=tuple(turned),
+                label=f"Turn {len(refs)} symbol(s) on the sheet",
             ),
         )
         if not result.ok:
             self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+
+    def on_schematic_mirror(self) -> None:
+        """Flip the selected symbols about their own vertical centre."""
+        refs = self._sheet_selection()
+        if not refs:
+            self.statusBar().showMessage(t("Select a symbol on the sheet first."), 5000)
+            return
+        flipped = tuple(
+            dataclasses.replace(placement, mirrored=not placement.mirrored)
+            if self._ref_of_id(placement.id) in refs
+            else placement
+            for placement in self._sheet_placements({})
+        )
+        result = self.bus.dispatch(
+            "symbol.move",
+            MoveSymbolsPayload(
+                placements=flipped, label=f"Flip {len(refs)} symbol(s) on the sheet"
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+
+    def _ref_of_id(self, part_id: str) -> str | None:
+        document = self.bus.document
+        found = next((p for p in document.parts if p.id == part_id), None) or next(
+            (c for c in document.components if c.id == part_id), None
+        )
+        return found.ref if found is not None else None
+
+    def _sheet_selection(self) -> list[str]:
+        """What the sheet has selected, falling back to the one symbol it is pointing at.
+
+        The panel keeps a single reference of its own for cross-probing -- what the board
+        or the Nets dock lit up -- and the view keeps a real multi-selection. A rotate with
+        nothing rubber-banded should still turn the symbol somebody just clicked.
+        """
+        picked = list(self.schematic_view.selected_refs)
+        if picked:
+            return picked
+        return [self._schematic_ref] if self._schematic_ref else []
+
+    def _on_sheet_selection_changed(self, refs: object) -> None:
+        if isinstance(refs, list) and len(refs) == 1:
+            self._schematic_ref = str(refs[0])
+        elif isinstance(refs, list) and not refs:
+            self._schematic_ref = None
+        self._refresh_schematic_actions()
+
+    def _on_sheet_wire_drawn(
+        self, ref_a: str, pin_a: str, ref_b: str, pin_b: str, path: object
+    ) -> None:
+        """A wire was dragged from one pin to another.
+
+        The sheet is FROZEN first when it has not been already, and that is two commands on
+        purpose. Storing a wire on a sheet the layout is still arranging would be storing a
+        line between two points that move the next time anything is added -- so "the sheet
+        is now yours" is a real thing that happened, and it is worth being able to undo on
+        its own.
+        """
+        if not isinstance(path, list) or len(path) < 2:
+            return
+        if not self.bus.document.sheet:
+            self._dispatch_sheet_layout({}, t("Fix the sheet layout"))
+        wire = SheetWire(
+            a=NetNode(component_ref=ref_a, pin=pin_a),
+            b=NetNode(component_ref=ref_b, pin=pin_b),
+            path=tuple(Point2(x=float(x), y=float(y)) for x, y in path),
+        )
+        result = self.bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=wire))
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
+
+    def on_sheet_label(self, ref: str, pin: str) -> None:
+        """Join a pin to a net by NAME rather than by drawing a line to it.
+
+        THE SECOND WAY OF CONNECTING, and the sheet needs it to be usable: a reset line
+        reaching six parts drawn as six wires crosses the whole page, and every schematic
+        ever drawn writes the name at the pin instead. Here it is not even a convention --
+        the net IS ``doc.nets``, and the label is printed from it, so two pins carrying one
+        name are the same net because they are.
+        """
+        document = self.bus.document
+        existing = sorted({net.name for net in document.nets})
+        name, ok = QInputDialog.getItem(
+            self,
+            t("Connect by Name"),
+            t("Net for {pin}:").format(pin=f"{ref}.{pin}"),
+            existing,
+            0,
+            True,
+        )
+        if not ok or not name.strip():
+            return
+        name = name.strip()
+        node = NetNode(component_ref=ref, pin=pin)
+        net = next((n for n in document.nets if n.name == name), None)
+        if net is None:
+            result = self.bus.dispatch(
+                "net.add", AddNetPayload(name=name, net_class="signal", nodes=(node,))
+            )
+        elif node in net.nodes:
+            self.statusBar().showMessage(
+                t("{pin} is already on {net}.").format(pin=f"{ref}.{pin}", net=name), 6000
+            )
+            return
+        else:
+            result = self.bus.dispatch(
+                "net.connect", ConnectPinsPayload(id=net.id, nodes=(node,))
+            )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
+
+    def on_sheet_note_drawn(
+        self, kind: str, x0: float, y0: float, x1: float, y1: float
+    ) -> None:
+        """A caption or a box, put on the drawing by hand.
+
+        Nothing derives anything from a note: it is not checked by DRC, not read by LVS,
+        and no command refuses one for overlapping anything. A drawing tool that argued
+        with what was written on it would be worse than one with no notes at all.
+        """
+        text = ""
+        if kind == "text":
+            text, ok = QInputDialog.getText(self, t("Write on the Sheet"), t("Text:"))
+            if not ok or not text.strip():
+                return
+            text = text.strip()
+        result = self.bus.dispatch(
+            "sheet.note.add",
+            AddSheetNotePayload(
+                kind=cast("SheetNoteKind", kind),
+                at=Point2(x=x0, y=y0),
+                to=Point2(x=x1, y=y1),
+                text=text,
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
+        self.schematic_view.set_tool("select")
+        if hasattr(self, "act_sheet_tool"):
+            self.act_sheet_tool["select"].setChecked(True)
+
+    def on_sheet_delete(self) -> None:
+        """Delete key on the sheet: whichever of the two things is selected.
+
+        A NOTE IS RUBBED OUT AND A PART IS TAKEN OUT OF THE DESIGN, which are different
+        enough that they would deserve different keys if they could ever both be selected
+        -- they cannot, because clicking either clears the other.
+        """
+        notes = list(self.schematic_view.selected_notes)
+        drawing = self.schematic_view.item.drawing if self.schematic_view.item else None
+        if notes and drawing is not None:
+            ids = tuple(
+                note.id
+                for index, note in enumerate(self.bus.document.sheet_notes)
+                if index in set(notes)
+            )
+            if ids:
+                result = self.bus.dispatch(
+                    "sheet.note.delete", DeleteSheetNotesPayload(ids=ids)
+                )
+                if not result.ok:
+                    self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.schematic_view.set_selection([], [])
+            return
+        for ref in self._sheet_selection():
+            self._remove_symbol(ref)
 
     def on_schematic_auto_layout(self) -> None:
         """Hand the whole sheet back to the layout.
@@ -4672,16 +5028,78 @@ class MainWindow(QMainWindow):
         self._schematic_ref = ref
         self._sync_schematic_highlight()
 
-    def on_schematic_wire_mode(self, checked: bool) -> None:
-        self.schematic_view.set_wiring(checked)
-        if checked:
-            self.statusBar().showMessage(
-                t("Click a pin, then the pin it joins. Neither on a net yet? One gets made. "
-                  "Esc cancels."),
-                0,
-            )
+    def on_sheet_tool(self, tool: str) -> None:
+        """Arm one of the sheet's tools. Exactly one is armed, always.
+
+        The button group already keeps that true among the buttons; this keeps the VIEW in
+        step with it, which is the half that matters, and puts the tool's one line of
+        instruction in the status bar.
+        """
+        self.schematic_view.set_tool(cast("SheetTool", tool))
+        action = self.act_sheet_tool.get(tool)
+        if action is not None and not action.isChecked():
+            action.setChecked(True)
+        elif action is None:
+            # A shape from the Box button's menu. Nothing in the group matches it, so the
+            # Box button stands for the group and says which shape it is holding.
+            box = self.act_sheet_tool["rectangle"]
+            box.setChecked(True)
+            box.setText(t("Line") if tool == "line" else t("Circle"))
+        hint = {
+            "select": "",
+            "wire": t(
+                "Click a pin, then the pin it joins. Neither on a net yet? One gets made. "
+                "Esc cancels."
+            ),
+            "label": t(
+                "Click a pin and name the net it belongs to. Two pins with one name are "
+                "one net. Esc cancels."
+            ),
+            "text": t("Click where the text goes. Esc cancels."),
+            "line": t("Drag out the shape. Esc cancels."),
+            "rectangle": t("Drag out the shape. Esc cancels."),
+            "circle": t("Drag out the shape. Esc cancels."),
+        }.get(tool, "")
+        if hint:
+            self.statusBar().showMessage(hint, 0)
         else:
             self.statusBar().clearMessage()
+
+    def on_schematic_wire_mode(self, checked: bool) -> None:
+        """The Wire tool, by the name the panel's button used before there were tools."""
+        self.on_sheet_tool("wire" if checked else "select")
+
+    def _on_sheet_footprint_dropped(self, footprint_id: str, x: float, y: float) -> None:
+        """A row dragged out of the Parts panel and dropped on the sheet.
+
+        ``part.add`` and not ``component.place``: the board is not involved, which is the
+        whole point of drawing a circuit before laying one out. It lands where it was
+        dropped rather than wherever the layout would have put it, which means the sheet is
+        frozen if it was not already -- dropping a part somewhere is saying where it goes.
+        """
+        footprint = get_footprint(footprint_id)
+        if footprint is None:
+            self.statusBar().showMessage(
+                t("No footprint called {id}.").format(id=footprint_id), 6000
+            )
+            return
+        ref = next_reference(self.bus.document, footprint_id)
+        result = self.bus.dispatch(
+            "part.add",
+            AddPartPayload(
+                ref=ref, footprint_id=footprint_id, value=self.library_value.text().strip()
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self._schematic_ref = ref
+        self._refresh_schematic_panel()
+        self._dispatch_sheet_layout(
+            {ref: Point2(x=x, y=y)}, f"Add {ref} to the sheet at ({x:.0f}, {y:.0f})"
+        )
+        self._sync_schematic_highlight()
+        self.statusBar().showMessage(result.description, 6000)
 
     def _on_schematic_pin_clicked(self, ref: str, pin: str) -> None:
         """Take the first pin, or join the second to it.
@@ -6912,8 +7330,8 @@ class MainWindow(QMainWindow):
         if self.scene.in_a_mode:
             self.scene.leave_mode()
             left_something = True
-        if hasattr(self, "act_sch_wire") and self.act_sch_wire.isChecked():
-            self.act_sch_wire.setChecked(False)
+        if hasattr(self, "act_sheet_tool") and self.schematic_view.tool != "select":
+            self.on_sheet_tool("select")
             left_something = True
         if left_something:
             self.statusBar().clearMessage()

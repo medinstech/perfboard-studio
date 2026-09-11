@@ -46,6 +46,7 @@ from .model import Mm, Point2
 from .schematic import (
     MARGIN_MM,
     NET_LABEL_MM,
+    Annotation,
     Label,
     NoConnect,
     Rail,
@@ -280,6 +281,36 @@ def _symbol(symbol: Symbol, ink: SheetInk) -> str:
     )
 
 
+def _annotation(note: Annotation, ink: SheetInk) -> str:
+    """A caption or a box somebody put on the drawing.
+
+    IN THE DIM INK AND NEVER IN A NET COLOUR, the same call the panel makes: a note is not
+    part of the circuit and must not read as one. Its text is millimetres of sheet like
+    everything else on paper -- and unlike on screen, where a reference holds a pixel size,
+    a note is the one piece of text that is millimetres in BOTH, because it is a size
+    somebody chose rather than annotation the renderer is sizing.
+    """
+    left, top = min(note.at.x, note.to.x), min(note.at.y, note.to.y)
+    width, height = abs(note.to.x - note.at.x), abs(note.to.y - note.at.y)
+    common = f'stroke="{ink.dim}" stroke-width="{_n(ink.wire_mm)}" fill="none"'
+    if note.kind == "line":
+        return (
+            f'<line x1="{_n(note.at.x)}" y1="{_n(note.at.y)}" '
+            f'x2="{_n(note.to.x)}" y2="{_n(note.to.y)}" {common}/>'
+        )
+    if note.kind == "rectangle":
+        return (
+            f'<rect x="{_n(left)}" y="{_n(top)}" '
+            f'width="{_n(width)}" height="{_n(height)}" {common}/>'
+        )
+    if note.kind == "circle":
+        return (
+            f'<ellipse cx="{_n(left + width / 2)}" cy="{_n(top + height / 2)}" '
+            f'rx="{_n(width / 2)}" ry="{_n(height / 2)}" {common}/>'
+        )
+    return _text(note.text, note.at.x, note.at.y, note.size_mm, ink.dim, "start", ink)
+
+
 def _label(label: Label, ink: SheetInk) -> str:
     if label.kind == "ref":
         size, colour, bold = ink.ref_mm, ink.ink, True
@@ -374,6 +405,9 @@ def drawing_to_svg(
     for symbol in drawing.symbols:
         out.append(_symbol(symbol, ink))
     out.append("</g>")
+
+    for annotation in drawing.annotations:
+        out.append(_annotation(annotation, ink))
 
     for label in drawing.labels:
         out.append(_label(label, ink))

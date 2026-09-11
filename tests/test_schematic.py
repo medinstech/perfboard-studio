@@ -52,6 +52,8 @@ from perfboard_studio.model import (
     PerfDocument,
     Point2,
     SchematicPart,
+    SheetNote,
+    SheetWire,
     SymbolPlacement,
 )
 from perfboard_studio.schematic import (
@@ -76,7 +78,10 @@ from perfboard_studio.schematic import (
     _split_tall_layers,
     _switch_poles,
     build_schematic,
-    cell_at,
+    pin_at,
+    pin_position,
+    snap_to_grid,
+    symbol_at,
     symbol_kind_for,
 )
 
@@ -1152,95 +1157,241 @@ def test_the_frozen_boards_still_cover_what_they_were_chosen_for() -> None:
 # would have handed that away.
 
 
-def _with_cell(document: PerfDocument, ref: str, col: int, row: int) -> PerfDocument:
-    target = next(
-        (p for p in document.parts if p.ref == ref),
-        next((c for c in document.components if c.ref == ref), None),
+def _at(document, ref: str, x: float, y: float, rotation: int = 0, mirrored: bool = False):
+    """The document with one symbol pinned to a place on the sheet.
+
+    ONE PLACEMENT IS ENOUGH TO MAKE THE SHEET HAND-DRAWN, which is the rule these tests are
+    mostly about: with anything in ``doc.sheet`` nothing is laid out, so every other symbol
+    is parked at the right-hand edge until it is given a place of its own.
+    """
+    target = next((p for p in document.parts if p.ref == ref), None) or next(
+        (c for c in document.components if c.ref == ref), None
     )
     assert target is not None, ref
     return dataclasses.replace(
-        document, sheet=(*document.sheet, SymbolPlacement(id=target.id, col=col, row=row))
+        document,
+        sheet=(
+            *document.sheet,
+            SymbolPlacement(
+                id=target.id, at=Point2(x=x, y=y), rotation=rotation, mirrored=mirrored
+            ),
+        ),
     )
 
 
-def test_a_symbol_goes_where_it_was_put() -> None:
+def test_a_sheet_nobody_has_drawn_on_is_still_laid_out() -> None:
+    """The half that must not change. Every imported netlist and every fresh document gets
+    the derived sheet, which is what keeps "open it and look at it" free."""
+    drawing = build_schematic(load(GOLDEN_DIR / "ne555.perf"), REGISTRY)
+
+    assert drawing.symbols
+    assert not any(symbol.positioned for symbol in drawing.symbols)
+    assert drawing.wires, "the layout routed nothing"
+
+
+def test_a_symbol_goes_exactly_where_it_was_put() -> None:
     document = load(GOLDEN_DIR / "ne555.perf")
-    moved = _with_cell(document, "U1", 3, 2)
+    moved = _at(document, "U1", 50.8, 25.4)
 
     symbol = next(s for s in build_schematic(moved, REGISTRY).symbols if s.ref == "U1")
 
-    assert (symbol.col, symbol.row) == (3, 2)
+    assert (symbol.at.x, symbol.at.y) == (50.8, 25.4)
+    assert symbol.positioned
 
 
-def test_positioning_one_symbol_leaves_the_others_where_they_were() -> None:
-    """The behaviour that makes a manual tweak worth making. Only a symbol whose cell was
-    taken moves; the rest stay exactly where the layering and the sweeps put them."""
+def test_one_position_makes_the_whole_sheet_hand_drawn() -> None:
+    """There is no half-arranged sheet. A layout that arranged twenty symbols around one
+    somebody had placed would move the twenty every time the one moved."""
     document = load(GOLDEN_DIR / "ne555.perf")
-    before = {s.ref: (s.col, s.row) for s in build_schematic(document, REGISTRY).symbols}
-    # A cell no symbol is in, so nothing is displaced at all.
-    free = next(
-        (col, row)
-        for col in range(8)
-        for row in range(8)
-        if (col, row) not in set(before.values())
+
+    drawing = build_schematic(_at(document, "U1", 50.8, 25.4), REGISTRY)
+
+    placed = [s for s in drawing.symbols if s.positioned]
+    parked = [s for s in drawing.symbols if not s.positioned]
+    assert [s.ref for s in placed] == ["U1"]
+    assert parked, "everything else should be parked at the edge"
+    # ...and parked past the right-hand edge of what IS placed, not on top of it.
+    assert all(s.at.x > 50.8 for s in parked)
+
+
+def test_a_turned_symbol_swaps_its_box_and_carries_its_pins_round() -> None:
+    """Nothing in the transform knows what the symbol IS: a resistor, a relay and a 40-pin
+    box all turn by the same arithmetic."""
+    document = load(GOLDEN_DIR / "ne555.perf")
+    upright = next(
+        s for s in build_schematic(_at(document, "U1", 25.4, 25.4), REGISTRY).symbols
+        if s.ref == "U1"
     )
-    moved = _with_cell(document, "R1", *free)
+    turned = next(
+        s
+        for s in build_schematic(_at(document, "U1", 25.4, 25.4, rotation=90), REGISTRY).symbols
+        if s.ref == "U1"
+    )
 
-    after = {s.ref: (s.col, s.row) for s in build_schematic(moved, REGISTRY).symbols}
+    assert (turned.width, turned.height) == (upright.height, upright.width)
+    assert turned.rotation == 90
+    # Every pin is still inside the box it belongs to, which is the property that breaks
+    # first when a transform is wrong.
+    for pin in turned.pins:
+        assert -0.01 <= pin.at.x <= turned.width + 0.01
+        assert -0.01 <= pin.at.y <= turned.height + 0.01
+    # ...and a pin that pointed left now points up.
+    sides = {pin.number: pin.side for pin in turned.pins}
+    upright_sides = {pin.number: pin.side for pin in upright.pins}
+    left = next(number for number, side in upright_sides.items() if side == "left")
+    assert sides[left] == "top"
 
-    assert after["R1"] == free
-    assert {ref: cell for ref, cell in after.items() if ref != "R1"} == {
-        ref: cell for ref, cell in before.items() if ref != "R1"
-    }
 
-
-def test_a_symbol_pushed_out_of_its_cell_is_re_packed_not_stacked() -> None:
-    """Two symbols in one cell is two symbols drawn on top of each other."""
+def test_a_mirrored_symbol_swaps_its_pins_left_for_right() -> None:
     document = load(GOLDEN_DIR / "ne555.perf")
-    before = {s.ref: (s.col, s.row) for s in build_schematic(document, REGISTRY).symbols}
-    taken = before["C1"]
-    moved = _with_cell(document, "R1", *taken)
+    plain = next(
+        s for s in build_schematic(_at(document, "U1", 25.4, 25.4), REGISTRY).symbols
+        if s.ref == "U1"
+    )
+    flipped = next(
+        s
+        for s in build_schematic(
+            _at(document, "U1", 25.4, 25.4, mirrored=True), REGISTRY
+        ).symbols
+        if s.ref == "U1"
+    )
 
-    cells = [(s.col, s.row) for s in build_schematic(moved, REGISTRY).symbols]
+    assert (flipped.width, flipped.height) == (plain.width, plain.height)
+    swapped = {"left": "right", "right": "left"}
+    for pin in plain.pins:
+        other = next(p for p in flipped.pins if p.number == pin.number)
+        assert other.side == swapped[pin.side]
 
-    assert len(cells) == len(set(cells)), "two symbols ended up in one cell"
+
+def test_a_pin_nobody_drew_a_wire_to_is_joined_by_name() -> None:
+    """The second way of connecting, and the sheet needs it to be usable: a reset line
+    reaching six parts drawn as six wires crosses the whole page."""
+    document = load(GOLDEN_DIR / "ne555.perf")
+
+    drawing = build_schematic(_at(document, "U1", 25.4, 25.4), REGISTRY)
+
+    names = {label.text for label in drawing.labels if label.kind == "net"}
+    signal_nets = {
+        net.name
+        for net in document.nets
+        if net.net_class == "signal" and len(net.nodes) > 1
+    }
+    assert signal_nets <= names, "a net nobody drew is not named anywhere on the sheet"
+
+
+def test_ground_and_power_stay_rail_glyphs_on_a_hand_drawn_sheet() -> None:
+    """A label saying GND eleven times is the hairball the glyphs exist to prevent."""
+    document = load(GOLDEN_DIR / "ne555.perf")
+
+    drawing = build_schematic(_at(document, "U1", 25.4, 25.4), REGISTRY)
+
+    assert drawing.rails
+    assert all(rail.net_class in ("ground", "power") for rail in drawing.rails)
+
+
+def test_a_drawn_wire_is_used_and_its_pins_are_not_named() -> None:
+    """A wire carries no net id: which net it belongs to is whichever net holds both of its
+    ends, looked up every time."""
+    document = load(GOLDEN_DIR / "ne555.perf")
+    net = next(n for n in document.nets if n.net_class == "signal" and len(n.nodes) >= 2)
+    a, b = net.nodes[0], net.nodes[1]
+    drawn = dataclasses.replace(
+        _at(document, "U1", 25.4, 25.4),
+        sheet_wires=(
+            SheetWire(a=a, b=b, path=(Point2(x=0.0, y=0.0), Point2(x=10.0, y=0.0))),
+        ),
+    )
+
+    drawing = build_schematic(drawn, REGISTRY)
+
+    on_that_net = [w for w in drawing.wires if w.net_id == net.id]
+    assert any(len(w.path) >= 2 for w in on_that_net)
+    # Both ends were moved onto the pins they belong to -- a symbol that moves takes its
+    # wires with it.
+    ends = {(w.path[0].x, w.path[0].y) for w in on_that_net}
+    anchor = pin_position(drawing, a.component_ref, a.pin)
+    assert anchor is not None
+    assert (anchor.x, anchor.y) in ends
+
+
+def test_a_wire_whose_pins_are_no_longer_on_one_net_is_not_drawn() -> None:
+    """What is connected is doc.nets. A wire left over from a connection somebody removed
+    stops being drawn rather than quietly asserting a join that no longer exists."""
+    document = load(GOLDEN_DIR / "ne555.perf")
+    stale = dataclasses.replace(
+        _at(document, "U1", 25.4, 25.4),
+        sheet_wires=(
+            SheetWire(
+                a=NetNode(component_ref="U1", pin="1"),
+                b=NetNode(component_ref="U1", pin="8"),
+                path=(Point2(x=0.0, y=0.0), Point2(x=10.0, y=0.0)),
+            ),
+        ),
+    )
+    joined = {
+        frozenset((n.component_ref, n.pin) for n in net.nodes) for net in document.nets
+    }
+    assert not any({("U1", "1"), ("U1", "8")} <= pair for pair in joined)
+
+    drawing = build_schematic(stale, REGISTRY)
+
+    assert not any(
+        w.path[0] == Point2(x=0.0, y=0.0) and w.path[-1] == Point2(x=10.0, y=0.0)
+        for w in drawing.wires
+    )
+
+
+def test_a_note_reaches_the_drawing_untouched() -> None:
+    document = load(GOLDEN_DIR / "ne555.perf")
+    noted = dataclasses.replace(
+        document,
+        sheet_notes=(
+            SheetNote(
+                id="n1",
+                kind="text",
+                at=Point2(x=5.0, y=5.0),
+                to=Point2(x=5.0, y=5.0),
+                text="oscillator",
+            ),
+        ),
+    )
+
+    drawing = build_schematic(noted, REGISTRY)
+
+    assert [(n.kind, n.text) for n in drawing.annotations] == [("text", "oscillator")]
 
 
 def test_the_same_document_draws_the_same_sheet_however_it_was_arranged() -> None:
     """Every tie is broken by reference. A sheet that rearranged itself between runs would
     be unblessable, and worse, unrecognisable."""
-    moved = _with_cell(_with_cell(load(GOLDEN_DIR / "ne555.perf"), "U1", 3, 2), "R1", 0, 0)
+    moved = _at(_at(load(GOLDEN_DIR / "ne555.perf"), "U1", 25.4, 25.4), "R1", 76.2, 50.8)
     assert build_schematic(moved, REGISTRY) == build_schematic(moved, REGISTRY)
 
 
-def test_a_cell_is_found_for_a_point_on_the_sheet() -> None:
-    """``cell_at`` is the inverse of the layout, answered from its OUTPUT -- a second
-    implementation of the column arithmetic in the view would be a second thing to keep in
-    step."""
+def test_a_symbol_is_found_for_a_point_on_the_sheet() -> None:
+    """``symbol_at`` is answered from the drawing's OUTPUT -- a second implementation of
+    the column arithmetic in the view would be a second thing to keep in step."""
     drawing = build_schematic(load(GOLDEN_DIR / "ne555.perf"), REGISTRY)
     for symbol in drawing.symbols:
         centre = Point2(x=symbol.at.x + symbol.width / 2, y=symbol.at.y + symbol.height / 2)
-        assert cell_at(drawing, centre) == (symbol.col, symbol.row), symbol.ref
+        found = symbol_at(drawing, centre)
+        assert found is not None and found.ref == symbol.ref
 
 
-def test_an_empty_cell_is_reachable() -> None:
-    """Columns and rows are taken separately, which is the whole point: dropping a symbol
-    into a gap is most of what rearranging a sheet is."""
+def test_a_pin_is_found_by_where_it_is() -> None:
     drawing = build_schematic(load(GOLDEN_DIR / "ne555.perf"), REGISTRY)
-    occupied = {(s.col, s.row) for s in drawing.symbols}
-    cols = {s.col for s in drawing.symbols}
-    rows = {s.row for s in drawing.symbols}
-    empty = next(((c, r) for c in cols for r in rows if (c, r) not in occupied), None)
-    assert empty is not None, "the fixture has no gap to aim at"
+    symbol = next(s for s in drawing.symbols if s.ref == "U1")
+    pin = symbol.pins[0]
+    where = Point2(x=symbol.at.x + pin.at.x, y=symbol.at.y + pin.at.y)
 
-    column = next(s for s in drawing.symbols if s.col == empty[0])
-    line = next(s for s in drawing.symbols if s.row == empty[1])
-    point = Point2(
-        x=column.at.x + column.width / 2, y=line.at.y + line.height / 2
-    )
-
-    assert cell_at(drawing, point) == empty
+    assert pin_at(drawing, where, 1.2) == ("U1", pin.number)
+    assert pin_position(drawing, "U1", pin.number) == where
 
 
-def test_a_sheet_with_nothing_on_it_has_one_cell() -> None:
-    assert cell_at(SchematicDrawing(), Point2(x=40.0, y=40.0)) == (0, 0)
+def test_everything_a_user_puts_on_the_sheet_lands_on_the_grid() -> None:
+    """One place rounds a sheet position, so a symbol dropped by the panel and a wire drawn
+    by it land on the same lattice."""
+    assert snap_to_grid(Point2(x=1.0, y=1.0)) == Point2(x=0.0, y=0.0)
+    assert snap_to_grid(Point2(x=2.0, y=-2.0)) == Point2(x=2.54, y=-2.54)
+
+

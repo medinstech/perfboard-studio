@@ -39,7 +39,9 @@ from typing import Literal
 
 from .geometry import validate_orthogonal_chain
 from .model import (
+    DEFAULT_NOTE_SIZE_MM,
     DOCUMENT_FORMAT_VERSION,
+    SHEET_NOTE_KINDS,
     VALID_ROTATIONS,
     Board,
     BoardEdge,
@@ -61,8 +63,11 @@ from .model import (
     PadAxis,
     PadShape,
     PerfDocument,
+    Point2,
     Rotation,
     SchematicPart,
+    SheetNote,
+    SheetWire,
     SolderBuildup,
     SolderTraceConductor,
     SpineSpec,
@@ -199,8 +204,13 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "parts",
     "nets",
     "sheet",
+    "sheetWires",
+    "sheetNotes",
 )
-SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "col", "row")
+SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "at", "rotation", "mirrored")
+SHEET_WIRE_KEY_ORDER: tuple[str, ...] = ("a", "b", "path")
+SHEET_NOTE_KEY_ORDER: tuple[str, ...] = ("id", "kind", "at", "to", "text", "sizeMm")
+POINT_KEY_ORDER: tuple[str, ...] = ("x", "y")
 META_KEY_ORDER: tuple[str, ...] = ("name", "created", "modified")
 BOARD_KEY_ORDER: tuple[str, ...] = (
     "type",
@@ -448,16 +458,63 @@ def _ordered_cut(c: TrackCut, index: int) -> JsonObj:
     )
 
 
-def _ordered_symbol_placement(placement: SymbolPlacement, index: int) -> JsonObj:
-    path = _index_path("sheet", index)
+def _ordered_point(point: Point2, path: str) -> JsonObj:
     return _build_ordered(
-        SYMBOL_PLACEMENT_KEY_ORDER,
+        POINT_KEY_ORDER,
         {
-            "id": placement.id,
-            "col": _num(_field_path(path, "col"), placement.col),
-            "row": _num(_field_path(path, "row"), placement.row),
+            "x": _num(_field_path(path, "x"), point.x),
+            "y": _num(_field_path(path, "y"), point.y),
         },
     )
+
+
+def _ordered_symbol_placement(placement: SymbolPlacement, index: int) -> JsonObj:
+    path = _index_path("sheet", index)
+    values: dict[str, JsonValue] = {
+        "id": placement.id,
+        "at": _ordered_point(placement.at, _field_path(path, "at")),
+    }
+    # The stripAxis rule twice over: a symbol nobody turned says nothing about turning, so
+    # the common case is two keys and the file stays readable by eye.
+    if placement.rotation:
+        values["rotation"] = _num(_field_path(path, "rotation"), placement.rotation)
+    if placement.mirrored:
+        values["mirrored"] = True
+    return _build_ordered(SYMBOL_PLACEMENT_KEY_ORDER, values)
+
+
+def _ordered_sheet_wire(wire: SheetWire, index: int) -> JsonObj:
+    path = _index_path("sheetWires", index)
+    return _build_ordered(
+        SHEET_WIRE_KEY_ORDER,
+        {
+            "a": _build_ordered(
+                NET_NODE_KEY_ORDER, {"componentRef": wire.a.component_ref, "pin": wire.a.pin}
+            ),
+            "b": _build_ordered(
+                NET_NODE_KEY_ORDER, {"componentRef": wire.b.component_ref, "pin": wire.b.pin}
+            ),
+            "path": [
+                _ordered_point(point, _index_path(_field_path(path, "path"), i))
+                for i, point in enumerate(wire.path)
+            ],
+        },
+    )
+
+
+def _ordered_sheet_note(note: SheetNote, index: int) -> JsonObj:
+    path = _index_path("sheetNotes", index)
+    values: dict[str, JsonValue] = {
+        "id": note.id,
+        "kind": note.kind,
+        "at": _ordered_point(note.at, _field_path(path, "at")),
+        "to": _ordered_point(note.to, _field_path(path, "to")),
+    }
+    if note.text:
+        values["text"] = note.text
+    if note.size_mm != DEFAULT_NOTE_SIZE_MM:
+        values["sizeMm"] = _num(_field_path(path, "sizeMm"), note.size_mm)
+    return _build_ordered(SHEET_NOTE_KEY_ORDER, values)
 
 
 def _ordered_net(n: Net, index: int) -> JsonObj:
@@ -492,6 +549,10 @@ def serialize_document(doc: PerfDocument) -> str:
     parts = sorted(doc.parts, key=lambda part: part.id)
     nets = sorted(doc.nets, key=lambda n: n.id)
     sheet = sorted(doc.sheet, key=lambda placement: placement.id)
+    # Sorted for a readable diff, like everything else here: moving one symbol must not
+    # reorder the file. A wire is named by its two pins and a note by its id.
+    sheet_wires = sorted(doc.sheet_wires, key=lambda wire: (wire.a, wire.b))
+    sheet_notes = sorted(doc.sheet_notes, key=lambda note: note.id)
 
     root = _build_ordered(
         DOCUMENT_KEY_ORDER,
@@ -559,6 +620,29 @@ def serialize_document(doc: PerfDocument) -> str:
                     ]
                 }
                 if sheet
+                else {}
+            ),
+            # The other two halves of a hand-drawn sheet, omitted by the same rule. A
+            # document nobody has drawn on carries neither key, which is every fixture and
+            # every board saved before the sheet became editable.
+            **(
+                {
+                    "sheetWires": [
+                        _ordered_sheet_wire(wire, i)
+                        for i, wire in enumerate(sheet_wires)
+                    ]
+                }
+                if sheet_wires
+                else {}
+            ),
+            **(
+                {
+                    "sheetNotes": [
+                        _ordered_sheet_note(note, i)
+                        for i, note in enumerate(sheet_notes)
+                    ]
+                }
+                if sheet_notes
                 else {}
             ),
         },
@@ -1048,13 +1132,100 @@ def _parse_part(raw: object, path: str, warnings: list[str]) -> SchematicPart:
     )
 
 
-def _parse_symbol_placement(raw: object, path: str, warnings: list[str]) -> SymbolPlacement:
+def _parse_point(raw: object, path: str, warnings: list[str]) -> Point2:
     obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, POINT_KEY_ORDER, path, warnings)
+    return Point2(
+        x=_expect_number(_require_field(obj, "x", path), _field_path(path, "x")),
+        y=_expect_number(_require_field(obj, "y", path), _field_path(path, "y")),
+    )
+
+
+#: What a ``sheet`` entry looked like for the few days a symbol's position was a CELL in a
+#: grid the layout owned.
+OLD_CELL_KEYS: frozenset[str] = frozenset({"col", "row"})
+
+
+def _parse_symbol_placement(
+    raw: object, path: str, warnings: list[str]
+) -> SymbolPlacement | None:
+    """One stored symbol position, or ``None`` for one written in the older shape.
+
+    A CELL CANNOT BE CONVERTED, so it is dropped with a warning rather than refused. Its
+    millimetres came out of a column width and a channel allocation computed from the whole
+    netlist, by a layout that no longer arranges anything -- there is no sum that turns a
+    (3, 2) into a place on a sheet. What is lost is where somebody dragged one symbol; what
+    replaces it is the derived sheet they had before they dragged it, which is a press of
+    Arrange away.
+
+    Refused would be the much worse answer. ``sheet`` is omitted from the file when empty,
+    so the only documents that can carry the old shape are ones saved in that same week --
+    and locking somebody out of a board over where a symbol used to sit is not a trade
+    anybody would make.
+    """
+    obj = _expect_object(raw, path)
+    if OLD_CELL_KEYS & obj.keys():
+        warnings.append(
+            f'{path} places a symbol by "col" and "row", which is how sheet positions were '
+            f"written before a symbol could be put anywhere on the sheet. It was dropped; "
+            f"use Arrange the Sheet to lay the drawing out again."
+        )
+        return None
     _check_unknown_keys(obj, SYMBOL_PLACEMENT_KEY_ORDER, path, warnings)
+    rotation = _expect_integer(obj.get("rotation", 0), _field_path(path, "rotation"))
+    if rotation not in VALID_ROTATIONS:
+        raise ValidationError(
+            "sheet-rotation-invalid",
+            f"A symbol may be turned by 0, 90, 180 or 270 degrees; this one says {rotation}.",
+            _field_path(path, "rotation"),
+        )
     return SymbolPlacement(
         id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
-        col=_expect_integer(_require_field(obj, "col", path), _field_path(path, "col")),
-        row=_expect_integer(_require_field(obj, "row", path), _field_path(path, "row")),
+        at=_parse_point(_require_field(obj, "at", path), _field_path(path, "at"), warnings),
+        rotation=rotation,
+        mirrored=_expect_boolean(obj.get("mirrored", False), _field_path(path, "mirrored")),
+    )
+
+
+def _parse_sheet_wire(raw: object, path: str, warnings: list[str]) -> SheetWire:
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, SHEET_WIRE_KEY_ORDER, path, warnings)
+    points = _expect_array(_require_field(obj, "path", path), _field_path(path, "path"))
+    if len(points) < 2:
+        raise ValidationError(
+            "sheet-wire-too-short",
+            "A wire on the sheet needs at least two points.",
+            _field_path(path, "path"),
+        )
+    return SheetWire(
+        a=_parse_net_node(_require_field(obj, "a", path), _field_path(path, "a"), warnings),
+        b=_parse_net_node(_require_field(obj, "b", path), _field_path(path, "b"), warnings),
+        path=tuple(
+            _parse_point(point, _index_path(_field_path(path, "path"), i), warnings)
+            for i, point in enumerate(points)
+        ),
+    )
+
+
+def _parse_sheet_note(raw: object, path: str, warnings: list[str]) -> SheetNote:
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, SHEET_NOTE_KEY_ORDER, path, warnings)
+    kind = _expect_string(_require_field(obj, "kind", path), _field_path(path, "kind"))
+    if kind not in SHEET_NOTE_KINDS:
+        raise ValidationError(
+            "sheet-note-kind-invalid",
+            f'"{kind}" is not a kind of note; expected one of {", ".join(SHEET_NOTE_KINDS)}.',
+            _field_path(path, "kind"),
+        )
+    return SheetNote(
+        id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
+        kind=kind,
+        at=_parse_point(_require_field(obj, "at", path), _field_path(path, "at"), warnings),
+        to=_parse_point(_require_field(obj, "to", path), _field_path(path, "to"), warnings),
+        text=_expect_string(obj.get("text", ""), _field_path(path, "text")),
+        size_mm=_expect_number(
+            obj.get("sizeMm", DEFAULT_NOTE_SIZE_MM), _field_path(path, "sizeMm")
+        ),
     )
 
 
@@ -1350,10 +1521,12 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
     positioned: set[str] = set()
     for index, item in enumerate(sheet_raw):
         placement = _parse_symbol_placement(item, _index_path("sheet", index), warnings)
+        if placement is None:
+            continue
         if placement.id not in seen_ids:
             # A position for a part the document no longer has. A warning and a drop
             # rather than a refusal, following the same rule as a diagonal solder step: a
-            # hand-edited or half-merged file must still open, and a cell nobody can see
+            # hand-edited or half-merged file must still open, and a position nobody can see
             # is not a reason to lock somebody out of their circuit.
             warnings.append(
                 f'The sheet places a symbol for "{placement.id}", which is not a part or '
@@ -1368,6 +1541,30 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
             continue
         positioned.add(placement.id)
         sheet.append(placement)
+
+    # THE GEOMETRY IS NOT THE CIRCUIT, so neither of these is checked against the netlist
+    # on the way in. A wire whose two pins are no longer on one net is not an error in the
+    # file -- it is a connection somebody removed, and the sheet simply stops drawing the
+    # wire. Refusing to open the document over it would make disconnecting a pin a thing
+    # that could lock somebody out of their board.
+    wires_raw = _expect_array(migrated.get("sheetWires", []), "sheetWires")
+    sheet_wires = tuple(
+        _parse_sheet_wire(item, _index_path("sheetWires", index), warnings)
+        for index, item in enumerate(wires_raw)
+    )
+    notes_raw = _expect_array(migrated.get("sheetNotes", []), "sheetNotes")
+    sheet_notes: list[SheetNote] = []
+    seen_notes: set[str] = set()
+    for index, item in enumerate(notes_raw):
+        note = _parse_sheet_note(item, _index_path("sheetNotes", index), warnings)
+        if note.id in seen_notes:
+            raise ValidationError(
+                "duplicate-id",
+                f'Two notes on the sheet share the id "{note.id}".',
+                _index_path("sheetNotes", index),
+            )
+        seen_notes.add(note.id)
+        sheet_notes.append(note)
 
     height_limit_raw = migrated.get("heightLimitMm")
     height_limit_mm = (
@@ -1393,6 +1590,8 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         cuts=cuts,
         nets=nets,
         sheet=tuple(sheet),
+        sheet_wires=sheet_wires,
+        sheet_notes=tuple(sheet_notes),
         mounting_holes=mounting_holes,
         edge_connectors=edge_connectors,
         height_limit_mm=height_limit_mm,

@@ -62,6 +62,7 @@ from perfboard_studio.commands import (
     NewSolderTraceConductor,
     NewWireConductor,
     PlaceComponentPayload,
+    next_net_name,
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.drc import DrcViolation
@@ -1003,21 +1004,6 @@ def describe_span(a: HoleCoord, b: HoleCoord, board: Board) -> str:
         f"{t('{mm:.2f} mm apart').format(mm=mm)}   "
         f"{t('{steps} step(s) by trace').format(steps=steps)}"
     )
-
-
-def next_net_name(document: PerfDocument) -> str:
-    """The next free automatic net name, e.g. "N3".
-
-    Counted from the document for the same reason ``next_reference`` is: a hidden counter
-    would disagree with it after an undo, and the bus would refuse the name for a reason
-    nobody could see. Short and neutral on purpose -- it is a placeholder for whatever the
-    net turns out to be called, and renaming it is one dialog away.
-    """
-    used = {net.name for net in document.nets}
-    index = 1
-    while f"N{index}" in used:
-        index += 1
-    return f"N{index}"
 
 
 def net_holding(document: PerfDocument, ref: str, pin: str) -> Net | None:

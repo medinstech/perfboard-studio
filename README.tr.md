@@ -205,8 +205,10 @@ ek değil, uygulamanın dayandığı bir kontrol aracı.
 
 ### Sıfırdan bir kart
 
-Şema panelini açın (`Ctrl+2`) ve devreyi çizin: her parça için **Parça Ekle**, iki pini
-birleştirmek için **Bağla**, sonra **Kart Üzerine Yerleştir**. Oradan **Yerleştir →
+Şema panelini açın (`Ctrl+2`) ve devreyi çizin: parçaları Parçalar panelinden sayfaya
+sürükleyin, istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine tel çekin — ya da
+bir pini **Etiket** ile adına göre bir nete bağlayın — sonra **Kart Üzerine Yerleştir**.
+Oradan **Yerleştir →
 Otomatik Yerleştir** (`Ctrl+Shift+A`), route için **`Ctrl+R`**, ardından **Dosya → Montaj
 Rehberini Dışa Aktar** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
 

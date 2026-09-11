@@ -26,6 +26,7 @@ from perfboard_studio.model import (
     HoleCoord,
     Net,
     PerfDocument,
+    Point2,
     SchematicPart,
     SolderTraceConductor,
     SpineSpec,
@@ -623,7 +624,8 @@ def test_a_sheet_nobody_rearranged_leaves_no_trace_in_the_file() -> None:
 
 def test_a_positioned_symbol_round_trips() -> None:
     document = dataclasses.replace(
-        _document_with_a_part(), sheet=(SymbolPlacement(id="p1", col=3, row=2),)
+        _document_with_a_part(),
+        sheet=(SymbolPlacement(id="p1", at=Point2(x=50.8, y=25.4)),),
     )
     text = persist.serialize_document(document)
 
@@ -634,12 +636,80 @@ def test_a_positioned_symbol_round_trips() -> None:
     assert persist.serialize_document(result.document) == text
 
 
-def test_a_cell_for_a_part_the_document_lost_is_dropped_with_a_warning() -> None:
-    """A hand-edited or half-merged file must still open, following the same rule as a
-    diagonal solder step: a cell nobody can see is not a reason to lock somebody out of
-    their circuit."""
+def test_a_turned_symbol_says_so_and_an_upright_one_says_nothing() -> None:
+    """The stripAxis rule, twice over: a symbol nobody turned is two keys, so the file
+    stays readable by eye and a sheet full of upright symbols is not full of zeroes."""
+    upright = dataclasses.replace(
+        _document_with_a_part(), sheet=(SymbolPlacement(id="p1", at=Point2(x=0.0, y=0.0)),)
+    )
+    turned = dataclasses.replace(
+        _document_with_a_part(),
+        sheet=(
+            SymbolPlacement(id="p1", at=Point2(x=0.0, y=0.0), rotation=90, mirrored=True),
+        ),
+    )
+
+    assert '"rotation"' not in persist.serialize_document(upright)
+    assert '"mirrored"' not in persist.serialize_document(upright)
+
+    text = persist.serialize_document(turned)
+    assert '"rotation": 90' in text
+    assert '"mirrored": true' in text
+    result = persist.deserialize_document(text)
+    assert result.ok, result.message
+    assert result.document.sheet == turned.sheet
+
+
+def test_a_wire_and_a_note_on_the_sheet_round_trip() -> None:
+    from perfboard_studio.model import NetNode, SheetNote, SheetWire
+
     document = dataclasses.replace(
-        _document_with_a_part(), sheet=(SymbolPlacement(id="gone", col=1, row=1),)
+        _document_with_a_part(),
+        sheet_wires=(
+            SheetWire(
+                a=NetNode(component_ref="R1", pin="1"),
+                b=NetNode(component_ref="R1", pin="2"),
+                path=(Point2(x=0.0, y=0.0), Point2(x=10.16, y=0.0)),
+            ),
+        ),
+        sheet_notes=(
+            SheetNote(
+                id="n1",
+                kind="text",
+                at=Point2(x=2.54, y=2.54),
+                to=Point2(x=2.54, y=2.54),
+                text="oscillator",
+            ),
+        ),
+    )
+    text = persist.serialize_document(document)
+    result = persist.deserialize_document(text)
+
+    assert result.ok, result.message
+    assert result.document.sheet_wires == document.sheet_wires
+    assert result.document.sheet_notes == document.sheet_notes
+    assert persist.serialize_document(result.document) == text
+    # Nobody changed the text height, so the file does not mention one.
+    assert '"sizeMm"' not in text
+
+
+def test_a_document_with_nothing_drawn_on_its_sheet_says_nothing() -> None:
+    """The rule the whole feature rests on: an array emitted unconditionally would change
+    all fifteen golden fixtures and break the differential proof."""
+    text = persist.serialize_document(_document_with_a_part())
+
+    assert '"sheet"' not in text
+    assert '"sheetWires"' not in text
+    assert '"sheetNotes"' not in text
+
+
+def test_a_position_for_a_part_the_document_lost_is_dropped_with_a_warning() -> None:
+    """A hand-edited or half-merged file must still open, following the same rule as a
+    diagonal solder step: a position nobody can see is not a reason to lock somebody out
+    of their circuit."""
+    document = dataclasses.replace(
+        _document_with_a_part(),
+        sheet=(SymbolPlacement(id="gone", at=Point2(x=1.0, y=1.0)),),
     )
     text = persist.serialize_document(document)
 
@@ -648,3 +718,33 @@ def test_a_cell_for_a_part_the_document_lost_is_dropped_with_a_warning() -> None
     assert result.ok
     assert result.document.sheet == ()
     assert any("not a part or a component" in w for w in result.warnings)
+
+
+def test_a_sheet_written_when_positions_were_cells_is_dropped_rather_than_refused() -> None:
+    """``sheet`` briefly held a COL and a ROW in a grid the layout owned. A cell means
+    nothing without that layout, so it cannot be converted -- and refusing to open the
+    document over it would be much the worse answer, since what is lost is where somebody
+    dragged a symbol and what replaces it is the sheet they had before they dragged it."""
+    text = persist.serialize_document(_document_with_a_part())
+    cells = chr(10).join(
+        [
+            '  "nets": [],',
+            '  "sheet": [',
+            "    {",
+            '      "id": "p1",',
+            '      "col": 3,',
+            '      "row": 2',
+            "    }",
+            "  ]",
+            "}",
+        ]
+    )
+    older = text.replace('  "nets": []' + chr(10) + '}', cells)
+
+    assert older != text
+
+    result = persist.deserialize_document(older)
+
+    assert result.ok, getattr(result, "message", "")
+    assert result.document.sheet == ()
+    assert any("col" in w and "row" in w for w in result.warnings)

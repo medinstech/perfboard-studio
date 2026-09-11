@@ -511,6 +511,60 @@ TURKISH: Mapping[str, str] = {
         "kenara, geri kalanı bağlantılarına göre hizalı. Kart boşken önce hazır satılan "
         "bir kart boyutu önerir. Tamamı tek geri alma adımı."
     ),
+    # -- the sheet's own tools -------------------------------------------------
+    # "Perfboard Studio" is the product's name and stays out of the catalogue, as the
+    # welcome dialog's own note says. "Net" is the Nets panel's column heading and reads
+    # the same in Turkish.
+    "Select": "Seç",
+    "Pick symbols up, move them, rubber-band several at once. Delete takes "
+    "the selection out of the design.": (
+        "Sembolleri tutar, taşır, kementle birden çoğunu seçer. Delete seçili olanı "
+        "tasarımdan çıkarır."
+    ),
+    "Label": "Etiket",
+    "Join a pin to a net by NAME instead of drawing a line to it. Two pins "
+    "carrying one name are one net — which here is simply true, because "
+    "the name is printed from the net.": (
+        "Bir pini çizgi çekmek yerine ADINA göre bir nete bağlar. Aynı adı taşıyan iki pin "
+        "tek nettir — burada bu zaten doğrudur, çünkü ad net'in kendisinden basılır."
+    ),
+    "Text": "Metin",
+    "Write on the drawing. Nothing derives anything from it.": (
+        "Çizimin üzerine yazı yazar. Hiçbir şey bundan bir şey türetmez."
+    ),
+    "Box": "Kutu",
+    "Draw a box round a block of the circuit. Drag for a line or a circle.": (
+        "Devrenin bir bölümünün etrafına kutu çizer. Çizgi ya da daire için sürükleyin."
+    ),
+    "Line": "Çizgi",
+    "Circle": "Daire",
+    "Turn": "Döndür",
+    "Turn the selected symbols a quarter clockwise. R does the same.": (
+        "Seçili sembolleri saat yönünde çeyrek döndürür. R tuşu da aynısını yapar."
+    ),
+    "Flip the selected symbols about their own centre, so their pins swap sides.": (
+        "Seçili sembolleri kendi merkezlerine göre aynalar; pinleri taraf değiştirir."
+    ),
+    "Select a symbol on the sheet first.": "Önce sayfada bir sembol seçin.",
+    "Click a pin and name the net it belongs to. Two pins with one name are "
+    "one net. Esc cancels.": (
+        "Bir pine tıklayın ve ait olduğu netin adını yazın. Aynı ada sahip iki pin tek "
+        "nettir. Esc iptal eder."
+    ),
+    "Click where the text goes. Esc cancels.": (
+        "Metnin geleceği yere tıklayın. Esc iptal eder."
+    ),
+    "Drag out the shape. Esc cancels.": "Şekli sürükleyerek çizin. Esc iptal eder.",
+    "Connect by Name": "Ada Göre Bağla",
+    "Net for {pin}:": "{pin} için net:",
+    "Write on the Sheet": "Sayfaya Yaz",
+    "Text:": "Metin:",
+    "No footprint called {id}.": "{id} adında bir ayak izi yok.",
+    "Fix the sheet layout": "Sayfa düzenini sabitle",
+    "Drag a part onto the board or the sheet — or pick one and click. Esc cancels.": (
+        "Bir parçayı kartın ya da sayfanın üzerine sürükleyin — ya da birini seçip "
+        "tıklayın. Esc iptal eder."
+    ),
     # -- the welcome dialog, and autosave that writes the file itself ----------
     # "Perfboard Studio" is deliberately absent: it is the product's name, and a name is
     # the one string that must read the same in every language.

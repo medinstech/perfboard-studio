@@ -679,34 +679,96 @@ from a test that hands it a document; two sheets are frozen whole in
 `tests/schematic_golden/` (`PERFBOARD_STUDIO_BLESS_SCHEMATIC=1`), for the reason
 `test_guide_golden` exists.
 
-**The CIRCUIT is editable and the DRAWING is derived, and a symbol can be moved without
-reversing PLAN.md D3.** D3 declined to write a geometric schematic editor — symbols you
-position freely, wires you route by hand — because that is a year of work whose output this
-tool already accepts from KiCad. What `doc.sheet` carries is not that: it is a **CELL** per
-part (`model.SymbolPlacement`), so the layout still owns every millimetre and still
-guarantees that wires run only in the channels between symbols. Storing millimetres would
-have handed that away — a symbol dropped between two columns is a symbol with wires through
-it, and the sheet would stop being readable in exactly the case somebody was trying to make
-it more readable.
+### Two kinds of sheet, and the document decides which
 
-Four things keep it honest:
+**PLAN.md D3 is reversed, and only half of it.** D3 declined to write a geometric schematic
+editor — symbols you position freely, wires you route by hand — because that is a year of
+work whose output this tool already accepts from KiCad. What it did not weigh is that a tool
+which can capture a circuit and cannot DRAW one sends people back to KiCad anyway.
+
+So `build_schematic` has two paths, chosen by whether `doc.sheet` is empty:
+
+- **Derived** (`_derived_sheet`): everything above. Symbols in cells, wires only in the
+  channels between them, no wire able to cross a symbol as a consequence of where the
+  tracks may be. This is what every imported netlist, every fresh document and every press
+  of `Arrange` produces, and it is what keeps "open it and look at it" free.
+- **Hand-drawn** (`_hand_drawn_sheet`): every symbol where it was put, turned how it was
+  turned, joined by the wires somebody drew. Nothing is arranged.
+
+**There is no half-arranged sheet, and there must not be.** A layout that arranged twenty
+symbols around the one somebody had placed would move the twenty every time the one moved.
+So the first edit FREEZES the sheet: the window sends a `SymbolPlacement` for every symbol,
+read off the drawing already on screen, in one `symbol.move` — one command, one undo step,
+and nothing jumps (`MainWindow._sheet_placements`). A part added afterwards is PARKED in a
+column past the right-hand edge rather than dropped at the origin on top of something.
+
+**What is not joined by a wire is joined by NAME**, with a label at the pin. That is not a
+fallback for wires nobody got round to: a reset line reaching six parts drawn as six wires
+crosses the whole page, and every schematic ever drawn writes the name at the pin instead.
+Here it is not even a convention — the net IS `doc.nets` and the label is printed FROM it,
+so two pins carrying one name are the same net because they are. Ground and power keep their
+rail glyphs either way, for the reason they always had them.
+
+**A drawn wire carries no net id** (`model.SheetWire`). Which net it belongs to is whichever
+net holds both of its ends, looked up every time (`_wire_net_of`). Three things follow, and
+all three are the point:
+
+- LVS, the router, the placer, the guide and the board read `doc.nets` and none of them has
+  to learn anything about geometry.
+- A wire left over from a connection somebody has since removed stops being drawn, instead
+  of quietly asserting a join that no longer exists.
+- Renaming a net costs nothing here.
+
+Two pins and no more per wire. A net drawn as three wires between four pins reads exactly
+like one branching run, and a branch point would need a fourth kind of endpoint — a point on
+another wire — that moves whenever either end does.
+
+**A symbol that moves takes its wires with it** (`_reanchored`). Only the two END segments
+give: the first point becomes the pin and the point after it slides along whichever axis that
+segment ran on, so the chain stays orthogonal and the middle is left exactly as drawn. A
+two-point path is the case that bites — `points[0]` and `points[-2]` are the same element, so
+the second fixup undoes the first — and it is handled before the loop, as an elbow.
+
+**`_orient_body` is the whole of rotation and mirroring.** Mirror first, then turn, which is
+the order `ComponentInstance` uses on the board: two places in this application answer "which
+way round is this", and having them disagree would mean a part whose symbol and whose
+footprint are flipped differently. Nothing in the transform knows what the symbol IS, which
+is the point — a resistor, a relay and a 40-pin box all turn by the same arithmetic — and
+`SymbolPin.side` gains `top` and `bottom`, which only a turned symbol ever has.
+
+Four things keep the stored half honest:
 
 - **It is keyed on the part's ID**, so a position survives a rename and survives
   `part.place` / `component.unplace` moving a part between the two lists.
-- **It is omitted from the file when empty**, the `stripAxis` rule, which is why all fifteen
-  golden fixtures are untouched and `DOCUMENT_FORMAT_VERSION` did not move. A sheet nobody
-  has rearranged says nothing.
-- **Only a displaced symbol moves.** `_apply_pinned_cells` puts the pinned ones in their
-  cells and leaves every other symbol exactly where the layering and the sweeps put it —
-  positioning one part must not rearrange the twenty around it, or nobody will position one.
+- **All three arrays are omitted from the file when empty** — `sheet`, `sheetWires`,
+  `sheetNotes` — the `stripAxis` rule, which is why all fifteen golden fixtures are untouched
+  and `DOCUMENT_FORMAT_VERSION` has still never moved. A sheet nobody has drawn on says
+  nothing. `rotation` and `mirrored` follow the same rule inside a placement.
+- **A `sheet` written while positions were CELLS is dropped with a warning**, not migrated
+  and not refused (`persist.OLD_CELL_KEYS`). A cell means nothing without the layout that
+  produced it, so there is no sum that converts one; and locking somebody out of a board
+  over where a symbol used to sit is not a trade anybody would make.
 - **`symbol.auto` is its own command**, not an undo: undo takes back the last move, and
   handing the sheet back after an afternoon of tidying is a great many moves and one
-  decision.
+  decision. Handing back the WHOLE sheet takes the drawn wires with it, because a wire was
+  drawn between pins that were where somebody put them.
 
-`schematic.cell_at` is the inverse — a point on the sheet to a cell — answered from the
-DRAWING's own output rather than by re-deriving the column arithmetic in the view, which
-would be a second thing to keep in step. Columns and rows are taken separately so an EMPTY
-cell is reachable, since dropping a symbol into a gap is most of what rearranging is.
+**`sheet.wire` joins the pins AND stores the line, in one command.** Two would mean an undo
+that took back the drawing and kept the connection, which is a lie about what just happened.
+What joining two pins MEANS is `commands.plan_pin_join`, which `view2d.join_pins` reads too —
+one fact, two consumers, the shape this codebase uses everywhere. Two nets are never merged:
+that is a change to the circuit rather than to a drawing.
+
+**A note is a person writing on the drawing** (`model.SheetNote`). Nothing derives anything
+from one: not DRC, not LVS, and no command refuses one for overlapping anything. A drawing
+tool that argued with what was written on it would be worse than one with no notes at all.
+It is the one piece of text on the sheet drawn in MILLIMETRES on screen as well as on paper,
+because it is a size somebody chose rather than annotation the renderer is sizing.
+
+`schematic.symbol_at`, `pin_at`, `pin_position` and `snap_to_grid` are the engine's answers
+to the four questions the panel asks about a point on the sheet, answered from the DRAWING's
+own output rather than by re-deriving anything — a second copy of "where is this symbol" is a
+second thing to keep in step, which is the rule `cell_at` followed before them.
 
 `Symbol.unplaced` and `Symbol.undefined` are different things and only the second is a
 defect: unplaced is every part on a sheet being drawn, so it is counted in the panel's
@@ -856,15 +918,30 @@ in a row gave the panel a minimum width of 1362 px — a panel inherits its mini
 whatever is in it — so the window could not be made narrower than the row and nothing in the
 layout could be resized at all.
 
+**The panel is a tool group, and select is IN it.** `viewsch.SheetTool` is one of
+select / wire / label / text / line / rectangle / circle, exactly one armed, `Escape` always
+back to the pointer — an editor whose "no tool" state is unreachable is an editor you get
+stuck in. **Panning moved to the middle button in every tool**, and that is what makes tools
+possible at all: it used to be a left drag on empty sheet, so arming the wire tool had to
+turn panning off, and with more than two tools that trade stops working — a rubber band, a
+rectangle and a wire all want the left button on empty sheet.
+
+**Nothing is committed until the button comes up.** The dragged symbols, the wire following
+the pointer and the shape being pulled out are all painted by `SheetItem._ghost` as pictures
+of an edit that has not happened, which is what lets Escape and a drag off the sheet both
+mean "never mind" without a command having to be undone.
+
 `viewsch` paints the grid in `drawBackground` at `schematic.GRID_MM`, not as items: a line
 per square on a 460 mm sheet is nine thousand things to hold, transform and hit-test for
 something nothing will ever click. The minor grid gives up before the major one does, so
 zooming out reads instead of greying over.
 
-**Dragging a symbol onto the board places that one part.** The other half of "Place on the
-Board", which moves the whole design: `view2d.PART_MIME` is the format the drag carries, the
-board is the drop target (`BoardView.partDropped`), and the WINDOW decides which command it
-is — `part.place` for a part in the design, `component.move` for one already down, the same
+**ONE GESTURE, TWO DESTINATIONS, decided by where the pointer goes.** Dragging a symbol
+inside the sheet moves it; the moment the pointer leaves the panel the in-sheet move becomes
+a Qt drag (`_start_board_drag`), which is what lands it on a hole when it is dropped on the
+board. Anything else would mean two ways to pick a symbol up. `view2d.PART_MIME` is the
+format the drag carries, the board is the drop target (`BoardView.partDropped`), and the
+WINDOW decides which command it is — `part.place` for a part in the design, `component.move` for one already down, the same
 split `on_schematic_remove` makes. The constant lives in `view2d` because that is the side
 that receives it and already owns the vocabulary a drop lands in (`screen_to_hole`), and
 because the import goes the way that does not make a cycle. With the two views as panels

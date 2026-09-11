@@ -52,7 +52,9 @@ from .geometry import (
     validate_orthogonal_chain,
 )
 from .model import (
+    DEFAULT_NOTE_SIZE_MM,
     DOCUMENT_FORMAT_VERSION,
+    SHEET_NOTE_KINDS,
     VALID_ROTATIONS,
     Board,
     BoardEdge,
@@ -74,8 +76,12 @@ from .model import (
     NetId,
     NetNode,
     PerfDocument,
+    Point2,
     Rotation,
     SchematicPart,
+    SheetNote,
+    SheetNoteKind,
+    SheetWire,
     SolderBuildup,
     SolderTraceConductor,
     SpineSpec,
@@ -207,6 +213,24 @@ def require_part(doc: PerfDocument, id_: ComponentId) -> SchematicPart:
         if part.id == id_:
             return part
     raise CommandError("part-not-found", f'No schematic part with id "{id_}".')
+
+
+def next_net_name(doc: PerfDocument) -> str:
+    """The next free automatic net name, e.g. "N3".
+
+    Counted from the document for the same reason ``next_reference`` is: a hidden counter
+    would disagree with it after an undo, and the bus would refuse the name for a reason
+    nobody could see. Short and neutral on purpose -- it is a placeholder for whatever the
+    net turns out to be called, and renaming it is one dialog away.
+
+    In the engine rather than in the window because ``sheet.wire`` makes a net itself, and
+    two functions naming nets would eventually hand out the same name twice.
+    """
+    used = {net.name for net in doc.nets}
+    index = 1
+    while f"N{index}" in used:
+        index += 1
+    return f"N{index}"
 
 
 def assert_ref_free(doc: PerfDocument, ref: str, *, ignoring: ComponentId | None = None) -> None:
@@ -637,10 +661,15 @@ class PlacePartsPayload:
 
 @dataclass(frozen=True, slots=True)
 class MoveSymbolsPayload:
-    """Cells on the SHEET for one or more symbols. See ``model.SymbolPlacement``.
+    """Positions on the SHEET for one or more symbols. See ``model.SymbolPlacement``.
 
     A batch for the reason every other batch here is one: dragging is one gesture and a
     tidy-up is one decision, and either dispatched per symbol would bury the undo stack.
+
+    IT IS ALSO HOW A SHEET IS FROZEN. A document with no positions is drawn by the layout;
+    the first time somebody moves, turns or wires anything, the caller sends a position for
+    EVERY symbol -- taken from the drawing it is already looking at -- so nothing jumps.
+    One command, one undo step, and afterwards the sheet is the user's.
     """
 
     placements: tuple[SymbolPlacement, ...]
@@ -652,11 +681,69 @@ class AutoSymbolsPayload:
     """Hand symbols back to the layout. Empty ``ids`` means the whole sheet.
 
     The inverse of ``symbol.move``, and it has to exist as its own command rather than as
-    a position meaning "automatic": there is no cell that means "you choose", and a user
-    who has moved four symbols and wants the sheet back needs one gesture, not four.
+    a position meaning "automatic": there is no coordinate that means "you choose", and a
+    user who has moved four symbols and wants the sheet back needs one gesture, not four.
+
+    Handing back the WHOLE sheet takes the hand-drawn wires with it, and that is not a side
+    effect. A wire was drawn between two pins that were where somebody put them; once the
+    layout is arranging the symbols again those pins are somewhere else, and a wire left
+    behind would be a line across a drawing it no longer belongs to.
     """
 
     ids: tuple[ComponentId, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class DrawSheetWirePayload:
+    """One wire drawn between two pins, and the connection it makes.
+
+    ONE COMMAND FOR BOTH HALVES, because they are one gesture: dragging from a pin to a pin
+    joins them and leaves a line saying so, and an undo that took back the line but kept
+    the connection -- or the other way round -- would be a lie about what just happened.
+
+    What joining two pins MEANS is ``plan_pin_join`` below, which the board's connect tool
+    reads too. Two surfaces that could disagree about whether a click on a rail pin extends
+    the rail or starts a new net would be two applications in one window.
+    """
+
+    wire: SheetWire
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteSheetWiresPayload:
+    """Rub out drawn wires. The CONNECTION stays: a wire is how a join was drawn, and
+    deleting the picture of a join is not the same decision as disconnecting a pin --
+    which is ``net.disconnect``, and says so."""
+
+    wires: tuple[SheetWire, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AddSheetNotePayload:
+    """A caption or a box on the drawing. Nothing derives anything from it."""
+
+    kind: SheetNoteKind
+    at: Point2
+    to: Point2
+    text: str = ""
+    size_mm: Mm = DEFAULT_NOTE_SIZE_MM
+    id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateSheetNotePayload:
+    """Move a note, resize it, or change what it says. ``None`` leaves a field alone."""
+
+    id: str
+    at: Point2 | None = None
+    to: Point2 | None = None
+    text: str | None = None
+    size_mm: Mm | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteSheetNotesPayload:
+    ids: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -1748,6 +1835,45 @@ class _ApplyBoardPreset:
         return f"Use a {p.board.cols}x{p.board.rows} {p.board.material} board"
 
 
+@dataclass(frozen=True, slots=True)
+class PinJoin:
+    """What joining two pins would mean for the document as it stands.
+
+    ONE FACT, TWO CONSUMERS, the shape this codebase uses everywhere. The board joins pins
+    by clicking two pads, the sheet joins them by clicking or dragging between two symbol
+    pins, and ``sheet.wire`` joins them as half of drawing a line -- and the three must not
+    be able to disagree about the cases that are not "make a net": one pin already on a
+    net, both on the same net, and both on DIFFERENT nets, which nothing does automatically
+    because merging two nets is a decision about the circuit.
+
+    The message is the CALLER's to write. This is an engine module and the refusals are
+    read by people, in their own language.
+    """
+
+    kind: Literal["same-net", "two-nets", "extend", "create"]
+    #: The net to extend, for "extend"; the two nets, for "two-nets"; the shared net, for
+    #: "same-net". Empty for "create".
+    net_a: Net | None = None
+    net_b: Net | None = None
+    #: The node that has to be attached, for "extend".
+    node: NetNode | None = None
+
+
+def plan_pin_join(doc: PerfDocument, a: NetNode, b: NetNode) -> PinJoin:
+    """What ought to happen if these two pins are joined. Decides nothing about wording."""
+    net_a = next((n for n in doc.nets if a in n.nodes), None)
+    net_b = next((n for n in doc.nets if b in n.nodes), None)
+    if net_a is not None and net_b is not None:
+        if net_a.id == net_b.id:
+            return PinJoin(kind="same-net", net_a=net_a, net_b=net_b)
+        return PinJoin(kind="two-nets", net_a=net_a, net_b=net_b)
+    if net_a is not None:
+        return PinJoin(kind="extend", net_a=net_a, node=b)
+    if net_b is not None:
+        return PinJoin(kind="extend", net_a=net_b, node=a)
+    return PinJoin(kind="create")
+
+
 class _MoveSymbols:
     """Put symbols in particular cells on the sheet.
 
@@ -1811,7 +1937,10 @@ class _AutoSymbols:
                 "nothing-to-do", "No symbol on this sheet has been positioned by hand."
             )
         if not p.ids:
-            return dataclasses.replace(doc, sheet=())
+            # The whole sheet, so the wires go too -- see AutoSymbolsPayload. Notes stay:
+            # a caption is a person writing on the drawing and has nothing to do with
+            # where the layout decides to put a resistor.
+            return dataclasses.replace(doc, sheet=(), sheet_wires=())
         dropped = set(p.ids)
         kept = tuple(placement for placement in doc.sheet if placement.id not in dropped)
         if len(kept) == len(doc.sheet):
@@ -1824,6 +1953,182 @@ class _AutoSymbols:
         if not p.ids:
             return "Lay the whole sheet out automatically"
         return f"Lay {len(p.ids)} symbol(s) out automatically"
+
+
+class _DrawSheetWire:
+    """Draw a wire between two pins, and join them.
+
+    BOTH HALVES OR NEITHER. Dragging from one pin to another is one gesture: it joins the
+    pins and it leaves a line on the sheet saying so. Two commands would mean an undo that
+    took back the drawing and kept the connection, which is a lie about what just happened,
+    and a redo that could put them back in the other order.
+
+    What joining two pins means is ``plan_pin_join``, shared with the board's connect tool.
+    Two nets are never merged here: that is a change to the circuit rather than to a
+    drawing, and the refusal names both nets so the user can disconnect one pin and try
+    again.
+    """
+
+    type = "sheet.wire"
+
+    def apply(
+        self, doc: PerfDocument, p: DrawSheetWirePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        wire = p.wire
+        if wire.a == wire.b:
+            raise CommandError("same-pin", "A wire has to go between two different pins.")
+        if len(wire.path) < 2:
+            raise CommandError(
+                "path-too-short", "A wire on the sheet needs at least two points."
+            )
+        plan = plan_pin_join(doc, wire.a, wire.b)
+        if plan.kind == "two-nets":
+            assert plan.net_a is not None and plan.net_b is not None
+            raise CommandError(
+                "two-nets",
+                f"{_pin_name(wire.a)} is on {plan.net_a.name} and {_pin_name(wire.b)} is "
+                f"on {plan.net_b.name}. Joining two nets is a change to the circuit \u2014 "
+                f"disconnect one of the pins first.",
+            )
+
+        # An identical wire twice is a no-op on the undo stack, and two lines drawn on top
+        # of one another that only one delete removes.
+        drawn = [w for w in doc.sheet_wires if {w.a, w.b} != {wire.a, wire.b}]
+        drawn.append(wire)
+
+        if plan.kind == "same-net":
+            return dataclasses.replace(doc, sheet_wires=tuple(drawn))
+        if plan.kind == "extend":
+            assert plan.net_a is not None and plan.node is not None
+            nets = tuple(
+                dataclasses.replace(net, nodes=(*net.nodes, plan.node))
+                if net.id == plan.net_a.id
+                else net
+                for net in doc.nets
+            )
+            return dataclasses.replace(doc, nets=nets, sheet_wires=tuple(drawn))
+        net = Net(
+            id=ctx.next_id("net"),
+            name=next_net_name(doc),
+            net_class="signal",
+            nodes=(wire.a, wire.b),
+        )
+        return dataclasses.replace(
+            doc, nets=(*doc.nets, net), sheet_wires=tuple(drawn)
+        )
+
+    def describe(self, p: DrawSheetWirePayload, doc: PerfDocument) -> str:
+        return f"Wire {_pin_name(p.wire.a)} to {_pin_name(p.wire.b)}"
+
+
+class _DeleteSheetWires:
+    """Rub out drawn wires, leaving the circuit alone."""
+
+    type = "sheet.wire.delete"
+
+    def apply(
+        self, doc: PerfDocument, p: DeleteSheetWiresPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not p.wires:
+            raise CommandError(
+                "empty-batch", "sheet.wire.delete needs at least one wire to rub out."
+            )
+        wanted = {frozenset((wire.a, wire.b)) for wire in p.wires}
+        kept = tuple(w for w in doc.sheet_wires if frozenset((w.a, w.b)) not in wanted)
+        if len(kept) == len(doc.sheet_wires):
+            raise CommandError("nothing-to-do", "No wire on the sheet joins those pins.")
+        return dataclasses.replace(doc, sheet_wires=kept)
+
+    def describe(self, p: DeleteSheetWiresPayload, doc: PerfDocument) -> str:
+        if len(p.wires) == 1:
+            wire = p.wires[0]
+            return f"Rub out the wire from {_pin_name(wire.a)} to {_pin_name(wire.b)}"
+        return f"Rub out {len(p.wires)} wire(s) on the sheet"
+
+
+class _AddSheetNote:
+    type = "sheet.note.add"
+
+    def apply(
+        self, doc: PerfDocument, p: AddSheetNotePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if p.kind not in SHEET_NOTE_KINDS:
+            raise CommandError("unknown-kind", f'"{p.kind}" is not a kind of sheet note.')
+        if p.kind == "text" and not p.text.strip():
+            raise CommandError(
+                "empty-text",
+                "A text note with nothing in it is an invisible thing on the drawing that "
+                "still has to be selected to be deleted.",
+            )
+        if p.size_mm <= 0:
+            raise CommandError("bad-size", "Text height has to be a positive number of mm.")
+        note_id = p.id or ctx.next_id("note")
+        if any(note.id == note_id for note in doc.sheet_notes):
+            raise CommandError("duplicate-id", f'A note with id "{note_id}" already exists.')
+        note = SheetNote(
+            id=note_id, kind=p.kind, at=p.at, to=p.to, text=p.text, size_mm=p.size_mm
+        )
+        return dataclasses.replace(doc, sheet_notes=(*doc.sheet_notes, note))
+
+    def describe(self, p: AddSheetNotePayload, doc: PerfDocument) -> str:
+        if p.kind == "text":
+            return f"Write \u201c{p.text}\u201d on the sheet"
+        return f"Draw a {p.kind} on the sheet"
+
+
+class _UpdateSheetNote:
+    type = "sheet.note.update"
+
+    def apply(
+        self, doc: PerfDocument, p: UpdateSheetNotePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        found = next((note for note in doc.sheet_notes if note.id == p.id), None)
+        if found is None:
+            raise CommandError("unknown-note", f'No note with id "{p.id}".')
+        if p.text is not None and found.kind == "text" and not p.text.strip():
+            raise CommandError("empty-text", "A text note needs something in it.")
+        if p.size_mm is not None and p.size_mm <= 0:
+            raise CommandError("bad-size", "Text height has to be a positive number of mm.")
+        changed = dataclasses.replace(
+            found,
+            at=found.at if p.at is None else p.at,
+            to=found.to if p.to is None else p.to,
+            text=found.text if p.text is None else p.text,
+            size_mm=found.size_mm if p.size_mm is None else p.size_mm,
+        )
+        if changed == found:
+            raise CommandError("nothing-to-do", "That note is already like that.")
+        return dataclasses.replace(
+            doc,
+            sheet_notes=tuple(
+                changed if note.id == p.id else note for note in doc.sheet_notes
+            ),
+        )
+
+    def describe(self, p: UpdateSheetNotePayload, doc: PerfDocument) -> str:
+        return "Edit a note on the sheet"
+
+
+class _DeleteSheetNotes:
+    type = "sheet.note.delete"
+
+    def apply(
+        self, doc: PerfDocument, p: DeleteSheetNotesPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not p.ids:
+            raise CommandError("empty-batch", "sheet.note.delete needs at least one note.")
+        wanted = set(p.ids)
+        kept = tuple(note for note in doc.sheet_notes if note.id not in wanted)
+        if len(kept) == len(doc.sheet_notes):
+            raise CommandError("unknown-note", "No note on this sheet has any of those ids.")
+        return dataclasses.replace(doc, sheet_notes=kept)
+
+    def describe(self, p: DeleteSheetNotesPayload, doc: PerfDocument) -> str:
+        return f"Delete {len(p.ids)} note(s) from the sheet"
+
+
+def _pin_name(node: NetNode) -> str:
+    return f"{node.component_ref}.{node.pin}"
 
 
 class _ImportNetlist:
@@ -2395,6 +2700,11 @@ delete_part: CommandDefinition[DeletePartPayload] = _DeletePart()
 place_parts: CommandDefinition[PlacePartsPayload] = _PlaceParts()
 move_symbols: CommandDefinition[MoveSymbolsPayload] = _MoveSymbols()
 auto_symbols: CommandDefinition[AutoSymbolsPayload] = _AutoSymbols()
+draw_sheet_wire: CommandDefinition[DrawSheetWirePayload] = _DrawSheetWire()
+delete_sheet_wires: CommandDefinition[DeleteSheetWiresPayload] = _DeleteSheetWires()
+add_sheet_note: CommandDefinition[AddSheetNotePayload] = _AddSheetNote()
+update_sheet_note: CommandDefinition[UpdateSheetNotePayload] = _UpdateSheetNote()
+delete_sheet_notes: CommandDefinition[DeleteSheetNotesPayload] = _DeleteSheetNotes()
 add_conductor: CommandDefinition[AddConductorPayload] = _AddConductor()
 add_conductors: CommandDefinition[AddConductorsPayload] = _AddConductors()
 set_conductor_path: CommandDefinition[SetConductorPathPayload] = _SetConductorPath()
@@ -2437,6 +2747,11 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     delete_part,
     place_parts,
     move_symbols,
+    draw_sheet_wire,
+    delete_sheet_wires,
+    add_sheet_note,
+    update_sheet_note,
+    delete_sheet_notes,
     auto_symbols,
     add_conductor,
     add_conductors,

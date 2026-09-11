@@ -5054,6 +5054,18 @@ def test_a_hatched_conductor_still_marks_every_joint() -> None:
 # holding still.
 
 
+def _move_symbol(window, ref: str, x: float, y: float) -> None:
+    """Drag one symbol to a place on the sheet, the way the view reports one.
+
+    Through the window's own handler rather than by building a SymbolPlacement, because the
+    interesting half is what it does to the OTHER symbols: the first move freezes every one
+    of them where the drawing already had it.
+    """
+    window._refresh_schematic_panel()
+    window._on_symbols_moved([(ref, x, y)])
+    window._refresh_schematic_panel()
+
+
 def _open_schematic(doc):
     window = _window_on(doc)
     window.show_schematic()
@@ -5168,10 +5180,10 @@ def test_a_dropped_footprint_the_library_does_not_list_is_still_placed() -> None
     _close(window)
 
 
-def test_pressing_a_symbol_and_moving_begins_a_drag() -> None:
+def test_pressing_a_symbol_and_moving_drags_it_about_the_sheet() -> None:
     """The gesture the sheet documented and never had: _maybe_start_drag existed, and
     nothing in the view ever recorded a press or called it -- so a symbol could not be
-    dragged to another cell, and could not be dragged onto the board either."""
+    dragged to another place, and could not be dragged onto the board either."""
     from PySide6.QtCore import QEvent, QPoint, QPointF
     from PySide6.QtGui import QMouseEvent
 
@@ -5181,6 +5193,8 @@ def test_pressing_a_symbol_and_moving_begins_a_drag() -> None:
     centre = view.mapFromScene(
         QPointF(symbol.at.x + symbol.width / 2, symbol.at.y + symbol.height / 2)
     )
+    moved: list = []
+    view.symbolsMoved.connect(moved.append)
 
     def mouse(kind, pos):
         return QMouseEvent(
@@ -5195,13 +5209,54 @@ def test_pressing_a_symbol_and_moving_begins_a_drag() -> None:
     view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, centre))
 
     assert view._press_ref == "R1"
+    assert view.selected_refs == ["R1"]
 
     view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, centre + QPoint(60, 40)))
 
-    # The drag ran and ended (offscreen it ends at once); what matters is that the press
-    # was consumed, which is the half that was missing.
-    assert view._press_at is None
+    # Nothing is committed while the button is down: the ghost is a PICTURE of the edit.
+    assert view.item.drag_offset is not None
+    assert window.bus.document.sheet == ()
+
+    view.mouseReleaseEvent(mouse(QEvent.Type.MouseButtonRelease, centre + QPoint(60, 40)))
+
+    assert moved and moved[0][0][0] == "R1"
+    _close(window)
+
+
+def test_letting_go_outside_the_sheet_hands_the_part_to_the_board() -> None:
+    """ONE GESTURE, TWO DESTINATIONS, decided by where the pointer goes. Anything else
+    would mean two ways to pick a symbol up."""
+    from PySide6.QtCore import QEvent, QPoint, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    window = _open_schematic(_golden_document("ne555"))
+    view = window.schematic_view
+    view.resize(400, 300)
+    symbol = next(s for s in view.item.drawing.symbols if s.ref == "R1")
+    centre = view.mapFromScene(
+        QPointF(symbol.at.x + symbol.width / 2, symbol.at.y + symbol.height / 2)
+    )
+    moved: list = []
+    view.symbolsMoved.connect(moved.append)
+
+    def mouse(kind, pos):
+        return QMouseEvent(
+            kind,
+            QPointF(pos),
+            QPointF(pos),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+
+    view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, centre))
+    # Past the edge of the panel: the in-sheet move becomes a Qt drag, which is what lands
+    # it on a hole when it is dropped on the board.
+    view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, QPoint(-40, 20)))
+
     assert view._press_ref is None
+    assert view.item.drag_offset is None
+    assert not moved
     _close(window)
 
 
@@ -5837,12 +5892,12 @@ def test_escape_leaves_the_wiring_tool_the_way_it_leaves_every_other_mode() -> N
     """
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
-    window.act_sch_wire.setChecked(True)
+    window.on_sheet_tool("wire")
     window._on_schematic_pin_clicked("R1", "2")
 
     window.on_stop_tool()
 
-    assert not window.act_sch_wire.isChecked()
+    assert not window.act_sheet_tool["wire"].isChecked()
     assert window.schematic_view.wiring is False
     assert window.schematic_view.pending_pin is None
     _close(window)
@@ -6058,37 +6113,146 @@ def test_a_duplicate_of_a_placed_part_lands_in_the_design() -> None:
 
 def test_only_a_symbol_somebody_moved_is_offered_back_to_the_layout() -> None:
     """On every other symbol the entry would do nothing and say so."""
-    from perfboard_studio.model import SymbolPlacement
-
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
     _add(window, "R2", "r-axial-3")
 
     assert "&Arrange This Symbol" not in _labels(window.sheet_menu(_over(window, "R1")))
 
-    part_id = next(p.id for p in window.bus.document.parts if p.ref == "R1")
-    window._on_symbol_moved("R1", 3, 2)
-    window._refresh_schematic_panel()
-    assert window.bus.document.sheet == (SymbolPlacement(id=part_id, col=3, row=2),)
+    _move_symbol(window, "R1", 50.8, 25.4)
 
     assert "&Arrange This Symbol" in _labels(window.sheet_menu(_over(window, "R1")))
     _close(window)
 
 
-def test_arranging_one_symbol_leaves_the_others_where_they_were_put() -> None:
-    """Undoing one bad drag must not undo an afternoon of good ones, which is the same
-    call ``_apply_pinned_cells`` makes about only moving displaced symbols."""
+def test_moving_one_symbol_gives_every_symbol_a_place() -> None:
+    """THE FIRST EDIT FREEZES THE SHEET, and it has to: a layout that arranged twenty
+    symbols around the one somebody had placed would move the twenty every time the one
+    moved. One command, so it is one undo step."""
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
     _add(window, "R2", "r-axial-3")
-    window._on_symbol_moved("R1", 3, 2)
-    window._on_symbol_moved("R2", 4, 1)
-    window._refresh_schematic_panel()
+    before = {
+        s.ref: (s.at.x, s.at.y) for s in window.schematic_view.item.drawing.symbols
+    }
+
+    _move_symbol(window, "R1", 50.8, 25.4)
+
+    placed = {p.id for p in window.bus.document.sheet}
+    assert placed == {p.id for p in window.bus.document.parts}
+    after = {s.ref: (s.at.x, s.at.y) for s in window.schematic_view.item.drawing.symbols}
+    assert after["R1"] == (50.8, 25.4)
+    # ...and nothing else moved, which is the whole point of freezing them all at once.
+    assert after["R2"] == before["R2"]
+    _close(window)
+
+
+def test_turning_a_symbol_is_the_same_command_as_moving_one() -> None:
+    """A position and an orientation are one fact about a symbol. Two commands would mean
+    a rotate that could land between the two halves of a move on the undo stack."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    window.schematic_view.set_selection(["R1"])
+
+    window.on_schematic_rotate(1)
+
+    placement = next(p for p in window.bus.document.sheet)
+    assert placement.rotation == 90
+    window.on_schematic_rotate(1)
+    assert next(p for p in window.bus.document.sheet).rotation == 180
+    _close(window)
+
+
+def test_flipping_a_symbol_swaps_which_way_its_pins_face() -> None:
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    window.schematic_view.set_selection(["R1"])
+
+    window.on_schematic_mirror()
+
+    assert next(p for p in window.bus.document.sheet).mirrored is True
+    _close(window)
+
+
+def test_arranging_one_symbol_leaves_the_others_where_they_were_put() -> None:
+    """Undoing one bad drag must not undo an afternoon of good ones."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    _move_symbol(window, "R1", 50.8, 25.4)
+    _move_symbol(window, "R2", 76.2, 25.4)
     kept = next(p.id for p in window.bus.document.parts if p.ref == "R2")
 
     _entry(window.sheet_menu(_over(window, "R1")), "Arrange This Symbol").trigger()
 
     assert [placement.id for placement in window.bus.document.sheet] == [kept]
+    _close(window)
+
+
+def test_a_wire_drawn_on_the_sheet_joins_the_pins_and_stays_drawn() -> None:
+    """Both halves or neither: dragging from one pin to another joins them and leaves a
+    line saying so, and an undo that took back one and kept the other would be a lie about
+    what just happened."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+
+    window._on_sheet_wire_drawn("R1", "2", "R2", "1", [(0.0, 0.0), (10.16, 0.0)])
+
+    document = window.bus.document
+    assert len(document.sheet_wires) == 1
+    joined = {
+        frozenset((n.component_ref, n.pin) for n in net.nodes) for net in document.nets
+    }
+    assert any({("R1", "2"), ("R2", "1")} <= pair for pair in joined)
+    # ...and one undo takes back the wire AND the connection, because they were one command.
+    window.bus.undo()
+    assert window.bus.document.sheet_wires == ()
+    _close(window)
+
+
+def test_drawing_a_wire_on_a_sheet_nobody_has_touched_fixes_the_layout_first() -> None:
+    """Storing a line between two points the layout is still free to move would be storing
+    a line that is wrong the next time anything is added."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    assert window.bus.document.sheet == ()
+
+    window._on_sheet_wire_drawn("R1", "2", "R2", "1", [(0.0, 0.0), (10.16, 0.0)])
+
+    assert len(window.bus.document.sheet) == 2
+    _close(window)
+
+
+def test_a_note_is_put_on_the_sheet_and_taken_off_it() -> None:
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+
+    window.on_sheet_note_drawn("rectangle", 0.0, 0.0, 25.4, 12.7)
+
+    assert [n.kind for n in window.bus.document.sheet_notes] == ["rectangle"]
+    window._refresh_schematic_panel()
+    assert len(window.schematic_view.item.drawing.annotations) == 1
+
+    window.schematic_view.set_selection([], [0])
+    window.on_sheet_delete()
+
+    assert window.bus.document.sheet_notes == ()
+    _close(window)
+
+
+def test_a_part_dropped_on_the_sheet_joins_the_design_where_it_landed() -> None:
+    """part.add and not component.place: the board is not involved, which is the whole
+    point of drawing a circuit before laying one out."""
+    window = _blank_window()
+
+    window._on_sheet_footprint_dropped("r-axial-3", 50.8, 25.4)
+
+    assert [p.footprint_id for p in window.bus.document.parts] == ["r-axial-3"]
+    assert window.bus.document.components == ()
+    placement = next(p for p in window.bus.document.sheet)
+    assert (placement.at.x, placement.at.y) == (50.8, 25.4)
     _close(window)
 
 
@@ -6215,7 +6379,7 @@ def test_a_right_click_while_wiring_cancels_the_pair_instead_of_opening_a_menu()
 
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
-    window.act_sch_wire.setChecked(True)
+    window.on_sheet_tool("wire")
     window._on_schematic_pin_clicked("R1", "1")
     asked: list[QPoint] = []
     window.schematic_view.contextMenuRequested.connect(asked.append)

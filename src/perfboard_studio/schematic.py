@@ -72,13 +72,21 @@ from .model import (
     Net,
     NetClass,
     NetId,
+    NetNode,
     PerfDocument,
     Point2,
+    Rotation,
+    SheetNoteKind,
+    SheetWire,
+    SymbolPlacement,
 )
 
 # ---------------------------------------------------------------------------
 # The sheet's units
 # ---------------------------------------------------------------------------
+
+#: Which way a pin's lead points out of its body.
+type PinSide = Literal["left", "right", "top", "bottom"]
 
 #: 0.1 inch. Schematics are drawn on this grid, KiCad's default is this grid, and every
 #: coordinate this module emits is a multiple of it or a half of one.
@@ -194,12 +202,18 @@ class SymbolShape:
 
 @dataclass(frozen=True, slots=True)
 class SymbolPin:
-    """One lead of a symbol. ``at`` is where a WIRE attaches, not where the body ends."""
+    """One lead of a symbol. ``at`` is where a WIRE attaches, not where the body ends.
+
+    ``side`` is which way the lead points OUT of the body, so a wire, a net label or a
+    rail stub knows which direction to leave in. Every symbol is drawn with its pins left
+    and right; the other two appear once a symbol has been turned a quarter, which is what
+    ``_orient_body`` does to it.
+    """
 
     number: str
     name: str | None
     at: Point2
-    side: Literal["left", "right"]
+    side: PinSide
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,12 +243,16 @@ class Symbol:
     #: footprint is a guess. That is a real hole in the design, unlike ``unplaced``, and
     #: it is what the dashed outline and the note are for.
     undefined: bool = False
-    #: The cell this symbol was put in. Carried out of the layout because it is what
-    #: ``model.SymbolPlacement`` names and therefore what a user dragging a symbol has to
-    #: be able to say -- ``cell_at`` below is how a point on the sheet becomes one. Not a
-    #: position: the millimetres are ``at``, and they stay the layout's to decide.
-    col: int = 0
-    row: int = 0
+    #: How the body was turned to get here, carried out so a renderer, an exporter and a
+    #: rotate command all read the same answer rather than three of them recomputing it.
+    #: Always 0 and False on a sheet the layout arranged -- the layout does not turn
+    #: anything, because it chooses the positions and can always find an upright one.
+    rotation: Rotation = 0
+    mirrored: bool = False
+    #: Whether this symbol's position is stored in the document (``model.SymbolPlacement``)
+    #: rather than chosen by the layout. False for a part added to a hand-drawn sheet and
+    #: parked at the edge until somebody puts it somewhere.
+    positioned: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,6 +340,23 @@ class Label:
 
 
 @dataclass(frozen=True, slots=True)
+class Annotation:
+    """A caption or a box somebody put on the drawing.
+
+    Straight out of ``model.SheetNote`` with nothing added, because there is nothing to
+    derive: a note is a person writing on the sheet. It is carried through the drawing
+    rather than read from the document by each renderer so that the panel, the SVG writer
+    and the PDF cannot disagree about what is on the page.
+    """
+
+    kind: SheetNoteKind
+    at: Point2
+    to: Point2
+    text: str
+    size_mm: Mm
+
+
+@dataclass(frozen=True, slots=True)
 class SchematicOptions:
     """What to draw, kept separate from how.
 
@@ -358,6 +393,8 @@ class SchematicDrawing:
     junctions: tuple[Junction, ...] = ()
     no_connects: tuple[NoConnect, ...] = ()
     labels: tuple[Label, ...] = ()
+    #: Captions and boxes, in both kinds of sheet. Nothing derives anything from them.
+    annotations: tuple[Annotation, ...] = ()
     width: Mm = 0.0
     height: Mm = 0.0
     notes: tuple[str, ...] = ()
@@ -374,34 +411,62 @@ class SchematicDrawing:
 _GROUND_BARS: tuple[tuple[float, float], ...] = ((1.0, 0.0), (0.6, 0.35), (0.25, 0.70))
 
 
-def cell_at(drawing: SchematicDrawing, point: Point2) -> tuple[int, int]:
-    """Which cell a point on the sheet is in, for a drawing that already exists.
+def symbol_at(drawing: SchematicDrawing, point: Point2) -> Symbol | None:
+    """The symbol whose box contains ``point``, or None.
 
-    THE INVERSE OF THE LAYOUT, ANSWERED FROM ITS OUTPUT rather than from its arithmetic:
-    the column and row boundaries are a consequence of every symbol width and every
-    channel on the sheet, and a second implementation of that in the view would be a
-    second thing to keep in step. What the drawing carries is enough -- each symbol knows
-    its cell and its millimetres, so a point falls in the cell of whichever column and row
-    it is nearest to.
-
-    Columns and rows are taken separately, which is what makes an EMPTY cell reachable: a
-    point below the last symbol of column 2 and level with row 4 is (2, 4) even though
-    nothing is drawn there, and dropping a symbol into a gap is most of what rearranging a
-    sheet is.
-
-    (0, 0) for a drawing with no symbols, which is the only cell such a sheet has.
+    Answered from the DRAWING's own output rather than by re-deriving anything, which is
+    the rule ``cell_at`` followed before it: a second copy of "where is this symbol" is a
+    second thing to keep in step.
     """
-    if not drawing.symbols:
-        return (0, 0)
-    col = min(
-        drawing.symbols,
-        key=lambda symbol: (abs(point.x - (symbol.at.x + symbol.width / 2)), symbol.col),
-    ).col
-    row = min(
-        drawing.symbols,
-        key=lambda symbol: (abs(point.y - (symbol.at.y + symbol.height / 2)), symbol.row),
-    ).row
-    return (col, row)
+    for symbol in drawing.symbols:
+        if (
+            symbol.at.x <= point.x <= symbol.at.x + symbol.width
+            and symbol.at.y <= point.y <= symbol.at.y + symbol.height
+        ):
+            return symbol
+    return None
+
+
+def pin_at(drawing: SchematicDrawing, point: Point2, within: Mm) -> tuple[str, str] | None:
+    """The nearest pin within ``within`` millimetres, as ``(reference, pin number)``.
+
+    NEAREST AND NOT FIRST, for the reason every picker in this codebase says: the pins of a
+    DIP are one pitch apart, and taking whichever was built first would make half of them
+    unreachable.
+    """
+    best: tuple[float, str, str] | None = None
+    for symbol in drawing.symbols:
+        for pin in symbol.pins:
+            dx = point.x - (symbol.at.x + pin.at.x)
+            dy = point.y - (symbol.at.y + pin.at.y)
+            distance = math.hypot(dx, dy)
+            if distance <= within and (best is None or distance < best[0]):
+                best = (distance, symbol.ref, pin.number)
+    return (best[1], best[2]) if best is not None else None
+
+
+def pin_position(drawing: SchematicDrawing, ref: str, number: str) -> Point2 | None:
+    """Where one pin's wire attaches, in sheet millimetres."""
+    for symbol in drawing.symbols:
+        if symbol.ref != ref:
+            continue
+        for pin in symbol.pins:
+            if pin.number == number:
+                return Point2(x=symbol.at.x + pin.at.x, y=symbol.at.y + pin.at.y)
+    return None
+
+
+def snap_to_grid(point: Point2) -> Point2:
+    """The nearest grid intersection. The one place a sheet position is rounded.
+
+    Everything a user puts on this sheet lands on ``GRID_MM``, which is what makes a wire
+    drawn between two symbols meet their pins instead of missing by a tenth of a
+    millimetre -- and what makes two symbols line up without anybody aiming.
+    """
+    return Point2(
+        x=round(point.x / GRID_MM) * GRID_MM,
+        y=round(point.y / GRID_MM) * GRID_MM,
+    )
 
 
 def no_connect_arms(mark: NoConnect) -> tuple[tuple[Point2, Point2], tuple[Point2, Point2]]:
@@ -483,6 +548,92 @@ class _SymbolBody:
 
 def _p(x: Mm, y: Mm) -> Point2:
     return Point2(x=x, y=y)
+
+
+#: Which way round a pin points once its body has been turned or flipped. The keys are
+#: the quarter turns clockwise; the values map a pin's original side onto its new one.
+_SIDE_AFTER_TURN: dict[int, dict[PinSide, PinSide]] = {
+    0: {"left": "left", "right": "right", "top": "top", "bottom": "bottom"},
+    90: {"left": "top", "right": "bottom", "top": "right", "bottom": "left"},
+    180: {"left": "right", "right": "left", "top": "bottom", "bottom": "top"},
+    270: {"left": "bottom", "right": "top", "top": "left", "bottom": "right"},
+}
+
+_SIDE_MIRRORED: dict[PinSide, PinSide] = {
+    "left": "right",
+    "right": "left",
+    "top": "top",
+    "bottom": "bottom",
+}
+
+#: Which way a pin's wire leaves it, as a unit vector in sheet millimetres.
+PIN_DIRECTION: dict[PinSide, tuple[float, float]] = {
+    "left": (-1.0, 0.0),
+    "right": (1.0, 0.0),
+    "top": (0.0, -1.0),
+    "bottom": (0.0, 1.0),
+}
+
+
+def _orient_body(body: _SymbolBody, rotation: Rotation, mirrored: bool) -> _SymbolBody:
+    """The same symbol, turned and flipped.
+
+    MIRROR FIRST, THEN TURN, which is the order ``ComponentInstance`` uses on the board --
+    two places in this application answer "which way round is this", and having them
+    disagree would mean a part whose symbol and whose footprint are flipped differently
+    from one another. The mirror is about the body's own vertical centre, so a DIP's pin 1
+    moves to the other side and nothing leaves the box.
+
+    Every shape and every pin is transformed, and the box swaps its width and height on a
+    quarter turn. Nothing here knows what the symbol IS, which is the point: a resistor, a
+    relay and a 40-pin box all turn by the same arithmetic.
+    """
+    if rotation == 0 and not mirrored:
+        return body
+
+    width, height = body.width, body.height
+
+    def place(point: Point2) -> Point2:
+        x, y = point.x, point.y
+        if mirrored:
+            x = width - x
+        if rotation == 90:
+            return _p(height - y, x)
+        if rotation == 180:
+            return _p(width - x, height - y)
+        if rotation == 270:
+            return _p(y, width - x)
+        return _p(x, y)
+
+    def side_of(side: PinSide) -> PinSide:
+        turned = _SIDE_MIRRORED[side] if mirrored else side
+        return _SIDE_AFTER_TURN[rotation][turned]
+
+    shapes = tuple(
+        SymbolShape(
+            kind=shape.kind,
+            points=tuple(place(point) for point in shape.points),
+            radius=shape.radius,
+            filled=shape.filled,
+        )
+        for shape in body.shapes
+    )
+    pins = tuple(
+        SymbolPin(
+            number=pin.number,
+            name=pin.name,
+            at=place(pin.at),
+            side=side_of(pin.side),
+        )
+        for pin in body.pins
+    )
+    turned_quarter = rotation in (90, 270)
+    return _SymbolBody(
+        shapes=shapes,
+        pins=pins,
+        width=height if turned_quarter else width,
+        height=width if turned_quarter else height,
+    )
 
 
 def _pin_sort_key(number: str) -> tuple[int, float, str]:
@@ -1373,65 +1524,6 @@ def _split_tall_layers(layers: list[list[str]], group_size: int) -> list[list[st
     return out
 
 
-def _apply_pinned_cells(
-    symbols: dict[str, _Placed], pinned: dict[str, tuple[int, int]]
-) -> tuple[int, int]:
-    """Put the symbols somebody positioned in their cells, and re-pack whatever that
-    displaced. Returns the grid size the result needs.
-
-    A CELL AND NOT A POSITION, which is what lets this exist at all: the layout still owns
-    every millimetre, so the guarantee that wires run only in the channels between symbols
-    survives somebody rearranging the sheet. See ``model.SymbolPlacement``.
-
-    THE AUTOMATIC LAYOUT IS KEPT FOR EVERYTHING ELSE. Only a symbol whose cell was taken
-    moves; the rest stay exactly where the layering and the barycentre sweeps put them, so
-    positioning one part does not rearrange the twenty around it -- which is the behaviour
-    that makes a manual tweak worth making.
-
-    Every tie is broken by reference: which of two symbols asking for one cell gets it,
-    and the order the displaced are re-packed in. A sheet that rearranged itself between
-    runs would be unblessable, and worse, unrecognisable.
-    """
-    taken: dict[tuple[int, int], str] = {}
-    for ref in sorted(pinned, key=_ref_sort_key):
-        if ref not in symbols or pinned[ref] in taken:
-            continue
-        cell = pinned[ref]
-        taken[cell] = ref
-        symbols[ref].col, symbols[ref].row = cell
-
-    displaced: list[str] = []
-    for ref in sorted(symbols, key=_ref_sort_key):
-        cell = (symbols[ref].col, symbols[ref].row)
-        if taken.get(cell) == ref:
-            continue
-        if cell in taken:
-            displaced.append(ref)
-        else:
-            taken[cell] = ref
-
-    if displaced:
-        rows = max(row for _, row in taken) + 1
-        cursor_col = 0
-        cursor_row = 0
-        for ref in displaced:
-            # Down a column and then on to the next, which is the order the layout reads
-            # in and the order a reader follows. The grid grows a column at a time rather
-            # than being sized in advance, so a sheet gains exactly the width it needs.
-            while (cursor_col, cursor_row) in taken:
-                cursor_row += 1
-                if cursor_row >= rows:
-                    cursor_row = 0
-                    cursor_col += 1
-            taken[(cursor_col, cursor_row)] = ref
-            symbols[ref].col, symbols[ref].row = cursor_col, cursor_row
-
-    return (
-        max(col for col, _ in taken) + 1,
-        max(row for _, row in taken) + 1,
-    )
-
-
 def _merge_thin_columns(columns: list[list[str]], group_size: int) -> list[list[str]]:
     """Fold consecutive columns into one while they still fit under the height cap.
 
@@ -1652,27 +1744,64 @@ def build_schematic(
 ) -> SchematicDrawing:
     """Draw the netlist.
 
+    TWO KINDS OF SHEET, AND THE DOCUMENT DECIDES WHICH. With ``doc.sheet`` empty the whole
+    drawing is derived, exactly as it always was: symbols laid out in a grid of cells and
+    wires routed in the channels between them, so no wire can cross a symbol and the same
+    document always produces the same picture. With positions stored, the sheet is a
+    DRAWING somebody made -- every symbol sits where they put it, turned how they turned
+    it, joined by the wires they drew, and what they did not draw a wire for is joined by
+    NAME, with a label at the pin. That is not a fallback, it is what a schematic does with
+    a net too busy to draw.
+
+    The second kind exists because a tool that can capture a circuit and cannot draw one
+    sends people back to KiCad. The first is still what every imported netlist, every fresh
+    document and every press of Arrange produces, which is what keeps "open it and look at
+    it" free.
+
     Works on whatever the document has. No netlist gives a sheet of unconnected symbols,
     which is a fair picture of a board nobody has declared anything about; no parts gives
     an empty sheet and says so in ``notes``.
     """
     notes: list[str] = []
     symbols = _collect_symbols(doc, lookup, notes)
-    # doc.sheet is keyed on the part's ID -- so a position survives a rename, and survives
-    # a part moving between doc.parts and doc.components -- and everything from here on is
-    # keyed on the reference, which is what the drawing speaks.
-    ref_of = {part.id: part.ref for part in doc.parts}
-    ref_of.update({component.id: component.ref for component in doc.components})
-    pinned = {
-        ref_of[placement.id]: (placement.col, placement.row)
-        for placement in doc.sheet
-        if placement.id in ref_of
-    }
     if not symbols:
         return SchematicDrawing(
             notes=("Nothing to draw: the document has no parts and no netlist.",)
         )
 
+    annotations = tuple(
+        Annotation(kind=n.kind, at=n.at, to=n.to, text=n.text, size_mm=n.size_mm)
+        for n in doc.sheet_notes
+    )
+    resolved = _resolve_nets(doc, symbols, notes, options)
+
+    # doc.sheet is keyed on the part's ID -- so a position survives a rename, and survives
+    # a part moving between doc.parts and doc.components -- and everything from here on is
+    # keyed on the reference, which is what the drawing speaks.
+    ref_of = {part.id: part.ref for part in doc.parts}
+    ref_of.update({component.id: component.ref for component in doc.components})
+    placements = {
+        ref_of[placement.id]: placement
+        for placement in doc.sheet
+        if placement.id in ref_of and ref_of[placement.id] in symbols
+    }
+    if placements:
+        return _hand_drawn_sheet(doc, symbols, resolved, placements, options, notes, annotations)
+    return _derived_sheet(symbols, resolved, options, notes, annotations)
+
+
+def _resolve_nets(
+    doc: PerfDocument,
+    symbols: dict[str, _Placed],
+    notes: list[str],
+    options: SchematicOptions,
+) -> list[_ResolvedNet]:
+    """Every net, paired with the pins of it that are actually on the sheet.
+
+    Both kinds of sheet need exactly this and neither should ask the question twice: a node
+    naming a pin the footprint does not have is a note here and must not count as a
+    connection anywhere downstream.
+    """
     pin_index: dict[tuple[str, str], SymbolPin] = {}
     for ref, placed in symbols.items():
         for pin in placed.body.pins:
@@ -1703,6 +1832,388 @@ def build_schematic(
             _ResolvedNet(net=net, rail=_is_rail(net, options), pins=tuple(picked))
         )
 
+    return resolved
+
+
+# ---------------------------------------------------------------------------
+# The sheet somebody drew
+# ---------------------------------------------------------------------------
+#
+# A DRAWING AND NOT A LAYOUT. Every symbol sits where it was put, turned how it was
+# turned, and the wires are the ones somebody drew. Nothing here arranges anything, and
+# that is the whole difference: the derived sheet is a picture OF the netlist, and this is
+# a picture somebody made that the netlist agrees with.
+#
+# What is NOT drawn as a wire is drawn as a net LABEL at the pin, which is the part worth
+# being clear about. It is not a fallback for wires nobody got round to: naming a net at
+# the pin is how every schematic joins a bus, a clock or a reset line that would otherwise
+# cross the whole page, and it is the second way of connecting that the sheet needs in
+# order to be usable at all. Two pins carrying the same name are the same net -- which here
+# is simply true, because the net is ``doc.nets`` and the label is printed FROM it.
+
+#: How far a net label's stub runs out of the pin before the name is written.
+LABEL_STUB_MM: Mm = 2 * GRID_MM
+
+#: How far a rail glyph hangs off a pin nobody drew a wire to.
+RAIL_STUB_MM: Mm = 3 * GRID_MM
+
+#: The gap between symbols parked at the edge of a hand-drawn sheet, and between that
+#: column and the drawing.
+PARK_GAP_MM: Mm = 3 * GRID_MM
+
+
+def _wire_net_of(doc: PerfDocument, wire: SheetWire) -> Net | None:
+    """The net holding both ends of a drawn wire, if one still does.
+
+    THE WIRE CARRIES NO NET ID, and this is why. A wire is geometry; what is CONNECTED is
+    ``doc.nets``, and asking the netlist every time is what makes a wire left over from a
+    connection somebody has since removed stop being drawn instead of quietly asserting a
+    join that no longer exists. It is also what makes renaming a net cost nothing here.
+    """
+    for net in doc.nets:
+        nodes = set(net.nodes)
+        if wire.a in nodes and wire.b in nodes:
+            return net
+    return None
+
+
+def _reanchored(path: tuple[Point2, ...], start: Point2, end: Point2) -> tuple[Point2, ...]:
+    """The drawn path with its two ends moved onto the pins they belong to.
+
+    A SYMBOL THAT MOVES TAKES ITS WIRES WITH IT, which is what every schematic editor does
+    and what anybody dragging one expects. Only the two end segments give: the first point
+    becomes the pin, and the point after it slides along whichever axis that segment ran on
+    so the chain stays orthogonal. Everything in the middle is left exactly as drawn, so a
+    route somebody took the trouble to lay out is not re-derived behind their back.
+    """
+    if len(path) < 3:
+        # Nothing in the middle to preserve, and the two fixups below would fight over the
+        # same point -- on a two-point path, ``points[0]`` and ``points[-2]`` are the same
+        # element, so the second would undo the first. An elbow, horizontal first, which is
+        # what the panel's own preview draws.
+        if start.x == end.x or start.y == end.y:
+            return (start, end)
+        return (start, _p(end.x, start.y), end)
+    points = list(path)
+    if points[0] != start:
+        horizontal = abs(points[1].y - points[0].y) < abs(points[1].x - points[0].x)
+        points[1] = _p(points[1].x, start.y) if horizontal else _p(start.x, points[1].y)
+        points[0] = start
+    if points[-1] != end:
+        horizontal = abs(points[-2].y - points[-1].y) < abs(points[-2].x - points[-1].x)
+        points[-2] = _p(points[-2].x, end.y) if horizontal else _p(end.x, points[-2].y)
+        points[-1] = end
+    return _tidy(points)
+
+
+def _hand_drawn_sheet(
+    doc: PerfDocument,
+    symbols: dict[str, _Placed],
+    resolved: list[_ResolvedNet],
+    placements: dict[str, SymbolPlacement],
+    options: SchematicOptions,
+    notes: list[str],
+    annotations: tuple[Annotation, ...],
+) -> SchematicDrawing:
+    """Draw the sheet as it was arranged, and join by name whatever has no wire."""
+    # -- where everything is, and which way round ---------------------------
+    for ref, placed in symbols.items():
+        placement = placements.get(ref)
+        if placement is None:
+            continue
+        placed.body = _orient_body(placed.body, placement.rotation, placement.mirrored)
+        placed.x, placed.y = placement.at.x, placement.at.y
+
+    # A part added after the sheet was arranged has nowhere to be, so it is PARKED in a
+    # column past the right-hand edge rather than dropped at the origin on top of whatever
+    # is there. It is drawn, it is labelled, and moving it is one drag -- which is a better
+    # answer than rearranging a sheet somebody laid out by hand in order to make room.
+    parked = sorted((ref for ref in symbols if ref not in placements), key=_ref_sort_key)
+    if parked:
+        right = max(
+            (placed.x + placed.body.width for ref, placed in symbols.items() if ref in placements),
+            default=MARGIN_MM,
+        )
+        top = min(
+            (placed.y for ref, placed in symbols.items() if ref in placements),
+            default=MARGIN_MM,
+        )
+        cursor = top
+        for ref in parked:
+            placed = symbols[ref]
+            placed.x = right + PARK_GAP_MM
+            placed.y = cursor
+            cursor += placed.body.height + PARK_GAP_MM
+
+    # -- the wires somebody drew --------------------------------------------
+    wires: list[Wire] = []
+    drawn_pins: set[tuple[str, str]] = set()
+    for wire in doc.sheet_wires:
+        net = _wire_net_of(doc, wire)
+        if net is None:
+            continue
+        start = _pin_of(symbols, wire.a)
+        end = _pin_of(symbols, wire.b)
+        if start is None or end is None:
+            continue
+        wires.append(
+            Wire(
+                net_id=net.id,
+                net_name=net.name,
+                net_class=net.net_class,
+                path=_reanchored(wire.path, start, end),
+            )
+        )
+        drawn_pins.add((wire.a.component_ref, wire.a.pin))
+        drawn_pins.add((wire.b.component_ref, wire.b.pin))
+
+    # -- and a name, or a rail glyph, on everything else ---------------------
+    rails: list[Rail] = []
+    net_labels: list[Label] = []
+    for item in resolved:
+        for ref, pin in item.pins:
+            if (ref, pin.number) in drawn_pins:
+                continue
+            anchor = symbols[ref].anchor_of(pin)
+            if item.rail:
+                upward = item.net.net_class == "power"
+                end = _p(anchor.x, anchor.y + (-RAIL_STUB_MM if upward else RAIL_STUB_MM))
+                rails.append(
+                    Rail(
+                        net_id=item.net.id,
+                        net_name=item.net.name,
+                        net_class=item.net.net_class,
+                        path=(anchor, end),
+                        at=end,
+                        direction="up" if upward else "down",
+                    )
+                )
+                continue
+            if len(item.pins) < 2:
+                # One pin and nothing to join it to. Saying the name would claim a
+                # connection to something; the derived sheet draws a stub here and says so
+                # in the notes, and so does this.
+                continue
+            dx, dy = PIN_DIRECTION[pin.side]
+            end = _p(anchor.x + dx * LABEL_STUB_MM, anchor.y + dy * LABEL_STUB_MM)
+            wires.append(
+                Wire(
+                    net_id=item.net.id,
+                    net_name=item.net.name,
+                    net_class=item.net.net_class,
+                    path=(anchor, end),
+                )
+            )
+            net_labels.append(
+                Label(
+                    text=item.net.name,
+                    at=end,
+                    kind="net",
+                    anchor="left" if dx > 0 else "right" if dx < 0 else "centre",
+                )
+            )
+
+    # -- dots where three or more ends of one net meet ----------------------
+    junctions = _junctions_of(wires)
+
+    wired_pins = {(ref, pin.number) for item in resolved for ref, pin in item.pins}
+    no_connects = [
+        NoConnect(ref=ref, pin=pin.number, at=symbols[ref].anchor_of(pin))
+        for ref in sorted(symbols, key=_ref_sort_key)
+        for pin in symbols[ref].body.pins
+        if (ref, pin.number) not in wired_pins
+    ]
+
+    ordered = sorted(symbols.values(), key=lambda placed: _ref_sort_key(placed.ref))
+    part_labels = _part_labels(ordered, options)
+
+    width, height = _sheet_extent(ordered, wires, rails, no_connects, annotations)
+
+    drawn = tuple(
+        Symbol(
+            ref=placed.ref,
+            value=placed.value,
+            kind=placed.kind,
+            footprint_id=placed.footprint_id,
+            at=_p(placed.x, placed.y),
+            shapes=placed.body.shapes,
+            pins=placed.body.pins,
+            width=placed.body.width,
+            height=placed.body.height,
+            unplaced=placed.unplaced,
+            undefined=placed.undefined,
+            rotation=placements[placed.ref].rotation if placed.ref in placements else 0,
+            mirrored=placements[placed.ref].mirrored if placed.ref in placements else False,
+            positioned=placed.ref in placements,
+        )
+        for placed in ordered
+    )
+    if parked:
+        notes.append(
+            f"{len(parked)} part(s) have no place on this sheet yet and are parked at the "
+            f"right-hand edge: {', '.join(parked)}"
+        )
+    return SchematicDrawing(
+        symbols=drawn,
+        wires=tuple(wires),
+        rails=tuple(rails),
+        junctions=junctions,
+        no_connects=tuple(no_connects),
+        labels=(*part_labels, *net_labels),
+        annotations=annotations,
+        width=width,
+        height=height,
+        notes=tuple(notes),
+    )
+
+
+def _pin_of(symbols: dict[str, _Placed], node: NetNode) -> Point2 | None:
+    placed = symbols.get(node.component_ref)
+    if placed is None:
+        return None
+    for pin in placed.body.pins:
+        if pin.number == node.pin:
+            return placed.anchor_of(pin)
+    return None
+
+
+def _junctions_of(wires: Sequence[Wire]) -> tuple[Junction, ...]:
+    """A dot where three or more ends of one net meet at a point.
+
+    THREE, NOT TWO, and that is the whole convention: two wires meeting end to end are one
+    wire that turns a corner, and a dot there claims a join that is really a bend. Counted
+    from the ENDS only -- a wire crossing another in the middle is an ordinary schematic
+    crossing and carries no dot, which is what lets a reader tell the two apart.
+    """
+    counts: dict[tuple[NetId, float, float], int] = defaultdict(int)
+    for wire in wires:
+        for end in (wire.path[0], wire.path[-1]):
+            counts[(wire.net_id, end.x, end.y)] += 1
+    return tuple(
+        Junction(net_id=net_id, at=_p(x, y))
+        for (net_id, x, y), count in sorted(counts.items())
+        if count >= 3
+    )
+
+
+def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[Label]:
+    """The reference, the value and the pin numbers. One answer for both kinds of sheet."""
+    labels: list[Label] = []
+    for placed in ordered:
+        centre = placed.x + placed.body.width / 2
+        # Well clear of the box rather than snug to it: a reference is drawn at a fixed
+        # PIXEL size, so how many millimetres of sheet it occupies grows as the view zooms
+        # out -- and the one symbol with anything near its top edge is the LED.
+        labels.append(
+            Label(
+                text=placed.ref,
+                at=_p(centre, placed.y - 0.75 * GRID_MM),
+                kind="ref",
+                anchor="centre",
+            )
+        )
+        if options.show_values and placed.value:
+            labels.append(
+                Label(
+                    text=placed.value,
+                    at=_p(centre, placed.y + placed.body.height + 0.4 * GRID_MM),
+                    kind="value",
+                    anchor="centre",
+                )
+            )
+        # A relay is numbered like a box because its contacts ARE numbered and nothing
+        # else on the symbol says which is which -- that refusal is only honest if the
+        # numbers are there to read. A switch deliberately is not: its two legs per side
+        # are one node inside the part, so which of them a net lands on is a question about
+        # holes and not about the circuit, and two labels at the join would sit on top of
+        # the lines that say they are joined.
+        if options.show_pin_numbers and placed.kind in ("ic", "connector", "box", "relay"):
+            for pin in placed.body.pins:
+                inset = LEAD_MM + 0.5 * GRID_MM
+                if pin.side == "left":
+                    labels.append(
+                        Label(
+                            text=pin.number,
+                            at=_p(placed.x + inset, placed.y + pin.at.y),
+                            kind="pin",
+                            anchor="left",
+                        )
+                    )
+                elif pin.side == "right":
+                    labels.append(
+                        Label(
+                            text=pin.number,
+                            at=_p(placed.x + placed.body.width - inset, placed.y + pin.at.y),
+                            kind="pin",
+                            anchor="right",
+                        )
+                    )
+                else:
+                    # A turned symbol's pins run along the top or the bottom, where a
+                    # number beside the lead would sit on the lead next to it. Centred over
+                    # the lead instead, just inside the body.
+                    inward = inset if pin.side == "top" else -inset
+                    labels.append(
+                        Label(
+                            text=pin.number,
+                            at=_p(placed.x + pin.at.x, placed.y + pin.at.y + inward),
+                            kind="pin",
+                            anchor="centre",
+                        )
+                    )
+    return labels
+
+
+def _sheet_extent(
+    ordered: Sequence[_Placed],
+    wires: Sequence[Wire],
+    rails: Sequence[Rail],
+    no_connects: Sequence[NoConnect],
+    annotations: Sequence[Annotation],
+) -> tuple[Mm, Mm]:
+    """How big the paper has to be. A margin past everything that is on it.
+
+    The origin stays at zero rather than the drawing being shifted up against it: a symbol
+    is where the document says it is, and a sheet that slid under the user because they
+    deleted the top-left part would move everything they had lined up.
+    """
+    right = MARGIN_MM
+    bottom = MARGIN_MM
+    for placed in ordered:
+        right = max(right, placed.x + placed.body.width)
+        bottom = max(bottom, placed.y + placed.body.height)
+    runs: list[tuple[Point2, ...]] = [wire.path for wire in wires]
+    runs.extend(rail.path for rail in rails)
+    for path in runs:
+        for point in path:
+            right = max(right, point.x)
+            bottom = max(bottom, point.y)
+    for mark in no_connects:
+        right = max(right, mark.at.x)
+        bottom = max(bottom, mark.at.y)
+    for note in annotations:
+        right = max(right, note.at.x, note.to.x)
+        bottom = max(bottom, note.at.y, note.to.y)
+    # A label's own width is not known here -- it is drawn at a size the renderer picks --
+    # so the margin doubles as the room for a net name written at the right-hand edge.
+    return right + 2 * MARGIN_MM, bottom + MARGIN_MM
+
+
+def _derived_sheet(
+    symbols: dict[str, _Placed],
+    resolved: list[_ResolvedNet],
+    options: SchematicOptions,
+    notes: list[str],
+    annotations: tuple[Annotation, ...],
+) -> SchematicDrawing:
+    """The sheet nobody has drawn on: cells, channels, and a routed picture of the netlist.
+
+    This is the original ``build_schematic`` body, unchanged in what it produces. The three
+    decisions it rests on are in the module docstring, and the one that matters most here
+    is that symbols live in cells and wires live only in the channels between them -- which
+    is why no wire crosses a symbol, as a consequence of where the tracks may be rather
+    than as a tuning parameter.
+    """
     # Rails are deliberately absent from the graph. A ground net touching every part would
     # make every part adjacent to every other, and the layering below would put the whole
     # circuit in two columns -- which is exactly the hairball the glyphs exist to prevent,
@@ -1718,8 +2229,6 @@ def build_schematic(
                 adjacency[touched[second]].add(touched[first])
 
     ncols, nrows = _assign_cells(symbols, adjacency)
-    if pinned:
-        ncols, nrows = _apply_pinned_cells(symbols, pinned)
 
     column_width = [0.0] * ncols
     row_height = [0.0] * nrows
@@ -1948,48 +2457,10 @@ def build_schematic(
         net_labels.append(Label(text=name, at=at, kind="net", anchor="left"))
 
     ordered = sorted(symbols.values(), key=lambda placed: _ref_sort_key(placed.ref))
-    part_labels: list[Label] = []
-    for placed in ordered:
-        centre = placed.x + placed.body.width / 2
-        # Well clear of the box rather than snug to it: a reference is drawn at a fixed
-        # PIXEL size, so how many millimetres of sheet it occupies grows as the view zooms
-        # out -- and the one symbol with anything near its top edge is the LED.
-        part_labels.append(
-            Label(
-                text=placed.ref,
-                at=Point2(x=centre, y=placed.y - 0.75 * GRID_MM),
-                kind="ref",
-                anchor="centre",
-            )
-        )
-        if options.show_values and placed.value:
-            part_labels.append(
-                Label(
-                    text=placed.value,
-                    at=Point2(x=centre, y=placed.y + placed.body.height + 0.4 * GRID_MM),
-                    kind="value",
-                    anchor="centre",
-                )
-            )
-        # A relay is numbered like a box because its contacts ARE numbered and nothing
-        # else on the symbol says which is which -- that refusal is only honest if the
-        # numbers are there to read. A switch deliberately is not: its two legs per side
-        # are one node inside the part, so which of them a net lands on is a question about
-        # holes and not about the circuit, and two labels at the join would sit on top of
-        # the lines that say they are joined.
-        if options.show_pin_numbers and placed.kind in ("ic", "connector", "box", "relay"):
-            for pin in placed.body.pins:
-                inset = LEAD_MM + 0.5 * GRID_MM
-                if pin.side == "left":
-                    at = Point2(x=placed.x + inset, y=placed.y + pin.at.y)
-                    part_labels.append(
-                        Label(text=pin.number, at=at, kind="pin", anchor="left")
-                    )
-                else:
-                    at = Point2(x=placed.x + placed.body.width - inset, y=placed.y + pin.at.y)
-                    part_labels.append(
-                        Label(text=pin.number, at=at, kind="pin", anchor="right")
-                    )
+    # The same call the hand-drawn sheet makes. A reference sitting a different
+    # distance above its symbol depending on which kind of sheet it is on would be one
+    # fact with two answers, and the exporters read whichever they were given.
+    part_labels = _part_labels(ordered, options)
 
     drawn = tuple(
         Symbol(
@@ -2004,8 +2475,6 @@ def build_schematic(
             height=placed.body.height,
             unplaced=placed.unplaced,
             undefined=placed.undefined,
-            col=placed.col,
-            row=placed.row,
         )
         for placed in ordered
     )
@@ -2017,6 +2486,7 @@ def build_schematic(
         junctions=tuple(junctions),
         no_connects=tuple(no_connects),
         labels=(*part_labels, *net_labels),
+        annotations=annotations,
         width=width,
         height=height,
         notes=tuple(notes),

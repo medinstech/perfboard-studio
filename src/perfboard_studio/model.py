@@ -404,33 +404,104 @@ class SchematicPart:
 
 @dataclass(frozen=True, slots=True)
 class SymbolPlacement:
-    """Where one part's SYMBOL sits on the sheet, once somebody has said.
+    """Where one part's symbol sits on the sheet, and which way round it is.
 
-    A CELL, NOT A POSITION, and that is the whole safety of the feature.
-    ``schematic.py`` guarantees that symbols live in grid cells and wires only in the
-    channels between them, so no wire can ever cross a symbol — a guarantee that holds
-    because the layout owns every position on the sheet. Storing millimetres would hand
-    that away: a symbol dropped between two columns is a symbol with wires through it, and
-    the sheet would stop being readable in exactly the case somebody was trying to make it
-    more readable. A cell is a choice the layout can honour and still route around.
+    MILLIMETRES, AND PLAN.md D3 IS REVERSED ON PURPOSE. This used to be a CELL in a grid
+    the layout owned, which is what let the sheet stay derived: wires ran only in the
+    channels between cells, so no wire could cross a symbol. That guarantee is real and it
+    is also the reason the sheet was not a schematic editor -- a symbol could be moved to
+    another cell and nowhere else, it could not be turned, and a wire could not be drawn at
+    all. D3 declined to write a geometric editor because that is a year of work whose
+    output this tool already accepts from KiCad; what it did not weigh is that a tool which
+    can capture a circuit and cannot DRAW one is asking people to keep KiCad open beside it.
 
-    Keyed on the part's ID rather than its reference, so it survives a rename — and so it
+    So the sheet has two states, and which one a document is in is decided by whether this
+    tuple is empty. Empty, the whole drawing is derived exactly as before, and every one of
+    the fifteen golden fixtures serializes to the bytes it always did. Non-empty, the
+    positions here are the sheet: every symbol has one, the layout arranges nothing, and
+    what is not joined by a wire somebody drew is joined by a net LABEL, which is what a
+    schematic does with a net too busy to draw.
+
+    ``at`` is the top-left of the symbol's own box, on the sheet grid. ``rotation`` is
+    clockwise and ``mirrored`` is applied before it, about the symbol's vertical centre --
+    the same order ``ComponentInstance`` uses on the board, so the two never have to be
+    reasoned about differently.
+
+    Keyed on the part's ID rather than its reference, so it survives a rename -- and so it
     survives ``part.place`` and ``component.unplace``, which move a part between the two
-    lists and keep the id. A symbol you positioned does not jump back when the part goes
-    on the board.
-
-    THE SHEET IS STILL DERIVED. This is an override on one part, absent by default and
-    absent from the file when nothing has been moved (see ``persist``), which is what keeps
-    PLAN.md D3 intact: the drawing is not state, and a document nobody has rearranged
-    serializes to exactly the bytes it did before this existed.
+    lists and keep the id.
     """
 
     id: ComponentId
-    col: int
-    row: int
+    at: Point2
+    rotation: Rotation = 0
+    mirrored: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SheetWire:
+    """A wire somebody drew on the sheet, between two pins.
+
+    THE CIRCUIT IS STILL ``doc.nets`` AND THIS IS ONLY HOW IT WAS DRAWN. A wire carries no
+    net id: which net it belongs to is whichever net holds both of its ends, looked up
+    every time. That is what keeps the netlist the one answer to "what is connected" --
+    LVS, the router, the placer, the guide and the board all read ``doc.nets`` and none of
+    them has to learn about geometry -- and it is what makes a wire left over from a
+    connection somebody has since removed simply stop being drawn, instead of quietly
+    asserting a join that no longer exists.
+
+    Two pins and no more. A net drawn as three wires between four pins reads exactly like a
+    net drawn as one branching run, and a branch point would need a fourth kind of endpoint
+    -- a point on another wire -- that moves whenever either end does.
+
+    ``path`` is the orthogonal chain between them, in sheet millimetres, first point at
+    ``a`` and last at ``b``.
+    """
+
+    a: NetNode
+    b: NetNode
+    path: tuple[Point2, ...]
+
+
+#: What a sheet note draws. Text, and the three shapes an annotation is made of -- which is
+#: the same argument ``SymbolShape`` makes about having three kinds and no more.
+type SheetNoteKind = Literal["text", "line", "rectangle", "circle"]
+
+#: Every member of the above, spelled out. ``get_args`` returns an empty tuple for a PEP
+#: 695 alias -- the trap ``BoardType`` and friends carry a ``noqa`` for -- so the run-time
+#: list is written down and a test asserts the two agree.
+SHEET_NOTE_KINDS: tuple[SheetNoteKind, ...] = ("text", "line", "rectangle", "circle")
+
+#: Cap height a note's text is given when nobody has said otherwise. Here rather than in
+#: ``persist`` so the default and the value the file omits are one number.
+DEFAULT_NOTE_SIZE_MM: Mm = 3.5
+
+
+@dataclass(frozen=True, slots=True)
+class SheetNote:
+    """Something on the sheet that is not the circuit: a caption, a box round a block.
+
+    NOTHING DERIVES ANYTHING FROM THESE. They are not checked by DRC, they are not read by
+    LVS, and no command refuses one for overlapping anything -- a note is a person writing
+    on the drawing, and a drawing tool that argued with what was written on it would be
+    worse than one with no notes at all.
+
+    ``at`` and ``to`` are the two corners for ``rectangle`` and ``circle``, the two ends for
+    ``line``, and both the same point for ``text``.
+    """
+
+    id: str
+    kind: SheetNoteKind
+    at: Point2
+    to: Point2
+    text: str = ""
+    #: Cap height in millimetres of sheet, for ``text``. Millimetres and not points because
+    #: everything else on this sheet is millimetres and the export is 1:1.
+    size_mm: Mm = DEFAULT_NOTE_SIZE_MM
 
 
 # ---------------------------------------------------------------------------
+# Conductors# ---------------------------------------------------------------------------
 # Conductors — the heart of the model
 # ---------------------------------------------------------------------------
 
@@ -591,12 +662,19 @@ class PerfDocument:
     #: to work and the only one there used to be.
     parts: tuple[SchematicPart, ...] = ()
     #: Schematic intent, imported from a netlist or drawn on the schematic. Empty until
-    #: one or the other has happened.
+    #: one or the other has happened. THE ONE ANSWER to what is connected: the sheet's own
+    #: geometry below says how a connection was drawn and never what it is.
     nets: tuple[Net, ...] = ()
     #: Sheet cells somebody has chosen for particular symbols — see ``SymbolPlacement``.
     #: Empty on every document the layout has been left to arrange, which is most of them,
-    #: and empty is what the file then says by saying nothing.
+    #: and empty is what the file then says by saying nothing. Non-empty, the sheet is
+    #: drawn from these and from ``sheet_wires`` rather than laid out.
     sheet: tuple[SymbolPlacement, ...] = ()
+    #: Wires somebody drew between two pins. Geometry only -- what is CONNECTED is still
+    #: ``nets``, and a wire whose two pins are no longer on one net is simply not drawn.
+    sheet_wires: tuple[SheetWire, ...] = ()
+    #: Captions and boxes on the drawing. Nothing derives anything from them.
+    sheet_notes: tuple[SheetNote, ...] = ()
     #: Mechanical features of the board. They sit on the document rather than on
     #: ``board`` — following ``cuts``, which is the same kind of thing — so that adding
     #: one is its own command and its own undo step instead of a wholesale board
