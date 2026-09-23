@@ -10,9 +10,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push cancels an older run everywhere EXCEPT main. On main every commit is a
+# record of whether that commit was sound, and "Release 0.12.0" has no such record: the
+# "Open 0.13.0 development" push fifteen minutes later cancelled its run, so the tag went
+# out on a commit whose CI never finished -- and the next run failed.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   types:

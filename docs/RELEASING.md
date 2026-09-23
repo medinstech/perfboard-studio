@@ -58,9 +58,18 @@ pytest                       # test_version.py checks steps 1 and 2 agree
 mypy --strict src             # `src` ONLY -- see CONTRIBUTING.md
 ruff check src tests          # a gate since 0.5.0; `ruff format` deliberately is not
 git commit -am "Release 0.4.0"
+git push
+gh run watch --exit-status $(gh run list --workflow=ci.yml --commit $(git rev-parse HEAD) --json databaseId -q '.[0].databaseId')
 git tag -a v0.4.0 -m "Perfboard Studio 0.4.0"
-git push && git push --tags
+git push --tags
 ```
+
+**The tag goes on a commit CI has passed**, not on one that passed here. A local run
+checks against whatever versions this machine happens to have installed; CI installs
+the newest ones `pyproject.toml` allows, which is what a `pip install` gets. v0.12.0 was
+tagged green locally with PySide6 6.10 while CI had 6.11, whose stubs made
+`QTreeWidget.currentItem()` optional, and `mypy --strict` failed there. Nothing in the
+dry run type-checks, so this is the only step that would have seen it.
 
 Pushing the tag is what builds the installers: `.github/workflows/release.yml` refuses
 to publish unless the tag, `version.py` and `CHANGELOG.md` agree, then builds and
