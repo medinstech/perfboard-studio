@@ -501,7 +501,7 @@ class PartTree(QTreeWidget):
     def startDrag(self, supportedActions: Qt.DropAction) -> None:
         item = self.currentItem()
         footprint_id = item.data(0, ROLE_FOOTPRINT_ID) if item is not None else None
-        if not isinstance(footprint_id, str) or not footprint_id:
+        if item is None or not isinstance(footprint_id, str) or not footprint_id:
             # A group heading. They are not selectable either, so this is the case where
             # the press landed on one and the pointer moved -- nothing to drag.
             return
