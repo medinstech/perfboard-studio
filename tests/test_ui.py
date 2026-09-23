@@ -2732,6 +2732,65 @@ def test_every_step_gets_a_picture_of_its_own() -> None:
     assert all(shot.startswith(b"\xff\xd8\xff") for shot in images.values())
 
 
+@requires_offscreen_gl
+def test_a_step_looks_the_same_whichever_face_was_drawn_before_it(monkeypatch) -> None:
+    """The step images used to come from two windows, one a face, sharing one room. Drawing
+    the solder side made the component window work its lighting out again, and every
+    component-side step after the first flip came out up to 23 levels in 255 away from the
+    same step drawn on its own. That second precompute, and the one for the second window,
+    were also most of the cost on a machine with no GPU. So: one renderer, two cameras."""
+    import numpy as np
+    import vtkmodules.all as vtk
+
+    from perfboard_studio.guide import all_steps, build_guide, document_at_step, step_focus
+    from perfboard_studio.ui import view3d
+
+    doc = _load_dense()
+    lookup = footprint_lookup()
+    guide = build_guide(doc, lookup)
+    steps = all_steps(guide)
+    size = (160, 106)
+
+    built = []
+    build_renderer = view3d.build_renderer
+    monkeypatch.setattr(
+        view3d, "build_renderer", lambda *a, **k: built.append(a) or build_renderer(*a, **k)
+    )
+    images = view3d.render_step_images(doc, guide, lookup, *size)
+    monkeypatch.undo()
+    assert len(built) == 1
+
+    sides = [view3d.step_is_solder_side(doc, step_focus(step)) for step in steps]
+    index = next(i for i in range(1, len(steps)) if sides[i - 1] and not sides[i])
+    focus = step_focus(steps[index])
+    ren, _stats = view3d.build_renderer(doc, lookup)
+    win = vtk.vtkRenderWindow()
+    win.SetOffScreenRendering(1)
+    win.AddRenderer(ren)
+    win.SetSize(*size)
+    view3d.populate_renderer(ren, document_at_step(doc, guide, index), lookup, highlight=focus)
+    win.Render()
+    grab = vtk.vtkWindowToImageFilter()
+    grab.SetInput(win)
+    grab.Update()
+    writer = vtk.vtkJPEGWriter()
+    writer.SetQuality(view3d.STEP_IMAGE_JPEG_QUALITY)
+    writer.WriteToMemoryOn()
+    writer.SetInputConnection(grab.GetOutputPort())
+    writer.Write()
+    alone = bytes(view3d.numpy_support.vtk_to_numpy(writer.GetResult()).tobytes())
+
+    def pixels(jpeg: bytes) -> np.ndarray:
+        image = QImage.fromData(jpeg, "JPG").convertToFormat(QImage.Format.Format_RGB888)
+        rows = np.frombuffer(image.constBits(), np.uint8).reshape(
+            image.height(), image.bytesPerLine()
+        )
+        return rows[:, : image.width() * 3].astype(int)
+
+    worst = int(np.abs(pixels(images[focus]) - pixels(alone)).max())
+    assert worst <= 2, f"step {index} differs from itself drawn alone by {worst} levels"
+
+
 def test_a_connection_is_photographed_from_the_side_it_is_made_on() -> None:
     """The fault this exists to prevent: almost every connection is made on the solder
     side, and shot from the component side it is behind 1.6 mm of board. The first version

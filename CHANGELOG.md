@@ -24,12 +24,17 @@ closed without a bump.
 
 - **The 3D view, the guide's step images and Save Project are fast again on a machine
   without a graphics card** — a virtual machine, a remote desktop, an old laptop. Before
-  its first frame, every 3D view worked out the room's diffuse light at a size meant for
-  a photographed environment, and this room is 64 pixels of smooth gradient. Without a
-  GPU that one step took 12.7 s per view in software OpenGL, and 820 s over one guide's
-  step images on the macOS CI runner. It is now sized for the room: 1.4 s, and the step
-  images 7.6 s instead of 41.6. The picture is the same — within 3 levels in 255 on any
-  pixel.
+  its first frame, every 3D view filled two lighting tables at sizes meant for a
+  photographed environment, and this room is 64 pixels of smooth gradient; the step images
+  also used a view per face, and each one filled the tables again. Both tables are now
+  sized for the room and the step images come from one view. On the macOS CI runner, which
+  draws with Apple's software renderer, one guide's 33 step images went from 820 s to 30 s;
+  on Linux's software OpenGL the first frame is 1.4 s instead of 12.7. The picture is the
+  same — within 3 levels in 255 on any pixel.
+
+- **A component-side step image after a solder-side one had slightly different lighting**
+  from the same step drawn on its own, up to 23 levels in 255. Drawing the solder side made
+  the component side's view work its lighting out again. One view for both faces cannot.
 
 ## [0.12.0] - 2026-09-11
 

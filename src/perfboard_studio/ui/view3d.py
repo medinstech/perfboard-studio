@@ -2843,6 +2843,15 @@ _ENV_LAMP_DEEP = 0.30
 _IRRADIANCE_PX = 32
 _IRRADIANCE_STEP_RAD = 0.1
 
+#: The other table VTK fills before the first frame: how a rough surface spreads light,
+#: indexed by angle and roughness. It describes no room at all, only the shading model,
+#: and 512 x 512 at 1024 samples a texel was most of what the irradiance change above left
+#: behind. It is pure arithmetic, which llvmpipe vectorises and Apple's software renderer
+#: does not: 2.6 s to 1.2 s for the first frame on single-threaded llvmpipe, but 102 s to
+#: 24 s on the macOS CI runner. The table is a smooth function read with linear filtering,
+#: and at 128 the rendered board is within 1 level in 255 of the one at 512 on every pixel.
+_BRDF_TABLE_PX = 128
+
 
 def _env_colour(x: float, y: float, z: float) -> tuple[float, float, float]:
     """What the room looks like in one direction. ``y`` is up in the texture's own frame."""
@@ -2990,6 +2999,7 @@ def apply_environment(ren: vtk.vtkRenderer) -> None:
     irradiance = ren.GetEnvMapIrradiance()
     irradiance.SetIrradianceSize(_IRRADIANCE_PX)
     irradiance.SetIrradianceStep(_IRRADIANCE_STEP_RAD)
+    ren.GetEnvMapLookupTable().SetLUTSize(_BRDF_TABLE_PX)
     # VTK cannot project a FLOAT cube map onto spherical harmonics and says so, once per
     # render, on stderr. It falls back to the irradiance texture, which is what this wants
     # anyway -- so ask for that rather than let it warn its way there. The environment has
@@ -3233,29 +3243,36 @@ def render_step_images(
     the board filled, so flipping through the guide would read as a series of unrelated
     photographs rather than one board being built.
 
-    One render window per face, re-actored per step -- which is what ``populate_renderer``
-    exists for, and is the difference between half a second and a minute.
+    ONE render window, re-actored per step -- which is what ``populate_renderer`` exists
+    for, and is the difference between half a second and a minute -- with the two cameras
+    framed on the finished board up front and swapped in per step. It used to be a window
+    per face, and each window is a renderer that works out the room's lighting again
+    before its first frame (see ``_IRRADIANCE_PX``), and again after the other one has
+    drawn. That is cheap on a GPU and was most of the cost without one: ``dense.perf``'s 33
+    steps took the macOS CI runner 181 s that way and take it 85 s this way. The drift was
+    a bug as well as a cost -- a component-side step after the first flip came out up to 23
+    levels in 255 away from the same step drawn on its own.
     """
     steps = all_steps(guide)
     if not steps:
         return {}
 
-    windows: dict[bool, tuple[vtk.vtkRenderer, vtk.vtkRenderWindow]] = {}
-
-    def window_for(flipped: bool) -> tuple[vtk.vtkRenderer, vtk.vtkRenderWindow]:
-        if flipped not in windows:
-            ren, _stats = build_renderer(doc, lookup, flipped=flipped)
-            win = vtk.vtkRenderWindow()
-            win.SetOffScreenRendering(1)
-            win.AddRenderer(ren)
-            win.SetSize(width, height)
-            windows[flipped] = (ren, win)
-        return windows[flipped]
+    ren, _stats = build_renderer(doc, lookup)
+    cameras: dict[bool, vtk.vtkCamera] = {}
+    for flipped in (False, True):
+        apply_default_camera(ren, flipped)
+        camera = vtk.vtkCamera()
+        camera.DeepCopy(ren.GetActiveCamera())
+        cameras[flipped] = camera
+    win = vtk.vtkRenderWindow()
+    win.SetOffScreenRendering(1)
+    win.AddRenderer(ren)
+    win.SetSize(width, height)
 
     images: dict[str, bytes] = {}
     for index, step in enumerate(steps):
         focus = step_focus(step)
-        ren, win = window_for(step_is_solder_side(doc, focus))
+        ren.GetActiveCamera().DeepCopy(cameras[step_is_solder_side(doc, focus)])
         populate_renderer(
             ren, document_at_step(doc, guide, index), lookup, highlight=focus
         )

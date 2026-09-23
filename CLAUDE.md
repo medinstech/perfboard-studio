@@ -550,6 +550,19 @@ Four things here were got wrong first, and each has a test:
   render that is a luxury and a machine whose OpenGL is too old should get a flatter board
   rather than no board.
 
+**Image-based lighting costs nothing per frame and a great deal per RENDERER.** Before a
+renderer's first frame VTK fills an irradiance map, a prefiltered map and a BRDF table, at
+defaults sized for photographed HDR environments. On a GPU that is milliseconds; on a
+software renderer it was the whole of the 3D cost — the macOS CI runner (Apple Software
+Renderer) spent 78 s of a 102 s first frame on the BRDF table alone, and its CI job went
+from 3 minutes to two hours when the lighting landed. `_IRRADIANCE_PX` and `_BRDF_TABLE_PX`
+size the two that were measured to matter, and the step images come from ONE renderer with
+two cameras rather than a window per face. So: never build a renderer per image, and
+measure a new lighting feature on software GL before trusting a GPU's timing. Mesa's
+`opengl32.dll` from `pal1000/mesa-dist-win` loaded through `os.add_dll_directory`, with
+`GALLIUM_DRIVER=llvmpipe`, is software GL on Windows — though llvmpipe vectorises arithmetic
+that Apple's renderer does not, so it UNDER-reports exactly the table that cost the most.
+
 `_dim` and `_pick_out` are a pair, and under PBR the way to push a part back is to ROUGHEN
 it — dropping the old specular did nothing at all once the parts were materials.
 
