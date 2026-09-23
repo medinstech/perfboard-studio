@@ -2827,6 +2827,22 @@ _ENV_LAMP = 8.0
 _ENV_LAMP_WIDE = 0.85
 _ENV_LAMP_DEEP = 0.30
 
+#: How finely VTK works out the DIFFUSE light from the room, which it does on the GPU before
+#: a renderer's first frame. Its defaults -- 256 px a face, a sample every 0.05 rad, some
+#: four thousand samples a pixel -- are sized for a photographed HDR environment, and this
+#: room is 64 px of smooth gradient with one soft lamp in it. Diffuse light is the most
+#: blurred thing in the scene; nothing it produces changes at a finer scale than this.
+#:
+#: MEASURED, AND IT WAS THE WHOLE OF THE SLOWDOWN ON A MACHINE WITHOUT A GPU. On llvmpipe the
+#: first frame of ``dense.perf`` took 12.7 s at VTK's defaults and 0.5 s with no environment
+#: at all; with these two it takes 1.4 s, and the guide's 33 step images 8.2 s instead of
+#: 41.6. The macOS CI runner has no GPU either, and the same step images took it 820 s.
+#: Rendered on a real GPU at 1400 x 950, the two settings differ from the defaults by at
+#: most 3 levels in 255 on any pixel -- the same picture. The contact-shadow pass was
+#: measured too and is not the cost.
+_IRRADIANCE_PX = 32
+_IRRADIANCE_STEP_RAD = 0.1
+
 
 def _env_colour(x: float, y: float, z: float) -> tuple[float, float, float]:
     """What the room looks like in one direction. ``y`` is up in the texture's own frame."""
@@ -2970,6 +2986,10 @@ def apply_environment(ren: vtk.vtkRenderer) -> None:
     ren.SetEnvironmentUp(0.0, 0.0, 1.0)
     ren.SetEnvironmentRight(1.0, 0.0, 0.0)
     ren.UseImageBasedLightingOn()
+    # Sized for this room rather than for a photograph -- see _IRRADIANCE_PX.
+    irradiance = ren.GetEnvMapIrradiance()
+    irradiance.SetIrradianceSize(_IRRADIANCE_PX)
+    irradiance.SetIrradianceStep(_IRRADIANCE_STEP_RAD)
     # VTK cannot project a FLOAT cube map onto spherical harmonics and says so, once per
     # render, on stderr. It falls back to the irradiance texture, which is what this wants
     # anyway -- so ask for that rather than let it warn its way there. The environment has

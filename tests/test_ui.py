@@ -640,6 +640,32 @@ def test_the_lamp_is_overhead_in_the_worlds_own_up() -> None:
     assert renderer.GetUseImageBasedLighting()
 
 
+def test_the_diffuse_light_is_worked_out_for_this_room_not_for_a_photograph(
+    monkeypatch,
+) -> None:
+    """VTK precomputes the room's diffuse light before a renderer's first frame, at a size
+    meant for a photographed HDR environment. On a machine with no GPU that one step was the
+    whole of the 3D view's cost: 12.7 s a renderer on llvmpipe, and 820 s over the guide's
+    step images on the macOS CI runner. The room is 64 px of smooth gradient, so the work
+    is sized to it -- a picture within 3 levels in 255 of the default one."""
+    import vtkmodules.all as vtk
+
+    from perfboard_studio.ui import view3d
+
+    monkeypatch.delenv(view3d.SIMPLE_3D_ENV, raising=False)
+    renderer = vtk.vtkRenderer()
+
+    def work(irradiance) -> float:
+        # Pixels in a face, times samples per pixel (one every `step` radians, each way).
+        return float(irradiance.GetIrradianceSize()) ** 2 / irradiance.GetIrradianceStep() ** 2
+
+    vtk_default = work(renderer.GetEnvMapIrradiance())
+    view3d.apply_environment(renderer)
+
+    assert renderer.GetEnvMapIrradiance().GetIrradianceSize() <= view3d._ENV_FACE_PX
+    assert work(renderer.GetEnvMapIrradiance()) * 100 < vtk_default
+
+
 def test_contact_shadows_say_whether_they_took() -> None:
     """The one piece of the render that is a luxury. A machine whose OpenGL cannot do it
     should get a slightly flatter board, not no board -- so this reports rather than

@@ -20,6 +20,17 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The 3D view, the guide's step images and Save Project are fast again on a machine
+  without a graphics card** — a virtual machine, a remote desktop, an old laptop. Before
+  its first frame, every 3D view worked out the room's diffuse light at a size meant for
+  a photographed environment, and this room is 64 pixels of smooth gradient. Without a
+  GPU that one step took 12.7 s per view in software OpenGL, and 820 s over one guide's
+  step images on the macOS CI runner. It is now sized for the room: 1.4 s, and the step
+  images 7.6 s instead of 41.6. The picture is the same — within 3 levels in 255 on any
+  pixel.
+
 ## [0.12.0] - 2026-09-11
 
 ### Added
