@@ -38,6 +38,15 @@ are readable as exchange rates against wire length (see :class:`PlacementWeights
                 come back in.
   EDGE          connectors, headers, pots and switches want a board edge: something
                 plugs into them, or a finger reaches them.
+  OVERHANG      a BODY reaching past the substrate while its pins stay in holes -- a
+                TO-220 on row 1. DRC reports it as a warning (``component-overhangs-edge``)
+                by ``geometry.hangs_over_edge``, and this prices exactly that predicate,
+                so the optimiser does not put a part where the checker then names it.
+  ENTRY         a screw terminal whose wire entry has a part standing in front of it --
+                DRC's ``terminal-entry-blocked``, by the same predicate
+                (``geometry.entry_blocked_by``) -- and, as a preference DRC does not
+                hold, how much board the wire has to cross from the mouth to the edge it
+                faces. The second is what turns a terminal's mouth outward.
   HEAT          a TO-220 or a relay next to an electrolytic (PLAN.md Sec 5.2 rule 9).
                 Which parts those are, and how close is too close, come from model.py,
                 because drc.py reports the same pairs by the same measure -- an
@@ -90,15 +99,25 @@ from .commands import (
     move_components,
 )
 from .connectivity import FootprintLookup
+from .footprints import body_extent, entry_corridor, wire_entry
 from .geometry import (
     STANDARD_PRESETS,
     BoardPreset,
-    board_edge_margin_mm,
+    SubstrateEdges,
     board_from_preset,
     convex_polygons_overlap,
+    edge_overhangs_mm,
+    entry_blocked_by,
+    entry_faces_away,
+    entry_run_mm,
+    entry_side,
     format_hole,
+    hangs_over_edge,
     is_axis_aligned_box,
+    on_edge_reach_mm,
+    substrate_edges_mm,
     transform_offset,
+    turned_box,
     unusable_holes,
 )
 from .model import (
@@ -129,7 +148,7 @@ from .striproute import StripboardPlan, plan_stripboard
 #: switch have a finger on them, and a terminal block has a screwdriver approaching it --
 #: none of which works from the middle of a populated board.
 EDGE_SEEKING_ARCHETYPES: frozenset[BodyArchetype] = frozenset(
-    {"screw-terminal", "pin-header", "potentiometer", "tactile-switch"}
+    {"screw-terminal", "pin-header", "box-header", "potentiometer", "tactile-switch"}
 )
 
 # Which parts run hot, which parts mind, and how close is too close all live in
@@ -220,6 +239,41 @@ class PlacementWeights:
     edge: float = 6.0
     #: Per mm closer than HEAT_CLEARANCE_MM, per (source, sensitive) pair.
     heat: float = 4.0
+    #: Per part whose BODY hangs past the substrate while its pins are all in holes.
+    #:
+    #: A count on exactly DRC's predicate, for the reason ``overlap_pair`` is one: the
+    #: millimetre term below is only charged once a body is past the tolerance, so on its
+    #: own it would let the annealer settle a hair over the line, where DRC reports it.
+    #: Priced under an overlap because it is DRC's WARNING rather than its error -- a part
+    #: can be meant to overhang, and a user who wants one there locks it -- and still far
+    #: above any wire a single part could save by standing on the edge: a connector moved
+    #: one hole in costs the ``edge`` term one pitch, about 15, which this outbids.
+    overhang_part: float = 100.0
+    #: Per mm of body past the edge, charged only for a part the count above says hangs
+    #: over. The gradient the count does not have: a body 2 mm over is further from legal
+    #: than one 0.3 mm over, and the annealer needs to be told which way is back.
+    overhang: float = 20.0
+    #: Per (terminal, part) pair where the part's BODY stands in the terminal's wire-entry
+    #: corridor -- exactly the pairs DRC's ``terminal-entry-blocked`` names.
+    #:
+    #: A count on DRC's predicate for the reason ``overhang_part`` is one, and priced the
+    #: same: a WARNING rather than an error, and still above anything a part could save by
+    #: standing in front of the mouth -- the wire has to go in somewhere.
+    entry_blocked: float = 100.0
+    #: Per terminal standing on a board edge with its wire entry facing away from it --
+    #: DRC's ``terminal-entry-faces-in``, by the same predicate
+    #: (``geometry.entry_faces_away``). Priced like a blocked entry and for the same
+    #: reason: a warning, and above anything the wires it would save could be worth.
+    entry_faces_in: float = 100.0
+    #: Per mm of board between a terminal's wire entry and the edge it faces.
+    #:
+    #: A PREFERENCE, and the one no rule holds: DRC deliberately says nothing about a mouth
+    #: facing into the board over clear space (a cable can cross a board). What it buys is
+    #: the orientation -- a terminal on the left edge facing right has the whole board in
+    #: front of it and one facing left has none, and nothing else in the cost function can
+    #: tell those two apart. Kept at the weight of wire (``hpwl``): turning a terminal a half
+    #: turn costs a few millimetres of reversed pins, and what it saves is tens.
+    entry: float = 1.0
     #: Per pair of pins on one strip, in different nets, with no hole between them to
     #: cut. Stripboard only; always zero on a pad-per-hole board.
     #:
@@ -314,6 +368,18 @@ class PlacementCost:
     heat_mm: float
     #: Pairs of pins the board joins and no cut can separate. Always 0 off stripboard.
     strip_conflicts: int = 0
+    #: Parts whose body hangs past the substrate, by exactly the predicate DRC's
+    #: ``component-overhangs-edge`` uses, and how far past it they reach between them.
+    overhanging_parts: int = 0
+    overhang_mm: float = 0.0
+    #: (terminal, part) pairs where the part stands in the terminal's wire entry, by the
+    #: predicate DRC's ``terminal-entry-blocked`` uses, and the board the terminals' wires
+    #: cross to reach the edge each one faces. Both zero on a board with no terminal.
+    entry_blocked: int = 0
+    entry_mm: float = 0.0
+    #: Terminals on an edge whose mouth faces away from it, by the predicate DRC's
+    #: ``terminal-entry-faces-in`` uses.
+    entry_facing_in: int = 0
 
     def total(self, weights: PlacementWeights) -> float:
         return (
@@ -328,7 +394,20 @@ class PlacementCost:
             + weights.edge * self.edge_mm
             + weights.heat * self.heat_mm
             + weights.strip_conflict * self.strip_conflicts
+            + weights.overhang_part * self.overhanging_parts
+            + weights.overhang * self.overhang_mm
+            + weights.entry_blocked * self.entry_blocked
+            + weights.entry * self.entry_mm
+            + weights.entry_faces_in * self.entry_facing_in
         )
+
+    @property
+    def physical_warnings(self) -> int:
+        """Parts DRC will warn cannot be built as placed, though the document is legal: a
+        body hanging past the edge, and a (terminal, part) pair where the part stands in the
+        terminal's wire entry, and a terminal on an edge facing away from it. What
+        ``_pick_best`` ranks ahead of the routed cost -- see there for why."""
+        return self.overhanging_parts + self.entry_blocked + self.entry_facing_in
 
     @property
     def is_legal(self) -> bool:
@@ -349,6 +428,15 @@ class PlacementCost:
         hole, and DRC says nothing about it. It is a board that cannot be finished, which
         is priced dearly in :meth:`total` and is what ``striproute`` reports, but "legal"
         here means "breaks no hard rule" and it would stop meaning that if this crept in.
+
+        ``overhanging_parts`` is left out for the same reason: DRC reports a body past the
+        edge as a warning, so a placement holding one breaks no hard rule. It is priced in
+        :meth:`total` well above anything standing on the edge could save, which is what
+        keeps the annealer from proposing one, and a part somebody locked there on purpose
+        is not an illegal board.
+
+        ``entry_blocked`` and ``entry_facing_in`` are left out by the same argument: DRC
+        reports both as warnings.
         """
         return (
             self.overlap_pairs == 0
@@ -472,6 +560,12 @@ def describe(plan: PlacementPlan) -> str:
     parts.append(f"~{plan.wire_saved_mm:.0f} mm less connection length")
     if plan.before.overlap_pairs > 0 and plan.after.overlap_pairs == 0:
         parts.append(f"{plan.before.overlap_pairs} overlap(s) cleared")
+    if plan.before.overhanging_parts > 0 and plan.after.overhanging_parts == 0:
+        parts.append(f"{plan.before.overhanging_parts} part(s) brought back over the board")
+    if plan.before.entry_blocked > 0 and plan.after.entry_blocked == 0:
+        parts.append(f"{plan.before.entry_blocked} blocked wire entr(ies) cleared")
+    if plan.before.entry_facing_in > 0 and plan.after.entry_facing_in == 0:
+        parts.append(f"{plan.before.entry_facing_in} terminal(s) turned to face their edge")
     if plan.route_cost is not None:
         parts.append(f"routing cost {plan.route_cost:.0f}")
     return ", ".join(parts)
@@ -484,7 +578,8 @@ def describe(plan: PlacementPlan) -> str:
 
 @dataclass(frozen=True, slots=True)
 class _Box:
-    """Courtyard bounding box, in mm relative to the component's anchor hole."""
+    """A bounding box in mm relative to the component's anchor hole -- a courtyard's, or
+    (``_Part.rel_body``) the real body's."""
 
     min_x: float
     max_x: float
@@ -546,6 +641,15 @@ class _Part:
     pin_offsets: tuple[tuple[tuple[int, int], ...], ...]
     #: Courtyard box per rotation index, relative to the anchor in mm.
     rel_box: tuple[_Box | None, ...]
+    #: The real BODY's box per rotation index, relative to the anchor in mm -- the one
+    #: ``footprints.body_extent`` gives both renderers and DRC, not the courtyard, which is
+    #: padded by half a pitch and would put every edge-row resistor over the edge.
+    rel_body: tuple[_Box, ...]
+    #: The wire-entry corridor per rotation index, relative to the anchor in mm, and the
+    #: direction it faces -- ``footprints.entry_corridor`` turned as the body is turned.
+    #: ``None`` at every index for a part with no wire entry, which is nearly all of them.
+    rel_entry: tuple[_Box | None, ...]
+    entry_dir: tuple[tuple[float, float] | None, ...]
     #: Courtyard OUTLINE per rotation index, relative to the anchor in mm -- and ``None``
     #: whenever the box above is already that outline exactly, which it is for 53 of the
     #: 61 generated footprints (a part turns only by a multiple of 90 degrees, so a
@@ -587,6 +691,12 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
 
         offsets: list[tuple[tuple[int, int], ...]] = []
         boxes: list[_Box | None] = []
+        bodies: list[_Box] = []
+        body = body_extent(footprint, board.pitch).box
+        corridor = entry_corridor(footprint, board.pitch)
+        facing = wire_entry(footprint)
+        entries: list[_Box | None] = []
+        entry_dirs: list[tuple[float, float] | None] = []
         polys: list[tuple[Point2, ...] | None] = []
         bounds: list[tuple[int, int, int, int] | None] = []
         pin_min: list[tuple[int, int]] = []
@@ -599,6 +709,15 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 for p in footprint.pins
             )
             offsets.append(placed)
+            bodies.append(_Box(*turned_box(body, rotation, component.mirrored)))
+            if corridor is not None and facing is not None:
+                entries.append(_Box(*turned_box(corridor, rotation, component.mirrored)))
+                entry_dirs.append(
+                    transform_offset(facing[0], facing[1], rotation, component.mirrored)
+                )
+            else:
+                entries.append(None)
+                entry_dirs.append(None)
 
             if footprint.body_outline:
                 outline = tuple(
@@ -638,6 +757,9 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 pin_numbers=tuple(p.number for p in footprint.pins),
                 pin_offsets=tuple(offsets),
                 rel_box=tuple(boxes),
+                rel_body=tuple(bodies),
+                rel_entry=tuple(entries),
+                entry_dir=tuple(entry_dirs),
                 rel_poly=tuple(polys),
                 anchor_bounds=tuple(bounds),
                 pin_min=tuple(pin_min),
@@ -1039,6 +1161,9 @@ class _Scorer:
     edge_max_x: float
     edge_min_y: float
     edge_max_y: float
+    #: The same four edges as one value, for ``geometry.edge_overhangs_mm`` -- which DRC
+    #: hands the identical value from the identical function.
+    edges: SubstrateEdges
     #: Holes nothing can be soldered into, in this module's own (col, row) key. The same
     #: set ``drc.py`` reports a pin on as an error and ``router.py`` refuses to solder in
     #: -- ``geometry.unusable_holes`` is the one answer all three read.
@@ -1127,6 +1252,116 @@ class _Scorer:
             ),
         )
 
+    def overhang_terms(self, state: _State, position: int) -> tuple[int, float]:
+        """(hangs over? 0/1, mm past the edge) for one part's BODY.
+
+        DRC's ``component-overhangs-edge`` spelled out: the body box ``footprints`` gives
+        both renderers, turned with the part, against ``geometry.substrate_edges_mm``, and
+        judged by ``geometry.hangs_over_edge``. A part with a pin off the grid is skipped,
+        as DRC skips it -- ``off_board`` already prices that part, far more dearly, and
+        counting its body too would score one fact twice.
+
+        Both halves are zero inside the tolerance, which is what keeps a board with no
+        part over the edge annealing bit for bit as it did before this term existed.
+        """
+        for col, row in state.pins(position):
+            if not (0 <= col < self.board_cols and 0 <= row < self.board_rows):
+                return 0, 0.0
+        body = state.parts[position].rel_body[state.rot[position]]
+        x = state.col[position] * self.board_pitch
+        y = state.row[position] * self.board_pitch
+        worst = max(
+            edge_overhangs_mm(
+                x + body.min_x, x + body.max_x, y + body.min_y, y + body.max_y, self.edges
+            )
+        )
+        if not hangs_over_edge(worst):
+            return 0, 0.0
+        return 1, worst
+
+    def entry_run(self, state: _State, position: int) -> float:
+        """How much board this part's wire has to cross to the edge its mouth faces, mm.
+
+        Zero for a part with no wire entry, and ``geometry.entry_run_mm`` otherwise -- a
+        preference only this module holds; see ``PlacementWeights.entry``.
+        """
+        rot = state.rot[position]
+        corridor = state.parts[position].rel_entry[rot]
+        direction = state.parts[position].entry_dir[rot]
+        if corridor is None or direction is None:
+            return 0.0
+        x = state.col[position] * self.board_pitch
+        y = state.row[position] * self.board_pitch
+        return entry_run_mm(
+            (x + corridor.min_x, x + corridor.max_x, y + corridor.min_y, y + corridor.max_y),
+            direction,
+            self.edges,
+        )
+
+    def entry_inward(self, state: _State, position: int) -> int:
+        """1 if this part is a terminal on an edge with its mouth facing away from it.
+
+        DRC's ``terminal-entry-faces-in`` spelled out: the real body turned with the part,
+        the direction its entry faces, ``geometry.on_edge_reach_mm`` as the reach -- through
+        ``geometry.entry_faces_away``, which is the whole of the rule. A part with a pin off
+        the grid is skipped, as DRC skips it: ``off_board`` prices that part, and counting it
+        here too would score one fact twice -- and disagree with the checker.
+        """
+        direction = state.parts[position].entry_dir[state.rot[position]]
+        if direction is None:
+            return 0
+        for col, row in state.pins(position):
+            if not (0 <= col < self.board_cols and 0 <= row < self.board_rows):
+                return 0
+        body = state.parts[position].rel_body[state.rot[position]]
+        x = state.col[position] * self.board_pitch
+        y = state.row[position] * self.board_pitch
+        box = (x + body.min_x, x + body.max_x, y + body.min_y, y + body.max_y)
+        reach = on_edge_reach_mm(self.board_pitch)
+        return 1 if entry_faces_away(box, direction, self.edges, reach) else 0
+
+    def entry_pair(self, state: _State, a: int, b: int) -> int:
+        """How many of the two stand in the other's wire entry: 0, 1 or 2.
+
+        DRC's ``terminal-entry-blocked`` spelled out -- the corridor ``footprints`` gives,
+        turned with the part, against the other's real BODY, by ``geometry.entry_blocked_by``
+        -- counted per (terminal, obstacle) pair. A part with a pin off the grid is in nobody's
+        way and has no mouth to block, as DRC skips it; ``off_board`` prices that part.
+        Almost every pair on a board has no terminal in it, and those return before any
+        arithmetic.
+        """
+        part_a, part_b = state.parts[a], state.parts[b]
+        corridor_a = part_a.rel_entry[state.rot[a]]
+        corridor_b = part_b.rel_entry[state.rot[b]]
+        if corridor_a is None and corridor_b is None:
+            return 0
+        if not (self._on_grid(state, a) and self._on_grid(state, b)):
+            return 0
+        ax = state.col[a] * self.board_pitch
+        ay = state.row[a] * self.board_pitch
+        bx = state.col[b] * self.board_pitch
+        by = state.row[b] * self.board_pitch
+        count = 0
+        if corridor_a is not None:
+            body_b = part_b.rel_body[state.rot[b]]
+            count += entry_blocked_by(
+                (ax + corridor_a.min_x, ax + corridor_a.max_x, ay + corridor_a.min_y, ay + corridor_a.max_y),
+                (bx + body_b.min_x, bx + body_b.max_x, by + body_b.min_y, by + body_b.max_y),
+            )
+        if corridor_b is not None:
+            body_a = part_a.rel_body[state.rot[a]]
+            count += entry_blocked_by(
+                (bx + corridor_b.min_x, bx + corridor_b.max_x, by + corridor_b.min_y, by + corridor_b.max_y),
+                (ax + body_a.min_x, ax + body_a.max_x, ay + body_a.min_y, ay + body_a.max_y),
+            )
+        return count
+
+    def _on_grid(self, state: _State, position: int) -> bool:
+        return all(
+            0 <= col < self.board_cols and 0 <= row < self.board_rows
+            for col, row in state.pins(position)
+        )
+
     def pair_terms(self, state: _State, a: int, b: int) -> tuple[int, float, float]:
         """(overlapping? 0/1, courtyard overlap mm^2, heat proximity mm) for one pair.
 
@@ -1197,13 +1432,23 @@ class _Scorer:
         off_board = 0
         dead_pins = 0
         edge = 0.0
+        overhanging = 0
+        overhang = 0.0
+        entry_run = 0.0
+        facing_in = 0
         for position in range(len(state.parts)):
             part_off, part_dead, part_edge = self.part_terms(state, position)
             off_board += part_off
             dead_pins += part_dead
             edge += part_edge
+            part_over, part_overhang = self.overhang_terms(state, position)
+            overhanging += part_over
+            overhang += part_overhang
+            entry_run += self.entry_run(state, position)
+            facing_in += self.entry_inward(state, position)
 
         pairs = 0
+        blocked = 0
         overlap = heat = 0.0
         for a in range(len(state.parts)):
             for b in range(a + 1, len(state.parts)):
@@ -1211,6 +1456,7 @@ class _Scorer:
                 pairs += touching
                 overlap += pair_overlap
                 heat += pair_heat
+                blocked += self.entry_pair(state, a, b)
 
         return PlacementCost(
             hpwl_mm=hpwl,
@@ -1224,6 +1470,11 @@ class _Scorer:
             edge_mm=edge,
             heat_mm=heat,
             strip_conflicts=state.strip_conflicts,
+            overhanging_parts=overhanging,
+            overhang_mm=overhang,
+            entry_blocked=blocked,
+            entry_mm=entry_run,
+            entry_facing_in=facing_in,
         )
 
     def local(self, state: _State, positions: tuple[int, ...]) -> float:
@@ -1253,6 +1504,19 @@ class _Scorer:
             total += (
                 weights.off_board * off + weights.dead_hole * dead + weights.edge * edge
             )
+            over, overhang = self.overhang_terms(state, position)
+            if over:
+                # Added only when there is something to add, rather than as a weighted
+                # zero: ``x + 0.0`` is exact, but keeping the sum's shape untouched on
+                # every board without an overhang is what the goldens were measured on.
+                total += weights.overhang_part * over + weights.overhang * overhang
+            run = self.entry_run(state, position)
+            if run:
+                # The same care: only a terminal has a run, and a board without one sums
+                # exactly as it did.
+                total += weights.entry * run
+            if self.entry_inward(state, position):
+                total += weights.entry_faces_in
 
         count = len(state.parts)
         for a in positions:
@@ -1265,6 +1529,9 @@ class _Scorer:
                     + weights.overlap_area * overlap
                     + weights.heat * heat
                 )
+                blocked = self.entry_pair(state, a, b)
+                if blocked:
+                    total += weights.entry_blocked * blocked
 
         return total
 
@@ -1296,16 +1563,16 @@ def _make_scorer(
     edges are derived from the board and nothing else, and two callers deriving them
     separately is how the annealer and a test end up measuring different boards.
     """
-    margin_x = board_edge_margin_mm(board, "horizontal")
-    margin_y = board_edge_margin_mm(board, "vertical")
+    edges = substrate_edges_mm(board)
     return _Scorer(
         board_pitch=board.pitch,
         board_cols=board.cols,
         board_rows=board.rows,
-        edge_min_x=-margin_x,
-        edge_max_x=(board.cols - 1) * board.pitch + margin_x,
-        edge_min_y=-margin_y,
-        edge_max_y=(board.rows - 1) * board.pitch + margin_y,
+        edge_min_x=edges.min_x,
+        edge_max_x=edges.max_x,
+        edge_min_y=edges.min_y,
+        edge_max_y=edges.max_y,
+        edges=edges,
         dead_holes=dead_holes,
         weights=weights,
         nets=nets,
@@ -1553,6 +1820,9 @@ class _Item:
     ref: str
     shapes: tuple[_Shape, ...]
     edge_seeking: bool
+    #: Which way the part's wire entry faces at each rotation index, or ``None`` at every
+    #: index for a part without one. See :func:`_edge_rotation`.
+    entry: tuple[tuple[float, float] | None, ...] = (None, None, None, None)
 
 
 def _cell_span(low_mm: float, high_mm: float, pitch: float) -> tuple[int, int]:
@@ -1732,11 +2002,18 @@ def arrange(
         if footprint is None:
             unplaced.append(request.ref)
             continue
+        facing = wire_entry(footprint)
         items[request.ref] = _Item(
             component_id=request.id,
             ref=request.ref,
             shapes=_shapes_of(footprint, pitch, request.mirrored),
             edge_seeking=footprint.body.archetype in EDGE_SEEKING_ARCHETYPES,
+            entry=tuple(
+                None
+                if facing is None
+                else transform_offset(facing[0], facing[1], rotation, request.mirrored)
+                for rotation in VALID_ROTATIONS
+            ),
         )
 
     order = _connectivity_order(sorted(items), _adjacency(nets, frozenset(items)))
@@ -1817,7 +2094,7 @@ def _place_on_an_edge(
     """
     for side in sides:
         vertical = side in ("left", "right")
-        rotation = _standing_rotation(item.shapes) if vertical else _lying_rotation(item.shapes)
+        rotation = _edge_rotation(item, side)
         shape = item.shapes[rotation]
         if vertical:
             col = 0 if side == "left" else floor.cols - shape.cols
@@ -1830,6 +2107,35 @@ def _place_on_an_edge(
                 if floor.fits(shape, col, row):
                     return rotation, col, row
     return None
+
+
+def _edge_rotation(item: _Item, side: str) -> int:
+    """The rotation a connector takes on one edge: as narrow (or as flat) as it goes, and
+    for a part with a wire entry, the one of those whose mouth faces OUT of that edge.
+
+    Narrowness decides first and always did: a connector on a side edge runs its pins down
+    the edge. But narrowness ties -- a terminal standing on end is exactly as narrow facing
+    left as facing right -- and the tie used to go to the lowest rotation index, which on
+    the right-hand edge is the one with its mouth against the rest of the board. A part
+    with no wire entry breaks the tie exactly as before.
+    """
+    vertical = side in ("left", "right")
+    chosen = _standing_rotation(item.shapes) if vertical else _lying_rotation(item.shapes)
+    if item.entry[chosen] is None:
+        return chosen
+
+    def size(shape: _Shape) -> tuple[int, int]:
+        return (shape.cols, shape.rows) if vertical else (shape.rows, shape.cols)
+
+    for rotation in range(4):
+        direction = item.entry[rotation]
+        if (
+            direction is not None
+            and size(item.shapes[rotation]) == size(item.shapes[chosen])
+            and entry_side(direction) == side
+        ):
+            return rotation
+    return chosen
 
 
 def arrange_document(
@@ -2421,6 +2727,15 @@ def _pick_best(
     Costs one planning run per restart, which is why ``route_scored_restarts`` bounds it
     rather than the restart count doing so. Falls back to the internal cost when the
     board has no netlist to route, when scoring is turned off, or beyond that bound.
+
+    **What DRC warns cannot be BUILT is ranked ahead of what it costs to route**
+    (:attr:`PlacementCost.physical_warnings`). The router knows nothing about a body over the
+    edge or a resistor in front of a terminal's mouth, so the routed cost alone kept whatever
+    board routed cheapest: on the DELTA-ATLAS plaket the annealer found an arrangement with
+    both blocked wire entries cleared, it routed for 812 against the original's 726, and the
+    original -- two terminals nobody could push a wire into -- was handed back as "nothing
+    cheaper to build". Cheaper to route is not cheaper to build when the wire cannot go in.
+    Every fixture has zero of both, so the ordering there is exactly what it was.
     """
     legal_first = sorted(
         [*candidates, baseline],
@@ -2441,7 +2756,7 @@ def _pick_best(
     if len(shortlist) < 2:
         return legal_first[0]
 
-    scored: list[tuple[tuple[int, int, float, float], PlacementPlan]] = []
+    scored: list[tuple[tuple[int, int, int, float, float], PlacementPlan]] = []
     for plan in shortlist:
         unfinished, cost = _build_cost(plan.document, lookup)
         scored.append(
@@ -2449,6 +2764,7 @@ def _pick_best(
                 (
                     0 if plan.after.is_legal else 1,
                     unfinished,
+                    plan.after.physical_warnings,
                     cost,
                     plan.after.total(options.weights),  # Deterministic tie-break.
                 ),
@@ -2459,10 +2775,10 @@ def _pick_best(
     # keep the shortlist's own order rather than being compared as objects.
     scored.sort(key=lambda item: item[0])
     best_key, best = scored[0]
-    runner_up = scored[1][0][2] if len(scored) > 1 else None
+    runner_up = scored[1][0][3] if len(scored) > 1 else None
     return replace(
         best,
-        route_cost=best_key[2],
+        route_cost=best_key[3],
         route_unrouted=best_key[1],
         route_runner_up=runner_up,
     )
@@ -2511,7 +2827,12 @@ def _settle_winner(
         return settled
 
     unfinished, cost = _build_cost(settled.document, lookup)
-    if (unfinished, cost) <= (plan.route_unrouted, plan.route_cost):
+    # The same order ``_pick_best`` chose by: what cannot be built outranks what it costs.
+    if (unfinished, settled.after.physical_warnings, cost) <= (
+        plan.route_unrouted,
+        plan.after.physical_warnings,
+        plan.route_cost,
+    ):
         return replace(
             settled,
             route_cost=cost,

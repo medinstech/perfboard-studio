@@ -57,6 +57,7 @@ from .stripboard import (
     position_along,
     strip_index,
 )
+from .wiregauge import wire_gauge_for_current
 
 # ---------------------------------------------------------------------------
 # What comes back
@@ -385,6 +386,11 @@ def _plan_links(
                     # make on the user's behalf.
                     kind="top-jumper",
                     side="top",
+                    # The same gauge the perfboard router writes: see
+                    # router._RouteContext.wire_gauge_awg.
+                    gauge_awg=(
+                        None if net.current_a is None else wire_gauge_for_current(net.current_a)
+                    ),
                     net_id=net.id,
                 )
             )

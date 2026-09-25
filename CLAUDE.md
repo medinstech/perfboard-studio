@@ -186,12 +186,16 @@ improve on it. Each is named, excluded from the comparison rather than edited in
 the next regeneration silently disagree), and pinned by its own test:
 
 - `PYTHON_ONLY_RULES` — rules the original never had (`conductor-crossing`,
-  `jumper-under-body`, `conductor-off-board`, `unknown-footprint`), so there is nothing
-  for a fixture to record. The last one fires on eight of the fifteen fixtures, every time
+  `jumper-under-body`, `conductor-off-board`, `unknown-footprint`,
+  `component-overhangs-edge`, `wire-too-thick-for-hole`, `terminal-entry-blocked`,
+  `terminal-entry-faces-in`), so
+  there is nothing for a fixture to record.
+  `unknown-footprint` fires on eight of the fifteen fixtures, every time
   on the id `c-disc-1`, which exists in neither engine: the fixtures are dumps of the
   original and are left exactly as they are, so the rule is excluded here and pinned by
   its own test. `tests/test_placer.py` measures the placer against `PLACEMENT_ERRORS`
   only, for the same reason — no arrangement of parts makes that footprint exist.
+  `component-overhangs-edge` fires on none of them, and a test says so.
 - `SHARPER_THAN_TYPESCRIPT` — one finding the original reported and this engine does not:
   `random-02`'s X3 against X6, a rectangle clipping the corner of an electrolytic's 24-gon
   courtyard where the boxes meet and the shapes do not. 41 body-overlap findings across
@@ -201,6 +205,79 @@ the next regeneration silently disagree), and pinned by its own test:
 `persist.py` hand-rolls its JSON writer to match `JSON.stringify(x, null, 2)` byte for
 byte (whole-number floats print as `1`, not `1.0`), and every object's key order comes
 from an explicit `*_KEY_ORDER` tuple, never dict insertion order.
+
+### A body past the edge is measured on the body
+
+`component-off-board` asks about PIN holes; `component-overhangs-edge` asks whether the
+BODY stands past the substrate while every pin is in a hole — a TO-220 on row 1. Three
+choices carry it, and each is where the first attempt would go wrong:
+
+- **The body, not the courtyard.** The courtyard is padded by half a pitch, so by that
+  measure every resistor on the outermost row reaches a full millimetre past the board. The
+  body is `footprints.body_extent` — the rectangle `ui/bodies.placement_for` draws, moved
+  into the engine so the rule could read it, and read back by the renderers rather than
+  worked out twice. A rectangle is exact here even for a round can: a part turns only by
+  quarters, and a circle touches its box on all four sides.
+- **The substrate, not the grid.** `geometry.substrate_edges_mm`, border included — the
+  `board_size_mm` / `hole_span_mm` trap above. It is also the one derivation of the far edge,
+  because `-margin + width` and `(n - 1) * pitch + margin` can differ in the last place.
+- **A tolerance of 0.25 mm, measured.** A DO-41 on the edge row reaches 0.08 mm past the
+  board and a 3 mm LED 0.23 mm; every part that genuinely hangs over clears 0.25 by a
+  margin. `geometry.hangs_over_edge` is the only place it is compared.
+
+**It is a WARNING and the placer prices it; `is_legal` does not include it.** Legal means
+"breaks no DRC error", which is `strip_conflicts`' position too. `placer.overhang_terms`
+reads the same body, edges and verdict as the rule, and
+`test_the_placer_and_drc_agree_on_every_body_at_every_edge` holds the two to one count over
+all 61 footprints, every rotation, mirrored and not. Both halves of the placer term are zero
+inside the tolerance and added only when they are not, which is why no golden placement
+moved.
+
+### A screw terminal has a mouth
+
+A terminal's wires go in through one long face, and `footprints.WIRE_ENTRY_BY_ARCHETYPE`
+says which: `(0, +1)` in the footprint's frame (increasing row). A table on the ARCHETYPE,
+not a `Footprint` field — a field would be one more key in every footprint the fixtures
+dump. The direction was **measured on the mesh**, not chosen: in KiCad's Phoenix MKDS model
+the openings sit a few tenths behind the -y face at the wire channel's height, and a model's
+y runs against the row, so model -y is footprint +y. `test_terminal_entry.py` re-measures
+the mesh; a mesh with its mouth the other way fails there before it draws a terminal
+backwards. The generated body (four-way and wider have no mesh) draws its openings on the
+same face.
+
+Four consumers, one fact:
+
+- **`drc._check_wire_entries`** (`terminal-entry-blocked`, warning): another part's BODY in
+  `footprints.entry_corridor` — as wide as the terminal's body, `WIRE_ENTRY_CLEARANCE_MM`
+  (8, an estimate, written as one) deep. Bodies, not courtyards, for the overhang rule's
+  reason. A mouth facing into the board over clear space is **deliberately not a finding**.
+- **`placer`**: `entry_pair` counts the same (terminal, obstacle) pairs by the same
+  predicate (`geometry.entry_blocked_by`), and `entry_run` prices the board between a mouth
+  and the edge it faces — a preference only the placer holds. Both are added to `local` only
+  when non-zero. `test_the_placer_counts_the_pairs_drc_names` holds the two counts equal.
+- **`_pick_best` and `_settle_winner` rank `PlacementCost.physical_warnings`** (overhanging
+  parts + blocked entries) **ahead of the routed cost.** The router cannot see either, and
+  ranking by routed cost alone handed back a board with two unwirable terminals because the
+  one with them cleared routed 812 against 726. Zero on every fixture, so nothing moved.
+  The mouth-facing PREFERENCE (`entry_run`) was not in that key and lost to routing: over
+  four seeds on the DELTA-ATLAS plaket 0–2 of six terminals still faced into clear board
+  at `entry` weights 1 to 4 — and with the finished `optimize_placement`, four of six stood
+  ON an edge facing in. So that case became a rule.
+- **`terminal-entry-faces-in`** (warning): a terminal whose body is within
+  `geometry.on_edge_reach_mm` (two pitches) of an edge while its mouth faces none of the
+  edges it stands on (`geometry.entry_faces_away`; a corner may face either). The placer
+  counts it by the same predicate (`entry_inward`, `PlacementWeights.entry_faces_in` = 100)
+  and it is part of `physical_warnings`, so it is in `_pick_best`'s key. A part with a pin
+  off the grid is skipped by both, as rule 2 already reports it —
+  `test_the_placer_counts_what_drc_reports_facing_in` found the placer counting one DRC
+  skipped. Mid-board terminals stay unreported: that is still only a preference.
+- **`arrange._edge_rotation`** breaks the narrow/flat tie toward the rotation whose mouth
+  faces out of the edge; a part without an entry breaks it exactly as before.
+
+The guide's part step names the edge (`guide._part_step`), and `view2d._paint_wire_entries`
+/ `view3d._wire_entry_pieces` draw the openings. ⚠️ Qt reads an 8-digit colour string as
+`#AARRGGBB`: `"#000000b4"` is a fully transparent blue, which is how the openings were first
+drawn invisible — give the alpha to `QColor(r, g, b, a)`.
 
 ### Two version numbers
 
@@ -231,6 +308,21 @@ is physically in the way") are separate modules over the same conductors.
 gap. `geometry.validate_orthogonal_chain` is the only adjacency check in the codebase;
 a hand-edited file that violates it loads with a *warning* and is reported by DRC, rather
 than locking the user out of their own project.
+
+**A wire's gauge is one answer with three askers** (`wiregauge.py`). DRC's
+`current-capacity` measures a wire on a net that declares a current, `router.py` and
+`striproute.py` write the gauge onto the wires they lay for such a net, and `guide.py`
+prints it on the cut list — all through `cut_gauge_awg`: the gauge the document stores,
+or else the one `wire_gauge_for_current` picks. The guide used to keep its own table and
+DRC looked at no wire at all, which is how the cut list came to print AWG 18 for 50 A.
+Two things about it are deliberate:
+
+- **Rule 6 measures wires under the TypeScript rule id.** PLAN.md §5.2 rule 6 always said
+  "wire or solder trace" and the original measured only the trace. No golden fixture
+  declares a current, so the wire half cannot move a recorded finding — which is why it is
+  not in `PYTHON_ONLY_RULES`. A fixture regenerated with currents and wires would show it.
+- **A net that declares no current gets no stored gauge.** The router writes `None` and the
+  guide still prints AWG 24 for it, so every golden route and every fixture keeps its bytes.
 
 ### Footprints are generated, not shipped
 
@@ -297,6 +389,21 @@ Three things hold it together:
   dimensions is what fits in an id. Its pins are numbered ROW BY ROW, which is a module's
   silkscreen convention and not a DIP's — `dip_footprint` is for when the answer is the
   other one.
+  - **The body may sit OFF its pins' centre** (`-o<X>x<Y>`, mm, signed, `offsetX`/`offsetY`
+    in `dims` only when not zero). That is a module with its header along one edge, and it
+    is still a number in an id, not a shape. `footprints.body_extent` adds it to the pin
+    centroid -- the ONE place, so DRC, the placer and both views move together -- and
+    `_offset_rect_outline` makes the courtyard the union of the pins and the shifted body.
+    With a zero offset that helper IS `_rect_outline`, float for float; keep it that way or
+    every existing `box-` courtyard moves in the last place.
+- **`idc-2x<n>` is the box header**, archetype `box-header`: numbered as `hdr-2xN` (odd pins
+  row 0), shroud from Wurth WR-BHD, key slot in the wall on the pin-1 row (local -y). It is
+  generated rather than registered on purpose -- the registry's 61 are frozen in a golden --
+  and a new archetype rather than a `pin-header` variant because the key is the whole point
+  and every archetype table (symbol, phase, style, silhouette, icon, 2D mark, 3D builder,
+  edge-seeking) then has to say what it does with one; the completeness tests enforce that.
+  The 3D builder finds the keyed wall from the direction pin 2 -> pin 1, not from a local
+  axis, so it cannot disagree with the pins however the part is turned.
 
 ### Hole addressing
 
@@ -818,12 +925,34 @@ Four decisions carry it, and each has a test that would notice it going:
   read from the pin NAMES with pin 1 as the cathode for an unnamed polarised part — the
   same rule as `guide._polarity_note`, and the two must not drift: an LED's pin 1 is its
   anode and a diode's is its cathode.
-  - A TO-92 has no E/B/C anywhere in this codebase and a TO-220 no IN/GND/OUT, so both are
+  - A TO-92 has no E/B/C anywhere in the REGISTRY and a TO-220 no IN/GND/OUT, so both are
     boxes with numbered pins. That is not a gap in the registry: BC547 and 2N3904 share the
     package and disagree about the pinout, and a TO-220 is a regulator, a transistor, a
     MOSFET and a bridge rectifier. The pinout is a fact about the PART, and a symbol that
     asserted one would be wrong for half the parts using the package — silently, and all
     the way to the bench.
+  - **So the PART carries it.** `ComponentInstance` and `SchematicPart` both have
+    `pin_names` (pin number → name, in pin order, `model.normalized_pin_names`) and
+    `symbol` (`model.PartSymbol`: `npn`/`pnp`/`nmos`/`pmos`/`zener`/`fuse`).
+    `model.pin_name_of` is THE answer to "what is this pin called" — declared name first,
+    footprint name second — and the sheet, the guide's polarity note and the MCP server all
+    read it. A declaration is drawn only when `schematic.DECLARED_SYMBOL_PINS` is met
+    (exactly B/C/E or G/D/S named; a zener needs a knowable cathode); otherwise the package
+    decides and the sheet's notes say why. Commands check only the SHAPE
+    (`checked_pin_names`/`checked_part_symbol`): a name on a pin the footprint lacks is a
+    note on the sheet, the same finding as a net naming such a pin, not a refusal.
+    - **Both fields are omitted from the file at their default** (the `stripAxis` rule),
+      which is the only reason every fixture still round-trips. `part.place` and
+      `component.unplace` carry them across the two lists; `block.place` (paste) and
+      `component.place` take them in the payload. Update payloads use `None` = leave for
+      the names and `KEEP` for the symbol, because `None` IS a symbol value.
+    - **Only a DECLARED name is added to a probe** ("J1 pin 1 (24V-L)"), never the
+      registry's own: appending "(A)" to every LED probe would change every guide golden
+      and tell nobody anything the polarity note has not.
+    - A named pin on a box prints the NAME inside and the NUMBER on the lead, and the box
+      widens to whole grid squares to fit (`_named_body_width`, sized from
+      `PIN_LABEL_MM`, which `SheetInk.pin_mm` now reads). A connector's names start past
+      its shroud line. A box none of whose pins is named is byte-for-byte what it was.
   - A tactile switch and a relay get real shapes because the fact IS the package.
     `_switch_poles` reads four legs in two bonded pairs off the footprint's own geometry
     (the legs on one side of a 6 mm switch are bonded inside it, on every one ever made),
@@ -1074,6 +1203,10 @@ model → geometry → stripboard → connectivity / occupancy
                                                         → guide → guide_export
                                                         → ui/, mcp/
 ```
+
+`wiregauge.py` hangs off `model` alone — it is arithmetic on a gauge number — and is read
+by `drc`, `router`, `striproute` and `guide`, which is how three siblings and their
+downstream share one fact without importing one another.
 
 `schematic.py` sits beside `ratsnest.py` on purpose: both take a document and a footprint
 lookup and answer a question about the netlist, and neither is downstream of the other.

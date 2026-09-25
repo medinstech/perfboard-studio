@@ -11,7 +11,8 @@ rules here fall into two groups:
  - WARNINGS: perfboard-specific physical risk, straight out of PLAN.md §4.6 -- the
    ~0.6 mm neighbour-pad bridging risk (§5.2 R5', the single most valuable rule in
    this file), phenolic pad-lifting, solder-trace feasibility, current capacity
-   with an actual resistance/voltage-drop estimate, mains creepage, lead-bend
+   with an actual resistance/voltage-drop estimate (and, for a wire, its gauge),
+   a wire too thick to go through the board's holes, mains creepage, lead-bend
    reliability, and a minimal "pin touches nothing" connectivity check (full LVS
    is lvs.py's job, not this module's).
 
@@ -40,13 +41,20 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .connectivity import FootprintLookup, PhysicalNet, PhysicalPinRef, extract_physical_nets
+from .footprints import WIRE_ENTRY_CLEARANCE_MM, body_extent, entry_corridor, wire_entry
 from .geometry import (
+    BODY_OVERHANG_TOLERANCE_MM,
     all_pin_holes,
     consumed_holes,
     convex_polygons_overlap,
     copper_gap_mm,
     edge_connector_holes,
+    edge_overhangs_mm,
+    entry_blocked_by,
+    entry_faces_away,
+    entry_side,
     format_hole,
+    hangs_over_edge,
     hole_key,
     hole_to_mm,
     holes_under_line,
@@ -56,10 +64,13 @@ from .geometry import (
     mounting_head_covers,
     neighbors4,
     neighbour_axis,
+    on_edge_reach_mm,
     path_length_mm,
     paths_cross,
     pin_hole,
+    substrate_edges_mm,
     transform_offset,
+    turned_box,
     undrilled_holes,
     validate_orthogonal_chain,
 )
@@ -81,6 +92,7 @@ from .model import (
     Point2,
     SolderBuildup,
     SolderTraceConductor,
+    WireConductor,
     contacts_every_path_hole,
     is_crossing_blocked,
     is_heat_pair,
@@ -88,6 +100,16 @@ from .model import (
 )
 from .occupancy import build_occupancy
 from .stripboard import cut_holes, is_stripboard
+from .wiregauge import (
+    HEAVIEST_AWG,
+    WIRE_CURRENT_DENSITY_A_PER_MM2,
+    awg_area_mm2,
+    awg_diameter_mm,
+    cut_gauge_awg,
+    fits_hole,
+    minimum_awg_for_current,
+    wire_capacity_a,
+)
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -173,6 +195,14 @@ class DrcOptions:
     #: gets uncomfortably hot, not after.
     max_current_density_a_per_mm2: float
 
+    #: The same rule for a WIRE, in A/mm² of copper. Default 10: the argument, and why it
+    #: is twice the solder figure above, is at wiregauge.WIRE_CURRENT_DENSITY_A_PER_MM2 --
+    #: the router and the build guide choose a gauge from that same number, so a wire
+    #: either of them names is one this rule accepts. Overriding it here moves the guide
+    #: too (it passes these options through) but not the router, which has no options to
+    #: be handed; a gauge the router wrote is measured against whatever this says.
+    max_wire_current_density_a_per_mm2: float
+
     #: Net voltage (V) above which R7 (creepage) starts checking adjacency to
     #: other nets. Default 300: PLAN.md §5.2 R7 and §4.6 both cite 2.54 mm hole
     #: spacing as "around the practical limit" for mains-level work.
@@ -199,6 +229,7 @@ DEFAULT_DRC_OPTIONS: DrcOptions = DrcOptions(
     solder_resistivity_u_ohm_cm=15.0,
     copper_resistivity_u_ohm_cm=1.68,
     max_current_density_a_per_mm2=5.0,
+    max_wire_current_density_a_per_mm2=WIRE_CURRENT_DENSITY_A_PER_MM2,
     creepage_voltage_threshold_v=300.0,
     max_lead_bend_holes=4,
     heat_clearance_mm=HEAT_CLEARANCE_MM,
@@ -581,6 +612,247 @@ def _check_unknown_footprints(doc: PerfDocument, lookup: FootprintLookup) -> lis
         for component in doc.components
         if lookup(component.footprint_id) is None
     ]
+
+
+# ---------------------------------------------------------------------------
+# Rule 2d -- a body hanging past the edge of the board (warning) -- Python only
+# ---------------------------------------------------------------------------
+
+#: The four edges in the order ``geometry.edge_overhangs_mm`` reports them.
+_EDGE_NAMES: tuple[str, str, str, str] = ("left", "right", "top", "bottom")
+
+
+def _check_body_overhang(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    """Rule 2's blind spot: every pin in a hole, and the body over nothing.
+
+    Rule 2 asks only about PIN holes, which is the question it exists for -- a pin off the
+    grid is a part that cannot be fitted. It cannot see a TO-220 on row 1 whose pins are
+    all in holes and whose body stands a millimetre past the substrate, and neither could
+    the placer, which put one there on the first real board anybody laid out with it and
+    called the placement legal. A body over the edge is the first thing to meet an
+    enclosure wall, a card guide or the bench the board is put down on.
+
+    Measured on the BODY, not the courtyard. The courtyard is padded by half a pitch, so
+    every resistor on the outermost row would reach a full millimetre past the board by
+    that measure -- a rule that fires on every edge-row resistor is a rule nobody reads.
+    The body is ``footprints.body_extent``, the same rectangle both renderers draw, turned
+    by the component's own transform; and the edge is ``geometry.substrate_edges_mm``,
+    the substrate including any printed border rather than the hole grid, for the reason
+    CLAUDE.md gives about ``board_size_mm`` against ``hole_span_mm``.
+
+    A WARNING, because a part can be meant to overhang -- a TO-220 reaching a heatsink off
+    the edge is a real layout -- and the board is still a board. What decides "hangs over"
+    is ``geometry.hangs_over_edge``, which ``placer`` prices by too, so the optimiser does
+    not leave a part over the edge that this rule then names.
+
+    A part rule 2 already reports is skipped: its body is off the board because its pins
+    are, and one finding at the louder severity says everything this one would.
+    """
+    violations: list[DrcViolation] = []
+    board = doc.board
+    edges = substrate_edges_mm(board)
+    for component in doc.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is None:
+            continue
+        pin_holes = [h for _pin, h in all_pin_holes(component, footprint)]
+        if not all(is_inside_board(h, board) for h in (pin_holes or [component.anchor])):
+            continue
+
+        min_x, max_x, min_y, max_y = turned_box(
+            body_extent(footprint, board.pitch).box, component.rotation, component.mirrored
+        )
+        anchor = hole_to_mm(component.anchor, board)
+        reach = edge_overhangs_mm(
+            anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y, edges
+        )
+        over = [
+            (name, amount)
+            for name, amount in zip(_EDGE_NAMES, reach, strict=True)
+            if hangs_over_edge(amount)
+        ]
+        if not over:
+            continue
+
+        worst = max(amount for _name, amount in over)
+        names = {name for name, _amount in over}
+        edge_words = (
+            f"{over[0][0]} edge" if len(over) == 1
+            else " and ".join(name for name, _amount in over) + " edges"
+        )
+        if {"left", "right"} <= names or {"top", "bottom"} <= names:
+            # Past two opposite edges at once: the part is bigger than the board, and no
+            # number of holes in either direction is an answer.
+            advice = "The part is larger than the board in that direction."
+        else:
+            holes_in = math.ceil((worst - BODY_OVERHANG_TOLERANCE_MM) / board.pitch)
+            advice = (
+                f"Moving it {holes_in} hole(s) in from the {edge_words} clears it; a part "
+                f"overhanging on purpose -- a TO-220 reaching a heatsink off the edge -- can "
+                f"stay."
+            )
+        violations.append(
+            DrcViolation(
+                rule="component-overhangs-edge",
+                severity="warning",
+                message=(
+                    f"Component {component.ref} (anchored at {_safe_hole(component.anchor)}) "
+                    f"hangs {worst:.1f} mm past the {edge_words} of the board: its pins are "
+                    f"in holes but part of its body is over nothing. {advice}"
+                ),
+                holes=(component.anchor,),
+                component_ids=(component.id,),
+            )
+        )
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Rule 2e -- a wire entry with something standing in front of it (warning) -- Python only
+# ---------------------------------------------------------------------------
+
+
+def placed_body_box(
+    component: ComponentInstance, footprint: Footprint, board: Board
+) -> tuple[float, float, float, float]:
+    """A component's real body as a board-space box, in the millimetre frame of the holes."""
+    min_x, max_x, min_y, max_y = turned_box(
+        body_extent(footprint, board.pitch).box, component.rotation, component.mirrored
+    )
+    anchor = hole_to_mm(component.anchor, board)
+    return anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y
+
+
+def placed_entry(
+    component: ComponentInstance, footprint: Footprint, board: Board
+) -> tuple[tuple[float, float, float, float], tuple[float, float]] | None:
+    """A terminal's wire-entry corridor as a board-space box, and the direction it faces.
+
+    ``None`` for a part with no wire entry. The corridor is turned by the component's own
+    transform, exactly as its body is, so a terminal mirrored onto the solder side or turned
+    a quarter keeps its mouth where the package has it.
+    """
+    corridor = entry_corridor(footprint, board.pitch)
+    direction = wire_entry(footprint)
+    if corridor is None or direction is None:
+        return None
+    min_x, max_x, min_y, max_y = turned_box(corridor, component.rotation, component.mirrored)
+    anchor = hole_to_mm(component.anchor, board)
+    facing = transform_offset(direction[0], direction[1], component.rotation, component.mirrored)
+    return (anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y), facing
+
+
+def _check_wire_entries(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    """A screw terminal whose mouth has a part standing in front of it.
+
+    A terminal's wire goes in through one long face (``footprints.wire_entry``), and the
+    stripped end has to go in STRAIGHT: the insulated wire behind it needs a straight run
+    before it can bend, and a fingertip has to push it. So the rule asks whether any other
+    part's BODY stands in the corridor ``footprints.entry_corridor`` puts in front of the
+    face -- as wide as the terminal, ``WIRE_ENTRY_CLEARANCE_MM`` deep. Bodies, not
+    courtyards, for the reason ``component-overhangs-edge`` gives: the courtyard's
+    half-pitch padding would put a neighbour one hole away "in front" of every terminal.
+
+    What it deliberately does NOT report is a mouth facing into the board over clear space.
+    A cable can cross a board, a terminal in the middle of one can be wired from above, and
+    nothing here knows where the cable is going -- a finding on every terminal not facing an
+    edge is a finding nobody would read. That is a PREFERENCE, and the placer holds it
+    (``PlacementWeights.entry``); this is the case where the wire physically cannot go in.
+
+    A WARNING: the board is still a board, and a part can be fitted after the wiring. One
+    finding per terminal, naming every part in the way, so the obstacles named here and the
+    placer's count of (terminal, obstacle) pairs are the same list. A terminal rule 2
+    already reports is skipped, as ``_check_body_overhang`` skips it, and so is a part that
+    could only be in the way because its own pins are off the board.
+    """
+    violations: list[DrcViolation] = []
+    board = doc.board
+    placed: list[tuple[ComponentInstance, Footprint]] = []
+    for component in doc.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is None:
+            continue
+        pin_holes = [h for _pin, h in all_pin_holes(component, footprint)]
+        if all(is_inside_board(h, board) for h in (pin_holes or [component.anchor])):
+            placed.append((component, footprint))
+
+    bodies = {
+        component.id: placed_body_box(component, footprint, board)
+        for component, footprint in placed
+    }
+    for component, footprint in placed:
+        entry = placed_entry(component, footprint, board)
+        if entry is None:
+            continue
+        corridor, facing = entry
+        side = entry_side(facing)
+        # On an edge and facing away from it: the wires come from outside and have to
+        # double back over the board. Its own finding, independent of the one below --
+        # a mouth can be clear and still face the wrong way, or face the right way and
+        # have a part in front of it -- and counted exactly as ``placer`` counts it.
+        away_from = entry_faces_away(
+            bodies[component.id], facing, substrate_edges_mm(board), on_edge_reach_mm(board.pitch)
+        )
+        if away_from:
+            on = " and ".join(away_from)
+            violations.append(
+                DrcViolation(
+                    rule="terminal-entry-faces-in",
+                    severity="warning",
+                    message=(
+                        f"Screw terminal {component.ref} (anchored at "
+                        f"{_safe_hole(component.anchor)}) stands on the {on} "
+                        f"edge{'s' if len(away_from) > 1 else ''} of the board but takes "
+                        f"its wires in from the {side}: every wire has to come in from "
+                        f"outside and double back over the board to reach it. Turn "
+                        f"{component.ref} so its entries face the {away_from[0]} edge."
+                    ),
+                    holes=(component.anchor,),
+                    component_ids=(component.id,),
+                )
+            )
+        in_the_way = sorted(
+            (
+                other
+                for other, _footprint in placed
+                if other.id != component.id and entry_blocked_by(corridor, bodies[other.id])
+            ),
+            key=lambda other: other.ref,
+        )
+        if not in_the_way:
+            continue
+
+        def gap_to(other: ComponentInstance, side: str = side, corridor: tuple[float, float, float, float] = corridor) -> float:
+            body = bodies[other.id]
+            if side == "right":
+                return body[0] - corridor[0]
+            if side == "left":
+                return corridor[1] - body[1]
+            if side == "bottom":
+                return body[2] - corridor[2]
+            return corridor[3] - body[3]
+
+        nearest = min(in_the_way, key=lambda other: (gap_to(other), other.ref))
+        names = ", ".join(other.ref for other in in_the_way)
+        verb = "stands" if len(in_the_way) == 1 else "stand"
+        violations.append(
+            DrcViolation(
+                rule="terminal-entry-blocked",
+                severity="warning",
+                message=(
+                    f"Screw terminal {component.ref} (anchored at "
+                    f"{_safe_hole(component.anchor)}) takes its wires in from the {side}, and "
+                    f"{names} {verb} in front of the entries ({nearest.ref} "
+                    f"{max(0.0, gap_to(nearest)):.1f} mm from them; a wire needs "
+                    f"{WIRE_ENTRY_CLEARANCE_MM:g} mm clear to go in straight). Turn "
+                    f"{component.ref} to face a clear side -- a board edge is best -- or move "
+                    f"what is in the way."
+                ),
+                holes=(component.anchor,),
+                component_ids=(component.id, *(other.id for other in in_the_way)),
+            )
+        )
+    return violations
 
 
 # ---------------------------------------------------------------------------
@@ -1247,6 +1519,16 @@ def _check_current_capacity(doc: PerfDocument, options: DrcOptions) -> list[DrcV
     nets_by_id: dict[NetId, Net] = {n.id: n for n in doc.nets}
 
     for conductor in doc.conductors:
+        if isinstance(conductor, WireConductor):
+            # PLAN.md Sec 5.2 rule 6 was always "net current against the WIRE's cross-section
+            # or the solder trace's", and the TypeScript original measured only the second.
+            # No golden fixture declares a current, so this half cannot move a single
+            # recorded finding -- it is new behaviour under an existing id, not a divergence
+            # any fixture can see (CLAUDE.md, "The differential proof").
+            wire_violation = _wire_current_violation(conductor, nets_by_id, doc.board, options)
+            if wire_violation is not None:
+                violations.append(wire_violation)
+            continue
         # isinstance(), not is_solder_trace(): buildup/spine only exist on
         # SolderTraceConductor, and only isinstance() gives mypy the narrowing
         # needed to read them. The two checks are equivalent here --
@@ -1294,6 +1576,128 @@ def _check_current_capacity(doc: PerfDocument, options: DrcOptions) -> list[DrcV
                     f"mV drop at rated current.{recommendation}"
                 ),
                 holes=tuple(conductor.path),
+                conductor_ids=(conductor.id,),
+            )
+        )
+    return violations
+
+
+def _wire_kind_label(conductor: WireConductor) -> str:
+    """"insulated wire", "bare wire", "top jumper" -- the words the build guide uses."""
+    return conductor.kind.replace("-", " ")
+
+
+def _wire_current_violation(
+    conductor: WireConductor,
+    nets_by_id: Mapping[NetId, Net],
+    board: Board,
+    options: DrcOptions,
+) -> DrcViolation | None:
+    """Rule 9 for a wire: the gauge it will be cut in against the current its net declares.
+
+    "The gauge it will be cut in" is ``wiregauge.cut_gauge_awg`` -- the one the document
+    names, or, where it names none, the one the build guide would print -- so this rule and
+    the cut list measure the same wire. That makes a wire with no stored gauge almost always
+    fine by construction, and that is correct rather than vacuous: the guide chooses its
+    gauge FROM the current, heavier where the current needs it. What remains to report is a
+    gauge somebody or something stored that the net has since outgrown -- a 0.9 A rail
+    routed in AWG 24 and later declared 14 A -- and a current no stocked gauge carries.
+    """
+    net_id = conductor.net_id
+    if net_id is None:
+        return None
+    net = nets_by_id.get(net_id)
+    if net is None or net.current_a is None:
+        return None
+    current_a = net.current_a
+    density = options.max_wire_current_density_a_per_mm2
+    awg = cut_gauge_awg(conductor.gauge_awg, current_a, density)
+    capacity_a = wire_capacity_a(awg, density)
+    if current_a <= capacity_a:
+        return None
+
+    stated = (
+        f"is AWG {awg},"
+        if conductor.gauge_awg is not None
+        else f"would be cut in AWG {awg}, the heaviest gauge this tool names,"
+    )
+    minimum = minimum_awg_for_current(current_a, density)
+    if minimum is None:
+        advice = (
+            f" No hookup wire up to AWG {HEAVIEST_AWG} carries that: split it across "
+            "parallel runs, or bring this current onto the board on a terminal rated for it."
+        )
+    else:
+        advice = f" Use AWG {minimum} or heavier."
+        if not fits_hole(minimum, board.drill_diameter):
+            advice += (
+                f" AWG {minimum} is {awg_diameter_mm(minimum):.2f} mm of copper and will not "
+                f"go through this board's {board.drill_diameter:g} mm holes, so it has to be "
+                "lap-soldered onto the pads or the current brought in on a terminal."
+            )
+    return DrcViolation(
+        rule="current-capacity",
+        severity="warning",
+        message=(
+            f"Net '{net.name}' declares {current_a} A but {_wire_kind_label(conductor)} "
+            f"{conductor.id} {_conductor_ends(conductor.path)} {stated} "
+            f"{awg_area_mm2(awg):.3f} mm² (~{capacity_a:.2f} A capacity at {density:g} "
+            f"A/mm²) — inadequate.{advice}"
+        ),
+        holes=tuple(conductor.path),
+        conductor_ids=(conductor.id,),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rule 9b -- a wire too thick for the board's holes (warning) -- Python only
+# ---------------------------------------------------------------------------
+
+
+def _check_wire_hole_fit(doc: PerfDocument, options: DrcOptions) -> list[DrcViolation]:
+    """A wire whose conductor is wider than the holes it is meant to go through.
+
+    The other half of letting the current choose the gauge: 14 A wants AWG 14, which is
+    1.63 mm of copper, and a perfboard is usually drilled 1.0 mm. Nothing about that is
+    visible from above, the router lays the wire hole to hole like any other, and the cut
+    list prints a gauge the builder then cannot push through the board. AWG 18 (1.02 mm) is
+    already too wide for a 1.0 mm hole, and the guide has printed it for every net
+    declaring 5 A or more since it first printed a gauge.
+
+    Measured at ``cut_gauge_awg`` for the same reason rule 9 is: this is the wire the cut
+    list will name. A warning, not an error -- lap-soldering a heavy lead onto the pad face
+    is a real technique, just a different step from the one the guide describes.
+    """
+    violations: list[DrcViolation] = []
+    nets_by_id: dict[NetId, Net] = {n.id: n for n in doc.nets}
+    drill = doc.board.drill_diameter
+    density = options.max_wire_current_density_a_per_mm2
+    for conductor in doc.conductors:
+        if not isinstance(conductor, WireConductor):
+            continue
+        net = nets_by_id.get(conductor.net_id) if conductor.net_id is not None else None
+        current_a = net.current_a if net is not None else None
+        awg = cut_gauge_awg(conductor.gauge_awg, current_a, density)
+        if fits_hole(awg, drill):
+            continue
+        why = (
+            ""
+            if conductor.gauge_awg is not None or current_a is None
+            else f" (the gauge the cut list names for {current_a} A)"
+        )
+        violations.append(
+            DrcViolation(
+                rule="wire-too-thick-for-hole",
+                severity="warning",
+                message=(
+                    f"{_wire_kind_label(conductor).capitalize()} {conductor.id} "
+                    f"{_conductor_ends(conductor.path)} is AWG {awg}{why}, "
+                    f"{awg_diameter_mm(awg):.2f} mm of copper, and this board's holes are "
+                    f"drilled {drill:g} mm: its ends will not go through them. Lap-solder it "
+                    "onto the pad faces instead, or bring this current onto the board on a "
+                    "terminal rated for it."
+                ),
+                holes=(conductor.path[0], conductor.path[-1]) if conductor.path else (),
                 conductor_ids=(conductor.id,),
             )
         )
@@ -1699,6 +2103,8 @@ def run_drc(
         *_check_components_off_board(doc, lookup),
         *_check_conductors_off_board(doc),
         *_check_unknown_footprints(doc, lookup),
+        *_check_body_overhang(doc, lookup),
+        *_check_wire_entries(doc, lookup),
         *_check_duplicate_pin_holes(doc, lookup),
         *_check_crossing_conductors(doc, conductor_net_index),
         *_check_conductor_geometry_crossings(doc, conductor_net_index),
@@ -1711,6 +2117,7 @@ def run_drc(
         *_check_pad_lifting_risk(doc, options),
         *_check_solder_trace_feasibility(doc, options),
         *_check_current_capacity(doc, options),
+        *_check_wire_hole_fit(doc, options),
         *_check_creepage(doc, options, node_index),
         *_check_lead_bend_length(doc, options),
         *_check_unconnected_pins(doc, lookup, physical_nets),

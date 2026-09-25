@@ -326,6 +326,7 @@ kaynakta ve `CHANGELOG`'da onlarla anılıyorlar; yanlarında kuralın **gerçek
 | **5''** | `pad-lifting-risk` | FR-2/pertinaks + saf lehim yolu uzunluğu > eşik | uyarı |
 | **5'''** | `solder-trace-too-long` | Saf lehim yolu > 5-6 pad → omurga öner | uyarı |
 | 6 | `current-capacity` | Net akımı vs. tel kesiti / lehim yolu etkin kesiti | uyarı |
+| — | `wire-too-thick-for-hole` | Telin bakırı kartın delik çapından kalın (AWG 18 = 1,02 mm > 1,0 mm) | uyarı |
 | 7 | `creepage-clearance` | 2.54 mm ≈ 300 V sınırı — şebeke devrelerinde | **uyarı, kalın** |
 | 8 | `component-too-tall` | Yükseklik / gabari çakışması (3D'den) | uyarı |
 | 9 | `heat-proximity` | TO-220 / güç direnci yanında elektrolitik | uyarı |

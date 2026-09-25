@@ -29,7 +29,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast, get_args
 
 from .command import (
     CommandContext,
@@ -75,7 +75,9 @@ from .model import (
     NetClass,
     NetId,
     NetNode,
+    PartSymbol,
     PerfDocument,
+    PinNames,
     Point2,
     Rotation,
     SchematicPart,
@@ -89,6 +91,7 @@ from .model import (
     SymbolPlacement,
     TrackCut,
     WireConductor,
+    normalized_pin_names,
 )
 
 # ---------------------------------------------------------------------------
@@ -328,6 +331,35 @@ def assert_rotation(rotation: int) -> None:
         )
 
 
+def checked_pin_names(names: object, ref: str) -> PinNames:
+    """Declared pin names in canonical form, or a refusal naming what is wrong with them.
+
+    Only the SHAPE is checked. Whether the footprint has a pin by that number is not this
+    command's question -- a name on a pin the package lacks is the same kind of finding as
+    a net naming such a pin, and the schematic reports both, on a document that is still a
+    document. Refusing it here would also make changing a part's footprint order-dependent:
+    rename the pins first, or change the package first, and one of the two would be refused.
+    """
+    try:
+        return normalized_pin_names(names)
+    except ValueError as err:
+        raise CommandError("invalid-pin-names", f"{ref}: {err}") from err
+
+
+def checked_part_symbol(symbol: object, ref: str) -> PartSymbol | None:
+    """A declared symbol this application can draw, or ``None`` for "declares nothing"."""
+    if symbol is None:
+        return None
+    allowed = get_args(PartSymbol)
+    if symbol not in allowed:
+        raise CommandError(
+            "invalid-symbol",
+            f"{ref}: {symbol!r} is not a symbol a part can declare. Use one of: "
+            f"{', '.join(allowed)}.",
+        )
+    return cast(PartSymbol, symbol)
+
+
 def assert_hole_on_board(hole: HoleCoord, board: Board, what: str) -> None:
     if not _is_plain_int(hole.col) or not _is_plain_int(hole.row):
         raise CommandError("invalid-hole", f"{what} must have integer col/row.")
@@ -508,6 +540,24 @@ def _finalize_conductor(spec: NewConductor, id_: ConductorId) -> Conductor:
     raise CommandError("invalid-conductor-kind", f"Unrecognised new-conductor spec: {spec!r}")
 
 
+class _Keep:
+    """Sentinel for an update payload: leave this field exactly as it is.
+
+    ``None`` cannot carry that meaning here, because for ``current_a`` and ``voltage_v``
+    None IS a value -- "this net declares no current" is what silences the current-capacity
+    rule. A payload that used None for both would be unable to express one of them. A
+    part's declared ``symbol`` is the same case: None is "this part declares nothing".
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return "KEEP"
+
+
+KEEP = _Keep()
+
+
 @dataclass(frozen=True, slots=True)
 class PlaceComponentPayload:
     ref: str
@@ -518,6 +568,10 @@ class PlaceComponentPayload:
     mirrored: bool | None = None
     #: Supply to make placement reproducible (e.g. netlist import); otherwise generated.
     id: ComponentId | None = None
+    #: What the part calls its leads and what it is -- see ``model.PartSymbol``. Carried
+    #: here so a paste and an agent's ``place_component`` do not lose them on the way in.
+    pin_names: PinNames = ()
+    symbol: PartSymbol | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -594,6 +648,10 @@ class UpdateComponentPayload:
     ref: str | None = None
     value: str | None = None
     locked: bool | None = None
+    #: ``None`` leaves the names alone; an empty tuple clears them. Replaced WHOLE rather
+    #: than merged, so what the dialog shows is exactly what the part ends up with.
+    pin_names: PinNames | None = None
+    symbol: PartSymbol | _Keep | None = KEEP
 
 
 @dataclass(frozen=True, slots=True)
@@ -620,6 +678,8 @@ class AddPartPayload:
     footprint_id: str
     value: str = ""
     id: ComponentId | None = None
+    pin_names: PinNames = ()
+    symbol: PartSymbol | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -629,6 +689,9 @@ class UpdatePartPayload:
     ref: str | None = None
     value: str | None = None
     footprint_id: str | None = None
+    #: As on ``UpdateComponentPayload``: None leaves them, an empty tuple clears them.
+    pin_names: PinNames | None = None
+    symbol: PartSymbol | _Keep | None = KEEP
 
 
 @dataclass(frozen=True, slots=True)
@@ -821,6 +884,13 @@ class SetBoardPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class RenameDocumentPayload:
+    """What the board is called: the title of its guide, its schematic and its project."""
+
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class SetHeightLimitPayload:
     """``None`` clears the limit, which is a different thing from a limit of zero."""
 
@@ -847,23 +917,6 @@ class ApplyBoardPresetPayload:
 @dataclass(frozen=True, slots=True)
 class ImportNetlistPayload:
     nets: tuple[Net, ...]
-
-
-class _Keep:
-    """Sentinel for ``net.update``: leave this field exactly as it is.
-
-    ``None`` cannot carry that meaning here, because for ``current_a`` and ``voltage_v``
-    None IS a value -- "this net declares no current" is what silences the current-capacity
-    rule. A payload that used None for both would be unable to express one of them.
-    """
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
-        return "KEEP"
-
-
-KEEP = _Keep()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1064,6 +1117,8 @@ def _prepare_component(
         rotation=rotation,
         mirrored=p.mirrored if p.mirrored is not None else False,
         locked=False,
+        pin_names=checked_pin_names(p.pin_names, p.ref),
+        symbol=checked_part_symbol(p.symbol, p.ref),
     )
 
 
@@ -1248,6 +1303,12 @@ class _UpdateComponent:
         ref = p.ref if p.ref is not None else existing.ref
         if ref != existing.ref:
             assert_ref_free(doc, ref, ignoring=p.id)
+        pin_names = (
+            existing.pin_names if p.pin_names is None else checked_pin_names(p.pin_names, ref)
+        )
+        symbol = (
+            existing.symbol if isinstance(p.symbol, _Keep) else checked_part_symbol(p.symbol, ref)
+        )
         # The rename carries the wiring; `rename_in_nets` says why, and refuses rather
         # than merging two parts when the new reference is already wired.
         nets = rename_in_nets(doc, existing.ref, ref)
@@ -1257,6 +1318,8 @@ class _UpdateComponent:
                 ref=ref,
                 value=p.value if p.value is not None else c.value,
                 locked=p.locked if p.locked is not None else c.locked,
+                pin_names=pin_names,
+                symbol=symbol,
             )
             if c.id == p.id
             else c
@@ -1332,7 +1395,12 @@ class _AddPart:
         if any(part.id == id_ for part in doc.parts) or any(c.id == id_ for c in doc.components):
             raise CommandError("duplicate-id", f'Something with id "{id_}" already exists.')
         part = SchematicPart(
-            id=id_, ref=ref, value=p.value, footprint_id=p.footprint_id
+            id=id_,
+            ref=ref,
+            value=p.value,
+            footprint_id=p.footprint_id,
+            pin_names=checked_pin_names(p.pin_names, ref),
+            symbol=checked_part_symbol(p.symbol, ref),
         )
         return dataclasses.replace(doc, parts=(*doc.parts, part))
 
@@ -1351,6 +1419,12 @@ class _UpdatePart:
             raise CommandError("empty-ref", "A part needs a reference designator.")
         if ref != existing.ref:
             assert_ref_free(doc, ref, ignoring=p.id)
+        pin_names = (
+            existing.pin_names if p.pin_names is None else checked_pin_names(p.pin_names, ref)
+        )
+        symbol = (
+            existing.symbol if isinstance(p.symbol, _Keep) else checked_part_symbol(p.symbol, ref)
+        )
         nets = rename_in_nets(doc, existing.ref, ref)
         parts = tuple(
             dataclasses.replace(
@@ -1360,6 +1434,8 @@ class _UpdatePart:
                 footprint_id=(
                     p.footprint_id if p.footprint_id is not None else part.footprint_id
                 ),
+                pin_names=pin_names,
+                symbol=symbol,
             )
             if part.id == p.id
             else part
@@ -1428,6 +1504,11 @@ def _placed_from(part: SchematicPart, spec: PartPlacement, doc: PerfDocument) ->
         rotation=rotation,
         mirrored=spec.mirrored if spec.mirrored is not None else False,
         locked=False,
+        # What the part says about itself goes with it. It is the same part on the board
+        # as on the sheet, and a placement that dropped its pinout would turn a MOSFET
+        # back into a box the moment it was put down.
+        pin_names=part.pin_names,
+        symbol=part.symbol,
     )
 
 
@@ -1494,6 +1575,8 @@ class _UnplaceComponent:
                     ref=existing.ref,
                     value=existing.value,
                     footprint_id=existing.footprint_id,
+                    pin_names=existing.pin_names,
+                    symbol=existing.symbol,
                 ),
             ),
         )
@@ -2681,6 +2764,29 @@ class _SetHeightLimit:
         return f"Limit build height to {p.height_limit_mm:g} mm"
 
 
+class _RenameDocument:
+    """Name the board.
+
+    A COMMAND, not a field the host writes on the way to disk like ``meta.modified``:
+    the name is something somebody chose and can see, on the guide's cover and the
+    sheet's title, so changing it is an edit -- one step on the undo stack, and the same
+    step whether a person typed it or the host named the board after its file.
+    """
+
+    type = "document.rename"
+
+    def apply(
+        self, doc: PerfDocument, p: RenameDocumentPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        name = p.name.strip() if isinstance(p.name, str) else ""
+        if not name:
+            raise CommandError("empty-name", "A board needs a name; it cannot be blank.")
+        return dataclasses.replace(doc, meta=dataclasses.replace(doc.meta, name=name))
+
+    def describe(self, p: RenameDocumentPayload, doc: PerfDocument) -> str:
+        return f"Name the board {p.name.strip()!r}"
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -2728,6 +2834,7 @@ delete_mounting_hole: CommandDefinition[DeleteMountingHolePayload] = _DeleteMoun
 add_edge_connector: CommandDefinition[AddEdgeConnectorPayload] = _AddEdgeConnector()
 delete_edge_connector: CommandDefinition[DeleteEdgeConnectorPayload] = _DeleteEdgeConnector()
 set_height_limit: CommandDefinition[SetHeightLimitPayload] = _SetHeightLimit()
+rename_document: CommandDefinition[RenameDocumentPayload] = _RenameDocument()
 
 # Typed with Any because CommandDefinition's payload is contravariant, so a specific
 # command is deliberately NOT assignable to CommandDefinition[object]. See the note on
@@ -2776,6 +2883,7 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_edge_connector,
     delete_edge_connector,
     set_height_limit,
+    rename_document,
 )
 
 

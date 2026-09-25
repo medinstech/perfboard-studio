@@ -20,7 +20,161 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **A board has a name now, and it is not "untitled".** Nothing in the application could
+  set the document's name: every board the window or the MCP server created was called
+  "untitled" for good, and that is the title every build guide, exported schematic and
+  project folder went out with. A board nobody has named takes its file's name the first
+  time it is saved; *File ▸ Rename Board…* names it anything else; `new_document` and
+  `save_document` on the MCP server take a `name`. The rename is a command
+  (`document.rename`), so it undoes like any other edit — and a name somebody chose is
+  never overwritten by the first-save rule.
+
+- **A custom part's body can sit off its pins.** `box-6x1-p1-r1-16x14.5x7-o0x6` is a
+  16 x 14.5 mm breakout whose six pins run along one edge: its body is 6 mm down the rows
+  from the pins' centre. Until now `box-` centred every body on its pins, so a module with
+  its header on one edge could only be described as reaching as far past the header on the
+  side it does not use as on the side it does — a CAN transceiver board on the first real
+  board laid out with this tool had to be written as 16 x 29 mm to be safe. The offset is
+  signed, moves the body and the courtyard, turns with the part, and is what DRC, the placer
+  and both views measure. Zero is not written, so every existing id names the same part and
+  no fixture moves. The custom-part dialog has two fields for it.
+
+- **IDC box headers: `idc-2x3` to `idc-2x32`.** A 2xN header in a shroud, numbered exactly
+  as `hdr-2xN` is — a straight ribbon cable with both ends keyed joins pin N to pin N --
+  with the key slot in the long wall beside the pin-1 row, drawn in 2D and cut in 3D, because
+  the slot is what the cable's red stripe is lined up against. Wurth WR-BHD 61201621621's
+  outline: the pin span plus 10.2 mm long, 9.0 mm wide, 9.1 mm tall, a 4.5 mm slot. The
+  guide says where the key goes; the placer wants it at an edge like any connector. It is a
+  new body archetype, `box-header`, and a generated id rather than a library part, so the
+  61-part registry and its golden are untouched.
+
+- **A part can say what it is and what it calls its leads.** Two optional fields on every
+  part, placed or not: `pinNames` (pin number to the datasheet's name for it) and `symbol`
+  (`npn`, `pnp`, `nmos`, `pmos`, `zener`, `fuse`). They are set in the part's properties —
+  a symbol list and a table with a row per footprint pin — and by `add_part`,
+  `update_part` and `place_component` on the MCP server. What they change:
+
+  - **The schematic draws the real symbol.** A TO-220 declared `pmos` with its leads named
+    G, D and S is a P-channel MOSFET with its source on top; a TO-92 declared `npn` with
+    B, C and E is a transistor; a DO-35 declared `zener` has the bent bar; a disc declared
+    `fuse` is a fuse and not a ceramic capacitor. The package numbers are printed on the
+    leads, because the symbol says G and the board says pin 1.
+  - **A module's box reads like its datasheet.** A named pin prints its name inside the
+    body and its number on the lead outside, and the box widens to fit the longest name —
+    an ESP32 devkit's 38 pins read `3V3`, `EN`, `IO21` instead of 1 to 38.
+  - **The guide orients a three-legged part leg by leg** — "G (gate) in P1; D (drain) in
+    Q1; S (source) in R1" instead of "check the package outline against the board" — and
+    its probes name the pin: "Probe J1 pin 1 (24V-L) and R3 pin 1."
+
+  **The registry's refusal stands; only the claim has moved.** A TO-92 is still a box
+  until somebody says otherwise, because BC547 and 2N3904 share the outline and disagree
+  about the base. The pinout is a fact about the PART, and the part is now somewhere it
+  can be written down by the one person who knows it. A declaration is also not taken on
+  trust: a transistor is drawn only when exactly its three leads are named B/C/E or
+  G/D/S, and a zener only when something says which lead is the cathode. Otherwise the
+  part is drawn as its package draws it, and the sheet's notes say why.
+
+  Both fields are omitted from the file when empty, so every existing board and all
+  fifteen golden fixtures serialize to exactly the bytes they did, and
+  `DOCUMENT_FORMAT_VERSION` has still never moved. Copy and paste carry them.
+
+- **DRC says when a part's body hangs past the edge of the board**
+  (`component-overhangs-edge`, a warning). `component-off-board` only ever asked about PIN
+  holes, so a TO-220 on row 1 — all three pins in holes, the body standing a millimetre past
+  the substrate — was clean, and the placer had put one exactly there on the first real
+  board laid out with this tool and called the placement legal. The rule measures the real
+  BODY, not the courtyard: the courtyard is padded by half a pitch, and by that measure
+  every resistor on the outermost row reaches a full millimetre over the edge. It measures
+  against the substrate, printed border included, not the hole grid. A quarter of a
+  millimetre is tolerated, because laid on the edge row a DO-41 reaches 0.08 mm past the
+  board and a 3 mm LED 0.23 mm; the parts that genuinely hang over clear it by a margin, a
+  TO-92 by 0.58 mm and a TO-220 by 1.03. A warning rather than an error, because a part can
+  be meant to overhang — a TO-220 reaching a heatsink off the edge is a real layout.
+
+  **The placer prices the same predicate**, so Optimize Placement no longer leaves a body
+  over the edge that DRC then names, and says `n part(s) brought back over the board` when
+  it clears one. Both read one body (`footprints.body_extent`, which the 2D and 3D views now
+  draw from too), one set of edges (`geometry.substrate_edges_mm`) and one verdict
+  (`geometry.hangs_over_edge`); a test sweeps all 61 footprints at every rotation, mirrored
+  and not, against all four edges and holds the two to the same count. A placement with a
+  part over the edge is still `legal` — that word means "breaks no DRC error", and this is a
+  warning — but it costs more than any wire a part could save by standing there.
+
+  The rule found one on a shipped example: `lpb1-booster`'s C3, a 6.3 mm electrolytic on
+  column A, stands 1.2 mm past the left edge.
+
+- **A wire on a net that declares a current is measured now.** DRC's `current-capacity`
+  rule used to look at solder traces only, so a 14 A motor rail carried by a length of
+  AWG 24 was a clean board. PLAN.md §5.2 rule 6 always said "the wire's cross-section or
+  the solder trace's"; the wire half is here, under the same rule id. A gauge is allowed
+  10 A/mm² of copper — the top of the range DRC already quoted for hookup wire in free air,
+  and below every figure of the usual chassis-wiring table — and the finding names the
+  gauge that would do.
+
+- **`wire-too-thick-for-hole`**, a new warning: a wire whose copper is wider than the
+  board's holes. AWG 18 is 1.02 mm and most perfboard is drilled 1.0 mm, so the heavy wire
+  a heavy current asks for is exactly the one that will not go through the board. The step
+  in the build guide says the same thing where the builder has the wire in hand, and says
+  to lap-solder it onto the pad instead.
+
+- **The autorouter writes the gauge onto the wires it lays for a net that declares a
+  current**, so the file says what was planned — and when that net is later declared to
+  carry more, `current-capacity` notices the wire has been outgrown. A net that declares
+  nothing is routed exactly as before, with no gauge stored.
+
+  One module, `wiregauge.py`, answers what a gauge is, what it carries and which one to
+  cut, and DRC, the router and the build guide all ask it — so the cut list cannot name a
+  wire the design-rule check would reject.
+
+- **A screw terminal knows which way its wires go in.** It takes them through one long
+  face, and it used to be a box centred on its pins: a terminal with its mouth pressed
+  against a capacitor looked exactly like one that could be wired. The face is MEASURED
+  from the KiCad Phoenix MKDS mesh the terminals are drawn with — the openings sit on its
+  -y face, which is this frame's +y — and every consumer reads it from one place
+  (`footprints.wire_entry`, `footprints.entry_corridor`):
+
+  - **`terminal-entry-blocked`**, a new warning: another part's body stands within 8 mm of
+    the mouth, across the terminal's width. One finding per terminal, naming every part in
+    the way. A mouth facing into the board over clear space in the MIDDLE of a board is
+    deliberately not reported — a cable can cross a board, and nothing here knows where it
+    goes.
+  - **`terminal-entry-faces-in`**, a new warning: a terminal standing ON an edge — its body
+    within two holes of it — with its mouth facing away from that edge. A terminal goes to
+    an edge because its wires come from outside; facing in from there, every one of them
+    doubles back over the board. On the first real board four terminals of six stood on an
+    edge facing in, over clear board, and nothing said so. Two holes and not one because one
+    of those four sat a hole and 0.3 mm in. A terminal in a corner may face either edge.
+  - **The placer** prices exactly those (terminal, obstacle) pairs, and — as a preference no
+    rule holds — how much board lies between each mouth and the edge it faces, which is
+    what turns a terminal round. The arrangement puts each terminal's mouth out of the edge
+    it is placed on.
+  - **Choosing between anneals, what DRC warns cannot be built now outranks what it costs
+    to route**, for bodies over the edge, blocked mouths and terminals facing in from an
+    edge. The routed cost alone
+    kept whatever board routed cheapest: on the first real board laid out with this tool
+    the annealer cleared both blocked terminals, that arrangement routed for 812 against
+    the original's 726, and the original — two terminals nobody could push a wire into —
+    came back as "nothing cheaper to build".
+  - **The guide** says which edge each terminal's wires come in from, and **both views** draw
+    the openings on the entry face — the generated body too, for the four-way and wider
+    blocks KiCad ships no mesh for.
+
+  No golden fixture has a screw terminal, so no recorded finding, placement or render
+  moves. The project example's "connectors are on the edge" check now measures from the
+  part's courtyard, as the placer's own `edge` term does: measured from the anchor, a
+  three-pin header lying across the right-hand edge read as two holes in.
+
 ### Fixed
+
+- **The build guide printed AWG 18 for any current from 5 A up** — for 5 A and for 50 A
+  alike, because its table stopped there. Past about 8 A it now names the gauge the current
+  needs (AWG 16 to AWG 10). Below that nothing it prints has changed.
+
+- **The cut list ignored a gauge the document stored.** A wire saved as AWG 18 was printed
+  as whatever the net's current suggested, AWG 24 for a net that declared none. It prints
+  the stored gauge now, which is also the gauge DRC measures.
 
 - **The 3D view, the guide's step images and Save Project are fast again on a machine
   without a graphics card** — a virtual machine, a remote desktop, an old laptop. Before

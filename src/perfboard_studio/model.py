@@ -298,6 +298,9 @@ BodyArchetype: TypeAlias = Literal[  # noqa: UP040
     "crystal-hc49",
     "relay-box",
     "generic-box",
+    # A 2xN IDC box header: the pin header's pins inside a shroud with a key slot, which
+    # is what a ribbon cable plugs into and the one thing about it that says where pin 1 is.
+    "box-header",
 ]
 
 #: Archetypes that get hot enough to matter to a neighbour.
@@ -360,6 +363,85 @@ class Footprint:
 
 type ComponentId = str
 
+#: What a part IS, when the package cannot say and the person who chose the part can.
+#:
+#: THE PINOUT IS A FACT ABOUT THE PART, NOT THE PACKAGE -- which is why a TO-92 is a box on
+#: the sheet: BC547 and 2N3904 share the outline and disagree about which leg is the base,
+#: and a TO-220 is a regulator, a transistor, a MOSFET and a bridge rectifier. The registry
+#: refuses to guess, and that refusal is right for the registry. It is not a reason for the
+#: DOCUMENT to stay silent: the person who put an IRF9540N on the board knows it is a
+#: P-channel MOSFET and knows which lead is the gate, and until this existed there was
+#: nowhere to write that down. So the claim moves to where the knowledge is, and the
+#: schematic draws the real symbol only when the part says what it is AND names the leads
+#: the symbol needs (``schematic.DECLARED_SYMBOL_PINS``) -- a declared transistor with
+#: unnamed leads is still a box, with a note saying why.
+#:
+#: Two of these are not about a pinout at all. A zener in a DO-35 is the same package as a
+#: signal diode and a PTC fuse is a disc, so the package draws them as a diode and as a
+#: capacitor; the declaration is the only thing that can say otherwise.
+#:
+#: Spelled with ``TypeAlias`` because persist and the MCP server read it at run time with
+#: ``get_args`` -- the trap this file documents above ``BodyArchetype``.
+PartSymbol: TypeAlias = Literal[  # noqa: UP040
+    "npn",
+    "pnp",
+    "nmos",
+    "pmos",
+    "zener",
+    "fuse",
+]
+
+#: Pin number -> the name the part's datasheet gives that lead, in pin order.
+#:
+#: A tuple of pairs rather than a dict so an instance stays hashable and compares by value
+#: like every other field in this file. ``normalized_pin_names`` is the one place the
+#: order is decided.
+type PinNames = tuple[tuple[str, str], ...]
+
+
+def pin_number_sort_key(number: str) -> tuple[int, float, str]:
+    """Pin "10" after pin "9", and a lettered pin after every numbered one.
+
+    The order ``schematic`` draws pins in, stated here because the document now stores pin
+    numbers of its own and has to keep them in SOME order: sorted as text, pin 10 lands
+    between 1 and 2.
+    """
+    try:
+        return (0, float(number), "")
+    except ValueError:
+        return (1, 0.0, number)
+
+
+def normalized_pin_names(names: object) -> PinNames:
+    """Declared pin names in canonical form: stripped, blank names dropped, pin order.
+
+    Takes a mapping or a sequence of pairs, because both callers exist -- an agent hands a
+    dict, a document already holds pairs. A BLANK NAME is dropped rather than refused:
+    clearing one cell in a table of forty pins means "this one has no name", and a dialog
+    answering that with an error would be arguing with the obvious reading. A blank pin
+    NUMBER is a name attached to nothing, and raises ``ValueError``.
+    """
+    pairs: list[object]
+    if isinstance(names, dict):
+        pairs = list(names.items())
+    elif isinstance(names, (list, tuple)):
+        pairs = list(names)
+    else:
+        raise ValueError("Pin names are a mapping of pin number to name.")
+    kept: dict[str, str] = {}
+    for entry in pairs:
+        if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+            raise ValueError("Each pin name is a (pin number, name) pair.")
+        number, name = entry
+        if not isinstance(number, str) or not isinstance(name, str):
+            raise ValueError("A pin number and a pin name are both text.")
+        number, name = number.strip(), name.strip()
+        if not number:
+            raise ValueError(f"The name {name!r} is given to a pin with no number.")
+        if name:
+            kept[number] = name
+    return tuple(sorted(kept.items(), key=lambda item: pin_number_sort_key(item[0])))
+
 
 @dataclass(frozen=True, slots=True)
 class ComponentInstance:
@@ -373,6 +455,11 @@ class ComponentInstance:
     rotation: Rotation = 0
     mirrored: bool = False
     locked: bool = False
+    #: What this particular part calls its leads, over whatever the footprint calls them.
+    #: Empty, the footprint's own names stand -- and the field is left out of the file.
+    pin_names: PinNames = ()
+    #: What this part is when its package cannot say. See ``PartSymbol``.
+    symbol: PartSymbol | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,13 +480,42 @@ class SchematicPart:
     across BOTH lists, which the commands enforce in one helper.
 
     It carries no rotation and no lock. Both are answers about a physical object on a
-    board, and this is not on a board yet; they are chosen when it is placed.
+    board, and this is not on a board yet; they are chosen when it is placed. It DOES carry
+    the pin names and the symbol, because those are answers about the part itself: the
+    same on the sheet before placement as after it, and moved across by ``part.place``.
     """
 
     id: ComponentId
     ref: str
     value: str
     footprint_id: str
+    pin_names: PinNames = ()
+    symbol: PartSymbol | None = None
+
+
+def declared_pin_name(part: ComponentInstance | SchematicPart, number: str) -> str | None:
+    """The name this part declares for one of its leads, or ``None``."""
+    for pin, name in part.pin_names:
+        if pin == number:
+            return name
+    return None
+
+
+def pin_name_of(
+    part: ComponentInstance | SchematicPart | None, pin: FootprintPin
+) -> str | None:
+    """What a lead is called: the part's own name for it first, the footprint's second.
+
+    THE ONE ANSWER to "what is this pin called", for the sheet, the guide and the MCP
+    server alike. The declared name wins because it is the more specific fact: an LED's
+    footprint says ``A`` and ``K`` and a part may say the same, but a TO-220's footprint
+    says nothing and the part is the only source there is.
+    """
+    if part is not None:
+        declared = declared_pin_name(part, pin.number)
+        if declared is not None:
+            return declared
+    return pin.name
 
 
 @dataclass(frozen=True, slots=True)
@@ -639,6 +755,13 @@ class Net:
 
 #: Bumped whenever a migration is needed. Persisted in the project file.
 DOCUMENT_FORMAT_VERSION = 1
+
+
+#: What a document is called until somebody names it. A board is named after its file
+#: the first time it is saved (``document.rename``, dispatched by the host), because
+#: this is the title the build guide, the schematic and the project folder all print --
+#: and every board anybody ever made in the application used to go out with it.
+UNTITLED_NAME = "untitled"
 
 
 @dataclass(frozen=True, slots=True)

@@ -224,18 +224,25 @@ def open_document(path: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def save_document(path: str | None = None) -> dict[str, Any]:
-    """Write the board to disk. Without a path it saves over the file it came from."""
-    return session.save_document(path)
+def save_document(path: str | None = None, name: str | None = None) -> dict[str, Any]:
+    """Write the board to disk. Without a path it saves over the file it came from. name
+    renames the board (the title of its guide and schematic); a board that was never
+    named takes its file's name."""
+    return session.save_document(path, name)
 
 
 @mcp.tool()
-def new_document(cols: int = 30, rows: int = 20, material: str = "FR4") -> dict[str, Any]:
+def new_document(
+    cols: int = 30, rows: int = 20, material: str = "FR4", name: str = "untitled"
+) -> dict[str, Any]:
     """Start a blank board. material is FR4, or FR2/FR1 for the cheaper phenolic kind —
     which matters: phenolic pads lift under heat, and the build guide derates the iron
-    temperature and dwell time for them."""
+    temperature and dwell time for them. name is the board's title on its guide and
+    schematic; left alone, the board takes its file's name when first saved."""
     global session
-    session = BoardSession(document=new_board(cols=cols, rows=rows, material=material))
+    session = BoardSession(
+        document=new_board(cols=cols, rows=rows, material=material, name=name)
+    )
     return session.get_status()
 
 
@@ -322,12 +329,24 @@ def import_netlist(path: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def add_part(ref: str, footprint_id: str, value: str = "") -> dict[str, Any]:
+def add_part(
+    ref: str,
+    footprint_id: str,
+    value: str = "",
+    pin_names: dict[str, str] | None = None,
+    symbol: str | None = None,
+) -> dict[str, Any]:
     """Put a part in the DESIGN without saying where on the board it goes. Draw the whole
     circuit this way, wire it with create_net / connect_pins, then place_parts and
     optimize_placement. The footprint is asked for now because everything else derives
-    from it: the schematic symbol, the pins, the 3D body and the bill of materials."""
-    return session.add_part(ref, footprint_id, value)
+    from it: the schematic symbol, the pins, the 3D body and the bill of materials.
+
+    pin_names says what the PART calls its leads, which no package can: {"1": "G", "2":
+    "D", "3": "S"} for a TO-220 MOSFET, {"1": "3V3", "2": "EN", ...} for a module. They are
+    printed on the sheet and in the soldering guide. symbol says what the part IS when its
+    package cannot: npn, pnp, nmos, pmos (drawn only once B/C/E or G/D/S are named), zener,
+    or fuse."""
+    return session.add_part(ref, footprint_id, value, pin_names, symbol)
 
 
 @mcp.tool()
@@ -336,11 +355,14 @@ def update_part(
     new_ref: str | None = None,
     value: str | None = None,
     footprint_id: str | None = None,
+    pin_names: dict[str, str] | None = None,
+    symbol: str | None = None,
 ) -> dict[str, Any]:
-    """Rename a part in the design or change what it is; omitted fields are left alone. A
-    rename CARRIES ITS WIRING, because a reference is the only name a net has for a part —
-    and is refused if that would put one pin on two nets."""
-    return session.update_part(ref, new_ref, value, footprint_id)
+    """Rename a part or change what it is; omitted fields are left alone. A rename CARRIES
+    ITS WIRING, because a reference is the only name a net has for a part — and is refused
+    if that would put one pin on two nets. Reaches parts on the board too, except for their
+    footprint. pin_names replaces the names whole ({} clears them); symbol "" clears it."""
+    return session.update_part(ref, new_ref, value, footprint_id, pin_names, symbol)
 
 
 @mcp.tool()
@@ -443,12 +465,25 @@ def delete_net(name: str) -> dict[str, Any]:
 
 @mcp.tool()
 def place_component(
-    ref: str, footprint_id: str, hole: str, value: str = "", rotation: int = 0
+    ref: str,
+    footprint_id: str,
+    hole: str,
+    value: str = "",
+    rotation: int = 0,
+    pin_names: dict[str, str] | None = None,
+    symbol: str | None = None,
 ) -> dict[str, Any]:
     """Put a part on the board. `hole` is where pin 1 goes ("C7"); rotation is 0, 90,
-    180 or 270. Use list_footprints to find a footprint_id."""
+    180 or 270. Use list_footprints to find a footprint_id. pin_names and symbol are as on
+    add_part."""
     return session.place_component(
-        ref=ref, footprint_id=footprint_id, hole=hole, value=value, rotation=rotation
+        ref=ref,
+        footprint_id=footprint_id,
+        hole=hole,
+        value=value,
+        rotation=rotation,
+        pin_names=pin_names,
+        symbol=symbol,
     )
 
 

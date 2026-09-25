@@ -347,3 +347,35 @@ def test_the_undo_label_says_what_it_was_rather_than_how_many() -> None:
     bus.dispatch("block.place", paste_payload(doc, block, HoleCoord(5, 5), label="Paste at F6").payload)
 
     assert bus.history()[-1] == "Paste at F6"
+
+
+def test_a_copied_part_pastes_with_what_it_said_about_itself() -> None:
+    """A MOSFET copied and pasted comes back a MOSFET, with its gate still named."""
+    import dataclasses
+
+    mosfet = dataclasses.replace(
+        _resistor("cmp-1", "Q1", HoleCoord(3, 3), value="IRF9540N"),
+        footprint_id="to220",
+        pin_names=(("1", "G"), ("2", "D"), ("3", "S")),
+        symbol="pmos",
+    )
+    doc = _doc((mosfet,))
+    block = block_from_json(block_to_json(doc, ["cmp-1"]))
+    assert block is not None
+    bus = _bus(doc)
+    assert bus.dispatch("block.place", paste_payload(doc, block, HoleCoord(10, 10)).payload).ok
+    pasted = bus.document.components[-1]
+    assert pasted.ref != "Q1"
+    assert (pasted.pin_names, pasted.symbol) == (mosfet.pin_names, "pmos")
+
+
+def test_a_malformed_declaration_on_the_clipboard_is_dropped_not_refused() -> None:
+    """The clipboard is text anybody can put anything into; a bad symbol must not make
+    the whole paste fail."""
+    doc = _doc((_resistor("cmp-1", "R1", HoleCoord(3, 3)),))
+    raw = json.loads(block_to_json(doc, ["cmp-1"]))
+    raw["components"][0]["symbol"] = "triac"
+    raw["components"][0]["pinNames"] = {"": "X"}
+    block = block_from_json(json.dumps(raw))
+    assert block is not None
+    assert (block.components[0].pin_names, block.components[0].symbol) == ((), None)

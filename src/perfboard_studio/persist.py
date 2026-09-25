@@ -62,7 +62,9 @@ from .model import (
     NetNode,
     PadAxis,
     PadShape,
+    PartSymbol,
     PerfDocument,
+    PinNames,
     Point2,
     Rotation,
     SchematicPart,
@@ -75,6 +77,7 @@ from .model import (
     SymbolPlacement,
     TrackCut,
     WireConductor,
+    normalized_pin_names,
 )
 
 #: Re-exported so callers of persist.py don't also need to import model.py.
@@ -259,8 +262,10 @@ COMPONENT_KEY_ORDER: tuple[str, ...] = (
     "rotation",
     "mirrored",
     "locked",
+    "pinNames",
+    "symbol",
 )
-PART_KEY_ORDER: tuple[str, ...] = ("id", "ref", "value", "footprintId")
+PART_KEY_ORDER: tuple[str, ...] = ("id", "ref", "value", "footprintId", "pinNames", "symbol")
 CONDUCTOR_KEY_ORDER: tuple[str, ...] = (
     "id",
     "kind",
@@ -374,6 +379,22 @@ def _ordered_edge_connector(e: EdgeConnector, index: int) -> JsonObj:
     return _build_ordered(EDGE_CONNECTOR_KEY_ORDER, values)
 
 
+def _declared_fields(part: ComponentInstance | SchematicPart) -> JsonObj:
+    """What a part says about itself beyond its package, and nothing when it says nothing.
+
+    OMITTED AT THEIR DEFAULT, the ``stripAxis`` rule: no fixture declares a pin name or a
+    symbol, so a file that does not either serializes to exactly the bytes it always did.
+    ``pinNames`` is an object in PIN order -- ``normalized_pin_names`` already sorted the
+    pairs, and a dict keeps the order it is built in.
+    """
+    values: JsonObj = {}
+    if part.pin_names:
+        values["pinNames"] = {number: name for number, name in part.pin_names}
+    if part.symbol is not None:
+        values["symbol"] = part.symbol
+    return values
+
+
 def _ordered_component(c: ComponentInstance, index: int) -> JsonObj:
     path = _index_path("components", index)
     return _build_ordered(
@@ -387,6 +408,7 @@ def _ordered_component(c: ComponentInstance, index: int) -> JsonObj:
             "rotation": _num(_field_path(path, "rotation"), c.rotation),
             "mirrored": c.mirrored,
             "locked": c.locked,
+            **_declared_fields(c),
         },
     )
 
@@ -394,9 +416,10 @@ def _ordered_component(c: ComponentInstance, index: int) -> JsonObj:
 def _ordered_part(part: SchematicPart, index: int) -> JsonObj:
     """A part in the design and not on the board.
 
-    Every field is written, unlike the optional ones elsewhere in this file: all four are
-    required and none has a default worth omitting. The array as a whole is what gets
-    omitted when it is empty -- see ``serialize_document``.
+    The four identifying fields are always written: all four are required and none has a
+    default worth omitting. The declared pin names and symbol are omitted when empty, as
+    on a placed component. The array as a whole is omitted when it is empty -- see
+    ``serialize_document``.
     """
     return _build_ordered(
         PART_KEY_ORDER,
@@ -405,6 +428,7 @@ def _ordered_part(part: SchematicPart, index: int) -> JsonObj:
             "ref": part.ref,
             "value": part.value,
             "footprintId": part.footprint_id,
+            **_declared_fields(part),
         },
     )
 
@@ -892,6 +916,35 @@ CONDUCTOR_KINDS: tuple[str, ...] = (
     "strip",
 )
 NET_CLASSES: tuple[NetClass, ...] = ("power", "ground", "signal")
+PART_SYMBOLS: tuple[PartSymbol, ...] = ("npn", "pnp", "nmos", "pmos", "zener", "fuse")
+
+
+def _parse_pin_names(obj: dict[str, object], path: str) -> PinNames:
+    """``pinNames``, if present: an object of pin number to name, both text.
+
+    Normalized on the way in, so a hand-edited file with keys out of order or a name
+    padded with spaces reads as the same part the application would have written.
+    """
+    raw = obj.get("pinNames")
+    if raw is None:
+        return ()
+    field_path = _field_path(path, "pinNames")
+    names = _expect_object(raw, field_path)
+    pairs = [
+        (number, _expect_string(name, _field_path(field_path, number)))
+        for number, name in names.items()
+    ]
+    try:
+        return normalized_pin_names(pairs)
+    except ValueError as err:
+        raise ValidationError("invalid-value", f"{err} (at \"{field_path}\")", field_path) from err
+
+
+def _parse_part_symbol(obj: dict[str, object], path: str) -> PartSymbol | None:
+    raw = obj.get("symbol")
+    if raw is None:
+        return None
+    return _expect_enum(raw, _field_path(path, "symbol"), PART_SYMBOLS)  # type: ignore[return-value]
 
 
 def _parse_hole(raw: object, path: str, warnings: list[str]) -> HoleCoord:
@@ -1116,6 +1169,8 @@ def _parse_component(raw: object, path: str, warnings: list[str]) -> ComponentIn
         rotation=_parse_rotation(_require_field(obj, "rotation", path), _field_path(path, "rotation")),
         mirrored=_expect_boolean(_require_field(obj, "mirrored", path), _field_path(path, "mirrored")),
         locked=_expect_boolean(_require_field(obj, "locked", path), _field_path(path, "locked")),
+        pin_names=_parse_pin_names(obj, path),
+        symbol=_parse_part_symbol(obj, path),
     )
 
 
@@ -1129,6 +1184,8 @@ def _parse_part(raw: object, path: str, warnings: list[str]) -> SchematicPart:
         footprint_id=_expect_string(
             _require_field(obj, "footprintId", path), _field_path(path, "footprintId")
         ),
+        pin_names=_parse_pin_names(obj, path),
+        symbol=_parse_part_symbol(obj, path),
     )
 
 

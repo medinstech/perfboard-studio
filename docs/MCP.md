@@ -179,6 +179,25 @@ opens as the same part on somebody else's machine. Placing an id nothing recogni
 the whole grammar, which is why it is not repeated in a tool description: it is a page long
 and it only matters once.
 
+**A board is named after its file unless it is given a name.** `new_document(name=…)`
+names it at the start and `save_document(path, name=…)` at any save; a board still called
+"untitled" when it is first saved takes the file's stem. The name is the title of the build
+guide and the schematic, and `get_status` reports it as `document`.
+
+**A module whose pins run along one edge** is `box-...-o<X>x<Y>`: the body sits that many
+millimetres off the pins' centre, so a breakout board is measured where it is rather than
+centred on its header. **A ribbon-cable box header** is `idc-2x<n>`, numbered like
+`hdr-2x<n>` and keyed on the pin-1 row.
+
+**A part can say what its package cannot.** `add_part`, `update_part` and `place_component`
+take `pin_names` — `{"1": "G", "2": "D", "3": "S"}`, or a module's `{"1": "3V3", "2": "EN",
+…}` — and `symbol`: `npn`, `pnp`, `nmos`, `pmos`, `zener` or `fuse`. The names come back
+from `get_component`, are printed on the sheet and in the guide's probes, and a declared
+transistor is drawn as one only once its three leads are named B/C/E or G/D/S; until then
+`render_schematic`'s notes say what is missing. `update_part` reaches a part already on the
+board (all but its footprint); `pin_names` replaces the names whole and `symbol=""` clears
+the declaration.
+
 **A netlist no longer has to come from KiCad.** `create_net` / `connect_pins` build one
 up on the board itself, which is what makes `autoroute` and `run_lvs` reachable on a
 board that never had a schematic — without a net there is no ratsnest, and so nothing to

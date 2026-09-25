@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from perfboard_studio.footprints import get_footprint, standard_footprints
+from perfboard_studio.footprints import body_extent, get_footprint, standard_footprints
 from perfboard_studio.model import BodyArchetype
 from perfboard_studio.ui.bodies import (
     BODY_STYLES,
@@ -61,6 +61,23 @@ def test_every_body_fits_inside_its_own_courtyard(footprint_id: str) -> None:
     assert placement.centre_x + placement.size_x / 2 <= max_x + 0.01
     assert placement.centre_y - placement.size_y / 2 >= min_y - 0.01
     assert placement.centre_y + placement.size_y / 2 <= max_y + 0.01
+
+
+@pytest.mark.parametrize("footprint_id", sorted(ALL_FOOTPRINTS))
+def test_the_body_drawn_is_the_body_drc_measures(footprint_id: str) -> None:
+    """``placement_for`` takes its rectangle from ``footprints.body_extent`` rather than
+    working it out again, because DRC's ``component-overhangs-edge`` and the placer measure
+    that rectangle against the edge of the board. A body drawn one size and measured another
+    would be a warning about a part that looks, on screen, as if it fits -- or the reverse.
+    Two pitches, because the pin centroid moves with the pitch and the size of a header
+    does too."""
+    footprint = ALL_FOOTPRINTS[footprint_id]
+    for pitch in (PITCH, 2.0):
+        placement = placement_for(footprint, pitch)
+        extent = body_extent(footprint, pitch)
+        assert (placement.centre_x, placement.centre_y) == (extent.centre_x, extent.centre_y)
+        assert (placement.size_x, placement.size_y) == (extent.size_x, extent.size_y)
+        assert placement.axis == extent.axis
 
 
 @pytest.mark.parametrize("footprint_id", sorted(ALL_FOOTPRINTS))

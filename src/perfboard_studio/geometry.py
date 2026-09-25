@@ -252,6 +252,212 @@ def board_outline_mm(board: Board) -> RectMm:
 
 
 # ---------------------------------------------------------------------------
+# What stands past the edge of the substrate
+# ---------------------------------------------------------------------------
+
+#: How far a part's body may reach past the edge of the substrate before it is said to
+#: hang over it. Not zero, and the reason is measured rather than cautious: laid on the
+#: outermost row, a DO-41 diode's 2.7 mm barrel reaches 0.08 mm past the board and a 3 mm
+#: LED 0.23 mm -- nothing anybody could see, on a board sheared to roughly that tolerance
+#: anyway, and a warning about either would teach the user to stop reading the rule. Every
+#: part that genuinely hangs over clears it by a margin: a tactile switch 0.46 mm, a TO-92
+#: 0.58, a TO-220 1.03, a 5 mm electrolytic 1.23, a screw terminal 2.02. It sits just under
+#: ``FINGER_BORE_CLEARANCE_MM``, the smallest gap these boards are made with.
+#:
+#: ONE number for two consumers: ``drc`` reports a body past it and ``placer`` prices one,
+#: both through :func:`hangs_over_edge`. A tolerance on one side only would let the
+#: optimiser leave a part a tenth of a millimetre over the edge that DRC then names.
+BODY_OVERHANG_TOLERANCE_MM: Mm = 0.25
+
+
+@dataclass(frozen=True, slots=True)
+class SubstrateEdges:
+    """The substrate's four outer edges, in the millimetre frame the holes are in."""
+
+    min_x: Mm
+    max_x: Mm
+    min_y: Mm
+    max_y: Mm
+
+
+def substrate_edges_mm(board: Board) -> SubstrateEdges:
+    """Where the board stops, per side: half a pitch past the outermost hole centres plus
+    any printed border, which is :func:`board_edge_margin_mm`'s answer and nobody else's.
+
+    Written in the frame the holes are in (hole 0 at 0.0) and with exactly the arithmetic
+    ``placer`` has always used for its edge term, so moving that onto this function changed
+    no float the annealer compares. What must not happen is two callers deriving the far
+    edge two ways: ``-margin + width`` and ``(n - 1) * pitch + margin`` are one number on
+    paper and can differ in the last place, which on a part packed against the edge is the
+    difference between a finding and none.
+    """
+    margin_x = board_edge_margin_mm(board, "horizontal")
+    margin_y = board_edge_margin_mm(board, "vertical")
+    return SubstrateEdges(
+        min_x=-margin_x,
+        max_x=(board.cols - 1) * board.pitch + margin_x,
+        min_y=-margin_y,
+        max_y=(board.rows - 1) * board.pitch + margin_y,
+    )
+
+
+def turned_box(
+    box: tuple[float, float, float, float], rotation: Rotation, mirrored: bool
+) -> tuple[float, float, float, float]:
+    """A local ``(min_x, max_x, min_y, max_y)`` box after a component's transform.
+
+    Exact, not a bound: a part turns only by a multiple of 90 degrees, so a box stays a box
+    and its corners land on the new one's. Through :func:`transform_offset`, so the body is
+    turned by the same rule as the pins it stands on.
+    """
+    min_x, max_x, min_y, max_y = box
+    corners = [
+        transform_offset(x, y, rotation, mirrored) for x in (min_x, max_x) for y in (min_y, max_y)
+    ]
+    xs = [x for x, _ in corners]
+    ys = [y for _, y in corners]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def edge_overhangs_mm(
+    min_x: float, max_x: float, min_y: float, max_y: float, edges: SubstrateEdges
+) -> tuple[Mm, Mm, Mm, Mm]:
+    """How far a board-space box reaches past each edge: ``(left, right, top, bottom)``.
+
+    Negative on a side the box stays inside. Rows grow downward, so ``top`` is row 1's
+    edge -- the side drawn at the top of the screen on the component face.
+    """
+    return (
+        edges.min_x - min_x,
+        max_x - edges.max_x,
+        edges.min_y - min_y,
+        max_y - edges.max_y,
+    )
+
+
+def hangs_over_edge(overhang_mm: float) -> bool:
+    """Whether a body reaching ``overhang_mm`` past an edge hangs over it.
+
+    Strict, like the overlap test: a body reaching exactly the tolerance does not. A pin
+    header's moulding is one pitch wide per row and lands flush on the edge, and flush is
+    the case the strictness is for.
+    """
+    return overhang_mm > BODY_OVERHANG_TOLERANCE_MM
+
+
+# ---------------------------------------------------------------------------
+# In front of a wire entry
+# ---------------------------------------------------------------------------
+#
+# ``footprints.entry_corridor`` says where a terminal's wires need clear board; these say
+# what is in the way and which way it faces. ``drc`` and ``placer`` both read them, in
+# board millimetres, for the reason every other shared predicate in this module exists: an
+# optimiser that clears an entry by a different measure from the one the checker uses
+# leaves a board the checker then names.
+
+type EdgeSide = Literal["left", "right", "top", "bottom"]
+
+
+def entry_blocked_by(
+    corridor: tuple[float, float, float, float], body: tuple[float, float, float, float]
+) -> bool:
+    """Whether a body stands in a wire entry's corridor, both as board-space boxes.
+
+    Strict on both axes, like the courtyard overlap: a body that only touches the
+    corridor's side -- the next terminal along, butted against this one -- is beside the
+    entry, not in front of it.
+    """
+    dx = min(corridor[1], body[1]) - max(corridor[0], body[0])
+    dy = min(corridor[3], body[3]) - max(corridor[2], body[2])
+    return dx > 0 and dy > 0
+
+
+def entry_side(direction: tuple[float, float]) -> EdgeSide:
+    """Which board edge a board-space direction points at. Rows grow downward, so -y is
+    ``top`` -- row 1's edge, the side drawn at the top of the screen on the component face."""
+    dx, dy = direction
+    if abs(dx) >= abs(dy):
+        return "right" if dx > 0 else "left"
+    return "bottom" if dy > 0 else "top"
+
+
+#: How many holes of board a terminal's body may leave between itself and an edge and still
+#: count as standing ON that edge (``entry_faces_away``). Two, not one: on the first real
+#: board a terminal came to rest 2.8 mm from the left edge -- one hole and a sliver --
+#: facing into the board, which anybody looking at it calls "on the left edge", and at one
+#: pitch the rule missed it by 0.3 mm. ``drc`` and ``placer`` both read it through
+#: :func:`on_edge_reach_mm`, so they cannot disagree about where the edge ends.
+ON_EDGE_PITCHES: float = 2.0
+
+
+def on_edge_reach_mm(pitch: Mm) -> Mm:
+    """How close to an edge counts as on it, for a board of this pitch."""
+    return ON_EDGE_PITCHES * pitch
+
+
+def edges_touched(
+    body: tuple[float, float, float, float], edges: SubstrateEdges, reach: Mm
+) -> tuple[EdgeSide, ...]:
+    """The board edges a board-space body box stands within ``reach`` of, in
+    ``(left, right, top, bottom)`` order. A part in a corner is on two."""
+    gaps = (
+        ("left", body[0] - edges.min_x),
+        ("right", edges.max_x - body[1]),
+        ("top", body[2] - edges.min_y),
+        ("bottom", edges.max_y - body[3]),
+    )
+    return tuple(side for side, gap in gaps if gap <= reach)  # type: ignore[misc]
+
+
+def entry_faces_away(
+    body: tuple[float, float, float, float],
+    direction: tuple[float, float],
+    edges: SubstrateEdges,
+    reach: Mm,
+) -> tuple[EdgeSide, ...]:
+    """The edges a terminal stands on while its mouth faces none of them, or ``()``.
+
+    THE OTHER HALF OF A WIRE ENTRY, and the half ``entry_run_mm`` only prefers. A terminal
+    in the middle of a board can face anywhere -- nothing says where its cable comes from.
+    One standing ON an edge has been put there for the one reason a terminal goes to an
+    edge, which is that its wires arrive from outside the board; facing into the board
+    from there, every one of those wires has to double back across it. On the first real
+    board laid out with the placer, four terminals of six stood on an edge facing in, and
+    nothing said so, because a mouth over clear board is not blocked.
+
+    ``reach`` is how close the body must come to count as on the edge; ``drc`` and
+    ``placer`` both pass :func:`on_edge_reach_mm`, so they are asking the same question. A part in
+    a corner that faces either of its two edges is fine.
+    """
+    touched = edges_touched(body, edges, reach)
+    if not touched or entry_side(direction) in touched:
+        return ()
+    return touched
+
+
+def entry_run_mm(
+    corridor: tuple[float, float, float, float],
+    direction: tuple[float, float],
+    edges: SubstrateEdges,
+) -> Mm:
+    """How much board lies between a wire entry and the edge it faces, in mm.
+
+    Measured from the corridor's NEAR side, which is the terminal's own face: zero for a
+    terminal whose mouth is at the edge, the whole width of the board for one whose mouth
+    faces across it. A preference, not a rule -- a cable can cross a board -- which is why
+    only ``placer`` prices it and ``drc`` says nothing.
+    """
+    side = entry_side(direction)
+    if side == "right":
+        return max(0.0, edges.max_x - corridor[0])
+    if side == "left":
+        return max(0.0, corridor[1] - edges.min_x)
+    if side == "bottom":
+        return max(0.0, edges.max_y - corridor[2])
+    return max(0.0, corridor[3] - edges.min_y)
+
+
+# ---------------------------------------------------------------------------
 # Copper: how big a pad is, and how close the next one's copper comes
 # ---------------------------------------------------------------------------
 

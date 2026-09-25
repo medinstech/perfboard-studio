@@ -66,6 +66,7 @@ from perfboard_studio.commands import (
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.drc import DrcViolation
+from perfboard_studio.footprints import wire_entry
 from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
@@ -939,6 +940,7 @@ REF_PREFIXES: dict[str, str] = {
     "crystal-hc49": "Y",
     "relay-box": "K",
     "generic-box": "X",
+    "box-header": "J",
 }
 
 
@@ -1842,8 +1844,22 @@ def _paint_body(
     elif archetype == "pin-header":
         _paint_pin_marks(painter, footprint, pitch, accent, square=True)
 
+    elif archetype == "box-header":
+        # The cavity the socket goes into, and the key slot through the wall on the pin-1
+        # row -- local -y, the side of row 0, where ``box_header_footprint`` puts it. Drawn
+        # in the local frame like everything here, so it turns with the part.
+        wall = min(rect.width(), rect.height()) * 0.13
+        cavity = rect.adjusted(wall, wall, -wall, -wall)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(style.fill).lighter(170)))
+        painter.drawRect(cavity)
+        slot = footprint.body.dims.get("keySlot", 4.5)
+        painter.drawRect(QRectF(rect.center().x() - slot / 2, rect.top(), slot, wall))
+        _paint_pin_marks(painter, footprint, pitch, accent, square=True)
+
     elif archetype == "screw-terminal":
         _paint_pin_marks(painter, footprint, pitch, accent, square=False)
+        _paint_wire_entries(painter, footprint, rect, pitch)
 
     elif archetype in ("potentiometer", "tactile-switch"):
         # The shaft or the button: the thing a finger or a screwdriver has to reach.
@@ -1851,6 +1867,38 @@ def _paint_body(
         painter.setPen(QPen(QColor(style.edge), 0.14))
         painter.setBrush(QBrush(accent))
         painter.drawEllipse(rect.center(), radius, radius)
+
+
+def _paint_wire_entries(
+    painter: QPainter, footprint: Footprint, rect: QRectF, pitch: float
+) -> None:
+    """A dark opening per way on the face the wires go in by (``footprints.wire_entry``).
+
+    The screw heads say where a terminal is; only these say which way round it is, and a
+    terminal soldered with its mouth against its neighbour looks exactly like one that can
+    be wired until somebody tries. Drawn in the part's own frame, like every other mark
+    here, so the item's transform turns it with the part.
+    """
+    direction = wire_entry(footprint)
+    if direction is None:
+        return
+    dx, dy = direction
+    width = 0.6 * pitch
+    depth = min(0.9, 0.25 * min(rect.width(), rect.height()))
+    painter.setPen(Qt.PenStyle.NoPen)
+    # Alpha given explicitly: an 8-digit Qt colour string is #AARRGGBB, not #RRGGBBAA.
+    painter.setBrush(QBrush(QColor(0, 0, 0, 180)))
+    for pin in footprint.pins:
+        x, y = pin.d_col * pitch, pin.d_row * pitch
+        if dy > 0:
+            opening = QRectF(x - width / 2, rect.bottom() - depth, width, depth)
+        elif dy < 0:
+            opening = QRectF(x - width / 2, rect.top(), width, depth)
+        elif dx > 0:
+            opening = QRectF(rect.right() - depth, y - width / 2, depth, width)
+        else:
+            opening = QRectF(rect.left(), y - width / 2, depth, width)
+        painter.drawRect(opening)
 
 
 def _paint_pin_marks(

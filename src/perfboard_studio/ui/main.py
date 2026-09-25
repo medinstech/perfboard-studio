@@ -81,6 +81,8 @@ from PySide6.QtWidgets import (
     QSlider,
     QSpinBox,
     QStatusBar,
+    QTableWidget,
+    QTableWidgetItem,
     QTabWidget,
     QToolBar,
     QToolButton,
@@ -132,6 +134,7 @@ from perfboard_studio.commands import (
     PlaceBlockPayload,
     PlaceComponentPayload,
     PlacePartsPayload,
+    RenameDocumentPayload,
     RotateComponentPayload,
     SetBoardPayload,
     SetHeightLimitPayload,
@@ -150,6 +153,7 @@ from perfboard_studio.drc import DrcViolation, run_drc
 from perfboard_studio.footprints import (
     axial_footprint,
     box_film_capacitor_footprint,
+    box_header_footprint,
     dip_footprint,
     disc_ceramic_footprint,
     footprint_lookup,
@@ -187,6 +191,7 @@ from perfboard_studio.guide import describe as describe_guide
 from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
 from perfboard_studio.lvs import LvsIssue, LvsResult, run_lvs, stale_conductor_ids
 from perfboard_studio.model import (
+    UNTITLED_NAME,
     VALID_ROTATIONS,
     Board,
     BoardEdge,
@@ -205,13 +210,16 @@ from perfboard_studio.model import (
     NetNode,
     PadAxis,
     PadShape,
+    PartSymbol,
     PerfDocument,
+    PinNames,
     Point2,
     Rotation,
     SchematicPart,
     SheetNoteKind,
     SheetWire,
     SymbolPlacement,
+    normalized_pin_names,
 )
 from perfboard_studio.parsers.kicad import parse_kicad_netlist
 from perfboard_studio.placer import (
@@ -1258,6 +1266,101 @@ class NetDialog(QDialog):
         )
 
 
+class PinoutEditor(QWidget):
+    """What a part is and what it calls its leads -- the two things its package cannot say.
+
+    One widget in two dialogs (a placed part's properties, and adding or editing a part on
+    the sheet), because they are the same question about the same part and answering it
+    two ways would be two chances to answer it differently.
+
+    The table has a row per footprint pin, the number fixed and the name editable. A pin
+    the registry already names (an LED's A and K) shows that name greyed as a hint: typing
+    over it declares a name, leaving it declares nothing. Only what was typed is stored.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.symbol = QComboBox()
+        # In the order a person looks for them. ``None`` is "whatever the package draws",
+        # which every part is until somebody says otherwise. Each label is its own t()
+        # call rather than a table read through one, because the catalogue test finds a
+        # translatable string by seeing it inside t() in the source.
+        choices: tuple[tuple[PartSymbol | None, str], ...] = (
+            (None, t("From the package")),
+            ("npn", t("NPN transistor (names B, C, E)")),
+            ("pnp", t("PNP transistor (names B, C, E)")),
+            ("nmos", t("N-channel MOSFET (names G, D, S)")),
+            ("pmos", t("P-channel MOSFET (names G, D, S)")),
+            ("zener", t("Zener diode")),
+            ("fuse", t("Fuse or PTC")),
+        )
+        for value, label in choices:
+            self.symbol.addItem(label, value)
+        self.symbol.setToolTip(
+            t(
+                "What this part is, when its package cannot say. A transistor symbol is "
+                "drawn only once its leads are named below, because which leg is the gate "
+                "is a fact about the part, not the package."
+            )
+        )
+        self.table = QTableWidget(0, 2)
+        self.table.setHorizontalHeaderLabels([t("Pin"), t("Name")])
+        self.table.verticalHeader().setVisible(False)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.setToolTip(
+            t(
+                "What the datasheet calls each lead. Printed on the schematic and in the "
+                "soldering guide, so a module's pin reads as GPIO21 rather than 21."
+            )
+        )
+        form = QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.addRow(t("Symbol"), self.symbol)
+        form.addRow(t("Pin names"), self.table)
+        self.setLayout(form)
+        self._hints: dict[str, str] = {}
+
+    def set_part(self, footprint: Footprint | None, names: PinNames, symbol: PartSymbol | None) -> None:
+        """Show one part's declaration against the pins its footprint has."""
+        index = self.symbol.findData(symbol)
+        self.symbol.setCurrentIndex(max(index, 0))
+        self.set_footprint(footprint, dict(names))
+
+    def set_footprint(self, footprint: Footprint | None, names: dict[str, str] | None = None) -> None:
+        """Rebuild the rows for a (possibly different) footprint, keeping typed names.
+
+        A name typed for pin 3 survives the footprint changing to one that still has a pin
+        3; one for a pin the new footprint lacks is dropped rather than kept invisibly.
+        """
+        kept = self.names_dict() if names is None else names
+        self._hints = {}
+        pins = footprint.pins if footprint is not None else ()
+        self.table.setRowCount(len(pins))
+        for row, pin in enumerate(pins):
+            number = QTableWidgetItem(pin.number)
+            number.setFlags(number.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.table.setItem(row, 0, number)
+            name = QTableWidgetItem(kept.get(pin.number, ""))
+            if pin.name and pin.number not in kept:
+                name.setToolTip(t("The footprint calls this pin {name}.").format(name=pin.name))
+                self._hints[pin.number] = pin.name
+            self.table.setItem(row, 1, name)
+        self.table.resizeColumnToContents(0)
+
+    def names_dict(self) -> dict[str, str]:
+        found: dict[str, str] = {}
+        for row in range(self.table.rowCount()):
+            number = self.table.item(row, 0)
+            name = self.table.item(row, 1)
+            if number is not None and name is not None and name.text().strip():
+                found[number.text()] = name.text().strip()
+        return found
+
+    def values(self) -> tuple[PinNames, PartSymbol | None]:
+        """``(pin names, symbol)`` as the commands take them."""
+        return normalized_pin_names(self.names_dict()), self.symbol.currentData()
+
+
 class ComponentDialog(QDialog):
     """What a placed part is called and what it IS.
 
@@ -1267,7 +1370,8 @@ class ComponentDialog(QDialog):
     that server existed -- so the tool's own build guide printed "Resistor x 4" where it
     meant "10k x 4", because ``guide._bom`` groups on exactly this field.
 
-    ONLY what ``component.update`` carries: reference, value and lock. Rotation is a
+    ONLY what ``component.update`` carries: reference, value, lock, and what the part says
+    about itself (``PinoutEditor``). Rotation is a
     command of its own and putting it here would turn one press of OK into two entries
     on the undo stack for what the user experienced as one edit -- so it stays on R and
     Shift+R, which is where it can be seen happening anyway.
@@ -1334,8 +1438,12 @@ class ComponentDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
+        self.pinout_editor = PinoutEditor()
+        self.pinout_editor.set_part(footprint, component.pin_names, component.symbol)
+
         layout = QVBoxLayout()
         layout.addLayout(form)
+        layout.addWidget(self.pinout_editor)
         layout.addWidget(buttons)
         self.setLayout(layout)
         # The value is what this was opened for in nearly every case -- the reference is
@@ -1345,6 +1453,10 @@ class ComponentDialog(QDialog):
 
     def values(self) -> tuple[str, str, bool]:
         return self.ref.text().strip(), self.value.text().strip(), self.locked.isChecked()
+
+    def pinout(self) -> tuple[PinNames, PartSymbol | None]:
+        """What the part says about itself: its pin names and its symbol."""
+        return self.pinout_editor.values()
 
 
 class GoToPartDialog(QDialog):
@@ -1468,6 +1580,11 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
                 _CustomField("width", t("Body width (mm)"), "mm", 0.5, 200, 15),
                 _CustomField("depth", t("Body depth (mm)"), "mm", 0.5, 200, 10),
                 _CustomField("height", t("Body height (mm)"), "mm", 0.5, 200, 8),
+                # Where the body sits off the pins' centre: a module whose header runs
+                # along one edge of its board. Zero, the default, is a centred body and
+                # leaves the identifier exactly as it was before this existed.
+                _CustomField("offset_x", t("Body offset along the pins (mm)"), "mm", -200, 200, 0),
+                _CustomField("offset_y", t("Body offset across the pins (mm)"), "mm", -200, 200, 0),
             ),
             build=lambda v: generic_box_footprint(
                 cols=whole(v, "cols"),
@@ -1477,6 +1594,8 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
                 width_mm=v["width"],
                 depth_mm=v["depth"],
                 height_mm=v["height"],
+                offset_x_mm=v.get("offset_x", 0.0),
+                offset_y_mm=v.get("offset_y", 0.0),
             ),
         ),
         _CustomFamily(
@@ -1498,6 +1617,11 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
             build=lambda v: pin_header_footprint(
                 rows=whole(v, "rows"), cols=whole(v, "cols")
             ),
+        ),
+        _CustomFamily(
+            label=t("IDC box header (ribbon cable)"),
+            fields=(_CustomField("per_row", t("Pins per row"), "int", 3, 32, 8),),
+            build=lambda v: box_header_footprint(pins_per_row=whole(v, "per_row")),
         ),
         _CustomFamily(
             label=t("Screw terminal"),
@@ -1782,6 +1906,15 @@ class AddPartDialog(QDialog):
         form.addRow(t("Reference"), self.ref)
         form.addRow(t("Value"), self.value)
 
+        # What the part is and what it calls its leads. Rebuilt whenever the footprint in
+        # the list changes, because the rows ARE the footprint's pins.
+        self.pinout_editor = PinoutEditor()
+        self.list.currentItemChanged.connect(
+            lambda _now, _then: self.pinout_editor.set_footprint(
+                get_footprint(self.chosen_footprint_id() or "")
+            )
+        )
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -1802,6 +1935,7 @@ class AddPartDialog(QDialog):
         layout.addWidget(self.list, 1)
         layout.addWidget(self.custom)
         layout.addLayout(form)
+        layout.addWidget(self.pinout_editor)
         layout.addWidget(buttons)
         self.setLayout(layout)
         self._refilter("")
@@ -1886,6 +2020,13 @@ class AddPartDialog(QDialog):
         if footprint_id is None:
             return None
         return self.ref.text().strip(), self.value.text().strip(), footprint_id
+
+    def set_pinout(self, names: PinNames, symbol: PartSymbol | None) -> None:
+        """Show an existing part's declaration, for editing it."""
+        self.pinout_editor.set_part(get_footprint(self.chosen_footprint_id() or ""), names, symbol)
+
+    def pinout(self) -> tuple[PinNames, PartSymbol | None]:
+        return self.pinout_editor.values()
 
 
 class ShortcutsDialog(QDialog):
@@ -3127,6 +3268,14 @@ class MainWindow(QMainWindow):
             )
         )
         act_features.triggered.connect(self.on_board_features)
+        act_rename = file_menu.addAction(t("Rena&me Board…"))
+        act_rename.setToolTip(
+            t(
+                "The board's title, printed on the build guide, on the schematic and on "
+                "the project folder. A board is named after its file when first saved."
+            )
+        )
+        act_rename.triggered.connect(self.on_rename_board)
         act_import = file_menu.addAction(t("&Import KiCad Netlist…"))
         self.act_import = act_import
         act_import.setShortcut(QKeySequence("Ctrl+I"))
@@ -5007,8 +5156,16 @@ class MainWindow(QMainWindow):
         if chosen is None:
             return
         ref, value, footprint_id = chosen
+        pin_names, symbol = dialog.pinout()
         result = self.bus.dispatch(
-            "part.add", AddPartPayload(ref=ref, footprint_id=footprint_id, value=value)
+            "part.add",
+            AddPartPayload(
+                ref=ref,
+                footprint_id=footprint_id,
+                value=value,
+                pin_names=pin_names,
+                symbol=symbol,
+            ),
         )
         if not result.ok:
             self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
@@ -5018,7 +5175,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(result.description, 6000)
 
     def on_schematic_part_properties(self, part_id: str) -> None:
-        """The same three fields ``AddPartDialog`` asks for, on a part that exists."""
+        """The same fields ``AddPartDialog`` asks for, on a part that exists."""
         part = next((p for p in self.bus.document.parts if p.id == part_id), None)
         if part is None:
             return
@@ -5027,15 +5184,24 @@ class MainWindow(QMainWindow):
         dialog.select_footprint(part.footprint_id)
         dialog.ref.setText(part.ref)
         dialog.value.setText(part.value)
+        dialog.set_pinout(part.pin_names, part.symbol)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         chosen = dialog.values()
         if chosen is None:
             return
         ref, value, footprint_id = chosen
+        pin_names, symbol = dialog.pinout()
         result = self.bus.dispatch(
             "part.update",
-            UpdatePartPayload(id=part_id, ref=ref, value=value, footprint_id=footprint_id),
+            UpdatePartPayload(
+                id=part_id,
+                ref=ref,
+                value=value,
+                footprint_id=footprint_id,
+                pin_names=pin_names,
+                symbol=symbol,
+            ),
         )
         if not result.ok:
             self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
@@ -7552,6 +7718,7 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         ref, value, locked = dialog.values()
+        pin_names, symbol = dialog.pinout()
         if not ref:
             QMessageBox.warning(
                 self,
@@ -7559,11 +7726,24 @@ class MainWindow(QMainWindow):
                 t("Every part is identified by its reference, so it cannot be blank."),
             )
             return
-        if (ref, value, locked) == (component.ref, component.value, component.locked):
+        if (ref, value, locked, pin_names, symbol) == (
+            component.ref,
+            component.value,
+            component.locked,
+            component.pin_names,
+            component.symbol,
+        ):
             return
         result = self.bus.dispatch(
             "component.update",
-            UpdateComponentPayload(id=component.id, ref=ref, value=value, locked=locked),
+            UpdateComponentPayload(
+                id=component.id,
+                ref=ref,
+                value=value,
+                locked=locked,
+                pin_names=pin_names,
+                symbol=symbol,
+            ),
         )
         if not result.ok:
             # A duplicate reference is the refusal this actually meets, and it is worth a
@@ -7618,7 +7798,7 @@ class MainWindow(QMainWindow):
         if not self._offer_to_save():
             return
         starter = create_starter_document(
-            DocumentMeta(name="untitled", created=_now_iso(), modified=_now_iso())
+            DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso())
         )
         dialog = BoardSetupDialog(starter.board, self, title=t("New Board"))
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -7628,7 +7808,7 @@ class MainWindow(QMainWindow):
         # which is the state `board.applyPreset` exists to make unreachable.
         features = dialog.preset_features()
         document = create_empty_document(
-            DocumentMeta(name="untitled", created=_now_iso(), modified=_now_iso()),
+            DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso()),
             dialog.board(),
         )
         if features is not None:
@@ -7690,6 +7870,26 @@ class MainWindow(QMainWindow):
             )
             return
         self.view.fit_board()
+
+    def on_rename_board(self) -> None:
+        """Name the board -- the title its guide, its schematic and its project carry.
+
+        Through ``document.rename`` like any other edit, so it undoes. A board that was
+        never named is named after its file on the first save (``_save_to``); this is for
+        choosing something better than a file name.
+        """
+        current = self.bus.document.meta.name
+        name, accepted = QInputDialog.getText(
+            self, t("Rename Board"), t("Board name:"), text=current
+        )
+        name = name.strip()
+        if not accepted or not name or name == current:
+            return
+        result = self.bus.dispatch("document.rename", RenameDocumentPayload(name=name))
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
 
     def on_board_features(self) -> None:
         """Mounting holes and edge connectors.
@@ -9012,6 +9212,11 @@ class MainWindow(QMainWindow):
         )
 
     def _save_to(self, path: Path) -> bool:
+        # A board nobody has named takes its file's name, as a command so it undoes. It
+        # used to keep "untitled" for good -- no route in the window changed it -- and that
+        # is the title every guide, sheet and project folder then went out with.
+        if self.bus.document.meta.name == UNTITLED_NAME and path.stem:
+            self.bus.dispatch("document.rename", RenameDocumentPayload(name=path.stem))
         text = persist.serialize_document(self._stamped(self.bus.document))
         # The one write that must not fail quietly -- and it was the one write with no
         # handler at all, so a read-only folder or a full disk was a traceback with the
@@ -9560,7 +9765,7 @@ def main() -> int:
     else:
         path = None
         document = create_starter_document(
-            DocumentMeta(name="untitled", created=_now_iso(), modified=_now_iso())
+            DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso())
         )
 
     window = MainWindow(document, path)

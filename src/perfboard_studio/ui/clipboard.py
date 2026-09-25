@@ -39,7 +39,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, TypeGuard, cast
+from typing import Any, TypeGuard, cast, get_args
 
 from perfboard_studio.commands import (
     NewConductor,
@@ -57,11 +57,13 @@ from perfboard_studio.model import (
     Conductor,
     HoleCoord,
     LeadBendConductor,
+    PartSymbol,
     PerfDocument,
     Rotation,
     SolderTraceConductor,
     StripConductor,
     WireConductor,
+    normalized_pin_names,
 )
 
 from .view2d import next_reference
@@ -195,6 +197,9 @@ def block_to_json(
                 "at": _relative(c.anchor, origin),
                 "rotation": c.rotation,
                 "mirrored": c.mirrored,
+                # Only when declared, as in a .perf: a copied MOSFET pastes as a MOSFET.
+                **({"pinNames": dict(c.pin_names)} if c.pin_names else {}),
+                **({"symbol": c.symbol} if c.symbol is not None else {}),
             }
             for c in components
         ],
@@ -296,6 +301,14 @@ def _component_from_json(item: Any, index: int) -> ComponentInstance | None:
     if rotation not in (0, 90, 180, 270):
         rotation = 0
     value = item.get("value")
+    # What the part said about itself. Read leniently, like everything else from the
+    # clipboard -- a malformed declaration is dropped, not allowed to refuse the paste:
+    # the clipboard is text anybody can put anything into.
+    try:
+        pin_names = normalized_pin_names(item.get("pinNames") or {})
+    except ValueError:
+        pin_names = ()
+    symbol = item.get("symbol")
     return ComponentInstance(
         # The id is the block's own, and is thrown away on paste: it exists so a lead
         # bend inside the block has something to point at before the document does.
@@ -307,6 +320,8 @@ def _component_from_json(item: Any, index: int) -> ComponentInstance | None:
         rotation=cast(Rotation, rotation),
         mirrored=bool(item.get("mirrored")),
         locked=False,
+        pin_names=pin_names,
+        symbol=cast(PartSymbol, symbol) if symbol in get_args(PartSymbol) else None,
     )
 
 
@@ -446,6 +461,8 @@ def paste_payload(doc: PerfDocument, block: Block, at: HoleCoord, label: str = "
                 rotation=component.rotation,
                 mirrored=component.mirrored,
                 id=id_,
+                pin_names=component.pin_names,
+                symbol=component.symbol,
             )
         )
 

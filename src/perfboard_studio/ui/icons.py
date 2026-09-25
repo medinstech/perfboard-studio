@@ -621,6 +621,22 @@ def _pin_header(p: QPainter, style: Any) -> None:
     p.drawRect(QRectF(16, 40, 68, 28))
 
 
+def _box_header(p: QPainter, style: Any) -> None:
+    """The header's pins inside a shroud, with the key slot cut in the near wall."""
+    _fill(p, style)
+    p.drawRect(QRectF(12, 26, 76, 50))
+    p.setBrush(QColor(style.fill).lighter(160))
+    p.drawRect(QRectF(20, 34, 60, 34))
+    # The key slot, a gap in the near wall: the one thing a plain header does not have.
+    p.setPen(_pen(style.edge, 1))
+    p.setBrush(QColor(style.fill).lighter(160))
+    p.drawRect(QRectF(40, 66, 20, 10))
+    p.setPen(_pen(style.accent, 6))
+    for x in (30, 44, 58, 72):
+        p.drawPoint(QPointF(x, 44))
+        p.drawPoint(QPointF(x, 58))
+
+
 def _screw_terminal(p: QPainter, style: Any) -> None:
     _leads(p, (34, 66), 76, 96)
     _fill(p, style)
@@ -693,6 +709,7 @@ PART_DRAWINGS: dict[str, Callable[[QPainter, Any], None]] = {
     "crystal-hc49": _crystal,
     "relay-box": _relay,
     "generic-box": _generic,
+    "box-header": _box_header,
 }
 
 

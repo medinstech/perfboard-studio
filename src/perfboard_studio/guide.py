@@ -53,14 +53,17 @@ from typing import Literal
 
 from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import DEFAULT_DRC_OPTIONS, DrcOptions, DrcViolation, run_drc, trace_electrical
+from .footprints import wire_entry
 from .geometry import (
     all_pin_holes,
     column_label,
     edge_connector_holes,
+    entry_side,
     format_hole,
     is_inside_board,
     path_length_mm,
     row_label,
+    transform_offset,
 )
 from .lvs import continuity_checks, isolation_checks, run_lvs
 from .model import (
@@ -79,8 +82,12 @@ from .model import (
     PerfDocument,
     Rotation,
     SolderTraceConductor,
+    WireConductor,
+    declared_pin_name,
+    pin_name_of,
 )
 from .stripboard import is_stripboard, strip_axis
+from .wiregauge import awg_diameter_mm, cut_gauge_awg, fits_hole
 
 # ---------------------------------------------------------------------------
 # Phases (PLAN.md Sec 7.1)
@@ -140,6 +147,7 @@ PHASE_BY_ARCHETYPE: dict[BodyArchetype, PhaseNumber] = {
     "tactile-switch": 5,
     "relay-box": 5,
     "generic-box": 5,
+    "box-header": 5,
 }
 
 #: Conductor kinds done on the solder side in phase 6, and in phase 7.
@@ -206,10 +214,6 @@ COLOR_BY_NET_CLASS: dict[NetClass, str] = {"power": "red", "ground": "black"}
 SIGNAL_COLORS: tuple[str, ...] = (
     "yellow", "green", "blue", "white", "orange", "violet", "grey", "brown",
 )
-
-#: Wire gauge by declared current, largest current first. Conservative: hookup wire in
-#: free air, derated because a perfboard has no copper pour to spread heat into.
-AWG_BY_CURRENT: tuple[tuple[float, int], ...] = ((5.0, 18), (3.0, 20), (1.5, 22), (0.0, 24))
 
 
 @dataclass(frozen=True, slots=True)
@@ -702,6 +706,20 @@ def _part_step(
             "This part is mirrored: it goes in from the SOLDER side, not the component "
             "side. Check the pin order against the board before soldering."
         )
+    facing = wire_entry(footprint)
+    if facing is not None:
+        # A terminal block is the one part that goes in the same holes either way round and
+        # is still wrong one way: its wires enter through one face, and a mouth soldered
+        # facing the wrong way is a terminal nothing can be screwed into. Said in board
+        # terms, from the same direction DRC and the placer turn with the part.
+        side = entry_side(
+            transform_offset(facing[0], facing[1], component.rotation, component.mirrored)
+        )
+        notes.append(
+            f"The wire entries face the {side} edge of the board — the screws on top, the "
+            f"openings towards the {side}. Check before soldering: it fits the holes either "
+            f"way round."
+        )
     if height_limit_mm is not None and footprint.body_height > height_limit_mm:
         notes.append(
             f"{footprint.body_height:g} mm tall, and this build has {height_limit_mm:g} mm "
@@ -731,7 +749,7 @@ def _part_step(
         rotation=component.rotation,
         mirrored=component.mirrored,
         height_mm=footprint.body_height,
-        polarity=_polarity_note(footprint, pin_holes),
+        polarity=_polarity_note(footprint, pin_holes, component),
         notes=tuple(notes),
     )
 
@@ -795,23 +813,72 @@ _PIN_NAME_MEANING: dict[str, str] = {
 }
 
 
+#: What a three-legged part's declared lead names mean, for the orientation note. Only
+#: ever read from names the PART declared -- the registry has none of these, which is the
+#: whole reason a TO-92 used to get "check the package outline" and nothing better.
+_LEAD_NAME_MEANING: dict[str, str] = {
+    "G": "gate",
+    "D": "drain",
+    "S": "source",
+    "B": "base",
+    "C": "collector",
+    "E": "emitter",
+}
+
+
 def _polarity_note(
-    footprint: Footprint, pin_holes: tuple[tuple[str, HoleCoord], ...]
+    footprint: Footprint,
+    pin_holes: tuple[tuple[str, HoleCoord], ...],
+    component: ComponentInstance | None = None,
 ) -> str | None:
-    """How to orient this part, in words, or None if it does not matter."""
+    """How to orient this part, in words, or None if it does not matter.
+
+    Names come from ``model.pin_name_of``: the part's own declared name first, the
+    footprint's second -- so a diode on an unpolarised footprint whose leads were named K
+    and A is oriented by the names like any other.
+    """
     by_number = dict(pin_holes)
 
-    named = [
-        f"{_PIN_NAME_MEANING[pin.name]} in {format_hole(by_number[pin.number])}"
-        for pin in footprint.pins
-        if pin.name in _PIN_NAME_MEANING and pin.number in by_number
-    ]
+    named = []
+    for pin in footprint.pins:
+        name = pin_name_of(component, pin)
+        if name in _PIN_NAME_MEANING and pin.number in by_number:
+            named.append(f"{_PIN_NAME_MEANING[name]} in {format_hole(by_number[pin.number])}")
     if named:
         return "; ".join(named)
+
+    if footprint.body.archetype in ("to92", "to220") and component is not None:
+        # A three-legged package says nothing about which leg is which; the PART may.
+        # When it has named every leg, that IS the orientation, leg by leg -- the one
+        # instruction a TO-92 could never be given before, and the one mistake (base and
+        # emitter swapped) that looks exactly right until the power is on.
+        legs: list[str] = []
+        for pin in footprint.pins:
+            name = declared_pin_name(component, pin.number)
+            hole = by_number.get(pin.number)
+            if name is None or hole is None:
+                legs = []
+                break
+            meaning = _LEAD_NAME_MEANING.get(name)
+            said = f"{name} ({meaning})" if meaning else name
+            legs.append(f"{said} in {format_hole(hole)}")
+        if legs:
+            return "; ".join(legs) + " — check against the part's datasheet"
 
     if footprint.body.archetype == "dip":
         first = by_number.get("1")
         return f"Pin 1 (the notched end, marked with a dot) in {format_hole(first)}" if first else None
+
+    if footprint.body.archetype == "box-header":
+        # The shroud goes on one way round only as far as the CABLE is concerned: soldered
+        # in turned half round, it takes the socket upside down and every pin lands on its
+        # neighbour across the row. The key slot is in the wall beside pin 1's row.
+        first = by_number.get("1")
+        if first is not None:
+            return (
+                f"Key slot on the side of the pin-1 row; pin 1 in {format_hole(first)} "
+                "(the cable's red stripe goes to pin 1)"
+            )
 
     if footprint.polarized:
         # Unnamed but polarized: a diode, where pin 1 is the cathode by the convention
@@ -942,9 +1009,18 @@ def _conductor_step(
             notes.append("Flux is not optional on a run this long.")
     elif conductor.kind in ("bare-wire", "insulated-wire", "top-jumper"):
         insulated = conductor.kind != "bare-wire"
+        stored_awg = conductor.gauge_awg if isinstance(conductor, WireConductor) else None
         cut = _wire_cut(
-            conductor.id, net_name, path, board, current_a, color, insulated, options
+            conductor.id, net_name, path, board, current_a, stored_awg, color, insulated, options
         )
+        if not fits_hole(cut.awg, board.drill_diameter):
+            # DRC's wire-too-thick-for-hole says the same thing, from the same function; it
+            # is repeated at the step because this is where the builder has the wire in hand.
+            notes.append(
+                f"AWG {cut.awg} is {awg_diameter_mm(cut.awg):.2f} mm of copper and will not go "
+                f"through this board's {board.drill_diameter:g} mm holes. Lap-solder each end "
+                "onto the face of its pad instead of passing it through."
+            )
         if conductor.kind == "top-jumper":
             notes.append(
                 "This one runs over the COMPONENT side, not the solder side. Keep it clear "
@@ -996,6 +1072,7 @@ def _wire_cut(
     path: tuple[HoleCoord, ...],
     board: Board,
     current_a: float | None,
+    stored_awg: int | None,
     colour: str,
     insulated: bool,
     options: GuideOptions,
@@ -1012,7 +1089,9 @@ def _wire_cut(
     # allowance anyway would pad every bare run by a centimetre.
     strip_mm = options.strip_length_mm if insulated else 0.0
     ends = 2 * (board.thickness + options.bend_allowance_mm) + 2 * strip_mm
-    awg = next(gauge for threshold, gauge in AWG_BY_CURRENT if (current_a or 0.0) >= threshold)
+    # The gauge the document names, if it names one; otherwise the one the current asks
+    # for. Before this read the document, a wire stored as AWG 18 was printed as AWG 24.
+    awg = cut_gauge_awg(stored_awg, current_a, options.drc.max_wire_current_density_a_per_mm2)
     return WireCut(
         conductor_id=conductor_id,
         net_name=net_name,
@@ -1196,8 +1275,8 @@ def _checkpoints(
                 kind="continuity",
                 title=f"{check.a.component_ref}.{check.a.pin} ↔ {check.b.component_ref}.{check.b.pin}",
                 instruction=(
-                    f"Probe {check.a.component_ref} pin {check.a.pin} and "
-                    f"{check.b.component_ref} pin {check.b.pin}."
+                    f"Probe {_pin_phrase(doc, check.a.component_ref, check.a.pin)} and "
+                    f"{_pin_phrase(doc, check.b.component_ref, check.b.pin)}."
                 ),
                 expected=f"Continuous — they are both on net {check.net_name}.",
                 pins=(check.a, check.b),
@@ -1283,6 +1362,19 @@ def _last_phase_by_net(
     return last
 
 
+def _pin_phrase(doc: PerfDocument, ref: str, pin: str) -> str:
+    """"U1 pin 4", or "U1 pin 4 (GPIO21)" when the part names that pin.
+
+    Only a DECLARED name is added, never the footprint's own: a probe on "D1 pin 1 (A)"
+    tells nobody anything the polarity note has not, and every guide written before parts
+    could name their pins would change under it. A name the part declares is the one
+    thing a pin number on a forty-pin module cannot tell you.
+    """
+    component = next((c for c in doc.components if c.ref == ref), None)
+    name = declared_pin_name(component, pin) if component is not None else None
+    return f"{ref} pin {pin} ({name})" if name else f"{ref} pin {pin}"
+
+
 def _closing_checks(
     doc: PerfDocument, lookup: FootprintLookup, options: GuideOptions
 ) -> list[Checkpoint]:
@@ -1296,8 +1388,9 @@ def _closing_checks(
                 kind="isolation",
                 title=f"{check.net_a} ↔ {check.net_b} must be separate",
                 instruction=(
-                    f"Probe {check.a.component_ref} pin {check.a.pin} ({check.net_a}) and "
-                    f"{check.b.component_ref} pin {check.b.pin} ({check.net_b})."
+                    f"Probe {_pin_phrase(doc, check.a.component_ref, check.a.pin)} "
+                    f"({check.net_a}) and "
+                    f"{_pin_phrase(doc, check.b.component_ref, check.b.pin)} ({check.net_b})."
                 ),
                 expected="Open, or at least the circuit's own resistance — never a short.",
                 pins=(check.a, check.b),

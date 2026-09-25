@@ -52,8 +52,17 @@ import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Literal
 
-from .model import STANDARD_PITCH_MM, BodySpec, Footprint, FootprintPin, Mm, Point2
+from .model import (
+    STANDARD_PITCH_MM,
+    BodyArchetype,
+    BodySpec,
+    Footprint,
+    FootprintPin,
+    Mm,
+    Point2,
+)
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -136,6 +145,38 @@ def _rect_outline(
         Point2(cx + half_w, cy - half_h),
         Point2(cx + half_w, cy + half_h),
         Point2(cx - half_w, cy + half_h),
+    )
+
+
+def _offset_rect_outline(
+    pins_mm: list[Point2],
+    width_mm: Mm,
+    depth_mm: Mm,
+    offset_x_mm: Mm,
+    offset_y_mm: Mm,
+    margin_mm: Mm,
+) -> tuple[Point2, ...]:
+    """A courtyard for a body that is NOT centred on its pins.
+
+    The union of the pins' bounding box and a ``width_mm`` x ``depth_mm`` body centred
+    ``(offset_x_mm, offset_y_mm)`` from the pins' centre, padded by ``margin_mm``. With a
+    zero offset this is exactly :func:`_rect_outline` -- the same box, and the same floats,
+    which is what keeps every existing ``box-`` id drawing the courtyard it always did.
+    """
+    if offset_x_mm == 0 and offset_y_mm == 0:
+        return _rect_outline(pins_mm, width_mm, depth_mm, margin_mm)
+    bbox = _pins_bounding_box(pins_mm)
+    cx = (bbox.min_x + bbox.max_x) / 2 + offset_x_mm
+    cy = (bbox.min_y + bbox.max_y) / 2 + offset_y_mm
+    min_x = min(bbox.min_x, cx - width_mm / 2) - margin_mm
+    max_x = max(bbox.max_x, cx + width_mm / 2) + margin_mm
+    min_y = min(bbox.min_y, cy - depth_mm / 2) - margin_mm
+    max_y = max(bbox.max_y, cy + depth_mm / 2) + margin_mm
+    return (
+        Point2(min_x, min_y),
+        Point2(max_x, min_y),
+        Point2(max_x, max_y),
+        Point2(min_x, max_y),
     )
 
 
@@ -559,6 +600,85 @@ def pin_header_footprint(
 
 
 # ---------------------------------------------------------------------------
+# IDC box headers
+# ---------------------------------------------------------------------------
+#
+# A 2xN pin header inside a moulded shroud with a key slot in one long wall: what a ribbon
+# cable's IDC socket plugs into. Not a variant of ``pin_header_footprint``, because the one
+# thing that matters about it is what a plain header does not have -- the key. A 2xN
+# header can take an IDC socket either way round and nothing says which is right; a box
+# header refuses the wrong one, and the slot is the mark the builder lines the cable's
+# red stripe up with.
+#
+# The dimensions are Wurth Elektronik's WR-BHD 2.54 mm male box header, 61201621621
+# (2x8, datasheet rev 002.001, 2026-08-30): pin-to-pin 17.78 mm and body length 27.98 mm,
+# so the body is the pin span plus 10.2 mm for every size in the family; 9.0 mm wide,
+# 9.1 mm tall above the board, and a 4.5 mm key slot in the middle of the long wall on the
+# pin-1 row. The same outline is the common one across makers of this header, to within
+# the 0.2 mm tolerance Wurth quotes on the length.
+
+#: Wurth WR-BHD: body length minus the pin span, width, height above the board, key slot.
+IDC_LENGTH_OVER_SPAN_MM: Mm = 10.2
+IDC_WIDTH_MM: Mm = 9.0
+IDC_HEIGHT_MM: Mm = 9.1
+IDC_KEY_SLOT_MM: Mm = 4.5
+#: The family runs from 2x3 (6 pins) to 2x32 (64 pins).
+_IDC_MIN_PER_ROW = 3
+_IDC_MAX_PER_ROW = 32
+
+
+def box_header_footprint(
+    *,
+    pins_per_row: int,
+    lead_diameter_mm: Mm | None = None,
+    id: str | None = None,
+    name: str | None = None,
+) -> Footprint:
+    """A 2xN IDC box header, 2.54 mm pitch. Pin 1 is the anchor at (0,0).
+
+    Numbered EXACTLY as ``hdr-2xN`` is -- pin 1 and pin 2 are the pair in the first column,
+    odd pins along row 0 -- because that is the IDC numbering, and a straight ribbon cable
+    with both ends keyed joins pin N to pin N. The key slot is in the long wall on the
+    ODD-pin side (local -y), which is where Wurth draws it: next to the row pin 1 is in.
+    """
+    if not isinstance(pins_per_row, int) or not (
+        _IDC_MIN_PER_ROW <= pins_per_row <= _IDC_MAX_PER_ROW
+    ):
+        raise ValueError(
+            f"box_header_footprint: pins_per_row must be {_IDC_MIN_PER_ROW}.."
+            f"{_IDC_MAX_PER_ROW} (got {pins_per_row})."
+        )
+    lead_diameter = 0.64 if lead_diameter_mm is None else lead_diameter_mm
+    pins: list[FootprintPin] = []
+    for i in range(pins_per_row):
+        pins.append(_make_pin(str(2 * i + 1), i, 0))
+        pins.append(_make_pin(str(2 * i + 2), i, 1))
+    pins_t = tuple(pins)
+    length_mm = (pins_per_row - 1) * STANDARD_PITCH_MM + IDC_LENGTH_OVER_SPAN_MM
+    outline = _rect_outline(_to_mm(pins_t), length_mm, IDC_WIDTH_MM, COURTYARD_MARGIN_MM)
+    fp_id = id if id is not None else f"idc-2x{pins_per_row}"
+    fp_name = name if name is not None else f"IDC box header, 2x{pins_per_row}"
+    return Footprint(
+        id=fp_id,
+        name=fp_name,
+        pins=pins_t,
+        body_outline=outline,
+        body_height=IDC_HEIGHT_MM,
+        body=BodySpec(
+            archetype="box-header",
+            dims={
+                "length": length_mm,
+                "width": IDC_WIDTH_MM,
+                "height": IDC_HEIGHT_MM,
+                "keySlot": IDC_KEY_SLOT_MM,
+            },
+        ),
+        lead_diameter=lead_diameter,
+        polarized=False,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Screw terminals
 # ---------------------------------------------------------------------------
 
@@ -773,11 +893,21 @@ def generic_box_footprint(
     height_mm: Mm,
     col_step: int = 1,
     row_step: int = 1,
+    offset_x_mm: Mm = 0.0,
+    offset_y_mm: Mm = 0.0,
     lead_diameter_mm: Mm | None = None,
     id: str | None = None,
     name: str | None = None,
 ) -> Footprint:
     """A rectangular part with a grid of leads, sized in grid steps and millimetres.
+
+    ``offset_x_mm``/``offset_y_mm`` move the BODY off the centre of its pins, in the
+    footprint's own frame (+x along the columns, +y down the rows). That is a module whose
+    header runs along one edge of its board -- a CAN transceiver breakout, a buck module, a
+    display -- and without it such a part could only be described as a body centred on its
+    pins, reaching as far past the header on the side it does not reach as on the side it
+    does. Zero is the default and is not written into the id, so every id this generator
+    produced before the offset existed still names the same part.
 
     Pin 1 is the anchor at (0,0) like every other footprint here, and the rest are numbered
     ROW BY ROW, left to right and then down. That is a choice this generator has to make and
@@ -799,6 +929,8 @@ def generic_box_footprint(
         raise ValueError("pin steps are whole grid steps and start at 1")
     if width_mm <= 0 or depth_mm <= 0 or height_mm <= 0:
         raise ValueError("a body needs a positive width, depth and height")
+    if abs(offset_x_mm) > _MAX_BODY_MM or abs(offset_y_mm) > _MAX_BODY_MM:
+        raise ValueError(f"a body offset is limited to {_MAX_BODY_MM} mm either way")
     # One line of pins has no second spacing to describe, so it gets exactly one spelling.
     col_step = col_step if cols > 1 else 1
     row_step = row_step if rows > 1 else 1
@@ -809,25 +941,40 @@ def generic_box_footprint(
         for row in range(rows)
         for col in range(cols)
     )
-    outline = _rect_outline(_to_mm(pins), width_mm, depth_mm, COURTYARD_MARGIN_MM)
+    outline = _offset_rect_outline(
+        _to_mm(pins), width_mm, depth_mm, offset_x_mm, offset_y_mm, COURTYARD_MARGIN_MM
+    )
+    offset = offset_x_mm != 0 or offset_y_mm != 0
+    offset_token = (
+        f"-o{_format_mm_token(offset_x_mm)}x{_format_mm_token(offset_y_mm)}" if offset else ""
+    )
     fp_id = id if id is not None else (
         f"box-{cols}x{rows}-p{col_step}-r{row_step}-{_format_mm_token(width_mm)}"
-        f"x{_format_mm_token(depth_mm)}x{_format_mm_token(height_mm)}"
+        f"x{_format_mm_token(depth_mm)}x{_format_mm_token(height_mm)}{offset_token}"
     )
     fp_name = name if name is not None else (
         f"Custom part, {cols}x{rows} pins, {_format_mm_token(width_mm)}"
         f"x{_format_mm_token(depth_mm)}x{_format_mm_token(height_mm)} mm"
+        + (
+            f", body offset {_format_mm_token(offset_x_mm)}, "
+            f"{_format_mm_token(offset_y_mm)} mm"
+            if offset
+            else ""
+        )
     )
+    dims: dict[str, Mm] = {"width": width_mm, "depth": depth_mm, "height": height_mm}
+    if offset:
+        # Only when there is one, like the id: a dims dict that grew two zero keys would be
+        # a footprint that compares unequal to the one it is.
+        dims["offsetX"] = offset_x_mm
+        dims["offsetY"] = offset_y_mm
     return Footprint(
         id=fp_id,
         name=fp_name,
         pins=pins,
         body_outline=outline,
         body_height=height_mm,
-        body=BodySpec(
-            archetype="generic-box",
-            dims={"width": width_mm, "depth": depth_mm, "height": height_mm},
-        ),
+        body=BodySpec(archetype="generic-box", dims=dims),
         lead_diameter=lead_diameter,
         polarized=False,
     )
@@ -1036,10 +1183,13 @@ GENERATED_ID_GRAMMAR = """A footprint the library does not have can be asked for
 that carries its own parameters. Steps are whole 2.54 mm grid steps; millimetres take at
 most two decimals and are written without units.
 
-  box-<cols>x<rows>-p<colStep>-r<rowStep>-<W>x<D>x<H>   any rectangular part: a grid of
-                                                        pins and a body in mm
+  box-<cols>x<rows>-p<colStep>-r<rowStep>-<W>x<D>x<H>[-o<X>x<Y>]
+                                                        any rectangular part: a grid of
+                                                        pins, a body in mm, and where the
+                                                        body sits off the pins' centre
   dip-<pins>[-wide]                                     a DIP of any pin count
   hdr-<rows>x<cols>                                     a pin header
+  idc-2x<n>                                             an IDC box header, 2 rows of n
   screw-terminal-<ways>                                 a screw terminal
   axial-<span>h-<L>x<D>[-pol]                           resistor, inductor, diode
   c-elec-d<D>-p<pitch>-h<H>                             radial electrolytic
@@ -1048,8 +1198,12 @@ most two decimals and are written without units.
   led-<D>mm                                             round LED
 
 box-8x2-p1-r3-20.32x7.62x4 is a 16-pin module on a 0.1 inch grid, two rows three holes
-apart. Lead diameter is not in the grammar: it is a manufacturing detail with a sensible
-default per family, and putting it in every id would make every id unreadable."""
+apart. box-6x1-p1-r1-16x14.5x7-o0x6 is a 16 x 14.5 mm breakout whose one row of six pins
+runs along an edge: its body sits 6 mm down the rows from the pins' centre. The offset is
+signed, left out when it is zero, and moves the body on the part as it is turned. idc-2x8
+is a 16-pin box header, numbered like hdr-2x8 with the key slot on the pin-1 row. Lead
+diameter is not in the grammar: it is a manufacturing detail with a sensible default per
+family, and putting it in every id would make every id unreadable."""
 
 
 def _grid(text: str, limit: int = _MAX_GRID_SPAN) -> int:
@@ -1070,12 +1224,20 @@ def _mm(text: str) -> Mm:
     return value
 
 
+def _offset(text: str | None) -> Mm:
+    """A signed body offset in mm; absent is zero. The generator bounds it."""
+    return 0.0 if text is None else float(text)
+
+
 #: Pattern to builder. Ordered, and every pattern is anchored: an id is a whole word, and a
 #: prefix match would let ``dip-8-oops`` build a DIP-8 and put a footprint in a document
 #: under a name that is not its own.
 _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], ...] = (
     (
-        re.compile(r"^box-(\d+)x(\d+)-p(\d+)-r(\d+)-([\d.]+)x([\d.]+)x([\d.]+)$"),
+        re.compile(
+            r"^box-(\d+)x(\d+)-p(\d+)-r(\d+)-([\d.]+)x([\d.]+)x([\d.]+)"
+            r"(?:-o(-?[\d.]+)x(-?[\d.]+))?$"
+        ),
         lambda m: generic_box_footprint(
             cols=_grid(m[1]),
             rows=_grid(m[2]),
@@ -1084,7 +1246,15 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
             width_mm=_mm(m[5]),
             depth_mm=_mm(m[6]),
             height_mm=_mm(m[7]),
+            # An "-o0x0" parses, builds a centred box, and is then refused by the id
+            # comparison in generated_footprint: zero is spelled by leaving it out.
+            offset_x_mm=_offset(m[8]),
+            offset_y_mm=_offset(m[9]),
         ),
+    ),
+    (
+        re.compile(r"^idc-2x(\d+)$"),
+        lambda m: box_header_footprint(pins_per_row=_grid(m[1])),
     ),
     (
         re.compile(r"^dip-(\d+)(-wide)?$"),
@@ -1179,3 +1349,244 @@ def footprint_lookup() -> Callable[[str], Footprint | None]:
     and the DRC/LVS modules expect (`(footprint_id) -> Footprint | None`).
     """
     return lambda id: get_footprint(id)
+
+
+# ---------------------------------------------------------------------------
+# The body, seen from directly above
+# ---------------------------------------------------------------------------
+#
+# WHY THIS LIVES IN THE ENGINE. The courtyard is not the body -- ``body_outline`` is padded
+# by half a pitch on every side, which is what overlap DRC needs and exactly what an edge
+# check must NOT use: an ``r-axial-3`` on the outermost row has a courtyard reaching a full
+# millimetre past the substrate while the resistor itself sits a quarter of a millimetre
+# inside it. The real body was only ever worked out in ``ui/bodies.py``, for the two
+# renderers, and an engine rule cannot import the UI. So the arithmetic moved here and
+# ``bodies.placement_for`` reads it, which keeps the part the renderers draw and the part
+# DRC and the placer measure one answer rather than two that happen to agree today.
+
+#: Nothing is thinner than this. Guards the degenerate registry entries -- a 1x1 pin header
+#: records length 0.0, and a zero-sized body is invisible rather than small.
+MIN_BODY_MM: Mm = 1.2
+
+#: Per archetype: (``dims`` key for the LOCAL X extent, key for the LOCAL Y extent, the axis
+#: the part's leads run along).
+#:
+#: Mapped straight to x and y rather than to "along" and "across", because the registry's
+#: dimension names follow each package's own datasheet and DO NOT agree with each other about
+#: orientation:
+#:
+#:   - ``relay_footprint`` builds its courtyard as ``_rect_outline(pins, 19, 15, ...)``, and
+#:     that helper takes x first -- so a relay's ``length`` is its X extent.
+#:   - ``dip_footprint`` derives ``length`` from the pin COLUMN span, which runs down y, and
+#:     ``rowSpacing`` is the gap between the two columns, across x. Exactly the other way
+#:     round.
+#:
+#: So no rule of the form "length is the long side" or "length runs along the pins" can be
+#: right for both, and inferring the axis from the pin layout is no better: a DIP-8's pin
+#: block is square, which makes any span comparison a coin toss on the one archetype where
+#: being wrong turns the package sideways. The invariant that keeps this table honest is that
+#: every body must fit inside its own courtyard, which tests/test_ui.py checks for all 61
+#: registry footprints -- that check is what caught the relay.
+BODY_DIM_KEYS: dict[BodyArchetype, tuple[str, str, Literal["x", "y"]]] = {
+    "axial-cylinder": ("length", "diameter", "x"),
+    "radial-electrolytic": ("diameter", "diameter", "x"),
+    "disc-ceramic": ("diameter", "thickness", "x"),
+    "box-film": ("length", "width", "x"),
+    "dip": ("rowSpacing", "length", "y"),
+    "to92": ("width", "depth", "x"),
+    "to220": ("width", "depth", "x"),
+    "led-round": ("diameter", "diameter", "x"),
+    "screw-terminal": ("length", "width", "x"),
+    "potentiometer": ("diameter", "diameter", "x"),
+    "tactile-switch": ("width", "depth", "x"),
+    "crystal-hc49": ("width", "depth", "x"),
+    "relay-box": ("length", "width", "x"),
+    # The one archetype whose dimension names were chosen rather than inherited from a
+    # datasheet, because `generic_box_footprint` invents the part: width across the pin
+    # rows, depth along them. Listed rather than left to the fallback so a reader can see
+    # which way round it is without deducing it from a default.
+    "generic-box": ("width", "depth", "x"),
+    # Along the pin rows and across them, as the pin header runs; the key slot is not part
+    # of the extent -- it is a gap in a wall, not a wall further out.
+    "box-header": ("length", "width", "x"),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class BodyExtent:
+    """The physical body as a rectangle seen from above, in component-local millimetres.
+
+    Local space is the footprint's own: +x is increasing column, +y increasing row, origin
+    at the anchor pin, before any rotation or mirroring. A rectangle even for a round can or
+    a D-cut TO-92, and for every question the engine asks of it that is exact rather than an
+    approximation: a part turns only by a multiple of 90 degrees, so its reach along either
+    board axis is its bounding box's -- a circle touches its box on all four sides.
+    """
+
+    #: Centre of the body, which is the centroid of the pin holes -- see :func:`body_extent`.
+    centre_x: Mm
+    centre_y: Mm
+    #: Extents in local x and y. Never below ``MIN_BODY_MM``: a body has to be drawable.
+    size_x: Mm
+    size_y: Mm
+    #: The direction the part's leads run, so an axial body lies along its own wires.
+    axis: Literal["x", "y"]
+
+    @property
+    def box(self) -> tuple[Mm, Mm, Mm, Mm]:
+        """``(min_x, max_x, min_y, max_y)`` around the anchor, unturned."""
+        half_x = self.size_x / 2
+        half_y = self.size_y / 2
+        return (
+            self.centre_x - half_x,
+            self.centre_x + half_x,
+            self.centre_y - half_y,
+            self.centre_y + half_y,
+        )
+
+
+def body_extent(footprint: Footprint, pitch: Mm) -> BodyExtent:
+    """Work out the real body from ``dims``, centred on the part's pins.
+
+    ``pitch`` converts the footprint's grid-step pin offsets to millimetres. Passed in
+    rather than assumed to be 2.54, because ``Board.pitch`` is a field and a body placed on
+    an assumed pitch would drift off its own pins on any board that sets it differently.
+
+    Centring on the PIN CENTROID is one rule that happens to be right for every archetype
+    here: it is the midpoint for a two-lead axial or radial part, the centre of the
+    rectangle for a DIP, the middle pin of a TO-220, and the centre of the row for a
+    header. No archetype needs a special case, which is why the bodies line up with their
+    leads without a table of offsets to keep in step with the registry.
+
+    Dimensions missing from ``dims`` fall back to the courtyard's own extent, so an
+    archetype added to the registry without full dims still measures something honest
+    rather than nothing.
+    """
+    body = footprint.body
+    dims = body.dims
+    archetype = body.archetype
+
+    pins_mm = [(pin.d_col * pitch, pin.d_row * pitch) for pin in footprint.pins]
+    if pins_mm:
+        xs = [x for x, _ in pins_mm]
+        ys = [y for _, y in pins_mm]
+        centre_x = (min(xs) + max(xs)) / 2
+        centre_y = (min(ys) + max(ys)) / 2
+        span_x = max(xs) - min(xs)
+        span_y = max(ys) - min(ys)
+    else:
+        centre_x = centre_y = span_x = span_y = 0.0
+
+    outline_x, outline_y = _outline_extent(footprint)
+    x_key, y_key, axis = BODY_DIM_KEYS.get(archetype, ("length", "width", "x"))
+
+    if archetype == "pin-header":
+        # Derived from the pins rather than from dims: the registry records a header's width
+        # as 0.0 because the moulding is exactly one hole wide per ROW, and a 2xN header has
+        # two. Growing the pin span by one pitch in each direction gives the moulding for any
+        # arrangement, single row or double.
+        size_x = span_x + pitch
+        size_y = span_y + pitch
+        axis = "y" if span_y > span_x else "x"
+    else:
+        size_x = dims.get(x_key) or outline_x
+        size_y = dims.get(y_key) or outline_y
+
+    # A body off its pins' centre (``generic_box_footprint``'s offset). Read from dims, which
+    # only carries the keys when the offset is not zero, so every other footprint's centre is
+    # the same float it always was.
+    centre_x += dims.get("offsetX", 0.0)
+    centre_y += dims.get("offsetY", 0.0)
+
+    return BodyExtent(
+        centre_x=centre_x,
+        centre_y=centre_y,
+        size_x=max(size_x, MIN_BODY_MM),
+        size_y=max(size_y, MIN_BODY_MM),
+        axis=axis,
+    )
+
+
+def _outline_extent(footprint: Footprint) -> tuple[Mm, Mm]:
+    """The courtyard's width and height, used only as a fallback for absent dims."""
+    if not footprint.body_outline:
+        return (MIN_BODY_MM, MIN_BODY_MM)
+    xs = [point.x for point in footprint.body_outline]
+    ys = [point.y for point in footprint.body_outline]
+    return (max(xs) - min(xs), max(ys) - min(ys))
+
+
+# ---------------------------------------------------------------------------
+# Where a wire goes in
+# ---------------------------------------------------------------------------
+#
+# A SCREW TERMINAL IS NOT SYMMETRIC, AND THE REGISTRY USED TO DRAW IT AS IF IT WERE. Its
+# wire goes in through one long face and its screws are turned from the top; the body was a
+# box centred on the pins, so nothing in the application knew which face the wire came in
+# by. A terminal turned with its mouth against a capacitor, or pointing into the middle of a
+# populated board, looked exactly like one that could be wired -- and the first real board
+# laid out with this tool (six terminals on the DELTA-ATLAS manipulator plaket) had them
+# facing every which way.
+#
+# One fact, and it lives here because it is a fact about the PACKAGE: ``drc`` reports a
+# blocked entry, ``placer`` prices the same predicate and turns the mouth outward, the guide
+# says which edge the wires come in from, and both renderers draw the openings -- all four
+# from :func:`wire_entry` and :func:`entry_corridor`.
+
+#: The direction a part's wire entries face, in the footprint's own frame (+x is increasing
+#: column, +y increasing row), per archetype.
+#:
+#: A table on the archetype rather than a ``Footprint`` field, and deliberately: a field
+#: would be one more key in every footprint the differential fixtures dump, for a fact that
+#: is the same for every part of the family.
+#:
+#: +y is MEASURED, not chosen. The screw terminals' 3D bodies are KiCad's Phoenix
+#: MKDS-1,5-x-5.08 meshes (``ui/models/index.json``), and in the mesh the face carrying the
+#: wire openings is the model's -y face -- the one at y = -4.6 mm, with the openings' rims a
+#: few tenths behind it at z 2.0-5.95 mm and the wire channel running in at z 2.4-5.1 mm,
+#: while the +y face is a plain step 4.57 mm high. A model's y runs AGAINST the row (see
+#: ``view3d._model_pieces``), so the mesh's -y is this frame's +y. The generated body draws
+#: its openings on the same face, so a terminal with a borrowed mesh and one without agree.
+WIRE_ENTRY_BY_ARCHETYPE: dict[BodyArchetype, tuple[int, int]] = {
+    "screw-terminal": (0, 1),
+}
+
+#: How much clear board a wire needs in front of an entry, in mm. A TAHMIN -- an estimate
+#: -- and written down as one: the stripped end goes INTO the clamp (Phoenix quotes 6 mm
+#: for this family), so what has to be clear outside the mouth is the insulated wire
+#: approaching straight before it can bend -- about three jacket diameters for the 1.5-2.5
+#: mm jackets these terminals take -- and a fingertip pushing it in. Eight millimetres is
+#: the smaller of those rounded up, and it is one constant so DRC and the placer cannot
+#: measure different corridors.
+WIRE_ENTRY_CLEARANCE_MM: Mm = 8.0
+
+
+def wire_entry(footprint: Footprint) -> tuple[int, int] | None:
+    """The direction this part's wire entries face in its own frame, or ``None``."""
+    return WIRE_ENTRY_BY_ARCHETYPE.get(footprint.body.archetype)
+
+
+def entry_corridor(
+    footprint: Footprint, pitch: Mm, depth: Mm = WIRE_ENTRY_CLEARANCE_MM
+) -> tuple[Mm, Mm, Mm, Mm] | None:
+    """The clear space a wire needs in front of this part's entries, or ``None``.
+
+    ``(min_x, max_x, min_y, max_y)`` in the footprint's own frame around the anchor, before
+    any rotation or mirroring -- the same frame as ``BodyExtent.box`` -- so a caller turns it
+    with ``geometry.turned_box`` exactly as it turns the body. As wide as the BODY along the
+    entry face, because every way of a terminal takes a wire, and ``depth`` deep, starting
+    at the face: a part standing against the face is in the way, one beside the terminal
+    is not.
+    """
+    direction = wire_entry(footprint)
+    if direction is None:
+        return None
+    min_x, max_x, min_y, max_y = body_extent(footprint, pitch).box
+    dx, dy = direction
+    if dy > 0:
+        return (min_x, max_x, max_y, max_y + depth)
+    if dy < 0:
+        return (min_x, max_x, min_y - depth, min_y)
+    if dx > 0:
+        return (max_x, max_x + depth, min_y, max_y)
+    return (min_x - depth, min_x, min_y, max_y)

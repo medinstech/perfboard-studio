@@ -28,6 +28,7 @@ import vtk  # type: ignore[import-untyped]
 from vtkmodules.util import numpy_support
 
 from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.footprints import wire_entry
 from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
@@ -1380,6 +1381,9 @@ class _WorldBody:
     #: The printed colour code, for a resistor whose value could be decoded. Empty for
     #: everything else -- see ``bodies.resistor_bands``, which refuses to guess.
     bands: tuple[str, ...] = ()
+    #: Which way the wire entries face, as a world direction, for a part that has them
+    #: (``footprints.wire_entry``). The generated terminal draws its openings on that face.
+    entry: tuple[float, float] | None = None
 
     @property
     def along(self) -> float:
@@ -1429,6 +1433,13 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         axis = "y" if axis == "x" else "x"
 
     polarity_local = polarity_pin_offset(fp, board.pitch)
+    facing = wire_entry(fp)
+    entry: tuple[float, float] | None = None
+    if facing is not None:
+        # The footprint frame counts rows downward and the world counts them up-negative,
+        # the sign ``to_world`` applies to a position, applied here to a direction.
+        turned_x, turned_y = transform_offset(facing[0], facing[1], comp.rotation, comp.mirrored)
+        entry = (turned_x, -turned_y)
     return _WorldBody(
         x=x,
         y=y,
@@ -1445,6 +1456,7 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         polarity=to_world(*polarity_local) if polarity_local is not None else None,
         # From the document's own value, so the bands cannot disagree with the netlist.
         bands=resistor_bands(fp, comp.value) or (),
+        entry=entry,
     )
 
 
@@ -1976,6 +1988,69 @@ def _header_pieces(body: _WorldBody) -> list[_Piece]:
     ]
 
 
+def _box_header_pieces(body: _WorldBody) -> list[_Piece]:
+    """A shroud of four walls on a floor, gold pins standing in it, and the key slot.
+
+    The slot is the part's whole reason to exist next to a plain header, so it is CUT: the
+    wall on the pin-1 row is two pieces with a gap between them. Which wall that is comes
+    from the pins themselves -- pin 1 and pin 2 are the pair in the first column, so the
+    direction from pin 2 to pin 1 points at the keyed wall however the part is turned.
+    """
+    floor_h = 1.2
+    wall = min(body.size_x, body.size_y) * 0.12
+    slot = 4.5
+    pieces: list[_Piece] = [
+        _Piece(
+            source=_moulded_box(body.size_x, body.size_y, floor_h),
+            rgb=_rgb(body.style.fill),
+            position=(body.x, body.y, floor_h / 2 + _LIFT),
+            material=MOULDED,
+        )
+    ]
+    wall_h = body.height - floor_h
+    z = floor_h + wall_h / 2 + _LIFT
+    keyed_axis, keyed_sign = "y", -1.0
+    if len(body.pins) >= 2:
+        dx = body.pins[0][0] - body.pins[1][0]
+        dy = body.pins[0][1] - body.pins[1][1]
+        keyed_axis = "x" if abs(dx) > abs(dy) else "y"
+        keyed_sign = (1.0 if dx > 0 else -1.0) if keyed_axis == "x" else (1.0 if dy > 0 else -1.0)
+    for axis in ("x", "y"):
+        for sign in (-1.0, 1.0):
+            # A wall along the part's other axis, at this side.
+            length = body.size_y if axis == "x" else body.size_x
+            cx = body.x + (sign * (body.size_x - wall) / 2 if axis == "x" else 0.0)
+            cy = body.y + (sign * (body.size_y - wall) / 2 if axis == "y" else 0.0)
+            keyed = axis == keyed_axis and sign == keyed_sign
+            spans = (
+                ((-length / 2, -slot / 2), (slot / 2, length / 2)) if keyed else ((-length / 2, length / 2),)
+            )
+            for start, end in spans:
+                piece_len = end - start
+                middle = (start + end) / 2
+                size = (wall, piece_len) if axis == "x" else (piece_len, wall)
+                offset = (0.0, middle) if axis == "x" else (middle, 0.0)
+                pieces.append(
+                    _Piece(
+                        source=_moulded_box(size[0], size[1], wall_h),
+                        rgb=_rgb(body.style.fill),
+                        position=(cx + offset[0], cy + offset[1], z),
+                        material=MOULDED,
+                    )
+                )
+    pin_h = body.height - 1.5
+    pieces.append(
+        _Piece(
+            source=_box(0.64, 0.64, pin_h),
+            rgb=_rgb(body.style.accent),
+            position=(0.0, 0.0, 0.0),
+            material=PLATED,
+            instances=tuple((pin_x, pin_y, pin_h / 2 + _LIFT) for pin_x, pin_y in body.pins),
+        )
+    )
+    return pieces + _through_hole_pieces(body, _LIFT + 0.15, blade=(0.64, 0.64))
+
+
 def _screw_terminal_pieces(body: _WorldBody) -> list[_Piece]:
     """A block with a screw head per way, so the wire entries are where they look."""
     pieces = [
@@ -2000,7 +2075,48 @@ def _screw_terminal_pieces(body: _WorldBody) -> list[_Piece]:
                 material=STEEL,
             )
         )
+    pieces += _wire_entry_pieces(body)
     return pieces + _through_hole_pieces(body, _LIFT + 0.15)
+
+
+#: The openings on a generated terminal's entry face: how wide along the row, how deep into
+#: the block, how tall, and where their centre sits. From the Phoenix MKDS mesh the borrowed
+#: terminals use, whose wire channel runs in at 2.4-5.1 mm on a 13.8 mm block -- so a
+#: terminal drawn without a mesh points its mouth the same way, at about the same height,
+#: as one drawn with it.
+_ENTRY_WIDTH_MM = 1.6
+_ENTRY_DEPTH_MM = 0.8
+_ENTRY_HEIGHT_MM = 2.4
+_ENTRY_CENTRE_Z_MM = 3.75
+
+
+def _wire_entry_pieces(body: _WorldBody) -> list[_Piece]:
+    """A dark opening per way, on the face ``footprints.wire_entry`` says the wires use.
+
+    Sunk a hair INTO the face rather than flush with it, so it does not fight the block's
+    own face for the same pixels.
+    """
+    if body.entry is None:
+        return []
+    ex, ey = body.entry
+    along_x = abs(ex) < abs(ey)  # the openings run along the pin row, across the entry
+    size = (
+        (_ENTRY_WIDTH_MM, _ENTRY_DEPTH_MM, _ENTRY_HEIGHT_MM)
+        if along_x
+        else (_ENTRY_DEPTH_MM, _ENTRY_WIDTH_MM, _ENTRY_HEIGHT_MM)
+    )
+    half_across = (body.size_y if along_x else body.size_x) / 2
+    reach = half_across - _ENTRY_DEPTH_MM / 2 + 0.02
+    z = min(_ENTRY_CENTRE_Z_MM, body.height * 0.4) + _LIFT
+    return [
+        _Piece(
+            source=_moulded_box(*size),
+            rgb=_rgb("#121212"),
+            position=(pin_x + ex * reach, pin_y + ey * reach, z),
+            material=GLOSS,
+        )
+        for pin_x, pin_y in body.pins
+    ]
 
 
 def _pot_pieces(body: _WorldBody) -> list[_Piece]:
@@ -2127,6 +2243,7 @@ _BUILDERS: dict[str, Any] = {
     "crystal-hc49": _crystal_pieces,
     "relay-box": _box_pieces,
     "generic-box": _box_pieces,
+    "box-header": _box_header_pieces,
 }
 
 
