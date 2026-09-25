@@ -11,7 +11,8 @@ rules here fall into two groups:
  - WARNINGS: perfboard-specific physical risk, straight out of PLAN.md §4.6 -- the
    ~0.6 mm neighbour-pad bridging risk (§5.2 R5', the single most valuable rule in
    this file), phenolic pad-lifting, solder-trace feasibility, current capacity
-   with an actual resistance/voltage-drop estimate, mains creepage, lead-bend
+   with an actual resistance/voltage-drop estimate (and, for a wire, its gauge),
+   a wire too thick to go through the board's holes, mains creepage, lead-bend
    reliability, and a minimal "pin touches nothing" connectivity check (full LVS
    is lvs.py's job, not this module's).
 
@@ -87,6 +88,7 @@ from .model import (
     Point2,
     SolderBuildup,
     SolderTraceConductor,
+    WireConductor,
     contacts_every_path_hole,
     is_crossing_blocked,
     is_heat_pair,
@@ -94,6 +96,16 @@ from .model import (
 )
 from .occupancy import build_occupancy
 from .stripboard import cut_holes, is_stripboard
+from .wiregauge import (
+    HEAVIEST_AWG,
+    WIRE_CURRENT_DENSITY_A_PER_MM2,
+    awg_area_mm2,
+    awg_diameter_mm,
+    cut_gauge_awg,
+    fits_hole,
+    minimum_awg_for_current,
+    wire_capacity_a,
+)
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -179,6 +191,14 @@ class DrcOptions:
     #: gets uncomfortably hot, not after.
     max_current_density_a_per_mm2: float
 
+    #: The same rule for a WIRE, in A/mm² of copper. Default 10: the argument, and why it
+    #: is twice the solder figure above, is at wiregauge.WIRE_CURRENT_DENSITY_A_PER_MM2 --
+    #: the router and the build guide choose a gauge from that same number, so a wire
+    #: either of them names is one this rule accepts. Overriding it here moves the guide
+    #: too (it passes these options through) but not the router, which has no options to
+    #: be handed; a gauge the router wrote is measured against whatever this says.
+    max_wire_current_density_a_per_mm2: float
+
     #: Net voltage (V) above which R7 (creepage) starts checking adjacency to
     #: other nets. Default 300: PLAN.md §5.2 R7 and §4.6 both cite 2.54 mm hole
     #: spacing as "around the practical limit" for mains-level work.
@@ -205,6 +225,7 @@ DEFAULT_DRC_OPTIONS: DrcOptions = DrcOptions(
     solder_resistivity_u_ohm_cm=15.0,
     copper_resistivity_u_ohm_cm=1.68,
     max_current_density_a_per_mm2=5.0,
+    max_wire_current_density_a_per_mm2=WIRE_CURRENT_DENSITY_A_PER_MM2,
     creepage_voltage_threshold_v=300.0,
     max_lead_bend_holes=4,
     heat_clearance_mm=HEAT_CLEARANCE_MM,
@@ -1346,6 +1367,16 @@ def _check_current_capacity(doc: PerfDocument, options: DrcOptions) -> list[DrcV
     nets_by_id: dict[NetId, Net] = {n.id: n for n in doc.nets}
 
     for conductor in doc.conductors:
+        if isinstance(conductor, WireConductor):
+            # PLAN.md Sec 5.2 rule 6 was always "net current against the WIRE's cross-section
+            # or the solder trace's", and the TypeScript original measured only the second.
+            # No golden fixture declares a current, so this half cannot move a single
+            # recorded finding -- it is new behaviour under an existing id, not a divergence
+            # any fixture can see (CLAUDE.md, "The differential proof").
+            wire_violation = _wire_current_violation(conductor, nets_by_id, doc.board, options)
+            if wire_violation is not None:
+                violations.append(wire_violation)
+            continue
         # isinstance(), not is_solder_trace(): buildup/spine only exist on
         # SolderTraceConductor, and only isinstance() gives mypy the narrowing
         # needed to read them. The two checks are equivalent here --
@@ -1393,6 +1424,128 @@ def _check_current_capacity(doc: PerfDocument, options: DrcOptions) -> list[DrcV
                     f"mV drop at rated current.{recommendation}"
                 ),
                 holes=tuple(conductor.path),
+                conductor_ids=(conductor.id,),
+            )
+        )
+    return violations
+
+
+def _wire_kind_label(conductor: WireConductor) -> str:
+    """"insulated wire", "bare wire", "top jumper" -- the words the build guide uses."""
+    return conductor.kind.replace("-", " ")
+
+
+def _wire_current_violation(
+    conductor: WireConductor,
+    nets_by_id: Mapping[NetId, Net],
+    board: Board,
+    options: DrcOptions,
+) -> DrcViolation | None:
+    """Rule 9 for a wire: the gauge it will be cut in against the current its net declares.
+
+    "The gauge it will be cut in" is ``wiregauge.cut_gauge_awg`` -- the one the document
+    names, or, where it names none, the one the build guide would print -- so this rule and
+    the cut list measure the same wire. That makes a wire with no stored gauge almost always
+    fine by construction, and that is correct rather than vacuous: the guide chooses its
+    gauge FROM the current, heavier where the current needs it. What remains to report is a
+    gauge somebody or something stored that the net has since outgrown -- a 0.9 A rail
+    routed in AWG 24 and later declared 14 A -- and a current no stocked gauge carries.
+    """
+    net_id = conductor.net_id
+    if net_id is None:
+        return None
+    net = nets_by_id.get(net_id)
+    if net is None or net.current_a is None:
+        return None
+    current_a = net.current_a
+    density = options.max_wire_current_density_a_per_mm2
+    awg = cut_gauge_awg(conductor.gauge_awg, current_a, density)
+    capacity_a = wire_capacity_a(awg, density)
+    if current_a <= capacity_a:
+        return None
+
+    stated = (
+        f"is AWG {awg},"
+        if conductor.gauge_awg is not None
+        else f"would be cut in AWG {awg}, the heaviest gauge this tool names,"
+    )
+    minimum = minimum_awg_for_current(current_a, density)
+    if minimum is None:
+        advice = (
+            f" No hookup wire up to AWG {HEAVIEST_AWG} carries that: split it across "
+            "parallel runs, or bring this current onto the board on a terminal rated for it."
+        )
+    else:
+        advice = f" Use AWG {minimum} or heavier."
+        if not fits_hole(minimum, board.drill_diameter):
+            advice += (
+                f" AWG {minimum} is {awg_diameter_mm(minimum):.2f} mm of copper and will not "
+                f"go through this board's {board.drill_diameter:g} mm holes, so it has to be "
+                "lap-soldered onto the pads or the current brought in on a terminal."
+            )
+    return DrcViolation(
+        rule="current-capacity",
+        severity="warning",
+        message=(
+            f"Net '{net.name}' declares {current_a} A but {_wire_kind_label(conductor)} "
+            f"{conductor.id} {_conductor_ends(conductor.path)} {stated} "
+            f"{awg_area_mm2(awg):.3f} mm² (~{capacity_a:.2f} A capacity at {density:g} "
+            f"A/mm²) — inadequate.{advice}"
+        ),
+        holes=tuple(conductor.path),
+        conductor_ids=(conductor.id,),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rule 9b -- a wire too thick for the board's holes (warning) -- Python only
+# ---------------------------------------------------------------------------
+
+
+def _check_wire_hole_fit(doc: PerfDocument, options: DrcOptions) -> list[DrcViolation]:
+    """A wire whose conductor is wider than the holes it is meant to go through.
+
+    The other half of letting the current choose the gauge: 14 A wants AWG 14, which is
+    1.63 mm of copper, and a perfboard is usually drilled 1.0 mm. Nothing about that is
+    visible from above, the router lays the wire hole to hole like any other, and the cut
+    list prints a gauge the builder then cannot push through the board. AWG 18 (1.02 mm) is
+    already too wide for a 1.0 mm hole, and the guide has printed it for every net
+    declaring 5 A or more since it first printed a gauge.
+
+    Measured at ``cut_gauge_awg`` for the same reason rule 9 is: this is the wire the cut
+    list will name. A warning, not an error -- lap-soldering a heavy lead onto the pad face
+    is a real technique, just a different step from the one the guide describes.
+    """
+    violations: list[DrcViolation] = []
+    nets_by_id: dict[NetId, Net] = {n.id: n for n in doc.nets}
+    drill = doc.board.drill_diameter
+    density = options.max_wire_current_density_a_per_mm2
+    for conductor in doc.conductors:
+        if not isinstance(conductor, WireConductor):
+            continue
+        net = nets_by_id.get(conductor.net_id) if conductor.net_id is not None else None
+        current_a = net.current_a if net is not None else None
+        awg = cut_gauge_awg(conductor.gauge_awg, current_a, density)
+        if fits_hole(awg, drill):
+            continue
+        why = (
+            ""
+            if conductor.gauge_awg is not None or current_a is None
+            else f" (the gauge the cut list names for {current_a} A)"
+        )
+        violations.append(
+            DrcViolation(
+                rule="wire-too-thick-for-hole",
+                severity="warning",
+                message=(
+                    f"{_wire_kind_label(conductor).capitalize()} {conductor.id} "
+                    f"{_conductor_ends(conductor.path)} is AWG {awg}{why}, "
+                    f"{awg_diameter_mm(awg):.2f} mm of copper, and this board's holes are "
+                    f"drilled {drill:g} mm: its ends will not go through them. Lap-solder it "
+                    "onto the pad faces instead, or bring this current onto the board on a "
+                    "terminal rated for it."
+                ),
+                holes=(conductor.path[0], conductor.path[-1]) if conductor.path else (),
                 conductor_ids=(conductor.id,),
             )
         )
@@ -1811,6 +1964,7 @@ def run_drc(
         *_check_pad_lifting_risk(doc, options),
         *_check_solder_trace_feasibility(doc, options),
         *_check_current_capacity(doc, options),
+        *_check_wire_hole_fit(doc, options),
         *_check_creepage(doc, options, node_index),
         *_check_lead_bend_length(doc, options),
         *_check_unconnected_pins(doc, lookup, physical_nets),

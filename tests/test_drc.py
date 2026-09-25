@@ -278,6 +278,11 @@ def _violation_to_jsonable(v: DrcViolation) -> dict[str, Any]:
 #: test_the_overhang_rule_fires_on_no_golden_fixture -- so today it is excluded from a
 #: comparison it could not disturb. It is listed because the next fixture regenerated with a
 #: TO-220 on row 1 would carry a finding the original engine had no rule to make.
+#:
+#: ``wire-too-thick-for-hole`` is the sixth: a wire's gauge against the board's drill, which
+#: the original never measured. No fixture stores a gauge or declares a current, so every
+#: wire on them is cut in AWG 24 and none can fire it -- listed so that stays a fact about
+#: the fixtures rather than a coincidence the comparison depends on.
 PYTHON_ONLY_RULES = frozenset(
     {
         "conductor-crossing",
@@ -285,6 +290,7 @@ PYTHON_ONLY_RULES = frozenset(
         "conductor-off-board",
         "unknown-footprint",
         "component-overhangs-edge",
+        "wire-too-thick-for-hole",
     }
 )
 

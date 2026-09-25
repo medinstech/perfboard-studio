@@ -187,7 +187,8 @@ the next regeneration silently disagree), and pinned by its own test:
 
 - `PYTHON_ONLY_RULES` — rules the original never had (`conductor-crossing`,
   `jumper-under-body`, `conductor-off-board`, `unknown-footprint`,
-  `component-overhangs-edge`), so there is nothing for a fixture to record.
+  `component-overhangs-edge`, `wire-too-thick-for-hole`), so there is nothing for a
+  fixture to record.
   `unknown-footprint` fires on eight of the fifteen fixtures, every time
   on the id `c-disc-1`, which exists in neither engine: the fixtures are dumps of the
   original and are left exactly as they are, so the rule is excluded here and pinned by
@@ -260,6 +261,21 @@ is physically in the way") are separate modules over the same conductors.
 gap. `geometry.validate_orthogonal_chain` is the only adjacency check in the codebase;
 a hand-edited file that violates it loads with a *warning* and is reported by DRC, rather
 than locking the user out of their own project.
+
+**A wire's gauge is one answer with three askers** (`wiregauge.py`). DRC's
+`current-capacity` measures a wire on a net that declares a current, `router.py` and
+`striproute.py` write the gauge onto the wires they lay for such a net, and `guide.py`
+prints it on the cut list — all through `cut_gauge_awg`: the gauge the document stores,
+or else the one `wire_gauge_for_current` picks. The guide used to keep its own table and
+DRC looked at no wire at all, which is how the cut list came to print AWG 18 for 50 A.
+Two things about it are deliberate:
+
+- **Rule 6 measures wires under the TypeScript rule id.** PLAN.md §5.2 rule 6 always said
+  "wire or solder trace" and the original measured only the trace. No golden fixture
+  declares a current, so the wire half cannot move a recorded finding — which is why it is
+  not in `PYTHON_ONLY_RULES`. A fixture regenerated with currents and wires would show it.
+- **A net that declares no current gets no stored gauge.** The router writes `None` and the
+  guide still prints AWG 24 for it, so every golden route and every fixture keeps its bytes.
 
 ### Footprints are generated, not shipped
 
@@ -1103,6 +1119,10 @@ model → geometry → stripboard → connectivity / occupancy
                                                         → guide → guide_export
                                                         → ui/, mcp/
 ```
+
+`wiregauge.py` hangs off `model` alone — it is arithmetic on a gauge number — and is read
+by `drc`, `router`, `striproute` and `guide`, which is how three siblings and their
+downstream share one fact without importing one another.
 
 `schematic.py` sits beside `ratsnest.py` on purpose: both take a document and a footprint
 lookup and answer a question about the netlist, and neither is downstream of the other.

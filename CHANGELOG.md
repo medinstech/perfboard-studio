@@ -47,7 +47,38 @@ closed without a bump.
   The rule found one on a shipped example: `lpb1-booster`'s C3, a 6.3 mm electrolytic on
   column A, stands 1.2 mm past the left edge.
 
+- **A wire on a net that declares a current is measured now.** DRC's `current-capacity`
+  rule used to look at solder traces only, so a 14 A motor rail carried by a length of
+  AWG 24 was a clean board. PLAN.md §5.2 rule 6 always said "the wire's cross-section or
+  the solder trace's"; the wire half is here, under the same rule id. A gauge is allowed
+  10 A/mm² of copper — the top of the range DRC already quoted for hookup wire in free air,
+  and below every figure of the usual chassis-wiring table — and the finding names the
+  gauge that would do.
+
+- **`wire-too-thick-for-hole`**, a new warning: a wire whose copper is wider than the
+  board's holes. AWG 18 is 1.02 mm and most perfboard is drilled 1.0 mm, so the heavy wire
+  a heavy current asks for is exactly the one that will not go through the board. The step
+  in the build guide says the same thing where the builder has the wire in hand, and says
+  to lap-solder it onto the pad instead.
+
+- **The autorouter writes the gauge onto the wires it lays for a net that declares a
+  current**, so the file says what was planned — and when that net is later declared to
+  carry more, `current-capacity` notices the wire has been outgrown. A net that declares
+  nothing is routed exactly as before, with no gauge stored.
+
+  One module, `wiregauge.py`, answers what a gauge is, what it carries and which one to
+  cut, and DRC, the router and the build guide all ask it — so the cut list cannot name a
+  wire the design-rule check would reject.
+
 ### Fixed
+
+- **The build guide printed AWG 18 for any current from 5 A up** — for 5 A and for 50 A
+  alike, because its table stopped there. Past about 8 A it now names the gauge the current
+  needs (AWG 16 to AWG 10). Below that nothing it prints has changed.
+
+- **The cut list ignored a gauge the document stored.** A wire saved as AWG 18 was printed
+  as whatever the net's current suggested, AWG 24 for a net that declared none. It prints
+  the stored gauge now, which is also the gauge DRC measures.
 
 - **The 3D view, the guide's step images and Save Project are fast again on a machine
   without a graphics card** — a virtual machine, a remote desktop, an old laptop. Before

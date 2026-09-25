@@ -102,6 +102,7 @@ from .model import (
     is_crossing_blocked,
 )
 from .occupancy import OccupancyIndex, build_occupancy
+from .wiregauge import wire_gauge_for_current
 
 # ---------------------------------------------------------------------------
 # Options
@@ -465,6 +466,7 @@ def route_connection(
         swept_blocked_holes=_trace_blocked_holes(doc),
         unusable_holes=dead,
         opts_from_pin=request.from_pin,
+        wire_gauge_awg=_declared_wire_gauge(doc, request.net_id),
     )
 
     candidates: list[RouteCandidate] = []
@@ -517,6 +519,21 @@ def route_connection(
     return RouteResult(ok=True, best=best, alternatives=tuple(candidates))
 
 
+def _declared_wire_gauge(doc: PerfDocument, net_id: NetId | None) -> int | None:
+    """The gauge to write on this net's wires, or None if the net declares no current.
+
+    Only a DECLARED current chooses a gauge. A net that says nothing gets None, not AWG 24:
+    the file then records exactly what it always recorded, and the build guide still prints
+    AWG 24 for it, from the same function it would have used anyway.
+    """
+    if net_id is None:
+        return None
+    for net in doc.nets:
+        if net.id == net_id:
+            return None if net.current_a is None else wire_gauge_for_current(net.current_a)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Context
 # ---------------------------------------------------------------------------
@@ -549,6 +566,12 @@ class _RouteContext:
     declared_own_nets: frozenset[str] = frozenset()
     #: See ``RouteRequest.from_pin``.
     opts_from_pin: tuple[str, str] | None = None
+    #: The gauge every wire laid for this net is written with: the one the build guide
+    #: would cut for the current the net declares (``wiregauge.wire_gauge_for_current``),
+    #: stored so the document says what was planned and DRC's ``current-capacity`` rule can
+    #: notice when the net later outgrows it. None when the net declares no current, which
+    #: leaves every such wire exactly as the golden routes record it.
+    wire_gauge_awg: int | None = None
     #: The nets that count as "ours" for a given pair of endpoints, worked out once.
     #:
     #: MEASURED, not guessed at. Routing a 100 x 60 board with 60 parts spent 9 of its 19
@@ -761,6 +784,7 @@ def _hopping_trace_candidate(
                 path=(hop_from, hop_to),
                 kind="insulated-wire",
                 side="bottom",
+                gauge_awg=ctx.wire_gauge_awg,
                 net_id=ctx.own_net_id,
                 # Above the copper it steps over, so the 3D view stacks it correctly.
                 layer_z=1,
@@ -1238,7 +1262,7 @@ def _straight_wire_candidate(
         path=(from_, to),
         kind=kind,
         side=side,
-        gauge_awg=None,
+        gauge_awg=ctx.wire_gauge_awg,
         color=None,
         net_id=ctx.own_net_id,
         layer_z=layer_z,

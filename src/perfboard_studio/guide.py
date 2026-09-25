@@ -79,8 +79,10 @@ from .model import (
     PerfDocument,
     Rotation,
     SolderTraceConductor,
+    WireConductor,
 )
 from .stripboard import is_stripboard, strip_axis
+from .wiregauge import awg_diameter_mm, cut_gauge_awg, fits_hole
 
 # ---------------------------------------------------------------------------
 # Phases (PLAN.md Sec 7.1)
@@ -206,10 +208,6 @@ COLOR_BY_NET_CLASS: dict[NetClass, str] = {"power": "red", "ground": "black"}
 SIGNAL_COLORS: tuple[str, ...] = (
     "yellow", "green", "blue", "white", "orange", "violet", "grey", "brown",
 )
-
-#: Wire gauge by declared current, largest current first. Conservative: hookup wire in
-#: free air, derated because a perfboard has no copper pour to spread heat into.
-AWG_BY_CURRENT: tuple[tuple[float, int], ...] = ((5.0, 18), (3.0, 20), (1.5, 22), (0.0, 24))
 
 
 @dataclass(frozen=True, slots=True)
@@ -942,9 +940,18 @@ def _conductor_step(
             notes.append("Flux is not optional on a run this long.")
     elif conductor.kind in ("bare-wire", "insulated-wire", "top-jumper"):
         insulated = conductor.kind != "bare-wire"
+        stored_awg = conductor.gauge_awg if isinstance(conductor, WireConductor) else None
         cut = _wire_cut(
-            conductor.id, net_name, path, board, current_a, color, insulated, options
+            conductor.id, net_name, path, board, current_a, stored_awg, color, insulated, options
         )
+        if not fits_hole(cut.awg, board.drill_diameter):
+            # DRC's wire-too-thick-for-hole says the same thing, from the same function; it
+            # is repeated at the step because this is where the builder has the wire in hand.
+            notes.append(
+                f"AWG {cut.awg} is {awg_diameter_mm(cut.awg):.2f} mm of copper and will not go "
+                f"through this board's {board.drill_diameter:g} mm holes. Lap-solder each end "
+                "onto the face of its pad instead of passing it through."
+            )
         if conductor.kind == "top-jumper":
             notes.append(
                 "This one runs over the COMPONENT side, not the solder side. Keep it clear "
@@ -996,6 +1003,7 @@ def _wire_cut(
     path: tuple[HoleCoord, ...],
     board: Board,
     current_a: float | None,
+    stored_awg: int | None,
     colour: str,
     insulated: bool,
     options: GuideOptions,
@@ -1012,7 +1020,9 @@ def _wire_cut(
     # allowance anyway would pad every bare run by a centimetre.
     strip_mm = options.strip_length_mm if insulated else 0.0
     ends = 2 * (board.thickness + options.bend_allowance_mm) + 2 * strip_mm
-    awg = next(gauge for threshold, gauge in AWG_BY_CURRENT if (current_a or 0.0) >= threshold)
+    # The gauge the document names, if it names one; otherwise the one the current asks
+    # for. Before this read the document, a wire stored as AWG 18 was printed as AWG 24.
+    awg = cut_gauge_awg(stored_awg, current_a, options.drc.max_wire_current_density_a_per_mm2)
     return WireCut(
         conductor_id=conductor_id,
         net_name=net_name,
