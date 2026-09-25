@@ -2067,10 +2067,12 @@ def _screw_terminal_pieces(body: _WorldBody) -> list[_Piece]:
             _Piece(
                 source=_cylinder(head_r, 0.5, resolution=14),
                 rgb=_rgb(body.style.accent),
-                # Sunk into the top rather than sitting on it, so the block is exactly as
-                # tall as its footprint says -- which is the number the height rule and
-                # the case check are both working from.
-                position=(pin_x, pin_y, body.height + _LIFT - 0.25),
+                # Standing PROUD of the top by _DECAL_PROUD_MM. It used to sit with its top
+                # exactly in the block's top face, and two coplanar faces are drawn in
+                # whichever order the depth buffer happens to resolve them -- the grey and
+                # white blotches a real board showed on every generated terminal. Rendering
+                # only: the height rule and the case check read the footprint, not this.
+                position=(pin_x, pin_y, body.height + _LIFT - 0.25 + _DECAL_PROUD_MM),
                 orientation=_ALONG_Z,
                 material=STEEL,
             )
@@ -2089,12 +2091,20 @@ _ENTRY_DEPTH_MM = 0.8
 _ENTRY_HEIGHT_MM = 2.4
 _ENTRY_CENTRE_Z_MM = 3.75
 
+#: How far a mark drawn on a generated body -- a screw head, a wire opening -- stands out of
+#: the face it is on. Not a hair: with the view's near plane pulled in close the depth
+#: buffer cannot tell 0.02 mm from coplanar, and a mark it cannot separate from its face
+#: comes out as blotches that change as the view turns. A tenth and a half of a millimetre
+#: is invisible as a step at any zoom this view reaches and is always resolved.
+_DECAL_PROUD_MM = 0.15
+
 
 def _wire_entry_pieces(body: _WorldBody) -> list[_Piece]:
     """A dark opening per way, on the face ``footprints.wire_entry`` says the wires use.
 
-    Sunk a hair INTO the face rather than flush with it, so it does not fight the block's
-    own face for the same pixels.
+    Standing ``_DECAL_PROUD_MM`` out of the face rather than a hair (0.02 mm, which the
+    depth buffer could not separate from the face), so it does not fight the block's own
+    face for the same pixels.
     """
     if body.entry is None:
         return []
@@ -2106,7 +2116,7 @@ def _wire_entry_pieces(body: _WorldBody) -> list[_Piece]:
         else (_ENTRY_DEPTH_MM, _ENTRY_WIDTH_MM, _ENTRY_HEIGHT_MM)
     )
     half_across = (body.size_y if along_x else body.size_x) / 2
-    reach = half_across - _ENTRY_DEPTH_MM / 2 + 0.02
+    reach = half_across - _ENTRY_DEPTH_MM / 2 + _DECAL_PROUD_MM
     z = min(_ENTRY_CENTRE_Z_MM, body.height * 0.4) + _LIFT
     return [
         _Piece(
@@ -2117,6 +2127,49 @@ def _wire_entry_pieces(body: _WorldBody) -> list[_Piece]:
         )
         for pin_x, pin_y in body.pins
     ]
+
+
+def _vertical_terminal_pieces(body: _WorldBody) -> list[_Piece]:
+    """The header and the screw plug standing in it, with the wire openings on TOP.
+
+    One block for the pair, because that is what stands on the board once it is wired. The
+    openings sit over the pins -- a wire goes straight down into its way -- and the screw
+    heads beside them on the same top face, both standing ``_DECAL_PROUD_MM`` proud so the
+    depth buffer can tell them from the block.
+    """
+    pieces = [
+        _Piece(
+            source=_moulded_box(body.size_x, body.size_y, body.height),
+            rgb=_rgb(body.style.fill),
+            position=(body.x, body.y, body.height / 2 + _LIFT),
+            material=GLOSS,
+        )
+    ]
+    # Openings and screws split across the block: the across axis is world y for a part
+    # lying along x and world x for one turned a quarter.
+    shift = body.across * 0.22
+    ox, oy = (0.0, shift) if body.axis == "x" else (shift, 0.0)
+    top = body.height + _LIFT
+    head_r = min(body.across * 0.14, 1.4)
+    for pin_x, pin_y in body.pins:
+        pieces.append(
+            _Piece(
+                source=_moulded_box(1.7, 1.7, 1.0),
+                rgb=_rgb("#121212"),
+                position=(pin_x + ox, pin_y + oy, top - 0.5 + _DECAL_PROUD_MM),
+                material=GLOSS,
+            )
+        )
+        pieces.append(
+            _Piece(
+                source=_cylinder(head_r, 0.5, resolution=14),
+                rgb=_rgb(body.style.accent),
+                position=(pin_x - ox, pin_y - oy, top - 0.25 + _DECAL_PROUD_MM),
+                orientation=_ALONG_Z,
+                material=STEEL,
+            )
+        )
+    return pieces + _through_hole_pieces(body, _LIFT + 0.15)
 
 
 def _pot_pieces(body: _WorldBody) -> list[_Piece]:
@@ -2244,6 +2297,7 @@ _BUILDERS: dict[str, Any] = {
     "relay-box": _box_pieces,
     "generic-box": _box_pieces,
     "box-header": _box_header_pieces,
+    "screw-terminal-vertical": _vertical_terminal_pieces,
 }
 
 

@@ -22,6 +22,16 @@ closed without a bump.
 
 ### Added
 
+- **A screw terminal whose wires go in from above: `screw-terminal-<n>-v`.** The pluggable
+  block on a vertical (180°) header — what is sold as a "dik klemens" — pinned exactly like
+  `screw-terminal-<n>`, so one swaps for the other without moving a pin. It has no side
+  mouth, so `terminal-entry-blocked` and `terminal-entry-faces-in` say nothing about it and
+  the placer does not pull it to an edge: it is the right part for the middle of a board,
+  where the first real board had a side-entry terminal facing its neighbour. The header is
+  measured from KiCad's Phoenix MSTBVA 2,5/N-G-5,08 model (N × 5.08 + 2.0 mm long, 8.6 mm
+  deep, 12 mm tall); the plug is not in KiCad's library, so the mated 12 × 22 mm is an
+  estimate and says so. Offered in *Custom Part…*; the guide says the wires come from above.
+
 - **A board has a name now, and it is not "untitled".** Nothing in the application could
   set the document's name: every board the window or the MCP server created was called
   "untitled" for good, and that is the title every build guide, exported schematic and
@@ -167,6 +177,12 @@ closed without a bump.
   three-pin header lying across the right-hand edge read as two holes in.
 
 ### Fixed
+
+- **Generated screw terminals were drawn with blotches in 3D.** A terminal with no borrowed
+  model — four ways and up — had its screw heads' tops exactly in the block's top face and
+  its wire openings 0.02 mm proud of the front, and the depth buffer cannot tell either from
+  coplanar with the view's near plane pulled in: grey and white patches that moved as the
+  board turned. Both now stand 0.15 mm proud.
 
 - **`perfboard-studio --lang tr board.perf` opens the board.** The spelling the README
   gives took `tr` for a file to open and exited with "Cannot open tr"; only `--lang=tr`

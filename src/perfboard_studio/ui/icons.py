@@ -710,6 +710,7 @@ PART_DRAWINGS: dict[str, Callable[[QPainter, Any], None]] = {
     "relay-box": _relay,
     "generic-box": _generic,
     "box-header": _box_header,
+    "screw-terminal-vertical": _screw_terminal,
 }
 
 

@@ -1664,6 +1664,7 @@ _KIND_BY_ARCHETYPE: dict[BodyArchetype, SymbolKind] = {
     "relay-box": "relay",  # the coil is the pair of pins; the contacts stay numbered
     "generic-box": "box",
     "box-header": "connector",
+    "screw-terminal-vertical": "connector",
 }
 
 _TWO_TERMINAL_KINDS: frozenset[SymbolKind] = frozenset(

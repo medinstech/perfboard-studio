@@ -164,6 +164,7 @@ from perfboard_studio.footprints import (
     radial_electrolytic_footprint,
     screw_terminal_footprint,
     standard_footprints,
+    vertical_screw_terminal_footprint,
 )
 from perfboard_studio.geometry import (
     STANDARD_PRESETS,
@@ -1627,6 +1628,11 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
             label=t("Screw terminal"),
             fields=(_CustomField("ways", t("Ways"), "int", 2, 24, 4),),
             build=lambda v: screw_terminal_footprint(ways=whole(v, "ways")),
+        ),
+        _CustomFamily(
+            label=t("Screw terminal, wires from above (vertical)"),
+            fields=(_CustomField("ways", t("Ways"), "int", 2, 24, 3),),
+            build=lambda v: vertical_screw_terminal_footprint(ways=whole(v, "ways")),
         ),
         _CustomFamily(
             label=t("Axial part (resistor, diode, choke)"),

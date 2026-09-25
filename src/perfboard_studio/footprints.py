@@ -720,6 +720,66 @@ def screw_terminal_footprint(
     )
 
 
+#: A vertical pluggable terminal's body. The HEADER is measured: KiCad's Phoenix
+#: MSTBVA 2,5/N-G-5,08 STEP model (``Connector_Phoenix_MSTB.3dshapes``) spans the pin row
+#: plus 3.54 mm at each end -- (N - 1) x 5.08 + 7.08, which is N x 5.08 + 2.0 -- is 8.6 mm
+#: across and 12.0 mm tall. The PLUG standing in it is not in KiCad's library, so its depth
+#: and the mated height are an ESTIMATE, written as one: a 5.08 mm screw plug is about 12 mm
+#: deep, and seated in the header's collar the pair stands about 22 mm. The body is the
+#: pair, because that is what occupies the board once the wires are in.
+VERTICAL_TERMINAL_EXTRA_MM: Mm = 2.0
+VERTICAL_TERMINAL_DEPTH_MM: Mm = 12.0
+VERTICAL_TERMINAL_HEIGHT_MM: Mm = 22.0
+
+
+def vertical_screw_terminal_footprint(
+    *,
+    ways: int,
+    lead_diameter_mm: Mm | None = None,
+    id: str | None = None,
+    name: str | None = None,
+) -> Footprint:
+    """A pluggable screw terminal on a vertical header: the wires go in from ABOVE.
+
+    Pinned exactly like ``screw_terminal_footprint`` -- 5.08 mm, two grid holes a way, pin 1
+    at the anchor -- so swapping one for the other moves no pin. What differs is where the
+    wire goes in, and that is why this is its own archetype rather than a flag: a side-entry
+    terminal has a mouth that must face clear board and wants an edge, and this one has
+    neither, which is exactly what makes it the right part for the middle of a board.
+    """
+    if not isinstance(ways, int) or ways < 2:
+        raise ValueError(
+            f"vertical_screw_terminal_footprint: ways must be an integer >= 2 (got {ways})."
+        )
+    lead_diameter = 0.8 if lead_diameter_mm is None else lead_diameter_mm
+    pins = tuple(_make_pin(str(i + 1), i * 2, 0) for i in range(ways))
+    body_length_mm = ways * 5.08 + VERTICAL_TERMINAL_EXTRA_MM
+    outline = _rect_outline(
+        _to_mm(pins), body_length_mm, VERTICAL_TERMINAL_DEPTH_MM, COURTYARD_MARGIN_MM
+    )
+    return Footprint(
+        id=id if id is not None else f"screw-terminal-{ways}-v",
+        name=(
+            name
+            if name is not None
+            else f"Screw terminal, {ways}-way, 5.08 mm pitch, vertical (wires from above)"
+        ),
+        pins=pins,
+        body_outline=outline,
+        body_height=VERTICAL_TERMINAL_HEIGHT_MM,
+        body=BodySpec(
+            archetype="screw-terminal-vertical",
+            dims={
+                "length": body_length_mm,
+                "width": VERTICAL_TERMINAL_DEPTH_MM,
+                "height": VERTICAL_TERMINAL_HEIGHT_MM,
+            },
+        ),
+        lead_diameter=lead_diameter,
+        polarized=False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Potentiometer
 # ---------------------------------------------------------------------------
@@ -1190,7 +1250,9 @@ most two decimals and are written without units.
   dip-<pins>[-wide]                                     a DIP of any pin count
   hdr-<rows>x<cols>                                     a pin header
   idc-2x<n>                                             an IDC box header, 2 rows of n
-  screw-terminal-<ways>                                 a screw terminal
+  screw-terminal-<ways>[-v]                             a screw terminal; -v takes its
+                                                        wires from above (pluggable, on a
+                                                        vertical header)
   axial-<span>h-<L>x<D>[-pol]                           resistor, inductor, diode
   c-elec-d<D>-p<pitch>-h<H>                             radial electrolytic
   c-disc-d<D>-p<pitch>-t<T>                             disc ceramic
@@ -1267,6 +1329,10 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
     (
         re.compile(r"^screw-terminal-(\d+)$"),
         lambda m: screw_terminal_footprint(ways=_grid(m[1])),
+    ),
+    (
+        re.compile(r"^screw-terminal-(\d+)-v$"),
+        lambda m: vertical_screw_terminal_footprint(ways=_grid(m[1])),
     ),
     (
         re.compile(r"^axial-(\d+)h-([\d.]+)x([\d.]+)(-pol)?$"),
@@ -1409,6 +1475,7 @@ BODY_DIM_KEYS: dict[BodyArchetype, tuple[str, str, Literal["x", "y"]]] = {
     # Along the pin rows and across them, as the pin header runs; the key slot is not part
     # of the extent -- it is a gap in a wall, not a wall further out.
     "box-header": ("length", "width", "x"),
+    "screw-terminal-vertical": ("length", "width", "x"),
 }
 
 
@@ -1549,6 +1616,10 @@ def _outline_extent(footprint: Footprint) -> tuple[Mm, Mm]:
 #: its openings on the same face, so a terminal with a borrowed mesh and one without agree.
 WIRE_ENTRY_BY_ARCHETYPE: dict[BodyArchetype, tuple[int, int]] = {
     "screw-terminal": (0, 1),
+    # ``screw-terminal-vertical`` is absent ON PURPOSE: its wires come down from above, so
+    # it has no face that must look at clear board. Absent here, it has no corridor for
+    # ``terminal-entry-blocked`` to test and no edge for ``terminal-entry-faces-in`` to
+    # want -- the whole reason to fit one in the middle of a board.
 }
 
 #: How much clear board a wire needs in front of an entry, in mm. A TAHMIN -- an estimate

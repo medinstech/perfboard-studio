@@ -148,6 +148,7 @@ PHASE_BY_ARCHETYPE: dict[BodyArchetype, PhaseNumber] = {
     "relay-box": 5,
     "generic-box": 5,
     "box-header": 5,
+    "screw-terminal-vertical": 5,
 }
 
 #: Conductor kinds done on the solder side in phase 6, and in phase 7.
@@ -719,6 +720,11 @@ def _part_step(
             f"The wire entries face the {side} edge of the board — the screws on top, the "
             f"openings towards the {side}. Check before soldering: it fits the holes either "
             f"way round."
+        )
+    if footprint.body.archetype == "screw-terminal-vertical":
+        notes.append(
+            "The wires go in from ABOVE: this is the header, and the screw plug is pushed "
+            "down into it. Keep the space over it clear for the plug and a screwdriver."
         )
     if height_limit_mm is not None and footprint.body_height > height_limit_mm:
         notes.append(

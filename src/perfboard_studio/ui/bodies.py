@@ -83,6 +83,8 @@ BODY_STYLES: dict[BodyArchetype, BodyStyle] = {
     "generic-box": BodyStyle(fill="#6b7280", edge="#343a44", accent="#e6e8ec"),
     # The header's black and gold, because it IS a header -- inside a shroud.
     "box-header": BodyStyle(fill="#1c1e24", edge=_PLASTIC_EDGE, accent="#d8b45a"),
+    # The same green as the side-entry terminal: it is the same family, plugged in upright.
+    "screw-terminal-vertical": BodyStyle(fill="#2f7d4f", edge="#164a2c", accent="#c8ccd2"),
 }
 
 #: A polarized axial part is a diode, not a resistor. Same archetype, different object.
@@ -238,6 +240,7 @@ _SILHOUETTES: dict[BodyArchetype, Silhouette] = {
     "relay-box": "rounded",
     "generic-box": "rect",
     "box-header": "rect",
+    "screw-terminal-vertical": "rect",
 }
 
 #: Nothing is drawn thinner than this. The engine's floor for a body's width, re-exported

@@ -1275,6 +1275,7 @@ TURKISH: Mapping[str, str] = {
     ),
     "Rename Board": "Kartı Yeniden Adlandır",
     "Board name:": "Kartın adı:",
+    "Screw terminal, wires from above (vertical)": "Klemens, kablo yukarıdan (dik)",
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}

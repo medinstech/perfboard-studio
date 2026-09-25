@@ -530,3 +530,67 @@ def test_the_facing_in_rule_fires_on_no_golden_fixture() -> None:
     for path in sorted(GOLDEN_DIR.glob("*.perf")):
         doc = persist.parse_document_or_throw(path.read_text(encoding="utf-8"))
         assert faces_in(doc) == [], path.name
+
+
+# ---------------------------------------------------------------------------
+# A terminal whose wires go in from above
+# ---------------------------------------------------------------------------
+#
+# ``screw-terminal-<n>-v``: the pluggable block on a vertical header, sold as "dik klemens".
+# Pinned like the side-entry one, and with no side mouth -- which is why it can stand in the
+# middle of a board, and why none of the entry rules may say anything about it.
+
+
+def test_a_vertical_terminal_is_pinned_like_the_side_entry_one() -> None:
+    vertical = get_footprint("screw-terminal-3-v")
+    side = get_footprint("screw-terminal-3")
+    assert vertical is not None and side is not None
+    assert vertical.id == "screw-terminal-3-v"
+    assert [(p.number, p.d_col, p.d_row) for p in vertical.pins] == [
+        (p.number, p.d_col, p.d_row) for p in side.pins
+    ]
+    assert vertical.body.archetype == "screw-terminal-vertical"
+    # The header is measured from KiCad's MSTBVA model: N x 5.08 + 2.0 mm long.
+    assert vertical.body.dims["length"] == pytest.approx(3 * 5.08 + 2.0)
+    assert get_footprint("screw-terminal-1-v") is None
+    assert get_footprint("screw-terminal-03-v") is None
+
+
+def test_a_vertical_terminal_has_no_mouth_for_any_rule_to_judge() -> None:
+    footprint = get_footprint("screw-terminal-3-v")
+    assert footprint is not None
+    assert wire_entry(footprint) is None
+    assert entry_corridor(footprint, BOARD.pitch) is None
+    # On the top edge, a part hard against it: the side-entry terminal facing in there is
+    # reported twice over; the vertical one is not reported at all.
+    crowded = doc_of(
+        part("J1", "screw-terminal-3-v", 10, 0),
+        part("R1", "r-axial-3", 10, 3),
+    )
+    assert findings(crowded) == [] and faces_in(crowded) == []
+    state, scorer = _scorer_for(crowded, PlacementWeights())
+    cost = scorer.full(state)
+    assert (cost.entry_blocked, cost.entry_facing_in, cost.entry_mm) == (0, 0, 0.0)
+
+
+def test_the_guide_says_the_wires_come_from_above() -> None:
+    guide = build_guide(doc_of(part("J1", "screw-terminal-2-v", 10, 10)), REGISTRY)
+    notes = [note for phase in guide.phases for step in phase.steps for note in getattr(step, "notes", ())]
+    assert any("from ABOVE" in note for note in notes)
+    assert not any("wire entries face" in note for note in notes)
+
+
+def test_a_vertical_terminal_draws_its_openings_on_top() -> None:
+    pytest.importorskip("vtk")
+    from perfboard_studio.ui import view3d
+
+    footprint = get_footprint("screw-terminal-2-v")
+    assert footprint is not None
+    component = part("J1", "screw-terminal-2-v", 10, 10)
+    body = view3d._world_body(REGISTRY, component, BOARD)
+    assert body is not None
+    pieces = view3d._vertical_terminal_pieces(body)
+    openings = [p for p in pieces if p.rgb == view3d._rgb("#121212")]
+    assert len(openings) == 2
+    # Their tops stand proud of the block's top, so the depth buffer can tell them apart.
+    assert all(p.position[2] + 0.5 > body.height + view3d._LIFT for p in openings)

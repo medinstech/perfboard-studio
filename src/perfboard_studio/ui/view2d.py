@@ -941,6 +941,7 @@ REF_PREFIXES: dict[str, str] = {
     "relay-box": "K",
     "generic-box": "X",
     "box-header": "J",
+    "screw-terminal-vertical": "TB",
 }
 
 
@@ -1860,6 +1861,17 @@ def _paint_body(
     elif archetype == "screw-terminal":
         _paint_pin_marks(painter, footprint, pitch, accent, square=False)
         _paint_wire_entries(painter, footprint, rect, pitch)
+
+    elif archetype == "screw-terminal-vertical":
+        # Seen from above, the openings ARE the top: a dark square per way over its pin,
+        # which is where the wires go in -- and no mark on any side, because no side is the
+        # mouth. The screws are on the plug's face and are not what this view is about.
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(0, 0, 0, 180)))
+        side = 0.55 * pitch
+        for pin in footprint.pins:
+            x, y = pin.d_col * pitch, pin.d_row * pitch
+            painter.drawRect(QRectF(x - side / 2, y - side / 2, side, side))
 
     elif archetype in ("potentiometer", "tactile-switch"):
         # The shaft or the button: the thing a finger or a screwdriver has to reach.

@@ -301,6 +301,10 @@ BodyArchetype: TypeAlias = Literal[  # noqa: UP040
     # A 2xN IDC box header: the pin header's pins inside a shroud with a key slot, which
     # is what a ribbon cable plugs into and the one thing about it that says where pin 1 is.
     "box-header",
+    # A screw terminal whose wires go in from ABOVE: a pluggable block on a vertical
+    # (180 degree) header, the kind sold as "dik klemens". It has no side mouth, so nothing
+    # has to stand clear in front of it and it can live in the middle of a board.
+    "screw-terminal-vertical",
 ]
 
 #: Archetypes that get hot enough to matter to a neighbour.
