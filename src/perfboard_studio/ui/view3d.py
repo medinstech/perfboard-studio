@@ -70,7 +70,7 @@ from .bodies import (
     style_for,
     surface_for,
 )
-from .partmodels import PartModel, header_pin_model
+from .partmodels import PartModel, header_pin_model, terminal_block_models
 from .partmodels import model_for as _model_for
 
 SUBSTRATE_RGB = {
@@ -2393,6 +2393,38 @@ def _header_model_pieces(body: _WorldBody, model: PartModel) -> list[_Piece]:
     ]
 
 
+def _terminal_block_pieces(
+    body: _WorldBody, blocks: tuple[PartModel, PartModel, PartModel], comp: Any
+) -> list[_Piece]:
+    """A screw terminal of any length, as a head at pin 1, a way at every pin between and a
+    tail at the last -- see ``partmodels.terminal_block_models``.
+
+    Each slice was cut with its own pin at the origin, so each goes down at its pin and
+    takes the component's own turn and mirror, exactly as ``_model_pieces`` does for a
+    whole package at pin 1. Turning and mirroring every way about its own pin, at pin
+    positions that are already turned and mirrored, is the same block as turning and
+    mirroring the whole of it about pin 1 -- the pins say where, the slices say what.
+    """
+    head, way, tail = blocks
+    turn = (0.0, 0.0, -float(comp.rotation))
+    scale = (-1.0, 1.0, 1.0) if comp.mirrored else (1.0, 1.0, 1.0)
+    placed = [(head, body.pins[0])]
+    placed += [(way, pin) for pin in body.pins[1:-1]]
+    placed.append((tail, body.pins[-1]))
+    return [
+        _Piece(
+            source=_mesh(str(piece.path)),
+            rgb=_rgb(body.style.fill if piece.is_body else piece.color),
+            position=(pin_x, pin_y, 0.0),
+            orientation=turn,
+            scale=scale,
+            material=MODEL_MATERIALS.get(piece.material, MOULDED),
+        )
+        for model, (pin_x, pin_y) in placed
+        for piece in model.pieces
+    ]
+
+
 def build_component(lookup: FootprintLookup, comp: Any, board: Board) -> list[vtk.vtkActor]:
     """Every solid making up one placed component.
 
@@ -2442,6 +2474,15 @@ def _pieces_for(
         if header is not None:
             return _header_model_pieces(body, header)
     model = _model_for(comp.footprint_id)
+    if model is None and footprint.body.archetype == "screw-terminal" and len(body.pins) >= 2:
+        # A terminal with no model of its own -- every length the library does not have,
+        # which is every length but two and three -- is assembled from the three slices.
+        blocks = terminal_block_models()
+        if blocks is not None:
+            return [
+                *_terminal_block_pieces(body, blocks, comp),
+                *_through_hole_pieces(body, 0.0),
+            ]
     if model is not None:
         markings = (
             _axial_markings(body, _barrel_of(model))

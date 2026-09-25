@@ -32,6 +32,15 @@ closed without a bump.
   deep, 12 mm tall); the plug is not in KiCad's library, so the mated 12 × 22 mm is an
   estimate and says so. Offered in *Custom Part…*; the guide says the wires come from above.
 
+- **Screw terminals of every length are drawn as the real part.** Only the 2- and 3-way
+  blocks had a KiCad model; a 4-way or a 6-way — generated ids no single model could be
+  named for — was a flat box with its openings and screws painted on, and on the first
+  real board it looked it. A Phoenix MKDS-1,5 block turns out to be a repetition, like a
+  header: an end plate with the first way, identical middle ways, a last way. Three slices
+  of the 3-way model, placed one at a pin, match KiCad's own 2- to 16-way models colour by
+  colour — 38 KB for every length, where the thirteen models would have been 1.5 MB. A
+  build without them draws the generated block exactly as before.
+
 - **A board has a name now, and it is not "untitled".** Nothing in the application could
   set the document's name: every board the window or the MCP server created was called
   "untitled" for good, and that is the title every build guide, exported schematic and

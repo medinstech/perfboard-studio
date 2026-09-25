@@ -1311,6 +1311,141 @@
   ],
   "source": "TerminalBlock_Phoenix/TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"
  },
+ "screw-terminal-head": {
+  "parts": [
+   {
+    "bounds": [
+     -3.28,
+     -4.6,
+     0.0,
+     2.54,
+     5.2,
+     13.8
+    ],
+    "color": "#186b2a",
+    "material": "gloss",
+    "mesh": "screw-terminal-head.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -1.9,
+     -2.0964,
+     2.4,
+     1.9,
+     2.0,
+     13.6
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "screw-terminal-head.1.ply"
+   },
+   {
+    "bounds": [
+     -0.45,
+     -0.45,
+     -0.05,
+     0.45,
+     0.45,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "screw-terminal-head.2.ply"
+   }
+  ],
+  "source": "TerminalBlock_Phoenix/TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"
+ },
+ "screw-terminal-tail": {
+  "parts": [
+   {
+    "bounds": [
+     -2.54,
+     -4.6,
+     0.0,
+     2.54,
+     5.2,
+     13.8
+    ],
+    "color": "#186b2a",
+    "material": "gloss",
+    "mesh": "screw-terminal-tail.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -1.9,
+     -2.0964,
+     2.4,
+     1.9,
+     2.0,
+     13.6
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "screw-terminal-tail.1.ply"
+   },
+   {
+    "bounds": [
+     -0.45,
+     -0.45,
+     -0.05,
+     0.45,
+     0.45,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "screw-terminal-tail.2.ply"
+   }
+  ],
+  "source": "TerminalBlock_Phoenix/TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"
+ },
+ "screw-terminal-way": {
+  "parts": [
+   {
+    "bounds": [
+     -2.54,
+     -4.6,
+     0.0,
+     2.54,
+     5.2,
+     13.8
+    ],
+    "color": "#186b2a",
+    "material": "gloss",
+    "mesh": "screw-terminal-way.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -1.9,
+     -2.0964,
+     2.4,
+     1.9,
+     2.0,
+     13.6
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "screw-terminal-way.1.ply"
+   },
+   {
+    "bounds": [
+     -0.45,
+     -0.45,
+     -0.05,
+     0.45,
+     0.45,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "screw-terminal-way.2.ply"
+   }
+  ],
+  "source": "TerminalBlock_Phoenix/TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"
+ },
  "sw-tactile": {
   "parts": [
    {

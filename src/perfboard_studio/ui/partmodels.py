@@ -11,7 +11,8 @@ borrowed, and everything D6 was protecting is kept by being careful about WHAT i
   * **The generated body is still the answer for everything else**, and it is still the
     fallback here. A footprint with no entry, a generated id (``box-4x2-p1-r3-15x10x8``), a
     part nobody has mapped -- all of them draw exactly as they did. Nothing depends on a
-    model existing.
+    model existing. (A screw terminal of any length is the one generated id that is drawn
+    from borrowed geometry, because the package is a repetition -- see ``TERMINAL_HEAD``.)
   * **Only the shape above the board is taken.** The leads are this application's own, drawn
     by ``view3d._through_hole_pieces``, which knows the board's thickness, where the copper
     is and how far past it a trimmed lead stands. A model's own legs are drawn untrimmed for
@@ -131,6 +132,29 @@ HEADER_PIN = "hdr-pin"
 
 def header_pin_model() -> PartModel | None:
     return model_for(HEADER_PIN)
+
+
+#: A screw terminal of ANY length, as three ways cut out of KiCad's 3-way MKDS-1,5 block.
+#:
+#: The second package that is a repetition, and measured to be one rather than assumed: a
+#: KiCad N-way block is an end plate with the first way, N - 2 identical middle ways and a
+#: last way, and head + (N - 2) ways + tail matches KiCad's own 2- to 16-way models colour
+#: by colour (``tools/import_kicad_models.py``). Each slice has ITS OWN pin at the origin,
+#: so the renderer puts the head at pin 1, a way at every pin between and the tail at the
+#: last. Three slices draw every length, including the ones this application generates on
+#: demand (``screw-terminal-4``, ``-6``, ...) that no single model could have been named for.
+TERMINAL_HEAD = "screw-terminal-head"
+TERMINAL_WAY = "screw-terminal-way"
+TERMINAL_TAIL = "screw-terminal-tail"
+
+
+def terminal_block_models() -> tuple[PartModel, PartModel, PartModel] | None:
+    """The head, middle way and tail of a terminal block, or ``None`` if any is missing --
+    in which case the terminal is drawn as the generated body, like any unmapped part."""
+    head, way, tail = model_for(TERMINAL_HEAD), model_for(TERMINAL_WAY), model_for(TERMINAL_TAIL)
+    if head is None or way is None or tail is None:
+        return None
+    return head, way, tail
 
 
 def known_footprints() -> frozenset[str]:

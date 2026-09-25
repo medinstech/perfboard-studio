@@ -24,8 +24,9 @@ WHAT IS AND IS NOT TAKEN. Only the part of the model ABOVE the board, and only i
     project's own convention is written down as "the anchor is pin 1, at grid offset
     (0, 0)".
 
-RUN IT WITH KiCad INSTALLED. It needs ``cadquery-ocp`` for the STEP reader and a KiCad
-installation to read from; neither is a dependency of the application, and neither is
+RUN IT WITH KiCad INSTALLED. It needs ``cadquery-ocp`` for the STEP reader -- 7.9.x:
+8.0 dropped ``TDF_LabelSequence`` from the bindings, and the colour walk below needs it --
+and a KiCad installation to read from; neither is a dependency of the application, and neither is
 needed to run it -- the meshes are written into the source tree and shipped. A footprint
 with no entry in ``MODELS`` below keeps the generated body, which is still the fallback for
 every part and the whole answer for a generated id.
@@ -81,6 +82,9 @@ class Model:
     #: Colours whose material this package disagrees with. KiCad paints an LED's lens and a
     #: film capacitor's case the same dark red, and they are not the same stuff.
     materials: tuple[tuple[str, str], ...] = ()
+    #: Keep only ``x0 <= x < x1`` of the model, in its own frame and before ``offset`` moves
+    #: it -- one WAY of a terminal block rather than the whole block. See ``clip_x``.
+    clip: tuple[float, float] | None = None
 
 
 #: WHICH KiCad PACKAGE IS THE SAME PART. Chosen by PITCH first and outline second: a model
@@ -126,6 +130,25 @@ MODELS: tuple[Model, ...] = (
           "TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"),
     Model("screw-terminal-3", "TerminalBlock_Phoenix",
           "TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"),
+    # -- a terminal block of any length, as three ways of the 3-way one -----
+    #
+    # A MKDS-1,5 block IS a repetition, like a header, and it was measured rather than
+    # assumed (KiCad 10): the N-way model is an end plate and a first way, N - 2 identical
+    # middle ways, and a last way. Cut out of the 3-way model, the head + (N - 2) middles +
+    # tail agree with KiCad's own 4- to 16-way models colour by colour to the last square
+    # micrometre of surface. Three slices (about 38 KB) draw every length; the thirteen
+    # models from 4 to 16 ways would have been 1.5 MB, three quarters again of everything
+    # else in this directory together. Each slice is moved so its own pin sits at the
+    # origin, because the renderer puts one at every pin (``view3d._terminal_block_pieces``).
+    Model("screw-terminal-head", "TerminalBlock_Phoenix",
+          "TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal",
+          clip=(-1000.0, 2.54)),
+    Model("screw-terminal-way", "TerminalBlock_Phoenix",
+          "TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal",
+          clip=(2.54, 7.62), offset=(-5.08, 0.0)),
+    Model("screw-terminal-tail", "TerminalBlock_Phoenix",
+          "TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal",
+          clip=(7.62, 1000.0), offset=(-10.16, 0.0)),
     # -- one pin of a header, drawn once per pin by the renderer -----------
     Model("hdr-pin", "Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical"),
 )
@@ -278,6 +301,66 @@ def groups_of(path: Path, rotate: float, offset: tuple[float, float]) -> dict[tu
     return by_colour
 
 
+def clip_x(
+    points: list[Any], faces: list[Any], x0: float, x1: float
+) -> tuple[list[Any], list[Any]]:
+    """The triangles of one colour, cut to ``x0 <= x <= x1``.
+
+    ON THE MESH, NOT THE SOLID, and that is not a shortcut. Cutting the STEP solid with a box
+    makes NEW faces wherever the box splits one, and the colours live in the XCAF document
+    keyed on the ORIGINAL faces: every face running the length of the block came back
+    uncoloured, half a terminal's nylon turned lead-grey. Clipping the triangles after they
+    have their colour keeps every one of them, and makes no cap at the cut -- neighbouring
+    slices meet face to face, so a cap would only be a wall inside the part.
+
+    A triangle lying IN a cut plane (the block's end face, against which the end plate sits)
+    belongs to the slice that STARTS at that plane, never to both: counted twice it put
+    110 mm² of extra nylon inside every block.
+    """
+    tolerance = 1e-6
+    out_points: list[Any] = []
+    out_faces: list[Any] = []
+    shared: dict[tuple[float, float, float], int] = {}
+    for triangle in faces:
+        corners = [points[index] for index in triangle]
+        xs = [corner[0] for corner in corners]
+        if max(xs) - min(xs) < tolerance and (
+            abs(xs[0] - x1) < tolerance and abs(xs[0] - x0) >= tolerance
+        ):
+            continue  # in the slice's far plane: the next slice's
+        polygon = corners
+        for plane, keep_above in ((x0, True), (x1, False)):
+            clipped = []
+            for i, a in enumerate(polygon):
+                b = polygon[(i + 1) % len(polygon)]
+                a_in = a[0] >= plane - tolerance if keep_above else a[0] <= plane + tolerance
+                b_in = b[0] >= plane - tolerance if keep_above else b[0] <= plane + tolerance
+                if a_in:
+                    clipped.append(a)
+                if a_in != b_in:
+                    t = (plane - a[0]) / (b[0] - a[0])
+                    clipped.append((plane, a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])))
+            polygon = clipped
+            if len(polygon) < 3:
+                break
+        if len(polygon) < 3:
+            continue
+        # Corners shared, as the tessellator shares them: a vertex per triangle corner
+        # doubled the files for no difference anybody could see.
+        indices = []
+        for corner in polygon:
+            key = (round(corner[0], 6), round(corner[1], 6), round(corner[2], 6))
+            index = shared.get(key)
+            if index is None:
+                index = shared[key] = len(out_points)
+                out_points.append(corner)
+            indices.append(index)
+        out_faces.extend(
+            (indices[0], indices[k], indices[k + 1]) for k in range(1, len(indices) - 1)
+        )
+    return out_points, out_faces
+
+
 def write_ply(path: Path, points: list[Any], faces: list[Any]) -> None:
     """Binary little-endian PLY, which is what ``vtkPLYReader`` wants and what a mesh tool
     on any platform can open if somebody wants to look at one."""
@@ -309,9 +392,9 @@ def _fit(model: Model, groups: dict[Any, tuple[list[Any], list[Any]]]) -> str:
     says whether it is -- printed for every entry rather than asserted, because "close
     enough" is a judgement about a physical part.
     """
-    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.footprints import get_footprint
 
-    footprint = standard_footprints().get(model.footprint)
+    footprint = get_footprint(model.footprint)
     if footprint is None or not footprint.body_outline:
         return ""
     xs = [point.x for point in footprint.body_outline]
@@ -347,7 +430,19 @@ def main(argv: list[str] | None = None) -> int:
             missing.append(f"{model.footprint}: {source.name}")
             continue
         parts = []
-        groups = groups_of(source, model.rotate, model.offset)
+        if model.clip is None:
+            groups = groups_of(source, model.rotate, model.offset)
+        else:
+            # Clipped in the model's own frame, then moved: the cut positions are written
+            # against the pins as KiCad places them.
+            groups = {}
+            for colour, (points, faces) in groups_of(source, model.rotate, (0.0, 0.0)).items():
+                kept_points, kept_faces = clip_x(points, faces, *model.clip)
+                dx, dy = model.offset
+                groups[colour] = (
+                    [(x + dx, y + dy, z) for x, y, z in kept_points],
+                    kept_faces,
+                )
         overrides = dict(model.materials)
         ordered = [item for item in sorted(groups.items(), key=lambda item: -len(item[1][1])) if item[1][1]]
         # THE BODY IS THE BIGGEST PIECE THAT IS NOT METAL, and it is worth naming because the

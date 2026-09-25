@@ -34,6 +34,9 @@ The meshes are not the KiCad models unaltered:
   application can shade a metal tab and a plastic case differently.
 - **Some were turned or shifted** so that the package sits on the holes of the footprint it
   is drawn for. The amounts are in `tools/import_kicad_models.py`.
+- **One was cut into ways.** `screw-terminal-head`, `-way` and `-tail` are three slices of
+  `TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal`, each moved so its own pin
+  is at the origin; the application puts them side by side to draw a block of any length.
 
 Nothing about the source models' geometry was otherwise altered, and no colours or
 materials were taken from them into the application's own tables.

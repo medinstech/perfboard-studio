@@ -741,6 +741,16 @@ Three things about the mapping:
   forty per row count; one pin mesh glyphed at the holes is the same picture for a fortieth
   of the library, and it is what lets a header of a length nobody shipped a model for be
   drawn at all — which matters, because header footprints are generated on demand.
+- **A screw terminal is the second.** A MKDS-1,5 block is an end plate with the first way,
+  N − 2 identical middle ways and a last way — MEASURED: assembled, the three slices match
+  KiCad 10's own 2- to 16-way models colour by colour (relative surface difference under
+  1e-7). So `screw-terminal-head`, `-way` and `-tail` are cut out of the 3-way model
+  (`Model.clip`, 38 KB together, where the thirteen models from 4 to 16 ways would have been
+  1.5 MB) and `view3d._terminal_block_pieces` puts one at every pin, each turned and mirrored
+  about its own pin. They are cut on the MESH (`import_kicad_models.clip_x`), not the STEP
+  solid: a boolean makes new faces and the colours are keyed on the old ones, so half a
+  block's nylon came back lead-grey. The 2- and 3-way blocks keep their own whole models;
+  `tests/test_terminal_meshes.py` holds the slices to them.
 
 **The meshes are the only part of this repository that is not Apache-2.0.** They are
 CC-BY-SA 4.0 with KiCad's design exception, and their `LICENSE` and `NOTICE.md` live in
