@@ -267,7 +267,13 @@ def test_the_project_example_places_routes_and_checks_out(tmp_path) -> None:
         create_standard_registry,
         place_parts,
     )
-    from perfboard_studio.geometry import preset_edge_connectors, preset_mounting_holes
+    from perfboard_studio.geometry import (
+        hole_to_mm,
+        preset_edge_connectors,
+        preset_mounting_holes,
+        substrate_edges_mm,
+        transform_offset,
+    )
     from perfboard_studio.placer import (
         PlacementOptions,
         arrange_design,
@@ -330,18 +336,33 @@ def test_the_project_example_places_routes_and_checks_out(tmp_path) -> None:
     assert len(placed.components) == 10
 
     # The connectors are on the edge, which is the reason the arrangement exists.
+    #
+    # Measured from the part's COURTYARD to the substrate edge, the way the placer's own
+    # ``edge`` term measures it, and not from the anchor. The anchor is pin 1: a three-pin
+    # header lying across the right-hand edge has its courtyard on the edge and its anchor
+    # two holes in, and the anchor measure called that "not on an edge" -- which is what it
+    # did the day screw terminals learned which way their wires go in, and the terminal
+    # moved from the left edge (mouth facing the board) to the right (mouth facing out).
     board = placed.board
+    edges = substrate_edges_mm(board)
     for ref in ("J1", "J2"):
         connector = next(c for c in placed.components if c.ref == ref)
-        assert (
-            min(
-                connector.anchor.col,
-                board.cols - 1 - connector.anchor.col,
-                connector.anchor.row,
-                board.rows - 1 - connector.anchor.row,
-            )
-            <= 1
-        ), f"{ref} was not put on an edge"
+        footprint = lookup(connector.footprint_id)
+        assert footprint is not None
+        corners = [
+            transform_offset(point.x, point.y, connector.rotation, connector.mirrored)
+            for point in footprint.body_outline
+        ]
+        anchor = hole_to_mm(connector.anchor, board)
+        xs = [anchor.x + x for x, _ in corners]
+        ys = [anchor.y + y for _, y in corners]
+        inside = min(
+            min(xs) - edges.min_x,
+            edges.max_x - max(xs),
+            min(ys) - edges.min_y,
+            edges.max_y - max(ys),
+        )
+        assert inside <= board.pitch, f"{ref} was not put on an edge ({inside:.2f} mm in)"
 
     route = plan_autoroute(placed, lookup)
     assert route.summary.links_unrouted == 0

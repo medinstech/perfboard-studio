@@ -346,6 +346,64 @@ def hangs_over_edge(overhang_mm: float) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# In front of a wire entry
+# ---------------------------------------------------------------------------
+#
+# ``footprints.entry_corridor`` says where a terminal's wires need clear board; these say
+# what is in the way and which way it faces. ``drc`` and ``placer`` both read them, in
+# board millimetres, for the reason every other shared predicate in this module exists: an
+# optimiser that clears an entry by a different measure from the one the checker uses
+# leaves a board the checker then names.
+
+type EdgeSide = Literal["left", "right", "top", "bottom"]
+
+
+def entry_blocked_by(
+    corridor: tuple[float, float, float, float], body: tuple[float, float, float, float]
+) -> bool:
+    """Whether a body stands in a wire entry's corridor, both as board-space boxes.
+
+    Strict on both axes, like the courtyard overlap: a body that only touches the
+    corridor's side -- the next terminal along, butted against this one -- is beside the
+    entry, not in front of it.
+    """
+    dx = min(corridor[1], body[1]) - max(corridor[0], body[0])
+    dy = min(corridor[3], body[3]) - max(corridor[2], body[2])
+    return dx > 0 and dy > 0
+
+
+def entry_side(direction: tuple[float, float]) -> EdgeSide:
+    """Which board edge a board-space direction points at. Rows grow downward, so -y is
+    ``top`` -- row 1's edge, the side drawn at the top of the screen on the component face."""
+    dx, dy = direction
+    if abs(dx) >= abs(dy):
+        return "right" if dx > 0 else "left"
+    return "bottom" if dy > 0 else "top"
+
+
+def entry_run_mm(
+    corridor: tuple[float, float, float, float],
+    direction: tuple[float, float],
+    edges: SubstrateEdges,
+) -> Mm:
+    """How much board lies between a wire entry and the edge it faces, in mm.
+
+    Measured from the corridor's NEAR side, which is the terminal's own face: zero for a
+    terminal whose mouth is at the edge, the whole width of the board for one whose mouth
+    faces across it. A preference, not a rule -- a cable can cross a board -- which is why
+    only ``placer`` prices it and ``drc`` says nothing.
+    """
+    side = entry_side(direction)
+    if side == "right":
+        return max(0.0, edges.max_x - corridor[0])
+    if side == "left":
+        return max(0.0, corridor[1] - edges.min_x)
+    if side == "bottom":
+        return max(0.0, edges.max_y - corridor[2])
+    return max(0.0, corridor[3] - edges.min_y)
+
+
+# ---------------------------------------------------------------------------
 # Copper: how big a pad is, and how close the next one's copper comes
 # ---------------------------------------------------------------------------
 

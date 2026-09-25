@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .connectivity import FootprintLookup, PhysicalNet, PhysicalPinRef, extract_physical_nets
-from .footprints import body_extent
+from .footprints import WIRE_ENTRY_CLEARANCE_MM, body_extent, entry_corridor, wire_entry
 from .geometry import (
     BODY_OVERHANG_TOLERANCE_MM,
     all_pin_holes,
@@ -50,6 +50,8 @@ from .geometry import (
     copper_gap_mm,
     edge_connector_holes,
     edge_overhangs_mm,
+    entry_blocked_by,
+    entry_side,
     format_hole,
     hangs_over_edge,
     hole_key,
@@ -698,6 +700,129 @@ def _check_body_overhang(doc: PerfDocument, lookup: FootprintLookup) -> list[Drc
                 ),
                 holes=(component.anchor,),
                 component_ids=(component.id,),
+            )
+        )
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Rule 2e -- a wire entry with something standing in front of it (warning) -- Python only
+# ---------------------------------------------------------------------------
+
+
+def placed_body_box(
+    component: ComponentInstance, footprint: Footprint, board: Board
+) -> tuple[float, float, float, float]:
+    """A component's real body as a board-space box, in the millimetre frame of the holes."""
+    min_x, max_x, min_y, max_y = turned_box(
+        body_extent(footprint, board.pitch).box, component.rotation, component.mirrored
+    )
+    anchor = hole_to_mm(component.anchor, board)
+    return anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y
+
+
+def placed_entry(
+    component: ComponentInstance, footprint: Footprint, board: Board
+) -> tuple[tuple[float, float, float, float], tuple[float, float]] | None:
+    """A terminal's wire-entry corridor as a board-space box, and the direction it faces.
+
+    ``None`` for a part with no wire entry. The corridor is turned by the component's own
+    transform, exactly as its body is, so a terminal mirrored onto the solder side or turned
+    a quarter keeps its mouth where the package has it.
+    """
+    corridor = entry_corridor(footprint, board.pitch)
+    direction = wire_entry(footprint)
+    if corridor is None or direction is None:
+        return None
+    min_x, max_x, min_y, max_y = turned_box(corridor, component.rotation, component.mirrored)
+    anchor = hole_to_mm(component.anchor, board)
+    facing = transform_offset(direction[0], direction[1], component.rotation, component.mirrored)
+    return (anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y), facing
+
+
+def _check_wire_entries(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    """A screw terminal whose mouth has a part standing in front of it.
+
+    A terminal's wire goes in through one long face (``footprints.wire_entry``), and the
+    stripped end has to go in STRAIGHT: the insulated wire behind it needs a straight run
+    before it can bend, and a fingertip has to push it. So the rule asks whether any other
+    part's BODY stands in the corridor ``footprints.entry_corridor`` puts in front of the
+    face -- as wide as the terminal, ``WIRE_ENTRY_CLEARANCE_MM`` deep. Bodies, not
+    courtyards, for the reason ``component-overhangs-edge`` gives: the courtyard's
+    half-pitch padding would put a neighbour one hole away "in front" of every terminal.
+
+    What it deliberately does NOT report is a mouth facing into the board over clear space.
+    A cable can cross a board, a terminal in the middle of one can be wired from above, and
+    nothing here knows where the cable is going -- a finding on every terminal not facing an
+    edge is a finding nobody would read. That is a PREFERENCE, and the placer holds it
+    (``PlacementWeights.entry``); this is the case where the wire physically cannot go in.
+
+    A WARNING: the board is still a board, and a part can be fitted after the wiring. One
+    finding per terminal, naming every part in the way, so the obstacles named here and the
+    placer's count of (terminal, obstacle) pairs are the same list. A terminal rule 2
+    already reports is skipped, as ``_check_body_overhang`` skips it, and so is a part that
+    could only be in the way because its own pins are off the board.
+    """
+    violations: list[DrcViolation] = []
+    board = doc.board
+    placed: list[tuple[ComponentInstance, Footprint]] = []
+    for component in doc.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is None:
+            continue
+        pin_holes = [h for _pin, h in all_pin_holes(component, footprint)]
+        if all(is_inside_board(h, board) for h in (pin_holes or [component.anchor])):
+            placed.append((component, footprint))
+
+    bodies = {
+        component.id: placed_body_box(component, footprint, board)
+        for component, footprint in placed
+    }
+    for component, footprint in placed:
+        entry = placed_entry(component, footprint, board)
+        if entry is None:
+            continue
+        corridor, facing = entry
+        side = entry_side(facing)
+        in_the_way = sorted(
+            (
+                other
+                for other, _footprint in placed
+                if other.id != component.id and entry_blocked_by(corridor, bodies[other.id])
+            ),
+            key=lambda other: other.ref,
+        )
+        if not in_the_way:
+            continue
+
+        def gap_to(other: ComponentInstance, side: str = side, corridor: tuple[float, float, float, float] = corridor) -> float:
+            body = bodies[other.id]
+            if side == "right":
+                return body[0] - corridor[0]
+            if side == "left":
+                return corridor[1] - body[1]
+            if side == "bottom":
+                return body[2] - corridor[2]
+            return corridor[3] - body[3]
+
+        nearest = min(in_the_way, key=lambda other: (gap_to(other), other.ref))
+        names = ", ".join(other.ref for other in in_the_way)
+        verb = "stands" if len(in_the_way) == 1 else "stand"
+        violations.append(
+            DrcViolation(
+                rule="terminal-entry-blocked",
+                severity="warning",
+                message=(
+                    f"Screw terminal {component.ref} (anchored at "
+                    f"{_safe_hole(component.anchor)}) takes its wires in from the {side}, and "
+                    f"{names} {verb} in front of the entries ({nearest.ref} "
+                    f"{max(0.0, gap_to(nearest)):.1f} mm from them; a wire needs "
+                    f"{WIRE_ENTRY_CLEARANCE_MM:g} mm clear to go in straight). Turn "
+                    f"{component.ref} to face a clear side -- a board edge is best -- or move "
+                    f"what is in the way."
+                ),
+                holes=(component.anchor,),
+                component_ids=(component.id, *(other.id for other in in_the_way)),
             )
         )
     return violations
@@ -1952,6 +2077,7 @@ def run_drc(
         *_check_conductors_off_board(doc),
         *_check_unknown_footprints(doc, lookup),
         *_check_body_overhang(doc, lookup),
+        *_check_wire_entries(doc, lookup),
         *_check_duplicate_pin_holes(doc, lookup),
         *_check_crossing_conductors(doc, conductor_net_index),
         *_check_conductor_geometry_crossings(doc, conductor_net_index),

@@ -1514,3 +1514,79 @@ def _outline_extent(footprint: Footprint) -> tuple[Mm, Mm]:
     xs = [point.x for point in footprint.body_outline]
     ys = [point.y for point in footprint.body_outline]
     return (max(xs) - min(xs), max(ys) - min(ys))
+
+
+# ---------------------------------------------------------------------------
+# Where a wire goes in
+# ---------------------------------------------------------------------------
+#
+# A SCREW TERMINAL IS NOT SYMMETRIC, AND THE REGISTRY USED TO DRAW IT AS IF IT WERE. Its
+# wire goes in through one long face and its screws are turned from the top; the body was a
+# box centred on the pins, so nothing in the application knew which face the wire came in
+# by. A terminal turned with its mouth against a capacitor, or pointing into the middle of a
+# populated board, looked exactly like one that could be wired -- and the first real board
+# laid out with this tool (six terminals on the DELTA-ATLAS manipulator plaket) had them
+# facing every which way.
+#
+# One fact, and it lives here because it is a fact about the PACKAGE: ``drc`` reports a
+# blocked entry, ``placer`` prices the same predicate and turns the mouth outward, the guide
+# says which edge the wires come in from, and both renderers draw the openings -- all four
+# from :func:`wire_entry` and :func:`entry_corridor`.
+
+#: The direction a part's wire entries face, in the footprint's own frame (+x is increasing
+#: column, +y increasing row), per archetype.
+#:
+#: A table on the archetype rather than a ``Footprint`` field, and deliberately: a field
+#: would be one more key in every footprint the differential fixtures dump, for a fact that
+#: is the same for every part of the family.
+#:
+#: +y is MEASURED, not chosen. The screw terminals' 3D bodies are KiCad's Phoenix
+#: MKDS-1,5-x-5.08 meshes (``ui/models/index.json``), and in the mesh the face carrying the
+#: wire openings is the model's -y face -- the one at y = -4.6 mm, with the openings' rims a
+#: few tenths behind it at z 2.0-5.95 mm and the wire channel running in at z 2.4-5.1 mm,
+#: while the +y face is a plain step 4.57 mm high. A model's y runs AGAINST the row (see
+#: ``view3d._model_pieces``), so the mesh's -y is this frame's +y. The generated body draws
+#: its openings on the same face, so a terminal with a borrowed mesh and one without agree.
+WIRE_ENTRY_BY_ARCHETYPE: dict[BodyArchetype, tuple[int, int]] = {
+    "screw-terminal": (0, 1),
+}
+
+#: How much clear board a wire needs in front of an entry, in mm. A TAHMIN -- an estimate
+#: -- and written down as one: the stripped end goes INTO the clamp (Phoenix quotes 6 mm
+#: for this family), so what has to be clear outside the mouth is the insulated wire
+#: approaching straight before it can bend -- about three jacket diameters for the 1.5-2.5
+#: mm jackets these terminals take -- and a fingertip pushing it in. Eight millimetres is
+#: the smaller of those rounded up, and it is one constant so DRC and the placer cannot
+#: measure different corridors.
+WIRE_ENTRY_CLEARANCE_MM: Mm = 8.0
+
+
+def wire_entry(footprint: Footprint) -> tuple[int, int] | None:
+    """The direction this part's wire entries face in its own frame, or ``None``."""
+    return WIRE_ENTRY_BY_ARCHETYPE.get(footprint.body.archetype)
+
+
+def entry_corridor(
+    footprint: Footprint, pitch: Mm, depth: Mm = WIRE_ENTRY_CLEARANCE_MM
+) -> tuple[Mm, Mm, Mm, Mm] | None:
+    """The clear space a wire needs in front of this part's entries, or ``None``.
+
+    ``(min_x, max_x, min_y, max_y)`` in the footprint's own frame around the anchor, before
+    any rotation or mirroring -- the same frame as ``BodyExtent.box`` -- so a caller turns it
+    with ``geometry.turned_box`` exactly as it turns the body. As wide as the BODY along the
+    entry face, because every way of a terminal takes a wire, and ``depth`` deep, starting
+    at the face: a part standing against the face is in the way, one beside the terminal
+    is not.
+    """
+    direction = wire_entry(footprint)
+    if direction is None:
+        return None
+    min_x, max_x, min_y, max_y = body_extent(footprint, pitch).box
+    dx, dy = direction
+    if dy > 0:
+        return (min_x, max_x, max_y, max_y + depth)
+    if dy < 0:
+        return (min_x, max_x, min_y - depth, min_y)
+    if dx > 0:
+        return (max_x, max_x + depth, min_y, max_y)
+    return (min_x - depth, min_x, min_y, max_y)

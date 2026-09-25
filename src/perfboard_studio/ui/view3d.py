@@ -28,6 +28,7 @@ import vtk  # type: ignore[import-untyped]
 from vtkmodules.util import numpy_support
 
 from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.footprints import wire_entry
 from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
@@ -1380,6 +1381,9 @@ class _WorldBody:
     #: The printed colour code, for a resistor whose value could be decoded. Empty for
     #: everything else -- see ``bodies.resistor_bands``, which refuses to guess.
     bands: tuple[str, ...] = ()
+    #: Which way the wire entries face, as a world direction, for a part that has them
+    #: (``footprints.wire_entry``). The generated terminal draws its openings on that face.
+    entry: tuple[float, float] | None = None
 
     @property
     def along(self) -> float:
@@ -1429,6 +1433,13 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         axis = "y" if axis == "x" else "x"
 
     polarity_local = polarity_pin_offset(fp, board.pitch)
+    facing = wire_entry(fp)
+    entry: tuple[float, float] | None = None
+    if facing is not None:
+        # The footprint frame counts rows downward and the world counts them up-negative,
+        # the sign ``to_world`` applies to a position, applied here to a direction.
+        turned_x, turned_y = transform_offset(facing[0], facing[1], comp.rotation, comp.mirrored)
+        entry = (turned_x, -turned_y)
     return _WorldBody(
         x=x,
         y=y,
@@ -1445,6 +1456,7 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         polarity=to_world(*polarity_local) if polarity_local is not None else None,
         # From the document's own value, so the bands cannot disagree with the netlist.
         bands=resistor_bands(fp, comp.value) or (),
+        entry=entry,
     )
 
 
@@ -2063,7 +2075,48 @@ def _screw_terminal_pieces(body: _WorldBody) -> list[_Piece]:
                 material=STEEL,
             )
         )
+    pieces += _wire_entry_pieces(body)
     return pieces + _through_hole_pieces(body, _LIFT + 0.15)
+
+
+#: The openings on a generated terminal's entry face: how wide along the row, how deep into
+#: the block, how tall, and where their centre sits. From the Phoenix MKDS mesh the borrowed
+#: terminals use, whose wire channel runs in at 2.4-5.1 mm on a 13.8 mm block -- so a
+#: terminal drawn without a mesh points its mouth the same way, at about the same height,
+#: as one drawn with it.
+_ENTRY_WIDTH_MM = 1.6
+_ENTRY_DEPTH_MM = 0.8
+_ENTRY_HEIGHT_MM = 2.4
+_ENTRY_CENTRE_Z_MM = 3.75
+
+
+def _wire_entry_pieces(body: _WorldBody) -> list[_Piece]:
+    """A dark opening per way, on the face ``footprints.wire_entry`` says the wires use.
+
+    Sunk a hair INTO the face rather than flush with it, so it does not fight the block's
+    own face for the same pixels.
+    """
+    if body.entry is None:
+        return []
+    ex, ey = body.entry
+    along_x = abs(ex) < abs(ey)  # the openings run along the pin row, across the entry
+    size = (
+        (_ENTRY_WIDTH_MM, _ENTRY_DEPTH_MM, _ENTRY_HEIGHT_MM)
+        if along_x
+        else (_ENTRY_DEPTH_MM, _ENTRY_WIDTH_MM, _ENTRY_HEIGHT_MM)
+    )
+    half_across = (body.size_y if along_x else body.size_x) / 2
+    reach = half_across - _ENTRY_DEPTH_MM / 2 + 0.02
+    z = min(_ENTRY_CENTRE_Z_MM, body.height * 0.4) + _LIFT
+    return [
+        _Piece(
+            source=_moulded_box(*size),
+            rgb=_rgb("#121212"),
+            position=(pin_x + ex * reach, pin_y + ey * reach, z),
+            material=GLOSS,
+        )
+        for pin_x, pin_y in body.pins
+    ]
 
 
 def _pot_pieces(body: _WorldBody) -> list[_Piece]:

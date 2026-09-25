@@ -283,6 +283,11 @@ def _violation_to_jsonable(v: DrcViolation) -> dict[str, Any]:
 #: the original never measured. No fixture stores a gauge or declares a current, so every
 #: wire on them is cut in AWG 24 and none can fire it -- listed so that stays a fact about
 #: the fixtures rather than a coincidence the comparison depends on.
+#:
+#: ``terminal-entry-blocked`` is the seventh: a part standing in front of a screw
+#: terminal's wire entry, which the original could not see because it did not know which
+#: face the wires go in by. No fixture carries a screw terminal, so none can fire it --
+#: pinned by test_the_entry_rule_fires_on_no_golden_fixture in test_terminal_entry.py.
 PYTHON_ONLY_RULES = frozenset(
     {
         "conductor-crossing",
@@ -291,6 +296,7 @@ PYTHON_ONLY_RULES = frozenset(
         "unknown-footprint",
         "component-overhangs-edge",
         "wire-too-thick-for-hole",
+        "terminal-entry-blocked",
     }
 )
 

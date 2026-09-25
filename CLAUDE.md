@@ -187,8 +187,8 @@ the next regeneration silently disagree), and pinned by its own test:
 
 - `PYTHON_ONLY_RULES` — rules the original never had (`conductor-crossing`,
   `jumper-under-body`, `conductor-off-board`, `unknown-footprint`,
-  `component-overhangs-edge`, `wire-too-thick-for-hole`), so there is nothing for a
-  fixture to record.
+  `component-overhangs-edge`, `wire-too-thick-for-hole`, `terminal-entry-blocked`), so
+  there is nothing for a fixture to record.
   `unknown-footprint` fires on eight of the fifteen fixtures, every time
   on the id `c-disc-1`, which exists in neither engine: the fixtures are dumps of the
   original and are left exactly as they are, so the rule is excluded here and pinned by
@@ -231,6 +231,44 @@ reads the same body, edges and verdict as the rule, and
 all 61 footprints, every rotation, mirrored and not. Both halves of the placer term are zero
 inside the tolerance and added only when they are not, which is why no golden placement
 moved.
+
+### A screw terminal has a mouth
+
+A terminal's wires go in through one long face, and `footprints.WIRE_ENTRY_BY_ARCHETYPE`
+says which: `(0, +1)` in the footprint's frame (increasing row). A table on the ARCHETYPE,
+not a `Footprint` field — a field would be one more key in every footprint the fixtures
+dump. The direction was **measured on the mesh**, not chosen: in KiCad's Phoenix MKDS model
+the openings sit a few tenths behind the -y face at the wire channel's height, and a model's
+y runs against the row, so model -y is footprint +y. `test_terminal_entry.py` re-measures
+the mesh; a mesh with its mouth the other way fails there before it draws a terminal
+backwards. The generated body (four-way and wider have no mesh) draws its openings on the
+same face.
+
+Four consumers, one fact:
+
+- **`drc._check_wire_entries`** (`terminal-entry-blocked`, warning): another part's BODY in
+  `footprints.entry_corridor` — as wide as the terminal's body, `WIRE_ENTRY_CLEARANCE_MM`
+  (8, an estimate, written as one) deep. Bodies, not courtyards, for the overhang rule's
+  reason. A mouth facing into the board over clear space is **deliberately not a finding**.
+- **`placer`**: `entry_pair` counts the same (terminal, obstacle) pairs by the same
+  predicate (`geometry.entry_blocked_by`), and `entry_run` prices the board between a mouth
+  and the edge it faces — a preference only the placer holds. Both are added to `local` only
+  when non-zero. `test_the_placer_counts_the_pairs_drc_names` holds the two counts equal.
+- **`_pick_best` and `_settle_winner` rank `PlacementCost.physical_warnings`** (overhanging
+  parts + blocked entries) **ahead of the routed cost.** The router cannot see either, and
+  ranking by routed cost alone handed back a board with two unwirable terminals because the
+  one with them cleared routed 812 against 726. Zero on every fixture, so nothing moved.
+  ⚠️ The mouth-facing PREFERENCE is not in that key and can lose to routing: over four
+  seeds on the DELTA-ATLAS plaket, blocked entries were 0 every time, while 0–2 of six
+  terminals still faced into clear board — the same at `entry` weights 1 to 4, so the
+  weight was left at 1.
+- **`arrange._edge_rotation`** breaks the narrow/flat tie toward the rotation whose mouth
+  faces out of the edge; a part without an entry breaks it exactly as before.
+
+The guide's part step names the edge (`guide._part_step`), and `view2d._paint_wire_entries`
+/ `view3d._wire_entry_pieces` draw the openings. ⚠️ Qt reads an 8-digit colour string as
+`#AARRGGBB`: `"#000000b4"` is a fully transparent blue, which is how the openings were first
+drawn invisible — give the alpha to `QColor(r, g, b, a)`.
 
 ### Two version numbers
 

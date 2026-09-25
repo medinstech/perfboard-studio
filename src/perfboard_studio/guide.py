@@ -53,14 +53,17 @@ from typing import Literal
 
 from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import DEFAULT_DRC_OPTIONS, DrcOptions, DrcViolation, run_drc, trace_electrical
+from .footprints import wire_entry
 from .geometry import (
     all_pin_holes,
     column_label,
     edge_connector_holes,
+    entry_side,
     format_hole,
     is_inside_board,
     path_length_mm,
     row_label,
+    transform_offset,
 )
 from .lvs import continuity_checks, isolation_checks, run_lvs
 from .model import (
@@ -702,6 +705,20 @@ def _part_step(
         notes.append(
             "This part is mirrored: it goes in from the SOLDER side, not the component "
             "side. Check the pin order against the board before soldering."
+        )
+    facing = wire_entry(footprint)
+    if facing is not None:
+        # A terminal block is the one part that goes in the same holes either way round and
+        # is still wrong one way: its wires enter through one face, and a mouth soldered
+        # facing the wrong way is a terminal nothing can be screwed into. Said in board
+        # terms, from the same direction DRC and the placer turn with the part.
+        side = entry_side(
+            transform_offset(facing[0], facing[1], component.rotation, component.mirrored)
+        )
+        notes.append(
+            f"The wire entries face the {side} edge of the board — the screws on top, the "
+            f"openings towards the {side}. Check before soldering: it fits the holes either "
+            f"way round."
         )
     if height_limit_mm is not None and footprint.body_height > height_limit_mm:
         notes.append(

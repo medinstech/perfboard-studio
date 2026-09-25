@@ -128,6 +128,36 @@ closed without a bump.
   cut, and DRC, the router and the build guide all ask it — so the cut list cannot name a
   wire the design-rule check would reject.
 
+- **A screw terminal knows which way its wires go in.** It takes them through one long
+  face, and it used to be a box centred on its pins: a terminal with its mouth pressed
+  against a capacitor looked exactly like one that could be wired. The face is MEASURED
+  from the KiCad Phoenix MKDS mesh the terminals are drawn with — the openings sit on its
+  -y face, which is this frame's +y — and every consumer reads it from one place
+  (`footprints.wire_entry`, `footprints.entry_corridor`):
+
+  - **`terminal-entry-blocked`**, a new warning: another part's body stands within 8 mm of
+    the mouth, across the terminal's width. One finding per terminal, naming every part in
+    the way. A mouth facing into the board over clear space is deliberately NOT reported —
+    a cable can cross a board, and nothing here knows where it goes.
+  - **The placer** prices exactly those (terminal, obstacle) pairs, and — as a preference no
+    rule holds — how much board lies between each mouth and the edge it faces, which is
+    what turns a terminal round. The arrangement puts each terminal's mouth out of the edge
+    it is placed on.
+  - **Choosing between anneals, what DRC warns cannot be built now outranks what it costs
+    to route**, for bodies over the edge as well as blocked mouths. The routed cost alone
+    kept whatever board routed cheapest: on the first real board laid out with this tool
+    the annealer cleared both blocked terminals, that arrangement routed for 812 against
+    the original's 726, and the original — two terminals nobody could push a wire into —
+    came back as "nothing cheaper to build".
+  - **The guide** says which edge each terminal's wires come in from, and **both views** draw
+    the openings on the entry face — the generated body too, for the four-way and wider
+    blocks KiCad ships no mesh for.
+
+  No golden fixture has a screw terminal, so no recorded finding, placement or render
+  moves. The project example's "connectors are on the edge" check now measures from the
+  part's courtyard, as the placer's own `edge` term does: measured from the anchor, a
+  three-pin header lying across the right-hand edge read as two holes in.
+
 ### Fixed
 
 - **The build guide printed AWG 18 for any current from 5 A up** — for 5 A and for 50 A
