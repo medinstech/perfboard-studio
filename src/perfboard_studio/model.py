@@ -624,6 +624,43 @@ class SheetNote:
     size_mm: Mm = DEFAULT_NOTE_SIZE_MM
 
 
+#: Cap height a board label is given when nobody has said otherwise: readable at arm's
+#: length on the 1:1 print, and small enough to sit between two rows of pads.
+DEFAULT_BOARD_NOTE_SIZE_MM: Mm = 1.5
+
+
+@dataclass(frozen=True, slots=True)
+class BoardNote:
+    """Words written on the board itself: "MOTOR 24V", "-> module chain", "14 A stays off".
+
+    A PERFBOARD HAS NO SILKSCREEN. These are what the builder writes on it with a marker or
+    a label printer, and what the 1:1 print taped under it and the guide's pictures carry --
+    which is where they are worth having: the connector that takes the battery is the one
+    thing on a board that should never have to be worked out twice.
+
+    NOTHING DERIVES ANYTHING FROM THESE, exactly as ``SheetNote``: DRC does not check them,
+    LVS does not read them and the router does not avoid them. A label over a pad is a
+    label over a pad.
+
+    Addressed like a ``MountingHole``: by the hole a builder can find, and millimetres from
+    its centre, so a label can sit between holes or out in the border and still names a
+    place ("beside C7"). ``at`` + offset is the CENTRE of the text.
+    """
+
+    id: str
+    text: str
+    at: HoleCoord
+    offset_x_mm: Mm = 0.0
+    offset_y_mm: Mm = 0.0
+    #: Cap height in millimetres.
+    size_mm: Mm = DEFAULT_BOARD_NOTE_SIZE_MM
+    #: Clockwise, as a part turns: 90 runs the text down a column.
+    rotation: Rotation = 0
+    #: The face it is written on. The solder side is where most of a board's wiring is
+    #: checked, so a label there is as ordinary as one on top.
+    side: BoardSide = "top"
+
+
 # ---------------------------------------------------------------------------
 # Conductors# ---------------------------------------------------------------------------
 # Conductors — the heart of the model
@@ -812,6 +849,8 @@ class PerfDocument:
     #: replacement.
     mounting_holes: tuple[MountingHole, ...] = ()
     edge_connectors: tuple[EdgeConnector, ...] = ()
+    #: Words written on the board -- see ``BoardNote``. Nothing derives anything from them.
+    board_notes: tuple[BoardNote, ...] = ()
     #: Clear height available above the component side, in mm — the inside of the case
     #: the finished board has to fit, measured from the board surface to whatever is
     #: over it. ``None`` means unconstrained, which is the honest default: most boards

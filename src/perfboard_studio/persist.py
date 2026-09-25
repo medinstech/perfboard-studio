@@ -35,10 +35,11 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, cast
 
 from .geometry import validate_orthogonal_chain
 from .model import (
+    DEFAULT_BOARD_NOTE_SIZE_MM,
     DEFAULT_NOTE_SIZE_MM,
     DOCUMENT_FORMAT_VERSION,
     SHEET_NOTE_KINDS,
@@ -48,6 +49,7 @@ from .model import (
     BoardFace,
     BoardLabels,
     BoardMaterial,
+    BoardNote,
     BoardSide,
     BoardType,
     ComponentInstance,
@@ -203,6 +205,7 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "cuts",
     "mountingHoles",
     "edgeConnectors",
+    "boardNotes",
     "heightLimitMm",
     "parts",
     "nets",
@@ -213,6 +216,16 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
 SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "at", "rotation", "mirrored")
 SHEET_WIRE_KEY_ORDER: tuple[str, ...] = ("a", "b", "path")
 SHEET_NOTE_KEY_ORDER: tuple[str, ...] = ("id", "kind", "at", "to", "text", "sizeMm")
+BOARD_NOTE_KEY_ORDER: tuple[str, ...] = (
+    "id",
+    "text",
+    "at",
+    "offsetXMm",
+    "offsetYMm",
+    "sizeMm",
+    "rotation",
+    "side",
+)
 POINT_KEY_ORDER: tuple[str, ...] = ("x", "y")
 META_KEY_ORDER: tuple[str, ...] = ("name", "created", "modified")
 BOARD_KEY_ORDER: tuple[str, ...] = (
@@ -541,6 +554,28 @@ def _ordered_sheet_note(note: SheetNote, index: int) -> JsonObj:
     return _build_ordered(SHEET_NOTE_KEY_ORDER, values)
 
 
+def _ordered_board_note(note: BoardNote, index: int) -> JsonObj:
+    """A label on the board, saying nothing it does not have to: an unshifted label on the
+    top face at the usual size is three keys and its text."""
+    path = _index_path("boardNotes", index)
+    values: dict[str, JsonValue] = {
+        "id": note.id,
+        "text": note.text,
+        "at": _build_ordered(HOLE_KEY_ORDER, {"col": note.at.col, "row": note.at.row}),
+    }
+    if note.offset_x_mm:
+        values["offsetXMm"] = _num(_field_path(path, "offsetXMm"), note.offset_x_mm)
+    if note.offset_y_mm:
+        values["offsetYMm"] = _num(_field_path(path, "offsetYMm"), note.offset_y_mm)
+    if note.size_mm != DEFAULT_BOARD_NOTE_SIZE_MM:
+        values["sizeMm"] = _num(_field_path(path, "sizeMm"), note.size_mm)
+    if note.rotation:
+        values["rotation"] = _num(_field_path(path, "rotation"), note.rotation)
+    if note.side != "top":
+        values["side"] = note.side
+    return _build_ordered(BOARD_NOTE_KEY_ORDER, values)
+
+
 def _ordered_net(n: Net, index: int) -> JsonObj:
     path = _index_path("nets", index)
     values: dict[str, JsonValue] = {
@@ -577,6 +612,7 @@ def serialize_document(doc: PerfDocument) -> str:
     # reorder the file. A wire is named by its two pins and a note by its id.
     sheet_wires = sorted(doc.sheet_wires, key=lambda wire: (wire.a, wire.b))
     sheet_notes = sorted(doc.sheet_notes, key=lambda note: note.id)
+    board_notes = sorted(doc.board_notes, key=lambda note: note.id)
 
     root = _build_ordered(
         DOCUMENT_KEY_ORDER,
@@ -667,6 +703,18 @@ def serialize_document(doc: PerfDocument) -> str:
                     ]
                 }
                 if sheet_notes
+                else {}
+            ),
+            # Omitted when there are none, which is every board saved before a board could
+            # be written on -- so none of them changes by a byte.
+            **(
+                {
+                    "boardNotes": [
+                        _ordered_board_note(note, i)
+                        for i, note in enumerate(board_notes)
+                    ]
+                }
+                if board_notes
                 else {}
             ),
         },
@@ -1286,6 +1334,30 @@ def _parse_sheet_note(raw: object, path: str, warnings: list[str]) -> SheetNote:
     )
 
 
+def _parse_board_note(raw: object, path: str, warnings: list[str]) -> BoardNote:
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, BOARD_NOTE_KEY_ORDER, path, warnings)
+    side = _expect_string(obj.get("side", "top"), _field_path(path, "side"))
+    if side not in ("top", "bottom"):
+        raise ValidationError(
+            "invalid-value",
+            f'A board label is on the "top" or the "bottom", not "{side}".',
+            _field_path(path, "side"),
+        )
+    return BoardNote(
+        id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
+        text=_expect_string(_require_field(obj, "text", path), _field_path(path, "text")),
+        at=_parse_hole(_require_field(obj, "at", path), _field_path(path, "at"), warnings),
+        offset_x_mm=_expect_number(obj.get("offsetXMm", 0.0), _field_path(path, "offsetXMm")),
+        offset_y_mm=_expect_number(obj.get("offsetYMm", 0.0), _field_path(path, "offsetYMm")),
+        size_mm=_expect_number(
+            obj.get("sizeMm", DEFAULT_BOARD_NOTE_SIZE_MM), _field_path(path, "sizeMm")
+        ),
+        rotation=_parse_rotation(obj.get("rotation", 0), _field_path(path, "rotation")),
+        side=cast(BoardSide, side),
+    )
+
+
 def _validate_solder_trace_chain(c: SolderTraceConductor, path: str, warnings: list[str]) -> None:
     """Checks a solder-trace path against the orthogonal-chain invariant -- solder
     cannot reliably span a diagonal gap (PLAN.md Section 4.6, and the path doc comment
@@ -1623,6 +1695,20 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         seen_notes.add(note.id)
         sheet_notes.append(note)
 
+    board_notes_raw = _expect_array(migrated.get("boardNotes", []), "boardNotes")
+    board_notes: list[BoardNote] = []
+    seen_board_notes: set[str] = set()
+    for index, item in enumerate(board_notes_raw):
+        board_note = _parse_board_note(item, _index_path("boardNotes", index), warnings)
+        if board_note.id in seen_board_notes:
+            raise ValidationError(
+                "duplicate-id",
+                f'Two labels on the board share the id "{board_note.id}".',
+                _index_path("boardNotes", index),
+            )
+        seen_board_notes.add(board_note.id)
+        board_notes.append(board_note)
+
     height_limit_raw = migrated.get("heightLimitMm")
     height_limit_mm = (
         None if height_limit_raw is None else _expect_number(height_limit_raw, "heightLimitMm")
@@ -1651,6 +1737,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         sheet_notes=tuple(sheet_notes),
         mounting_holes=mounting_holes,
         edge_connectors=edge_connectors,
+        board_notes=tuple(board_notes),
         height_limit_mm=height_limit_mm,
         format_version=CURRENT_FORMAT_VERSION,
     )

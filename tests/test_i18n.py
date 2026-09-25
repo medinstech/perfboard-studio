@@ -214,7 +214,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Check Automatically at &Startup", "&About Perfboard Studio"],
         "edit": ["&Undo", "&Redo", "Cop&y", "&Paste", "Dupl&icate", "Rotate &Clockwise",
                  "Rotate Counter-clock&wise", "&Mirror", "Toggle &Lock", "&Delete",
-                 "Proper&ties…"],
+                 "Proper&ties…", "Add La&bel…"],
         "draw": ["&Solder Trace", "Solder Trace with S&pine", "&Bare Wire",
                  "&Insulated Wire", "Top &Jumper", "&Cut Track",
                  "&Stop the Current Tool"],
@@ -225,7 +225,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Measure &Distance", "&Go to Part…", "Show &3D View",
                  "Show &Build Guide", "Show &Schematic", "Show &Parts", "Show &Nets",
                  "Show DRC / L&VS", "&Exploded View", "Reset 3D Ca&mera", "&Language",
-                 "Board &Colour"],
+                 "Board &Colour", "Sho&w Pin Names", "Show Labels on &the Board"],
         "net": ["&Connect Two Pins", "&New Net…", "&Add Pins to Net", "&Finish Adding Pins",
                 "&Edit Net…", "&Disconnect Selected Pins", "De&lete Net"],
         # Route ▸ Preferred Connection. Five items in one submenu, and the one place in the

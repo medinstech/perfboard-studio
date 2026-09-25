@@ -8540,3 +8540,88 @@ def test_a_board_with_pin_names_draws_them() -> None:
     named, _ = with_names.render_2d(px_per_mm=12)
     plain, _ = without.render_2d(px_per_mm=12)
     assert named != plain
+
+
+# ---------------------------------------------------------------------------
+# Labels written on the board
+# ---------------------------------------------------------------------------
+
+
+def _label_items(window):
+    from perfboard_studio.ui.view2d import BoardNoteItem
+
+    return [item for item in window.scene.items() if isinstance(item, BoardNoteItem)]
+
+
+def test_a_label_is_written_where_it_is_asked_for_and_can_be_hidden() -> None:
+    window = _blank_window()
+    try:
+        pitch = window.bus.document.board.pitch
+        result = window.add_board_label("MOTOR 24V", QPointF(3 * pitch + 0.5, 5 * pitch))
+        assert result.ok
+        (note,) = window.bus.document.board_notes
+        assert (note.at, note.offset_x_mm, note.offset_y_mm) == (HoleCoord(3, 5), 0.5, 0.0)
+        assert len(_label_items(window)) == 1
+        window.act_board_labels.setChecked(False)
+        assert _label_items(window) == []
+        window.act_board_labels.setChecked(True)
+        assert len(_label_items(window)) == 1
+    finally:
+        _close(window)
+
+
+def test_a_dragged_label_lands_where_it_was_dropped() -> None:
+    window = _blank_window()
+    try:
+        pitch = window.bus.document.board.pitch
+        window.add_board_label("CAN", QPointF(2 * pitch, 2 * pitch))
+        (item,) = _label_items(window)
+        item.setPos(QPointF(6 * pitch + 1.0, 4 * pitch - 0.5))
+        results = window.scene.commit_pending_moves()
+        assert results and all(r.ok for r in results)
+        (note,) = window.bus.document.board_notes
+        assert (note.at, note.offset_x_mm, note.offset_y_mm) == (HoleCoord(6, 4), 1.0, -0.5)
+    finally:
+        _close(window)
+
+
+def test_delete_takes_a_label_without_asking() -> None:
+    """Words, and Undo brings them back -- no question in the way."""
+    window = _blank_window()
+    try:
+        window.add_board_label("X", QPointF(10.0, 10.0))
+        (item,) = _label_items(window)
+        item.setSelected(True)
+        assert window.act_delete.isEnabled()
+        window.on_delete_selection()
+        assert window.bus.document.board_notes == ()
+        window.bus.undo()
+        assert len(window.bus.document.board_notes) == 1
+    finally:
+        _close(window)
+
+
+def test_the_right_click_menu_knows_a_label() -> None:
+    window = _blank_window()
+    try:
+        window.add_board_label("GND", QPointF(10.0, 10.0))
+        on_label = window.view.mapFromScene(QPointF(10.0, 10.0))
+        texts = [action.text() for action in window.board_menu(on_label).actions()]
+        assert "Edit Label…" in texts
+        window.scene.clearSelection()
+        bare = window.view.mapFromScene(QPointF(40.0, 40.0))
+        texts = [action.text() for action in window.board_menu(bare).actions()]
+        assert "Add Label Here…" in texts
+    finally:
+        _close(window)
+
+
+def test_a_label_on_the_solder_side_is_seen_from_the_solder_side() -> None:
+    window = _blank_window()
+    try:
+        window.add_board_label("ALT", QPointF(10.0, 10.0), side="bottom")
+        assert _label_items(window) == []
+        window.scene.set_side("bottom")
+        assert len(_label_items(window)) == 1
+    finally:
+        _close(window)

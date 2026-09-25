@@ -22,6 +22,18 @@ closed without a bump.
 
 ### Added
 
+- **Labels written on the board.** A perfboard has no silkscreen; what a builder writes on
+  one with a marker -- "MOTOR 24V" beside the terminal that takes it, "CAN ->" where the
+  chain goes -- is now part of the board: *Edit ▸ Add Label…*, or *Add Label Here…* on a
+  right-click, dragged into place, double-clicked to change, Delete to remove. A label is
+  on the top or the solder side, turns by 90°, is printed on the 1:1 sheet and in the
+  guide's pictures, and in 3D is drawn by Qt so a Turkish "ALT YÜZ" or an arrow comes out
+  whole (VTK's vector text knows ASCII only). Stored as `boardNotes`, addressed like a
+  mounting hole -- a hole and millimetres off it -- and omitted when there are none, so no
+  existing board changes by a byte. Nothing derives anything from a label: DRC, LVS and
+  the router ignore it. *View ▸ Show Labels on the Board* hides them; over MCP,
+  `add_board_label` (the 53rd tool) and `remove_board_feature`.
+
 - **Real parts by name: the catalog.** The library is sixty-one packages, and a package is
   not a part -- a TO-92 is a BC547 or a 2N7000 or a 78L05, and which leg is the base is the
   fact the board depends on. `perfboard_studio.catalog` lists 58 parts a perfboard is

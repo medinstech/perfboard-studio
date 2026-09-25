@@ -1308,7 +1308,33 @@ TURKISH: Mapping[str, str] = {
         "satır. Boş bırakılırsa pinler yalnız numaralanır."
     ),
     "{names} name(s) for {pins} pin(s).": "{pins} pin için {names} ad.",
-    "Sho&w Pin Names": "Pin Adlarını Gös&ter",
+    "Sho&w Pin Names": "P&in Adlarını Göster",
+    "Show Labels on &the Board": "Karttaki &Etiketleri Göster",
+    "Show the labels written on the board, on the board and in 3D.": (
+        "Karta yazılmış etiketleri kartta ve 3B'de gösterir."
+    ),
+    "Add La&bel…": "&Etiket Ekle…",
+    "Write something on the board -- \"MOTOR 24V\" beside the terminal that "
+    "takes it. Printed on the 1:1 sheet and in the guide's pictures; drag it "
+    "into place, double-click it to change it.": (
+        "Karta bir şey yazar -- onu alan klemensin yanına \"MOTOR 24V\" gibi. 1:1 çıktıda "
+        "ve rehberin resimlerinde basılır; sürükleyerek yerleştirin, değiştirmek için çift "
+        "tıklayın."
+    ),
+    "Board Label": "Kart Etiketi",
+    "What to write on the board: MOTOR 24V, CAN →…": "Karta ne yazılacak: MOTOR 24V, CAN →…",
+    "Component side (top)": "Parça yüzü (üst)",
+    "Solder side (bottom)": "Lehim yüzü (alt)",
+    "A label on the solder side is written where the wiring is checked, and reads "
+    "the right way round from underneath.": (
+        "Lehim yüzündeki etiket, kabloların kontrol edildiği yere yazılır ve alttan "
+        "bakınca düz okunur."
+    ),
+    "Height:": "Yükseklik:",
+    "Rotation:": "Dönüş:",
+    "Face:": "Yüz:",
+    "Edit Label…": "Etiketi Düzenle…",
+    "Add Label Here…": "Buraya Etiket Ekle…",
     "Print each part's pin names beside its pins, on the board and in 3D. Turn "
     "it off while placing or routing a crowded board.": (
         "Her parçanın pin adlarını pinlerinin yanına yazar, kartta ve 3B'de. Kalabalık "

@@ -32,6 +32,7 @@ from perfboard_studio.footprints import MODULE_PCB_MM, MODULE_SEAT_SOCKETED_MM, 
 from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
+    board_note_centre_mm,
     board_size_mm,
     column_label,
     edge_finger_rect,
@@ -2608,6 +2609,153 @@ def _module_rows_along_world_x(footprint: Any, comp: Any) -> bool:
     return along_local_x != turned
 
 
+#: A label on the board in 3D: the 2D view's warm white ink on its dark tag.
+BOARD_NOTE_INK_RGB = (0.97, 0.95, 0.87)
+BOARD_NOTE_TAG_RGB = (0.09, 0.10, 0.12)
+
+
+def _label_decal(text: str, height_mm: float) -> tuple[Any, float, float] | None:
+    """A label drawn by Qt -- every character the font has, a Turkish one included -- on
+    its own dark tag, as a texture, with the millimetres it spans.
+
+    NOT ``vtkVectorText``, which knows ASCII and nothing else: "ALT YÜZ" came out "ALT YZ"
+    and an arrow came out as nothing, on the one kind of text in the view that a person
+    typed in their own language. ``None`` when there is no Qt application to draw with --
+    a bare engine test -- and the caller falls back to the vector glyphs.
+    """
+    import numpy
+    from PySide6.QtCore import QPointF as _Point
+    from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QImage, QPainter
+
+    if QGuiApplication.instance() is None:
+        return None
+    font = QFont()
+    font.setPixelSize(96)
+    font.setBold(True)
+    metrics = QFontMetricsF(font)
+    cap = metrics.capHeight() or 96 * 0.7
+    pad = cap * 0.35
+    width = max(1, math.ceil(metrics.horizontalAdvance(text) + 2 * pad))
+    height = max(1, math.ceil(cap * 1.8))
+    image = QImage(width, height, QImage.Format.Format_RGBA8888)
+    image.fill(QColor.fromRgbF(*BOARD_NOTE_TAG_RGB))
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    painter.setFont(font)
+    painter.setPen(QColor.fromRgbF(*BOARD_NOTE_INK_RGB))
+    painter.drawText(_Point(pad, (height + cap) / 2), text)
+    painter.end()
+    raw = bytes(image.constBits())[: image.sizeInBytes()]
+    rows = numpy.frombuffer(raw, dtype="uint8").reshape(
+        height, image.bytesPerLine()
+    )[:, : width * 4]
+    # VTK counts image rows from the bottom.
+    pixels = numpy.ascontiguousarray(rows[::-1]).reshape(-1, 4)
+    data = vtk.vtkImageData()
+    data.SetDimensions(width, height, 1)
+    scalars = numpy_support.numpy_to_vtk(  # type: ignore[no-untyped-call]
+        pixels, deep=True, array_type=vtk.VTK_UNSIGNED_CHAR
+    )
+    scalars.SetNumberOfComponents(4)
+    data.GetPointData().SetScalars(scalars)
+    texture = vtk.vtkTexture()
+    texture.SetInputData(data)
+    texture.InterpolateOn()
+    per_px = height_mm / cap
+    return texture, width * per_px, height * per_px
+
+
+def _board_note_frame(note: Any, board: Board) -> tuple[Any, bool]:
+    """The transform from a label's own frame -- text along +x, up +y -- to the board:
+    turned clockwise as seen from its own face, reflected for the underside."""
+    centre = board_note_centre_mm(note, board)
+    bottom = note.side == "bottom"
+    frame = vtk.vtkTransform()
+    frame.Translate(
+        centre.x,
+        -centre.y,
+        -board.thickness - PAD_LIFT_MM - _DECAL_PROUD_MM if bottom else PAD_LIFT_MM + _DECAL_PROUD_MM,
+    )
+    if bottom:
+        frame.Scale(-1.0, 1.0, 1.0)
+    frame.RotateZ(-float(note.rotation))
+    return frame, bottom
+
+
+def build_board_notes(doc: PerfDocument) -> list[vtk.vtkActor]:
+    """Every label written on the board, on the face it is written on, reading the right
+    way round from that face -- this is the one view where a label is a thing on the board
+    being looked at rather than an annotation over a picture.
+
+    Each is a flat decal with its tag baked in (``_label_decal``), unlit, as ink is. Without
+    a Qt application the text falls back to vector glyphs on a separate tag.
+    """
+    board = doc.board
+    actors: list[vtk.vtkActor] = []
+    fallback_text = vtk.vtkAppendPolyData()
+    fallback_tags = vtk.vtkAppendPolyData()
+    fallen_back = False
+    for note in doc.board_notes:
+        frame, bottom = _board_note_frame(note, board)
+        decal = _label_decal(note.text, note.size_mm)
+        if decal is not None:
+            texture, width, height = decal
+            plane = vtk.vtkPlaneSource()
+            plane.SetOrigin(-width / 2, -height / 2, 0.0)
+            plane.SetPoint1(width / 2, -height / 2, 0.0)
+            plane.SetPoint2(-width / 2, height / 2, 0.0)
+            placed = vtk.vtkTransformPolyDataFilter()
+            placed.SetTransform(frame)
+            placed.SetInputConnection(plane.GetOutputPort())
+            placed.Update()
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputData(placed.GetOutput())
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.SetTexture(texture)
+            actor.GetProperty().LightingOff()
+            actors.append(actor)
+            continue
+        fallen_back = True
+        vector = vtk.vtkVectorText()
+        vector.SetText(note.text)
+        vector.Update()
+        bounds = vector.GetOutput().GetBounds()
+        text_w = max(bounds[1] - bounds[0], 1e-6) * note.size_mm
+        tag = vtk.vtkCubeSource()
+        tag.SetXLength(text_w + 0.8)
+        tag.SetYLength(note.size_mm * 1.8)
+        tag.SetZLength(0.02)
+        placed_tag = vtk.vtkTransformPolyDataFilter()
+        placed_tag.SetTransform(frame)
+        placed_tag.SetInputConnection(tag.GetOutputPort())
+        placed_tag.Update()
+        fallback_tags.AddInputData(placed_tag.GetOutput())
+        glyphs = vtk.vtkTransform()
+        glyphs.DeepCopy(frame)
+        # Proud of its tag, on whichever side of the board the tag faces out from.
+        glyphs.Translate(0.0, 0.0, -_DECAL_PROUD_MM if bottom else _DECAL_PROUD_MM)
+        glyphs.Scale(note.size_mm, note.size_mm, note.size_mm)
+        glyphs.Translate(-(bounds[0] + bounds[1]) / 2, -(bounds[2] + bounds[3]) / 2, 0.0)
+        placed = vtk.vtkTransformPolyDataFilter()
+        placed.SetTransform(glyphs)
+        placed.SetInputData(vector.GetOutput())
+        placed.Update()
+        fallback_text.AddInputData(placed.GetOutput())
+    if fallen_back:
+        for append, rgb in ((fallback_tags, BOARD_NOTE_TAG_RGB), (fallback_text, BOARD_NOTE_INK_RGB)):
+            append.Update()
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputData(append.GetOutput())
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(*rgb)
+            _finish(actor.GetProperty(), INK)
+            actors.append(actor)
+    return actors
+
+
 def build_pin_names(lookup: FootprintLookup, comp: Any, board: Board) -> list[vtk.vtkActor]:
     """One part's pin names as ONE flat actor, where ``bodies.pin_labels`` says they go:
     on a module's own board, or on this board beside the part. Laid out in world axes
@@ -3089,6 +3237,7 @@ def populate_renderer(
     exploded_mm: float = 0.0,
     highlight: str | None = None,
     pin_names: bool = True,
+    board_notes: bool = True,
 ) -> dict[str, int]:
     """Rebuild the board's actors in an EXISTING renderer, leaving the camera alone.
 
@@ -3132,6 +3281,9 @@ def populate_renderer(
     ren.AddActor(build_drills(board, patched_holes(doc) | undrilled_holes(doc)))
     for actor in build_legend(doc):
         ren.AddActor(actor)
+    if board_notes:
+        for actor in build_board_notes(doc):
+            ren.AddActor(actor)
     for actor in build_edge_connectors(doc):
         ren.AddActor(actor)
     for actor in build_mounting_holes(doc):
@@ -3356,13 +3508,20 @@ def build_renderer(
     exploded_mm: float = 0.0,
     highlight: str | None = None,
     pin_names: bool = True,
+    board_notes: bool = True,
 ) -> tuple[vtk.vtkRenderer, dict[str, int]]:
     """A renderer with the board in it, framed and lit. For a first build or a one-off
     offscreen render; an interactive view refreshes with :func:`populate_renderer`."""
     ren = vtk.vtkRenderer()
     ren.SetBackground(0.09, 0.09, 0.11)
     stats = populate_renderer(
-        ren, doc, lookup, exploded_mm=exploded_mm, highlight=highlight, pin_names=pin_names
+        ren,
+        doc,
+        lookup,
+        exploded_mm=exploded_mm,
+        highlight=highlight,
+        pin_names=pin_names,
+        board_notes=board_notes,
     )
     apply_default_camera(ren, flipped)
 

@@ -751,7 +751,12 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # base is the fact the board depends on. An agent had to know every pinout and pass it
     # as pin_names; the catalog knows them, and placing from it is a parameter on the two
     # tools that already put parts in (part=), not two more tools.
-    assert len(tools) <= 52, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 53, for add_board_label. Everything else a person can put on a board an agent
+    # could; a label could not be written, and a label is the one thing on a finished board
+    # that says which terminal takes the battery. Removing one is remove_board_feature,
+    # which already takes back every other thing added to the board by id.
+    assert len(tools) <= 53, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"

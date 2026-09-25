@@ -40,6 +40,7 @@ from PySide6.QtGui import (
     QPen,
     QPixmap,
     QPolygonF,
+    QTransform,
 )
 from PySide6.QtWidgets import (
     QGraphicsItem,
@@ -62,6 +63,7 @@ from perfboard_studio.commands import (
     NewSolderTraceConductor,
     NewWireConductor,
     PlaceComponentPayload,
+    UpdateBoardNotePayload,
     next_net_name,
 )
 from perfboard_studio.connectivity import FootprintLookup
@@ -70,6 +72,8 @@ from perfboard_studio.footprints import wire_entry
 from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
+    board_note_anchor,
+    board_note_centre_mm,
     board_outline_mm,
     column_label,
     consumed_holes,
@@ -99,6 +103,7 @@ from perfboard_studio.guide import COLOR_BY_NET_CLASS, SIGNAL_COLORS
 from perfboard_studio.model import (
     Board,
     BoardLabels,
+    BoardNote,
     BoardSide,
     ComponentInstance,
     Conductor,
@@ -732,6 +737,93 @@ def _span_w_for(board: Board) -> float:
     """The hole span's width, for un-mirroring an x that was mirrored for the solder side."""
     span_w, _span_h = hole_span_mm(board)
     return span_w
+
+
+#: A label on the board: warm white ink -- a paint marker's -- on a dark tag, so it reads
+#: over pads, strips and copper alike.
+BOARD_NOTE_INK = "#f7f2df"
+BOARD_NOTE_TAG = QColor(24, 26, 31, 228)
+#: How finely a dragged label lands: fine enough to line up with anything, coarse enough
+#: that a file does not fill with 1.2345 mm offsets from an unsteady hand.
+BOARD_NOTE_SNAP_MM = 0.25
+
+
+class BoardNoteItem(QGraphicsItem):
+    """A label written on the board -- ``model.BoardNote``.
+
+    Drawn only from the face it is written on: a label on the solder side is not visible
+    from above, any more than a marker note on the back of a real board is. Selectable,
+    and dragged anywhere: on release the scene turns where it was dropped back into a hole
+    and an offset (``BoardScene.commit_pending_moves``), which is how the file stores it.
+    """
+
+    def __init__(self, note: BoardNote, board: Board, side: BoardSide) -> None:
+        super().__init__()
+        self.note = note
+        self.board = board
+        self.side = side
+        self.setFlags(
+            QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+            | QGraphicsItem.GraphicsItemFlag.ItemIsMovable
+            | QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges
+        )
+        # Over the parts: a label is written on top of whatever it is about.
+        self.setZValue(60)
+        centre = board_note_centre_mm(note, board)
+        self.home = mm_to_screen(centre.x, centre.y, board, side)
+        self.setPos(self.home)
+        self._width = physical_label_width_mm(note.text, note.size_mm) + 0.8
+        self._height = note.size_mm * 1.8
+
+    @property
+    def moved(self) -> bool:
+        return (self.pos() - self.home).manhattanLength() > 1e-6
+
+    def placement(self) -> tuple[HoleCoord, float, float]:
+        """Where it is now, as a label addresses a place: a hole and an offset."""
+        x = self.pos().x()
+        if self.side == "bottom":
+            span_w, _span_h = hole_span_mm(self.board)
+            x = span_w - x
+        return board_note_anchor(x, self.pos().y(), self.board)
+
+    def _rect(self) -> QRectF:
+        return QRectF(-self._width / 2, -self._height / 2, self._width, self._height)
+
+    def boundingRect(self) -> QRectF:
+        reach = max(self._width, self._height) / 2 + 0.3
+        return QRectF(-reach, -reach, 2 * reach, 2 * reach)
+
+    def shape(self) -> QPainterPath:
+        path = QPainterPath()
+        path.addRect(self._rect())
+        turned = QPainterPath()
+        turned.addPolygon(QTransform().rotate(float(self.note.rotation)).map(path.toFillPolygon()))
+        return turned
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        painter.save()
+        painter.rotate(float(self.note.rotation))
+        painter.setPen(QPen(QColor(SELECTED), 0.2) if self.isSelected() else Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(BOARD_NOTE_TAG))
+        painter.drawRoundedRect(self._rect(), 0.4, 0.4)
+        painter.setPen(QPen(QColor(BOARD_NOTE_INK)))
+        draw_physical_label(painter, QPointF(0.0, 0.0), self.note.text, self.note.size_mm)
+        painter.restore()
+
+    def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value: Any) -> Any:
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            # Snapped as an OFFSET from the nearest hole, which is what the file stores:
+            # snapping the scene position instead gave 1.01 mm for a 1 mm drop, because a
+            # hole is not on a quarter-millimetre.
+            p: QPointF = value
+            centre = hole_to_screen(screen_to_hole(p, self.board, self.side), self.board, self.side)
+            step = BOARD_NOTE_SNAP_MM
+            return QPointF(
+                centre.x() + round((p.x() - centre.x()) / step) * step,
+                centre.y() + round((p.y() - centre.y()) / step) * step,
+            )
+        return super().itemChange(change, value)
 
 
 class MountingHoleItem(QGraphicsItem):
@@ -2293,6 +2385,9 @@ class BoardScene(QGraphicsScene):
         self.document = document
         self.violations: tuple[DrcViolation, ...] = ()
         self.component_items: dict[str, ComponentItem] = {}
+        self.board_note_items: dict[str, BoardNoteItem] = {}
+        #: Draw the labels written on the board (View > Show Board Labels).
+        self.show_board_notes = True
         self.pad_grid: PadGridItem | None = None
         self.show_ratsnest = show_ratsnest
         self.show_rulers = show_rulers
@@ -2376,6 +2471,33 @@ class BoardScene(QGraphicsScene):
             self.hatch_far_side = hatch
             self._build()
 
+    def set_show_board_notes(self, show: bool) -> None:
+        """Draw the labels written on the board, or not."""
+        if show != self.show_board_notes:
+            self.show_board_notes = show
+            self._build()
+
+    def selected_board_note_ids(self) -> tuple[str, ...]:
+        return tuple(
+            note_id for note_id, item in self.board_note_items.items() if item.isSelected()
+        )
+
+    def board_note_at(self, pos: QPointF) -> BoardNoteItem | None:
+        """The label under a scene position, if any -- asked before the parts, because a
+        label is drawn over them."""
+        for item in self.board_note_items.values():
+            if item.shape().contains(item.mapFromScene(pos)):
+                return item
+        return None
+
+    def board_point(self, pos: QPointF) -> tuple[HoleCoord, float, float]:
+        """A scene position as a label addresses a place: the nearest hole and an offset."""
+        x = pos.x()
+        if self.side == "bottom":
+            span_w, _span_h = hole_span_mm(self.document.board)
+            x = span_w - x
+        return board_note_anchor(x, pos.y(), self.document.board)
+
     def set_show_pin_names(self, show: bool) -> None:
         """Print parts' pin names beside their pins, or not. Off for a dense board being
         placed or routed, where they are clutter; on for wiring and for the printout."""
@@ -2421,6 +2543,10 @@ class BoardScene(QGraphicsScene):
         # wrappers whose C++ object is gone and raises "Internal C++ object already deleted".
         # Emptying first means the handler sees an empty selection, which is the truth.
         self.component_items = {}
+        previously_selected_notes = {
+            note_id for note_id, note_item in self.board_note_items.items() if note_item.isSelected()
+        }
+        self.board_note_items = {}
         # Every grid position a lead cannot be fitted into: a mounting bore has taken the
         # pad, a finger was never drilled, a cut took the pad with it. Computed once per
         # rebuild because the placement ghost asks about it on every mouse move.
@@ -2547,6 +2673,18 @@ class BoardScene(QGraphicsScene):
             self.component_items[comp.id] = item
             if comp.id in previously_selected:
                 item.setSelected(True)
+
+        # Labels last, over everything: they are written on top of what they are about.
+        # Only the face in view -- a label on the far side is on the far side.
+        if self.show_board_notes:
+            for note in self.document.board_notes:
+                if note.side != self.side:
+                    continue
+                note_item = BoardNoteItem(note, board, self.side)
+                self.addItem(note_item)
+                self.board_note_items[note.id] = note_item
+                if note.id in previously_selected_notes:
+                    note_item.setSelected(True)
 
         # Recomputed on every rebuild rather than cached across one: a rebuild follows a
         # committed command, which is exactly when what remains to be connected changes.
@@ -2675,6 +2813,8 @@ class BoardScene(QGraphicsScene):
     #: Emitted with the id of a part that was double-clicked. What the host does about it
     #: (open its properties) is the host's business; the scene only reports the gesture.
     componentActivated = Signal(str)
+    #: A label on the board was double-clicked. Carries its id; the host opens it.
+    boardNoteActivated = Signal(str)
 
     # -- drawing conductors by hand ------------------------------------------
     #
@@ -3460,6 +3600,11 @@ class BoardScene(QGraphicsScene):
         if self.in_a_mode or event.button() != Qt.MouseButton.LeftButton:
             super().mouseDoubleClickEvent(event)
             return
+        note = self.board_note_at(event.scenePos())
+        if note is not None:
+            self.boardNoteActivated.emit(note.note.id)
+            event.accept()
+            return
         item = self.component_at(event.scenePos())
         if item is None:
             super().mouseDoubleClickEvent(event)
@@ -3580,7 +3725,19 @@ class BoardScene(QGraphicsScene):
             for comp_id, item in self.component_items.items()
             if item.pending_anchor != item.comp.anchor
         ]
+        moved_notes = [
+            (note_id, item.placement())
+            for note_id, item in self.board_note_items.items()
+            if item.moved
+        ]
         results = self._dispatch_moves(pending)
+        for note_id, (at, dx, dy) in moved_notes:
+            results.append(
+                self.bus.dispatch(
+                    "board.note.update",
+                    UpdateBoardNotePayload(id=note_id, at=at, offset_x_mm=dx, offset_y_mm=dy),
+                )
+            )
         if results:
             self.moveCommitted.emit(results)
         return results

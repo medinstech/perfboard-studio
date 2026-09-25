@@ -52,6 +52,7 @@ from .geometry import (
     validate_orthogonal_chain,
 )
 from .model import (
+    DEFAULT_BOARD_NOTE_SIZE_MM,
     DEFAULT_NOTE_SIZE_MM,
     DOCUMENT_FORMAT_VERSION,
     SHEET_NOTE_KINDS,
@@ -59,6 +60,7 @@ from .model import (
     Board,
     BoardEdge,
     BoardFace,
+    BoardNote,
     BoardSide,
     ComponentId,
     ComponentInstance,
@@ -806,6 +808,40 @@ class UpdateSheetNotePayload:
 
 @dataclass(frozen=True, slots=True)
 class DeleteSheetNotesPayload:
+    ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AddBoardNotePayload:
+    """Words written on the board. Nothing derives anything from them."""
+
+    text: str
+    at: HoleCoord
+    offset_x_mm: Mm = 0.0
+    offset_y_mm: Mm = 0.0
+    size_mm: Mm = DEFAULT_BOARD_NOTE_SIZE_MM
+    rotation: Rotation = 0
+    side: BoardSide = "top"
+    id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateBoardNotePayload:
+    """Move a label, resize or turn it, or change what it says. ``None`` leaves a field
+    alone -- a drag moves ``at`` and the offsets and nothing else."""
+
+    id: str
+    text: str | None = None
+    at: HoleCoord | None = None
+    offset_x_mm: Mm | None = None
+    offset_y_mm: Mm | None = None
+    size_mm: Mm | None = None
+    rotation: Rotation | None = None
+    side: BoardSide | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteBoardNotesPayload:
     ids: tuple[str, ...]
 
 
@@ -1842,6 +1878,13 @@ class _SetBoard:
                     f"The track cut at {format_hole(cut.at)} would fall outside a "
                     f"{b.cols}x{b.rows} board.",
                 )
+        for board_note in doc.board_notes:
+            if not is_inside_board(board_note.at, b):
+                raise CommandError(
+                    "would-strand-label",
+                    f"The label \u201c{board_note.text}\u201d at {format_hole(board_note.at)} "
+                    f"would fall outside a {b.cols}x{b.rows} board.",
+                )
         for mount in doc.mounting_holes:
             if not is_inside_board(mount.at, b):
                 raise CommandError(
@@ -2208,6 +2251,102 @@ class _DeleteSheetNotes:
 
     def describe(self, p: DeleteSheetNotesPayload, doc: PerfDocument) -> str:
         return f"Delete {len(p.ids)} note(s) from the sheet"
+
+
+def _check_board_note(
+    text: str, size_mm: Mm, rotation: int, side: str, at: HoleCoord, board: Board
+) -> None:
+    """What makes a label a label, asked of both the add and the edit."""
+    if not text.strip():
+        raise CommandError(
+            "empty-text",
+            "A label with nothing in it is an invisible thing on the board that still has "
+            "to be found to be deleted.",
+        )
+    if size_mm <= 0:
+        raise CommandError("bad-size", "Text height has to be a positive number of mm.")
+    if rotation not in VALID_ROTATIONS:
+        raise CommandError("invalid-rotation", "A label turns by 0, 90, 180 or 270 degrees.")
+    if side not in ("top", "bottom"):
+        raise CommandError("invalid-side", 'A label is written on the "top" or the "bottom".')
+    assert_hole_on_board(at, board, "A label")
+
+
+class _AddBoardNote:
+    type = "board.note.add"
+
+    def apply(
+        self, doc: PerfDocument, p: AddBoardNotePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        _check_board_note(p.text, p.size_mm, p.rotation, p.side, p.at, doc.board)
+        note_id = p.id or ctx.next_id("label")
+        if any(note.id == note_id for note in doc.board_notes):
+            raise CommandError("duplicate-id", f'A label with id "{note_id}" already exists.')
+        note = BoardNote(
+            id=note_id,
+            text=p.text.strip(),
+            at=p.at,
+            offset_x_mm=p.offset_x_mm,
+            offset_y_mm=p.offset_y_mm,
+            size_mm=p.size_mm,
+            rotation=p.rotation,
+            side=p.side,
+        )
+        return dataclasses.replace(doc, board_notes=(*doc.board_notes, note))
+
+    def describe(self, p: AddBoardNotePayload, doc: PerfDocument) -> str:
+        return f"Write \u201c{p.text.strip()}\u201d on the board at {format_hole(p.at)}"
+
+
+class _UpdateBoardNote:
+    type = "board.note.update"
+
+    def apply(
+        self, doc: PerfDocument, p: UpdateBoardNotePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        found = next((note for note in doc.board_notes if note.id == p.id), None)
+        if found is None:
+            raise CommandError("unknown-label", f'No label on the board with id "{p.id}".')
+        changed = dataclasses.replace(
+            found,
+            text=found.text if p.text is None else p.text.strip(),
+            at=found.at if p.at is None else p.at,
+            offset_x_mm=found.offset_x_mm if p.offset_x_mm is None else p.offset_x_mm,
+            offset_y_mm=found.offset_y_mm if p.offset_y_mm is None else p.offset_y_mm,
+            size_mm=found.size_mm if p.size_mm is None else p.size_mm,
+            rotation=found.rotation if p.rotation is None else p.rotation,
+            side=found.side if p.side is None else p.side,
+        )
+        _check_board_note(
+            changed.text, changed.size_mm, changed.rotation, changed.side, changed.at, doc.board
+        )
+        if changed == found:
+            raise CommandError("nothing-to-do", "That label is already like that.")
+        return dataclasses.replace(
+            doc,
+            board_notes=tuple(changed if note.id == p.id else note for note in doc.board_notes),
+        )
+
+    def describe(self, p: UpdateBoardNotePayload, doc: PerfDocument) -> str:
+        return "Edit a label on the board"
+
+
+class _DeleteBoardNotes:
+    type = "board.note.delete"
+
+    def apply(
+        self, doc: PerfDocument, p: DeleteBoardNotesPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not p.ids:
+            raise CommandError("empty-batch", "board.note.delete needs at least one label.")
+        wanted = set(p.ids)
+        kept = tuple(note for note in doc.board_notes if note.id not in wanted)
+        if len(kept) == len(doc.board_notes):
+            raise CommandError("unknown-label", "No label on this board has any of those ids.")
+        return dataclasses.replace(doc, board_notes=kept)
+
+    def describe(self, p: DeleteBoardNotesPayload, doc: PerfDocument) -> str:
+        return f"Delete {len(p.ids)} label(s) from the board"
 
 
 def _pin_name(node: NetNode) -> str:
@@ -2811,6 +2950,9 @@ delete_sheet_wires: CommandDefinition[DeleteSheetWiresPayload] = _DeleteSheetWir
 add_sheet_note: CommandDefinition[AddSheetNotePayload] = _AddSheetNote()
 update_sheet_note: CommandDefinition[UpdateSheetNotePayload] = _UpdateSheetNote()
 delete_sheet_notes: CommandDefinition[DeleteSheetNotesPayload] = _DeleteSheetNotes()
+add_board_note: CommandDefinition[AddBoardNotePayload] = _AddBoardNote()
+update_board_note: CommandDefinition[UpdateBoardNotePayload] = _UpdateBoardNote()
+delete_board_notes: CommandDefinition[DeleteBoardNotesPayload] = _DeleteBoardNotes()
 add_conductor: CommandDefinition[AddConductorPayload] = _AddConductor()
 add_conductors: CommandDefinition[AddConductorsPayload] = _AddConductors()
 set_conductor_path: CommandDefinition[SetConductorPathPayload] = _SetConductorPath()
@@ -2859,6 +3001,9 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_sheet_note,
     update_sheet_note,
     delete_sheet_notes,
+    add_board_note,
+    update_board_note,
+    delete_board_notes,
     auto_symbols,
     add_conductor,
     add_conductors,

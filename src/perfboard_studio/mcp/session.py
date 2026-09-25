@@ -49,6 +49,7 @@ from perfboard_studio.catalog import (
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import (
     KEEP,
+    AddBoardNotePayload,
     AddConductorPayload,
     AddCutPayload,
     AddEdgeConnectorPayload,
@@ -56,6 +57,7 @@ from perfboard_studio.commands import (
     AddNetPayload,
     AddPartPayload,
     ConnectPinsPayload,
+    DeleteBoardNotesPayload,
     DeleteComponentPayload,
     DeleteCutPayload,
     DeleteEdgeConnectorPayload,
@@ -108,6 +110,7 @@ from perfboard_studio.model import (
     BoardEdge,
     BoardFace,
     BoardMaterial,
+    BoardSide,
     BoardType,
     ComponentInstance,
     DocumentMeta,
@@ -359,6 +362,21 @@ class BoardSession:
                 for row in range(board.rows)
                 if hole_key(HoleCoord(col, row)) in consumed
             )
+        if self.document.board_notes:
+            info["labels"] = [
+                {
+                    "id": note.id,
+                    "text": note.text,
+                    "at": format_hole(note.at),
+                    **(
+                        {"offset_mm": [note.offset_x_mm, note.offset_y_mm]}
+                        if note.offset_x_mm or note.offset_y_mm
+                        else {}
+                    ),
+                    **({"side": note.side} if note.side != "top" else {}),
+                }
+                for note in self.document.board_notes
+            ]
         if self.document.edge_connectors:
             info["edge_connectors"] = [
                 {
@@ -1040,8 +1058,34 @@ class BoardSession:
         """Break a stripboard track at a hole. The cut takes that hole's pad with it."""
         return self._dispatch("cut.add", AddCutPayload(at=_hole(hole)))
 
+    def add_board_label(
+        self,
+        text: str,
+        hole: str,
+        offset_x_mm: float = 0.0,
+        offset_y_mm: float = 0.0,
+        size_mm: float = 1.5,
+        rotation: int = 0,
+        side: str = "top",
+    ) -> dict[str, Any]:
+        """Write something on the board: centred on a hole, or millimetres off it."""
+        if side not in ("top", "bottom"):
+            raise SessionError('side is "top" or "bottom".')
+        return self._dispatch(
+            "board.note.add",
+            AddBoardNotePayload(
+                text=text,
+                at=_hole(hole),
+                offset_x_mm=offset_x_mm,
+                offset_y_mm=offset_y_mm,
+                size_mm=size_mm,
+                rotation=_rotation(rotation),
+                side=cast(BoardSide, side),
+            ),
+        )
+
     def remove_board_feature(self, id: str) -> dict[str, Any]:
-        """Take back a mounting hole, an edge connector or a track cut, by its id.
+        """Take back a mounting hole, an edge connector, a track cut or a label, by its id.
 
         One tool rather than three, because the three deletes differ only in which list
         the id is in -- and an agent that has just been handed an id by
@@ -1053,14 +1097,17 @@ class BoardSession:
             return self._dispatch("edge-connector.delete", DeleteEdgeConnectorPayload(id=id))
         if any(cut.id == id for cut in self.document.cuts):
             return self._dispatch("cut.delete", DeleteCutPayload(id=id))
+        if any(note.id == id for note in self.document.board_notes):
+            return self._dispatch("board.note.delete", DeleteBoardNotesPayload(ids=(id,)))
         known = [
             *(m.id for m in self.document.mounting_holes),
             *(c.id for c in self.document.edge_connectors),
             *(c.id for c in self.document.cuts),
+            *(n.id for n in self.document.board_notes),
         ]
         return _refused(
             "no-such-feature",
-            f"No mounting hole, edge connector or cut with id {id!r}. "
+            f"No mounting hole, edge connector, cut or label with id {id!r}. "
             f"This board has: {', '.join(known) if known else 'none'}.",
         )
 

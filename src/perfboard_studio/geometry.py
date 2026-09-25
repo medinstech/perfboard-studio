@@ -27,6 +27,7 @@ from .model import (
     BoardEdge,
     BoardLabels,
     BoardMaterial,
+    BoardNote,
     BoardSide,
     ComponentInstance,
     EdgeConnector,
@@ -625,6 +626,26 @@ def mounting_hole_centre_mm(hole_mount: MountingHole, board: Board) -> Point2:
     """
     centre = hole_to_mm(hole_mount.at, board)
     return Point2(centre.x + hole_mount.offset_x_mm, centre.y + hole_mount.offset_y_mm)
+
+
+def board_note_centre_mm(note: BoardNote, board: Board) -> Point2:
+    """Where a label's text is centred, in board-space mm: its hole plus its offset --
+    the same address a mounting hole has, and for the same reason."""
+    centre = hole_to_mm(note.at, board)
+    return Point2(centre.x + note.offset_x_mm, centre.y + note.offset_y_mm)
+
+
+def board_note_anchor(x_mm: float, y_mm: float, board: Board) -> tuple[HoleCoord, float, float]:
+    """A board-space point as a label addresses it: the nearest hole on the grid, and how
+    far from its centre, to a hundredth of a millimetre. A point out in the border takes
+    the nearest edge hole and a larger offset, which is how a label sits beside the grid."""
+    col = min(max(round(x_mm / board.pitch), 0), board.cols - 1)
+    row = min(max(round(y_mm / board.pitch), 0), board.rows - 1)
+    return (
+        HoleCoord(col, row),
+        round(x_mm - col * board.pitch, 2),
+        round(y_mm - row * board.pitch, 2),
+    )
 
 
 def mounting_bore_consumes(hole_mount: MountingHole, hole: HoleCoord, board: Board) -> bool:

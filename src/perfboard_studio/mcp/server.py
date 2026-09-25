@@ -315,8 +315,25 @@ def cut_track(hole: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+def add_board_label(
+    text: str,
+    hole: str,
+    offset_x_mm: float = 0.0,
+    offset_y_mm: float = 0.0,
+    size_mm: float = 1.5,
+    rotation: int = 0,
+    side: str = "top",
+) -> dict[str, Any]:
+    """Write on the board: "MOTOR 24V" beside the terminal that takes it. Centred on
+    `hole`, or offset_x_mm / offset_y_mm off it (x along the columns, y down the rows);
+    rotation 0/90/180/270; side "top" or "bottom". It is what a builder would write with a
+    marker: printed on the 1:1 sheet and in the pictures, checked by nothing."""
+    return session.add_board_label(text, hole, offset_x_mm, offset_y_mm, size_mm, rotation, side)
+
+
+@mcp.tool()
 def remove_board_feature(id: str) -> dict[str, Any]:
-    """Take back a mounting hole, an edge connector or a track cut, by the id
+    """Take back a mounting hole, an edge connector, a track cut or a label, by the id
     get_board_info gave you."""
     return session.remove_board_feature(id)
 

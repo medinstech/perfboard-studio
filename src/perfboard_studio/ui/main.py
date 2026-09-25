@@ -111,6 +111,7 @@ from perfboard_studio.autoroute import (
 from perfboard_studio.catalog import CATALOG, CATEGORY_ORDER, CatalogPart, catalog_part
 from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
+    AddBoardNotePayload,
     AddEdgeConnectorPayload,
     AddMountingHolesPayload,
     AddNetPayload,
@@ -119,6 +120,7 @@ from perfboard_studio.commands import (
     ApplyBoardPresetPayload,
     AutoSymbolsPayload,
     ConnectPinsPayload,
+    DeleteBoardNotesPayload,
     DeleteComponentPayload,
     DeleteConductorsPayload,
     DeleteEdgeConnectorPayload,
@@ -142,6 +144,7 @@ from perfboard_studio.commands import (
     SetBoardPayload,
     SetHeightLimitPayload,
     UnplaceComponentPayload,
+    UpdateBoardNotePayload,
     UpdateComponentPayload,
     UpdateNetPayload,
     UpdatePartPayload,
@@ -1399,6 +1402,73 @@ class PinoutEditor(QWidget):
         return normalized_pin_names(self.names_dict()), self.symbol.currentData()
 
 
+class BoardLabelDialog(QDialog):
+    """What a label on the board says, how big, which way and on which face.
+
+    The same dialog adds one and edits one: they are the same four questions, and asking
+    them two ways would be two chances to ask them differently.
+    """
+
+    def __init__(
+        self,
+        text: str = "",
+        size_mm: float = 1.5,
+        rotation: int = 0,
+        side: BoardSide = "top",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(t("Board Label"))
+        self.text_edit = QLineEdit(text)
+        self.text_edit.setPlaceholderText(t("What to write on the board: MOTOR 24V, CAN →…"))
+        self.size_box = QDoubleSpinBox()
+        self.size_box.setRange(0.5, 10.0)
+        self.size_box.setSingleStep(0.25)
+        self.size_box.setDecimals(2)
+        self.size_box.setSuffix(" mm")
+        self.size_box.setValue(size_mm)
+        self.rotation_box = QComboBox()
+        for angle in (0, 90, 180, 270):
+            self.rotation_box.addItem(f"{angle}°", angle)
+        self.rotation_box.setCurrentIndex(max(0, (0, 90, 180, 270).index(rotation)))
+        self.side_box = QComboBox()
+        self.side_box.addItem(t("Component side (top)"), "top")
+        self.side_box.addItem(t("Solder side (bottom)"), "bottom")
+        self.side_box.setCurrentIndex(0 if side == "top" else 1)
+        self.side_box.setToolTip(
+            t("A label on the solder side is written where the wiring is checked, and reads "
+              "the right way round from underneath.")
+        )
+        form = QFormLayout()
+        form.addRow(t("Text:"), self.text_edit)
+        form.addRow(t("Height:"), self.size_box)
+        form.addRow(t("Rotation:"), self.rotation_box)
+        form.addRow(t("Face:"), self.side_box)
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        self.text_edit.textChanged.connect(self._refresh)
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(self.buttons)
+        self._refresh()
+
+    def _refresh(self) -> None:
+        ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if ok is not None:
+            ok.setEnabled(bool(self.text_edit.text().strip()))
+
+    def values(self) -> tuple[str, float, Rotation, BoardSide]:
+        return (
+            self.text_edit.text().strip(),
+            self.size_box.value(),
+            cast(Rotation, self.rotation_box.currentData()),
+            cast(BoardSide, self.side_box.currentData()),
+        )
+
+
 class ComponentDialog(QDialog):
     """What a placed part is called and what it IS.
 
@@ -2648,6 +2718,7 @@ class MainWindow(QMainWindow):
         self.scene.hoveredHole.connect(self._on_hovered_hole)
         self.scene.componentPlaced.connect(self._on_component_placed)
         self.scene.componentActivated.connect(self.on_component_properties)
+        self.scene.boardNoteActivated.connect(self.on_edit_board_label)
         self.view.contextMenuRequested.connect(self._on_board_context_menu)
         self.view.partDropped.connect(self._on_part_dropped)
         self.view.footprintDropped.connect(self._on_footprint_dropped)
@@ -3084,6 +3155,7 @@ class MainWindow(QMainWindow):
                 self.lookup,
                 flipped=(self.side == "bottom"),
                 pin_names=self._pin_names_shown(),
+                board_notes=self._board_labels_shown(),
             )
             widget.GetRenderWindow().AddRenderer(ren)
             widget.Initialize()
@@ -3269,9 +3341,75 @@ class MainWindow(QMainWindow):
             exploded_mm=view3d.EXPLODED_LIFT_MM if self.act_exploded.isChecked() else 0.0,
             highlight=highlight,
             pin_names=self._pin_names_shown(),
+            board_notes=self._board_labels_shown(),
         )
         self.vtk_widget.GetRenderWindow().Render()
         self._3d_stale = False
+
+    def _board_labels_shown(self) -> bool:
+        action = getattr(self, "act_board_labels", None)
+        return action is None or action.isChecked()
+
+    def _on_toggle_board_labels(self, show: bool) -> None:
+        self.scene.set_show_board_notes(show)
+        self._refresh_3d()
+
+    def on_add_board_label(self, scene_pos: QPointF | None = None) -> None:
+        """Ask what to write, then write it where the view is looking -- or, from the
+        right-click menu, exactly where the click was."""
+        dialog = BoardLabelDialog(side=self.side, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        text, size_mm, rotation, side = dialog.values()
+        where = (
+            scene_pos
+            if scene_pos is not None
+            else self.view.mapToScene(self.view.viewport().rect().center())
+        )
+        self.add_board_label(text, where, size_mm, rotation, side)
+
+    def add_board_label(
+        self,
+        text: str,
+        where: QPointF,
+        size_mm: float = 1.5,
+        rotation: Rotation = 0,
+        side: BoardSide = "top",
+    ) -> DispatchResult:
+        """``board.note.add`` at a scene position. The seam the dialog and the tests share."""
+        at, dx, dy = self.scene.board_point(where)
+        result = self.bus.dispatch(
+            "board.note.add",
+            AddBoardNotePayload(
+                text=text,
+                at=at,
+                offset_x_mm=dx,
+                offset_y_mm=dy,
+                size_mm=size_mm,
+                rotation=rotation,
+                side=side,
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+        return result
+
+    def on_edit_board_label(self, note_id: str) -> None:
+        note = next((n for n in self.bus.document.board_notes if n.id == note_id), None)
+        if note is None:
+            return
+        dialog = BoardLabelDialog(note.text, note.size_mm, note.rotation, note.side, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        text, size_mm, rotation, side = dialog.values()
+        result = self.bus.dispatch(
+            "board.note.update",
+            UpdateBoardNotePayload(
+                id=note_id, text=text, size_mm=size_mm, rotation=rotation, side=side
+            ),
+        )
+        if not result.ok and result.code != "nothing-to-do":
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
 
     def _pin_names_shown(self) -> bool:
         action = getattr(self, "act_pin_names", None)
@@ -3526,6 +3664,18 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_properties.triggered.connect(lambda: self.on_component_properties())
+        # A label is what a builder would write on the board with a marker: which terminal
+        # takes the battery, where the module chain goes. Added where the view is looking,
+        # then dragged; the right-click menu adds one exactly where it was clicked.
+        self.act_add_label = edit_menu.addAction(t("Add La&bel…"))
+        self.act_add_label.setToolTip(
+            t(
+                "Write something on the board -- \"MOTOR 24V\" beside the terminal that "
+                "takes it. Printed on the 1:1 sheet and in the guide's pictures; drag it "
+                "into place, double-click it to change it."
+            )
+        )
+        self.act_add_label.triggered.connect(lambda: self.on_add_board_label())
 
         #: Actions that act on the selection, so they can be greyed out when there is none.
         #: A menu item that silently does nothing is indistinguishable from a broken one.
@@ -3795,6 +3945,13 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_pin_names.toggled.connect(self._on_toggle_pin_names)
+        self.act_board_labels = view_menu.addAction(t("Show Labels on &the Board"))
+        self.act_board_labels.setCheckable(True)
+        self.act_board_labels.setChecked(True)
+        self.act_board_labels.setToolTip(
+            t("Show the labels written on the board, on the board and in 3D.")
+        )
+        self.act_board_labels.toggled.connect(self._on_toggle_board_labels)
         # ON by default, because the board is opaque: copper on the far face drawn solid
         # reads as copper in front of you, and that is how a board gets soldered on the
         # wrong side. A toggle rather than a fixed rule because someone tracing a dense
@@ -6063,6 +6220,17 @@ class MainWindow(QMainWindow):
         headless run waits for a click that will never come.
         """
         where = self.view.mapToScene(pos)
+        label = self.scene.board_note_at(where)
+        if label is not None:
+            # A label is over whatever it is about, so it is what a right-click on it means.
+            if not label.isSelected():
+                self.scene.clearSelection()
+                label.setSelected(True)
+            menu = QMenu(self)
+            edit_label = menu.addAction(t("Edit Label…"))
+            edit_label.triggered.connect(lambda: self.on_edit_board_label(label.note.id))
+            menu.addAction(self.act_delete)
+            return menu
         item = self.scene.component_at(where)
         if item is not None and item.comp.id not in self.scene.selected_component_ids():
             # Right-clicking a part nobody selected selects it first, as it does in every
@@ -6103,6 +6271,8 @@ class MainWindow(QMainWindow):
             # worth having at all: the keyboard version pastes wherever the pointer happens
             # to be, and here the pointer is demonstrably where the user just clicked.
             menu.addAction(self.act_paste)
+            add_label = menu.addAction(t("Add Label Here…"))
+            add_label.triggered.connect(lambda: self.on_add_board_label(where))
             menu.addSeparator()
             menu.addAction(self.act_connect)
             menu.addAction(self.act_new_net)
@@ -6931,8 +7101,8 @@ class MainWindow(QMainWindow):
         self.act_copy.setEnabled(copyable)
         self.act_duplicate.setEnabled(copyable)
         # Delete too. A single bad route is the whole reason conductors are selectable,
-        # and the menu item was greyed out for exactly that selection.
-        self.act_delete.setEnabled(copyable)
+        # and the menu item was greyed out for exactly that selection. And a label.
+        self.act_delete.setEnabled(copyable or bool(self.scene.selected_board_note_ids()))
         # Properties edits ONE part: a reference is unique by definition, so a dialog over
         # three of them could only offer the value, and a field that silently overwrites
         # three values with one is not worth the two it destroys.
@@ -7840,6 +8010,21 @@ class MainWindow(QMainWindow):
             for item in self.scene.component_items.values()
             if item.isSelected()
         ]
+        # Labels go without a question: they are words, and Undo brings them back. They go
+        # with whatever else is selected, which is then asked about as it always was.
+        note_ids = self.scene.selected_board_note_ids()
+        if note_ids:
+            result = self.bus.dispatch("board.note.delete", DeleteBoardNotesPayload(ids=note_ids))
+            if not result.ok:
+                self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            conductor_ids = self.scene.selected_conductor_ids()
+            components = [
+                item.comp
+                for item in self.scene.component_items.values()
+                if item.isSelected()
+            ]
+            if not conductor_ids and not components:
+                return
         if conductor_ids and not components:
             label = f"Delete {len(conductor_ids)} conductor(s)"
             if not self._confirm(
