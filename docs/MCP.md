@@ -87,7 +87,7 @@ conductor at a time.
 
 | | |
 |---|---|
-| **Reading** | `get_status` · `get_board_info` · `list_components` · `get_component` · `list_parts` · `get_nets` · `get_net_connections` · `list_footprints` |
+| **Reading** | `get_status` · `get_board_info` · `list_components` · `get_component` · `list_parts` · `get_nets` · `get_net_connections` · `list_footprints` · `list_catalog` |
 | **The design** | `add_part` · `update_part` · `delete_part` · `place_parts` · `unplace_component` |
 | **Seeing** | `render_2d_view` · `render_3d_view` · `render_schematic` |
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
@@ -99,7 +99,7 @@ conductor at a time.
 | **Output** | `generate_guide` · `export_pdf` |
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 
-51 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+52 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -169,6 +169,13 @@ writing two sheets into whatever directory the server was started in.
 **`ok` means the call ran.** Every tool here returns `ok: false` only for a refusal —
 so `run_lvs` reports its verdict as `matches_schematic` and `run_drc` as `errors` /
 `warnings`. A board with an open is a question answered, not a tool that failed.
+
+**A real part can be asked for by its name.** `list_catalog` lists the parts a perfboard
+is built from -- BC547, IRF9540N, 7805, NE555, an ESP32-DevKitC -- each with the package it
+comes in, what its datasheet calls each lead, its symbol and its value, and
+`place_component(ref="", footprint_id="", hole="C7", part="bc547")` places one with all of
+that filled in and the next free `Q` reference. Nothing in the document refers back to the
+catalog: what lands is an ordinary part, so the board opens the same anywhere.
 
 **A part that is not in the library can still be used.** `list_footprints` returns 61 and
 that is not every part anybody owns, so a footprint can be asked for by its MEASUREMENTS

@@ -1276,6 +1276,44 @@ TURKISH: Mapping[str, str] = {
     "Rename Board": "Kartı Yeniden Adlandır",
     "Board name:": "Kartın adı:",
     "Screw terminal, wires from above (vertical)": "Klemens, kablo yukarıdan (dik)",
+    # -- the catalog and modules ---------------------------------------------
+    "Transistors": "Transistörler",
+    "MOSFETs": "MOSFET'ler",
+    "Regulators and references": "Regülatörler ve referanslar",
+    "Diodes": "Diyotlar",
+    "Protection": "Koruma",
+    "Sensors": "Sensörler",
+    "ICs": "Entegreler",
+    "Modules": "Modüller",
+    "Check": "Kontrol et",
+    "Source": "Kaynak",
+    "Module on header pins (dev board, breakout)": "Pin başlıklı modül (geliştirme kartı, breakout)",
+    "Pin columns": "Pin sütunu",
+    "Pins per column": "Sütun başına pin",
+    "Holes between columns": "Sütunlar arası delik",
+    "Holes between pins in a column": "Sütundaki pinler arası delik",
+    "Module board width (mm)": "Modül kartının genişliği (mm)",
+    "Module board length (mm)": "Modül kartının boyu (mm)",
+    "Tallest part on it (mm)": "Üstündeki en uzun parça (mm)",
+    "Plugged into female headers": "Dişi başlığa takılı",
+    "Board offset across the columns (mm)": "Kartın sütunlara dik kayması (mm)",
+    "Board offset along the columns (mm)": "Kartın sütun boyunca kayması (mm)",
+    "Pin names, in pin order:": "Pin adları, pin sırasıyla:",
+    "One per line, or separated by commas or spaces: 3V3 GND TX RX…": (
+        "Her satıra bir tane, ya da virgül veya boşlukla ayrılmış: 3V3 GND TX RX…"
+    ),
+    "Pin 1 first, then row by row: left to right across the columns, then the "
+    "next row down. Leave it empty to number the pins only.": (
+        "Önce pin 1, sonra satır satır: sütunlar boyunca soldan sağa, sonra bir alttaki "
+        "satır. Boş bırakılırsa pinler yalnız numaralanır."
+    ),
+    "{names} name(s) for {pins} pin(s).": "{pins} pin için {names} ad.",
+    "Sho&w Pin Names": "Pin Adlarını Gös&ter",
+    "Print each part's pin names beside its pins, on the board and in 3D. Turn "
+    "it off while placing or routing a crowded board.": (
+        "Her parçanın pin adlarını pinlerinin yanına yazar, kartta ve 3B'de. Kalabalık "
+        "bir kartı yerleştirirken ya da iz çekerken kapatın."
+    ),
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}

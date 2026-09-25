@@ -152,6 +152,17 @@ def get_net_connections(name: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+def list_catalog(search: str = "", category: str = "") -> list[dict[str, Any]]:
+    """Real parts by the name on the bag -- BC547, IRF9540N, 7805, NE555, ESP32-DevKitC --
+    each already described: its package, what its datasheet calls each lead, the symbol
+    it is drawn as, its value and its reference letter. Pass an id to place_component or
+    add_part as `part` and all of that is filled in. `check` says what to verify on the
+    part in hand. Categories: transistor, mosfet, regulator, diode, protection, sensor,
+    ic, module."""
+    return session.list_catalog(search, category)
+
+
+@mcp.tool()
 def list_footprints(search: str = "") -> list[dict[str, Any]]:
     """The parts library. Free text matches the id, the name or the body type — try
     "dip", "resistor", "electrolytic", or leave it empty for all of them.
@@ -335,6 +346,7 @@ def add_part(
     value: str = "",
     pin_names: dict[str, str] | None = None,
     symbol: str | None = None,
+    part: str = "",
 ) -> dict[str, Any]:
     """Put a part in the DESIGN without saying where on the board it goes. Draw the whole
     circuit this way, wire it with create_net / connect_pins, then place_parts and
@@ -345,8 +357,9 @@ def add_part(
     "D", "3": "S"} for a TO-220 MOSFET, {"1": "3V3", "2": "EN", ...} for a module. They are
     printed on the sheet and in the soldering guide. symbol says what the part IS when its
     package cannot: npn, pnp, nmos, pmos (drawn only once B/C/E or G/D/S are named), zener,
-    or fuse."""
-    return session.add_part(ref, footprint_id, value, pin_names, symbol)
+    or fuse. part="bc547" (see list_catalog) fills the footprint, value, names and symbol
+    in, under anything given; with it, ref and footprint_id may be left empty."""
+    return session.add_part(ref, footprint_id, value, pin_names, symbol, part)
 
 
 @mcp.tool()
@@ -472,10 +485,12 @@ def place_component(
     rotation: int = 0,
     pin_names: dict[str, str] | None = None,
     symbol: str | None = None,
+    part: str = "",
 ) -> dict[str, Any]:
     """Put a part on the board. `hole` is where pin 1 goes ("C7"); rotation is 0, 90,
     180 or 270. Use list_footprints to find a footprint_id. pin_names and symbol are as on
-    add_part."""
+    add_part. part="irf9540n" (see list_catalog) fills the footprint, value, names and
+    symbol in, under anything given; with it, ref and footprint_id may be left empty."""
     return session.place_component(
         ref=ref,
         footprint_id=footprint_id,
@@ -484,6 +499,7 @@ def place_component(
         rotation=rotation,
         pin_names=pin_names,
         symbol=symbol,
+        part=part,
     )
 
 

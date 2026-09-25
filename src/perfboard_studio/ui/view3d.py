@@ -28,7 +28,7 @@ import vtk  # type: ignore[import-untyped]
 from vtkmodules.util import numpy_support
 
 from perfboard_studio.connectivity import FootprintLookup
-from perfboard_studio.footprints import wire_entry
+from perfboard_studio.footprints import MODULE_PCB_MM, MODULE_SEAT_SOCKETED_MM, wire_entry
 from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
@@ -62,8 +62,11 @@ from perfboard_studio.stripboard import cut_holes, segments
 
 from .boardcolors import scheme_for
 from .bodies import (
+    PIN_NAME_HEIGHT_MM,
     BodyStyle,
     Surface,
+    module_block_size,
+    pin_labels,
     placement_for,
     polarity_pin_offset,
     resistor_bands,
@@ -2298,6 +2301,9 @@ _BUILDERS: dict[str, Any] = {
     "generic-box": _box_pieces,
     "box-header": _box_header_pieces,
     "screw-terminal-vertical": _vertical_terminal_pieces,
+    # Drawn by ``_module_pieces`` from ``_pieces_for``, because its pin names are the
+    # PART's and a builder here sees only the body. The box is the fallback's fallback.
+    "module-board": _box_pieces,
 }
 
 
@@ -2469,6 +2475,8 @@ def _pieces_for(
     what goes through the hole and stands trimmed on the solder side is drawn from the
     board's own thickness -- see ``_through_hole_pieces``.
     """
+    if footprint.body.archetype == "module-board":
+        return _module_pieces(body, footprint, comp, board)
     if footprint.body.archetype == "pin-header":
         header = header_pin_model()
         if header is not None:
@@ -2497,6 +2505,195 @@ def _pieces_for(
     builder = _BUILDERS.get(footprint.body.archetype, _box_pieces)
     generated: list[_Piece] = builder(body)
     return generated
+
+
+#: The plastic of a header strip, under a module or holding its pins.
+_HEADER_PLASTIC_RGB = (0.11, 0.12, 0.14)
+#: How far a module's header pins stand out of the top of its board.
+_MODULE_PIN_TIP_MM = 1.6
+#: A header pin's section.
+_MODULE_PIN_MM = 0.64
+
+
+def _module_pieces(body: _WorldBody, footprint: Any, comp: Any, board: Board) -> list[_Piece]:
+    """A module: its own board up on its seat, the header under it, its pins through it,
+    and a block for what is on it. Its pin names are printed by ``build_pin_names``, which
+    the View menu can turn off.
+
+    THE HEADER IS WHAT HOLDS IT UP and what is actually soldered to this board: a female
+    strip as tall as the seat (8.5 mm is a standard socket) or, soldered straight in, the
+    plastic spacer of the module's own male pins. One strip per unbroken run of pins along
+    a header row, so a 2 x 19 devkit stands on two strips and a module with pins three holes
+    apart on single posts.
+
+    WHAT IS ON THE MODULE is not known -- the id carries its tallest part's height and no
+    more -- so it is one dark block that tall in the middle of the board: an honest envelope
+    rather than a guessed chip, and the height DRC measures.
+    """
+    dims = footprint.body.dims
+    seat = float(dims.get("seat", MODULE_SEAT_SOCKETED_MM))
+    top = float(dims.get("top", 2.0))
+    pcb_top = seat + MODULE_PCB_MM
+    pitch = board.pitch
+    pieces: list[_Piece] = [
+        _Piece(
+            source=_box(body.size_x, body.size_y, MODULE_PCB_MM),
+            rgb=_rgb(body.style.fill),
+            position=(body.x, body.y, seat + MODULE_PCB_MM / 2),
+            material=MASK,
+        )
+    ]
+
+    # The header rows, in world axes: a part turned a quarter turns its rows with it.
+    along_x = _module_rows_along_world_x(footprint, comp)
+    rows: dict[float, list[float]] = {}
+    for px, py in body.pins:
+        across, along = (py, px) if along_x else (px, py)
+        rows.setdefault(round(across, 3), []).append(along)
+    for across, positions in rows.items():
+        positions.sort()
+        run = [positions[0]]
+        for position in [*positions[1:], math.inf]:
+            if position - run[-1] <= pitch * 1.05:
+                run.append(position)
+                continue
+            length = run[-1] - run[0] + pitch
+            middle = (run[0] + run[-1]) / 2
+            size = (length, pitch, seat) if along_x else (pitch, length, seat)
+            where = (middle, across) if along_x else (across, middle)
+            pieces.append(
+                _Piece(
+                    source=_box(*size),
+                    rgb=_HEADER_PLASTIC_RGB,
+                    position=(where[0], where[1], seat / 2),
+                    material=MOULDED,
+                )
+            )
+            run = [position]
+
+    # The pins, through the module's board and a little out of the top of it.
+    stand = MODULE_PCB_MM + _MODULE_PIN_TIP_MM
+    pieces.append(
+        _Piece(
+            source=_box(_MODULE_PIN_MM, _MODULE_PIN_MM, stand),
+            rgb=LEAD_RGB,
+            position=(0.0, 0.0, 0.0),
+            material=TINNED,
+            instances=tuple((px, py, seat + stand / 2) for px, py in body.pins),
+        )
+    )
+
+    # What is on the module: one block as tall as its tallest part.
+    block_x, block_y = module_block_size(body.size_x, body.size_y)
+    pieces.append(
+        _Piece(
+            source=_box(block_x, block_y, top),
+            rgb=(0.106, 0.114, 0.133),
+            position=(body.x, body.y, pcb_top + top / 2),
+            material=MOULDED,
+        )
+    )
+
+    return pieces + _through_hole_pieces(body, 0.0, blade=(_MODULE_PIN_MM, _MODULE_PIN_MM))
+
+
+def _module_rows_along_world_x(footprint: Any, comp: Any) -> bool:
+    """Whether a module's header rows lie along world x: along its own columns when it has
+    as many columns as rows (``bodies.pin_labels`` asks the same), swapped by a quarter
+    turn."""
+    columns = {pin.d_col for pin in footprint.pins}
+    rows = {pin.d_row for pin in footprint.pins}
+    along_local_x = len(columns) >= len(rows)
+    turned = int(comp.rotation) in (90, 270)
+    return along_local_x != turned
+
+
+def build_pin_names(lookup: FootprintLookup, comp: Any, board: Board) -> list[vtk.vtkActor]:
+    """One part's pin names as ONE flat actor, where ``bodies.pin_labels`` says they go:
+    on a module's own board, or on this board beside the part. Laid out in world axes
+    rather than turned with the part, so each reads upright from above however the part is
+    turned or flipped -- the same place the 2D view prints them."""
+    footprint = lookup(comp.footprint_id)
+    if footprint is None:
+        return []
+    labels = pin_labels(footprint, comp, board.pitch)
+    if not labels:
+        return []
+    body = _world_body(lookup, comp, board)
+    if body is None:
+        return []
+    where = {pin.number: xy for pin, xy in zip(footprint.pins, body.pins, strict=False)}
+    on_module = labels[0].on_module
+    append = vtk.vtkAppendPolyData()
+    # Names on THIS board sit on a dark tag, as in the 2D view: white ink across white pad
+    # rings is unreadable. A module's names are on its own board and need none.
+    tags = vtk.vtkAppendPolyData()
+    for label in labels:
+        px, py = where[label.number]
+        turned_x, turned_y = transform_offset(label.dx, label.dy, comp.rotation, comp.mirrored)
+        wx, wy = turned_x, -turned_y  # rows run down, the world's y runs up
+        vector = vtk.vtkVectorText()
+        vector.SetText(label.name)
+        vector.Update()
+        bounds = vector.GetOutput().GetBounds()
+        text_width = max(bounds[1] - bounds[0], 1e-6)
+        scale = min(PIN_NAME_HEIGHT_MM, label.room / text_width)
+        transform = vtk.vtkTransform()
+        if abs(wx) > abs(wy):
+            # Kept upright: a name to the LEFT of its pin ends there rather than being
+            # turned over to start there and read upside down.
+            start = px + label.start if wx > 0 else px - label.start - text_width * scale
+            transform.Translate(start, py, 0.0)
+        else:
+            transform.Translate(px, py + (label.start if wy > 0 else -label.start), 0.0)
+            transform.RotateZ(90.0 if wy > 0 else -90.0)
+        if not on_module:
+            # The tag, in the text's own frame before it is scaled: a box round the glyphs.
+            tag = vtk.vtkCubeSource()
+            tag.SetXLength(text_width * scale + 0.5)
+            tag.SetYLength(PIN_NAME_HEIGHT_MM * 1.7)
+            tag.SetZLength(0.02)
+            tag.SetCenter(text_width * scale / 2, 0.0, 0.0)
+            tag_transform = vtk.vtkTransform()
+            tag_transform.DeepCopy(transform)
+            placed_tag = vtk.vtkTransformPolyDataFilter()
+            placed_tag.SetTransform(tag_transform)
+            placed_tag.SetInputConnection(tag.GetOutputPort())
+            placed_tag.Update()
+            tags.AddInputData(placed_tag.GetOutput())
+        transform.Scale(scale, scale, scale)
+        transform.Translate(-bounds[0], -(bounds[2] + bounds[3]) / 2, 0.0)
+        placed = vtk.vtkTransformPolyDataFilter()
+        placed.SetTransform(transform)
+        placed.SetInputData(vector.GetOutput())
+        placed.Update()
+        append.AddInputData(placed.GetOutput())
+    append.Update()
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputData(append.GetOutput())
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actors = [actor]
+    if not on_module:
+        tags.Update()
+        tag_mapper = vtk.vtkPolyDataMapper()
+        tag_mapper.SetInputData(tags.GetOutput())
+        tag_actor = vtk.vtkActor()
+        tag_actor.SetMapper(tag_mapper)
+        tag_actor.SetPosition(0.0, 0.0, PAD_LIFT_MM + _DECAL_PROUD_MM)
+        tag_actor.GetProperty().SetColor(0.07, 0.08, 0.09)
+        _finish(tag_actor.GetProperty(), INK)
+        actors.append(tag_actor)
+    if on_module:
+        seat = float(footprint.body.dims.get("seat", MODULE_SEAT_SOCKETED_MM))
+        actor.SetPosition(0.0, 0.0, seat + MODULE_PCB_MM + _DECAL_PROUD_MM)
+        actor.GetProperty().SetColor(*_rgb(body.style.accent))
+    else:
+        # On its tag, above the pad rings a name runs across.
+        actor.SetPosition(0.0, 0.0, PAD_LIFT_MM + 2 * _DECAL_PROUD_MM)
+        actor.GetProperty().SetColor(*LEGEND_RGB)
+    _finish(actor.GetProperty(), INK)
+    return actors
 
 
 def _attach(mapper: Any, source: Any, *, glyph: bool = False) -> None:
@@ -2891,6 +3088,7 @@ def populate_renderer(
     *,
     exploded_mm: float = 0.0,
     highlight: str | None = None,
+    pin_names: bool = True,
 ) -> dict[str, int]:
     """Rebuild the board's actors in an EXISTING renderer, leaving the camera alone.
 
@@ -2948,6 +3146,16 @@ def populate_renderer(
             if highlight is not None:
                 (_pick_out if subject else _dim)(actor)
             ren.AddActor(actor)
+        if pin_names:
+            # A module's names are on its own board and rise with it; a part's names on
+            # this board stay on this board.
+            footprint = lookup(comp.footprint_id)
+            on_module = footprint is not None and footprint.body.archetype == "module-board"
+            for actor in build_pin_names(lookup, comp, board):
+                _lift(actor, exploded_mm if on_module else 0.0)
+                if highlight is not None:
+                    (_pick_out if subject else _dim)(actor)
+                ren.AddActor(actor)
     net_class_by_id = {net.id: net.net_class for net in doc.nets}
     signal_index = {
         net.id: index
@@ -3147,12 +3355,15 @@ def build_renderer(
     *,
     exploded_mm: float = 0.0,
     highlight: str | None = None,
+    pin_names: bool = True,
 ) -> tuple[vtk.vtkRenderer, dict[str, int]]:
     """A renderer with the board in it, framed and lit. For a first build or a one-off
     offscreen render; an interactive view refreshes with :func:`populate_renderer`."""
     ren = vtk.vtkRenderer()
     ren.SetBackground(0.09, 0.09, 0.11)
-    stats = populate_renderer(ren, doc, lookup, exploded_mm=exploded_mm, highlight=highlight)
+    stats = populate_renderer(
+        ren, doc, lookup, exploded_mm=exploded_mm, highlight=highlight, pin_names=pin_names
+    )
     apply_default_camera(ren, flipped)
 
     apply_default_lighting(ren)

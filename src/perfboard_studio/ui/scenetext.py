@@ -140,6 +140,20 @@ def draw_physical_label(
     painter.restore()
 
 
+def physical_label_width_mm(
+    text: str, height_mm: float, max_width_mm: float | None = None, bold: bool = True
+) -> float:
+    """How long :func:`draw_physical_label` will draw ``text``, in millimetres -- so a
+    caller can start a label at a point rather than centre it on one."""
+    font = label_font(_PHYSICAL_FONT_PX, bold)
+    metrics = QFontMetricsF(font)
+    cap = metrics.capHeight()
+    if cap <= 0:  # pragma: no cover - a platform with no font database
+        cap = _PHYSICAL_FONT_PX * 0.7
+    width = max(metrics.horizontalAdvance(text), 1.0) * height_mm / cap
+    return min(width, max_width_mm) if max_width_mm is not None else width
+
+
 def label_extent_mm(pixel_size: int, scale: float) -> float:
     """How many millimetres of scene a ``pixel_size`` label occupies at ``scale`` px/mm.
 

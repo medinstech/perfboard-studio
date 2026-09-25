@@ -26,6 +26,7 @@ import datetime
 import gc
 import math
 import os
+import re
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -76,6 +77,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPlainTextEdit,
     QProgressDialog,
     QPushButton,
     QSlider,
@@ -106,6 +108,7 @@ from perfboard_studio.autoroute import (
 from perfboard_studio.autoroute import (
     describe as describe_plan,
 )
+from perfboard_studio.catalog import CATALOG, CATEGORY_ORDER, CatalogPart, catalog_part
 from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
     AddEdgeConnectorPayload,
@@ -151,6 +154,8 @@ from perfboard_studio.commands import (
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.drc import DrcViolation, run_drc
 from perfboard_studio.footprints import (
+    MODULE_SEAT_SOCKETED_MM,
+    MODULE_SEAT_SOLDERED_MM,
     axial_footprint,
     box_film_capacitor_footprint,
     box_header_footprint,
@@ -160,6 +165,7 @@ from perfboard_studio.footprints import (
     generic_box_footprint,
     get_footprint,
     led_footprint,
+    module_footprint,
     pin_header_footprint,
     radial_electrolytic_footprint,
     screw_terminal_footprint,
@@ -404,6 +410,8 @@ ROLE_NET_ID = int(Qt.ItemDataRole.UserRole) + 3
 ROLE_FOOTPRINT_ID = int(Qt.ItemDataRole.UserRole) + 4
 ROLE_STEP_INDEX = int(Qt.ItemDataRole.UserRole) + 5
 ROLE_FINDING_KEY = int(Qt.ItemDataRole.UserRole) + 6
+#: On a Parts row that is a real part from the catalog rather than a bare package.
+ROLE_CATALOG_ID = int(Qt.ItemDataRole.UserRole) + 7
 #: (component ref, pin number) on a pin row under a net. The row also carries
 #: ROLE_NET_ID, so selecting a pin highlights its net exactly as selecting the net does.
 ROLE_PIN = int(Qt.ItemDataRole.UserRole) + 5
@@ -483,6 +491,35 @@ def read_document_text(path: Path) -> tuple[str | None, str | None]:
 #: Substrate to add outside the hole grid when a board carries a printed legend, so the
 #: characters have somewhere to go. Roughly what the boards being modelled have.
 LEGEND_BORDER_MM = 2.0
+
+
+def _catalog_headings() -> dict[str, str]:
+    """The catalog's groups as the Parts panel names them. A function because the words go
+    through ``t()`` and the language is chosen after import."""
+    return {
+        "transistor": t("Transistors"),
+        "mosfet": t("MOSFETs"),
+        "regulator": t("Regulators and references"),
+        "diode": t("Diodes"),
+        "protection": t("Protection"),
+        "sensor": t("Sensors"),
+        "ic": t("ICs"),
+        "module": t("Modules"),
+    }
+
+
+def _catalog_tooltip(part: CatalogPart) -> str:
+    """What a catalog row says on hover: what the part is, how it is pinned, where that
+    comes from and -- the line that matters -- what to check on the one in hand."""
+    lines = [f"{part.name} — {part.summary}", part.footprint_id]
+    if part.pin_names:
+        lines.append(" ".join(f"{number}={name}" for number, name in part.pin_names[:12])
+                     + (" …" if len(part.pin_names) > 12 else ""))
+    if part.check:
+        lines.append(f"{t('Check')}: {part.check}")
+    if part.source:
+        lines.append(f"{t('Source')}: {part.source}")
+    return "\n".join(lines)
 
 
 class PartTree(QTreeWidget):
@@ -1561,6 +1598,9 @@ class _CustomFamily:
     label: str
     fields: tuple[_CustomField, ...]
     build: Callable[[dict[str, float]], Footprint]
+    #: Whether this family takes a list of pin names too -- a module, whose silkscreen names
+    #: every pin and whose pins are otherwise a row of identical numbers.
+    names: bool = False
 
 
 def _custom_families() -> tuple[_CustomFamily, ...]:
@@ -1598,6 +1638,38 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
                 offset_x_mm=v.get("offset_x", 0.0),
                 offset_y_mm=v.get("offset_y", 0.0),
             ),
+        ),
+        _CustomFamily(
+            # Laid out as a module is usually drawn: its pin columns running DOWN it. Two
+            # columns of fifteen, six holes apart, is an Arduino Nano.
+            label=t("Module on header pins (dev board, breakout)"),
+            fields=(
+                _CustomField("cols", t("Pin columns"), "int", 1, 64, 2),
+                _CustomField("rows", t("Pins per column"), "int", 1, 64, 15),
+                _CustomField("col_step", t("Holes between columns"), "int", 1, 20, 6),
+                _CustomField("row_step", t("Holes between pins in a column"), "int", 1, 20, 1),
+                _CustomField("width", t("Module board width (mm)"), "mm", 1, 200, 18),
+                _CustomField("depth", t("Module board length (mm)"), "mm", 1, 200, 45),
+                _CustomField("top", t("Tallest part on it (mm)"), "mm", 0.5, 60, 4),
+                _CustomField("socketed", t("Plugged into female headers"), "bool", 0, 1, 1),
+                _CustomField("offset_x", t("Board offset across the columns (mm)"), "mm", -200, 200, 0),
+                _CustomField("offset_y", t("Board offset along the columns (mm)"), "mm", -200, 200, 0),
+            ),
+            build=lambda v: module_footprint(
+                cols=whole(v, "cols"),
+                rows=whole(v, "rows"),
+                col_step=whole(v, "col_step"),
+                row_step=whole(v, "row_step"),
+                width_mm=v["width"],
+                depth_mm=v["depth"],
+                top_mm=v["top"],
+                seat_mm=(
+                    MODULE_SEAT_SOCKETED_MM if round(v["socketed"]) else MODULE_SEAT_SOLDERED_MM
+                ),
+                offset_x_mm=v.get("offset_x", 0.0),
+                offset_y_mm=v.get("offset_y", 0.0),
+            ),
+            names=True,
         ),
         _CustomFamily(
             label=t("DIP (dual in-line)"),
@@ -1733,6 +1805,22 @@ class CustomPartDialog(QDialog):
         self.form = QFormLayout(self.form_host)
         self.form.setContentsMargins(0, 0, 0, 0)
 
+        # A module's pins are a row of identical numbers without their names, and the names
+        # are printed on the module itself: typed here once, they go on every one placed.
+        self.pin_names_label = QLabel(t("Pin names, in pin order:"))
+        self.pin_names_edit = QPlainTextEdit()
+        self.pin_names_edit.setPlaceholderText(
+            t("One per line, or separated by commas or spaces: 3V3 GND TX RX…")
+        )
+        self.pin_names_edit.setToolTip(
+            t(
+                "Pin 1 first, then row by row: left to right across the columns, then the "
+                "next row down. Leave it empty to number the pins only."
+            )
+        )
+        self.pin_names_edit.setMaximumHeight(90)
+        self.pin_names_edit.textChanged.connect(self._refresh)
+
         self.summary = QLabel()
         self.summary.setWordWrap(True)
         self.summary.setStyleSheet(f"color: {TEXT_DIM};")
@@ -1757,6 +1845,8 @@ class CustomPartDialog(QDialog):
         layout = QVBoxLayout()
         layout.addWidget(self.family)
         layout.addWidget(self.form_host)
+        layout.addWidget(self.pin_names_label)
+        layout.addWidget(self.pin_names_edit)
         layout.addWidget(self.identifier)
         layout.addWidget(self.summary)
         layout.addWidget(self.buttons)
@@ -1769,7 +1859,10 @@ class CustomPartDialog(QDialog):
         while self.form.rowCount():
             self.form.removeRow(0)
         self._widgets.clear()
-        for field in self._families[self.family.currentIndex()].fields:
+        family = self._families[self.family.currentIndex()]
+        self.pin_names_label.setVisible(family.names)
+        self.pin_names_edit.setVisible(family.names)
+        for field in family.fields:
             widget: QWidget
             if field.kind == "bool":
                 box = QCheckBox()
@@ -1833,17 +1926,37 @@ class CustomPartDialog(QDialog):
             self.summary.setText(t("Those measurements do not make a part."))
             return
         self.identifier.setText(footprint.id)
-        self.summary.setText(
-            t("{name} — {pins} pin(s), {height} mm tall").format(
-                name=footprint.name,
-                pins=len(footprint.pins),
-                height=f"{footprint.body_height:g}",
-            )
+        summary = t("{name} — {pins} pin(s), {height} mm tall").format(
+            name=footprint.name,
+            pins=len(footprint.pins),
+            height=f"{footprint.body_height:g}",
         )
+        typed = self._typed_names()
+        if family.names and typed and len(typed) != len(footprint.pins):
+            summary += "\n" + t("{names} name(s) for {pins} pin(s).").format(
+                names=len(typed), pins=len(footprint.pins)
+            )
+        self.summary.setText(summary)
+
+    def _typed_names(self) -> tuple[str, ...]:
+        """The names as typed: one per line or comma-separated, or -- when there is
+        neither -- separated by spaces, which is how a pinout copied off a web page reads."""
+        text = self.pin_names_edit.toPlainText()
+        separated = re.split(r"[,;\n]+", text) if re.search(r"[,;\n]", text) else text.split()
+        return tuple(name.strip() for name in separated if name.strip())
 
     def chosen(self) -> Footprint | None:
         """The part described, or None. Valid once the dialog has been accepted."""
         return self._footprint
+
+    def chosen_pin_names(self) -> PinNames:
+        """The names typed for a module, as pin number to name, pin 1 first. Names past the
+        last pin are dropped; pins past the last name stay unnamed."""
+        family = self._families[self.family.currentIndex()]
+        if not family.names or self._footprint is None:
+            return ()
+        numbers = [pin.number for pin in self._footprint.pins]
+        return tuple(zip(numbers, self._typed_names(), strict=False))
 
 
 class AddPartDialog(QDialog):
@@ -2428,6 +2541,11 @@ class MainWindow(QMainWindow):
         #: the id carries the definition and a saved board therefore needs nothing
         #: remembered for it.
         self._described_here: dict[str, Footprint] = {}
+        #: The pin names typed for a part described here, given again whenever it is picked.
+        self._described_names: dict[str, PinNames] = {}
+        #: The value the catalog put in the value box, so picking a bare package afterwards
+        #: can take it back out -- and leave alone a value the user typed.
+        self._catalog_value = ""
         #: Assembly playback. The slider and its friends do not exist until the 3D panel
         #: is first opened, so everything that reads them checks for None first.
         self.assembly_slider: Any = None
@@ -2962,7 +3080,10 @@ class MainWindow(QMainWindow):
 
             widget: Any = QVTKRenderWindowInteractor()  # type: ignore[no-untyped-call]
             ren, _stats = view3d.build_renderer(
-                self.bus.document, self.lookup, flipped=(self.side == "bottom")
+                self.bus.document,
+                self.lookup,
+                flipped=(self.side == "bottom"),
+                pin_names=self._pin_names_shown(),
             )
             widget.GetRenderWindow().AddRenderer(ren)
             widget.Initialize()
@@ -3147,9 +3268,18 @@ class MainWindow(QMainWindow):
             self.lookup,
             exploded_mm=view3d.EXPLODED_LIFT_MM if self.act_exploded.isChecked() else 0.0,
             highlight=highlight,
+            pin_names=self._pin_names_shown(),
         )
         self.vtk_widget.GetRenderWindow().Render()
         self._3d_stale = False
+
+    def _pin_names_shown(self) -> bool:
+        action = getattr(self, "act_pin_names", None)
+        return action is None or action.isChecked()
+
+    def _on_toggle_pin_names(self, show: bool) -> None:
+        self.scene.set_show_pin_names(show)
+        self._refresh_3d()
 
     def on_toggle_exploded(self) -> None:
         """Lift the parts off the board, or set them back down.
@@ -3652,6 +3782,19 @@ class MainWindow(QMainWindow):
         self.act_rulers.setCheckable(True)
         self.act_rulers.setChecked(True)
         self.act_rulers.toggled.connect(self.scene.set_show_rulers)
+        # ON by default: which way of a terminal is 24V and which pin of a devkit is GPIO4
+        # is the thing the board is wired by. Off while placing or routing a crowded board,
+        # where the names are clutter.
+        self.act_pin_names = view_menu.addAction(t("Sho&w Pin Names"))
+        self.act_pin_names.setCheckable(True)
+        self.act_pin_names.setChecked(True)
+        self.act_pin_names.setToolTip(
+            t(
+                "Print each part's pin names beside its pins, on the board and in 3D. Turn "
+                "it off while placing or routing a crowded board."
+            )
+        )
+        self.act_pin_names.toggled.connect(self._on_toggle_pin_names)
         # ON by default, because the board is opaque: copper on the far face drawn solid
         # reads as copper in front of you, and that is how a board gets soldered on the
         # wrong side. A toggle rather than a fixed rule because someone tracing a dense
@@ -4079,6 +4222,9 @@ class MainWindow(QMainWindow):
         if footprint is None:
             return
         self._described_here[footprint.id] = footprint
+        names = dialog.chosen_pin_names()
+        if names:
+            self._described_names[footprint.id] = names
         self.library_filter.clear()
         self._refresh_library()
         self._select_library_footprint(footprint.id)
@@ -4091,7 +4237,13 @@ class MainWindow(QMainWindow):
                 continue
             for child_index in range(group.childCount()):
                 leaf = group.child(child_index)
-                if leaf is not None and leaf.data(0, ROLE_FOOTPRINT_ID) == footprint_id:
+                # The package's own row, never a catalog part that happens to use it:
+                # a TO-92 is not a BC547.
+                if (
+                    leaf is not None
+                    and leaf.data(0, ROLE_FOOTPRINT_ID) == footprint_id
+                    and not leaf.data(0, ROLE_CATALOG_ID)
+                ):
                     group.setExpanded(True)
                     tree.setCurrentItem(leaf)
                     return
@@ -4129,6 +4281,41 @@ class MainWindow(QMainWindow):
                 group.addChild(leaf)
             group.setExpanded(True)
 
+        # REAL PARTS, before the packages: what somebody holding a BC547 looks for is
+        # "BC547", not "to92". Each row places a part with its value, pin names and symbol
+        # already given -- see ``perfboard_studio.catalog``.
+        headings = _catalog_headings()
+        for category in CATEGORY_ORDER:
+            parts = [
+                part
+                for part in CATALOG
+                if part.category == category
+                and (
+                    not needle
+                    or needle in f"{part.id} {part.name} {part.summary} {category}".lower()
+                )
+            ]
+            if not parts:
+                continue
+            group = QTreeWidgetItem([headings[category], ""])
+            group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            first = get_footprint(parts[0].footprint_id)
+            if first is not None:
+                group.setIcon(0, icons.part_icon(first))
+            tree.addTopLevelItem(group)
+            for part in parts:
+                packaged = get_footprint(part.footprint_id)
+                leaf = QTreeWidgetItem(
+                    [part.name, str(len(packaged.pins)) if packaged is not None else ""]
+                )
+                leaf.setData(0, ROLE_FOOTPRINT_ID, part.footprint_id)
+                leaf.setData(0, ROLE_CATALOG_ID, part.id)
+                if packaged is not None:
+                    leaf.setIcon(0, icons.part_icon(packaged))
+                leaf.setToolTip(0, _catalog_tooltip(part))
+                group.addChild(leaf)
+            group.setExpanded(bool(needle))
+
         for archetype in sorted(by_archetype):
             group = QTreeWidgetItem([archetype.replace("-", " "), ""])
             group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
@@ -4161,8 +4348,36 @@ class MainWindow(QMainWindow):
 
     def _on_library_selection_changed(self) -> None:
         items = self.library_tree.selectedItems()
-        footprint_id = items[0].data(0, ROLE_FOOTPRINT_ID) if items else None
+        item = items[0] if items else None
+        footprint_id = item.data(0, ROLE_FOOTPRINT_ID) if item is not None else None
+        catalog_id = item.data(0, ROLE_CATALOG_ID) if item is not None else None
+        part = catalog_part(catalog_id) if isinstance(catalog_id, str) else None
+        # Before arming, so the banner that arming raises already names the part as it
+        # will be placed -- "Q3 (BC547 …)", not "Q3 (TO-92)".
+        self._apply_placement_template(part, footprint_id)
         self.scene.arm_placement(footprint_id)
+
+    def _apply_placement_template(self, part: CatalogPart | None, footprint_id: object) -> None:
+        """Give the parts placed from here what the chosen catalog part says about itself,
+        or take it all back for a bare package."""
+        scene = self.scene
+        if part is not None:
+            scene.placement_pin_names = part.pin_names
+            scene.placement_symbol = part.symbol
+            scene.placement_prefix = part.reference_prefix
+            self._catalog_value = part.placed_value
+            self.library_value.setText(part.placed_value)
+            return
+        scene.placement_pin_names = (
+            self._described_names.get(footprint_id, ()) if isinstance(footprint_id, str) else ()
+        )
+        scene.placement_symbol = None
+        scene.placement_prefix = None
+        # A value the catalog filled in belongs to the catalog part: a TO-92 picked after a
+        # BC547 is not a BC547. A value the user typed stays, as it always has.
+        if self._catalog_value and self.library_value.text().strip() == self._catalog_value:
+            self.library_value.clear()
+        self._catalog_value = ""
 
     def _on_placement_armed(self, footprint_id: str) -> None:
         if not footprint_id:
@@ -4173,7 +4388,7 @@ class MainWindow(QMainWindow):
             return
         footprint = self.lookup(footprint_id)
         name = footprint.name if footprint is not None else footprint_id
-        ref = next_reference(self.bus.document, footprint_id)
+        ref = next_reference(self.bus.document, footprint_id, self.scene.placement_prefix)
         described = f"{self.scene.placement_value} {name}" if self.scene.placement_value else name
         self.label_place_hint.setText(
             f"{t('Click a hole to place')} <b>{ref}</b> ({described}). {t('Esc cancels.')}"
@@ -4232,7 +4447,7 @@ class MainWindow(QMainWindow):
         if footprint_id:
             footprint = self.lookup(footprint_id)
             name = footprint.name if footprint is not None else footprint_id
-            ref = next_reference(self.bus.document, footprint_id)
+            ref = next_reference(self.bus.document, footprint_id, self.scene.placement_prefix)
             value = self.scene.placement_value
             described = f"{value} {name}" if value else name
             return f"{t('Placing')} {ref} ({described})  ·  {t('click a hole, Esc cancels')}"
@@ -5130,7 +5345,11 @@ class MainWindow(QMainWindow):
         """
         if not isinstance(hole, HoleCoord):
             return
-        self._select_library_footprint(footprint_id)
+        # Pressing on the row to drag it already selected -- and armed -- it, with whatever
+        # the catalog says about the part; re-selecting by footprint would find the bare
+        # package's row instead and drop a plain TO-92 where a BC547 was dragged.
+        if self.scene.armed_footprint_id != footprint_id:
+            self._select_library_footprint(footprint_id)
         if self.scene.armed_footprint_id != footprint_id:
             # A generated or custom part that is not in the list -- arm it directly.
             self.scene.arm_placement(footprint_id)
@@ -5270,11 +5489,20 @@ class MainWindow(QMainWindow):
                 t("No footprint called {id}.").format(id=footprint_id), 6000
             )
             return
-        ref = next_reference(self.bus.document, footprint_id)
+        # The row dragged is the one selected, and its catalog part -- if it is one -- is
+        # what the scene is armed with: the same names and symbol the board would give it.
+        template = self.scene.armed_footprint_id == footprint_id
+        ref = next_reference(
+            self.bus.document, footprint_id, self.scene.placement_prefix if template else None
+        )
         result = self.bus.dispatch(
             "part.add",
             AddPartPayload(
-                ref=ref, footprint_id=footprint_id, value=self.library_value.text().strip()
+                ref=ref,
+                footprint_id=footprint_id,
+                value=self.library_value.text().strip(),
+                pin_names=self.scene.placement_pin_names if template else (),
+                symbol=self.scene.placement_symbol if template else None,
             ),
         )
         if not result.ok:

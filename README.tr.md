@@ -295,6 +295,13 @@ gelmez — mesh kütüphanesi yok, devralınacak share-alike lisansı yok. Bir p
 çizen spec, 3D'de gövdesini extrude eden spec ile aynıdır; dolayısıyla ikisi birbiriyle
 çelişemez.
 
+**Gerçek bir parça adıyla seçilir.** Parçalar paneli, delikli bir kartın gerçekten
+yapıldığı parçaların kataloğuyla başlar -- BC547, IRF9540N, 7805, NE555, bir ESP32-DevKitC
+-- ve birini seçmek onu değeri, veri sayfasının her bacağa verdiği ad ve çizildiği sembolle
+birlikte yerleştirir. O adlar kartta ve 3B'de pinlerin yanına yazılır (*Görünüm ▸ Pin
+Adlarını Göster*); bir klemens ya da bir geliştirme kartı onlara bakılarak kablolanır. Bir
+geliştirme kartı bir *modüldür*: pin başlıklarının üstünde duran kendi kartı, öyle çizilir.
+
 **61'in içinde olmayan bir parça kurulmaz, tarif edilir.** *Özel Parça…* bir pin ızgarası
 ve üç ölçü ister, karşılığında bunları kendi taşıyan bir kimlik verir:
 `box-4x2-p1-r3-15x10x8` dört çarpı iki pinlik bir ızgara, sıralar arası üç delik,
@@ -327,7 +334,7 @@ Sırada, [PLAN.md](./PLAN.md) §11'in koyduğu sırayla:
 
 | | |
 |---|---|
-| [docs/MCP.md](./docs/MCP.md) | 51 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
+| [docs/MCP.md](./docs/MCP.md) | 52 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
 | [examples/README.md](./examples/README.md) | dört örnek kartın her birinin neyi göstermek için orada olduğu (yalnızca İngilizce) |
 | [CHANGELOG.md](./CHANGELOG.md) | her sürüm, ve yayınlanmamış bir yapının bir sonrakine doğru ne biriktirdiği (yalnızca İngilizce) |
 | [docs/RELEASING.md](./docs/RELEASING.md) | etiket ritüeli, ve `release.yml`'in ondan üç platformda ne ürettiği (yalnızca İngilizce) |

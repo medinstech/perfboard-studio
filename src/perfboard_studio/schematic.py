@@ -1665,6 +1665,8 @@ _KIND_BY_ARCHETYPE: dict[BodyArchetype, SymbolKind] = {
     "generic-box": "box",
     "box-header": "connector",
     "screw-terminal-vertical": "connector",
+    # A box whose pins carry the module's own names, when the part declares them.
+    "module-board": "box",
 }
 
 _TWO_TERMINAL_KINDS: frozenset[SymbolKind] = frozenset(

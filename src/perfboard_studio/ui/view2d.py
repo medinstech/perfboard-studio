@@ -110,7 +110,9 @@ from perfboard_studio.model import (
     Net,
     NetClass,
     NetNode,
+    PartSymbol,
     PerfDocument,
+    PinNames,
     Point2,
     TrackCut,
     contacts_every_path_hole,
@@ -121,9 +123,12 @@ from perfboard_studio.stripboard import cut_holes, is_stripboard, segments
 
 from .boardcolors import scheme_for
 from .bodies import (
+    PIN_NAME_HEIGHT_MM,
     BodyPlacement,
     BodyStyle,
     leads_for,
+    module_block_size,
+    pin_labels,
     placement_for,
     polarity_pin_offset,
     resistor_bands,
@@ -131,7 +136,7 @@ from .bodies import (
     surface_for,
 )
 from .i18n import t
-from .scenetext import draw_label, draw_physical_label
+from .scenetext import draw_label, draw_physical_label, physical_label_width_mm
 
 # The window's own palette, for the overlays that sit ON the board but belong to the
 # application rather than to the object -- see theme.py's note on why the two are apart.
@@ -942,6 +947,7 @@ REF_PREFIXES: dict[str, str] = {
     "generic-box": "X",
     "box-header": "J",
     "screw-terminal-vertical": "TB",
+    "module-board": "U",
 }
 
 
@@ -953,7 +959,7 @@ def reference_prefix(footprint: Footprint) -> str:
     return REF_PREFIXES.get(footprint.body.archetype, "X")
 
 
-def next_reference(document: PerfDocument, footprint_id: str) -> str:
+def next_reference(document: PerfDocument, footprint_id: str, prefix: str | None = None) -> str:
     """The next free reference for this kind of part, e.g. "R3".
 
     Counts from what is already on the board rather than from a counter, so it stays correct
@@ -967,8 +973,9 @@ def next_reference(document: PerfDocument, footprint_id: str) -> str:
     """
     from perfboard_studio.footprints import get_footprint
 
-    footprint = get_footprint(footprint_id)
-    prefix = reference_prefix(footprint) if footprint is not None else "X"
+    if prefix is None:
+        footprint = get_footprint(footprint_id)
+        prefix = reference_prefix(footprint) if footprint is not None else "X"
     used = {c.ref for c in document.components} | {part.ref for part in document.parts}
     index = 1
     while f"{prefix}{index}" in used:
@@ -1727,6 +1734,66 @@ def _paint_resistor_bands(
     painter.restore()
 
 
+#: The ink pin names are printed in on this board: the colour of the board's own legend.
+PIN_NAME_INK = "#eceef2"
+#: What a name on THIS board is printed on. White on a grid of white pad rings is
+#: unreadable wherever the name crosses one, so a name off a module sits on a dark tag --
+#: a label stuck to the board, which is also what the builder will put there.
+PIN_NAME_TAG = QColor(18, 20, 24, 215)
+
+
+def _paint_pin_names(
+    painter: QPainter,
+    footprint: Footprint,
+    comp: ComponentInstance,
+    pitch: float,
+    module_ink: str,
+) -> None:
+    """Each named pin's name, printed beside it -- see ``bodies.pin_labels`` for where and
+    why. In the footprint's own frame, so the names turn with the part; each is kept
+    upright on screen and unmirrored, and none is drawn when the view is too far out for
+    0.9 mm of ink to be anything but noise."""
+    transform = painter.transform()
+    if (transform.m11() ** 2 + transform.m12() ** 2) ** 0.5 < 5.0:
+        return
+    for label in pin_labels(footprint, comp, pitch):
+        width = physical_label_width_mm(label.name, PIN_NAME_HEIGHT_MM, label.room)
+        reach = label.start + width / 2
+        centre = QPointF(label.x + label.dx * reach, label.y + label.dy * reach)
+        rotation = 0.0 if label.dy == 0 else (90.0 if label.dy > 0 else -90.0)
+        # Never upside down on screen: the frame is already turned with the part, so a
+        # name that would come out reading backwards is turned half round about its own
+        # centre, which leaves it exactly where it was.
+        if 90.0 < (rotation + float(comp.rotation)) % 360.0 < 270.0:
+            rotation += 180.0
+        painter.save()
+        painter.translate(centre)
+        if comp.mirrored:
+            # The frame is reflected for a mirrored part; ink is not.
+            painter.scale(-1.0, 1.0)
+        if not label.on_module:
+            painter.save()
+            painter.rotate(rotation)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(PIN_NAME_TAG))
+            tag_h = PIN_NAME_HEIGHT_MM * 1.7
+            painter.drawRoundedRect(
+                QRectF(-width / 2 - 0.25, -tag_h / 2, width + 0.5, tag_h), 0.3, 0.3
+            )
+            painter.restore()
+        painter.setPen(QPen(QColor(module_ink if label.on_module else PIN_NAME_INK)))
+        draw_physical_label(
+            painter,
+            QPointF(0.0, 0.0),
+            label.name,
+            PIN_NAME_HEIGHT_MM,
+            bold=False,
+            max_width_mm=label.room,
+            rotation_deg=rotation,
+        )
+        painter.restore()
+
+
 def _paint_body(
     painter: QPainter,
     footprint: Footprint,
@@ -1862,6 +1929,17 @@ def _paint_body(
         _paint_pin_marks(painter, footprint, pitch, accent, square=False)
         _paint_wire_entries(painter, footprint, rect, pitch)
 
+    elif archetype == "module-board":
+        # The module's chip, as a dark block in the middle of its board: enough to read as
+        # a board with something on it rather than an empty rectangle, and no more -- the
+        # pin names beside the pins are what this view is for (``_paint_pin_names``).
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor("#1b1d22")))
+        chip_w, chip_h = module_block_size(rect.width(), rect.height())
+        painter.drawRect(
+            QRectF(rect.center().x() - chip_w / 2, rect.center().y() - chip_h / 2, chip_w, chip_h)
+        )
+
     elif archetype == "screw-terminal-vertical":
         # Seen from above, the openings ARE the top: a dark square per way over its pin,
         # which is where the wires go in -- and no mark on any side, because no side is the
@@ -1948,12 +2026,21 @@ class ComponentItem(QGraphicsItem):
     source of truth.
     """
 
-    def __init__(self, comp: ComponentInstance, fp: Footprint, board: Board, side: BoardSide) -> None:
+    def __init__(
+        self,
+        comp: ComponentInstance,
+        fp: Footprint,
+        board: Board,
+        side: BoardSide,
+        show_pin_names: bool = True,
+    ) -> None:
         super().__init__()
         self.comp = comp
         self.fp = fp
         self.board = board
         self.side = side
+        #: Print the part's pin names beside its pins (View > Show Pin Names).
+        self.show_pin_names = show_pin_names
         self.pending_anchor: HoleCoord = comp.anchor
         self.has_error = False
         # Locked components stay draggable on purpose: the bus (not the item flags) is
@@ -2069,6 +2156,8 @@ class ComponentItem(QGraphicsItem):
                 # netlist. None for anything that is not a resistor with a readable value.
                 bands=resistor_bands(self.fp, self.comp.value),
             )
+            if self.show_pin_names:
+                _paint_pin_names(painter, self.fp, self.comp, self.board.pitch, style.accent)
             painter.restore()
 
         self._paint_pin_ends(painter, keyed)
@@ -2193,9 +2282,11 @@ class BoardScene(QGraphicsScene):
         show_ratsnest: bool = True,
         show_rulers: bool = True,
         hatch_far_side: bool = True,
+        show_pin_names: bool = True,
     ) -> None:
         super().__init__()
         self.lookup = lookup
+        self.show_pin_names = show_pin_names
         self.side = side
         self.bus = bus
         self.hatch_far_side = hatch_far_side
@@ -2247,6 +2338,14 @@ class BoardScene(QGraphicsScene):
         #: the armed footprint: five resistors of the same value is the case, and retyping
         #: it between each of them is the friction this exists to remove.
         self.placement_value = ""
+        #: What a part chosen from the catalog says about itself -- its pin names, what it
+        #: is, and the letter its reference takes (a 7805 is a TO-220 and not a "Q") --
+        #: given to every part placed from here. Set by the host with the armed footprint
+        #: and cleared when a plain package is picked, so a TO-92 chosen after a BC547 is
+        #: not quietly a BC547.
+        self.placement_pin_names: PinNames = ()
+        self.placement_symbol: PartSymbol | None = None
+        self.placement_prefix: str | None = None
         self._build()
         self.selectionChanged.connect(self._on_selection_changed)
 
@@ -2275,6 +2374,13 @@ class BoardScene(QGraphicsScene):
         """
         if hatch != self.hatch_far_side:
             self.hatch_far_side = hatch
+            self._build()
+
+    def set_show_pin_names(self, show: bool) -> None:
+        """Print parts' pin names beside their pins, or not. Off for a dense board being
+        placed or routed, where they are clutter; on for wiring and for the printout."""
+        if show != self.show_pin_names:
+            self.show_pin_names = show
             self._build()
 
     def set_show_rulers(self, show: bool) -> None:
@@ -2436,7 +2542,7 @@ class BoardScene(QGraphicsScene):
             fp = self.lookup(comp.footprint_id)
             if fp is None:
                 continue
-            item = ComponentItem(comp, fp, board, self.side)
+            item = ComponentItem(comp, fp, board, self.side, self.show_pin_names)
             self.addItem(item)
             self.component_items[comp.id] = item
             if comp.id in previously_selected:
@@ -3311,10 +3417,12 @@ class BoardScene(QGraphicsScene):
                 # only refreshed after a command lands, so reading the reference from it would
                 # hand out a name that is already taken -- and the bus would refuse the second
                 # part of every pair as a duplicate ref.
-                ref=next_reference(self.bus.document, self._armed_id),
+                ref=next_reference(self.bus.document, self._armed_id, self.placement_prefix),
                 value=self.placement_value,
                 footprint_id=self._armed_id,
                 anchor=anchor,
+                pin_names=self.placement_pin_names,
+                symbol=self.placement_symbol,
             ),
         )
         self.componentPlaced.emit(result)

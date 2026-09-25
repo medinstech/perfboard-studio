@@ -1041,6 +1041,113 @@ def generic_box_footprint(
 
 
 # ---------------------------------------------------------------------------
+# A module: a small board of its own, on header pins
+# ---------------------------------------------------------------------------
+#
+# A BOX WAS THE WRONG SHAPE FOR THE COMMONEST THING ON A HOBBY BOARD. An ESP32 devkit, an
+# Arduino Nano, a CAN transceiver breakout: each is a circuit board of its own standing on
+# its pins, and ``box-`` described it as a solid block from the board up -- which DRC,
+# the 3D view and the guide all then believed. What matters about a module is not its
+# height as a block but three things a box cannot say: where its pins are (the only part of
+# it on this board's grid), how big its own board is, and how high that board sits -- 8.5 mm
+# up in a female header, which is how a devkit is usually fitted so it can come out again,
+# or a couple of millimetres on its own pins' plastic when it is soldered straight in.
+
+#: A module's own circuit board, which nearly every hobby module is made on.
+MODULE_PCB_MM: Mm = 1.6
+
+#: The two ways a module is fitted, as the height of its board's underside above this one.
+#: A standard 2.54 mm female header is 8.5 mm tall; a male header's plastic spacer 2.5 mm.
+MODULE_SEAT_SOCKETED_MM: Mm = 8.5
+MODULE_SEAT_SOLDERED_MM: Mm = 2.5
+
+
+def module_footprint(
+    *,
+    cols: int,
+    rows: int,
+    width_mm: Mm,
+    depth_mm: Mm,
+    top_mm: Mm,
+    seat_mm: Mm,
+    col_step: int = 1,
+    row_step: int = 1,
+    offset_x_mm: Mm = 0.0,
+    offset_y_mm: Mm = 0.0,
+    id: str | None = None,
+    name: str | None = None,
+) -> Footprint:
+    """A module on header pins: its pins on the grid, its own board above them.
+
+    The pins are laid out and numbered exactly as ``generic_box_footprint`` does -- a grid
+    of ``cols`` x ``rows``, ``col_step``/``row_step`` holes apart, numbered ROW BY ROW from
+    the anchor -- so a module and a box with the same pins are pinned the same, and what a
+    module's own silkscreen calls each pin is the part's ``pinNames``, not the footprint's.
+
+    ``width_mm`` x ``depth_mm`` is the module's board (x along the columns, y down the
+    rows), placed off the pins' centre by the offset exactly as a box is. ``seat_mm`` is how
+    high its underside sits above this board and ``top_mm`` how far its tallest part stands
+    above its own board, so the part is ``seat + 1.6 + top`` tall -- which is what DRC's
+    height rules and the guide measure.
+    """
+    if cols < 1 or rows < 1:
+        raise ValueError("a module needs at least one pin")
+    if cols * rows > _MAX_BOX_PINS:
+        raise ValueError(f"a module is limited to {_MAX_BOX_PINS} pins")
+    if col_step < 1 or row_step < 1:
+        raise ValueError("pin steps are whole grid steps and start at 1")
+    if min(width_mm, depth_mm, top_mm, seat_mm) <= 0:
+        raise ValueError("a module needs a positive board size, top and seat")
+    if abs(offset_x_mm) > _MAX_BODY_MM or abs(offset_y_mm) > _MAX_BODY_MM:
+        raise ValueError(f"a body offset is limited to {_MAX_BODY_MM} mm either way")
+    # One line of pins has no second spacing to describe, so it gets exactly one spelling.
+    col_step = col_step if cols > 1 else 1
+    row_step = row_step if rows > 1 else 1
+
+    pins = tuple(
+        _make_pin(str(row * cols + col + 1), col * col_step, row * row_step)
+        for row in range(rows)
+        for col in range(cols)
+    )
+    outline = _offset_rect_outline(
+        _to_mm(pins), width_mm, depth_mm, offset_x_mm, offset_y_mm, COURTYARD_MARGIN_MM
+    )
+    offset = offset_x_mm != 0 or offset_y_mm != 0
+    offset_token = (
+        f"-o{_format_mm_token(offset_x_mm)}x{_format_mm_token(offset_y_mm)}" if offset else ""
+    )
+    size = f"{_format_mm_token(width_mm)}x{_format_mm_token(depth_mm)}"
+    fp_id = id if id is not None else (
+        f"mod-{cols}x{rows}-p{col_step}-r{row_step}-{size}x{_format_mm_token(top_mm)}"
+        f"-s{_format_mm_token(seat_mm)}{offset_token}"
+    )
+    fp_name = name if name is not None else (
+        f"Module, {cols}x{rows} pins, {_format_mm_token(width_mm)} x "
+        f"{_format_mm_token(depth_mm)} mm, seated {_format_mm_token(seat_mm)} mm up"
+    )
+    dims: dict[str, Mm] = {
+        "width": width_mm,
+        "depth": depth_mm,
+        "top": top_mm,
+        "seat": seat_mm,
+    }
+    if offset:
+        dims["offsetX"] = offset_x_mm
+        dims["offsetY"] = offset_y_mm
+    return Footprint(
+        id=fp_id,
+        name=fp_name,
+        pins=pins,
+        body_outline=outline,
+        body_height=seat_mm + MODULE_PCB_MM + top_mm,
+        body=BodySpec(archetype="module-board", dims=dims),
+        # A header pin: 0.64 mm square, in a female header's contact or through a hole.
+        lead_diameter=0.64,
+        polarized=False,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Standard registry
 # ---------------------------------------------------------------------------
 
@@ -1249,6 +1356,12 @@ most two decimals and are written without units.
                                                         body sits off the pins' centre
   dip-<pins>[-wide]                                     a DIP of any pin count
   hdr-<rows>x<cols>                                     a pin header
+  mod-<cols>x<rows>-p<colStep>-r<rowStep>-<W>x<D>x<T>-s<S>[-o<X>x<Y>]
+                                                        a module on header pins: its pins
+                                                        as for box-, its own board W x D,
+                                                        its tallest part T above that board,
+                                                        and its board seated S mm up (8.5 in
+                                                        a female header, 2.5 soldered in)
   idc-2x<n>                                             an IDC box header, 2 rows of n
   screw-terminal-<ways>[-v]                             a screw terminal; -v takes its
                                                         wires from above (pluggable, on a
@@ -1262,7 +1375,9 @@ most two decimals and are written without units.
 box-8x2-p1-r3-20.32x7.62x4 is a 16-pin module on a 0.1 inch grid, two rows three holes
 apart. box-6x1-p1-r1-16x14.5x7-o0x6 is a 16 x 14.5 mm breakout whose one row of six pins
 runs along an edge: its body sits 6 mm down the rows from the pins' centre. The offset is
-signed, left out when it is zero, and moves the body on the part as it is turned. idc-2x8
+signed, left out when it is zero, and moves the body on the part as it is turned.
+mod-2x19-p10-r1-27.94x54.3x3.5-s8.5-o0x-3 is an ESP32-DevKitC in female headers: two
+columns of 19 pins ten holes apart, its 27.94 x 54.3 mm board 8.5 mm up. idc-2x8
 is a 16-pin box header, numbered like hdr-2x8 with the key slot on the pin-1 row. Lead
 diameter is not in the grammar: it is a manufacturing detail with a sensible default per
 family, and putting it in every id would make every id unreadable."""
@@ -1312,6 +1427,24 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
             # comparison in generated_footprint: zero is spelled by leaving it out.
             offset_x_mm=_offset(m[8]),
             offset_y_mm=_offset(m[9]),
+        ),
+    ),
+    (
+        re.compile(
+            r"^mod-(\d+)x(\d+)-p(\d+)-r(\d+)-([\d.]+)x([\d.]+)x([\d.]+)-s([\d.]+)"
+            r"(?:-o(-?[\d.]+)x(-?[\d.]+))?$"
+        ),
+        lambda m: module_footprint(
+            cols=_grid(m[1]),
+            rows=_grid(m[2]),
+            col_step=_step(m[3]),
+            row_step=_step(m[4]),
+            width_mm=_mm(m[5]),
+            depth_mm=_mm(m[6]),
+            top_mm=_mm(m[7]),
+            seat_mm=_mm(m[8]),
+            offset_x_mm=_offset(m[9]),
+            offset_y_mm=_offset(m[10]),
         ),
     ),
     (
@@ -1476,6 +1609,8 @@ BODY_DIM_KEYS: dict[BodyArchetype, tuple[str, str, Literal["x", "y"]]] = {
     # of the extent -- it is a gap in a wall, not a wall further out.
     "box-header": ("length", "width", "x"),
     "screw-terminal-vertical": ("length", "width", "x"),
+    # The module's own board, named as a box's body is: width along the columns.
+    "module-board": ("width", "depth", "x"),
 }
 
 

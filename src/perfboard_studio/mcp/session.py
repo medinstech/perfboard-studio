@@ -38,6 +38,14 @@ from perfboard_studio.autoroute import (
     plan_reroute,
 )
 from perfboard_studio.autoroute import describe as describe_route
+from perfboard_studio.catalog import (
+    CATEGORY_ORDER,
+    CatalogCategory,
+    CatalogPart,
+    catalog_part,
+    free_reference,
+    search_catalog,
+)
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import (
     KEEP,
@@ -501,6 +509,49 @@ class BoardSession:
             ],
         }
 
+    def list_catalog(self, search: str = "", category: str = "") -> list[dict[str, Any]]:
+        """Real parts by name, each already described: package, pin names, symbol, value.
+
+        What ``list_footprints`` cannot say. A TO-92 is a package; a BC547 is a part, and
+        which of its legs is the base is the fact the board depends on. Placing one with
+        ``place_component(part=...)`` fills all of that in.
+        """
+        if category and category not in CATEGORY_ORDER:
+            raise SessionError(
+                f"{category!r} is not a catalog category. They are: {', '.join(CATEGORY_ORDER)}."
+            )
+        chosen: CatalogCategory | None = category if category else None
+        return [_catalog_summary(part) for part in search_catalog(search, chosen)]
+
+    def _from_catalog(
+        self,
+        part: str,
+        ref: str,
+        footprint_id: str,
+        value: str,
+        pin_names: dict[str, str] | None,
+        symbol: str | None,
+    ) -> tuple[str, str, str, PinNames, str | None]:
+        """A catalog part's description, under anything the caller said explicitly.
+
+        Explicit wins, field by field: ``part="bc547", value="BC547B"`` is a BC547 with a
+        more exact value on the bill. An empty ``ref`` takes the part's letter and the next
+        free number.
+        """
+        names = _pin_names_arg(pin_names)
+        if not part:
+            return ref, footprint_id, value, names or (), symbol
+        entry: CatalogPart | None = catalog_part(part)
+        if entry is None:
+            raise SessionError(f"{part!r} is not in the catalog. list_catalog lists what is.")
+        return (
+            ref.strip() or free_reference(self.document, entry.reference_prefix),
+            footprint_id or entry.footprint_id,
+            value or entry.placed_value,
+            names if names is not None else entry.pin_names,
+            symbol or entry.symbol,
+        )
+
     def list_footprints(self, search: str = "") -> list[dict[str, Any]]:
         """The parts library. Free text matches the id, the name or the body type."""
         needle = search.strip().lower()
@@ -708,6 +759,7 @@ class BoardSession:
         value: str = "",
         pin_names: dict[str, str] | None = None,
         symbol: str | None = None,
+        part: str = "",
     ) -> dict[str, Any]:
         """Put a part in the DESIGN without deciding where on the board it goes.
 
@@ -717,8 +769,12 @@ class BoardSession:
 
         ``pin_names`` and ``symbol`` are what the part says about itself that its package
         cannot -- see ``model.PartSymbol``. Both are optional and both travel with the part
-        when it is placed.
+        when it is placed. ``part`` is a catalog id (``list_catalog``) that fills in the
+        footprint, value, names and symbol, under anything given explicitly.
         """
+        ref, footprint_id, value, names, symbol = self._from_catalog(
+            part, ref, footprint_id, value, pin_names, symbol
+        )
         if self.lookup(footprint_id) is None:
             raise _no_such_footprint(footprint_id)
         return self._dispatch(
@@ -727,7 +783,7 @@ class BoardSession:
                 ref=ref,
                 footprint_id=footprint_id,
                 value=value,
-                pin_names=_pin_names_arg(pin_names) or (),
+                pin_names=names,
                 symbol=cast(PartSymbol | None, symbol or None),
             ),
         )
@@ -1017,7 +1073,11 @@ class BoardSession:
         rotation: int = 0,
         pin_names: dict[str, str] | None = None,
         symbol: str | None = None,
+        part: str = "",
     ) -> dict[str, Any]:
+        ref, footprint_id, value, names, symbol = self._from_catalog(
+            part, ref, footprint_id, value, pin_names, symbol
+        )
         if self.lookup(footprint_id) is None:
             raise _no_such_footprint(footprint_id)
         return self._dispatch(
@@ -1028,7 +1088,7 @@ class BoardSession:
                 footprint_id=footprint_id,
                 anchor=_hole(hole),
                 rotation=_rotation(rotation),
-                pin_names=_pin_names_arg(pin_names) or (),
+                pin_names=names,
                 symbol=cast(PartSymbol | None, symbol or None),
             ),
         )
@@ -1690,6 +1750,24 @@ def _route_options(style: str) -> AutorouteOptions:
     if style not in get_args(RoutingStyle):
         raise SessionError(f"{style!r} is not a routing style. Use one of: {_route_styles()}.")
     return AutorouteOptions(router=options_for_style(cast(RoutingStyle, style)))
+
+
+def _catalog_summary(part: CatalogPart) -> dict[str, Any]:
+    """One catalog entry as an agent reads it. ``check`` only when there is something to
+    check -- an empty field in every row is noise that hides the rows that have one."""
+    return {
+        "id": part.id,
+        "name": part.name,
+        "category": part.category,
+        "summary": part.summary,
+        "footprint": part.footprint_id,
+        "value": part.placed_value,
+        "ref_prefix": part.reference_prefix,
+        **({"pin_names": dict(part.pin_names)} if part.pin_names else {}),
+        **({"symbol": part.symbol} if part.symbol is not None else {}),
+        "source": part.source,
+        **({"check": part.check} if part.check else {}),
+    }
 
 
 def _pin_names_arg(names: dict[str, str] | None) -> PinNames | None:

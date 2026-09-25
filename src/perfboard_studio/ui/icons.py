@@ -685,6 +685,20 @@ def _relay(p: QPainter, style: Any) -> None:
     p.drawRect(QRectF(26, 28, 48, 22))
 
 
+def _module(p: QPainter, style: Any) -> None:
+    """A small board of its own: a row of header pins down each long edge and a chip on
+    it -- the silhouette of a devkit, which is what most modules are."""
+    _fill(p, style)
+    p.drawRoundedRect(QRectF(20, 8, 60, 84), 4, 4)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor("#1b1d22"))
+    p.drawRect(QRectF(36, 22, 28, 30))
+    p.setPen(_pen("#d8b45a", 7))
+    for y in (20, 36, 52, 68, 84):
+        p.drawPoint(QPointF(28, y))
+        p.drawPoint(QPointF(72, y))
+
+
 def _generic(p: QPainter, style: Any) -> None:
     _leads(p, (36, 64), 72, 96)
     _fill(p, style)
@@ -711,6 +725,7 @@ PART_DRAWINGS: dict[str, Callable[[QPainter, Any], None]] = {
     "generic-box": _generic,
     "box-header": _box_header,
     "screw-terminal-vertical": _screw_terminal,
+    "module-board": _module,
 }
 
 

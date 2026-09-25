@@ -8389,3 +8389,154 @@ def test_a_board_with_an_offset_module_and_a_box_header_draws() -> None:
         assert drawn == [("J1", 16), ("U1", 6)]
     finally:
         _close(window)
+
+
+# ---------------------------------------------------------------------------
+# The catalog in the Parts panel, the module wizard, and pin names on the board
+# ---------------------------------------------------------------------------
+
+
+def _catalog_leaf(window, catalog_id: str):
+    from perfboard_studio.ui.main import ROLE_CATALOG_ID
+
+    tree = window.library_tree
+    for index in range(tree.topLevelItemCount()):
+        group = tree.topLevelItem(index)
+        for child in range(group.childCount()):
+            leaf = group.child(child)
+            if leaf.data(0, ROLE_CATALOG_ID) == catalog_id:
+                return leaf
+    return None
+
+
+def test_the_parts_panel_lists_real_parts_and_places_them_described() -> None:
+    """Picking BC547 places a BC547: value, pin names, symbol, and a Q reference -- the
+    whole of what the catalog says, through the same arming a package uses."""
+    window = _blank_window()
+    try:
+        leaf = _catalog_leaf(window, "bc547")
+        assert leaf is not None
+        window.library_tree.setCurrentItem(leaf)
+        assert window.library_value.text() == "BC547"
+        result = window.scene.place_armed(HoleCoord(4, 4))
+        assert result is not None and result.ok
+        (part,) = window.bus.document.components
+        assert (part.ref, part.value, part.footprint_id, part.symbol) == (
+            "Q1", "BC547", "to92", "npn"
+        )
+        assert dict(part.pin_names) == {"1": "C", "2": "B", "3": "E"}
+
+        # A 7805 is a TO-220 and it is not a transistor.
+        window.library_tree.setCurrentItem(_catalog_leaf(window, "7805"))
+        window.scene.place_armed(HoleCoord(10, 4))
+        assert window.bus.document.components[-1].ref == "U1"
+    finally:
+        _close(window)
+
+
+def test_a_bare_package_picked_after_a_catalog_part_is_a_bare_package() -> None:
+    """The catalog's value, names and symbol go back out -- a TO-92 picked after a BC547 is
+    not quietly a BC547 -- but a value the user typed stays, as it always has."""
+    from perfboard_studio.ui.main import ROLE_CATALOG_ID, ROLE_FOOTPRINT_ID
+
+    window = _blank_window()
+    try:
+        window.library_tree.setCurrentItem(_catalog_leaf(window, "bc547"))
+        tree = window.library_tree
+        bare = None
+        for index in range(tree.topLevelItemCount()):
+            group = tree.topLevelItem(index)
+            for child in range(group.childCount()):
+                leaf = group.child(child)
+                if leaf.data(0, ROLE_FOOTPRINT_ID) == "to92" and not leaf.data(0, ROLE_CATALOG_ID):
+                    bare = leaf
+        assert bare is not None
+        tree.setCurrentItem(bare)
+        assert window.library_value.text() == ""
+        assert window.scene.placement_pin_names == () and window.scene.placement_symbol is None
+        window.scene.place_armed(HoleCoord(4, 4))
+        (part,) = window.bus.document.components
+        assert (part.value, part.pin_names, part.symbol) == ("", (), None)
+
+        window.library_value.setText("2N3904")
+        tree.setCurrentItem(_catalog_leaf(window, "bc557"))
+        tree.setCurrentItem(bare)
+        assert window.library_value.text() == ""  # the catalog's BC557 went back out
+        window.library_value.setText("mine")
+        tree.setCurrentItem(bare)
+        assert window.library_value.text() == "mine"
+    finally:
+        _close(window)
+
+
+def test_the_filter_finds_a_part_by_what_it_is() -> None:
+    window = _blank_window()
+    try:
+        window.library_filter.setText("p-channel")
+        assert _catalog_leaf(window, "irf9540n") is not None
+        assert _catalog_leaf(window, "bc547") is None
+    finally:
+        _close(window)
+
+
+def test_the_module_wizard_describes_a_module_and_its_pin_names() -> None:
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import CustomPartDialog
+
+    dialog = CustomPartDialog()
+    module = next(
+        i for i in range(dialog.family.count()) if "Module" in dialog.family.itemText(i)
+    )
+    dialog.family.setCurrentIndex(module)
+    assert dialog.pin_names_edit.isVisibleTo(dialog)
+    for key, value in (("cols", 1), ("rows", 6), ("width", 16), ("depth", 14.5), ("top", 3)):
+        dialog._widgets[key].setValue(value)
+    dialog._widgets["offset_x"].setValue(6)
+    footprint = dialog.chosen()
+    assert footprint is not None
+    assert footprint.id == "mod-1x6-p1-r1-16x14.5x3-s8.5-o6x0"
+    assert get_footprint(footprint.id) == footprint
+
+    dialog.pin_names_edit.setPlainText("3V3 GND CTX CRX")
+    assert "4 name(s) for 6 pin(s)" in dialog.summary.text()
+    dialog.pin_names_edit.setPlainText("3V3, GND, CTX, CRX, CAN H, CAN L")
+    assert dict(dialog.chosen_pin_names()) == {
+        "1": "3V3", "2": "GND", "3": "CTX", "4": "CRX", "5": "CAN H", "6": "CAN L",
+    }
+
+    dialog._widgets["socketed"].setChecked(False)
+    assert dialog.chosen() is not None and dialog.chosen().id.endswith("-s2.5-o6x0")
+
+    other = next(i for i in range(dialog.family.count()) if "DIP" in dialog.family.itemText(i))
+    dialog.family.setCurrentIndex(other)
+    assert not dialog.pin_names_edit.isVisibleTo(dialog)
+    assert dialog.chosen_pin_names() == ()
+    dialog.deleteLater()
+
+
+def test_pin_names_can_be_turned_off_on_the_board() -> None:
+    window = _blank_window()
+    try:
+        window.library_tree.setCurrentItem(_catalog_leaf(window, "ne555"))
+        window.scene.place_armed(HoleCoord(6, 6))
+        drawn = [item for item in window.scene.items() if isinstance(item, ComponentItem)]
+        assert drawn and all(item.show_pin_names for item in drawn)
+        window.act_pin_names.setChecked(False)
+        drawn = [item for item in window.scene.items() if isinstance(item, ComponentItem)]
+        assert drawn and not any(item.show_pin_names for item in drawn)
+    finally:
+        _close(window)
+
+
+def test_a_board_with_pin_names_draws_them() -> None:
+    """Rendered, not just built: the names are painted at 0.9 mm, and a board with them
+    has ink beside the NE555 that a board without them does not."""
+    from perfboard_studio.mcp.session import BoardSession, new_board
+
+    with_names = BoardSession(document=new_board(cols=20, rows=12))
+    with_names.place_component("", "", "H4", part="ne555")
+    without = BoardSession(document=new_board(cols=20, rows=12))
+    without.place_component("U1", "dip-8", "H4")
+    named, _ = with_names.render_2d(px_per_mm=12)
+    plain, _ = without.render_2d(px_per_mm=12)
+    assert named != plain

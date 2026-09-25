@@ -149,6 +149,7 @@ PHASE_BY_ARCHETYPE: dict[BodyArchetype, PhaseNumber] = {
     "generic-box": 5,
     "box-header": 5,
     "screw-terminal-vertical": 5,
+    "module-board": 5,
 }
 
 #: Conductor kinds done on the solder side in phase 6, and in phase 7.
@@ -726,6 +727,19 @@ def _part_step(
             "The wires go in from ABOVE: this is the header, and the screw plug is pushed "
             "down into it. Keep the space over it clear for the plug and a screwdriver."
         )
+    if footprint.body.archetype == "module-board":
+        seat = footprint.body.dims.get("seat", 0.0)
+        if seat >= 5.0:
+            notes.append(
+                "Solder the female header strips here, not the module: it plugs in last, "
+                "after the power-up checks, and can come out again. Seat each strip square "
+                "on the board before soldering its end pins."
+            )
+        else:
+            notes.append(
+                "Soldered straight in on its own pins, so it cannot come out again without "
+                "desoldering every pin: check its orientation against the pin names first."
+            )
     if height_limit_mm is not None and footprint.body_height > height_limit_mm:
         notes.append(
             f"{footprint.body_height:g} mm tall, and this build has {height_limit_mm:g} mm "

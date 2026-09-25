@@ -305,6 +305,11 @@ BodyArchetype: TypeAlias = Literal[  # noqa: UP040
     # (180 degree) header, the kind sold as "dik klemens". It has no side mouth, so nothing
     # has to stand clear in front of it and it can live in the middle of a board.
     "screw-terminal-vertical",
+    # A small circuit board of its own -- a dev board, a breakout, a converter -- carried
+    # on its header pins: plugged into female headers soldered to this board, or soldered
+    # straight in on its own pins. The pins are the only part of it on this board's grid;
+    # everything else is the module's board, lifted clear by its seat.
+    "module-board",
 ]
 
 #: Archetypes that get hot enough to matter to a neighbour.

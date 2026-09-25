@@ -35,8 +35,14 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from perfboard_studio.footprints import MIN_BODY_MM, body_extent
-from perfboard_studio.model import BodyArchetype, Footprint
+from perfboard_studio.footprints import MIN_BODY_MM, body_extent, wire_entry
+from perfboard_studio.model import (
+    BodyArchetype,
+    ComponentInstance,
+    Footprint,
+    declared_pin_name,
+    pin_name_of,
+)
 
 # ---------------------------------------------------------------------------
 # Appearance
@@ -85,6 +91,9 @@ BODY_STYLES: dict[BodyArchetype, BodyStyle] = {
     "box-header": BodyStyle(fill="#1c1e24", edge=_PLASTIC_EDGE, accent="#d8b45a"),
     # The same green as the side-entry terminal: it is the same family, plugged in upright.
     "screw-terminal-vertical": BodyStyle(fill="#2f7d4f", edge="#164a2c", accent="#c8ccd2"),
+    # A module's own board: the blue solder mask most hobby modules are made in, with white
+    # silkscreen -- the accent -- which is what its pin names are printed in.
+    "module-board": BodyStyle(fill="#1f4f86", edge="#0e2b4d", accent="#eef2f7"),
 }
 
 #: A polarized axial part is a diode, not a resistor. Same archetype, different object.
@@ -241,6 +250,7 @@ _SILHOUETTES: dict[BodyArchetype, Silhouette] = {
     "generic-box": "rect",
     "box-header": "rect",
     "screw-terminal-vertical": "rect",
+    "module-board": "rect",
 }
 
 #: Nothing is drawn thinner than this. The engine's floor for a body's width, re-exported
@@ -481,3 +491,118 @@ __all__ = [
     "style_for",
     "surface_for",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Pin names beside the pins
+# ---------------------------------------------------------------------------
+#
+# WHAT A BOARD IS WIRED BY. A screw terminal's four ways look the same, a devkit's thirty-
+# eight pins look the same, and which one is 24V-L or GPIO4 is written nowhere on the board
+# a person solders -- only in the part's pin names, which the sheet and the guide already
+# print. So both views print them beside the pins as well, where they are needed, and one
+# function decides where: the 2D view and the 3D view put each name in the same place, or
+# the two pictures of one board would disagree about which pin is which.
+#
+# Where depends on what the part is. A MODULE has its names printed on its own board, as
+# its silkscreen does: beside each pin, running in towards the middle. Anything else gets
+# them on THIS board, just outside its body, running away from it -- a DIP's names down
+# either side like a pinout drawing, a terminal's behind it rather than across its mouth.
+# Only a part's DECLARED names are printed there: an LED's registry A and K on every LED
+# would be noise, and a name somebody typed in is one they wanted seen.
+
+#: Cap height of a printed pin name: silkscreen-sized, so it is millimetres, not pixels.
+PIN_NAME_HEIGHT_MM = 0.9
+#: On a module, how far from the pin's centre its name starts -- clear of the pad ring.
+PIN_NAME_GAP_MM = 1.25
+#: Off a module, how far past the body's edge a name starts, and never nearer the pin
+#: than this -- a pad ring is 0.95 mm across its radius.
+PIN_NAME_CLEAR_MM = 0.6
+PIN_NAME_NEAREST_MM = 1.1
+#: The longest a name is printed; longer ones are narrowed to fit.
+PIN_NAME_MAX_MM = 6.0
+#: How much of a module's board the block standing for its parts covers, each way. Both
+#: views draw it this size, and a module's names stop short of it.
+MODULE_BLOCK_FRACTION = 0.36
+#: The smallest that block is drawn, so a tiny breakout still has something on it.
+MODULE_BLOCK_MIN_MM = 3.0
+
+
+def module_block_size(size_x: float, size_y: float) -> tuple[float, float]:
+    """The block standing for what is on a module, centred on its board."""
+    return (
+        min(size_x, max(size_x * MODULE_BLOCK_FRACTION, MODULE_BLOCK_MIN_MM)),
+        min(size_y, max(size_y * MODULE_BLOCK_FRACTION, MODULE_BLOCK_MIN_MM)),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PinLabel:
+    """One pin's name and where it goes, in the footprint's own millimetres.
+
+    Local like ``BodyPlacement``: +x along the columns, +y down the rows, pin 1 at the
+    origin. Each view turns it with the part as it turns the body.
+    """
+
+    number: str
+    name: str
+    #: The pin's centre.
+    x: float
+    y: float
+    #: Which way the name runs from its pin: one of (1, 0), (-1, 0), (0, 1), (0, -1).
+    dx: float
+    dy: float
+    #: How far from the pin's centre the name starts, and the most it may run.
+    start: float
+    room: float
+    #: On the module's own board rather than on this one.
+    on_module: bool
+
+
+def pin_labels(
+    footprint: Footprint, component: ComponentInstance | None, pitch: float
+) -> tuple[PinLabel, ...]:
+    """Every named pin of a placed part, and where its name is printed."""
+    if component is None or not footprint.pins:
+        return ()
+    placement = placement_for(footprint, pitch)
+    module = footprint.body.archetype == "module-board"
+    # Names run ACROSS the header rows: along a row each has one pitch of room, across it
+    # has the width of the part.
+    columns = {pin.d_col for pin in footprint.pins}
+    rows = {pin.d_row for pin in footprint.pins}
+    across_y = len(columns) >= len(rows)
+    half = (placement.size_y if across_y else placement.size_x) / 2
+    # A terminal's names go BEHIND it: in front is its mouth, where the wires are.
+    entry = wire_entry(footprint)
+    behind = None
+    if entry is not None and not module:
+        along_entry = entry[1] if across_y else entry[0]
+        behind = -1.0 if along_entry > 0 else 1.0 if along_entry < 0 else None
+    block = module_block_size(placement.size_x, placement.size_y)
+    block_half = (block[1] if across_y else block[0]) / 2
+    labels: list[PinLabel] = []
+    for pin in footprint.pins:
+        name = (
+            pin_name_of(component, pin) if module else declared_pin_name(component, pin.number)
+        )
+        if not name:
+            continue
+        x, y = pin.d_col * pitch, pin.d_row * pitch
+        toward = (placement.centre_y - y) if across_y else (placement.centre_x - x)
+        if module:
+            sign = 1.0 if toward >= 0 else -1.0
+            start = PIN_NAME_GAP_MM
+            # Up to the block in the middle, which stands over anything printed under it.
+            room = min(max(abs(toward) - start - block_half - 0.3, 2.0), PIN_NAME_MAX_MM)
+        else:
+            # Away from the body, starting just past its edge on that side.
+            sign = behind if behind is not None else (-1.0 if toward > 1e-6 else 1.0)
+            # The body's edge on that side: its half-size, less the pin's offset from its
+            # centre towards that side (``toward`` points from the pin to the centre).
+            start = max(half + sign * toward, 0.0) + PIN_NAME_CLEAR_MM
+            start = max(start, PIN_NAME_NEAREST_MM)
+            room = PIN_NAME_MAX_MM
+        dx, dy = (0.0, sign) if across_y else (sign, 0.0)
+        labels.append(PinLabel(pin.number, name, x, y, dx, dy, start, room, module))
+    return tuple(labels)

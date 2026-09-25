@@ -745,7 +745,13 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # is GENERATED: there is nothing to configure and no stored layout, and the three
     # files the GUI writes all come out of one string, so an agent needs the picture and
     # nothing else.
-    assert len(tools) <= 51, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 52, for list_catalog. list_footprints answers "which packages are there" and
+    # nothing about a PART: a TO-92 is a BC547 or a 2N7000 or a 78L05, and which leg is the
+    # base is the fact the board depends on. An agent had to know every pinout and pass it
+    # as pin_names; the catalog knows them, and placing from it is a parameter on the two
+    # tools that already put parts in (part=), not two more tools.
+    assert len(tools) <= 52, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"

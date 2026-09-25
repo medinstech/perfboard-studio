@@ -298,6 +298,13 @@ board's thickness, the body keeps its colour from this project's own table, and 
 without a model draws exactly as it did. **Those meshes are the one part of this repository
 that is not Apache-2.0** — see [Licence](#licence).
 
+**A real part is picked by its name.** The Parts panel starts with a catalog of the parts
+a perfboard is actually built from -- BC547, IRF9540N, 7805, NE555, an ESP32-DevKitC --
+and picking one places it with its value, what its datasheet calls every lead and the
+symbol it is drawn as already filled in. Those names are printed beside the pins on the
+board and in 3D (*View ▸ Show Pin Names*), which is what a terminal or a devkit is wired
+by. A dev board is a *module*: its own board up on its header pins, drawn that way.
+
 **A part that is not among the 61 is described, not installed.** *Custom Part…* asks for a
 pin grid and three dimensions and hands back an identifier that carries them:
 `box-4x2-p1-r3-15x10x8` is a four-by-two pin grid, three holes between the rows, in a
@@ -330,7 +337,7 @@ Next, in the order [PLAN.md](https://github.com/medinstech/perfboard-studio/blob
 
 | | |
 |---|---|
-| [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | the 51 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
+| [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | the 52 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
 | [examples/README.md](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) | what each of the four example boards is there to demonstrate |
 | [CHANGELOG.md](https://github.com/medinstech/perfboard-studio/blob/main/CHANGELOG.md) | every release, and what an unreleased build is accumulating towards the next one |
 | [docs/RELEASING.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/RELEASING.md) | the tag ritual, and what `release.yml` builds out of it on three platforms |

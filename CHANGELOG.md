@@ -22,6 +22,33 @@ closed without a bump.
 
 ### Added
 
+- **Real parts by name: the catalog.** The library is sixty-one packages, and a package is
+  not a part -- a TO-92 is a BC547 or a 2N7000 or a 78L05, and which leg is the base is the
+  fact the board depends on. `perfboard_studio.catalog` lists 58 parts a perfboard is
+  actually built from -- bipolar and MOSFET transistors, regulators and references, diodes
+  and zeners, a PTC, sensors, DIP ICs and five dev boards -- each with its package, what
+  its datasheet calls every lead, its symbol, its value and its reference letter, and
+  `source` saying whose datasheet that is. They head the Parts panel, grouped by kind and
+  found by what they are ("p-channel", "esp32"); picking one places it with all of that
+  filled in, dragged or clicked, on the board or the sheet. Nothing in the document refers
+  back: what lands is an ordinary part, so a board opens the same anywhere. Over MCP,
+  `list_catalog` lists them and `place_component` / `add_part` take `part="bc547"`.
+- **A module on header pins: `mod-<cols>x<rows>-p<c>-r<r>-<W>x<D>x<T>-s<seat>[-o<X>x<Y>]`.**
+  A devkit or a breakout is a board of its own standing on its pins, and `box-` described
+  it as a solid block from the board up. The new `module-board` archetype knows its pins,
+  its own board, how high that sits -- 8.5 mm in a female header, 2.5 mm soldered on its
+  own pins -- and the height of what is on it. 3D draws the board on its header strips
+  with its pins through it; the guide says to solder the headers and plug the module in
+  last. The catalog's ESP32-DevKitC V4 is measured from Espressif's own DXF; the
+  ESP32-C3-DevKitM-1, Arduino Nano, Raspberry Pi Pico and WEMOS D1 mini from KiCad's
+  footprints. *Custom Part…* has a module family that takes the pin names too.
+- **Pin names on the board, and a switch for them.** A part's pin names are printed beside
+  its pins in 2D and 3D: on a module's own board as its silkscreen is, and on this board
+  just outside anything else -- a DIP's down either side, a terminal's behind it rather
+  than across its mouth -- on a dark tag, since white ink across white pad rings cannot
+  be read. Only names a part declares are printed off a module. *View ▸ Show Pin Names*
+  turns them off for a crowded board being placed or routed.
+
 - **A screw terminal whose wires go in from above: `screw-terminal-<n>-v`.** The pluggable
   block on a vertical (180°) header — what is sold as a "dik klemens" — pinned exactly like
   `screw-terminal-<n>`, so one swaps for the other without moving a pin. It has no side
