@@ -187,6 +187,19 @@ closed without a bump.
 
 ### Fixed
 
+- **Four borrowed 3D models stood beside their holes.** The TO-92 was KiCad's
+  `TO-92_Inline`, whose legs are 1.27 mm apart, on a footprint whose legs are 2.54 mm apart:
+  its middle leg came down between two holes and the case sat a hole to one side. The 3-hole
+  disc capacitor's legs stood 1.3 mm beside both its holes, the tactile switch's missed by
+  up to 2 mm, and the relay's model (a CUI SR5) had another pinout than `relay-spdt`
+  altogether. The TO-92 is now KiCad's `TO-92_Inline_Wide` — the same part with its legs bent
+  out to the grid; the disc capacitor, the tactile switch and the radial electrolytics have
+  their legs bent onto the holes by the converter, as whoever fits them bends them
+  (`splay` in `tools/import_kicad_models.py`); and the relay is drawn as its generated box,
+  which is its own footprint's size, because no KiCad relay has its on-grid pinout.
+  `tests/test_model_leads.py` measures every lead of every shipped mesh against its hole —
+  on the old meshes it fails for exactly these eight.
+
 - **Generated screw terminals were drawn with blotches in 3D.** A terminal with no borrowed
   model — four ways and up — had its screw heads' tops exactly in the block's top face and
   its wire openings 0.02 mm proud of the front, and the depth buffer cannot tell either from

@@ -85,11 +85,26 @@ class Model:
     #: Keep only ``x0 <= x < x1`` of the model, in its own frame and before ``offset`` moves
     #: it -- one WAY of a terminal block rather than the whole block. See ``clip_x``.
     clip: tuple[float, float] | None = None
+    #: Bend the model's bare leads onto our holes, as whoever fits the part bends its legs
+    #: to the grid. For a package made on a pitch the grid does not have. See ``splay_leads``.
+    splay: bool = False
 
 
 #: WHICH KiCad PACKAGE IS THE SAME PART. Chosen by PITCH first and outline second: a model
 #: whose leads are 5 mm apart dropped onto a footprint whose holes are 2.54 mm apart is a
 #: part standing on nothing, and it is the mistake that looks like a rendering bug.
+#:
+#: It was made anyway, four times, because nothing measured it: the TO-92 was KiCad's
+#: 1.27 mm ``TO-92_Inline`` on a footprint whose legs are 2.54 mm apart (its middle leg
+#: stood between two holes), the 3-hole disc capacitor stood 1.3 mm beside both its holes,
+#: the tactile switch's legs missed by up to 2 mm and the relay's model had another pinout
+#: altogether. ``tests/test_model_leads.py`` now measures every lead against the hole it
+#: goes in. Where KiCad has the part with its legs already bent to the grid, that model is
+#: used (``TO-92_Inline_Wide``); where it has only the part as made, the legs are bent here
+#: (``splay``); and a part whose model has another pinout has no model. The relay is that
+#: last case: ``relay-spdt`` is an on-grid approximation (coil pins in one column, NO/COM/NC
+#: in another) that neither KiCad's Songle/Sanyou SRD nor its CUI SR5 is, so it keeps the
+#: generated box, which is its own footprint's size.
 MODELS: tuple[Model, ...] = (
     # -- ICs ---------------------------------------------------------------
     Model("dip-8", "Package_DIP", "DIP-8_W7.62mm"),
@@ -107,25 +122,35 @@ MODELS: tuple[Model, ...] = (
     Model("d-do35", "Diode_THT", "D_DO-35_SOD27_P7.62mm_Horizontal"),
     Model("d-do41", "Diode_THT", "D_DO-41_SOD81_P10.16mm_Horizontal"),
     # -- capacitors --------------------------------------------------------
-    Model("c-elec-d5-p2", "Capacitor_THT", "CP_Radial_D5.0mm_P2.50mm", offset=(1.29, 0.0)),
-    Model("c-elec-d6.3-p2", "Capacitor_THT", "CP_Radial_D6.3mm_P2.50mm", offset=(1.29, 0.0)),
-    Model("c-elec-d8-p3", "Capacitor_THT", "CP_Radial_D8.0mm_P5.00mm", offset=(1.31, 0.0)),
-    Model("c-elec-d10-p3", "Capacitor_THT", "CP_Radial_D10.0mm_P5.00mm", offset=(1.31, 0.0)),
+    # A radial can is made with its leads 2.5 or 5 mm apart and goes in holes two or three
+    # apart, so the legs are bent out under it -- as they are on the board.
+    Model("c-elec-d5-p2", "Capacitor_THT", "CP_Radial_D5.0mm_P2.50mm", offset=(1.29, 0.0),
+          splay=True),
+    Model("c-elec-d6.3-p2", "Capacitor_THT", "CP_Radial_D6.3mm_P2.50mm", offset=(1.29, 0.0),
+          splay=True),
+    Model("c-elec-d8-p3", "Capacitor_THT", "CP_Radial_D8.0mm_P5.00mm", offset=(1.31, 0.0),
+          splay=True),
+    Model("c-elec-d10-p3", "Capacitor_THT", "CP_Radial_D10.0mm_P5.00mm", offset=(1.31, 0.0),
+          splay=True),
     Model("c-disc-p2", "Capacitor_THT", "C_Disc_D5.0mm_W2.5mm_P5.00mm"),
-    Model("c-disc-p3", "Capacitor_THT", "C_Disc_D7.5mm_W2.5mm_P5.00mm", offset=(1.31, 0.0)),
+    # KiCad's 7.5 mm disc on a 7.5 mm pitch is the 5 mm thick one; ours is 2.5 mm thick.
+    Model("c-disc-p3", "Capacitor_THT", "C_Disc_D7.5mm_W2.5mm_P5.00mm", offset=(1.31, 0.0),
+          splay=True),
     Model("c-film-p2", "Capacitor_THT", "C_Rect_L7.0mm_W2.5mm_P5.00mm"),
     Model("c-film-p3", "Capacitor_THT", "C_Rect_L10.0mm_W2.5mm_P7.50mm_MKS4"),
     # -- everything with its own shape ------------------------------------
-    Model("to92", "Package_TO_SOT_THT", "TO-92_Inline"),
+    # The WIDE one: legs bent out to 2.54 mm, which is what our footprint is. The inline
+    # model is the part as made, legs 1.27 mm apart.
+    Model("to92", "Package_TO_SOT_THT", "TO-92_Inline_Wide"),
     Model("to220", "Package_TO_SOT_THT", "TO-220-3_Vertical"),
     Model("led-3mm", "LED_THT", "LED_D3.0mm", materials=(("#720301", "lens"),)),
     Model("led-5mm", "LED_THT", "LED_D5.0mm", materials=(("#720301", "lens"),)),
     Model("led-10mm", "LED_THT", "LED_D10.0mm", materials=(("#720301", "lens"),)),
     Model("xtal-hc49", "Crystal", "Crystal_HC49-U_Vertical",
           materials=(("#2a2a2a", "steel"),)),
-    Model("sw-tactile", "Button_Switch_THT", "SW_PUSH_6mm"),
-    Model("relay-spdt", "Relay_THT", "Relay_SPDT_CUI_SR5", rotate=90.0,
-          materials=(("#9e2705", "gloss"),)),
+    # Legs 6.5 x 4.5 mm on a 5.08 x 2.54 mm footprint: the case is centred on the four holes,
+    # as the footprint's courtyard is, and the legs bent in to them.
+    Model("sw-tactile", "Button_Switch_THT", "SW_PUSH_6mm", offset=(-0.61, 0.98), splay=True),
     Model("screw-terminal-2", "TerminalBlock_Phoenix",
           "TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"),
     Model("screw-terminal-3", "TerminalBlock_Phoenix",
@@ -361,6 +386,92 @@ def clip_x(
     return out_points, out_faces
 
 
+#: How far above the cut a lead is sampled to find its foot. Well under the height of any
+#: body's underside, so a lead's foot is never confused with the part it holds up.
+_FOOT_BAND_MM = 0.3
+
+
+def pin_positions(footprint_id: str) -> list[tuple[float, float]]:
+    """Where our footprint's holes are, in the model's frame: pin 1 at the origin, x with
+    the column and y against the row -- the frame ``partmodels`` places a mesh in."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.model import STANDARD_PITCH_MM
+
+    footprint = get_footprint(footprint_id)
+    if footprint is None:
+        raise SystemExit(f"{footprint_id}: no such footprint")
+    return [(p.d_col * STANDARD_PITCH_MM, -p.d_row * STANDARD_PITCH_MM) for p in footprint.pins]
+
+
+def lead_feet(points: list[Any]) -> list[tuple[float, float]]:
+    """Where each lead of a mesh meets the board: the centre of every separate patch of
+    vertices within ``_FOOT_BAND_MM`` of the cut. Leads are millimetres apart and under a
+    millimetre across, so a patch is one lead."""
+    patches: list[list[tuple[float, float]]] = []
+    for x, y, z in points:
+        if z > CUT_Z + _FOOT_BAND_MM:
+            continue
+        for patch in patches:
+            px = sum(p[0] for p in patch) / len(patch)
+            py = sum(p[1] for p in patch) / len(patch)
+            if math.hypot(px - x, py - y) < 1.0:
+                patch.append((x, y))
+                break
+        else:
+            patches.append([(x, y)])
+    return [
+        (sum(p[0] for p in patch) / len(patch), sum(p[1] for p in patch) / len(patch))
+        for patch in patches
+    ]
+
+
+def splay_leads(
+    groups: dict[Any, tuple[list[Any], list[Any]]], pins: list[tuple[float, float]]
+) -> dict[Any, tuple[list[Any], list[Any]]]:
+    """Every bare lead bent from where it leaves the part to the hole it goes in.
+
+    A PART'S LEGS ARE NOT WHERE THE GRID IS, and on a perfboard nobody expects them to be:
+    a 7.5 mm disc capacitor is made with its leads 5 mm apart and goes in holes 7.62 mm
+    apart, so whoever fits it bends them. KiCad draws the part as made -- straight legs
+    standing 1.3 mm beside our holes, which in a view that exists to show which hole a lead
+    is in reads as the wrong footprint. This does what the builder does. Each lead keeps
+    its top, where it leaves the body, as a hinge; its foot moves onto the nearest hole;
+    and every point between leans in proportion to how far down the lead it is. The top
+    staying put is what keeps the lead joined to whatever it came out of.
+
+    Only the bare leads (``tinned``) move. Each foot goes to its nearest hole, and two feet
+    wanting the same hole is a mapping that is wrong rather than one to bend into shape.
+    """
+    moved = dict(groups)
+    for colour, (points, faces) in groups.items():
+        if MATERIALS.get(hexed(colour)) != "tinned":
+            continue
+        feet = lead_feet(points)
+        targets = [
+            min(pins, key=lambda pin, fx=fx, fy=fy: math.hypot(pin[0] - fx, pin[1] - fy))
+            for fx, fy in feet
+        ]
+        if len(set(targets)) != len(targets):
+            raise SystemExit(f"two leads would go in one hole: feet {feet}, holes {targets}")
+        owner = [
+            min(range(len(feet)), key=lambda i, x=x, y=y: math.hypot(feet[i][0] - x, feet[i][1] - y))
+            for x, y, _z in points
+        ]
+        tops = [
+            max((p[2] for p, o in zip(points, owner, strict=True) if o == lead), default=CUT_Z)
+            for lead in range(len(feet))
+        ]
+        bent = []
+        for (x, y, z), lead in zip(points, owner, strict=True):
+            top = tops[lead]
+            share = 0.0 if top <= CUT_Z else min(1.0, max(0.0, (top - z) / (top - CUT_Z)))
+            dx = targets[lead][0] - feet[lead][0]
+            dy = targets[lead][1] - feet[lead][1]
+            bent.append((x + dx * share, y + dy * share, z))
+        moved[colour] = (bent, faces)
+    return moved
+
+
 def write_ply(path: Path, points: list[Any], faces: list[Any]) -> None:
     """Binary little-endian PLY, which is what ``vtkPLYReader`` wants and what a mesh tool
     on any platform can open if somebody wants to look at one."""
@@ -432,6 +543,8 @@ def main(argv: list[str] | None = None) -> int:
         parts = []
         if model.clip is None:
             groups = groups_of(source, model.rotate, model.offset)
+            if model.splay:
+                groups = splay_leads(groups, pin_positions(model.footprint))
         else:
             # Clipped in the model's own frame, then moved: the cut positions are written
             # against the pins as KiCad places them.

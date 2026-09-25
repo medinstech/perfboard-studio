@@ -290,7 +290,8 @@ The same spec that draws a part in 2D extrudes its body in 3D, so the two cannot
 and a part nobody has a model for is still a whole part.
 
 **The 3D view borrows the real shape of the packages KiCad has one for** — a TO-220 with
-its tab and bolt hole, a relay, a screw terminal with slots in its screws — because a
+its tab and bolt hole, a TO-92 with its legs bent out to the grid, a screw terminal with
+slots in its screws — because a
 potentiometer generated from a diameter and a height is a disc with a peg on it. Only the
 shape above the board is borrowed: the leads through the holes are drawn from *your*
 board's thickness, the body keeps its colour from this project's own table, and every part

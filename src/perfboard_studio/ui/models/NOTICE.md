@@ -34,6 +34,11 @@ The meshes are not the KiCad models unaltered:
   application can shade a metal tab and a plastic case differently.
 - **Some were turned or shifted** so that the package sits on the holes of the footprint it
   is drawn for. The amounts are in `tools/import_kicad_models.py`.
+- **Some had their leads bent.** A package made on a pitch the perfboard grid does not have
+  — a radial electrolytic with its leads 2.5 mm apart, a 7.5 mm disc capacitor with 5 mm,
+  a 6 mm tactile switch — has each bare lead leaned in a straight line from where it leaves
+  the part to the hole it goes in, as whoever fits the part bends its legs. Which ones is
+  the `splay` flag in `tools/import_kicad_models.py`.
 - **One was cut into ways.** `screw-terminal-head`, `-way` and `-tail` are three slices of
   `TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal`, each moved so its own pin
   is at the origin; the application puts them side by side to draw a block of any length.
