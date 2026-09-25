@@ -9681,6 +9681,29 @@ def _language_argument(argv: list[str]) -> str | None:
     return None
 
 
+def _document_arguments(argv: list[str]) -> list[str]:
+    """The paths on a command line: everything that is neither a flag nor a flag's value.
+
+    ``--lang tr`` is two arguments, and the second one does not start with ``--``. Taking
+    "not a flag" as the whole test made ``perfboard-studio --lang tr board.perf`` -- the
+    spelling the README gives -- try to open a file called ``tr`` and exit. The value is
+    skipped by the same reading ``_language_argument`` gives it, so the two cannot disagree
+    about which argument the language is.
+    """
+    paths: list[str] = []
+    skip_next = False
+    for arg in argv[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--lang":
+            skip_next = True
+            continue
+        if not arg.startswith("--"):
+            paths.append(arg)
+    return paths
+
+
 def _preferred_language(argv: list[str]) -> str | None:
     """The language to start in: the flag, then the variable, then the last choice made.
 
@@ -9746,7 +9769,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     _apply_application_icon(app)
-    argv_paths = [a for a in sys.argv[1:] if not a.startswith("--")]
+    argv_paths = _document_arguments(sys.argv)
     path: Path | None
     if argv_paths:
         path = Path(argv_paths[0])

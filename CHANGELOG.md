@@ -168,6 +168,10 @@ closed without a bump.
 
 ### Fixed
 
+- **`perfboard-studio --lang tr board.perf` opens the board.** The spelling the README
+  gives took `tr` for a file to open and exited with "Cannot open tr"; only `--lang=tr`
+  worked with a file after it. The value after `--lang` is no longer read as a path.
+
 - **The build guide printed AWG 18 for any current from 5 A up** — for 5 A and for 50 A
   alike, because its table stopped there. Past about 8 A it now names the gauge the current
   needs (AWG 16 to AWG 10). Below that nothing it prints has changed.

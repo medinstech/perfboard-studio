@@ -311,6 +311,18 @@ def test_the_command_line_flag_is_parsed_both_ways() -> None:
     assert _language_argument(["perfboard-studio", "--lang"]) is None
 
 
+def test_the_language_is_not_taken_for_a_file_to_open() -> None:
+    """``--lang tr board.perf`` opened a file called "tr" and exited: the path list took
+    every argument not starting with ``--``, and the flag's value does not."""
+    from perfboard_studio.ui.main import _document_arguments
+
+    assert _document_arguments(["perfboard-studio", "--lang", "tr", "board.perf"]) == ["board.perf"]
+    assert _document_arguments(["perfboard-studio", "board.perf", "--lang", "tr"]) == ["board.perf"]
+    assert _document_arguments(["perfboard-studio", "--lang=tr", "board.perf"]) == ["board.perf"]
+    assert _document_arguments(["perfboard-studio", "--lang", "tr"]) == []
+    assert _document_arguments(["perfboard-studio", "--lang"]) == []
+
+
 def test_available_lists_exactly_what_can_be_selected() -> None:
     assert set(AVAILABLE) == {"en", *CATALOGUES}
 
