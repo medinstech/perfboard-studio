@@ -137,14 +137,22 @@ closed without a bump.
 
   - **`terminal-entry-blocked`**, a new warning: another part's body stands within 8 mm of
     the mouth, across the terminal's width. One finding per terminal, naming every part in
-    the way. A mouth facing into the board over clear space is deliberately NOT reported —
-    a cable can cross a board, and nothing here knows where it goes.
+    the way. A mouth facing into the board over clear space in the MIDDLE of a board is
+    deliberately not reported — a cable can cross a board, and nothing here knows where it
+    goes.
+  - **`terminal-entry-faces-in`**, a new warning: a terminal standing ON an edge — its body
+    within two holes of it — with its mouth facing away from that edge. A terminal goes to
+    an edge because its wires come from outside; facing in from there, every one of them
+    doubles back over the board. On the first real board four terminals of six stood on an
+    edge facing in, over clear board, and nothing said so. Two holes and not one because one
+    of those four sat a hole and 0.3 mm in. A terminal in a corner may face either edge.
   - **The placer** prices exactly those (terminal, obstacle) pairs, and — as a preference no
     rule holds — how much board lies between each mouth and the edge it faces, which is
     what turns a terminal round. The arrangement puts each terminal's mouth out of the edge
     it is placed on.
   - **Choosing between anneals, what DRC warns cannot be built now outranks what it costs
-    to route**, for bodies over the edge as well as blocked mouths. The routed cost alone
+    to route**, for bodies over the edge, blocked mouths and terminals facing in from an
+    edge. The routed cost alone
     kept whatever board routed cheapest: on the first real board laid out with this tool
     the annealer cleared both blocked terminals, that arrangement routed for 812 against
     the original's 726, and the original — two terminals nobody could push a wire into —

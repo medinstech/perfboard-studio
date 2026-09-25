@@ -108,11 +108,13 @@ from .geometry import (
     convex_polygons_overlap,
     edge_overhangs_mm,
     entry_blocked_by,
+    entry_faces_away,
     entry_run_mm,
     entry_side,
     format_hole,
     hangs_over_edge,
     is_axis_aligned_box,
+    on_edge_reach_mm,
     substrate_edges_mm,
     transform_offset,
     turned_box,
@@ -258,6 +260,11 @@ class PlacementWeights:
     #: same: a WARNING rather than an error, and still above anything a part could save by
     #: standing in front of the mouth -- the wire has to go in somewhere.
     entry_blocked: float = 100.0
+    #: Per terminal standing on a board edge with its wire entry facing away from it --
+    #: DRC's ``terminal-entry-faces-in``, by the same predicate
+    #: (``geometry.entry_faces_away``). Priced like a blocked entry and for the same
+    #: reason: a warning, and above anything the wires it would save could be worth.
+    entry_faces_in: float = 100.0
     #: Per mm of board between a terminal's wire entry and the edge it faces.
     #:
     #: A PREFERENCE, and the one no rule holds: DRC deliberately says nothing about a mouth
@@ -370,6 +377,9 @@ class PlacementCost:
     #: cross to reach the edge each one faces. Both zero on a board with no terminal.
     entry_blocked: int = 0
     entry_mm: float = 0.0
+    #: Terminals on an edge whose mouth faces away from it, by the predicate DRC's
+    #: ``terminal-entry-faces-in`` uses.
+    entry_facing_in: int = 0
 
     def total(self, weights: PlacementWeights) -> float:
         return (
@@ -388,15 +398,16 @@ class PlacementCost:
             + weights.overhang * self.overhang_mm
             + weights.entry_blocked * self.entry_blocked
             + weights.entry * self.entry_mm
+            + weights.entry_faces_in * self.entry_facing_in
         )
 
     @property
     def physical_warnings(self) -> int:
         """Parts DRC will warn cannot be built as placed, though the document is legal: a
         body hanging past the edge, and a (terminal, part) pair where the part stands in the
-        terminal's wire entry. What ``_pick_best`` ranks ahead of the routed cost -- see
-        there for why."""
-        return self.overhanging_parts + self.entry_blocked
+        terminal's wire entry, and a terminal on an edge facing away from it. What
+        ``_pick_best`` ranks ahead of the routed cost -- see there for why."""
+        return self.overhanging_parts + self.entry_blocked + self.entry_facing_in
 
     @property
     def is_legal(self) -> bool:
@@ -424,8 +435,8 @@ class PlacementCost:
         keeps the annealer from proposing one, and a part somebody locked there on purpose
         is not an illegal board.
 
-        ``entry_blocked`` is left out by the same argument: DRC reports a blocked wire entry
-        as a warning.
+        ``entry_blocked`` and ``entry_facing_in`` are left out by the same argument: DRC
+        reports both as warnings.
         """
         return (
             self.overlap_pairs == 0
@@ -553,6 +564,8 @@ def describe(plan: PlacementPlan) -> str:
         parts.append(f"{plan.before.overhanging_parts} part(s) brought back over the board")
     if plan.before.entry_blocked > 0 and plan.after.entry_blocked == 0:
         parts.append(f"{plan.before.entry_blocked} blocked wire entr(ies) cleared")
+    if plan.before.entry_facing_in > 0 and plan.after.entry_facing_in == 0:
+        parts.append(f"{plan.before.entry_facing_in} terminal(s) turned to face their edge")
     if plan.route_cost is not None:
         parts.append(f"routing cost {plan.route_cost:.0f}")
     return ", ".join(parts)
@@ -1285,6 +1298,28 @@ class _Scorer:
             self.edges,
         )
 
+    def entry_inward(self, state: _State, position: int) -> int:
+        """1 if this part is a terminal on an edge with its mouth facing away from it.
+
+        DRC's ``terminal-entry-faces-in`` spelled out: the real body turned with the part,
+        the direction its entry faces, ``geometry.on_edge_reach_mm`` as the reach -- through
+        ``geometry.entry_faces_away``, which is the whole of the rule. A part with a pin off
+        the grid is skipped, as DRC skips it: ``off_board`` prices that part, and counting it
+        here too would score one fact twice -- and disagree with the checker.
+        """
+        direction = state.parts[position].entry_dir[state.rot[position]]
+        if direction is None:
+            return 0
+        for col, row in state.pins(position):
+            if not (0 <= col < self.board_cols and 0 <= row < self.board_rows):
+                return 0
+        body = state.parts[position].rel_body[state.rot[position]]
+        x = state.col[position] * self.board_pitch
+        y = state.row[position] * self.board_pitch
+        box = (x + body.min_x, x + body.max_x, y + body.min_y, y + body.max_y)
+        reach = on_edge_reach_mm(self.board_pitch)
+        return 1 if entry_faces_away(box, direction, self.edges, reach) else 0
+
     def entry_pair(self, state: _State, a: int, b: int) -> int:
         """How many of the two stand in the other's wire entry: 0, 1 or 2.
 
@@ -1400,6 +1435,7 @@ class _Scorer:
         overhanging = 0
         overhang = 0.0
         entry_run = 0.0
+        facing_in = 0
         for position in range(len(state.parts)):
             part_off, part_dead, part_edge = self.part_terms(state, position)
             off_board += part_off
@@ -1409,6 +1445,7 @@ class _Scorer:
             overhanging += part_over
             overhang += part_overhang
             entry_run += self.entry_run(state, position)
+            facing_in += self.entry_inward(state, position)
 
         pairs = 0
         blocked = 0
@@ -1437,6 +1474,7 @@ class _Scorer:
             overhang_mm=overhang,
             entry_blocked=blocked,
             entry_mm=entry_run,
+            entry_facing_in=facing_in,
         )
 
     def local(self, state: _State, positions: tuple[int, ...]) -> float:
@@ -1477,6 +1515,8 @@ class _Scorer:
                 # The same care: only a terminal has a run, and a board without one sums
                 # exactly as it did.
                 total += weights.entry * run
+            if self.entry_inward(state, position):
+                total += weights.entry_faces_in
 
         count = len(state.parts)
         for a in positions:

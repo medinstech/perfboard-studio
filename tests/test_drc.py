@@ -297,6 +297,7 @@ PYTHON_ONLY_RULES = frozenset(
         "component-overhangs-edge",
         "wire-too-thick-for-hole",
         "terminal-entry-blocked",
+        "terminal-entry-faces-in",
     }
 )
 

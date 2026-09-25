@@ -438,3 +438,95 @@ def test_a_generated_terminal_draws_its_openings_on_the_entry_face() -> None:
         assert piece.position[0] < pin_x
     none = view3d._world_body(REGISTRY, part("R1", "r-axial-3", 3, 3), BOARD)
     assert none is not None and none.entry is None and view3d._wire_entry_pieces(none) == []
+
+
+# ---------------------------------------------------------------------------
+# On an edge and facing away from it
+# ---------------------------------------------------------------------------
+#
+# ``terminal-entry-faces-in``: the half ``entry_run`` only preferred. Rotation 0 puts the
+# mouth on local +y, which is the BOTTOM of the board, so a terminal on row 0 at rotation 0
+# faces into the board and one on the last row faces out of it.
+
+
+def faces_in(doc: PerfDocument) -> list[DrcViolation]:
+    return [v for v in run_drc(doc, REGISTRY) if v.rule == "terminal-entry-faces-in"]
+
+
+def test_a_terminal_on_an_edge_facing_into_the_board_is_reported() -> None:
+    top_facing_in = part("J1", "screw-terminal-3", 10, 0, rotation=0)
+    found = faces_in(doc_of(top_facing_in))
+    assert len(found) == 1
+    assert "stands on the top edge" in found[0].message
+    assert "Turn J1 so its entries face the top edge" in found[0].message
+
+
+@pytest.mark.parametrize(
+    "col,row,rotation",
+    [
+        (10, 0, 180),  # top edge, facing up and out
+        (10, BOARD.rows - 1, 0),  # bottom edge, facing down and out
+        (15, 15, 0),  # the middle of the board: nothing says where its cable comes from
+    ],
+    ids=["top-facing-out", "bottom-facing-out", "mid-board"],
+)
+def test_a_terminal_facing_its_edge_or_in_the_middle_is_not(col: int, row: int, rotation: int) -> None:
+    assert faces_in(doc_of(part("J1", "screw-terminal-3", col, row, rotation=rotation))) == []
+
+
+def test_in_a_corner_either_edge_will_do() -> None:
+    """On the top edge AND the left, facing up: it faces one of its edges, which is all a
+    terminal in a corner can do."""
+    corner = part("J1", "screw-terminal-2", 0, 0, rotation=180)
+    assert faces_in(doc_of(corner)) == []
+
+
+def test_one_hole_and_a_sliver_from_the_edge_is_still_on_it() -> None:
+    """The case that set the reach at two pitches: a terminal a hole in from the edge,
+    facing in, is on the edge to anybody looking at it. Far enough in, it is not."""
+    assert len(faces_in(doc_of(part("J1", "screw-terminal-3", 10, 1, rotation=0)))) == 1
+    assert faces_in(doc_of(part("J1", "screw-terminal-3", 10, 8, rotation=0))) == []
+
+
+def test_the_placer_counts_what_drc_reports_facing_in() -> None:
+    """One predicate, two consumers, over random boards with terminals near every edge."""
+    rng = random.Random(4321)
+    total = 0
+    for _ in range(300):
+        components = [
+            part(
+                f"J{i}",
+                rng.choice(("screw-terminal-2", "screw-terminal-3")),
+                rng.randrange(0, BOARD.cols - 6),
+                rng.choice((0, 1, 2, 3, BOARD.rows - 3, BOARD.rows - 2, BOARD.rows - 1,
+                            rng.randrange(0, BOARD.rows))),
+                rng.choice((0, 90, 180, 270)),
+                rng.random() < 0.3,
+            )
+            for i in range(3)
+        ]
+        doc = doc_of(*components)
+        state, scorer = _scorer_for(doc, PlacementWeights())
+        placer_count = scorer.full(state).entry_facing_in
+        assert placer_count == len(faces_in(doc))
+        total += placer_count
+    assert total > 0
+
+
+def test_the_placer_turns_an_edge_terminal_to_face_out() -> None:
+    doc = doc_of(
+        part("J1", "screw-terminal-2", 10, 0, rotation=0),
+        part("R1", "r-axial-3", 10, 6),
+        nets=(Net(id="n1", name="A", nodes=(NetNode("J1", "1"), NetNode("R1", "1"))),),
+    )
+    state, scorer = _scorer_for(doc, PlacementWeights())
+    assert scorer.full(state).entry_facing_in == 1
+    plan = plan_placement(doc, REGISTRY, PlacementOptions(seed=3))
+    assert plan.after.entry_facing_in == 0
+    assert "turned to face their edge" in describe(plan)
+
+
+def test_the_facing_in_rule_fires_on_no_golden_fixture() -> None:
+    for path in sorted(GOLDEN_DIR.glob("*.perf")):
+        doc = persist.parse_document_or_throw(path.read_text(encoding="utf-8"))
+        assert faces_in(doc) == [], path.name

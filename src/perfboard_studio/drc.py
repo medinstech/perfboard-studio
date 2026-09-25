@@ -51,6 +51,7 @@ from .geometry import (
     edge_connector_holes,
     edge_overhangs_mm,
     entry_blocked_by,
+    entry_faces_away,
     entry_side,
     format_hole,
     hangs_over_edge,
@@ -63,6 +64,7 @@ from .geometry import (
     mounting_head_covers,
     neighbors4,
     neighbour_axis,
+    on_edge_reach_mm,
     path_length_mm,
     paths_cross,
     pin_hole,
@@ -784,6 +786,31 @@ def _check_wire_entries(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcV
             continue
         corridor, facing = entry
         side = entry_side(facing)
+        # On an edge and facing away from it: the wires come from outside and have to
+        # double back over the board. Its own finding, independent of the one below --
+        # a mouth can be clear and still face the wrong way, or face the right way and
+        # have a part in front of it -- and counted exactly as ``placer`` counts it.
+        away_from = entry_faces_away(
+            bodies[component.id], facing, substrate_edges_mm(board), on_edge_reach_mm(board.pitch)
+        )
+        if away_from:
+            on = " and ".join(away_from)
+            violations.append(
+                DrcViolation(
+                    rule="terminal-entry-faces-in",
+                    severity="warning",
+                    message=(
+                        f"Screw terminal {component.ref} (anchored at "
+                        f"{_safe_hole(component.anchor)}) stands on the {on} "
+                        f"edge{'s' if len(away_from) > 1 else ''} of the board but takes "
+                        f"its wires in from the {side}: every wire has to come in from "
+                        f"outside and double back over the board to reach it. Turn "
+                        f"{component.ref} so its entries face the {away_from[0]} edge."
+                    ),
+                    holes=(component.anchor,),
+                    component_ids=(component.id,),
+                )
+            )
         in_the_way = sorted(
             (
                 other

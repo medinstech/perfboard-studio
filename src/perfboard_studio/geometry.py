@@ -381,6 +381,60 @@ def entry_side(direction: tuple[float, float]) -> EdgeSide:
     return "bottom" if dy > 0 else "top"
 
 
+#: How many holes of board a terminal's body may leave between itself and an edge and still
+#: count as standing ON that edge (``entry_faces_away``). Two, not one: on the first real
+#: board a terminal came to rest 2.8 mm from the left edge -- one hole and a sliver --
+#: facing into the board, which anybody looking at it calls "on the left edge", and at one
+#: pitch the rule missed it by 0.3 mm. ``drc`` and ``placer`` both read it through
+#: :func:`on_edge_reach_mm`, so they cannot disagree about where the edge ends.
+ON_EDGE_PITCHES: float = 2.0
+
+
+def on_edge_reach_mm(pitch: Mm) -> Mm:
+    """How close to an edge counts as on it, for a board of this pitch."""
+    return ON_EDGE_PITCHES * pitch
+
+
+def edges_touched(
+    body: tuple[float, float, float, float], edges: SubstrateEdges, reach: Mm
+) -> tuple[EdgeSide, ...]:
+    """The board edges a board-space body box stands within ``reach`` of, in
+    ``(left, right, top, bottom)`` order. A part in a corner is on two."""
+    gaps = (
+        ("left", body[0] - edges.min_x),
+        ("right", edges.max_x - body[1]),
+        ("top", body[2] - edges.min_y),
+        ("bottom", edges.max_y - body[3]),
+    )
+    return tuple(side for side, gap in gaps if gap <= reach)  # type: ignore[misc]
+
+
+def entry_faces_away(
+    body: tuple[float, float, float, float],
+    direction: tuple[float, float],
+    edges: SubstrateEdges,
+    reach: Mm,
+) -> tuple[EdgeSide, ...]:
+    """The edges a terminal stands on while its mouth faces none of them, or ``()``.
+
+    THE OTHER HALF OF A WIRE ENTRY, and the half ``entry_run_mm`` only prefers. A terminal
+    in the middle of a board can face anywhere -- nothing says where its cable comes from.
+    One standing ON an edge has been put there for the one reason a terminal goes to an
+    edge, which is that its wires arrive from outside the board; facing into the board
+    from there, every one of those wires has to double back across it. On the first real
+    board laid out with the placer, four terminals of six stood on an edge facing in, and
+    nothing said so, because a mouth over clear board is not blocked.
+
+    ``reach`` is how close the body must come to count as on the edge; ``drc`` and
+    ``placer`` both pass :func:`on_edge_reach_mm`, so they are asking the same question. A part in
+    a corner that faces either of its two edges is fine.
+    """
+    touched = edges_touched(body, edges, reach)
+    if not touched or entry_side(direction) in touched:
+        return ()
+    return touched
+
+
 def entry_run_mm(
     corridor: tuple[float, float, float, float],
     direction: tuple[float, float],

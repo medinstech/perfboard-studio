@@ -187,7 +187,8 @@ the next regeneration silently disagree), and pinned by its own test:
 
 - `PYTHON_ONLY_RULES` — rules the original never had (`conductor-crossing`,
   `jumper-under-body`, `conductor-off-board`, `unknown-footprint`,
-  `component-overhangs-edge`, `wire-too-thick-for-hole`, `terminal-entry-blocked`), so
+  `component-overhangs-edge`, `wire-too-thick-for-hole`, `terminal-entry-blocked`,
+  `terminal-entry-faces-in`), so
   there is nothing for a fixture to record.
   `unknown-footprint` fires on eight of the fifteen fixtures, every time
   on the id `c-disc-1`, which exists in neither engine: the fixtures are dumps of the
@@ -258,10 +259,18 @@ Four consumers, one fact:
   parts + blocked entries) **ahead of the routed cost.** The router cannot see either, and
   ranking by routed cost alone handed back a board with two unwirable terminals because the
   one with them cleared routed 812 against 726. Zero on every fixture, so nothing moved.
-  ⚠️ The mouth-facing PREFERENCE is not in that key and can lose to routing: over four
-  seeds on the DELTA-ATLAS plaket, blocked entries were 0 every time, while 0–2 of six
-  terminals still faced into clear board — the same at `entry` weights 1 to 4, so the
-  weight was left at 1.
+  The mouth-facing PREFERENCE (`entry_run`) was not in that key and lost to routing: over
+  four seeds on the DELTA-ATLAS plaket 0–2 of six terminals still faced into clear board
+  at `entry` weights 1 to 4 — and with the finished `optimize_placement`, four of six stood
+  ON an edge facing in. So that case became a rule.
+- **`terminal-entry-faces-in`** (warning): a terminal whose body is within
+  `geometry.on_edge_reach_mm` (two pitches) of an edge while its mouth faces none of the
+  edges it stands on (`geometry.entry_faces_away`; a corner may face either). The placer
+  counts it by the same predicate (`entry_inward`, `PlacementWeights.entry_faces_in` = 100)
+  and it is part of `physical_warnings`, so it is in `_pick_best`'s key. A part with a pin
+  off the grid is skipped by both, as rule 2 already reports it —
+  `test_the_placer_counts_what_drc_reports_facing_in` found the placer counting one DRC
+  skipped. Mid-board terminals stay unreported: that is still only a preference.
 - **`arrange._edge_rotation`** breaks the narrow/flat tie toward the rotation whose mouth
   faces out of the edge; a part without an entry breaks it exactly as before.
 
