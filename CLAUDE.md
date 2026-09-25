@@ -186,12 +186,14 @@ improve on it. Each is named, excluded from the comparison rather than edited in
 the next regeneration silently disagree), and pinned by its own test:
 
 - `PYTHON_ONLY_RULES` — rules the original never had (`conductor-crossing`,
-  `jumper-under-body`, `conductor-off-board`, `unknown-footprint`), so there is nothing
-  for a fixture to record. The last one fires on eight of the fifteen fixtures, every time
+  `jumper-under-body`, `conductor-off-board`, `unknown-footprint`,
+  `component-overhangs-edge`), so there is nothing for a fixture to record.
+  `unknown-footprint` fires on eight of the fifteen fixtures, every time
   on the id `c-disc-1`, which exists in neither engine: the fixtures are dumps of the
   original and are left exactly as they are, so the rule is excluded here and pinned by
   its own test. `tests/test_placer.py` measures the placer against `PLACEMENT_ERRORS`
   only, for the same reason — no arrangement of parts makes that footprint exist.
+  `component-overhangs-edge` fires on none of them, and a test says so.
 - `SHARPER_THAN_TYPESCRIPT` — one finding the original reported and this engine does not:
   `random-02`'s X3 against X6, a rectangle clipping the corner of an electrolytic's 24-gon
   courtyard where the boxes meet and the shapes do not. 41 body-overlap findings across
@@ -201,6 +203,33 @@ the next regeneration silently disagree), and pinned by its own test:
 `persist.py` hand-rolls its JSON writer to match `JSON.stringify(x, null, 2)` byte for
 byte (whole-number floats print as `1`, not `1.0`), and every object's key order comes
 from an explicit `*_KEY_ORDER` tuple, never dict insertion order.
+
+### A body past the edge is measured on the body
+
+`component-off-board` asks about PIN holes; `component-overhangs-edge` asks whether the
+BODY stands past the substrate while every pin is in a hole — a TO-220 on row 1. Three
+choices carry it, and each is where the first attempt would go wrong:
+
+- **The body, not the courtyard.** The courtyard is padded by half a pitch, so by that
+  measure every resistor on the outermost row reaches a full millimetre past the board. The
+  body is `footprints.body_extent` — the rectangle `ui/bodies.placement_for` draws, moved
+  into the engine so the rule could read it, and read back by the renderers rather than
+  worked out twice. A rectangle is exact here even for a round can: a part turns only by
+  quarters, and a circle touches its box on all four sides.
+- **The substrate, not the grid.** `geometry.substrate_edges_mm`, border included — the
+  `board_size_mm` / `hole_span_mm` trap above. It is also the one derivation of the far edge,
+  because `-margin + width` and `(n - 1) * pitch + margin` can differ in the last place.
+- **A tolerance of 0.25 mm, measured.** A DO-41 on the edge row reaches 0.08 mm past the
+  board and a 3 mm LED 0.23 mm; every part that genuinely hangs over clears 0.25 by a
+  margin. `geometry.hangs_over_edge` is the only place it is compared.
+
+**It is a WARNING and the placer prices it; `is_legal` does not include it.** Legal means
+"breaks no DRC error", which is `strip_conflicts`' position too. `placer.overhang_terms`
+reads the same body, edges and verdict as the rule, and
+`test_the_placer_and_drc_agree_on_every_body_at_every_edge` holds the two to one count over
+all 61 footprints, every rotation, mirrored and not. Both halves of the placer term are zero
+inside the tolerance and added only when they are not, which is why no golden placement
+moved.
 
 ### Two version numbers
 

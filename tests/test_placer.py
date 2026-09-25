@@ -45,7 +45,7 @@ from perfboard_studio.commands import (
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.drc import DrcViolation, run_drc
-from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.footprints import footprint_lookup, standard_footprints
 from perfboard_studio.geometry import all_pin_holes, is_inside_board
 from perfboard_studio.model import (
     Board,
@@ -585,6 +585,148 @@ def test_an_electrolytic_moves_away_from_a_to220() -> None:
 
     assert plan.before.heat_mm > 0
     assert plan.after.heat_mm == 0
+
+
+# ---------------------------------------------------------------------------
+# A body past the edge of the board
+# ---------------------------------------------------------------------------
+
+#: The real library, for the tests below: the body a part stands on comes from its
+#: ``dims``, which the hand-built footprints above do not carry.
+REGISTRY: FootprintLookup = footprint_lookup()
+
+
+def _overhang_findings(doc: PerfDocument) -> list[DrcViolation]:
+    return [v for v in run_drc(doc, REGISTRY) if v.rule == "component-overhangs-edge"]
+
+
+def test_a_to220_is_not_left_hanging_over_the_edge() -> None:
+    """The board that found this: the placer put a TO-220 on row 1, its body standing past
+    the top edge, and called the placement legal. It now prices exactly the predicate DRC
+    reports, so it brings the part back over the board -- and says so."""
+    doc = make_doc(
+        components=(
+            component("Q1", "to220", hole(8, 0)),
+            component("R1", "r-axial-3", hole(8, 4)),
+            component("R2", "r-axial-3", hole(8, 7)),
+        ),
+        nets=(
+            net("n1", "G", "signal", (("Q1", "1"), ("R1", "1"))),
+            net("n2", "S", "signal", (("Q1", "3"), ("R2", "2"))),
+        ),
+    )
+    assert len(_overhang_findings(doc)) == 1
+
+    plan = plan_placement(doc, REGISTRY, PlacementOptions(iterations=2000, restarts=1,
+                                                          score_with_router=False))
+
+    assert plan.before.overhanging_parts == 1
+    assert plan.after.overhanging_parts == 0
+    assert plan.after.overhang_mm == 0.0
+    assert _overhang_findings(plan.document) == []
+    assert "1 part(s) brought back over the board" in describe(plan)
+
+
+@pytest.mark.parametrize("mirrored", (False, True))
+def test_the_placer_and_drc_agree_on_every_body_at_every_edge(mirrored: bool) -> None:
+    """One fact, two consumers, measured over the whole library.
+
+    Every one of the 61 registry footprints, at every rotation, flush against each of the
+    four edges and then one hole in from it: the placer's count of parts over the edge must
+    be DRC's count of findings, every time. The two read the same body
+    (``footprints.body_extent``), the same edges (``geometry.substrate_edges_mm``) and the
+    same verdict (``geometry.hangs_over_edge``), and this is what would notice one of them
+    growing a second opinion. Mirrored as well, because a mirrored part's pins run the other
+    way from its anchor and its body has to follow them.
+    """
+    board = dataclasses.replace(BOARD, cols=40, rows=40)
+    checked = over = 0
+    for footprint_id, fp in sorted(standard_footprints().items()):
+        for rotation in (0, 90, 180, 270):
+            probe = dataclasses.replace(
+                component("X1", footprint_id, hole(0, 0), rotation=rotation), mirrored=mirrored
+            )
+            pins = [h for _pin, h in all_pin_holes(probe, fp)]
+            min_c = min(h.col for h in pins)
+            max_c = max(h.col for h in pins)
+            min_r = min(h.row for h in pins)
+            max_r = max(h.row for h in pins)
+            middle = 20
+            anchors_to_try = []
+            for inset in (0, 1):
+                anchors_to_try += [
+                    hole(inset - min_c, middle),
+                    hole(board.cols - 1 - inset - max_c, middle),
+                    hole(middle, inset - min_r),
+                    hole(middle, board.rows - 1 - inset - max_r),
+                ]
+            for anchor in anchors_to_try:
+                part = dataclasses.replace(probe, anchor=anchor)
+                doc = make_doc(components=(part,), board=board)
+                state, scorer = _scorer_for(doc, REGISTRY, PlacementWeights())
+                placer_count = scorer.full(state).overhanging_parts
+                drc_count = len(_overhang_findings(doc))
+                assert placer_count == drc_count, (footprint_id, rotation, anchor)
+                checked += 1
+                over += drc_count
+    # Not vacuous in either direction: plenty of bodies hang over, plenty do not.
+    assert checked == 61 * 4 * 8
+    assert 0 < over < checked
+
+
+def test_local_delta_matches_a_full_recompute_with_bodies_over_the_edge() -> None:
+    """The load-bearing test above, on a board where the overhang term is LIVE.
+
+    The hand-built footprints carry no ``dims``, so their bodies are the 1.2 mm floor and
+    never reach past an edge -- the overhang term is zero throughout that test and would be
+    zero there even if it were mis-scoped. Real parts pressed against the edges make it
+    move with nearly every proposal.
+    """
+    weights = PlacementWeights()
+    doc = make_doc(
+        components=(
+            component("Q1", "to220", hole(3, 0)),
+            component("C1", "c-elec-d8-p3", hole(0, 6), rotation=90),
+            component("J1", "screw-terminal-2", hole(22, 8)),
+            component("R1", "r-axial-3", hole(10, 15)),
+            component("U1", "dip-8", hole(12, 5)),
+        ),
+        nets=(
+            net("n1", "GND", "ground", (("Q1", "2"), ("C1", "2"), ("J1", "2"), ("U1", "4"))),
+            net("n2", "SIG", "signal", (("Q1", "1"), ("R1", "1"), ("U1", "3"))),
+        ),
+    )
+    state, scorer = _scorer_for(doc, REGISTRY, weights)
+    assert scorer.full(state).overhanging_parts >= 2  # the term starts out live
+    movable = list(range(len(state.parts)))
+    rng = random.Random(4242)
+
+    checked = 0
+    for _ in range(400):
+        proposal = _propose(rng, state, movable, 3, DEFAULT_PLACEMENT_OPTIONS)
+        if proposal is None:
+            continue
+        positions, placements = proposal
+
+        full_before = scorer.full(state).total(weights)
+        local_before = scorer.local(state, positions)
+        global_before = _global_counts(state)
+        snapshot = tuple((state.col[p], state.row[p], state.rot[p]) for p in positions)
+
+        for position, (col, row, rot) in zip(positions, placements, strict=True):
+            state.set_placement(position, col, row, rot)
+
+        tracked = (scorer.local(state, positions) - local_before) + _global_delta(
+            state, global_before, weights
+        )
+        actual = scorer.full(state).total(weights) - full_before
+        assert tracked == pytest.approx(actual, abs=1e-9)
+
+        for position, (col, row, rot) in zip(positions, snapshot, strict=True):
+            state.set_placement(position, col, row, rot)
+        checked += 1
+
+    assert checked > 200
 
 
 def test_alignment_rewards_pins_that_share_a_row() -> None:

@@ -12,8 +12,9 @@ THE OUTLINE IS NOT THE BODY. This is the specific mistake that made everything l
 that DRC uses for overlap checks. For ``r-axial-3`` it spans 10.16 mm while the resistor
 body is 5 mm long, so drawing the outline draws a box half again too big, with no leads and
 no shape. The real body comes from ``dims`` and is centred on the pins -- which is what
-:func:`placement_for` computes, and why the parts now have leads with a body between them
-instead of a rectangle covering both.
+:func:`placement_for` returns (worked out by ``footprints.body_extent``, which DRC reads
+too), and why the parts now have leads with a body between them instead of a rectangle
+covering both.
 
 ONE TABLE, TWO RENDERERS. Colours live here rather than in either view so that a resistor is
 the same beige in the editor, in the 3D view and in the build guide's step images. A part
@@ -34,6 +35,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from perfboard_studio.footprints import MIN_BODY_MM, body_extent
 from perfboard_studio.model import BodyArchetype, Footprint
 
 # ---------------------------------------------------------------------------
@@ -235,119 +237,37 @@ _SILHOUETTES: dict[BodyArchetype, Silhouette] = {
     "generic-box": "rect",
 }
 
-#: Nothing is drawn thinner than this. Guards the degenerate registry entries -- a 1x1 pin
-#: header records length 0.0, and a zero-sized body is invisible rather than small.
-_MIN_MM = 1.2
-
-#: Per archetype: (``dims`` key for the LOCAL X extent, key for the LOCAL Y extent, the axis
-#: the part's leads run along).
-#:
-#: Mapped straight to x and y rather than to "along" and "across", because the registry's
-#: dimension names follow each package's own datasheet and DO NOT agree with each other about
-#: orientation:
-#:
-#:   - ``relay_footprint`` builds its courtyard as ``_rect_outline(pins, 19, 15, ...)``, and
-#:     that helper takes x first -- so a relay's ``length`` is its X extent.
-#:   - ``dip_footprint`` derives ``length`` from the pin COLUMN span, which runs down y, and
-#:     ``rowSpacing`` is the gap between the two columns, across x. Exactly the other way
-#:     round.
-#:
-#: So no rule of the form "length is the long side" or "length runs along the pins" can be
-#: right for both, and inferring the axis from the pin layout is no better: a DIP-8's pin
-#: block is square, which makes any span comparison a coin toss on the one archetype where
-#: being wrong turns the package sideways. The invariant that keeps this table honest is that
-#: every body must fit inside its own courtyard, which tests/test_ui.py checks for all 61
-#: registry footprints -- that check is what caught the relay.
-_DIM_KEYS: dict[BodyArchetype, tuple[str, str, Literal["x", "y"]]] = {
-    "axial-cylinder": ("length", "diameter", "x"),
-    "radial-electrolytic": ("diameter", "diameter", "x"),
-    "disc-ceramic": ("diameter", "thickness", "x"),
-    "box-film": ("length", "width", "x"),
-    "dip": ("rowSpacing", "length", "y"),
-    "to92": ("width", "depth", "x"),
-    "to220": ("width", "depth", "x"),
-    "led-round": ("diameter", "diameter", "x"),
-    "screw-terminal": ("length", "width", "x"),
-    "potentiometer": ("diameter", "diameter", "x"),
-    "tactile-switch": ("width", "depth", "x"),
-    "crystal-hc49": ("width", "depth", "x"),
-    "relay-box": ("length", "width", "x"),
-    # The one archetype whose dimension names were chosen rather than inherited from a
-    # datasheet, because `generic_box_footprint` invents the part: width across the pin
-    # rows, depth along them. Listed rather than left to the fallback so a reader can see
-    # which way round it is without deducing it from a default.
-    "generic-box": ("width", "depth", "x"),
-}
+#: Nothing is drawn thinner than this. The engine's floor for a body's width, re-exported
+#: because the height below falls back to it too.
+_MIN_MM = MIN_BODY_MM
 
 
 def placement_for(footprint: Footprint, pitch: float) -> BodyPlacement:
-    """Work out the real body from ``dims``, centred on the part's pins.
+    """The real body, centred on the part's pins, with what only a renderer needs added.
+
+    The rectangle itself -- centre, size and the axis the leads run along -- is
+    ``footprints.body_extent``, and it is not worked out a second time here. It used to be:
+    this function WAS that arithmetic, until DRC needed to ask whether a body hangs past the
+    edge of the board, and an engine rule cannot import the UI. So it moved, and the two
+    renderers and the rule now read one answer. Everything its docstring says about centring
+    on the pin centroid and about ``BODY_DIM_KEYS`` is true of what this returns.
 
     ``pitch`` converts the footprint's grid-step pin offsets to millimetres. Passed in
     rather than assumed to be 2.54, because ``Board.pitch`` is a field and a body placed on
     an assumed pitch would drift off its own pins on any board that sets it differently.
-
-    Centring on the PIN CENTROID is one rule that happens to be right for every archetype
-    here: it is the midpoint for a two-lead axial or radial part, the centre of the
-    rectangle for a DIP, the middle pin of a TO-220, and the centre of the row for a
-    header. No archetype needs a special case, which is why the bodies line up with their
-    leads without a table of offsets to keep in step with the registry.
-
-    Dimensions missing from ``dims`` fall back to the courtyard's own extent, so an
-    archetype added to the registry without full dims still draws something honest rather
-    than nothing.
     """
-    body = footprint.body
-    dims = body.dims
-    archetype = body.archetype
-
-    pins_mm = [(pin.d_col * pitch, pin.d_row * pitch) for pin in footprint.pins]
-    if pins_mm:
-        xs = [x for x, _ in pins_mm]
-        ys = [y for _, y in pins_mm]
-        centre_x = (min(xs) + max(xs)) / 2
-        centre_y = (min(ys) + max(ys)) / 2
-        span_x = max(xs) - min(xs)
-        span_y = max(ys) - min(ys)
-    else:
-        centre_x = centre_y = span_x = span_y = 0.0
-
-    outline_x, outline_y = _outline_extent(footprint)
-    x_key, y_key, axis = _DIM_KEYS.get(archetype, ("length", "width", "x"))
-
-    if archetype == "pin-header":
-        # Derived from the pins rather than from dims: the registry records a header's width
-        # as 0.0 because the moulding is exactly one hole wide per ROW, and a 2xN header has
-        # two. Growing the pin span by one pitch in each direction gives the moulding for any
-        # arrangement, single row or double.
-        size_x = span_x + pitch
-        size_y = span_y + pitch
-        axis = "y" if span_y > span_x else "x"
-    else:
-        size_x = dims.get(x_key) or outline_x
-        size_y = dims.get(y_key) or outline_y
-
-    height = footprint.body_height or dims.get("height") or _MIN_MM
-
+    extent = body_extent(footprint, pitch)
+    height = footprint.body_height or footprint.body.dims.get("height") or _MIN_MM
     return BodyPlacement(
-        silhouette=_SILHOUETTES.get(archetype, "rect"),
-        centre_x=centre_x,
-        centre_y=centre_y,
-        size_x=max(size_x, _MIN_MM),
-        size_y=max(size_y, _MIN_MM),
+        silhouette=_SILHOUETTES.get(footprint.body.archetype, "rect"),
+        centre_x=extent.centre_x,
+        centre_y=extent.centre_y,
+        size_x=extent.size_x,
+        size_y=extent.size_y,
         height=max(height, 0.6),
-        axis=axis,
+        axis=extent.axis,
         polarized=footprint.polarized,
     )
-
-
-def _outline_extent(footprint: Footprint) -> tuple[float, float]:
-    """The courtyard's width and height, used only as a fallback for absent dims."""
-    if not footprint.body_outline:
-        return (_MIN_MM, _MIN_MM)
-    xs = [point.x for point in footprint.body_outline]
-    ys = [point.y for point in footprint.body_outline]
-    return (max(xs) - min(xs), max(ys) - min(ys))
 
 
 # ---------------------------------------------------------------------------

@@ -20,6 +20,33 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **DRC says when a part's body hangs past the edge of the board**
+  (`component-overhangs-edge`, a warning). `component-off-board` only ever asked about PIN
+  holes, so a TO-220 on row 1 — all three pins in holes, the body standing a millimetre past
+  the substrate — was clean, and the placer had put one exactly there on the first real
+  board laid out with this tool and called the placement legal. The rule measures the real
+  BODY, not the courtyard: the courtyard is padded by half a pitch, and by that measure
+  every resistor on the outermost row reaches a full millimetre over the edge. It measures
+  against the substrate, printed border included, not the hole grid. A quarter of a
+  millimetre is tolerated, because laid on the edge row a DO-41 reaches 0.08 mm past the
+  board and a 3 mm LED 0.23 mm; the parts that genuinely hang over clear it by a margin, a
+  TO-92 by 0.58 mm and a TO-220 by 1.03. A warning rather than an error, because a part can
+  be meant to overhang — a TO-220 reaching a heatsink off the edge is a real layout.
+
+  **The placer prices the same predicate**, so Optimize Placement no longer leaves a body
+  over the edge that DRC then names, and says `n part(s) brought back over the board` when
+  it clears one. Both read one body (`footprints.body_extent`, which the 2D and 3D views now
+  draw from too), one set of edges (`geometry.substrate_edges_mm`) and one verdict
+  (`geometry.hangs_over_edge`); a test sweeps all 61 footprints at every rotation, mirrored
+  and not, against all four edges and holds the two to the same count. A placement with a
+  part over the edge is still `legal` — that word means "breaks no DRC error", and this is a
+  warning — but it costs more than any wire a part could save by standing there.
+
+  The rule found one on a shipped example: `lpb1-booster`'s C3, a 6.3 mm electrolytic on
+  column A, stands 1.2 mm past the left edge.
+
 ### Fixed
 
 - **The 3D view, the guide's step images and Save Project are fast again on a machine

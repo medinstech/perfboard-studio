@@ -252,6 +252,100 @@ def board_outline_mm(board: Board) -> RectMm:
 
 
 # ---------------------------------------------------------------------------
+# What stands past the edge of the substrate
+# ---------------------------------------------------------------------------
+
+#: How far a part's body may reach past the edge of the substrate before it is said to
+#: hang over it. Not zero, and the reason is measured rather than cautious: laid on the
+#: outermost row, a DO-41 diode's 2.7 mm barrel reaches 0.08 mm past the board and a 3 mm
+#: LED 0.23 mm -- nothing anybody could see, on a board sheared to roughly that tolerance
+#: anyway, and a warning about either would teach the user to stop reading the rule. Every
+#: part that genuinely hangs over clears it by a margin: a tactile switch 0.46 mm, a TO-92
+#: 0.58, a TO-220 1.03, a 5 mm electrolytic 1.23, a screw terminal 2.02. It sits just under
+#: ``FINGER_BORE_CLEARANCE_MM``, the smallest gap these boards are made with.
+#:
+#: ONE number for two consumers: ``drc`` reports a body past it and ``placer`` prices one,
+#: both through :func:`hangs_over_edge`. A tolerance on one side only would let the
+#: optimiser leave a part a tenth of a millimetre over the edge that DRC then names.
+BODY_OVERHANG_TOLERANCE_MM: Mm = 0.25
+
+
+@dataclass(frozen=True, slots=True)
+class SubstrateEdges:
+    """The substrate's four outer edges, in the millimetre frame the holes are in."""
+
+    min_x: Mm
+    max_x: Mm
+    min_y: Mm
+    max_y: Mm
+
+
+def substrate_edges_mm(board: Board) -> SubstrateEdges:
+    """Where the board stops, per side: half a pitch past the outermost hole centres plus
+    any printed border, which is :func:`board_edge_margin_mm`'s answer and nobody else's.
+
+    Written in the frame the holes are in (hole 0 at 0.0) and with exactly the arithmetic
+    ``placer`` has always used for its edge term, so moving that onto this function changed
+    no float the annealer compares. What must not happen is two callers deriving the far
+    edge two ways: ``-margin + width`` and ``(n - 1) * pitch + margin`` are one number on
+    paper and can differ in the last place, which on a part packed against the edge is the
+    difference between a finding and none.
+    """
+    margin_x = board_edge_margin_mm(board, "horizontal")
+    margin_y = board_edge_margin_mm(board, "vertical")
+    return SubstrateEdges(
+        min_x=-margin_x,
+        max_x=(board.cols - 1) * board.pitch + margin_x,
+        min_y=-margin_y,
+        max_y=(board.rows - 1) * board.pitch + margin_y,
+    )
+
+
+def turned_box(
+    box: tuple[float, float, float, float], rotation: Rotation, mirrored: bool
+) -> tuple[float, float, float, float]:
+    """A local ``(min_x, max_x, min_y, max_y)`` box after a component's transform.
+
+    Exact, not a bound: a part turns only by a multiple of 90 degrees, so a box stays a box
+    and its corners land on the new one's. Through :func:`transform_offset`, so the body is
+    turned by the same rule as the pins it stands on.
+    """
+    min_x, max_x, min_y, max_y = box
+    corners = [
+        transform_offset(x, y, rotation, mirrored) for x in (min_x, max_x) for y in (min_y, max_y)
+    ]
+    xs = [x for x, _ in corners]
+    ys = [y for _, y in corners]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def edge_overhangs_mm(
+    min_x: float, max_x: float, min_y: float, max_y: float, edges: SubstrateEdges
+) -> tuple[Mm, Mm, Mm, Mm]:
+    """How far a board-space box reaches past each edge: ``(left, right, top, bottom)``.
+
+    Negative on a side the box stays inside. Rows grow downward, so ``top`` is row 1's
+    edge -- the side drawn at the top of the screen on the component face.
+    """
+    return (
+        edges.min_x - min_x,
+        max_x - edges.max_x,
+        edges.min_y - min_y,
+        max_y - edges.max_y,
+    )
+
+
+def hangs_over_edge(overhang_mm: float) -> bool:
+    """Whether a body reaching ``overhang_mm`` past an edge hangs over it.
+
+    Strict, like the overlap test: a body reaching exactly the tolerance does not. A pin
+    header's moulding is one pitch wide per row and lands flush on the edge, and flush is
+    the case the strictness is for.
+    """
+    return overhang_mm > BODY_OVERHANG_TOLERANCE_MM
+
+
+# ---------------------------------------------------------------------------
 # Copper: how big a pad is, and how close the next one's copper comes
 # ---------------------------------------------------------------------------
 

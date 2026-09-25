@@ -40,13 +40,17 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .connectivity import FootprintLookup, PhysicalNet, PhysicalPinRef, extract_physical_nets
+from .footprints import body_extent
 from .geometry import (
+    BODY_OVERHANG_TOLERANCE_MM,
     all_pin_holes,
     consumed_holes,
     convex_polygons_overlap,
     copper_gap_mm,
     edge_connector_holes,
+    edge_overhangs_mm,
     format_hole,
+    hangs_over_edge,
     hole_key,
     hole_to_mm,
     holes_under_line,
@@ -59,7 +63,9 @@ from .geometry import (
     path_length_mm,
     paths_cross,
     pin_hole,
+    substrate_edges_mm,
     transform_offset,
+    turned_box,
     undrilled_holes,
     validate_orthogonal_chain,
 )
@@ -581,6 +587,99 @@ def _check_unknown_footprints(doc: PerfDocument, lookup: FootprintLookup) -> lis
         for component in doc.components
         if lookup(component.footprint_id) is None
     ]
+
+
+# ---------------------------------------------------------------------------
+# Rule 2d -- a body hanging past the edge of the board (warning) -- Python only
+# ---------------------------------------------------------------------------
+
+#: The four edges in the order ``geometry.edge_overhangs_mm`` reports them.
+_EDGE_NAMES: tuple[str, str, str, str] = ("left", "right", "top", "bottom")
+
+
+def _check_body_overhang(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    """Rule 2's blind spot: every pin in a hole, and the body over nothing.
+
+    Rule 2 asks only about PIN holes, which is the question it exists for -- a pin off the
+    grid is a part that cannot be fitted. It cannot see a TO-220 on row 1 whose pins are
+    all in holes and whose body stands a millimetre past the substrate, and neither could
+    the placer, which put one there on the first real board anybody laid out with it and
+    called the placement legal. A body over the edge is the first thing to meet an
+    enclosure wall, a card guide or the bench the board is put down on.
+
+    Measured on the BODY, not the courtyard. The courtyard is padded by half a pitch, so
+    every resistor on the outermost row would reach a full millimetre past the board by
+    that measure -- a rule that fires on every edge-row resistor is a rule nobody reads.
+    The body is ``footprints.body_extent``, the same rectangle both renderers draw, turned
+    by the component's own transform; and the edge is ``geometry.substrate_edges_mm``,
+    the substrate including any printed border rather than the hole grid, for the reason
+    CLAUDE.md gives about ``board_size_mm`` against ``hole_span_mm``.
+
+    A WARNING, because a part can be meant to overhang -- a TO-220 reaching a heatsink off
+    the edge is a real layout -- and the board is still a board. What decides "hangs over"
+    is ``geometry.hangs_over_edge``, which ``placer`` prices by too, so the optimiser does
+    not leave a part over the edge that this rule then names.
+
+    A part rule 2 already reports is skipped: its body is off the board because its pins
+    are, and one finding at the louder severity says everything this one would.
+    """
+    violations: list[DrcViolation] = []
+    board = doc.board
+    edges = substrate_edges_mm(board)
+    for component in doc.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is None:
+            continue
+        pin_holes = [h for _pin, h in all_pin_holes(component, footprint)]
+        if not all(is_inside_board(h, board) for h in (pin_holes or [component.anchor])):
+            continue
+
+        min_x, max_x, min_y, max_y = turned_box(
+            body_extent(footprint, board.pitch).box, component.rotation, component.mirrored
+        )
+        anchor = hole_to_mm(component.anchor, board)
+        reach = edge_overhangs_mm(
+            anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y, edges
+        )
+        over = [
+            (name, amount)
+            for name, amount in zip(_EDGE_NAMES, reach, strict=True)
+            if hangs_over_edge(amount)
+        ]
+        if not over:
+            continue
+
+        worst = max(amount for _name, amount in over)
+        names = {name for name, _amount in over}
+        edge_words = (
+            f"{over[0][0]} edge" if len(over) == 1
+            else " and ".join(name for name, _amount in over) + " edges"
+        )
+        if {"left", "right"} <= names or {"top", "bottom"} <= names:
+            # Past two opposite edges at once: the part is bigger than the board, and no
+            # number of holes in either direction is an answer.
+            advice = "The part is larger than the board in that direction."
+        else:
+            holes_in = math.ceil((worst - BODY_OVERHANG_TOLERANCE_MM) / board.pitch)
+            advice = (
+                f"Moving it {holes_in} hole(s) in from the {edge_words} clears it; a part "
+                f"overhanging on purpose -- a TO-220 reaching a heatsink off the edge -- can "
+                f"stay."
+            )
+        violations.append(
+            DrcViolation(
+                rule="component-overhangs-edge",
+                severity="warning",
+                message=(
+                    f"Component {component.ref} (anchored at {_safe_hole(component.anchor)}) "
+                    f"hangs {worst:.1f} mm past the {edge_words} of the board: its pins are "
+                    f"in holes but part of its body is over nothing. {advice}"
+                ),
+                holes=(component.anchor,),
+                component_ids=(component.id,),
+            )
+        )
+    return violations
 
 
 # ---------------------------------------------------------------------------
@@ -1699,6 +1798,7 @@ def run_drc(
         *_check_components_off_board(doc, lookup),
         *_check_conductors_off_board(doc),
         *_check_unknown_footprints(doc, lookup),
+        *_check_body_overhang(doc, lookup),
         *_check_duplicate_pin_holes(doc, lookup),
         *_check_crossing_conductors(doc, conductor_net_index),
         *_check_conductor_geometry_crossings(doc, conductor_net_index),

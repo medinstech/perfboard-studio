@@ -38,6 +38,10 @@ are readable as exchange rates against wire length (see :class:`PlacementWeights
                 come back in.
   EDGE          connectors, headers, pots and switches want a board edge: something
                 plugs into them, or a finger reaches them.
+  OVERHANG      a BODY reaching past the substrate while its pins stay in holes -- a
+                TO-220 on row 1. DRC reports it as a warning (``component-overhangs-edge``)
+                by ``geometry.hangs_over_edge``, and this prices exactly that predicate,
+                so the optimiser does not put a part where the checker then names it.
   HEAT          a TO-220 or a relay next to an electrolytic (PLAN.md Sec 5.2 rule 9).
                 Which parts those are, and how close is too close, come from model.py,
                 because drc.py reports the same pairs by the same measure -- an
@@ -90,15 +94,20 @@ from .commands import (
     move_components,
 )
 from .connectivity import FootprintLookup
+from .footprints import body_extent
 from .geometry import (
     STANDARD_PRESETS,
     BoardPreset,
-    board_edge_margin_mm,
+    SubstrateEdges,
     board_from_preset,
     convex_polygons_overlap,
+    edge_overhangs_mm,
     format_hole,
+    hangs_over_edge,
     is_axis_aligned_box,
+    substrate_edges_mm,
     transform_offset,
+    turned_box,
     unusable_holes,
 )
 from .model import (
@@ -220,6 +229,20 @@ class PlacementWeights:
     edge: float = 6.0
     #: Per mm closer than HEAT_CLEARANCE_MM, per (source, sensitive) pair.
     heat: float = 4.0
+    #: Per part whose BODY hangs past the substrate while its pins are all in holes.
+    #:
+    #: A count on exactly DRC's predicate, for the reason ``overlap_pair`` is one: the
+    #: millimetre term below is only charged once a body is past the tolerance, so on its
+    #: own it would let the annealer settle a hair over the line, where DRC reports it.
+    #: Priced under an overlap because it is DRC's WARNING rather than its error -- a part
+    #: can be meant to overhang, and a user who wants one there locks it -- and still far
+    #: above any wire a single part could save by standing on the edge: a connector moved
+    #: one hole in costs the ``edge`` term one pitch, about 15, which this outbids.
+    overhang_part: float = 100.0
+    #: Per mm of body past the edge, charged only for a part the count above says hangs
+    #: over. The gradient the count does not have: a body 2 mm over is further from legal
+    #: than one 0.3 mm over, and the annealer needs to be told which way is back.
+    overhang: float = 20.0
     #: Per pair of pins on one strip, in different nets, with no hole between them to
     #: cut. Stripboard only; always zero on a pad-per-hole board.
     #:
@@ -314,6 +337,10 @@ class PlacementCost:
     heat_mm: float
     #: Pairs of pins the board joins and no cut can separate. Always 0 off stripboard.
     strip_conflicts: int = 0
+    #: Parts whose body hangs past the substrate, by exactly the predicate DRC's
+    #: ``component-overhangs-edge`` uses, and how far past it they reach between them.
+    overhanging_parts: int = 0
+    overhang_mm: float = 0.0
 
     def total(self, weights: PlacementWeights) -> float:
         return (
@@ -328,6 +355,8 @@ class PlacementCost:
             + weights.edge * self.edge_mm
             + weights.heat * self.heat_mm
             + weights.strip_conflict * self.strip_conflicts
+            + weights.overhang_part * self.overhanging_parts
+            + weights.overhang * self.overhang_mm
         )
 
     @property
@@ -349,6 +378,12 @@ class PlacementCost:
         hole, and DRC says nothing about it. It is a board that cannot be finished, which
         is priced dearly in :meth:`total` and is what ``striproute`` reports, but "legal"
         here means "breaks no hard rule" and it would stop meaning that if this crept in.
+
+        ``overhanging_parts`` is left out for the same reason: DRC reports a body past the
+        edge as a warning, so a placement holding one breaks no hard rule. It is priced in
+        :meth:`total` well above anything standing on the edge could save, which is what
+        keeps the annealer from proposing one, and a part somebody locked there on purpose
+        is not an illegal board.
         """
         return (
             self.overlap_pairs == 0
@@ -472,6 +507,8 @@ def describe(plan: PlacementPlan) -> str:
     parts.append(f"~{plan.wire_saved_mm:.0f} mm less connection length")
     if plan.before.overlap_pairs > 0 and plan.after.overlap_pairs == 0:
         parts.append(f"{plan.before.overlap_pairs} overlap(s) cleared")
+    if plan.before.overhanging_parts > 0 and plan.after.overhanging_parts == 0:
+        parts.append(f"{plan.before.overhanging_parts} part(s) brought back over the board")
     if plan.route_cost is not None:
         parts.append(f"routing cost {plan.route_cost:.0f}")
     return ", ".join(parts)
@@ -484,7 +521,8 @@ def describe(plan: PlacementPlan) -> str:
 
 @dataclass(frozen=True, slots=True)
 class _Box:
-    """Courtyard bounding box, in mm relative to the component's anchor hole."""
+    """A bounding box in mm relative to the component's anchor hole -- a courtyard's, or
+    (``_Part.rel_body``) the real body's."""
 
     min_x: float
     max_x: float
@@ -546,6 +584,10 @@ class _Part:
     pin_offsets: tuple[tuple[tuple[int, int], ...], ...]
     #: Courtyard box per rotation index, relative to the anchor in mm.
     rel_box: tuple[_Box | None, ...]
+    #: The real BODY's box per rotation index, relative to the anchor in mm -- the one
+    #: ``footprints.body_extent`` gives both renderers and DRC, not the courtyard, which is
+    #: padded by half a pitch and would put every edge-row resistor over the edge.
+    rel_body: tuple[_Box, ...]
     #: Courtyard OUTLINE per rotation index, relative to the anchor in mm -- and ``None``
     #: whenever the box above is already that outline exactly, which it is for 53 of the
     #: 61 generated footprints (a part turns only by a multiple of 90 degrees, so a
@@ -587,6 +629,8 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
 
         offsets: list[tuple[tuple[int, int], ...]] = []
         boxes: list[_Box | None] = []
+        bodies: list[_Box] = []
+        body = body_extent(footprint, board.pitch).box
         polys: list[tuple[Point2, ...] | None] = []
         bounds: list[tuple[int, int, int, int] | None] = []
         pin_min: list[tuple[int, int]] = []
@@ -599,6 +643,7 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 for p in footprint.pins
             )
             offsets.append(placed)
+            bodies.append(_Box(*turned_box(body, rotation, component.mirrored)))
 
             if footprint.body_outline:
                 outline = tuple(
@@ -638,6 +683,7 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 pin_numbers=tuple(p.number for p in footprint.pins),
                 pin_offsets=tuple(offsets),
                 rel_box=tuple(boxes),
+                rel_body=tuple(bodies),
                 rel_poly=tuple(polys),
                 anchor_bounds=tuple(bounds),
                 pin_min=tuple(pin_min),
@@ -1039,6 +1085,9 @@ class _Scorer:
     edge_max_x: float
     edge_min_y: float
     edge_max_y: float
+    #: The same four edges as one value, for ``geometry.edge_overhangs_mm`` -- which DRC
+    #: hands the identical value from the identical function.
+    edges: SubstrateEdges
     #: Holes nothing can be soldered into, in this module's own (col, row) key. The same
     #: set ``drc.py`` reports a pin on as an error and ``router.py`` refuses to solder in
     #: -- ``geometry.unusable_holes`` is the one answer all three read.
@@ -1127,6 +1176,33 @@ class _Scorer:
             ),
         )
 
+    def overhang_terms(self, state: _State, position: int) -> tuple[int, float]:
+        """(hangs over? 0/1, mm past the edge) for one part's BODY.
+
+        DRC's ``component-overhangs-edge`` spelled out: the body box ``footprints`` gives
+        both renderers, turned with the part, against ``geometry.substrate_edges_mm``, and
+        judged by ``geometry.hangs_over_edge``. A part with a pin off the grid is skipped,
+        as DRC skips it -- ``off_board`` already prices that part, far more dearly, and
+        counting its body too would score one fact twice.
+
+        Both halves are zero inside the tolerance, which is what keeps a board with no
+        part over the edge annealing bit for bit as it did before this term existed.
+        """
+        for col, row in state.pins(position):
+            if not (0 <= col < self.board_cols and 0 <= row < self.board_rows):
+                return 0, 0.0
+        body = state.parts[position].rel_body[state.rot[position]]
+        x = state.col[position] * self.board_pitch
+        y = state.row[position] * self.board_pitch
+        worst = max(
+            edge_overhangs_mm(
+                x + body.min_x, x + body.max_x, y + body.min_y, y + body.max_y, self.edges
+            )
+        )
+        if not hangs_over_edge(worst):
+            return 0, 0.0
+        return 1, worst
+
     def pair_terms(self, state: _State, a: int, b: int) -> tuple[int, float, float]:
         """(overlapping? 0/1, courtyard overlap mm^2, heat proximity mm) for one pair.
 
@@ -1197,11 +1273,16 @@ class _Scorer:
         off_board = 0
         dead_pins = 0
         edge = 0.0
+        overhanging = 0
+        overhang = 0.0
         for position in range(len(state.parts)):
             part_off, part_dead, part_edge = self.part_terms(state, position)
             off_board += part_off
             dead_pins += part_dead
             edge += part_edge
+            part_over, part_overhang = self.overhang_terms(state, position)
+            overhanging += part_over
+            overhang += part_overhang
 
         pairs = 0
         overlap = heat = 0.0
@@ -1224,6 +1305,8 @@ class _Scorer:
             edge_mm=edge,
             heat_mm=heat,
             strip_conflicts=state.strip_conflicts,
+            overhanging_parts=overhanging,
+            overhang_mm=overhang,
         )
 
     def local(self, state: _State, positions: tuple[int, ...]) -> float:
@@ -1253,6 +1336,12 @@ class _Scorer:
             total += (
                 weights.off_board * off + weights.dead_hole * dead + weights.edge * edge
             )
+            over, overhang = self.overhang_terms(state, position)
+            if over:
+                # Added only when there is something to add, rather than as a weighted
+                # zero: ``x + 0.0`` is exact, but keeping the sum's shape untouched on
+                # every board without an overhang is what the goldens were measured on.
+                total += weights.overhang_part * over + weights.overhang * overhang
 
         count = len(state.parts)
         for a in positions:
@@ -1296,16 +1385,16 @@ def _make_scorer(
     edges are derived from the board and nothing else, and two callers deriving them
     separately is how the annealer and a test end up measuring different boards.
     """
-    margin_x = board_edge_margin_mm(board, "horizontal")
-    margin_y = board_edge_margin_mm(board, "vertical")
+    edges = substrate_edges_mm(board)
     return _Scorer(
         board_pitch=board.pitch,
         board_cols=board.cols,
         board_rows=board.rows,
-        edge_min_x=-margin_x,
-        edge_max_x=(board.cols - 1) * board.pitch + margin_x,
-        edge_min_y=-margin_y,
-        edge_max_y=(board.rows - 1) * board.pitch + margin_y,
+        edge_min_x=edges.min_x,
+        edge_max_x=edges.max_x,
+        edge_min_y=edges.min_y,
+        edge_max_y=edges.max_y,
+        edges=edges,
         dead_holes=dead_holes,
         weights=weights,
         nets=nets,
