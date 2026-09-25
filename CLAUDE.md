@@ -342,6 +342,21 @@ Three things hold it together:
   dimensions is what fits in an id. Its pins are numbered ROW BY ROW, which is a module's
   silkscreen convention and not a DIP's — `dip_footprint` is for when the answer is the
   other one.
+  - **The body may sit OFF its pins' centre** (`-o<X>x<Y>`, mm, signed, `offsetX`/`offsetY`
+    in `dims` only when not zero). That is a module with its header along one edge, and it
+    is still a number in an id, not a shape. `footprints.body_extent` adds it to the pin
+    centroid -- the ONE place, so DRC, the placer and both views move together -- and
+    `_offset_rect_outline` makes the courtyard the union of the pins and the shifted body.
+    With a zero offset that helper IS `_rect_outline`, float for float; keep it that way or
+    every existing `box-` courtyard moves in the last place.
+- **`idc-2x<n>` is the box header**, archetype `box-header`: numbered as `hdr-2xN` (odd pins
+  row 0), shroud from Wurth WR-BHD, key slot in the wall on the pin-1 row (local -y). It is
+  generated rather than registered on purpose -- the registry's 61 are frozen in a golden --
+  and a new archetype rather than a `pin-header` variant because the key is the whole point
+  and every archetype table (symbol, phase, style, silhouette, icon, 2D mark, 3D builder,
+  edge-seeking) then has to say what it does with one; the completeness tests enforce that.
+  The 3D builder finds the keyed wall from the direction pin 2 -> pin 1, not from a local
+  axis, so it cannot disagree with the pins however the part is turned.
 
 ### Hole addressing
 

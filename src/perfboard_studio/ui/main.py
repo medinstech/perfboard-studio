@@ -153,6 +153,7 @@ from perfboard_studio.drc import DrcViolation, run_drc
 from perfboard_studio.footprints import (
     axial_footprint,
     box_film_capacitor_footprint,
+    box_header_footprint,
     dip_footprint,
     disc_ceramic_footprint,
     footprint_lookup,
@@ -1579,6 +1580,11 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
                 _CustomField("width", t("Body width (mm)"), "mm", 0.5, 200, 15),
                 _CustomField("depth", t("Body depth (mm)"), "mm", 0.5, 200, 10),
                 _CustomField("height", t("Body height (mm)"), "mm", 0.5, 200, 8),
+                # Where the body sits off the pins' centre: a module whose header runs
+                # along one edge of its board. Zero, the default, is a centred body and
+                # leaves the identifier exactly as it was before this existed.
+                _CustomField("offset_x", t("Body offset along the pins (mm)"), "mm", -200, 200, 0),
+                _CustomField("offset_y", t("Body offset across the pins (mm)"), "mm", -200, 200, 0),
             ),
             build=lambda v: generic_box_footprint(
                 cols=whole(v, "cols"),
@@ -1588,6 +1594,8 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
                 width_mm=v["width"],
                 depth_mm=v["depth"],
                 height_mm=v["height"],
+                offset_x_mm=v.get("offset_x", 0.0),
+                offset_y_mm=v.get("offset_y", 0.0),
             ),
         ),
         _CustomFamily(
@@ -1609,6 +1617,11 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
             build=lambda v: pin_header_footprint(
                 rows=whole(v, "rows"), cols=whole(v, "cols")
             ),
+        ),
+        _CustomFamily(
+            label=t("IDC box header (ribbon cable)"),
+            fields=(_CustomField("per_row", t("Pins per row"), "int", 3, 32, 8),),
+            build=lambda v: box_header_footprint(pins_per_row=whole(v, "per_row")),
         ),
         _CustomFamily(
             label=t("Screw terminal"),

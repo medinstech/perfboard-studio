@@ -298,6 +298,9 @@ BodyArchetype: TypeAlias = Literal[  # noqa: UP040
     "crystal-hc49",
     "relay-box",
     "generic-box",
+    # A 2xN IDC box header: the pin header's pins inside a shroud with a key slot, which
+    # is what a ribbon cable plugs into and the one thing about it that says where pin 1 is.
+    "box-header",
 ]
 
 #: Archetypes that get hot enough to matter to a neighbour.

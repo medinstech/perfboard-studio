@@ -1238,6 +1238,10 @@ TURKISH: Mapping[str, str] = {
     # -- the sheet -----------------------------------------------------------------------
     "not in the design": "tasarımda yok",
     "not placed yet": "henüz yerleştirilmedi",
+    # -- custom part: a body off its pins, and the IDC box header ------------------------
+    "Body offset along the pins (mm)": "Gövde kayması, pin sırası boyunca (mm)",
+    "Body offset across the pins (mm)": "Gövde kayması, pin sırasına dik (mm)",
+    "IDC box header (ribbon cable)": "IDC kutu başlık (şerit kablo)",
     # -- what a part says about itself (PinoutEditor) -------------------------------------
     "From the package": "Gövdeden",
     "NPN transistor (names B, C, E)": "NPN transistör (adlar B, C, E)",

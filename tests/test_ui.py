@@ -8285,3 +8285,107 @@ def test_rename_board_asks_and_renames_in_one_undo_step(monkeypatch) -> None:
     window.on_rename_board()
     assert len(window.bus.history()) == before + 1
     _close(window)
+
+
+# ---------------------------------------------------------------------------
+# A body off its pins, and the IDC box header
+# ---------------------------------------------------------------------------
+
+
+def test_the_custom_part_dialog_writes_a_body_offset_and_an_idc_header() -> None:
+    """Both through the engine's own generators, and both read back by the lookup."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import CustomPartDialog
+
+    dialog = CustomPartDialog()
+    rect = next(
+        i for i in range(dialog.family.count()) if dialog.family.itemText(i) == "Any rectangular part"
+    )
+    dialog.family.setCurrentIndex(rect)
+    for key, value in (("cols", 6), ("rows", 1), ("width", 16), ("depth", 14.5), ("height", 7)):
+        dialog._widgets[key].setValue(value)
+    assert dialog.chosen() is not None and "-o" not in dialog.chosen().id
+    dialog._widgets["offset_y"].setValue(6)
+    assert dialog.identifier.text() == "box-6x1-p1-r1-16x14.5x7-o0x6"
+    assert get_footprint(dialog.identifier.text()) == dialog.chosen()
+
+    idc = next(i for i in range(dialog.family.count()) if "IDC" in dialog.family.itemText(i))
+    dialog.family.setCurrentIndex(idc)
+    assert dialog.identifier.text() == "idc-2x8"
+    dialog.deleteLater()
+
+
+def _idc_body(rotation: int):
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.model import ComponentInstance
+    from perfboard_studio.ui import view3d
+
+    comp = ComponentInstance(
+        id="c1", ref="J1", value="", footprint_id="idc-2x8", anchor=HoleCoord(8, 8),
+        rotation=rotation,
+    )
+    body = view3d._world_body(footprint_lookup(), comp, _load_dense().board)
+    assert body is not None
+    return body
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_a_box_header_has_its_key_slot_in_the_wall_beside_pin_1(rotation: int) -> None:
+    """The slot is the part: the wall on the pin-1 row is two pieces with a gap, the other
+    three walls are whole -- and it stays on pin 1's side however the part is turned."""
+    from perfboard_studio.ui import view3d
+
+    body = _idc_body(rotation)
+    pieces = view3d._box_header_pieces(body)
+    walls = [p for p in pieces if not p.instances and p.position[2] > 2.0]
+    assert len(walls) == 5  # three whole walls and the keyed one in two
+    pin1, pin2 = body.pins[0], body.pins[1]
+    towards = (pin1[0] - pin2[0], pin1[1] - pin2[1])
+    keyed = [
+        wall for wall in walls
+        if (wall.position[0] - body.x) * towards[0] + (wall.position[1] - body.y) * towards[1] > 1.0
+    ]
+    assert len(keyed) == 2
+
+
+def test_a_box_header_stands_as_tall_as_its_footprint_with_a_lead_per_pin() -> None:
+    from perfboard_studio.ui import view3d
+
+    body = _idc_body(0)
+    pieces = view3d._box_header_pieces(body)
+    top = max(_piece_top(piece) for piece in pieces)
+    assert top == pytest.approx(body.height + view3d._LIFT, abs=0.3)
+    leads = [p for p in pieces if p.instances and p.rgb == view3d.LEAD_RGB]
+    assert len(leads) == 1 and len(leads[0].instances) == len(body.pins) == 16
+
+
+def test_a_board_with_an_offset_module_and_a_box_header_draws() -> None:
+    """Both on the board, drawn from the same lookup: 2D items with their pads under them,
+    and the 3D scene builds without a builder falling back to a plain box."""
+    import dataclasses
+
+    from perfboard_studio.model import ComponentInstance
+
+    document = dataclasses.replace(
+        _custom_document(),
+        components=(
+            ComponentInstance(
+                id="c1", ref="U1", value="SN65HVD230",
+                footprint_id="box-6x1-p1-r1-16x14.5x7-o0x6", anchor=HoleCoord(col=3, row=3),
+            ),
+            ComponentInstance(
+                id="c2", ref="J1", value="CN12", footprint_id="idc-2x8",
+                anchor=HoleCoord(col=10, row=14),
+            ),
+        ),
+    )
+    window = _window_on(document)
+    try:
+        drawn = sorted(
+            (item.comp.ref, len(item.fp.pins))
+            for item in window.scene.items()
+            if isinstance(item, ComponentItem)
+        )
+        assert drawn == [("J1", 16), ("U1", 6)]
+    finally:
+        _close(window)

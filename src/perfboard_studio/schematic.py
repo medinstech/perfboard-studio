@@ -1663,6 +1663,7 @@ _KIND_BY_ARCHETYPE: dict[BodyArchetype, SymbolKind] = {
     "crystal-hc49": "crystal",
     "relay-box": "relay",  # the coil is the pair of pins; the contacts stay numbered
     "generic-box": "box",
+    "box-header": "connector",
 }
 
 _TWO_TERMINAL_KINDS: frozenset[SymbolKind] = frozenset(

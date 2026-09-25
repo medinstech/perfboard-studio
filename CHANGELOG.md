@@ -31,6 +31,25 @@ closed without a bump.
   (`document.rename`), so it undoes like any other edit — and a name somebody chose is
   never overwritten by the first-save rule.
 
+- **A custom part's body can sit off its pins.** `box-6x1-p1-r1-16x14.5x7-o0x6` is a
+  16 x 14.5 mm breakout whose six pins run along one edge: its body is 6 mm down the rows
+  from the pins' centre. Until now `box-` centred every body on its pins, so a module with
+  its header on one edge could only be described as reaching as far past the header on the
+  side it does not use as on the side it does — a CAN transceiver board on the first real
+  board laid out with this tool had to be written as 16 x 29 mm to be safe. The offset is
+  signed, moves the body and the courtyard, turns with the part, and is what DRC, the placer
+  and both views measure. Zero is not written, so every existing id names the same part and
+  no fixture moves. The custom-part dialog has two fields for it.
+
+- **IDC box headers: `idc-2x3` to `idc-2x32`.** A 2xN header in a shroud, numbered exactly
+  as `hdr-2xN` is — a straight ribbon cable with both ends keyed joins pin N to pin N --
+  with the key slot in the long wall beside the pin-1 row, drawn in 2D and cut in 3D, because
+  the slot is what the cable's red stripe is lined up against. Wurth WR-BHD 61201621621's
+  outline: the pin span plus 10.2 mm long, 9.0 mm wide, 9.1 mm tall, a 4.5 mm slot. The
+  guide says where the key goes; the placer wants it at an edge like any connector. It is a
+  new body archetype, `box-header`, and a generated id rather than a library part, so the
+  61-part registry and its golden are untouched.
+
 - **A part can say what it is and what it calls its leads.** Two optional fields on every
   part, placed or not: `pinNames` (pin number to the datasheet's name for it) and `symbol`
   (`npn`, `pnp`, `nmos`, `pmos`, `zener`, `fuse`). They are set in the part's properties —

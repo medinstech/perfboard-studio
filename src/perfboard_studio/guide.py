@@ -144,6 +144,7 @@ PHASE_BY_ARCHETYPE: dict[BodyArchetype, PhaseNumber] = {
     "tactile-switch": 5,
     "relay-box": 5,
     "generic-box": 5,
+    "box-header": 5,
 }
 
 #: Conductor kinds done on the solder side in phase 6, and in phase 7.
@@ -850,6 +851,17 @@ def _polarity_note(
     if footprint.body.archetype == "dip":
         first = by_number.get("1")
         return f"Pin 1 (the notched end, marked with a dot) in {format_hole(first)}" if first else None
+
+    if footprint.body.archetype == "box-header":
+        # The shroud goes on one way round only as far as the CABLE is concerned: soldered
+        # in turned half round, it takes the socket upside down and every pin lands on its
+        # neighbour across the row. The key slot is in the wall beside pin 1's row.
+        first = by_number.get("1")
+        if first is not None:
+            return (
+                f"Key slot on the side of the pin-1 row; pin 1 in {format_hole(first)} "
+                "(the cable's red stripe goes to pin 1)"
+            )
 
     if footprint.polarized:
         # Unnamed but polarized: a diode, where pin 1 is the cathode by the convention

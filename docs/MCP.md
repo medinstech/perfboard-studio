@@ -184,6 +184,11 @@ names it at the start and `save_document(path, name=…)` at any save; a board s
 "untitled" when it is first saved takes the file's stem. The name is the title of the build
 guide and the schematic, and `get_status` reports it as `document`.
 
+**A module whose pins run along one edge** is `box-...-o<X>x<Y>`: the body sits that many
+millimetres off the pins' centre, so a breakout board is measured where it is rather than
+centred on its header. **A ribbon-cable box header** is `idc-2x<n>`, numbered like
+`hdr-2x<n>` and keyed on the pin-1 row.
+
 **A part can say what its package cannot.** `add_part`, `update_part` and `place_component`
 take `pin_names` — `{"1": "G", "2": "D", "3": "S"}`, or a module's `{"1": "3V3", "2": "EN",
 …}` — and `symbol`: `npn`, `pnp`, `nmos`, `pmos`, `zener` or `fuse`. The names come back

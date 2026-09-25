@@ -939,6 +939,7 @@ REF_PREFIXES: dict[str, str] = {
     "crystal-hc49": "Y",
     "relay-box": "K",
     "generic-box": "X",
+    "box-header": "J",
 }
 
 
@@ -1840,6 +1841,19 @@ def _paint_body(
         painter.drawRect(tab)
 
     elif archetype == "pin-header":
+        _paint_pin_marks(painter, footprint, pitch, accent, square=True)
+
+    elif archetype == "box-header":
+        # The cavity the socket goes into, and the key slot through the wall on the pin-1
+        # row -- local -y, the side of row 0, where ``box_header_footprint`` puts it. Drawn
+        # in the local frame like everything here, so it turns with the part.
+        wall = min(rect.width(), rect.height()) * 0.13
+        cavity = rect.adjusted(wall, wall, -wall, -wall)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(style.fill).lighter(170)))
+        painter.drawRect(cavity)
+        slot = footprint.body.dims.get("keySlot", 4.5)
+        painter.drawRect(QRectF(rect.center().x() - slot / 2, rect.top(), slot, wall))
         _paint_pin_marks(painter, footprint, pitch, accent, square=True)
 
     elif archetype == "screw-terminal":
