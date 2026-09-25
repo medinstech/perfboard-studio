@@ -1262,6 +1262,15 @@ TURKISH: Mapping[str, str] = {
     "Symbol": "Sembol",
     "Pin names": "Pin adları",
     "The footprint calls this pin {name}.": "Footprint bu pini {name} olarak adlandırıyor.",
+    # -- naming the board ------------------------------------------------------------
+    "Rena&me Board…": "Kar&tı Yeniden Adlandır…",
+    "The board's title, printed on the build guide, on the schematic and on "
+    "the project folder. A board is named after its file when first saved.": (
+        "Kartın başlığı: montaj rehberine, şemaya ve proje klasörüne basılır. Kart ilk "
+        "kaydedildiğinde dosyasının adını alır."
+    ),
+    "Rename Board": "Kartı Yeniden Adlandır",
+    "Board name:": "Kartın adı:",
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}

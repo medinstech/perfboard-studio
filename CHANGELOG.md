@@ -22,6 +22,15 @@ closed without a bump.
 
 ### Added
 
+- **A board has a name now, and it is not "untitled".** Nothing in the application could
+  set the document's name: every board the window or the MCP server created was called
+  "untitled" for good, and that is the title every build guide, exported schematic and
+  project folder went out with. A board nobody has named takes its file's name the first
+  time it is saved; *File ▸ Rename Board…* names it anything else; `new_document` and
+  `save_document` on the MCP server take a `name`. The rename is a command
+  (`document.rename`), so it undoes like any other edit — and a name somebody chose is
+  never overwritten by the first-save rule.
+
 - **A part can say what it is and what it calls its leads.** Two optional fields on every
   part, placed or not: `pinNames` (pin number to the datasheet's name for it) and `symbol`
   (`npn`, `pnp`, `nmos`, `pmos`, `zener`, `fuse`). They are set in the part's properties —

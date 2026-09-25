@@ -8235,3 +8235,53 @@ def test_properties_writes_a_declaration_in_the_same_undo_step(monkeypatch) -> N
     assert (edited.pin_names, edited.symbol) == ((("1", "C"), ("2", "B"), ("3", "E")), "npn")
     assert len(window.bus.history()) == before + 1
     _close(window)
+
+
+# ---------------------------------------------------------------------------
+# The board's name
+# ---------------------------------------------------------------------------
+
+
+def test_saving_an_unnamed_board_names_it_after_its_file(tmp_path) -> None:
+    from perfboard_studio.model import UNTITLED_NAME
+
+    window = _window_on(dataclasses.replace(
+        _load_dense(),
+        meta=dataclasses.replace(_load_dense().meta, name=UNTITLED_NAME),
+    ))
+    target = tmp_path / "logic-rail.perf"
+    assert window._save_to(target)
+    assert window.bus.document.meta.name == "logic-rail"
+    assert '"name": "logic-rail"' in target.read_text(encoding="utf-8")
+    # Saved means saved: the rename happened before the write, not after it.
+    assert not window.is_modified
+    _close(window)
+
+
+def test_a_named_board_is_not_renamed_by_saving(tmp_path) -> None:
+    window = _window_on(_load_dense())
+    before = window.bus.document.meta.name
+    assert before != "untitled"
+    assert window._save_to(tmp_path / "elsewhere.perf")
+    assert window.bus.document.meta.name == before
+    _close(window)
+
+
+def test_rename_board_asks_and_renames_in_one_undo_step(monkeypatch) -> None:
+    from perfboard_studio.ui import main as main_module
+
+    window = _window_on(_load_dense())
+    before = len(window.bus.history())
+    monkeypatch.setattr(
+        main_module.QInputDialog, "getText", lambda *args, **kwargs: ("Plaket v1", True)
+    )
+    window.on_rename_board()
+    assert window.bus.document.meta.name == "Plaket v1"
+    assert len(window.bus.history()) == before + 1
+    # Cancelled, or unchanged: nothing on the undo stack.
+    monkeypatch.setattr(
+        main_module.QInputDialog, "getText", lambda *args, **kwargs: ("Plaket v1", True)
+    )
+    window.on_rename_board()
+    assert len(window.bus.history()) == before + 1
+    _close(window)

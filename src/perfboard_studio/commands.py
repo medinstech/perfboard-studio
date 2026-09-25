@@ -884,6 +884,13 @@ class SetBoardPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class RenameDocumentPayload:
+    """What the board is called: the title of its guide, its schematic and its project."""
+
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class SetHeightLimitPayload:
     """``None`` clears the limit, which is a different thing from a limit of zero."""
 
@@ -2757,6 +2764,29 @@ class _SetHeightLimit:
         return f"Limit build height to {p.height_limit_mm:g} mm"
 
 
+class _RenameDocument:
+    """Name the board.
+
+    A COMMAND, not a field the host writes on the way to disk like ``meta.modified``:
+    the name is something somebody chose and can see, on the guide's cover and the
+    sheet's title, so changing it is an edit -- one step on the undo stack, and the same
+    step whether a person typed it or the host named the board after its file.
+    """
+
+    type = "document.rename"
+
+    def apply(
+        self, doc: PerfDocument, p: RenameDocumentPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        name = p.name.strip() if isinstance(p.name, str) else ""
+        if not name:
+            raise CommandError("empty-name", "A board needs a name; it cannot be blank.")
+        return dataclasses.replace(doc, meta=dataclasses.replace(doc.meta, name=name))
+
+    def describe(self, p: RenameDocumentPayload, doc: PerfDocument) -> str:
+        return f"Name the board {p.name.strip()!r}"
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -2804,6 +2834,7 @@ delete_mounting_hole: CommandDefinition[DeleteMountingHolePayload] = _DeleteMoun
 add_edge_connector: CommandDefinition[AddEdgeConnectorPayload] = _AddEdgeConnector()
 delete_edge_connector: CommandDefinition[DeleteEdgeConnectorPayload] = _DeleteEdgeConnector()
 set_height_limit: CommandDefinition[SetHeightLimitPayload] = _SetHeightLimit()
+rename_document: CommandDefinition[RenameDocumentPayload] = _RenameDocument()
 
 # Typed with Any because CommandDefinition's payload is contravariant, so a specific
 # command is deliberately NOT assignable to CommandDefinition[object]. See the note on
@@ -2852,6 +2883,7 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_edge_connector,
     delete_edge_connector,
     set_height_limit,
+    rename_document,
 )
 
 

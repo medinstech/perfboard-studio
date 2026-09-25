@@ -224,18 +224,25 @@ def open_document(path: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def save_document(path: str | None = None) -> dict[str, Any]:
-    """Write the board to disk. Without a path it saves over the file it came from."""
-    return session.save_document(path)
+def save_document(path: str | None = None, name: str | None = None) -> dict[str, Any]:
+    """Write the board to disk. Without a path it saves over the file it came from. name
+    renames the board (the title of its guide and schematic); a board that was never
+    named takes its file's name."""
+    return session.save_document(path, name)
 
 
 @mcp.tool()
-def new_document(cols: int = 30, rows: int = 20, material: str = "FR4") -> dict[str, Any]:
+def new_document(
+    cols: int = 30, rows: int = 20, material: str = "FR4", name: str = "untitled"
+) -> dict[str, Any]:
     """Start a blank board. material is FR4, or FR2/FR1 for the cheaper phenolic kind —
     which matters: phenolic pads lift under heat, and the build guide derates the iron
-    temperature and dwell time for them."""
+    temperature and dwell time for them. name is the board's title on its guide and
+    schematic; left alone, the board takes its file's name when first saved."""
     global session
-    session = BoardSession(document=new_board(cols=cols, rows=rows, material=material))
+    session = BoardSession(
+        document=new_board(cols=cols, rows=rows, material=material, name=name)
+    )
     return session.get_status()
 
 

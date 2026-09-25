@@ -754,6 +754,13 @@ class Net:
 DOCUMENT_FORMAT_VERSION = 1
 
 
+#: What a document is called until somebody names it. A board is named after its file
+#: the first time it is saved (``document.rename``, dispatched by the host), because
+#: this is the title the build guide, the schematic and the project folder all print --
+#: and every board anybody ever made in the application used to go out with it.
+UNTITLED_NAME = "untitled"
+
+
 @dataclass(frozen=True, slots=True)
 class DocumentMeta:
     name: str

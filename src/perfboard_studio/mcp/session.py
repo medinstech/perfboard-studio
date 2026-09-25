@@ -62,6 +62,7 @@ from perfboard_studio.commands import (
     PartPlacement,
     PlaceComponentPayload,
     PlacePartsPayload,
+    RenameDocumentPayload,
     RotateComponentPayload,
     SetBoardPayload,
     SetHeightLimitPayload,
@@ -94,6 +95,7 @@ from perfboard_studio.guide import describe as describe_guide
 from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
 from perfboard_studio.lvs import run_lvs, stale_conductor_ids
 from perfboard_studio.model import (
+    UNTITLED_NAME,
     Board,
     BoardEdge,
     BoardFace,
@@ -218,7 +220,7 @@ class BoardSession:
 
     document: PerfDocument = field(
         default_factory=lambda: create_empty_document(
-            DocumentMeta(name="untitled", created=_now_iso(), modified=_now_iso())
+            DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso())
         )
     )
     path: Path | None = None
@@ -540,12 +542,27 @@ class BoardSession:
             status=self.get_status(),
         )
 
-    def save_document(self, path: str | None = None) -> dict[str, Any]:
+    def save_document(self, path: str | None = None, name: str | None = None) -> dict[str, Any]:
+        """Write the board, naming it first if it has no name of its own.
+
+        ``name`` renames it explicitly. Without one, a board still called
+        ``UNTITLED_NAME`` takes its file's name -- the rule the window follows too, so a
+        board saved as ``relay-driver.perf`` has a guide titled "relay-driver" rather than
+        "untitled" whichever of the two saved it. Either way the rename is a command, so it
+        is on the undo stack like any other edit.
+        """
         target = _path_arg(path, "save_document") if path else self.path
         if target is None:
             raise SessionError(
                 "This board has never been saved, so save_document needs a path."
             )
+        wanted = name.strip() if name is not None and name.strip() else None
+        if wanted is None and self.document.meta.name == UNTITLED_NAME:
+            wanted = target.stem
+        if wanted is not None and wanted != self.document.meta.name:
+            renamed = self._dispatch("document.rename", RenameDocumentPayload(name=wanted))
+            if not renamed["ok"]:
+                return renamed
         stamped = dataclasses.replace(
             self.document,
             meta=dataclasses.replace(self.document.meta, modified=_now_iso()),
@@ -555,7 +572,7 @@ class BoardSession:
         except OSError as err:
             raise SessionError(f"Cannot write {target}: {err.strerror or err}.") from err
         self.path = target
-        return _ok(saved=str(target), bytes=target.stat().st_size)
+        return _ok(saved=str(target), bytes=target.stat().st_size, name=self.document.meta.name)
 
     def import_netlist(self, path: str) -> dict[str, Any]:
         from perfboard_studio.parsers.kicad import parse_kicad_netlist
@@ -1740,7 +1757,9 @@ def _png_bytes(image: Any) -> bytes:
     return bytes(data.data())
 
 
-def new_board(cols: int = 30, rows: int = 20, material: str = "FR4") -> PerfDocument:
+def new_board(
+    cols: int = 30, rows: int = 20, material: str = "FR4", name: str = UNTITLED_NAME
+) -> PerfDocument:
     """A blank document, for a session that starts from nothing."""
     if material not in ("FR4", "FR2", "FR1"):
         raise SessionError("Board material must be FR4, FR2 or FR1.")
@@ -1755,5 +1774,6 @@ def new_board(cols: int = 30, rows: int = 20, material: str = "FR4") -> PerfDocu
         drill_diameter=0.8,
     )
     return create_empty_document(
-        DocumentMeta(name="untitled", created=_now_iso(), modified=_now_iso()), board
+        DocumentMeta(name=name.strip() or UNTITLED_NAME, created=_now_iso(), modified=_now_iso()),
+        board,
     )

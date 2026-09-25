@@ -134,6 +134,7 @@ from perfboard_studio.commands import (
     PlaceBlockPayload,
     PlaceComponentPayload,
     PlacePartsPayload,
+    RenameDocumentPayload,
     RotateComponentPayload,
     SetBoardPayload,
     SetHeightLimitPayload,
@@ -189,6 +190,7 @@ from perfboard_studio.guide import describe as describe_guide
 from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
 from perfboard_studio.lvs import LvsIssue, LvsResult, run_lvs, stale_conductor_ids
 from perfboard_studio.model import (
+    UNTITLED_NAME,
     VALID_ROTATIONS,
     Board,
     BoardEdge,
@@ -3253,6 +3255,14 @@ class MainWindow(QMainWindow):
             )
         )
         act_features.triggered.connect(self.on_board_features)
+        act_rename = file_menu.addAction(t("Rena&me Board…"))
+        act_rename.setToolTip(
+            t(
+                "The board's title, printed on the build guide, on the schematic and on "
+                "the project folder. A board is named after its file when first saved."
+            )
+        )
+        act_rename.triggered.connect(self.on_rename_board)
         act_import = file_menu.addAction(t("&Import KiCad Netlist…"))
         self.act_import = act_import
         act_import.setShortcut(QKeySequence("Ctrl+I"))
@@ -7775,7 +7785,7 @@ class MainWindow(QMainWindow):
         if not self._offer_to_save():
             return
         starter = create_starter_document(
-            DocumentMeta(name="untitled", created=_now_iso(), modified=_now_iso())
+            DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso())
         )
         dialog = BoardSetupDialog(starter.board, self, title=t("New Board"))
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -7785,7 +7795,7 @@ class MainWindow(QMainWindow):
         # which is the state `board.applyPreset` exists to make unreachable.
         features = dialog.preset_features()
         document = create_empty_document(
-            DocumentMeta(name="untitled", created=_now_iso(), modified=_now_iso()),
+            DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso()),
             dialog.board(),
         )
         if features is not None:
@@ -7847,6 +7857,26 @@ class MainWindow(QMainWindow):
             )
             return
         self.view.fit_board()
+
+    def on_rename_board(self) -> None:
+        """Name the board -- the title its guide, its schematic and its project carry.
+
+        Through ``document.rename`` like any other edit, so it undoes. A board that was
+        never named is named after its file on the first save (``_save_to``); this is for
+        choosing something better than a file name.
+        """
+        current = self.bus.document.meta.name
+        name, accepted = QInputDialog.getText(
+            self, t("Rename Board"), t("Board name:"), text=current
+        )
+        name = name.strip()
+        if not accepted or not name or name == current:
+            return
+        result = self.bus.dispatch("document.rename", RenameDocumentPayload(name=name))
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
 
     def on_board_features(self) -> None:
         """Mounting holes and edge connectors.
@@ -9169,6 +9199,11 @@ class MainWindow(QMainWindow):
         )
 
     def _save_to(self, path: Path) -> bool:
+        # A board nobody has named takes its file's name, as a command so it undoes. It
+        # used to keep "untitled" for good -- no route in the window changed it -- and that
+        # is the title every guide, sheet and project folder then went out with.
+        if self.bus.document.meta.name == UNTITLED_NAME and path.stem:
+            self.bus.dispatch("document.rename", RenameDocumentPayload(name=path.stem))
         text = persist.serialize_document(self._stamped(self.bus.document))
         # The one write that must not fail quietly -- and it was the one write with no
         # handler at all, so a read-only folder or a full disk was a traceback with the
@@ -9717,7 +9752,7 @@ def main() -> int:
     else:
         path = None
         document = create_starter_document(
-            DocumentMeta(name="untitled", created=_now_iso(), modified=_now_iso())
+            DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso())
         )
 
     window = MainWindow(document, path)
