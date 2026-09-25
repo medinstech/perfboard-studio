@@ -8167,3 +8167,71 @@ def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatc
     assert not window.is_modified
     assert window.schematic_is_showing()
     _close(window)
+
+
+# ---------------------------------------------------------------------------
+# What a part says about itself
+# ---------------------------------------------------------------------------
+
+
+def test_the_pinout_editor_shows_and_returns_a_declaration() -> None:
+    """A row per footprint pin, the declared names in them, and back out in normal form."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import PinoutEditor
+
+    editor = PinoutEditor()
+    editor.set_part(get_footprint("to220"), (("1", "G"), ("2", "D"), ("3", "S")), "pmos")
+    assert editor.table.rowCount() == 3
+    assert editor.values() == ((("1", "G"), ("2", "D"), ("3", "S")), "pmos")
+    editor.deleteLater()
+
+
+def test_the_pinout_editor_keeps_typed_names_across_a_footprint_change() -> None:
+    """Pin 3 survives a footprint that still has a pin 3; pin 5 does not survive one that
+    has three pins, rather than being kept where nothing shows it."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import PinoutEditor
+
+    editor = PinoutEditor()
+    editor.set_part(get_footprint("dip-8"), (("3", "VCC"), ("5", "Vref")), None)
+    editor.set_footprint(get_footprint("to92"))
+    assert editor.values() == ((("3", "VCC"),), None)
+    editor.deleteLater()
+
+
+def test_a_registry_pin_name_is_a_hint_not_a_declaration() -> None:
+    """An LED's A and K are the footprint's; leaving them untouched declares nothing, so
+    nothing is written to the part and nothing changes in the file."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import PinoutEditor
+
+    editor = PinoutEditor()
+    editor.set_part(get_footprint("led-5mm"), (), None)
+    assert editor.values() == ((), None)
+    editor.deleteLater()
+
+
+def test_properties_writes_a_declaration_in_the_same_undo_step(monkeypatch) -> None:
+    from perfboard_studio.ui import main as main_module
+
+    window = _window_on(_load_dense())
+    component = window.bus.document.components[0]
+    before = len(window.bus.history())
+    monkeypatch.setattr(
+        main_module.ComponentDialog, "exec", lambda self: main_module.QDialog.DialogCode.Accepted
+    )
+    monkeypatch.setattr(
+        main_module.ComponentDialog, "values", lambda self: (component.ref, "BC547", False)
+    )
+    monkeypatch.setattr(
+        main_module.ComponentDialog,
+        "pinout",
+        lambda self: ((("1", "C"), ("2", "B"), ("3", "E")), "npn"),
+    )
+    window.on_component_properties(component.id)
+
+    edited = next(c for c in window.bus.document.components if c.id == component.id)
+    assert edited.value == "BC547"
+    assert (edited.pin_names, edited.symbol) == ((("1", "C"), ("2", "B"), ("3", "E")), "npn")
+    assert len(window.bus.history()) == before + 1
+    _close(window)

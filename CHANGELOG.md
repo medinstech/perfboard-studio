@@ -22,6 +22,36 @@ closed without a bump.
 
 ### Added
 
+- **A part can say what it is and what it calls its leads.** Two optional fields on every
+  part, placed or not: `pinNames` (pin number to the datasheet's name for it) and `symbol`
+  (`npn`, `pnp`, `nmos`, `pmos`, `zener`, `fuse`). They are set in the part's properties —
+  a symbol list and a table with a row per footprint pin — and by `add_part`,
+  `update_part` and `place_component` on the MCP server. What they change:
+
+  - **The schematic draws the real symbol.** A TO-220 declared `pmos` with its leads named
+    G, D and S is a P-channel MOSFET with its source on top; a TO-92 declared `npn` with
+    B, C and E is a transistor; a DO-35 declared `zener` has the bent bar; a disc declared
+    `fuse` is a fuse and not a ceramic capacitor. The package numbers are printed on the
+    leads, because the symbol says G and the board says pin 1.
+  - **A module's box reads like its datasheet.** A named pin prints its name inside the
+    body and its number on the lead outside, and the box widens to fit the longest name —
+    an ESP32 devkit's 38 pins read `3V3`, `EN`, `IO21` instead of 1 to 38.
+  - **The guide orients a three-legged part leg by leg** — "G (gate) in P1; D (drain) in
+    Q1; S (source) in R1" instead of "check the package outline against the board" — and
+    its probes name the pin: "Probe J1 pin 1 (24V-L) and R3 pin 1."
+
+  **The registry's refusal stands; only the claim has moved.** A TO-92 is still a box
+  until somebody says otherwise, because BC547 and 2N3904 share the outline and disagree
+  about the base. The pinout is a fact about the PART, and the part is now somewhere it
+  can be written down by the one person who knows it. A declaration is also not taken on
+  trust: a transistor is drawn only when exactly its three leads are named B/C/E or
+  G/D/S, and a zener only when something says which lead is the cathode. Otherwise the
+  part is drawn as its package draws it, and the sheet's notes say why.
+
+  Both fields are omitted from the file when empty, so every existing board and all
+  fifteen golden fixtures serialize to exactly the bytes they did, and
+  `DOCUMENT_FORMAT_VERSION` has still never moved. Copy and paste carry them.
+
 - **DRC says when a part's body hangs past the edge of the board**
   (`component-overhangs-edge`, a warning). `component-off-board` only ever asked about PIN
   holes, so a TO-220 on row 1 — all three pins in holes, the body standing a millimetre past

@@ -46,6 +46,7 @@ from .model import Mm, Point2
 from .schematic import (
     MARGIN_MM,
     NET_LABEL_MM,
+    PIN_LABEL_MM,
     Annotation,
     Label,
     NoConnect,
@@ -99,7 +100,9 @@ class SheetInk:
     #: the name at some other size would be filling a gap that was measured for a different
     #: piece of text.
     net_mm: Mm = NET_LABEL_MM
-    pin_mm: Mm = 1.0
+    #: From the layout, for the reason ``net_mm`` is: a box is widened to fit the pin
+    #: names its part declares, measured at this size.
+    pin_mm: Mm = PIN_LABEL_MM
     title_mm: Mm = 3.2
     note_mm: Mm = 1.6
 

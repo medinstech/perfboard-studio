@@ -71,18 +71,23 @@ from typing import Literal, TypeAlias
 from .connectivity import FootprintLookup
 from .model import (
     BodyArchetype,
+    ComponentInstance,
     Footprint,
     Mm,
     Net,
     NetClass,
     NetId,
     NetNode,
+    PartSymbol,
     PerfDocument,
     Point2,
     Rotation,
+    SchematicPart,
     SheetNoteKind,
     SheetWire,
     SymbolPlacement,
+    pin_name_of,
+    pin_number_sort_key,
 )
 
 # ---------------------------------------------------------------------------
@@ -141,6 +146,13 @@ PIN_PITCH_MM: Mm = 2 * GRID_MM
 NET_LABEL_MM: Mm = 1.3
 NET_LABEL_ADVANCE: float = 0.55
 
+#: The height a pin number or pin name is drawn at, in millimetres of sheet.
+#:
+#: The same arrangement as ``NET_LABEL_MM``: a box WIDENS to fit the names its part
+#: declares, so the layout has to know how much room a name takes, and the exported sheet
+#: takes its size from here (``SheetInk.pin_mm``) rather than naming its own.
+PIN_LABEL_MM: Mm = 1.0
+
 #: How far a net name sits clear of the run it names, and how far past a branch it starts.
 #:
 #: The sheet used to place a net label AT its trunk, left-anchored: the baseline WAS the
@@ -184,6 +196,14 @@ SymbolKind: TypeAlias = Literal[  # noqa: UP040
     "ic",
     "connector",
     "box",
+    # Drawn only when a part DECLARES itself one of these (``model.PartSymbol``); nothing
+    # in the registry asks for them, because no package knows which of its legs is which.
+    "zener",
+    "fuse",
+    "npn",
+    "pnp",
+    "nmos",
+    "pmos",
 ]
 
 
@@ -644,12 +664,10 @@ def _pin_sort_key(number: str) -> tuple[int, float, str]:
     """Pin "10" after pin "9", and a lettered pin after every numbered one.
 
     A netlist may name a pin anything. Sorting the numbers as text puts pin 10 between 1
-    and 2 and silently reorders half a DIP-16.
+    and 2 and silently reorders half a DIP-16. The rule itself lives in ``model``, which
+    orders a part's declared pin names by it; the two must never sort differently.
     """
-    try:
-        return (0, float(number), "")
-    except ValueError:
-        return (1, 0.0, number)
+    return pin_number_sort_key(number)
 
 
 def _other_pin(pins: tuple[_PinSpec, ...], number: str) -> str | None:
@@ -1150,7 +1168,13 @@ def _relay_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _Sym
 
 
 def _boxy_body(
-    pins: tuple[_PinSpec, ...], *, body_width: Mm, split: bool, dip_order: bool, notch: bool
+    pins: tuple[_PinSpec, ...],
+    *,
+    body_width: Mm,
+    split: bool,
+    dip_order: bool,
+    notch: bool,
+    name_inset: Mm | None = None,
 ) -> _SymbolBody:
     """A rectangle with numbered pins down one or both sides.
 
@@ -1170,6 +1194,15 @@ def _boxy_body(
 
     rows = max(len(left), len(right), 1)
     height = (rows + 1) * PIN_PITCH_MM
+    # A part that NAMES its pins gets a body wide enough to print the names inside it --
+    # "GPIO21" does not fit where "21" did. Only then: a box whose pins carry no names is
+    # exactly the width it always was, which is what keeps every frozen sheet unchanged.
+    body_width = max(
+        body_width,
+        _named_body_width(
+            left, right, _PIN_NAME_INSET_MM if name_inset is None else name_inset
+        ),
+    )
     width = LEAD_MM + body_width + (LEAD_MM if right else 0.0)
     body_left = LEAD_MM
     body_right = LEAD_MM + body_width
@@ -1210,6 +1243,43 @@ def _boxy_body(
     )
 
 
+#: How far a pin's name sits inside the body edge, and the least gap between a name on the
+#: left and one on the right. The first is where ``_part_labels`` has always put a pin
+#: number; the second is one grid square, because two names nearer than that read as one.
+_PIN_NAME_INSET_MM: Mm = 0.5 * GRID_MM
+_PIN_NAME_GAP_MM: Mm = GRID_MM
+
+#: Where a CONNECTOR prints a pin's name: past the shroud line ``_connector_body`` draws
+#: 1.4 grid squares into the body. A number fits in front of that line and always has; a
+#: name starting in the same place runs straight through it, and "24V-L" reads as "24V-"
+#: with a bar through the L.
+_CONNECTOR_SHROUD_MM: Mm = 1.4 * GRID_MM
+_CONNECTOR_NAME_INSET_MM: Mm = _CONNECTOR_SHROUD_MM + 0.4 * GRID_MM
+
+
+def pin_label_width(text: str) -> Mm:
+    """Roughly how wide a pin label is on paper, by the same average-advance estimate the
+    net labels use. Close is enough: the answer is rounded up to whole grid squares."""
+    return len(text) * PIN_LABEL_MM * NET_LABEL_ADVANCE
+
+
+def _named_body_width(
+    left: Sequence[_PinSpec], right: Sequence[_PinSpec], inset: Mm = _PIN_NAME_INSET_MM
+) -> Mm:
+    """The body width the longest names on each side need, or 0 when nothing is named.
+
+    ``inset`` is where a name starts from the edge it belongs to; the far end keeps the
+    ordinary inset, since nothing is drawn there but the body outline.
+    """
+    left_width = max((pin_label_width(pin.name) for pin in left if pin.name), default=0.0)
+    right_width = max((pin_label_width(pin.name) for pin in right if pin.name), default=0.0)
+    if not left_width and not right_width:
+        return 0.0
+    gap = _PIN_NAME_GAP_MM if left_width and right_width else 0.0
+    needed = inset + _PIN_NAME_INSET_MM + left_width + gap + right_width
+    return math.ceil(needed / GRID_MM - 1e-9) * GRID_MM
+
+
 def _ic_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
     return _boxy_body(pins, body_width=8 * GRID_MM, split=True, dip_order=True, notch=True)
 
@@ -1220,12 +1290,19 @@ def _connector_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> 
     A header is a place wires leave the board, and splitting one across two sides of a box
     would draw the eight-way strip in your hand as two four-ways.
     """
-    body = _boxy_body(pins, body_width=6 * GRID_MM, split=False, dip_order=False, notch=False)
+    body = _boxy_body(
+        pins,
+        body_width=6 * GRID_MM,
+        split=False,
+        dip_order=False,
+        notch=False,
+        name_inset=_CONNECTOR_NAME_INSET_MM,
+    )
     shroud = SymbolShape(
         kind="polyline",
         points=(
-            _p(LEAD_MM + 1.4 * GRID_MM, PIN_PITCH_MM / 2),
-            _p(LEAD_MM + 1.4 * GRID_MM, body.height - PIN_PITCH_MM / 2),
+            _p(LEAD_MM + _CONNECTOR_SHROUD_MM, PIN_PITCH_MM / 2),
+            _p(LEAD_MM + _CONNECTOR_SHROUD_MM, body.height - PIN_PITCH_MM / 2),
         ),
     )
     return _SymbolBody(
@@ -1244,6 +1321,306 @@ def _box_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _Symbo
     return _boxy_body(pins, body_width=6 * GRID_MM, split=split, dip_order=False, notch=False)
 
 
+# -- what a part declares itself to be ----------------------------------------
+#
+# Every symbol below exists only because a PART said what it is (``model.PartSymbol``).
+# The registry never asks for one: a DO-35 is a zener or a signal diode, a disc is a
+# ceramic capacitor or a PTC fuse, and a three-legged package is anything at all. The
+# person who chose the part knows, and for the transistors they also have to say which leg
+# is which -- see ``DECLARED_SYMBOL_PINS``.
+
+#: The pin NAMES a declared symbol needs before it can be drawn. A transistor symbol is a
+#: claim about which leg is the base or the gate; drawing one from the declaration alone
+#: would be making the claim the registry refuses to make, on the part's behalf and
+#: without its datasheet. So a declared MOSFET whose leads are not named G, D and S stays a
+#: box, and the sheet's notes say which names are missing.
+DECLARED_SYMBOL_PINS: dict[PartSymbol, frozenset[str]] = {
+    "npn": frozenset({"B", "C", "E"}),
+    "pnp": frozenset({"B", "C", "E"}),
+    "nmos": frozenset({"G", "D", "S"}),
+    "pmos": frozenset({"G", "D", "S"}),
+    "zener": frozenset(),
+    "fuse": frozenset(),
+}
+
+
+def declared_symbol_kind(
+    symbol: PartSymbol, pins: tuple[_PinSpec, ...], footprint: Footprint | None
+) -> tuple[SymbolKind | None, str | None]:
+    """The kind a declaration draws as, or ``(None, why not)``.
+
+    The reason is phrased for the sheet's notes, after the reference -- "Q1: ..." -- because
+    that is where somebody looks to find out why the MOSFET they declared is still a box.
+    The caller finishes the sentence with what it drew instead, which is not always a box:
+    a declared zener on an unpolarised axial falls back to the resistor it looks like.
+    """
+    needed = DECLARED_SYMBOL_PINS[symbol]
+    if needed:
+        names = [pin.name for pin in pins]
+        if len(pins) != len(needed) or set(names) != needed:
+            wanted = ", ".join(sorted(needed))
+            return None, (
+                f"declared {symbol}, but a {symbol} symbol needs exactly {len(needed)} pins "
+                f"named {wanted}"
+            )
+        return symbol, None
+    if len(pins) != 2:
+        return None, f"declared {symbol}, but a {symbol} has two leads"
+    if symbol == "zener":
+        polarised = footprint.polarized if footprint is not None else False
+        if _cathode_pin_number(pins, polarised) is None:
+            return None, (
+                "declared zener, but nothing says which lead is the cathode "
+                "(name the leads K and A)"
+            )
+    return symbol, None
+
+
+def _zener_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    """A diode whose bar is bent at both ends, cathode on the left like every diode here.
+
+    The bends are the whole difference from a signal diode, and a signal diode where the
+    circuit needs a zener is a gate driven to the full rail -- so they are drawn as two
+    unmistakable strokes rather than a serif.
+    """
+    cathode = _cathode_pin_number(pins, footprint.polarized if footprint else False)
+    half = 1.3 * GRID_MM
+    near = 3.6 * GRID_MM
+    wing_x, wing_y = 0.45 * GRID_MM, 0.35 * GRID_MM
+    shapes = list(_diode_shapes(cathode_left=True))
+    # The plain bar is the third shape _diode_shapes returns; replaced, not overdrawn.
+    shapes[2] = SymbolShape(
+        kind="polyline",
+        points=(
+            _p(near - wing_x, _AXIS - half - wing_y),
+            _p(near, _AXIS - half),
+            _p(near, _AXIS + half),
+            _p(near + wing_x, _AXIS + half + wing_y),
+        ),
+    )
+    return _SymbolBody(
+        shapes=tuple(shapes),
+        pins=_two_terminal_pins(pins, cathode),
+        width=_TWO_W,
+        height=_TWO_H,
+    )
+
+
+def _fuse_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    """The IEC fuse: the resistor's rectangle with the conductor running straight through.
+
+    The line through the body is what says "this opens", and it is also the only thing
+    telling it apart from the resistor it would otherwise be.
+    """
+    half = 0.75 * GRID_MM
+    shapes = (
+        SymbolShape(kind="polyline", points=(_p(0.0, _AXIS), _p(_TWO_W, _AXIS))),
+        SymbolShape(
+            kind="polygon",
+            points=(
+                _p(2 * GRID_MM, _AXIS - half),
+                _p(6 * GRID_MM, _AXIS - half),
+                _p(6 * GRID_MM, _AXIS + half),
+                _p(2 * GRID_MM, _AXIS + half),
+            ),
+        ),
+    )
+    return _SymbolBody(
+        shapes=shapes, pins=_two_terminal_pins(pins, None), width=_TWO_W, height=_TWO_H
+    )
+
+
+# The transistors share one frame: the control lead on the left at mid-height, the two
+# power leads on the right one above the other, the envelope circle between. Leads only on
+# the left and right because that is how every symbol here leaves its body -- a wire goes
+# out sideways into the channel beside its column -- and the potentiometer already puts
+# one lead on the left and two on the right in the same way.
+_TRANSISTOR_H: Mm = 6 * GRID_MM
+_TRANSISTOR_AXIS: Mm = 3 * GRID_MM
+_TRANSISTOR_TOP: Mm = 1 * GRID_MM
+_TRANSISTOR_BOTTOM: Mm = 5 * GRID_MM
+
+
+def _arrowhead(tip: Point2, towards_x: float, towards_y: float) -> SymbolShape:
+    """A filled arrowhead at ``tip``, pointing along (``towards_x``, ``towards_y``)."""
+    length = math.hypot(towards_x, towards_y)
+    ux, uy = towards_x / length, towards_y / length
+    back, spread = 0.55 * GRID_MM, 0.28 * GRID_MM
+    base_x, base_y = tip.x - ux * back, tip.y - uy * back
+    return SymbolShape(
+        kind="polygon",
+        points=(
+            tip,
+            _p(base_x - uy * spread, base_y + ux * spread),
+            _p(base_x + uy * spread, base_y - ux * spread),
+        ),
+        filled=True,
+    )
+
+
+def _envelope() -> SymbolShape:
+    return SymbolShape(
+        kind="circle", points=(_p(4.5 * GRID_MM, _TRANSISTOR_AXIS),), radius=1.9 * GRID_MM
+    )
+
+
+def _named(pins: tuple[_PinSpec, ...], name: str) -> _PinSpec:
+    """The lead with this name. ``declared_symbol_kind`` has already checked it exists."""
+    return next(pin for pin in pins if pin.name == name)
+
+
+def _transistor_pins(control: _PinSpec, top: _PinSpec, bottom: _PinSpec) -> tuple[SymbolPin, ...]:
+    return (
+        SymbolPin(
+            number=control.number, name=control.name, at=_p(0.0, _TRANSISTOR_AXIS), side="left"
+        ),
+        SymbolPin(number=top.number, name=top.name, at=_p(_TWO_W, _TRANSISTOR_TOP), side="right"),
+        SymbolPin(
+            number=bottom.number,
+            name=bottom.name,
+            at=_p(_TWO_W, _TRANSISTOR_BOTTOM),
+            side="right",
+        ),
+    )
+
+
+def _bjt_body(pins: tuple[_PinSpec, ...], *, pnp: bool) -> _SymbolBody:
+    """Base on the left; the collector on top for an NPN and the emitter on top for a PNP.
+
+    The conventional orientation for each -- conventional current runs DOWN the page
+    through both -- and the arrow on the emitter is the only other difference: out of the
+    transistor on an NPN, into it on a PNP.
+    """
+    bar_x, lead_x = 3.4 * GRID_MM, 5.4 * GRID_MM
+    upper_y, lower_y = 2.5 * GRID_MM, 3.5 * GRID_MM
+    upper_end, lower_end = 1.6 * GRID_MM, 4.4 * GRID_MM
+    shapes: list[SymbolShape] = [
+        _envelope(),
+        SymbolShape(
+            kind="polyline", points=(_p(0.0, _TRANSISTOR_AXIS), _p(bar_x, _TRANSISTOR_AXIS))
+        ),
+        SymbolShape(kind="polyline", points=(_p(bar_x, 1.9 * GRID_MM), _p(bar_x, 4.1 * GRID_MM))),
+        SymbolShape(
+            kind="polyline",
+            points=(
+                _p(bar_x, upper_y),
+                _p(lead_x, upper_end),
+                _p(lead_x, _TRANSISTOR_TOP),
+                _p(_TWO_W, _TRANSISTOR_TOP),
+            ),
+        ),
+        SymbolShape(
+            kind="polyline",
+            points=(
+                _p(bar_x, lower_y),
+                _p(lead_x, lower_end),
+                _p(lead_x, _TRANSISTOR_BOTTOM),
+                _p(_TWO_W, _TRANSISTOR_BOTTOM),
+            ),
+        ),
+    ]
+    if pnp:
+        # Emitter on top, the arrow pointing IN, towards the base bar.
+        dx, dy = bar_x - lead_x, upper_y - upper_end
+        shapes.append(_arrowhead(_p(lead_x + dx * 0.6, upper_end + dy * 0.6), dx, dy))
+        top, bottom = _named(pins, "E"), _named(pins, "C")
+    else:
+        # Emitter at the bottom, the arrow pointing OUT, away from the base bar.
+        dx, dy = lead_x - bar_x, lower_end - lower_y
+        shapes.append(_arrowhead(_p(bar_x + dx * 0.8, lower_y + dy * 0.8), dx, dy))
+        top, bottom = _named(pins, "C"), _named(pins, "E")
+    return _SymbolBody(
+        shapes=tuple(shapes),
+        pins=_transistor_pins(_named(pins, "B"), top, bottom),
+        width=_TWO_W,
+        height=_TRANSISTOR_H,
+    )
+
+
+def _mosfet_body(pins: tuple[_PinSpec, ...], *, p_channel: bool) -> _SymbolBody:
+    """An enhancement MOSFET: insulated gate, broken channel, body tied to the source.
+
+    Drain on top for an N-channel and source on top for a P-channel -- the way each is
+    drawn in the circuits it appears in, where a P-channel high-side switch has its source
+    on the supply. The arrow on the body connection points INTO the channel on an
+    N-channel and out of it on a P-channel.
+    """
+    gate_x, channel_x, lead_x = 3.0 * GRID_MM, 3.5 * GRID_MM, 5.4 * GRID_MM
+    upper_y, lower_y = 1.9 * GRID_MM, 4.1 * GRID_MM
+    source_y = upper_y if p_channel else lower_y
+    shapes: list[SymbolShape] = [
+        _envelope(),
+        SymbolShape(
+            kind="polyline", points=(_p(0.0, _TRANSISTOR_AXIS), _p(gate_x, _TRANSISTOR_AXIS))
+        ),
+        SymbolShape(kind="polyline", points=(_p(gate_x, 1.8 * GRID_MM), _p(gate_x, 4.2 * GRID_MM))),
+    ]
+    for low, high in ((1.5, 2.3), (2.6, 3.4), (3.7, 4.5)):
+        shapes.append(
+            SymbolShape(
+                kind="polyline",
+                points=(_p(channel_x, low * GRID_MM), _p(channel_x, high * GRID_MM)),
+            )
+        )
+    shapes += [
+        SymbolShape(
+            kind="polyline",
+            points=(
+                _p(channel_x, upper_y),
+                _p(lead_x, upper_y),
+                _p(lead_x, _TRANSISTOR_TOP),
+                _p(_TWO_W, _TRANSISTOR_TOP),
+            ),
+        ),
+        SymbolShape(
+            kind="polyline",
+            points=(
+                _p(channel_x, lower_y),
+                _p(lead_x, lower_y),
+                _p(lead_x, _TRANSISTOR_BOTTOM),
+                _p(_TWO_W, _TRANSISTOR_BOTTOM),
+            ),
+        ),
+        # The body connection: from the middle of the channel across to the source.
+        SymbolShape(
+            kind="polyline",
+            points=(
+                _p(channel_x, _TRANSISTOR_AXIS),
+                _p(lead_x, _TRANSISTOR_AXIS),
+                _p(lead_x, source_y),
+            ),
+        ),
+    ]
+    if p_channel:
+        shapes.append(_arrowhead(_p(channel_x + 1.3 * GRID_MM, _TRANSISTOR_AXIS), 1.0, 0.0))
+        top, bottom = _named(pins, "S"), _named(pins, "D")
+    else:
+        shapes.append(_arrowhead(_p(channel_x + 0.1 * GRID_MM, _TRANSISTOR_AXIS), -1.0, 0.0))
+        top, bottom = _named(pins, "D"), _named(pins, "S")
+    return _SymbolBody(
+        shapes=tuple(shapes),
+        pins=_transistor_pins(_named(pins, "G"), top, bottom),
+        width=_TWO_W,
+        height=_TRANSISTOR_H,
+    )
+
+
+def _npn_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    return _bjt_body(pins, pnp=False)
+
+
+def _pnp_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    return _bjt_body(pins, pnp=True)
+
+
+def _nmos_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    return _mosfet_body(pins, p_channel=False)
+
+
+def _pmos_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    return _mosfet_body(pins, p_channel=True)
+
+
 _SYMBOL_BUILDERS: dict[
     SymbolKind, Callable[[tuple[_PinSpec, ...], Footprint | None], _SymbolBody]
 ] = {
@@ -1259,6 +1636,12 @@ _SYMBOL_BUILDERS: dict[
     "ic": _ic_body,
     "connector": _connector_body,
     "box": _box_body,
+    "zener": _zener_body,
+    "fuse": _fuse_body,
+    "npn": _npn_body,
+    "pnp": _pnp_body,
+    "nmos": _nmos_body,
+    "pmos": _pmos_body,
 }
 
 #: Which symbol an archetype asks for. ``test_schematic`` asserts this covers every member
@@ -1433,10 +1816,16 @@ def _collect_symbols(
             else (part.footprint_id if part is not None else None)
         )
         footprint = lookup(footprint_id) if footprint_id is not None else None
+        owner: ComponentInstance | SchematicPart | None = (
+            component if component is not None else part
+        )
         if footprint_id is not None and footprint is None:
             notes.append(f"{ref}: footprint {footprint_id!r} is not in the registry")
         if footprint is not None:
-            specs = tuple(_PinSpec(number=pin.number, name=pin.name) for pin in footprint.pins)
+            specs = tuple(
+                _PinSpec(number=pin.number, name=pin_name_of(owner, pin))
+                for pin in footprint.pins
+            )
             missing = sorted(
                 pins_named[ref] - {pin.number for pin in footprint.pins}, key=_pin_sort_key
             )
@@ -1444,6 +1833,18 @@ def _collect_symbols(
                 notes.append(
                     f"{ref}: the netlist names pin(s) {', '.join(missing)}, "
                     f"which {footprint.id} does not have"
+                )
+            # The same finding from the other direction: a name the PART gives a lead the
+            # package does not have. Not refused by the command that stored it, for the
+            # reason ``commands.checked_pin_names`` gives, so it is said here.
+            unnamed = sorted(
+                {number for number, _ in (owner.pin_names if owner else ())}
+                - {pin.number for pin in footprint.pins},
+                key=_pin_sort_key,
+            )
+            if unnamed:
+                notes.append(
+                    f"{ref}: names pin(s) {', '.join(unnamed)}, which {footprint.id} does not have"
                 )
         else:
             # No footprint to ask, so the netlist is the only account of what pins exist.
@@ -1454,6 +1855,12 @@ def _collect_symbols(
         if not specs:
             specs = (_PinSpec(number="1", name=None),)
         kind = symbol_kind_for(footprint, len(specs))
+        if owner is not None and owner.symbol is not None:
+            declared, why_not = declared_symbol_kind(owner.symbol, specs, footprint)
+            if declared is not None:
+                kind = declared
+            elif why_not is not None:
+                notes.append(f"{ref}: {why_not}; drawn as a {kind} instead")
         undefined = component is None and part is None
         symbols[ref] = _Placed(
             ref=ref,
@@ -2131,13 +2538,23 @@ def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[
         # are one node inside the part, so which of them a net lands on is a question about
         # holes and not about the circuit, and two labels at the join would sit on top of
         # the lines that say they are joined.
-        if options.show_pin_numbers and placed.kind in ("ic", "connector", "box", "relay"):
+        #
+        # A pin the part NAMES prints the name inside the body, where the number used to
+        # be, and its number on the lead outside -- the arrangement every schematic uses,
+        # and the only one where both fit. A box none of whose pins is named draws exactly
+        # what it always did.
+        if placed.kind in ("ic", "connector", "box", "relay"):
             for pin in placed.body.pins:
+                inside = _inside_text(pin, options)
+                if inside is None:
+                    continue
                 inset = LEAD_MM + 0.5 * GRID_MM
+                if pin.name and placed.kind == "connector":
+                    inset = LEAD_MM + _CONNECTOR_NAME_INSET_MM
                 if pin.side == "left":
                     labels.append(
                         Label(
-                            text=pin.number,
+                            text=inside,
                             at=_p(placed.x + inset, placed.y + pin.at.y),
                             kind="pin",
                             anchor="left",
@@ -2146,7 +2563,7 @@ def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[
                 elif pin.side == "right":
                     labels.append(
                         Label(
-                            text=pin.number,
+                            text=inside,
                             at=_p(placed.x + placed.body.width - inset, placed.y + pin.at.y),
                             kind="pin",
                             anchor="right",
@@ -2159,13 +2576,51 @@ def _part_labels(ordered: Sequence[_Placed], options: SchematicOptions) -> list[
                     inward = inset if pin.side == "top" else -inset
                     labels.append(
                         Label(
-                            text=pin.number,
+                            text=inside,
                             at=_p(placed.x + pin.at.x, placed.y + pin.at.y + inward),
                             kind="pin",
                             anchor="centre",
                         )
                     )
+                if pin.name and options.show_pin_numbers:
+                    labels.append(_lead_number(placed, pin))
+        elif options.show_pin_numbers and placed.kind in _TRANSISTOR_KINDS:
+            # Which PACKAGE leg is the gate is the question the declaration answered, and
+            # the answer is only useful at the bench if the number is on the sheet: the
+            # symbol says G, the board says pin 1.
+            labels.extend(_lead_number(placed, pin) for pin in placed.body.pins)
     return labels
+
+
+_TRANSISTOR_KINDS: frozenset[SymbolKind] = frozenset({"npn", "pnp", "nmos", "pmos"})
+
+
+def _inside_text(pin: SymbolPin, options: SchematicOptions) -> str | None:
+    """What a box prints inside its body at one pin: the name if it has one, else the number.
+
+    On a TURNED box the pins are a pin pitch apart along the top or bottom edge, and a
+    name centred over its lead that is wider than that pitch would sit on its neighbour.
+    Such a name falls back to the number there -- turning the box back upright shows it.
+    """
+    if pin.name:
+        if pin.side in ("top", "bottom") and pin_label_width(pin.name) > PIN_PITCH_MM - GRID_MM:
+            return pin.number if options.show_pin_numbers else None
+        return pin.name
+    return pin.number if options.show_pin_numbers else None
+
+
+def _lead_number(placed: _Placed, pin: SymbolPin) -> Label:
+    """A pin's number on its lead, outside the body: below a sideways lead, beside an
+    upright one. A grid square in from the end, so it never reaches the wire."""
+    along, off = GRID_MM, 0.45 * GRID_MM
+    x, y = placed.x + pin.at.x, placed.y + pin.at.y
+    if pin.side == "left":
+        return Label(text=pin.number, at=_p(x + along, y + off), kind="pin", anchor="centre")
+    if pin.side == "right":
+        return Label(text=pin.number, at=_p(x - along, y + off), kind="pin", anchor="centre")
+    if pin.side == "top":
+        return Label(text=pin.number, at=_p(x + off, y + along), kind="pin", anchor="left")
+    return Label(text=pin.number, at=_p(x + off, y - along), kind="pin", anchor="left")
 
 
 def _sheet_extent(

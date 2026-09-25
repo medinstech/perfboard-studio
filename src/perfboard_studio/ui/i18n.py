@@ -1238,6 +1238,30 @@ TURKISH: Mapping[str, str] = {
     # -- the sheet -----------------------------------------------------------------------
     "not in the design": "tasarımda yok",
     "not placed yet": "henüz yerleştirilmedi",
+    # -- what a part says about itself (PinoutEditor) -------------------------------------
+    "From the package": "Gövdeden",
+    "NPN transistor (names B, C, E)": "NPN transistör (adlar B, C, E)",
+    "PNP transistor (names B, C, E)": "PNP transistör (adlar B, C, E)",
+    "N-channel MOSFET (names G, D, S)": "N kanallı MOSFET (adlar G, D, S)",
+    "P-channel MOSFET (names G, D, S)": "P kanallı MOSFET (adlar G, D, S)",
+    "Zener diode": "Zener diyot",
+    "Fuse or PTC": "Sigorta ya da PTC",
+    "What this part is, when its package cannot say. A transistor symbol is "
+    "drawn only once its leads are named below, because which leg is the gate "
+    "is a fact about the part, not the package.": (
+        "Gövdesinin söyleyemediği durumda bu parçanın ne olduğu. Transistör sembolü ancak "
+        "bacakları aşağıda adlandırılınca çizilir, çünkü hangi bacağın geyt olduğu gövdenin "
+        "değil parçanın bilgisidir."
+    ),
+    "Pin": "Pin no",
+    "What the datasheet calls each lead. Printed on the schematic and in the "
+    "soldering guide, so a module's pin reads as GPIO21 rather than 21.": (
+        "Veri sayfasının her bacağa verdiği ad. Şemada ve lehim rehberinde basılır; böylece "
+        "bir modülün pini 21 değil GPIO21 diye okunur."
+    ),
+    "Symbol": "Sembol",
+    "Pin names": "Pin adları",
+    "The footprint calls this pin {name}.": "Footprint bu pini {name} olarak adlandırıyor.",
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}

@@ -80,6 +80,8 @@ from .model import (
     Rotation,
     SolderTraceConductor,
     WireConductor,
+    declared_pin_name,
+    pin_name_of,
 )
 from .stripboard import is_stripboard, strip_axis
 from .wiregauge import awg_diameter_mm, cut_gauge_awg, fits_hole
@@ -729,7 +731,7 @@ def _part_step(
         rotation=component.rotation,
         mirrored=component.mirrored,
         height_mm=footprint.body_height,
-        polarity=_polarity_note(footprint, pin_holes),
+        polarity=_polarity_note(footprint, pin_holes, component),
         notes=tuple(notes),
     )
 
@@ -793,19 +795,57 @@ _PIN_NAME_MEANING: dict[str, str] = {
 }
 
 
+#: What a three-legged part's declared lead names mean, for the orientation note. Only
+#: ever read from names the PART declared -- the registry has none of these, which is the
+#: whole reason a TO-92 used to get "check the package outline" and nothing better.
+_LEAD_NAME_MEANING: dict[str, str] = {
+    "G": "gate",
+    "D": "drain",
+    "S": "source",
+    "B": "base",
+    "C": "collector",
+    "E": "emitter",
+}
+
+
 def _polarity_note(
-    footprint: Footprint, pin_holes: tuple[tuple[str, HoleCoord], ...]
+    footprint: Footprint,
+    pin_holes: tuple[tuple[str, HoleCoord], ...],
+    component: ComponentInstance | None = None,
 ) -> str | None:
-    """How to orient this part, in words, or None if it does not matter."""
+    """How to orient this part, in words, or None if it does not matter.
+
+    Names come from ``model.pin_name_of``: the part's own declared name first, the
+    footprint's second -- so a diode on an unpolarised footprint whose leads were named K
+    and A is oriented by the names like any other.
+    """
     by_number = dict(pin_holes)
 
-    named = [
-        f"{_PIN_NAME_MEANING[pin.name]} in {format_hole(by_number[pin.number])}"
-        for pin in footprint.pins
-        if pin.name in _PIN_NAME_MEANING and pin.number in by_number
-    ]
+    named = []
+    for pin in footprint.pins:
+        name = pin_name_of(component, pin)
+        if name in _PIN_NAME_MEANING and pin.number in by_number:
+            named.append(f"{_PIN_NAME_MEANING[name]} in {format_hole(by_number[pin.number])}")
     if named:
         return "; ".join(named)
+
+    if footprint.body.archetype in ("to92", "to220") and component is not None:
+        # A three-legged package says nothing about which leg is which; the PART may.
+        # When it has named every leg, that IS the orientation, leg by leg -- the one
+        # instruction a TO-92 could never be given before, and the one mistake (base and
+        # emitter swapped) that looks exactly right until the power is on.
+        legs: list[str] = []
+        for pin in footprint.pins:
+            name = declared_pin_name(component, pin.number)
+            hole = by_number.get(pin.number)
+            if name is None or hole is None:
+                legs = []
+                break
+            meaning = _LEAD_NAME_MEANING.get(name)
+            said = f"{name} ({meaning})" if meaning else name
+            legs.append(f"{said} in {format_hole(hole)}")
+        if legs:
+            return "; ".join(legs) + " — check against the part's datasheet"
 
     if footprint.body.archetype == "dip":
         first = by_number.get("1")
@@ -1206,8 +1246,8 @@ def _checkpoints(
                 kind="continuity",
                 title=f"{check.a.component_ref}.{check.a.pin} ↔ {check.b.component_ref}.{check.b.pin}",
                 instruction=(
-                    f"Probe {check.a.component_ref} pin {check.a.pin} and "
-                    f"{check.b.component_ref} pin {check.b.pin}."
+                    f"Probe {_pin_phrase(doc, check.a.component_ref, check.a.pin)} and "
+                    f"{_pin_phrase(doc, check.b.component_ref, check.b.pin)}."
                 ),
                 expected=f"Continuous — they are both on net {check.net_name}.",
                 pins=(check.a, check.b),
@@ -1293,6 +1333,19 @@ def _last_phase_by_net(
     return last
 
 
+def _pin_phrase(doc: PerfDocument, ref: str, pin: str) -> str:
+    """"U1 pin 4", or "U1 pin 4 (GPIO21)" when the part names that pin.
+
+    Only a DECLARED name is added, never the footprint's own: a probe on "D1 pin 1 (A)"
+    tells nobody anything the polarity note has not, and every guide written before parts
+    could name their pins would change under it. A name the part declares is the one
+    thing a pin number on a forty-pin module cannot tell you.
+    """
+    component = next((c for c in doc.components if c.ref == ref), None)
+    name = declared_pin_name(component, pin) if component is not None else None
+    return f"{ref} pin {pin} ({name})" if name else f"{ref} pin {pin}"
+
+
 def _closing_checks(
     doc: PerfDocument, lookup: FootprintLookup, options: GuideOptions
 ) -> list[Checkpoint]:
@@ -1306,8 +1359,9 @@ def _closing_checks(
                 kind="isolation",
                 title=f"{check.net_a} ↔ {check.net_b} must be separate",
                 instruction=(
-                    f"Probe {check.a.component_ref} pin {check.a.pin} ({check.net_a}) and "
-                    f"{check.b.component_ref} pin {check.b.pin} ({check.net_b})."
+                    f"Probe {_pin_phrase(doc, check.a.component_ref, check.a.pin)} "
+                    f"({check.net_a}) and "
+                    f"{_pin_phrase(doc, check.b.component_ref, check.b.pin)} ({check.net_b})."
                 ),
                 expected="Open, or at least the circuit's own resistance — never a short.",
                 pins=(check.a, check.b),

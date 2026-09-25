@@ -863,12 +863,34 @@ Four decisions carry it, and each has a test that would notice it going:
   read from the pin NAMES with pin 1 as the cathode for an unnamed polarised part — the
   same rule as `guide._polarity_note`, and the two must not drift: an LED's pin 1 is its
   anode and a diode's is its cathode.
-  - A TO-92 has no E/B/C anywhere in this codebase and a TO-220 no IN/GND/OUT, so both are
+  - A TO-92 has no E/B/C anywhere in the REGISTRY and a TO-220 no IN/GND/OUT, so both are
     boxes with numbered pins. That is not a gap in the registry: BC547 and 2N3904 share the
     package and disagree about the pinout, and a TO-220 is a regulator, a transistor, a
     MOSFET and a bridge rectifier. The pinout is a fact about the PART, and a symbol that
     asserted one would be wrong for half the parts using the package — silently, and all
     the way to the bench.
+  - **So the PART carries it.** `ComponentInstance` and `SchematicPart` both have
+    `pin_names` (pin number → name, in pin order, `model.normalized_pin_names`) and
+    `symbol` (`model.PartSymbol`: `npn`/`pnp`/`nmos`/`pmos`/`zener`/`fuse`).
+    `model.pin_name_of` is THE answer to "what is this pin called" — declared name first,
+    footprint name second — and the sheet, the guide's polarity note and the MCP server all
+    read it. A declaration is drawn only when `schematic.DECLARED_SYMBOL_PINS` is met
+    (exactly B/C/E or G/D/S named; a zener needs a knowable cathode); otherwise the package
+    decides and the sheet's notes say why. Commands check only the SHAPE
+    (`checked_pin_names`/`checked_part_symbol`): a name on a pin the footprint lacks is a
+    note on the sheet, the same finding as a net naming such a pin, not a refusal.
+    - **Both fields are omitted from the file at their default** (the `stripAxis` rule),
+      which is the only reason every fixture still round-trips. `part.place` and
+      `component.unplace` carry them across the two lists; `block.place` (paste) and
+      `component.place` take them in the payload. Update payloads use `None` = leave for
+      the names and `KEEP` for the symbol, because `None` IS a symbol value.
+    - **Only a DECLARED name is added to a probe** ("J1 pin 1 (24V-L)"), never the
+      registry's own: appending "(A)" to every LED probe would change every guide golden
+      and tell nobody anything the polarity note has not.
+    - A named pin on a box prints the NAME inside and the NUMBER on the lead, and the box
+      widens to whole grid squares to fit (`_named_body_width`, sized from
+      `PIN_LABEL_MM`, which `SheetInk.pin_mm` now reads). A connector's names start past
+      its shroud line. A box none of whose pins is named is byte-for-byte what it was.
   - A tactile switch and a relay get real shapes because the fact IS the package.
     `_switch_poles` reads four legs in two bonded pairs off the footprint's own geometry
     (the legs on one side of a 6 mm switch are bonded inside it, on every one ever made),

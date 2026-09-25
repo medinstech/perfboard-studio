@@ -105,10 +105,13 @@ from perfboard_studio.model import (
     NetClass,
     NetId,
     NetNode,
+    PartSymbol,
     PerfDocument,
+    PinNames,
     Rotation,
     SchematicPart,
     SpineSpec,
+    pin_name_of,
 )
 from perfboard_studio.placer import PlacementOptions, plan_placement
 from perfboard_studio.placer import describe as describe_placement
@@ -416,6 +419,9 @@ class BoardSession:
             "rotation": component.rotation,
             "mirrored": component.mirrored,
             "locked": component.locked,
+            # Only when declared, like the file: a summary of forty parts that said
+            # "symbol: null" forty times would bury the one that says "pmos".
+            **({"symbol": component.symbol} if component.symbol is not None else {}),
         }
 
     def get_component(self, ref: str) -> dict[str, Any]:
@@ -426,8 +432,10 @@ class BoardSession:
             summary["footprint_name"] = footprint.name
             summary["body_height_mm"] = footprint.body_height
             summary["polarized"] = footprint.polarized
+            # The name the PART gives each lead, over the footprint's: a declared "GPIO21"
+            # is what an agent wiring a module needs to read back, not "21".
             summary["pins"] = [
-                {"pin": pin.number, "name": pin.name, "hole": format_hole(at)}
+                {"pin": pin.number, "name": pin_name_of(component, pin), "hole": format_hole(at)}
                 for pin, at in all_pin_holes(component, footprint)
             ]
         return summary
@@ -676,17 +684,35 @@ class BoardSession:
     # a part to be on the board), ``place_parts`` when the circuit is settled, and
     # ``optimize_placement`` to arrange it.
 
-    def add_part(self, ref: str, footprint_id: str, value: str = "") -> dict[str, Any]:
+    def add_part(
+        self,
+        ref: str,
+        footprint_id: str,
+        value: str = "",
+        pin_names: dict[str, str] | None = None,
+        symbol: str | None = None,
+    ) -> dict[str, Any]:
         """Put a part in the DESIGN without deciding where on the board it goes.
 
         The footprint is asked for now rather than at placement because everything else
         needs it: the symbol this part is drawn as is derived from it, and so are its pins,
         its 3D body and its line in the bill of materials.
+
+        ``pin_names`` and ``symbol`` are what the part says about itself that its package
+        cannot -- see ``model.PartSymbol``. Both are optional and both travel with the part
+        when it is placed.
         """
         if self.lookup(footprint_id) is None:
             raise _no_such_footprint(footprint_id)
         return self._dispatch(
-            "part.add", AddPartPayload(ref=ref, footprint_id=footprint_id, value=value)
+            "part.add",
+            AddPartPayload(
+                ref=ref,
+                footprint_id=footprint_id,
+                value=value,
+                pin_names=_pin_names_arg(pin_names) or (),
+                symbol=cast(PartSymbol | None, symbol or None),
+            ),
         )
 
     def update_part(
@@ -695,15 +721,45 @@ class BoardSession:
         new_ref: str | None = None,
         value: str | None = None,
         footprint_id: str | None = None,
+        pin_names: dict[str, str] | None = None,
+        symbol: str | None = None,
     ) -> dict[str, Any]:
-        """Rename a part in the design, or change what it is. Omitted fields are left alone.
+        """Rename a part, or change what it is. Omitted fields are left alone.
 
         A rename CARRIES THE WIRING: a reference is the only name a net has for a part, so
         renaming the part renames what the net points at. It is refused if that would put
         one pin on two nets.
+
+        ``pin_names`` REPLACES the part's names whole (``{}`` clears them); ``symbol`` of
+        ``""`` clears a declaration, since an omitted argument already means "leave it".
+
+        It reaches a part ON THE BOARD as well. Naming the pins of a module is something
+        done after it has been placed as often as before, and "unplace it, rename its pins,
+        place it back" would lose its lead bends for no reason. Only the footprint of a
+        placed part is out of reach: changing the package under a part soldered into holes
+        is a different edit from renaming it, and it stays with ``unplace_component``.
         """
         if footprint_id is not None and self.lookup(footprint_id) is None:
             raise _no_such_footprint(footprint_id)
+        symbol_arg = KEEP if symbol is None else cast(PartSymbol | None, symbol or None)
+        names_arg = _pin_names_arg(pin_names)
+        placed = next((c for c in self.document.components if c.ref == ref), None)
+        if placed is not None:
+            if footprint_id is not None:
+                raise SessionError(
+                    f"{ref} is on the board, and its footprint is what its holes were chosen "
+                    f"for. unplace_component takes it off; change the footprint there."
+                )
+            return self._dispatch(
+                "component.update",
+                UpdateComponentPayload(
+                    id=placed.id,
+                    ref=new_ref,
+                    value=value,
+                    pin_names=names_arg,
+                    symbol=symbol_arg,
+                ),
+            )
         return self._dispatch(
             "part.update",
             UpdatePartPayload(
@@ -711,6 +767,8 @@ class BoardSession:
                 ref=new_ref,
                 value=value,
                 footprint_id=footprint_id,
+                pin_names=names_arg,
+                symbol=symbol_arg,
             ),
         )
 
@@ -771,6 +829,10 @@ class BoardSession:
                     "value": part.value,
                     "footprint": part.footprint_id,
                     "pins": [pin.number for pin in footprint.pins] if footprint else [],
+                    # Declared names and symbol, only when there are any -- see
+                    # ``_component_summary`` for why they are not printed empty.
+                    **({"pin_names": dict(part.pin_names)} if part.pin_names else {}),
+                    **({"symbol": part.symbol} if part.symbol is not None else {}),
                 }
                 for part in self.document.parts
                 for footprint in (self.lookup(part.footprint_id),)
@@ -936,6 +998,8 @@ class BoardSession:
         hole: str,
         value: str = "",
         rotation: int = 0,
+        pin_names: dict[str, str] | None = None,
+        symbol: str | None = None,
     ) -> dict[str, Any]:
         if self.lookup(footprint_id) is None:
             raise _no_such_footprint(footprint_id)
@@ -947,6 +1011,8 @@ class BoardSession:
                 footprint_id=footprint_id,
                 anchor=_hole(hole),
                 rotation=_rotation(rotation),
+                pin_names=_pin_names_arg(pin_names) or (),
+                symbol=cast(PartSymbol | None, symbol or None),
             ),
         )
 
@@ -1607,6 +1673,20 @@ def _route_options(style: str) -> AutorouteOptions:
     if style not in get_args(RoutingStyle):
         raise SessionError(f"{style!r} is not a routing style. Use one of: {_route_styles()}.")
     return AutorouteOptions(router=options_for_style(cast(RoutingStyle, style)))
+
+
+def _pin_names_arg(names: dict[str, str] | None) -> PinNames | None:
+    """An agent's ``{"1": "G"}`` as the pairs a payload carries, or ``None`` for "not given".
+
+    Passed on UNCHECKED on purpose: ``commands.checked_pin_names`` is the one place the
+    shape is judged, and a refusal from there comes back as data (``invalid-pin-names``)
+    the way every other refusal does, rather than as an exception from this side.
+    """
+    if names is None:
+        return None
+    if not isinstance(names, dict):
+        raise SessionError('pin_names is a mapping of pin number to name, e.g. {"1": "G"}.')
+    return cast(PinNames, tuple(names.items()))
 
 
 def _rotation(value: int) -> Rotation:

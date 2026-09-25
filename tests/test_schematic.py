@@ -49,6 +49,7 @@ from perfboard_studio.model import (
     HoleCoord,
     Net,
     NetNode,
+    PartSymbol,
     PerfDocument,
     Point2,
     SchematicPart,
@@ -871,6 +872,10 @@ def test_every_symbol_kind_is_reachable_from_the_registry_or_deliberately_is_not
     archetype -- code that looks tested because the builder has a test and is dead.
     """
     reachable = {symbol_kind_for(fp, len(fp.pins)) for fp in standard_footprints().values()}
+    # ...or a part can DECLARE it. Those kinds are out of the registry's reach on purpose
+    # -- no package knows which of its legs is the gate -- and every one of them is drawn
+    # from a part declaring it in ``test_part_pinout.py``, which is the other way in.
+    reachable |= set(get_args(PartSymbol))
     unreachable = set(get_args(SymbolKind)) - reachable
     assert unreachable == set(), f"no footprint in the registry ever draws {sorted(unreachable)}"
 
