@@ -8648,6 +8648,24 @@ def test_a_dragged_label_lands_where_it_was_dropped() -> None:
         _close(window)
 
 
+def test_a_label_dragged_past_the_edge_stays_on_the_board() -> None:
+    """Held at the edge, not let go past it: the command would refuse a label off the board
+    and send it back to where the drag began."""
+    window = _blank_window()
+    try:
+        board = window.bus.document.board
+        window.add_board_label("EDGE", QPointF(2 * board.pitch, 2 * board.pitch))
+        (item,) = _label_items(window)
+        item.setPos(QPointF(-50.0, board.rows * board.pitch + 50.0))
+        results = window.scene.commit_pending_moves()
+        assert results and all(r.ok for r in results)
+        (note,) = window.bus.document.board_notes
+        assert note.at == HoleCoord(0, board.rows - 1)
+        assert note.offset_x_mm < 0 and note.offset_y_mm > 0
+    finally:
+        _close(window)
+
+
 def test_delete_takes_a_label_without_asking() -> None:
     """Words, and Undo brings them back -- no question in the way."""
     window = _blank_window()

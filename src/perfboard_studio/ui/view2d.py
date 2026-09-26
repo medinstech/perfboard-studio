@@ -827,9 +827,14 @@ class BoardNoteItem(QGraphicsItem):
             p: QPointF = value
             centre = hole_to_screen(screen_to_hole(p, self.board, self.side), self.board, self.side)
             step = BOARD_NOTE_SNAP_MM
+            x = centre.x() + round((p.x() - centre.x()) / step) * step
+            y = centre.y() + round((p.y() - centre.y()) / step) * step
+            # And never off the board, which the command refuses: held at the edge rather
+            # than let go past it and sent back on release. A hundredth in, since the file
+            # rounds the offset to one.
+            edge = _outline_rect(self.board).adjusted(0.01, 0.01, -0.01, -0.01)
             return QPointF(
-                centre.x() + round((p.x() - centre.x()) / step) * step,
-                centre.y() + round((p.y() - centre.y()) / step) * step,
+                min(max(x, edge.left()), edge.right()), min(max(y, edge.top()), edge.bottom())
             )
         return super().itemChange(change, value)
 

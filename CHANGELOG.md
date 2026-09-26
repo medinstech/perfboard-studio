@@ -59,7 +59,10 @@ closed without a bump.
   mounting hole -- a hole and millimetres off it -- and omitted when there are none, so no
   existing board changes by a byte. Nothing derives anything from a label: DRC, LVS and
   the router ignore it. *View ▸ Show Labels on the Board* hides them; over MCP,
-  `add_board_label` (the 53rd tool) and `remove_board_feature`.
+  `add_board_label` (the 53rd tool) and `remove_board_feature`. A label stays on the board:
+  a drag stops at its edge, and one whose offset would carry it past the substrate -- on
+  adding, editing, or narrowing the border under it -- is refused (`off-board`,
+  `would-strand-label`).
 
 - **Real parts by name: the catalog.** The library is sixty-one packages, and a package is
   not a part -- a TO-92 is a BC547 or a 2N7000 or a 78L05, and which leg is the base is the

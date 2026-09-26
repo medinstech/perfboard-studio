@@ -112,6 +112,41 @@ def test_shrinking_the_board_out_from_under_a_label_is_refused() -> None:
     assert not result.ok and result.code == "would-strand-label"
 
 
+def test_a_label_carried_off_the_board_by_its_offset_is_refused() -> None:
+    """Its hole on the board and its centre past the edge: drawn outside the board in every
+    view and written on nothing. The border counts as board; past it does not."""
+    bus = _bus()
+    board = bus.document.board
+    in_border = bus.dispatch(
+        "board.note.add", AddBoardNotePayload(text="EDGE", at=HoleCoord(0, 0), offset_x_mm=-1.2)
+    )
+    assert in_border.ok
+    off = bus.dispatch(
+        "board.note.add", AddBoardNotePayload(text="GONE", at=HoleCoord(0, 0), offset_x_mm=-9.0)
+    )
+    assert not off.ok and off.code == "off-board"
+    (note,) = bus.document.board_notes
+    moved = bus.dispatch(
+        "board.note.update",
+        UpdateBoardNotePayload(id=note.id, offset_y_mm=board.rows * board.pitch + 5.0),
+    )
+    assert not moved.ok and moved.code == "off-board"
+
+
+def test_narrowing_the_border_out_from_under_a_label_is_refused() -> None:
+    import dataclasses
+
+    bus = _bus()
+    board = dataclasses.replace(bus.document.board, border_x_mm=4.0)
+    assert bus.dispatch("board.set", SetBoardPayload(board=board)).ok
+    assert bus.dispatch(
+        "board.note.add", AddBoardNotePayload(text="BORDER", at=HoleCoord(0, 3), offset_x_mm=-4.0)
+    ).ok
+    narrower = dataclasses.replace(board, border_x_mm=0.0)
+    result = bus.dispatch("board.set", SetBoardPayload(board=narrower))
+    assert not result.ok and result.code == "would-strand-label"
+
+
 def test_a_label_changes_nothing_any_check_says() -> None:
     session = BoardSession(document=new_board(cols=20, rows=12))
     session.place_component("R1", "r-axial-4", "C3")

@@ -46,9 +46,11 @@ from .geometry import (
     default_finger_length_mm,
     edge_connector_holes,
     format_hole,
+    hole_to_mm,
     is_inside_board,
     preset_edge_connectors,
     preset_mounting_holes,
+    substrate_edges_mm,
     validate_orthogonal_chain,
 )
 from .model import (
@@ -1879,7 +1881,10 @@ class _SetBoard:
                     f"{b.cols}x{b.rows} board.",
                 )
         for board_note in doc.board_notes:
-            if not is_inside_board(board_note.at, b):
+            # Its hole, and -- a narrower border is enough -- its centre.
+            if not is_inside_board(board_note.at, b) or not _label_on_substrate(
+                board_note.at, board_note.offset_x_mm, board_note.offset_y_mm, b
+            ):
                 raise CommandError(
                     "would-strand-label",
                     f"The label \u201c{board_note.text}\u201d at {format_hole(board_note.at)} "
@@ -2253,8 +2258,24 @@ class _DeleteSheetNotes:
         return f"Delete {len(p.ids)} note(s) from the sheet"
 
 
+def _label_on_substrate(at: HoleCoord, offset_x_mm: Mm, offset_y_mm: Mm, board: Board) -> bool:
+    """Whether a label's centre is on the board: its hole, and the millimetres off it, inside
+    the substrate's edges -- the border counts, past it does not."""
+    centre = hole_to_mm(at, board)
+    edges = substrate_edges_mm(board)
+    x, y = centre.x + offset_x_mm, centre.y + offset_y_mm
+    return edges.min_x <= x <= edges.max_x and edges.min_y <= y <= edges.max_y
+
+
 def _check_board_note(
-    text: str, size_mm: Mm, rotation: int, side: str, at: HoleCoord, board: Board
+    text: str,
+    size_mm: Mm,
+    rotation: int,
+    side: str,
+    at: HoleCoord,
+    board: Board,
+    offset_x_mm: Mm = 0.0,
+    offset_y_mm: Mm = 0.0,
 ) -> None:
     """What makes a label a label, asked of both the add and the edit."""
     if not text.strip():
@@ -2270,6 +2291,14 @@ def _check_board_note(
     if side not in ("top", "bottom"):
         raise CommandError("invalid-side", 'A label is written on the "top" or the "bottom".')
     assert_hole_on_board(at, board, "A label")
+    if not _label_on_substrate(at, offset_x_mm, offset_y_mm, board):
+        # Its hole is on the board and the offset carried it off: drawn past the edge in
+        # every view, printed off the sheet, and written on nothing.
+        raise CommandError(
+            "off-board",
+            f"A label {offset_x_mm:g} x {offset_y_mm:g} mm from {format_hole(at)} is past the "
+            "edge of the board, where it would be written on nothing.",
+        )
 
 
 class _AddBoardNote:
@@ -2278,7 +2307,9 @@ class _AddBoardNote:
     def apply(
         self, doc: PerfDocument, p: AddBoardNotePayload, ctx: CommandContext
     ) -> PerfDocument:
-        _check_board_note(p.text, p.size_mm, p.rotation, p.side, p.at, doc.board)
+        _check_board_note(
+            p.text, p.size_mm, p.rotation, p.side, p.at, doc.board, p.offset_x_mm, p.offset_y_mm
+        )
         note_id = p.id or ctx.next_id("label")
         if any(note.id == note_id for note in doc.board_notes):
             raise CommandError("duplicate-id", f'A label with id "{note_id}" already exists.')
@@ -2318,7 +2349,14 @@ class _UpdateBoardNote:
             side=found.side if p.side is None else p.side,
         )
         _check_board_note(
-            changed.text, changed.size_mm, changed.rotation, changed.side, changed.at, doc.board
+            changed.text,
+            changed.size_mm,
+            changed.rotation,
+            changed.side,
+            changed.at,
+            doc.board,
+            changed.offset_x_mm,
+            changed.offset_y_mm,
         )
         if changed == found:
             raise CommandError("nothing-to-do", "That label is already like that.")
