@@ -151,6 +151,14 @@ MODELS: tuple[Model, ...] = (
     # Legs 6.5 x 4.5 mm on a 5.08 x 2.54 mm footprint: the case is centred on the four holes,
     # as the footprint's courtyard is, and the legs bent in to them.
     Model("sw-tactile", "Button_Switch_THT", "SW_PUSH_6mm", offset=(-0.61, 0.98), splay=True),
+    # The same buttons on the holes they go in (3 x 2 and 5 x 2), numbered as KiCad numbers
+    # them and centred. The 6 mm one's legs are splayed the half millimetre out to the holes;
+    # the 12 mm one's (12.5 x 5.0 mm) are a tenth off and go in as they are. KiCad has no
+    # model of its plain 12 mm footprint; the Wuerth one is that button.
+    Model("sw-tactile-6x6", "Button_Switch_THT", "SW_PUSH_6mm", offset=(0.56, -0.29),
+          splay=True),
+    Model("sw-tactile-12x12", "Button_Switch_THT", "SW_PUSH-12mm_Wuerth-430476085716",
+          offset=(0.1, -0.04)),
     Model("screw-terminal-2", "TerminalBlock_Phoenix",
           "TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"),
     Model("screw-terminal-3", "TerminalBlock_Phoenix",
@@ -198,6 +206,7 @@ MATERIALS: dict[str, str] = {
     "#b58136": "plated",  # gold on a header pin
     "#2a2a2a": "moulded",  # the base a crystal can is set into
     "#720301": "gloss",  # a film capacitor's case -- an LED's lens overrides this
+    "#383838": "moulded",  # the collar round a 12 mm push button's plunger
 }
 
 

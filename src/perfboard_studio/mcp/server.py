@@ -158,7 +158,7 @@ def list_catalog(search: str = "", category: str = "") -> list[dict[str, Any]]:
     it is drawn as, its value and its reference letter. Pass an id to place_component or
     add_part as `part` and all of that is filled in. `check` says what to verify on the
     part in hand. Categories: transistor, mosfet, regulator, diode, protection, sensor,
-    ic, module."""
+    ic, switch, module."""
     return session.list_catalog(search, category)
 
 

@@ -64,12 +64,24 @@ closed without a bump.
   adding, editing, or narrowing the border under it -- is refused (`off-board`,
   `would-strand-label`).
 
+- **A push button as made: `sw-tactile-6x6` and `sw-tactile-12x12`.** A 6 x 6 mm button's
+  legs stand 6.5 x 4.5 mm apart -- three holes by two on a perfboard, across the gutter on a
+  breadboard -- and the registry's `sw-tactile` is two holes by one, which no such button
+  is. Which legs are which matters more: the pair straight across is one strip of metal,
+  the pair down one side is what pressing it joins, and `sw-tactile` calls the pair its
+  pins 1 and 2 stand on one node -- so a KiCad switch guessed onto it was a button pressed
+  for ever. The new ones are numbered as KiCad's `SW_PUSH` footprints are (pins 1 and 2 the
+  switched pair, 3 and 4 joined inside to them, named A B A B), have KiCad's models on
+  their holes, are in the catalog under *Switches*, and are what a netlist's `SW_PUSH_6mm`
+  and `SW_PUSH-12mm`, and a guessed `SW`, now become. `sw-tactile` is unchanged, for the
+  boards that have it.
 - **Real parts by name: the catalog.** The library is sixty-one packages, and a package is
   not a part -- a TO-92 is a BC547 or a 2N7000 or a 78L05, and which leg is the base is the
-  fact the board depends on. `perfboard_studio.catalog` lists 58 parts a perfboard is
+  fact the board depends on. `perfboard_studio.catalog` lists 60 parts a perfboard is
   actually built from -- bipolar and MOSFET transistors, regulators and references, diodes
-  and zeners, a PTC, sensors, DIP ICs and five dev boards -- each with its package, what
-  its datasheet calls every lead, its symbol, its value and its reference letter, and
+  and zeners, a PTC, sensors, DIP ICs, push buttons and five dev boards -- each with its
+  package, what its datasheet calls every lead, its symbol, its value and its reference
+  letter, and
   `source` saying whose datasheet that is. They head the Parts panel, grouped by kind and
   found by what they are ("p-channel", "esp32"); picking one places it with all of that
   filled in, dragged or clicked, on the board or the sheet. Nothing in the document refers

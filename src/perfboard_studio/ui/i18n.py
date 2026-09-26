@@ -1455,6 +1455,20 @@ TURKISH: Mapping[str, str] = {
         "Sıcaklık sensörü, 1-Wire, DQ hattında 4,7k pull-up ister"
     ),
     "Timer": "Zamanlayıcı",
+    "Switches": "Anahtarlar",
+    "Momentary push button, legs 6.5 x 4.5 mm": (
+        "Basılı tutulduğunda kapanan buton, bacaklar arası 6,5 x 4,5 mm"
+    ),
+    "Momentary push button, legs 12.5 x 5.0 mm": (
+        "Basılı tutulduğunda kapanan buton, bacaklar arası 12,5 x 5,0 mm"
+    ),
+    "The two legs on one side are the switched pair; the two straight across are "
+    "one strip. A meter on continuity says which: across reads shut before the "
+    "button is pressed.": (
+        "Aynı yandaki iki bacak butonun açıp kapadığı çifttir; tam karşıdaki iki bacak "
+        "tek bir metal şerittir. Süreklilik ölçen bir multimetre hangisi olduğunu "
+        "söyler: karşılıklı bacaklar butona basmadan da kısa devre okur."
+    ),
     "Dual op-amp, single supply": "Çift op-amp, tek besleme",
     "Dual comparator, open-collector outputs": "Çift karşılaştırıcı, açık kolektör çıkışlı",
     "High-speed optocoupler, 10 Mbit/s": "Yüksek hızlı optokuplör, 10 Mbit/s",

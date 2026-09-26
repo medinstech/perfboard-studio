@@ -854,6 +854,47 @@ def tactile_switch_footprint(
     )
 
 
+# THE PUSH BUTTON AS MADE. ``sw-tactile`` above is on a 2 x 1 hole rectangle, and no 6 x 6 mm
+# button is: its legs stand 6.5 x 4.5 mm apart, which on a 2.54 mm grid -- and across a
+# breadboard's gutter, where everybody first plugs one in -- is three holes by two. And which
+# legs are which matters more than where they are: the two 6.5 mm apart are one strip of metal
+# through the switch, the two 4.5 mm apart are what pressing it joins. ``sw-tactile`` calls its
+# 2.54 mm pair one node; a netlist's pins 1 and 2 put there are a button pressed for ever.
+#
+# These are numbered as KiCad's SW_PUSH footprints are, so a netlist's pins land on them as
+# they are: pin 1 and pin 2 are the switched pair, down one side; pins 3 and 4 are the far
+# side, joined inside to 1 and 2. The names say so -- A, B, A, B -- where a builder reads them.
+
+#: Size -> (holes across the joined pair, holes down the switched pair, body, height). The
+#: legs as KiCad's SW_PUSH_6mm (6.5 x 4.5 mm) and SW_PUSH-12mm (12.5 x 5.0 mm) have them;
+#: the heights to the top of the plunger, measured off the models KiCad draws them with.
+PUSH_BUTTON_SIZES: dict[str, tuple[int, int, Mm, Mm]] = {
+    "6x6": (3, 2, 6.0, 4.3),
+    "12x12": (5, 2, 12.0, 8.5),
+}
+
+
+def push_button_footprint(size: str) -> Footprint:
+    """A 4-leg tactile push button as made, ``sw-tactile-<size>``: see above."""
+    across, down, body_size, body_height = PUSH_BUTTON_SIZES[size]
+    pins = (
+        _make_pin("1", 0, 0, "A"),
+        _make_pin("2", 0, down, "B"),
+        _make_pin("3", across, 0, "A"),
+        _make_pin("4", across, down, "B"),
+    )
+    return Footprint(
+        id=f"sw-tactile-{size}",
+        name=f"Tactile switch, {size.replace('x', ' x ')} mm",
+        pins=pins,
+        body_outline=_rect_outline(_to_mm(pins), body_size, body_size, COURTYARD_MARGIN_MM),
+        body_height=body_height,
+        body=BodySpec(archetype="tactile-switch", dims={"width": body_size, "depth": body_size}),
+        lead_diameter=0.7 if size == "6x6" else 1.0,
+        polarized=False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # HC-49 crystal
 # ---------------------------------------------------------------------------
@@ -1371,6 +1412,9 @@ most two decimals and are written without units.
   c-disc-d<D>-p<pitch>-t<T>                             disc ceramic
   c-film-<L>x<W>x<H>-p<pitch>                           boxed film capacitor
   led-<D>mm                                             round LED
+  sw-tactile-6x6 | sw-tactile-12x12                     a 4-leg push button as made: pins
+                                                        1 and 2 are the switched pair, 3 and
+                                                        4 are joined inside to 1 and 2
 
 box-8x2-p1-r3-20.32x7.62x4 is a 16-pin module on a 0.1 inch grid, two rows three holes
 apart. box-6x1-p1-r1-16x14.5x7-o0x6 is a 16 x 14.5 mm breakout whose one row of six pins
@@ -1500,6 +1544,10 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
     (
         re.compile(r"^led-(\d+)mm$"),
         lambda m: led_footprint(diameter_mm=_grid(m[1])),
+    ),
+    (
+        re.compile(r"^sw-tactile-(\d+x\d+)$"),
+        lambda m: push_button_footprint(size=m[1]),
     ),
 )
 

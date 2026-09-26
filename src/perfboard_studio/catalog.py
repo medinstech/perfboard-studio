@@ -47,6 +47,7 @@ CatalogCategory = Literal[
     "protection",
     "sensor",
     "ic",
+    "switch",
     "module",
 ]
 
@@ -59,6 +60,7 @@ CATEGORY_ORDER: tuple[CatalogCategory, ...] = (
     "protection",
     "sensor",
     "ic",
+    "switch",
     "module",
 )
 
@@ -183,6 +185,12 @@ _C3_DEVKITM_RIGHT = (
     "GND", "TX", "RX", "GND", "IO9", "IO8", "GND", "IO7", "IO6", "IO5",
     "IO4", "GND", "IO18", "IO19", "GND",
 )  # fmt: skip
+
+_SWITCH_LEGS = (
+    "The two legs on one side are the switched pair; the two straight across are one "
+    "strip. A meter on continuity says which: across reads shut before the button is "
+    "pressed."
+)
 
 _MODULE_TOP = (
     "The height of what is on the board is an estimate, and so is its colour; the pins, "
@@ -377,6 +385,23 @@ CATALOG: tuple[CatalogPart, ...] = (
                       "SCK", "AVCC", "AREF", "GND", "PC0", "PC1", "PC2", "PC3", "PC4", "PC5"),
                 ref_prefix="U", source="Microchip ATmega328P datasheet, PDIP"),
     # -- modules ----------------------------------------------------------------------
+    # -- switches ----------------------------------------------------------
+    # A push button's four legs are two strips of metal, and which two legs are one strip is
+    # the whole of how it is wired: A and A are joined inside, B and B are joined inside,
+    # and pressing it joins A to B. Numbered as KiCad's SW_PUSH footprints (pins 1 and 2 the
+    # switched pair), so a netlist's switch lands on them as drawn.
+    CatalogPart("tact-6x6", "Tactile switch 6x6 mm", "switch", "sw-tactile-6x6",
+                "Momentary push button, legs 6.5 x 4.5 mm",
+                (("1", "A"), ("2", "B"), ("3", "A"), ("4", "B")), ref_prefix="SW",
+                value="6x6 tactile",
+                source="Omron B3F datasheet terminal arrangement; KiCad Button_Switch_THT:SW_PUSH_6mm",
+                check=_SWITCH_LEGS),
+    CatalogPart("tact-12x12", "Tactile switch 12x12 mm", "switch", "sw-tactile-12x12",
+                "Momentary push button, legs 12.5 x 5.0 mm",
+                (("1", "A"), ("2", "B"), ("3", "A"), ("4", "B")), ref_prefix="SW",
+                value="12x12 tactile",
+                source="KiCad Button_Switch_THT:SW_PUSH-12mm and the Wuerth 430476085716 model",
+                check=_SWITCH_LEGS),
     CatalogPart("esp32-devkitc", "ESP32-DevKitC V4", "module",
                 "mod-2x19-p10-r1-27.94x54.3x3.5-s8.5-o0x-3",
                 "ESP32-WROOM-32 dev board, 38 pins, rows 25.4 mm apart",

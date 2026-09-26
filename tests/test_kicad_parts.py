@@ -68,6 +68,9 @@ def _first(kicad_footprint: str) -> str | None:
         ("Package_TO_SOT_THT:TO-92_Inline", "to92"),
         ("Package_TO_SOT_THT:TO-220-3_Vertical", "to220"),
         ("Crystal:Crystal_HC49-4H_Vertical", "xtal-hc49"),
+        ("Button_Switch_THT:SW_PUSH_6mm", "sw-tactile-6x6"),
+        ("Button_Switch_THT:SW_PUSH_6mm_H5mm", "sw-tactile-6x6"),
+        ("Button_Switch_THT:SW_PUSH-12mm_Wuerth-430476085716", "sw-tactile-12x12"),
     ],
 )
 def test_a_kicad_footprint_name_is_read_for_its_package(kicad: str, expected: str) -> None:
@@ -80,7 +83,7 @@ def test_a_kicad_footprint_name_is_read_for_its_package(kicad: str, expected: st
         ("Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", "surface-mount"),
         ("Resistor_SMD:R_0805_2012Metric", "surface-mount"),
         ("Relay_THT:Relay_SPDT_SANYOU_SRD_Series_Form_C", "relay"),
-        ("Button_Switch_THT:SW_PUSH_6mm", "push button"),
+        ("Button_Switch_THT:SW_PUSH_1P1T_6x3.5mm_H4.3_APEM_MJTP1243", "push button"),
         ("Module:Arduino_Nano", "module"),
         ("Package_TO_SOT_THT:TO-220-3_Horizontal_TabDown", "upright"),
         ("Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical", "laid flat"),
@@ -303,3 +306,37 @@ def test_without_place_missing_nothing_is_placed(tmp_path: Path) -> None:
     result = session.import_netlist(str(path))
     assert result["ok"] and "placed" not in result
     assert len(result["missing_components"]) == 11
+
+
+def test_a_push_button_is_wired_across_its_switched_pair() -> None:
+    """KiCad's switch symbol is two pins, and they are the pair pressing it joins. On the
+    button as made they land on pins 1 and 2, one side of it, 4.5 mm apart -- where the old
+    guess put them on sw-tactile's pins 1 and 2, which that footprint calls one node."""
+    footprint = LOOKUP("sw-tactile-6x6")
+    assert footprint is not None
+    where = {pin.number: (pin.d_col, pin.d_row, pin.name) for pin in footprint.pins}
+    assert where == {"1": (0, 0, "A"), "2": (0, 2, "B"), "3": (3, 0, "A"), "4": (3, 2, "B")}
+    netlist = NETLIST.replace(
+        '(comp (ref "J1")',
+        '(comp (ref "SW1") (value "RESET") (footprint "Button_Switch_THT:SW_PUSH_6mm")'
+        ' (libsource (lib "Switch") (part "SW_Push"))) (comp (ref "J1")',
+    ).replace(
+        '(node (ref "J1") (pin "1") (pinfunction "Pin_1") (pintype "passive"))',
+        '(node (ref "J1") (pin "1") (pinfunction "Pin_1") (pintype "passive"))'
+        ' (node (ref "SW1") (pin "1") (pinfunction "1") (pintype "passive"))',
+    )
+    document = create_empty_document(DocumentMeta(name="t", created="", modified=""))
+    plan = plan_import(parse_kicad_netlist(netlist), document, LOOKUP)
+    switch = plan.suggestions["SW1"]
+    assert (switch.footprint_id, switch.source) == ("sw-tactile-6x6", "kicad")
+    assert "SW1" not in plan.notes
+
+
+def test_the_catalog_has_the_buttons_as_made() -> None:
+    from perfboard_studio.catalog import catalog_part, search_catalog
+
+    for part_id, footprint in (("tact-6x6", "sw-tactile-6x6"), ("tact-12x12", "sw-tactile-12x12")):
+        part = catalog_part(part_id)
+        assert part is not None and part.footprint_id == footprint
+        assert LOOKUP(footprint) is not None
+    assert [p.id for p in search_catalog("push button")] == ["tact-6x6", "tact-12x12"]

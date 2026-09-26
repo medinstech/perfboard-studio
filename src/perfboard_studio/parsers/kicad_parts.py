@@ -246,6 +246,10 @@ _KICAD_NAMES: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], list[str]]]
     (re.compile(r"^TO-92"), lambda m: ["to92"]),
     (re.compile(r"^TO-220-3_Vertical"), lambda m: ["to220"]),
     (re.compile(r"^Crystal_HC49"), lambda m: ["xtal-hc49"]),
+    # Numbered as KiCad numbers them -- pins 1 and 2 the switched pair -- so a netlist's
+    # switch lands on them as drawn. See footprints.push_button_footprint.
+    (re.compile(r"^SW_PUSH_6mm"), lambda m: ["sw-tactile-6x6"]),
+    (re.compile(r"^SW_PUSH-12mm"), lambda m: ["sw-tactile-12x12"]),
 )
 
 #: Through-hole packages that are common and deliberately NOT mapped: their pins are
@@ -262,7 +266,7 @@ _UNMAPPED: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(r"^SW_PUSH"),
-        "a push button's four legs are two pairs joined inside; check which pair is switched",
+        "only the 6 mm and 12 mm four-leg push buttons are here; this one was guessed",
     ),
     (
         re.compile(r"^(Arduino|WEMOS|RaspberryPi|RPi_Pico|ESP32)", re.IGNORECASE),
@@ -342,7 +346,7 @@ _GUESS_BY_PREFIX = {
     "Q": "to92",
     "Y": "xtal-hc49",
     "RV": "pot-3",
-    "SW": "sw-tactile",
+    "SW": "sw-tactile-6x6",
     "K": "relay-spdt",
     "TB": "screw-terminal-2",
 }
