@@ -22,6 +22,16 @@ closed without a bump.
 
 ### Added
 
+- **An example that is a real part list: `examples/nano-relay`.** An Arduino Nano switching
+  a 12 V relay through a BC547, fed by a 7805, with a push button and an LED -- imported
+  from its KiCad netlist exactly as *File ▸ Import KiCad Netlist* does, with no footprint
+  named for it: the catalog's parts by their values, the rest by their KiCad footprints, the
+  Nano's and the LED's pins renumbered by name. It is on the README's new *Real parts*
+  pictures, and `tools/build_examples.py` builds it through the importer, so it is the
+  end-to-end check of that path too. The other examples were rebuilt with this release's
+  placer; `tools/screenshots.py` now takes its pictures with a settings store of its own
+  rather than the user's, which it used to rearrange.
+
 - **A T on the sheet.** A drawn wire went from a pin to a pin and nowhere else, so a net
   reaching four pins was three wires from pin to pin -- nothing like the one run with
   branches off it that a person draws. The wire tool now takes a drawn wire as either click:

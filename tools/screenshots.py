@@ -59,10 +59,48 @@ def _settle(app: QApplication, rounds: int = 12) -> None:
     """Let Qt finish laying out and painting before grabbing.
 
     A single ``processEvents`` is not enough: fitting the view and re-rendering the pad
-    grid both land on later trips through the loop.
+    grid both land on later trips through the loop. And a count of trips is not enough
+    either, because some of it is on TIMERS: the window pins its opening dock sizes a turn
+    after showing (``_apply_default_sizes``), and until that fires Qt still has a second
+    Board/Schematic tab bar from the arranging lying across the left-hand panels -- which a
+    grab taken sooner put in the picture. So the loop is also run for long enough for them.
+
+    And the pending deletes are run by hand: Qt drops that stray tab bar with
+    ``deleteLater``, which only happens when control returns to a running event loop --
+    so in the application it is gone at once, and under ``processEvents`` alone it never
+    goes at all.
     """
-    for _ in range(rounds):
+    import time
+
+    from PySide6.QtCore import QEvent
+
+    deadline = time.monotonic() + 0.6
+    count = 0
+    while count < rounds or time.monotonic() < deadline:
         app.processEvents()
+        app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        time.sleep(0.01)
+        count += 1
+
+
+def _fresh_settings() -> None:
+    """A settings store of the script's own, as the test suite uses.
+
+    The window restores its layout from the user's settings and writes it back on close, so
+    the pictures used to be of whatever this machine's layout happened to be -- docks tabbed,
+    panels resized -- and taking them switched the user's ratsnest off. A first run's layout
+    in a throwaway file is the one a reader of the README gets.
+    """
+    import tempfile
+
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio.ui import main as main_module
+
+    store = QSettings(
+        str(Path(tempfile.mkdtemp()) / "screenshots.ini"), QSettings.Format.IniFormat
+    )
+    main_module.app_settings = lambda: store  # type: ignore[assignment]
 
 
 def main() -> int:
@@ -70,6 +108,7 @@ def main() -> int:
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     assert isinstance(app, QApplication)
+    _fresh_settings()
 
     result = persist.deserialize_document(FIXTURE.read_text(encoding="utf-8"))
     if not result.ok:
@@ -125,7 +164,21 @@ def main() -> int:
     window.grab().save(str(OUT_DIR / "editor-solder-side.png"))
     shots.append(("editor-solder-side.png", "2D editor, solder side"))
 
+    # The same circuit as a sheet, in the panel that draws one: a 555 is a sheet a reader
+    # can check by eye, which is the point of it being the example.
+    window.show_schematic()
+    _settle(app)
+    window.schematic_view.fit()
+    _settle(app)
+    window.grab().save(str(OUT_DIR / "schematic.png"))
+    shots.append(("schematic.png", "the schematic panel"))
+    window.show_board()
+    _settle(app)
+
     document = window.bus.document
+    # Placed and routed here, saved nowhere: the window is a picture. Without this the close
+    # stops on "unsaved changes?" and waits for a click nobody is there to make.
+    window._mark_saved()
     window.close()
     _settle(app)
 
@@ -134,10 +187,92 @@ def main() -> int:
     view3d.render_offscreen(document, lookup, str(OUT_DIR / "board-3d.png"), width=1400, height=950)
     shots.append(("board-3d.png", "3D view, component side"))
 
+    if not _nano_relay_shots(app, shots):
+        return 1
+
     for name, what in shots:
         size = (OUT_DIR / name).stat().st_size
         print(f"{name:32} {size // 1024:5} KB   {what}")
     return 0
+
+
+#: The example that is a real part list rather than a textbook circuit: an Arduino Nano on
+#: header strips, a BC547 and a 7805 out of the catalog, terminals with their pins named,
+#: labels written on the board -- and every one of them read out of a KiCad netlist.
+NANO_RELAY = REPO_ROOT / "examples" / "nano-relay.perf"
+
+#: What the close-ups frame: the module and the power stage beside it, which is where the
+#: pin names, the catalog's parts and a label all are.
+CLOSE_UP_REFS = ("A1", "U1", "Q1", "R1", "C1", "C2", "C3", "J1", "SW1", "D2")
+
+
+def _nano_relay_shots(app: QApplication, shots: list[tuple[str, str]]) -> bool:
+    result = persist.deserialize_document(NANO_RELAY.read_text(encoding="utf-8"))
+    if not result.ok:
+        print(f"LOAD FAILED [{result.code}] {result.message}")
+        return False
+    document = result.document
+    board = document.board
+    lookup = footprint_lookup()
+
+    window = MainWindow(document, NANO_RELAY)
+    window.resize(1600, 1000)
+    window.show()
+    _settle(app)
+    window.act_ratsnest.setChecked(False)
+    _settle(app)
+
+    # Framed on the parts rather than the whole 9 x 15 cm board, which is mostly holes: the
+    # picture is of the names printed beside the pins and the parts the catalog placed.
+    from PySide6.QtCore import Qt
+
+    from perfboard_studio.drc import placed_body_box
+
+    boxes = [
+        placed_body_box(comp, lookup(comp.footprint_id), board)  # type: ignore[arg-type]
+        for comp in document.components
+        if comp.ref in CLOSE_UP_REFS and lookup(comp.footprint_id) is not None
+    ]
+    from PySide6.QtCore import QRectF
+
+    left = min(b[0] for b in boxes) - 6.0
+    right = max(b[1] for b in boxes) + 6.0
+    top = min(b[2] for b in boxes) - 4.0
+    bottom = max(b[3] for b in boxes) + 4.0
+    window.view.fitInView(QRectF(left, top, right - left, bottom - top), Qt.AspectRatioMode.KeepAspectRatio)
+    _settle(app)
+    window.grab().save(str(OUT_DIR / "catalog-and-pin-names.png"))
+    shots.append(("catalog-and-pin-names.png", "catalog parts, a module, pin names, labels"))
+
+    window._mark_saved()
+    window.close()
+    _settle(app)
+
+    # 3D, closer in than the whole-board shot, on the module standing on its headers.
+    ren, _stats = view3d.build_renderer(document, lookup)
+    cam = ren.GetActiveCamera()
+    fx, fy, fz = cam.GetFocalPoint()
+    px, py, pz = cam.GetPosition()
+    cx = (left + right) / 2
+    cy = -(top + bottom) / 2  # rows run down the board, the world's y runs up
+    scale = 0.5
+    cam.SetFocalPoint(cx, cy, 4.0)
+    cam.SetPosition(cx + (px - fx) * scale, cy + (py - fy) * scale, 4.0 + (pz - fz) * scale)
+    ren.ResetCameraClippingRange()
+    win = view3d.vtk.vtkRenderWindow()
+    win.SetOffScreenRendering(1)
+    win.AddRenderer(ren)
+    win.SetSize(1400, 950)
+    win.Render()
+    grab = view3d.vtk.vtkWindowToImageFilter()
+    grab.SetInput(win)
+    grab.Update()
+    writer = view3d.vtk.vtkPNGWriter()
+    writer.SetFileName(str(OUT_DIR / "module-3d.png"))
+    writer.SetInputConnection(grab.GetOutputPort())
+    writer.Write()
+    shots.append(("module-3d.png", "3D close-up: a module on its headers"))
+    return True
 
 
 if __name__ == "__main__":

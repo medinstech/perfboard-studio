@@ -37,7 +37,7 @@
 ![NE555 astable devresi yerleştirilmiş ve route edilmiş hâliyle 2D editör](./docs/images/editor-component-side.png)
 
 <p align="center">
-  İddianın tamamı durum çubuğunda: yedi net üzerinde on dört bağlantı, üçü tel<br>
+  İddianın tamamı durum çubuğunda: yedi net üzerinde on dört bağlantı, dördü tel<br>
   gerektirmiş, DRC temiz ve LVS şemayla aynı fikirde.
 </p>
 
@@ -57,9 +57,10 @@
 - **Yalnızca üçüncü boyutun görebildiği üç kural.** Kutuya sığmayan bir parça,
   üstüne parça lehimlenecek bir jumper, ve sıcak bir parçanın fazla yakınında
   duran ısıya duyarlı bir parça. 3D görünüm bir resim değil, kontrol aracı.
-- **Şema sayfası türetilir, saklanmaz.** Dosyada hiçbir sembol konumu durmaz;
-  yani netlist ile eşzamanlı tutulacak ikinci bir devre kopyası ve elle
-  düzenlenecek bir yerleşim yok.
+- **KiCad netlist'inden gerçek parçalar.** Değer bir katalog parçasını adlandırır —
+  BC547, 7805, Arduino Nano — KiCad footprint'i de bir kılıfı. Şemadaki sembol pinleri
+  elinizdeki parçadan farklı numaralıyorsa pinler adlarıyla yeniden numaralanır; kart,
+  gerçekten lehimleyeceğiniz parçaya göre kablolanır.
 - **Ajan-dostu.** MCP sunucusu, headless CLI ve git ile diff alınabilen proje
   dosyası; hepsi GUI ile aynı komut veri yolunu kullanır — yani bir insanın ve
   bir modelin aynı oturumda birlikte çalıştığı bir kartta geri alma çalışır.
@@ -67,13 +68,13 @@
 > **Durum: pre-alpha, ve uçtan uca çalışıyor.** Netlist giriyor, lehimleme
 > rehberi çıkıyor. Eksik olan tek şey dogfood testi — henüz kimse üretilen bir
 > rehberi takip ederek gerçek bir kart lehimlemedi ve [PLAN.md](./PLAN.md) §11'e
-> göre bu olmadan M5 kapanmıyor. Gerisi çalışıyor: **v0.10.0** üç masaüstü
+> göre bu olmadan M5 kapanmıyor. Gerisi çalışıyor; her sürüm üç masaüstü
 > platformunun her biri için bir kurulum paketi yayınlıyor, hiçbiri kod imzalı
 > değil.
 
 **Şuraya atla** — [Çalıştırmak](#çalıştırmak) ·
 [Bağlantılar](#her-bağlantı-aynı-şey-değildir) · [İki yüz](#iki-yuz) ·
-[Şema](#önce-devreyi-çizin) ·
+[Gerçek parçalar](#gerçek-parçalar-adlarıyla) · [Şema](#önce-devreyi-çizin) ·
 [Rehber](#rehberin-bir-sırası-var-ve-onu-izleyebilirsiniz) ·
 [Bir ajandan](#bir-ajandan) · [Nasıl kurulmuş](#nasıl-kurulmuş) ·
 [Belgeler](#geri-kalan-her-şeyin-yazılı-olduğu-yer) · [Katkı](#katkı)
@@ -116,6 +117,36 @@ duran ısıya duyarlı bir parça.
 
 ![Aynı kart 3D'de](./docs/images/board-3d.png)
 
+## Gerçek parçalar, adlarıyla
+
+![Arduino Nano röle sürücü: katalogdan parçalar, pin başlıklarındaki Nano, kartta pin adları ve etiketler](./docs/images/catalog-and-pin-names.png)
+
+Bir kılıf bir parça değildir. Bir TO-92 bir BC547 de olabilir, bir 2N7000 ya da bir 78L05
+de; kartın dayandığı bilgi hangi bacağın beyz olduğudur. Parçalar paneli, delikli bir
+kartın gerçekten yapıldığı parçaların **kataloğuyla** başlar — transistörler ve MOSFET'ler,
+regülatörler, diyotlar, DIP entegreler, butonlar ve geliştirme kartları — ve birini seçmek
+onu değeri, veri sayfasının her bacağa verdiği ad ve çizildiği sembolle yerleştirir; her
+birinin hangi veri sayfasından geldiği de yazılıdır.
+
+**Bu adlar pinlerin yanına basılır**, kartta ve 3B'de; bir klemens ya da bir geliştirme
+kartı onlara bakılarak kablolanır. Bütün kart için bir kerede yerleşirler: bir ad önüne
+çıkan ilk engelde durur, tek sıralı bir parça adlarını boş olan yanına basar, yeri biraz
+dar olan ad daraltılır, hiç yeri olmayan basılmaz ve parçanın araç ipucunda listelenir. Bir
+geliştirme kartı bir **modüldür** — pin başlıklarının üstünde duran kendi kartı — ve **kartın
+üstüne yazılabilir**: onu alan klemensin yanına "12V IN" gibi bir etiket iki yüzden birine
+konur, 1:1 çıktıda ve rehberde basılır.
+
+![Aynı kart 3B'de: başlıklarının üstündeki Nano, pinlerin yanındaki adlar](./docs/images/module-3d.png)
+
+**Bir KiCad netlist'i tahminlerle değil parçalarla gelir.** Yukarıdaki kart,
+[`examples/nano-relay.net`](./examples/nano-relay.net) dosyasının olduğu gibi içe
+aktarılmış hâlidir. Değerleri katalog parçalarını adlandırır — Nano, BC547, 1N4007, 7805 —
+KiCad footprint adları da gerisini ölçer, `R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm`'den
+`SW_PUSH_6mm`'e. Şemadaki sembol pinleri parçadan farklı numaralıyorsa pinler adlarıyla
+yeniden numaralanır: KiCad bir Nano'yu bir yandan aşağı öbür yandan yukarı, LED'ini katot
+önce, üzerine "BC547" yazılmış genel bir transistör sembolünü de emetör önce numaralar —
+numarasıyla alındığında her biri kartı var olmayan bir parçaya göre kablolardı.
+
 ## Önce devreyi çizin
 
 Kart neyin nereye gideceğini söyler. Şema paneli (`Ctrl+2`) *ne inşa ettiğinizi* söyler —
@@ -123,11 +154,13 @@ ve onu söylediğiniz yer de burasıdır: **Parça Ekle**, iki pini **Bağla**, 
 Yerleştir**. Önce devre, sonra yerleşim; diğer her EDA aracının çalıştığı sıra ve bu aracın
 şimdiye kadar yapamadığı şey.
 
-![NE555 astable, netlist'inden çizilmiş](./docs/images/schematic.png)
+![Şema panelinde NE555 astable](./docs/images/schematic.png)
 
-**Sayfa saklanmaz, türetilir.** Dosyada hiçbir sembol koordinatı yoktur; dolayısıyla
-netlist ile senkron tutulacak ikinci bir devre kopyası ve elle yerleştirilecek bir sembol
-yoktur. Toprak ve besleme hat sembolüne dönüşür, tel olarak çizilmez: okunabilir bir sayfa
+**Sayfa, siz devralana kadar sizin için yerleşir.** Üzerinde hiçbir şey taşınmadıkça
+netlist'ten çizilir, yani senkron tutulacak bir şey yoktur; bir sembolü taşıyın, döndürün ya
+da bir tel çekin, o andan itibaren sayfa sizindir. Tel pinden pine ya da çizilmiş bir telin
+üstüne gider — bir **T**, düştüğü yerde bir noktayla — çizilemeyecek kadar kalabalık bir net
+de pindeki bir etiketle adına göre bağlanır. Toprak ve besleme hat sembolüne dönüşür, tel olarak çizilmez: okunabilir bir sayfa
 ile her şeyin üzerinden geçen on bir çizgi arasındaki fark budur. Polarite parça
 kütüphanesinin kendi pin ADLARINDAN okunur; böylece bir LED'in katodu da bir diyotun katodu
 da bantlı uca gelir — bunlar karşıt pinlerdir ve pin 1'e bakarak tahmin eden bir kural
@@ -206,19 +239,21 @@ ek değil, uygulamanın dayandığı bir kontrol aracı.
 ### Sıfırdan bir kart
 
 Şema panelini açın (`Ctrl+2`) ve devreyi çizin: parçaları Parçalar panelinden sayfaya
-sürükleyin, istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine tel çekin — ya da
-bir pini **Etiket** ile adına göre bir nete bağlayın — sonra **Kart Üzerine Yerleştir**.
+sürükleyin, istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine ya da çizilmiş
+bir telin üstüne tel çekin — ya da bir pini **Etiket** ile adına göre bir nete bağlayın —
+sonra **Kart Üzerine Yerleştir**.
 Oradan **Yerleştir →
 Otomatik Yerleştir** (`Ctrl+Shift+A`), route için **`Ctrl+R`**, ardından **Dosya → Montaj
 Rehberini Dışa Aktar** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
 
 Devre zaten varsa ilk üç adım yerine `examples/ne555-astable.net` üzerinde **Dosya → KiCad
-Netlist İçe Aktar** ile başlayın ve önerilen yerleşimi kabul edin. Yukarıdaki ekran görüntüleri
-tam olarak bu sıradan çıkıyor — bkz. [`tools/screenshots.py`](./tools/screenshots.py).
+Netlist İçe Aktar** ile başlayın ve önerilen yerleşimi kabul edin: her parça, değerinin ve
+KiCad footprint'inin söylediği şey olarak, bağlandığı parçaların yanına gelir. Yukarıdaki
+ekran görüntüleri bu sıradan çıkıyor — bkz. [`tools/screenshots.py`](./tools/screenshots.py).
 
 ### Ya da hazır bir kart açın
 
-[Dört örnek](./examples/README.md) hem netlist hem de bitmiş kart olarak geliyor:
+[Altı örnek](./examples/README.md) hem netlist hem de bitmiş kart olarak geliyor:
 
 ```sh
 perfboard-studio examples/lm317-supply.perf
@@ -230,8 +265,10 @@ perfboard-studio examples/lm317-supply.perf
 | `lm317-supply` | TO-220 regülatör, yani ısı kuralının ölçecek bir şeyi var |
 | `lpb1-booster` | **FR-2** üzerine kurulu — pad'leri kalkan pertinaks kart |
 | `arduino-io-shield` | iki header; bir shield zaten büyük ölçüde budur |
+| `atmega328-relay` | ölçek: yirmi dört parça, ve bütün kurallar bir arada |
+| `nano-relay` | KiCad netlist'inden gerçek parçalar — başlıklarındaki bir Nano, katalogdan BC547 ve 7805, pinlerde adlar, kartta etiketler |
 
-Dördü de eksiksiz route ediliyor, LVS'te şemalarıyla örtüşüyor ve hiçbir DRC hatası
+Altısı da eksiksiz route ediliyor, LVS'te şemalarıyla örtüşüyor ve hiçbir DRC hatası
 taşımıyor — `tests/test_examples.py` bunu her commit'te doğruluyor.
 
 ### Bir ajandan
@@ -247,7 +284,7 @@ claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-
 çalışırken `pip install -e ".[mcp]"` ve ardından
 `claude mcp add perfboard-studio -- perfboard-studio-mcp`.
 
-Elli bir tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
+Elli üç tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
 (`A1`, `C7`, `AC12`) — hiçbir yerde ham koordinat yok. Tool listesi, diğer istemcilerin
 istediği JSON yapılandırması ve kurulumun geri kalanı için [docs/MCP.md](./docs/MCP.md).
 
@@ -280,12 +317,14 @@ src/perfboard_studio/            motor: doküman modeli, komut veri yolu, bağla
 src/perfboard_studio/guide.py    lehimleme rehberi; HTML/CSV/JSON için guide_export.py
 src/perfboard_studio/stripboard.py  bakırı baştan bağlı gelen kart; striproute.py onun üstünde
                            tasarım yapan kes-ve-bağla planlayıcısı
-src/perfboard_studio/parsers/    KiCad netlist içe aktarıcı
+src/perfboard_studio/parsers/    KiCad netlist içe aktarıcı; kicad_parts.py: her bileşenin hangi
+                           parça olduğu ve hangi bacağının hangisi olduğu
 src/perfboard_studio/ui/         Qt uygulaması: 2D editör, VTK 3D görünüm, 1:1 PDF çıktısı,
                            ve headless.py: CI'ın çıktısını denetlediği ekransız koşu
 src/perfboard_studio/mcp/        MCP sunucusu (docs/MCP.md)
-examples/                  içe aktarılacak bir netlist
-tests/                     ~2080 test; motor mypy --strict temiz
+src/perfboard_studio/catalog.py  gerçek parçalar, adlarıyla ve veri sayfalarıyla
+examples/                  içe aktarılacak netlist'ler ve çıktıkları kartlar
+tests/                     ~2800 test; motor mypy --strict temiz
 packages/                  Python portunun karşısında kanıtlandığı referans olarak
                            saklanan orijinal TypeScript motoru
 ```
@@ -294,17 +333,6 @@ packages/                  Python portunun karşısında kanıtlandığı refera
 gelmez — mesh kütüphanesi yok, devralınacak share-alike lisansı yok. Bir parçayı 2D'de
 çizen spec, 3D'de gövdesini extrude eden spec ile aynıdır; dolayısıyla ikisi birbiriyle
 çelişemez.
-
-**Gerçek bir parça adıyla seçilir.** Parçalar paneli, delikli bir kartın gerçekten
-yapıldığı parçaların kataloğuyla başlar -- BC547, IRF9540N, 7805, NE555, bir ESP32-DevKitC
--- ve birini seçmek onu değeri, veri sayfasının her bacağa verdiği ad ve çizildiği sembolle
-birlikte yerleştirir. O adlar kartta ve 3B'de pinlerin yanına yazılır (*Görünüm ▸ Pin
-Adlarını Göster*); bir klemens ya da bir geliştirme kartı onlara bakılarak kablolanır. Bir
-geliştirme kartı bir *modüldür*: pin başlıklarının üstünde duran kendi kartı, öyle çizilir.
-
-**Kartın üstüne yazılabilir.** Bir etiket -- onu alan klemensin yanına "MOTOR 24V" --
-iki yüzden birine konur, 1:1 çıktıda ve rehberde basılır, hiçbir denetim ona bakmaz:
-kartın üstüne kalemle yazacağınız şeydir.
 
 **61'in içinde olmayan bir parça kurulmaz, tarif edilir.** *Özel Parça…* bir pin ızgarası
 ve üç ölçü ister, karşılığında bunları kendi taşıyan bir kimlik verir:
@@ -317,8 +345,10 @@ parçayla açılır: kurulacak bir kütüphane ve kaybolacak bir dosya yoktur.
 
 Biten: editör, kütüphane, bağlantısallık ve LVS, DRC, router ve yerleştirme
 optimizasyonu, render edilmiş adım görselleri ve montaj oynatması ile montaj rehberi,
-1:1 PDF çıktısı, şema paneli ve yanındaki sayfa dışa aktarımı, kütüphanede olmayan
-parçaların kendi ölçüleriyle tarif edilmesi, çökme kurtarma, MCP sunucusu,
+1:1 PDF çıktısı, T ve etiketleriyle şema paneli ve yanındaki sayfa dışa aktarımı,
+pin adları kartta basılan gerçek parça kataloğu, pin başlıklarındaki modüller, karta yazılan
+etiketler, parça parça okunan KiCad netlist'leri, kütüphanede olmayan parçaların kendi
+ölçüleriyle tarif edilmesi, çökme kurtarma, MCP sunucusu,
 TR/EN yerelleştirme, bir `v*` etiketiyle çalışan
 üç platformluk paketleme, ve yeni sürümü haber verip indiren güncelleme denetimi
 (**Yardım ▸ Güncellemeleri Denetle**; indirdiğini sürümün `SHA256SUMS` dosyasıyla
@@ -339,7 +369,7 @@ Sırada, [PLAN.md](./PLAN.md) §11'in koyduğu sırayla:
 | | |
 |---|---|
 | [docs/MCP.md](./docs/MCP.md) | 53 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
-| [examples/README.md](./examples/README.md) | dört örnek kartın her birinin neyi göstermek için orada olduğu (yalnızca İngilizce) |
+| [examples/README.md](./examples/README.md) | her örnek kartın neyi göstermek için orada olduğu (yalnızca İngilizce) |
 | [CHANGELOG.md](./CHANGELOG.md) | her sürüm, ve yayınlanmamış bir yapının bir sonrakine doğru ne biriktirdiği (yalnızca İngilizce) |
 | [docs/RELEASING.md](./docs/RELEASING.md) | etiket ritüeli, ve `release.yml`'in ondan üç platformda ne ürettiği (yalnızca İngilizce) |
 | [docs/prior-art.md](./docs/prior-art.md) | bu alanda hâlihazırda var olan araçlar, ve bu projenin onlara karşı koruduğu lisans sınırı (yalnızca İngilizce) |

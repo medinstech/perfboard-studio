@@ -32,27 +32,36 @@ from perfboard_studio import persist  # noqa: E402
 from perfboard_studio.autoroute import plan_autoroute  # noqa: E402
 from perfboard_studio.command import CommandBus, CommandContext  # noqa: E402
 from perfboard_studio.commands import (  # noqa: E402
+    AddBoardNotePayload,
     AddPartPayload,
     ImportNetlistPayload,
+    PlaceBlockPayload,
     PlaceComponentPayload,
     create_document_id_generator,
     create_empty_document,
     create_standard_registry,
 )
-from perfboard_studio.drc import run_drc  # noqa: E402
+from perfboard_studio.drc import placed_body_box, placed_entry, run_drc  # noqa: E402
 from perfboard_studio.footprints import footprint_lookup  # noqa: E402
 from perfboard_studio.geometry import (  # noqa: E402
     STANDARD_PRESETS,
     BoardFamily,
     BoardPreset,
     board_from_preset,
+    board_note_anchor,
+    hole_to_mm,
+    mounting_hole_centre_mm,
     preset_edge_connectors,
     preset_mounting_holes,
+    substrate_edges_mm,
+    unusable_holes,
 )
 from perfboard_studio.guide import build_guide  # noqa: E402
 from perfboard_studio.lvs import run_lvs  # noqa: E402
-from perfboard_studio.model import Board, DocumentMeta, HoleCoord  # noqa: E402
+from perfboard_studio.model import Board, DocumentMeta, HoleCoord, PerfDocument  # noqa: E402
+from perfboard_studio.netlist_import import import_placements  # noqa: E402
 from perfboard_studio.parsers.kicad import parse_kicad_netlist  # noqa: E402
+from perfboard_studio.parsers.kicad_parts import plan_import  # noqa: E402
 from perfboard_studio.placer import (  # noqa: E402
     PlacementOptions,
     design_entries,
@@ -93,13 +102,21 @@ class Example:
         footprints: dict[str, str],
         family: BoardFamily = "double-sided-fr4",
         seed: int = 0,
+        pin_names: dict[str, dict[str, str]] | None = None,
+        labels: tuple[tuple[str, str], ...] = (),
     ) -> None:
         self.stem = stem
         self.title = title
         self.preset = preset
+        #: Empty means the netlist is IMPORTED as a user imports one -- every part read for
+        #: what it is by ``parsers.kicad_parts`` -- rather than told what each part is.
         self.footprints = footprints
         self.family = family
         self.seed = seed
+        #: Names for pins the schematic leaves unnamed -- a terminal's "Pin_1" -- by ref.
+        self.pin_names = pin_names or {}
+        #: Words written on the board: (text, the ref it goes beside).
+        self.labels = labels
 
 
 CATALOGUE: tuple[Example, ...] = (
@@ -217,6 +234,27 @@ CATALOGUE: tuple[Example, ...] = (
         # is the reassuring half of that measurement. This is the cheapest of them.
         seed=5,
     ),
+    Example(
+        stem="nano-relay",
+        title="Arduino Nano Relay Driver",
+        # What Place on the Board recommends for it: 7 x 9 cm fits it at half full, past
+        # the ratio that leaves room to wire.
+        preset="9 x 15 cm",
+        # No footprints: this one is imported the way a user imports a netlist, and it is
+        # the example that shows what that reads -- the Nano, the BC547, the 1N4007 and the
+        # 7805 come out of the catalog by their values, with their pin names; the rest by
+        # their KiCad footprints; the Nano's pins, which KiCad numbers down one side and up
+        # the other, renumbered by name; and the LED turned anode-first.
+        footprints={},
+        pin_names={
+            "J1": {"1": "+12V", "2": "GND"},
+            "J2": {"1": "COM", "2": "NO", "3": "NC"},
+        },
+        labels=(("12V IN", "J1"), ("LOAD", "J2")),
+        # Swept like atmega328-relay's: seeds 0-7 all route clean, and 5 is the first with
+        # the fewest wires and no terminal under a screw head.
+        seed=5,
+    ),
 )
 
 
@@ -276,6 +314,11 @@ def build(example: Example, lookup, *, write: bool) -> bool:
     #
     # They go down in a column at the left edge and are immediately rearranged by the
     # placer, so the starting anchors only have to be legal, not good.
+    if not example.footprints:
+        if not _import_as_a_user_would(example, parsed, bus, lookup):
+            return False
+        return _finish(example, bus, lookup, preset, write=write)
+
     refs = sorted({node.component_ref for net in parsed.nets for node in net.nodes})
     missing = [ref for ref in refs if ref not in example.footprints]
     if missing:
@@ -313,7 +356,43 @@ def build(example: Example, lookup, *, write: bool) -> bool:
     if not result.ok:
         print(f"  {example.stem}: netlist import refused [{result.code}] {result.message}")
         return False
+    return _finish(example, bus, lookup, preset, write=write)
 
+
+def _import_as_a_user_would(example: Example, parsed, bus: CommandBus, lookup) -> bool:
+    """File > Import KiCad Netlist and yes to placing the parts, without the dialogs."""
+    plan = plan_import(parsed, bus.document, lookup)
+    for ref, lines in sorted(plan.notes.items()):
+        for line in lines:
+            print(f"      {ref}: {line}")
+    result = bus.dispatch("netlist.import", ImportNetlistPayload(nets=plan.nets))
+    if not result.ok:
+        print(f"  {example.stem}: netlist import refused [{result.code}] {result.message}")
+        return False
+    suggestions = [
+        replace(
+            suggestion,
+            pin_names=tuple(example.pin_names[suggestion.ref].items()),
+        )
+        if suggestion.ref in example.pin_names
+        else suggestion
+        for suggestion in plan.suggestions.values()
+    ]
+    placements, left_out = import_placements(suggestions, bus.document, lookup)
+    if left_out:
+        print(f"  {example.stem}: no room for {left_out}")
+        return False
+    result = bus.dispatch(
+        "block.place", PlaceBlockPayload(components=tuple(placements), label="import")
+    )
+    if not result.ok:
+        print(f"  {example.stem}: placing refused [{result.code}] {result.message}")
+        return False
+    return True
+
+
+def _finish(example: Example, bus: CommandBus, lookup, preset: BoardPreset, *, write: bool) -> bool:
+    """Place, route, write on the board, check -- the same for every example."""
     plan = plan_placement(bus.document, lookup, PlacementOptions(seed=example.seed))
     if not plan.is_empty:
         result = bus.dispatch("component.moveMany", plan.payload())
@@ -326,6 +405,20 @@ def build(example: Example, lookup, *, write: bool) -> bool:
         result = bus.dispatch("conductor.addMany", plan.payload())
         if not result.ok:
             print(f"  {example.stem}: routing refused [{result.code}] {result.message}")
+            return False
+
+    for text, ref in example.labels:
+        spot = _free_spot_beside(bus.document, lookup, ref, text)
+        if spot is None:
+            print(f"  {example.stem}: no room to write {text!r} beside {ref}")
+            return False
+        at, dx, dy = spot
+        result = bus.dispatch(
+            "board.note.add",
+            AddBoardNotePayload(text=text, at=at, offset_x_mm=dx, offset_y_mm=dy, size_mm=2.0),
+        )
+        if not result.ok:
+            print(f"  {example.stem}: label refused [{result.code}] {result.message}")
             return False
 
     document = bus.document
@@ -366,6 +459,60 @@ def build(example: Example, lookup, *, write: bool) -> bool:
         )
 
     return ok
+
+
+def _free_spot_beside(
+    document: PerfDocument, lookup, ref: str, text: str, size_mm: float = 2.0
+) -> tuple[HoleCoord, float, float] | None:
+    """Where to write ``text`` beside part ``ref``: the nearest place to its body where the
+    label clears every body, every terminal's mouth, the screw heads and the finger strips.
+    Searched rather than placed by hand, because the placer decides where ``ref`` ends up."""
+    board = document.board
+    width = len(text) * size_mm * 0.8 + 1.0
+    height = size_mm * 1.8
+    boxes = []
+    target = None
+    for comp in document.components:
+        footprint = lookup(comp.footprint_id)
+        if footprint is None:
+            continue
+        box = placed_body_box(comp, footprint, board)
+        boxes.append(box)
+        entry = placed_entry(comp, footprint, board)
+        if entry is not None:
+            boxes.append(entry[0])
+        if comp.ref == ref:
+            target = ((box[0] + box[1]) / 2, (box[2] + box[3]) / 2)
+    if target is None:
+        return None
+    for mount in document.mounting_holes:
+        centre = mounting_hole_centre_mm(mount, board)
+        r = mount.head_diameter / 2
+        boxes.append((centre.x - r, centre.x + r, centre.y - r, centre.y + r))
+    half = board.pitch / 2
+    for key in unusable_holes(document):
+        col, row = (int(part) for part in key.split(","))
+        centre = hole_to_mm(HoleCoord(col, row), board)
+        boxes.append((centre.x - half, centre.x + half, centre.y - half, centre.y + half))
+    edges = substrate_edges_mm(board)
+    step = board.pitch / 2
+    candidates = []
+    y = edges.min_y + height / 2
+    while y <= edges.max_y - height / 2:
+        x = edges.min_x + width / 2
+        while x <= edges.max_x - width / 2:
+            candidates.append(((x - target[0]) ** 2 + (y - target[1]) ** 2, x, y))
+            x += step
+        y += step
+    for _distance, x, y in sorted(candidates):
+        mine = (x - width / 2 - 0.5, x + width / 2 + 0.5, y - height / 2 - 0.5, y + height / 2 + 0.5)
+        if any(
+            mine[0] < box[1] and box[0] < mine[1] and mine[2] < box[3] and box[2] < mine[3]
+            for box in boxes
+        ):
+            continue
+        return board_note_anchor(x, y, board)
+    return None
 
 
 # ---------------------------------------------------------------------------

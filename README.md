@@ -38,7 +38,7 @@
 
 <p align="center">
   The status bar is the whole claim: fourteen connections across seven nets,<br>
-  three of which needed a wire, DRC clean and LVS agreeing with the schematic.
+  four of which needed a wire, DRC clean and LVS agreeing with the schematic.
 </p>
 
 ---
@@ -58,9 +58,10 @@
   a jumper trapped under a body that gets soldered down on top of it, and a
   heat-sensitive part sitting too close to a hot one. The 3D view is a checking
   tool, not a picture.
-- **The sheet is derived, never stored.** No symbol positions live in the file,
-  so there is no second copy of the circuit to keep in step with the netlist and
-  nothing to lay out by hand.
+- **Real parts, read out of a KiCad netlist.** A value names a catalog part — a
+  BC547, a 7805, an Arduino Nano — and a KiCad footprint names a package. Where the
+  schematic's symbol numbers the pins differently from the part in your hand, they are
+  renumbered by name, so the board is wired for the part you actually solder.
 - **Agent-native.** An MCP server, a headless CLI and a git-diffable project
   file, all driving the same command bus as the GUI — so undo works across a
   session where a human and a model both edit the board.
@@ -68,12 +69,13 @@
 > **Status: pre-alpha, and end to end.** A netlist goes in and a soldering guide
 > comes out. What is missing is the dogfood test — nobody has yet built a real
 > board by following a generated guide, and [PLAN.md](https://github.com/medinstech/perfboard-studio/blob/main/PLAN.md) §11
-> says M5 does not close until somebody has. Everything else runs: **v0.10.0**
-> ships an installer for each of the three desktop platforms, none code-signed.
+> says M5 does not close until somebody has. Everything else runs, and every
+> release ships an installer for each of the three desktop platforms, none code-signed.
 
 **Jump to** — [Running it](#running-it) ·
 [Connections](#connections-are-not-all-the-same-thing) ·
 [Both faces](#both-faces-and-the-third-dimension) ·
+[Real parts](#real-parts-by-name) ·
 [The schematic](#draw-the-circuit-first) ·
 [The guide](#the-guide-has-an-order-and-you-can-watch-it) ·
 [From an agent](#from-an-agent) · [How it is built](#how-it-is-built) ·
@@ -114,6 +116,35 @@ be soldered down on top of it, and a heat-sensitive part sitting too close to a 
 
 ![The same board in 3D](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/board-3d.png)
 
+## Real parts, by name
+
+![An Arduino Nano relay driver: the catalog's parts, the Nano on its header strips, pin names and labels on the board](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/catalog-and-pin-names.png)
+
+A package is not a part. A TO-92 is a BC547 or a 2N7000 or a 78L05, and which leg is the
+base is the fact the board depends on. The Parts panel starts with a **catalog** of the parts
+a perfboard is actually built from — transistors and MOSFETs, regulators, diodes, DIP ICs,
+push buttons and dev boards — and picking one places it with its value, what its datasheet
+calls every lead and the symbol it is drawn as, each with the datasheet it came from.
+
+**Those names are printed beside the pins**, on the board and in 3D, because a terminal or a
+devkit is wired by them. They are laid out for the whole board at once: a name stops at
+whatever is in its way, a part in one row prints its names on its clear side, a name short
+of room is narrowed, and one with none is left off and listed in the part's tooltip. A dev
+board is a **module** — its own board standing on its header strips — and **the board can
+be written on**: a label such as "12V IN" beside the terminal that takes it goes on either
+face and is printed on the 1:1 sheet and in the guide.
+
+![The same board in 3D: the Nano on its header strips, the names beside the pins](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/module-3d.png)
+
+**A KiCad netlist comes in as parts, not guesses.** The board above is
+[`examples/nano-relay.net`](https://github.com/medinstech/perfboard-studio/blob/main/examples/nano-relay.net) imported as it stands. Its values
+name catalog parts — the Nano, the BC547, the 1N4007, the 7805 — and its KiCad footprint
+names measure the rest, from `R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm` to `SW_PUSH_6mm`. The
+pins are renumbered by name where the schematic's symbol numbers them differently from the
+part: KiCad numbers a Nano down one side and up the other, its LED cathode first, and a
+generic transistor symbol with "BC547" typed on it emitter first — each of which, taken at
+its number, would wire the board for a part that does not exist.
+
 ## Draw the circuit first
 
 The board says where everything goes. The schematic panel (`Ctrl+2`) says *what you are
@@ -121,11 +152,13 @@ building* — and it is where you say it: **Add Part**, **Wire** two pins, **Pla
 Board**. The circuit comes first and the layout second, which is how every other EDA tool
 works and is the order this one could not do until now.
 
-![The NE555 astable, drawn from its netlist](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/schematic.png)
+![The NE555 astable in the schematic panel](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/schematic.png)
 
-**The sheet is derived, never stored.** No symbol positions live in the file, so there is
-no second copy of the circuit to keep in step with the netlist and nothing to lay out by
-hand. Ground and power become rail symbols instead of wires, which is the difference
+**The sheet is laid out for you until you take it over.** Until anything on it is moved it
+is drawn from the netlist, so there is nothing to keep in step; move a symbol, turn one or
+draw a wire, and from then on the sheet is yours. A wire goes from pin to pin, or onto a
+wire already drawn — a **T**, with a dot where it lands — and a net too busy to draw is
+joined by name with a label at the pin. Ground and power become rail symbols instead of wires, which is the difference
 between a sheet you can read and eleven lines crossing everything. Polarity comes from the
 parts library's own pin names, so an LED's cathode and a diode's cathode both end up on the
 barred end — they are opposite pins, and a rule that guessed from pin 1 would draw one of
@@ -204,19 +237,21 @@ checking tool the application depends on rather than an optional extra.
 ### A board from nothing
 
 Open the schematic panel (`Ctrl+2`) and draw the circuit: drag parts onto the sheet out
-of the Parts panel, move and turn them where you want them, **Wire** from pin to pin — or
-**Label** a pin to join it to a net by name — then **Place on the Board**. From there
+of the Parts panel, move and turn them where you want them, **Wire** from pin to pin or
+onto a wire already drawn — or **Label** a pin to join it to a net by name — then **Place
+on the Board**. From there
 **Place → Auto-place Board** (`Ctrl+Shift+A`), **`Ctrl+R`** to route, and
 **File → Export Build Guide** (`Ctrl+B`). No KiCad anywhere in that.
 
 With a circuit that already exists, start at **File → Import KiCad Netlist** on
-`examples/ne555-astable.net` and accept the offered placement instead. That is the exact
-sequence the screenshots above come out of — see
-[`tools/screenshots.py`](https://github.com/medinstech/perfboard_studio/blob/main/tools/screenshots.py).
+`examples/ne555-astable.net` and accept the offered placement instead: each part arrives as
+what its value and its KiCad footprint say it is, beside the parts it connects to. That is
+the sequence the screenshots above come out of — see
+[`tools/screenshots.py`](https://github.com/medinstech/perfboard-studio/blob/main/tools/screenshots.py).
 
 ### Or open one that is already built
 
-[Four examples](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) ship as both the netlist and the finished board:
+[Six examples](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) ship as both the netlist and the finished board:
 
 ```sh
 perfboard-studio examples/lm317-supply.perf
@@ -228,8 +263,10 @@ perfboard-studio examples/lm317-supply.perf
 | `lm317-supply` | a TO-220 regulator, so the heat rule has something to measure |
 | `lpb1-booster` | built on **FR-2**, the phenolic board whose pads lift |
 | `arduino-io-shield` | two headers, which is what a shield mostly is |
+| `atmega328-relay` | scale: twenty-four parts, and every rule at once |
+| `nano-relay` | real parts from a KiCad netlist — a Nano on header strips, the catalog's BC547 and 7805, names on the pins, labels on the board |
 
-All four route to completion, match their schematics under LVS and carry no DRC error —
+All six route to completion, match their schematics under LVS and carry no DRC error —
 `tests/test_examples.py` asserts it on every commit.
 
 ### From an agent
@@ -243,7 +280,7 @@ claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-
 Nothing has to be installed first — `uvx` fetches the package into its own cache. From a
 clone it is `pip install -e ".[mcp]"` and then `claude mcp add perfboard-studio -- perfboard-studio-mcp`.
 
-Fifty-one tools, every hole addressed the way people talk about perfboard (`A1`, `C7`,
+Fifty-three tools, every hole addressed the way people talk about perfboard (`A1`, `C7`,
 `AC12`) and never as raw coordinates. See [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) for the tool list,
 the JSON config other clients want, and the rest of the setup.
 
@@ -275,12 +312,14 @@ src/perfboard_studio/            the engine: document model, command bus, connec
 src/perfboard_studio/guide.py    the soldering guide, and guide_export.py for HTML/CSV/JSON
 src/perfboard_studio/stripboard.py  the board whose copper arrives joined, and striproute.py
                            for the cuts-and-links planner that designs on one
-src/perfboard_studio/parsers/    KiCad netlist importer
+src/perfboard_studio/parsers/    KiCad netlist importer, and kicad_parts.py: which part each
+                           component is, and which of its legs is which
 src/perfboard_studio/ui/         Qt application: 2D editor, VTK 3D view, 1:1 PDF export,
                            and headless.py, the no-display run CI checks the output with
 src/perfboard_studio/mcp/        the MCP server (docs/MCP.md)
-examples/                  a netlist to import
-tests/                     ~2080 tests; the engine is mypy --strict clean
+src/perfboard_studio/catalog.py  the real parts, by name, each with its datasheet
+examples/                  netlists to import, and the boards they become
+tests/                     ~2800 tests; the engine is mypy --strict clean
 packages/                  the original TypeScript engine, kept as the reference the
                            Python port is proved against
 ```
@@ -298,17 +337,6 @@ board's thickness, the body keeps its colour from this project's own table, and 
 without a model draws exactly as it did. **Those meshes are the one part of this repository
 that is not Apache-2.0** — see [Licence](#licence).
 
-**A real part is picked by its name.** The Parts panel starts with a catalog of the parts
-a perfboard is actually built from -- BC547, IRF9540N, 7805, NE555, an ESP32-DevKitC --
-and picking one places it with its value, what its datasheet calls every lead and the
-symbol it is drawn as already filled in. Those names are printed beside the pins on the
-board and in 3D (*View ▸ Show Pin Names*), which is what a terminal or a devkit is wired
-by. A dev board is a *module*: its own board up on its header pins, drawn that way.
-
-**The board can be written on.** A label -- "MOTOR 24V" beside the terminal that takes it
--- goes on either face, is printed on the 1:1 sheet and in the guide, and is ignored by
-every check: it is what you would write on the board with a marker.
-
 **A part that is not among the 61 is described, not installed.** *Custom Part…* asks for a
 pin grid and three dimensions and hands back an identifier that carries them:
 `box-4x2-p1-r3-15x10x8` is a four-by-two pin grid, three holes between the rows, in a
@@ -320,7 +348,9 @@ install and nothing to go missing.
 
 Done: the editor, the library, connectivity and LVS, DRC, the router and the placement
 optimiser, the build guide with rendered step images and assembly playback, the 1:1 PDF
-export, the schematic panel and the sheet export beside it, parts described by their own
+export, the schematic panel with T's and labels and the sheet export beside it, a
+catalog of real parts with their pin names printed on the board, modules on header strips,
+labels written on the board, KiCad netlists read part by part, parts described by their own
 measurements when the library does not have them, crash recovery, the MCP server, TR/EN
 localisation, the three-platform packaging that a `v*` tag
 runs, and the update check that tells you a release exists and fetches it (**Help ▸ Check
@@ -342,7 +372,7 @@ Next, in the order [PLAN.md](https://github.com/medinstech/perfboard-studio/blob
 | | |
 |---|---|
 | [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | the 53 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
-| [examples/README.md](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) | what each of the four example boards is there to demonstrate |
+| [examples/README.md](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) | what each example board is there to demonstrate |
 | [CHANGELOG.md](https://github.com/medinstech/perfboard-studio/blob/main/CHANGELOG.md) | every release, and what an unreleased build is accumulating towards the next one |
 | [docs/RELEASING.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/RELEASING.md) | the tag ritual, and what `release.yml` builds out of it on three platforms |
 | [docs/prior-art.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/prior-art.md) | the tools that already exist in this space, and the licence boundary this project keeps from them |
