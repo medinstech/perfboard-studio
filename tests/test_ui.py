@@ -5776,6 +5776,93 @@ def test_a_drawn_wire_turns_once_and_always_the_same_way() -> None:
     _close(window)
 
 
+def _middle_of_drawn_wire(view):
+    """A point in the middle of the longest run of the one wire somebody drew."""
+    wire = next(w for w in view.item.drawing.wires if w.ends is not None)
+    runs = list(zip(wire.path, wire.path[1:], strict=False))
+    start, end = max(runs, key=lambda r: abs(r[1].x - r[0].x) + abs(r[1].y - r[0].y))
+    return QPointF((start.x + end.x) / 2, (start.y + end.y) / 2), wire.ends
+
+
+def test_a_pin_clicked_then_a_wire_branches_off_it_in_a_t() -> None:
+    """The wire tool, pin first: the second click lands on a drawn wire, and the pin joins
+    that wire's net with a line ending ON it -- not three wires from pin to pin."""
+    window = _blank_window()
+    for ref in ("R1", "R2", "R3"):
+        _add(window, ref, "r-axial-3")
+    view = window.schematic_view
+    window.on_sheet_tool("wire")
+    view._wire_click(("R1", "2"))
+    view._wire_click(("R2", "1"))
+    window._refresh_schematic_panel()
+
+    middle, ends = _middle_of_drawn_wire(view)
+    tee = view.tee_at(middle)
+    assert tee is not None and tee.ends == ends
+    view._wire_click(("R3", "1"))
+    view._tee_click(tee)
+
+    document = window.bus.document
+    (net,) = document.nets
+    assert {(n.component_ref, n.pin) for n in net.nodes} == {("R1", "2"), ("R2", "1"), ("R3", "1")}
+    branch = next(w for w in document.sheet_wires if w.tap is not None)
+    assert branch.a.component_ref == "R3" and branch.host_pins == frozenset(ends)
+    # The last run crosses the wire rather than lying along it.
+    last_start, last_end = branch.path[-2], branch.path[-1]
+    run_horizontal = last_start.y == last_end.y
+    wire_horizontal = tee.horizontal
+    assert run_horizontal != wire_horizontal or len(branch.path) == 2
+    window._refresh_schematic_panel()
+    assert any(j.at == branch.path[-1] for j in view.item.drawing.junctions)
+    _close(window)
+
+
+def test_a_wire_clicked_then_a_pin_is_the_same_t() -> None:
+    window = _blank_window()
+    for ref in ("R1", "R2", "R3"):
+        _add(window, ref, "r-axial-3")
+    view = window.schematic_view
+    window.on_sheet_tool("wire")
+    view._wire_click(("R1", "2"))
+    view._wire_click(("R2", "1"))
+    window._refresh_schematic_panel()
+
+    middle, _ends = _middle_of_drawn_wire(view)
+    view._tee_click(view.tee_at(middle))
+    assert view.pending_tee is not None
+    assert "click the pin that branches off it" in window.statusBar().currentMessage()
+    view._wire_click(("R3", "1"))
+
+    assert view.pending_tee is None
+    assert any(w.tap is not None for w in window.bus.document.sheet_wires)
+    assert len(window.bus.document.nets[0].nodes) == 3
+    _close(window)
+
+
+def test_a_net_label_stub_is_not_a_wire_to_branch_off() -> None:
+    """Only a wire somebody drew is stored; a label's stub is the sheet's shorthand, and a
+    T onto it would land on nothing."""
+    from perfboard_studio.commands import AddNetPayload
+    from perfboard_studio.model import NetNode
+
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    window.bus.dispatch(
+        "net.add",
+        AddNetPayload(name="CLK", nodes=(NetNode("R1", "1"), NetNode("R2", "1"))),
+    )
+    window.on_sheet_tool("wire")
+    window._refresh_schematic_panel()
+    view = window.schematic_view
+    stub = next(w for w in view.item.drawing.wires if w.ends is None)
+    middle = QPointF(
+        (stub.path[0].x + stub.path[-1].x) / 2, (stub.path[0].y + stub.path[-1].y) / 2
+    )
+    assert view.tee_at(middle) is None
+    _close(window)
+
+
 def test_clicking_the_same_pin_twice_cancels_instead_of_wiring_it_to_itself() -> None:
     window = _blank_window()
     _add(window, "R1", "r-axial-3")

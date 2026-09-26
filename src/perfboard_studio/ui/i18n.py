@@ -493,10 +493,12 @@ TURKISH: Mapping[str, str] = {
         "Kart üzerinde nereye geleceğine karar vermeden tasarıma bir parça ekler."
     ),
     "Wire": "Bağla",
-    "Click a pin, then the pin it joins. Neither on a net yet? One gets made. "
-    "Exactly what the board's connect tool does, because it is the same code.": (
-        "Bir pine tıklayın, sonra birleşeceği pine. İkisi de bir nette değilse yeni bir net "
-        "oluşur. Kartın bağlama aracıyla birebir aynı davranış — çünkü aynı kod."
+    "Click a pin, then the pin it joins — or a wire already drawn, and the pin "
+    "branches off it in a T. Neither on a net yet? One gets made. Exactly what the "
+    "board's connect tool does, because it is the same code.": (
+        "Bir pine tıklayın, sonra birleşeceği pine — ya da çizilmiş bir tele; pin o telden "
+        "T ile dallanır. İkisi de bir nette değilse yeni bir net oluşur. Kartın bağlama "
+        "aracıyla birebir aynı davranış — çünkü aynı kod."
     ),
     "Take the selected part out of the design, along with its connections. A "
     "part that is on the board comes off it and stays in the design instead.": (
@@ -762,7 +764,12 @@ TURKISH: Mapping[str, str] = {
         "Bu kartta tasarımdaki parçalar için yer yok. Kartı büyütün ya da parçaları "
         "teker teker yerleştirin."
     ),
-    "From {pin} — click the pin it joins.": "{pin} pininden — birleşeceği pine tıklayın.",
+    "From {pin} — click the pin or the wire it joins.": (
+        "{pin} pininden — birleşeceği pine ya da tele tıklayın."
+    ),
+    "On the wire {wire} — click the pin that branches off it.": (
+        "{wire} teli üzerinde — ondan dallanacak pine tıklayın."
+    ),
     "Cancelled.": "İptal edildi.",
     "Add a Part": "Parça Ekle",
     "Edit a Part": "Parçayı Düzenle",
@@ -1087,7 +1094,7 @@ TURKISH: Mapping[str, str] = {
     "The netlist names {count} part(s) that are not on the board yet:\n  {refs}\n\n"
     "Place them beside the parts they connect to, to move from there? {catalog} "
     "are known parts from the catalog, {kicad} were matched by their KiCad "
-    "footprint, and {guess} are guessed from their reference and pin count -- "
+    "footprint, and {guess} are guessed from their reference and pin count — "
     "check those.": (
         "Netlist'te kartta henüz olmayan {count} parça var:\n  {refs}\n\n"
         "Bağlandıkları parçaların yanına yerleştirilsinler mi? Oradan taşıyabilirsiniz. "

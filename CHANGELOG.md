@@ -22,6 +22,20 @@ closed without a bump.
 
 ### Added
 
+- **A T on the sheet.** A drawn wire went from a pin to a pin and nowhere else, so a net
+  reaching four pins was three wires from pin to pin -- nothing like the one run with
+  branches off it that a person draws. The wire tool now takes a drawn wire as either click:
+  a pin and then a wire, or a wire and then a pin, and the pin branches off it in a T, with
+  a dot where it lands and its last run across the wire rather than along it. A T can land
+  on a T. The circuit is still `doc.nets`: a T joins its pin to the net of the wire it lands
+  on, exactly as a wire to one of that wire's pins would. It is stored as the wire it is
+  plus the far end of the wire it lands on (`SheetWire.tap`, written only when set, so
+  every sheet drawn before is byte for byte what it was), and where it lands is laid back
+  onto that wire each time the sheet is drawn -- a symbol drags only the end runs of its
+  wires, so a T in the middle of one stays where it was put. Rubbing a wire out takes the
+  T's off it with it, in one undo step; a T whose wire is no longer drawn (its net lost an
+  end) goes to its pin instead.
+
 - **A KiCad netlist's parts arrive as what they are.** The importer kept the nets and threw
   away everything else a netlist says about a component, and guessed each part from its
   reference letter and pin count: a 7805 in a TO-220 ("U1", three pins) became a DIP-8,

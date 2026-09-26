@@ -4782,6 +4782,8 @@ class MainWindow(QMainWindow):
         self.schematic_view.symbolsMoved.connect(self._on_symbols_moved)
         self.schematic_view.selectionChanged.connect(self._on_sheet_selection_changed)
         self.schematic_view.wireDrawn.connect(self._on_sheet_wire_drawn)
+        self.schematic_view.wireTeed.connect(self._on_sheet_wire_teed)
+        self.schematic_view.teeStarted.connect(self._on_sheet_tee_started)
         self.schematic_view.labelRequested.connect(self.on_sheet_label)
         self.schematic_view.noteDrawn.connect(self.on_sheet_note_drawn)
         self.schematic_view.deleteRequested.connect(self.on_sheet_delete)
@@ -4829,9 +4831,9 @@ class MainWindow(QMainWindow):
                 "connect",
                 t("Wire"),
                 t(
-                    "Click a pin, then the pin it joins. Neither on a net yet? One gets "
-                    "made. Exactly what the board's connect tool does, because it is the "
-                    "same code."
+                    "Click a pin, then the pin it joins — or a wire already drawn, and the "
+                    "pin branches off it in a T. Neither on a net yet? One gets made. "
+                    "Exactly what the board's connect tool does, because it is the same code."
                 ),
             ),
             (
@@ -5307,6 +5309,41 @@ class MainWindow(QMainWindow):
             return
         self.statusBar().showMessage(result.description, 6000)
 
+    def _on_sheet_tee_started(self, wire: str) -> None:
+        self.statusBar().showMessage(
+            t("On the wire {wire} — click the pin that branches off it.").format(wire=wire), 0
+        )
+
+    def _on_sheet_wire_teed(
+        self,
+        ref: str,
+        pin: str,
+        ref_a: str,
+        pin_a: str,
+        ref_b: str,
+        pin_b: str,
+        path: object,
+    ) -> None:
+        """A pin was wired onto a wire already on the sheet: a T.
+
+        One ``sheet.wire``, as a wire from pin to pin is: the pin joins the net the wire is
+        on -- through the wire's first pin, which is on it -- and the line is stored ending
+        on the wire (``SheetWire.tap``). The sheet is frozen already: there is a drawn wire.
+        """
+        if not isinstance(path, list) or len(path) < 2:
+            return
+        wire = SheetWire(
+            a=NetNode(component_ref=ref, pin=pin),
+            b=NetNode(component_ref=ref_a, pin=pin_a),
+            path=tuple(Point2(x=float(x), y=float(y)) for x, y in path),
+            tap=NetNode(component_ref=ref_b, pin=pin_b),
+        )
+        result = self.bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=wire))
+        if not result.ok:
+            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            return
+        self.statusBar().showMessage(result.description, 6000)
+
     def on_sheet_label(self, ref: str, pin: str) -> None:
         """Join a pin to a net by NAME rather than by drawing a line to it.
 
@@ -5656,7 +5693,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(t("Cancelled."), 4000)
             return
         self.statusBar().showMessage(
-            t("From {pin} — click the pin it joins.").format(pin=f"{ref}.{pin}"), 0
+            t("From {pin} — click the pin or the wire it joins.").format(pin=f"{ref}.{pin}"),
+            0,
         )
 
     def on_schematic_remove(self) -> None:
@@ -9058,7 +9096,7 @@ class MainWindow(QMainWindow):
                 "The netlist names {count} part(s) that are not on the board yet:\n  {refs}\n\n"
                 "Place them beside the parts they connect to, to move from there? {catalog} "
                 "are known parts from the catalog, {kicad} were matched by their KiCad "
-                "footprint, and {guess} are guessed from their reference and pin count -- "
+                "footprint, and {guess} are guessed from their reference and pin count — "
                 "check those."
             ).format(
                 count=len(wanted),

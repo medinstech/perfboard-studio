@@ -574,17 +574,32 @@ class SheetWire:
     connection somebody has since removed simply stop being drawn, instead of quietly
     asserting a join that no longer exists.
 
-    Two pins and no more. A net drawn as three wires between four pins reads exactly like a
-    net drawn as one branching run, and a branch point would need a fourth kind of endpoint
-    -- a point on another wire -- that moves whenever either end does.
+    OR A PIN AND ANOTHER WIRE: a T. A net reaching four pins was drawn as three wires from
+    pin to pin, which reads nothing like the one run with branches off it that a person
+    draws. With ``tap`` set, this wire does not end at pin ``b``: it ends ON the drawn wire
+    from ``b`` to ``tap``, at its last point. ``b`` is still its electrical partner -- it
+    joins ``a`` to the net ``b`` is on, as any wire does -- and ``b`` and ``tap`` together
+    name the wire it lands on, which is one wire because two wires never join the same two
+    pins. Where on it the T is, is the path's last point laid back onto that wire each time
+    the sheet is drawn: a symbol that moves drags only the end runs of its wires, so a T in
+    the middle of one stays where it was put and a T on an end run slides with it.
 
     ``path`` is the orthogonal chain between them, in sheet millimetres, first point at
-    ``a`` and last at ``b``.
+    ``a`` and last at ``b`` -- or at the T.
     """
 
     a: NetNode
     b: NetNode
     path: tuple[Point2, ...]
+    #: The far end of the wire this one branches off, when it is a T. ``None`` -- the whole
+    #: of every sheet drawn before there were T's -- is a wire from pin to pin, and is not
+    #: written to the file.
+    tap: NetNode | None = None
+
+    @property
+    def host_pins(self) -> frozenset[NetNode] | None:
+        """The two pins of the wire this one branches off, or ``None`` for pin to pin."""
+        return None if self.tap is None else frozenset((self.b, self.tap))
 
 
 #: What a sheet note draws. Text, and the three shapes an annotation is made of -- which is

@@ -682,9 +682,6 @@ söyleyen tek şey şu an testler.
 
 Plandan gelmeyen, kullanımdan gelen işler. Sıra bağlayıcı değil.
 
-- **Şema sayfasında dal (T) bağlantısı.** Çizilen tel tam olarak iki pin arasında; dört
-  pinli bir net üç telle çiziliyor. Bir telin ortasına bağlanmak dördüncü bir uç türü
-  ister ve iki uçtan biri her oynadığında yerinden kayar — çözülebilir, çözülmedi.
 - **Hiyerarşik sayfa ve bus.** Yok. 24 parçalık kartlarda ihtiyaç duyulmadı.
 - **`docs/` Türkçesi.** Arayüz tam Türkçe, `README` iki dilde; `docs/` yalnız İngilizce.
 - **Kod imzalama** — §12.

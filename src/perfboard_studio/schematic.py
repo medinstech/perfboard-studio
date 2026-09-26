@@ -292,6 +292,9 @@ class Wire:
     net_name: str
     net_class: NetClass
     path: tuple[Point2, ...]
+    #: For a wire somebody drew, the two pins that name it (``SheetWire.a`` and ``.b``):
+    #: what a T drawn onto it says it lands on. ``None`` for everything the sheet derives.
+    ends: tuple[NetNode, NetNode] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2363,24 +2366,53 @@ def _hand_drawn_sheet(
     # -- the wires somebody drew --------------------------------------------
     wires: list[Wire] = []
     drawn_pins: set[tuple[str, str]] = set()
-    for wire in doc.sheet_wires:
-        net = _wire_net_of(doc, wire)
-        if net is None:
-            continue
-        start = _pin_of(symbols, wire.a)
-        end = _pin_of(symbols, wire.b)
-        if start is None or end is None:
-            continue
-        wires.append(
-            Wire(
-                net_id=net.id,
-                net_name=net.name,
-                net_class=net.net_class,
-                path=_reanchored(wire.path, start, end),
+    tees: list[Junction] = []
+    # Pin to pin first, then each T onto the wire it lands on once that is drawn -- a T can
+    # land on a T -- until a pass draws nothing more. What is left is a T whose wire is not
+    # drawn (its net no longer holds both its ends); it goes to its pin instead, which is
+    # still true: it joins that pin's net.
+    drawn_paths: dict[frozenset[NetNode], tuple[Point2, ...]] = {}
+    waiting = list(doc.sheet_wires)
+    stalled = False
+    while waiting:
+        still: list[SheetWire] = []
+        for wire in waiting:
+            host = wire.host_pins
+            host_path = drawn_paths.get(host) if host is not None else None
+            if host is not None and host_path is None and not stalled:
+                still.append(wire)
+                continue
+            net = _wire_net_of(doc, wire)
+            if net is None:
+                continue
+            start = _pin_of(symbols, wire.a)
+            if start is None:
+                continue
+            if host_path is not None:
+                end, on_end = _laid_onto(wire.path[-1], host_path)
+                if not on_end:
+                    tees.append(Junction(net_id=net.id, at=end))
+            else:
+                pin_end = _pin_of(symbols, wire.b)
+                if pin_end is None:
+                    continue
+                end = pin_end
+                drawn_pins.add((wire.b.component_ref, wire.b.pin))
+            path = _reanchored(wire.path, start, end)
+            wires.append(
+                Wire(
+                    net_id=net.id,
+                    net_name=net.name,
+                    net_class=net.net_class,
+                    path=path,
+                    ends=(wire.a, wire.b),
+                )
             )
-        )
-        drawn_pins.add((wire.a.component_ref, wire.a.pin))
-        drawn_pins.add((wire.b.component_ref, wire.b.pin))
+            drawn_paths[frozenset((wire.a, wire.b))] = path
+            drawn_pins.add((wire.a.component_ref, wire.a.pin))
+        if len(still) == len(waiting):
+            stalled = True
+        waiting = still
 
     # -- and a name, or a rail glyph, on everything else ---------------------
     rails: list[Rail] = []
@@ -2428,8 +2460,10 @@ def _hand_drawn_sheet(
                 )
             )
 
-    # -- dots where three or more ends of one net meet ----------------------
-    junctions = _junctions_of(wires)
+    # -- dots where three or more ends of one net meet, and at every T ------
+    junctions = tuple(sorted(
+        set(_junctions_of(wires)) | set(tees), key=lambda j: (j.net_id, j.at.x, j.at.y)
+    ))
 
     wired_pins = {(ref, pin.number) for item in resolved for ref, pin in item.pins}
     no_connects = [
@@ -2480,6 +2514,31 @@ def _hand_drawn_sheet(
         height=height,
         notes=tuple(notes),
     )
+
+
+def _laid_onto(point: Point2, path: Sequence[Point2]) -> tuple[Point2, bool]:
+    """Where a T lands on the wire it branches off: the point of ``path`` nearest ``point``,
+    and whether that is one of the wire's two ends -- where three lines meeting is a bend
+    and a pin, not a T, and gets no dot of its own.
+
+    Nearest rather than exact, because the wire moves: dragging a symbol drags the end runs
+    of its wires, and a T that stayed at the point it was drawn at would be left beside the
+    wire instead of on it.
+    """
+    best: tuple[float, Point2] | None = None
+    for start, end in itertools.pairwise(path):
+        dx, dy = end.x - start.x, end.y - start.y
+        length = dx * dx + dy * dy
+        t = 0.0 if length == 0 else ((point.x - start.x) * dx + (point.y - start.y) * dy) / length
+        t = min(max(t, 0.0), 1.0)
+        on = _p(start.x + t * dx, start.y + t * dy)
+        distance = (on.x - point.x) ** 2 + (on.y - point.y) ** 2
+        if best is None or distance < best[0]:
+            best = (distance, on)
+    if best is None:
+        return point, False
+    landed = best[1]
+    return landed, landed in (path[0], path[-1])
 
 
 def _pin_of(symbols: dict[str, _Placed], node: NetNode) -> Point2 | None:

@@ -2112,6 +2112,8 @@ class _DrawSheetWire:
             raise CommandError(
                 "path-too-short", "A wire on the sheet needs at least two points."
             )
+        if wire.tap is not None:
+            _check_tee(doc, wire)
         plan = plan_pin_join(doc, wire.a, wire.b)
         if plan.kind == "two-nets":
             assert plan.net_a is not None and plan.net_b is not None
@@ -2149,7 +2151,58 @@ class _DrawSheetWire:
         )
 
     def describe(self, p: DrawSheetWirePayload, doc: PerfDocument) -> str:
+        if p.wire.tap is not None:
+            return (
+                f"Wire {_pin_name(p.wire.a)} onto the wire from {_pin_name(p.wire.b)} "
+                f"to {_pin_name(p.wire.tap)}"
+            )
         return f"Wire {_pin_name(p.wire.a)} to {_pin_name(p.wire.b)}"
+
+
+def _check_tee(doc: PerfDocument, wire: SheetWire) -> None:
+    """What a T needs: a drawn wire to land on, still drawn, and not one of its own ends."""
+    assert wire.tap is not None
+    if wire.a in (wire.b, wire.tap):
+        raise CommandError(
+            "same-pin",
+            f"{_pin_name(wire.a)} is an end of that wire already; a branch has to come from "
+            "another pin.",
+        )
+    host = next(
+        (w for w in doc.sheet_wires if frozenset((w.a, w.b)) == wire.host_pins), None
+    )
+    if host is None:
+        raise CommandError(
+            "no-such-wire",
+            f"No wire is drawn from {_pin_name(wire.b)} to {_pin_name(wire.tap)} to branch "
+            "off.",
+        )
+    # Drawn only while one net holds both its ends -- see ``SheetWire``. A T on a wire the
+    # sheet no longer draws would be a branch off nothing.
+    if not any(host.a in net.nodes and host.b in net.nodes for net in doc.nets):
+        raise CommandError(
+            "wire-not-drawn",
+            f"The wire from {_pin_name(host.a)} to {_pin_name(host.b)} no longer joins one "
+            "net, so it is not drawn and nothing can branch off it.",
+        )
+
+
+def _with_branches(doc: PerfDocument, pairs: set[frozenset[NetNode]]) -> set[frozenset[NetNode]]:
+    """``pairs`` and every wire branching off them, and off those, all the way out.
+
+    A T is drawn onto the wire it branches off; rubbing that wire out and leaving the T
+    would leave a branch off nothing, so it goes too -- in the same command, so one undo
+    brings the whole run back."""
+    gone = set(pairs)
+    grew = True
+    while grew:
+        grew = False
+        for wire in doc.sheet_wires:
+            key = frozenset((wire.a, wire.b))
+            if key not in gone and wire.host_pins in gone:
+                gone.add(key)
+                grew = True
+    return gone
 
 
 class _DeleteSheetWires:
@@ -2164,17 +2217,20 @@ class _DeleteSheetWires:
             raise CommandError(
                 "empty-batch", "sheet.wire.delete needs at least one wire to rub out."
             )
-        wanted = {frozenset((wire.a, wire.b)) for wire in p.wires}
+        wanted = _with_branches(doc, {frozenset((wire.a, wire.b)) for wire in p.wires})
         kept = tuple(w for w in doc.sheet_wires if frozenset((w.a, w.b)) not in wanted)
         if len(kept) == len(doc.sheet_wires):
             raise CommandError("nothing-to-do", "No wire on the sheet joins those pins.")
         return dataclasses.replace(doc, sheet_wires=kept)
 
     def describe(self, p: DeleteSheetWiresPayload, doc: PerfDocument) -> str:
+        named = {frozenset((wire.a, wire.b)) for wire in p.wires}
+        branches = len(_with_branches(doc, named) - named)
+        tail = f" and {branches} branch(es) off it" if branches else ""
         if len(p.wires) == 1:
             wire = p.wires[0]
-            return f"Rub out the wire from {_pin_name(wire.a)} to {_pin_name(wire.b)}"
-        return f"Rub out {len(p.wires)} wire(s) on the sheet"
+            return f"Rub out the wire from {_pin_name(wire.a)} to {_pin_name(wire.b)}{tail}"
+        return f"Rub out {len(p.wires)} wire(s) on the sheet{tail}"
 
 
 class _AddSheetNote:

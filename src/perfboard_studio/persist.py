@@ -214,7 +214,7 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "sheetNotes",
 )
 SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "at", "rotation", "mirrored")
-SHEET_WIRE_KEY_ORDER: tuple[str, ...] = ("a", "b", "path")
+SHEET_WIRE_KEY_ORDER: tuple[str, ...] = ("a", "b", "path", "tap")
 SHEET_NOTE_KEY_ORDER: tuple[str, ...] = ("id", "kind", "at", "to", "text", "sizeMm")
 BOARD_NOTE_KEY_ORDER: tuple[str, ...] = (
     "id",
@@ -522,6 +522,13 @@ def _ordered_symbol_placement(placement: SymbolPlacement, index: int) -> JsonObj
 
 def _ordered_sheet_wire(wire: SheetWire, index: int) -> JsonObj:
     path = _index_path("sheetWires", index)
+    # A T names the far end of the wire it lands on; a wire from pin to pin -- every one
+    # drawn before T's existed -- says nothing, so those files do not change by a byte.
+    tee: dict[str, JsonValue] = {}
+    if wire.tap is not None:
+        tee["tap"] = _build_ordered(
+            NET_NODE_KEY_ORDER, {"componentRef": wire.tap.component_ref, "pin": wire.tap.pin}
+        )
     return _build_ordered(
         SHEET_WIRE_KEY_ORDER,
         {
@@ -535,6 +542,7 @@ def _ordered_sheet_wire(wire: SheetWire, index: int) -> JsonObj:
                 _ordered_point(point, _index_path(_field_path(path, "path"), i))
                 for i, point in enumerate(wire.path)
             ],
+            **tee,
         },
     )
 
@@ -1308,6 +1316,11 @@ def _parse_sheet_wire(raw: object, path: str, warnings: list[str]) -> SheetWire:
         path=tuple(
             _parse_point(point, _index_path(_field_path(path, "path"), i), warnings)
             for i, point in enumerate(points)
+        ),
+        tap=(
+            _parse_net_node(obj["tap"], _field_path(path, "tap"), warnings)
+            if "tap" in obj
+            else None
         ),
     )
 

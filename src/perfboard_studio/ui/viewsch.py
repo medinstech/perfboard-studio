@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from typing import Literal
 
 from PySide6.QtCore import QLineF, QMimeData, QPoint, QPointF, QRect, QRectF, Qt, Signal
@@ -64,7 +65,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from perfboard_studio.model import Point2
+from perfboard_studio.model import NetNode, Point2
 from perfboard_studio.schematic import (
     GRID_MM,
     Annotation,
@@ -542,6 +543,14 @@ class SchematicView(QGraphicsView):
     #: (x, y) pairs). The VIEW does not decide what that means to the circuit -- see
     #: ``commands.plan_pin_join`` and the window's handler.
     wireDrawn = Signal(str, str, str, str, list)
+    #: A T was drawn: a pin wired onto a wire already on the sheet. (ref, pin, then the two
+    #: pins that name the wire -- ref a, pin a, ref b, pin b -- then the path from the pin
+    #: to the point on the wire, as (x, y) pairs.) What it means to the circuit is the
+    #: window's business again: the pin joins the wire's net.
+    wireTeed = Signal(str, str, str, str, str, str, list)
+    #: The wire tool's first click landed on a wire rather than a pin. Carries the wire's
+    #: two ends as "R1.2 – U1.4", for the status bar.
+    teeStarted = Signal(str)
     #: A pin was clicked with the label tool: join it to a net by NAME. The window asks
     #: which name, because that is a question with a dialog behind it.
     labelRequested = Signal(str, str)
@@ -576,6 +585,8 @@ class SchematicView(QGraphicsView):
         self.tool: SheetTool = "select"
         self.wiring = False
         self.pending_pin: tuple[str, str] | None = None
+        #: The wire tool's first click, when it was on a wire: the T it will be.
+        self.pending_tee: Tee | None = None
         self.selected_refs: list[str] = []
         self.selected_notes: list[int] = []
         self.setBackgroundBrush(QBrush(QColor(SHEET)))
@@ -695,6 +706,7 @@ class SchematicView(QGraphicsView):
         self.tool = tool
         self.wiring = tool == "wire"
         self.set_pending_pin(None)
+        self.pending_tee = None
         self._clear_ghosts()
         self.setCursor(
             Qt.CursorShape.ArrowCursor if tool == "select" else Qt.CursorShape.CrossCursor
@@ -748,6 +760,35 @@ class SchematicView(QGraphicsView):
                 if distance <= PIN_PICK_MM and (best is None or distance < best[0]):
                     best = (distance, symbol.ref, pin.number)
         return (best[1], best[2]) if best is not None else None
+
+    def tee_at(self, scene_pos: QPointF) -> Tee | None:
+        """The point on a DRAWN wire a T would land on, within ``PICK_MM`` of the pointer.
+
+        Only a wire somebody drew (``Wire.ends``): a net label's stub and a rail are the
+        sheet's own shorthand, and a branch off one would be a branch off nothing stored.
+        Snapped to the grid along the run it lands on, and kept on that run.
+        """
+        if self.item is None:
+            return None
+        best: tuple[float, tuple[NetNode, NetNode], QPointF, QPointF] | None = None
+        for wire in self.item.drawing.wires:
+            if wire.ends is None:
+                continue
+            for start, end in zip(wire.path, wire.path[1:], strict=False):
+                a, b = _point(start), _point(end)
+                distance = _distance_to_segment(scene_pos, a, b)
+                if distance <= PICK_MM and (best is None or distance < best[0]):
+                    best = (distance, wire.ends, a, b)
+        if best is None:
+            return None
+        _distance, ends, a, b = best
+        horizontal = abs(b.y() - a.y()) < abs(b.x() - a.x())
+        snapped = _snapped(scene_pos)
+        if horizontal:
+            at = QPointF(min(max(snapped.x(), min(a.x(), b.x())), max(a.x(), b.x())), a.y())
+        else:
+            at = QPointF(a.x(), min(max(snapped.y(), min(a.y(), b.y())), max(a.y(), b.y())))
+        return Tee(ends=ends, at=at, horizontal=horizontal)
 
     def fit(self) -> None:
         if self.item is None:
@@ -879,7 +920,14 @@ class SchematicView(QGraphicsView):
         self._press_scene = where
 
         if self.tool == "wire":
-            self._wire_click(self.pin_at(where))
+            pin = self.pin_at(where)
+            # A pin wins over the wire running into it: at a pin the two are one point, and
+            # a wire drawn to a pin is the ordinary case.
+            tee = self.tee_at(where) if pin is None else None
+            if tee is not None:
+                self._tee_click(tee)
+            else:
+                self._wire_click(pin)
             event.accept()
             return
 
@@ -952,7 +1000,14 @@ class SchematicView(QGraphicsView):
             # alternative is a stale first pin joining itself to whatever is clicked three
             # gestures later.
             self.set_pending_pin(None)
+            self.pending_tee = None
             self.pinClicked.emit("", "")
+            return
+        if self.pending_tee is not None:
+            # The wire was clicked first: this pin branches off it.
+            tee = self.pending_tee
+            self.pending_tee = None
+            self._emit_tee(pin, tee)
             return
         pending = self.pending_pin
         if pending is None or pending == pin:
@@ -969,6 +1024,35 @@ class SchematicView(QGraphicsView):
             return
         path = [(point.x(), point.y()) for point in _elbow(start, end)]
         self.wireDrawn.emit(pending[0], pending[1], pin[0], pin[1], path)
+
+    def _tee_click(self, tee: Tee) -> None:
+        """The wire tool clicked on a wire: finish a T from the pin taken first, or take
+        the wire first and wait for the pin."""
+        pending = self.pending_pin
+        if pending is not None:
+            self._emit_tee(pending, tee)
+            return
+        self.pending_tee = tee
+        self.teeStarted.emit(
+            " – ".join(f"{end.component_ref}.{end.pin}" for end in tee.ends)
+        )
+
+    def _emit_tee(self, pin: tuple[str, str], tee: Tee) -> None:
+        self.set_pending_pin(None)
+        self.pending_tee = None
+        self._clear_ghosts()
+        if self.item is None:
+            return
+        if NetNode(component_ref=pin[0], pin=pin[1]) in tee.ends:
+            # A branch from one of the wire's own ends back onto it joins nothing new.
+            self.pinClicked.emit("", "")
+            return
+        start = pin_anchor(self.item.drawing, *pin)
+        if start is None:
+            return
+        path = [(point.x(), point.y()) for point in _tee_path(start, tee.at, tee.horizontal)]
+        a, b = tee.ends
+        self.wireTeed.emit(pin[0], pin[1], a.component_ref, a.pin, b.component_ref, b.pin, path)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if self._panning:
@@ -993,8 +1077,22 @@ class SchematicView(QGraphicsView):
         if self.item is not None and self.tool == "wire" and self.pending_pin is not None:
             start = pin_anchor(self.item.drawing, *self.pending_pin)
             if start is not None:
-                self.item.ghost_path = _elbow(start, _snapped(where))
+                # Over a wire, the preview is the T it would draw: square onto the wire.
+                tee = self.tee_at(where) if self.pin_at(where) is None else None
+                self.item.ghost_path = (
+                    _tee_path(start, tee.at, tee.horizontal)
+                    if tee is not None
+                    else _elbow(start, _snapped(where))
+                )
                 self.item.update()
+        elif self.item is not None and self.tool == "wire" and self.pending_tee is not None:
+            pin = self.pin_at(where)
+            target = pin_anchor(self.item.drawing, *pin) if pin is not None else None
+            tee = self.pending_tee
+            self.item.ghost_path = _tee_path(
+                target if target is not None else _snapped(where), tee.at, tee.horizontal
+            )
+            self.item.update()
 
         if self._press_ref is not None and event.buttons() & Qt.MouseButton.LeftButton:
             self._drag_symbols(event, where)
@@ -1331,6 +1429,29 @@ def _elbow(start: QPointF, end: QPointF) -> tuple[QPointF, ...]:
     if start.x() == end.x() or start.y() == end.y():
         return (start, end)
     return (start, QPointF(end.x(), start.y()), end)
+
+
+@dataclass(frozen=True, slots=True)
+class Tee:
+    """Where a T lands: the drawn wire, by the two pins that name it, and the point on it."""
+
+    ends: tuple[NetNode, NetNode]
+    at: QPointF
+    #: Whether the run it lands on is horizontal, which decides the corner of the branch.
+    horizontal: bool
+
+
+def _tee_path(start: QPointF, at: QPointF, host_horizontal: bool) -> tuple[QPointF, ...]:
+    """From a pin to a T, meeting the wire square on.
+
+    NOT ``_elbow``'s horizontal-first rule: onto a vertical wire that rule ends with a
+    vertical run lying along the wire instead of a line coming into it, which is a wire
+    drawn on top of a wire and no T at all. So the last run is always across the wire.
+    """
+    if start.x() == at.x() or start.y() == at.y():
+        return (start, at)
+    corner = QPointF(at.x(), start.y()) if host_horizontal else QPointF(start.x(), at.y())
+    return (start, corner, at)
 
 
 def _distance_to_segment(point: QPointF, start: QPointF, end: QPointF) -> float:
