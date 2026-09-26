@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ..model import Net, NetClass, NetNode
 from .sexpr import SExpr, parse_sexpr
@@ -31,6 +31,10 @@ class ImportedComponent:
     value: str
     footprint: str | None = None
     lib_part: str | None = None
+    #: ``(pin, name)`` for each of its pins in a net whose symbol names it -- the node's
+    #: ``pinfunction``, which KiCad writes for a named pin and leaves out for a passive's.
+    #: In pin order. What ``kicad_parts`` checks the part's own pin numbers against.
+    pin_functions: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,7 +185,12 @@ def _parse_int_leading(s: str) -> float:
     return float(int(match.group(1))) if match else math.nan
 
 
-def _parse_nets(nets_list: list[SExpr] | None, warnings: list[str]) -> list[Net]:
+def _parse_nets(
+    nets_list: list[SExpr] | None,
+    warnings: list[str],
+    pin_functions: dict[str, dict[str, str]] | None = None,
+) -> list[Net]:
+    """The nets, and -- into ``pin_functions``, by ref then pin -- each node's pin name."""
     if nets_list is None:
         return []
 
@@ -205,6 +214,9 @@ def _parse_nets(nets_list: list[SExpr] | None, warnings: list[str]) -> list[Net]
                 warnings.append(f'Skipped a node with missing "ref"/"pin" in net "{name}"')
                 continue
             nodes.append(NetNode(component_ref=node_ref, pin=pin))
+            function = _field_value(node_form, "pinfunction")
+            if function and pin_functions is not None:
+                pin_functions.setdefault(node_ref, {})[pin] = function
 
         if len(nodes) < 2:
             warnings.append(f'net "{name}" has only {_pluralize(len(nodes), "node")}')
@@ -290,6 +302,23 @@ def parse_kicad_netlist(source: str) -> KicadNetlistImport:
 
     warnings: list[str] = []
     components = _parse_components(_find_child(root, "components"), warnings)
-    nets = _parse_nets(_find_child(root, "nets"), warnings)
+    functions: dict[str, dict[str, str]] = {}
+    nets = _parse_nets(_find_child(root, "nets"), warnings, functions)
+    components = [
+        replace(
+            component,
+            pin_functions=tuple(
+                sorted(functions[component.ref].items(), key=lambda item: _pin_order(item[0]))
+            ),
+        )
+        if component.ref in functions
+        else component
+        for component in components
+    ]
 
     return KicadNetlistImport(components=tuple(components), nets=tuple(nets), warnings=tuple(warnings))
+
+
+def _pin_order(pin: str) -> tuple[int, str]:
+    """Pin numbers in the order a person counts them: 2 before 10, and "A1" after them."""
+    return (int(pin), "") if pin.isdigit() else (1 << 30, pin)

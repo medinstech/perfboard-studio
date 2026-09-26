@@ -137,7 +137,6 @@ from perfboard_studio.commands import (
     MoveSymbolsPayload,
     PartPlacement,
     PlaceBlockPayload,
-    PlaceComponentPayload,
     PlacePartsPayload,
     RenameDocumentPayload,
     RotateComponentPayload,
@@ -231,7 +230,13 @@ from perfboard_studio.model import (
     SymbolPlacement,
     normalized_pin_names,
 )
+from perfboard_studio.netlist_import import import_placements
 from perfboard_studio.parsers.kicad import parse_kicad_netlist
+from perfboard_studio.parsers.kicad_parts import (  # noqa: F401 - guess_footprint_id re-exported
+    NetlistPlan,
+    guess_footprint_id,
+    plan_import,
+)
 from perfboard_studio.placer import (
     BoardSuggestion,
     PlacementOptions,
@@ -431,45 +436,6 @@ def _rotation_after(current: Rotation, delta: int) -> Rotation:
     a rejected command."""
     turned = (int(current) + delta) % 360
     return cast(Rotation, turned)
-
-
-#: Reference letter -> the registry footprint to try for it. The inverse of
-#: view2d.REF_PREFIXES, used when a netlist gives a reference and a pin count and nothing this
-#: registry can match: a KiCad netlist's footprint field names a KiCad library part.
-_GUESS_BY_PREFIX: dict[str, str] = {
-    "R": "r-axial-3",
-    "D": "d-do41",
-    "LED": "led-5mm",
-    "C": "c-disc-p2",
-    "Q": "to92",
-    "Y": "xtal-hc49",
-    "RV": "pot-3",
-    "SW": "sw-tactile",
-    "K": "relay-spdt",
-    "TB": "screw-terminal-2",
-}
-
-
-def guess_footprint_id(ref: str, pin_count: int) -> str:
-    """A first guess at a footprint from a schematic reference and how many pins it uses.
-
-    A guess, stated as one: the netlist knows the part is called "U3" and that three of its pins
-    appear in nets, which is genuinely all there is to go on. It is enough to be useful -- a "R"
-    with two pins really is an axial resistor -- and it is why the parts land somewhere obvious
-    for the user to correct rather than being quietly treated as final.
-    """
-    letters = "".join(ch for ch in ref if ch.isalpha()).upper()
-    if letters in ("U", "IC") or pin_count > 4:
-        # An IC, sized to what the netlist actually uses, rounded up to a real DIP.
-        for pins in (8, 14, 16, 18, 20, 24, 28, 40):
-            if pin_count <= pins:
-                return f"dip-{pins}"
-        return "dip-40"
-    if letters in ("J", "P", "CN"):
-        return f"hdr-1x{max(pin_count, 1)}"
-    if letters == "C" and pin_count == 2:
-        return "c-disc-p2"
-    return _GUESS_BY_PREFIX.get(letters, "r-axial-3")
 
 
 def read_document_text(path: Path) -> tuple[str | None, str | None]:
@@ -9032,79 +8998,75 @@ class MainWindow(QMainWindow):
                 t("Import failed"), f"{path.name}: {err}")
             return
 
-        result = self.bus.dispatch("netlist.import", ImportNetlistPayload(nets=imported.nets))
+        # Read for what it says about each part -- its footprint, its value, what its pins are
+        # called -- and renumbered where the schematic's symbol and the real part number
+        # their pins differently. See parsers.kicad_parts.
+        plan = plan_import(imported, self.bus.document, self.lookup)
+        result = self.bus.dispatch("netlist.import", ImportNetlistPayload(nets=plan.nets))
         if not result.ok:
             QMessageBox.critical(
                 self,
                 t("Import failed"), f"[{result.code}] {result.message}")
             return
 
-        note = f"Imported {len(imported.nets)} net(s) from {path.name}"
-        if imported.warnings:
-            shown = "\n".join(f"  • {w}" for w in imported.warnings[:12])
-            more = f"\n  … and {len(imported.warnings) - 12} more" if len(imported.warnings) > 12 else ""
+        note = t("Imported {count} net(s) from {name}").format(
+            count=len(imported.nets), name=path.name
+        )
+        lines = [*imported.warnings] + [
+            f"{ref}: {line}" for ref, said in sorted(plan.notes.items()) for line in said
+        ]
+        if lines:
+            shown = "\n".join(f"  • {w}" for w in lines[:12])
+            more = (
+                "\n  " + t("… and {count} more").format(count=len(lines) - 12)
+                if len(lines) > 12
+                else ""
+            )
             QMessageBox.information(
-                self, t("Imported with warnings"), f"{note}, with warnings:\n\n{shown}{more}"
+                self,
+                t("Imported with warnings"),
+                f"{note}, {t('with warnings:')}\n\n{shown}{more}",
             )
         self.statusBar().showMessage(note, 8000)
-        self._offer_to_place_missing_parts()
+        self._offer_to_place_missing_parts(plan)
 
-    def _offer_to_place_missing_parts(self) -> None:
+    def _offer_to_place_missing_parts(self, plan: NetlistPlan) -> None:
         """Offer a first-pass placement for the parts the netlist names but the board lacks.
 
-        A netlist's own footprint strings are KiCad library names, which say nothing about
-        Perfboard Studio's registry -- so the footprint is inferred from the reference letter and the
-        pin count the netlist itself reveals. That guess is often right and never trusted: the
-        parts land in a plain grid for the user to drag, rotate and lock, and every one of them
-        goes through ``component.place`` so the whole lot undoes in one step.
+        Each arrives as ``parsers.kicad_parts`` read it -- the catalog part its value names,
+        the footprint its KiCad footprint names, or, failing both, a guess from its reference
+        letter and pin count -- with its value and pin names. Never trusted: the parts land
+        beside what they connect to (``netlist_import``) for the user to drag, rotate and
+        lock, and the whole lot goes through ONE ``block.place`` so it undoes in one step.
         """
-        document = self.bus.document
-        placed = {c.ref for c in document.components}
-        wanted: dict[str, set[str]] = {}
-        for net in document.nets:
-            for node in net.nodes:
-                if node.component_ref not in placed:
-                    wanted.setdefault(node.component_ref, set()).add(node.pin)
+        wanted = list(plan.suggestions.values())
         if not wanted:
             return
-
+        refs = sorted(s.ref for s in wanted)
+        counts = {
+            source: sum(s.source == source for s in wanted)
+            for source in ("catalog", "kicad", "guess")
+        }
         answer = QMessageBox.question(
             self,
             t("Place the missing parts?"),
-            f"The netlist names {len(wanted)} part(s) that are not on the board yet:\n"
-            f"  {', '.join(sorted(wanted)[:14])}"
-            f"{'…' if len(wanted) > 14 else ''}\n\n"
-            "Place them in a grid to drag into position? The footprint is guessed from each "
-            "reference and its pin count, so check and change what it got wrong.",
+            t(
+                "The netlist names {count} part(s) that are not on the board yet:\n  {refs}\n\n"
+                "Place them beside the parts they connect to, to move from there? {catalog} "
+                "are known parts from the catalog, {kicad} were matched by their KiCad "
+                "footprint, and {guess} are guessed from their reference and pin count -- "
+                "check those."
+            ).format(
+                count=len(wanted),
+                refs=", ".join(refs[:14]) + ("…" if len(refs) > 14 else ""),
+                catalog=counts["catalog"],
+                kicad=counts["kicad"],
+                guess=counts["guess"],
+            ),
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
-        self._place_parts_in_grid(wanted)
-
-    def _place_parts_in_grid(self, wanted: dict[str, set[str]]) -> None:
-        board = self.bus.document.board
-        specs: list[PlaceComponentPayload] = []
-        col, row, row_height = 1, 1, 0
-        for ref in sorted(wanted):
-            footprint_id = guess_footprint_id(ref, len(wanted[ref]))
-            footprint = self.lookup(footprint_id)
-            if footprint is None:
-                continue
-            width = max((p.d_col for p in footprint.pins), default=0) + 2
-            height = max((p.d_row for p in footprint.pins), default=0) + 2
-            if col + width >= board.cols:
-                col, row = 1, row + row_height + 1
-                row_height = 0
-            if row + height >= board.rows:
-                break  # Out of board; the rest stay unplaced and LVS will say so.
-            specs.append(
-                PlaceComponentPayload(
-                    ref=ref, value="", footprint_id=footprint_id, anchor=HoleCoord(col, row)
-                )
-            )
-            col += width
-            row_height = max(row_height, height)
-
+        specs, left_out = import_placements(wanted, self.bus.document, self.lookup)
         if not specs:
             return
         # ONE command, which is what the docstring above has always promised and what
@@ -9120,10 +9082,11 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(f"[{result.code}] {result.message}", 10000)
             return
-        skipped = len(wanted) - len(specs)
-        message = f"Placed {len(specs)} part(s)"
-        if skipped:
-            message += f"; {skipped} could not be placed and will show in LVS as unplaced"
+        message = t("Placed {count} part(s)").format(count=len(specs))
+        if left_out:
+            message += t("; {count} could not be placed and will show in LVS as unplaced").format(
+                count=len(left_out)
+            )
         self.statusBar().showMessage(message, 10000)
 
     def on_save(self) -> bool:

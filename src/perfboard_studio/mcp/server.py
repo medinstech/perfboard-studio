@@ -339,12 +339,16 @@ def remove_board_feature(id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def import_netlist(path: str) -> dict[str, Any]:
+def import_netlist(path: str, place_missing: bool = False) -> dict[str, Any]:
     """Import a KiCad netlist — one way the circuit's intent gets onto the board, and what
     makes LVS and the guide's continuity checks possible. REPLACES the whole netlist;
-    create_net builds one up instead. Reports any components the netlist names that the
-    board does not have yet."""
-    return session.import_netlist(path)
+    create_net builds one up instead. Each component is read for what it is: the catalog
+    part its value names ("BC547B"), the footprint its KiCad footprint names, or a guess.
+    Pins are renumbered where the schematic's symbol numbers them unlike the real part
+    (KiCad's LED is pin 1 = K, a generic EBC transistor with a BC547 value) — see "notes".
+    "suggested_parts" says what would be placed for each part not on the board;
+    place_missing=true places them beside what they connect to, as one undo step."""
+    return session.import_netlist(path, place_missing)
 
 
 # ---------------------------------------------------------------------------

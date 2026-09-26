@@ -22,6 +22,33 @@ closed without a bump.
 
 ### Added
 
+- **A KiCad netlist's parts arrive as what they are.** The importer kept the nets and threw
+  away everything else a netlist says about a component, and guessed each part from its
+  reference letter and pin count: a 7805 in a TO-220 ("U1", three pins) became a DIP-8,
+  every electrolytic a disc capacitor, and every part came with no value. Now
+  `parsers.kicad_parts` reads, in order: the value against the catalog ("BC547B", "L7805CV",
+  "NE555P" -- with the part's pin names and symbol, when the KiCad footprint is the same
+  package); the KiCad footprint name, which KiCad writes as the package's measurements
+  (resistors and diodes by span and body, electrolytics and discs by can and lead spacing,
+  DIPs, headers, IDC, Phoenix and bornier terminals, LEDs, TO-92, TO-220, HC-49); and only
+  then the old guess. A surface-mount footprint, a relay, a push button and a module are
+  not mapped and say why. The parts are placed beside what they connect to
+  (`placer.arrange`) rather than in a grid in reference order, with their values, as one
+  undo step. Over MCP, `import_netlist` returns `suggested_parts` and `notes`, and
+  `place_missing=true` places them.
+- **Which leg is which, from the schematic's pin names.** A netlist's pin numbers are the
+  symbol's, and they are not always the part's: KiCad's LED is pin 1 = cathode where this
+  library's is pin 1 = anode, and a generic `Q_NPN_EBC` given "BC547" as its value is pin 1 =
+  emitter where a BC547's pin 1 is its collector. Taken at its numbers, either netlist wires
+  a board for a part that does not exist, and no check can see it, because the netlist is
+  what every check is measured against. The netlist now carries each pin's name
+  (`pinfunction`, which the parser used to drop); where every named pin matches exactly one
+  pin of the real part, the import renumbers it to the part's own numbers and says so, and
+  a transistor or diode whose names cannot be settled is reported instead. An LED with no
+  names in the netlist is read by KiCad's own numbering of its footprint. A part that has no
+  catalog entry but three or more named pins -- a 2N5088, an IC -- gets the schematic's
+  names printed beside its pins.
+
 - **Labels written on the board.** A perfboard has no silkscreen; what a builder writes on
   one with a marker -- "MOTOR 24V" beside the terminal that takes it, "CAN ->" where the
   chain goes -- is now part of the board: *Edit ▸ Add Label…*, or *Add Label Here…* on a

@@ -1081,6 +1081,24 @@ TURKISH: Mapping[str, str] = {
     "Some connections could not be routed": "Bazı bağlantılar route edilemedi",
     "Imported with warnings": "Uyarılarla içe aktarıldı",
     "Place the missing parts?": "Eksik parçalar yerleştirilsin mi?",
+    "Imported {count} net(s) from {name}": "{name} dosyasından {count} net içe aktarıldı",
+    "with warnings:": "uyarılar:",
+    "… and {count} more": "… ve {count} tane daha",
+    "The netlist names {count} part(s) that are not on the board yet:\n  {refs}\n\n"
+    "Place them beside the parts they connect to, to move from there? {catalog} "
+    "are known parts from the catalog, {kicad} were matched by their KiCad "
+    "footprint, and {guess} are guessed from their reference and pin count -- "
+    "check those.": (
+        "Netlist'te kartta henüz olmayan {count} parça var:\n  {refs}\n\n"
+        "Bağlandıkları parçaların yanına yerleştirilsinler mi? Oradan taşıyabilirsiniz. "
+        "{catalog} tanesi katalogdan bilinen parça, {kicad} tanesi KiCad footprint'inden "
+        "eşlendi, {guess} tanesi referansından ve pin sayısından tahmin edildi; onları "
+        "kontrol edin."
+    ),
+    "Placed {count} part(s)": "{count} parça yerleştirildi",
+    "; {count} could not be placed and will show in LVS as unplaced": (
+        "; {count} tanesi yerleştirilemedi, LVS'de yerleşmemiş olarak görünecek"
+    ),
     # -- the status bar and the panels' summaries ---------------------------------
     # These were the last English left on a Turkish screen: the menus were translated
     # and the numbers under them were not.

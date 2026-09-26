@@ -7494,6 +7494,45 @@ def test_a_truncated_netlist_is_reported_in_a_dialog_not_a_traceback(tmp_path, m
         _close(window)
 
 
+def test_an_imported_netlist_places_real_parts_with_their_values(tmp_path, monkeypatch) -> None:
+    """The window places what ``parsers.kicad_parts`` read -- the catalog's BC547 with its
+    value and pin names, the LED renumbered anode to pin 1 -- as one undo step, and says what
+    it renumbered."""
+    from PySide6.QtWidgets import QMessageBox
+
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
+
+    from .test_kicad_parts import NETLIST
+
+    shown: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+    monkeypatch.setattr(
+        QMessageBox, "information",
+        staticmethod(lambda parent, title, text, *a, **k: shown.append(text)),
+    )
+    netlist = tmp_path / "t.net"
+    netlist.write_text(NETLIST, encoding="utf-8")
+    doc = create_empty_document(DocumentMeta(name="t", created="", modified=""))
+    window = _window_on(doc)
+    try:
+        window.import_netlist_from(netlist)
+        parts = {c.ref: c for c in window.bus.document.components}
+        assert parts["Q1"].value == "BC547" and parts["Q1"].footprint_id == "to92"
+        assert dict(parts["Q1"].pin_names)["1"] == "C"
+        assert parts["U2"].footprint_id == "to220"
+        led = next(n for n in window.bus.document.nets if n.name == "+5V")
+        assert ("D1", "1") in {(node.component_ref, node.pin) for node in led.nodes}
+        assert any("Q1: pins renumbered" in text for text in shown)
+        window.bus.undo()
+        assert window.bus.document.components == ()
+    finally:
+        _close(window)
+
+
 def test_right_clicking_a_conductor_offers_to_delete_it() -> None:
     """The menu used to offer the bare-board list over a trace, with no way to delete the
     trace from it."""

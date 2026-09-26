@@ -227,7 +227,15 @@ def test_ne555_component_count_and_fields() -> None:
     result = parse_kicad_netlist(NE555_ASTABLE_NETLIST)
     assert len(result.components) == 8
     assert result.components[0] == ImportedComponent(
-        ref="U1", value="NE555", footprint="Package_DIP:DIP-8_W7.62mm", lib_part="NE555"
+        ref="U1",
+        value="NE555",
+        footprint="Package_DIP:DIP-8_W7.62mm",
+        lib_part="NE555",
+        # Each pin in a net, by what its symbol calls it; pin 4 (RESET) is in none.
+        pin_functions=(
+            ("1", "GND"), ("2", "TRIG"), ("3", "OUT"), ("5", "CV"), ("6", "THR"),
+            ("7", "DISCH"), ("8", "VCC"),
+        ),
     )
     by_ref = {c.ref: c for c in result.components}
     assert set(by_ref) == {"U1", "R1", "R2", "C1", "C2", "R3", "LED1", "J1"}

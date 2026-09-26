@@ -70,6 +70,7 @@ from perfboard_studio.commands import (
     NewSolderTraceConductor,
     NewWireConductor,
     PartPlacement,
+    PlaceBlockPayload,
     PlaceComponentPayload,
     PlacePartsPayload,
     RenameDocumentPayload,
@@ -643,8 +644,20 @@ class BoardSession:
         self.path = target
         return _ok(saved=str(target), bytes=target.stat().st_size, name=self.document.meta.name)
 
-    def import_netlist(self, path: str) -> dict[str, Any]:
+    def import_netlist(self, path: str, place_missing: bool = False) -> dict[str, Any]:
+        """Replace the netlist with a KiCad one.
+
+        Each component is read for what it is (``parsers.kicad_parts``): the catalog part
+        its value names, the footprint its KiCad footprint names, or a guess from its
+        reference. Its pins are renumbered where the schematic's symbol numbers them
+        differently from the real part -- KiCad's LED, a generic EBC transistor -- and
+        ``notes`` says where. ``suggested_parts`` is what would be placed for each part in
+        neither the board nor the design; ``place_missing`` places them, beside what they
+        connect to, as one undo step.
+        """
+        from perfboard_studio.netlist_import import import_placements
         from perfboard_studio.parsers.kicad import parse_kicad_netlist
+        from perfboard_studio.parsers.kicad_parts import plan_import
 
         target = _path_arg(path, "import_netlist")
         try:
@@ -656,18 +669,49 @@ class BoardSession:
         except ValueError as err:
             return _refused("parse-error", f"{target.name}: {err}")
 
-        result = self._dispatch("netlist.import", ImportNetlistPayload(nets=imported.nets))
-        if result["ok"]:
-            result["nets"] = len(imported.nets)
-            result["warnings"] = list(imported.warnings)
-            result["missing_components"] = sorted(
-                {
-                    node.component_ref
-                    for net in imported.nets
-                    for node in net.nodes
-                    if not any(c.ref == node.component_ref for c in self.document.components)
-                }
-            )
+        plan = plan_import(imported, self.document, self.lookup)
+        result = self._dispatch("netlist.import", ImportNetlistPayload(nets=plan.nets))
+        if not result["ok"]:
+            return result
+        result["nets"] = len(imported.nets)
+        result["warnings"] = list(imported.warnings)
+        if plan.notes:
+            result["notes"] = {ref: list(lines) for ref, lines in sorted(plan.notes.items())}
+        suggestions = sorted(plan.suggestions.values(), key=lambda s: s.ref)
+        result["suggested_parts"] = [
+            {
+                "ref": s.ref,
+                "footprint": s.footprint_id,
+                "value": s.value,
+                "from": s.source,
+                **({"part": s.part_id} if s.part_id else {}),
+                **({"pin_names": dict(s.pin_names)} if s.pin_names else {}),
+            }
+            for s in suggestions
+        ]
+        if place_missing and suggestions:
+            placements, left_out = import_placements(suggestions, self.document, self.lookup)
+            if placements:
+                placed = self._dispatch(
+                    "block.place",
+                    PlaceBlockPayload(
+                        components=tuple(placements),
+                        label=f"Place {len(placements)} imported part(s)",
+                    ),
+                )
+                if not placed["ok"]:
+                    result["place_missing"] = placed
+                    return result
+            result["placed"] = [
+                {"ref": p.ref, "at": format_hole(p.anchor), "rotation": p.rotation}
+                for p in placements
+            ]
+            if left_out:
+                result["not_placed"] = left_out
+        on_board = {c.ref for c in self.document.components}
+        result["missing_components"] = sorted(
+            {node.component_ref for net in plan.nets for node in net.nodes} - on_board
+        )
         return result
 
     # -- the netlist, without KiCad ------------------------------------------

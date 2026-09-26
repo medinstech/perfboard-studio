@@ -77,7 +77,14 @@ generate_guide                 → is it buildable, and what is missing
 ```
 
 With a circuit that already exists somewhere, `import_netlist` replaces the first three
-steps and `place_component` puts parts down directly.
+steps and `place_component` puts parts down directly. It reads each KiCad component for
+what it is -- the catalog part its value names ("BC547B" is the catalog's `bc547`), the
+footprint its KiCad footprint measures (`R_Axial_..._P10.16mm` is `r-axial-4`), or a guess
+from its reference -- and returns that as `suggested_parts`; `place_missing=true` places
+them beside what they connect to, as one undo step. Where the schematic's symbol numbers a
+part's pins unlike the real part -- KiCad's LED is pin 1 = K, a generic `Q_NPN_EBC` given a
+BC547's value is pin 1 = E -- the netlist is renumbered to the real part by the pins' names,
+and `notes` says which.
 
 `snapshot` before anything drastic. Every edit is also undoable one step at a time, and
 batched operations (`autoroute`, `optimize_placement`) undo as one step rather than one

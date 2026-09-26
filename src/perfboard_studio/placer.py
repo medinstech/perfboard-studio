@@ -2169,11 +2169,23 @@ def arrange_design(
     is not the moment to rearrange what somebody has already positioned, and auto-place is
     a separate gesture with a separate undo step.
     """
+    entries = [ArrangeRequest(part.id, part.ref, part.footprint_id) for part in doc.parts]
+    return arrange_around(doc, entries, lookup, board)
+
+
+def arrange_around(
+    doc: PerfDocument,
+    entries: Sequence[ArrangeRequest],
+    lookup: FootprintLookup,
+    board: Board | None = None,
+) -> Arrangement:
+    """A first arrangement of ``entries`` around everything already on the board, which is
+    reserved rather than moved. ``arrange_design`` asks it for the parts in the design; a
+    netlist import asks it for parts that are in no list yet, before they are added."""
     on = board if board is not None else doc.board
     reserved: set[tuple[int, int]] = set(_dead_hole_keys(doc))
     for component in doc.components:
         _reserve(reserved, component, on, lookup)
-    entries = [ArrangeRequest(part.id, part.ref, part.footprint_id) for part in doc.parts]
     return arrange(on, entries, doc.nets, lookup, frozenset(reserved))
 
 
