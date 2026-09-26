@@ -129,11 +129,14 @@ from perfboard_studio.stripboard import cut_holes, is_stripboard, segments
 from .boardcolors import scheme_for
 from .bodies import (
     PIN_NAME_HEIGHT_MM,
+    PIN_NAME_TAG_HEIGHT_MM,
+    PIN_NAME_TAG_PAD_MM,
     BodyPlacement,
     BodyStyle,
+    PinLabel,
+    lay_out_pin_names,
     leads_for,
     module_block_size,
-    pin_labels,
     placement_for,
     polarity_pin_offset,
     resistor_bands,
@@ -141,7 +144,12 @@ from .bodies import (
     surface_for,
 )
 from .i18n import t
-from .scenetext import draw_label, draw_physical_label, physical_label_width_mm
+from .scenetext import (
+    draw_label,
+    draw_physical_label,
+    physical_label_width_mm,
+    pin_name_width_mm,
+)
 
 # The window's own palette, for the overlays that sit ON the board but belong to the
 # application rather than to the object -- see theme.py's note on why the two are apart.
@@ -1836,20 +1844,20 @@ PIN_NAME_TAG = QColor(18, 20, 24, 215)
 
 def _paint_pin_names(
     painter: QPainter,
-    footprint: Footprint,
+    labels: tuple[PinLabel, ...],
     comp: ComponentInstance,
-    pitch: float,
     module_ink: str,
 ) -> None:
     """Each named pin's name, printed beside it -- see ``bodies.pin_labels`` for where and
-    why. In the footprint's own frame, so the names turn with the part; each is kept
-    upright on screen and unmirrored, and none is drawn when the view is too far out for
-    0.9 mm of ink to be anything but noise."""
+    why, and ``bodies.lay_out_pin_names`` for what the rest of the board leaves room for.
+    In the footprint's own frame, so the names turn with the part; each is kept upright on
+    screen and unmirrored, and none is drawn when the view is too far out for 0.9 mm of ink
+    to be anything but noise."""
     transform = painter.transform()
     if (transform.m11() ** 2 + transform.m12() ** 2) ** 0.5 < 5.0:
         return
-    for label in pin_labels(footprint, comp, pitch):
-        width = physical_label_width_mm(label.name, PIN_NAME_HEIGHT_MM, label.room)
+    for label in labels:
+        width = physical_label_width_mm(label.name, PIN_NAME_HEIGHT_MM, label.room, bold=False)
         reach = label.start + width / 2
         centre = QPointF(label.x + label.dx * reach, label.y + label.dy * reach)
         rotation = 0.0 if label.dy == 0 else (90.0 if label.dy > 0 else -90.0)
@@ -1868,9 +1876,10 @@ def _paint_pin_names(
             painter.rotate(rotation)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(PIN_NAME_TAG))
-            tag_h = PIN_NAME_HEIGHT_MM * 1.7
+            tag_h = PIN_NAME_TAG_HEIGHT_MM
+            pad = PIN_NAME_TAG_PAD_MM
             painter.drawRoundedRect(
-                QRectF(-width / 2 - 0.25, -tag_h / 2, width + 0.5, tag_h), 0.3, 0.3
+                QRectF(-width / 2 - pad, -tag_h / 2, width + 2 * pad, tag_h), 0.3, 0.3
             )
             painter.restore()
         painter.setPen(QPen(QColor(module_ink if label.on_module else PIN_NAME_INK)))
@@ -2125,6 +2134,8 @@ class ComponentItem(QGraphicsItem):
         board: Board,
         side: BoardSide,
         show_pin_names: bool = True,
+        pin_names: tuple[PinLabel, ...] = (),
+        names_left_off: tuple[tuple[str, str], ...] = (),
     ) -> None:
         super().__init__()
         self.comp = comp
@@ -2133,6 +2144,8 @@ class ComponentItem(QGraphicsItem):
         self.side = side
         #: Print the part's pin names beside its pins (View > Show Pin Names).
         self.show_pin_names = show_pin_names
+        #: Where they go, as the scene laid them out against the rest of the board.
+        self.pin_names = pin_names
         self.pending_anchor: HoleCoord = comp.anchor
         self.has_error = False
         # Locked components stay draggable on purpose: the bus (not the item flags) is
@@ -2150,7 +2163,13 @@ class ComponentItem(QGraphicsItem):
         where = format_hole(comp.anchor)
         if comp.rotation:
             where += f"  {comp.rotation}°"
-        self.setToolTip(f"{comp.ref}  {comp.value}\n{fp.name}{lock_note}\n{where}")
+        tip = f"{comp.ref}  {comp.value}\n{fp.name}{lock_note}\n{where}"
+        if names_left_off and show_pin_names:
+            # Printed nowhere on the board for want of room, so said here instead.
+            pins = ", ".join(f"{number} {name}" for number, name in names_left_off)
+            tip += f"\n{t('No room to print:')} {pins}"
+        self.setToolTip(tip)
+        self._names_rect = self._pin_names_rect()
         self._sync_position()
 
     def _sync_position(self) -> None:
@@ -2168,12 +2187,29 @@ class ComponentItem(QGraphicsItem):
             poly.append(QPointF(dx, dy))
         return poly
 
+    def _pin_names_rect(self) -> QRectF:
+        """What the printed pin names cover, in item coordinates -- they run past the
+        body, and a repaint that does not reach them leaves them smeared behind a drag."""
+        rect = QRectF()
+        if not self.show_pin_names or self.side != "top":
+            return rect
+        half = PIN_NAME_TAG_HEIGHT_MM / 2
+        for label in self.pin_names:
+            reach = label.start + label.room + PIN_NAME_TAG_PAD_MM
+            for along in (label.start - PIN_NAME_TAG_PAD_MM, reach):
+                x, y = _local_offset_mm(
+                    label.x + label.dx * along, label.y + label.dy * along, self.comp, self.side
+                )
+                rect = rect.united(QRectF(x - half, y - half, 2 * half, 2 * half))
+        return rect
+
     def boundingRect(self) -> QRectF:
         # The top margin has to hold a fixed-pixel-size ref label, which occupies more scene
         # space the further out the view is zoomed (see scenetext.label_extent_mm). Sized for
         # the lowest zoom at which the label is still drawn.
         top = 1.5 + REF_LABEL_PX / 3.0
-        return self._local_outline().boundingRect().adjusted(-1.5, -top, 1.5, 3.0)
+        body = self._local_outline().boundingRect().adjusted(-1.5, -top, 1.5, 3.0)
+        return body.united(self._names_rect) if not self._names_rect.isNull() else body
 
     def _apply_local_transform(self, painter: QPainter) -> None:
         """Enter the footprint's own coordinate frame, so a body can be drawn as a shape.
@@ -2249,7 +2285,7 @@ class ComponentItem(QGraphicsItem):
                 bands=resistor_bands(self.fp, self.comp.value),
             )
             if self.show_pin_names:
-                _paint_pin_names(painter, self.fp, self.comp, self.board.pitch, style.accent)
+                _paint_pin_names(painter, self.pin_names, self.comp, style.accent)
             painter.restore()
 
         self._paint_pin_ends(painter, keyed)
@@ -2664,11 +2700,22 @@ class BoardScene(QGraphicsScene):
             if conductor.id in previously_selected_conductors:
                 conductor_item.setSelected(True)
 
+        # Laid out for the whole board at once: where one part's names go depends on what
+        # stands beside it. See bodies.lay_out_pin_names.
+        names = lay_out_pin_names(self.document, self.lookup, pin_name_width_mm)
         for comp in self.document.components:
             fp = self.lookup(comp.footprint_id)
             if fp is None:
                 continue
-            item = ComponentItem(comp, fp, board, self.side, self.show_pin_names)
+            item = ComponentItem(
+                comp,
+                fp,
+                board,
+                self.side,
+                self.show_pin_names,
+                pin_names=names.labels.get(comp.id, ()),
+                names_left_off=names.left_off.get(comp.id, ()),
+            )
             self.addItem(item)
             self.component_items[comp.id] = item
             if comp.id in previously_selected:

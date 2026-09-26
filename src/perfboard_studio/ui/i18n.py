@@ -1309,6 +1309,7 @@ TURKISH: Mapping[str, str] = {
     ),
     "{names} name(s) for {pins} pin(s).": "{pins} pin için {names} ad.",
     "Sho&w Pin Names": "P&in Adlarını Göster",
+    "No room to print:": "Basacak yer yok:",
     "Show Labels on &the Board": "Karttaki &Etiketleri Göster",
     "Show the labels written on the board, on the board and in 3D.": (
         "Karta yazılmış etiketleri kartta ve 3B'de gösterir."

@@ -32,14 +32,26 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from typing import Literal
 
+from perfboard_studio.drc import placed_body_box, placed_entry
 from perfboard_studio.footprints import MIN_BODY_MM, body_extent, wire_entry
+from perfboard_studio.geometry import (
+    SubstrateEdges,
+    board_note_centre_mm,
+    hole_to_mm,
+    mounting_hole_centre_mm,
+    substrate_edges_mm,
+    transform_offset,
+)
 from perfboard_studio.model import (
+    Board,
     BodyArchetype,
     ComponentInstance,
     Footprint,
+    PerfDocument,
     declared_pin_name,
     pin_name_of,
 )
@@ -557,6 +569,10 @@ class PinLabel:
     room: float
     #: On the module's own board rather than on this one.
     on_module: bool
+    #: The name could run the other way just as well: the part's pins are in one row, so
+    #: its body is as far away on both sides, and it has no mouth to keep clear. What
+    #: ``lay_out_pin_names`` turns round when this side is taken.
+    either_side: bool = False
 
 
 def pin_labels(
@@ -590,6 +606,7 @@ def pin_labels(
             continue
         x, y = pin.d_col * pitch, pin.d_row * pitch
         toward = (placement.centre_y - y) if across_y else (placement.centre_x - x)
+        either_side = False
         if module:
             sign = 1.0 if toward >= 0 else -1.0
             start = PIN_NAME_GAP_MM
@@ -603,6 +620,207 @@ def pin_labels(
             start = max(half + sign * toward, 0.0) + PIN_NAME_CLEAR_MM
             start = max(start, PIN_NAME_NEAREST_MM)
             room = PIN_NAME_MAX_MM
+            either_side = behind is None and abs(toward) <= 1e-6
         dx, dy = (0.0, sign) if across_y else (sign, 0.0)
-        labels.append(PinLabel(pin.number, name, x, y, dx, dy, start, room, module))
+        labels.append(
+            PinLabel(pin.number, name, x, y, dx, dy, start, room, module, either_side)
+        )
     return tuple(labels)
+
+
+# WHEN THERE IS NO ROOM. ``pin_labels`` puts each part's names where they would go if the
+# part were alone on the board, and on a real board it is not. The first one laid out with
+# this program stood two terminals side by side, and each one's names ran under the other's
+# body: printed, in both views, exactly where nobody could read them. So the names are laid
+# out once more for the whole board. Each runs its own way until something stands in it --
+# another part's body, the mouth of a terminal, a screw head, the edge of the board, a name
+# already printed -- and then a part with its pins in one row prints them on its other side
+# if that is clear; failing that a name is narrowed to the gap, while its letters still read
+# as letters; and failing THAT it is left off, and the part says so, rather than being
+# printed where it cannot be read.
+
+#: A name narrowed further than this to fit a gap is left off instead.
+PIN_NAME_MIN_SQUEEZE = 0.6
+#: The dark tag a name on this board is printed on: how far it reaches past the ink at each
+#: end, and how tall it is. Both views draw it this size, so it is what has to fit.
+PIN_NAME_TAG_PAD_MM = 0.25
+PIN_NAME_TAG_HEIGHT_MM = PIN_NAME_HEIGHT_MM * 1.7
+
+#: ``(min_x, max_x, min_y, max_y)`` in the board's millimetres, rows growing downward.
+type BoardBox = tuple[float, float, float, float]
+
+
+@dataclass(frozen=True, slots=True)
+class PrintedPinNames:
+    """Every part's pin names as the rest of the board leaves room for them."""
+
+    #: Per component id, the names to print -- turned, narrowed, or as ``pin_labels`` had
+    #: them. A part with nothing to print has no entry.
+    labels: dict[str, tuple[PinLabel, ...]]
+    #: Per component id, the ``(number, name)`` of each pin whose name found no room.
+    left_off: dict[str, tuple[tuple[str, str], ...]]
+
+
+def lay_out_pin_names(
+    document: PerfDocument,
+    lookup: Callable[[str], Footprint | None],
+    measure: Callable[[str], float],
+) -> PrintedPinNames:
+    """Every part's pin names, laid out against everything else on the board.
+
+    ``measure`` is how long a name is printed, in millimetres, at ``PIN_NAME_HEIGHT_MM``:
+    passed in, because only a view has a font to ask, and both views pass the same one so
+    that they leave off the same names.
+    """
+    board = document.board
+    edges = substrate_edges_mm(board)
+    # Everything a name may not run under, by the part it belongs to.
+    standing: list[tuple[str, BoardBox]] = []
+    for comp in document.components:
+        footprint = lookup(comp.footprint_id)
+        if footprint is None:
+            continue
+        standing.append((comp.id, placed_body_box(comp, footprint, board)))
+        entry = placed_entry(comp, footprint, board)
+        if entry is not None:
+            standing.append((comp.id, entry[0]))
+    for mount in document.mounting_holes:
+        centre = mounting_hole_centre_mm(mount, board)
+        r = max(mount.head_diameter, mount.diameter) / 2
+        standing.append(("", (centre.x - r, centre.x + r, centre.y - r, centre.y + r)))
+    for note in document.board_notes:
+        if note.side != "top":
+            continue
+        centre = board_note_centre_mm(note, board)
+        # The box both views draw a label in: its text, set bold (a tenth wider than a pin
+        # name's), and its tag round it.
+        along = measure(note.text) * note.size_mm / PIN_NAME_HEIGHT_MM * 1.1 + 0.8
+        across = note.size_mm * 1.8
+        if note.rotation in (90, 270):
+            along, across = across, along
+        standing.append(
+            ("", (centre.x - along / 2, centre.x + along / 2, centre.y - across / 2, centre.y + across / 2))
+        )
+
+    printed: list[BoardBox] = []
+    labels: dict[str, tuple[PinLabel, ...]] = {}
+    left_off: dict[str, tuple[tuple[str, str], ...]] = {}
+    for comp in document.components:
+        footprint = lookup(comp.footprint_id)
+        if footprint is None:
+            continue
+        wanted = pin_labels(footprint, comp, board.pitch)
+        if not wanted:
+            continue
+        if wanted[0].on_module:
+            # On the module's own board, which nothing else stands on.
+            labels[comp.id] = wanted
+            continue
+        others = [box for owner, box in standing if owner != comp.id]
+        needs = [min(measure(label.name), label.room) for label in wanted]
+        # Each pin's centre on the board and the way its name runs there, as ``pin_labels``
+        # has it (1) and turned round (-1).
+        runs = {
+            turn: [_run_on_board(label, comp, board, turn) for label in wanted]
+            for turn in (1.0, -1.0)
+        }
+
+        # A part in one row prints all its names on the same side: the side where more of
+        # them fit, and the side ``pin_labels`` chose when that is a tie.
+        turn = 1.0
+        if all(label.either_side for label in wanted):
+            fits = {
+                way: sum(
+                    _free_run(run, label.start, others + printed, edges) >= need
+                    for label, need, run in zip(wanted, needs, runs[way], strict=True)
+                )
+                for way in (1.0, -1.0)
+            }
+            turn = -1.0 if fits[-1.0] > fits[1.0] else 1.0
+
+        kept: list[PinLabel] = []
+        dropped: list[tuple[str, str]] = []
+        for label, need, run in zip(wanted, needs, runs[turn], strict=True):
+            free = _free_run(run, label.start, others + printed, edges)
+            if free >= need:
+                room = min(label.room, free)
+            elif free >= need * PIN_NAME_MIN_SQUEEZE:
+                room = free
+            else:
+                dropped.append((label.number, label.name))
+                continue
+            kept.append(
+                label
+                if turn == 1.0 and room == label.room
+                else replace(label, dx=label.dx * turn, dy=label.dy * turn, room=room)
+            )
+            printed.append(_tag_box(run, label.start, min(need, room)))
+        if kept:
+            labels[comp.id] = tuple(kept)
+        if dropped:
+            left_off[comp.id] = tuple(dropped)
+    return PrintedPinNames(labels, left_off)
+
+
+#: A pin's centre on the board, ``(x, y)`` mm, and the axis its name runs along there.
+type BoardRun = tuple[float, float, int, int]
+
+
+def _run_on_board(
+    label: PinLabel, comp: ComponentInstance, board: Board, turn: float
+) -> BoardRun:
+    """Where ``label``'s pin is on the board and which way its name runs -- turned round
+    when ``turn`` is -1 -- through the part's own placement transform."""
+    anchor = hole_to_mm(comp.anchor, board)
+    px, py = transform_offset(label.x, label.y, comp.rotation, comp.mirrored)
+    ux, uy = transform_offset(label.dx * turn, label.dy * turn, comp.rotation, comp.mirrored)
+    return anchor.x + px, anchor.y + py, round(ux), round(uy)
+
+
+def _free_run(
+    run: BoardRun, start: float, obstacles: list[BoardBox], edges: SubstrateEdges
+) -> float:
+    """How far a name starting ``start`` along ``run`` may go before its tag meets an
+    obstacle or the edge of the board; zero when its start is covered already."""
+    px, py, ux, uy = run
+    begin = start - PIN_NAME_TAG_PAD_MM
+    half = PIN_NAME_TAG_HEIGHT_MM / 2
+    if ux:
+        edge = (edges.max_x - px) if ux > 0 else (px - edges.min_x)
+        low, high = edges.min_y, edges.max_y
+        side = py
+    else:
+        edge = (edges.max_y - py) if uy > 0 else (py - edges.min_y)
+        low, high = edges.min_x, edges.max_x
+        side = px
+    # A part hanging off the board (DRC says so) has pins off it, and a name beside one
+    # would be printed on nothing.
+    if side - half < low or side + half > high:
+        return 0.0
+    free = edge - PIN_NAME_TAG_PAD_MM - start
+    for min_x, max_x, min_y, max_y in obstacles:
+        if ux:
+            near, far = (min_x - px, max_x - px) if ux > 0 else (px - max_x, px - min_x)
+            across = (min_y - py, max_y - py)
+        else:
+            near, far = (min_y - py, max_y - py) if uy > 0 else (py - max_y, py - min_y)
+            across = (min_x - px, max_x - px)
+        if across[1] <= -half or across[0] >= half or far <= begin:
+            continue
+        if near <= begin:
+            return 0.0
+        free = min(free, near - PIN_NAME_TAG_PAD_MM - start)
+    return max(free, 0.0)
+
+
+def _tag_box(run: BoardRun, start: float, length: float) -> BoardBox:
+    """The board box a printed name's tag covers."""
+    px, py, ux, uy = run
+    a = start - PIN_NAME_TAG_PAD_MM
+    b = start + length + PIN_NAME_TAG_PAD_MM
+    half = PIN_NAME_TAG_HEIGHT_MM / 2
+    if ux:
+        xs = (px + ux * a, px + ux * b)
+        return min(xs), max(xs), py - half, py + half
+    ys = (py + uy * a, py + uy * b)
+    return px - half, px + half, min(ys), max(ys)

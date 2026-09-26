@@ -22,7 +22,9 @@ text has to scale with the page, and at 600 dpi ordinary point sizes work correc
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QFont, QFontMetricsF, QPainter
+from PySide6.QtGui import QFont, QFontMetricsF, QGuiApplication, QPainter
+
+from .bodies import PIN_NAME_HEIGHT_MM
 
 #: pixel size -> font. Rulers draw dozens of labels per repaint, so building a QFont and
 #: its metrics every time is worth avoiding.
@@ -152,6 +154,23 @@ def physical_label_width_mm(
         cap = _PHYSICAL_FONT_PX * 0.7
     width = max(metrics.horizontalAdvance(text), 1.0) * height_mm / cap
     return min(width, max_width_mm) if max_width_mm is not None else width
+
+
+#: Without a font to ask, how far a character of a pin name advances, per millimetre of
+#: its height -- a capital's, which is what names mostly are.
+_UNMEASURED_ADVANCE = 0.72
+
+
+def pin_name_width_mm(name: str) -> float:
+    """How long a pin name is printed, in millimetres.
+
+    The one measure ``bodies.lay_out_pin_names`` is given by both views, so that both
+    leave off the same names. With no Qt application there is no font to measure -- a 3D
+    render from a bare engine -- and a capital's width per character stands in for it.
+    """
+    if QGuiApplication.instance() is None:
+        return max(len(name), 1) * PIN_NAME_HEIGHT_MM * _UNMEASURED_ADVANCE
+    return physical_label_width_mm(name, PIN_NAME_HEIGHT_MM, bold=False)
 
 
 def label_extent_mm(pixel_size: int, scale: float) -> float:

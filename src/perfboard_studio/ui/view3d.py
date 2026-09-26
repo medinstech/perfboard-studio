@@ -64,8 +64,12 @@ from perfboard_studio.stripboard import cut_holes, segments
 from .boardcolors import scheme_for
 from .bodies import (
     PIN_NAME_HEIGHT_MM,
+    PIN_NAME_TAG_HEIGHT_MM,
+    PIN_NAME_TAG_PAD_MM,
     BodyStyle,
+    PinLabel,
     Surface,
+    lay_out_pin_names,
     module_block_size,
     pin_labels,
     placement_for,
@@ -2614,36 +2618,51 @@ BOARD_NOTE_INK_RGB = (0.97, 0.95, 0.87)
 BOARD_NOTE_TAG_RGB = (0.09, 0.10, 0.12)
 
 
-def _label_decal(text: str, height_mm: float) -> tuple[Any, float, float] | None:
+def _label_decal(
+    text: str,
+    height_mm: float,
+    *,
+    ink: tuple[float, float, float] = BOARD_NOTE_INK_RGB,
+    ground: tuple[float, float, float] | None = BOARD_NOTE_TAG_RGB,
+    bold: bool = True,
+    pad_mm: float | None = None,
+    tag_height_mm: float | None = None,
+) -> tuple[Any, float, float] | None:
     """A label drawn by Qt -- every character the font has, a Turkish one included -- on
-    its own dark tag, as a texture, with the millimetres it spans.
+    its own tag, as a texture, with the millimetres it spans.
 
     NOT ``vtkVectorText``, which knows ASCII and nothing else: "ALT YÜZ" came out "ALT YZ"
     and an arrow came out as nothing, on the one kind of text in the view that a person
     typed in their own language. ``None`` when there is no Qt application to draw with --
     a bare engine test -- and the caller falls back to the vector glyphs.
+
+    ``ground`` ``None`` leaves the tag clear, for ink printed straight onto something
+    (a module's own board). ``pad_mm`` and ``tag_height_mm`` size the tag in millimetres
+    where it has to match one drawn elsewhere; left out, it is sized from the letters.
     """
     import numpy
     from PySide6.QtCore import QPointF as _Point
+    from PySide6.QtCore import Qt as _Qt
     from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QImage, QPainter
 
     if QGuiApplication.instance() is None:
         return None
     font = QFont()
     font.setPixelSize(96)
-    font.setBold(True)
+    font.setBold(bold)
     metrics = QFontMetricsF(font)
     cap = metrics.capHeight() or 96 * 0.7
-    pad = cap * 0.35
+    px_per_mm = cap / height_mm
+    pad = cap * 0.35 if pad_mm is None else pad_mm * px_per_mm
     width = max(1, math.ceil(metrics.horizontalAdvance(text) + 2 * pad))
-    height = max(1, math.ceil(cap * 1.8))
+    height = max(1, math.ceil(cap * 1.8 if tag_height_mm is None else tag_height_mm * px_per_mm))
     image = QImage(width, height, QImage.Format.Format_RGBA8888)
-    image.fill(QColor.fromRgbF(*BOARD_NOTE_TAG_RGB))
+    image.fill(_Qt.GlobalColor.transparent if ground is None else QColor.fromRgbF(*ground))
     painter = QPainter(image)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
     painter.setFont(font)
-    painter.setPen(QColor.fromRgbF(*BOARD_NOTE_INK_RGB))
+    painter.setPen(QColor.fromRgbF(*ink))
     painter.drawText(_Point(pad, (height + cap) / 2), text)
     painter.end()
     raw = bytes(image.constBits())[: image.sizeInBytes()]
@@ -2756,15 +2775,32 @@ def build_board_notes(doc: PerfDocument) -> list[vtk.vtkActor]:
     return actors
 
 
-def build_pin_names(lookup: FootprintLookup, comp: Any, board: Board) -> list[vtk.vtkActor]:
-    """One part's pin names as ONE flat actor, where ``bodies.pin_labels`` says they go:
-    on a module's own board, or on this board beside the part. Laid out in world axes
-    rather than turned with the part, so each reads upright from above however the part is
-    turned or flipped -- the same place the 2D view prints them."""
+#: The tag a pin name on this board is printed on: the 2D view's, nearly black.
+PIN_NAME_TAG_RGB = (0.07, 0.08, 0.09)
+
+
+def build_pin_names(
+    lookup: FootprintLookup,
+    comp: Any,
+    board: Board,
+    labels: tuple[PinLabel, ...] | None = None,
+) -> list[vtk.vtkActor]:
+    """One part's pin names, where ``labels`` puts them -- ``bodies.lay_out_pin_names``'s
+    answer for the part, or, left out, ``bodies.pin_labels``'s as if it stood alone: on a
+    module's own board, or on this board beside the part. Laid out in world axes rather
+    than turned with the part, so each reads upright from above however the part is turned
+    or flipped -- the same place the 2D view prints them.
+
+    Each name is a decal Qt draws (``_label_decal``), for the reason a board label is: a
+    name somebody typed in their own language -- GİRİŞ, ÇIKIŞ -- has to come out as typed,
+    and ``vtkVectorText`` drops every letter that is not ASCII. Without a Qt application,
+    vector glyphs stand in.
+    """
     footprint = lookup(comp.footprint_id)
     if footprint is None:
         return []
-    labels = pin_labels(footprint, comp, board.pitch)
+    if labels is None:
+        labels = pin_labels(footprint, comp, board.pitch)
     if not labels:
         return []
     body = _world_body(lookup, comp, board)
@@ -2772,75 +2808,136 @@ def build_pin_names(lookup: FootprintLookup, comp: Any, board: Board) -> list[vt
         return []
     where = {pin.number: xy for pin, xy in zip(footprint.pins, body.pins, strict=False)}
     on_module = labels[0].on_module
-    append = vtk.vtkAppendPolyData()
-    # Names on THIS board sit on a dark tag, as in the 2D view: white ink across white pad
-    # rings is unreadable. A module's names are on its own board and need none.
-    tags = vtk.vtkAppendPolyData()
+    if on_module:
+        seat = float(footprint.body.dims.get("seat", MODULE_SEAT_SOCKETED_MM))
+        lift = seat + MODULE_PCB_MM + _DECAL_PROUD_MM
+        ink = _rgb(body.style.accent)
+    else:
+        # On its tag, above the pad rings a name runs across.
+        lift = PAD_LIFT_MM + _DECAL_PROUD_MM
+        ink = LEGEND_RGB
+
+    actors: list[vtk.vtkActor] = []
+    pad = PIN_NAME_TAG_PAD_MM
     for label in labels:
-        px, py = where[label.number]
-        turned_x, turned_y = transform_offset(label.dx, label.dy, comp.rotation, comp.mirrored)
-        wx, wy = turned_x, -turned_y  # rows run down, the world's y runs up
+        decal = _label_decal(
+            label.name,
+            PIN_NAME_HEIGHT_MM,
+            ink=ink,
+            # A module's names are printed on its own board, which needs no tag; names on
+            # THIS board need one, as in the 2D view: white ink over white pad rings is
+            # unreadable.
+            ground=None if on_module else PIN_NAME_TAG_RGB,
+            bold=False,
+            pad_mm=pad,
+            tag_height_mm=PIN_NAME_TAG_HEIGHT_MM,
+        )
+        if decal is None:
+            return _vector_pin_names(labels, where, comp, on_module, lift, ink)
+        texture, width, height = decal
+        # Narrowed to the room it was given, the tag with it.
+        shown = min(max(width - 2 * pad, 1e-6), label.room)
+        frame = _pin_name_frame(label, where[label.number], comp, shown, lift)
+        plane = vtk.vtkPlaneSource()
+        plane.SetOrigin(-pad, -height / 2, 0.0)
+        plane.SetPoint1(shown + pad, -height / 2, 0.0)
+        plane.SetPoint2(-pad, height / 2, 0.0)
+        placed = vtk.vtkTransformPolyDataFilter()
+        placed.SetTransform(frame)
+        placed.SetInputConnection(plane.GetOutputPort())
+        placed.Update()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(placed.GetOutput())
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.SetTexture(texture)
+        actor.GetProperty().LightingOff()
+        actors.append(actor)
+    return actors
+
+
+def _pin_name_frame(
+    label: PinLabel, pin_xy: tuple[float, float], comp: Any, shown: float, lift: float
+) -> vtk.vtkTransform:
+    """The transform from a pin name's own frame -- text from the origin along +x, centred
+    on y -- to the world, where it starts ``label.start`` from its pin and reads upright."""
+    px, py = pin_xy
+    turned_x, turned_y = transform_offset(label.dx, label.dy, comp.rotation, comp.mirrored)
+    wx, wy = turned_x, -turned_y  # rows run down, the world's y runs up
+    frame = vtk.vtkTransform()
+    if abs(wx) > abs(wy):
+        # Kept upright: a name to the LEFT of its pin ends there rather than being turned
+        # over to start there and read upside down.
+        start = px + label.start if wx > 0 else px - label.start - shown
+        frame.Translate(start, py, lift)
+    else:
+        frame.Translate(px, py + (label.start if wy > 0 else -label.start), lift)
+        frame.RotateZ(90.0 if wy > 0 else -90.0)
+    return frame
+
+
+def _vector_pin_names(
+    labels: tuple[PinLabel, ...],
+    where: dict[str, tuple[float, float]],
+    comp: Any,
+    on_module: bool,
+    lift: float,
+    ink: tuple[float, float, float],
+) -> list[vtk.vtkActor]:
+    """``build_pin_names`` with no Qt to draw with: vector glyphs on a separate tag, ASCII
+    only. One actor for the glyphs and one for the tags, whatever the count."""
+    text_append = vtk.vtkAppendPolyData()
+    tag_append = vtk.vtkAppendPolyData()
+    for label in labels:
         vector = vtk.vtkVectorText()
         vector.SetText(label.name)
         vector.Update()
         bounds = vector.GetOutput().GetBounds()
         text_width = max(bounds[1] - bounds[0], 1e-6)
         scale = min(PIN_NAME_HEIGHT_MM, label.room / text_width)
-        transform = vtk.vtkTransform()
-        if abs(wx) > abs(wy):
-            # Kept upright: a name to the LEFT of its pin ends there rather than being
-            # turned over to start there and read upside down.
-            start = px + label.start if wx > 0 else px - label.start - text_width * scale
-            transform.Translate(start, py, 0.0)
-        else:
-            transform.Translate(px, py + (label.start if wy > 0 else -label.start), 0.0)
-            transform.RotateZ(90.0 if wy > 0 else -90.0)
+        frame = _pin_name_frame(label, where[label.number], comp, text_width * scale, 0.0)
         if not on_module:
-            # The tag, in the text's own frame before it is scaled: a box round the glyphs.
             tag = vtk.vtkCubeSource()
-            tag.SetXLength(text_width * scale + 0.5)
-            tag.SetYLength(PIN_NAME_HEIGHT_MM * 1.7)
+            tag.SetXLength(text_width * scale + 2 * PIN_NAME_TAG_PAD_MM)
+            tag.SetYLength(PIN_NAME_TAG_HEIGHT_MM)
             tag.SetZLength(0.02)
             tag.SetCenter(text_width * scale / 2, 0.0, 0.0)
-            tag_transform = vtk.vtkTransform()
-            tag_transform.DeepCopy(transform)
             placed_tag = vtk.vtkTransformPolyDataFilter()
-            placed_tag.SetTransform(tag_transform)
+            placed_tag.SetTransform(frame)
             placed_tag.SetInputConnection(tag.GetOutputPort())
             placed_tag.Update()
-            tags.AddInputData(placed_tag.GetOutput())
-        transform.Scale(scale, scale, scale)
-        transform.Translate(-bounds[0], -(bounds[2] + bounds[3]) / 2, 0.0)
+            tag_append.AddInputData(placed_tag.GetOutput())
+        glyphs = vtk.vtkTransform()
+        glyphs.DeepCopy(frame)
+        glyphs.Scale(scale, scale, scale)
+        glyphs.Translate(-bounds[0], -(bounds[2] + bounds[3]) / 2, 0.0)
         placed = vtk.vtkTransformPolyDataFilter()
-        placed.SetTransform(transform)
+        placed.SetTransform(glyphs)
         placed.SetInputData(vector.GetOutput())
         placed.Update()
-        append.AddInputData(placed.GetOutput())
-    append.Update()
+        text_append.AddInputData(placed.GetOutput())
+    text_append.Update()
     mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputData(append.GetOutput())
+    mapper.SetInputData(text_append.GetOutput())
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
-    actors = [actor]
-    if not on_module:
-        tags.Update()
-        tag_mapper = vtk.vtkPolyDataMapper()
-        tag_mapper.SetInputData(tags.GetOutput())
-        tag_actor = vtk.vtkActor()
-        tag_actor.SetMapper(tag_mapper)
-        tag_actor.SetPosition(0.0, 0.0, PAD_LIFT_MM + _DECAL_PROUD_MM)
-        tag_actor.GetProperty().SetColor(0.07, 0.08, 0.09)
-        _finish(tag_actor.GetProperty(), INK)
-        actors.append(tag_actor)
-    if on_module:
-        seat = float(footprint.body.dims.get("seat", MODULE_SEAT_SOCKETED_MM))
-        actor.SetPosition(0.0, 0.0, seat + MODULE_PCB_MM + _DECAL_PROUD_MM)
-        actor.GetProperty().SetColor(*_rgb(body.style.accent))
-    else:
-        # On its tag, above the pad rings a name runs across.
-        actor.SetPosition(0.0, 0.0, PAD_LIFT_MM + 2 * _DECAL_PROUD_MM)
-        actor.GetProperty().SetColor(*LEGEND_RGB)
+    actor.GetProperty().SetColor(*ink)
     _finish(actor.GetProperty(), INK)
+    actors = [actor]
+    if on_module:
+        actor.SetPosition(0.0, 0.0, lift)
+        return actors
+    # The glyphs proud of their tag.
+    actor.SetPosition(0.0, 0.0, lift + _DECAL_PROUD_MM)
+    tag_append.Update()
+    tag_mapper = vtk.vtkPolyDataMapper()
+    tag_mapper.SetInputData(tag_append.GetOutput())
+    tag_actor = vtk.vtkActor()
+    tag_actor.SetMapper(tag_mapper)
+    tag_actor.SetPosition(0.0, 0.0, lift)
+    tag_actor.GetProperty().SetColor(*PIN_NAME_TAG_RGB)
+    _finish(tag_actor.GetProperty(), INK)
+    actors.append(tag_actor)
     return actors
 
 
@@ -3291,6 +3388,14 @@ def populate_renderer(
     leaders = build_drop_lines(lookup, doc, exploded_mm)
     if leaders is not None:
         ren.AddActor(leaders)
+    # Laid out for the whole board, as the 2D view lays them out: where one part's names
+    # go depends on what stands beside it (bodies.lay_out_pin_names). Measured with the
+    # 2D view's own measure, imported here as Qt is everywhere else in this module.
+    printed = None
+    if pin_names:
+        from .scenetext import pin_name_width_mm
+
+        printed = lay_out_pin_names(doc, lookup, pin_name_width_mm)
     for comp in doc.components:
         subject = highlight is not None and comp.id == highlight
         for actor in build_component(lookup, comp, board):
@@ -3298,12 +3403,13 @@ def populate_renderer(
             if highlight is not None:
                 (_pick_out if subject else _dim)(actor)
             ren.AddActor(actor)
-        if pin_names:
+        if printed is not None:
             # A module's names are on its own board and rise with it; a part's names on
             # this board stay on this board.
             footprint = lookup(comp.footprint_id)
             on_module = footprint is not None and footprint.body.archetype == "module-board"
-            for actor in build_pin_names(lookup, comp, board):
+            names = printed.labels.get(comp.id, ())
+            for actor in build_pin_names(lookup, comp, board, names):
                 _lift(actor, exploded_mm if on_module else 0.0)
                 if highlight is not None:
                     (_pick_out if subject else _dim)(actor)

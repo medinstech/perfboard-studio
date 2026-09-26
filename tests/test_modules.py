@@ -178,9 +178,14 @@ def test_sparse_pins_stand_on_posts_not_on_a_strip() -> None:
     assert len([p for p in pieces if p.rgb == view3d._HEADER_PLASTIC_RGB]) == 4
 
 
-def test_pin_names_are_one_actor_and_the_view_can_leave_them_out() -> None:
+def test_pin_names_are_one_actor_and_the_view_can_leave_them_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without Qt, where the vector glyphs are all one actor. (With Qt each name is its own
+    decal -- ``test_pin_name_layout``.)"""
     from perfboard_studio.ui import view3d
 
+    monkeypatch.setattr(view3d, "_label_decal", lambda *args, **kwargs: None)
     session = _board_with(DEVKITC, {"1": "3V3", "2": "GND"})
     comp = session.document.components[0]
     assert len(view3d.build_pin_names(session.lookup, comp, session.document.board)) == 1
@@ -192,11 +197,12 @@ def test_pin_names_are_one_actor_and_the_view_can_leave_them_out() -> None:
     assert on.GetActors().GetNumberOfItems() == off.GetActors().GetNumberOfItems() + 1
 
 
-def test_names_off_a_module_sit_on_a_tag() -> None:
+def test_names_off_a_module_sit_on_a_tag(monkeypatch: pytest.MonkeyPatch) -> None:
     """White ink across white pad rings is unreadable, so a name on this board has a dark
-    tag under it -- a second actor."""
+    tag under it -- a second actor, where the glyphs are vector (no Qt)."""
     from perfboard_studio.ui import view3d
 
+    monkeypatch.setattr(view3d, "_label_decal", lambda *args, **kwargs: None)
     session = BoardSession(document=new_board(cols=30, rows=20))
     assert session.place_component("", "", "E6", part="ne555")["ok"]
     comp = session.document.components[0]

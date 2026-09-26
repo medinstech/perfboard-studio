@@ -60,6 +60,14 @@ closed without a bump.
   than across its mouth -- on a dark tag, since white ink across white pad rings cannot
   be read. Only names a part declares are printed off a module. *View ▸ Show Pin Names*
   turns them off for a crowded board being placed or routed.
+  The names are laid out for the whole board, not part by part: on the first real board two
+  terminals stood side by side and each one's names ran under the other's body. A name now
+  stops at whatever is in its way -- a body, a terminal's mouth, a screw head, a label, the
+  board's edge, another name. A part with its pins in one row prints them on its other side
+  when that is clear; a name short of room is narrowed, down to 60 % of its width; one with
+  none is left off, and the part's tooltip lists it. Both views ask
+  `bodies.lay_out_pin_names`, so they print and leave off the same names, and 3D draws each
+  one with Qt, as it does a board label, so "GİRİŞ" keeps its dots.
 
 - **A screw terminal whose wires go in from above: `screw-terminal-<n>-v`.** The pluggable
   block on a vertical (180°) header — what is sold as a "dik klemens" — pinned exactly like
