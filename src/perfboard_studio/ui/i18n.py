@@ -1359,6 +1359,154 @@ TURKISH: Mapping[str, str] = {
         "Her parçanın pin adlarını pinlerinin yanına yazar, kartta ve 3B'de. Kalabalık "
         "bir kartı yerleştirirken ya da iz çekerken kapatın."
     ),
+    # -- the parts catalog -------------------------------------------------------------
+    # What each part is and what to check on the one in hand: ``catalog.CATALOG``'s
+    # summaries and checks, shown in the parts list's tooltips. Reached through t() by
+    # variable, so ``tests/test_i18n.py`` reads them out of the catalog itself. The
+    # datasheet a pinout comes from is a citation and stays as it is written. Four
+    # summaries read the same in Turkish ("NPN Darlington, 60 V, 5 A") and are not here.
+    "NPN, 45 V, 100 mA, general purpose": "NPN, 45 V, 100 mA, genel amaçlı",
+    "NPN, 30 V, 100 mA, general purpose": "NPN, 30 V, 100 mA, genel amaçlı",
+    "PNP, 45 V, 100 mA, general purpose": "PNP, 45 V, 100 mA, genel amaçlı",
+    "PNP, 30 V, 100 mA, general purpose": "PNP, 30 V, 100 mA, genel amaçlı",
+    "NPN, 40 V, 200 mA, general purpose": "NPN, 40 V, 200 mA, genel amaçlı",
+    "PNP, 40 V, 200 mA, general purpose": "PNP, 40 V, 200 mA, genel amaçlı",
+    "NPN, 40 V, 600 mA, switching (plastic TO-92, sold as PN2222A)": (
+        "NPN, 40 V, 600 mA, anahtarlama (plastik TO-92, PN2222A adıyla satılır)"
+    ),
+    "Check the legs against the datasheet of the part you have before soldering.": (
+        "Lehimlemeden önce elinizdeki parçanın bacaklarını veri sayfasıyla karşılaştırın."
+    ),
+    "The metal-can (TO-18) 2N2222 is pinned differently. Check the legs against the "
+    "datasheet of the part you have before soldering.": (
+        "Metal kılıflı (TO-18) 2N2222'nin bacak dizilişi farklıdır. Lehimlemeden önce "
+        "elinizdeki parçanın bacaklarını veri sayfasıyla karşılaştırın."
+    ),
+    "The tab is the collector. Check the legs against the datasheet of the part you "
+    "have before soldering.": (
+        "Tırnak kolektöre bağlıdır. Lehimlemeden önce elinizdeki parçanın bacaklarını veri "
+        "sayfasıyla karşılaştırın."
+    ),
+    "NPN power, 100 V, 3 A": "NPN güç, 100 V, 3 A",
+    "NPN power, 100 V, 6 A": "NPN güç, 100 V, 6 A",
+    "N-channel, 60 V, 200 mA, small signal": "N kanal, 60 V, 200 mA, küçük sinyal",
+    "N-channel, 60 V, 500 mA, small signal": "N kanal, 60 V, 500 mA, küçük sinyal",
+    "Pinned the other way round from the 2N7000. Check the legs against the datasheet "
+    "of the part you have before soldering.": (
+        "Bacak dizilişi 2N7000'in tersidir. Lehimlemeden önce elinizdeki parçanın "
+        "bacaklarını veri sayfasıyla karşılaştırın."
+    ),
+    "N-channel, 100 V, 33 A, 10 V gate": "N kanal, 100 V, 33 A, 10 V geyt",
+    "N-channel, 55 V, 49 A, 10 V gate": "N kanal, 55 V, 49 A, 10 V geyt",
+    "N-channel, 55 V, 47 A, logic-level gate (on from 5 V)": (
+        "N kanal, 55 V, 47 A, lojik seviye geyt (5 V ile iletime geçer)"
+    ),
+    "N-channel, 100 V, 9.7 A, 10 V gate": "N kanal, 100 V, 9,7 A, 10 V geyt",
+    "N-channel, 55 V, 110 A, 10 V gate": "N kanal, 55 V, 110 A, 10 V geyt",
+    "P-channel, -100 V, -23 A": "P kanal, -100 V, -23 A",
+    "P-channel, -55 V, -74 A": "P kanal, -55 V, -74 A",
+    "P-channel, -55 V, -19 A": "P kanal, -55 V, -19 A",
+    "The tab is the drain.": "Tırnak drain'e bağlıdır.",
+    "The tab is the drain. Not fully on from a 3.3 V or 5 V pin.": (
+        "Tırnak drain'e bağlıdır. 3,3 V ya da 5 V'luk bir pinden tam iletime geçmez."
+    ),
+    "The tab is the drain. A high-side switch: source to the supply.": (
+        "Tırnak drain'e bağlıdır. Üst taraf anahtarı: source beslemeye bağlanır."
+    ),
+    "Linear regulator, +5 V, 1.5 A": "Lineer regülatör, +5 V, 1,5 A",
+    "Linear regulator, +9 V, 1.5 A": "Lineer regülatör, +9 V, 1,5 A",
+    "Linear regulator, +12 V, 1.5 A": "Lineer regülatör, +12 V, 1,5 A",
+    "Linear regulator, -5 V, 1.5 A": "Lineer regülatör, -5 V, 1,5 A",
+    "Linear regulator, +5 V, 100 mA": "Lineer regülatör, +5 V, 100 mA",
+    "The tab is ground.": "Tırnak toprağa bağlıdır.",
+    "The tab is ground. Needs 0.33 uF on the input and 0.1 uF on the output.": (
+        "Tırnak toprağa bağlıdır. Girişte 0,33 µF, çıkışta 0,1 µF ister."
+    ),
+    "NOT pinned like a 7805: the tab is the INPUT.": (
+        "Bacak dizilişi 7805 gibi DEĞİL: tırnak GİRİŞE bağlıdır."
+    ),
+    "Adjustable regulator, +1.25 to +37 V, 1.5 A": (
+        "Ayarlı regülatör, +1,25 ile +37 V arası, 1,5 A"
+    ),
+    "Adjustable regulator, -1.25 to -37 V, 1.5 A": (
+        "Ayarlı regülatör, -1,25 ile -37 V arası, 1,5 A"
+    ),
+    "The tab is the output.": "Tırnak çıkışa bağlıdır.",
+    "NOT pinned like an LM317: the tab is the INPUT.": (
+        "Bacak dizilişi LM317 gibi DEĞİL: tırnak GİRİŞE bağlıdır."
+    ),
+    "Adjustable shunt reference, 2.5 to 36 V": "Ayarlı şönt referans, 2,5 ile 36 V arası",
+    "Small-signal diode, 100 V, 200 mA": "Küçük sinyal diyodu, 100 V, 200 mA",
+    "Rectifier, 1000 V, 1 A": "Doğrultucu, 1000 V, 1 A",
+    "Zener, 3.3 V, 0.5 W": "Zener, 3,3 V, 0,5 W",
+    "Zener, 5.1 V, 0.5 W": "Zener, 5,1 V, 0,5 W",
+    "Zener, 12 V, 0.5 W (a MOSFET gate clamp)": "Zener, 12 V, 0,5 W (MOSFET geyt kırpıcısı)",
+    "Zener, 15 V, 0.5 W (a MOSFET gate clamp)": "Zener, 15 V, 0,5 W (MOSFET geyt kırpıcısı)",
+    "Polymer PTC (polyfuse), radial, leads 5 mm apart": (
+        "Polimer PTC (polyfuse), radyal, bacaklar arası 5 mm"
+    ),
+    "Its size grows with its hold current: if yours is larger than 8 mm, describe it "
+    "as a disc capacitor of its real size and mark it a fuse.": (
+        "Boyu tutma akımıyla büyür: sizinki 8 mm'den büyükse gerçek boyunda bir disk "
+        "kondansatör olarak tanımlayın ve sigorta olarak işaretleyin."
+    ),
+    "Temperature sensor, 10 mV per degree C": "Sıcaklık sensörü, derece başına 10 mV",
+    "Temperature sensor, 1-Wire, needs a 4.7k pull-up on DQ": (
+        "Sıcaklık sensörü, 1-Wire, DQ hattında 4,7k pull-up ister"
+    ),
+    "Timer": "Zamanlayıcı",
+    "Dual op-amp, single supply": "Çift op-amp, tek besleme",
+    "Dual comparator, open-collector outputs": "Çift karşılaştırıcı, açık kolektör çıkışlı",
+    "High-speed optocoupler, 10 Mbit/s": "Yüksek hızlı optokuplör, 10 Mbit/s",
+    "Optocoupler, transistor output": "Optokuplör, transistör çıkışlı",
+    "CAN transceiver, 5 V, 1 Mbit/s": "CAN alıcı-verici, 5 V, 1 Mbit/s",
+    "RS-485 transceiver, half duplex, 5 V": "RS-485 alıcı-verici, yarı çift yönlü, 5 V",
+    "8-bit shift register, latched outputs": "8 bit kaydırmalı yazmaç, mandallı çıkışlar",
+    "Seven Darlington sinks, 50 V, 500 mA, with flyback diodes": (
+        "Yedi Darlington akım çekici, 50 V, 500 mA, serbest geçiş diyotlu"
+    ),
+    "Dual H-bridge, 600 mA, with clamp diodes": "Çift H köprüsü, 600 mA, kırpma diyotlu",
+    "The four GND pins are also its heatsink: solder them to a copper area.": (
+        "Dört GND pini aynı zamanda soğutucusudur: bir bakır alana lehimleyin."
+    ),
+    "CAN controller, SPI": "CAN denetleyici, SPI",
+    "Octal bus transceiver (74HCT245 for 3.3 V in, 5 V out)": (
+        "Sekizli veri yolu alıcı-vericisi (3,3 V giriş, 5 V çıkış için 74HCT245)"
+    ),
+    "8-bit AVR, the Arduino Uno's": "8 bit AVR, Arduino Uno'nunki",
+    "ESP32-WROOM-32 dev board, 38 pins, rows 25.4 mm apart": (
+        "ESP32-WROOM-32 geliştirme kartı, 38 pin, sıralar arası 25,4 mm"
+    ),
+    "ESP32-C3 dev board, 30 pins, rows 22.86 mm apart": (
+        "ESP32-C3 geliştirme kartı, 30 pin, sıralar arası 22,86 mm"
+    ),
+    "ATmega328P board, 30 pins, rows 15.24 mm apart": (
+        "ATmega328P kartı, 30 pin, sıralar arası 15,24 mm"
+    ),
+    "RP2040 board, 40 pins, rows 17.78 mm apart": "RP2040 kartı, 40 pin, sıralar arası 17,78 mm",
+    "ESP8266 board, 16 pins, rows 22.86 mm apart": (
+        "ESP8266 kartı, 16 pin, sıralar arası 22,86 mm"
+    ),
+    "The height of what is on the board is an estimate, and so is its colour; the "
+    "pins, the rows and the board outline are measured.": (
+        "Kartın üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve "
+        "kart çevresi ölçülmüştür."
+    ),
+    "Clones called 'ESP32 DevKit' come with 30 or 38 pins and more than one row "
+    "spacing: count your pins and measure across the rows. The height of what is on "
+    "the board is an estimate, and so is its colour; the pins, the rows and the board "
+    "outline are measured.": (
+        "'ESP32 DevKit' adıyla satılan klonlar 30 ya da 38 pinli ve birden çok sıra "
+        "aralığıyla gelir: pinlerinizi sayın ve sıralar arasını ölçün. Kartın "
+        "üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
+        "çevresi ölçülmüştür."
+    ),
+    "The 6-pin ICSP header, if fitted, stands taller. The height of what is on the "
+    "board is an estimate, and so is its colour; the pins, the rows and the board "
+    "outline are measured.": (
+        "6 pinli ICSP başlığı takılıysa daha yüksekte durur. Kartın üstündekilerin "
+        "yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}

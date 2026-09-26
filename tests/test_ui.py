@@ -8518,6 +8518,30 @@ def test_the_filter_finds_a_part_by_what_it_is() -> None:
         _close(window)
 
 
+def test_in_turkish_the_catalog_says_what_a_part_is_in_turkish() -> None:
+    """The tooltip under a Turkish parts list, and the filter, in the user's language."""
+    from perfboard_studio.catalog import catalog_part
+    from perfboard_studio.ui.i18n import language, set_language
+    from perfboard_studio.ui.main import _catalog_tooltip
+
+    before = language()
+    set_language("tr")
+    try:
+        part = catalog_part("7805")
+        assert part is not None
+        tip = _catalog_tooltip(part)
+        assert "Lineer regülatör" in tip and "Tırnak toprağa bağlıdır" in tip
+        window = _blank_window()
+        try:
+            window.library_filter.setText("regülatör")
+            assert _catalog_leaf(window, "7805") is not None
+            assert _catalog_leaf(window, "bc547") is None
+        finally:
+            _close(window)
+    finally:
+        set_language(before)
+
+
 def test_the_module_wizard_describes_a_module_and_its_pin_names() -> None:
     from perfboard_studio.footprints import get_footprint
     from perfboard_studio.ui.main import CustomPartDialog

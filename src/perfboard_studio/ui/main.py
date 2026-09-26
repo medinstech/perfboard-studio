@@ -480,12 +480,12 @@ def _catalog_headings() -> dict[str, str]:
 def _catalog_tooltip(part: CatalogPart) -> str:
     """What a catalog row says on hover: what the part is, how it is pinned, where that
     comes from and -- the line that matters -- what to check on the one in hand."""
-    lines = [f"{part.name} — {part.summary}", part.footprint_id]
+    lines = [f"{part.name} — {t(part.summary)}", part.footprint_id]
     if part.pin_names:
         lines.append(" ".join(f"{number}={name}" for number, name in part.pin_names[:12])
                      + (" …" if len(part.pin_names) > 12 else ""))
     if part.check:
-        lines.append(f"{t('Check')}: {part.check}")
+        lines.append(f"{t('Check')}: {t(part.check)}")
     if part.source:
         lines.append(f"{t('Source')}: {part.source}")
     return "\n".join(lines)
@@ -4415,7 +4415,10 @@ class MainWindow(QMainWindow):
                 if part.category == category
                 and (
                     not needle
-                    or needle in f"{part.id} {part.name} {part.summary} {category}".lower()
+                    # In either language: "regülatör" finds a 7805 as "regulator" does.
+                    or needle
+                    in f"{part.id} {part.name} {part.summary} {t(part.summary)} "
+                    f"{category} {headings[category]}".lower()
                 )
             ]
             if not parts:

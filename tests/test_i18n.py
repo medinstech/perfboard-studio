@@ -95,7 +95,34 @@ def loop_built_labels() -> set[str]:
         )
         for raw in row
     }
-    return {scheme.label for scheme in SCHEMES} | tools | pairs
+    return {scheme.label for scheme in SCHEMES} | tools | pairs | catalog_texts()
+
+
+def catalog_texts() -> set[str]:
+    """What the parts catalog says about each part, which its tooltip passes through t()."""
+    from perfboard_studio.catalog import CATALOG
+
+    return {text for part in CATALOG for text in (part.summary, part.check) if text}
+
+
+#: Catalog summaries that read the same in Turkish, and so have no entry: an entry mapped to
+#: itself is what ``test_every_catalogue_translates_to_something_different`` refuses.
+SAME_IN_TURKISH = {
+    "NPN Darlington, 60 V, 5 A",
+    "NPN Darlington, 100 V, 5 A",
+    "PNP Darlington, 100 V, 5 A",
+    "Schottky, 40 V, 1 A",
+}
+
+
+def test_every_word_the_catalog_says_about_a_part_is_in_turkish() -> None:
+    """A Turkish parts list with an English line under every part is the half-translated
+    screen the tooltip test above is about -- and a catalog entry added later would slip in
+    exactly that way."""
+    missing = sorted(catalog_texts() - set(TURKISH) - SAME_IN_TURKISH)
+    assert missing == [], f"catalog text with no Turkish: {missing}"
+    unused = sorted(SAME_IN_TURKISH - catalog_texts())
+    assert unused == [], f"same-in-Turkish summaries the catalog no longer has: {unused}"
 
 
 @pytest.fixture(autouse=True)

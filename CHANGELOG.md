@@ -71,7 +71,10 @@ closed without a bump.
   found by what they are ("p-channel", "esp32"); picking one places it with all of that
   filled in, dragged or clicked, on the board or the sheet. Nothing in the document refers
   back: what lands is an ordinary part, so a board opens the same anywhere. Over MCP,
-  `list_catalog` lists them and `place_component` / `add_part` take `part="bc547"`.
+  `list_catalog` lists them and `place_component` / `add_part` take `part="bc547"`. In
+  Turkish, what each part is and what to check on it are in Turkish, and the filter finds
+  a part in either language ("regülatör" or "regulator"); the datasheet citations stay as
+  written.
 - **A module on header pins: `mod-<cols>x<rows>-p<c>-r<r>-<W>x<D>x<T>-s<seat>[-o<X>x<Y>]`.**
   A devkit or a breakout is a board of its own standing on its pins, and `box-` described
   it as a solid block from the board up. The new `module-board` archetype knows its pins,
