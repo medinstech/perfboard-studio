@@ -45,7 +45,12 @@ closed without a bump.
   (`pinfunction`, which the parser used to drop); where every named pin matches exactly one
   pin of the real part, the import renumbers it to the part's own numbers and says so, and
   a transistor or diode whose names cannot be settled is reported instead. An LED with no
-  names in the netlist is read by KiCad's own numbering of its footprint. A part that has no
+  names in the netlist is read by KiCad's own numbering of its footprint. A module comes
+  through the same way: KiCad numbers an Arduino Nano, a Pico or a D1 mini down one side
+  and up the other, the catalog's are numbered across their rows, and every pin is found by
+  its name -- KiCad's overbar markup off (`~{RESET}` is RESET), a Pico's `GPIO26_ADC0` read
+  as its silkscreen's GP26, and a name on several pins (two GNDs) matched in order when
+  every one of them is in the same net, and never otherwise. A part that has no
   catalog entry but three or more named pins -- a 2N5088, an IC -- gets the schematic's
   names printed beside its pins.
 

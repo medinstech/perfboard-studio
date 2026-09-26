@@ -124,8 +124,13 @@ def test_names_renumber_only_when_they_settle_it() -> None:
     led = (("1", "A"), ("2", "K"))
     assert pin_renumbering((("1", "K"), ("2", "A")), led, {"1", "2"}) == {"1": "2", "2": "1"}
     assert pin_renumbering((("1", "A"), ("2", "K")), led, {"1", "2"}) == {}
-    # A name on two pins of the part says nothing about which.
-    assert pin_renumbering((("1", "GND"),), (("1", "X"), ("4", "GND"), ("8", "GND")), {"1"}) == {}
+    # A name on two pins of the part is one node on it -- a module's two GNDs -- so either
+    # will do, and it is the first.
+    assert pin_renumbering((("1", "GND"),), (("1", "X"), ("4", "GND"), ("8", "GND")), {"1"}) == {
+        "1": "4"
+    }
+    # A name the schematic has more of than the part does is not settled.
+    assert pin_renumbering((("1", "GND"), ("2", "GND")), (("4", "GND"),), {"1", "2"}) == {}
     # Moving pin 1 onto pin 3 while the schematic still uses pin 3 as itself would join them.
     assert pin_renumbering((("1", "C"),), (("3", "C"),), {"1", "3"}) == {}
 
@@ -340,3 +345,54 @@ def test_the_catalog_has_the_buttons_as_made() -> None:
         assert part is not None and part.footprint_id == footprint
         assert LOOKUP(footprint) is not None
     assert [p.id for p in search_catalog("push button")] == ["tact-6x6", "tact-12x12"]
+
+
+NANO_NETLIST = """(export (version "E")
+  (components
+    (comp (ref "A1") (value "Arduino_Nano_v3.x") (footprint "Module:Arduino_Nano")
+      (libsource (lib "MCU_Module") (part "Arduino_Nano_v3.x")))
+    (comp (ref "R1") (value "1k")
+      (footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal")
+      (libsource (lib "Device") (part "R"))))
+  (nets
+    (net (code "1") (name "GND")
+      (node (ref "A1") (pin "4") (pinfunction "GND") (pintype "power_in"))
+      (node (ref "A1") (pin "29") (pinfunction "GND") (pintype "power_in"))
+      (node (ref "R1") (pin "2") (pinfunction "~") (pintype "passive")))
+    (net (code "2") (name "LED")
+      (node (ref "A1") (pin "5") (pinfunction "D2") (pintype "bidirectional"))
+      (node (ref "R1") (pin "1") (pinfunction "~") (pintype "passive")))
+    (net (code "3") (name "/RST")
+      (node (ref "A1") (pin "3") (pinfunction "~{RESET}") (pintype "input"))
+      (node (ref "A1") (pin "19") (pinfunction "A0") (pintype "input")))))
+"""
+
+
+def test_a_kicad_module_is_renumbered_across_its_rows() -> None:
+    """KiCad numbers an Arduino Nano down one side and up the other; the catalog's Nano is
+    numbered across its rows. Every pin is found by name -- ``~{RESET}`` is RESET, and the
+    two GNDs, one net, go to the Nano's two GNDs in order -- and the module note that the
+    footprint alone would give is not said, since the catalog part answers it."""
+    document = create_empty_document(DocumentMeta(name="t", created="", modified=""))
+    plan = plan_import(parse_kicad_netlist(NANO_NETLIST), document, LOOKUP)
+    nano = plan.suggestions["A1"]
+    assert (nano.source, nano.part_id) == ("catalog", "arduino-nano")
+    names = dict(nano.pin_names)
+    pins = {
+        net.name: {node.pin for node in net.nodes if node.component_ref == "A1"}
+        for net in plan.nets
+    }
+    assert {names[p] for p in pins["GND"]} == {"GND"} and len(pins["GND"]) == 2
+    assert {names[p] for p in pins["LED"]} == {"D2"}
+    assert {names[p] for p in pins["/RST"]} == {"RESET", "A0"}
+    assert not any("module" in line for line in plan.notes["A1"])
+    assert any("renumbered" in line for line in plan.notes["A1"])
+
+
+def test_two_pins_of_one_name_in_different_nets_are_not_guessed_at() -> None:
+    """Two "+" inputs of a dual op-amp are not interchangeable: matched in order they could
+    swap its channels. Nothing moves."""
+    part = (("3", "+"), ("5", "+"))
+    schematic = (("5", "+"), ("7", "+"))
+    assert pin_renumbering(schematic, part, {"5", "7"}, {"5": "a", "7": "b"}) == {}
+    assert pin_renumbering(schematic, part, {"5", "7"}, {"5": "a", "7": "a"}) == {"5": "3", "7": "5"}

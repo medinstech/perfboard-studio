@@ -49,6 +49,7 @@ from ..model import (
     PinNames,
     SchematicPart,
     pin_name_of,
+    pin_number_sort_key,
 )
 from .kicad import ImportedComponent, KicadNetlistImport
 
@@ -271,13 +272,17 @@ _UNMAPPED: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(r"^(Arduino|WEMOS|RaspberryPi|RPi_Pico|ESP32)", re.IGNORECASE),
         "a module's KiCad footprint numbers its pins down one side and up the other, this "
-        "program's across; place it from the catalog and check its nets",
+        "program's across its rows, and its value names no module in the catalog; give it "
+        "one (\"Arduino Nano\", \"Raspberry Pi Pico\") and its pins are renumbered by name",
     ),
     (
         re.compile(r"^TO-220"),
         "only the upright three-leg TO-220 is here; a flat or five-leg one is not",
     ),
 )
+
+
+_SMD_NOTE = "its footprint is surface-mount, which a perfboard cannot take"
 
 
 def kicad_footprint_ids(kicad_footprint: str) -> tuple[list[str], str]:
@@ -289,7 +294,7 @@ def kicad_footprint_ids(kicad_footprint: str) -> tuple[list[str], str]:
     """
     name = kicad_footprint.split(":", 1)[-1]
     if _SMD.search(kicad_footprint):
-        return [], "its footprint is surface-mount, which a perfboard cannot take"
+        return [], _SMD_NOTE
     for pattern, build in _KICAD_NAMES:
         match = pattern.match(name)
         if match is not None:
@@ -393,32 +398,60 @@ _NAMELESS = re.compile(r"^(~|Pin_?\d+|P\d+|\d+|-|)$", re.IGNORECASE)
 
 def schematic_pin_names(component: ImportedComponent) -> PinNames:
     """What the schematic's symbol calls this component's pins, where it says something -- a
-    connector's "Pin_1" and a resistor's "~" do not."""
+    connector's "Pin_1" and a resistor's "~" do not -- as a person reads them: KiCad's
+    overbar markup (``~{RESET}``) is for its own drawing, not for printing beside a pin."""
     return tuple(
-        (pin, function) for pin, function in component.pin_functions if not _NAMELESS.match(function)
+        (pin, re.sub(r"~\{([^}]*)\}", r"\1", function))
+        for pin, function in component.pin_functions
+        if not _NAMELESS.match(function)
     )
 
 
-def pin_renumbering(schematic: PinNames, part: PinNames, pins_in_nets: set[str]) -> dict[str, str]:
-    """The schematic pins to move, and where: each named pin to the ONE pin of the part with
-    the same name. Empty when nothing moves or when the names cannot settle it -- a name on
-    two pins, two pins onto one, or a pin moved onto one the schematic still uses as itself."""
+def pin_name_key(name: str) -> str:
+    """A pin name as two libraries agree on it: KiCad's overbar markup off (``~{RESET}`` is
+    RESET), one case, and a GPIO spelled as a board's silkscreen spells it (KiCad's
+    ``GPIO26_ADC0`` is the Pico's GP26)."""
+    plain = re.sub(r"~\{([^}]*)\}", r"\1", name).strip().upper()
+    return re.sub(r"^GPIO(\d+)(?:_.*)?$", r"GP\1", plain)
+
+
+def pin_renumbering(
+    schematic: PinNames,
+    part: PinNames,
+    pins_in_nets: set[str],
+    net_of: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """The schematic pins to move, and where: each named pin to the pin of the part with the
+    same name.
+
+    A name on one pin of each is settled. A name on several -- a module's two GNDs, its two
+    RESETs -- is settled too when every schematic pin with it is in ONE net (``net_of``):
+    then which of the part's pins of that name each goes to changes nothing, and they are
+    matched in order. Anything else is not settled, and the answer is empty rather than a
+    guess: a name the part has fewer of, two pins sent to one, or a pin moved onto one the
+    schematic still uses as itself.
+    """
     theirs: dict[str, list[str]] = {}
     for pin, name in schematic:
-        theirs.setdefault(name.upper(), []).append(pin)
+        theirs.setdefault(pin_name_key(name), []).append(pin)
     ours: dict[str, list[str]] = {}
     for number, name in part:
-        ours.setdefault(name.upper(), []).append(number)
-    mapping = {
-        pins[0]: ours[name][0]
-        for name, pins in theirs.items()
-        if len(pins) == 1 and len(ours.get(name, ())) == 1
-    }
+        ours.setdefault(pin_name_key(name), []).append(number)
+    nets = net_of or {}
+    mapping: dict[str, str] = {}
+    for name, pins in theirs.items():
+        targets = ours.get(name, [])
+        if not targets or len(pins) > len(targets):
+            continue
+        if len(pins) > 1 and len({nets.get(pin, pin) for pin in pins}) != 1:
+            continue
+        ordered = sorted(pins, key=pin_number_sort_key)
+        mapping.update(zip(ordered, sorted(targets, key=pin_number_sort_key), strict=False))
     moved = {pin: to for pin, to in mapping.items() if pin != to}
     if not moved:
         return {}
-    targets = list(mapping.values())
-    if len(set(targets)) != len(targets):
+    targets_used = list(mapping.values())
+    if len(set(targets_used)) != len(targets_used):
         return {}
     staying = pins_in_nets - set(mapping)
     if staying & set(moved.values()):
@@ -461,16 +494,19 @@ def _suggest(
     """What to place for ``component``, before any renumbering, and what to say about it."""
     notes: list[str] = []
     from_kicad: str | None = None
+    note = ""
     if component.footprint:
         candidates, note = kicad_footprint_ids(component.footprint)
         from_kicad = next((fid for fid in candidates if lookup(fid) is not None), None)
-        if note:
-            notes.append(note)
     part = catalog_part_for(component.value, component.lib_part)
     if part is not None and from_kicad is not None and from_kicad != part.footprint_id:
         # "BC547" on a TO-220 is not the catalog's BC547, and its pin names would be for the
         # wrong package: the footprint wins.
         part = None
+    # Why the footprint was not mapped -- unless the catalog part the value names is the
+    # answer to it, as it is for a module. Surface-mount is said either way.
+    if note and (part is None or note == _SMD_NOTE):
+        notes.append(note)
     if part is not None:
         return (
             PartSuggestion(
@@ -498,9 +534,11 @@ def plan_import(
     """What importing ``imported`` onto ``document`` means: the nets as this board's parts
     number their pins, and what to place for each component that is not on it yet."""
     pins_by_ref: dict[str, set[str]] = {}
+    net_by_ref: dict[str, dict[str, str]] = {}
     for net in imported.nets:
         for node in net.nodes:
             pins_by_ref.setdefault(node.component_ref, set()).add(node.pin)
+            net_by_ref.setdefault(node.component_ref, {})[node.pin] = net.id
     # On the board or in the design: either way its footprint and names are the user's.
     placed: dict[str, ComponentInstance | SchematicPart] = {
         **{part.ref: part for part in document.parts},
@@ -530,30 +568,37 @@ def plan_import(
             ours = _part_names(footprint, suggestion.pin_names) if footprint is not None else ()
         ours = tuple((number, name) for number, name in ours if name)
 
-        move = pin_renumbering(schematic, ours, pins)
+        nets_here = net_by_ref.get(ref, {})
+        move = pin_renumbering(schematic, ours, pins, nets_here)
         name_of = dict(schematic)
-        our_names = {name.upper() for _number, name in ours}
-        if not move and not any(name.upper() in our_names for _pin, name in schematic):
+        our_names = {pin_name_key(name) for _number, name in ours}
+        if not move and not any(pin_name_key(name) in our_names for _pin, name in schematic):
             # The schematic's names say nothing either way; what KiCad calls the pads of the
             # footprint it chose may.
             pads = _kicad_pad_names(component.footprint)
-            move = pin_renumbering(pads, ours, pins)
+            move = pin_renumbering(pads, ours, pins, nets_here)
             name_of = dict(pads)
         if move:
             moves[ref] = move
-            what = ", ".join(
-                f"{pin} ({name_of[pin]}) is its pin {to}" for pin, to in sorted(move.items())
-            )
-            said.append(f"pins renumbered to the part's own: {what}")
+            if len(move) <= 6:
+                what = ", ".join(
+                    f"{pin} ({name_of[pin]}) is its pin {to}"
+                    for pin, to in sorted(move.items(), key=lambda item: pin_number_sort_key(item[0]))
+                )
+                said.append(f"pins renumbered to the part's own: {what}")
+            else:
+                said.append(
+                    f"{len(move)} pins renumbered to the part's own numbers, by their names"
+                )
         elif suggestion is not None and suggestion.source == "catalog":
             part_says = dict(ours)
             wrong = [
                 f"pin {pin} is {name} in the schematic but {part_says[pin]} on the part"
                 for pin, name in schematic
                 if pin in part_says
-                and name.upper() in _WIRED_BY
-                and part_says[pin].upper() in _WIRED_BY
-                and name.upper() != part_says[pin].upper()
+                and pin_name_key(name) in _WIRED_BY
+                and pin_name_key(part_says[pin]) in _WIRED_BY
+                and pin_name_key(name) != pin_name_key(part_says[pin])
             ]
             if wrong:
                 said.append("; ".join(wrong) + " -- the board would be wired for the wrong pinout")
