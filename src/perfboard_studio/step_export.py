@@ -24,12 +24,17 @@ a box, a cylinder and a plate with holes through it.
   round a board the checker had just called too tall for it.
 * **Every lead**, down through its hole and ``LEAD_TRIM_MM`` past the solder side, because
   that is how far the board has to stand off whatever it is screwed to.
+* **Every wire**, on the face it is laid on: a cylinder per straight run of its path, as
+  thick as the gauge the cut list prints (``wiregauge.cut_gauge_awg``, the same answer DRC
+  and the guide read) plus its sleeve if it has one, and lifted clear of whatever it crosses
+  by ``occupancy.stacking_layers`` -- the levels the 3D view draws it at. A wire under the
+  board is what the board stands on, as much as a lead is.
 
 **WHAT IS NOT, AND WHY.** Copper and solder are tens of microns on a board nobody is going
 to machine, and a pad as a solid is four faces times every hole on the board for nothing
-an enclosure can use. The wiring lies flat on the board under the parts it joins. KiCad
-leaves copper out of its STEP by default for the same reason. The 3D view and its mesh
-export are where the board is LOOKED at.
+an enclosure can use. A solder trace is that copper, so it is left out with it. KiCad
+leaves copper out of its STEP by default for the same reason. The 3D view is where the
+board is LOOKED at.
 
 **THE FRAME.** Millimetres, z up, the solder side on z = 0 and the board's corner at the
 origin, so the whole board lies in the positive quadrant and its dimensions read straight
@@ -51,6 +56,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
+from itertools import pairwise
 
 from .connectivity import FootprintLookup
 from .drc import placed_body_box
@@ -63,8 +69,18 @@ from .geometry import (
     mounting_hole_centre_mm,
     undrilled_holes,
 )
-from .model import BodyArchetype, ComponentInstance, Footprint, HoleCoord, PerfDocument
+from .model import (
+    BodyArchetype,
+    ComponentInstance,
+    Conductor,
+    Footprint,
+    HoleCoord,
+    PerfDocument,
+    contacts_every_path_hole,
+)
+from .occupancy import stacking_layers
 from .version import __version__
+from .wiregauge import INSULATION_WALL_MM, awg_diameter_mm, cut_gauge_awg
 
 type Vec = tuple[float, float, float]
 type Rgb = tuple[float, float, float]
@@ -82,6 +98,17 @@ ROUND_ARCHETYPES: frozenset[BodyArchetype] = frozenset(
 #: its place and the second is not drilled. Bores are cut first, which is what makes a grid
 #: hole under an M3 bore the one that gives way: the bore took it.
 MIN_WEB_MM = 0.1
+
+#: The wires that wear a sleeve. Their solid is the sleeve, because that is the room they
+#: take; the copper inside it is not a separate surface anybody designs round.
+SLEEVED_KINDS = frozenset({"insulated-wire", "top-jumper"})
+
+#: The gap left between two wires stacked one over the other, on top of their two radii.
+WIRE_STACK_GAP_MM = 0.15
+
+#: The name the wiring goes under in the assembly: one product for all of it, because a
+#: tree with a line per jumper is a tree nobody can find a part in.
+WIRES_NAME = "Wires"
 
 #: How closely a reading program may merge two points, in millimetres. OpenCASCADE's own
 #: default; every coordinate below is written to a nanometre, well inside it.
@@ -149,9 +176,18 @@ class Palette:
     lead: Rgb = (0.78, 0.80, 0.84)
     part: Rgb = (0.30, 0.31, 0.34)
     body: Callable[[Footprint], Rgb] | None = None
+    #: Asked per conductor, which is where a red supply wire and a black ground differ.
+    #: Left out, a sleeved wire is ``sleeve`` and a bare one ``lead``.
+    wire: Callable[[Conductor], Rgb] | None = None
+    sleeve: Rgb = (0.20, 0.35, 0.70)
 
     def body_rgb(self, footprint: Footprint) -> Rgb:
         return self.part if self.body is None else self.body(footprint)
+
+    def wire_rgb(self, conductor: Conductor) -> Rgb:
+        if self.wire is not None:
+            return self.wire(conductor)
+        return self.sleeve if conductor.kind in SLEEVED_KINDS else self.lead
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +254,70 @@ def board_model(
             comp, footprint, doc, place, top, drilled, lead_radius, palette
         )
         parts.append(ModelPart(comp.ref or comp.id, solids))
+    wires = _wire_solids(doc, place, top, palette)
+    if wires:
+        parts.append(ModelPart(WIRES_NAME, wires))
     return tuple(parts)
+
+
+def wire_radius_mm(doc: PerfDocument, conductor: Conductor) -> float:
+    """How thick one wire is drawn in the file: the copper of the gauge it is cut in --
+    the same answer the cut list prints and DRC measures -- plus its sleeve, if it wears
+    one. A bent lead is a lead."""
+    if conductor.kind == "lead-bend":
+        return LEAD_RADIUS_MM
+    net = next((n for n in doc.nets if n.id == conductor.net_id), None)
+    awg = cut_gauge_awg(getattr(conductor, "gauge_awg", None), net.current_a if net else None)
+    sleeve = INSULATION_WALL_MM if conductor.kind in SLEEVED_KINDS else 0.0
+    return awg_diameter_mm(awg) / 2 + sleeve
+
+
+def _wire_solids(
+    doc: PerfDocument,
+    place: Callable[[float, float], tuple[float, float]],
+    top: float,
+    palette: Palette,
+) -> tuple[Solid, ...]:
+    """Every wire as a cylinder per straight run, lying on the face it is laid on.
+
+    Lifted by its stacking level -- ``occupancy.stacking_layers``, what it crosses -- in
+    steps of the thickest wire on the board, so two that cross pass one over the other
+    rather than through it; a lifted wire then gets a post down to the board at each end,
+    where it is soldered. Each run is lengthened by its radius at every corner, so the two
+    meet in a solid elbow rather than leaving a notch on the outside of the bend.
+    """
+    wires = [c for c in doc.conductors if not contacts_every_path_hole(c) and len(c.path) > 1]
+    if not wires:
+        return ()
+    radii = {c.id: wire_radius_mm(doc, c) for c in wires}
+    step = 2 * max(radii.values()) + WIRE_STACK_GAP_MM
+    layers = stacking_layers(doc)
+    solids: list[Solid] = []
+    for cond in wires:
+        radius = radii[cond.id]
+        lift = step * layers.get(cond.id, cond.layer_z)
+        z = top + radius + lift if cond.side == "top" else -(radius + lift)
+        rgb = palette.wire_rgb(cond)
+        points = [
+            place(centre.x, centre.y) for hole in cond.path for centre in [hole_to_mm(hole, doc.board)]
+        ]
+        last = len(points) - 2
+        for index, ((ax, ay), (bx, by)) in enumerate(pairwise(points)):
+            length = math.hypot(bx - ax, by - ay)
+            if length < 1e-6:
+                continue
+            axis: Vec = ((bx - ax) / length, (by - ay) / length, 0.0)
+            before = radius if index > 0 else 0.0
+            after = radius if index < last else 0.0
+            base = (ax - axis[0] * before, ay - axis[1] * before, z)
+            solids.append(Solid(Cylinder(base, axis, length + before + after, radius), rgb))
+        if lift > 0:
+            for x, y in (points[0], points[-1]):
+                foot = top if cond.side == "top" else z
+                solids.append(
+                    Solid(Cylinder((x, y, foot), (0.0, 0.0, 1.0), radius + lift, radius), rgb)
+                )
+    return tuple(solids)
 
 
 def _part_solids(
@@ -664,6 +763,8 @@ def document_to_step(
 __all__ = [
     "MIN_WEB_MM",
     "ROUND_ARCHETYPES",
+    "SLEEVED_KINDS",
+    "WIRES_NAME",
     "Box",
     "Cylinder",
     "ModelPart",
@@ -674,4 +775,5 @@ __all__ = [
     "document_to_step",
     "model_to_step",
     "step_string",
+    "wire_radius_mm",
 ]

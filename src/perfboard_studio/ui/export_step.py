@@ -16,12 +16,12 @@ from pathlib import Path
 from PySide6.QtGui import QColor
 
 from perfboard_studio.connectivity import FootprintLookup
-from perfboard_studio.model import Board, Footprint, PerfDocument
+from perfboard_studio.model import Conductor, Footprint, PerfDocument
 from perfboard_studio.step_export import Palette, Rgb, document_to_step
 
 from .boardcolors import scheme_for
 from .bodies import style_for
-from .view3d import LEAD_RGB
+from .view3d import LEAD_RGB, net_colouring, wire_rgb
 
 
 def _rgb(colour: str) -> Rgb:
@@ -33,9 +33,17 @@ def _body_rgb(footprint: Footprint) -> Rgb:
     return _rgb(style_for(footprint).fill)
 
 
-def step_palette(board: Board) -> Palette:
+def step_palette(doc: PerfDocument) -> Palette:
     """The colours the 3D view paints this board with, as sRGB -- what STEP reads."""
-    return Palette(board=scheme_for(board.material).rgb, lead=LEAD_RGB, body=_body_rgb)
+    net_class, signal_index = net_colouring(doc)
+
+    def wire(conductor: Conductor) -> Rgb:
+        net = conductor.net_id or ""
+        return wire_rgb(conductor, net_class.get(net), signal_index.get(net, 0))
+
+    return Palette(
+        board=scheme_for(doc.board.material).rgb, lead=LEAD_RGB, body=_body_rgb, wire=wire
+    )
 
 
 def export_step(doc: PerfDocument, lookup: FootprintLookup, path: Path) -> Path:
@@ -48,7 +56,7 @@ def export_step(doc: PerfDocument, lookup: FootprintLookup, path: Path) -> Path:
         doc,
         lookup,
         timestamp=datetime.now().astimezone().isoformat(timespec="seconds"),
-        palette=step_palette(doc.board),
+        palette=step_palette(doc),
         file_name=path.name,
     )
     path.write_text(text, encoding="ascii", newline="\n")

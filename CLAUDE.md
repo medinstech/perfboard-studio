@@ -871,8 +871,15 @@ Three choices carry it, each with a test in `tests/test_step_export.py`:
   with `component-overhangs-edge` or `component-too-tall` would let a lid be drawn round a
   board the checker had just called too tall for it. Every lead goes down its hole to
   `footprints.LEAD_TRIM_MM` past the solder side -- moved out of `view3d` with
-  `LEAD_RADIUS_MM` so the view and the file draw one lead. Copper and wiring are left out,
-  as KiCad's STEP leaves them out by default.
+  `LEAD_RADIUS_MM` so the view and the file draw one lead. Copper and solder traces are
+  left out, as KiCad's STEP leaves copper out by default.
+- **A wire is as thick as the gauge it is cut in** -- `wiregauge.cut_gauge_awg`, the answer
+  DRC and the cut list already share, plus `INSULATION_WALL_MM` for a sleeve -- and lifted by
+  `occupancy.stacking_layers` in steps of the thickest wire on the board, so the 53 crossings
+  across the fixtures pass over one another (`test_wires_that_cross_pass_over_one_another`).
+  Its colour is `view3d.wire_rgb`, the one the 3D view paints it with. Each run is
+  lengthened by its radius at an elbow so a bend is solid; the crossing test trims that
+  back, or two runs of one wire read as a crossing.
 - **Holes are cut only where they leave a wall** (`MIN_WEB_MM`). Bores first, so a grid hole
   under an M3 bore is the one that gives way; a sliver between two circles is a degenerate
   face a CAD kernel rejects, not a detail.

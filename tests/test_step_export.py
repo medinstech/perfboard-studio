@@ -33,10 +33,19 @@ from perfboard_studio.geometry import (
     hole_to_mm,
     undrilled_holes,
 )
-from perfboard_studio.model import HoleCoord, MountingHole, PerfDocument
+from perfboard_studio.model import (
+    HoleCoord,
+    MountingHole,
+    PerfDocument,
+    WireConductor,
+    contacts_every_path_hole,
+)
+from perfboard_studio.occupancy import stacking_layers
 from perfboard_studio.step_export import (
     MIN_WEB_MM,
     ROUND_ARCHETYPES,
+    SLEEVED_KINDS,
+    WIRES_NAME,
     Box,
     Cylinder,
     Palette,
@@ -44,7 +53,9 @@ from perfboard_studio.step_export import (
     board_model,
     document_to_step,
     step_string,
+    wire_radius_mm,
 )
+from perfboard_studio.wiregauge import INSULATION_WALL_MM, awg_diameter_mm
 
 ROOT = Path(__file__).resolve().parents[1]
 BOARDS = sorted(
@@ -146,7 +157,7 @@ def test_the_assembly_names_the_board_and_every_part_by_reference() -> None:
         for entity in entities.values()
         if _kind(entity) == "PRODUCT"
     ]
-    assert products == [doc.meta.name, "Board", *(c.ref for c in doc.components)]
+    assert products == [doc.meta.name, "Board", *(c.ref for c in doc.components), WIRES_NAME]
     usages = [e for e in entities.values() if _kind(e) == "NEXT_ASSEMBLY_USAGE_OCCURRENCE"]
     assert len(usages) == len(products) - 1
 
@@ -242,7 +253,7 @@ def test_every_part_is_the_body_drc_measures(name: str) -> None:
     lookup = footprint_lookup()
     board = doc.board
     outline = board_outline_mm(board)
-    parts = board_model(doc, lookup)[1:]
+    parts = [part for part in board_model(doc, lookup)[1:] if part.name != WIRES_NAME]
     placed = [c for c in doc.components if lookup(c.footprint_id) is not None]
     assert [part.name for part in parts] == [c.ref for c in placed]
 
@@ -294,6 +305,7 @@ def test_every_lead_goes_down_a_drilled_hole_and_out_past_the_solder_side() -> N
     upright = [
         solid.shape
         for part in model[1:]
+        if part.name != WIRES_NAME
         for solid in part.solids[1:]
         if isinstance(solid.shape, Cylinder) and solid.shape.axis == (0.0, 0.0, 1.0)
     ]
@@ -328,10 +340,138 @@ def test_the_palette_colours_each_part_from_its_own_footprint() -> None:
     )
     model = board_model(doc, footprint_lookup(), palette)
     assert model[0].solids[0].rgb == (0.1, 0.2, 0.3)
-    for comp, part in zip(doc.components, model[1:], strict=True):
+    for comp, part in zip(doc.components, model[1:-1], strict=True):
         dip = get_footprint(comp.footprint_id).body.archetype == "dip"  # type: ignore[union-attr]
         assert part.solids[0].rgb == ((0.9, 0.0, 0.0) if dip else (0.0, 0.9, 0.0))
         assert all(solid.rgb == (0.4, 0.5, 0.6) for solid in part.solids[1:])
+    # Without a ``wire`` answer, a sleeve is ``sleeve`` and bare wire is ``lead``.
+    assert model[-1].name == WIRES_NAME
+    assert {solid.rgb for solid in model[-1].solids} <= {(0.4, 0.5, 0.6), palette.sleeve}
+
+
+# ---------------------------------------------------------------------------
+# The wiring
+# ---------------------------------------------------------------------------
+
+
+def _wire_runs(doc: PerfDocument) -> list[Cylinder]:
+    model = board_model(doc, footprint_lookup())
+    wires = [part for part in model if part.name == WIRES_NAME]
+    return [
+        solid.shape
+        for part in wires
+        for solid in part.solids
+        if isinstance(solid.shape, Cylinder) and solid.shape.axis[2] == 0.0
+    ]
+
+
+def _covers(run: Cylinder, a: tuple[float, float], b: tuple[float, float]) -> bool:
+    """Whether ``run`` lies along a to b and spans it -- lengthened by at most its radius at
+    either end, which is the elbow it shares with the run before or after it."""
+    length = math.dist(a, b)
+    along = ((b[0] - a[0]) / length, (b[1] - a[1]) / length)
+    if not (math.isclose(run.axis[0], along[0]) and math.isclose(run.axis[1], along[1])):
+        return False
+    dx, dy = a[0] - run.base[0], a[1] - run.base[1]
+    start = dx * along[0] + dy * along[1]
+    beside = abs(dx * along[1] - dy * along[0])
+    tail = run.length - (start + length)
+    return beside < 1e-6 and -1e-6 <= start <= run.radius + 1e-6 and -1e-6 <= tail <= run.radius + 1e-6
+
+
+def test_every_wire_lies_along_its_path_on_its_own_face_and_no_trace_is_drawn() -> None:
+    """A wire run by run, centred a radius off the face it is laid on (more where it has
+    to clear something), and a solder trace not at all: it is the copper."""
+    doc = _example("nano-relay")
+    board = doc.board
+    outline = board_outline_mm(board)
+    layers = stacking_layers(doc)
+    wires = [c for c in doc.conductors if not contacts_every_path_hole(c)]
+    assert wires and len(wires) < len(doc.conductors), "the fixture should have both"
+    runs = _wire_runs(doc)
+    assert len(runs) == sum(len(c.path) - 1 for c in wires)
+
+    remaining = list(runs)
+    for cond in wires:
+        radius = wire_radius_mm(doc, cond)
+        for a, b in zip(cond.path, cond.path[1:], strict=False):
+            pa, pb = hole_to_mm(a, board), hole_to_mm(b, board)
+            ax, ay = pa.x - outline.x, outline.y + outline.height - pa.y
+            bx, by = pb.x - outline.x, outline.y + outline.height - pb.y
+            match = next(run for run in remaining if _covers(run, (ax, ay), (bx, by)))
+            remaining.remove(match)
+            assert match.radius == radius
+            if cond.side == "top":
+                assert match.base[2] >= board.thickness + radius - 1e-9
+            else:
+                assert match.base[2] <= -radius + 1e-9
+            if layers.get(cond.id, cond.layer_z) == 0:
+                expected = board.thickness + radius if cond.side == "top" else -radius
+                assert match.base[2] == pytest.approx(expected)
+    assert not remaining
+
+
+def test_a_wire_is_as_thick_as_the_gauge_it_is_cut_in_and_its_sleeve() -> None:
+    """``cut_gauge_awg`` -- the gauge the cut list prints and DRC measures -- plus the
+    sleeve, because the room a wire takes is what an enclosure is drawn round."""
+    doc = _example("nano-relay")
+    wires = [c for c in doc.conductors if isinstance(c, WireConductor)]
+    assert {c.kind for c in wires} >= {"bare-wire", "insulated-wire"}
+    heavy = tuple(replace(c, gauge_awg=18) if isinstance(c, WireConductor) else c for c in doc.conductors)
+    doc = replace(doc, conductors=heavy)
+    for cond in doc.conductors:
+        if not isinstance(cond, WireConductor):
+            continue
+        sleeve = INSULATION_WALL_MM if cond.kind in SLEEVED_KINDS else 0.0
+        assert wire_radius_mm(doc, cond) == pytest.approx(awg_diameter_mm(18) / 2 + sleeve)
+    assert {run.radius for run in _wire_runs(doc)} <= {
+        awg_diameter_mm(18) / 2,
+        awg_diameter_mm(18) / 2 + INSULATION_WALL_MM,
+    }
+
+
+def _cross(p: tuple[float, float], q: tuple[float, float], r: tuple[float, float]) -> float:
+    return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+
+@pytest.mark.parametrize("path", BOARDS, ids=lambda p: p.stem)
+def test_wires_that_cross_pass_over_one_another(path: Path) -> None:
+    """Two runs whose paths cross in plan must be a whole radius-and-a-radius apart in
+    height: two solids in one place is a modelling error whatever the picture looks like."""
+    doc = _load(path)
+    lookup = footprint_lookup()
+    model = board_model(doc, lookup)
+    wires = [part for part in model if part.name == WIRES_NAME]
+    runs = [
+        s.shape
+        for part in wires
+        for s in part.solids
+        if isinstance(s.shape, Cylinder) and s.shape.axis[2] == 0.0
+    ]
+
+    def ends(run: Cylinder) -> tuple[tuple[float, float], tuple[float, float]]:
+        # Without the radius each run is lengthened by at an elbow: the run before it and
+        # the run after it are the same wire, and overlap there on purpose.
+        near = run.radius
+        far = run.length - run.radius
+        return (
+            (run.base[0] + run.axis[0] * near, run.base[1] + run.axis[1] * near),
+            (run.base[0] + run.axis[0] * far, run.base[1] + run.axis[1] * far),
+        )
+
+    for index, first in enumerate(runs):
+        a, b = ends(first)
+        for second in runs[index + 1 :]:
+            if (first.base[2] > 0) != (second.base[2] > 0):
+                continue  # one on each face of the board
+            c, d = ends(second)
+            proper = (
+                _cross(a, b, c) * _cross(a, b, d) < -1e-9
+                and _cross(c, d, a) * _cross(c, d, b) < -1e-9
+            )
+            if proper:
+                gap = abs(first.base[2] - second.base[2])
+                assert gap >= first.radius + second.radius - 1e-9, (path.stem, first, second)
 
 
 # ---------------------------------------------------------------------------

@@ -27,13 +27,16 @@ closed without a bump.
   and cut a box round: the board at its real size with every drilled hole and mounting bore
   through it, every part as the room it takes -- the very outline and height DRC's
   overhang and too-tall rules measure, a cylinder for a can, a barrel lying along its leads
-  for a resistor -- and every lead down through its hole and a millimetre past the solder
-  side. Each part is its own named component (Board, R1, U1...) in the colour the 3D view
-  gives it. Written by the application itself (ISO 10303-21, AP214), so it needs no
+  for a resistor -- every lead down through its hole and a millimetre past the solder
+  side, and every wire along its path on the face it is laid on, as thick as the gauge the
+  cut list prints plus its sleeve, lifted over whatever it crosses as the 3D view lifts it.
+  Each part is its own named component (Board, R1, U1..., and Wires) in the colour the 3D
+  view gives it. Written by the application itself (ISO 10303-21, AP214), so it needs no
   graphics driver and no new dependency; checked against OpenCASCADE, the kernel FreeCAD
   and KiCad read STEP with. A project save writes `-board.step` beside the other outputs,
-  and the headless run writes `board.step`. Copper and wiring are left out, as KiCad's own
-  STEP export leaves them out by default: an enclosure needs the room, not the solder.
+  and the headless run writes `board.step`. Copper and solder traces are left out, as
+  KiCad's own STEP export leaves copper out by default: an enclosure needs the room, not
+  the solder.
 
 ## [0.15.0] - 2026-10-06
 

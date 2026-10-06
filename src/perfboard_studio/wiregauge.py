@@ -62,6 +62,11 @@ STOCKED_AWG: tuple[int, ...] = (30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10)
 #: two holes, and whatever it carries should arrive on a terminal rated for it.
 HEAVIEST_AWG: int = STOCKED_AWG[-1]
 
+#: How thick an insulated wire's sleeve is, per side. Thin-wall PVC hook-up wire: AWG 24
+#: comes out 1.1 mm across, the size the 3D view draws every insulated wire at. Only the
+#: STEP export reads it, where a wire is as wide as the room it takes in the enclosure.
+INSULATION_WALL_MM: Mm = 0.3
+
 
 def awg_diameter_mm(awg: int) -> Mm:
     """Conductor diameter of a solid wire of this gauge, from the AWG definition itself.

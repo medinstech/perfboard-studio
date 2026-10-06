@@ -3558,7 +3558,7 @@ def build_conductor(
         _finish(core.GetProperty(), BRIGHT_TIN)
         actors = [core]
         if body is not None:
-            rgb = _own_rgb(cond) or _insulation_rgb(net_class, signal_index)
+            rgb = wire_rgb(cond, net_class, signal_index)
             body.GetProperty().SetColor(*rgb)
             _finish(body.GetProperty(), INSULATION)
             actors.append(body)
@@ -3567,7 +3567,7 @@ def build_conductor(
         if swell is not None:
             # Squashed about the copper, for TRACE_FLATTEN's reason.
             _flatten_about(actor, joint_z)
-        rgb = _own_rgb(cond) or (SOLDER_RGB if is_trace else BARE_RGB)
+        rgb = (_own_rgb(cond) or SOLDER_RGB) if is_trace else wire_rgb(cond, net_class, signal_index)
         actor.GetProperty().SetColor(*rgb)
         # Solder is metal and it is ROUGH metal -- a broad soft sheen rather than the tight
         # glint tinned wire gives. Making it smooth is what once made a run look like wire,
@@ -3789,6 +3789,31 @@ def _insulation_rgb(net_class: NetClass | None, signal_index: int) -> tuple[floa
 
     colour = insulation_color(net_class, signal_index)
     return (colour.redF(), colour.greenF(), colour.blueF())
+
+
+def wire_rgb(
+    cond: Conductor, net_class: NetClass | None, signal_index: int
+) -> tuple[float, float, float]:
+    """The colour one wire is: its own if it names one, its sleeve's by the net's class if
+    it wears one, bare tin otherwise. The STEP export asks this too
+    (``ui/export_step``), so a wire is the same red in the view and in the CAD program."""
+    own = _own_rgb(cond)
+    if own is not None:
+        return own
+    if cond.kind in ("insulated-wire", "top-jumper"):
+        return _insulation_rgb(net_class, signal_index)
+    return BARE_RGB
+
+
+def net_colouring(doc: PerfDocument) -> tuple[dict[str, NetClass], dict[str, int]]:
+    """Each net's class, and each signal net's place in the colour cycle -- what
+    :func:`wire_rgb` needs to know about the net a wire is on, worked out once a board."""
+    net_class_by_id = {net.id: net.net_class for net in doc.nets}
+    signal_index = {
+        net.id: index
+        for index, net in enumerate(n for n in doc.nets if n.net_class == "signal")
+    }
+    return net_class_by_id, signal_index
 
 
 # --------------------------------------------------------------------------- scene
@@ -4018,11 +4043,7 @@ def populate_renderer(
                 if highlight is not None:
                     (_pick_out if subject else _dim)(actor)
                 ren.AddActor(actor)
-    net_class_by_id = {net.id: net.net_class for net in doc.nets}
-    signal_index = {
-        net.id: index
-        for index, net in enumerate(n for n in doc.nets if n.net_class == "signal")
-    }
+    net_class_by_id, signal_index = net_colouring(doc)
     # How high each conductor has to sit to clear what it crosses -- from the engine, so
     # 2D and 3D cannot disagree about which wire passes over which. Not a running index:
     # see occupancy.stacking_layers.
