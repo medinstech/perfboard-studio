@@ -55,8 +55,9 @@ NETLIST_NAME = "netlist.net"
 #: The 1:1 board sheets and the schematic PDF are the two anybody prints, so they come
 #: first; the CSVs are what gets opened in a spreadsheet or pasted into an order; the JSON
 #: is for whatever comes next, and is the only one written for a machine rather than a
-#: person.
-ExportKind = Literal["board", "schematic", "guide", "table", "data"]
+#: person. The STEP model is last because it is for somebody else's program entirely: the
+#: CAD one the case is drawn in.
+ExportKind = Literal["board", "schematic", "guide", "table", "data", "model"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +81,7 @@ EXPORTS: tuple[ExportSpec, ...] = (
     ExportSpec("-bom.csv", "table", "What to buy"),
     ExportSpec("-cuts.csv", "table", "Every track cut, in the order they are made"),
     ExportSpec("-guide.json", "data", "The build guide, for another program"),
+    ExportSpec("-board.step", "model", "The board as solids, to draw its enclosure round"),
 )
 
 

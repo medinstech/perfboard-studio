@@ -296,6 +296,7 @@ from .clipboard import block_from_json, block_to_json, paste_payload, paste_posi
 from .engine_text import net_class_word, say
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
+from .export_step import export_step
 from .i18n import language as current_language
 from .i18n import set_language, t
 from .partnames import footprint_label
@@ -4624,6 +4625,15 @@ class MainWindow(QMainWindow):
         act_pdf.triggered.connect(self.on_export_pdf)
         act_png = file_menu.addAction(t("Export 3D Snapshot PNG…"))
         act_png.triggered.connect(self.on_export_3d_png)
+        act_step = self.act_export_step = file_menu.addAction(t("Export 3D Model (STEP)…"))
+        act_step.setToolTip(
+            t(
+                "Write the board as solids for a mechanical CAD program: the board with its holes "
+                "and every part as the room it takes, named by its reference -- to draw the "
+                "enclosure round."
+            )
+        )
+        act_step.triggered.connect(self.on_export_step)
         file_menu.addSeparator()
         act_quit = file_menu.addAction(t("&Quit"))
         # Ctrl+Q rather than StandardKey.Quit: on Windows that standard key resolves to no
@@ -11247,6 +11257,30 @@ class MainWindow(QMainWindow):
                 self,
                 t("Export failed"),
                 t("Could not write {path}. Is the folder writable?").format(path=out),
+            )
+            return
+        self.statusBar().showMessage(t("Exported {path}").format(path=out), 8000)
+
+    def on_export_step(self) -> None:
+        """The board as solids, for whoever draws its enclosure (``step_export``).
+
+        No GL guard, unlike the snapshot above: nothing here renders. The file is text the
+        engine writes from the document, so it works on the machines that cannot draw the
+        3D view at all -- which are often exactly the ones a CAD program runs on remotely.
+        """
+        chosen = self._ask_where_to_export(
+            t("Export 3D Model (STEP)"),
+            f"{self._export_stem()}.step",
+            t("STEP model (*.step *.stp)"),
+        )
+        if chosen is None:
+            return
+        out = chosen if chosen.suffix.lower() in (".step", ".stp") else chosen.with_suffix(".step")
+        try:
+            export_step(self.bus.document, self.lookup, out)
+        except OSError as err:
+            QMessageBox.critical(
+                self, t("Export failed"), t("Could not write {path}: {reason}").format(path=out, reason=err)
             )
             return
         self.statusBar().showMessage(t("Exported {path}").format(path=out), 8000)

@@ -156,6 +156,7 @@ def test_a_project_save_writes_the_board_and_everything_it_can_generate(tmp_path
     assert "ne555-guide.html" in written
     assert "ne555-bom.csv" in written
     assert "ne555-schematic.svg" in written
+    assert "ne555-board.step" in written
     assert all(path.parent.name == OUTPUT_DIR for path in result.written)
 
 

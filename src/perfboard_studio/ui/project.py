@@ -36,6 +36,7 @@ from perfboard_studio.schematic_export import drawing_to_svg
 
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
+from .export_step import export_step
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +177,7 @@ def _producers(
         "-bom.csv": text_export(lambda: bom_to_csv(guide)),
         "-cuts.csv": text_export(lambda: cut_list_to_csv(guide)),
         "-guide.json": text_export(lambda: guide_to_json(guide)),
+        "-board.step": lambda target: export_step(document, lookup, target),
     }
     return {spec: by_suffix[spec.suffix] for spec in EXPORTS}
 

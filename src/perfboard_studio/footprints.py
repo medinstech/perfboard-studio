@@ -1623,6 +1623,17 @@ def footprint_lookup() -> Callable[[str], Footprint | None]:
 #: records length 0.0, and a zero-sized body is invisible rather than small.
 MIN_BODY_MM: Mm = 1.2
 
+#: A through-hole lead: 0.56 mm across, between a resistor's 0.5 mm wire and a DIP's
+#: 0.6 mm-wide blade. The 3D view draws every lead at it and the STEP export cuts every lead
+#: at it; here, in the engine, so the two are one number.
+LEAD_RADIUS_MM: Mm = 0.28
+
+#: How far a trimmed lead stands proud of the solder-side copper. Enough to see that
+#: something came through the hole, not enough to look like a board nobody has cut the
+#: legs off yet -- and, in the STEP export, how far the board has to stand off whatever it
+#: is screwed to.
+LEAD_TRIM_MM: Mm = 1.0
+
 #: Per archetype: (``dims`` key for the LOCAL X extent, key for the LOCAL Y extent, the axis
 #: the part's leads run along).
 #:

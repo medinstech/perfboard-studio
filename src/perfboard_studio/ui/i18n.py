@@ -69,6 +69,14 @@ TURKISH: Mapping[str, str] = {
     ),
     "Export 1:1 PDF (component + solder side)…": "1:1 PDF Dışa Aktar (komponent + lehim yüzü)…",
     "Export 3D Snapshot PNG…": "3D Görüntü PNG Dışa Aktar…",
+    "Export 3D Model (STEP)…": "3D Modeli Dışa Aktar (STEP)…",
+    "Write the board as solids for a mechanical CAD program: the board with its holes "
+    "and every part as the room it takes, named by its reference -- to draw the "
+    "enclosure round.": (
+        "Kartı mekanik bir CAD programı için katı olarak yaz: delikleriyle kart ve her "
+        "parça kapladığı hacim olarak, referansıyla adlandırılmış -- kutusunu çevresine "
+        "çizmek için."
+    ),
     "&Quit": "&Çıkış",
     # -- edit ----------------------------------------------------------------
     "&Undo": "&Geri Al",
@@ -563,6 +571,8 @@ TURKISH: Mapping[str, str] = {
     "PDF (*.pdf)": "PDF belgesi (*.pdf)",
     "Export 3D Snapshot": "3D Görüntüyü Dışa Aktar",
     "PNG image (*.png)": "PNG görüntüsü (*.png)",
+    "Export 3D Model (STEP)": "3D Modeli Dışa Aktar (STEP)",
+    "STEP model (*.step *.stp)": "STEP modeli (*.step *.stp)",
     "Export Build Guide — the cut list, parts list and JSON go beside it": (
         "Montaj Rehberini Dışa Aktar — kesim listesi, parça listesi ve JSON yanına yazılır"
     ),

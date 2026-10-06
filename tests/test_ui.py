@@ -1863,14 +1863,41 @@ def test_every_export_asks_where_and_suggests_what_it_used_to_write(tmp_path, mo
     window.on_export_3d_png()
     window.on_export_guide()
     window.on_export_schematic()
+    window.on_export_step()
 
     assert [name for name, _filter in asked] == [
         "board_component_side.pdf",
         "board.png",
         "board_guide.html",
         "board_schematic.pdf",
+        "board.step",
     ]
     assert list(tmp_path.iterdir()) == [], "a cancelled export wrote something"
+    _close(window)
+
+
+def test_the_step_model_is_written_where_asked_and_needs_no_gl(tmp_path, monkeypatch) -> None:
+    """Nothing in it renders, so it is not behind the GL guard the snapshot is: a machine
+    that cannot draw the 3D view can still hand the board to a CAD program. A name typed
+    without an extension gets the one the filter promised."""
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui import view3d
+
+    window = _window_on(_golden_document("ne555"))
+    monkeypatch.setattr(view3d, "offscreen_gl_available", lambda: False)
+    monkeypatch.setattr(
+        main_module.MainWindow,
+        "_ask_where_to_export",
+        lambda self, title, suggested, file_filter: tmp_path / "timer",
+    )
+
+    window.on_export_step()
+
+    assert [p.name for p in tmp_path.iterdir()] == ["timer.step"]
+    text = (tmp_path / "timer.step").read_text(encoding="ascii")
+    assert text.startswith("ISO-10303-21;")
+    assert "FILE_NAME('timer.step'" in text
+    assert "PRODUCT('U1','U1'" in text
     _close(window)
 
 

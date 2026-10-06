@@ -1,7 +1,8 @@
 """The headless run: every output this application can produce, with no display.
 
 ``python -m perfboard_studio.ui.main --headless board.perf`` renders the 2D editor view, both
-1:1 PDFs, the schematic as SVG/PDF/PNG, the 3D view from each face, the build guide with
+1:1 PDFs, the schematic as SVG/PDF/PNG, the board as a STEP model, the 3D view from each
+face, the build guide with
 its step images, and prints DRC, LVS, ratsnest, autoroute, style-sweep and placement
 timings.
 
@@ -52,6 +53,7 @@ from perfboard_studio.version import describe as describe_version
 from . import view3d
 from .export_pdf import export_pdf, verify_scale
 from .export_schematic import svg_to_pdf, svg_to_png
+from .export_step import export_step
 from .i18n import language
 from .main import _document_arguments, read_document_text
 from .view2d import RULER_MARGIN_MM, BoardScene
@@ -198,6 +200,13 @@ def headless(argv: list[str]) -> int:
     print(f"             schematic.svg, {sheet_pdf.name}, {sheet_png.name}")
     for note in drawing.notes:
         print(f"             note: {note}")
+
+    # --- The board as STEP solids. Like the sheet, it needs no GL, so it is written on
+    # every machine -- and it is the only place the writer meets a real board end to end.
+    t0 = time.perf_counter()
+    step = export_step(doc, lookup, out_dir / "board.step")
+    t_step = (time.perf_counter() - t0) * 1000
+    print(f"STEP model   {t_step:6.1f} ms   {step.stat().st_size // 1024} KB -> {step.name}")
 
     # --- DRC / LVS, timed. This is the number that matters for "is DRC fast enough to
     # run after every drag": see the docstring on view2d.BoardScene.mouseReleaseEvent

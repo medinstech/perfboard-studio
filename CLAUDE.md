@@ -46,7 +46,8 @@ type an agent asked for from a check that raises nothing.
 `ruff format` would still rewrite 40 of the 57 files and point every line of blame in the
 repository at a reformat. That is its own decision, not a side effect of another change.
 
-`--headless` (`ui/headless.py`) renders 2D/3D/PDF and the schematic (SVG + PDF + PNG) into
+`--headless` (`ui/headless.py`) renders 2D/3D/PDF, the schematic (SVG + PDF + PNG) and the
+STEP model into
 `headless_out/`, runs DRC + LVS and prints timings with no display. It is the only step
 that exercises 2D, 3D and both exports against a real board end to end, and the fastest
 way to check that a rendering change did not crash. It inspects a document and never edits
@@ -850,6 +851,42 @@ declares `Apache-2.0 AND CC-BY-SA-4.0` and `release.yml` checks the meshes and t
 are actually in it, because a wheel without them still draws every board — which is exactly
 why nothing else would notice them going missing.
 
+### The board leaves as STEP solids, and they are the bodies DRC measured
+
+`step_export.py` writes ISO 10303-21 (AP214) itself, from three shapes -- a box, a cylinder
+and a plate drilled through -- and `ui/export_step.py` adds the views' colours, the clock
+and the file. VTK can write meshes and not STEP, and a mesh in a mechanical CAD program is
+triangles nobody can measure or cut a box round; OpenCASCADE would be a hundred megabytes
+of dependency for a few kinds of text entity. It is an ENGINE module -- pure, strings out,
+the header's time stamp passed in -- so it needs no GL and runs wherever the sheet export
+does: the window, `--headless` and a project save (`-board.step`) all go through
+`export_step`.
+
+Three choices carry it, each with a test in `tests/test_step_export.py`:
+
+- **A part is its ENVELOPE, and the envelope is DRC's**: `drc.placed_body_box` and
+  `Footprint.body_height`, a cylinder where the courtyard is round (`ROUND_ARCHETYPES`, held
+  to the 24-gon outlines), a barrel along its leads for an axial part, a box otherwise. Not
+  the borrowed meshes: an enclosure needs the room a part takes, and a STEP that disagreed
+  with `component-overhangs-edge` or `component-too-tall` would let a lid be drawn round a
+  board the checker had just called too tall for it. Every lead goes down its hole to
+  `footprints.LEAD_TRIM_MM` past the solder side -- moved out of `view3d` with
+  `LEAD_RADIUS_MM` so the view and the file draw one lead. Copper and wiring are left out,
+  as KiCad's STEP leaves them out by default.
+- **Holes are cut only where they leave a wall** (`MIN_WEB_MM`). Bores first, so a grid hole
+  under an M3 bore is the one that gives way; a sliver between two circles is a degenerate
+  face a CAD kernel rejects, not a detail.
+- **Orientation is the whole difficulty of a hand-written B-rep, so it is tested twice.**
+  The text test reads every closed shell back and requires each edge used exactly twice,
+  once each way, and every loop to join up; the OpenCASCADE test (skipped unless
+  `cadquery-ocp` is installed -- not a dependency) checks every solid valid with positive
+  volume and the board to the volume its holes predict, which is the one thing the shell
+  test cannot tell from its inside-out twin. Run it after any change to the B-rep.
+
+The file is ASCII (`step_string` escapes everything else as `\X2\`, so "Röle" survives),
+millimetres, z up, the solder side on z = 0 and the board's corner at the origin. Every
+part is its own product under one root, named by reference, placed by the identity.
+
 ### The guide's order is physical, and its checks are derived
 
 `guide.py` has nine phases (`PHASE_TITLES`, 0–8) and the order is not editorial: parts go
@@ -1365,7 +1402,7 @@ nobody is going to follow.
 model → geometry → stripboard → connectivity / occupancy
                                     → drc, lvs, router, autoroute, placer, ratsnest,
                                       striproute, schematic
-                                                        → boardfit
+                                                        → boardfit, step_export
                                                         → guide → guide_export
                                                         → ui/, mcp/
 ```

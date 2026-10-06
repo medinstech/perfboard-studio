@@ -361,7 +361,7 @@ parçayla açılır: kurulacak bir kütüphane ve kaybolacak bir dosya yoktur.
 
 Biten: editör, kütüphane, bağlantısallık ve LVS, DRC, router ve yerleştirme
 optimizasyonu, render edilmiş adım görselleri ve montaj oynatması ile montaj rehberi,
-1:1 PDF çıktısı, T ve etiketleriyle şema paneli ve yanındaki sayfa dışa aktarımı,
+1:1 PDF çıktısı, kutusunu çizmek için kartın STEP modeli, T ve etiketleriyle şema paneli ve yanındaki sayfa dışa aktarımı,
 pin adları kartta basılan gerçek parça kataloğu, pin başlıklarındaki modüller, karta yazılan
 etiketler, parça parça okunan KiCad netlist'leri, kütüphanede olmayan parçaların kendi
 ölçüleriyle tarif edilmesi, çökme kurtarma, MCP sunucusu,

@@ -29,7 +29,13 @@ import vtk  # type: ignore[import-untyped]
 from vtkmodules.util import numpy_support
 
 from perfboard_studio.connectivity import FootprintLookup
-from perfboard_studio.footprints import MODULE_PCB_MM, MODULE_SEAT_SOCKETED_MM, wire_entry
+from perfboard_studio.footprints import (
+    LEAD_RADIUS_MM,
+    LEAD_TRIM_MM,
+    MODULE_PCB_MM,
+    MODULE_SEAT_SOCKETED_MM,
+    wire_entry,
+)
 from perfboard_studio.geometry import (
     all_pin_holes,
     board_edge_margin_mm,
@@ -527,11 +533,6 @@ PAD_LIFT_MM = 0.05
 #: holes drilled through it. Below the copper on both faces, the ring is the topmost thing
 #: at every hole, which is what makes it read as a hole.
 BORE_UNDER_PAD_MM = 0.015
-
-#: How far a trimmed lead stands proud of the solder-side copper. Enough to see that
-#: something came through the hole, not enough to look like a board nobody has cut the
-#: legs off yet.
-LEAD_TRIM_MM = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -1655,7 +1656,7 @@ def _marking(fp: Footprint, value: str) -> str:
 def _through_hole_pieces(
     body: _WorldBody,
     top_z: float,
-    radius: float = 0.28,
+    radius: float = LEAD_RADIUS_MM,
     blade: tuple[float, float] | None = None,
 ) -> list[_Piece]:
     """The part of every lead that goes down its hole, in ONE instanced actor.
@@ -1691,7 +1692,7 @@ def _through_hole_pieces(
     ]
 
 
-def _lead_pieces(body: _WorldBody, radius: float = 0.28) -> list[_Piece]:
+def _lead_pieces(body: _WorldBody, radius: float = LEAD_RADIUS_MM) -> list[_Piece]:
     """Tinned wire from each pin to the body edge, and down through the hole from there.
 
     This is most of what makes a resistor read as a resistor: the horizontal run says the
@@ -3741,7 +3742,7 @@ def build_joints(doc: PerfDocument, lookup: FootprintLookup) -> list[vtk.vtkActo
     dead = patched_holes(doc) | undrilled_holes(doc)
     z = pad_z(board, "bottom")
     points = vtk.vtkPoints()
-    radius = 0.28
+    radius = LEAD_RADIUS_MM
     for comp in doc.components:
         footprint = lookup(comp.footprint_id)
         if footprint is None:

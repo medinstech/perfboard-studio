@@ -363,7 +363,7 @@ install and nothing to go missing.
 
 Done: the editor, the library, connectivity and LVS, DRC, the router and the placement
 optimiser, the build guide with rendered step images and assembly playback, the 1:1 PDF
-export, the schematic panel with T's and labels and the sheet export beside it, a
+export, the board as a STEP model to draw its enclosure round, the schematic panel with T's and labels and the sheet export beside it, a
 catalog of real parts with their pin names printed on the board, modules on header strips,
 labels written on the board, KiCad netlists read part by part, parts described by their own
 measurements when the library does not have them, crash recovery, the MCP server, TR/EN
