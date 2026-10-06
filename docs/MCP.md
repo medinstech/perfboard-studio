@@ -103,10 +103,10 @@ conductor at a time.
 | **Editing** | `place_component` · `move_component` · `rotate_component` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `remove_stale_conductors` · `set_height_limit` |
 | **Planning** | `autoroute` · `reroute` · `optimize_placement` |
 | **Verifying** | `run_drc` · `run_lvs` · `check_heights` |
-| **Output** | `generate_guide` · `export_pdf` |
+| **Output** | `generate_guide` · `export_pdf` · `export_step` |
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 
-53 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+54 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -159,6 +159,16 @@ after a part has moved grows the board every time: the runs laid for the old pos
 still join the right pins, so nothing flags them. `reroute` takes the old ones out first,
 which is the only safe verb after `move_component` or `optimize_placement`.
 
+`export_step` is the board leaving for somebody else's program: the CAD one its enclosure
+is drawn in. An agent asked to design the case, or only to say whether the board fits the
+one it has, otherwise has the board's size from `get_board_info` and each part's height
+from `check_heights` and nothing that puts them together. The STEP model is solids -- the
+board with its holes, every part as the room it takes, every lead and every wire -- and
+the outline and height of each part are the very numbers DRC measured, so the file and
+`run_drc` cannot disagree about whether something sticks out. It is the only file tool
+that needs neither Qt nor GL: the engine writes the text, and the views' colours are added
+only when the UI is there to give them.
+
 ## Things worth knowing
 
 **Rendering needs Qt.** `render_2d_view`, `render_3d_view`, `render_schematic` and
@@ -167,13 +177,15 @@ gets every other tool; the render tools report their absence instead of taking t
 down at import. Only the 3D one needs GL — the schematic is drawn as an SVG by a pure
 engine module and rasterised by Qt, so it works where `render_3d_view` cannot.
 
-**Nothing writes to disk unless you name a path**, and the two tools that write files
+**Nothing writes to disk unless you name a path**, and the three tools that write files
 hold to it in different ways. `generate_guide` without a directory returns the summary
 and the warnings, which is usually the question being asked. It takes a `language` too —
 `"en"` or `"tr"`, the language of whoever will build from it — and refuses one it cannot
 write (`unknown-language`) rather than answering in English. `export_pdf` has no useful
 answer without files, so without a directory it is refused (`no-directory`) rather than
-writing two sheets into whatever directory the server was started in.
+writing two sheets into whatever directory the server was started in. `export_step` takes
+a file rather than a directory, adds `.step` if the name has neither `.step` nor `.stp`,
+and is refused without one (`no-path`) for the same reason.
 
 **`ok` means the call ran.** Every tool here returns `ok: false` only for a refusal —
 so `run_lvs` reports its verdict as `matches_schematic` and `run_drc` as `errors` /

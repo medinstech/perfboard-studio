@@ -12,7 +12,7 @@ module configures logging to stderr before anything else, and nothing anywhere u
 render tools pull in are the real risk, which is another reason they are imported lazily
 inside the tools rather than at module scope.
 
-FIFTY-ONE TOOLS, against PLAN.md Sec 2's "~25, deliberately narrow", and the overage is
+FIFTY-FOUR TOOLS, against PLAN.md Sec 2's "~25, deliberately narrow", and the overage is
 stated rather than hidden. Each tool is a verb an agent cannot compose from the others,
 and the surface was trimmed rather than grown: the history listing folded into
 ``get_status``, and "solder bridge" is not a separate tool from ``add_solder_trace``
@@ -28,6 +28,9 @@ too tall looks exactly like one that is not. ``set_height_limit`` exists because
 it that limit can only be typed into the GUI, leaving one DRC rule permanently silent
 for an agent -- and folding the limit into ``check_heights`` as an argument would make a
 read tool mutate the document, off the command bus and outside the undo stack.
+``export_step`` finishes that thought: the enclosure is drawn in somebody else's program,
+and the STEP model is the board in the form that program reads, with every part as the
+room DRC measured it taking. It writes one file and composes from nothing here.
 
 THE MOST RECENT FIVE are the netlist group -- ``create_net``, ``connect_pins``,
 ``disconnect_pins``, ``update_net``, ``delete_net`` -- and they are the largest single
@@ -734,6 +737,19 @@ def export_pdf(directory: str | None = None) -> dict[str, Any]:
     without one this is refused rather than writing two files wherever the server
     happens to have been started."""
     return session.export_pdf(directory)
+
+
+@mcp.tool()
+def export_step(path: str | None = None) -> dict[str, Any]:
+    """Write the board as a STEP model — solids a mechanical CAD program (FreeCAD, Fusion,
+    SolidWorks, KiCad) can measure and draw an enclosure round: the board with its holes and
+    mounting bores, every part as the room it takes (the outline and height DRC measures),
+    every lead through its hole and every wire. No copper or solder traces. Millimetres,
+    z up, the solder side on z = 0, the board's corner at the origin. Needs no GL.
+
+    `path` is required, as for everything that writes: without one this is refused. A path
+    that does not end in .step or .stp has .step added."""
+    return session.export_step(path)
 
 
 # ---------------------------------------------------------------------------

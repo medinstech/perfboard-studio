@@ -384,7 +384,7 @@ Sırada, [PLAN.md](./PLAN.md) §11'in koyduğu sırayla:
 
 | | |
 |---|---|
-| [docs/MCP.md](./docs/MCP.md) | 53 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
+| [docs/MCP.md](./docs/MCP.md) | 54 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
 | [examples/README.md](./examples/README.md) | her örnek kartın neyi göstermek için orada olduğu (yalnızca İngilizce) |
 | [CHANGELOG.md](./CHANGELOG.md) | her sürüm, ve yayınlanmamış bir yapının bir sonrakine doğru ne biriktirdiği (yalnızca İngilizce) |
 | [docs/RELEASING.md](./docs/RELEASING.md) | etiket ritüeli, ve `release.yml`'in ondan üç platformda ne ürettiği (yalnızca İngilizce) |

@@ -721,6 +721,39 @@ def test_export_pdf_without_a_directory_is_refused_rather_than_writing_two_files
     assert list(tmp_path.iterdir()) == []
 
 
+def test_export_step_without_a_path_is_refused_rather_than_writing_a_file(
+    loaded: BoardSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = loaded.export_step()
+
+    assert result["ok"] is False
+    assert result["code"] == "no-path"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_export_step_writes_the_board_as_a_named_assembly(
+    loaded: BoardSession, tmp_path: Path
+) -> None:
+    """No GL behind it, so no marker: the engine writes the text. A name without the
+    extension gets one, and the answer says what is in the file and which way up it is."""
+    result = loaded.export_step(str(tmp_path / "out" / "timer"))
+
+    assert result["ok"] is True
+    target = tmp_path / "out" / "timer.step"
+    assert result["written"] == [str(target)]
+    text = target.read_text(encoding="ascii")
+    assert text.startswith("ISO-10303-21;")
+    refs = [c["ref"] for c in loaded.list_components()]
+    assert result["parts"][0] == "Board"
+    assert set(refs) <= set(result["parts"])
+    assert result["solids"] == text.count("MANIFOLD_SOLID_BREP(")
+    info = loaded.get_board_info()
+    assert result["board_mm"][2] == pytest.approx(info["thickness_mm"])
+    assert "z = 0" in result["frame"]
+
+
 # ---------------------------------------------------------------------------
 # The protocol layer -- only what nothing else can check
 # ---------------------------------------------------------------------------
@@ -779,7 +812,12 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # could; a label could not be written, and a label is the one thing on a finished board
     # that says which terminal takes the battery. Removing one is remove_board_feature,
     # which already takes back every other thing added to the board by id.
-    assert len(tools) <= 53, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 54, for export_step. check_heights says how tall the build stands and
+    # get_board_info how big the board is; nothing put the two together in the form the
+    # enclosure is actually drawn in, which is a CAD program reading STEP. One file, one
+    # verb, composed from nothing else here.
+    assert len(tools) <= 54, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"

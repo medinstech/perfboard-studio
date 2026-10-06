@@ -138,6 +138,7 @@ from perfboard_studio.router import (
     RoutingStyle,
     options_for_style,
 )
+from perfboard_studio.step_export import Plate, board_model, model_to_step
 from perfboard_studio.stripboard import is_stripboard
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
 from perfboard_studio.striproute import plan_stripboard
@@ -1679,6 +1680,54 @@ class BoardSession:
             written=[str(component_side), str(solder_side)],
             scale_exact=check.ok,
             scale_error_um=round(check.error_mm * 1000, 3),
+        )
+
+    def export_step(self, path: str | None = None) -> dict[str, Any]:
+        """The board as a STEP model: solids for a mechanical CAD program (``step_export``).
+
+        Text the engine writes, so unlike the renders it needs no GL and cannot take the
+        server down. The colours are the views' when the UI imports and neutral ones when
+        it does not -- a model without its colours is still the whole model.
+        """
+        if not path or not path.strip():
+            return _refused(
+                "no-path",
+                "export_step writes a file, so it needs a path to write it to. Nothing is "
+                "written without one.",
+            )
+        target = _path_arg(path, "export_step")
+        if target.suffix.lower() not in (".step", ".stp"):
+            target = target.with_name(f"{target.name}.step")
+        palette = None
+        try:
+            from perfboard_studio.ui.export_step import step_palette
+
+            palette = step_palette(self.document)
+        except Exception:  # pragma: no cover - only on a Qt- or VTK-less install
+            palette = None
+        model = board_model(self.document, self.lookup, palette)
+        text = model_to_step(
+            model,
+            name=self.document.meta.name or "board",
+            timestamp=_now_iso(),
+            file_name=target.name,
+        )
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text, encoding="ascii", newline="\n")
+        except OSError as err:
+            raise SessionError(f"Cannot write {target}: {err.strerror or err}.") from err
+        board = model[0].solids[0].shape
+        assert isinstance(board, Plate)
+        return _ok(
+            written=[str(target)],
+            parts=[part.name for part in model],
+            solids=sum(len(part.solids) for part in model),
+            board_mm=[round(board.high[0], 3), round(board.high[1], 3), round(board.high[2], 3)],
+            frame=(
+                "millimetres, z up, the solder side on z = 0 and the board's corner at the "
+                "origin; seen from +z it is the component side, A1 at the top left"
+            ),
         )
 
     def render_2d(self, side: str = "top", px_per_mm: int = 12) -> tuple[bytes, dict[str, Any]]:

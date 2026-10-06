@@ -37,6 +37,10 @@ closed without a bump.
   and the headless run writes `board.step`. Copper and solder traces are left out, as
   KiCad's own STEP export leaves copper out by default: an enclosure needs the room, not
   the solder.
+- **`export_step`, the MCP server's 54th tool**, writes the same STEP model for an agent:
+  asked to design the case, or only whether the board fits the one it has, it can now hand
+  the board to the program the case is drawn in. It takes a file path and is refused
+  without one, like every tool that writes, and needs neither Qt nor GL.
 
 ## [0.15.0] - 2026-10-06
 
