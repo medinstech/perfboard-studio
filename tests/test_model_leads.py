@@ -37,13 +37,17 @@ FOOT_BAND = 0.01
 IN_THE_HOLE_MM = 0.4
 
 #: Models of ONE pin, drawn by the renderer at every pin of their part: each has its own
-#: pin at the origin (``partmodels.header_pin_model``, ``terminal_block_models``).
+#: pin at the origin (``partmodels.header_pin_model``, ``terminal_block_models``,
+#: ``vertical_header_models``).
 ONE_PIN_MODELS = frozenset(
     {
         partmodels.HEADER_PIN,
         partmodels.TERMINAL_HEAD,
         partmodels.TERMINAL_WAY,
         partmodels.TERMINAL_TAIL,
+        partmodels.VERTICAL_HEADER_HEAD,
+        partmodels.VERTICAL_HEADER_WAY,
+        partmodels.VERTICAL_HEADER_TAIL,
     }
 )
 

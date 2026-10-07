@@ -88,7 +88,13 @@ from .bodies import (
     surface_for,
 )
 from .moduleart import PlacedArt, fit_module_art
-from .partmodels import ModelPiece, PartModel, header_pin_model, terminal_block_models
+from .partmodels import (
+    ModelPiece,
+    PartModel,
+    header_pin_model,
+    terminal_block_models,
+    vertical_header_models,
+)
 from .partmodels import model_for as _model_for
 
 SUBSTRATE_RGB = {
@@ -1279,7 +1285,7 @@ def _box(x: float, y: float, z: float) -> Any:
 CHAMFER_MM = 0.3
 
 
-def _moulded_box(x: float, y: float, z: float) -> vtk.vtkPolyData:
+def _moulded_box(x: float, y: float, z: float, chamfer: float = CHAMFER_MM) -> vtk.vtkPolyData:
     """A box with its top and bottom edges broken, which is what a plastic case has.
 
     A ``vtkCubeSource`` meets its neighbours at a knife edge, and a knife edge takes exactly
@@ -1290,9 +1296,10 @@ def _moulded_box(x: float, y: float, z: float) -> vtk.vtkPolyData:
 
     Only the HORIZONTAL edges are cut. From anywhere this view is looked at, the top edge
     is the one seen against the board; cutting the four vertical corners as well doubles the
-    geometry to change a silhouette nobody is looking at.
+    geometry to change a silhouette nobody is looking at. ``chamfer`` is for a case whose
+    break is bigger than a moulding's, and it is never more than the box can take.
     """
-    chamfer = min(CHAMFER_MM, x / 4, y / 4, z / 3)
+    chamfer = min(chamfer, x / 4, y / 4, z / 3)
     corners = ((0.5, 0.5), (-0.5, 0.5), (-0.5, -0.5), (0.5, -0.5))
     rings = (
         (-z / 2, x - 2 * chamfer, y - 2 * chamfer),
@@ -2343,138 +2350,355 @@ def _wire_entry_pieces(body: _WorldBody) -> list[_Piece]:
 #: not say which way the plug was put in; this is a convention, and the only rule anything
 #: checks about the part (its envelope) is the same either way.
 VERTICAL_TERMINAL_SCREW_FACE: tuple[float, float] = (0.0, 1.0)
-#: The header the plug stands in, from KiCad's Phoenix MSTBVA 2,5/N-G-5,08 model: 8.6 mm
-#: across and 12.0 mm tall (``footprints.VERTICAL_TERMINAL_*`` has the rest).
-_VERTICAL_HEADER_ACROSS_MM = 8.6
+
+# THE HEADER, measured on KiCad's Phoenix MSTBVA 2,5/N-G-5,08 model -- the slices
+# ``partmodels.vertical_header_models`` draw, and the sizes the fallback is drawn from. In the
+# plug's own frame: ``c`` runs across the row towards the screw face, so the model's +y (the
+# side with the locking lip) is -c.
+#: Its top, where the plug's body comes to rest.
 _VERTICAL_HEADER_HEIGHT_MM = 12.0
-#: A screw in the plug's face: the round pocket it sits in, its head and the blade's slot.
+#: Its outside across the row, lip included, and how far it reaches past the end pins.
+_VERTICAL_HEADER_BACK_MM = -4.8
+_VERTICAL_HEADER_FRONT_MM = 3.8
+_VERTICAL_HEADER_END_MM = 3.54
+#: The pocket the plug's foot goes into: across, past the end pins, and its floor.
+_VERTICAL_CAVITY_BACK_MM = -3.1
+_VERTICAL_CAVITY_FRONT_MM = 2.8
+_VERTICAL_CAVITY_END_MM = 2.74
+_VERTICAL_CAVITY_FLOOR_MM = 3.5
+
+# THE PLUG, from Phoenix's MSTB 2,5/..-ST-5,08: a way every 5.08 mm, 18.3 mm from the face
+# that mates to the face the wires go in at, 15 mm from the screw face to the back. Its foot
+# fills the header's pocket and its body rests on the header's rim, so the two together stand
+# 12 + (18.3 - 8.5) mm -- the 22 the footprint's envelope estimates. Across, 15 mm does not
+# fit the envelope's 12, and the envelope is what DRC and the placer measure, so the body is
+# drawn as wide as the envelope allows and no wider.
+#: The groove between one way and the next, across the top, and how deep it is.
+_PLUG_GROOVE_MM = 0.5
+_PLUG_CAP_MM = 1.0
+#: A wire entry: along the row, across it, and the funnel round its mouth. (Scalars, not a
+#: pair: an upper-case pair of floats in this module is a MATERIAL, and a test says so.)
+_PLUG_ENTRY_ALONG_MM = 3.4
+_PLUG_ENTRY_ACROSS_MM = 3.2
+_PLUG_FUNNEL_MM = 0.35
+#: How far down the entry the clamp's cage is, and the wall of it seen from above.
+_PLUG_CAGE_DEPTH_MM = 0.85
+_PLUG_CAGE_WALL_MM = 0.5
+#: The grip ribs on the back: how far they stand out and how tall each one is.
+_PLUG_RIB_OUT_MM = 0.4
+_PLUG_RIB_HEIGHT_MM = 0.6
+#: A screw in the plug's face: the round pocket it sits in, its head, and how far up the
+#: plug's body its axis is.
 _PLUG_POCKET_RADIUS_MM = 1.75
 _PLUG_SCREW_RADIUS_MM = 1.4
+_PLUG_SCREW_HEIGHT = 0.45
+#: The metal of a clamp and its screw: the grey KiCad's MKDS terminal block is drawn in, so a
+#: vertical terminal and a side-entry one beside it are one family.
+_TERMINAL_METAL_RGB = _hex_rgb("#a5a392", LEAD_RGB)
+#: How far the screw face stands back from the envelope's edge: the marks on it (pocket, head,
+#: slot) stand proud of the face, and the face is set back by what they stand out, so nothing
+#: drawn passes the envelope.
+_PLUG_FACE_SETBACK_MM = 0.45
 
 
-def _vertical_terminal_pieces(body: _WorldBody) -> list[_Piece]:
-    """The header and the screw plug standing in it: the wires go in from ABOVE, and the
-    screws that clamp them are in the plug's side.
+def _framed_cap(
+    outer: tuple[float, float],
+    hole: tuple[float, float],
+    hole_offset: float,
+    height: float,
+    chamfer: float,
+    funnel: float,
+    along_x: bool,
+) -> vtk.vtkPolyData:
+    """A block with a rectangular hole straight down through it -- one way of a plug's top,
+    round its wire entry -- its outer top edge broken and the mouth of the hole funnelled.
 
-    It was one green block with the openings and the screw heads side by side on top, which
-    is no part anybody can buy: on a vertical header the plug stands on end, so its wire
-    entries face up and its screws face sideways -- the 2D view says the same, drawing only
-    the openings from above. The header is the narrower collar the plug's foot sits in, a
-    shade darker than the plug, and the plug carries a groove between ways on its top and
-    its screw face, which is what makes three ways read as three. Marks stand
-    ``_DECAL_PROUD_MM`` proud of the face they are on, so the depth buffer can tell them
-    from it.
+    Built as six rings joined into one closed solid, because a box cannot be bored and the
+    hole has to be one: a dark square printed on a face is what the entries were, and an
+    entry with walls you see down into, and the clamp at the bottom of it, is what the eye
+    reads as a terminal. ``outer`` and ``hole`` are (along the row, across it); the hole is
+    ``hole_offset`` across from the block's centre. Centred on the origin like a box.
     """
-    fill = _rgb(body.style.fill)
-    along_x = body.axis == "x"
-    header_across = min(_VERTICAL_HEADER_ACROSS_MM, body.across)
-    header_h = min(_VERTICAL_HEADER_HEIGHT_MM, body.height * 0.55)
-    plug_h = body.height - header_h
-    plug_along = body.along - 0.4
+    oa, oc = outer[0] / 2, outer[1] / 2
+    ha, hc = hole[0] / 2, hole[1] / 2
+    top, bottom = height / 2, -height / 2
 
-    def sized(along: float, across: float, height: float, *, moulded: bool = True) -> Any:
-        size = (along, across, height) if along_x else (across, along, height)
-        return _moulded_box(*size) if moulded else _box(*size)
+    def ring(half_a: float, half_c: float, centre_c: float, z: float) -> list[tuple[float, float, float]]:
+        corners = ((half_a, half_c), (-half_a, half_c), (-half_a, -half_c), (half_a, -half_c))
+        out = []
+        for a, c in corners:
+            c += centre_c
+            out.append((a, c, z) if along_x else (c, a, z))
+        return out
 
-    pieces = [
-        _Piece(
-            source=sized(body.along, header_across, header_h),
-            rgb=_lit(body.style.fill, 0.82),
-            position=(body.x, body.y, header_h / 2 + _LIFT),
-            material=GLOSS,
-        ),
-        _Piece(
-            source=sized(plug_along, body.across, plug_h),
-            rgb=fill,
-            position=(body.x, body.y, header_h + plug_h / 2 + _LIFT),
-            material=GLOSS,
-        ),
+    rings = [
+        ring(oa, oc, 0.0, bottom),
+        ring(oa, oc, 0.0, top - chamfer),
+        ring(oa - chamfer, oc - chamfer, 0.0, top),
+        ring(ha + funnel, hc + funnel, hole_offset, top),
+        ring(ha, hc, hole_offset, top - funnel),
+        ring(ha, hc, hole_offset, bottom),
     ]
-    top = body.height + _LIFT
+    mesh = _Mesh()
+    for index, low in enumerate(rings):
+        high = rings[(index + 1) % len(rings)]
+        for corner in range(4):
+            nxt = (corner + 1) % 4
+            mesh.polygon([low[corner], low[nxt], high[nxt], high[corner]])
+    normals = vtk.vtkPolyDataNormals()
+    normals.SetInputData(mesh.data())
+    normals.SetFeatureAngle(30.0)
+    normals.ConsistencyOn()
+    normals.AutoOrientNormalsOn()
+    normals.SplittingOn()
+    normals.Update()
+    result: vtk.vtkPolyData = normals.GetOutput()
+    return result
+
+
+def _baked(source: Any, rotate_z: float) -> vtk.vtkPolyData:
+    """``source`` turned about z once, into its own polydata: an instanced piece has no actor
+    of its own to turn (see ``_upright_cylinder``)."""
+    if hasattr(source, "Update"):
+        source.Update()
+        data = source.GetOutput()
+    else:
+        data = source
+    turn = vtk.vtkTransform()
+    turn.RotateZ(rotate_z)
+    baked = vtk.vtkTransformPolyDataFilter()
+    baked.SetTransform(turn)
+    baked.SetInputData(data)
+    baked.Update()
+    result: vtk.vtkPolyData = baked.GetOutput()
+    return result
+
+
+def _vertical_terminal_pieces(
+    body: _WorldBody,
+    comp: Any = None,
+    header: tuple[PartModel, PartModel, PartModel] | None = None,
+) -> list[_Piece]:
+    """A pluggable terminal on a vertical header: KiCad's header, with the screw plug
+    standing in it -- the wires go in from ABOVE, and the screws that clamp them are in the
+    plug's side.
+
+    It was one green box, then a box on a narrower box, and neither was a part anybody can
+    buy. On a vertical header the plug stands on end: its foot fills the header's open
+    pocket and its body rests on the header's rim, so there is no gap between the two and
+    the header shows round the plug's foot. The plug's top is one framed cap per way with a
+    groove between them; each wire entry is a real hole with a funnelled mouth and the
+    clamp's metal cage down in it, as the side-entry block's entries are drawn; the screws
+    are slotted heads in round pockets in the face; and the back carries the grip ribs a
+    plug is pulled out by. Metal is the grey the side-entry block's clamps and screws are,
+    the nylon the same table's green, so the two kinds read as one family on a board.
+
+    The header is KiCad's (``header``, cut into ways like ``_terminal_block_pieces``); without
+    the meshes it is drawn from the same measured sizes. Everything stays inside the
+    envelope the footprint gives DRC: the marks on the screw face stand proud of a face set
+    back by as much as they stand out.
+    """
+    count = len(body.pins)
+    along_x = body.axis == "x"
+    ua = (1.0, 0.0) if along_x else (0.0, 1.0)
+    normal = body.screws if body.screws is not None else ((0.0, 1.0) if along_x else (1.0, 0.0))
+    nx, ny = normal
+    cx = sum(x for x, _y in body.pins) / count
+    cy = sum(y for _x, y in body.pins) / count
+    # Each pin's place along the row, from the row's centre.
+    rows = sorted((px - cx) * ua[0] + (py - cy) * ua[1] for px, py in body.pins)
+    pitch = (rows[-1] - rows[0]) / (count - 1) if count > 1 else 5.08
+
+    def at(a: float, c: float, z: float) -> tuple[float, float, float]:
+        return (cx + a * ua[0] + c * nx, cy + a * ua[1] + c * ny, z)
+
+    def box(along: float, across: float, height: float, chamfer: float | None = None) -> Any:
+        size = (along, across, height) if along_x else (across, along, height)
+        if chamfer is None:
+            return _box(*size)
+        return _moulded_box(*size, chamfer=chamfer)
+
+    fill = _rgb(body.style.fill)
+    shade = _lit(body.style.fill, 0.22)
     groove_rgb = _lit(body.style.fill, 0.55)
-    # Between ways: halfway between neighbouring pins, along the row.
-    pins = sorted(body.pins, key=lambda pin: pin[0] if along_x else pin[1])
-    for (ax, ay), (bx, by) in pairwise(pins):
-        mid_x, mid_y = (ax + bx) / 2, (ay + by) / 2
-        pieces.append(
-            _Piece(
-                source=sized(0.35, body.across - 1.2, 0.1, moulded=False),
-                rgb=groove_rgb,
-                position=(mid_x, mid_y, top - 0.05 + _DECAL_PROUD_MM),
-                material=GLOSS,
-            )
-        )
-    for pin_x, pin_y in body.pins:
-        # The wire entry, straight over its pin, where the 2D view draws it.
-        pieces.append(
-            _Piece(
-                source=sized(2.5, 2.3, 1.0),
-                rgb=_rgb("#121212"),
-                position=(pin_x, pin_y, top - 0.5 + _DECAL_PROUD_MM),
-                material=GLOSS,
-            )
-        )
-    if body.screws is not None:
-        nx, ny = body.screws
-        normal_along_x = abs(nx) > abs(ny)
-        face = body.across / 2
-        screw_z = header_h + plug_h * 0.55 + _LIFT
-        orientation = _ALONG_X if normal_along_x else _ALONG_Y
-        pocket_rgb = _lit(body.style.fill, 0.22)
+    pieces: list[_Piece] = []
 
-        def out(pin_x: float, pin_y: float, depth: float) -> tuple[float, float]:
-            return (pin_x + nx * (face + depth), pin_y + ny * (face + depth))
-
-        for pin_x, pin_y in body.pins:
-            for radius, length, depth, rgb, material in (
-                # The hole the screw sits down in: the plug's own plastic, in shadow.
-                (_PLUG_POCKET_RADIUS_MM, 0.3, _DECAL_PROUD_MM - 0.15, pocket_rgb, GLOSS),
-                (
-                    _PLUG_SCREW_RADIUS_MM,
-                    0.3,
-                    _DECAL_PROUD_MM,
-                    _rgb(body.style.accent),
-                    STEEL,
-                ),
-            ):
-                pieces.append(
-                    _Piece(
-                        source=_cylinder(radius, length, resolution=20),
-                        rgb=rgb,
-                        position=(*out(pin_x, pin_y, depth), screw_z),
-                        orientation=orientation,
-                        material=material,
-                    )
-                )
-            # The slot, upright, as a screwdriver meets a screw it can only reach sideways.
-            slot = (0.3, 0.4, _PLUG_SCREW_RADIUS_MM * 1.8)
+    # -- the header ------------------------------------------------------------------
+    if header is not None and comp is not None and count >= 2:
+        pieces += _terminal_block_pieces(body, header, comp)
+        pieces += _through_hole_pieces(body, 0.0)
+        rest = _VERTICAL_HEADER_HEIGHT_MM
+    else:
+        rest = min(_VERTICAL_HEADER_HEIGHT_MM, body.height * 0.55)
+        length = rows[-1] - rows[0] + 2 * _VERTICAL_HEADER_END_MM
+        inner = rows[-1] - rows[0] + 2 * _VERTICAL_CAVITY_END_MM
+        header_rgb = _lit(body.style.fill, 0.86)
+        floor = min(_VERTICAL_CAVITY_FLOOR_MM, rest / 2)
+        walls = (
+            # floor, back wall with its lip, front wall, two ends
+            (0.0, _VERTICAL_HEADER_BACK_MM, _VERTICAL_HEADER_FRONT_MM, length, 0.0, floor),
+            (0.0, _VERTICAL_HEADER_BACK_MM, _VERTICAL_CAVITY_BACK_MM, length, floor, rest),
+            (0.0, _VERTICAL_CAVITY_FRONT_MM, _VERTICAL_HEADER_FRONT_MM, length, floor, rest),
+        )
+        for a, c0, c1, along, z0, z1 in walls:
             pieces.append(
                 _Piece(
-                    source=_box(*(slot if normal_along_x else (slot[1], slot[0], slot[2]))),
-                    rgb=_lit(body.style.accent, 0.35),
-                    position=(*out(pin_x, pin_y, _DECAL_PROUD_MM + 0.12), screw_z),
-                    material=STEEL,
+                    source=box(along, c1 - c0, z1 - z0, chamfer=CHAMFER_MM),
+                    rgb=header_rgb,
+                    position=at(a, (c0 + c1) / 2, (z0 + z1) / 2 + _LIFT),
+                    material=GLOSS,
                 )
             )
-        for (ax, ay), (bx, by) in pairwise(pins):
+        for end in (-1.0, 1.0):
             pieces.append(
                 _Piece(
-                    source=_box(
-                        *(
-                            (0.1, 0.35, plug_h * 0.8)
-                            if normal_along_x
-                            else (0.35, 0.1, plug_h * 0.8)
-                        )
-                    ),
-                    rgb=groove_rgb,
-                    position=(
-                        *out((ax + bx) / 2, (ay + by) / 2, _DECAL_PROUD_MM - 0.05),
-                        header_h + plug_h / 2 + _LIFT,
+                    source=box(_VERTICAL_HEADER_END_MM - _VERTICAL_CAVITY_END_MM,
+                               _VERTICAL_CAVITY_FRONT_MM - _VERTICAL_CAVITY_BACK_MM, rest - floor),
+                    rgb=header_rgb,
+                    position=at(
+                        end * (inner + length) / 4,
+                        (_VERTICAL_CAVITY_FRONT_MM + _VERTICAL_CAVITY_BACK_MM) / 2,
+                        (floor + rest) / 2 + _LIFT,
                     ),
                     material=GLOSS,
                 )
             )
-    return pieces + _through_hole_pieces(body, _LIFT + 0.15)
+        pieces += _through_hole_pieces(body, _LIFT + 0.15)
+        rest += _LIFT
+
+    # -- the plug ---------------------------------------------------------------------
+    top = body.height + (0.0 if header is not None and comp is not None else _LIFT)
+    half = body.across / 2
+    front = half - _PLUG_FACE_SETBACK_MM
+    back = -half + _PLUG_RIB_OUT_MM
+    plug_along = count * pitch - _PLUG_GROOVE_MM
+    across = front - back
+    middle = (front + back) / 2
+    cap_z = top - _PLUG_CAP_MM
+
+    # The foot, down in the header's pocket: hidden once it is in, and the reason the header
+    # shows round the plug rather than under a slab standing on it.
+    cavity_along = rows[-1] - rows[0] + 2 * _VERTICAL_CAVITY_END_MM - 0.3
+    foot_across = _VERTICAL_CAVITY_FRONT_MM - _VERTICAL_CAVITY_BACK_MM - 0.3
+    foot_low = min(_VERTICAL_CAVITY_FLOOR_MM + 0.5, rest - 1.0)
+    pieces.append(
+        _Piece(
+            source=box(cavity_along, foot_across, rest - foot_low),
+            rgb=fill,
+            position=at(
+                0.0,
+                (_VERTICAL_CAVITY_FRONT_MM + _VERTICAL_CAVITY_BACK_MM) / 2,
+                (foot_low + rest) / 2,
+            ),
+            material=GLOSS,
+        )
+    )
+    # The body, from the header's rim to under the caps.
+    pieces.append(
+        _Piece(
+            source=box(plug_along, across, cap_z - rest, chamfer=0.4),
+            rgb=fill,
+            position=at(0.0, middle, (rest + cap_z) / 2),
+            material=GLOSS,
+        )
+    )
+    entry_a, entry_c = _PLUG_ENTRY_ALONG_MM, _PLUG_ENTRY_ACROSS_MM
+    caps = tuple(at(a, middle, cap_z + _PLUG_CAP_MM / 2) for a in rows)
+    pieces.append(
+        _Piece(
+            source=_framed_cap(
+                (pitch - _PLUG_GROOVE_MM, across),
+                (entry_a, entry_c),
+                # From the cap's centre to the entry's, in the world's own sign: the cap is
+                # built along +x/+y, and the screw face may be either way along it.
+                -middle * (ny if along_x else nx),
+                _PLUG_CAP_MM,
+                0.4,
+                _PLUG_FUNNEL_MM,
+                along_x,
+            ),
+            rgb=fill,
+            position=(0.0, 0.0, 0.0),
+            material=GLOSS,
+            instances=caps,
+        )
+    )
+    # Down each entry, the clamp's cage: a metal rim round the dark channel the wire goes in.
+    cage_top = top - _PLUG_CAGE_DEPTH_MM
+    cage_h = cage_top - (cap_z - 0.6)
+    pieces.append(
+        _Piece(
+            source=box(entry_a - 0.1, entry_c - 0.1, cage_h),
+            rgb=_TERMINAL_METAL_RGB,
+            position=(0.0, 0.0, 0.0),
+            material=STEEL,
+            instances=tuple(at(a, 0.0, cage_top - cage_h / 2) for a in rows),
+        )
+    )
+    channel = 2 * _PLUG_CAGE_WALL_MM
+    pieces.append(
+        _Piece(
+            source=box(entry_a - channel, entry_c - channel, 0.1),
+            rgb=_rgb("#121212"),
+            position=(0.0, 0.0, 0.0),
+            material=GLOSS,
+            instances=tuple(at(a, 0.0, cage_top + 0.05) for a in rows),
+        )
+    )
+
+    # The screws, in the face: a pocket in shadow, the head standing in it, the slot upright
+    # -- a screwdriver meets a screw it can only reach sideways with its blade upright.
+    screw_z = rest + (top - rest) * _PLUG_SCREW_HEIGHT
+    turn = 90.0 if abs(nx) > abs(ny) else 0.0  # a cylinder's own axis is y
+    for radius, depth, rgb, material in (
+        (_PLUG_POCKET_RADIUS_MM, 0.0, shade, GLOSS),
+        (_PLUG_SCREW_RADIUS_MM, _DECAL_PROUD_MM, _TERMINAL_METAL_RGB, STEEL),
+    ):
+        pieces.append(
+            _Piece(
+                source=_baked(_cylinder(radius, 0.3, resolution=24), turn),
+                rgb=rgb,
+                position=(0.0, 0.0, 0.0),
+                material=material,
+                instances=tuple(at(a, front + depth, screw_z) for a in rows),
+            )
+        )
+    slot = (0.4, 0.3, _PLUG_SCREW_RADIUS_MM * 1.8)  # along the row, out of the face, up
+    pieces.append(
+        _Piece(
+            source=box(*slot),
+            rgb=_lit("#a5a392", 0.35),
+            position=(0.0, 0.0, 0.0),
+            material=STEEL,
+            instances=tuple(at(a, front + _DECAL_PROUD_MM + 0.12, screw_z) for a in rows),
+        )
+    )
+    # Between ways: a groove down the screw face, where the caps' grooves come down to it.
+    if count > 1:
+        pieces.append(
+            _Piece(
+                source=box(_PLUG_GROOVE_MM * 0.7, 0.1, cap_z - rest - 0.8),
+                rgb=groove_rgb,
+                position=(0.0, 0.0, 0.0),
+                material=GLOSS,
+                instances=tuple(
+                    at((a + b) / 2, front + 0.05, (rest + cap_z) / 2)
+                    for a, b in pairwise(rows)
+                ),
+            )
+        )
+    # The grip ribs across the back, low on the body where a thumb and finger take it.
+    rib_out, rib_h = _PLUG_RIB_OUT_MM, _PLUG_RIB_HEIGHT_MM
+    for step in range(3):
+        pieces.append(
+            _Piece(
+                source=box(plug_along - 1.6, rib_out, rib_h, chamfer=0.15),
+                rgb=fill,
+                position=at(0.0, back - rib_out / 2, rest + 1.4 + step * 1.3),
+                material=GLOSS,
+            )
+        )
+    return pieces
 
 
 def _pot_pieces(body: _WorldBody) -> list[_Piece]:
@@ -2987,6 +3211,10 @@ def _pieces_for(
     """
     if footprint.body.archetype == "module-board":
         return _module_pieces(body, footprint, comp, board)
+    if footprint.body.archetype == "screw-terminal-vertical":
+        # The header is KiCad's, sliced like a terminal block; the plug is ours. Without the
+        # slices the header is drawn from its measured sizes, and the plug is the same.
+        return _vertical_terminal_pieces(body, comp=comp, header=vertical_header_models())
     if footprint.body.archetype == "pin-header":
         header = header_pin_model()
         if header is not None:

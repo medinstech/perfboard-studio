@@ -11,8 +11,9 @@ borrowed, and everything D6 was protecting is kept by being careful about WHAT i
   * **The generated body is still the answer for everything else**, and it is still the
     fallback here. A footprint with no entry, a generated id (``box-4x2-p1-r3-15x10x8``), a
     part nobody has mapped -- all of them draw exactly as they did. Nothing depends on a
-    model existing. (A screw terminal of any length is the one generated id that is drawn
-    from borrowed geometry, because the package is a repetition -- see ``TERMINAL_HEAD``.)
+    model existing. (A screw terminal of any length, and the header a vertical one's plug
+    stands in, are the generated ids drawn from borrowed geometry, because each package is a
+    repetition -- see ``TERMINAL_HEAD`` and ``VERTICAL_HEADER_HEAD``.)
   * **Only the shape above the board is taken.** The leads are this application's own, drawn
     by ``view3d._through_hole_pieces``, which knows the board's thickness, where the copper
     is and how far past it a trimmed lead stands. A model's own legs are drawn untrimmed for
@@ -153,6 +154,26 @@ def terminal_block_models() -> tuple[PartModel, PartModel, PartModel] | None:
     """The head, middle way and tail of a terminal block, or ``None`` if any is missing --
     in which case the terminal is drawn as the generated body, like any unmapped part."""
     head, way, tail = model_for(TERMINAL_HEAD), model_for(TERMINAL_WAY), model_for(TERMINAL_TAIL)
+    if head is None or way is None or tail is None:
+        return None
+    return head, way, tail
+
+
+#: The header a VERTICAL terminal's plug stands in, of any length, as three ways cut out of
+#: KiCad's 3-way Phoenix MSTBVA 2,5/3-G-5,08 -- the same cut as ``TERMINAL_HEAD``, measured the
+#: same way (``tools/import_kicad_models.py``). KiCad has the header and not the plug, so the
+#: plug is drawn by ``view3d._vertical_terminal_pieces`` and stood in this.
+VERTICAL_HEADER_HEAD = "screw-terminal-v-head"
+VERTICAL_HEADER_WAY = "screw-terminal-v-way"
+VERTICAL_HEADER_TAIL = "screw-terminal-v-tail"
+
+
+def vertical_header_models() -> tuple[PartModel, PartModel, PartModel] | None:
+    """The head, middle way and tail of a vertical terminal's header, or ``None`` if any is
+    missing -- in which case the header is drawn from its measured sizes instead."""
+    head = model_for(VERTICAL_HEADER_HEAD)
+    way = model_for(VERTICAL_HEADER_WAY)
+    tail = model_for(VERTICAL_HEADER_TAIL)
     if head is None or way is None or tail is None:
         return None
     return head, way, tail

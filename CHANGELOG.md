@@ -35,13 +35,20 @@ closed without a bump.
   than the id says -- the height DRC measures. A value nobody wrote a layout for, or a board
   of another size, keeps the block, and the STEP export is still the envelope. Every module
   also shows the tinned pad each of its pins comes up through.
-- **A vertical terminal is drawn as a header with a plug standing in it.** It was one green
-  block with the wire openings and the screw heads side by side on its top, which is no part
-  anybody sells: on a vertical header the plug stands on end, so its wires go in from above
-  and its screws are in its side. The narrower header collar now stands under the plug, the
-  openings sit straight over the pins as the 2D view draws them, the screws are slotted
-  heads in round pockets on the face a side-entry terminal's mouth would be on, and a groove
-  divides one way from the next.
+- **A vertical terminal is drawn as KiCad's header with a screw plug standing in it.** It was
+  one green block with the wire openings and the screw heads side by side on its top, which
+  is no part anybody sells. The header is now KiCad's own Phoenix MSTBVA model -- the open
+  pocket, the locking lip and its notches, the ends past the pins -- cut into ways like the
+  side-entry block, so a header of any length is drawn. The plug is drawn from Phoenix's MSTB
+  2,5/..-ST-5,08 sizes and stands IN it: its foot down in the pocket, its body resting on
+  the rim with no gap between. On a vertical header the plug stands on end, so the wires go
+  in from above -- each entry a real hole with a funnelled mouth and the clamp's metal cage
+  down in it, straight over its pin as the 2D view draws it -- and the screws are in its
+  side, slotted heads in round pockets, on the face a side-entry terminal's mouth would be
+  on. Each way is its own cap with a groove between, the back carries grip ribs, and the
+  edges are broken. The nylon and the metal are the side-entry block's, so the two kinds
+  look like one family. The plug is narrower than Phoenix's 15 mm so it stays inside the
+  footprint's 12 mm, which DRC and the placer measure; neither moved.
 
 ## [0.16.0] - 2026-10-06
 

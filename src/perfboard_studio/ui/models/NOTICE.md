@@ -39,9 +39,12 @@ The meshes are not the KiCad models unaltered:
   a 6 mm tactile switch — has each bare lead leaned in a straight line from where it leaves
   the part to the hole it goes in, as whoever fits the part bends its legs. Which ones is
   the `splay` flag in `tools/import_kicad_models.py`.
-- **One was cut into ways.** `screw-terminal-head`, `-way` and `-tail` are three slices of
-  `TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal`, each moved so its own pin
-  is at the origin; the application puts them side by side to draw a block of any length.
+- **Two were cut into ways.** `screw-terminal-head`, `-way` and `-tail` are three slices of
+  `TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal`, and `screw-terminal-v-head`,
+  `-way` and `-tail` three slices of
+  `Connector_Phoenix_MSTB/PhoenixContact_MSTBVA_2,5_3-G-5,08_1x03_P5.08mm_Vertical`, each moved
+  so its own pin is at the origin; the application puts them side by side to draw a block, or
+  a header, of any length.
 
 Nothing about the source models' geometry was otherwise altered, and no colours or
 materials were taken from them into the application's own tables.

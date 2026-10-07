@@ -192,6 +192,23 @@ MODELS: tuple[Model, ...] = (
     Model("screw-terminal-tail", "TerminalBlock_Phoenix",
           "TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal",
           clip=(7.62, 1000.0), offset=(-10.16, 0.0)),
+    # -- the header a vertical terminal's plug stands in, of any length ----
+    #
+    # ``screw-terminal-<n>-v`` is a pluggable block on a vertical header, and the HEADER is in
+    # KiCad's library (Phoenix MSTBVA 2,5/N-G-5,08) while the plug is not. It is a repetition
+    # in exactly the way the MKDS block is -- measured on KiCad 10: head + (N - 2) ways + tail
+    # cut from the 3-way model match the 2-, 4-, 8- and 16-way models colour by colour to a
+    # relative surface difference of 1e-15 -- so it is cut the same way, at the same places,
+    # and ``view3d`` stands the plug (drawn from Phoenix's MSTB 2,5/..-ST-5,08 dimensions) in it.
+    Model("screw-terminal-v-head", "Connector_Phoenix_MSTB",
+          "PhoenixContact_MSTBVA_2,5_3-G-5,08_1x03_P5.08mm_Vertical",
+          clip=(-1000.0, 2.54)),
+    Model("screw-terminal-v-way", "Connector_Phoenix_MSTB",
+          "PhoenixContact_MSTBVA_2,5_3-G-5,08_1x03_P5.08mm_Vertical",
+          clip=(2.54, 7.62), offset=(-5.08, 0.0)),
+    Model("screw-terminal-v-tail", "Connector_Phoenix_MSTB",
+          "PhoenixContact_MSTBVA_2,5_3-G-5,08_1x03_P5.08mm_Vertical",
+          clip=(7.62, 1000.0), offset=(-10.16, 0.0)),
     # -- one pin of a header, drawn once per pin by the renderer -----------
     Model("hdr-pin", "Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical"),
 )
@@ -217,6 +234,7 @@ MATERIALS: dict[str, str] = {
     "#2a2a2a": "moulded",  # the base a crystal can is set into
     "#720301": "gloss",  # a film capacitor's case -- an LED's lens overrides this
     "#383838": "moulded",  # the collar round a 12 mm push button's plunger
+    "#a4a392": "steel",  # the contacts in a Phoenix MSTB header, one shade off the metal grey
 }
 
 

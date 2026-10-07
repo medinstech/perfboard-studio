@@ -278,46 +278,189 @@ def test_what_is_drawn_stays_inside_the_envelope_drc_measures(
 
 
 # ---------------------------------------------------------------------- a vertical terminal
+#
+# A pluggable block on a vertical header: KiCad's Phoenix MSTBVA header, sliced into ways
+# like the side-entry block, with the plug drawn from Phoenix's MSTB 2,5/..-ST-5,08 sizes
+# standing in it.
 
 
-@pytest.mark.parametrize("rotation", TURNS)
-@pytest.mark.parametrize("mirrored", [False, True])
-def test_a_vertical_terminals_screws_are_in_the_side_of_its_plug(rotation: int, mirrored: bool) -> None:
-    """On a vertical header the plug stands on end: wires in from above, screws from the
-    side -- the face ``VERTICAL_TERMINAL_SCREW_FACE`` names, turned with the part."""
+def _vertical(ways: int = 3, rotation: int = 0, mirrored: bool = False, header: bool = True):
     from perfboard_studio.footprints import footprint_lookup
-    from perfboard_studio.geometry import transform_offset
     from perfboard_studio.mcp.session import new_board
     from perfboard_studio.ui import view3d
 
     board = new_board(cols=40, rows=40).board
-    lookup = footprint_lookup()
-    component = _part("screw-terminal-3-v", "", (), rotation, mirrored)
-    body = view3d._world_body(lookup, component, board)
+    component = _part(f"screw-terminal-{ways}-v", "", (), rotation, mirrored)
+    body = view3d._world_body(footprint_lookup(), component, board)
     assert body is not None and body.screws is not None
+    models = view3d.vertical_header_models() if header else None
+    return body, view3d._vertical_terminal_pieces(body, comp=component, header=models)
+
+
+def _across(body, point) -> float:
+    """How far ``point`` is from the pin row, towards the screw face."""
+    cx = sum(x for x, _y in body.pins) / len(body.pins)
+    cy = sum(y for _x, y in body.pins) / len(body.pins)
+    nx, ny = body.screws
+    return (point[0] - cx) * nx + (point[1] - cy) * ny
+
+
+def test_the_header_slices_are_one_way_each_and_meet() -> None:
+    """Each slice has its own pin at the origin and they butt end to end, so a way at every
+    pin between a head and a tail is the whole header -- and they are the size the plug is
+    drawn to stand in."""
+    from perfboard_studio.ui import partmodels, view3d
+
+    models = partmodels.vertical_header_models()
+    assert models is not None, "the vertical header slices are missing from ui/models/"
+    spans = []
+    for model in models:
+        body = model.body
+        assert body is not None and len(body.bounds) == 6
+        x0, y0, z0, x1, y1, z1 = body.bounds
+        spans.append((round(x0, 3), round(x1, 3)))
+        assert (z0, z1) == (0.0, view3d._VERTICAL_HEADER_HEIGHT_MM)
+        # The model's +y is against the row; the plug's frame runs across it the other way.
+        assert (-y1, -y0) == (view3d._VERTICAL_HEADER_BACK_MM, view3d._VERTICAL_HEADER_FRONT_MM)
+    end = view3d._VERTICAL_HEADER_END_MM
+    assert spans == [(-end, 2.54), (-2.54, 2.54), (-2.54, end)]
+    for stem in (
+        partmodels.VERTICAL_HEADER_HEAD,
+        partmodels.VERTICAL_HEADER_WAY,
+        partmodels.VERTICAL_HEADER_TAIL,
+    ):
+        assert get_footprint(stem) is None  # parts of a package, not something to place
+
+
+def test_the_header_is_as_long_as_the_footprint_says() -> None:
+    from perfboard_studio.ui import view3d
+
+    for ways in (2, 3, 6):
+        body, pieces = _vertical(ways)
+        footprint = _footprint(f"screw-terminal-{ways}-v")
+        # The header's own slices: one per pin, each going down at its pin.
+        nylon = [
+            p
+            for p in pieces
+            if p.rgb == view3d._rgb(body.style.fill) and not p.instances and p.position[2] == 0.0
+        ]
+        assert len(nylon) == ways
+        x0, x1, y0, y1, _z0, z1 = _union(view3d, nylon)
+        along = (x1 - x0) if body.axis == "x" else (y1 - y0)
+        assert along == pytest.approx(footprint.body.dims["length"], abs=1e-3)
+        assert z1 == pytest.approx(view3d._VERTICAL_HEADER_HEIGHT_MM)
+
+
+def _union(view3d, pieces) -> tuple[float, ...]:
+    boxes = [view3d._actor_for(piece).GetBounds() for piece in pieces]
+    return (
+        min(b[0] for b in boxes),
+        max(b[1] for b in boxes),
+        min(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+        min(b[4] for b in boxes),
+        max(b[5] for b in boxes),
+    )
+
+
+@pytest.mark.parametrize("header", [True, False])
+def test_the_plug_stands_in_the_header_with_no_gap(header: bool) -> None:
+    """Its foot is down in the header's pocket and its body rests on the header's rim: the
+    gap a slab standing on a narrower slab showed between the two is not there."""
+    from perfboard_studio.ui import view3d
+
+    body, pieces = _vertical(3, header=header)
+    lift = 0.0 if header else view3d._LIFT
+    rim = view3d._VERTICAL_HEADER_HEIGHT_MM + lift
+    plug = [
+        piece
+        for piece in pieces
+        if piece.rgb == view3d._rgb(body.style.fill) and not piece.instances and piece.position[2] > 0
+    ]
+    foot = min(plug, key=lambda piece: view3d._actor_for(piece).GetBounds()[4])
+    x0, x1, y0, y1, z0, z1 = view3d._actor_for(foot).GetBounds()
+    assert z1 == pytest.approx(rim)
+    assert z0 >= view3d._VERTICAL_CAVITY_FLOOR_MM
+    for corner in ((x0, y0), (x1, y1)):
+        assert (
+            view3d._VERTICAL_CAVITY_BACK_MM
+            <= _across(body, corner)
+            <= view3d._VERTICAL_CAVITY_FRONT_MM
+        )
+    # The body's underside is the rim, exactly.
+    lows = sorted(view3d._actor_for(piece).GetBounds()[4] for piece in plug if piece is not foot)
+    assert lows[0] == pytest.approx(rim)
+
+
+@pytest.mark.parametrize("rotation", TURNS)
+@pytest.mark.parametrize("mirrored", [False, True])
+@pytest.mark.parametrize("header", [True, False])
+def test_a_vertical_terminals_screws_are_in_the_side_of_its_plug(
+    rotation: int, mirrored: bool, header: bool
+) -> None:
+    """On a vertical header the plug stands on end: wires in from above, screws from the
+    side -- the face ``VERTICAL_TERMINAL_SCREW_FACE`` names, turned with the part."""
+    from perfboard_studio.geometry import transform_offset
+    from perfboard_studio.ui import view3d
+
+    body, pieces = _vertical(3, rotation, mirrored, header)
     fx, fy = transform_offset(*view3d.VERTICAL_TERMINAL_SCREW_FACE, rotation, mirrored)  # type: ignore[arg-type]
     assert body.screws == pytest.approx((fx, -fy))
 
-    pieces = view3d._vertical_terminal_pieces(body)
-    heads = [piece for piece in pieces if piece.rgb == view3d._rgb(body.style.accent)]
-    assert len(heads) == 3
-    nx, ny = body.screws
-    for head, (pin_x, pin_y) in zip(heads, body.pins, strict=True):
-        hx, hy, hz = head.position
-        # Out on the screw face, level with its own pin, partway up the plug.
-        assert (hx - pin_x) * nx + (hy - pin_y) * ny == pytest.approx(
-            body.across / 2 + view3d._DECAL_PROUD_MM
-        )
+    heads = [
+        piece
+        for piece in pieces
+        if piece.rgb == view3d._TERMINAL_METAL_RGB and piece.material == view3d.STEEL
+        and piece.instances
+        and all(_across(body, point) > 0 for point in piece.instances)
+    ]
+    assert len(heads) == 1 and len(heads[0].instances) == 3
+    front = body.across / 2 - view3d._PLUG_FACE_SETBACK_MM
+    for (hx, hy, hz), (pin_x, pin_y) in zip(sorted(heads[0].instances), sorted(body.pins), strict=True):
+        assert _across(body, (hx, hy)) == pytest.approx(front + view3d._DECAL_PROUD_MM)
+        # Level with its own pin along the row, partway up the plug's body.
+        nx, ny = body.screws
         assert abs((hx - pin_x) * ny - (hy - pin_y) * nx) < 1e-9
         assert view3d._VERTICAL_HEADER_HEIGHT_MM < hz < body.height
 
-    # Everything inside the envelope but the marks standing proud of its faces.
-    proud = view3d._DECAL_PROUD_MM + 0.3
+
+@pytest.mark.parametrize("rotation", TURNS)
+@pytest.mark.parametrize("mirrored", [False, True])
+@pytest.mark.parametrize("header", [True, False])
+def test_a_vertical_terminal_stays_inside_its_envelope(
+    rotation: int, mirrored: bool, header: bool
+) -> None:
+    """Measured on the actors as built: the header's, the plug's and every mark on them.
+    The screw face is set back by what its marks stand out, so nothing passes the box DRC
+    and the placer measure."""
+    from perfboard_studio.ui import view3d
+
+    body, pieces = _vertical(3, rotation, mirrored, header)
+    lift = 0.0 if header else view3d._LIFT
     for piece in pieces:
         x0, x1, y0, y1, _z0, z1 = view3d._actor_for(piece).GetBounds()
-        assert z1 <= body.height + view3d._LIFT + proud
-        assert body.x - body.size_x / 2 - proud <= x0 and x1 <= body.x + body.size_x / 2 + proud
-        assert body.y - body.size_y / 2 - proud <= y0 and y1 <= body.y + body.size_y / 2 + proud
+        assert z1 <= body.height + lift + 1e-6, piece
+        assert body.x - body.size_x / 2 - 1e-6 <= x0 and x1 <= body.x + body.size_x / 2 + 1e-6
+        assert body.y - body.size_y / 2 - 1e-6 <= y0 and y1 <= body.y + body.size_y / 2 + 1e-6
+
+
+def test_the_board_draws_the_header_from_kicad() -> None:
+    """Through ``_pieces_for``, as a board is drawn: the header's slices, not the fallback."""
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.mcp.session import new_board
+    from perfboard_studio.ui import partmodels, view3d
+
+    board = new_board(cols=40, rows=40).board
+    lookup = footprint_lookup()
+    component = _part("screw-terminal-3-v", "")
+    body = view3d._world_body(lookup, component, board)
+    footprint = lookup("screw-terminal-3-v")
+    assert body is not None and footprint is not None
+    pieces = view3d._pieces_for(body, footprint, component, board)
+    models = partmodels.vertical_header_models()
+    assert models is not None
+    meshes = {id(view3d._mesh(str(piece.path))) for model in models for piece in model.pieces}
+    assert meshes <= {id(piece.source) for piece in pieces}
 
 
 def test_only_a_vertical_terminal_has_a_screw_face() -> None:

@@ -1369,6 +1369,141 @@
   ],
   "source": "TerminalBlock_Phoenix/TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"
  },
+ "screw-terminal-v-head": {
+  "parts": [
+   {
+    "bounds": [
+     -3.54,
+     -3.8,
+     0.0,
+     2.54,
+     4.8,
+     12.0
+    ],
+    "color": "#186b2a",
+    "material": "gloss",
+    "mesh": "screw-terminal-v-head.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.5,
+     -0.5,
+     3.5,
+     0.5,
+     0.5,
+     10.0
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "screw-terminal-v-head.1.ply"
+   },
+   {
+    "bounds": [
+     -0.5,
+     -0.5,
+     -0.05,
+     0.5,
+     0.5,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "screw-terminal-v-head.2.ply"
+   }
+  ],
+  "source": "Connector_Phoenix_MSTB/PhoenixContact_MSTBVA_2,5_3-G-5,08_1x03_P5.08mm_Vertical"
+ },
+ "screw-terminal-v-tail": {
+  "parts": [
+   {
+    "bounds": [
+     -2.54,
+     -3.8,
+     0.0,
+     3.54,
+     4.8,
+     12.0
+    ],
+    "color": "#186b2a",
+    "material": "gloss",
+    "mesh": "screw-terminal-v-tail.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.5,
+     -0.5,
+     3.5,
+     0.5,
+     0.5,
+     10.0
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "screw-terminal-v-tail.1.ply"
+   },
+   {
+    "bounds": [
+     -0.5,
+     -0.5,
+     -0.05,
+     0.5,
+     0.5,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "screw-terminal-v-tail.2.ply"
+   }
+  ],
+  "source": "Connector_Phoenix_MSTB/PhoenixContact_MSTBVA_2,5_3-G-5,08_1x03_P5.08mm_Vertical"
+ },
+ "screw-terminal-v-way": {
+  "parts": [
+   {
+    "bounds": [
+     -2.54,
+     -3.8,
+     0.0,
+     2.54,
+     4.8,
+     12.0
+    ],
+    "color": "#186b2a",
+    "material": "gloss",
+    "mesh": "screw-terminal-v-way.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.5,
+     -0.5,
+     3.5,
+     0.5,
+     0.5,
+     10.0
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "screw-terminal-v-way.1.ply"
+   },
+   {
+    "bounds": [
+     -0.5,
+     -0.5,
+     -0.05,
+     0.5,
+     0.5,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "screw-terminal-v-way.2.ply"
+   }
+  ],
+  "source": "Connector_Phoenix_MSTB/PhoenixContact_MSTBVA_2,5_3-G-5,08_1x03_P5.08mm_Vertical"
+ },
  "screw-terminal-way": {
   "parts": [
    {

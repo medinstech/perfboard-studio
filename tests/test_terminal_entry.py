@@ -591,8 +591,16 @@ def test_a_vertical_terminal_draws_its_openings_on_top() -> None:
     component = part("J1", "screw-terminal-2-v", 10, 10)
     body = view3d._world_body(REGISTRY, component, BOARD)
     assert body is not None
-    pieces = view3d._vertical_terminal_pieces(body)
-    openings = [p for p in pieces if p.rgb == view3d._rgb("#121212")]
-    assert len(openings) == 2
-    # Their tops stand proud of the block's top, so the depth buffer can tell them apart.
-    assert all(p.position[2] + 0.5 > body.height + view3d._LIFT for p in openings)
+    for header in (None, view3d.vertical_header_models()):
+        pieces = view3d._vertical_terminal_pieces(body, comp=component, header=header)
+        openings = [p for p in pieces if p.rgb == view3d._rgb("#121212")]
+        # One dark channel per way, drawn as one instanced piece, straight over its pin and
+        # down the entry from the plug's top -- seen from above, which is where the 2D view
+        # draws them too.
+        assert len(openings) == 1
+        channels = openings[0].instances
+        assert sorted((round(x, 6), round(y, 6)) for x, y, _z in channels) == sorted(
+            (round(x, 6), round(y, 6)) for x, y in body.pins
+        )
+        top = body.height + (view3d._LIFT if header is None else 0.0)
+        assert all(top - 1.0 < z < top for _x, _y, z in channels)

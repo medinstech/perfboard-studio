@@ -842,6 +842,13 @@ Three things about the mapping:
   solid: a boolean makes new faces and the colours are keyed on the old ones, so half a
   block's nylon came back lead-grey. The 2- and 3-way blocks keep their own whole models;
   `tests/test_terminal_meshes.py` holds the slices to them.
+- **A vertical terminal's header is the third**, cut the same way at the same places out of
+  KiCad's Phoenix MSTBVA 2,5/3-G-5,08 (`screw-terminal-v-head`, `-way`, `-tail`, 13 KB):
+  measured on KiCad 10, the slices reassemble the 2-, 4-, 8- and 16-way models to a relative
+  surface difference of 1e-15. KiCad has the header and not the plug, so the plug is drawn —
+  see "A module is drawn by what it is called" below. Every length, two ways included, is
+  drawn from the slices, so there are no whole models to hold them to; `test_module_art.py`
+  holds their ends, their size and the length a footprint gives them instead.
 
 **The meshes are the only part of this repository that is not Apache-2.0.** They are
 CC-BY-SA 4.0 with KiCad's design exception, and their `LICENSE` and `NOTICE.md` live in
@@ -880,11 +887,27 @@ A new module is an entry in `MODULE_ARTS` with datasheet sizes, drawn from the k
 `view3d._ART_BUILDERS` knows; `test_every_layout_is_tested` makes sure it is measured. The 2D
 view keeps the block on purpose — what that view is for is the names beside the pins.
 
-**A vertical terminal is a header with a plug standing in it**: wires in from above, screws in
-the plug's SIDE, as on every pluggable block on a vertical header (and as the 2D view's
-comment always said). Which side is `view3d.VERTICAL_TERMINAL_SCREW_FACE`, the face a
-side-entry terminal's mouth is on — a convention, since the document does not record which
-way round the plug went in, and nothing checks it.
+**A vertical terminal is KiCad's header with our plug standing in it**: wires in from above,
+screws in the plug's SIDE, as on every pluggable block on a vertical header (and as the 2D
+view's comment always said). The header is the sliced MSTBVA model above; the plug is drawn
+from Phoenix's MSTB 2,5/..-ST-5,08 sizes (`view3d._PLUG_*`) and stood IN it: its foot fills the
+header's measured pocket (`_VERTICAL_CAVITY_*`) and its body rests on the rim, so nothing shows
+between the two. Two rules hold it, each with a test:
+
+- **The envelope wins over the datasheet.** The plug is 15 mm from screw face to back and the
+  footprint's envelope is 12; the envelope is what DRC and the placer measure, so the plug is
+  drawn as wide as it allows, and the screw face is set back by as much as the marks on it
+  (`_PLUG_FACE_SETBACK_MM`) stand out. `test_a_vertical_terminal_stays_inside_its_envelope`
+  measures every actor at every turn and flip, header and fallback both.
+- **One family with the side-entry block**: the same green from `BODY_STYLES`, the clamp and
+  screw metal in the grey KiCad's MKDS is drawn in (`_TERMINAL_METAL_RGB`), and each wire
+  entry a real hole (`_framed_cap`, a bored block built ring by ring) with a funnelled mouth
+  and the clamp's cage down in it — a dark square printed on a face was what it replaced.
+
+Which side the screws are on is `view3d.VERTICAL_TERMINAL_SCREW_FACE`, the face a side-entry
+terminal's mouth is on — a convention, since the document does not record which way round the
+plug went in, and nothing checks it. Without the meshes the header is drawn from the same
+measured sizes and the plug is unchanged.
 
 ### The board leaves as STEP solids, and they are the bodies DRC measured
 
