@@ -20,6 +20,29 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Changed
+
+- **An LM2596 buck module and an SN65HVD230 CAN breakout are drawn as what is on them.** A
+  module's id carries its board and the height of its tallest part and nothing else, so in
+  3D every module was its blue board with one dark block standing on it. A module whose value
+  names one of these two -- `LM2596`, `SN65HVD230`, `VP230`, `CJMCU-230` -- now shows its
+  parts at their datasheet sizes: the buck its two cans, the D2PAK regulator with its legs,
+  the shielded inductor, the Schottky diode and the blue multi-turn trimmer with its brass
+  screw; the breakout its SO-8 chip with its legs and marking, its 0805 resistors and
+  capacitors and its silkscreen. The layout turns with the part and follows the pins' names
+  (an LM2596 described with IN on the right has its regulator on the right), stays on the
+  module's own board and clear of the pin names printed on it, and no part stands taller
+  than the id says -- the height DRC measures. A value nobody wrote a layout for, or a board
+  of another size, keeps the block, and the STEP export is still the envelope. Every module
+  also shows the tinned pad each of its pins comes up through.
+- **A vertical terminal is drawn as a header with a plug standing in it.** It was one green
+  block with the wire openings and the screw heads side by side on its top, which is no part
+  anybody sells: on a vertical header the plug stands on end, so its wires go in from above
+  and its screws are in its side. The narrower header collar now stands under the plug, the
+  openings sit straight over the pins as the 2D view draws them, the screws are slotted
+  heads in round pockets on the face a side-entry terminal's mouth would be on, and a groove
+  divides one way from the next.
+
 ## [0.16.0] - 2026-10-06
 
 ### Added

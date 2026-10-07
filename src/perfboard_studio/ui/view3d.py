@@ -71,6 +71,7 @@ from perfboard_studio.stripboard import cut_holes, segments
 
 from .boardcolors import scheme_for
 from .bodies import (
+    BODY_STYLES,
     PIN_NAME_HEIGHT_MM,
     PIN_NAME_TAG_HEIGHT_MM,
     PIN_NAME_TAG_PAD_MM,
@@ -86,6 +87,7 @@ from .bodies import (
     style_for,
     surface_for,
 )
+from .moduleart import PlacedArt, fit_module_art
 from .partmodels import ModelPiece, PartModel, header_pin_model, terminal_block_models
 from .partmodels import model_for as _model_for
 
@@ -1557,6 +1559,9 @@ class _WorldBody:
     entry: tuple[float, float] | None = None
     #: What is printed on the part, for a package that carries print -- see ``_marking``.
     marking: str = ""
+    #: Which face a vertical terminal's screws are on, as a world direction -- see
+    #: ``VERTICAL_TERMINAL_SCREW_FACE``. ``None`` for every other part.
+    screws: tuple[float, float] | None = None
 
     @property
     def along(self) -> float:
@@ -1613,6 +1618,11 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         # the sign ``to_world`` applies to a position, applied here to a direction.
         turned_x, turned_y = transform_offset(facing[0], facing[1], comp.rotation, comp.mirrored)
         entry = (turned_x, -turned_y)
+    screws: tuple[float, float] | None = None
+    if fp.body.archetype == "screw-terminal-vertical":
+        face_x, face_y = VERTICAL_TERMINAL_SCREW_FACE
+        turned_x, turned_y = transform_offset(face_x, face_y, comp.rotation, comp.mirrored)
+        screws = (turned_x, -turned_y)
     return _WorldBody(
         x=x,
         y=y,
@@ -1631,6 +1641,7 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         bands=resistor_bands(fp, comp.value) or (),
         entry=entry,
         marking=_marking(fp, comp.value),
+        screws=screws,
     )
 
 
@@ -2325,46 +2336,144 @@ def _wire_entry_pieces(body: _WorldBody) -> list[_Piece]:
     ]
 
 
-def _vertical_terminal_pieces(body: _WorldBody) -> list[_Piece]:
-    """The header and the screw plug standing in it, with the wire openings on TOP.
+#: Which long face of a vertical terminal's plug its screws are on, in the footprint's frame:
+#: the face a side-entry terminal's mouth is on (``footprints.WIRE_ENTRY_BY_ARCHETYPE``), so a
+#: terminal swapped for the other kind keeps its working side where it was -- turned to face
+#: clear board for its wires, it now faces clear board for a screwdriver. The document does
+#: not say which way the plug was put in; this is a convention, and the only rule anything
+#: checks about the part (its envelope) is the same either way.
+VERTICAL_TERMINAL_SCREW_FACE: tuple[float, float] = (0.0, 1.0)
+#: The header the plug stands in, from KiCad's Phoenix MSTBVA 2,5/N-G-5,08 model: 8.6 mm
+#: across and 12.0 mm tall (``footprints.VERTICAL_TERMINAL_*`` has the rest).
+_VERTICAL_HEADER_ACROSS_MM = 8.6
+_VERTICAL_HEADER_HEIGHT_MM = 12.0
+#: A screw in the plug's face: the round pocket it sits in, its head and the blade's slot.
+_PLUG_POCKET_RADIUS_MM = 1.75
+_PLUG_SCREW_RADIUS_MM = 1.4
 
-    One block for the pair, because that is what stands on the board once it is wired. The
-    openings sit over the pins -- a wire goes straight down into its way -- and the screw
-    heads beside them on the same top face, both standing ``_DECAL_PROUD_MM`` proud so the
-    depth buffer can tell them from the block.
+
+def _vertical_terminal_pieces(body: _WorldBody) -> list[_Piece]:
+    """The header and the screw plug standing in it: the wires go in from ABOVE, and the
+    screws that clamp them are in the plug's side.
+
+    It was one green block with the openings and the screw heads side by side on top, which
+    is no part anybody can buy: on a vertical header the plug stands on end, so its wire
+    entries face up and its screws face sideways -- the 2D view says the same, drawing only
+    the openings from above. The header is the narrower collar the plug's foot sits in, a
+    shade darker than the plug, and the plug carries a groove between ways on its top and
+    its screw face, which is what makes three ways read as three. Marks stand
+    ``_DECAL_PROUD_MM`` proud of the face they are on, so the depth buffer can tell them
+    from it.
     """
+    fill = _rgb(body.style.fill)
+    along_x = body.axis == "x"
+    header_across = min(_VERTICAL_HEADER_ACROSS_MM, body.across)
+    header_h = min(_VERTICAL_HEADER_HEIGHT_MM, body.height * 0.55)
+    plug_h = body.height - header_h
+    plug_along = body.along - 0.4
+
+    def sized(along: float, across: float, height: float, *, moulded: bool = True) -> Any:
+        size = (along, across, height) if along_x else (across, along, height)
+        return _moulded_box(*size) if moulded else _box(*size)
+
     pieces = [
         _Piece(
-            source=_moulded_box(body.size_x, body.size_y, body.height),
-            rgb=_rgb(body.style.fill),
-            position=(body.x, body.y, body.height / 2 + _LIFT),
+            source=sized(body.along, header_across, header_h),
+            rgb=_lit(body.style.fill, 0.82),
+            position=(body.x, body.y, header_h / 2 + _LIFT),
             material=GLOSS,
-        )
+        ),
+        _Piece(
+            source=sized(plug_along, body.across, plug_h),
+            rgb=fill,
+            position=(body.x, body.y, header_h + plug_h / 2 + _LIFT),
+            material=GLOSS,
+        ),
     ]
-    # Openings and screws split across the block: the across axis is world y for a part
-    # lying along x and world x for one turned a quarter.
-    shift = body.across * 0.22
-    ox, oy = (0.0, shift) if body.axis == "x" else (shift, 0.0)
     top = body.height + _LIFT
-    head_r = min(body.across * 0.14, 1.4)
-    for pin_x, pin_y in body.pins:
+    groove_rgb = _lit(body.style.fill, 0.55)
+    # Between ways: halfway between neighbouring pins, along the row.
+    pins = sorted(body.pins, key=lambda pin: pin[0] if along_x else pin[1])
+    for (ax, ay), (bx, by) in pairwise(pins):
+        mid_x, mid_y = (ax + bx) / 2, (ay + by) / 2
         pieces.append(
             _Piece(
-                source=_moulded_box(1.7, 1.7, 1.0),
-                rgb=_rgb("#121212"),
-                position=(pin_x + ox, pin_y + oy, top - 0.5 + _DECAL_PROUD_MM),
+                source=sized(0.35, body.across - 1.2, 0.1, moulded=False),
+                rgb=groove_rgb,
+                position=(mid_x, mid_y, top - 0.05 + _DECAL_PROUD_MM),
                 material=GLOSS,
             )
         )
+    for pin_x, pin_y in body.pins:
+        # The wire entry, straight over its pin, where the 2D view draws it.
         pieces.append(
             _Piece(
-                source=_cylinder(head_r, 0.5, resolution=14),
-                rgb=_rgb(body.style.accent),
-                position=(pin_x - ox, pin_y - oy, top - 0.25 + _DECAL_PROUD_MM),
-                orientation=_ALONG_Z,
-                material=STEEL,
+                source=sized(2.5, 2.3, 1.0),
+                rgb=_rgb("#121212"),
+                position=(pin_x, pin_y, top - 0.5 + _DECAL_PROUD_MM),
+                material=GLOSS,
             )
         )
+    if body.screws is not None:
+        nx, ny = body.screws
+        normal_along_x = abs(nx) > abs(ny)
+        face = body.across / 2
+        screw_z = header_h + plug_h * 0.55 + _LIFT
+        orientation = _ALONG_X if normal_along_x else _ALONG_Y
+        pocket_rgb = _lit(body.style.fill, 0.22)
+
+        def out(pin_x: float, pin_y: float, depth: float) -> tuple[float, float]:
+            return (pin_x + nx * (face + depth), pin_y + ny * (face + depth))
+
+        for pin_x, pin_y in body.pins:
+            for radius, length, depth, rgb, material in (
+                # The hole the screw sits down in: the plug's own plastic, in shadow.
+                (_PLUG_POCKET_RADIUS_MM, 0.3, _DECAL_PROUD_MM - 0.15, pocket_rgb, GLOSS),
+                (
+                    _PLUG_SCREW_RADIUS_MM,
+                    0.3,
+                    _DECAL_PROUD_MM,
+                    _rgb(body.style.accent),
+                    STEEL,
+                ),
+            ):
+                pieces.append(
+                    _Piece(
+                        source=_cylinder(radius, length, resolution=20),
+                        rgb=rgb,
+                        position=(*out(pin_x, pin_y, depth), screw_z),
+                        orientation=orientation,
+                        material=material,
+                    )
+                )
+            # The slot, upright, as a screwdriver meets a screw it can only reach sideways.
+            slot = (0.3, 0.4, _PLUG_SCREW_RADIUS_MM * 1.8)
+            pieces.append(
+                _Piece(
+                    source=_box(*(slot if normal_along_x else (slot[1], slot[0], slot[2]))),
+                    rgb=_lit(body.style.accent, 0.35),
+                    position=(*out(pin_x, pin_y, _DECAL_PROUD_MM + 0.12), screw_z),
+                    material=STEEL,
+                )
+            )
+        for (ax, ay), (bx, by) in pairwise(pins):
+            pieces.append(
+                _Piece(
+                    source=_box(
+                        *(
+                            (0.1, 0.35, plug_h * 0.8)
+                            if normal_along_x
+                            else (0.35, 0.1, plug_h * 0.8)
+                        )
+                    ),
+                    rgb=groove_rgb,
+                    position=(
+                        *out((ax + bx) / 2, (ay + by) / 2, _DECAL_PROUD_MM - 0.05),
+                        header_h + plug_h / 2 + _LIFT,
+                    ),
+                    material=GLOSS,
+                )
+            )
     return pieces + _through_hole_pieces(body, _LIFT + 0.15)
 
 
@@ -2942,9 +3051,12 @@ def _module_pieces(body: _WorldBody, footprint: Any, comp: Any, board: Board) ->
     a header row, so a 2 x 19 devkit stands on two strips and a module with pins three holes
     apart on single posts.
 
-    WHAT IS ON THE MODULE is not known -- the id carries its tallest part's height and no
-    more -- so it is one dark block that tall in the middle of the board: an honest envelope
-    rather than a guessed chip, and the height DRC measures.
+    WHAT IS ON THE MODULE is not in the id -- it carries its tallest part's height and no
+    more. For a module the part's VALUE names and whose board the layout fits (an LM2596
+    buck, an SN65HVD230 breakout: ``moduleart``), the parts themselves are drawn, none
+    taller than that height; for every other one it is one dark block that tall in the
+    middle of the board: an honest envelope rather than a guessed chip, and the height DRC
+    measures either way.
     """
     dims = footprint.body.dims
     seat = float(dims.get("seat", MODULE_SEAT_SOCKETED_MM))
@@ -2999,18 +3111,453 @@ def _module_pieces(body: _WorldBody, footprint: Any, comp: Any, board: Board) ->
         )
     )
 
-    # What is on the module: one block as tall as its tallest part.
-    block_x, block_y = module_block_size(body.size_x, body.size_y)
+    # The tinned pad each pin comes up through on the module's own board.
     pieces.append(
         _Piece(
-            source=_box(block_x, block_y, top),
-            rgb=(0.106, 0.114, 0.133),
-            position=(body.x, body.y, pcb_top + top / 2),
-            material=MOULDED,
+            source=_cylinder(_MODULE_PAD_RADIUS_MM, 0.06, resolution=20),
+            rgb=LEAD_RGB,
+            position=(0.0, 0.0, 0.0),
+            orientation=_ALONG_Z,
+            material=TINNED,
+            instances=tuple((px, py, pcb_top + 0.03) for px, py in body.pins),
         )
     )
 
+    # What is on the module: the parts themselves, for a module the art table knows by
+    # name and whose board it fits -- otherwise one block as tall as its tallest part.
+    art = fit_module_art(footprint, comp, pitch)
+    if art is not None:
+        for placed in art:
+            pieces.extend(_art_pieces(_art_solid(placed, comp, board, pcb_top)))
+    else:
+        block_x, block_y = module_block_size(body.size_x, body.size_y)
+        pieces.append(
+            _Piece(
+                source=_box(block_x, block_y, top),
+                rgb=_MODULE_BLOCK_RGB,
+                position=(body.x, body.y, pcb_top + top / 2),
+                material=MOULDED,
+            )
+        )
+
     return pieces + _through_hole_pieces(body, 0.0, blade=(_MODULE_PIN_MM, _MODULE_PIN_MM))
+
+
+#: The block standing for what is on a module nobody wrote a layout for.
+_MODULE_BLOCK_RGB = (0.106, 0.114, 0.133)
+#: The tinned pad round each of a module's pins, on the module's own board.
+_MODULE_PAD_RADIUS_MM = 0.9
+
+
+# ---------------------------------------------------------------------------
+# What stands on a recognised module (``moduleart``)
+# ---------------------------------------------------------------------------
+#
+# Small parts, each drawn from the few solids that make it read as itself at this view's
+# zoom: a can's rolled rim and vent, a regulator's tab and legs, a trimmer's brass screw.
+# They are not packages anybody solders here -- they are on somebody else's board -- so they
+# need neither leads through a hole nor a footprint, only to be the right size in the right
+# place. Their colours are what the parts are made of, named here once, because no
+# archetype in ``bodies.BODY_STYLES`` is a ferrite or a chip resistor; a can takes the
+# electrolytic's own colours from that table, so the two cans on a buck module are the
+# colour of the one beside it on the board.
+
+_ELECTROLYTIC_STYLE = BODY_STYLES["radial-electrolytic"]
+_MODULE_STYLE = BODY_STYLES["module-board"]
+_ART_FERRITE_RGB = _hex_rgb("#2a2b2f", BODY_RGB)
+_ART_FERRITE_TOP_RGB = _hex_rgb("#3a3b40", BODY_RGB)
+_ART_EPOXY_RGB = _hex_rgb("#1d1e22", BODY_RGB)
+_ART_TRIMMER_RGB = _hex_rgb("#2f6fd0", BODY_RGB)
+_ART_BRASS_RGB = _hex_rgb("#c9a45a", LEAD_RGB)
+_ART_SLOT_RGB = _hex_rgb("#4a3a1c", BODY_RGB)
+_ART_RESISTOR_RGB = _hex_rgb("#17181b", BODY_RGB)
+_ART_MLCC_RGB = _hex_rgb("#b48c5a", BODY_RGB)
+_ART_BAND_RGB = _hex_rgb("#a9adb3", LEAD_RGB)
+_ART_INK_RGB = _hex_rgb("#d9dce1", LEGEND_RGB)
+_ART_DOT_RGB = _hex_rgb("#0b0c0e", BODY_RGB)
+
+
+@dataclass(frozen=True, slots=True)
+class _ArtSolid:
+    """One recognised part in the world: its centre on the module's board, its own axis
+    as a world axis, and which way along it its feature faces."""
+
+    kind: str
+    x: float
+    y: float
+    #: The top of the module's board, which the part stands on.
+    z: float
+    length: float
+    width: float
+    height: float
+    axis: str
+    facing: float
+    text: str
+
+    def at(self, along: float, across: float, z: float) -> tuple[float, float, float]:
+        """A point ``along`` the part's own axis and ``across`` it from its centre, ``z``
+        above the module's board."""
+        if self.axis == "x":
+            return (self.x + along, self.y + across, self.z + z)
+        return (self.x + across, self.y + along, self.z + z)
+
+    def box(self, along: float, across: float, height: float, *, moulded: bool = False) -> Any:
+        """A box ``along`` x ``across`` x ``height`` in the part's own axes."""
+        size_x, size_y = (along, across) if self.axis == "x" else (across, along)
+        return _moulded_box(size_x, size_y, height) if moulded else _box(size_x, size_y, height)
+
+    def printed(
+        self, text: str, height: float, max_width: float, across: bool = False
+    ) -> tuple[vtk.vtkPolyData | None, tuple[float, float, float]]:
+        """``text`` laid flat, and the orientation that runs it along the part's own axis
+        (or across it): along world x or world y, reading upright from the front."""
+        along_x = (self.axis == "x") != across
+        return _printed(text, height, max_width), (0.0, 0.0, 0.0 if along_x else 90.0)
+
+
+def _art_solid(placed: PlacedArt, comp: Any, board: Board, base: float) -> _ArtSolid:
+    """A part of a module's art, from the footprint's frame to the world -- the turn and
+    the flip ``_world_body`` gives the module's own board."""
+    tx, ty = transform_offset(placed.x, placed.y, comp.rotation, comp.mirrored)
+    local = (float(placed.facing), 0.0) if placed.axis == "x" else (0.0, float(placed.facing))
+    fx, fy = transform_offset(local[0], local[1], comp.rotation, comp.mirrored)
+    fy = -fy  # rows run down, the world's y runs up
+    along_x = abs(fx) > abs(fy)
+    turned = int(comp.rotation) in (90, 270)
+    size_x, size_y = (placed.size_y, placed.size_x) if turned else (placed.size_x, placed.size_y)
+    return _ArtSolid(
+        kind=placed.kind,
+        x=comp.anchor.col * board.pitch + tx,
+        y=-(comp.anchor.row * board.pitch + ty),
+        z=base,
+        length=size_x if along_x else size_y,
+        width=size_y if along_x else size_x,
+        height=placed.height,
+        axis="x" if along_x else "y",
+        facing=(1.0 if fx > 0 else -1.0) if along_x else (1.0 if fy > 0 else -1.0),
+        text=placed.text,
+    )
+
+
+def _art_pieces(solid: _ArtSolid) -> list[_Piece]:
+    """The solids of one part on a module's board."""
+    return _ART_BUILDERS[solid.kind](solid)
+
+
+def _art_can(s: _ArtSolid) -> list[_Piece]:
+    """An electrolytic standing on the module: the sleeve rolled over the top and bottom of
+    the can, a crimp groove above the seal, the aluminium top with its vent, and the stripe
+    on the negative side -- ``_can_pieces`` in the round, because it is turned, not boxed."""
+    r = min(s.length, s.width) / 2
+    h = s.height
+    recess = min(0.15, h * 0.05)
+    profile = [
+        (0.0, 0.0),
+        (r - 0.4, 0.0),
+        (r, 0.4),
+        (r, 0.9),
+        (r - 0.3, 1.1),
+        (r, 1.3),
+        (r, h - 0.5),
+        (r - 0.15, h - 0.15),
+        (r - 0.5, h),
+        (r - 0.7, h),
+        (r - 0.75, h - recess),
+        (0.0, h - recess),
+    ]
+    pieces = [
+        _Piece(
+            source=_lathe(profile),
+            rgb=_rgb(_ELECTROLYTIC_STYLE.fill),
+            position=(s.x, s.y, s.z),
+            material=SLEEVE,
+        ),
+        _Piece(
+            source=_cylinder(r - 0.75, 0.04, resolution=40),
+            rgb=_lit(_ELECTROLYTIC_STYLE.accent, 0.85),
+            position=(s.x, s.y, s.z + h - recess + 0.02),
+            orientation=_ALONG_Z,
+            material=STEEL,
+        ),
+    ]
+    for along_x in (True, False):
+        size = (r * 1.3, 0.12, 0.05) if along_x else (0.12, r * 1.3, 0.05)
+        pieces.append(
+            _Piece(
+                source=_box(*size),
+                rgb=_lit(_ELECTROLYTIC_STYLE.accent, 0.4),
+                position=(s.x, s.y, s.z + h - recess + 0.05),
+                material=STEEL,
+            )
+        )
+    # The stripe: thin radially, sitting just inside the sleeve, so it reads as printing.
+    thickness = r * 0.2
+    pieces.append(
+        _Piece(
+            source=s.box(thickness, r * 1.0, (h - 1.6) * 0.92),
+            rgb=_rgb(_ELECTROLYTIC_STYLE.accent),
+            position=s.at(s.facing * (r - thickness * 0.42), 0.0, 1.35 + (h - 1.6) / 2),
+            material=INK,
+        )
+    )
+    return pieces
+
+
+def _art_inductor(s: _ArtSolid) -> list[_Piece]:
+    """A shielded power inductor: a square ferrite case with rounded corners, and the round
+    top of the drum core inside it, which is what tells it from a black box."""
+    size = min(s.length, s.width)
+    return [
+        _Piece(
+            source=_rounded_case(size, size, s.height, min(1.6, size * 0.14)),
+            rgb=_ART_FERRITE_RGB,
+            position=(s.x, s.y, s.z + s.height / 2),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=_cylinder(size * 0.36, 0.05, resolution=40),
+            rgb=_ART_FERRITE_TOP_RGB,
+            position=(s.x, s.y, s.z + s.height + 0.02),
+            orientation=_ALONG_Z,
+            material=MOULDED,
+        ),
+    ]
+
+
+#: A D2PAK's tab behind its body, and how far its legs reach out in front.
+_TO263_TAB_MM = 1.3
+_TO263_LEGS_MM = 2.5
+#: TO-263-5: five legs 1.7 mm apart.
+_TO263_LEG_PITCH_MM = 1.7
+
+
+def _art_to263(s: _ArtSolid) -> list[_Piece]:
+    """A D2PAK lying on the module: the moulded body, the metal tab it is soldered down by
+    showing behind it, and five gull-wing legs out of the front, with its part number on
+    top. The legs are what make it a regulator rather than a black tile."""
+    half = s.length / 2
+    body = s.length - _TO263_TAB_MM - _TO263_LEGS_MM
+    body_mid = (-half + _TO263_TAB_MM + half - _TO263_LEGS_MM) / 2
+    f = s.facing
+    pieces = [
+        _Piece(
+            source=s.box(body, s.width, s.height, moulded=True),
+            rgb=_ART_EPOXY_RGB,
+            position=s.at(f * body_mid, 0.0, s.height / 2),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=s.box(_TO263_TAB_MM + 0.6, s.width * 0.86, 0.5),
+            rgb=LEAD_RGB,
+            position=s.at(f * (-half + (_TO263_TAB_MM + 0.6) / 2), 0.0, 0.25),
+            material=TINNED,
+        ),
+    ]
+    front = half - _TO263_LEGS_MM  # where the legs leave the body
+    for index in range(5):
+        across = (index - 2) * _TO263_LEG_PITCH_MM
+        for along, length, z, height in (
+            (front + 0.45, 0.9, 1.5, 0.4),  # out of the body
+            (front + 1.05, 0.4, 0.85, 1.7),  # bent down
+            (half - 0.65, 1.3, 0.17, 0.34),  # the foot soldered to the pad
+        ):
+            pieces.append(
+                _Piece(
+                    source=s.box(length, 0.8, height),
+                    rgb=LEAD_RGB,
+                    position=s.at(f * along, across, z),
+                    material=TINNED,
+                )
+            )
+    if s.text:
+        glyphs, orientation = s.printed(s.text, body * 0.13, s.width * 0.8, across=True)
+        if glyphs is not None:
+            pieces.append(
+                _Piece(
+                    source=glyphs,
+                    rgb=_ART_INK_RGB,
+                    position=s.at(f * body_mid, 0.0, s.height + 0.02),
+                    orientation=orientation,
+                    material=INK,
+                )
+            )
+    return pieces
+
+
+def _art_trimpot(s: _ArtSolid) -> list[_Piece]:
+    """A multi-turn trimmer standing on edge: the blue case and the slotted brass screw at
+    one end of its top, which is the part of a buck module anybody touches."""
+    screw_r = min(1.1, s.width * 0.25)
+    screw_h = 0.8
+    along = s.facing * (s.length / 2 - screw_r - 0.45)
+    case = s.height - screw_h
+    return [
+        _Piece(
+            source=s.box(s.length, s.width, case, moulded=True),
+            rgb=_ART_TRIMMER_RGB,
+            position=s.at(0.0, 0.0, case / 2),
+            material=GLOSS,
+        ),
+        _Piece(
+            source=_cylinder(screw_r, screw_h, resolution=24),
+            rgb=_ART_BRASS_RGB,
+            position=s.at(along, 0.0, case + screw_h / 2),
+            orientation=_ALONG_Z,
+            material=PLATED,
+        ),
+        _Piece(
+            source=s.box(0.35, screw_r * 1.9, 0.3),
+            rgb=_ART_SLOT_RGB,
+            position=s.at(along, 0.0, case + screw_h - 0.15),
+            material=MOULDED,
+        ),
+    ]
+
+
+#: An SO-8's legs: how far they reach out from the body each side, and where along it.
+_SOIC_REACH_MM = 1.05
+_SOIC_LEGS_MM = (-1.905, -0.635, 0.635, 1.905)
+
+
+def _art_soic8(s: _ArtSolid) -> list[_Piece]:
+    """An SO-8: the body on its stand-off, four gull-wing legs down each long side, the
+    pin-1 dot and the part's own marking."""
+    body_w = s.width - 2 * _SOIC_REACH_MM
+    standoff = 0.1
+    body_h = s.height - standoff
+    pieces = [
+        _Piece(
+            source=s.box(s.length, body_w, body_h, moulded=True),
+            rgb=_ART_EPOXY_RGB,
+            position=s.at(0.0, 0.0, standoff + body_h / 2),
+            material=MOULDED,
+        )
+    ]
+    # Each leg in three straight runs -- out of the body, down, and the foot on its pad --
+    # one instanced actor per run for all eight legs.
+    shoulder_z = standoff + body_h * 0.45
+    for reach, across, z, height in (
+        (0.55, body_w / 2 + 0.2, shoulder_z, 0.2),
+        (0.2, body_w / 2 + 0.45, (shoulder_z + 0.1) / 2, shoulder_z),
+        (0.65, body_w / 2 + _SOIC_REACH_MM - 0.32, 0.1, 0.2),
+    ):
+        pieces.append(
+            _Piece(
+                source=s.box(0.42, reach, height),
+                rgb=LEAD_RGB,
+                position=(0.0, 0.0, 0.0),
+                material=TINNED,
+                instances=tuple(
+                    s.at(along, side * across, z)
+                    for side in (-1.0, 1.0)
+                    for along in _SOIC_LEGS_MM
+                ),
+            )
+        )
+    pieces.append(
+        _Piece(
+            source=_cylinder(0.32, 0.05, resolution=16),
+            rgb=_ART_DOT_RGB,
+            position=s.at(
+                s.facing * (s.length / 2 - 0.75), -(body_w / 2 - 0.7), s.height + 0.02
+            ),
+            orientation=_ALONG_Z,
+            material=MOULDED,
+        )
+    )
+    if s.text:
+        glyphs, orientation = s.printed(s.text, body_w * 0.24, s.length * 0.7)
+        if glyphs is not None:
+            pieces.append(
+                _Piece(
+                    source=glyphs,
+                    rgb=_ART_INK_RGB,
+                    position=s.at(0.0, 0.2, s.height + 0.02),
+                    orientation=orientation,
+                    material=INK,
+                )
+            )
+    return pieces
+
+
+def _art_sma(s: _ArtSolid) -> list[_Piece]:
+    """A moulded SMD diode: the black body, the grey cathode band, the tinned tabs."""
+    pieces = [
+        _Piece(
+            source=s.box(s.length, s.width, s.height, moulded=True),
+            rgb=_ART_EPOXY_RGB,
+            position=s.at(0.0, 0.0, s.height / 2),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=s.box(0.7, s.width + 0.04, s.height + 0.04),
+            rgb=_ART_BAND_RGB,
+            position=s.at(s.facing * (s.length / 2 - 0.75), 0.0, s.height / 2),
+            material=INK,
+        ),
+    ]
+    for end in (-1.0, 1.0):
+        pieces.append(
+            _Piece(
+                source=s.box(0.6, s.width * 0.55, 0.22),
+                rgb=LEAD_RGB,
+                position=s.at(end * (s.length / 2 + 0.15), 0.0, 0.11),
+                material=TINNED,
+            )
+        )
+    return pieces
+
+
+def _art_chip(s: _ArtSolid, rgb: tuple[float, float, float], material: tuple[float, float]) -> list[_Piece]:
+    """A 0805 part: its body between two tinned end caps."""
+    cap = min(0.4, s.length * 0.2)
+    pieces = [
+        _Piece(
+            source=s.box(s.length - 2 * cap, s.width, s.height),
+            rgb=rgb,
+            position=s.at(0.0, 0.0, s.height / 2),
+            material=material,
+        )
+    ]
+    for end in (-1.0, 1.0):
+        pieces.append(
+            _Piece(
+                source=s.box(cap, s.width + 0.02, s.height + 0.02),
+                rgb=LEAD_RGB,
+                position=s.at(end * (s.length / 2 - cap / 2), 0.0, s.height / 2),
+                material=TINNED,
+            )
+        )
+    return pieces
+
+
+def _art_silk(s: _ArtSolid) -> list[_Piece]:
+    """Printing on the module's own board, in its silkscreen's colour."""
+    glyphs, orientation = s.printed(s.text, s.width, s.length)
+    if glyphs is None:
+        return []
+    return [
+        _Piece(
+            source=glyphs,
+            rgb=_rgb(_MODULE_STYLE.accent),
+            position=s.at(0.0, 0.0, _DECAL_PROUD_MM),
+            orientation=orientation,
+            material=INK,
+        )
+    ]
+
+
+_ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
+    "can": _art_can,
+    "inductor": _art_inductor,
+    "to263": _art_to263,
+    "trimpot": _art_trimpot,
+    "soic8": _art_soic8,
+    "sma": _art_sma,
+    "chip-r": lambda s: _art_chip(s, _ART_RESISTOR_RGB, MOULDED),
+    "chip-c": lambda s: _art_chip(s, _ART_MLCC_RGB, CERAMIC),
+    "silk": _art_silk,
+}
 
 
 def _module_rows_along_world_x(footprint: Any, comp: Any) -> bool:

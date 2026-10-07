@@ -851,6 +851,41 @@ declares `Apache-2.0 AND CC-BY-SA-4.0` and `release.yml` checks the meshes and t
 are actually in it, because a wheel without them still draws every board — which is exactly
 why nothing else would notice them going missing.
 
+### A module is drawn by what it is called, and never past its envelope
+
+What KiCad has no model of is drawn by code, and on the first real board two of those were
+the roughest things in the 3D view: an LM2596 buck and an SN65HVD230 breakout were the same
+blue slab with a dark brick on it, and a vertical terminal was a green box. A module's id
+carries its board, its pins and its tallest part's height and nothing about what the parts
+are, so `ui/moduleart.py` (pure, no VTK) draws them for the modules it RECOGNISES — by the
+part's VALUE, as `resistor_bands` reads a colour code, so the picture cannot disagree with
+the parts list. Four rules hold it, each pinned in `tests/test_module_art.py` for every turn
+and flip:
+
+- **Only on the board the layout was drawn for.** Same pin count, the right frame (a
+  `"header"` layout is for one row of pins) and a board within `SIZE_TOLERANCE` (15 %) of the
+  reference; anything else keeps the block. A guessed layout on another board is a picture
+  of a part that is not there.
+- **Inside the envelope DRC measures.** `fit_module_art` clamps every part to the id's
+  `top`, and every part stays on the module's board — measured on the built actors too, a
+  decal's `_DECAL_PROUD_MM` allowed. The STEP export is untouched: it is the envelope.
+- **Clear of the module's pin names.** `bodies.pin_labels` still sizes their room from
+  `module_block_size`, and the layout leaves that strip empty, so the silkscreen is not
+  printed under a capacitor.
+- **Oriented by pin NAMES, not by pin numbers.** A `"power"` layout puts the pins called
+  IN at `-u` and the `+` ones at `-v`; a `"header"` layout lies on the board's side of its
+  row. An LM2596 described with IN on the right is drawn with its regulator on the right.
+
+A new module is an entry in `MODULE_ARTS` with datasheet sizes, drawn from the kinds
+`view3d._ART_BUILDERS` knows; `test_every_layout_is_tested` makes sure it is measured. The 2D
+view keeps the block on purpose — what that view is for is the names beside the pins.
+
+**A vertical terminal is a header with a plug standing in it**: wires in from above, screws in
+the plug's SIDE, as on every pluggable block on a vertical header (and as the 2D view's
+comment always said). Which side is `view3d.VERTICAL_TERMINAL_SCREW_FACE`, the face a
+side-entry terminal's mouth is on — a convention, since the document does not record which
+way round the plug went in, and nothing checks it.
+
 ### The board leaves as STEP solids, and they are the bodies DRC measured
 
 `step_export.py` writes ISO 10303-21 (AP214) itself, from three shapes -- a box, a cylinder
