@@ -248,6 +248,7 @@ from perfboard_studio.model import (
     BoardType,
     BodyArchetype,
     ComponentInstance,
+    ConductorKind,
     DocumentMeta,
     EdgeConnector,
     Footprint,
@@ -541,6 +542,19 @@ def _now_iso() -> str:
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
 
+_I_FOLD = str.maketrans({"İ": "i", "I": "i", "ı": "i", "\u0307": None})
+
+
+def _folded(text: str) -> str:
+    """``text`` as every filter in the window compares it.
+
+    ``str.lower`` is not enough in a Turkish window: "İzoleli".lower() keeps a combining dot
+    and "Isı".lower() is "isı", so typing "iletken" or "ısı" found neither. Every i is folded
+    to one letter on both sides, which finds both whichever language either was typed in.
+    """
+    return text.translate(_I_FOLD).lower()
+
+
 def _rotation_after(current: Rotation, delta: int) -> Rotation:
     """The next legal rotation, wrapping. ``model.VALID_ROTATIONS`` is 0/90/180/270 and the
     command refuses anything else, so the wrap happens here rather than being discovered as
@@ -577,13 +591,15 @@ def read_document_text(path: Path) -> tuple[str | None, str | None]:
     they do not have.
     """
     if path.is_dir():
-        return None, f"{path} is a directory, not a .perf document."
+        return None, t("{path} is a directory, not a .perf document.").format(path=path)
     try:
         return path.read_text(encoding="utf-8"), None
     except OSError as err:
-        return None, f"Cannot open {path}: {err.strerror or err}."
+        return None, t("Cannot open {path}: {reason}.").format(path=path, reason=err.strerror or err)
     except UnicodeDecodeError:
-        return None, f"Cannot open {path}: not UTF-8 text. A .perf document is JSON."
+        return None, t("Cannot open {path}: not UTF-8 text. A .perf document is JSON.").format(
+            path=path
+        )
 
 
 #: Substrate to add outside the hole grid when a board carries a printed legend, so the
@@ -670,7 +686,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     Every leaf carries its footprint in ``ROLE_FOOTPRINT_ID``, and a catalog part its id in
     ``ROLE_CATALOG_ID`` as well; group headings carry neither and cannot be selected.
     """
-    needle = text.strip().lower()
+    needle = _folded(text.strip())
     tree.clear()
     by_archetype: dict[BodyArchetype, list[Footprint]] = {}
     for footprint in sorted(standard_footprints().values(), key=lambda f: f.name):
@@ -679,7 +695,8 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
         haystack = (
             f"{footprint.id} {footprint.name} {footprint_label(footprint.name)} "
             f"{footprint.body.archetype}"
-        ).lower()
+        )
+        haystack = _folded(haystack)
         if needle and needle not in haystack:
             continue
         by_archetype.setdefault(footprint.body.archetype, []).append(footprint)
@@ -721,8 +738,10 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
                 not needle
                 # In either language: "regülatör" finds a 7805 as "regulator" does.
                 or needle
-                in f"{part.id} {part.name} {part.summary} {t(part.summary)} "
-                f"{category} {headings[category]}".lower()
+                in _folded(
+                    f"{part.id} {part.name} {part.summary} {t(part.summary)} "
+                    f"{category} {headings[category]}"
+                )
             )
         ]
         if not parts:
@@ -1484,7 +1503,9 @@ class BoardFeaturesDialog(QDialog):
                 [
                     t("Mounting hole"),
                     format_hole(mount.at, doc.board),
-                    f"⌀{mount.diameter:g} mm, {mount.head_diameter:g} mm head",
+                    t("⌀{drill} mm, {head} mm head").format(
+                        drill=f"{mount.diameter:g}", head=f"{mount.head_diameter:g}"
+                    ),
                 ]
             )
             item.setData(0, Qt.ItemDataRole.UserRole, ("mounting-hole.delete", mount.id))
@@ -1497,7 +1518,7 @@ class BoardFeaturesDialog(QDialog):
             item = QTreeWidgetItem(
                 [
                     t("Edge connector"),
-                    f"{conn.edge}, {where}",
+                    f"{t(dict(self.EDGES)[conn.edge])}, {where}",
                     f"{conn.count} × {conn.finger_width:g} mm",
                 ]
             )
@@ -2057,11 +2078,11 @@ class GoToPartDialog(QDialog):
         return f"{component.ref}{value}  ·  {name}  ·  {format_hole(component.anchor, self._board)}"
 
     def _refilter(self, text: str) -> None:
-        needle = text.strip().lower()
+        needle = _folded(text.strip())
         self.list.clear()
         for component in self._components:
             row = self._describe(component)
-            if needle and needle not in row.lower():
+            if needle and needle not in _folded(row):
                 continue
             item = QListWidgetItem(row)
             item.setData(Qt.ItemDataRole.UserRole, component.id)
@@ -2788,19 +2809,22 @@ class ShortcutsDialog(QDialog):
     way to find out was to read the source.
     """
 
-    #: (gesture, what it does). Not actions, so nothing can derive them; they are listed
-    #: here because they are otherwise undiscoverable.
-    BOARD_GESTURES: tuple[tuple[str, str], ...] = (
-        ("Middle-drag", "Pan the board"),
-        ("Wheel", "Zoom about the pointer"),
-        ("Drag a part", "Move it, snapping to the nearest hole"),
-        ("Arrow keys", "Nudge the selected part one hole (Shift: five)"),
-        ("Right-click", "Finish the trace or net being drawn"),
-        ("Enter", "Finish it without moving the pointer"),
-        ("Esc", "Leave the current mode"),
-        ("Double-click a net", "Route just that net"),
-        ("Click a DRC row", "Zoom to the holes it names"),
-    )
+    @staticmethod
+    def board_gestures() -> tuple[tuple[str, str], ...]:
+        """(gesture, what it does). Not actions, so nothing can derive them; they are listed
+        here because they are otherwise undiscoverable. A function rather than a table, so
+        they are said in the window's language, which is chosen after this module loads."""
+        return (
+            (t("Middle-drag"), t("Pan the board")),
+            (t("Wheel"), t("Zoom about the pointer")),
+            (t("Drag a part"), t("Move it, snapping to the nearest hole")),
+            (t("Arrow keys"), t("Nudge the selected part one hole (Shift: five)")),
+            (t("Right-click"), t("Finish the trace or net being drawn")),
+            ("Enter", t("Finish it without moving the pointer")),
+            ("Esc", t("Leave the current mode")),
+            (t("Double-click a net"), t("Route just that net")),
+            (t("Click a DRC row"), t("Zoom to the holes it names")),
+        )
 
     def __init__(self, menus: Any, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -2818,7 +2842,7 @@ class ShortcutsDialog(QDialog):
 
         gestures = QTreeWidgetItem([t("On the board"), ""])
         tree.addTopLevelItem(gestures)
-        for gesture, what in self.BOARD_GESTURES:
+        for gesture, what in self.board_gestures():
             gestures.addChild(QTreeWidgetItem([what, gesture]))
         gestures.setExpanded(True)
 
@@ -2860,9 +2884,13 @@ class ShortcutsDialog(QDialog):
         return found
 
 
+#: An action's own name for the shortcut card, where its text says more than that.
+SHORTCUT_LABEL = "shortcutLabel"
+
+
 def _shortcut_rows(actions: Any) -> list[tuple[str, str]]:
     return [
-        (_plain(action.text()), action.shortcut().toString())
+        (_plain(action.property(SHORTCUT_LABEL) or action.text()), action.shortcut().toString())
         for action in actions
         if not action.isSeparator() and not action.shortcut().isEmpty()
     ]
@@ -3324,7 +3352,7 @@ def window_title(path: Path | None = None, modified: bool = False) -> str:
     forced -- the title is where someone notices in time to just press Ctrl+S.
     """
     name = f"Perfboard Studio {__version__}"
-    document = f" — {path.name}" if path is not None else " — untitled"
+    document = f" — {path.name}" if path is not None else f" — {t('untitled')}"
     return f"{'• ' if modified else ''}{name}{document}"
 
 
@@ -5190,6 +5218,9 @@ class MainWindow(QMainWindow):
         self.act_redo = edit_menu.addAction(t("&Redo"))
         self.act_redo.setShortcut(QKeySequence("Ctrl+Shift+Z"))
         self.act_redo.triggered.connect(self.on_redo)
+        # Their text carries the last command; the shortcut card names the action itself.
+        for action, label in ((self.act_undo, t("&Undo")), (self.act_redo, t("&Redo"))):
+            action.setProperty(SHORTCUT_LABEL, label)
         edit_menu.addSeparator()
 
         # A perfboard project repeats itself in a way a PCB does not -- eight identical
@@ -6225,7 +6256,8 @@ class MainWindow(QMainWindow):
                 if two_point
                 else t("click each pad, Enter or right-click finishes, Esc cancels")
             )
-            return f"{t('Drawing')} {kind.replace('-', ' ')}  ·  {how}"
+            word = conductor_word(kind, self._guide_language())
+            return f"{t('Drawing')} {word}  ·  {how}"
 
         if self.scene.cut_armed:
             return f"{t('Cutting tracks')}  ·  {t('click a hole, Esc ends')}"
@@ -8868,7 +8900,7 @@ class MainWindow(QMainWindow):
         """
         tree = self.drc_tree
         expanded = self._expanded_drc_keys()
-        needle = self.drc_filter.text().strip().lower() if hasattr(self, "drc_filter") else ""
+        needle = _folded(self.drc_filter.text().strip()) if hasattr(self, "drc_filter") else ""
         tree.clear()
 
         self._add_erc_findings(needle, expanded)
@@ -8880,7 +8912,10 @@ class MainWindow(QMainWindow):
         tree.addTopLevelItem(drc_root)
         by_rule: dict[str, list[DrcViolation]] = {}
         for v in violations:
-            haystack = f"{v.rule} {_rule_title(v.rule)} {v.severity} {v.message}".lower()
+            haystack = _folded(
+                f"{v.rule} {_rule_title(v.rule)} {v.severity} {_severity_word(v.severity)} "
+                f"{v.message}"
+            )
             if needle and needle not in haystack:
                 continue
             by_rule.setdefault(v.rule, []).append(v)
@@ -8919,7 +8954,7 @@ class MainWindow(QMainWindow):
         tree.addTopLevelItem(lvs_root)
         by_kind: dict[str, list[LvsIssue]] = {}
         for iss in lvs.issues:
-            if needle and needle not in f"{iss.kind} {_lvs_title(iss.kind)} {iss.message}".lower():
+            if needle and needle not in _folded(f"{iss.kind} {_lvs_title(iss.kind)} {iss.message}"):
                 continue
             by_kind.setdefault(iss.kind, []).append(iss)
         for kind in sorted(by_kind):
@@ -8961,8 +8996,11 @@ class MainWindow(QMainWindow):
         components = {c.ref: c.id for c in self.bus.document.components}
         by_rule: dict[str, list[ErcFinding]] = {}
         for finding in findings:
-            haystack = f"{finding.rule} {_erc_title(finding.rule)} {finding.severity} {finding.message}"
-            if needle and needle not in haystack.lower():
+            haystack = _folded(
+                f"{finding.rule} {_erc_title(finding.rule)} {finding.severity} "
+                f"{_severity_word(finding.severity)} {finding.message}"
+            )
+            if needle and needle not in haystack:
                 continue
             by_rule.setdefault(finding.rule, []).append(finding)
         for rule, items in by_rule.items():
@@ -9113,7 +9151,7 @@ class MainWindow(QMainWindow):
         previously = set(self._selected_net_ids())
         expanded = self._expanded_net_ids()
         nodes_by_net = {net.id: net.nodes for net in self.bus.document.nets}
-        needle = self.nets_filter.text().strip().lower()
+        needle = _folded(self.nets_filter.text().strip())
         tree.blockSignals(True)
         tree.clear()
         for entry in nets:
@@ -9186,7 +9224,8 @@ class MainWindow(QMainWindow):
                 net_class_word(entry.net_class),
                 *(f"{n.component_ref}.{n.pin}" for n in nodes),
             ]
-        ).lower()
+        )
+        haystack = _folded(haystack)
         return needle in haystack
 
     def _selected_net_ids(self) -> tuple[NetId, ...]:
@@ -9501,7 +9540,14 @@ class MainWindow(QMainWindow):
             return
 
         stale = len(stale_conductor_ids(self.bus.document, self.lookup))
-        note = f"  ·  {stale} conductor(s) are now stale; Ctrl+R clears and re-routes" if stale else ""
+        note = (
+            "  ·  "
+            + t("{count} conductor(s) are now stale; Ctrl+R clears and re-routes").format(
+                count=stale
+            )
+            if stale
+            else ""
+        )
         self.statusBar().showMessage(f"{say(describe_placement(plan))}{note}", 0)
 
     def _confirm_placement(self, plan: PlacementPlan, elapsed_ms: float) -> bool:
@@ -9830,13 +9876,20 @@ class MainWindow(QMainWindow):
         elapsed = (time.perf_counter() - t0) * 1000
         if plan is None:
             return
-        cleared_note = f"  ·  {cleared} stale conductor(s) removed first" if cleared else ""
+        cleared_note = (
+            "  ·  " + t("{count} stale conductor(s) removed first").format(count=cleared)
+            if cleared
+            else ""
+        )
         # Which style won, and how many it beat. Said in the status line rather than only in
         # the log, because a user who asked the tool to choose is owed the choice it made --
         # otherwise "best" is indistinguishable from the router having a good day.
         style_note = (
-            f"  ·  {best.style} beat {best.considered - 1} other style"
-            f"{'' if best.considered == 2 else 's'}"
+            "  ·  "
+            + t("“{style}” beat {count} other style(s)").format(
+                style=_plain(self.act_style[best.style].text()),
+                count=best.considered - 1,
+            )
             if best is not None
             else ""
         )
@@ -10087,12 +10140,14 @@ class MainWindow(QMainWindow):
         block = block_from_json(text)
         if block is None:
             return
-        message = f"Copied {len(block.components)} part(s), {len(block.conductors)} conductor(s)"
+        message = t("Copied {parts} part(s), {conductors} conductor(s)").format(
+            parts=len(block.components), conductors=len(block.conductors)
+        )
         if block.orphaned_lead_bends:
-            message += (
-                f" — {block.orphaned_lead_bends} lead bend(s) left behind: a bent leg "
-                f"belongs to a part that was not in the selection"
-            )
+            message += " — " + t(
+                "{count} lead bend(s) left behind: a bent leg belongs to a part that was not "
+                "in the selection"
+            ).format(count=block.orphaned_lead_bends)
         self.statusBar().showMessage(message, 8000)
 
     def on_paste(self) -> None:
@@ -10136,12 +10191,20 @@ class MainWindow(QMainWindow):
         # Selected, so the very next thing -- a drag, R, M -- lands on what was just
         # pasted rather than on whatever happened to be selected when it was copied.
         self.scene.select_components([spec.id for spec in paste.payload.components if spec.id])
-        message = (
-            f"{what}d {len(paste.payload.components)} part(s) and "
-            f"{len(paste.payload.conductors)} conductor(s) at {format_hole(at, self.bus.document.board)}"
+        done = (
+            t("Pasted {parts} part(s) and {conductors} conductor(s) at {hole}")
+            if what == "Paste"
+            else t("Duplicated {parts} part(s) and {conductors} conductor(s) at {hole}")
+        )
+        message = done.format(
+            parts=len(paste.payload.components),
+            conductors=len(paste.payload.conductors),
+            hole=format_hole(at, self.bus.document.board),
         )
         if paste.dropped_conductors:
-            message += f" — {paste.dropped_conductors} conductor(s) would have run off the board"
+            message += " — " + t("{count} conductor(s) would have run off the board").format(
+                count=paste.dropped_conductors
+            )
         self.statusBar().showMessage(message, 8000)
 
     def _pointer_is_on_board(self) -> bool:
@@ -10173,7 +10236,10 @@ class MainWindow(QMainWindow):
             hole_to_screen(component.anchor, self.bus.document.board, self.side)
         )
         self.statusBar().showMessage(
-            f"{component.ref} at {format_hole(component.anchor, self.bus.document.board)}", 6000
+            t("{ref} at {hole}").format(
+                ref=component.ref, hole=format_hole(component.anchor, self.bus.document.board)
+            ),
+            6000,
         )
 
     def on_cut_mode(self, checked: bool) -> None:
@@ -10277,7 +10343,9 @@ class MainWindow(QMainWindow):
                 else t("click each pad, Enter or right-click finishes, Esc cancels")
             )
             self.statusBar().showMessage(
-                f"{t('Drawing')} {wanted.replace('-', ' ')} — {how}", 0
+                f"{t('Drawing')} "
+                f"{conductor_word(cast(ConductorKind, wanted), self._guide_language())} — {how}",
+                0,
             )
         else:
             self.statusBar().clearMessage()
@@ -11378,7 +11446,7 @@ class MainWindow(QMainWindow):
         net_id = self.scene.armed_net_id
         if not net_id:
             return
-        picked = ", ".join(str(label) for label in labels) if labels else "no pins yet"
+        picked = ", ".join(str(label) for label in labels) if labels else t("no pins yet")
         self.statusBar().showMessage(
             f"{self._pin_session_prefix(net_id)}: {picked} — {t(self.PIN_HINT)}", 0
         )
@@ -11405,7 +11473,7 @@ class MainWindow(QMainWindow):
     PIN_HINT = "Enter or right-click finishes, Esc cancels"
 
     def _pin_session_prefix(self, net_id: str) -> str:
-        return f"Adding pins to {self._net_name(net_id)}"
+        return f"{t('Adding pins to')} {self._net_name(net_id)}"
 
     def _net_name(self, net_id: str) -> str:
         return next((n.name for n in self.bus.document.nets if n.id == net_id), net_id)
@@ -11619,17 +11687,28 @@ class MainWindow(QMainWindow):
         """
         if not self.is_modified:
             return True
-        name = self.current_path.name if self.current_path else t("this board")
+        # Two sentences rather than "this board" put where a file name goes: a name that
+        # opens a sentence is not a subject that does, and in Turkish it came out in lower case.
+        question = (
+            t("{name} has changes that are not saved.").format(name=self.current_path.name)
+            if self.current_path
+            else t("This board has changes that are not saved.")
+        )
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle(t("Unsaved changes"))
-        box.setText(f"<b>{t('{name} has changes that are not saved.').format(name=name)}</b>")
+        box.setText(f"<b>{question}</b>")
         box.setInformativeText(t("Saving keeps them; discarding loses them for good."))
         box.setStandardButtons(
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
             | QMessageBox.StandardButton.Cancel
         )
+        # Named for what it does: Qt's own Turkish for Discard is "At", which says nothing
+        # about the changes beside a sentence that is all about them.
+        discard = box.button(QMessageBox.StandardButton.Discard)
+        if discard is not None:
+            discard.setText(t("Don't Save"))
         box.setDefaultButton(QMessageBox.StandardButton.Save)
         answer = box.exec()
         if answer == QMessageBox.StandardButton.Save:

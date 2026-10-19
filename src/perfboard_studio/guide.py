@@ -1271,7 +1271,7 @@ def _flying_lead_notes(
 def _wires_span(pin_holes: tuple[tuple[str, HoleCoord], ...], say: Phrasebook, *, board: Board | None) -> str:
     """Where the wires to a part off the board land: their row, and how many there are.
 
-    Not ``_span_of``: "B16 → A16, 1 holes apart" is the pitch to bend two leads to, and these
+    Not ``_span_of``: "B16 → A16, 1 hole apart" is the pitch to bend two leads to, and these
     are wires, cut rather than bent.
     """
     if len(pin_holes) == 1:
@@ -1301,6 +1301,11 @@ def _span_of(pin_holes: tuple[tuple[str, HoleCoord], ...], say: Phrasebook = ENG
     if len(pin_holes) == 2:
         first, last = pin_holes[0][1], pin_holes[1][1]
         steps = max(max(cols) - min(cols), max(rows) - min(rows))
+        if steps == 1:
+            return say(
+                "{start} → {end}, 1 hole apart",
+                start=format_hole(first, board), end=format_hole(last, board),
+            )
         return say(
             "{start} → {end}, {steps} holes apart",
             start=format_hole(first, board), end=format_hole(last, board), steps=steps,

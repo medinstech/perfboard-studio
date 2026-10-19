@@ -24,6 +24,8 @@ from PySide6.QtGui import QColor, QFont, QImage, QPageLayout, QPageSize, QPainte
 from perfboard_studio.geometry import board_outline_mm
 from perfboard_studio.model import Board
 
+from .i18n import t
+
 MM_PER_INCH = 25.4
 
 
@@ -64,7 +66,9 @@ def _draw_scale_bar(painter: QPainter, origin: QPointF) -> None:
     font = QFont()
     font.setPointSizeF(2.2)
     painter.setFont(font)
-    painter.drawText(QPointF(x0, y0 + 3.4), "50 mm — measure this with a ruler to confirm 1:1")
+    painter.drawText(
+        QPointF(x0, y0 + 3.4), t("50 mm — measure this with a ruler to confirm 1:1")
+    )
     painter.restore()
 
 
@@ -98,9 +102,11 @@ def export_pdf(board: Board, scene: Any, path: str | Path, mirrored: bool = Fals
     font.setPointSizeF(3.0)
     painter.setFont(font)
     painter.setPen(QPen(QColor("#000000")))
-    side = "SOLDER SIDE (mirrored)" if mirrored else "COMPONENT SIDE"
+    side = t("SOLDER SIDE (mirrored)") if mirrored else t("COMPONENT SIDE")
     painter.drawText(
-        QPointF(0, -6), f"Perfboard Studio  ·  {board.cols}x{board.rows} {board.material}  ·  {side}  ·  printed 1:1"
+        QPointF(0, -6),
+        f"Perfboard Studio  ·  {board.cols} × {board.rows} {board.material}  ·  {side}  ·  "
+        + t("printed 1:1"),
     )
     painter.restore()
 

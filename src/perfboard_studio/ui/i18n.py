@@ -337,6 +337,23 @@ TURKISH: Mapping[str, str] = {
     "Action": "Eylem",
     "Shortcut": "Kısayol",
     "On the board": "Kart üzerinde",
+    "⌀{drill} mm, {head} mm head": "⌀{drill} mm, {head} mm vida başı",
+    "Middle-drag": "Orta tuşla sürükle",
+    "Pan the board": "Kartı kaydır",
+    "Wheel": "Tekerlek",
+    "Zoom about the pointer": "İmlecin çevresinde yakınlaştır",
+    "Drag a part": "Bir parçayı sürükle",
+    "Move it, snapping to the nearest hole": "Taşır, en yakın deliğe oturtur",
+    "Arrow keys": "Ok tuşları",
+    "Nudge the selected part one hole (Shift: five)": "Seçili parçayı bir delik kaydır (Shift: beş)",
+    "Right-click": "Sağ tık",
+    "Finish the trace or net being drawn": "Çizilmekte olan lehim yolunu ya da neti bitir",
+    "Finish it without moving the pointer": "İmleci oynatmadan bitir",
+    "Leave the current mode": "Geçerli kipten çık",
+    "Double-click a net": "Bir nete çift tıkla",
+    "Route just that net": "Yalnızca o neti yönlendir",
+    "Click a DRC row": "Bir DRC satırına tıkla",
+    "Zoom to the holes it names": "Andığı deliklere yakınlaş",
     "Undo": "Geri al:",
     "Nothing to undo": "Geri alınacak bir şey yok",
     "Redo": "Yinele:",
@@ -356,8 +373,26 @@ TURKISH: Mapping[str, str] = {
     "Adding pins to": "Pin ekleniyor:",
     "Enter or right-click finishes, Esc cancels": "Enter veya sağ tık bitirir, Esc iptal eder",
     "no pins yet": "henüz pin yok",
+    "Copied {parts} part(s), {conductors} conductor(s)": "{parts} parça, {conductors} iletken kopyalandı",
+    "{count} lead bend(s) left behind: a bent leg belongs to a part that was not in the selection":
+        "{count} bacak bükme geride kaldı: bükülen bacak, seçimde olmayan bir parçanın",
+    "Pasted {parts} part(s) and {conductors} conductor(s) at {hole}":
+        "{parts} parça ve {conductors} iletken {hole} deliğine yapıştırıldı",
+    "Duplicated {parts} part(s) and {conductors} conductor(s) at {hole}":
+        "{parts} parça ve {conductors} iletken {hole} deliğine çoğaltıldı",
+    "{count} conductor(s) would have run off the board": "{count} iletken kartın dışına taşacaktı",
+    "{ref} at {hole}": "{ref}, {hole} deliğinde",
+    "untitled": "adsız",
+    "{path} is a directory, not a .perf document.": "{path} bir klasör, .perf belgesi değil.",
+    "Cannot open {path}: {reason}.": "{path} açılamıyor: {reason}.",
+    "Cannot open {path}: not UTF-8 text. A .perf document is JSON.":
+        "{path} açılamıyor: UTF-8 metin değil. Bir .perf belgesi JSON'dur.",
+    "{count} conductor(s) are now stale; Ctrl+R clears and re-routes":
+        "{count} iletken eskidi; Ctrl+R temizler ve yeniden yönlendirir",
+    "{count} stale conductor(s) removed first": "önce {count} eskimiş iletken kaldırıldı",
+    "“{style}” beat {count} other style(s)": "“{style}” diğer {count} stilden iyi çıktı",
     "Nothing on this board yet.": "Bu kartta henüz bir şey yok.",
-    "Filter nets…  (gnd, power, U1)": "Netleri süz…  (gnd, power, U1)",
+    "Filter nets…  (gnd, power, U1)": "Netleri süz…  (gnd, güç, U1)",
     "Filter parts…  (resistor, dip, 5mm)": "Parçaları süz…  (direnç, dip, 5mm)",
     # -- toolbar ---------------------------------------------------------------
     # Short labels for the buttons; the menus keep the full wording. Qt draws an action's
@@ -697,7 +732,7 @@ TURKISH: Mapping[str, str] = {
     "Pins": "Pin",
     "Rule / Kind": "Kural / Tür",
     "Message": "Mesaj",
-    "Filter findings…  (error, short, R5', C7)": "Bulguları süz…  (error, short, R5', C7)",
+    "Filter findings…  (error, short, R5', C7)": "Bulguları süz…  (hata, kısa devre, R5', C7)",
     "pads": "ped",
     "a pin has no pad there — see DRC": "orada bir pinin pedi yok — DRC'ye bak",
     "it overlaps an existing pin — see DRC": "mevcut bir pinle çakışıyor — DRC'ye bak",
@@ -993,6 +1028,13 @@ TURKISH: Mapping[str, str] = {
         "Proje {path} konumuna kaydedildi: kart ve {count} üretilmiş dosya{note}"
     ),
     "Some files were not written": "Bazı dosyalar yazılmadı",
+    "no board view to print from": "basılacak bir kart görünümü yok",
+    "the design has no parts to draw yet": "tasarımda henüz çizilecek parça yok",
+    "Could not write the download: {error}": "İndirilen dosya yazılamadı: {error}",
+    "50 mm — measure this with a ruler to confirm 1:1": "50 mm — 1:1 olduğunu cetvelle ölçerek doğrula",
+    "SOLDER SIDE (mirrored)": "LEHİM YÜZÜ (aynalı)",
+    "COMPONENT SIDE": "KOMPONENT YÜZÜ",
+    "printed 1:1": "1:1 basıldı",
     "Everything else is saved. These had nothing to write:\n\n{lines}": (
         "Diğer her şey kaydedildi. Bunların yazacak bir şeyi yoktu:\n\n{lines}"
     ),
@@ -1478,8 +1520,10 @@ TURKISH: Mapping[str, str] = {
         "ne de bayat temizliğinin dokunacağı bir şey olur."
     ),
     "{name} has changes that are not saved.": "{name} üzerinde kaydedilmemiş değişiklikler var.",
+    "This board has changes that are not saved.": "Bu kartta kaydedilmemiş değişiklikler var.",
+    "Don't Save": "Kaydetme",
     "Saving keeps them; discarding loses them for good.": (
-        "Kaydetmek korur; vazgeçmek temelli kaybettirir."
+        "Kaydet onları korur; Kaydetme temelli kaybettirir."
     ),
     "Discard the unsaved changes in this window and load {name} as it is "
     "on disk?": "Bu penceredeki kaydedilmemiş değişiklikler atılıp {name} diskteki haliyle yüklensin mi?",
@@ -2040,6 +2084,7 @@ TURKISH: Mapping[str, str] = {
     "Move {count} symbol(s) on the sheet": "Şemada {count} sembolü taşı",
     "Move {count} symbols on the sheet": "Şemada {count} sembolü taşı",
     "Move {ref} on the sheet": "{ref} sembolünü şemada taşı",
+    "Add {ref} to the sheet at ({x}, {y})": "{ref} sembolünü şemaya ekle ({x}, {y})",
     "Move {ref} to {hole}": "{ref} parçasını {hole} deliğine taşı",
     "Rotate {ref} to {degrees} degrees": "{ref} parçasını {degrees} dereceye döndür",
     "Unmirror {ref}": "{ref} parçasının aynalamasını kaldır",

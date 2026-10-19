@@ -6198,11 +6198,36 @@ def test_the_board_gestures_are_listed_because_no_menu_carries_them() -> None:
     an action anywhere, so until this dialog the only way to find out was the source."""
     from perfboard_studio.ui.main import ShortcutsDialog
 
-    gestures = dict((keys, what) for keys, what in ShortcutsDialog.BOARD_GESTURES)
+    gestures = dict((keys, what) for keys, what in ShortcutsDialog.board_gestures())
 
     assert "Middle-drag" in gestures
     assert "Esc" in gestures
     assert "Arrow keys" in gestures
+
+
+def test_the_board_gestures_are_said_in_the_windows_language() -> None:
+    """They were a table built when the module loaded, before any language was chosen, so
+    the Turkish card listed every gesture in English under a Turkish heading."""
+    from perfboard_studio.ui.i18n import set_language
+    from perfboard_studio.ui.main import ShortcutsDialog
+
+    english = ShortcutsDialog.board_gestures()
+    set_language("tr")
+    try:
+        turkish = ShortcutsDialog.board_gestures()
+    finally:
+        set_language("en")
+    assert all(said != meant for (_, said), (_, meant) in zip(turkish, english, strict=True))
+
+
+def test_a_filter_finds_a_turkish_word_whatever_its_i() -> None:
+    """``str.lower`` keeps a combining dot on "İ" and makes "I" an ordinary i, so typing
+    "iletken" never found "İletkenler kesişiyor" and "ısı" never found "Isı kaynağı"."""
+    from perfboard_studio.ui.main import _folded
+
+    assert _folded("iletken") in _folded("İletkenler kesişiyor")
+    assert _folded("ısı") in _folded("Isı kaynağı fazla yakın")
+    assert _folded("insulated") in _folded("INSULATED wire")
 
 
 def test_the_menus_survive_a_garbage_collection() -> None:

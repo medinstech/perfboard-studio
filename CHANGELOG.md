@@ -33,6 +33,22 @@ closed without a bump.
   the moment a placement landed and Next said "See the Findings" instead of "Autoroute". An
   open now counts once the wiring is done; a short, or a DRC error, still counts at once.
 
+- **The Turkish interface says the rest of it in Turkish**: the status lines after copy,
+  paste, duplicate, Go to Part and autoroute (which style won, which conductors went stale),
+  the pin-adding and drawing lines (which named the conductor by its id, "solder trace
+  wired"), the board's hover tips, the undo labels for placing a symbol and moving several
+  parts, the window title of an unnamed board, the reasons a file would not open, the
+  gestures on the keyboard-shortcuts card, the mounting holes and fingers in Board
+  Features, the files a project save could not write, and the 1:1 PDF's own print. The
+  unsaved-changes question starts with a capital and its button says "Kaydetme" rather than
+  Qt's "At".
+
+- **Every filter finds a Turkish word whatever its i.** Typing "iletken" or "ısı" found
+  nothing, because a capital İ or I does not lower-case to the letter typed; the findings
+  filter also finds "hata" and "uyarı" now, as its placeholder says.
+
+- **"1 hole apart", not "1 holes apart"**, in the English build guide.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

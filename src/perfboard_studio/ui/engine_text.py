@@ -51,6 +51,7 @@ TEMPLATES: tuple[str, ...] = (
     "Move {count} symbol(s) on the sheet",
     "Move {count} symbols on the sheet",
     "Move {ref} on the sheet",
+    "Add {ref} to the sheet at ({x}, {y})",
     "Move {ref} to {hole}",
     "Rotate {ref} to {degrees} degrees",
     "Unmirror {ref}",

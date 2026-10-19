@@ -37,6 +37,7 @@ from perfboard_studio.schematic_export import drawing_to_svg
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
+from .i18n import t
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,23 +143,23 @@ def _producers(
 
     def board_pdf(target: Path) -> Path:
         if scene is None:
-            raise _NothingToWrite("no board view to print from")
+            raise _NothingToWrite(t("no board view to print from"))
         return export_pdf(document.board, scene, target)
 
     def sheet_svg(target: Path) -> Path:
         if svg is None:
-            raise _NothingToWrite("the design has no parts to draw yet")
+            raise _NothingToWrite(t("the design has no parts to draw yet"))
         target.write_text(svg, encoding="utf-8")
         return target
 
     def sheet_pdf(target: Path) -> Path:
         if svg is None:
-            raise _NothingToWrite("the design has no parts to draw yet")
+            raise _NothingToWrite(t("the design has no parts to draw yet"))
         return svg_to_pdf(svg, target, title=document.meta.name)
 
     def sheet_png(target: Path) -> Path:
         if svg is None:
-            raise _NothingToWrite("the design has no parts to draw yet")
+            raise _NothingToWrite(t("the design has no parts to draw yet"))
         return svg_to_png(svg, target)
 
     def text_export(render: Any) -> Any:

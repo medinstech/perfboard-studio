@@ -290,7 +290,7 @@ class UpdateChecker(QObject):
             # class is a signal; this write was the one place an exception could reach
             # the event loop, with the .part file left behind because nothing cancelled.
             self.cancel()
-            self.downloadFailed.emit(f"Could not write the download: {err}")
+            self.downloadFailed.emit(t("Could not write the download: {error}").format(error=err))
             return
         self._hash.update(data)
 

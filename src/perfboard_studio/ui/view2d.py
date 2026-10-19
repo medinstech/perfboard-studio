@@ -119,6 +119,7 @@ from perfboard_studio.geometry import (
 from perfboard_studio.guide import (
     COLOR_BY_NET_CLASS,
     SIGNAL_COLORS,
+    conductor_word,
     lead_end,
     lead_marker,
     net_colours,
@@ -1782,7 +1783,8 @@ class ConductorItem(QGraphicsItem):
         # -- and it was the one field the tooltip left out.
         net_note = f"\n{net_name}" if net_name else ""
         self.setToolTip(
-            f"{conductor.kind.replace('-', ' ')}  {format_hole(first, board)} → {format_hole(last, board)}{net_note}"
+            f"{conductor_word(conductor.kind, guide_language(current_language()))}  "
+            f"{format_hole(first, board)} → {format_hole(last, board)}{net_note}"
         )
 
     def _points(self) -> list[QPointF]:
@@ -4806,7 +4808,7 @@ class BoardScene(QGraphicsScene):
                     placements=tuple(
                         ComponentPlacement(id=comp_id, anchor=anchor) for comp_id, anchor in moves
                     ),
-                    label=f"Move {len(moves)} parts",
+                    label=f"Move {len(moves)} component(s)",
                 ),
             )
         ]

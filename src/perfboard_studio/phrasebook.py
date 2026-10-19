@@ -474,6 +474,7 @@ TURKISH: dict[str, str] = {
     # -- where a part goes, and which way round ------------------------------------------
     "no pins": "pin yok",
     "{start} → {end}, {steps} holes apart": "{start} → {end}, {steps} delik ara",
+    "{start} → {end}, 1 hole apart": "{start} → {end}, 1 delik ara",
     "{start} → {end}, {count} pins": "{start} → {end}, {count} pin",
     "{start} → {end}, {count} pins with pin 1 at {hole}": (
         "{start} → {end}, {count} pin, 1. pin {hole} deliğinde"
