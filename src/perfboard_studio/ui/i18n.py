@@ -2105,6 +2105,8 @@ TURKISH: Mapping[str, str] = {
     "Remove cut {id}": "{id} kesimini kaldır",
     "Set board to {cols}x{rows} {material}": "Kartı {cols}x{rows} {material} yap",
     "Use a {cols}x{rows} {material} board": "{cols}x{rows} {material} kart kullan",
+    "Use a {points}-point breadboard": "{points} noktalı breadboard kullan",
+    "Use a {points}-point solderable breadboard": "{points} noktalı lehimlenebilir breadboard kullan",
     "Use a {preset} board": "{preset} kart kullan",
     "Drill 4 corner mounting holes ({mm} mm)": "Köşelere 4 montaj deliği del ({mm} mm)",
     "Drill {mm} mm mounting hole at {hole}": "{hole} deliğine {mm} mm montaj deliği del",

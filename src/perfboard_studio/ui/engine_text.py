@@ -121,6 +121,8 @@ TEMPLATES: tuple[str, ...] = (
     # -- the board itself -------------------------------------------------------------------
     "Set board to {cols}x{rows} {material}",
     "Use a {cols}x{rows} {material} board",
+    "Use a {points}-point breadboard",
+    "Use a {points}-point solderable breadboard",
     "Use a {preset} board",
     "Drill 4 corner mounting holes ({mm} mm)",
     "Drill {mm} mm mounting hole at {hole}",

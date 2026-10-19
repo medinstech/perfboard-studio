@@ -20,6 +20,14 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A new board can be made a breadboard in Board Setup.** Choosing either kind of
+  breadboard on a fresh document was refused -- "a breadboard has no mounting holes; remove
+  them first" -- about the corner bores and finger strips the starter board comes with,
+  which nobody had added. Changing the kind of board now takes the old board's fingers and
+  bores with it, as choosing another stock size always has, in one undo step.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

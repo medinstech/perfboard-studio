@@ -1262,10 +1262,17 @@ class BoardSetupDialog(QDialog):
         self,
     ) -> tuple[tuple[EdgeConnector, ...], tuple[MountingHole, ...]] | None:
         """What the caller needs to apply a whole product rather than just a size."""
-        if self.board_type.currentData() in ("breadboard", "solderable-breadboard"):
-            # Nothing is drilled into a solderless one, and neither has fingers; a
-            # solderable one's mounting holes are added like any board's, where they are.
-            return None
+        kind = self.board_type.currentData()
+        if kind in ("breadboard", "solderable-breadboard"):
+            if kind == self._board.type:
+                # Another size of the same board: a solderable one keeps the mounting holes
+                # somebody drilled in it, and a solderless one never had any.
+                return None
+            # A different PRODUCT, so the fingers and corner bores go with the board they
+            # belonged to, as they do when one stock size replaces another. Neither kind
+            # takes fingers and a solderless one takes no bore, so keeping them was a
+            # refusal -- on every new document, whose starter board comes with both.
+            return (), ()
         return _preset_features(self._preset, self.board())
 
     def board(self) -> Board:
@@ -10632,13 +10639,17 @@ class MainWindow(QMainWindow):
             result = self.bus.dispatch("board.set", SetBoardPayload(board=board))
         else:
             connectors, holes = features
+            points = size_of(board)
+            if points is not None and board.type == "breadboard":
+                label = f"Use a {points}-point breadboard"
+            elif points is not None:
+                label = f"Use a {points}-point solderable breadboard"
+            else:
+                label = f"Use a {board.cols}x{board.rows} {board.material} board"
             result = self.bus.dispatch(
                 "board.applyPreset",
                 ApplyBoardPresetPayload(
-                    board=board,
-                    edge_connectors=connectors,
-                    mounting_holes=holes,
-                    label=f"Use a {board.cols}x{board.rows} {board.material} board",
+                    board=board, edge_connectors=connectors, mounting_holes=holes, label=label
                 ),
             )
         if not result.ok:

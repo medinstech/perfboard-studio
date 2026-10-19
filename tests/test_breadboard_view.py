@@ -69,7 +69,8 @@ def test_board_setup_asks_a_breadboard_only_its_size() -> None:
     dialog.board_type.setCurrentIndex(dialog.board_type.findData("breadboard"))
     dialog.breadboard_size.setCurrentIndex(dialog.breadboard_size.findData("400"))
     assert dialog.board() == breadboard("400")
-    assert dialog.preset_features() is None
+    # A different product: the perfboard's fingers and bores go with it.
+    assert dialog.preset_features() == ((), ())
     form = dialog._chosen
     assert form.isRowVisible(dialog.breadboard_size)
     assert not form.isRowVisible(dialog.preset)
@@ -88,6 +89,51 @@ def test_board_setup_opens_on_the_breadboard_it_was_given() -> None:
     assert dialog.board_type.currentData() == "breadboard"
     assert dialog.breadboard_size.currentData() == "170"
     assert dialog.board() == breadboard("170")
+    # Another size of the same board is only a size.
+    dialog.breadboard_size.setCurrentIndex(dialog.breadboard_size.findData("830"))
+    assert dialog.preset_features() is None
+
+
+def test_a_new_document_can_be_made_a_breadboard_in_board_setup(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The starter board comes with corner bores and finger strips, which neither kind of
+    breadboard takes -- so choosing one was refused with "remove them first", about
+    features nobody had added. They go with the board they belonged to, in one undo step."""
+    _app()
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QDialog
+
+    from perfboard_studio.breadboard import solderable_breadboard
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.ui import main as main_module
+
+    store = QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
+    monkeypatch.setattr(main_module, "app_settings", lambda: store)
+    for kind, expected in (
+        ("breadboard", breadboard("400")),
+        ("solderable-breadboard", solderable_breadboard("400")),
+    ):
+        starter = create_starter_document(DocumentMeta(name="t", created="", modified=""))
+        assert starter.mounting_holes and starter.edge_connectors
+        window = main_module.MainWindow(starter)
+
+        def choose(dialog, _kind=kind) -> QDialog.DialogCode:  # type: ignore[no-untyped-def]
+            dialog.board_type.setCurrentIndex(dialog.board_type.findData(_kind))
+            dialog.breadboard_size.setCurrentIndex(dialog.breadboard_size.findData("400"))
+            return QDialog.DialogCode.Accepted
+
+        monkeypatch.setattr(main_module.BoardSetupDialog, "exec", choose)
+        try:
+            assert window.on_board_setup()
+            document = window.bus.document
+            assert document.board == expected
+            assert document.mounting_holes == () and document.edge_connectors == ()
+            assert "400-point" in window.bus.history()[-1]
+            window.on_undo()
+            assert window.bus.document.board == starter.board
+            assert window.bus.document.mounting_holes == starter.mounting_holes
+        finally:
+            window._saved_document = window.bus.document
+            window.close()
 
 
 
