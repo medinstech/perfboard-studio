@@ -4398,6 +4398,26 @@ def test_board_features_dialog_removes_the_selected_feature() -> None:
     assert dialog.tree.topLevelItemCount() == 1
 
 
+def test_enter_in_board_features_removes_nothing() -> None:
+    """Qt makes the first push button it finds a dialog's default, and that was Remove:
+    Enter typed into the hole-diameter box deleted whichever feature was selected."""
+    from PySide6.QtTest import QTest
+
+    from perfboard_studio.ui.main import BoardFeaturesDialog
+
+    bus = _new_bus(_featured_document())
+    dialog = BoardFeaturesDialog(bus)
+    dialog.show()
+    try:
+        dialog.tree.setCurrentItem(dialog.tree.topLevelItem(0))
+        dialog.mount_diameter.setFocus()
+        QTest.keyClick(dialog.mount_diameter, Qt.Key.Key_Return)
+        assert len(bus.document.mounting_holes) == 1
+        assert len(bus.document.edge_connectors) == 1
+    finally:
+        dialog.close()
+
+
 # ---------------------------------------------------------------------------
 # Assembly playback
 # ---------------------------------------------------------------------------

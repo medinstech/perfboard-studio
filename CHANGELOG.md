@@ -53,6 +53,10 @@ closed without a bump.
   the platform's light palette, so their alternate rows came out pale grey under light
   text; they take the panels' colours now, and their selection is the trees' blue.
 
+- **Enter in Board Features no longer deletes a mounting hole.** Qt made Remove the dialog's
+  default button, so pressing Enter in the hole-diameter box removed whichever feature was
+  selected in the list. No button there is the default now.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

@@ -1485,6 +1485,12 @@ class BoardFeaturesDialog(QDialog):
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
 
+        # None of them is the dialog's default. Qt makes the first push button it finds
+        # the default, which was Remove -- so Enter in the hole-diameter box deleted the
+        # selected mounting hole. Each of these is done by clicking it.
+        for button in (self.act_remove, add_corners, add_connector, apply_height):
+            button.setAutoDefault(False)
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.tree)
         layout.addWidget(self.act_remove)
