@@ -4964,6 +4964,10 @@ def test_a_net_of_parts_not_yet_placed_is_not_done() -> None:
         assert row is not None
         assert row.text(3) == "not placed"
         assert row.text(1) == "signal"
+        # ...and is not drawn in the green that means done.
+        from perfboard_studio.ui.theme import OK
+
+        assert row.foreground(3).color().name() != QColor(OK).name()
     finally:
         _close(window)
 

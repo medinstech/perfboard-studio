@@ -57,6 +57,11 @@ closed without a bump.
   default button, so pressing Enter in the hole-diameter box removed whichever feature was
   selected in the list. No button there is the default now.
 
+- **A net of parts not yet placed is not drawn in green.** The Nets panel said "not
+  placed" in the colour that means done; it is dimmed now, as anything still to come is.
+  Board Setup's size line wraps instead of running off the dialog ("0.64 m"), and the pin
+  table in a part's properties is as wide as its heading.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

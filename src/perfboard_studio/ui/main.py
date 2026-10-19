@@ -1043,6 +1043,8 @@ class BoardSetupDialog(QDialog):
         self.row_digits.setToolTip(t('2 prints row 7 as "07", the way most such boards do.'))
 
         self._size_note = QLabel()
+        # Wrapped: beside the preview the line ran past the dialog's edge, "0.64 mm" cut to "0.64 m".
+        self._size_note.setWordWrap(True)
         self.cols.valueChanged.connect(self._update_note)
         self.rows.valueChanged.connect(self._update_note)
         self.board_type.currentIndexChanged.connect(self._update_enabled)
@@ -1804,6 +1806,10 @@ class PinoutEditor(QWidget):
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels([t("Pin"), t("Name")])
         self.table.verticalHeader().setVisible(False)
+        # As wide as its heading: at Qt's default width the Turkish "Pin no" was cut to "Pin nc".
+        self.table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.setToolTip(
             t(
@@ -9167,12 +9173,13 @@ class MainWindow(QMainWindow):
             # "done" only when there is a board to be done ON. A net whose pins are in the
             # design and not on the board has nothing left to route because it has nothing
             # placed, and it used to say "done" beside every net of a circuit freshly drawn.
+            # Coloured with it: "not placed" was drawn in the green of "done".
             if remaining:
-                left = str(remaining)
+                left, colour = str(remaining), WARNING if entry.unresolved_pins else TEXT_DIM
             elif entry.unresolved_pins:
-                left = t("not placed")
+                left, colour = t("not placed"), TEXT_DIM
             else:
-                left = t("done")
+                left, colour = t("done"), OK
             item = QTreeWidgetItem(
                 [
                     entry.net_name,
@@ -9182,7 +9189,6 @@ class MainWindow(QMainWindow):
                 ]
             )
             item.setData(0, ROLE_NET_ID, entry.net_id)
-            colour = OK if remaining == 0 else (WARNING if entry.unresolved_pins else TEXT_DIM)
             item.setForeground(3, QColor(colour))
             unresolved = {(p.component_ref, p.pin) for p in entry.unresolved_pins}
             if entry.unresolved_pins:
