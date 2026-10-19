@@ -74,6 +74,9 @@ class WorkflowFacts:
     #: counted for the step's line and never hold it back.
     erc_errors: int = 0
     erc_warnings: int = 0
+    #: Of ``lvs_problems``, the shorts. A short is wrong however much is left to route; an
+    #: open is only the wiring not being finished until the wiring is.
+    lvs_shorts: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +157,12 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     board_done = facts.board_chosen or facts.parts_on_board > 0
     place_done = facts.parts_on_board > 0 and facts.parts_off_board == 0
     route_done = place_done and facts.unrouted == 0 and facts.nets > 0
-    check_bad = facts.parts_on_board > 0 and (facts.drc_errors > 0 or facts.lvs_problems > 0)
+    # Between placing the parts and routing them every net is open, and that is the Wiring
+    # step's news: counted as a fault it turned Check red the moment a placement landed and
+    # sent Next to the findings instead of to Autoroute. An open once nothing is left to
+    # route is a board whose copper does not join what the ratsnest says it does.
+    lvs_errors = facts.lvs_problems if route_done else facts.lvs_shorts
+    check_bad = facts.parts_on_board > 0 and (facts.drc_errors > 0 or lvs_errors > 0)
     check_done = route_done and not check_bad
 
     if parts == 0:
@@ -181,7 +189,7 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
         checked = t("nothing to check yet")
     else:
         checked = t("{errors} error(s) · {warnings} warning(s)").format(
-            errors=facts.drc_errors + facts.lvs_problems, warnings=facts.drc_warnings
+            errors=facts.drc_errors + lvs_errors, warnings=facts.drc_warnings
         )
 
     done = {

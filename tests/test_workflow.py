@@ -109,6 +109,24 @@ def test_an_error_is_a_problem_and_the_next_button_goes_to_it_first() -> None:
     assert statuses(open_net)["check"] == "problem"
 
 
+def test_a_net_left_open_by_wiring_not_yet_done_is_the_wiring_steps_news() -> None:
+    """Right after Place on the Board every net is open. That turned Check red with an
+    error per net and sent Next to the findings rather than to Autoroute -- on a board the
+    application had just laid out itself. A short is wrong whatever is left to wire."""
+    placed = dataclasses.replace(
+        EMPTY, parts_on_board=8, nets=7, unrouted=14, lvs_problems=7, drc_warnings=21
+    )
+    steps = statuses(placed)
+    assert steps["check"] == "todo"
+    assert next_step(workflow_steps(placed)) == "route"
+    check = next(step for step in workflow_steps(placed) if step.key == "check")
+    assert check.summary == "0 error(s) · 21 warning(s)"
+
+    shorted = dataclasses.replace(placed, lvs_problems=8, lvs_shorts=1)
+    assert statuses(shorted)["check"] == "problem"
+    assert next_step(workflow_steps(shorted)) == "check"
+
+
 def test_nothing_on_the_board_is_nothing_to_check() -> None:
     """LVS reports every net as unplaced before anything is placed. That is the placement
     step's news, and reporting it again as a check failure would put the warning colour on

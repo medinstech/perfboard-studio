@@ -28,6 +28,11 @@ closed without a bump.
   which nobody had added. Changing the kind of board now takes the old board's fingers and
   bores with it, as choosing another stock size always has, in one undo step.
 
+- **After Place on the Board, Next routes the board.** Every net is open between placing the
+  parts and wiring them, and the step bar counted each one as an error: Verify turned red
+  the moment a placement landed and Next said "See the Findings" instead of "Autoroute". An
+  open now counts once the wiring is done; a short, or a DRC error, still counts at once.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

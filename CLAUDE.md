@@ -1389,9 +1389,10 @@ about the document. Three things about it:
   Board commits that placement when `placer.placement_inputs` still matches, instead of
   annealing again and perhaps coming out different from the picture just approved; any edit
   in between makes it miss, and placing works it out afresh through `placer.place_design`.
-- **A problem outranks the next step.** A DRC error or an LVS open/short on a placed board
+- **A problem outranks the next step.** A DRC error or an LVS short on a placed board
   makes Check the step Next does, whatever else is left -- but not before anything is placed,
-  when LVS reports every net unplaced and that is Placement's news.
+  when LVS reports every net unplaced and that is Placement's news. An OPEN counts only once
+  the wiring is done: between placing and routing every net is open, and that is Wiring's.
 
 A netlist import feeds the same order: its parts go into the DESIGN in one `part.addMany`
 and the sheet comes forward; nothing lands on the board until a board is chosen.

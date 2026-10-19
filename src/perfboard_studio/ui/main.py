@@ -3869,6 +3869,7 @@ class MainWindow(QMainWindow):
             lvs_problems=problems,
             erc_errors=sum(1 for f in self._last_erc if f.severity == "error"),
             erc_warnings=sum(1 for f in self._last_erc if f.severity == "warning"),
+            lvs_shorts=lvs.summary.shorts if lvs is not None else 0,
         )
 
     def _refresh_workflow(self) -> None:
