@@ -101,15 +101,21 @@ QDockWidget::title {{
     text-align: left;
 }}
 
-QTreeWidget {{
+/* Lists and tables as well as trees: left to the platform, their alternate rows came out
+   in the light palette's grey under this theme's light text -- every other example in the
+   welcome dialog was unreadable. */
+QTreeWidget, QListWidget, QTableWidget {{
     background: {PANEL};
     alternate-background-color: {PANEL_ALT};
     border: none;
     outline: none;
 }}
 QTreeWidget::item {{ padding: 3px 4px; }}
-QTreeWidget::item:selected {{ background: {ACCENT_DIM}; color: #ffffff; }}
-QTreeWidget::item:hover {{ background: {PANEL_ALT}; }}
+QTreeWidget::item:selected, QListWidget::item:selected, QTableWidget::item:selected {{
+    background: {ACCENT_DIM};
+    color: #ffffff;
+}}
+QTreeWidget::item:hover, QListWidget::item:hover {{ background: {PANEL_ALT}; }}
 QHeaderView::section {{
     background: {WINDOW};
     color: {TEXT_DIM};

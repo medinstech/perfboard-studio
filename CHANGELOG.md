@@ -49,6 +49,10 @@ closed without a bump.
 
 - **"1 hole apart", not "1 holes apart"**, in the English build guide.
 
+- **Every other example in the welcome dialog is readable.** Lists and tables were left to
+  the platform's light palette, so their alternate rows came out pale grey under light
+  text; they take the panels' colours now, and their selection is the trees' blue.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added
