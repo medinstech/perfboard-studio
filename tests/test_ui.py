@@ -6885,9 +6885,9 @@ def test_every_archetype_the_model_has_can_be_drawn() -> None:
     from perfboard_studio.ui.icons import PART_DRAWINGS
 
     declared = set(typing.get_args(BodyArchetype))
-    # axial-cylinder is drawn by the polarity-aware path rather than the plain table,
-    # because a resistor and a DO-41 diode share the archetype and look nothing alike.
-    assert declared - set(PART_DRAWINGS) == {"axial-cylinder"}
+    # The two axial archetypes are drawn by the polarity-aware path rather than the plain
+    # table, because a resistor and a DO-41 diode share each and look nothing alike.
+    assert declared - set(PART_DRAWINGS) == {"axial-cylinder", "axial-upright"}
 
 
 def test_every_footprint_in_the_library_gets_a_picture() -> None:

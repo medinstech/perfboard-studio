@@ -20,7 +20,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable, Collection
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from itertools import pairwise
 from typing import Any, Literal
@@ -47,6 +47,7 @@ from perfboard_studio.footprints import (
     MODULE_PCB_MM,
     MODULE_SEAT_SOCKETED_MM,
     MODULE_SEAT_SOLDERED_MM,
+    upright_body_span,
     wire_entry,
 )
 from perfboard_studio.geometry import (
@@ -1890,6 +1891,9 @@ class _WorldBody:
     #: Which face a vertical terminal's screws are on, as a world direction -- see
     #: ``VERTICAL_TERMINAL_SCREW_FACE``. ``None`` for every other part.
     screws: tuple[float, float] | None = None
+    #: A standing axial body's bottom and top above the board (``footprints.
+    #: upright_body_span``); above the top is its bent-over lead. ``None`` for everything else.
+    standing: tuple[float, float] | None = None
 
     @property
     def along(self) -> float:
@@ -1972,6 +1976,7 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         entry=entry,
         marking=_marking(fp, comp.value),
         screws=screws,
+        standing=upright_body_span(fp) if fp.body.archetype == "axial-upright" else None,
     )
 
 
@@ -2174,6 +2179,95 @@ def _axial_markings(
                 position=_offset_along(body, offset, z),
                 orientation=orientation,
                 material=CERAMIC,
+            )
+        )
+    return pieces
+
+
+def _axial_upright_pieces(body: _WorldBody) -> list[_Piece]:
+    """A resistor or a diode stood on end over one of its holes.
+
+    The barrel stands where ``footprints.upright_body_span`` says, off the board by its
+    standoff, with the same moulded shoulders as the lying one; its near lead goes straight
+    down into the hole under it, and its far lead rises past the top, bends over and comes
+    down into the other hole -- as tall as ``body_height``, which is what DRC measured. The
+    print is the lying part's, turned upright: the colour code read from the top down, and
+    a diode's band at whichever end the cathode is, which on a part standing on its cathode
+    is the bottom.
+    """
+    bottom, top = body.standing or (0.0, body.height)
+    radius = body.across / 2
+    length = max(top - bottom, 2 * radius)
+    centre_z = _LIFT + (bottom + top) / 2
+    surface = body.surface
+    dome = min(radius * 0.55, length * 0.16)
+    pieces = [
+        _Piece(
+            source=_cylinder(radius, length - 2 * dome),
+            rgb=_rgb(body.style.fill),
+            position=(body.x, body.y, centre_z),
+            orientation=_ALONG_Z,
+            material=_material_of(surface),
+        )
+    ]
+    for end in (-1.0, 1.0):
+        pieces.append(
+            _Piece(
+                source=_sphere(radius),
+                rgb=_rgb(body.style.fill),
+                position=(body.x, body.y, centre_z + end * (length / 2 - dome)),
+                scale=(1.0, 1.0, dome / radius),
+                material=_material_of(surface),
+            )
+        )
+
+    for index, colour in enumerate(body.bands):
+        fraction = 0.16 + index * 0.15 if index < len(body.bands) - 1 else 0.80
+        pieces.append(
+            _Piece(
+                source=_cylinder(radius * 1.03, length * 0.11, resolution=20),
+                rgb=_rgb(colour),
+                position=(body.x, body.y, centre_z + (0.5 - fraction) * length),
+                orientation=_ALONG_Z,
+                material=CERAMIC,
+            )
+        )
+
+    def over(point: tuple[float, float]) -> bool:
+        return math.hypot(point[0] - body.x, point[1] - body.y) <= 0.05
+
+    if body.polarity is not None:
+        band_width = max(length * 0.16, 0.5)
+        down = -1.0 if over(body.polarity) else 1.0
+        pieces.append(
+            _Piece(
+                source=_cylinder(radius * 1.04, band_width),
+                rgb=_rgb(body.style.accent),
+                position=(body.x, body.y, centre_z + down * (length / 2 - band_width)),
+                orientation=_ALONG_Z,
+                material=CERAMIC,
+            )
+        )
+
+    under = tuple(pin for pin in body.pins if over(pin))
+    pieces.extend(_through_hole_pieces(replace(body, pins=under), _LIFT + bottom + dome))
+    crown = _LIFT + body.height - LEAD_RADIUS_MM
+    for pin_x, pin_y in body.pins:
+        if over((pin_x, pin_y)):
+            continue
+        path = [
+            (body.x, body.y, _LIFT + top - dome),
+            (body.x, body.y, crown),
+            (pin_x, pin_y, crown),
+            (pin_x, pin_y, body.lead_bottom_z),
+        ]
+        bend = min(WIRE_BEND_RADIUS_MM, math.hypot(pin_x - body.x, pin_y - body.y) / 2)
+        pieces.append(
+            _Piece(
+                source=_tube_source(_rounded(path, bend), LEAD_RADIUS_MM),
+                rgb=LEAD_RGB,
+                position=(0.0, 0.0, 0.0),
+                material=TINNED,
             )
         )
     return pieces
@@ -3313,6 +3407,7 @@ _BUILDERS: dict[str, Any] = {
     # Drawn by ``_adapter_pieces`` from ``_pieces_for``, because the chip on it is in the
     # footprint's ``dims`` and a builder here sees only the body.
     "smd-adapter": _box_pieces,
+    "axial-upright": _axial_upright_pieces,
 }
 
 

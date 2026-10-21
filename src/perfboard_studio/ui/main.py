@@ -639,6 +639,7 @@ def _archetype_headings() -> dict[BodyArchetype, str]:
     """
     return {
         "axial-cylinder": t("Axial resistors and diodes"),
+        "axial-upright": t("Resistors and diodes stood on end"),
         "disc-ceramic": t("Ceramic disc capacitors"),
         "box-film": t("Film capacitors"),
         "radial-electrolytic": t("Electrolytic capacitors"),
@@ -2266,6 +2267,11 @@ class _CustomFamily:
     names: bool = False
 
 
+#: The axial family's Mounted choice, by its index: lying flat, or stood on end over pin 1
+#: or pin 2 (``footprints``, "Stood on end").
+_STANDING: dict[int, Literal[1, 2]] = {1: 1, 2: 2}
+
+
 def _custom_families() -> tuple[_CustomFamily, ...]:
     """Built by a call rather than held as a constant, because the labels go through
     ``t()`` and the language is chosen after this module is imported."""
@@ -2411,12 +2417,17 @@ def _custom_families() -> tuple[_CustomFamily, ...]:
                 _CustomField("length", t("Body length (mm)"), "mm", 0.5, 200, 12),
                 _CustomField("diameter", t("Body diameter (mm)"), "mm", 0.5, 100, 5),
                 _CustomField("polarized", t("Polarised (banded end)"), "bool", 0, 1, 0),
+                _CustomField(
+                    "mount", t("Mounted"), "choice", 0, 2, 0,
+                    options=(t("Lying flat"), t("Standing on pin 1"), t("Standing on pin 2")),
+                ),
             ),
             build=lambda v: axial_footprint(
                 span_holes=whole(v, "span"),
                 body_length_mm=v["length"],
                 body_diameter_mm=v["diameter"],
                 polarized=bool(round(v["polarized"])),
+                upright=_STANDING.get(whole(v, "mount")),
             ),
         ),
         _CustomFamily(

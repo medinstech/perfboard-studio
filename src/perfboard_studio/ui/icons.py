@@ -532,6 +532,29 @@ def _axial(p: QPainter, style: Any, polarized: bool) -> None:
             p.drawRect(QRectF(x, 33, 6, 34))
 
 
+def _axial_upright(p: QPainter, style: Any, polarized: bool) -> None:
+    """The same resistor or diode stood on end: the barrel upright over one lead, the other
+    lead bent back over its top and down beside it."""
+    p.setPen(_pen(LEAD, 6))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    path = QPainterPath()
+    path.moveTo(QPointF(40, 18))
+    path.lineTo(QPointF(40, 12))
+    path.arcTo(QRectF(40, 4, 24, 16), 180, -180)
+    path.lineTo(QPointF(64, 96))
+    p.drawPath(path)
+    p.drawLine(QPointF(40, 80), QPointF(40, 96))
+    _fill(p, style)
+    p.drawRoundedRect(QRectF(26, 16, 28, 66), 12, 12)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(style.accent))
+    if polarized:
+        p.drawRect(QRectF(27, 24, 26, 8))  # the cathode band, at one end only
+    else:
+        for y in (30, 40, 50):
+            p.drawRect(QRectF(27, y, 26, 6))
+
+
 def _electrolytic(p: QPainter, style: Any) -> None:
     _leads(p, (42, 60), 70, 96)
     _fill(p, style)
@@ -787,6 +810,8 @@ def part_icon(footprint: Any) -> QIcon:
     painter.scale(PART_SIZE * scale / BOX, PART_SIZE * scale / BOX)
     if archetype == "axial-cylinder":
         _axial(painter, style, bool(footprint.polarized))
+    elif archetype == "axial-upright":
+        _axial_upright(painter, style, bool(footprint.polarized))
     else:
         PART_DRAWINGS.get(archetype, _generic)(painter, style)
     painter.end()

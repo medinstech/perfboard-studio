@@ -387,6 +387,24 @@ def _part_solids(
             lead((px, py, floor), (0.0, 0.0, 1.0), cz - floor)
         return tuple(solids)
 
+    if archetype == "axial-upright" and pins:
+        # Stood on end: the envelope is a cylinder over the pin it stands on, as tall as the
+        # bent-over lead DRC measures, and that lead crosses at the top to come down into
+        # the other hole. The body inside the envelope is the 3D view's business.
+        radius = min(x1 - x0, y1 - y0) / 2
+        solids.append(Solid(Cylinder((cx, cy, top), (0.0, 0.0, 1.0), height, radius), rgb))
+        crown = top + max(height - lead_radius, 0.0)
+        for px, py in pins:
+            reach = math.hypot(px - cx, py - cy)
+            if reach <= radius:
+                lead((px, py, floor), (0.0, 0.0, 1.0), top - floor)
+                continue
+            across: Vec = ((px - cx) / reach, (py - cy) / reach, 0.0)
+            rim: Vec = (cx + across[0] * radius, cy + across[1] * radius, crown)
+            lead(rim, across, reach - radius)
+            lead((px, py, floor), (0.0, 0.0, 1.0), crown - floor)
+        return tuple(solids)
+
     if archetype in ROUND_ARCHETYPES:
         radius = min(x1 - x0, y1 - y0) / 2
         solids.append(Solid(Cylinder((cx, cy, top), (0.0, 0.0, 1.0), height, radius), rgb))

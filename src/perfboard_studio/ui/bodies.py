@@ -118,7 +118,15 @@ BODY_STYLES: dict[BodyArchetype, BodyStyle] = {
     # The adapter's board, in a module's blue and white: it is a small board on header pins
     # too. The chip on it is drawn in the DIP's black, which is the colour of the package.
     "smd-adapter": BodyStyle(fill="#1f4f86", edge="#0e2b4d", accent="#eef2f7"),
+    # The same resistor stood on end, so the same beige -- and split by polarity below the
+    # same way, because a standing diode is the same black diode.
+    "axial-upright": BodyStyle(fill="#d9c9a1", edge="#7d6c46", accent="#3b2d18"),
 }
+
+#: The archetypes that are a resistor or, polarised, a diode: one lying down, one standing.
+#: Everything that tells the two objects apart -- the colour, the bands, the cathode stripe,
+#: the letter -- asks this rather than one archetype's name.
+AXIAL_ARCHETYPES: frozenset[BodyArchetype] = frozenset({"axial-cylinder", "axial-upright"})
 
 #: A polarized axial part is a diode, not a resistor. Same archetype, different object.
 _DIODE_STYLE = BodyStyle(fill="#1d1f24", edge=_PLASTIC_EDGE, accent="#e8ecf2")
@@ -197,7 +205,7 @@ def style_for(footprint: Footprint) -> BodyStyle:
     stay legible against the fill, are left to the archetype.
     """
     archetype = footprint.body.archetype
-    if archetype == "axial-cylinder" and footprint.polarized:
+    if archetype in AXIAL_ARCHETYPES and footprint.polarized:
         base = _DIODE_STYLE
     else:
         base = BODY_STYLES.get(archetype, _FALLBACK_STYLE)
@@ -228,7 +236,8 @@ class BodyPlacement:
     """
 
     silhouette: Silhouette
-    #: Centre of the body, which is the centroid of the pin holes -- see placement_for.
+    #: Centre of the body: the centroid of the pin holes, or the hole a standing axial part
+    #: is over -- see ``footprints.body_extent``.
     centre_x: float
     centre_y: float
     #: Extents in local x and y. Never zero: a body has to be drawable.
@@ -277,6 +286,8 @@ _SILHOUETTES: dict[BodyArchetype, Silhouette] = {
     "module-board": "rect",
     "flying-leads": "rounded",
     "smd-adapter": "rect",
+    # From above, a barrel standing on end is its end cap.
+    "axial-upright": "circle",
 }
 
 #: Nothing is drawn thinner than this. The engine's floor for a body's width, re-exported
@@ -340,7 +351,13 @@ def leads_for(footprint: Footprint, placement: BodyPlacement, pitch: float) -> t
     pin's own cross-axis position, so a part whose pins are not exactly on its centre line
     still gets leads that meet their pins.
     """
-    if placement.silhouette == "circle" and footprint.body.archetype != "disc-ceramic":
+    # A can sits over its own leads. A disc ceramic and a resistor stood on end do not: the
+    # first stands between its leads and the second over one of them, its far lead running
+    # back across the board to the other hole -- which from above is exactly a lead.
+    if placement.silhouette == "circle" and footprint.body.archetype not in (
+        "disc-ceramic",
+        "axial-upright",
+    ):
         return ()
 
     leads: list[Lead] = []
@@ -496,13 +513,14 @@ def resistor_bands(footprint: Footprint, value: str) -> tuple[str, ...] | None:
     diode, which carries a cathode stripe instead and must never be given bands on top of
     it. ``style_for`` splits the same archetype the same way, for the same reason.
     """
-    if footprint.body.archetype != "axial-cylinder" or footprint.polarized:
+    if footprint.body.archetype not in AXIAL_ARCHETYPES or footprint.polarized:
         return None
     ohms = parse_resistance(value)
     return None if ohms is None else resistance_bands(ohms)
 
 
 __all__ = [
+    "AXIAL_ARCHETYPES",
     "BODY_STYLES",
     "BodyPlacement",
     "BodyStyle",

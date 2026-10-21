@@ -157,6 +157,7 @@ from perfboard_studio.stripboard import cut_holes, is_stripboard, segments
 
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
+    AXIAL_ARCHETYPES,
     BODY_STYLES,
     PIN_NAME_HEIGHT_MM,
     PIN_NAME_TAG_HEIGHT_MM,
@@ -1374,13 +1375,14 @@ REF_PREFIXES: dict[str, str] = {
     # Whatever it is on the panel; "J" until it is given its own letter, as a jack would be.
     "flying-leads": "J",
     "smd-adapter": "U",
+    "axial-upright": "R",
 }
 
 
 def reference_prefix(footprint: Footprint) -> str:
     """The schematic letter for a footprint. A polarized axial part is a diode, not a
-    resistor -- the same distinction ui/bodies.py draws them by."""
-    if footprint.body.archetype == "axial-cylinder" and footprint.polarized:
+    resistor -- the same distinction ui/bodies.py draws them by, lying or standing."""
+    if footprint.body.archetype in AXIAL_ARCHETYPES and footprint.polarized:
         return "D"
     return REF_PREFIXES.get(footprint.body.archetype, "X")
 
@@ -2301,10 +2303,24 @@ def _paint_body(
     # it rather than being washed out by a highlight painted over it.
     _paint_body_sheen(painter, path, rect, placement, style)
 
-    if bands:
+    # From above, a resistor stood on end is its end cap: the bands are round its side,
+    # where this view cannot see them (the 3D view prints them).
+    if bands and archetype != "axial-upright":
         _paint_resistor_bands(painter, path, rect, placement, bands)
 
-    if archetype == "axial-cylinder" and keyed is not None:
+    if archetype == "axial-upright" and keyed is not None:
+        # A diode stood on end shows its band from above only when the banded end -- the
+        # cathode, pin 1 -- is the one at the top, i.e. when it is NOT standing on pin 1: a
+        # ring round the end cap. Banded end down, the band is under the body, and nothing
+        # is drawn that the part does not show.
+        cathode_up = math.hypot(keyed[0] - placement.centre_x, keyed[1] - placement.centre_y) > 0.05
+        if cathode_up:
+            ring = max(min(rect.width(), rect.height()) * 0.14, 0.3)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(accent, ring))
+            painter.drawEllipse(rect.adjusted(ring / 2, ring / 2, -ring / 2, -ring / 2))
+
+    elif archetype == "axial-cylinder" and keyed is not None:
         # A diode's cathode band. Clipped to the body so it cannot spill past a rounded end.
         painter.setClipPath(path)
         band = QRectF(rect)

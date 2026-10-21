@@ -158,6 +158,8 @@ KIND_BY_ARCHETYPE: dict[BodyArchetype, PartKind] = {
     # A part on the panel, seen from the board as the pads its wires land in.
     "flying-leads": "connector",
     "smd-adapter": "chip",
+    # A resistor or a diode, standing or lying: two leads and no supply.
+    "axial-upright": "passive",
 }
 
 type SupplyKind = Literal["positive", "ground", "negative"]

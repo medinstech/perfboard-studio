@@ -59,7 +59,7 @@ from .breadboard import has_breadboard_pattern, has_rails, is_breadboard
 from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import DEFAULT_DRC_OPTIONS, DrcOptions, DrcViolation, run_drc, trace_electrical
 from .erc import run_erc
-from .footprints import adapter_package, flying_lead_length_mm, wire_entry
+from .footprints import adapter_package, flying_lead_length_mm, standing_pin, wire_entry
 from .geometry import (
     all_pin_holes,
     column_label,
@@ -215,6 +215,9 @@ PHASE_BY_ARCHETYPE: dict[BodyArchetype, PhaseNumber] = {
     # every part is down, so they are not in the way of the iron, and before the closing
     # checks, which power the board up through the very jack and switch they reach.
     "flying-leads": 7,
+    # Stood on end, a resistor is as tall as an LED and a diode as a TO-92: the small
+    # bodies, not the flat ones it would go in with lying down.
+    "axial-upright": 3,
 }
 
 #: Conductor kinds done on the solder side in phase 6, and in phase 7.
@@ -1093,6 +1096,9 @@ def _part_step(
             "adapter itself goes in with the other ICs in phase 8.",
             package=package,
         ))
+    stood = standing_pin(footprint)
+    if stood is not None:
+        notes.append(_standing_note(component, footprint, holes, stood, board, say))
     if component.mirrored and not breadboard:
         notes.append(say(
             "This part is mirrored: it goes in from the SOLDER side, not the component "
@@ -1178,8 +1184,11 @@ def _part_step(
         anchor=component.anchor,
         pin_holes=pin_holes,
         span=_wires_span(pin_holes, say, board=board) if off_board else _span_of(pin_holes, say, board=board),
-        # Two pads in a row are not two leads to bend: the wires are cut, not formed.
-        bend_template_mm=None if off_board else _bend_template(pin_holes, board),
+        # Two pads in a row are not two leads to bend: the wires are cut, not formed. A part
+        # stood on end is bent back over itself, which its own note says, not to a pitch.
+        bend_template_mm=(
+            None if off_board or stood is not None else _bend_template(pin_holes, board)
+        ),
         rotation=component.rotation,
         mirrored=component.mirrored,
         height_mm=footprint.body_height,
@@ -1323,6 +1332,51 @@ def _span_of(pin_holes: tuple[tuple[str, HoleCoord], ...], say: Phrasebook = ENG
         "{start} → {end}, {count} pins with pin 1 at {hole}",
         start=format_hole(corner_a, board), end=format_hole(corner_b, board), count=len(pin_holes),
         hole=format_hole(pin_one, board),
+    )
+
+
+def _standing_note(
+    component: ComponentInstance,
+    footprint: Footprint,
+    holes: list[tuple[FootprintPin, HoleCoord]],
+    stood: FootprintPin,
+    board: Board,
+    say: Phrasebook,
+) -> str:
+    """How to fit an axial part stood on end: over which hole, and -- for a diode -- which
+    end up. The banded end is the cathode, found by NAME as ``_polarity_note`` finds it and
+    by pin 1 only for a polarised part nobody named, the registry's and KiCad's convention.
+    Said as which end is up because that is what a hand holding the part can check; the
+    cathode's own hole is in the polarity line beside it."""
+    over = format_hole(next(at for pin, at in holes if pin.number == stood.number), board)
+    other = next(
+        (format_hole(at, board) for pin, at in holes if pin.number != stood.number), over
+    )
+    names = {pin.number: pin_name_of(component, pin) for pin in footprint.pins}
+    cathode = next((number for number, name in names.items() if name == "K"), None)
+    if cathode is None and "A" in names.values():
+        cathode = next((number for number, name in names.items() if name != "A"), None)
+    if cathode is None and footprint.polarized:
+        cathode = "1"
+    if cathode is None:
+        return say(
+            "Stand it on end over {hole} and bend the top lead back over and down into "
+            "{other}.",
+            hole=over,
+            other=other,
+        )
+    if cathode == stood.number:
+        return say(
+            "Stand it on end over {hole}, the banded end down, and bend the top lead back "
+            "over and down into {other}.",
+            hole=over,
+            other=other,
+        )
+    return say(
+        "Stand it on end over {hole}, the banded end up, and bend the top lead back over "
+        "and down into {other}.",
+        hole=over,
+        other=other,
     )
 
 

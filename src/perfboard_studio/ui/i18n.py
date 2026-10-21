@@ -1220,6 +1220,7 @@ TURKISH: Mapping[str, str] = {
     "{count} pin(s)": "{count} pin",
     # -- the Parts panel's package families (main._archetype_headings) -------------------
     "Axial resistors and diodes": "Eksenel dirençler ve diyotlar",
+    "Resistors and diodes stood on end": "Dik takılan dirençler ve diyotlar",
     "Ceramic disc capacitors": "Seramik disk kondansatörler",
     "Film capacitors": "Film kondansatörler",
     "Electrolytic capacitors": "Elektrolitik kondansatörler",
@@ -1255,6 +1256,10 @@ TURKISH: Mapping[str, str] = {
     "Ways": "Yol sayısı",
     "Wide body (0.6 in)": "Geniş gövde (0,6 inç)",
     "Polarised (banded end)": "Kutuplu (bantlı uç)",
+    "Mounted": "Takılışı",
+    "Lying flat": "Yatık",
+    "Standing on pin 1": "1. pinin üstünde dik",
+    "Standing on pin 2": "2. pinin üstünde dik",
     "Lead span (holes)": "Bacak açıklığı (delik)",
     "Lead pitch (holes)": "Bacak aralığı (delik)",
     "Body width (mm)": "Gövde genişliği (mm)",

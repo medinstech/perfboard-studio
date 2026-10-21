@@ -1717,6 +1717,8 @@ _KIND_BY_ARCHETYPE: dict[BodyArchetype, SymbolKind] = {
     "flying-leads": "box",
     # Numbered as the DIP it stands in for, which is all an IC symbol reads.
     "smd-adapter": "ic",
+    # The same resistor -- or diode -- stood on end: how it is fitted is not the circuit.
+    "axial-upright": "resistor",
 }
 
 _TWO_TERMINAL_KINDS: frozenset[SymbolKind] = frozenset(

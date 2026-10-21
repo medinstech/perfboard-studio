@@ -329,6 +329,12 @@ BodyArchetype: TypeAlias = Literal[  # noqa: UP040
     # which stands on two rows of header pins numbered as the DIP it imitates. It goes in
     # like a DIP and is built like a module: the chip first, on the bench, then the board.
     "smd-adapter",
+    # A resistor or a diode STOOD ON END over one of its two holes, the other lead bent back
+    # over the top and down into the next: the axial part as it is fitted where a board has
+    # no room to lay it down. Its own archetype rather than a flag on the lying one, because
+    # everything about it that the board cares about is different -- where the body is,
+    # how tall it stands, when it goes in, how its leads are bent.
+    "axial-upright",
 ]
 
 #: Archetypes that get hot enough to matter to a neighbour.

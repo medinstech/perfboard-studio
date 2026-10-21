@@ -484,6 +484,23 @@ Three things hold it together:
   `-1EP` part on purpose: no adapter brings an exposed pad out. A catalog part keeps its
   names on the adapter only when the pin counts agree (`_same_chip`) -- an L293D is a DIP-16
   and the SO-20 sold under nearly its name is pinned differently.
+- **`axial-...-v` / `-v2` is a resistor or a diode STOOD ON END**, archetype
+  `axial-upright`: the body over pin 1 or pin 2 (`dims["standsOnPin"]`), the other lead
+  bent back over the top. It is the one archetype whose body is NOT on its pins' centroid,
+  so `body_extent` puts it on that pin's own position at the board's pitch -- never a
+  millimetre offset, which would drift off the hole on another pitch -- and DRC, the placer
+  and both views move with it. Pin 1 stays the anchor and a diode's cathode either way
+  round. Its height is a standoff + the body + the loop of the bent lead, MEASURED off KiCad
+  10's `*_Vertical*` models (the table is in `footprints.py`): one pair for a resistor and
+  one for a diode, within 0.25 mm of every model and exact for the DIN0207, so
+  `component-too-tall` and the guide's order (phase 3, the small bodies) see a standing part
+  at the height it stands. A resistor and a diode are still one archetype each:
+  `bodies.AXIAL_ARCHETYPES` is what the colour, the bands, the diode's band and the `D`
+  letter ask, lying or standing. From above it is its end cap, so 2D prints no bands on it
+  (3D does, read from the top) and a diode's band only as a ring when the cathode is up. The
+  STEP file writes DRC's envelope, a cylinder as tall as the loop, not the body inside it.
+  KiCad's `R_Axial_*_Vertical` and `D_*_Vertical_AnodeUp` / `_CathodeUp` (`_KathodeUp`
+  before KiCad 7) import as one: anode up is the cathode, pad 1, under the body.
 
 ### Hole addressing
 

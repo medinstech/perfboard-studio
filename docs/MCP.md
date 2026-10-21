@@ -274,7 +274,12 @@ centred on its header. **A ribbon-cable box header** is `idc-2x<n>`, numbered li
 adapter, `adp-<package>-<pins>` (`soic`, `ssop`, `tssop` or `msop`), numbered exactly as the
 DIP of the same pin count, so a netlist drawn for the SOIC needs no pin moved; rows are 0.3
 inch apart for eight pins and 0.6 above, and `-r<steps>` asks for other rows. A KiCad
-netlist's SOIC, SSOP, TSSOP and MSOP footprints import as one.
+netlist's SOIC, SSOP, TSSOP and MSOP footprints import as one. **A resistor or a diode stood
+on end** is the axial id with `-v` (the body over pin 1) or `-v2` (over pin 2), its other
+lead bent back over the top: `axial-1h-6.3x2.5-v` is a quarter-watt resistor in two holes
+side by side, as tall as KiCad's model of one. Pin 1 is still a diode's cathode either way
+round, and the guide says which end is up. KiCad's `R_Axial_..._Vertical` and
+`D_..._Vertical_AnodeUp` / `_CathodeUp` import as one.
 
 **A part can say what its package cannot.** `add_part`, `update_part` and `place_component`
 take `pin_names` — `{"1": "G", "2": "D", "3": "S"}`, or a module's `{"1": "3V3", "2": "EN",

@@ -233,6 +233,7 @@ def axial_footprint(
     body_diameter_mm: Mm,
     lead_diameter_mm: Mm | None = None,
     polarized: bool = False,
+    upright: Literal[1, 2] | None = None,
     id: str | None = None,
     name: str | None = None,
 ) -> Footprint:
@@ -240,7 +241,22 @@ def axial_footprint(
     Pin 1 is the anchor at (0,0); pin 2 sits `span_holes` grid steps to the right on
     the same row. The body is centred between the leads and the courtyard covers
     the full lead span even when it is longer than the body itself.
+
+    ``upright`` stands the same part ON END over pin 1 or pin 2 instead -- see
+    "Stood on end" below. The pins do not move: pin 1 is still the anchor, whichever pin
+    the body is over, because a netlist's pin 1 is a diode's cathode either way round.
     """
+    if upright is not None:
+        return _upright_axial_footprint(
+            span_holes=span_holes,
+            body_length_mm=body_length_mm,
+            body_diameter_mm=body_diameter_mm,
+            lead_diameter_mm=lead_diameter_mm,
+            polarized=polarized,
+            stands_on=upright,
+            id=id,
+            name=name,
+        )
     lead_diameter = 0.5 if lead_diameter_mm is None else lead_diameter_mm
     pins = (_make_pin("1", 0, 0), _make_pin("2", span_holes, 0))
     outline = _rect_outline(_to_mm(pins), body_length_mm, body_diameter_mm, COURTYARD_MARGIN_MM)
@@ -259,6 +275,116 @@ def axial_footprint(
         body_outline=outline,
         body_height=body_diameter_mm,
         body=BodySpec(archetype="axial-cylinder", dims={"length": body_length_mm, "diameter": body_diameter_mm}),
+        lead_diameter=lead_diameter,
+        polarized=polarized,
+    )
+
+
+# STOOD ON END. Where a board has no room to lay a resistor down, it is stood up over one
+# of its holes and its far lead is bent back over the top and down into the next: one hole
+# of board instead of four, and a part three or four times as tall. The two are the same
+# part and nothing else about them is the same, so the upright one is its own archetype
+# (``axial-upright``) and every table keyed on archetypes says what it does with it.
+#
+# Its body is NOT on its pins' centroid -- the one archetype whose body stands over a single
+# pin. ``body_extent`` reads which from ``dims["standsOnPin"]`` and puts the body on that
+# pin's own position at the board's pitch, so it cannot drift off its hole on a board whose
+# pitch is not 2.54 the way a millimetre offset would.
+#
+# The heights were MEASURED off KiCad 10's own models, `Resistor_THT.3dshapes` and
+# `Diode_THT.3dshapes`, `*_Vertical*.step`, read with OpenCASCADE: the body's ends (its
+# rounded caps' tori) and the top of the bent-over lead.
+#
+#   R_Axial_DIN0204 L3.6   body 1.00..4.60   lead to 6.68   loop over the body 2.08
+#   R_Axial_DIN0207 L6.3   body 1.00..7.30   lead to 9.60   loop 2.30
+#   R_Axial_DIN0309 L9.0   body 1.00..10.00  lead to 12.52  loop 2.52
+#   D_DO-35 (4.0 long)     body 0.50..4.50   lead to 5.81   loop 1.31
+#   D_DO-41 (5.2 long)     body 0.50..5.70   lead to 7.50   loop 1.80
+#
+# So a resistor stands 1 mm off the board and a diode half that, and the loop grows a little
+# with the lead's thickness. One standoff and one loop per kind is within a quarter of a
+# millimetre of every model above -- exact for the DIN0207 everybody buys -- and an id has
+# no room for a lead gauge, which is why the loop is not a formula in one.
+
+#: How far a standing resistor's body is off the board, and how far its bent-over lead
+#: rises above the body's top: measured, see above.
+UPRIGHT_RESISTOR_STANDOFF_MM: Mm = 1.0
+UPRIGHT_RESISTOR_LOOP_MM: Mm = 2.3
+#: The same for a diode, which KiCad's models stand lower and bend tighter.
+UPRIGHT_DIODE_STANDOFF_MM: Mm = 0.5
+UPRIGHT_DIODE_LOOP_MM: Mm = 1.55
+
+
+def upright_body_span(footprint: Footprint) -> tuple[Mm, Mm]:
+    """Where a standing axial body is, as heights above the board: its bottom and its top.
+
+    Everything above the top is the bent-over lead, up to ``body_height``. ``(0, height)``
+    for any other archetype, which has no standoff to speak of.
+    """
+    if footprint.body.archetype != "axial-upright":
+        return (0.0, footprint.body_height)
+    standoff = UPRIGHT_DIODE_STANDOFF_MM if footprint.polarized else UPRIGHT_RESISTOR_STANDOFF_MM
+    return (standoff, standoff + footprint.body.dims.get("length", 0.0))
+
+
+def standing_pin(footprint: Footprint) -> FootprintPin | None:
+    """The pin a standing axial body is over, or None for any other footprint."""
+    if footprint.body.archetype != "axial-upright":
+        return None
+    number = str(int(footprint.body.dims.get("standsOnPin", 1.0)))
+    return next((pin for pin in footprint.pins if pin.number == number), None)
+
+
+def _upright_axial_footprint(
+    *,
+    span_holes: int,
+    body_length_mm: Mm,
+    body_diameter_mm: Mm,
+    lead_diameter_mm: Mm | None,
+    polarized: bool,
+    stands_on: Literal[1, 2],
+    id: str | None,
+    name: str | None,
+) -> Footprint:
+    """An axial part stood on end over pin ``stands_on``: see "Stood on end" above."""
+    if stands_on not in (1, 2):
+        raise ValueError(f"an axial part stands on pin 1 or pin 2, not {stands_on}")
+    lead_diameter = 0.5 if lead_diameter_mm is None else lead_diameter_mm
+    pins = (_make_pin("1", 0, 0), _make_pin("2", span_holes, 0))
+    pins_mm = _to_mm(pins)
+    # The courtyard is the standing body and the far pin together: the body's circle over
+    # its pin, offset from the pins' centre by half the span towards it.
+    half_span = span_holes * STANDARD_PITCH_MM / 2
+    offset_x = -half_span if stands_on == 1 else half_span
+    outline = _offset_rect_outline(
+        pins_mm, body_diameter_mm, body_diameter_mm, offset_x, 0.0, COURTYARD_MARGIN_MM
+    )
+    if polarized:
+        standoff, loop = UPRIGHT_DIODE_STANDOFF_MM, UPRIGHT_DIODE_LOOP_MM
+    else:
+        standoff, loop = UPRIGHT_RESISTOR_STANDOFF_MM, UPRIGHT_RESISTOR_LOOP_MM
+    size = f"{_format_mm_token(body_length_mm)}x{_format_mm_token(body_diameter_mm)}"
+    fp_id = id if id is not None else (
+        f"axial-{span_holes}h-{size}{'-pol' if polarized else ''}"
+        f"-v{'' if stands_on == 1 else stands_on}"
+    )
+    fp_name = name if name is not None else (
+        f"Axial, standing on pin {stands_on} ({span_holes}-hole span, {size} mm body)"
+    )
+    return Footprint(
+        id=fp_id,
+        name=fp_name,
+        pins=pins,
+        body_outline=outline,
+        body_height=standoff + body_length_mm + loop,
+        body=BodySpec(
+            archetype="axial-upright",
+            dims={
+                "length": body_length_mm,
+                "diameter": body_diameter_mm,
+                "standsOnPin": float(stands_on),
+            },
+        ),
         lead_diameter=lead_diameter,
         polarized=polarized,
     )
@@ -1784,7 +1910,10 @@ most two decimals and are written without units.
   screw-terminal-<ways>[-v]                             a screw terminal; -v takes its
                                                         wires from above (pluggable, on a
                                                         vertical header)
-  axial-<span>h-<L>x<D>[-pol]                           resistor, inductor, diode
+  axial-<span>h-<L>x<D>[-pol][-v|-v2]                  resistor, inductor, diode; -v
+                                                        stands it on end over pin 1, -v2
+                                                        over pin 2, the other lead bent
+                                                        back over the top
   c-elec-d<D>-p<pitch>-h<H>                             radial electrolytic
   c-disc-d<D>-p<pitch>-t<T>                             disc ceramic
   c-film-<L>x<W>x<H>-p<pitch>                           boxed film capacitor
@@ -1806,7 +1935,10 @@ mod-2x19-p10-r1-27.94x54.3x3.5-s8.5-o0x-3 is an ESP32-DevKitC in female headers:
 columns of 19 pins ten holes apart, its 27.94 x 54.3 mm board 8.5 mm up. idc-2x8
 is a 16-pin box header, numbered like hdr-2x8 with the key slot on the pin-1 row.
 wire-3-l150 is a panel pot's three wires, 150 mm each, landing in three pads side by side;
-give the part its value and pin names, and declare it a potentiometer. Lead
+give the part its value and pin names, and declare it a potentiometer.
+axial-1h-6.3x2.5-v is a quarter-watt resistor stood on end over pin 1, one hole from
+pin 2; axial-1h-5.2x2.7-pol-v2 is a 1N4007 stood over pin 2, its banded end -- pin 1,
+the cathode -- at the top. Lead
 diameter is not in the grammar: it is a manufacturing detail with a sensible default per
 family, and putting it in every id would make every id unreadable."""
 
@@ -1827,6 +1959,15 @@ def _mm(text: str) -> Mm:
     if not 0.1 <= value <= _MAX_BODY_MM:
         raise ValueError(f"{value} mm is outside 0.1..{_MAX_BODY_MM}")
     return value
+
+
+def _stands_on(text: str) -> Literal[1, 2]:
+    """Which pin a standing axial part is over: ``-v`` is pin 1, ``-v2`` pin 2."""
+    if text in ("", "1"):
+        return 1
+    if text == "2":
+        return 2
+    raise ValueError(f"an axial part has no pin {text} to stand on")
 
 
 def _offset(text: str | None) -> Mm:
@@ -1906,12 +2047,15 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
         lambda m: vertical_screw_terminal_footprint(ways=_grid(m[1])),
     ),
     (
-        re.compile(r"^axial-(\d+)h-([\d.]+)x([\d.]+)(-pol)?$"),
+        re.compile(r"^axial-(\d+)h-([\d.]+)x([\d.]+)(-pol)?(?:-v(\d*))?$"),
         lambda m: axial_footprint(
             span_holes=_grid(m[1]),
             body_length_mm=_mm(m[2]),
             body_diameter_mm=_mm(m[3]),
             polarized=m[4] is not None,
+            # "-v1" builds pin 1 and is then refused by the id comparison in
+            # generated_footprint: standing on pin 1 is spelled "-v".
+            upright=None if m[5] is None else _stands_on(m[5]),
         ),
     ),
     (
@@ -2078,6 +2222,8 @@ BODY_DIM_KEYS: dict[BodyArchetype, tuple[str, str, Literal["x", "y"]]] = {
     "flying-leads": ("length", "width", "x"),
     # The adapter's board: across the two rows, and along them -- a DIP's way round.
     "smd-adapter": ("width", "length", "y"),
+    # Seen from above, a standing barrel is its end: a circle as wide as the body.
+    "axial-upright": ("diameter", "diameter", "x"),
 }
 
 
@@ -2121,11 +2267,12 @@ def body_extent(footprint: Footprint, pitch: Mm) -> BodyExtent:
     rather than assumed to be 2.54, because ``Board.pitch`` is a field and a body placed on
     an assumed pitch would drift off its own pins on any board that sets it differently.
 
-    Centring on the PIN CENTROID is one rule that happens to be right for every archetype
-    here: it is the midpoint for a two-lead axial or radial part, the centre of the
-    rectangle for a DIP, the middle pin of a TO-220, and the centre of the row for a
-    header. No archetype needs a special case, which is why the bodies line up with their
-    leads without a table of offsets to keep in step with the registry.
+    Centring on the PIN CENTROID is one rule that is right for every archetype but one: it
+    is the midpoint for a two-lead axial or radial part, the centre of the rectangle for a
+    DIP, the middle pin of a TO-220, and the centre of the row for a header. The exception
+    is an axial part STOOD ON END, whose body is over one pin and not between the two; it
+    is put on that pin's own position at this pitch (``dims["standsOnPin"]``), never by a
+    millimetre offset, which would drift off the hole on a board of another pitch.
 
     Dimensions missing from ``dims`` fall back to the courtyard's own extent, so an
     archetype added to the registry without full dims still measures something honest
@@ -2166,6 +2313,11 @@ def body_extent(footprint: Footprint, pitch: Mm) -> BodyExtent:
     # the same float it always was.
     centre_x += dims.get("offsetX", 0.0)
     centre_y += dims.get("offsetY", 0.0)
+
+    stands_on = standing_pin(footprint)
+    if stands_on is not None:
+        centre_x = stands_on.d_col * pitch
+        centre_y = stands_on.d_row * pitch
 
     return BodyExtent(
         centre_x=centre_x,

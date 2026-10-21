@@ -115,6 +115,7 @@ def phrasebook(language: GuideLanguage) -> Phrasebook:
 NAME_TEMPLATES: tuple[str, ...] = (
     "Resistor (axial, {0}-hole span)",
     "Axial ({0}-hole span, {1} mm body)",
+    "Axial, standing on pin {0} ({1}-hole span, {2} mm body)",
     "Diode, {0}",
     "Electrolytic capacitor, {0} mm dia, {1}-hole pitch",
     "Disc ceramic capacitor, {0} mm dia, {1}-hole pitch",
@@ -516,6 +517,21 @@ TURKISH: dict[str, str] = {
         "şeridi 1. pine gelir)"
     ),
     "Cathode — the banded end — in {hole}": "Katot — bantlı uç — {hole} deliğine",
+    # An axial part stood on end, over one hole, its top lead bent back down into the next.
+    "Stand it on end over {hole} and bend the top lead back over and down into {other}.": (
+        "{hole} deliğinin üstüne dik oturt; üstteki bacağı geri kıvırıp {other} deliğine "
+        "indir."
+    ),
+    "Stand it on end over {hole}, the banded end down, and bend the top lead back over "
+    "and down into {other}.": (
+        "{hole} deliğinin üstüne bantlı ucu altta kalacak şekilde dik oturt; üstteki "
+        "bacağı geri kıvırıp {other} deliğine indir."
+    ),
+    "Stand it on end over {hole}, the banded end up, and bend the top lead back over and "
+    "down into {other}.": (
+        "{hole} deliğinin üstüne bantlı ucu üstte kalacak şekilde dik oturt; üstteki "
+        "bacağı geri kıvırıp {other} deliğine indir."
+    ),
     "Pin 1 in {hole}; check the package outline against the board": (
         "1. pin {hole} deliğine; kılıfın dış hatlarını kartla karşılaştır"
     ),
@@ -943,6 +959,7 @@ TURKISH: dict[str, str] = {
     "module-board": "modül",
     "flying-leads": "kart dışı parça",
     "smd-adapter": "SMD adaptör",
+    "axial-upright": "dik eksenel",
     # -- footprint names (NAME_TEMPLATES) -------------------------------------------------
     "Flying leads, {0} wires to a part off the board, {1} mm": (
         "Kart dışındaki bir parçaya {0} tel, {1} mm"
@@ -954,6 +971,9 @@ TURKISH: dict[str, str] = {
     "Flying leads, 1 wire to a part off the board": "Kart dışındaki bir parçaya 1 tel",
     "Resistor (axial, {0}-hole span)": "Direnç (eksenel, {0} delik açıklık)",
     "Axial ({0}-hole span, {1} mm body)": "Eksenel ({0} delik açıklık, {1} mm gövde)",
+    "Axial, standing on pin {0} ({1}-hole span, {2} mm body)": (
+        "Eksenel, {0}. pinin üstünde dik ({1} delik açıklık, {2} mm gövde)"
+    ),
     "Diode, {0}": "Diyot, {0}",
     "Electrolytic capacitor, {0} mm dia, {1}-hole pitch": (
         "Elektrolitik kondansatör, {0} mm çap, {1} delik aralık"

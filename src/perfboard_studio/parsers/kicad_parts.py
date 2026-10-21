@@ -153,6 +153,32 @@ def _diode(m: re.Match[str]) -> list[str]:
     return [registry, exact] if registry else [exact]
 
 
+def _standing_resistor(m: re.Match[str]) -> list[str]:
+    """KiCad's ``R_Axial_*_Vertical``: stood on end over pad 1, which is where its model and
+    its silkscreen circle put the body (``footprints``, "Stood on end")."""
+    holes = _holes(float(m["pitch"]))
+    if holes is None:
+        return []
+    return [f"axial-{holes}h-{float(m['length']):g}x{float(m['diameter']):g}-v"]
+
+
+def _standing_diode(m: re.Match[str]) -> list[str]:
+    """KiCad's ``D_*_Vertical_AnodeUp`` and ``_CathodeUp`` (``_KathodeUp`` before KiCad 7).
+
+    Pad 1 is the cathode in both, as on every KiCad diode. Anode UP means the cathode is
+    DOWN, under the body: the body stands over pad 1. Cathode up, it stands over pad 2.
+    Measured on KiCad 10's models of the DO-35 and the DO-41: the barrel is centred on pad 1
+    in the first and on pad 2 in the second.
+    """
+    package = m["package"].upper()
+    holes = _holes(float(m["pitch"]))
+    body = _DIODE_BODY_MM.get(package)
+    if holes is None or body is None:
+        return []
+    over = "-v" if m["up"] == "AnodeUp" else "-v2"
+    return [f"axial-{holes}h-{body[0]:g}x{body[1]:g}-pol{over}"]
+
+
 def _electrolytic(m: re.Match[str]) -> list[str]:
     diameter = float(m["diameter"])
     holes = _holes(float(m["pitch"]), _RADIAL_BEND_MM)
@@ -225,6 +251,22 @@ _KICAD_NAMES: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], list[str]]]
         re.compile(r"^D_(?P<package>DO-\d+[A-Z]*|P600)_[\w-]*?P(?P<pitch>[\d.]+)mm_Horizontal"),
         _diode,
     ),
+    # Stood on end, on the pitches a perfboard has: the half-step ones (DO-35 on 3.81 mm)
+    # are left to the note below, because no hole is where their second lead goes.
+    (
+        re.compile(
+            r"^R_Axial_DIN\d{4}_L(?P<length>[\d.]+)mm_D(?P<diameter>[\d.]+)mm_"
+            r"P(?P<pitch>2\.54|5\.08|7\.62)mm_Vertical"
+        ),
+        _standing_resistor,
+    ),
+    (
+        re.compile(
+            r"^D_(?P<package>DO-\d+[A-Z]*|P600)_[\w-]*?P(?P<pitch>2\.54|5\.08|7\.62)mm_"
+            r"Vertical_(?P<up>AnodeUp|CathodeUp|KathodeUp)"
+        ),
+        _standing_diode,
+    ),
     (re.compile(r"^CP_Radial_D(?P<diameter>[\d.]+)mm_P(?P<pitch>[\d.]+)mm"), _electrolytic),
     (
         re.compile(r"^C_Disc_D(?P<diameter>[\d.]+)mm_W(?P<width>[\d.]+)mm_P(?P<pitch>[\d.]+)mm"),
@@ -282,7 +324,13 @@ _KICAD_NAMES: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], list[str]]]
 _UNMAPPED: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(r"^R_Axial\S*_Vertical"),
-        "a resistor stood on end has no footprint here; it was laid flat",
+        "a resistor stood on end with its leads off the 0.1 inch grid has no footprint "
+        "here; it was laid flat",
+    ),
+    (
+        re.compile(r"^D_\S*_Vertical"),
+        "a diode stood on end with its leads off the 0.1 inch grid has no footprint here; "
+        "it was laid flat",
     ),
     (
         re.compile(r"^Relay_"),

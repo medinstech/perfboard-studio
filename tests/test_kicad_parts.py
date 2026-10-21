@@ -88,7 +88,10 @@ def test_a_kicad_footprint_name_is_read_for_its_package(kicad: str, expected: st
         ("Button_Switch_THT:SW_PUSH_1P1T_6x3.5mm_H4.3_APEM_MJTP1243", "push button"),
         ("Module:Arduino_Nano", "module"),
         ("Package_TO_SOT_THT:TO-220-3_Horizontal_TabDown", "upright"),
-        ("Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical", "laid flat"),
+        # Stood on end is mapped (test_axial_upright.py) -- unless the second lead lands
+        # between two holes, which no hole on this board is.
+        ("Resistor_THT:R_Axial_DIN0204_L3.6mm_D1.6mm_P1.90mm_Vertical", "laid flat"),
+        ("Diode_THT:D_DO-35_SOD27_P3.81mm_Vertical_AnodeUp", "laid flat"),
     ],
 )
 def test_what_is_not_mapped_says_why(kicad: str, says: str) -> None:
