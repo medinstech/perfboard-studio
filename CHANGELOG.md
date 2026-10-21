@@ -72,6 +72,13 @@ closed without a bump.
   Connection, Crossings and Lay Wires Along the Grid are greyed out there, since its
   planner reads none of them.
 
+- **Board Setup with nothing changed leaves the board as it was.** OK rewrote the border to
+  the 2 mm a printed legend is given when it is turned on -- on five of the six examples,
+  each a stock size that prints its own -- so a dialog nobody used left an undo step, a
+  modified title and a slightly bigger board in the 1:1 print, 3D and STEP. On the sheet the
+  Box button draws the shape it shows (after Line was picked it said Line and drew a box),
+  and its menu has the box on it to go back to; a new net cannot be OK'd without a name.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

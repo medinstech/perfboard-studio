@@ -1304,8 +1304,11 @@ class BoardSetupDialog(QDialog):
         # Each axis keeps its own border: a preset solves them separately so the outline
         # is the advertised size to the tenth of a millimetre, and averaging them here
         # would throw that away. Only a legend with nowhere to go raises either of them.
+        # Only when THIS dialog turns the legend on: a board that already prints one -- every
+        # stock size does -- has the border its maker cut, and OK with nothing changed
+        # rewrote it to 2 mm on five of the six examples, an undo step and a bigger board.
         border_x, border_y = self._board.border_x_mm, self._board.border_y_mm
-        if self.legend.isChecked():
+        if self.legend.isChecked() and self._board.labels is None:
             border_x = max(border_x, LEGEND_BORDER_MM)
             border_y = max(border_y, LEGEND_BORDER_MM)
 
@@ -1738,11 +1741,20 @@ class NetDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        # A net needs a name, and the command says so in English after the dialog has
+        # closed -- so OK waits for one, as it does in the label and part dialogs.
+        self.ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self.name.textChanged.connect(self._refresh_ok)
+        self._refresh_ok()
 
         layout = QVBoxLayout()
         layout.addLayout(form)
         layout.addWidget(buttons)
         self.setLayout(layout)
+
+    def _refresh_ok(self) -> None:
+        if self.ok_button is not None:
+            self.ok_button.setEnabled(bool(self.name.text().strip()))
 
     def _on_class_chosen(self, _index: int) -> None:
         self._class_follows_name = False
@@ -6524,6 +6536,8 @@ class MainWindow(QMainWindow):
         # Escape comes back to the pointer. Select is IN the group rather than being the
         # absence of a tool, which is what makes Escape mean one thing everywhere.
         self.act_sheet_tool: dict[str, QAction] = {}
+        #: The shape the Box button holds: the last one picked from its menu.
+        self._sheet_shape = "rectangle"
         tools = QActionGroup(self)
         tools.setExclusive(True)
         for name, icon_name, label, tip in (
@@ -6572,18 +6586,24 @@ class MainWindow(QMainWindow):
             action = QAction(icons.icon(icon_name), label, self)
             action.setCheckable(True)
             action.setToolTip(tip)
-            action.triggered.connect(
-                lambda _checked=False, which=name: self.on_sheet_tool(which)
-            )
+            if name == "rectangle":
+                # The shape button arms the shape it SHOWS, which is whichever was picked
+                # from its menu last: it said Line and armed a box.
+                action.triggered.connect(lambda _checked=False: self.on_sheet_tool(self._sheet_shape))
+            else:
+                action.triggered.connect(
+                    lambda _checked=False, which=name: self.on_sheet_tool(which)
+                )
             tools.addAction(action)
             bar.addAction(action)
             self.act_sheet_tool[name] = action
         self.act_sheet_tool["select"].setChecked(True)
         self.act_sheet_tools = tools
 
-        # The two shapes the Box button does not have room for, on a menu under it.
+        # Every shape on a menu under the Box button, the box too, so the one shown can be
+        # changed back.
         shapes = QMenu(bar)
-        for name, label in (("line", t("Line")), ("circle", t("Circle"))):
+        for name, label in (("rectangle", t("Box")), ("line", t("Line")), ("circle", t("Circle"))):
             entry = shapes.addAction(label)
             entry.triggered.connect(
                 lambda _checked=False, which=name: self.on_sheet_tool(which)
@@ -7346,15 +7366,17 @@ class MainWindow(QMainWindow):
         instruction in the status bar.
         """
         self.schematic_view.set_tool(cast("SheetTool", tool))
-        action = self.act_sheet_tool.get(tool)
-        if action is not None and not action.isChecked():
-            action.setChecked(True)
-        elif action is None:
-            # A shape from the Box button's menu. Nothing in the group matches it, so the
-            # Box button stands for the group and says which shape it is holding.
+        shape_names = {"rectangle": t("Box"), "line": t("Line"), "circle": t("Circle")}
+        if tool in shape_names:
+            # The Box button stands for every shape and says which one it is holding.
+            self._sheet_shape = tool
             box = self.act_sheet_tool["rectangle"]
             box.setChecked(True)
-            box.setText(t("Line") if tool == "line" else t("Circle"))
+            box.setText(shape_names[tool])
+        else:
+            action = self.act_sheet_tool.get(tool)
+            if action is not None and not action.isChecked():
+                action.setChecked(True)
         hint = {
             "select": "",
             "wire": t(

@@ -4930,6 +4930,57 @@ def test_a_net_typed_as_gnd_is_a_ground_net_unless_somebody_says_otherwise() -> 
     assert deliberate.values()[1] == "signal"
 
 
+def test_a_net_cannot_be_made_without_a_name() -> None:
+    """OK used to take an empty name, and the refusal came back in English after the
+    dialog had closed -- then the dialog opened again."""
+    from perfboard_studio.ui.main import NetDialog
+
+    dialog = NetDialog()
+    assert dialog.ok_button is not None and not dialog.ok_button.isEnabled()
+    dialog.name.setText("  ")
+    assert not dialog.ok_button.isEnabled()
+    dialog.name.setText("VCC")
+    assert dialog.ok_button.isEnabled()
+
+
+def test_board_setup_with_nothing_changed_is_the_board_it_was() -> None:
+    """OK with nothing touched rewrote the border to the 2 mm a legend gets when it is
+    turned ON -- on five of the six examples, every one a stock size that prints its own --
+    and so put an undo step, a dirty title and a bigger board behind a dialog nobody used."""
+    from perfboard_studio.ui.main import BoardSetupDialog, example_boards
+
+    examples = example_boards()
+    assert examples
+    for path, _title in examples:
+        loaded = persist.deserialize_document(path.read_text(encoding="utf-8"))
+        assert loaded.ok, path
+        doc = loaded.document
+        dialog = BoardSetupDialog(doc.board, document=doc)
+        assert dialog.board() == doc.board, path.name
+        assert dialog.preset_features() is None or doc.board.labels is None, path.name
+
+
+def test_the_box_button_arms_the_shape_it_shows() -> None:
+    """After Line was picked from its menu the button said Line and pressing it drew a
+    box; and the box itself was not on the menu to change back to."""
+    window = _window_on(_load_dense())
+    try:
+        box = window.act_sheet_tool["rectangle"]
+        window.on_sheet_tool("line")
+        assert box.text() == "Line" and box.isChecked()
+        window.on_sheet_tool("select")
+        box.trigger()
+        assert window.schematic_view.tool == "line"
+        menu = box.menu()
+        assert menu is not None
+        labels = [action.text() for action in menu.actions()]
+        assert labels == ["Box", "Line", "Circle"]
+        menu.actions()[0].trigger()
+        assert box.text() == "Box" and window.schematic_view.tool == "rectangle"
+    finally:
+        _close(window)
+
+
 def test_renaming_a_net_to_gnd_makes_it_a_ground_net(monkeypatch) -> None:
     """The sheet's auto-named N3, renamed GND from its wire's menu, was a signal called GND:
     drawn as wires, routed last. Renamed by the dialog's rule -- only while the class still
