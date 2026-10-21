@@ -12398,25 +12398,36 @@ class MainWindow(QMainWindow):
         return self.current_path.stem if self.current_path is not None else "board"
 
     def on_export_pdf(self) -> None:
+        doc = self.bus.document
+        # A solderless breadboard has no solder side: underneath is the adhesive backing,
+        # so the sheet of it is the top alone rather than a second page of nothing.
+        plastic = is_breadboard(doc.board)
         chosen = self._ask_where_to_export(
-            t("Export 1:1 PDF — the solder side is written beside it"),
+            t("Export 1:1 PDF")
+            if plastic
+            else t("Export 1:1 PDF — the solder side is written beside it"),
             f"{self._export_stem()}_component_side.pdf",
             t("PDF (*.pdf)"),
         )
         if chosen is None:
             return
         stem = chosen.stem.removesuffix("_component_side")
-        doc = self.bus.document
         # Overlays off: the 1:1 sheet is a soldering template held against the real board,
         # and the ratsnest draws what is NOT built yet. Printing it would put dashed lines
         # across the very sheet someone is using to decide where to put solder.
         top_scene = self._export_scene(doc, "top")
-        bottom_scene = self._export_scene(doc, "bottom")
         try:
-            p1 = export_pdf(doc.board, top_scene, chosen.with_suffix(".pdf"))
-            p2 = export_pdf(
-                doc.board, bottom_scene, chosen.with_name(f"{stem}_solder_side.pdf"), mirrored=True
-            )
+            written = [export_pdf(doc.board, top_scene, chosen.with_suffix(".pdf"))]
+            if not plastic:
+                bottom_scene = self._export_scene(doc, "bottom")
+                written.append(
+                    export_pdf(
+                        doc.board,
+                        bottom_scene,
+                        chosen.with_name(f"{stem}_solder_side.pdf"),
+                        mirrored=True,
+                    )
+                )
         except OSError as err:
             QMessageBox.critical(
                 self, t("Export failed"), t("Could not write the PDF: {reason}").format(reason=err)
@@ -12424,7 +12435,7 @@ class MainWindow(QMainWindow):
             return
         # QPdfWriter reports an unwritable target as a warning on stderr and returns as
         # if it had written, so success is checked on disk rather than believed.
-        missing = [p for p in (p1, p2) if not p.is_file() or p.stat().st_size == 0]
+        missing = [p for p in written if not p.is_file() or p.stat().st_size == 0]
         if missing:
             QMessageBox.critical(
                 self,
@@ -12432,10 +12443,16 @@ class MainWindow(QMainWindow):
                 t("Could not write {path}. Is the folder writable?").format(path=missing[0]),
             )
             return
-        self.statusBar().showMessage(
-            t("Exported {first} and {second}").format(first=p1.name, second=p2.name), 8000
-        )
-        self._offer_to_open([p1, p2], title=t("PDF written"), open_label=t("Open the Sheet"))
+        if len(written) == 2:
+            self.statusBar().showMessage(
+                t("Exported {first} and {second}").format(
+                    first=written[0].name, second=written[1].name
+                ),
+                8000,
+            )
+        else:
+            self.statusBar().showMessage(t("Exported {path}").format(path=written[0].name), 8000)
+        self._offer_to_open(written, title=t("PDF written"), open_label=t("Open the Sheet"))
 
     def _export_scene(self, doc: PerfDocument, side: BoardSide) -> BoardScene:
         """A scene for print: the board and nothing else."""

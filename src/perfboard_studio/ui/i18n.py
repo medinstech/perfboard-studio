@@ -648,8 +648,9 @@ TURKISH: Mapping[str, str] = {
     "Design rules checked in {ms} ms. Click to see the findings.": (
         "Tasarım kuralları {ms} ms'de denetlendi. Bulguları görmek için tıkla."
     ),
+    "Export 1:1 PDF": "1:1 PDF Dışa Aktar",
     "Export 1:1 PDF — the solder side is written beside it": (
-        "1:1 PDF Dışa Aktar — lehim tarafı yanına yazılır"
+        "1:1 PDF Dışa Aktar — lehim yüzü yanına yazılır"
     ),
     "PDF (*.pdf)": "PDF belgesi (*.pdf)",
     "Export 3D Snapshot": "3D Görüntüyü Dışa Aktar",

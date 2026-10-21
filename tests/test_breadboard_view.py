@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import pathlib
 
 import pytest
 
@@ -224,6 +225,20 @@ def test_the_window_rewires_a_breadboard_with_jumpers_and_greys_the_perfboard_se
     finally:
         window._saved_document = window.bus.document
         window.close()
+
+
+def test_a_breadboards_1_to_1_pdf_is_its_top_alone(window, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Under a solderless breadboard is its adhesive backing: there is no solder side to
+    print, and the export wrote a second sheet of one anyway."""
+    from perfboard_studio.ui import main as main_module
+
+    target = tmp_path / "bb_component_side.pdf"
+    monkeypatch.setattr(main_module.MainWindow, "_ask_where_to_export", lambda self, *a: target)
+    opened: list[list[pathlib.Path]] = []
+    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written, **k: opened.append(written))
+    window.on_export_pdf()
+    assert [p.name for p in opened[0]] == ["bb_component_side.pdf"]
+    assert sorted(p.name for p in tmp_path.glob("*.pdf")) == ["bb_component_side.pdf"]
 
 
 def test_no_stock_perfboard_is_offered_for_a_breadboard() -> None:

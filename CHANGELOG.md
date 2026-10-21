@@ -102,6 +102,9 @@ closed without a bump.
   Yönlendir). Every " -- " in the interface, in both languages, is the dash the rest of it
   uses.
 
+- **A solderless breadboard's 1:1 PDF is its top alone.** Under it is the adhesive backing,
+  and the export wrote a second sheet for a solder side it does not have.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added
