@@ -103,6 +103,9 @@ STANDARD_CHANNEL = 3
 #: The widest channel a board with rails may have, in pitches: 1.5 inch, room for any
 #: module made. Without rails the rows run out first, at 10 (see :func:`channel_of`).
 MAX_CHANNEL = 15
+#: The widest channel a board WITHOUT rails may have, in pitches: one more row and it has
+#: as many rows as an ordinary board with rails, and is read as one.
+MAX_CHANNEL_WITHOUT_RAILS = STANDARD_CHANNEL + ROWS_WITH_RAILS - 1 - ROWS_WITHOUT_RAILS
 #: The channels the wide boards are printed for, in mil: the Nano, the Pico, a narrow and
 #: a standard ESP32 devkit. The Board Setup list, not a limit -- any whole pitch will do.
 WIDE_CHANNEL_MILS: tuple[int, ...] = (600, 700, 900, 1000)
@@ -211,7 +214,17 @@ def channel_of(board: Board) -> int:
 
 def rows_for(channel: int, rails: bool = True) -> int:
     """The rows of a breadboard with this channel, in pitches -- :func:`channel_of`'s
-    inverse."""
+    inverse.
+
+    Raises ``ValueError`` past :data:`MAX_CHANNEL_WITHOUT_RAILS` on a board without rails,
+    which would then have the rows of one with them and be read back by :func:`channel_of`
+    as a narrower channel with rails. Every other answer is arithmetic, and whether a board
+    is a breadboard at all stays :func:`board_problem`'s to say."""
+    if not rails and channel > MAX_CHANNEL_WITHOUT_RAILS:
+        raise ValueError(
+            f"A breadboard without power rails has a channel of at most "
+            f"{MAX_CHANNEL_WITHOUT_RAILS * 100} mil; {channel * 100} is not one."
+        )
     return (ROWS_WITH_RAILS if rails else ROWS_WITHOUT_RAILS) + channel - STANDARD_CHANNEL
 
 
@@ -285,7 +298,7 @@ def breadboard(size: str, channel: int = STANDARD_CHANNEL, narrow_channel_cols: 
     """A breadboard of one of the ``SIZES``, its channel ``channel`` pitches across."""
     cols, rows = SIZES[size]
     return pattern_board(
-        "breadboard", cols, rows + channel - STANDARD_CHANNEL, narrow_channel_cols
+        "breadboard", cols, rows_for(channel, rows == ROWS_WITH_RAILS), narrow_channel_cols
     )
 
 

@@ -137,7 +137,8 @@ There are five types: `pad-per-hole` (every hole its own island, the default),
 is point-to-point wire and there is no pad for a solder trace to reach — `breadboard`,
 the solderless kind, whose clips join five holes across each half of a column and the
 length of each rail, and `solderable-breadboard`, the same pattern in copper. A breadboard
-of either kind is 20 rows (with power rails) or 12 (without) at 2.54 mm, as long as it has
+of either kind is 20 rows (with power rails) or 12 (without) at 2.54 mm with the ordinary
+channel, as long as it has
 columns, and its holes are named as it prints them, `e12` and `T+12`. `set_board(channel_mil=…)`
 widens the channel between rows e and f for a module the 300 mil one does not take -- 1000
 for an ESP32 devkit, 900 for a narrow one, 700 for a Pico -- as the printed wide bodies do:

@@ -293,6 +293,21 @@ def test_an_agent_asks_for_a_wide_channel_in_mil() -> None:
         BoardSession(document=_doc(dataclasses.replace(FULL, type="pad-per-hole", rows=20))).set_board(channel_mil=1000)
 
 
+def test_a_board_without_rails_is_refused_a_channel_it_would_be_read_back_as_another() -> None:
+    """Past 1000 mil a railless board has the rows of an ordinary one with rails: 1100 mil
+    asked of the mini came back as 300 mil and four rails nobody asked for."""
+    mini = breadboard("170")
+    assert channel_of(dataclasses.replace(mini, rows=rows_for(10, rails=False))) == 10
+    with pytest.raises(ValueError):
+        rows_for(11, rails=False)
+    with pytest.raises(ValueError):
+        breadboard("170", channel=11)
+    session = BoardSession(document=_doc(mini))
+    with pytest.raises(SessionError):
+        session.set_board(channel_mil=1100)
+    assert session.document.board == mini
+
+
 def _app() -> None:
     from PySide6.QtWidgets import QApplication
 
@@ -320,6 +335,21 @@ def test_board_setup_asks_a_breadboard_its_channel_and_where_it_narrows() -> Non
     assert dialog.board() == breadboard("830", channel=9)
     dialog.narrow_channel.setValue(20)
     assert dialog.board() == breadboard("830", channel=9, narrow_channel_cols=20)
+
+
+@pytest.mark.parametrize("kind", ["pad-per-hole", "stripboard"])
+def test_board_setup_turns_a_flex_breadboard_into_a_board_with_no_channel(kind: str) -> None:
+    """The narrow part goes with the breadboard: carried onto a perfboard it is a board
+    board.set refuses, and the dialog had no row left to clear it in."""
+    _app()
+    from perfboard_studio.ui.main import BoardSetupDialog
+
+    dialog = BoardSetupDialog(FLEX_900)
+    dialog.board_type.setCurrentIndex(dialog.board_type.findData(kind))
+    board = dialog.board()
+    assert board.type == kind and board.narrow_channel_cols == 0
+    bus = CommandBus(_doc(FLEX_900), create_standard_registry(), CommandContext(next_id=create_document_id_generator(_doc(FLEX_900))))
+    assert bus.dispatch("board.set", SetBoardPayload(board=board)).ok
 
 
 def test_the_groove_is_drawn_as_wide_as_the_channel_in_both_views() -> None:

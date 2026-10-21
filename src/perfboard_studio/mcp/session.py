@@ -1130,7 +1130,10 @@ class BoardSession:
                 rails = rows == ROWS_WITH_RAILS
             else:
                 rails = has_rails(board) or not has_breadboard_pattern(board)
-            rows = rows_for(channel_mil // 100, rails)
+            try:
+                rows = rows_for(channel_mil // 100, rails)
+            except ValueError as exc:
+                raise SessionError(str(exc)) from exc
         narrow = board.narrow_channel_cols if narrow_channel_cols is None else narrow_channel_cols
         if wanted_type not in PATTERN_TYPES:
             narrow = 0  # Only a breadboard has a channel to narrow.

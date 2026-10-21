@@ -1427,6 +1427,9 @@ class BoardSetupDialog(QDialog):
         return dataclasses.replace(
             self._board,
             type=board_type,
+            # Only a breadboard has a channel to narrow, and the board this dialog opened on
+            # may have been a flex one.
+            narrow_channel_cols=0,
             strip_axis=(
                 cast(Literal["horizontal", "vertical"], self.strip_axis.currentData())
                 if board_type == "stripboard"
