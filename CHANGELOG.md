@@ -73,6 +73,11 @@ closed without a bump.
 
 ### Fixed
 
+- **A top jumper drawn by hand runs over the component side.** The drawing tool left it on
+  the solder side, so on a perfboard the 3D view drew it under the board and DRC judged it
+  against the solder side's copper, while Autoroute and an agent's `add_wire` laid the
+  same jumper on top. All three ask one rule now.
+
 - **A click on the board picks what is under the pointer.** A part answered clicks over its
   padded courtyard and a strip for a reference label it no longer paints -- 13 mm tall on a
   2 mm resistor -- so with parts two rows apart a click on one selected its neighbour, and

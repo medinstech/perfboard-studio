@@ -3060,7 +3060,28 @@ def test_a_wire_is_two_clicks_and_commits_itself() -> None:
     conductor = bus.document.conductors[0]
     assert conductor.kind == "insulated-wire"
     assert conductor.path == (view2d.HoleCoord(2, 2), view2d.HoleCoord(9, 6))
+    assert conductor.side == "bottom"
     assert scene.armed_draw_kind is None  # Disarmed once committed.
+
+
+def test_a_top_jumper_drawn_by_hand_runs_over_the_component_side() -> None:
+    """The kind says where it goes. The window left a hand-drawn top jumper at the
+    payload's default, the solder side, so 3D drew it under the board and DRC judged it
+    against the solder side's copper -- while the router and an agent laid the same jumper
+    on top. All three ask commands.wire_side now."""
+    from perfboard_studio.commands import wire_side
+
+    scene, bus = _drawing_scene()
+    scene.arm_drawing("top-jumper")
+    scene.draw_click(view2d.HoleCoord(2, 2))
+    result = scene.draw_click(view2d.HoleCoord(9, 6))
+
+    assert result is not None and result.ok, result
+    assert bus.document.conductors[0].side == "top"
+    board = bus.document.board
+    assert [wire_side(k, board) for k in ("top-jumper", "insulated-wire", "bare-wire")] == [
+        "top", "bottom", "bottom",
+    ]
 
 
 def test_a_solder_trace_is_a_chain_and_commits_on_request() -> None:

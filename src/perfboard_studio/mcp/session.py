@@ -100,6 +100,7 @@ from perfboard_studio.commands import (
     create_document_id_generator,
     create_empty_document,
     create_standard_registry,
+    wire_side,
 )
 from perfboard_studio.connectivity import extract_physical_nets
 from perfboard_studio.drc import run_drc
@@ -1393,12 +1394,11 @@ class BoardSession:
             *(_hole(corner, board) for corner in via or ()),
             _hole(to_hole, board),
         )
-        side: BoardSide = "top" if kind == "top-jumper" or is_breadboard(board) else "bottom"
         return self._add_conductor(
             NewWireConductor(
                 path=path,
                 kind=kind,  # type: ignore[arg-type]
-                side=side,
+                side=wire_side(kind, board),
                 net_id=self._net_id(net),
             )
         )

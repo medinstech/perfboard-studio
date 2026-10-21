@@ -611,6 +611,19 @@ class NewWireConductor:
     layer_z: int = 0
 
 
+def wire_side(kind: str, board: Board) -> BoardSide:
+    """The face a newly laid wire of this kind runs on: the component side for a top
+    jumper, which is what the kind says, and for every wire on a solderless breadboard,
+    which is pushed into the plastic from above and has no other side; the solder side
+    otherwise.
+
+    One answer for the router, the window's drawing tool and MCP's ``add_wire``. The
+    window used to leave a hand-drawn top jumper on a perfboard at the payload's default,
+    so it was drawn under the board in 3D and DRC judged it against the solder side's
+    copper, while the router and an agent laid the same jumper on top."""
+    return "top" if kind == "top-jumper" or is_breadboard(board) else "bottom"
+
+
 @dataclass(frozen=True, slots=True)
 class NewLeadBendConductor:
     path: tuple[HoleCoord, ...]

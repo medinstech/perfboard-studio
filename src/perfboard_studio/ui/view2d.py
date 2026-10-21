@@ -81,6 +81,7 @@ from perfboard_studio.commands import (
     PlaceComponentPayload,
     UpdateBoardNotePayload,
     next_net_name,
+    wire_side,
 )
 from perfboard_studio.connectivity import FootprintLookup, PhysicalNet, extract_physical_nets
 from perfboard_studio.drc import DrcViolation
@@ -4066,13 +4067,13 @@ class BoardScene(QGraphicsScene):
             spec = NewSolderTraceConductor(
                 path=path, kind=cast(Any, kind), net_id=self._net_for(path)
             )
-        elif is_breadboard(self.document.board):
-            # Pushed into the plastic from above: a breadboard has no other side to run on.
-            spec = NewWireConductor(
-                path=path, kind=cast(Any, kind), side="top", net_id=self._net_for(path)
-            )
         else:
-            spec = NewWireConductor(path=path, kind=cast(Any, kind), net_id=self._net_for(path))
+            spec = NewWireConductor(
+                path=path,
+                kind=cast(Any, kind),
+                side=wire_side(kind, self.document.board),
+                net_id=self._net_for(path),
+            )
 
         result = self.bus.dispatch("conductor.add", AddConductorPayload(conductor=spec))
         self._clear_draw()

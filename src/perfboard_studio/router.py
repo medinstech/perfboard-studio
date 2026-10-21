@@ -80,6 +80,7 @@ from .commands import (
     NewLeadBendConductor,
     NewSolderTraceConductor,
     NewWireConductor,
+    wire_side,
 )
 from .connectivity import FootprintLookup, PhysicalNet, extract_physical_nets
 from .geometry import (
@@ -1506,10 +1507,7 @@ def _straight_wire_candidate(
         fixed = costs.top_jumper_fixed
         per_mm = costs.top_jumper_per_mm
 
-    if kind == "top-jumper":
-        side: Literal["top", "bottom"] = "top"
-    else:
-        side = "bottom"
+    side = wire_side(kind, ctx.doc.board)
     layer_z = 1 if kind == "insulated-wire" else 0
 
     conductor: NewConductor = NewWireConductor(
