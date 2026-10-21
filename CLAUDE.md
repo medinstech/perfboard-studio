@@ -21,8 +21,8 @@ python -m perfboard_studio.ui.main --headless tools/diffcheck/golden/dense.perf
 python -m perfboard_studio.mcp    # the MCP server (docs/MCP.md)
 ```
 
-The suite is ~2000 tests in under a minute, so run all of it; there is no reason to
-narrow to one file except while iterating.
+The suite is ~4500 tests in about four and a half minutes, so run all of it before a
+commit; narrow to one file only while iterating.
 
 **`mypy --strict src`, never `src tests`.** The engine is strict-clean and must stay
 that way. The tests are not and never have been — `--strict` over `tests` reports ~267
