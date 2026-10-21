@@ -5094,7 +5094,7 @@ class MainWindow(QMainWindow):
         )
         act_from_design.setToolTip(
             t(
-                "The same circuit on a board with nothing on it yet -- how a design tried on "
+                "The same circuit on a board with nothing on it yet — how a design tried on "
                 "a breadboard goes on to perfboard. The board it is on now, and its file, "
                 "stay exactly as they are."
             )
@@ -5106,7 +5106,7 @@ class MainWindow(QMainWindow):
         act_to_solderable.setToolTip(
             t(
                 "Every part and every jumper on the same holes of a solderable breadboard, as "
-                "a new document -- how a circuit that works on the breadboard is made "
+                "a new document — how a circuit that works on the breadboard is made "
                 "permanent. The breadboard and its file stay exactly as they are."
             )
         )
@@ -5240,7 +5240,7 @@ class MainWindow(QMainWindow):
         act_step.setToolTip(
             t(
                 "Write the board as solids for a mechanical CAD program: the board with its holes "
-                "and every part as the room it takes, named by its reference -- to draw the "
+                "and every part as the room it takes, named by its reference — to draw the "
                 "enclosure round."
             )
         )
@@ -5340,7 +5340,7 @@ class MainWindow(QMainWindow):
         self.act_add_label = edit_menu.addAction(t("Add La&bel…"))
         self.act_add_label.setToolTip(
             t(
-                "Write something on the board -- \"MOTOR 24V\" beside the terminal that "
+                "Write something on the board — \"MOTOR 24V\" beside the terminal that "
                 "takes it. Printed on the 1:1 sheet and in the guide's pictures; drag it "
                 "into place, double-click it to change it."
             )
@@ -5535,10 +5535,10 @@ class MainWindow(QMainWindow):
         for style, label, tip in (
             ("best", t("&Try each and keep the best"),
              t("Route the board once with every style, measure what each would cost to "
-               "build -- traces, wires, wire length, bridging risk -- and keep the best. "
+               "build — traces, wires, wire length, bridging risk — and keep the best. "
                "Takes about as long as two ordinary routes; the comparison is reported.")),
             ("solder", t("&Solder trace where possible"),
-             t("Every connection a solder trace can make, IS one -- wire only where a "
+             t("Every connection a solder trace can make, IS one — wire only where a "
                "trace physically cannot get there. A short jumper carries a run over "
                "anything it must cross. On the NE555 fixture: all 14 connections, not one "
                "wire.")),
@@ -5552,7 +5552,7 @@ class MainWindow(QMainWindow):
                "wire, including the rails. Solder only where a wire cannot reach.")),
             ("lead-bend", t("Bend component &legs where possible"),
              t("Fold a component's own leg to a nearby hole first, then solder, then wire. "
-               "The cheapest connection there is -- no wire to cut, and already soldered "
+               "The cheapest connection there is — no wire to cut, and already soldered "
                "at one end.")),
         ):
             action = style_menu.addAction(label)
@@ -5572,7 +5572,7 @@ class MainWindow(QMainWindow):
         for policy, label, tip in (
             ("hop", t("&Hop over it with a short jumper"), t(
                 "Solder trace as far as it goes, and one short insulated jumper over each "
-                "thing it may not cross -- what somebody building by hand does. Most of the "
+                "thing it may not cross — what somebody building by hand does. Most of the "
                 "run is solder and only the crossing costs a piece of wire. The default.")),
             ("wire", t("Make the whole connection one &wire"), t(
                 "A connection that has to cross something becomes one insulated wire from "
@@ -5598,7 +5598,7 @@ class MainWindow(QMainWindow):
         self.act_grid_wires.setChecked(self._grid_wires)
         self._grid_wires_tip = t(
             "Run every wire square to the grid, along the rows and columns of holes, "
-            "with as few bends as the board allows -- the way wire is dressed on "
+            "with as few bends as the board allows — the way wire is dressed on "
             "perfboard. Off, a wire is one straight run at whatever angle, which is "
             "shorter and crosses everything near it."
         )
@@ -8871,8 +8871,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "act_grid_wires"):
             joined = board_joins_holes(self.bus.document.board)
             own_planner = t(
-                "This board is wired by its own planner -- cuts and links on stripboard, "
-                "jumpers on a breadboard -- so this does not apply to it."
+                "This board is wired by its own planner — cuts and links on stripboard, "
+                "jumpers on a breadboard — so this does not apply to it."
             )
             for menu in (self.style_menu, self.crossing_menu):
                 menu.menuAction().setEnabled(not joined)
@@ -10585,7 +10585,7 @@ class MainWindow(QMainWindow):
             + copper_note
             + "\n\n"
             + t(
-                "Other wires and traces are left in place -- DRC and LVS will point at "
+                "Other wires and traces are left in place — DRC and LVS will point at "
                 "anything left dangling."
             ),
             t("Delete"),
@@ -10777,7 +10777,7 @@ class MainWindow(QMainWindow):
         self.view.fit_board()
         self._open_the_schematic_on_an_empty_design()
         self.statusBar().showMessage(
-            t("New {cols}×{rows} {material} board").format(
+            t("New {cols} × {rows} {material} board").format(
                 cols=document.board.cols, rows=document.board.rows, material=document.board.material
             ),
             8000,
@@ -11780,7 +11780,7 @@ class MainWindow(QMainWindow):
         self.show_schematic()
         message = t(
             "{count} part(s) are in the design: {catalog} known from the catalog, {kicad} "
-            "matched by their KiCad footprint, {guess} guessed from their reference -- check "
+            "matched by their KiCad footprint, {guess} guessed from their reference — check "
             "those. Next: choose a board and place them."
         ).format(
             count=len(wanted),

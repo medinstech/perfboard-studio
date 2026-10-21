@@ -95,6 +95,13 @@ closed without a bump.
   The Language menu names each language in itself -- English, Türkçe -- so somebody who
   cannot read the window's language can still find their own.
 
+- **One Turkish word for each thing.** Wire is "tel" everywhere (it was "kablo" in nine
+  places, including the routing style), the schematic "şema", the board "kart", the guide
+  "rehber", a stale conductor "eskimiş", an insulated wire "izoleli", a footprint "ayak izi"
+  and a column "sütun"; the toolbar's two automatic verbs read alike (Oto Yerleştir, Oto
+  Yönlendir). Every " -- " in the interface, in both languages, is the dash the rest of it
+  uses.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

@@ -46,12 +46,12 @@ TURKISH: Mapping[str, str] = {
     # -- file ----------------------------------------------------------------
     "&New Board…": "&Yeni Kart…",
     "New Board from This &Design…": "Bu Tasarımdan Yeni Kart &Oluştur…",
-    "The same circuit on a board with nothing on it yet -- how a design tried on a breadboard goes on to perfboard. The board it is on now, and its file, stay exactly as they are.":
+    "The same circuit on a board with nothing on it yet — how a design tried on a breadboard goes on to perfboard. The board it is on now, and its file, stay exactly as they are.":
         "Aynı devre, üzerinde henüz hiçbir şey olmayan bir kartta — breadboard'da denenen bir tasarım perfboard'a böyle geçer. Şimdiki kart ve dosyası olduğu gibi kalır.",
     "There is no circuit here to take to another board.": "Burada başka bir karta taşınacak bir devre yok.",
     "Same &Layout on a Solderable Breadboard…": "Aynı Yerleşimle &Lehimlenebilir Breadboard'a…",
-    "Every part and every jumper on the same holes of a solderable breadboard, as a new document -- how a circuit that works on the breadboard is made permanent. The breadboard and its file stay exactly as they are.":
-        "Her parça ve her jumper, lehimlenebilir bir breadboard'un aynı deliklerinde, yeni bir belge olarak -- breadboard'da çalışan bir devre böyle kalıcı hâle getirilir. Breadboard ve dosyası olduğu gibi kalır.",
+    "Every part and every jumper on the same holes of a solderable breadboard, as a new document — how a circuit that works on the breadboard is made permanent. The breadboard and its file stay exactly as they are.":
+        "Her parça ve her jumper, lehimlenebilir bir breadboard'un aynı deliklerinde, yeni bir belge olarak — breadboard'da çalışan bir devre böyle kalıcı hâle getirilir. Breadboard ve dosyası olduğu gibi kalır.",
     "Only a solderless breadboard's layout moves to a solderable one.": "Yalnızca lehimsiz bir breadboard'un yerleşimi lehimlenebilir bir karta taşınır.",
     "The same layout on a solderable breadboard: {parts} part(s) and {wires} wire(s), each on the holes it had.":
         "Aynı yerleşim lehimlenebilir bir breadboard'da: {parts} parça ve {wires} tel, her biri eski deliklerinde.",
@@ -82,10 +82,10 @@ TURKISH: Mapping[str, str] = {
     "Export 3D Snapshot PNG…": "3D Görüntü PNG Dışa Aktar…",
     "Export 3D Model (STEP)…": "3D Modeli Dışa Aktar (STEP)…",
     "Write the board as solids for a mechanical CAD program: the board with its holes "
-    "and every part as the room it takes, named by its reference -- to draw the "
+    "and every part as the room it takes, named by its reference — to draw the "
     "enclosure round.": (
         "Kartı mekanik bir CAD programı için katı olarak yaz: delikleriyle kart ve her "
-        "parça kapladığı hacim olarak, referansıyla adlandırılmış -- kutusunu çevresine "
+        "parça kapladığı hacim olarak, referansıyla adlandırılmış — kutusunu çevresine "
         "çizmek için."
     ),
     "&Quit": "&Çıkış",
@@ -163,21 +163,21 @@ TURKISH: Mapping[str, str] = {
     "Route Nets of &Selection": "&Seçimin Netlerini Yönlendir",
     "Re-route &Everything": "Her Şeyi &Yeniden Yönlendir",
     "Re-route Nets of Se&lection": "Seçimin Netlerini Yeniden Yönl&endir",
-    "Remove S&tale Conductors": "&Artık İletkenleri Kaldır",
+    "Remove S&tale Conductors": "Eski&miş İletkenleri Kaldır",
     "&Preferred Connection": "&Tercih Edilen Bağlantı",
     "&Try each and keep the best": "&Hepsini dene, en iyisini tut",
     "&Solder trace where possible": "Mümkün olan her yerde &lehim yolu",
     "&Balanced": "&Dengeli",
-    "&Wire where possible": "Mümkün olan her yerde &kablo",
+    "&Wire where possible": "Mümkün olan her yerde &tel",
     "Bend component &legs where possible": "Mümkün olan her yerde &bacak bük",
     "Route the board once with every style, measure what each would cost to "
-    "build -- traces, wires, wire length, bridging risk -- and keep the best. "
+    "build — traces, wires, wire length, bridging risk — and keep the best. "
     "Takes about as long as two ordinary routes; the comparison is reported.": (
         "Kartı her stille bir kez yönlendir, her birinin yapım maliyetini ölç — lehim "
         "yolları, teller, tel uzunluğu, köprüleme riski — ve en iyisini tut. İki sıradan "
         "yönlendirme kadar sürer; karşılaştırma raporlanır."
     ),
-    "Every connection a solder trace can make, IS one -- wire only where a "
+    "Every connection a solder trace can make, IS one — wire only where a "
     "trace physically cannot get there. A short jumper carries a run over "
     "anything it must cross. On the NE555 fixture: all 14 connections, not one "
     "wire.": (
@@ -199,7 +199,7 @@ TURKISH: Mapping[str, str] = {
         "Lehim yalnızca telin ulaşamadığı yerde."
     ),
     "Fold a component's own leg to a nearby hole first, then solder, then wire. "
-    "The cheapest connection there is -- no wire to cut, and already soldered "
+    "The cheapest connection there is — no wire to cut, and already soldered "
     "at one end.": (
         "Önce parçanın kendi bacağını yakındaki bir deliğe bük, sonra lehim, sonra tel. "
         "Olabilecek en ucuz bağlantı — kesilecek tel yok, bir ucu zaten lehimli."
@@ -213,16 +213,16 @@ TURKISH: Mapping[str, str] = {
     "Make the whole connection one &wire": "Bağlantının tamamını tek bir &tel yap",
     "&Never use wire; leave it unrouted": "&Hiç tel kullanma; yönlendirilmeden bırak",
     "Solder trace as far as it goes, and one short insulated jumper over each "
-    "thing it may not cross -- what somebody building by hand does. Most of the "
+    "thing it may not cross — what somebody building by hand does. Most of the "
     "run is solder and only the crossing costs a piece of wire. The default.": (
         "Lehim yolu gidebildiği yere kadar gider, geçemeyeceği her şeyin üstünden de "
-        "kısa bir yalıtımlı atlama teli geçer -- elle kart yapan birinin yaptığı gibi. "
+        "kısa bir izoleli atlama teli geçer — elle kart yapan birinin yaptığı gibi. "
         "Yolun çoğu lehimdir, yalnızca kesişme bir parça tele mal olur. Varsayılan."
     ),
     "A connection that has to cross something becomes one insulated wire from "
     "end to end, for anybody who would rather run one clean wire than solder up "
     "to a jumper.": (
-        "Bir şeyin üstünden geçmesi gereken bağlantı baştan sona tek bir yalıtımlı tel "
+        "Bir şeyin üstünden geçmesi gereken bağlantı baştan sona tek bir izoleli tel "
         "olur; bir atlama teline kadar lehim çekmektense tek temiz bir tel döşemeyi "
         "tercih eden için."
     ),
@@ -236,11 +236,11 @@ TURKISH: Mapping[str, str] = {
         "birkaç tane olabilir; çözüm çoğu zaman parçaları taşımaktır."
     ),
     "Run every wire square to the grid, along the rows and columns of holes, "
-    "with as few bends as the board allows -- the way wire is dressed on "
+    "with as few bends as the board allows — the way wire is dressed on "
     "perfboard. Off, a wire is one straight run at whatever angle, which is "
     "shorter and crosses everything near it.": (
         "Her teli ızgaraya dik olarak, delik satırları ve sütunları boyunca, kartın izin "
-        "verdiği en az bükümle döşer -- perfboard'da tel böyle döşenir. Kapalıyken tel, "
+        "verdiği en az bükümle döşer — perfboard'da tel böyle döşenir. Kapalıyken tel, "
         "açısı ne olursa olsun tek bir düz parçadır; daha kısadır ve yakınındaki her şeyi "
         "keser."
     ),
@@ -409,7 +409,7 @@ TURKISH: Mapping[str, str] = {
     "Bare": "Çıplak",
     "Insulated": "İzoleli",
     "Jumper": "Üst Jumper",
-    "Auto-place": "Oto-yerleşim",
+    "Auto-place": "Oto Yerleştir",
     "Autoroute": "Oto Yönlendir",
     "Rotate": "Döndür",
     "Mirror": "Aynala",
@@ -443,7 +443,7 @@ TURKISH: Mapping[str, str] = {
         "Delik başına ada — her delik kendi adası"
     ),
     "Stripboard — whole rows joined; you cut the track to separate": (
-        "Şeritli plaket — satırlar baştan bağlı; ayırmak için şerit kesilir"
+        "Şeritli kart — satırlar baştan bağlı; ayırmak için şerit kesilir"
     ),
     # -- board setup: the sizes you can buy -----------------------------------
     "Board": "Kart",
@@ -547,8 +547,8 @@ TURKISH: Mapping[str, str] = {
         "yönlendirme için Yönlendir ▸ Tercih Edilen Bağlantı ya da Yönlendir ▸ Kesişmeler "
         "ayarını değiştirin."
     ),
-    "This board is wired by its own planner -- cuts and links on stripboard, jumpers on a "
-    "breadboard -- so this does not apply to it.": (
+    "This board is wired by its own planner — cuts and links on stripboard, jumpers on a "
+    "breadboard — so this does not apply to it.": (
         "Bu kartı kendi planlayıcısı kurar — şeritli kartta kesim ve köprü, breadboard'da "
         "jumper — bu yüzden bu ayar ona uygulanmaz."
     ),
@@ -623,7 +623,7 @@ TURKISH: Mapping[str, str] = {
     "Solder trace too long": "Lehim yolu fazla uzun",
     "Terminal entry blocked": "Klemens girişi kapalı",
     "Terminal faces into the board": "Klemens kartın içine bakıyor",
-    "Unknown footprint": "Bilinmeyen footprint",
+    "Unknown footprint": "Bilinmeyen ayak izi",
     "Bare wire on a joint": "Lehim noktası üzerinde çıplak tel",
     "Wire too thick for the hole": "Tel delik için fazla kalın",
     "Supply not connected": "Besleme bağlı değil",
@@ -642,7 +642,7 @@ TURKISH: Mapping[str, str] = {
     "Short: two nets joined": "Kısa devre: iki net birleşik",
     "Copper joined to no pin": "Hiçbir pine bağlı olmayan bakır",
     "Part not on the board": "Parça kartta değil",
-    "Net not wired yet": "Net henüz kablolanmadı",
+    "Net not wired yet": "Net henüz bağlanmadı",
     "error": "hata",
     "warning": "uyarı",
     "Design rules checked in {ms} ms. Click to see the findings.": (
@@ -879,7 +879,7 @@ TURKISH: Mapping[str, str] = {
     "Draw the circuit, let the tool arrange it on a board a supplier stocks, "
     "and build it from the guide it writes.": (
         "Devreyi çiz, aracın onu satılan hazır bir kart üzerine yerleştirmesine izin ver "
-        "ve yazdığı kılavuza bakarak kur."
+        "ve yazdığı rehbere bakarak kur."
     ),
     "New Project…": "Yeni Proje…",
     "A folder for the board and everything generated from it.": (
@@ -1002,7 +1002,7 @@ TURKISH: Mapping[str, str] = {
     "New &Project…": "Yeni &Proje…",
     "Name the board, choose what it is built on, and start in the schematic. "
     "Makes a folder to keep the board and everything generated from it.": (
-        "Karta bir ad ver, neyin üzerine kurulacağını seç ve şematikten başla. Kartı ve "
+        "Karta bir ad ver, neyin üzerine kurulacağını seç ve şemadan başla. Kartı ve "
         "ondan üretilen her şeyi bir arada tutacak bir klasör oluşturur."
     ),
     "A blank board with no home on disk yet.": "Diskte henüz bir yeri olmayan boş kart.",
@@ -1014,8 +1014,8 @@ TURKISH: Mapping[str, str] = {
     "Save the board and rewrite everything generated from it — the 1:1 sheets, "
     "the schematic, the build guide, the bill of materials — into outputs/ "
     "beside it.": (
-        "Kartı kaydeder ve ondan üretilen her şeyi — 1:1 baskıları, şematiği, montaj "
-        "kılavuzunu, malzeme listesini — yanındaki outputs/ klasörüne yeniden yazar."
+        "Kartı kaydeder ve ondan üretilen her şeyi — 1:1 baskıları, şemayı, montaj "
+        "rehberini, malzeme listesini — yanındaki outputs/ klasörüne yeniden yazar."
     ),
     "New Project": "Yeni Proje",
     "What is this board called?": "Bu kartın adı ne?",
@@ -1218,7 +1218,7 @@ TURKISH: Mapping[str, str] = {
     "Pin headers": "Pin başlıkları",
     "IDC box headers": "IDC kutu başlıklar",
     "Screw terminals": "Vidalı klemensler",
-    "Screw terminals, wires from above": "Dik klemensler, kablo yukarıdan",
+    "Screw terminals, wires from above": "Dik klemensler, tel yukarıdan",
     "Potentiometers": "Potansiyometreler",
     "Tactile switches": "Tact butonlar",
     "Relays": "Röleler",
@@ -1282,7 +1282,7 @@ TURKISH: Mapping[str, str] = {
     ),
     "Write the step-by-step soldering guide: one offline HTML file, the wire cut "
     "list and BOM as CSV, and the whole thing as JSON.": (
-        "Adım adım lehimleme rehberini yazar: çevrimdışı tek bir HTML dosyası, kablo "
+        "Adım adım lehimleme rehberini yazar: çevrimdışı tek bir HTML dosyası, tel "
         "kesim listesi ve malzeme listesi CSV olarak, tamamı da JSON olarak."
     ),
     "Put the selected parts and copper on the clipboard as text, so a block can "
@@ -1309,7 +1309,7 @@ TURKISH: Mapping[str, str] = {
     ),
     "Rearrange the unlocked parts to shorten the connections and make them "
     "solderable as traces rather than wires. Shows the result before applying it.": (
-        "Kilitli olmayan parçaları, bağlantıları kısaltmak ve kabloyla değil lehim yoluyla "
+        "Kilitli olmayan parçaları, bağlantıları kısaltmak ve telle değil lehim yoluyla "
         "yapılabilir kılmak için yeniden düzenler. Sonucu uygulamadan önce gösterir."
     ),
     "Search again from a different seed. Annealing is a random walk, so this is "
@@ -1342,7 +1342,7 @@ TURKISH: Mapping[str, str] = {
     "Forget what the net was for. Copper already laid for it stays on the board, "
     "and stops being anything re-route or the stale sweep will touch.": (
         "Netin ne için olduğunu unutur. Onun için döşenmiş bakır kartta kalır ve artık ne "
-        "yeniden yönlendirmenin ne de artık temizliğinin dokunacağı bir şey olur."
+        "yeniden yönlendirmenin ne de eskimiş iletken temizliğinin dokunacağı bir şey olur."
     ),
     "Rip up the existing routing and plan it again from nothing. Use this after "
     "moving parts: autoroute only adds, so it leaves the copper laid out for "
@@ -1385,7 +1385,7 @@ TURKISH: Mapping[str, str] = {
     "Wakes DRC's current-capacity rule and picks the wire gauge on the build "
     "guide's cut list. Nothing else in the application can set it.": (
         "DRC'nin akım kapasitesi kuralını uyandırır ve montaj rehberinin kesim listesindeki "
-        "kablo kalınlığını seçer. Uygulamada bunu başka hiçbir şey belirleyemez."
+        "tel kalınlığını seçer. Uygulamada bunu başka hiçbir şey belirleyemez."
     ),
     "Wakes DRC's creepage rule above the mains threshold. A -12 V rail is an "
     "ordinary value here, which is why it needs its own tick rather than a zero.": (
@@ -1399,7 +1399,7 @@ TURKISH: Mapping[str, str] = {
         "Görünümün kenarları boyunca sütun harfleri ve satır numaraları."
     ),
     "Only stripboard has tracks to cut. File ▸ Board Setup ▸ Type.": (
-        "Yalnızca şeritli plakette kesilecek şerit vardır. Dosya ▸ Kart Ayarları ▸ Tip."
+        "Yalnızca şeritli kartta kesilecek şerit vardır. Dosya ▸ Kart Ayarları ▸ Tip."
     ),
     # -- the status bar's fixed sentences --------------------------------------
     "Nothing to place: the board is empty.": "Yerleştirilecek bir şey yok: kart boş.",
@@ -1413,7 +1413,7 @@ TURKISH: Mapping[str, str] = {
         "İçe aktarılmış netlist yok, dolayısıyla yönlendirilecek bir şey de yok."
     ),
     "No stale conductors: every one still connects the net it claims.": (
-        "Artık iletken yok: her biri hâlâ iddia ettiği neti bağlıyor."
+        "Eskimiş iletken yok: her biri hâlâ iddia ettiği neti bağlıyor."
     ),
     "Select a part or a conductor on the board first, then copy it.": (
         "Önce kart üzerinden bir parça ya da iletken seç, sonra kopyala."
@@ -1523,15 +1523,15 @@ TURKISH: Mapping[str, str] = {
     "The {count} selected conductor(s) go with them.": (
         "Seçili {count} iletken de onlarla birlikte silinir."
     ),
-    "Other wires and traces are left in place -- DRC and LVS will point at "
+    "Other wires and traces are left in place — DRC and LVS will point at "
     "anything left dangling.": (
-        "Diğer teller ve lehim yolları yerinde kalır -- boşta kalan ne varsa DRC ve LVS gösterir."
+        "Diğer teller ve lehim yolları yerinde kalır — boşta kalan ne varsa DRC ve LVS gösterir."
     ),
     "Delete net {name}?": "{name} neti silinsin mi?",
     "{count} conductor(s) already laid for it stay on the board, and stop "
     "being anything re-route or the stale sweep will touch.": (
         "Onun için döşenmiş {count} iletken kartta kalır ve artık ne yeniden yönlendirmenin "
-        "ne de bayat temizliğinin dokunacağı bir şey olur."
+        "ne de eskimiş iletken temizliğinin dokunacağı bir şey olur."
     ),
     "{name} has changes that are not saved.": "{name} üzerinde kaydedilmemiş değişiklikler var.",
     "This board has changes that are not saved.": "Bu kartta kaydedilmemiş değişiklikler var.",
@@ -1558,7 +1558,7 @@ TURKISH: Mapping[str, str] = {
     "({count} warning(s))": "({count} uyarı)",
     "Opened with warnings": "Uyarılarla açıldı",
     "{name} loaded, but not all of it was understood:": "{name} yüklendi, ama tamamı anlaşılamadı:",
-    "New {cols}×{rows} {material} board": "Yeni {cols}×{rows} {material} kart",
+    "New {cols} × {rows} {material} board": "Yeni {cols} × {rows} {material} kart",
     "Save failed": "Kaydedilemedi",
     "Could not write {path}: {reason}": "{path} yazılamadı: {reason}",
     "Saved {path}": "Kaydedildi: {path}",
@@ -1583,10 +1583,10 @@ TURKISH: Mapping[str, str] = {
     "Solderable breadboard — the same holes and strips, in copper, soldered": "Lehimlenebilir breadboard — aynı delikler ve şeritler, bakırda, lehimli",
     "Border, left and right": "Kenar payı, sağ ve sol",
     "Border, top and bottom": "Kenar payı, üst ve alt",
-    "Full size · 830 points · 63 columns": "Tam boy · 830 nokta · 63 kolon",
-    "Half size · 400 points · 30 columns": "Yarım boy · 400 nokta · 30 kolon",
-    "Mini · 170 points · 17 columns, no rails": "Mini · 170 nokta · 17 kolon, raysız",
-    "Nothing is soldered on a breadboard: use a jumper or an insulated wire.": "Breadboard'da lehim yapılmaz: jumper ya da izoleli kablo kullanın.",
+    "Full size · 830 points · 63 columns": "Tam boy · 830 nokta · 63 sütun",
+    "Half size · 400 points · 30 columns": "Yarım boy · 400 nokta · 30 sütun",
+    "Mini · 170 points · 17 columns, no rails": "Mini · 170 nokta · 17 sütun, raysız",
+    "Nothing is soldered on a breadboard: use a jumper or an insulated wire.": "Breadboard'da lehim yapılmaz: jumper ya da izoleli tel kullanın.",
     "Stopping, and keeping the best found so far…": (
         "Durduruluyor; şimdiye kadar bulunan en iyisi tutuluyor…"
     ),
@@ -1625,9 +1625,9 @@ TURKISH: Mapping[str, str] = {
     "No component pin at {hole}.": "{hole} deliğinde parça pini yok.",
     "{pin} is already on the list.": "{pin} zaten listede.",
     "{pin} is already on {net}.": "{pin} zaten {net} üzerinde.",
-    "{pin} belongs to {net}. Disconnect it there first -- a pin can only "
+    "{pin} belongs to {net}. Disconnect it there first — a pin can only "
     "be on one net.": (
-        "{pin} {net} netine ait. Önce oradan ayır -- bir pin yalnızca bir nette olabilir."
+        "{pin} {net} netine ait. Önce oradan ayır — bir pin yalnızca bir nette olabilir."
     ),
     "{pin} is already the pin you started from.": "{pin} zaten başladığın pin.",
     "{a} and {b} are both already on {net}.": "{a} ve {b} zaten {net} üzerinde.",
@@ -1680,7 +1680,7 @@ TURKISH: Mapping[str, str] = {
     ),
     "Rename Board": "Kartı Yeniden Adlandır",
     "Board name:": "Kartın adı:",
-    "Screw terminal, wires from above (vertical)": "Klemens, kablo yukarıdan (dik)",
+    "Screw terminal, wires from above (vertical)": "Klemens, tel yukarıdan (dik)",
     # -- parts off the board -------------------------------------------------
     "Wires to a part off the board (panel pot, jack, switch)": (
         "Kart dışındaki parçaya giden teller (panel potu, jak, anahtar)"
@@ -1696,7 +1696,7 @@ TURKISH: Mapping[str, str] = {
         "jak gibi. Pinleri, tellerinin geldiği pedlere dönüşür."
     ),
     "{ref} has no footprint this program can build.": (
-        "{ref} için bu programın oluşturabileceği bir footprint yok."
+        "{ref} için bu programın oluşturabileceği bir ayak izi yok."
     ),
     "{ref} is off the board now, wired to it. Its wires land where its pins were; the build "
     "guide says where each one goes.": (
@@ -1746,10 +1746,10 @@ TURKISH: Mapping[str, str] = {
         "Karta yazılmış etiketleri kartta ve 3D'de gösterir."
     ),
     "Add La&bel…": "&Etiket Ekle…",
-    "Write something on the board -- \"MOTOR 24V\" beside the terminal that "
+    "Write something on the board — \"MOTOR 24V\" beside the terminal that "
     "takes it. Printed on the 1:1 sheet and in the guide's pictures; drag it "
     "into place, double-click it to change it.": (
-        "Karta bir şey yazar -- onu alan klemensin yanına \"MOTOR 24V\" gibi. 1:1 çıktıda "
+        "Karta bir şey yazar — onu alan klemensin yanına \"MOTOR 24V\" gibi. 1:1 çıktıda "
         "ve rehberin resimlerinde basılır; sürükleyerek yerleştirin, değiştirmek için çift "
         "tıklayın."
     ),
@@ -1759,7 +1759,7 @@ TURKISH: Mapping[str, str] = {
     "Solder side (bottom)": "Lehim yüzü (alt)",
     "A label on the solder side is written where the wiring is checked, and reads "
     "the right way round from underneath.": (
-        "Lehim yüzündeki etiket, kabloların kontrol edildiği yere yazılır ve alttan "
+        "Lehim yüzündeki etiket, bağlantıların kontrol edildiği yere yazılır ve alttan "
         "bakınca düz okunur."
     ),
     "Height:": "Yükseklik:",
@@ -1870,10 +1870,10 @@ TURKISH: Mapping[str, str] = {
     "Timer": "Zamanlayıcı",
     "Switches": "Anahtarlar",
     "Momentary push button, legs 6.5 x 4.5 mm": (
-        "Basılı tutulduğunda kapanan buton, bacaklar arası 6,5 x 4,5 mm"
+        "Basılı tutulduğunda kapanan buton, bacaklar arası 6,5 × 4,5 mm"
     ),
     "Momentary push button, legs 12.5 x 5.0 mm": (
-        "Basılı tutulduğunda kapanan buton, bacaklar arası 12,5 x 5,0 mm"
+        "Basılı tutulduğunda kapanan buton, bacaklar arası 12,5 × 5,0 mm"
     ),
     "The two legs on one side are the switched pair; the two straight across are "
     "one strip. A meter on continuity says which: across reads shut before the "
@@ -2017,10 +2017,10 @@ TURKISH: Mapping[str, str] = {
         "Hazır bir devre için: Dosya ▸ KiCad Netlist İçe Aktar ya da Dosya ▸ Örnek Aç."
     ),
     "{count} part(s) are in the design: {catalog} known from the catalog, {kicad} "
-    "matched by their KiCad footprint, {guess} guessed from their reference -- check "
+    "matched by their KiCad footprint, {guess} guessed from their reference — check "
     "those. Next: choose a board and place them.": (
         "{count} parça tasarımda: {catalog} tanesi katalogdan tanındı, {kicad} tanesi KiCad "
-        "footprint'inden eşleşti, {guess} tanesi referansından tahmin edildi -- onları "
+        "ayak izinden eşleşti, {guess} tanesi referansından tahmin edildi — onları "
         "kontrol edin. Sıradaki: bir kart seçip parçaları yerleştirin."
     ),
     # -- the welcome dialog --------------------------------------------------------
@@ -2162,8 +2162,8 @@ TURKISH: Mapping[str, str] = {
     "Autoroute breadboard: {count} jumper(s)": "Breadboard'u otomatik yönlendir: {count} jumper",
     "Fit {count} jumper(s)": "{count} jumper tak",
     "Remove cut {id}": "{id} kesimini kaldır",
-    "Set board to {cols}x{rows} {material}": "Kartı {cols}x{rows} {material} yap",
-    "Use a {cols}x{rows} {material} board": "{cols}x{rows} {material} kart kullan",
+    "Set board to {cols}x{rows} {material}": "Kartı {cols} × {rows} {material} yap",
+    "Use a {cols}x{rows} {material} board": "{cols} × {rows} {material} kart kullan",
     "Use a {points}-point breadboard": "{points} noktalı breadboard kullan",
     "Use a {points}-point solderable breadboard": "{points} noktalı lehimlenebilir breadboard kullan",
     "Use a {preset} board": "{preset} kart kullan",

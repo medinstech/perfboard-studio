@@ -4086,7 +4086,7 @@ class BoardScene(QGraphicsScene):
         if holder is not None:
             self.netPinRejected.emit(
                 t(
-                    "{pin} belongs to {net}. Disconnect it there first -- a pin can only "
+                    "{pin} belongs to {net}. Disconnect it there first — a pin can only "
                     "be on one net."
                 ).format(pin=f"{ref}.{pin}", net=holder.name)
             )
