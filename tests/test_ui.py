@@ -11504,6 +11504,37 @@ def test_autosave_writes_the_file_itself_and_keeps_the_last_real_save_as_bak(
     _close(window)
 
 
+def test_autosave_never_writes_over_a_file_somebody_else_changed(tmp_path) -> None:
+    """A window with unsaved edits does not reload when the file changes underneath it,
+    and autosave must not then settle the question by writing over the other version: an
+    agent's or an editor's change would vanish without anyone choosing it. The edit is
+    kept in the recovery record instead, and the window says why."""
+    path = tmp_path / "board.perf"
+    window = _window_on(_load_dense())
+    window.current_path = path
+    assert window._save_to(path)
+
+    edited = _new_bus(window.bus.document)
+    edited.dispatch(
+        "component.move",
+        MoveComponentPayload(id=edited.document.components[0].id, anchor=HoleCoord(9, 9)),
+    )
+    _write(path, edited.document)
+    theirs = path.read_text(encoding="utf-8")
+
+    window.bus.dispatch(
+        "component.move",
+        MoveComponentPayload(id=window.bus.document.components[1].id, anchor=HoleCoord(2, 2)),
+    )
+    window._on_autosave_tick()
+
+    assert path.read_text(encoding="utf-8") == theirs
+    assert window.is_modified
+    assert window._autosave.written
+    assert "changed on disk" in window.statusBar().currentMessage()
+    _close(window)
+
+
 def test_autosave_writes_nothing_of_the_users_when_it_is_switched_off(tmp_path) -> None:
     path = tmp_path / "board.perf"
     window = _window_on(_load_dense())
