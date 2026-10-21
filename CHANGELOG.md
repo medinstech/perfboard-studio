@@ -164,6 +164,13 @@ closed without a bump.
   everything else there, legality included, so a board whose parts already overlap no
   longer loses to any legal arrangement however many clips it shorts.
 
+- **The ATmega328 relay board and the Arduino I/O shield no longer hold their button down.**
+  Both examples stood their push button on `sw-tactile`, whose pins 1 and 2 are one node,
+  while their netlists -- KiCad's `SW_PUSH_6mm`, pins 1 and 2 the switched pair -- put
+  RESET (and D5) on pin 1 and GND on pin 2: a reset held down for ever. They use the button
+  as made, `sw-tactile-6x6`, as an imported netlist and the catalog already did. The shield
+  moved from a 2 x 8 cm board to a 3 x 7 cm one to take it.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added
