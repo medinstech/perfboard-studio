@@ -159,12 +159,14 @@ from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
     AXIAL_ARCHETYPES,
     BODY_STYLES,
+    FLAT_FACE_LOCAL,
     PIN_NAME_HEIGHT_MM,
     PIN_NAME_TAG_HEIGHT_MM,
     PIN_NAME_TAG_PAD_MM,
     BodyPlacement,
     BodyStyle,
     PinLabel,
+    flat_face_profile,
     lay_out_pin_names,
     leads_for,
     module_block_size,
@@ -2073,12 +2075,36 @@ def _body_path(
     keyed: tuple[float, float] | None,
 ) -> QPainterPath:
     """The body silhouette. A 'dcut' is a circle with the cathode side flattened, which is
-    exactly how the flat on a real LED tells you which lead is which."""
+    exactly how the flat on a real LED tells you which lead is which.
+
+    A 'flat-face' is a TO-92's case: the D ``bodies.flat_face_profile`` gives the 3D view
+    too, its flat on local +y however the part is turned -- the painter's transform turns
+    and mirrors it with the part. Not ``keyed``: the flat is moulded, so the solder-side
+    shadow, which is drawn with ``keyed=None``, shows it as well.
+    """
     rect = _body_rect(placement)
     path = QPainterPath()
     if placement.silhouette == "circle":
         path.addEllipse(rect)
         return path
+    if placement.silhouette == "flat-face":
+        profile = flat_face_profile(placement.size_x, placement.size_y)
+        centre = QPointF(placement.centre_x, placement.centre_y)
+        r = profile.radius
+        path.addEllipse(centre, r, r)
+        side = QRectF(centre.x() - r, centre.y() - r, 2 * r, 2 * r)
+        towards_x, towards_y = FLAT_FACE_LOCAL
+        if towards_y > 0:
+            side.setBottom(centre.y() + profile.flat)
+        elif towards_y < 0:
+            side.setTop(centre.y() - profile.flat)
+        elif towards_x > 0:
+            side.setRight(centre.x() + profile.flat)
+        else:
+            side.setLeft(centre.x() - profile.flat)
+        chord = QPainterPath()
+        chord.addRect(side)
+        return path.intersected(chord)
     if placement.silhouette == "rounded":
         radius = min(rect.width(), rect.height()) * 0.32
         path.addRoundedRect(rect, radius, radius)

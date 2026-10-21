@@ -96,12 +96,14 @@ from perfboard_studio.stripboard import cut_holes, segments
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
     BODY_STYLES,
+    FLAT_FACE_LOCAL,
     PIN_NAME_HEIGHT_MM,
     PIN_NAME_TAG_HEIGHT_MM,
     PIN_NAME_TAG_PAD_MM,
     BodyStyle,
     PinLabel,
     Surface,
+    flat_face_profile,
     lay_out_pin_names,
     module_block_size,
     pin_labels,
@@ -1894,6 +1896,9 @@ class _WorldBody:
     #: A standing axial body's bottom and top above the board (``footprints.
     #: upright_body_span``); above the top is its bent-over lead. ``None`` for everything else.
     standing: tuple[float, float] | None = None
+    #: Which way a ``flat-face`` case's flat faces, as a world direction --
+    #: ``bodies.FLAT_FACE_LOCAL`` turned and mirrored with the part. ``None`` otherwise.
+    flat: tuple[float, float] | None = None
 
     @property
     def along(self) -> float:
@@ -1955,6 +1960,10 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         face_x, face_y = VERTICAL_TERMINAL_SCREW_FACE
         turned_x, turned_y = transform_offset(face_x, face_y, comp.rotation, comp.mirrored)
         screws = (turned_x, -turned_y)
+    flat: tuple[float, float] | None = None
+    if placement.silhouette == "flat-face":
+        turned_x, turned_y = transform_offset(*FLAT_FACE_LOCAL, comp.rotation, comp.mirrored)
+        flat = (turned_x, -turned_y)
     return _WorldBody(
         x=x,
         y=y,
@@ -1977,6 +1986,7 @@ def _world_body(lookup: FootprintLookup, comp: Any, board: Board) -> _WorldBody 
         marking=_marking(fp, comp.value),
         screws=screws,
         standing=upright_body_span(fp) if fp.body.archetype == "axial-upright" else None,
+        flat=flat,
     )
 
 
@@ -2478,24 +2488,22 @@ def _to92_pieces(body: _WorldBody) -> list[_Piece]:
 
     It was a squashed cylinder, which is an ellipse: no flat, so nothing on the part said
     which way round it goes -- and getting a transistor round the wrong way is the classic
-    way to spend an evening. The flat faces the row of pins, as it does on the real part.
+    way to spend an evening.
+
+    The D is ``bodies.flat_face_profile``, the one the 2D view draws, and the flat faces
+    ``body.flat``: local +y, where the borrowed KiCad model has it. It used to be chosen from
+    the pin axis alone, which put it on the wrong side at 0 and 270 degrees -- a fallback
+    drawn backwards from the mesh it stands in for.
     """
-    radius = max(body.size_x, body.size_y) / 2
+    profile = flat_face_profile(body.size_x, body.size_y)
+    towards_x, towards_y = body.flat if body.flat is not None else FLAT_FACE_LOCAL
     return [
         _Piece(
-            # The chord sits where the case's own DEPTH puts it: a flat at half the depth
-            # shaves a sliver off a cylinder and reads as no flat at all, which is what
-            # the first attempt drew.
-            source=_d_prism(
-                radius,
-                max(min(body.size_x, body.size_y) - radius, radius * 0.25),
-                body.height,
-            ),
+            source=_d_prism(profile.radius, profile.flat, body.height),
             rgb=_rgb(body.style.fill),
             position=(body.x, body.y, body.height / 2 + _LIFT),
-            # The profile is built with its flat towards +y; a part whose pins run along y
-            # wants it towards +x instead.
-            orientation=(0.0, 0.0, 0.0) if body.axis == "x" else (0.0, 0.0, 90.0),
+            # The profile is built with its flat towards +y; this turns +y onto ``flat``.
+            orientation=(0.0, 0.0, math.degrees(math.atan2(-towards_x, towards_y))),
             material=MOULDED,
         ),
         *_lead_pieces(body),
@@ -3423,8 +3431,24 @@ def _offset_along(body: _WorldBody, offset: float, z: float) -> tuple[float, flo
     return (body.x, body.y + offset, z)
 
 
+def _mesh(path: str, mirrored: bool = False) -> vtk.vtkPolyData:
+    """One borrowed mesh -- see ``_read_mesh`` -- reflected for a part on the solder side.
+
+    Not cached itself: ``lru_cache`` keys ``_mesh(p)`` and ``_mesh(p, False)`` apart, and a
+    mesh that is two objects defeats every comparison by identity made of it. The two
+    caches behind it each hold one object per file.
+    """
+    return _reflected_mesh(path) if mirrored else _read_mesh(path)
+
+
 @lru_cache(maxsize=128)
-def _mesh(path: str) -> vtk.vtkPolyData:
+def _reflected_mesh(path: str) -> vtk.vtkPolyData:
+    """``_read_mesh`` reflected about x, once per file: see ``_reflected_x``."""
+    return _reflected_x(_read_mesh(path))
+
+
+@lru_cache(maxsize=128)
+def _read_mesh(path: str) -> vtk.vtkPolyData:
     """One borrowed mesh, read once and shared by every part that uses it.
 
     Cached because a board is mostly the same twenty parts over and over and the whole
@@ -3448,6 +3472,33 @@ def _mesh(path: str) -> vtk.vtkPolyData:
     data = vtk.vtkPolyData()
     data.DeepCopy(normals.GetOutput())
     return data
+
+
+def _reflected_x(data: vtk.vtkPolyData) -> vtk.vtkPolyData:
+    """A solid reflected about x, and still a solid seen from OUTSIDE.
+
+    A MIRRORED PART WAS DRAWN INSIDE OUT. It was an actor scaled by -1 in x, and a
+    reflection reverses the winding of every triangle, so each face the camera saw was a
+    back face: the renderer's two-sided lighting turned its normal round, and the part was
+    lit as if from inside -- a mirrored TO-92 measured 23 grey levels against 64 for the same
+    part unmirrored, under the same lamp. So the reflection is made here, to the points and
+    the normals, and the winding is put back; the actor is never given a scale that
+    reflects.
+    """
+    flip = vtk.vtkTransform()
+    flip.Scale(-1.0, 1.0, 1.0)
+    placed = vtk.vtkTransformPolyDataFilter()
+    placed.SetTransform(flip)
+    placed.SetInputData(data)
+    placed.Update()
+    rewound = vtk.vtkReverseSense()
+    rewound.SetInputData(placed.GetOutput())
+    rewound.ReverseCellsOn()
+    rewound.ReverseNormalsOff()
+    rewound.Update()
+    out = vtk.vtkPolyData()
+    out.DeepCopy(rewound.GetOutput())
+    return out
 
 
 #: Where a borrowed mesh's smooth shading stops and a crease begins. 40 degrees keeps a
@@ -3483,10 +3534,9 @@ def _model_pieces(
     x, y = _xy(board, comp.anchor)
     turn = (0.0, 0.0, -float(comp.rotation))
     # A mirrored part is reflected about the anchor's vertical axis, the same rule
-    # ``geometry.transform_offset`` states for its pins, so the mesh is scaled by -1 in x
-    # rather than being rebuilt. VTK scales before it orients, which is also the order a
-    # part is physically flipped and then turned.
-    scale = (-1.0, 1.0, 1.0) if comp.mirrored else (1.0, 1.0, 1.0)
+    # ``geometry.transform_offset`` states for its pins: the mesh is reflected in x in its
+    # own frame, before the actor turns it -- the order a part is physically flipped and
+    # then turned -- by ``_mesh`` rather than by the actor (see ``_reflected_x``).
     pieces = []
     for piece in model.pieces:
         if piece.is_body:
@@ -3497,11 +3547,10 @@ def _model_pieces(
             colour = piece.color
         pieces.append(
             _Piece(
-                source=_mesh(str(piece.path)),
+                source=_mesh(str(piece.path), comp.mirrored),
                 rgb=_rgb(colour),
                 position=(x, y, 0.0),
                 orientation=turn,
-                scale=scale,
                 material=MODEL_MATERIALS.get(piece.material, MOULDED),
             )
         )
@@ -3572,17 +3621,16 @@ def _terminal_block_pieces(
     """
     head, way, tail = blocks
     turn = (0.0, 0.0, -float(comp.rotation))
-    scale = (-1.0, 1.0, 1.0) if comp.mirrored else (1.0, 1.0, 1.0)
     placed = [(head, body.pins[0])]
     placed += [(way, pin) for pin in body.pins[1:-1]]
     placed.append((tail, body.pins[-1]))
     return [
         _Piece(
-            source=_mesh(str(piece.path)),
+            # Reflected by the mesh, not the actor, as ``_model_pieces`` does.
+            source=_mesh(str(piece.path), comp.mirrored),
             rgb=_rgb(body.style.fill if piece.is_body else piece.color),
             position=(pin_x, pin_y, 0.0),
             orientation=turn,
-            scale=scale,
             material=MODEL_MATERIALS.get(piece.material, MOULDED),
         )
         for model, (pin_x, pin_y) in placed

@@ -66,8 +66,9 @@ FLYING_LEAD_HALF_WIDTH_MM = 0.55
 # Appearance
 # ---------------------------------------------------------------------------
 
-#: 2D silhouette shape. The 3D view builds a solid per archetype and does not use this.
-type Silhouette = Literal["rect", "circle", "dcut", "rounded"]
+#: 2D silhouette shape. The 3D view builds a solid per archetype and does not use this --
+#: except ``flat-face``, whose geometry both views read from :func:`flat_face_profile`.
+type Silhouette = Literal["rect", "circle", "dcut", "rounded", "flat-face"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,7 +272,9 @@ _SILHOUETTES: dict[BodyArchetype, Silhouette] = {
     "disc-ceramic": "rounded",
     "box-film": "rect",
     "dip": "rect",
-    "to92": "dcut",
+    # Not the LED's ``dcut``: that flattens the KEYED end, and a TO-92 is keyed by nothing
+    # but its moulding -- see ``flat_face_profile``.
+    "to92": "flat-face",
     "to220": "rect",
     "led-round": "dcut",
     "pin-header": "rect",
@@ -293,6 +296,39 @@ _SILHOUETTES: dict[BodyArchetype, Silhouette] = {
 #: Nothing is drawn thinner than this. The engine's floor for a body's width, re-exported
 #: because the height below falls back to it too.
 _MIN_MM = MIN_BODY_MM
+
+#: Which side of a ``flat-face`` case is flat, in the footprint's own frame (rows grow
+#: downward): local +y. That is where KiCad's TO-92 model has it -- the case reaches 2.41 mm
+#: from the pin row one way and 1.33 mm the other, measured off the mesh -- and where "legs
+#: 1-2-3 left to right, flat face towards you" puts it for somebody reading the legs.
+FLAT_FACE_LOCAL: tuple[float, float] = (0.0, 1.0)
+
+
+@dataclass(frozen=True, slots=True)
+class FlatFaceProfile:
+    """A moulded case seen from above: a circle with one side cut flat.
+
+    The flat is the only thing on a TO-92 that says which way round it goes, and it is part
+    of the MOULDING rather than a mark printed on top, so it is drawn whether or not the
+    part is keyed and on both faces of the board.
+    """
+
+    #: The round side's radius, from the body's centre.
+    radius: float
+    #: From the body's centre to the flat, towards :data:`FLAT_FACE_LOCAL`.
+    flat: float
+
+
+def flat_face_profile(size_x: float, size_y: float) -> FlatFaceProfile:
+    """The D both views draw a ``flat-face`` case as, from its body's two extents.
+
+    The circle is as wide as the case's longer extent and the chord sits where its DEPTH
+    puts it: a flat at half the depth shaves a sliver off a cylinder and reads as no flat at
+    all, which is what the 3D view first drew. Either extent may be given first -- a quarter
+    turn swaps them and changes nothing here.
+    """
+    radius = max(size_x, size_y) / 2
+    return FlatFaceProfile(radius=radius, flat=max(min(size_x, size_y) - radius, radius * 0.25))
 
 
 def placement_for(footprint: Footprint, pitch: float) -> BodyPlacement:

@@ -907,7 +907,10 @@ Three things about the mapping:
   the row. Both follow the footprint, and this project's convention is written down as "the
   anchor is pin 1, at grid offset (0, 0)". A quarter turn of a component is minus a quarter
   turn about world z: the footprint frame counts rows downward and the world counts them
-  up-negative.
+  up-negative. A MIRRORED part's mesh is reflected by `view3d._mesh(path, mirrored=True)`,
+  winding put back, and never by a negative actor scale: a reflecting actor shows the camera
+  back faces, and two-sided lighting lit every mirrored package from inside
+  (`test_no_borrowed_package_is_drawn_inside_out_when_it_is_mirrored`).
 - **A header is the one package that is a repetition.** KiCad ships a model per length,
   forty per row count; one pin mesh glyphed at the holes is the same picture for a fortieth
   of the library, and it is what lets a header of a length nobody shipped a model for be

@@ -91,6 +91,16 @@ closed without a bump.
   window's rule now: a top jumper runs over the component side, and so does every wire on
   a solderless breadboard. (thanks @vindavs)
 
+- **A TO-92 shows which way round it goes in 2D.** It was drawn as an ellipse at every turn,
+  so the view a transistor is placed in did not say which way to fit it. It is the D the 3D
+  view draws now -- one shape from one helper -- with the flat where KiCad's model has it,
+  on the solder-side shadow too, because the flat is moulded rather than printed. The 3D
+  view's own D, drawn when the meshes are not installed, had its flat on the wrong side at
+  0 and 270 degrees; it follows the part's turn and mirror now. And a mirrored part's
+  borrowed package is no longer drawn inside out: reflecting it by the actor reversed every
+  face, and two-sided lighting then lit it from within -- a mirrored TO-92 came out at a
+  third of the brightness of the same part unmirrored. (thanks @vindavs)
+
 - **Autosave no longer writes over a file somebody else changed.** A window with unsaved
   edits rightly does not reload when its file changes on disk, but autosave then wrote the
   window's board into the file anyway, so a change made by a script, an agent or another

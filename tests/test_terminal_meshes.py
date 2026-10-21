@@ -118,9 +118,11 @@ def test_every_slice_has_its_wire_entry_on_the_minus_y_face(stem: str) -> None:
     assert recessed(lambda y: back - y) == 0
 
 
-def _slice_ids() -> set[int]:
+def _slice_ids(mirrored: bool = False) -> set[int]:
     """The three slices' cached meshes, by identity -- a VTK object is not hashable."""
-    return {id(view3d._mesh(str(piece.path))) for model in _slices() for piece in model.pieces}
+    return {
+        id(view3d._mesh(str(piece.path), mirrored)) for model in _slices() for piece in model.pieces
+    }
 
 
 def _pieces(footprint_id: str, rotation: int = 0, mirrored: bool = False):
@@ -172,20 +174,20 @@ def test_a_terminal_with_no_model_of_its_own_is_built_from_the_slices(ways: int)
 def test_a_turned_or_mirrored_block_puts_its_head_on_pin_one(rotation: int, mirrored: bool) -> None:
     """The head carries the end plate, so it is the one slice whose place shows: it has to be
     on pin 1 whichever way the part was turned, and every slice takes the part's own turn and
-    mirror -- as a whole package does in ``_model_pieces``."""
+    mirror -- as a whole package does in ``_model_pieces``. The mirror is in the MESH, never a
+    reflecting scale on the piece: see ``view3d._reflected_x``."""
     head, _way, tail = _slices()
     body, pieces = _pieces("screw-terminal-5", rotation, mirrored)
-    head_mesh = view3d._mesh(str(head.pieces[0].path))
-    tail_mesh = view3d._mesh(str(tail.pieces[0].path))
+    head_mesh = view3d._mesh(str(head.pieces[0].path), mirrored)
+    tail_mesh = view3d._mesh(str(tail.pieces[0].path), mirrored)
     head_piece = next(p for p in pieces if p.source is head_mesh)
     tail_piece = next(p for p in pieces if p.source is tail_mesh)
     assert head_piece.position[:2] == pytest.approx(body.pins[0])
     assert tail_piece.position[:2] == pytest.approx(body.pins[-1])
-    slice_ids = _slice_ids()
+    slice_ids = _slice_ids(mirrored)
     meshed = [p for p in pieces if id(p.source) in slice_ids]
     assert meshed and all(p.orientation == (0.0, 0.0, -float(rotation)) for p in meshed)
-    expected_scale = (-1.0, 1.0, 1.0) if mirrored else (1.0, 1.0, 1.0)
-    assert head_piece.scale == expected_scale
+    assert all(p.scale == (1.0, 1.0, 1.0) for p in meshed)
 
 
 def test_the_two_and_three_way_blocks_keep_their_own_models() -> None:
