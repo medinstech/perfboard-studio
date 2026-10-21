@@ -1496,6 +1496,21 @@ class BoardFeaturesDialog(QDialog):
         for button in (self.act_remove, add_corners, add_connector, apply_height):
             button.setAutoDefault(False)
 
+        # What this board cannot take is not offered, rather than answered in English with
+        # a refusal: no bore through a solderless breadboard, no fingers on either kind.
+        board = self.bus.document.board
+        if is_breadboard(board):
+            add_corners.setEnabled(False)
+            add_corners.setToolTip(t("Nothing is drilled into a solderless breadboard."))
+        if has_breadboard_pattern(board):
+            add_connector.setEnabled(False)
+            add_connector.setToolTip(t("A breadboard's edges are its rails, not fingers."))
+        # As many fingers as the chosen edge has holes, so the default of eight on a
+        # board five holes wide is not a refusal waiting to happen.
+        self.edge.currentIndexChanged.connect(self._fit_fingers)
+        self.finger_start.valueChanged.connect(self._fit_fingers)
+        self._fit_fingers()
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.tree)
         layout.addWidget(self.act_remove)
@@ -1541,6 +1556,12 @@ class BoardFeaturesDialog(QDialog):
         # Read back rather than left as typed, so the box shows what the document says
         # after an undo -- the dialog stays open while the board changes underneath it.
         self.height_limit.setValue(doc.height_limit_mm if doc.height_limit_mm else 0.0)
+
+    def _fit_fingers(self, *_args: object) -> None:
+        board = self.bus.document.board
+        along = board.cols if self.edge.currentData() in ("top", "bottom") else board.rows
+        self.finger_start.setMaximum(max(0, along - 1))
+        self.finger_count.setMaximum(max(1, along - self.finger_start.value()))
 
     def _refresh_remove_button(self) -> None:
         # Enabled by what is CHOSEN, not by what exists: with nothing picked the button
@@ -3922,6 +3943,7 @@ class MainWindow(QMainWindow):
             erc_errors=sum(1 for f in self._last_erc if f.severity == "error"),
             erc_warnings=sum(1 for f in self._last_erc if f.severity == "warning"),
             lvs_shorts=lvs.summary.shorts if lvs is not None else 0,
+            shorts_wait_for_wiring=is_stripboard(board),
         )
 
     def _refresh_workflow(self) -> None:
@@ -5800,7 +5822,9 @@ class MainWindow(QMainWindow):
         # the way applications are run. The catalogue has existed the whole time.
         language_menu = view_menu.addMenu(t("&Language"))
         self.act_language: dict[str, QAction] = {}
-        for code, label in (("en", t("English")), ("tr", t("Turkish"))):
+        # Each language by its OWN name, not translated: somebody who cannot read the
+        # language the window is in has to recognise the one they can.
+        for code, label in (("en", "English"), ("tr", "Türkçe")):
             action = language_menu.addAction(label)
             action.setCheckable(True)
             action.setChecked(code == current_language())
@@ -8142,6 +8166,13 @@ class MainWindow(QMainWindow):
                 self.guide_tree.setCurrentItem(leaf)
                 self.guide_tree.scrollToItem(leaf)
                 return
+        if not self._guide_leaves():
+            # Nothing on the board yet: a guide with no steps has none done either.
+            self.statusBar().showMessage(
+                t("The guide has no steps yet: it is written from the parts on the board."),
+                6000,
+            )
+            return
         self.statusBar().showMessage(t("Every step is done."), 6000)
 
     def on_clear_progress(self) -> None:
@@ -9551,7 +9582,17 @@ class MainWindow(QMainWindow):
         is still printed with the result, so any answer can be had again.
         """
         if not self.bus.document.components:
-            self.statusBar().showMessage(t("Nothing to place: the board is empty."), 6000)
+            # Auto-place rearranges what is ON the board; a design waiting to go on it is
+            # Place on the Board's, and "the board is empty" sent nobody there.
+            self.statusBar().showMessage(
+                t(
+                    "{count} part(s) in the design are not on the board yet: Place on the "
+                    "Board puts them there, arranged."
+                ).format(count=len(self.bus.document.parts))
+                if self.bus.document.parts
+                else t("Nothing to place: the board is empty."),
+                8000,
+            )
             return
 
         document = self.bus.document
@@ -9637,7 +9678,7 @@ class MainWindow(QMainWindow):
                 )
             )
         detail.append("")
-        detail.extend(summarize_placement(plan, limit=10))
+        detail.extend(summarize_placement(plan, limit=10, board=self.bus.document.board))
 
         box = QMessageBox(self)
         box.setWindowTitle(t("Apply this placement?"))

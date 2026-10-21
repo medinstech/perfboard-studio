@@ -6305,6 +6305,53 @@ def test_a_filter_finds_a_turkish_word_whatever_its_i() -> None:
     assert _folded("insulated") in _folded("INSULATED wire")
 
 
+def test_each_language_is_offered_by_its_own_name() -> None:
+    """The menu said "İngilizce" in Turkish: somebody who cannot read the language the
+    window is in has to find the one they can by its own name."""
+    window = _window_on(_load_dense())
+    try:
+        assert window.act_language["en"].text() == "English"
+        assert window.act_language["tr"].text() == "Türkçe"
+    finally:
+        _close(window)
+
+
+def test_auto_place_on_a_design_with_nothing_placed_points_at_place_on_the_board() -> None:
+    window = _blank_window()
+    try:
+        _add(window, "R1", "r-axial-3")
+        window.on_autoplace()
+        message = window.statusBar().currentMessage()
+        assert "Place on the Board" in message and "empty" not in message
+    finally:
+        _close(window)
+
+
+def test_next_step_on_a_guide_with_no_steps_does_not_say_every_step_is_done() -> None:
+    window = _blank_window()
+    try:
+        window.on_next_step_to_do()
+        assert "Every step is done" not in window.statusBar().currentMessage()
+    finally:
+        _close(window)
+
+
+def test_board_features_offers_only_what_the_board_can_take() -> None:
+    from perfboard_studio.breadboard import breadboard
+    from perfboard_studio.ui.main import BoardFeaturesDialog
+
+    bus = _new_bus(dataclasses.replace(_blank_document(), board=breadboard("400")))
+    dialog = BoardFeaturesDialog(bus)
+    buttons = {b.text(): b for b in dialog.findChildren(type(dialog.act_remove))}
+    assert not buttons["Add Corner Holes"].isEnabled()
+    assert not buttons["Add Edge Connector"].isEnabled()
+
+    narrow = dataclasses.replace(_blank_document().board, cols=5)
+    dialog = BoardFeaturesDialog(_new_bus(dataclasses.replace(_blank_document(), board=narrow)))
+    dialog.edge.setCurrentIndex(dialog.edge.findData("bottom"))
+    assert dialog.finger_count.value() <= 5
+
+
 def test_the_menus_survive_a_garbage_collection() -> None:
     """QMenuBar.addMenu hands Python a QMenu it believes it owns, so a menu held only by a
     local in the builder can be destroyed the moment that method returns -- leaving a menu

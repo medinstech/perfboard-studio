@@ -338,6 +338,8 @@ TURKISH: Mapping[str, str] = {
     "Shortcut": "Kısayol",
     "On the board": "Kart üzerinde",
     "⌀{drill} mm, {head} mm head": "⌀{drill} mm, {head} mm vida başı",
+    "Nothing is drilled into a solderless breadboard.": "Lehimsiz bir breadboard'a delik açılmaz.",
+    "A breadboard's edges are its rails, not fingers.": "Breadboard'un kenarlarında parmak değil, raylar var.",
     "Middle-drag": "Orta tuşla sürükle",
     "Pan the board": "Kartı kaydır",
     "Wheel": "Tekerlek",
@@ -373,6 +375,10 @@ TURKISH: Mapping[str, str] = {
     "Adding pins to": "Pin ekleniyor:",
     "Enter or right-click finishes, Esc cancels": "Enter veya sağ tık bitirir, Esc iptal eder",
     "no pins yet": "henüz pin yok",
+    "The guide has no steps yet: it is written from the parts on the board.":
+        "Rehberde henüz adım yok: rehber karttaki parçalardan yazılır.",
+    "{count} part(s) in the design are not on the board yet: Place on the Board puts them there, arranged.":
+        "Tasarımdaki {count} parça henüz kartta değil: Kart Üzerine Yerleştir onları dizerek oraya koyar.",
     "Copied {parts} part(s), {conductors} conductor(s)": "{parts} parça, {conductors} iletken kopyalandı",
     "{count} lead bend(s) left behind: a bent leg belongs to a part that was not in the selection":
         "{count} bacak bükme geride kaldı: bükülen bacak, seçimde olmayan bir parçanın",
@@ -1250,8 +1256,6 @@ TURKISH: Mapping[str, str] = {
     "LED diameter (mm)": "LED çapı (mm)",
     # -- the language of the interface itself ----------------------------------
     "&Language": "&Dil",
-    "English": "İngilizce",
-    "Turkish": "Türkçe",
     "Language changed": "Dil değişti",
     "The interface is built in one language when the window opens, so the new "
     "one appears the next time Perfboard Studio starts.": (

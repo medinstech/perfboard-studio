@@ -127,6 +127,19 @@ def test_a_net_left_open_by_wiring_not_yet_done_is_the_wiring_steps_news() -> No
     assert next_step(workflow_steps(shorted)) == "check"
 
 
+def test_a_stripboards_shorts_wait_for_its_cuts() -> None:
+    """Its strips join every net along them until the wiring cuts them, so before then a
+    short is what Autoroute is for -- not a red Verify and a Next that goes to findings."""
+    uncut = dataclasses.replace(
+        EMPTY, parts_on_board=8, nets=7, unrouted=6, lvs_problems=11, lvs_shorts=5,
+        shorts_wait_for_wiring=True,
+    )
+    assert statuses(uncut)["check"] == "todo"
+    assert next_step(workflow_steps(uncut)) == "route"
+    cut = dataclasses.replace(uncut, unrouted=0, lvs_problems=1, lvs_shorts=1)
+    assert statuses(cut)["check"] == "problem"
+
+
 def test_nothing_on_the_board_is_nothing_to_check() -> None:
     """LVS reports every net as unplaced before anything is placed. That is the placement
     step's news, and reporting it again as a check failure would put the warning colour on

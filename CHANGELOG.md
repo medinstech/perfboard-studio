@@ -86,6 +86,15 @@ closed without a bump.
   clear, every pin has a hole of its own that can take one, and no pin lands in somebody's
   copper.
 
+- **Smaller things the window said wrong.** Auto-place on a design with nothing placed
+  said "the board is empty" instead of pointing at Place on the Board; Next Step to Do on a
+  guide with no steps said every step was done; on a stripboard the shorts its strips make
+  before they are cut turned Verify red ahead of the Autoroute that cuts them; the
+  placement summary named a breadboard's holes by the grid; Board Features offered corner
+  holes and fingers a breadboard refuses, and eight fingers on a board five holes wide.
+  The Language menu names each language in itself -- English, Türkçe -- so somebody who
+  cannot read the window's language can still find their own.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

@@ -77,6 +77,9 @@ class WorkflowFacts:
     #: Of ``lvs_problems``, the shorts. A short is wrong however much is left to route; an
     #: open is only the wiring not being finished until the wiring is.
     lvs_shorts: int = 0
+    #: A stripboard: its strips join every net along them until the wiring cuts them, so a
+    #: short there is also the wiring's news until the wiring is done.
+    shorts_wait_for_wiring: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,7 +164,10 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     # step's news: counted as a fault it turned Check red the moment a placement landed and
     # sent Next to the findings instead of to Autoroute. An open once nothing is left to
     # route is a board whose copper does not join what the ratsnest says it does.
-    lvs_errors = facts.lvs_problems if route_done else facts.lvs_shorts
+    if route_done:
+        lvs_errors = facts.lvs_problems
+    else:
+        lvs_errors = 0 if facts.shorts_wait_for_wiring else facts.lvs_shorts
     check_bad = facts.parts_on_board > 0 and (facts.drc_errors > 0 or lvs_errors > 0)
     check_done = route_done and not check_bad
 
