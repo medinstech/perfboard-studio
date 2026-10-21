@@ -61,33 +61,52 @@ def draw_label(
     one way to keep a label readable over whatever it lands on: pads, a pale body, the
     printed legend. A drop shadow a pixel wide does it over flat substrate and nowhere else.
     """
-    transform = painter.transform()
-    device = transform.map(anchor)
-    if offset is not None:
-        device += offset
-
     font = label_font(pixel_size, bold)
-    metrics = QFontMetricsF(font)
-    width = metrics.horizontalAdvance(text)
-    height = metrics.height()
-
-    # A box around the anchor big enough for the text, then aligned inside it. Simpler and
-    # more predictable than juggling baselines per alignment case.
-    box = QRectF(device.x() - width, device.y() - height, width * 2, height * 2)
+    box = _label_box(painter.transform().map(anchor), text, font, offset)
 
     painter.save()
     painter.resetTransform()
     painter.setFont(font)
     if background is not None:
         pen = painter.pen()
-        used = metrics.boundingRect(box, int(alignment), text)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(background)
-        radius = height * 0.3
-        painter.drawRoundedRect(used.adjusted(-4, -1, 4, 1), radius, radius)
+        radius = QFontMetricsF(font).height() * 0.3
+        painter.drawRoundedRect(_plate(box, text, font, alignment), radius, radius)
         painter.setPen(pen)
     painter.drawText(box, int(alignment), text)
     painter.restore()
+
+
+def label_plate_rect(
+    device_anchor: QPointF,
+    text: str,
+    pixel_size: int,
+    alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
+    bold: bool = False,
+    offset: QPointF | None = None,
+) -> QRectF:
+    """The plate :func:`draw_label` puts behind ``text``, in DEVICE pixels, for an anchor
+    already mapped to the device. What a click on a label has to be measured against: the
+    same arithmetic as the drawing, so the two cannot disagree about where a label is."""
+    font = label_font(pixel_size, bold)
+    return _plate(_label_box(device_anchor, text, font, offset), text, font, alignment)
+
+
+def _label_box(device: QPointF, text: str, font: QFont, offset: QPointF | None) -> QRectF:
+    """A box around the anchor big enough for the text, which the text is then aligned
+    inside. Simpler and more predictable than juggling baselines per alignment case."""
+    if offset is not None:
+        device = device + offset
+    metrics = QFontMetricsF(font)
+    width = metrics.horizontalAdvance(text)
+    height = metrics.height()
+    return QRectF(device.x() - width, device.y() - height, width * 2, height * 2)
+
+
+def _plate(box: QRectF, text: str, font: QFont, alignment: Qt.AlignmentFlag) -> QRectF:
+    """The text's own rect inside ``box``, a few pixels bigger: the label's plate."""
+    return QFontMetricsF(font).boundingRect(box, int(alignment), text).adjusted(-4, -1, 4, 1)
 
 
 #: Physical labels are rasterised from a font this tall and then scaled down to the

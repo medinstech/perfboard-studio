@@ -88,7 +88,8 @@ closed without a bump.
   59 runs), and now at most two per board cannot, each lying under another wire along its
   whole length. A right-click on such copper offers the copper and a double-click there no
   longer opens the part underneath; from the solder side the lead ends are still painted
-  over the joints that land on them. (thanks @vindavs)
+  over the joints that land on them. A part's printed reference still picks it, measured
+  at the zoom it is printed at. (thanks @vindavs)
 
 - **A wire an agent lays on a solderless breadboard goes on top.** `add_wire` left every
   wire on the default bottom side, so on a solderless breadboard each one was a

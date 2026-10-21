@@ -5890,6 +5890,52 @@ def test_each_of_three_parts_two_rows_apart_is_picked_by_a_click_on_its_own_body
         view.close()
 
 
+def test_a_click_on_a_printed_reference_picks_its_part_at_any_zoom_it_is_printed_at() -> None:
+    """The hit area lost the strip that once stood for the reference, and with it the most
+    obvious thing to click on a crowded board: the name. The plate is measured as the layer
+    prints it, so it follows the zoom -- and where no name is printed there is none to hit."""
+    from perfboard_studio.ui.view2d import (
+        REF_LABEL_ALIGN,
+        REF_LABEL_OFFSET,
+        REF_LABEL_PX,
+        label_plate_rect,
+    )
+
+    doc = _board_with([_resistor("R1", HoleCoord(5, 8))])
+    scene = BoardScene(doc, footprint_lookup())
+    view = _shown_view(scene)
+    item = scene.component_items["c-R1"]
+    try:
+        for zoom in (4.0, 9.0, 25.0):
+            view.resetTransform()
+            view.scale(zoom, zoom)
+            view.centerOn(item.reference_anchor())
+            QApplication.processEvents()
+            transform = view.transform()
+            plate = label_plate_rect(
+                transform.map(item.reference_anchor()), "R1", REF_LABEL_PX,
+                REF_LABEL_ALIGN, bold=True, offset=REF_LABEL_OFFSET,
+            )
+            on_label = transform.inverted()[0].map(plate.center())
+            above = transform.inverted()[0].map(QPointF(plate.center().x(), plate.top() - 4))
+            assert item.shape().contains(item.mapFromScene(on_label))
+            assert not item._hit_shape.contains(item.mapFromScene(on_label)), "not the body"
+
+            scene.clearSelection()
+            _click(view, on_label)
+            assert scene.selected_component_ids() == ("c-R1",), zoom
+            scene.clearSelection()
+            _click(view, above)
+            assert scene.selected_component_ids() == (), zoom
+
+        view.resetTransform()
+        view.scale(2.0, 2.0)  # Too far out for a name to be printed.
+        QApplication.processEvents()
+        assert item.shape().boundingRect() == item._hit_shape.boundingRect()
+    finally:
+        view.close()
+
+
 def test_copper_on_the_face_being_looked_at_is_drawn_over_the_parts() -> None:
     """From the solder side the parts are only shadows of what stands on the other face, and
     the copper is what is being worked on. It sat under the parts from both faces."""

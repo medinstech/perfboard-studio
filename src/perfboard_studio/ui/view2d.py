@@ -197,6 +197,7 @@ from .scenetext import (
     draw_label,
     draw_physical_label,
     label_font,
+    label_plate_rect,
     physical_label_width_mm,
     pin_name_width_mm,
 )
@@ -361,6 +362,13 @@ RULER_MARGIN_MM = 6.0
 #: what keeps them clear of the size below which some font engines draw nothing.
 RULER_LABEL_PX = 11
 REF_LABEL_PX = 12
+#: How a part's reference sits on its anchor (``ComponentItem.reference_anchor``): centred,
+#: and ABOVE the point in draw_label's terms, two device pixels clear. One pair for the
+#: layer that prints the references and for the part's hit area, which takes the label in.
+REF_LABEL_ALIGN = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
+REF_LABEL_OFFSET = QPointF(0, -2)
+#: Below this many pixels per millimetre the references are not printed at all.
+REF_LABEL_MIN_SCALE = 3.0
 
 
 # --------------------------------------------------------------------- coordinates
@@ -2892,6 +2900,9 @@ class ComponentItem(QGraphicsItem):
         #: What a click on this part is (:meth:`shape`), worked out on first ask: the item is
         #: rebuilt with the document and with the side, so it never goes stale.
         self._hit_shape: QPainterPath | None = None
+        #: The same with the printed reference taken in, for the zoom it was worked out at:
+        #: the label holds a pixel size, so its share of the scene changes with every zoom.
+        self._hit_with_label: tuple[float, QPainterPath] | None = None
         self._sync_position()
 
     def _sync_position(self) -> None:
@@ -3132,6 +3143,12 @@ class ComponentItem(QGraphicsItem):
 
         United rather than added: overlapping subpaths under the default odd-even fill
         would make a pad inside the body a hole in it.
+
+        And the printed reference, where it is printed: a name is the obvious thing to click
+        on a crowded board. Its plate is measured as ``ReferenceLayerItem`` draws it, at the
+        view's zoom -- the label holds a pixel size, so it covers less board the further in
+        the view is -- and kept inside the bounding rect, which is what the scene's index
+        finds an item by.
         """
         if self._hit_shape is None:
             path = QPainterPath()
@@ -3143,7 +3160,30 @@ class ComponentItem(QGraphicsItem):
                 pad.addEllipse(QPointF(dx * self.board.pitch, dy * self.board.pitch), radius, radius)
                 path = path.united(pad)
             self._hit_shape = path
-        return self._hit_shape
+        transform = self._view_transform()
+        if transform is None or not self.show_reference or transform.m11() < REF_LABEL_MIN_SCALE:
+            return self._hit_shape
+        scale = transform.m11()
+        if self._hit_with_label is None or self._hit_with_label[0] != scale:
+            plate = label_plate_rect(
+                transform.map(self.reference_anchor()), self.comp.ref, REF_LABEL_PX,
+                REF_LABEL_ALIGN, bold=True, offset=REF_LABEL_OFFSET,
+            )
+            label = QPainterPath()
+            label.addRect(
+                self.mapRectFromScene(transform.inverted()[0].mapRect(plate)).intersected(
+                    self.boundingRect()
+                )
+            )
+            self._hit_with_label = (scale, self._hit_shape.united(label))
+        return self._hit_with_label[1]
+
+    def _view_transform(self) -> QTransform | None:
+        """The board view's scene-to-pixel transform, or None in a scene nobody is
+        looking at (a board picture, a test that never shows one)."""
+        scene = self.scene()
+        views = scene.views() if scene is not None else []
+        return views[0].transform() if views else None
 
     def _apply_local_transform(self, painter: QPainter) -> None:
         """Enter the footprint's own coordinate frame, so a body can be drawn as a shape.
@@ -3319,18 +3359,18 @@ class ReferenceLayerItem(QGraphicsItem):
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         scale = painter.transform().m11() or 1.0
-        if scale < 3.0:
+        if scale < REF_LABEL_MIN_SCALE:
             return
-        align = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
         for item in self._board_scene.component_items.values():
             if not item.show_reference or not item.isVisible():
                 continue
             # AlignTop is ABOVE the point in draw_label's terms (see ``label_alignment``
             # in viewsch): over the body, never on it, where it would hide a resistor's bands.
+            # The part's hit area takes the same plate in (ComponentItem.shape).
             painter.setPen(QPen(SELECTED if item.isSelected() else REF_LABEL))
             draw_label(
-                painter, item.reference_anchor(), item.comp.ref, REF_LABEL_PX, align,
-                bold=True, offset=QPointF(0, -2), background=REF_PLATE,
+                painter, item.reference_anchor(), item.comp.ref, REF_LABEL_PX, REF_LABEL_ALIGN,
+                bold=True, offset=REF_LABEL_OFFSET, background=REF_PLATE,
             )
 
 
