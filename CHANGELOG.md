@@ -130,7 +130,9 @@ closed without a bump.
   uses.
 
 - **A solderless breadboard's 1:1 PDF is its top alone.** Under it is the adhesive backing,
-  and the export wrote a second sheet for a solder side it does not have.
+  and the export wrote a second sheet for a solder side it does not have. The `--headless`
+  run and an agent's `export_pdf` write the top alone too; a solderable breadboard keeps
+  both sheets, because it is soldered.
 
 - **The planners explain themselves in Turkish.** What the stripboard and breadboard
   planners could not do (two nets in one clip or strip, a signal in a rail, a clip with no

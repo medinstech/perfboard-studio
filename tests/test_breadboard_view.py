@@ -10,7 +10,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from perfboard_studio.breadboard import SIZES, breadboard, missing_holes
+from perfboard_studio.breadboard import SIZES, breadboard, missing_holes, pattern_board
 from perfboard_studio.commands import DEFAULT_BOARD
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.model import DocumentMeta, PerfDocument
@@ -252,6 +252,27 @@ def test_a_breadboards_1_to_1_pdf_is_its_top_alone(window, tmp_path, monkeypatch
     window.on_export_pdf()
     assert [p.name for p in opened[0]] == ["bb_component_side.pdf"]
     assert sorted(p.name for p in tmp_path.glob("*.pdf")) == ["bb_component_side.pdf"]
+
+
+@pytest.mark.parametrize(
+    ("board", "sheets"),
+    [
+        (breadboard("830"), ["board_component_side.pdf"]),
+        (pattern_board("solderable-breadboard", 63, 20), ["board_component_side.pdf", "board_solder_side.pdf"]),
+    ],
+    ids=["solderless", "solderable"],
+)
+def test_an_agents_1_to_1_pdf_has_a_solder_side_only_where_there_is_one(board, sheets, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """MCP's export_pdf decides as the window does: a solderless breadboard is its top
+    alone, and a solderable one, which IS soldered, keeps both sheets."""
+    _app()
+    from perfboard_studio.mcp.session import BoardSession
+
+    doc = PerfDocument(meta=DocumentMeta(name="t", created="", modified=""), board=board)
+    result = BoardSession(document=doc).export_pdf(str(tmp_path))
+    assert result["ok"], result
+    assert [pathlib.Path(p).name for p in result["written"]] == sheets
+    assert sorted(p.name for p in tmp_path.glob("*.pdf")) == sheets
 
 
 def test_no_stock_perfboard_is_offered_for_a_breadboard() -> None:

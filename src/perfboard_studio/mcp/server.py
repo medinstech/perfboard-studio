@@ -765,7 +765,9 @@ def generate_guide(directory: str | None = None, language: str = "en") -> dict[s
 @mcp.tool()
 def export_pdf(directory: str | None = None) -> dict[str, Any]:
     """Write the 1:1 printable sheets — component side, and the mirrored solder side —
-    which are meant to be printed at exactly 100% and held against the real board.
+    which are meant to be printed at exactly 100% and held against the real board. A
+    solderless breadboard has no solder side, so it gets the component side alone;
+    `written` lists what was actually written.
 
     `directory` is required: nothing here writes to disk unless you name a path, so
     without one this is refused rather than writing two files wherever the server

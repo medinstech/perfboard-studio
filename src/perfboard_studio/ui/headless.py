@@ -35,6 +35,7 @@ from PySide6.QtWidgets import QApplication
 from perfboard_studio import persist
 from perfboard_studio.autoroute import describe as describe_plan
 from perfboard_studio.autoroute import describe_best, plan_autoroute, plan_best_autoroute
+from perfboard_studio.breadboard import is_breadboard
 from perfboard_studio.breadroute import plan_joined_board
 from perfboard_studio.drc import run_drc
 from perfboard_studio.erc import run_erc
@@ -169,7 +170,6 @@ def headless(argv: list[str]) -> int:
     # Built WITHOUT the editor overlays: see MainWindow._export_scene for why the ratsnest
     # must not reach a sheet someone solders from.
     print_top = BoardScene(doc, lookup, side="top", show_ratsnest=False, show_rulers=False)
-    print_bottom = BoardScene(doc, lookup, side="bottom", show_ratsnest=False, show_rulers=False)
 
     check = verify_scale(print_top, board)
     print(
@@ -179,9 +179,15 @@ def headless(argv: list[str]) -> int:
     )
 
     pdf_component = export_pdf(board, print_top, out_dir / "board_1to1_component_side.pdf")
-    pdf_solder = export_pdf(board, print_bottom, out_dir / "board_1to1_solder_side.pdf", mirrored=True)
     print(f"PDF          {pdf_component.stat().st_size / 1024:.0f} KB -> {pdf_component.name}")
-    print(f"PDF mirrored {pdf_solder.stat().st_size / 1024:.0f} KB -> {pdf_solder.name}")
+    # A solderless breadboard has no solder side -- the adhesive backing is under it -- so
+    # it gets the top sheet alone, as the window's export and MCP's export_pdf decide.
+    if is_breadboard(board):
+        print("PDF mirrored none: a solderless breadboard has no solder side")
+    else:
+        print_bottom = BoardScene(doc, lookup, side="bottom", show_ratsnest=False, show_rulers=False)
+        pdf_solder = export_pdf(board, print_bottom, out_dir / "board_1to1_solder_side.pdf", mirrored=True)
+        print(f"PDF mirrored {pdf_solder.stat().st_size / 1024:.0f} KB -> {pdf_solder.name}")
 
     # --- The schematic, exported. Here rather than left to the GUI because this is the
     # only place the SVG writer, Qt's SVG renderer and a real board meet on all three

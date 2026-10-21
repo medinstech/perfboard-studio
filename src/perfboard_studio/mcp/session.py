@@ -46,6 +46,7 @@ from perfboard_studio.breadboard import (
     channel_of,
     has_breadboard_pattern,
     has_rails,
+    is_breadboard,
     pattern_board,
     rows_for,
 )
@@ -1810,7 +1811,9 @@ class BoardSession:
         return _ok(written=written, **report)
 
     def export_pdf(self, directory: str | None = None) -> dict[str, Any]:
-        """The 1:1 printable sheets, component side and mirrored solder side.
+        """The 1:1 printable sheets, component side and mirrored solder side -- the
+        component side alone on a solderless breadboard, which has the adhesive backing
+        under it and no solder side, as the window's export decides.
 
         Needs Qt, which the engine does not, so it is imported here and its absence is
         reported as a refusal rather than taking the server down at import time.
@@ -1840,15 +1843,16 @@ class BoardSession:
         out.mkdir(parents=True, exist_ok=True)
         top = BoardScene(self.document, self.lookup, side="top", show_ratsnest=False,
                          show_rulers=False)
-        bottom = BoardScene(self.document, self.lookup, side="bottom", show_ratsnest=False,
-                            show_rulers=False)
         check = verify_scale(top, self.document.board)
-        component_side = write_pdf(self.document.board, top, out / "board_component_side.pdf")
-        solder_side = write_pdf(
-            self.document.board, bottom, out / "board_solder_side.pdf", mirrored=True
-        )
+        written = [write_pdf(self.document.board, top, out / "board_component_side.pdf")]
+        if not is_breadboard(self.document.board):
+            bottom = BoardScene(self.document, self.lookup, side="bottom", show_ratsnest=False,
+                                show_rulers=False)
+            written.append(
+                write_pdf(self.document.board, bottom, out / "board_solder_side.pdf", mirrored=True)
+            )
         return _ok(
-            written=[str(component_side), str(solder_side)],
+            written=[str(path) for path in written],
             scale_exact=check.ok,
             scale_error_um=round(check.error_mm * 1000, 3),
         )
