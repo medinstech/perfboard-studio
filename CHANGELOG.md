@@ -55,7 +55,13 @@ closed without a bump.
   window's board into the file anyway, so a change made by a script, an agent or another
   editor vanished half a minute later without anyone choosing. Autosave now leaves such a
   file alone, keeps the window's edits in the recovery record, and says the file changed on
-  disk.
+  disk. (thanks @vindavs)
+
+- **A recovered board is not written over its file until it is saved.** Recovering a board
+  after a crash promises to touch nothing on disk until Ctrl+S, but autosave wrote the
+  recovered board into the file at its next tick -- with no `.bak`, since there was no
+  deliberate save of it to back up -- and marked the window saved. It waits for the save
+  now, and the recovery record keeps the work in the meantime.
 
 - **A new board can be made a breadboard in Board Setup.** Choosing either kind of
   breadboard on a fresh document was refused -- "a breadboard has no mounting holes; remove

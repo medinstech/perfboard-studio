@@ -11535,6 +11535,36 @@ def test_autosave_never_writes_over_a_file_somebody_else_changed(tmp_path) -> No
     _close(window)
 
 
+def test_autosave_leaves_a_recovered_boards_file_alone_until_it_is_saved(tmp_path) -> None:
+    """Recovery touches nothing on disk until the user saves, and autosave must not do it
+    for them half a minute later. A recovered board names its file without having come
+    from it, so there is no deliberate save of it to back up -- autosave used to write it
+    over the file with no .bak at all and mark the window saved. Ctrl+S still does."""
+    from perfboard_studio.recovery import RecoveryRecord
+
+    board = tmp_path / "amp.perf"
+    board.write_text("a different, older board", encoding="utf-8")
+    window = _window_on(_load_dense())
+    try:
+        record = RecoveryRecord(
+            session="gone", document_path=str(board),
+            saved_at="2026-08-31T14:00:00.000Z", version="0.9.0",
+            document=persist.serialize_document(_load_dense()),
+        )
+        assert window._load_recovered(record) is True
+        window._on_autosave_tick()
+
+        assert board.read_text(encoding="utf-8") == "a different, older board"
+        assert not (tmp_path / "amp.perf.bak").exists()
+        assert window.is_modified
+        assert window._autosave.written, "the recovery record still holds the work"
+
+        assert window._save_to(board)
+        assert persist.deserialize_document(board.read_text(encoding="utf-8")).ok
+    finally:
+        _close(window)
+
+
 def test_autosave_writes_nothing_of_the_users_when_it_is_switched_off(tmp_path) -> None:
     path = tmp_path / "board.perf"
     window = _window_on(_load_dense())
