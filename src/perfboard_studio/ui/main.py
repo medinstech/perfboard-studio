@@ -8727,6 +8727,9 @@ class MainWindow(QMainWindow):
         """
         bar = QStatusBar()
         self.setStatusBar(bar)
+        # The whole message on hover. The fields on the right take their room first, so at
+        # 1366 px an autoroute report lost its last clause -- the pads to measure -- to them.
+        bar.messageChanged.connect(bar.setToolTip)
         #: A condition, not an event: shown while the recovery file cannot be written and
         #: cleared when it can again. See _on_autosave_tick.
         self.label_warning = QLabel()

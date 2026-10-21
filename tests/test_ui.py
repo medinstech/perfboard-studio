@@ -6370,6 +6370,16 @@ def test_a_catalog_parts_holding_note_is_said_in_the_windows_language() -> None:
     assert _source_said(part.source) == part.source
 
 
+def test_a_status_message_cut_short_is_whole_on_hover() -> None:
+    window = _window_on(_load_dense())
+    try:
+        message = "55 connection(s) routed, 13 needed an insulated wire, 1 pad(s) to measure"
+        window.statusBar().showMessage(message)
+        assert window.statusBar().toolTip() == message
+    finally:
+        _close(window)
+
+
 def test_the_menus_survive_a_garbage_collection() -> None:
     """QMenuBar.addMenu hands Python a QMenu it believes it owns, so a menu held only by a
     local in the builder can be destroyed the moment that method returns -- leaving a menu

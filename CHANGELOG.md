@@ -117,6 +117,10 @@ closed without a bump.
   you", "cathode is the banded end" -- is said in the window's language, for the 39 parts
   that end in one.
 
+- **A status message cut short is whole on hover.** The counts on the right of the status
+  bar take their room first, so on a 1366 px screen an autoroute report lost its last
+  clause to them.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added
