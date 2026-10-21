@@ -138,7 +138,15 @@ is point-to-point wire and there is no pad for a solder trace to reach — `brea
 the solderless kind, whose clips join five holes across each half of a column and the
 length of each rail, and `solderable-breadboard`, the same pattern in copper. A breadboard
 of either kind is 20 rows (with power rails) or 12 (without) at 2.54 mm, as long as it has
-columns, and its holes are named as it prints them, `e12` and `T+12`. On the solderless one
+columns, and its holes are named as it prints them, `e12` and `T+12`. `set_board(channel_mil=…)`
+widens the channel between rows e and f for a module the 300 mil one does not take -- 1000
+for an ESP32 devkit, 900 for a narrow one, 700 for a Pico -- as the printed wide bodies do:
+one more row of grid per 100 mil, the rails kept where they are. `narrow_channel_cols` keeps
+the ordinary channel for that many columns from column 1, its strips moved in to meet it, so
+a DIP still straddles it beside the module -- 39 columns on lhm0's flex bodies. Where the
+two strips cannot move in by the same whole number of rows (1000 mil against 300) the narrow
+part is drawn half a pitch high; its clips, names and connections are exact.
+`get_board_info` reports `channel_mil`, `rails` and any `narrow_channel_cols`. On the solderless one
 nothing that needs solder or a drill is accepted; the solderable one is soldered, takes a
 mounting hole like any board and is guided with an iron. `set_board(board_type=
 "solderable-breadboard")` on a working breadboard keeps every part and jumper on its holes

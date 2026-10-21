@@ -280,6 +280,8 @@ def set_board(
     strip_axis: str | None = None,
     pitch: float | None = None,
     single_sided: bool | None = None,
+    channel_mil: int | None = None,
+    narrow_channel_cols: int | None = None,
 ) -> dict[str, Any]:
     """Change the board under the design, keeping everything on it. Anything left out is
     left alone. board_type is "pad-per-hole" (every hole its own island), "stripboard"
@@ -290,8 +292,18 @@ def set_board(
     "solderable-breadboard" (the same holes and strips in copper, soldered: switching a
     working breadboard to it keeps every part and jumper on its holes, and takes a copper
     board's thickness and drill). Shrinking a board that still has a part hanging off the
-    new edge is refused, naming the part."""
-    return session.set_board(cols, rows, material, board_type, strip_axis, pitch, single_sided)
+    new edge is refused, naming the part. On a breadboard, channel_mil widens the channel
+    between rows e and f for a module too wide for the ordinary 300 mil one (an ESP32
+    devkit is 1000, a narrow one 900, a Pico 700): one more row of grid per 100 mil, rails
+    kept. narrow_channel_cols keeps the 300 mil channel for that many columns from column
+    1, its strips moved in to meet it, so a DIP still fits beside the module -- 39 on the
+    flex bodies of 63 columns. Where the strips cannot move in by the same whole number of
+    rows (1000 against 300) the narrow part is drawn half a pitch high; every connection
+    and hole name is exact."""
+    return session.set_board(
+        cols, rows, material, board_type, strip_axis, pitch, single_sided, channel_mil,
+        narrow_channel_cols,
+    )
 
 
 @mcp.tool()

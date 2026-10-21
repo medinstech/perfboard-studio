@@ -267,7 +267,9 @@ def layout_on_a_solderable_breadboard(doc: PerfDocument, meta: DocumentMeta) -> 
     """
     if not is_breadboard(doc.board):
         raise ValueError("Only a solderless breadboard's layout moves to a solderable one.")
-    board = pattern_board("solderable-breadboard", doc.board.cols, doc.board.rows)
+    board = pattern_board(
+        "solderable-breadboard", doc.board.cols, doc.board.rows, doc.board.narrow_channel_cols
+    )
     return dataclasses.replace(doc, meta=meta, board=board)
 
 

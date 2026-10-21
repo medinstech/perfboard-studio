@@ -182,6 +182,11 @@ class Board:
     single_sided: bool = False
     #: None when the board carries no printed legend, which is the common cheap board.
     labels: BoardLabels | None = None
+    #: A breadboard whose channel is wider than 0.3 inch (more rows than 20 or 12; see
+    #: ``breadboard.channel_of``) may keep the ordinary channel for part of its length, so a
+    #: DIP still straddles it beside a wide module: how many columns, from column 1, do.
+    #: Zero everywhere else, and then left out of the file (``breadboard.board_problem``).
+    narrow_channel_cols: int = 0
 
 
 # ---------------------------------------------------------------------------

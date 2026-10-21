@@ -56,6 +56,31 @@ none of that is drawn. The border defaults to Adafruit's half-size Perma-Proto, 
 over 30 x 20 holes, which is the solderless grid with no rows moved; a board with more
 round it, or with mounting holes, is set in Board Setup like any other.
 
+A WIDE CHANNEL is for the modules that do not fit the 0.3 inch one. An ESP32 devkit is
+1000 mil across its pins, a Pico 700, and on an ordinary board the first leaves no hole
+free beside any pin and the second two; so people print a body with the channel opened up
+and move the clips of an ordinary board into it -- lhm0's wide-mcu-breadboard is the one
+measured here (``docs/prior-art.md``). Everything but the channel is the ordinary board:
+the same clips, the same rails, three pitches between a rail and the strip beside it. So
+the channel is still THE BOARD'S SHAPE: every pitch it is wider than 0.3 inch is one more
+row of grid, and the rows say how wide it is (:func:`channel_of`) -- 20 to 32 with rails,
+12 to 19 without.
+
+Some of those bodies keep the ordinary channel for part of their length, so a DIP can
+still straddle it beside the module: lhm0 calls them "flex". That is the one thing the
+grid cannot say, so it is the one field, ``Board.narrow_channel_cols``: how many columns,
+counted from column 1, have the 0.3 inch channel with their two strips of clips moved in
+to meet it. Each strip moves by half of what the channel lost. Where that is a whole
+number of pitches the narrow part is exactly where the body has it -- lhm0's 900 mil flex
+board, 9 against 3. Where it is not -- the 1000 mil one, 10 against 3 -- the body's narrow
+strips stand half a pitch off the grid the rest of it is on, and a hole here is a grid
+position, so the lower strip moves in by one row more than the upper and the narrow part
+is drawn half a pitch (1.27 mm) above where it is. The clips, the names and every
+connection are exact; only the picture is rounded, as the half-size board's rails are
+above, and it is written here so nobody mistakes it for a measurement. A strip keeps its letters wherever it
+is, so in the narrow part ``e`` is a different row of the grid from ``e`` in the wide
+part -- which is why a letter is asked for by row AND column.
+
 Pure and deterministic, and it imports nothing but the model: ``geometry`` asks this
 module which positions have no hole and what a hole is called, so it cannot ask anything
 of ``geometry`` in return.
@@ -63,14 +88,24 @@ of ``geometry`` in return.
 
 from __future__ import annotations
 
+import functools
 import re
 from typing import Literal
 
 from .model import STANDARD_PITCH_MM, Board, BoardType, HoleCoord, Mm, NetClass
 
-#: Rows on a breadboard with power rails, and on one without.
+#: Rows on a breadboard with power rails, and on one without, at the ordinary channel.
 ROWS_WITH_RAILS = 20
 ROWS_WITHOUT_RAILS = 12
+
+#: The ordinary channel, from row e to row f, in pitches: 0.3 inch, what a DIP straddles.
+STANDARD_CHANNEL = 3
+#: The widest channel a board with rails may have, in pitches: 1.5 inch, room for any
+#: module made. Without rails the rows run out first, at 10 (see :func:`channel_of`).
+MAX_CHANNEL = 15
+#: The channels the wide boards are printed for, in mil: the Nano, the Pico, a narrow and
+#: a standard ESP32 devkit. The Board Setup list, not a limit -- any whole pitch will do.
+WIDE_CHANNEL_MILS: tuple[int, ...] = (600, 700, 900, 1000)
 
 #: Which of the four power rails a row is. "top" is the rail pair beside row j.
 type Rail = Literal["top-", "top+", "bottom-", "bottom+"]
@@ -98,6 +133,8 @@ _ROWS_WITH_RAILS: tuple[str | None, ...] = (
     None, None, "bottom-", "bottom+",
 )
 _ROWS_WITHOUT_RAILS: tuple[str | None, ...] = _ROWS_WITH_RAILS[4:16]
+_UPPER = ("j", "i", "h", "g", "f")
+_LOWER = ("e", "d", "c", "b", "a")
 
 #: Holes in one group of a rail, and the columns left out between groups.
 RAIL_GROUP = 5
@@ -162,7 +199,20 @@ def has_breadboard_pattern(board: Board) -> bool:
 
 
 def has_rails(board: Board) -> bool:
-    return has_breadboard_pattern(board) and board.rows == ROWS_WITH_RAILS
+    return has_breadboard_pattern(board) and board.rows >= ROWS_WITH_RAILS
+
+
+def channel_of(board: Board) -> int:
+    """How far apart rows e and f are, in pitches, where the channel is widest: 3 on an
+    ordinary board, one more for every row past 20 (with rails) or 12 (without)."""
+    base = ROWS_WITH_RAILS if board.rows >= ROWS_WITH_RAILS else ROWS_WITHOUT_RAILS
+    return STANDARD_CHANNEL + board.rows - base
+
+
+def rows_for(channel: int, rails: bool = True) -> int:
+    """The rows of a breadboard with this channel, in pitches -- :func:`channel_of`'s
+    inverse."""
+    return (ROWS_WITH_RAILS if rails else ROWS_WITHOUT_RAILS) + channel - STANDARD_CHANNEL
 
 
 def board_problem(board: Board) -> str | None:
@@ -172,20 +222,34 @@ def board_problem(board: Board) -> str | None:
     the same reason (CLAUDE.md, "persist.py refuses at load what board.set refuses").
     """
     if not has_breadboard_pattern(board):
+        if board.narrow_channel_cols:
+            return "Only a breadboard has a channel to narrow; this board is not one."
         return None
-    if board.rows not in (ROWS_WITH_RAILS, ROWS_WITHOUT_RAILS):
+    widest = rows_for(MAX_CHANNEL)
+    if not ROWS_WITHOUT_RAILS <= board.rows <= widest:
         return (
             f"A breadboard has {ROWS_WITH_RAILS} rows with power rails or "
-            f"{ROWS_WITHOUT_RAILS} without; this one has {board.rows}."
+            f"{ROWS_WITHOUT_RAILS} without, and one more for every pitch its channel is wider "
+            f"than 0.3 inch (up to {widest} rows); this one has {board.rows}."
         )
     if board.pitch != STANDARD_PITCH_MM:
         return f"A breadboard's holes are {STANDARD_PITCH_MM} mm apart; this one says {board.pitch}."
     if has_rails(board) and board.cols < RAIL_GROUP:
         return f"A breadboard with power rails needs at least {RAIL_GROUP} columns."
+    narrow = board.narrow_channel_cols
+    if narrow:
+        channel = channel_of(board)
+        if not 0 < narrow < board.cols:
+            return (
+                f"The narrow part of the channel must leave some of the {board.cols} columns "
+                f"wide; it is {narrow}."
+            )
+        if channel == STANDARD_CHANNEL:
+            return "The channel is 0.3 inch already; there is nothing to narrow."
     return None
 
 
-def pattern_board(kind: BoardType, cols: int, rows: int) -> Board:
+def pattern_board(kind: BoardType, cols: int, rows: int, narrow_channel_cols: int = 0) -> Board:
     """A board of either breadboard kind, with that kind's thickness, holes and border.
 
     THE ONE PLACE those numbers are chosen by kind, because they follow the kind and not
@@ -213,12 +277,16 @@ def pattern_board(kind: BoardType, cols: int, rows: int) -> Board:
         drill_diameter=drill,
         border_x_mm=border_x,
         border_y_mm=border_y,
+        narrow_channel_cols=narrow_channel_cols,
     )
 
 
-def breadboard(size: str) -> Board:
-    """A breadboard of one of the ``SIZES``."""
-    return pattern_board("breadboard", *SIZES[size])
+def breadboard(size: str, channel: int = STANDARD_CHANNEL, narrow_channel_cols: int = 0) -> Board:
+    """A breadboard of one of the ``SIZES``, its channel ``channel`` pitches across."""
+    cols, rows = SIZES[size]
+    return pattern_board(
+        "breadboard", cols, rows + channel - STANDARD_CHANNEL, narrow_channel_cols
+    )
 
 
 def solderable_breadboard(size: str) -> Board:
@@ -227,20 +295,40 @@ def solderable_breadboard(size: str) -> Board:
 
 
 def size_of(board: Board) -> str | None:
-    """Which of the ``SIZES`` a breadboard of either kind is, or None."""
+    """Which of the ``SIZES`` a breadboard of either kind is, whatever its channel, or None."""
     if not has_breadboard_pattern(board):
         return None
-    return next(
-        (name for name, shape in SIZES.items() if shape == (board.cols, board.rows)), None
-    )
+    shape = (board.cols, board.rows - channel_of(board) + STANDARD_CHANNEL)
+    return next((name for name, size in SIZES.items() if size == shape), None)
 
 
-def _roles(board: Board) -> tuple[str | None, ...]:
-    return _ROWS_WITH_RAILS if board.rows == ROWS_WITH_RAILS else _ROWS_WITHOUT_RAILS
+@functools.cache
+def _layout(rails: bool, channel: int, moved_in: int, lower_moved_in: int | None = None) -> tuple[str | None, ...]:
+    """What each row is, top to bottom, for a column whose channel is ``channel`` pitches
+    and whose upper strip stands ``moved_in`` rows in from where the widest channel has it,
+    the lower ``lower_moved_in`` (the same, unless told)."""
+    lower = moved_in if lower_moved_in is None else lower_moved_in
+    core = (None,) * moved_in + _UPPER + (None,) * (channel - 1) + _LOWER + (None,) * lower
+    if not rails:
+        return core
+    return ("top-", "top+", None, None, *core, None, None, "bottom-", "bottom+")
 
 
-def _role(board: Board, row: int) -> str | None:
-    roles = _roles(board)
+def _roles(board: Board, col: int | None = None) -> tuple[str | None, ...]:
+    """What each row is in this column; ``None`` asks about the wide part, which is every
+    column of a board with no narrow part and where the rails and the print are read."""
+    channel = channel_of(board)
+    if col is not None and col < board.narrow_channel_cols:
+        # The lower strip takes the odd row when the strips cannot move in by the same
+        # amount, which leaves the narrow part drawn half a pitch high (row 0 is the top;
+        # see the module docstring).
+        lost = channel - STANDARD_CHANNEL
+        return _layout(has_rails(board), STANDARD_CHANNEL, lost // 2, lost - lost // 2)
+    return _layout(has_rails(board), channel, 0)
+
+
+def _role(board: Board, row: int, col: int | None = None) -> str | None:
+    roles = _roles(board, col)
     return roles[row] if 0 <= row < len(roles) else None
 
 
@@ -256,9 +344,25 @@ def rail_columns(board: Board) -> frozenset[int]:
     )
 
 
-def strip_letter(board: Board, row: int) -> str | None:
-    """The letter printed beside a row of clips, or None for a rail or a row with no holes."""
-    role = _role(board, row)
+def channel_stretches(board: Board) -> tuple[tuple[int, int, int, int], ...]:
+    """The channel down the middle as stretches of equal width: ``(first column, column
+    past the last, row f, row e)`` for each. One on an ordinary board or a wide one, two
+    where a wide channel narrows. What both views draw the groove from, so it is one shape."""
+    narrow = board.narrow_channel_cols
+    stretches = ((0, narrow), (narrow, board.cols)) if narrow else ((0, board.cols),)
+    out: list[tuple[int, int, int, int]] = []
+    for first, end in stretches:
+        roles = _roles(board, first)
+        out.append((first, end, roles.index("f"), roles.index("e")))
+    return tuple(out)
+
+
+def strip_letter(board: Board, row: int, col: int | None = None) -> str | None:
+    """The letter printed beside a row of clips, or None for a rail or a row with no holes.
+
+    In ``col``, because where the channel narrows its strips move; ``None`` is the wide
+    part, which on a board that never narrows is every column."""
+    role = _role(board, row, col)
     return role if role is not None and len(role) == 1 else None
 
 
@@ -280,7 +384,7 @@ def has_hole(board: Board, hole: HoleCoord) -> bool:
     """Whether there is a hole at this grid position at all."""
     if not (0 <= hole.col < board.cols and 0 <= hole.row < board.rows):
         return False
-    if strip_letter(board, hole.row) is not None:
+    if strip_letter(board, hole.row, hole.col) is not None:
         return True
     return rail_of(board, hole.row) is not None and hole.col in rail_columns(board)
 
@@ -308,7 +412,7 @@ def clip_of(board: Board, hole: HoleCoord) -> tuple[int, int] | None:
         return None
     if rail_of(board, hole.row) is not None:
         return (hole.row, -1)
-    letter = strip_letter(board, hole.row)
+    letter = strip_letter(board, hole.row, hole.col)
     return (hole.col, 0 if letter is not None and letter >= "f" else 1)
 
 
@@ -351,7 +455,7 @@ def hole_name(board: Board, hole: HoleCoord) -> str | None:
     rail = rail_of(board, hole.row)
     if rail is not None:
         return f"{_RAIL_PREFIX[rail]}{hole.col + 1}"
-    return f"{strip_letter(board, hole.row)}{hole.col + 1}"
+    return f"{strip_letter(board, hole.row, hole.col)}{hole.col + 1}"
 
 
 def parse_hole_name(board: Board, text: str) -> HoleCoord | None:
@@ -359,7 +463,8 @@ def parse_hole_name(board: Board, text: str) -> HoleCoord | None:
     rows = _roles(board)
     found: HoleCoord | None = None
     if (match := _STRIP_NAME.fullmatch(text)) is not None:
-        found = HoleCoord(int(match.group(2)) - 1, rows.index(match.group(1)))
+        col = int(match.group(2)) - 1
+        found = HoleCoord(col, _roles(board, col).index(match.group(1)))
     elif (match := _RAIL_NAME.fullmatch(text)) is not None:
         rail = _PREFIX_RAIL[match.group(1)]
         if rail not in rows:

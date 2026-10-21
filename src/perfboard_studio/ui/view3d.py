@@ -31,6 +31,8 @@ from vtkmodules.util import numpy_support
 from perfboard_studio.breadboard import (
     CLIP_DEPTH_MM,
     RAIL_CLASS,
+    STANDARD_CHANNEL,
+    channel_stretches,
     has_hole,
     is_breadboard,
     is_solderable_breadboard,
@@ -672,13 +674,15 @@ def build_breadboard(doc: PerfDocument) -> list[vtk.vtkActor]:
         _finish(well.GetProperty(), LAMINATE)
         actors.append(well)
 
-    letters = {row: strip_letter(board, row) for row in range(board.rows)}
-    strip_rows = [row for row in range(board.rows) if letters[row] is not None]
-    upper = max(row for row in strip_rows if (letters[row] or "") >= "f")
-    lower = min(row for row in strip_rows if (letters[row] or "") <= "e")
-    middle = (_breadboard_row_y(board, upper) + _breadboard_row_y(board, lower)) / 2
     groove = _Mesh()
-    groove.rectangle((x0, middle - BREADBOARD_GROOVE_MM / 2, x1, middle + BREADBOARD_GROOVE_MM / 2), _BREADBOARD_INLAY_MM)
+    for first, end, upper, lower in channel_stretches(board):
+        # The ordinary groove, widened by every pitch the channel is wider; to the board's
+        # edge at an end of the board, half way between columns where a channel narrows.
+        middle = (_breadboard_row_y(board, upper) + _breadboard_row_y(board, lower)) / 2
+        half = (BREADBOARD_GROOVE_MM + (lower - upper - STANDARD_CHANNEL) * board.pitch) / 2
+        left = x0 if first == 0 else _breadboard_col_x(board, first - 0.5)
+        right = x1 if end == board.cols else _breadboard_col_x(board, end - 0.5)
+        groove.rectangle((min(left, right), middle - half, max(left, right), middle + half), _BREADBOARD_INLAY_MM)
     groove_actor = vtk.vtkActor()
     groove_mapper = vtk.vtkPolyDataMapper()
     groove_mapper.SetInputData(groove.data())
@@ -705,8 +709,6 @@ def build_pattern_print(
     _, y0, _, y1 = board_outline_rect(board)
     actors: list[vtk.vtkActor] = []
     lines: dict[str, _Mesh] = {}
-    letters = {row: strip_letter(board, row) for row in range(board.rows)}
-    strip_rows = [row for row in range(board.rows) if letters[row] is not None]
     left = _breadboard_col_x(board, 0) - board.pitch * 0.4
     right = _breadboard_col_x(board, board.cols - 1) + board.pitch * 0.4
     rail_rows = [row for row in range(board.rows) if rail_of(board, row) is not None]
@@ -742,11 +744,16 @@ def build_pattern_print(
         number = col + 1
         if number != 1 and number % 5:
             continue
+        # Per column, and each end's letters its own: where a wide channel narrows, its
+        # strips move in, and the print with them.
+        strip_rows = [row for row in range(board.rows) if strip_letter(board, row, col) is not None]
         for at_row in (min(strip_rows) - 1.05, max(strip_rows) + 1.05):
             texts.append((str(number), _breadboard_col_x(board, col), _breadboard_row_y(board, at_row), BREADBOARD_NUMBER_MM))
-    for row in strip_rows:
-        for at_col in (-1.15, board.cols - 1 + 1.15):
-            texts.append((letters[row] or "", _breadboard_col_x(board, at_col), _breadboard_row_y(board, row), BREADBOARD_LETTER_MM))
+    for at_col, col in ((-1.15, 0), (board.cols - 1 + 1.15, board.cols - 1)):
+        for row in range(board.rows):
+            letter = strip_letter(board, row, col)
+            if letter is not None:
+                texts.append((letter, _breadboard_col_x(board, at_col), _breadboard_row_y(board, row), BREADBOARD_LETTER_MM))
     append = vtk.vtkAppendPolyData()
     for text, x, y, height in texts:
         glyphs = _printed(text, height, board.pitch * 1.6)

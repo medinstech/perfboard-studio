@@ -55,6 +55,8 @@ from PySide6.QtWidgets import (
 
 from perfboard_studio.breadboard import (
     RAIL_CLASS,
+    STANDARD_CHANNEL,
+    channel_stretches,
     has_breadboard_pattern,
     has_hole,
     has_rails,
@@ -1044,6 +1046,25 @@ def _pattern_col_x(board: Board, side: BoardSide, col: float) -> float:
     return first + col * step
 
 
+def breadboard_groove_rects(board: Board, side: BoardSide) -> list[QRectF]:
+    """The groove down a breadboard's middle, one rectangle per stretch of
+    ``breadboard.channel_stretches``: the ordinary groove widened by every pitch the channel
+    is wider, running to the board's edge at either end of the board."""
+    outline = _outline_rect(board)
+    rects: list[QRectF] = []
+    for first, end, upper, lower in channel_stretches(board):
+        middle = (_pattern_row_y(board, side, upper) + _pattern_row_y(board, side, lower)) / 2
+        width = BREADBOARD_GROOVE_MM + (lower - upper - STANDARD_CHANNEL) * board.pitch
+        # A stretch that reaches an end of the board runs to its edge; the step between two
+        # is half way between their columns. Measured in columns and sorted afterwards, so
+        # it holds on the solder side, where the columns run the other way.
+        ends = [first - 0.5 if first else -board.cols, end - 0.5 if end != board.cols else 2 * board.cols]
+        xs = [min(max(_pattern_col_x(board, side, at), outline.left()), outline.right()) for at in ends]
+        left, right = sorted(xs)
+        rects.append(QRectF(left, middle - width / 2, right - left, width))
+    return rects
+
+
 def _paint_rail_lines(painter: QPainter, board: Board, side: BoardSide) -> None:
     """A line beside each rail: outside the outer rail of a pair, inside the inner one, so
     the two lines frame the pair as on Fritzing's MB102. A line that would fall off the
@@ -1076,14 +1097,15 @@ def _paint_pattern_print(painter: QPainter, board: Board, side: BoardSide, ink: 
     both ends, and a + or a - at each end of every rail -- what a builder reads "e12" off."""
     pitch = board.pitch
     rows = range(board.rows)
-    letters = {row: strip_letter(board, row) for row in rows}
-    strip_rows = [row for row in rows if letters[row] is not None]
     painter.save()
     painter.setPen(QColor(ink))
     for col in range(board.cols):
         number = col + 1
         if number != 1 and number % 5:
             continue
+        # Per column: where a wide channel narrows, its strips -- and the numbers beside
+        # them -- move in with it.
+        strip_rows = [row for row in rows if strip_letter(board, row, col) is not None]
         for at_row in (min(strip_rows) - 1.05, max(strip_rows) + 1.05):
             draw_physical_label(
                 painter,
@@ -1094,12 +1116,17 @@ def _paint_pattern_print(painter: QPainter, board: Board, side: BoardSide, ink: 
                 max_width_mm=pitch * 1.6,
             )
     ends = (-1.15, board.cols - 1 + 1.15)
-    for row in strip_rows:
-        for at_col in ends:
+    # The letters at each end are that end's own: a board whose channel narrows has its
+    # narrow end's strips on other rows than its wide end's.
+    for at_col, col in zip(ends, (0, board.cols - 1), strict=True):
+        for row in rows:
+            letter = strip_letter(board, row, col)
+            if letter is None:
+                continue
             draw_physical_label(
                 painter,
                 QPointF(_pattern_col_x(board, side, at_col), _pattern_row_y(board, side, row)),
-                letters[row] or "",
+                letter,
                 BREADBOARD_LETTER_MM,
                 bold=False,
             )
@@ -1196,20 +1223,14 @@ class BreadboardItem(QGraphicsItem):
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         b = self.board
-        outline = _outline_rect(b)
         rows = range(b.rows)
-        letters = {row: strip_letter(b, row) for row in rows}
-        strip_rows = [row for row in rows if letters[row] is not None]
 
-        # The groove down the middle: between the last upper row (f) and the first lower (e).
-        upper = max(row for row in strip_rows if (letters[row] or "") >= "f")
-        lower = min(row for row in strip_rows if (letters[row] or "") <= "e")
-        middle = (self._row_y(upper) + self._row_y(lower)) / 2
+        # The groove down the middle: between the last upper row (f) and the first lower (e),
+        # and as much wider than the ordinary one as the channel is.
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(QColor(BREADBOARD.groove)))
-        painter.drawRect(
-            QRectF(outline.left(), middle - BREADBOARD_GROOVE_MM / 2, outline.width(), BREADBOARD_GROOVE_MM)
-        )
+        for rect in breadboard_groove_rects(b, self.side):
+            painter.drawRect(rect)
 
         _paint_rail_lines(painter, b, self.side)
 

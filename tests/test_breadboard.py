@@ -264,8 +264,14 @@ def test_no_breadboard_rule_fires_on_any_other_board() -> None:
 
 
 def test_a_breadboard_is_twenty_rows_or_twelve_at_the_standard_pitch() -> None:
+    """Twenty or twelve, and one more for every pitch a wide channel adds -- up to 1.5 inch
+    with rails (32 rows); fewer than twelve or more than that is no breadboard."""
     bus = _bus(_doc(dataclasses.replace(FULL, type="pad-per-hole")))
-    for board in (dataclasses.replace(FULL, rows=13), dataclasses.replace(FULL, pitch=2.0)):
+    for board in (
+        dataclasses.replace(FULL, rows=11),
+        dataclasses.replace(FULL, rows=33),
+        dataclasses.replace(FULL, pitch=2.0),
+    ):
         result = bus.dispatch("board.set", SetBoardPayload(board=board))
         assert not result.ok and result.code == "invalid-board"
     assert bus.dispatch("board.set", SetBoardPayload(board=HALF)).ok
@@ -296,7 +302,7 @@ def test_a_breadboard_survives_the_file_and_a_wrong_one_does_not_load() -> None:
     assert loaded.ok
     assert loaded.document.board == HALF
 
-    text = serialize_document(doc).replace('"rows": 20', '"rows": 13', 1)
+    text = serialize_document(doc).replace('"rows": 20', '"rows": 11', 1)
     refused = deserialize_document(text)
     assert not refused.ok
     assert refused.code == "invalid-board"

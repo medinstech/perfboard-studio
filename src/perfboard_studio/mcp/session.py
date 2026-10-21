@@ -38,7 +38,17 @@ from perfboard_studio.autoroute import (
     plan_reroute,
 )
 from perfboard_studio.autoroute import describe as describe_route
-from perfboard_studio.breadboard import PATTERN_TYPES, has_breadboard_pattern, pattern_board
+from perfboard_studio.breadboard import (
+    MAX_CHANNEL,
+    PATTERN_TYPES,
+    ROWS_WITH_RAILS,
+    ROWS_WITHOUT_RAILS,
+    channel_of,
+    has_breadboard_pattern,
+    has_rails,
+    pattern_board,
+    rows_for,
+)
 from perfboard_studio.breadroute import plan_joined_board, plan_joined_reroute
 from perfboard_studio.catalog import (
     CATEGORY_ORDER,
@@ -360,6 +370,14 @@ class BoardSession:
             "top_left_hole": format_hole(HoleCoord(0, 0), board),
             "bottom_right_hole": format_hole(HoleCoord(board.cols - 1, board.rows - 1), board),
         }
+        if has_breadboard_pattern(board):
+            # Row e to row f, where the channel is widest; and the columns that keep the
+            # ordinary one, when a wide channel narrows. An agent placing a module across
+            # the channel needs both before it places, not from a no-hole finding after.
+            info["channel_mil"] = channel_of(board) * 100
+            info["rails"] = has_rails(board)
+            if board.narrow_channel_cols:
+                info["narrow_channel_cols"] = board.narrow_channel_cols
         if board.pad_shape == "oblong":
             info["pad_length_mm"] = board.pad_length
             info["pad_axis"] = board.pad_axis
@@ -1069,12 +1087,20 @@ class BoardSession:
         strip_axis: str | None = None,
         pitch: float | None = None,
         single_sided: bool | None = None,
+        channel_mil: int | None = None,
+        narrow_channel_cols: int | None = None,
     ) -> dict[str, Any]:
         """Change the board under the design. Anything left out is left alone.
 
         Shrinking a board that still has a part hanging off the new edge comes back as a
         refusal naming the part, because ``board.set`` checks it -- the same answer the
         window gets from the same command.
+
+        ``channel_mil`` is a breadboard's channel, row e to row f: 300 is the ordinary one,
+        and a wide one is one more row of grid per 100 mil (``breadboard.channel_of``), so
+        it sets ``rows``, keeping the rails the board has (or ``rows`` says, as 20 or 12).
+        ``narrow_channel_cols`` keeps the ordinary channel for that many columns from
+        column 1. ``board.set`` judges both, through ``breadboard.board_problem``.
         """
         board = self.document.board
         if board_type is not None and board_type not in get_args(BoardType):
@@ -1092,6 +1118,22 @@ class BoardSession:
                 f"{strip_axis!r} is not a strip axis. Use 'horizontal' or 'vertical'."
             )
         wanted_type = cast(BoardType, board_type) if board_type is not None else board.type
+        if channel_mil is not None:
+            if wanted_type not in PATTERN_TYPES:
+                raise SessionError("Only a breadboard has a channel; set board_type to one first.")
+            if channel_mil % 100 or not 300 <= channel_mil <= MAX_CHANNEL * 100:
+                raise SessionError(
+                    f"{channel_mil} mil is not a channel: it is a whole number of pitches, "
+                    f"300 to {MAX_CHANNEL * 100} mil in steps of 100."
+                )
+            if rows in (ROWS_WITH_RAILS, ROWS_WITHOUT_RAILS):
+                rails = rows == ROWS_WITH_RAILS
+            else:
+                rails = has_rails(board) or not has_breadboard_pattern(board)
+            rows = rows_for(channel_mil // 100, rails)
+        narrow = board.narrow_channel_cols if narrow_channel_cols is None else narrow_channel_cols
+        if wanted_type not in PATTERN_TYPES:
+            narrow = 0  # Only a breadboard has a channel to narrow.
         if wanted_type in PATTERN_TYPES and wanted_type != board.type:
             # A breadboard's thickness, drill and border follow its KIND, and turning one
             # kind into the other changes them all (breadboard.pattern_board) -- a board
@@ -1103,6 +1145,7 @@ class BoardSession:
                         wanted_type,
                         cols if cols is not None else board.cols,
                         rows if rows is not None else board.rows,
+                        narrow,
                     )
                 ),
             )
@@ -1114,6 +1157,7 @@ class BoardSession:
             material=cast(BoardMaterial, material) if material is not None else board.material,
             pitch=pitch if pitch is not None else board.pitch,
             single_sided=single_sided if single_sided is not None else board.single_sided,
+            narrow_channel_cols=narrow,
             # Only a stripboard has an axis, the way only an oblong pad has a length: a
             # field describing nothing does not belong in the file.
             strip_axis=(

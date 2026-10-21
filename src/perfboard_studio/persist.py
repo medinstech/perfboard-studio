@@ -246,6 +246,7 @@ BOARD_KEY_ORDER: tuple[str, ...] = (
     "borderYMm",
     "singleSided",
     "labels",
+    "narrowChannelCols",
 )
 BOARD_LABELS_KEY_ORDER: tuple[str, ...] = ("face", "rowDigits", "allEdges")
 MOUNTING_HOLE_KEY_ORDER: tuple[str, ...] = (
@@ -357,6 +358,8 @@ def _ordered_board(b: Board) -> JsonObj:
                 "allEdges": b.labels.all_edges,
             },
         )
+    if b.narrow_channel_cols:
+        values["narrowChannelCols"] = b.narrow_channel_cols
     return _build_ordered(BOARD_KEY_ORDER, values)
 
 
@@ -1107,6 +1110,11 @@ def _parse_board(raw: object, warnings: list[str]) -> Board:
         else _parse_board_labels(labels_raw, _field_path(path, "labels"), warnings)
     )
 
+    narrow_raw = obj.get("narrowChannelCols")
+    narrow_channel_cols = (
+        0 if narrow_raw is None else _expect_integer(narrow_raw, _field_path(path, "narrowChannelCols"))
+    )
+
     pad_diameter = _expect_number(_require_field(obj, "padDiameter", path), _field_path(path, "padDiameter"))
     # A warning, not an error, for the same reason a diagonal solder-trace step is one:
     # a hand-edited file must still open. `geometry.pad_extent_mm` falls back to a round
@@ -1166,6 +1174,7 @@ def _parse_board(raw: object, warnings: list[str]) -> Board:
         border_y_mm=borders["border_y_mm"],
         single_sided=single_sided,
         labels=labels,
+        narrow_channel_cols=narrow_channel_cols,
     )
     if (problem := board_problem(board)) is not None:
         raise ValidationError("invalid-board", problem, path)
