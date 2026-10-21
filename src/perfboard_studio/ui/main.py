@@ -3092,12 +3092,6 @@ class WelcomeDialog(QDialog):
             ),
             (t("Open a Board…"), t("A single .perf file."), "open", False),
             (t("Open Project…"), t("A folder built around one board."), "open-project", False),
-            (
-                t("Import a KiCad Netlist…"),
-                t("A circuit drawn in KiCad: its parts and connections come in as the design."),
-                "import",
-                False,
-            ),
         ):
             button = QPushButton(label)
             button.setToolTip(tip)
@@ -3111,6 +3105,22 @@ class WelcomeDialog(QDialog):
             button.clicked.connect(lambda _checked=False, c=choice: self._pick(c))
             begin.addWidget(button)
         begin.addStretch(1)
+        # A side door, drawn as one: the circuit is drawn here, on the sheet, and a button
+        # the size of "Draw a New Circuit" said a KiCad netlist was the other way in. It is
+        # still a click away, under the doors that are, and in the File menu and a drop.
+        self.import_link = QPushButton(t("Import a KiCad Netlist…"))
+        self.import_link.setToolTip(
+            t("A circuit drawn in KiCad: its parts and connections come in as the design.")
+        )
+        self.import_link.setFlat(True)
+        self.import_link.setAutoDefault(False)
+        self.import_link.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.import_link.setStyleSheet(
+            f"QPushButton {{ color: {TEXT_DIM}; background: transparent; border: none; "
+            "text-align: left; padding: 2px 4px; text-decoration: underline; }"
+        )
+        self.import_link.clicked.connect(lambda _checked=False: self._pick("import"))
+        begin.addWidget(self.import_link)
         columns.addLayout(begin, 2)
 
         lists = QVBoxLayout()

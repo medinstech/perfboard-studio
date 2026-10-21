@@ -117,6 +117,11 @@ closed without a bump.
   you", "cathode is the banded end" -- is said in the window's language, for the 39 parts
   that end in one.
 
+- **The welcome window offers a KiCad netlist as the side door it is.** It was a button as
+  large as Draw a New Circuit, which said the circuit came in from KiCad as often as it is
+  drawn here. It is a small link at the foot of the Start column now, and still in the File
+  menu and on a drop.
+
 - **A status message cut short is whole on hover.** The counts on the right of the status
   bar take their room first, so on a 1366 px screen an autoroute report lost its last
   clause to them.

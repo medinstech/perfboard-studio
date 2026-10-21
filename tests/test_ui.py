@@ -11623,6 +11623,25 @@ def test_the_welcome_window_gives_qt_a_stylesheet_it_can_read() -> None:
     assert not [message for message in said if "stylesheet" in message.lower()], said
 
 
+def test_the_welcome_window_offers_netlist_import_as_a_side_door() -> None:
+    """The circuit is drawn on the sheet; a button the size of Draw a New Circuit said a
+    KiCad netlist was the other way in. It is a small link under the doors that are, and
+    still does what it did."""
+    from PySide6.QtWidgets import QPushButton
+
+    import perfboard_studio.ui.main as main_module
+
+    dialog = main_module.WelcomeDialog([], None, examples=main_module.example_boards())
+    try:
+        assert dialog.import_link.isFlat()
+        big = [b.text() for b in dialog.findChildren(QPushButton) if not b.isFlat()]
+        assert "Import a KiCad Netlist…" not in big
+        dialog.import_link.click()
+        assert dialog.choice == "import"
+    finally:
+        dialog.deleteLater()
+
+
 def monkeypatch_exec(window, shown: list[int]) -> None:
     """Count the times a welcome dialog would have been shown, without showing one."""
     import perfboard_studio.ui.main as main_module
