@@ -85,6 +85,7 @@ Pure and deterministic: no I/O, no clock. The only randomness is the seeded RNG.
 
 from __future__ import annotations
 
+import itertools
 import math
 import random
 from collections.abc import Callable, Sequence
@@ -887,7 +888,8 @@ class _Strips:
     #: to ``_Part.pin_numbers``. ``-1`` for a pin no net declares -- which is not the
     #: same as a pin in a net of its own: an undeclared pin is a gap in the schematic,
     #: and it is a party to no conflict, but it still stands in a hole and still blocks
-    #: the drill. ``striproute._plan_cuts`` treats it identically.
+    #: the drill. ``striproute._plan_cuts`` treats it identically. On a breadboard it IS
+    #: a net of its own (:func:`_build_strips`), because nothing can part it from a clip.
     pin_nets: tuple[tuple[int, ...], ...]
     #: Positions along each strip whose copper has already been cut away, by strip index.
     #: Almost always empty -- placement comes before cutting -- but a board that has been
@@ -944,11 +946,18 @@ def _build_strips(
                     rail_nets[index] = frozenset(
                         i for i, net in enumerate(doc.nets) if rail_takes(rail, net.net_class)
                     )
+        # A pin no net declares is a party to a conflict here, unlike on stripboard: a clip
+        # cannot be cut, so an unused lead in one with another lead is joined to it -- an
+        # unused GPIO tied to a header's 5 V is a change to the circuit LVS cannot see,
+        # because LVS asks only about declared nets. Each such pin is its own net, numbered
+        # past the declared ones, which is ``breadroute._shorts``' rule over integers.
+        unused = itertools.count(len(doc.nets))
+        own_nets = [tuple(next(unused) if net < 0 else net for net in nets) for nets in pin_nets]
         return _Strips(
             horizontal=False,
             count=len(index_of),
             length=max(board.cols, board.rows),
-            pin_nets=tuple(pin_nets),
+            pin_nets=tuple(own_nets),
             cuts={},
             clips=clips,
             rail_nets=rail_nets,
@@ -3360,10 +3369,18 @@ def _pick_best(
     original -- two terminals nobody could push a wire into -- was handed back as "nothing
     cheaper to build". Cheaper to route is not cheaper to build when the wire cannot go in.
     Every fixture has zero of both, so the ordering there is exactly what it was.
+
+    **On a breadboard a clip shared by two nets outranks even legality**
+    (:func:`_shorted_clips`). Nothing can part them, so it is a short, not a board that is
+    hard to finish -- and a user's own board with two bodies touching is not legal, which
+    let every legal candidate beat it however many clips it shorted: autoplace on a
+    breadboard handed back a header standing in a chip's clips.
     """
     legal_first = sorted(
         [*candidates, baseline],
-        key=lambda plan: (not plan.after.is_legal, plan.after.total(options.weights)),
+        key=lambda plan: (
+            _shorted_clips(plan, doc), not plan.after.is_legal, plan.after.total(options.weights)
+        ),
     )
     routable = options.score_with_router and bool(doc.nets)
     if not routable or options.route_scored_restarts <= 0:
@@ -3380,12 +3397,13 @@ def _pick_best(
     if len(shortlist) < 2:
         return legal_first[0]
 
-    scored: list[tuple[tuple[int, int, int, float, float], PlacementPlan]] = []
+    scored: list[tuple[tuple[int, int, int, int, float, float], PlacementPlan]] = []
     for plan in shortlist:
         unfinished, cost = _build_cost(plan.document, lookup)
         scored.append(
             (
                 (
+                    _shorted_clips(plan, doc),
                     0 if plan.after.is_legal else 1,
                     unfinished,
                     plan.after.physical_warnings,
@@ -3399,13 +3417,20 @@ def _pick_best(
     # keep the shortlist's own order rather than being compared as objects.
     scored.sort(key=lambda item: item[0])
     best_key, best = scored[0]
-    runner_up = scored[1][0][3] if len(scored) > 1 else None
+    runner_up = scored[1][0][4] if len(scored) > 1 else None
     return replace(
         best,
-        route_cost=best_key[3],
-        route_unrouted=best_key[1],
+        route_cost=best_key[4],
+        route_unrouted=best_key[2],
         route_runner_up=runner_up,
     )
+
+
+def _shorted_clips(plan: PlacementPlan, doc: PerfDocument) -> int:
+    """The pairs a breadboard's clips join that nothing can part -- ``strip_conflicts``,
+    which on that board is ``breadroute``'s ``cannot-separate`` and ``wrong-rail`` -- and
+    zero on every other board, where a cut can part them or there are no strips at all."""
+    return plan.after.strip_conflicts if has_breadboard_pattern(doc.board) else 0
 
 
 def _settle_winner(

@@ -131,7 +131,11 @@ the build guide and `autoroute` all answer differently — `autoroute` on one pl
 and links rather than traces and wires, and reports the pairs it could not separate. On a
 breadboard it plans jumpers into free holes, power and ground from the rails, and reports a
 clip it cannot reach (`clip-full`), two nets one clip joins (`cannot-separate`) and a pin on
-a rail its net is not for (`wrong-rail`); `cut_count` is always 0 there.
+a rail its net is not for (`wrong-rail`); `cut_count` is always 0 there. A pin no net
+declares counts as a net of its own in a clip: an unused lead is joined to whatever else
+is in it, and LVS, which asks only about declared nets, cannot see that. `optimize_placement`
+on a breadboard (either kind) ranks a placement by those pairs before anything else, legality included,
+so it never hands back more of them than the board had.
 There are five types: `pad-per-hole` (every hole its own island, the default),
 `stripboard`, `plain` — bare substrate with no copper at all, where every connection
 is point-to-point wire and there is no pad for a solder trace to reach — `breadboard`,
@@ -293,14 +297,21 @@ snapshotted as `before-restore` first, so the way back is another restore.
 
 **`autoroute` clears stale copper first**, exactly as the GUI does, and says how much it
 removed. A conductor is stale when the island it sits in no longer holds two pins of the
-net it claims — which is the shape of what a moved part leaves behind.
+net it claims — which is the shape of what a moved part leaves behind. On a stripboard or a
+breadboard too, before that board's own planner runs, and its result carries
+`stale_removed` as well.
 
 **Wires are laid along the grid unless an agent asks otherwise.** `autoroute` and
 `reroute` take `wires`: `"grid"` (the default, as in the window) runs each wire square to
 the rows and columns of holes with as few bends as the board allows; `"straight"` is one
 run at whatever angle, which is what the engine does by default and what every golden
 route records. A straight bare wire can pass a fraction of a millimetre from another net's
-pad, and a board of them crosses itself everywhere.
+pad, and a board of them crosses itself everywhere. On a breadboard `wires` shapes the
+jumpers: `"grid"` lays each one along a row and down a column like the pre-bent kits — an
+L, or a U or a Z round a part rather than under it — and `"straight"` is the chord from
+clip to clip. Grid jumpers may cross; they lie over one another on the plastic. A link's
+`holes` is the length it runs, corners included, and the guide cuts it to that length.
+On a stripboard `wires` changes nothing; its links are straight.
 
 **What a trace does at a crossing is the agent's to say too.** `autoroute` and `reroute`
 take `crossings`: `"hop"` (the default, as in the engine and the window) carries a solder

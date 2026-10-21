@@ -18,7 +18,9 @@ link:
 
   **TWO NETS IN ONE CLIP ARE NOT SEPARABLE.** Stripboard can drill between them; this
   board cannot, so the pair is reported as ``cannot-separate`` -- the same code, and the
-  same answer: move a part. The placer prices exactly those pairs.
+  same answer: move a part. A pin no net declares is a net of its own for this, because
+  an unused lead in a clip is joined to whatever else is in it. The placer prices
+  exactly those pairs.
 
 The plan is a ``striproute.StripboardPlan`` with no cuts, so the window, the MCP server
 and the placer apply and price a breadboard's wiring through the code they already have
@@ -27,13 +29,21 @@ breadboard). A jumper is a ``top-jumper`` on the top side -- the one kind of cop
 ``not-on-breadboard`` accepts -- and a jumper that would run under a part is avoided where
 another will do, by the same predicate ``jumper-under-body`` warns with.
 
+  **A JUMPER IS LAID STRAIGHT OR ALONG THE GRID** (``wire_path``, the router's own
+  option). Straight is a chord from end to end, and on a full board that is a fan of
+  diagonals crossing at every angle. Along the grid is how the pre-bent kits are made: a
+  run along a row and a run down a column, with as few bends as will keep the jumper out
+  from under a part -- an L, or a U or a Z round one (:func:`_grid_path`). Jumpers may
+  cross; on the plastic they simply lie over one another, and ``occupancy.stacking_layers``
+  lifts them apart in 3D. Only the ends go into holes, so a corner may sit anywhere.
+
 Pure and deterministic, like every planner: the same board plans the same way.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from itertools import pairwise
 
 from .breadboard import (
@@ -58,6 +68,7 @@ from .connectivity import FootprintLookup, PhysicalPinRef, extract_physical_nets
 from .geometry import format_hole, hole_key, holes_under_line, manhattan
 from .model import HoleCoord, Net, NetClass, NetId, PerfDocument
 from .occupancy import OccupancyIndex, build_occupancy
+from .router import WirePath
 from .striproute import (
     PlannedLink,
     StripboardPlan,
@@ -82,19 +93,39 @@ RAILS_FOR_CLASS: dict[NetClass, tuple[Rail, Rail]] = {
 #: clip unreachable that a person would simply wire under the chip.
 UNDER_BODY_COST = 100
 
+#: What one bend in a jumper laid along the grid costs, in holes of extra length: enough
+#: that an L beats a Z of the same length, never enough to buy a run under a part.
+BEND_COST = 1
+
+#: What a grid jumper pays per hole it runs along another one, in holes of extra length.
+#: Two jumpers down one row are legal and hide each other from above -- the reason the
+#: perfboard router prices ``wire_along_copper`` -- so a jumper takes a lane of its own
+#: whenever one is a step or two away, and never at the price of running under a part.
+ALONG_COST = 1
+
+#: One hole-to-hole step of a grid jumper: the lower hole, and whether it runs along a row.
+type Step = tuple[int, int, bool]
+
 #: A jumper: its two ends.
 type Join = tuple[HoleCoord, HoleCoord]
+
+#: The holes a jumper runs through, ends and corners: two of them for a straight one.
+type JumperRoute = tuple[HoleCoord, ...]
 
 
 def plan_joined_board(
     doc: PerfDocument,
     lookup: FootprintLookup,
     only_net_ids: tuple[NetId, ...] | None = None,
+    wire_path: WirePath = "straight",
 ) -> StripboardPlan:
     """The plan for a board that joins its own holes: a stripboard's cuts and links, or a
-    breadboard's jumpers. What every caller with such a board asks."""
+    breadboard's jumpers. What every caller with such a board asks.
+
+    ``wire_path`` shapes a breadboard's jumpers; a stripboard's links are straight either
+    way, because they run along its strips' cross direction already."""
     if has_breadboard_pattern(doc.board):
-        return plan_breadboard(doc, lookup, only_net_ids)
+        return plan_breadboard(doc, lookup, only_net_ids, wire_path)
     return plan_stripboard(doc, lookup, only_net_ids)
 
 
@@ -102,6 +133,7 @@ def plan_joined_reroute(
     doc: PerfDocument,
     lookup: FootprintLookup,
     only_net_ids: tuple[NetId, ...] | None = None,
+    wire_path: WirePath = "straight",
 ) -> StripboardPlan:
     """Re-route on a board that joins its own holes: its own planner, not the perfboard's.
 
@@ -110,7 +142,7 @@ def plan_joined_reroute(
     and bare wire on a breadboard, which is nineteen not-on-breadboard errors and a short,
     and replaced a stripboard's links with traces along strips already joined. The cuts
     stay: a cut is the board's copper taken away, it claims no net, and the planner reads
-    the board as it is cut.
+    the board as it is cut. ``wire_path`` is :func:`plan_joined_board`'s.
     """
     targets = {net.id for net in doc.nets}
     if only_net_ids is not None:
@@ -122,8 +154,8 @@ def plan_joined_reroute(
     stripped = dataclasses.replace(
         doc, conductors=tuple(c for c in doc.conductors if c.id not in gone)
     )
-    plan = plan_joined_board(stripped, lookup, only_net_ids)
-    names = [net.name for net in doc.nets if net.id in targets]
+    plan = plan_joined_board(stripped, lookup, only_net_ids, wire_path)
+    names =[net.name for net in doc.nets if net.id in targets]
     label = f"Re-route {len(names)} net(s)" if len(names) != 1 else f"Re-route {names[0]}"
     return dataclasses.replace(plan, remove_ids=remove_ids, label=label)
 
@@ -132,6 +164,7 @@ def plan_breadboard(
     doc: PerfDocument,
     lookup: FootprintLookup,
     only_net_ids: tuple[NetId, ...] | None = None,
+    wire_path: WirePath = "straight",
 ) -> StripboardPlan:
     """Work out the jumpers this breadboard needs, without touching it."""
     if not has_breadboard_pattern(doc.board):
@@ -150,6 +183,7 @@ def plan_breadboard(
     pins = pins_by_hole(doc, lookup)
     net_of = net_of_pin(doc, every_net)
     occupancy = build_occupancy(doc, lookup)
+    route = _router(doc, occupancy, wire_path)
     problems = _shorts(doc, pins, net_of, every_net) + _wrong_rails(doc, pins, net_of)
 
     # What is already joined, by the board and by anything fitted: the islands every jumper
@@ -176,6 +210,7 @@ def plan_breadboard(
     joined = [_reach(doc, holes)[0] for holes in island_holes.values()]
     conductors: list[NewConductor] = []
     links: list[PlannedLink] = []
+    lanes: set[Step] = set()
 
     for net in doc.nets:
         if net.id not in wanted:
@@ -210,14 +245,18 @@ def plan_breadboard(
             )
         own_rails = sorted(rail for rail, owner in rails.items() if owner == net.id)
         joins = (
-            _to_rails(net, islands, own_rails, doc, used, occupancy, problems, joined)
+            _to_rails(net, islands, own_rails, doc, used, route, problems, joined)
             if own_rails
-            else _nearest_first(net, islands, doc, used, occupancy, problems)
+            else _nearest_first(net, islands, doc, used, route, problems)
         )
         for a, b in joins:
+            # The ends were chosen by what a jumper costs on its own; its shape is chosen
+            # knowing the ones already laid, so that it takes a lane of its own.
+            path = _grid_path(a, b, doc, occupancy, lanes)[1] if wire_path == "grid" else route(a, b)[1]
+            lanes.update(_steps(path))
             conductors.append(
                 NewWireConductor(
-                    path=(a, b),
+                    path=path,
                     kind="top-jumper",
                     side="top",
                     # The gauge every planner writes: see router._RouteContext.wire_gauge_awg.
@@ -227,7 +266,8 @@ def plan_breadboard(
             )
             links.append(
                 PlannedLink(
-                    net_id=net.id, net_name=net.name, from_hole=a, to_hole=b, holes=manhattan(a, b)
+                    net_id=net.id, net_name=net.name, from_hole=a, to_hole=b,
+                    holes=sum(manhattan(p, q) for p, q in pairwise(path)),
                 )
             )
 
@@ -256,28 +296,41 @@ def _shorts(
     net_of: dict[tuple[str, str], NetId],
     names: dict[NetId, str],
 ) -> list[StripProblem]:
-    """Every clip holding pins of two declared nets: shorted by the board, and nothing a
-    wire can undo. One problem per pair of neighbouring pins along the clip, the way
-    striproute reports a strip it cannot cut."""
+    """Every clip holding pins of two nets: shorted by the board, and nothing a wire can
+    undo. One problem per pair of neighbouring pins along the clip, the way striproute
+    reports a strip it cannot cut.
+
+    A pin no net declares counts as a net of its own here. On stripboard it is a party to
+    nothing because a cut can always part it later; a clip cannot be cut, so an unused
+    lead in one with another lead IS joined to it -- an unused GPIO of a chip tied to a
+    header's 5 V, which LVS cannot see because it asks only about declared nets. The
+    placer prices exactly these pairs (``placer._build_strips``)."""
     by_clip: dict[tuple[int, int], list[tuple[PhysicalPinRef, HoleCoord]]] = {}
     for pin_ref, hole in pins.values():
         clip = clip_of(doc.board, hole)
-        if clip is not None and (pin_ref.component_ref, pin_ref.pin) in net_of:
+        if clip is not None:
             by_clip.setdefault(clip, []).append((pin_ref, hole))
+
+    def net(ref: PhysicalPinRef) -> NetId | tuple[str, str]:
+        key = (ref.component_ref, ref.pin)
+        return net_of.get(key, key)
+
+    def said(ref: PhysicalPinRef) -> str:
+        found = net_of.get((ref.component_ref, ref.pin))
+        return "no net" if found is None else names[found]
+
     problems: list[StripProblem] = []
     for clip in sorted(by_clip):
         members = sorted(by_clip[clip], key=lambda m: (m[1].row, m[1].col, m[0].component_ref, m[0].pin))
         for (ref_a, hole_a), (ref_b, hole_b) in pairwise(members):
-            net_a = net_of[(ref_a.component_ref, ref_a.pin)]
-            net_b = net_of[(ref_b.component_ref, ref_b.pin)]
-            if net_a == net_b:
+            if net(ref_a) == net(ref_b):
                 continue
             problems.append(
                 StripProblem(
                     code="cannot-separate",
                     message=(
-                        f"{ref_a.component_ref}.{ref_a.pin} ({names[net_a]}) and "
-                        f"{ref_b.component_ref}.{ref_b.pin} ({names[net_b]}) are in one clip, "
+                        f"{ref_a.component_ref}.{ref_a.pin} ({said(ref_a)}) and "
+                        f"{ref_b.component_ref}.{ref_b.pin} ({said(ref_b)}) are in one clip, "
                         f"{format_hole(hole_a, doc.board)} and {format_hole(hole_b, doc.board)}: "
                         f"the breadboard joins them and nothing can be cut. Move one of the parts."
                     ),
@@ -416,24 +469,112 @@ def _free(holes: Iterable[HoleCoord], used: set[str]) -> list[HoleCoord]:
     return sorted({h for h in holes if hole_key(h) not in used}, key=lambda h: (h.row, h.col))
 
 
-def _under_bodies(a: HoleCoord, b: HoleCoord, occupancy: OccupancyIndex) -> int:
-    """How many parts a straight jumper from a to b passes under: the holes strictly
-    between its ends, counted as ``jumper-under-body`` counts them."""
-    ends = {hole_key(a), hole_key(b)}
-    crossed = {occupancy.body_covers(h) for h in holes_under_line(a, b) if hole_key(h) not in ends}
+def _under_bodies(path: JumperRoute, occupancy: OccupancyIndex) -> int:
+    """How many parts a jumper along ``path`` passes under: the holes under it other than
+    its two ends, counted as ``jumper-under-body`` counts them -- a corner included, since
+    the wire lies over it."""
+    ends = {hole_key(path[0]), hole_key(path[-1])}
+    crossed = {
+        occupancy.body_covers(h)
+        for p, q in pairwise(path)
+        for h in holes_under_line(p, q)
+        if hole_key(h) not in ends
+    }
     crossed.discard(None)
     return len(crossed)
 
 
-def _cost(a: HoleCoord, b: HoleCoord, occupancy: OccupancyIndex) -> int:
-    """A jumper's length in holes, plus :data:`UNDER_BODY_COST` for every part it runs
-    under and for each end that goes in under one."""
-    covered = sum(occupancy.body_covers(end) is not None for end in (a, b))
-    return manhattan(a, b) + UNDER_BODY_COST * (_under_bodies(a, b, occupancy) + covered)
+#: How a jumper between two holes is laid, and what that costs: :func:`_router`.
+type Router = Callable[[HoleCoord, HoleCoord], tuple[int, JumperRoute]]
+
+
+def _router(doc: PerfDocument, occupancy: OccupancyIndex, wire_path: WirePath) -> Router:
+    """The jumper between two holes for this ``wire_path``, with its cost: its length in
+    holes, plus :data:`UNDER_BODY_COST` for every part it runs under and for each end that
+    goes in under one, plus :data:`BEND_COST` a bend. Remembered per pair, because the
+    planner asks again for the jumper it chose."""
+    seen: dict[tuple[str, str], tuple[int, JumperRoute]] = {}
+
+    def route(a: HoleCoord, b: HoleCoord) -> tuple[int, JumperRoute]:
+        key = (hole_key(a), hole_key(b))
+        found = seen.get(key)
+        if found is None:
+            covered = sum(occupancy.body_covers(end) is not None for end in (a, b))
+            if wire_path == "grid":
+                cost, path = _grid_path(a, b, doc, occupancy)
+            else:
+                path = (a, b)
+                cost = manhattan(a, b) + UNDER_BODY_COST * _under_bodies(path, occupancy)
+            found = seen[key] = (cost + UNDER_BODY_COST * covered, path)
+        return found
+
+    return route
+
+
+def _corners(points: Iterable[HoleCoord]) -> JumperRoute:
+    """A path with its repeated points and its straight-through points taken out: the
+    ends and the bends, which is all a wire records."""
+    out: list[HoleCoord] = []
+    for point in points:
+        if out and out[-1] == point:
+            continue
+        if len(out) >= 2:
+            before, last = out[-2], out[-1]
+            if (before.col == last.col == point.col) or (before.row == last.row == point.row):
+                out[-1] = point
+                continue
+        out.append(point)
+    return tuple(out)
+
+
+def _steps(path: JumperRoute) -> set[Step]:
+    """Every hole-to-hole step a jumper along the grid runs: what :data:`ALONG_COST`
+    prices another jumper for sharing."""
+    steps: set[Step] = set()
+    for p, q in pairwise(path):
+        if p.row == q.row:
+            steps.update((col, p.row, True) for col in range(min(p.col, q.col), max(p.col, q.col)))
+        elif p.col == q.col:
+            steps.update((p.col, row, False) for row in range(min(p.row, q.row), max(p.row, q.row)))
+    return steps
+
+
+def _grid_path(
+    a: HoleCoord,
+    b: HoleCoord,
+    doc: PerfDocument,
+    occupancy: OccupancyIndex,
+    lanes: set[Step] | None = None,
+) -> tuple[int, JumperRoute]:
+    """The cheapest jumper from a to b that runs only along rows and columns.
+
+    Every path with at most two bends, which is every shape the pre-bent kits come in:
+    straight when the ends share a row or a column, an L, and a U or a Z through any row
+    or column of the board, so a jumper can step round a part rather than under it, and off
+    the lanes other jumpers already run (``lanes``, :data:`ALONG_COST`). The
+    length of a two-bend path is at least the Manhattan distance, which is what keeps
+    :func:`_cheapest`'s early stop exact. Ties go to the fewest corners, then the lowest
+    row and column, so the plan is the same every time.
+    """
+    candidates = {
+        _corners((a, HoleCoord(a.col, row), HoleCoord(b.col, row), b)) for row in range(doc.board.rows)
+    } | {_corners((a, HoleCoord(col, a.row), HoleCoord(col, b.row), b)) for col in range(doc.board.cols)}
+    best: tuple[tuple[int, int, tuple[tuple[int, int], ...]], JumperRoute] | None = None
+    for path in candidates:
+        bends = len(path) - 2
+        length = sum(manhattan(p, q) for p, q in pairwise(path))
+        cost = length + BEND_COST * bends + UNDER_BODY_COST * _under_bodies(path, occupancy)
+        if lanes:
+            cost += ALONG_COST * len(_steps(path) & lanes)
+        key = (cost, bends, tuple((p.row, p.col) for p in path))
+        if best is None or key < best[0]:
+            best = (key, path)
+    assert best is not None  # a board has a row
+    return best[0][0], best[1]
 
 
 def _cheapest(
-    left: Iterable[HoleCoord], right: Iterable[HoleCoord], used: set[str], occupancy: OccupancyIndex
+    left: Iterable[HoleCoord], right: Iterable[HoleCoord], used: set[str], route: Router
 ) -> tuple[int, Join] | None:
     """The cheapest jumper between two sets of holes, ties broken by position so the plan
     is the same every time.
@@ -454,7 +595,7 @@ def _cheapest(
     for length, a_col, a_row, b_col, b_row, a, b in pairs:
         if best is not None and length > best[0][0]:
             break
-        key = (_cost(a, b, occupancy), a_col, a_row, b_col, b_row)
+        key = (route(a, b)[0], a_col, a_row, b_col, b_row)
         if best is None or key < best[0]:
             best = (key, (a, b))
     return None if best is None else (best[0][0], best[1])
@@ -483,7 +624,7 @@ def _nearest_first(
     islands: list[list[HoleCoord]],
     doc: PerfDocument,
     used: set[str],
-    occupancy: OccupancyIndex,
+    route: Router,
     problems: list[StripProblem],
 ) -> list[Join]:
     """Join a signal net's islands nearest pair first, the way striproute links a strip."""
@@ -493,7 +634,7 @@ def _nearest_first(
         choice: tuple[int, int, int, Join] | None = None
         for i, left in enumerate(groups):
             for j in range(i + 1, len(groups)):
-                found = _cheapest(left, groups[j], used, occupancy)
+                found = _cheapest(left, groups[j], used, route)
                 if found is not None and (choice is None or found[0] < choice[0]):
                     choice = (found[0], i, j, found[1])
         if choice is None:
@@ -512,7 +653,7 @@ def _to_rails(
     own_rails: list[Rail],
     doc: PerfDocument,
     used: set[str],
-    occupancy: OccupancyIndex,
+    route: Router,
     problems: list[StripProblem],
     joined: list[set[Rail]],
 ) -> list[Join]:
@@ -531,7 +672,7 @@ def _to_rails(
             continue
         choice: tuple[int, Rail, Join] | None = None
         for rail in own_rails:
-            found = _cheapest(reach, rail_holes[rail], used, occupancy)
+            found = _cheapest(reach, rail_holes[rail], used, route)
             if found is not None and (choice is None or found[0] < choice[0]):
                 choice = (found[0], rail, found[1])
         if choice is None:
@@ -542,7 +683,7 @@ def _to_rails(
 
     if len(reached) == 2 and not any(reached <= rails for rails in joined):
         top, bottom = sorted(reached, key=lambda rail: not rail.startswith("top"))
-        bridge = _bridge(rail_holes[top], rail_holes[bottom], doc, used, occupancy)
+        bridge = _bridge(rail_holes[top], rail_holes[bottom], doc, used, route)
         if bridge is not None:
             joins.append(_take(bridge, used))
     return joins
@@ -553,7 +694,7 @@ def _bridge(
     bottom: list[HoleCoord],
     doc: PerfDocument,
     used: set[str],
-    occupancy: OccupancyIndex,
+    route: Router,
 ) -> Join | None:
     """The jumper joining a rail pair: straight across, at the end of the board nearest an
     edge where nothing stands in the way."""
@@ -564,7 +705,7 @@ def _bridge(
         b = below.get(a.col)
         if b is None:
             continue
-        key = (_cost(a, b, occupancy), min(a.col, cols - 1 - a.col), a.col)
+        key = (route(a, b)[0], min(a.col, cols - 1 - a.col), a.col)
         if best is None or key < best[0]:
             best = (key, (a, b))
     return None if best is None else best[1]

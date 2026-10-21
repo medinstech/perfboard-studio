@@ -10141,13 +10141,15 @@ class MainWindow(QMainWindow):
 
         One command for both halves, because they are one decision: a board cut apart
         with nothing linking it, or linked with nothing cut, is a state nobody designed
-        and either is one Ctrl+Z away if this commits them separately.
+        and either is one Ctrl+Z away if this commits them separately. Route ▸ Lay Wires
+        Along the Grid shapes a breadboard's jumpers as it shapes a wire.
         """
         document = self.bus.document
+        wire_path = self._autoroute_options().router.wire_path
         t0 = time.perf_counter()
         plan = self._run_planner(
             t("Planning jumpers…") if has_breadboard_pattern(document.board) else t("Planning cuts and links…"),
-            lambda _should_stop: plan_joined_board(document, self.lookup, only_net_ids),
+            lambda _should_stop: plan_joined_board(document, self.lookup, only_net_ids, wire_path),
         )
         elapsed = (time.perf_counter() - t0) * 1000
         if plan is None:
@@ -10181,13 +10183,15 @@ class MainWindow(QMainWindow):
         This went to the perfboard router, which ripped a breadboard's jumpers up and laid
         solder traces and bare wire in their place -- nineteen not-on-breadboard errors and a
         short -- and replaced a stripboard's links with traces along strips already joined.
-        Asked, and said, exactly as a perfboard re-route is.
+        Asked, and said, exactly as a perfboard re-route is. Route ▸ Lay Wires Along the
+        Grid shapes a breadboard's jumpers, as in :meth:`_route_stripboard`.
         """
         document = self.bus.document
+        wire_path = self._autoroute_options().router.wire_path
         t0 = time.perf_counter()
         plan = self._run_planner(
             t("Ripping up and routing again…"),
-            lambda _should_stop: plan_joined_reroute(document, self.lookup, only_net_ids),
+            lambda _should_stop: plan_joined_reroute(document, self.lookup, only_net_ids, wire_path),
         )
         elapsed = (time.perf_counter() - t0) * 1000
         if plan is None:

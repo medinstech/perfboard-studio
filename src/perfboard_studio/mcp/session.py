@@ -1388,15 +1388,23 @@ class BoardSession:
         # along tracks that are already joined and bare wire across a solid copper face,
         # so the board type picks the planner -- for an agent exactly as for the window.
         # A breadboard is the same problem with nothing to cut (breadroute.py).
-        if board_joins_holes(self.document.board):
-            return self._autoroute_stripboard(only)
+        joined = board_joins_holes(self.document.board)
+        if joined:
+            # Checked here, before anything is cleared, as _route_options checks it below.
+            _route_options(style, wires, crossings)
 
         # Cleared BEFORE planning, exactly as the GUI does it, so the plan is made
         # against the board as it will be rather than around copper that is about to go.
         # An agent that moves a part and re-routes must get the same result a user does.
+        # On a breadboard too: a jumper left in a clip a part has moved out of joins the
+        # part that moved IN, and the planner -- which takes what is fitted as fitted --
+        # wires round it into a short.
         cleared = stale_conductor_ids(self.document, self.lookup)
         if cleared:
             self.remove_stale_conductors()
+
+        if joined:
+            return self._autoroute_stripboard(only, wires, stale_removed=len(cleared))
 
         options = _route_options(style, wires, crossings)
         # Every variant's measurements travel with the result, not just the winner's. An
@@ -1463,15 +1471,23 @@ class BoardSession:
         )
         return result
 
-    def _autoroute_stripboard(self, only: tuple[NetId, ...] | None) -> dict[str, Any]:
+    def _autoroute_stripboard(
+        self,
+        only: tuple[NetId, ...] | None,
+        wires: str = "grid",
+        stale_removed: int = 0,
+    ) -> dict[str, Any]:
         """Cut the tracks that short two nets, link the islands that are left.
 
         One command for both, so an agent's undo takes back a whole plan rather than
         leaving the board cut apart with nothing linking it. Everything the planner could
         not do comes back in ``problems`` -- an agent that is told only what worked cannot
         tell a finished board from a half-finished one.
+
+        ``wires`` shapes a breadboard's jumpers, as it shapes a perfboard's wires.
         """
-        plan = plan_joined_board(self.document, self.lookup, only)
+        wire_path = _route_options("balanced", wires).router.wire_path
+        plan = plan_joined_board(self.document, self.lookup, only, wire_path)
         problems = [
             {
                 "code": problem.code,
@@ -1491,6 +1507,7 @@ class BoardSession:
                 links=[],
                 cut_count=0,
                 link_count=0,
+                stale_removed=stale_removed,
                 problems=problems,
             )
 
@@ -1502,6 +1519,7 @@ class BoardSession:
             summary=describe_strip_plan(plan),
             cut_count=len(plan.cuts),
             link_count=len(plan.links),
+            stale_removed=stale_removed,
             cuts=[format_hole(cut.at, self.document.board) for cut in plan.cuts],
             links=[
                 {
@@ -1537,8 +1555,10 @@ class BoardSession:
         only = tuple(self._net_id_strict(name) for name in nets) if nets else None
         if board_joins_holes(self.document.board):
             # Its own planner, as autoroute's: the perfboard router laid solder traces on a
-            # breadboard and traces along a stripboard's joined strips.
-            joined = plan_joined_reroute(self.document, self.lookup, only)
+            # breadboard and traces along a stripboard's joined strips. The options are
+            # checked all the same, and ``wires`` shapes a breadboard's jumpers.
+            wire_path = _route_options(style, wires, crossings).router.wire_path
+            joined = plan_joined_reroute(self.document, self.lookup, only, wire_path)
             if joined.is_empty:
                 return _ok(committed=False, summary=describe_strip_plan(joined))
             outcome = self._dispatch("stripboard.apply", joined.payload())

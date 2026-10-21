@@ -33,9 +33,19 @@ closed without a bump.
   module, as lhm0's "flex" bodies do -- offered by name in the Channel list, "900 mil flex"
   and "1000 mil flex"; that one is written to the file, and only when it is set. On the
   1000 mil flex board the real narrow part is half a pitch off the grid the rest is on, so
-  it is drawn 1.27 mm high; every clip, name and connection is exact. Place on the Board puts the module across the wide channel and Autoroute wires it as
-  any breadboard; both views draw the groove as wide as the channel, and the print where
+  it is drawn 1.27 mm high; every clip, name and connection is exact. Place on the Board
+  puts the module across the wide channel and Autoroute wires it as any breadboard; both views draw the groove as wide as the channel, and the print where
   the strips are.
+
+- **Breadboard jumpers can be laid along the grid.** Route ▸ Lay Wires Along the Grid, and
+  `wires="grid"` for an agent's `autoroute` and `reroute`, now shape a breadboard's jumpers
+  the way the pre-bent kits are made: along a row and down a column, an L, or a U or a Z
+  round a part rather than under it -- where straight jumpers fan out across the board at
+  every angle. Each takes a lane of its own where one is close, because two jumpers down
+  one row hide each other from above. They may cross, as they do on the plastic. The cut
+  list and the guide cut each one to the length it runs, corners included. On a real
+  830-point board the 46 jumpers that had 28 parts standing over them as chords have 2
+  along the grid.
 
 ### Fixed
 
@@ -142,6 +152,17 @@ closed without a bump.
 - **A status message cut short is whole on hover.** The counts on the right of the status
   bar take their room first, so on a 1366 px screen an autoroute report lost its last
   clause to them.
+
+- **An agent's `autoroute` on a stripboard or a breadboard clears stale copper first**, as
+  the window's does and as it always did on perfboard, and says how much it removed.
+
+- **An unused lead in a breadboard clip was a party to nothing.** Moving a header into the
+  clips of a chip's unused pins joined them to its signals, and neither LVS (which asks
+  only about declared nets) nor the planner nor the placer counted it. On a breadboard a
+  pin no net declares is now a net of its own in a clip -- `cannot-separate` from the
+  planner, a conflict to the placer -- and Optimize Placement ranks shorted clips ahead of
+  everything else there, legality included, so a board whose parts already overlap no
+  longer loses to any legal arrangement however many clips it shorts.
 
 ## [0.20.0] - 2026-10-19
 
