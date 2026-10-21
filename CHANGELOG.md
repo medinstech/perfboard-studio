@@ -31,7 +31,9 @@ closed without a bump.
   guide fits it with the small bodies and says which hole it stands over, which way to bend
   the lead, and for a diode which end is up; the STEP file stands it upright. KiCad's
   `R_Axial_..._Vertical` and `D_..._Vertical_AnodeUp` / `_CathodeUp` footprints import as
-  one, and Custom Part ▸ Axial asks how it is mounted. (thanks @vindavs)
+  one, and Custom Part ▸ Axial asks how it is mounted. The guide fits one with the bodies
+  as tall as it stands -- a DIN0207 among the LEDs, a long power resistor later, with the
+  electrolytics or the tall parts. (thanks @vindavs)
 
 - **A breadboard can have a wide channel**, for the modules too wide for the 0.3 inch one:
   an ESP32 devkit's pins are 1000 mil apart and on an ordinary board leave no hole free

@@ -53,13 +53,20 @@ import dataclasses
 import itertools
 import math
 from dataclasses import dataclass
+from functools import cache
 from typing import Literal
 
 from .breadboard import has_breadboard_pattern, has_rails, is_breadboard
 from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import DEFAULT_DRC_OPTIONS, DrcOptions, DrcViolation, run_drc, trace_electrical
 from .erc import run_erc
-from .footprints import adapter_package, flying_lead_length_mm, standing_pin, wire_entry
+from .footprints import (
+    adapter_package,
+    flying_lead_length_mm,
+    standard_footprints,
+    standing_pin,
+    wire_entry,
+)
 from .geometry import (
     all_pin_holes,
     column_label,
@@ -216,9 +223,36 @@ PHASE_BY_ARCHETYPE: dict[BodyArchetype, PhaseNumber] = {
     # checks, which power the board up through the very jack and switch they reach.
     "flying-leads": 7,
     # Stood on end, a resistor is as tall as an LED and a diode as a TO-92: the small
-    # bodies, not the flat ones it would go in with lying down.
+    # bodies, not the flat ones it would go in with lying down. A long one goes later --
+    # see _standing_phase.
     "axial-upright": 3,
 }
+
+
+@cache
+def _tallest_standard_body(phase: PhaseNumber) -> Mm:
+    """The tallest body the standard library puts in ``phase`` -- the measure a part whose
+    height is not fixed by its kind is placed against."""
+    return max(
+        (fp.body_height for fp in standard_footprints().values()
+         if PHASE_BY_ARCHETYPE.get(fp.body.archetype) == phase),
+        default=0.0,
+    )
+
+
+def _standing_phase(height_mm: Mm) -> PhaseNumber:
+    """The phase of an axial part stood on end, by how tall it stands.
+
+    Every other kind of part has the phase of its kind, because its kind fixes its height
+    closely enough. A standing resistor's height is its body's LENGTH: a DIN0207 stands
+    9.6 mm, among the LEDs, and a 5 W wirewound twice that -- taller than anything the small
+    bodies hold, and fitted before the medium ones it would then stop lying flat on the bench
+    for. So it goes in the first phase whose tallest standard body is at least as tall,
+    measured off the library rather than chosen."""
+    for phase in (3, 4):
+        if height_mm <= _tallest_standard_body(phase):
+            return phase
+    return 5
 
 #: Conductor kinds done on the solder side in phase 6, and in phase 7.
 PHASE_BY_CONDUCTOR: dict[ConductorKind, PhaseNumber] = {
@@ -965,6 +999,8 @@ def _part_steps(
             wires=wires,
         )
         phase = PHASE_BY_ARCHETYPE.get(footprint.body.archetype, 5)
+        if footprint.body.archetype == "axial-upright":
+            phase = _standing_phase(footprint.body_height)
         if is_breadboard(doc.board):
             phase = BREADBOARD_PHASE_BY_ARCHETYPE.get(footprint.body.archetype, phase)
         entries.append((phase, footprint.body_height, component.ref, step))

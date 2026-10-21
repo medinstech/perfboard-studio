@@ -251,6 +251,29 @@ def test_the_guide_fits_it_with_the_small_bodies_and_says_how_to_bend_it() -> No
     assert up.polarity == "Cathode — the banded end — in E13"
 
 
+def test_a_long_part_stood_on_end_goes_in_with_the_bodies_as_tall_as_it_is() -> None:
+    """Its kind does not fix a standing part's height: its body's LENGTH does. A DIN0207
+    stands among the LEDs; one twice as long is taller than every small body and would be
+    fitted before the electrolytics it then stops the board lying flat for. The thresholds
+    are the tallest standard bodies of phases 3 and 4, measured off the library."""
+    from perfboard_studio.footprints import standard_footprints
+    from perfboard_studio.guide import PHASE_BY_ARCHETYPE
+
+    def tallest(phase: int) -> float:
+        return max(
+            fp.body_height for fp in standard_footprints().values()
+            if PHASE_BY_ARCHETYPE.get(fp.body.archetype) == phase
+        )
+
+    bus = _bus()
+    _place(bus, "R1", RESISTOR, 4, 4)
+    _place(bus, "R2", "axial-2h-15x5-v", 4, 8)
+    _place(bus, "R3", "axial-3h-25x6-v", 4, 12)
+    heights = {ref: _part_step(bus.document, ref)[1].height_mm for ref in ("R1", "R2", "R3")}
+    assert heights["R1"] <= tallest(3) < heights["R2"] <= tallest(4) < heights["R3"]
+    assert [_part_step(bus.document, ref)[0] for ref in ("R1", "R2", "R3")] == [3, 4, 5]
+
+
 def test_the_guide_says_it_in_turkish_too() -> None:
     bus = _bus()
     _place(bus, "D2", DIODE_CATHODE_UP, 4, 12)
