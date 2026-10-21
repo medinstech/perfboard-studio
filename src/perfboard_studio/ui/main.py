@@ -670,8 +670,28 @@ def _catalog_tooltip(part: CatalogPart) -> str:
     if part.check:
         lines.append(f"{t('Check')}: {t(part.check)}")
     if part.source:
-        lines.append(f"{t('Source')}: {part.source}")
+        lines.append(f"{t('Source')}: {_source_said(part.source)}")
     return "\n".join(lines)
+
+
+def _source_said(source: str) -> str:
+    """A catalog source, its citation as written and its note on how the part is held said
+    in the window's language: "legs 1-2-3 left to right, flat face towards you" is the one
+    instruction on the line, and 47 of the catalog's parts end in one of these three."""
+    for english, said in (
+        ("cathode is the banded end", t("cathode is the banded end")),
+        (
+            "TO-92 legs 1-2-3 left to right, flat face towards you, legs down",
+            t("TO-92 legs 1-2-3 left to right, flat face towards you, legs down"),
+        ),
+        (
+            "TO-220 legs 1-2-3 left to right, printed face towards you, tab behind",
+            t("TO-220 legs 1-2-3 left to right, printed face towards you, tab behind"),
+        ),
+    ):
+        if source.endswith(english):
+            return source[: -len(english)] + said
+    return source
 
 
 def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint]) -> None:

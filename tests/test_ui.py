@@ -6352,6 +6352,24 @@ def test_board_features_offers_only_what_the_board_can_take() -> None:
     assert dialog.finger_count.value() <= 5
 
 
+def test_a_catalog_parts_holding_note_is_said_in_the_windows_language() -> None:
+    """The citation is a name and stays one; the note after it is the one instruction on the
+    line -- which leg is which -- and it was English under a Turkish summary."""
+    from perfboard_studio.catalog import CATALOG
+    from perfboard_studio.ui.i18n import set_language
+    from perfboard_studio.ui.main import _source_said
+
+    part = next(p for p in CATALOG if p.id == "bc547")
+    set_language("tr")
+    try:
+        said = _source_said(part.source)
+    finally:
+        set_language("en")
+    citation = part.source.split("; ")[0]
+    assert said.startswith(citation + "; ") and "flat face" not in said
+    assert _source_said(part.source) == part.source
+
+
 def test_the_menus_survive_a_garbage_collection() -> None:
     """QMenuBar.addMenu hands Python a QMenu it believes it owns, so a menu held only by a
     local in the builder can be destroyed the moment that method returns -- leaving a menu

@@ -112,6 +112,11 @@ closed without a bump.
   They are recognised and said in the window's language where they are shown; the engine
   still says them in English, so nothing an agent or a golden reads has moved.
 
+- **A catalog part's hover says how to hold it in Turkish too.** The citation stays as
+  written, and the note after it -- "TO-92 legs 1-2-3 left to right, flat face towards
+  you", "cathode is the banded end" -- is said in the window's language, for the 39 parts
+  that end in one.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

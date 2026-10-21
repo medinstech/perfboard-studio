@@ -340,6 +340,11 @@ TURKISH: Mapping[str, str] = {
     "⌀{drill} mm, {head} mm head": "⌀{drill} mm, {head} mm vida başı",
     "Nothing is drilled into a solderless breadboard.": "Lehimsiz bir breadboard'a delik açılmaz.",
     "A breadboard's edges are its rails, not fingers.": "Breadboard'un kenarlarında parmak değil, raylar var.",
+    "cathode is the banded end": "katot, bantlı uçtur",
+    "TO-92 legs 1-2-3 left to right, flat face towards you, legs down":
+        "TO-92 bacakları soldan sağa 1-2-3, düz yüz sana dönük, bacaklar aşağıda",
+    "TO-220 legs 1-2-3 left to right, printed face towards you, tab behind":
+        "TO-220 bacakları soldan sağa 1-2-3, yazılı yüz sana dönük, metal sırt arkada",
     "Middle-drag": "Orta tuşla sürükle",
     "Pan the board": "Kartı kaydır",
     "Wheel": "Tekerlek",
