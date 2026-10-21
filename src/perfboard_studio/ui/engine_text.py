@@ -170,6 +170,25 @@ TEMPLATES: tuple[str, ...] = (
     "{count} link(s)",
     "{count} jumper(s)",
     "{count} problem(s)",
+    # -- what the planners and the router could not do, where it is explained -------------
+    "{ref}: {hole} -> {to}, turned to {degrees} deg",
+    "{ref}: {hole} -> {to}",
+    "... and {count} more",
+    "{pin} ({net}) and {pin_b} ({net_b}) share the strip through {hole} and there is no free hole between them to cut. Move one of the parts.",
+    "{pin} ({net}) and {pin_b} ({net_b}) are in one clip, {hole} and {hole_b}: the breadboard joins them and nothing can be cut. Move one of the parts.",
+    "{count} pin(s) of {net} could not be found on the board: the part is not placed, its footprint is not in the library, or the netlist names a pin the footprint does not have. Nothing was linked to them.",
+    "{count} part(s) of {net} stand where the breadboard has no hole, so nothing was linked to them. Move them onto the holes.",
+    "{pin} is in the {edge} {sign} rail at {hole}, which is for {netclass}, and this is a pin no net declares. Move the part off the rail.",
+    "{pin} is in the {edge} {sign} rail at {hole}, which is for {netclass}, and this is a {netclass_b} net. Move the part off the rail.",
+    "Part of {net} (at {holes}) cannot be reached: every hole of its clip already has a lead in it. Move a part so its clip has a hole free for a jumper.",
+    "No route found from {hole} to {to}. No wire is allowed by the current crossing policy, so only a solder trace was tried.",
+    "No route found from {hole} to {to}. Every strategy was blocked — try moving a part, or allow a top jumper.",
+    "{hole} has no pad to solder to — a mounting bore or an edge-connector finger is there. Move the part.",
+    "Endpoint is outside the board.",
+    "Start and end are the same hole.",
+    "The router found no route.",
+    "Skipped {count} unconnected nets",
+    "Skipped {count} unconnected net",
 )
 
 _CONDUCTOR_KINDS = (
@@ -194,6 +213,8 @@ _FIELDS: dict[str, str] = {
     "mm": r"-?\d+(?:\.\d+)?",
     "kind": "|".join(_CONDUCTOR_KINDS),
     "netclass": r"signal|ground|power",
+    "netclass_b": r"signal|ground|power",
+    "sign": r"[+-]",
     "shape": r"line|rectangle|circle|text",
     "edge": r"left|right|top|bottom",
     # A perfboard address, a breadboard's own ("e12", "T+12" -- geometry.format_hole), a
@@ -235,7 +256,7 @@ def _word(field: str, value: str) -> str:
     """A field's value, said in the window's language where it is a word and not a name."""
     if field == "kind":
         return conductor_word(value, guide_language(language()))  # type: ignore[arg-type]
-    if field == "netclass":
+    if field.startswith("netclass"):
         return net_class_word(value)
     if field == "shape":
         return {

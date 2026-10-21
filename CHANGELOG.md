@@ -105,6 +105,13 @@ closed without a bump.
 - **A solderless breadboard's 1:1 PDF is its top alone.** Under it is the adhesive backing,
   and the export wrote a second sheet for a solder side it does not have.
 
+- **The planners explain themselves in Turkish.** What the stripboard and breadboard
+  planners could not do (two nets in one clip or strip, a signal in a rail, a clip with no
+  hole free), why the router gave up on a connection, the moves in Auto-place's
+  confirmation and a netlist's skipped nets were English sentences in a Turkish window.
+  They are recognised and said in the window's language where they are shown; the engine
+  still says them in English, so nothing an agent or a golden reads has moved.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

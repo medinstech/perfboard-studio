@@ -317,3 +317,65 @@ def test_everything_a_session_says_comes_out_in_turkish(turkish: None) -> None:
         if clause in sentence.split(", ")
     ]
     assert leftover == [], leftover
+
+
+def _explanations() -> list[str]:
+    """What the planners and the router say about what they could NOT do, produced by
+    running them on boards where they cannot -- not typed out, so a reworded message
+    without a template fails here rather than reaching a Turkish window in English."""
+    from perfboard_studio.breadroute import plan_breadboard
+    from perfboard_studio.placer import summarize_changes
+    from perfboard_studio.router import route_connection
+
+    from .test_breadroute import FULL, TIMER, _part
+
+    said: list[str] = []
+    # Two nets in one clip, and a signal down the + rail.
+    clipped = dataclasses.replace(
+        TIMER, components=(_part("U1", "dip-8", "e11", rotation=0), *TIMER.components[1:])
+    )
+    said += [p.message for p in plan_breadboard(clipped, LOOKUP).problems]
+    railed = dataclasses.replace(
+        TIMER, components=(*TIMER.components[:2], _part("R2", "r-axial-4", "T+21"))
+    )
+    said += [p.message for p in plan_breadboard(railed, LOOKUP).problems]
+    assert {"cannot-separate", "wrong-rail"} <= {
+        p.code for d in (clipped, railed) for p in plan_breadboard(d, LOOKUP).problems
+    }
+
+    # Two pins sharing a strip with no hole between them to cut.
+    doc = persist.deserialize_document(EXAMPLE.read_text(encoding="utf-8")).document
+    strips = dataclasses.replace(doc.board, type="stripboard", strip_axis="horizontal")
+    from perfboard_studio.striproute import plan_stripboard
+
+    stripped = dataclasses.replace(doc, board=strips, conductors=(), cuts=(), edge_connectors=(), mounting_holes=())
+    said += [p.message for p in plan_stripboard(stripped, LOOKUP).problems]
+
+    # The placement dialog's list of moves, one turned and one not, and the "more" line.
+    import types
+
+    from perfboard_studio.placer import PlacementChange
+
+    moves = types.SimpleNamespace(
+        changes=[
+            PlacementChange("c1", "C1", HoleCoord(0, 18), HoleCoord(4, 28), 0, 270),
+            PlacementChange("r1", "R1", HoleCoord(1, 12), HoleCoord(3, 12), 90, 90),
+            PlacementChange("r2", "R2", HoleCoord(2, 12), HoleCoord(5, 12), 90, 90),
+        ]
+    )
+    said += summarize_changes(moves, limit=2, board=FULL)  # type: ignore[arg-type]
+
+    # Two connections the router refuses outright.
+    from perfboard_studio.router import RouteRequest
+
+    said.append(route_connection(doc, LOOKUP, RouteRequest(from_=HoleCoord(1, 1), to=HoleCoord(1, 1))).reason or "")
+    said.append(route_connection(doc, LOOKUP, RouteRequest(from_=HoleCoord(-1, 0), to=HoleCoord(1, 1))).reason or "")
+    return [line for line in said if line]
+
+
+def test_what_the_planners_could_not_do_comes_out_in_turkish(turkish: None) -> None:
+    said = _explanations()
+    assert len(said) >= 5, said
+    untranslated = [line for line in said if say(line) == line]
+    assert untranslated == [], untranslated
+

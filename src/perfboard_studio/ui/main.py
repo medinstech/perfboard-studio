@@ -9678,7 +9678,9 @@ class MainWindow(QMainWindow):
                 )
             )
         detail.append("")
-        detail.extend(summarize_placement(plan, limit=10, board=self.bus.document.board))
+        detail.extend(
+            say(line) for line in summarize_placement(plan, limit=10, board=self.bus.document.board)
+        )
 
         box = QMessageBox(self)
         box.setWindowTitle(t("Apply this placement?"))
@@ -10139,7 +10141,7 @@ class MainWindow(QMainWindow):
         handful of connections undone and does not say which."""
         if not plan.problems:
             return
-        lines = [f"{problem.message}" for problem in plan.problems[:12]]
+        lines = [say(problem.message) for problem in plan.problems[:12]]
         if len(plan.problems) > 12:
             lines.append(t("… and {count} more").format(count=len(plan.problems) - 12))
         QMessageBox.information(
@@ -10158,7 +10160,7 @@ class MainWindow(QMainWindow):
             return
         lines = [
             f"{item.link.net_name}: {format_hole(item.link.from_, self.bus.document.board)} → "
-            f"{format_hole(item.link.to, self.bus.document.board)}\n    {item.reason}"
+            f"{format_hole(item.link.to, self.bus.document.board)}\n    {say(item.reason)}"
             for item in failures[:12]
         ]
         if len(failures) > 12:
@@ -11712,7 +11714,7 @@ class MainWindow(QMainWindow):
         note = t("Imported {count} net(s) from {name}").format(
             count=len(imported.nets), name=path.name
         )
-        lines = [*imported.warnings] + [
+        lines = [say(warning) for warning in imported.warnings] + [
             f"{ref}: {line}" for ref, said in sorted(plan.notes.items()) for line in said
         ]
         if lines:
