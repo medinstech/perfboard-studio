@@ -209,6 +209,130 @@ def test_naming_a_net_that_does_not_exist_lists_the_ones_that_do(loaded: BoardSe
     assert "GND" in str(err.value)
 
 
+def test_a_wire_bends_where_it_is_told_and_comes_back_with_its_id(loaded: BoardSession) -> None:
+    """`via` is where a wire TURNS, not where it is soldered: the path is the two ends and
+    the corners between, which is what the router lays along the grid. The id comes back
+    with the result, and get_board_info lists the wire by it -- before this a wire joining
+    no pin appeared in no tool's output at all."""
+    added = loaded.add_wire("A1", "D5", via=["A5"], net="GND")
+    assert added["ok"], added
+    wire = next(c for c in loaded.document.conductors if c.id == added["id"])
+    assert wire.path == (HoleCoord(0, 0), HoleCoord(0, 4), HoleCoord(3, 4))
+    assert wire.side == "bottom"
+
+    listed = next(c for c in loaded.get_board_info()["conductors"] if c["id"] == added["id"])
+    assert listed == {
+        "id": added["id"],
+        "kind": "insulated-wire",
+        "net": "GND",
+        "side": "bottom",
+        "path": ["A1", "A5", "D5"],
+    }
+
+    trace = loaded.add_solder_trace(["A10", "A11"])
+    assert trace["ok"] and trace["id"] in {c.id for c in loaded.document.conductors}
+    # Two-hole wires are what they always were.
+    assert loaded.add_wire("B1", "B4")["ok"]
+
+
+def test_a_corner_repeated_by_mistake_is_refused_rather_than_laid(loaded: BoardSession) -> None:
+    """A hole that follows itself is a segment of no length -- a `via` that repeated an end
+    -- and the command says so instead of storing a wire with a bend that is not there."""
+    refused = loaded.add_wire("A1", "A5", via=["A1"])
+    assert refused["ok"] is False and refused["code"] == "repeated-hole"
+    assert "A1" in refused["message"]
+
+
+def test_a_top_jumper_and_every_wire_on_a_solderless_breadboard_go_on_top() -> None:
+    """The window's own rule. A wire left on the default bottom of a solderless breadboard
+    was a not-on-breadboard error the moment an agent laid it, whatever its kind; a
+    solderable breadboard IS soldered underneath, so its wires keep the bottom."""
+    from perfboard_studio.breadboard import breadboard, hole_name, pattern_board
+
+    perfboard = BoardSession(document=new_board(cols=24, rows=16))
+    jumper = perfboard.add_wire("C3", "C9", kind="top-jumper")
+    assert next(c for c in perfboard.document.conductors if c.id == jumper["id"]).side == "top"
+
+    for board, side in (
+        (breadboard("400"), "top"),
+        (pattern_board("solderable-breadboard", 30, 20), "bottom"),
+    ):
+        on = BoardSession(document=dataclasses.replace(new_board(cols=30, rows=20), board=board))
+        start, end = hole_name(board, HoleCoord(2, 4)), hole_name(board, HoleCoord(8, 6))
+        assert start is not None and end is not None
+        wire = on.add_wire(start, end)
+        assert wire["ok"], wire
+        assert next(c for c in on.document.conductors if c.id == wire["id"]).side == side
+        assert not [v for v in on.run_drc()["violations"] if v["rule"] == "not-on-breadboard"]
+
+
+def test_conductors_are_deleted_by_id_all_or_none_in_one_undo_step(loaded: BoardSession) -> None:
+    first = loaded.add_wire("A1", "A5")["id"]
+    second = loaded.add_solder_trace(["A10", "A11", "A12"])["id"]
+    depth = len(loaded.history())
+
+    refused = loaded.delete_conductors([first, "cond-nowhere"])
+    assert refused["ok"] is False and refused["code"] == "conductor-not-found"
+    assert {first, second} <= {c.id for c in loaded.document.conductors}
+
+    assert loaded.delete_conductors([first, second])["ok"]
+    assert not {first, second} & {c.id for c in loaded.document.conductors}
+    assert len(loaded.history()) == depth + 1
+    loaded.undo()
+    assert {first, second} <= {c.id for c in loaded.document.conductors}
+
+    with pytest.raises(SessionError):
+        loaded.delete_conductors([])
+
+
+def test_a_part_goes_to_the_solder_side_and_a_locked_one_refuses(session: BoardSession) -> None:
+    session.place_component(ref="R1", footprint_id="r-axial-4", hole="C3")
+    assert session.mirror_component("R1")["ok"]
+    assert session.get_component("R1")["mirrored"] is True
+    assert session.mirror_component("R1", mirrored=False)["ok"]
+    assert session.get_component("R1")["mirrored"] is False
+
+    session.set_component_locked("R1", True)
+    refused = session.mirror_component("R1")
+    assert refused["ok"] is False and refused["code"] == "component-locked"
+    assert session.get_component("R1")["mirrored"] is False
+
+
+def test_parts_can_be_placed_on_the_solder_side(session: BoardSession) -> None:
+    assert session.place_component(ref="R1", footprint_id="r-axial-4", hole="C3", mirrored=True)["ok"]
+    assert session.get_component("R1")["mirrored"] is True
+
+    session.add_part("R2", "r-axial-4")
+    session.add_part("R3", "r-axial-4")
+    placed = session.place_parts(
+        [{"ref": "R2", "at": "C8", "mirrored": True}, {"ref": "R3", "at": "C12"}]
+    )
+    assert placed["ok"], placed
+    assert session.get_component("R2")["mirrored"] is True
+    assert session.get_component("R3")["mirrored"] is False
+
+    session.add_part("R4", "r-axial-4")
+    with pytest.raises(SessionError):
+        # "false" is a non-empty string; read as truthy it would mirror the part.
+        session.place_parts([{"ref": "R4", "at": "J3", "mirrored": "false"}])
+
+
+def test_a_drc_finding_names_the_parts_and_the_copper_it_is_about(session: BoardSession) -> None:
+    """A finding is only useful to an agent if it can act on it: the parts by the reference
+    every tool takes, the copper by the id delete_conductors takes."""
+    session.place_component(ref="R1", footprint_id="r-axial-4", hole="C3")
+    session.place_component(ref="R2", footprint_id="r-axial-4", hole="C3")
+    trace = session.add_solder_trace(["J1", "J2"])["id"]
+    session.add_wire("I1", "K2", kind="bare-wire")
+
+    violations = session.run_drc()["violations"]
+    overlap = next(v for v in violations if set(v.get("components", [])) == {"R1", "R2"})
+    assert overlap["severity"] in ("error", "warning")
+    assert any(trace in v.get("conductor_ids", []) for v in violations)
+    # Absent rather than empty when a rule names nothing, like every optional field here.
+    assert all(v.get("components", ["x"]) and v.get("conductor_ids", ["x"]) for v in violations)
+
+
 # ---------------------------------------------------------------------------
 # The planners
 # ---------------------------------------------------------------------------
@@ -852,7 +976,15 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # LVS and a guide for a dead board. Not a field on run_lvs, because it answers on a
     # design with nothing placed -- which is when an agent drawing a circuit asks -- and
     # LVS has nothing to say there but "unplaced".
-    assert len(tools) <= 55, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 57, for two inverses (issue #8). delete_conductors: add_wire and add_solder_trace
+    # had no way back but undo, which reaches the last step only, and reroute and
+    # remove_stale_conductors take only copper that claims a net or stopped serving one.
+    # mirror_component: the solder side, one key for a person and unreachable for an agent;
+    # not a flag on rotate_component, which would make one call two undo steps. Everything
+    # else the issue asked for was a parameter -- add_wire's via, mirrored on the two place
+    # tools -- or already there: update_part sets a placed part's value.
+    assert len(tools) <= 57, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"

@@ -72,6 +72,7 @@ from perfboard_studio.commands import (
     ConnectPinsPayload,
     DeleteBoardNotesPayload,
     DeleteComponentPayload,
+    DeleteConductorsPayload,
     DeleteCutPayload,
     DeleteEdgeConnectorPayload,
     DeleteMountingHolePayload,
@@ -79,7 +80,9 @@ from perfboard_studio.commands import (
     DeletePartPayload,
     DisconnectPinsPayload,
     ImportNetlistPayload,
+    MirrorComponentPayload,
     MoveComponentPayload,
+    NewConductor,
     NewSolderTraceConductor,
     NewWireConductor,
     PartPlacement,
@@ -433,6 +436,25 @@ class BoardSession:
                     "face": connector.face,
                 }
                 for connector in self.document.edge_connectors
+            ]
+        if self.document.conductors:
+            # The copper, by id, which is what delete_conductors takes: before this the
+            # only place an id appeared was a net's islands, and a wire joining no pin
+            # appeared nowhere at all.
+            names = {net.id: net.name for net in self.document.nets}
+            info["conductors"] = [
+                {
+                    "id": conductor.id,
+                    "kind": conductor.kind,
+                    **(
+                        {"net": names.get(conductor.net_id, conductor.net_id)}
+                        if conductor.net_id is not None
+                        else {}
+                    ),
+                    "side": conductor.side,
+                    "path": [format_hole(hole, board) for hole in conductor.path],
+                }
+                for conductor in self.document.conductors
             ]
         if self.document.height_limit_mm is not None:
             info["height_limit_mm"] = self.document.height_limit_mm
@@ -912,7 +934,9 @@ class BoardSession:
         ``pin_names`` REPLACES the part's names whole (``{}`` clears them); ``symbol`` of
         ``""`` clears a declaration, since an omitted argument already means "leave it".
 
-        It reaches a part ON THE BOARD as well. Naming the pins of a module is something
+        It reaches a part ON THE BOARD as well -- which is how a placed part's VALUE is
+        set, ``update_part("R1", value="4k7")``, so there is no separate tool for it. Naming
+        the pins of a module is something
         done after it has been placed as often as before, and "unplace it, rename its pins,
         place it back" would lose its lead bends for no reason. Only the footprint of a
         placed part is out of reach: changing the package under a part soldered into holes
@@ -989,7 +1013,8 @@ class BoardSession:
         """Move parts from the design onto the board, all as ONE undo step.
 
         Each placement is ``{"ref": "R1", "at": "C7", "rotation": 90}``; rotation is
-        optional and defaults to 0. One command however many parts, because laying out a
+        optional and defaults to 0, and ``"mirrored": true`` puts the part on the solder
+        side. One command however many parts, because laying out a
         drawn circuit is one decision — dispatched one at a time it takes one undo press
         per part, each leaving a board that is half laid out.
         """
@@ -1008,6 +1033,7 @@ class BoardSession:
                     id=self._require_part(ref).id,
                     anchor=_hole(at, self.document.board),
                     rotation=_rotation(int(entry.get("rotation", 0))),
+                    mirrored=_mirrored(entry.get("mirrored", False)),
                 )
             )
         return self._dispatch("part.place", PlacePartsPayload(placements=tuple(specs)))
@@ -1276,6 +1302,7 @@ class BoardSession:
         pin_names: dict[str, str] | None = None,
         symbol: str | None = None,
         part: str = "",
+        mirrored: bool = False,
     ) -> dict[str, Any]:
         ref, footprint_id, value, names, symbol = self._from_catalog(
             part, ref, footprint_id, value, pin_names, symbol
@@ -1290,6 +1317,7 @@ class BoardSession:
                 footprint_id=footprint_id,
                 anchor=_hole(hole, self.document.board),
                 rotation=_rotation(rotation),
+                mirrored=_mirrored(mirrored),
                 pin_names=names,
                 symbol=cast(PartSymbol | None, symbol or None),
             ),
@@ -1308,6 +1336,19 @@ class BoardSession:
             RotateComponentPayload(id=component.id, rotation=_rotation(rotation)),
         )
 
+    def mirror_component(self, ref: str, mirrored: bool = True) -> dict[str, Any]:
+        """Put a part on the solder side, or back: ``mirrored`` is absolute, as
+        ``rotate_component``'s rotation is. A mirrored part's pins are reflected, so the
+        holes it takes change with it. Refused on a locked part, as the window refuses it.
+
+        Its own verb and not a flag on ``rotate_component``: one call would then be two
+        decisions and two undo steps.
+        """
+        component = self._require_component(ref)
+        return self._dispatch(
+            "component.mirror", MirrorComponentPayload(id=component.id, mirrored=mirrored)
+        )
+
     def set_component_locked(self, ref: str, locked: bool) -> dict[str, Any]:
         """Pin a part in place so the placement optimiser works around it."""
         component = self._require_component(ref)
@@ -1320,22 +1361,46 @@ class BoardSession:
         return self._dispatch("component.delete", DeleteComponentPayload(id=component.id))
 
     def add_wire(
-        self, from_hole: str, to_hole: str, kind: str = "insulated-wire", net: str | None = None
+        self,
+        from_hole: str,
+        to_hole: str,
+        kind: str = "insulated-wire",
+        net: str | None = None,
+        via: list[str] | None = None,
     ) -> dict[str, Any]:
+        """Run a wire from one hole to another, bent at each hole in ``via`` on the way.
+
+        A wire is joined at its two ends and only lies over the holes between, so ``via``
+        is where it BENDS, not where it is soldered -- the corners a wire dressed along the
+        grid has, which ``autoroute(wires="grid")`` lays and a two-hole wire could not.
+
+        The side follows from the wire, as it does in the window: a top jumper runs over the
+        component side, and on a solderless breadboard EVERY wire does, pushed into the
+        plastic from above -- there is no other side there, and a wire left on the default
+        bottom was a ``not-on-breadboard`` error the moment it was laid.
+
+        The new conductor's ``id`` comes back with the result, which is what
+        ``delete_conductors`` takes.
+        """
         if kind not in ("bare-wire", "insulated-wire", "top-jumper"):
             raise SessionError(
                 f"{kind!r} is not a wire. Use 'insulated-wire' (may cross other copper), "
                 "'bare-wire' (may not) or 'top-jumper' (over the component side)."
             )
-        return self._dispatch(
-            "conductor.add",
-            AddConductorPayload(
-                conductor=NewWireConductor(
-                    path=(_hole(from_hole, self.document.board), _hole(to_hole, self.document.board)),
-                    kind=kind,  # type: ignore[arg-type]
-                    net_id=self._net_id(net),
-                )
-            ),
+        board = self.document.board
+        path = (
+            _hole(from_hole, board),
+            *(_hole(corner, board) for corner in via or ()),
+            _hole(to_hole, board),
+        )
+        side: BoardSide = "top" if kind == "top-jumper" or is_breadboard(board) else "bottom"
+        return self._add_conductor(
+            NewWireConductor(
+                path=path,
+                kind=kind,  # type: ignore[arg-type]
+                side=side,
+                net_id=self._net_id(net),
+            )
         )
 
     def add_solder_trace(
@@ -1355,16 +1420,43 @@ class BoardSession:
             if spine_gauge_mm is not None
             else None
         )
+        return self._add_conductor(
+            NewSolderTraceConductor(
+                path=tuple(_hole(h, self.document.board) for h in holes),
+                kind="solder-trace-wired" if spine is not None else "solder-trace",
+                spine=spine,
+                net_id=self._net_id(net),
+            )
+        )
+
+    def _add_conductor(self, conductor: NewConductor) -> dict[str, Any]:
+        """One ``conductor.add``, answered with the id it was given.
+
+        Without the id an agent could lay a wire and never take that wire back but by
+        ``undo``: nothing else in a result named it, and a wire joining no pin appears in
+        no tool's output at all.
+        """
+        before = {c.id for c in self.document.conductors}
+        result = self._dispatch("conductor.add", AddConductorPayload(conductor=conductor))
+        if result["ok"]:
+            result["id"] = next(c.id for c in self.document.conductors if c.id not in before)
+        return result
+
+    def delete_conductors(self, ids: list[str]) -> dict[str, Any]:
+        """Take copper off the board by id, all of it or none, as ONE undo step.
+
+        The inverse ``add_wire`` and ``add_solder_trace`` never had: ``undo`` takes back the
+        last step only, ``reroute`` only what claims a net, and ``remove_stale_conductors``
+        only what a move left stranded. The ids are in ``get_board_info``'s ``conductors``,
+        in ``run_drc``'s violations and in what an add returns. An id that is not on the
+        board refuses the whole batch, as the command does -- a partly applied cleanup
+        leaves nobody able to tell what went.
+        """
+        if not ids:
+            raise SessionError("delete_conductors needs at least one conductor id.")
         return self._dispatch(
-            "conductor.add",
-            AddConductorPayload(
-                conductor=NewSolderTraceConductor(
-                    path=tuple(_hole(h, self.document.board) for h in holes),
-                    kind="solder-trace-wired" if spine is not None else "solder-trace",
-                    spine=spine,
-                    net_id=self._net_id(net),
-                )
-            ),
+            "conductor.deleteMany",
+            DeleteConductorsPayload(ids=tuple(dict.fromkeys(ids))),
         )
 
     # -- the planners ------------------------------------------------------
@@ -1655,8 +1747,6 @@ class BoardSession:
         strays = stale_conductor_ids(self.document, self.lookup)
         if not strays:
             return _ok(removed=0, message="Every conductor still connects the net it claims.")
-        from perfboard_studio.commands import DeleteConductorsPayload
-
         result = self._dispatch(
             "conductor.deleteMany",
             DeleteConductorsPayload(ids=strays, label=f"Remove {len(strays)} stale conductor(s)"),
@@ -1690,6 +1780,7 @@ class BoardSession:
 
     def run_drc(self) -> dict[str, Any]:
         violations = run_drc(self.document, self.lookup)
+        refs = {c.id: c.ref for c in self.document.components}
         return {
             # "ok" means the CALL ran, the same as everywhere else in this API. A check
             # that found something is still a check that ran; what it found is "errors".
@@ -1702,6 +1793,16 @@ class BoardSession:
                     "severity": v.severity,
                     "message": v.message,
                     "holes": [format_hole(h, self.document.board) for h in v.holes],
+                    # What the finding is ABOUT, so it can be acted on: the parts by the
+                    # reference every other tool takes, the copper by the id
+                    # delete_conductors takes. Only when the rule names any, as the
+                    # optional fields are everywhere else.
+                    **(
+                        {"components": [refs.get(id_, id_) for id_ in v.component_ids]}
+                        if v.component_ids
+                        else {}
+                    ),
+                    **({"conductor_ids": list(v.conductor_ids)} if v.conductor_ids else {}),
                 }
                 for v in violations
             ],
@@ -2152,6 +2253,18 @@ def _pin_names_arg(names: dict[str, str] | None) -> PinNames | None:
     if not isinstance(names, dict):
         raise SessionError('pin_names is a mapping of pin number to name, e.g. {"1": "G"}.')
     return cast(PinNames, tuple(names.items()))
+
+
+def _mirrored(value: object) -> bool | None:
+    """A placement's ``mirrored``, or ``None`` for the command's own default.
+
+    ``None`` rather than ``False`` when it is not asked for, so a placement that says
+    nothing about the side dispatches exactly the payload it always did. A string is
+    refused rather than read as true: ``"false"`` is a non-empty string.
+    """
+    if not isinstance(value, bool):
+        raise SessionError(f"mirrored must be true or false, not {value!r}.")
+    return True if value else None
 
 
 def _rotation(value: int) -> Rotation:

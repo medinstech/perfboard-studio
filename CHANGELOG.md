@@ -48,6 +48,18 @@ closed without a bump.
   830-point board the 46 jumpers that had 28 parts standing over them as chords have 2
   along the grid. (thanks @RespawnDespair)
 
+- **An agent can bend a wire, take copper back and mirror a part.** `add_wire` takes
+  `via`, the holes a wire bends at on its way, and it and `add_solder_trace` return the
+  new conductor's `id`. `delete_conductors` takes copper off by id, all or none, as one
+  undo step -- before it, `undo` was the only way back from a wire an agent had laid --
+  and `mirror_component` puts a part on the solder side, as `mirrored` on
+  `place_component` and each `place_parts` entry does. `get_board_info` lists every
+  conductor as `{id, kind, net, side, path}` and a `run_drc` violation names the
+  `components` and `conductor_ids` it is about, so an id can be found to begin with. A
+  placed part's value needed nothing new: `update_part(ref, value=...)` already set it,
+  and says so now. 57 tools. A path that names one hole twice in a row is refused
+  (`repeated-hole`) rather than stored as a bend that is not there. (thanks @vindavs)
+
 ### Fixed
 
 - **A click on the board picks what is under the pointer.** A part answered clicks over its
@@ -61,6 +73,12 @@ closed without a bump.
   whole length. A right-click on such copper offers the copper and a double-click there no
   longer opens the part underneath; from the solder side the lead ends are still painted
   over the joints that land on them. (thanks @vindavs)
+
+- **A wire an agent lays on a solderless breadboard goes on top.** `add_wire` left every
+  wire on the default bottom side, so on a solderless breadboard each one was a
+  `not-on-breadboard` error the moment it was laid, `top-jumper` included. It follows the
+  window's rule now: a top jumper runs over the component side, and so does every wire on
+  a solderless breadboard. (thanks @vindavs)
 
 - **Autosave no longer writes over a file somebody else changed.** A window with unsaved
   edits rightly does not reload when its file changes on disk, but autosave then wrote the

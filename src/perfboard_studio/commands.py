@@ -29,6 +29,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Any, Literal, cast, get_args
 
 from .breadboard import board_problem, has_breadboard_pattern, is_breadboard, pattern_board
@@ -477,6 +478,15 @@ def assert_valid_path(path: tuple[HoleCoord, ...], kind: ConductorKind, board: B
         raise CommandError("path-too-short", "A conductor path needs at least 2 holes.")
     for hole in path:
         assert_hole_on_board(hole, board, "Conductor path hole")
+    # A hole named twice in a row is a segment of no length: nothing a wire or a run can
+    # be, and a corner an agent's `via` repeated by mistake rather than a bend.
+    for a, b in pairwise(path):
+        if a == b:
+            raise CommandError(
+                "repeated-hole",
+                f"{format_hole(a, board)} follows itself in the path; a conductor's next hole "
+                f"must be a different one.",
+            )
     if kind in ("solder-trace", "solder-trace-wired", "strip"):
         check = validate_orthogonal_chain(path)
         if not check.ok:

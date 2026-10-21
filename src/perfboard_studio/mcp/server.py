@@ -12,7 +12,7 @@ module configures logging to stderr before anything else, and nothing anywhere u
 render tools pull in are the real risk, which is another reason they are imported lazily
 inside the tools rather than at module scope.
 
-FIFTY-FOUR TOOLS, against PLAN.md Sec 2's "~25, deliberately narrow", and the overage is
+FIFTY-SEVEN TOOLS, against PLAN.md Sec 2's "~25, deliberately narrow", and the overage is
 stated rather than hidden. Each tool is a verb an agent cannot compose from the others,
 and the surface was trimmed rather than grown: the history listing folded into
 ``get_status``, and "solder bridge" is not a separate tool from ``add_solder_trace``
@@ -43,6 +43,16 @@ composes from the others -- declaring a net, adding a pin, removing one, renamin
 forgetting are five different verbs -- and ``update_net`` carries the only route in the
 whole API to ``current_a`` and ``voltage_v``, which two DRC rules and the guide's wire
 gauge are silent without.
+
+The newest two are inverses that were missing. ``delete_conductors`` is the only way an
+agent can take back a wire it laid other than ``undo``, which reaches the last step only;
+``reroute`` and ``remove_stale_conductors`` take only copper that claims a net or no longer
+serves one. ``mirror_component`` is the solder side, which a person reaches with one key
+and an agent could not reach at all. Mirroring is not a flag on ``rotate_component``,
+because one call would then be two decisions and two undo steps. The rest of what was
+asked for in the same issue were parameters, not tools: ``add_wire(via=...)`` for a bent
+wire, ``mirrored`` on the two place tools, and a placed part's value, which
+``update_part`` already set.
 
 The two the plan singles out as critical are here and are worth every byte of their
 schema: ``render_2d_view``/``render_3d_view``, because an agent editing a board it
@@ -124,7 +134,8 @@ def get_status() -> dict[str, Any]:
 @mcp.tool()
 def get_board_info() -> dict[str, Any]:
     """The board itself: grid size, pitch, thickness, material, and the hole addresses of
-    its corners."""
+    its corners -- and what is on it by id: mounting holes, edge connectors, labels, and
+    every conductor as {id, kind, net, side, path}."""
     return session.get_board_info()
 
 
@@ -416,7 +427,8 @@ def update_part(
     """Rename a part or change what it is; omitted fields are left alone. A rename CARRIES
     ITS WIRING, because a reference is the only name a net has for a part — and is refused
     if that would put one pin on two nets. Reaches parts on the board too, except for their
-    footprint. pin_names replaces the names whole ({} clears them); symbol "" clears it.
+    footprint: update_part("R1", value="4k7") is how a placed part's value is set.
+    pin_names replaces the names whole ({} clears them); symbol "" clears it.
     off_board=true takes a pot, jack or switch off the board and wires it to it instead:
     its footprint becomes the pads its wires land in (wire-<n>), on the board or not, and
     it keeps the pin names and symbol its package gave it."""
@@ -440,7 +452,8 @@ def list_parts() -> dict[str, Any]:
 @mcp.tool()
 def place_parts(placements: list[dict[str, Any]]) -> dict[str, Any]:
     """Move parts from the design onto the board, all as ONE undo step. Each placement is
-    {"ref": "R1", "at": "C7", "rotation": 90}; rotation is optional. Laying out a drawn
+    {"ref": "R1", "at": "C7", "rotation": 90}; rotation is optional, and "mirrored": true
+    puts a part on the solder side. Laying out a drawn
     circuit is one decision, and one command per part means one undo press per part, each
     leaving a board half laid out. optimize_placement arranges them afterwards."""
     return session.place_parts(placements)
@@ -531,11 +544,13 @@ def place_component(
     pin_names: dict[str, str] | None = None,
     symbol: str | None = None,
     part: str = "",
+    mirrored: bool = False,
 ) -> dict[str, Any]:
     """Put a part on the board. `hole` is where pin 1 goes ("C7"); rotation is 0, 90,
-    180 or 270. Use list_footprints to find a footprint_id. pin_names and symbol are as on
-    add_part. part="irf9540n" (see list_catalog) fills the footprint, value, names and
-    symbol in, under anything given; with it, ref and footprint_id may be left empty."""
+    180 or 270; mirrored=true puts it on the solder side. Use list_footprints to find a
+    footprint_id. pin_names and symbol are as on add_part. part="irf9540n" (see
+    list_catalog) fills the footprint, value, names and symbol in, under anything given;
+    with it, ref and footprint_id may be left empty."""
     return session.place_component(
         ref=ref,
         footprint_id=footprint_id,
@@ -545,6 +560,7 @@ def place_component(
         pin_names=pin_names,
         symbol=symbol,
         part=part,
+        mirrored=mirrored,
     )
 
 
@@ -558,6 +574,14 @@ def move_component(ref: str, hole: str) -> dict[str, Any]:
 def rotate_component(ref: str, rotation: int) -> dict[str, Any]:
     """Turn a part to an absolute rotation of 0, 90, 180 or 270 degrees."""
     return session.rotate_component(ref, rotation)
+
+
+@mcp.tool()
+def mirror_component(ref: str, mirrored: bool = True) -> dict[str, Any]:
+    """Put a part on the solder side (mirrored=true) or back on the component side
+    (false). Absolute, like rotate_component. Its pins are reflected, so the holes it
+    takes change. Refused on a locked part."""
+    return session.mirror_component(ref, mirrored)
 
 
 @mcp.tool()
@@ -576,12 +600,19 @@ def delete_component(ref: str) -> dict[str, Any]:
 
 @mcp.tool()
 def add_wire(
-    from_hole: str, to_hole: str, kind: str = "insulated-wire", net: str | None = None
+    from_hole: str,
+    to_hole: str,
+    kind: str = "insulated-wire",
+    net: str | None = None,
+    via: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run a wire between two holes. "insulated-wire" may cross other copper, "bare-wire"
     may not, "top-jumper" goes over the component side. Naming the net lets LVS and the
-    guide know what it is for."""
-    return session.add_wire(from_hole, to_hole, kind=kind, net=net)
+    guide know what it is for. `via` lists the holes it BENDS at on the way, in order
+    (["C9", "H9"]) -- a wire is joined only at its two ends. A top jumper, and every wire
+    on a solderless breadboard, goes on the component side. Returns the new conductor's
+    `id`, which delete_conductors takes."""
+    return session.add_wire(from_hole, to_hole, kind=kind, net=net, via=via)
 
 
 @mcp.tool()
@@ -594,9 +625,19 @@ def add_solder_trace(
     between neighbouring pads and does not reliably span the 1.7 mm diagonal one. Give
     spine_gauge_mm (0.6 is typical) for a run over a tinned-wire spine, which drops the
     resistance by roughly a factor of ten and is what you want for a power or ground
-    rail longer than five or six pads. A two-hole trace is a solder bridge.
+    rail longer than five or six pads. A two-hole trace is a solder bridge. Returns the new
+    conductor's `id`.
     """
     return session.add_solder_trace(holes, spine_gauge_mm=spine_gauge_mm, net=net)
+
+
+@mcp.tool()
+def delete_conductors(ids: list[str]) -> dict[str, Any]:
+    """Take wires, traces or jumpers off the board by id, all of them as ONE undo step.
+    The ids are in get_board_info's `conductors`, in run_drc's violations and in what
+    add_wire and add_solder_trace return. An id that is not on the board refuses the whole
+    batch rather than deleting the rest."""
+    return session.delete_conductors(ids)
 
 
 @mcp.tool()
@@ -709,7 +750,9 @@ def run_erc() -> dict[str, Any]:
 def run_drc() -> dict[str, Any]:
     """Check the board against the design rules: overlapping parts, crossing conductors,
     pins sharing a hole, and — the one that matters most on perfboard — solder traces
-    running within a pad gap of another net, which is the commonest way a build fails."""
+    running within a pad gap of another net, which is the commonest way a build fails.
+    A violation names the `components` and `conductor_ids` it is about, when it is about
+    any."""
     return session.run_drc()
 
 

@@ -101,13 +101,13 @@ conductor at a time.
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
 | **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `update_net` · `delete_net` |
 | **The board** | `set_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `remove_board_feature` |
-| **Editing** | `place_component` · `move_component` · `rotate_component` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `remove_stale_conductors` · `set_height_limit` |
+| **Editing** | `place_component` · `move_component` · `rotate_component` · `mirror_component` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` |
 | **Planning** | `autoroute` · `reroute` · `optimize_placement` |
 | **Verifying** | `run_erc` · `run_drc` · `run_lvs` · `check_heights` |
 | **Output** | `generate_guide` · `export_pdf` · `export_step` |
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 
-55 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+57 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -198,6 +198,21 @@ still join the right pins, so nothing flags them. `reroute` takes the old ones o
 which is the only safe verb after `move_component` or `optimize_placement`. On a stripboard
 or a breadboard it plans with that board's own planner, as `autoroute` does: the links or
 jumpers are taken up and laid again, and the cuts stay where they are.
+
+The editing group lays copper and takes it back by ID. `add_wire` bends at each hole
+in `via` on its way, in order -- a wire is joined at its two ends and only lies over
+the holes between, so `via` is where it turns, the corners `autoroute(wires="grid")`
+lays. Its side follows from the wire, as in the window: a `top-jumper` runs over the
+component side, and so does every wire on a solderless breadboard, which has no other
+side -- on the default bottom it was `not-on-breadboard` the moment it was laid.
+`add_wire` and `add_solder_trace` return the new conductor's `id`; `get_board_info`
+lists every conductor as `{id, kind, net, side, path}`, and a `run_drc` violation names
+the `components` and `conductor_ids` it is about. `delete_conductors` takes any of those
+ids off the board as one undo step, all or none: before it, `undo` was the only way back
+from a wire an agent had laid. `mirror_component` puts a part on the solder side, and
+`place_component` and each `place_parts` entry take `mirrored` too. A placed part's
+VALUE needs no tool of its own: `update_part(ref, value=...)` reaches parts on the
+board.
 
 `export_step` is the board leaving for somebody else's program: the CAD one its enclosure
 is drawn in. An agent asked to design the case, or only to say whether the board fits the
