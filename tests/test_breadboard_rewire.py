@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
+import random
 from itertools import pairwise
 
 import pytest
@@ -12,9 +13,11 @@ import pytest
 from perfboard_studio.breadboard import clip_holes, clip_of
 from perfboard_studio.breadroute import (
     UNDER_BODY_COST,
+    _cover,
     _grid_path,
     _router,
     _steps,
+    _under_bodies,
     plan_breadboard,
     plan_joined_reroute,
 )
@@ -342,6 +345,34 @@ def test_grid_jumpers_wire_a_placed_example_with_fewer_parts_over_them() -> None
 
     assert under(grid) <= under(straight)
     assert all(clip_of(grid.board, c.path[0]) is not None for c in grid.conductors)
+
+
+def test_the_parts_over_a_run_are_the_same_read_off_the_cover_or_walked() -> None:
+    """``_cover`` answers a run along a row or a column without walking it, which is what
+    took grid jumpers on atmega328-relay from 50 s to about one. It has to be the same
+    answer as walking it, ends excluded, for every shape -- or the plan moves."""
+    occupancy = build_occupancy(TIMER, get_footprint)
+    cover = _cover(TIMER, occupancy)
+    # Every covered hole as the far end of a run and the near end of one, out and back
+    # along a row and along a column: the hole the run turns on is the one only it covers.
+    for row, along in cover[0].items():
+        for col, _part_id in along:
+            hole = HoleCoord(col, row)
+            for d_col, d_row in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                near = HoleCoord(col + d_col, row + d_row)
+                path = (near, hole, near)
+                assert _under_bodies(path, occupancy, cover) == _under_bodies(path, occupancy) == 1, path
+    rng = random.Random(3)
+    for _ in range(2000):
+        points = [HoleCoord(rng.randrange(TIMER.board.cols), rng.randrange(TIMER.board.rows))]
+        for _ in range(rng.randrange(1, 4)):
+            last = points[-1]
+            step = rng.choice(("row", "col", "any"))
+            col = rng.randrange(TIMER.board.cols) if step != "col" else last.col
+            row = rng.randrange(TIMER.board.rows) if step != "row" else last.row
+            points.append(HoleCoord(col, row))
+        path = tuple(points)
+        assert _under_bodies(path, occupancy, cover) == _under_bodies(path, occupancy), path
 
 
 def test_a_grid_jumper_takes_a_lane_of_its_own() -> None:
