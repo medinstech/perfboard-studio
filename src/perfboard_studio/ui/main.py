@@ -333,7 +333,6 @@ from .view2d import (
     FOOTPRINT_MIME,
     BoardScene,
     BoardView,
-    ConductorItem,
     hole_to_screen,
     next_reference,
     picture_beside_the_pointer,
@@ -8395,9 +8394,9 @@ class MainWindow(QMainWindow):
         elif item is None:
             # A conductor under the pointer gets the same courtesy: the menu used to offer
             # the bare-board list over a trace, with no way to delete the trace from it.
-            conductor = next(
-                (i for i in self.scene.items(where) if isinstance(i, ConductorItem)), None
-            )
+            # Copper drawn over a part lands here too, because that is what a left click
+            # on it selects (BoardScene.component_at).
+            conductor = self.scene.conductor_at(where)
             if conductor is not None and not conductor.isSelected():
                 self.scene.clearSelection()
                 conductor.setSelected(True)

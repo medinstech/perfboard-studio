@@ -1797,8 +1797,14 @@ class ConductorItem(QGraphicsItem):
         # which of two crossing wires was drawn on top came down to scene order -- and
         # could disagree with the 3D view, which is the one place a reader checks. A tenth
         # of a step keeps every conductor comfortably inside its band whatever the board
-        # does; three stacked wires still sit below the parts.
-        self.setZValue((-50 if conductor.side == "bottom" else 40) + 0.1 * stack)
+        # does.
+        #
+        # The band is the FACE, not the side: copper on the face being looked at is above
+        # the parts and copper on the far face below them. Solder-side copper sat under the
+        # parts from the solder side too, where the parts are only shadows of what stands
+        # on the other face -- so wherever a part's outline covered a run, nothing on the
+        # face the user was working on could be clicked.
+        self.setZValue((40 if conductor.side == side else -50) + 0.1 * stack)
         first, last = conductor.path[0], conductor.path[-1]
         # The net is the thing a reader hovering a trace is asking about -- "what IS this"
         # -- and it was the one field the tooltip left out.
@@ -2840,6 +2846,9 @@ class ComponentItem(QGraphicsItem):
         self.board_colour = board_colour_for(fp, comp, board.pitch)
         self._names_rect = self._pin_names_rect()
         self._leads_rect = self._flying_leads_rect()
+        #: What a click on this part is (:meth:`shape`), worked out on first ask: the item is
+        #: rebuilt with the document and with the side, so it never goes stale.
+        self._hit_shape: QPainterPath | None = None
         self._sync_position()
 
     def _sync_position(self) -> None:
@@ -3066,14 +3075,32 @@ class ComponentItem(QGraphicsItem):
         return body.united(self._names_rect) if not self._names_rect.isNull() else body
 
     def shape(self) -> QPainterPath:
-        """What a click on this part is: the part and the strip over it -- NOT the whole
-        painted area. Without its own shape an item is hit-tested by its bounding rect,
-        and that rect is widened to hold a reference plate that can be wider than the
-        part, so a click on the part beside it selected this one."""
-        path = QPainterPath()
-        top = 1.5 + REF_LABEL_PX / 3.0
-        path.addRect(self._local_outline().boundingRect().adjusted(-1.5, -top, 1.5, 3.0))
-        return path
+        """What a click on this part is: its BODY and the pads its pins stand in.
+
+        Not the bounding rect, which is sized to repaint far more than the part. And not the
+        courtyard with a strip for the reference over it, which is what this was: the
+        courtyard is already padded by half a pitch, and the strip was kept for a label the
+        part no longer paints (``ReferenceLabelsItem`` prints every reference, over the
+        body), so on a board built two rows apart every part's hit area reached over its
+        neighbour's body and a click on a resistor selected the one below it -- and most of
+        the solder-side copper lay under some part's hit area, where no click could reach
+        it from either face. The pads are in it because an axial part's leads stand outside
+        its body, and a part is dragged from pin 1 as often as from the middle.
+
+        United rather than added: overlapping subpaths under the default odd-even fill
+        would make a pad inside the body a hole in it.
+        """
+        if self._hit_shape is None:
+            path = QPainterPath()
+            path.addRect(self._local_body_rect())
+            radius = max(self.board.pad_diameter / 2, 0.62)
+            for pin in self.fp.pins:
+                dx, dy = _local_offset(pin.d_col, pin.d_row, self.comp, self.side)
+                pad = QPainterPath()
+                pad.addEllipse(QPointF(dx * self.board.pitch, dy * self.board.pitch), radius, radius)
+                path = path.united(pad)
+            self._hit_shape = path
+        return self._hit_shape
 
     def _apply_local_transform(self, painter: QPainter) -> None:
         """Enter the footprint's own coordinate frame, so a body can be drawn as a shape.
@@ -3162,7 +3189,10 @@ class ComponentItem(QGraphicsItem):
                 _paint_pin_names(painter, self.pin_names, self.comp, style.accent)
             painter.restore()
 
-        self._paint_pin_ends(painter, keyed)
+        # From the solder side the scene paints the lead ends over the copper instead
+        # (LeadEndsLayerItem); a part in a scene without that layer still paints its own.
+        if self.side == "top" or getattr(self.scene(), "lead_ends_layer", None) is None:
+            self._paint_pin_ends(painter, keyed)
 
     def _paint_pin_ends(self, painter: QPainter, keyed: tuple[float, float] | None) -> None:
         """The holes this part occupies.
@@ -3199,9 +3229,10 @@ class ComponentItem(QGraphicsItem):
             QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged,
             QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged,
         ):
-            layer = getattr(self.scene(), "reference_layer", None)
-            if layer is not None:
-                layer.update()
+            for name in ("reference_layer", "lead_ends_layer"):
+                layer = getattr(self.scene(), name, None)
+                if layer is not None:
+                    layer.update()
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange and self.scene():
             # Snap to the nearest hole, but do NOT clamp to the board bounds: dragging
             # a part past the edge and releasing there must reach the bus's own
@@ -3258,6 +3289,38 @@ class ReferenceLayerItem(QGraphicsItem):
                 painter, item.reference_anchor(), item.comp.ref, REF_LABEL_PX, align,
                 bold=True, offset=QPointF(0, -2), background=REF_PLATE,
             )
+
+
+class LeadEndsLayerItem(QGraphicsItem):
+    """Every part's cut lead ends, from the SOLDER side, painted over the copper.
+
+    From the solder side the copper is what is being worked on, so it is drawn above the
+    parts (``ConductorItem``). But a lead comes up THROUGH its joint: the end standing out of
+    the solder is the one thing on that face that belongs to the part, and pin 1's brighter
+    fill is how somebody reading the back of the board tells which way round a chip went in.
+    Painted by the part, it would sit at the part's place in the stacking order, and the
+    fillet at the end of every wire landing on a pin would cover it. Above the copper, below
+    the risk rings and the tools' previews.
+    """
+
+    def __init__(self, scene: BoardScene) -> None:
+        super().__init__()
+        self._board_scene = scene
+        self.setZValue(50)
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+
+    def boundingRect(self) -> QRectF:
+        scene = self.scene()
+        return scene.sceneRect() if scene is not None else QRectF()
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        for item in self._board_scene.component_items.values():
+            if not item.isVisible():
+                continue
+            painter.save()
+            painter.setTransform(item.sceneTransform(), True)
+            item._paint_pin_ends(painter, polarity_pin_offset(item.fp, item.board.pitch))
+            painter.restore()
 
 
 class BoardScene(QGraphicsScene):
@@ -3330,6 +3393,8 @@ class BoardScene(QGraphicsScene):
         self.component_items: dict[str, ComponentItem] = {}
         #: Every part's reference, over every part -- see ``ReferenceLayerItem``.
         self.reference_layer: ReferenceLayerItem | None = None
+        #: The solder side's lead ends, over the copper; None on the component side.
+        self.lead_ends_layer: LeadEndsLayerItem | None = None
         self.board_note_items: dict[str, BoardNoteItem] = {}
         #: Draw the labels written on the board (View > Show Board Labels).
         self.show_board_notes = True
@@ -3545,6 +3610,7 @@ class BoardScene(QGraphicsScene):
         # Dropped with the dict, for the same reason: a part selected while clear() runs
         # tells the layer to repaint, and the layer is one of the items being destroyed.
         self.reference_layer = None
+        self.lead_ends_layer = None
         previously_selected_notes = {
             note_id for note_id, note_item in self.board_note_items.items() if note_item.isSelected()
         }
@@ -3695,6 +3761,9 @@ class BoardScene(QGraphicsScene):
         names = lay_out_pin_names(self.document, self.lookup, pin_name_width_mm)
         self.reference_layer = ReferenceLayerItem(self)
         self.addItem(self.reference_layer)
+        if self.side == "bottom":
+            self.lead_ends_layer = LeadEndsLayerItem(self)
+            self.addItem(self.lead_ends_layer)
         net_by_pin = {
             (node.component_ref, node.pin): net for net in self.document.nets for node in net.nodes
         }
@@ -4706,9 +4775,29 @@ class BoardScene(QGraphicsScene):
         conductor or a ratsnest line lying over a part -- which is the normal state of a
         routed board -- would swallow the click and report no part at all. Ties go to the
         highest z, so two overlapping parts resolve to the one the user can see.
+
+        The one thing that does take the click from a part is copper drawn OVER it, on the
+        face being looked at, with the pointer on the copper itself: that is what a left
+        click there selects (:meth:`conductor_at`), and a right-click or a double-click
+        meaning the part underneath would be acting on something the user did not pick.
         """
         best: ComponentItem | None = None
         for item in self.component_items.values():
+            if not item.contains(item.mapFromScene(pos)):
+                continue
+            if best is None or item.zValue() >= best.zValue():
+                best = item
+        if best is not None:
+            over = self.conductor_at(pos)
+            if over is not None and over.zValue() > best.zValue():
+                return None
+        return best
+
+    def conductor_at(self, pos: QPointF) -> ConductorItem | None:
+        """The topmost conductor under a scene position, or None -- by its clickable band,
+        ties to the highest z, as :meth:`component_at` does for parts."""
+        best: ConductorItem | None = None
+        for item in self.conductor_items.values():
             if not item.contains(item.mapFromScene(pos)):
                 continue
             if best is None or item.zValue() >= best.zValue():

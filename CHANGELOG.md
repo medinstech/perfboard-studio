@@ -50,6 +50,18 @@ closed without a bump.
 
 ### Fixed
 
+- **A click on the board picks what is under the pointer.** A part answered clicks over its
+  padded courtyard and a strip for a reference label it no longer paints -- 13 mm tall on a
+  2 mm resistor -- so with parts two rows apart a click on one selected its neighbour, and
+  59-81% of the holes on the shipped examples sat inside some part's hit area. A part is
+  now picked by its body and the pads its pins stand in (18-37% of the holes). Copper on the
+  face being looked at is drawn, and picked, above the parts: from the solder side most of
+  the solder-side copper on the examples could not be clicked at all (37 of atmega328-relay's
+  59 runs), and now at most two per board cannot, each lying under another wire along its
+  whole length. A right-click on such copper offers the copper and a double-click there no
+  longer opens the part underneath; from the solder side the lead ends are still painted
+  over the joints that land on them. (thanks @vindavs)
+
 - **Autosave no longer writes over a file somebody else changed.** A window with unsaved
   edits rightly does not reload when its file changes on disk, but autosave then wrote the
   window's board into the file anyway, so a change made by a script, an agent or another

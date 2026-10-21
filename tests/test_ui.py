@@ -5790,6 +5790,171 @@ def _press_at(pos: QPointF, button):
     return event
 
 
+# ---------------------------------------------------------------------------
+# What a click on the board picks
+# ---------------------------------------------------------------------------
+
+
+def _board_with(components=(), conductors=()) -> PerfDocument:
+    return dataclasses.replace(
+        _blank_document(), components=tuple(components), conductors=tuple(conductors)
+    )
+
+
+def _resistor(ref: str, anchor: HoleCoord) -> ComponentInstance:
+    return ComponentInstance(
+        id=f"c-{ref}", ref=ref, value="10k", footprint_id="r-axial-3", anchor=anchor
+    )
+
+
+def _shown_view(scene):
+    from perfboard_studio.ui.view2d import BoardView
+
+    view = BoardView(scene)
+    view.resize(1200, 900)
+    view.show()
+    view.fitInView(scene.itemsBoundingRect(), Qt.AspectRatioMode.KeepAspectRatio)
+    QApplication.processEvents()
+    return view
+
+
+def _click(view, scene_pos: QPointF) -> None:
+    from PySide6.QtTest import QTest
+
+    QTest.mouseClick(
+        view.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        view.mapFromScene(scene_pos),
+    )
+
+
+def _midpoint(conductor, board, side) -> QPointF:
+    p, q = (hole_to_screen(h, board, side) for h in conductor.path)
+    return QPointF((p.x() + q.x()) / 2, (p.y() + q.y()) / 2)
+
+
+#: A bare wire on the solder side between R1's pins, under its body -- and one a row below,
+#: outside the body and its courtyard but inside the hit area the part used to have.
+_UNDER = WireConductor(
+    id="under", path=(HoleCoord(6, 8), HoleCoord(7, 8)), kind="bare-wire", side="bottom"
+)
+_BESIDE = WireConductor(
+    id="beside", path=(HoleCoord(6, 9), HoleCoord(7, 9)), kind="bare-wire", side="bottom"
+)
+
+
+@pytest.mark.parametrize("side", ["top", "bottom"])
+def test_each_of_three_parts_two_rows_apart_is_picked_by_a_click_on_its_own_body(side) -> None:
+    """A part's hit area was its padded courtyard and a strip for a reference label it no
+    longer paints -- 13 mm tall on a 2 mm resistor -- so with three of them two rows apart a
+    click on R1's body selected R2, and one on R2's selected R3. Pin 1 is in it too: an axial
+    part's leads stand outside its body, and a part is dragged from pin 1."""
+    doc = _board_with(_resistor(f"R{i}", HoleCoord(5, 6 + 2 * i)) for i in (1, 2, 3))
+    scene = BoardScene(doc, footprint_lookup(), side=side)
+    view = _shown_view(scene)
+    try:
+        for comp in doc.components:
+            pin_1 = hole_to_screen(comp.anchor, doc.board, side)
+            pin_2 = hole_to_screen(HoleCoord(comp.anchor.col + 3, comp.anchor.row), doc.board, side)
+            body = QPointF((pin_1.x() + pin_2.x()) / 2, pin_1.y())
+            scene.clearSelection()
+            _click(view, body)
+            assert scene.selected_component_ids() == (comp.id,), comp.ref
+            assert scene.component_at(body) is scene.component_items[comp.id]
+            scene.clearSelection()
+            _click(view, pin_1)
+            assert scene.selected_component_ids() == (comp.id,), f"{comp.ref} by pin 1"
+    finally:
+        view.close()
+
+
+def test_copper_on_the_face_being_looked_at_is_drawn_over_the_parts() -> None:
+    """From the solder side the parts are only shadows of what stands on the other face, and
+    the copper is what is being worked on. It sat under the parts from both faces."""
+    jumper = WireConductor(
+        id="jumper", path=(HoleCoord(2, 2), HoleCoord(2, 6)), kind="top-jumper", side="top"
+    )
+    doc = _board_with([_resistor("R1", HoleCoord(5, 8))], [_UNDER, jumper])
+    for side in ("top", "bottom"):
+        scene = BoardScene(doc, footprint_lookup(), side=side)
+        part = scene.component_items["c-R1"].zValue()
+        for item in scene.conductor_items.values():
+            if item.conductor.side == side:
+                assert item.zValue() > part, (side, item.conductor.id)
+            else:
+                assert item.zValue() < part, (side, item.conductor.id)
+        # A lead comes up THROUGH its joint, so from the solder side the lead ends -- pin 1
+        # among them -- are painted over the copper, not under the fillets landing on them.
+        layer = scene.lead_ends_layer
+        if side == "bottom":
+            assert layer is not None
+            assert all(layer.zValue() > c.zValue() for c in scene.conductor_items.values())
+            assert layer.acceptedMouseButtons() == Qt.MouseButton.NoButton
+        else:
+            assert layer is None
+
+
+def test_solder_side_copper_under_a_part_is_picked_from_the_solder_side() -> None:
+    """On the shipped examples most of the solder-side copper could not be clicked from
+    either face: it lay under some part's hit area, and parts were drawn over it. From the
+    component side the part does stand over the run beneath it, so that click is the part's
+    -- but the run beside it is the run's from both faces."""
+    doc = _board_with([_resistor("R1", HoleCoord(5, 8))], [_UNDER, _BESIDE])
+    board = doc.board
+
+    bottom = BoardScene(doc, footprint_lookup(), side="bottom")
+    view = _shown_view(bottom)
+    try:
+        for conductor in (_UNDER, _BESIDE):
+            bottom.clearSelection()
+            _click(view, _midpoint(conductor, board, "bottom"))
+            assert bottom.selected_conductor_ids() == (conductor.id,), conductor.id
+        # Off the copper, the part is still the part.
+        bottom.clearSelection()
+        _click(view, hole_to_screen(HoleCoord(5, 8), board, "bottom"))
+        assert bottom.selected_component_ids() == ("c-R1",)
+    finally:
+        view.close()
+
+    top = BoardScene(doc, footprint_lookup(), side="top")
+    view = _shown_view(top)
+    try:
+        _click(view, _midpoint(_UNDER, board, "top"))
+        assert top.selected_component_ids() == ("c-R1",)
+        top.clearSelection()
+        _click(view, _midpoint(_BESIDE, board, "top"))
+        assert top.selected_conductor_ids() == ("beside",)
+    finally:
+        view.close()
+
+
+def test_a_right_click_on_copper_drawn_over_a_part_is_about_the_copper() -> None:
+    """The menu follows the click. It asked for the part first wherever the part's outline
+    reached, so a right-click on a run from the solder side offered to rotate the resistor
+    on the other face rather than to delete the run under the pointer."""
+    window = _window_on(_board_with([_resistor("R1", HoleCoord(5, 8))], [_UNDER]))
+    try:
+        window.on_flip_board()
+        board = window.bus.document.board
+        # Zoomed in, so a scene point survives the round trip through whole pixels.
+        window.view.resetTransform()
+        window.view.scale(20.0, 20.0)
+
+        menu = window.board_menu(window.view.mapFromScene(_midpoint(_UNDER, board, "bottom")))
+        assert window.scene.selected_conductor_ids() == ("under",)
+        assert window.scene.selected_component_ids() == ()
+        assert window.act_delete in menu.actions()
+        assert window.act_properties not in menu.actions()
+
+        pin_1 = hole_to_screen(HoleCoord(5, 8), board, "bottom")
+        menu = window.board_menu(window.view.mapFromScene(pin_1))
+        assert window.scene.selected_component_ids() == ("c-R1",)
+        assert window.act_properties in menu.actions()
+    finally:
+        _close(window)
+
+
 def test_the_findings_can_be_copied_out_as_text() -> None:
     """A DRC message is what somebody pastes into a forum post asking why their board
     does not work."""
