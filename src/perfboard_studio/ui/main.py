@@ -12166,7 +12166,7 @@ class MainWindow(QMainWindow):
         """Put the board back in its own file, if that is what the user asked for.
 
         THIS IS THE ONE PLACE THE APPLICATION WRITES OVER SOMEBODY'S DOCUMENT WITHOUT
-        BEING TOLD TO, so it is hedged three ways and every one of them is load-bearing:
+        BEING TOLD TO, so it is hedged four ways and every one of them is load-bearing:
 
           - it never runs on a board with no path. There is nowhere to write, and the
             board with the most to lose is exactly the one that has never been saved --
@@ -12177,12 +12177,27 @@ class MainWindow(QMainWindow):
             the whole failure this is meant to protect against.
           - if the backup cannot be written, nothing is. A copy that could not be made is
             not a reason to go ahead and overwrite the only one there is.
+          - if somebody else has written the file since this window last loaded or saved
+            it, nothing is. That is the case the file watcher declines to reload, because
+            the window has unsaved edits of its own; writing now would settle which
+            version wins without asking. The recovery record keeps this window's.
 
         Returns whether the file now holds the document.
         """
         path = self.current_path
         if path is None or not self._autosave_to_file:
             return False
+        if self._disk_text is not None:
+            on_disk, _problem = read_document_text(path)
+            if on_disk is not None and on_disk != self._disk_text:
+                self.statusBar().showMessage(
+                    t(
+                        "{name} changed on disk, and this window has unsaved edits. "
+                        "File ▸ Reload from Disk to take the file's version."
+                    ).format(name=path.name),
+                    0,
+                )
+                return False
         if not self._autosave_backed_up:
             previous = self._disk_text
             if previous is not None:

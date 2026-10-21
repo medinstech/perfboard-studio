@@ -50,6 +50,13 @@ closed without a bump.
 
 ### Fixed
 
+- **Autosave no longer writes over a file somebody else changed.** A window with unsaved
+  edits rightly does not reload when its file changes on disk, but autosave then wrote the
+  window's board into the file anyway, so a change made by a script, an agent or another
+  editor vanished half a minute later without anyone choosing. Autosave now leaves such a
+  file alone, keeps the window's edits in the recovery record, and says the file changed on
+  disk.
+
 - **A new board can be made a breadboard in Board Setup.** Choosing either kind of
   breadboard on a fresh document was refused -- "a breadboard has no mounting holes; remove
   them first" -- about the corner bores and finger strips the starter board comes with,
