@@ -34,7 +34,7 @@ from perfboard_studio.geometry import (
     path_length_mm,
 )
 from perfboard_studio.guide import build_guide
-from perfboard_studio.lvs import run_lvs
+from perfboard_studio.lvs import run_lvs, stale_conductor_ids
 from perfboard_studio.mcp.session import BoardSession, SessionError
 from perfboard_studio.model import ComponentInstance, HoleCoord, PerfDocument, SchematicPart
 from perfboard_studio.occupancy import build_occupancy
@@ -126,6 +126,88 @@ def test_a_way_of_laying_wire_nobody_has_is_refused_on_a_breadboard_too() -> Non
         BoardSession(document=TIMER).autoroute(wires="diagonal")
     with pytest.raises(SessionError):
         BoardSession(document=TIMER).reroute(wires="diagonal")
+
+
+# ---------------------------------------------------------------------------
+# Stale jumpers
+# ---------------------------------------------------------------------------
+
+
+def test_an_agents_autoroute_clears_the_jumpers_moved_parts_left() -> None:
+    """The window cleared stale copper before a breadboard's planner ran and the MCP
+    server did not: with both resistors moved, the TRIG jumpers join U1.2 to nothing."""
+    wired = _wired(TIMER)
+    trig = {c.id for c in wired.conductors if c.net_id == "trig"}
+    moved = dataclasses.replace(
+        wired,
+        components=tuple(
+            _part(c.ref, "r-axial-4", {"R1": "c40", "R2": "h40"}[c.ref]) if c.ref in ("R1", "R2") else c
+            for c in wired.components
+        ),
+    )
+    assert set(stale_conductor_ids(moved, get_footprint)) >= trig
+    session = BoardSession(document=moved)
+    result = session.autoroute()
+    assert result["stale_removed"] >= len(trig)
+    assert not trig & {c.id for c in session.document.conductors}
+    assert run_lvs(session.document, get_footprint).ok
+
+
+def test_a_jumper_in_a_clip_the_board_already_shorts_is_not_taken_up_every_time() -> None:
+    """A GND pin moved into a clip that still holds a TRIG pin is shorted by the BOARD,
+    whatever the jumper beside it does: the planner says cannot-separate, LVS says short,
+    and taking the jumper up only lays it again. A rule calling every jumper in a clip with
+    another net's pin stale was tried, and did that here and beside every unused pin on
+    stripboard, so a second autoroute was never a no-op."""
+    wired = _wired(TIMER)
+    jumper = next(c for c in wired.conductors if c.net_id == "trig")
+    gnd = next(n for n in TIMER.nets if n.id == "gnd")
+    moved = dataclasses.replace(
+        wired,
+        components=(*wired.components, _header("J9", _free_in_clip(wired, jumper.path[-1]))),
+        nets=tuple(
+            dataclasses.replace(n, nodes=(*n.nodes, _node("J9", "1"))) if n is gnd else n
+            for n in wired.nets
+        ),
+    )
+    assert any(p.code == "cannot-separate" for p in plan_breadboard(moved, get_footprint).problems)
+    assert stale_conductor_ids(moved, get_footprint) == ()
+    session = BoardSession(document=moved)
+    session.autoroute()
+    again = session.autoroute()
+    assert again["ok"] and not again["committed"] and again["stale_removed"] == 0, again
+
+
+def test_a_stripboard_link_beside_an_unused_pin_is_not_taken_up_every_time() -> None:
+    """On stripboard a pin no net declares is a party to nothing -- striproute does not cut
+    to isolate it -- so a link on a strip beside one is where the planner meant it."""
+    from perfboard_studio.commands import DEFAULT_BOARD
+
+    strips = dataclasses.replace(DEFAULT_BOARD, type="stripboard", strip_axis="horizontal")
+    doc = dataclasses.replace(
+        TIMER,
+        board=strips,
+        components=(
+            *(
+                ComponentInstance(id=f"c-{ref}", ref=ref, value="", footprint_id="r-axial-4",
+                                  anchor=HoleCoord(col, 2), rotation=90, mirrored=False, locked=False)
+                for ref, col in (("R1", 2), ("R2", 8))
+            ),
+            _header("J9", HoleCoord(3, 2)),
+        ),
+        nets=(
+            dataclasses.replace(TIMER.nets[0], id="a", name="A", nodes=(_node("R1", "1"), _node("R2", "2")),
+                                net_class="signal"),
+            dataclasses.replace(TIMER.nets[0], id="b", name="B", nodes=(_node("R1", "2"), _node("R2", "1")),
+                                net_class="signal"),
+        ),
+    )
+    session = BoardSession(document=doc)
+    assert session.autoroute()["committed"]
+    assert run_lvs(session.document, get_footprint).ok
+    assert stale_conductor_ids(session.document, get_footprint) == ()
+    again = session.autoroute()
+    assert not again["committed"] and again["stale_removed"] == 0, again
 
 
 # ---------------------------------------------------------------------------

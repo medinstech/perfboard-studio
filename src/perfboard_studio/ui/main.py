@@ -8970,8 +8970,11 @@ class MainWindow(QMainWindow):
         # How the perfboard router chooses and lays its copper means nothing to the planner of
         # a board that joins its own holes, which cuts and links or fits jumpers -- and the
         # three settings said "applies to the next route" there and applied to nothing.
+        # Except the grid setting on a breadboard, whose planner lays its jumpers straight or
+        # along the grid by it; a stripboard's links run across the strips either way.
         if hasattr(self, "act_grid_wires"):
             joined = board_joins_holes(self.bus.document.board)
+            jumpers = has_breadboard_pattern(self.bus.document.board)
             own_planner = t(
                 "This board is wired by its own planner — cuts and links on stripboard, "
                 "jumpers on a breadboard — so this does not apply to it."
@@ -8979,8 +8982,18 @@ class MainWindow(QMainWindow):
             for menu in (self.style_menu, self.crossing_menu):
                 menu.menuAction().setEnabled(not joined)
                 menu.menuAction().setToolTip(own_planner if joined else "")
-            self.act_grid_wires.setEnabled(not joined)
-            self.act_grid_wires.setToolTip(own_planner if joined else self._grid_wires_tip)
+            self.act_grid_wires.setEnabled(not joined or jumpers)
+            self.act_grid_wires.setToolTip(
+                t(
+                    "On a breadboard this shapes the jumpers: along a row and down a column, "
+                    "the way the pre-bent kits are made, and round a part rather than under "
+                    "it. Off, each jumper is one straight run from clip to clip."
+                )
+                if jumpers
+                else own_planner
+                if joined
+                else self._grid_wires_tip
+            )
 
         # A breadboard takes a wire pushed in from above and nothing else: solder, a lead
         # bent along the underside and bare wire on the solder side are not-on-breadboard

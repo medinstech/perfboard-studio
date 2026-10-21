@@ -177,8 +177,9 @@ def test_the_window_rewires_a_breadboard_with_jumpers_and_greys_the_perfboard_se
     tmp_path, monkeypatch  # type: ignore[no-untyped-def]
 ) -> None:
     """Re-route Everything went to the perfboard router -- solder traces and bare wire on a
-    breadboard -- and the router's style, crossing and grid settings said "applies to the
-    next route" on a board whose planner reads none of them."""
+    breadboard -- and the router's style and crossing settings said "applies to the next
+    route" on a board whose planner reads neither. The grid setting stays: it shapes a
+    breadboard's jumpers, and only a stripboard's links ignore it."""
     _app()
     from PySide6.QtCore import QSettings
 
@@ -201,8 +202,8 @@ def test_the_window_rewires_a_breadboard_with_jumpers_and_greys_the_perfboard_se
     try:
         assert not window.style_menu.menuAction().isEnabled()
         assert not window.crossing_menu.menuAction().isEnabled()
-        assert not window.act_grid_wires.isEnabled()
-        moved = next(c for c in window.bus.document.components if c.ref == "R2")
+        assert window.act_grid_wires.isEnabled()
+        moved =next(c for c in window.bus.document.components if c.ref == "R2")
         anchor = dataclasses.replace(moved.anchor, col=30)
         assert window.bus.dispatch(
             "component.move", MoveComponentPayload(id=moved.id, anchor=anchor)
@@ -215,6 +216,18 @@ def test_the_window_rewires_a_breadboard_with_jumpers_and_greys_the_perfboard_se
         assert not [
             v for v in run_drc(window.bus.document, LOOKUP) if v.severity == "error"
         ]
+
+        # A grid jumper turns its corners where it is drawn, in no hole.
+        assert any(len(c.path) > 2 for c in after) == window._grid_wires
+
+        # On a stripboard the grid setting goes too: its links run across the strips.
+        window.bus.dispatch("conductor.deleteMany", DeleteConductorsPayload(
+            ids=tuple(c.id for c in after)
+        ))
+        strips = dataclasses.replace(DEFAULT_BOARD, type="stripboard", strip_axis="horizontal")
+        assert window.bus.dispatch("board.set", SetBoardPayload(board=strips)).ok
+        assert not window.act_grid_wires.isEnabled()
+        after = window.bus.document.conductors
 
         # Back on a perfboard the settings are the router's again.
         window.bus.dispatch("conductor.deleteMany", DeleteConductorsPayload(

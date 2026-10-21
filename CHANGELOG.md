@@ -96,8 +96,8 @@ closed without a bump.
   jumpers up and lays them again in one undo step, and the cuts stay. The MCP `reroute`
   does the same. Autoroute after Auto-place on such a board clears the stale jumpers and
   asks about the moved nets first, as the status line said it would, and Preferred
-  Connection, Crossings and Lay Wires Along the Grid are greyed out there, since its
-  planner reads none of them.
+  Connection and Crossings are greyed out there, since its planner reads neither -- as is
+  Lay Wires Along the Grid on a stripboard, whose links run across the strips either way.
 
 - **Board Setup with nothing changed leaves the board as it was.** OK rewrote the border to
   the 2 mm a printed legend is given when it is turned on -- on five of the six examples,

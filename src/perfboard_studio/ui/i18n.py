@@ -557,6 +557,13 @@ TURKISH: Mapping[str, str] = {
         "Bu kartı kendi planlayıcısı kurar — şeritli kartta kesim ve köprü, breadboard'da "
         "jumper — bu yüzden bu ayar ona uygulanmaz."
     ),
+    "On a breadboard this shapes the jumpers: along a row and down a column, the way the "
+    "pre-bent kits are made, and round a part rather than under it. Off, each jumper is "
+    "one straight run from clip to clip.": (
+        "Breadboard'da jumper'ların biçimini belirler: hazır bükülmüş setlerdeki gibi bir "
+        "satır boyunca ve bir sütun aşağı, bir parçanın altından değil etrafından. "
+        "Kapalıyken her jumper klipsten klipse tek bir düz parçadır."
+    ),
     "Planned again, and it came out exactly as it is ({elapsed:.0f} ms). "
     "Moving a part is what gives a different one.": (
         "Yeniden planlandı ve tıpatıp aynısı çıktı ({elapsed:.0f} ms). Farklı bir sonucu "
