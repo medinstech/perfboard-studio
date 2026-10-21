@@ -34,8 +34,9 @@ closed without a bump.
   and "1000 mil flex"; that one is written to the file, and only when it is set. On the
   1000 mil flex board the real narrow part is half a pitch off the grid the rest is on, so
   it is drawn 1.27 mm high; every clip, name and connection is exact. Place on the Board
-  puts the module across the wide channel and Autoroute wires it as any breadboard; both views draw the groove as wide as the channel, and the print where
-  the strips are.
+  puts the module across the wide channel and Autoroute wires it as any breadboard; both
+  views draw the groove as wide as the channel, and the print where the strips are.
+  (thanks @RespawnDespair)
 
 - **Breadboard jumpers can be laid along the grid.** Route ▸ Lay Wires Along the Grid, and
   `wires="grid"` for an agent's `autoroute` and `reroute`, now shape a breadboard's jumpers
@@ -45,7 +46,7 @@ closed without a bump.
   one row hide each other from above. They may cross, as they do on the plastic. The cut
   list and the guide cut each one to the length it runs, corners included. On a real
   830-point board the 46 jumpers that had 28 parts standing over them as chords have 2
-  along the grid.
+  along the grid. (thanks @RespawnDespair)
 
 ### Fixed
 
@@ -157,6 +158,7 @@ closed without a bump.
 
 - **An agent's `autoroute` on a stripboard or a breadboard clears stale copper first**, as
   the window's does and as it always did on perfboard, and says how much it removed.
+  (thanks @RespawnDespair)
 
 - **An unused lead in a breadboard clip was a party to nothing.** Moving a header into the
   clips of a chip's unused pins joined them to its signals, and neither LVS (which asks
@@ -165,6 +167,7 @@ closed without a bump.
   planner, a conflict to the placer -- and Optimize Placement ranks shorted clips ahead of
   everything else there, legality included, so a board whose parts already overlap no
   longer loses to any legal arrangement however many clips it shorts.
+  (thanks @RespawnDespair)
 
 - **The ATmega328 relay board and the Arduino I/O shield no longer hold their button down.**
   Both examples stood their push button on `sw-tactile`, whose pins 1 and 2 are one node,
