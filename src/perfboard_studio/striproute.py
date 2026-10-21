@@ -107,10 +107,12 @@ class StripboardPlan:
     links: tuple[PlannedLink, ...]
     problems: tuple[StripProblem, ...]
     label: str
+    #: What a re-route takes up before it lays anything (``breadroute.plan_joined_reroute``).
+    remove_ids: tuple[str, ...] = ()
 
     @property
     def is_empty(self) -> bool:
-        return not self.cuts and not self.conductors
+        return not self.cuts and not self.conductors and not self.remove_ids
 
     def payload(self) -> ApplyStripboardPlanPayload:
         """The one command that commits this plan, as a single undo step."""
@@ -119,6 +121,7 @@ class StripboardPlan:
             conductors=self.conductors,
             cut_ids=tuple(cut.id for cut in self.cuts),
             label=self.label,
+            remove_ids=self.remove_ids,
         )
 
 
@@ -130,6 +133,8 @@ def describe_plan(plan: StripboardPlan) -> str:
         bits = [f"{len(plan.links)} jumper(s)"]
     else:
         bits = [f"{len(plan.cuts)} cut(s)", f"{len(plan.links)} link(s)"]
+    if plan.remove_ids:
+        bits.insert(0, f"{len(plan.remove_ids)} old conductor(s) ripped up")
     if plan.problems:
         bits.append(f"{len(plan.problems)} problem(s)")
     return ", ".join(bits)

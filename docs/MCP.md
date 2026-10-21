@@ -182,7 +182,9 @@ the footprint does not have is a hole in the design that a drawing alone would h
 `reroute` is `autoroute`'s replacement half. `autoroute` ADDS copper, so calling it again
 after a part has moved grows the board every time: the runs laid for the old position
 still join the right pins, so nothing flags them. `reroute` takes the old ones out first,
-which is the only safe verb after `move_component` or `optimize_placement`.
+which is the only safe verb after `move_component` or `optimize_placement`. On a stripboard
+or a breadboard it plans with that board's own planner, as `autoroute` does: the links or
+jumpers are taken up and laid again, and the cuts stay where they are.
 
 `export_step` is the board leaving for somebody else's program: the CAD one its enclosure
 is drawn in. An agent asked to design the case, or only to say whether the board fits the

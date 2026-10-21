@@ -32,6 +32,7 @@ Pure and deterministic, like every planner: the same board plans the same way.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable
 from itertools import pairwise
 
@@ -95,6 +96,36 @@ def plan_joined_board(
     if has_breadboard_pattern(doc.board):
         return plan_breadboard(doc, lookup, only_net_ids)
     return plan_stripboard(doc, lookup, only_net_ids)
+
+
+def plan_joined_reroute(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    only_net_ids: tuple[NetId, ...] | None = None,
+) -> StripboardPlan:
+    """Re-route on a board that joins its own holes: its own planner, not the perfboard's.
+
+    The links and jumpers that claim these nets are taken up and planned again, in the step
+    that lays the new ones (``remove_ids``). ``autoroute.plan_reroute`` laid solder traces
+    and bare wire on a breadboard, which is nineteen not-on-breadboard errors and a short,
+    and replaced a stripboard's links with traces along strips already joined. The cuts
+    stay: a cut is the board's copper taken away, it claims no net, and the planner reads
+    the board as it is cut.
+    """
+    targets = {net.id for net in doc.nets}
+    if only_net_ids is not None:
+        targets &= set(only_net_ids)
+    remove_ids = tuple(
+        sorted(c.id for c in doc.conductors if c.net_id is not None and c.net_id in targets)
+    )
+    gone = set(remove_ids)
+    stripped = dataclasses.replace(
+        doc, conductors=tuple(c for c in doc.conductors if c.id not in gone)
+    )
+    plan = plan_joined_board(stripped, lookup, only_net_ids)
+    names = [net.name for net in doc.nets if net.id in targets]
+    label = f"Re-route {len(names)} net(s)" if len(names) != 1 else f"Re-route {names[0]}"
+    return dataclasses.replace(plan, remove_ids=remove_ids, label=label)
 
 
 def plan_breadboard(

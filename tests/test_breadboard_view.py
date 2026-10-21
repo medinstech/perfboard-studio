@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 
 import pytest
@@ -169,6 +170,60 @@ def test_a_breadboard_offers_only_the_copper_it_can_take(window) -> None:  # typ
     }
     assert window.bus.dispatch("board.set", SetBoardPayload(board=DEFAULT_BOARD)).ok
     assert all(action.isEnabled() for action in window.act_draw.values())
+
+
+def test_the_window_rewires_a_breadboard_with_jumpers_and_greys_the_perfboard_settings(
+    tmp_path, monkeypatch  # type: ignore[no-untyped-def]
+) -> None:
+    """Re-route Everything went to the perfboard router -- solder traces and bare wire on a
+    breadboard -- and the router's style, crossing and grid settings said "applies to the
+    next route" on a board whose planner reads none of them."""
+    _app()
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio.breadroute import plan_joined_board
+    from perfboard_studio.commands import (
+        DeleteConductorsPayload,
+        MoveComponentPayload,
+        SetBoardPayload,
+    )
+    from perfboard_studio.drc import run_drc
+    from perfboard_studio.ui import main as main_module
+
+    from .test_breadroute import TIMER, _apply
+
+    store = QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
+    monkeypatch.setattr(main_module, "app_settings", lambda: store)
+    monkeypatch.setattr(main_module.MainWindow, "_confirm", lambda self, *a: True)
+    wired = _apply(TIMER, plan_joined_board(TIMER, LOOKUP).payload())
+    window = main_module.MainWindow(wired)
+    try:
+        assert not window.style_menu.menuAction().isEnabled()
+        assert not window.crossing_menu.menuAction().isEnabled()
+        assert not window.act_grid_wires.isEnabled()
+        moved = next(c for c in window.bus.document.components if c.ref == "R2")
+        anchor = dataclasses.replace(moved.anchor, col=30)
+        assert window.bus.dispatch(
+            "component.move", MoveComponentPayload(id=moved.id, anchor=anchor)
+        ).ok
+        before = {c.id for c in window.bus.document.conductors}
+        window.on_reroute(None)
+        after = window.bus.document.conductors
+        assert {c.kind for c in after} == {"top-jumper"}
+        assert not before & {c.id for c in after}
+        assert not [
+            v for v in run_drc(window.bus.document, LOOKUP) if v.severity == "error"
+        ]
+
+        # Back on a perfboard the settings are the router's again.
+        window.bus.dispatch("conductor.deleteMany", DeleteConductorsPayload(
+            ids=tuple(c.id for c in after)
+        ))
+        assert window.bus.dispatch("board.set", SetBoardPayload(board=DEFAULT_BOARD)).ok
+        assert window.style_menu.menuAction().isEnabled() and window.act_grid_wires.isEnabled()
+    finally:
+        window._saved_document = window.bus.document
+        window.close()
 
 
 def test_no_stock_perfboard_is_offered_for_a_breadboard() -> None:

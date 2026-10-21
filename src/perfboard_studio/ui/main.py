@@ -134,7 +134,7 @@ from perfboard_studio.breadboard import (
     pattern_board,
     size_of,
 )
-from perfboard_studio.breadroute import plan_joined_board
+from perfboard_studio.breadroute import plan_joined_board, plan_joined_reroute
 from perfboard_studio.catalog import CATALOG, CATEGORY_ORDER, CatalogPart, catalog_part
 from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
@@ -5496,6 +5496,7 @@ class MainWindow(QMainWindow):
         # See router.RoutingStyle for the measurements.
         style_menu = route_menu.addMenu(t("&Preferred Connection"))
         style_menu.setToolTipsVisible(True)
+        self.style_menu = style_menu
         self.act_style: dict[str, QAction] = {}
         for style, label, tip in (
             ("best", t("&Try each and keep the best"),
@@ -5532,6 +5533,7 @@ class MainWindow(QMainWindow):
         # take a jumper over a crossing, or may take no wire at all. See router.CrossingPolicy.
         crossing_menu = route_menu.addMenu(t("&Crossings"))
         crossing_menu.setToolTipsVisible(True)
+        self.crossing_menu = crossing_menu
         self.act_crossing: dict[str, QAction] = {}
         for policy, label, tip in (
             ("hop", t("&Hop over it with a short jumper"), t(
@@ -5560,14 +5562,13 @@ class MainWindow(QMainWindow):
         self.act_grid_wires = route_menu.addAction(t("Lay Wires Along the &Grid"))
         self.act_grid_wires.setCheckable(True)
         self.act_grid_wires.setChecked(self._grid_wires)
-        self.act_grid_wires.setToolTip(
-            t(
-                "Run every wire square to the grid, along the rows and columns of holes, "
-                "with as few bends as the board allows -- the way wire is dressed on "
-                "perfboard. Off, a wire is one straight run at whatever angle, which is "
-                "shorter and crosses everything near it."
-            )
+        self._grid_wires_tip = t(
+            "Run every wire square to the grid, along the rows and columns of holes, "
+            "with as few bends as the board allows -- the way wire is dressed on "
+            "perfboard. Off, a wire is one straight run at whatever angle, which is "
+            "shorter and crosses everything near it."
         )
+        self.act_grid_wires.setToolTip(self._grid_wires_tip)
         self.act_grid_wires.toggled.connect(self.on_grid_wires)
 
         route_menu.addSeparator()
@@ -8811,6 +8812,21 @@ class MainWindow(QMainWindow):
                 else t("Only stripboard has tracks to cut. File ▸ Board Setup ▸ Type.")
             )
 
+        # How the perfboard router chooses and lays its copper means nothing to the planner of
+        # a board that joins its own holes, which cuts and links or fits jumpers -- and the
+        # three settings said "applies to the next route" there and applied to nothing.
+        if hasattr(self, "act_grid_wires"):
+            joined = board_joins_holes(self.bus.document.board)
+            own_planner = t(
+                "This board is wired by its own planner -- cuts and links on stripboard, "
+                "jumpers on a breadboard -- so this does not apply to it."
+            )
+            for menu in (self.style_menu, self.crossing_menu):
+                menu.menuAction().setEnabled(not joined)
+                menu.menuAction().setToolTip(own_planner if joined else "")
+            self.act_grid_wires.setEnabled(not joined)
+            self.act_grid_wires.setToolTip(own_planner if joined else self._grid_wires_tip)
+
         # A breadboard takes a wire pushed in from above and nothing else: solder, a lead
         # bent along the underside and bare wire on the solder side are not-on-breadboard
         # errors before they are drawn, so those tools are greyed out rather than allowed.
@@ -9721,6 +9737,9 @@ class MainWindow(QMainWindow):
         if not self.bus.document.nets:
             self.statusBar().showMessage(t("No netlist imported, so there is nothing to route."), 6000)
             return
+        if board_joins_holes(self.bus.document.board):
+            self._reroute_joined(only_net_ids, why)
+            return
 
         document = self.bus.document
         t0 = time.perf_counter()
@@ -9825,14 +9844,6 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(t("No netlist imported, so there is nothing to route."), 6000)
             return
 
-        # A stripboard is a different problem and gets a different planner: its copper is
-        # already there, so the work is deciding where to BREAK it and what to link across
-        # afterwards. Running the perfboard router on one would lay solder traces along
-        # tracks that are already joined, and bare wire across a face that is solid copper.
-        if board_joins_holes(self.bus.document.board):
-            self._route_stripboard(only_net_ids)
-            return
-
         # Autoroute ADDS. On a net whose parts have moved since it was routed that is the
         # wrong answer and produces a board that grows every time -- so the question is
         # put to the user rather than either behaviour being assumed. See
@@ -9864,6 +9875,16 @@ class MainWindow(QMainWindow):
         # than around copper that is about to go. Its own undo entry, named, immediately before
         # the routing one.
         cleared = self._clear_strays(quiet=True)
+
+        # A stripboard is a different problem and gets a different planner: its copper is
+        # already there, so the work is deciding where to BREAK it and what to link across
+        # afterwards. Running the perfboard router on one would lay solder traces along
+        # tracks that are already joined, and bare wire across a face that is solid copper.
+        # After the two questions above, which are the same on every board: a jumper left
+        # where a part used to be is as stale as a trace, and Ctrl+R was said to clear it.
+        if board_joins_holes(self.bus.document.board):
+            self._route_stripboard(only_net_ids, cleared)
+            return
 
         document = self.bus.document
         options = self._autoroute_options()
@@ -9948,7 +9969,7 @@ class MainWindow(QMainWindow):
         )
         self._report_unrouted(plan)
 
-    def _route_stripboard(self, only_net_ids: tuple[NetId, ...] | None) -> None:
+    def _route_stripboard(self, only_net_ids: tuple[NetId, ...] | None, cleared: int = 0) -> None:
         """Cut the tracks this board needs cutting, and link what is left apart.
 
         One command for both halves, because they are one decision: a board cut apart
@@ -9965,9 +9986,14 @@ class MainWindow(QMainWindow):
         if plan is None:
             return
 
+        cleared_note = (
+            "  ·  " + t("{count} stale conductor(s) removed first").format(count=cleared)
+            if cleared
+            else ""
+        )
         if plan.is_empty:
             self.statusBar().showMessage(
-                f"{say(describe_strip_plan(plan))} ({elapsed:.0f} ms)", 8000
+                f"{say(describe_strip_plan(plan))} ({elapsed:.0f} ms){cleared_note}", 8000
             )
             self._report_strip_problems(plan)
             return
@@ -9978,8 +10004,71 @@ class MainWindow(QMainWindow):
             return
 
         self.statusBar().showMessage(
-            f"{say(describe_strip_plan(plan))}  ({elapsed:.0f} ms)", 0
+            f"{say(describe_strip_plan(plan))}  ({elapsed:.0f} ms){cleared_note}", 0
         )
+        self._report_strip_problems(plan)
+
+    def _reroute_joined(self, only_net_ids: tuple[NetId, ...] | None, why: str) -> None:
+        """Re-route a stripboard or a breadboard with ITS planner (``plan_joined_reroute``).
+
+        This went to the perfboard router, which ripped a breadboard's jumpers up and laid
+        solder traces and bare wire in their place -- nineteen not-on-breadboard errors and a
+        short -- and replaced a stripboard's links with traces along strips already joined.
+        Asked, and said, exactly as a perfboard re-route is.
+        """
+        document = self.bus.document
+        t0 = time.perf_counter()
+        plan = self._run_planner(
+            t("Ripping up and routing again…"),
+            lambda _should_stop: plan_joined_reroute(document, self.lookup, only_net_ids),
+        )
+        elapsed = (time.perf_counter() - t0) * 1000
+        if plan is None:
+            return
+        if plan.is_empty:
+            self.statusBar().showMessage(f"{t('Nothing to re-route')} ({elapsed:.0f} ms)", 6000)
+            self._report_strip_problems(plan)
+            return
+
+        removing = set(plan.remove_ids)
+        if (
+            plan.remove_ids
+            and not plan.cuts
+            and _same_copper([c for c in document.conductors if c.id in removing], plan.conductors)
+        ):
+            self.statusBar().showMessage(
+                f"{why + '  ' if why else ''}"
+                + t(
+                    "Planned again, and it came out exactly as it is ({elapsed:.0f} ms). "
+                    "Moving a part is what gives a different one."
+                ).format(elapsed=elapsed),
+                0,
+            )
+            return
+
+        if plan.remove_ids:
+            body = (
+                (f"<p>{why}</p>" if why else "")
+                + f"<b>{say(describe_strip_plan(plan))}</b><p>"
+                + t(
+                    "{removed} existing conductor(s) will be removed and {planned} planned "
+                    "in their place. Copper with no net assigned is left alone."
+                ).format(removed=len(plan.remove_ids), planned=len(plan.conductors))
+                + "</p><p>"
+                + t("One Ctrl+Z puts it all back.")
+                + "</p>"
+            )
+            if not self._confirm(t("Re-route?"), body, t("Re-route")):
+                return
+
+        result = self.bus.dispatch("stripboard.apply", plan.payload())
+        if not result.ok:
+            QMessageBox.warning(self, t("Re-route refused"), f"[{result.code}] {result.message}")
+            return
+
+        rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
+        self._nets_from_old_layout -= rerouted
+        self.statusBar().showMessage(f"{say(describe_strip_plan(plan))}  ({elapsed:.0f} ms)", 0)
         self._report_strip_problems(plan)
 
     def _report_strip_problems(self, plan: StripboardPlan) -> None:

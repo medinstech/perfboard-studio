@@ -39,7 +39,7 @@ from perfboard_studio.autoroute import (
 )
 from perfboard_studio.autoroute import describe as describe_route
 from perfboard_studio.breadboard import PATTERN_TYPES, has_breadboard_pattern, pattern_board
-from perfboard_studio.breadroute import plan_joined_board
+from perfboard_studio.breadroute import plan_joined_board, plan_joined_reroute
 from perfboard_studio.catalog import (
     CATEGORY_ORDER,
     CatalogCategory,
@@ -1488,6 +1488,33 @@ class BoardSession:
         if not self.document.nets:
             return _refused("no-netlist", "Nothing to route: no netlist has been imported.")
         only = tuple(self._net_id_strict(name) for name in nets) if nets else None
+        if board_joins_holes(self.document.board):
+            # Its own planner, as autoroute's: the perfboard router laid solder traces on a
+            # breadboard and traces along a stripboard's joined strips.
+            joined = plan_joined_reroute(self.document, self.lookup, only)
+            if joined.is_empty:
+                return _ok(committed=False, summary=describe_strip_plan(joined))
+            outcome = self._dispatch("stripboard.apply", joined.payload())
+            if not outcome["ok"]:
+                return outcome
+            # The same fields a perfboard re-route answers with, and the planner's problems
+            # where it lists the connections it could not make.
+            outcome.update(
+                committed=True,
+                summary=describe_strip_plan(joined),
+                ripped_up=len(joined.remove_ids),
+                routed=len(joined.links),
+                unrouted=len(joined.problems),
+                unrouted_detail=[
+                    {
+                        "code": problem.code,
+                        "reason": problem.message,
+                        "holes": [format_hole(h, self.document.board) for h in problem.holes],
+                    }
+                    for problem in joined.problems
+                ],
+            )
+            return outcome
 
         plan = plan_reroute(
             self.document,

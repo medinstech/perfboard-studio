@@ -1160,6 +1160,9 @@ class ApplyStripboardPlanPayload:
     cut_ids: tuple[str, ...] | None = None
     conductor_ids: tuple[ConductorId, ...] | None = None
     label: str | None = None
+    #: Conductors taken up first, in the same step: a re-route of a board that joins its
+    #: own holes rips up the links and jumpers it lays again (``breadroute.plan_joined_reroute``).
+    remove_ids: tuple[ConductorId, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -2885,11 +2888,22 @@ class _ApplyStripboardPlan:
                 "not-stripboard",
                 f"This board is {doc.board.type}, which has no tracks to cut or link.",
             )
-        if not p.cuts and not p.conductors:
+        if not p.cuts and not p.conductors and not p.remove_ids:
             raise CommandError(
                 "nothing-to-apply",
                 "stripboard.apply needs a cut or a link; an empty plan would put a no-op "
                 "on the undo stack.",
+            )
+        if p.remove_ids:
+            present = {c.id for c in doc.conductors}
+            missing = [id_ for id_ in p.remove_ids if id_ not in present]
+            if missing:
+                raise CommandError(
+                    "conductor-not-found", f'No conductor with id "{missing[0]}".'
+                )
+            gone = set(p.remove_ids)
+            doc = dataclasses.replace(
+                doc, conductors=tuple(c for c in doc.conductors if c.id not in gone)
             )
         if p.cut_ids is not None and len(p.cut_ids) != len(p.cuts):
             raise CommandError(

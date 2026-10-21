@@ -10,7 +10,7 @@ import random
 import pytest
 
 from perfboard_studio.breadboard import breadboard, has_hole, parse_hole_name, rail_of
-from perfboard_studio.breadroute import plan_breadboard, plan_joined_board
+from perfboard_studio.breadroute import plan_breadboard, plan_joined_board, plan_joined_reroute
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import (
     ApplyStripboardPlanPayload,
@@ -175,6 +175,56 @@ def test_an_agent_autoroutes_a_breadboard_with_jumpers() -> None:
     assert result["cut_count"] == 0 and result["link_count"] == len(session.document.conductors)
     ends = [link[end] for link in result["links"] for end in ("from", "to")]
     assert ends and all(parse_hole_name(FULL, name) is not None for name in ends)
+
+
+def test_a_reroute_lays_jumpers_again_and_nothing_else() -> None:
+    """Re-route Everything went to the perfboard router, which took a breadboard's jumpers
+    up and laid solder traces and bare wire in their place: nineteen not-on-breadboard
+    errors and a short. A part moved first, so the plan has something to change."""
+    wired = _apply(TIMER, plan_joined_board(TIMER, get_footprint).payload())
+    moved = dataclasses.replace(
+        wired,
+        components=(*wired.components[:2], _part("R2", "r-axial-4", "h31")),
+    )
+    plan = plan_joined_reroute(moved, get_footprint)
+    assert set(plan.remove_ids) == {c.id for c in moved.conductors}
+    assert describe_plan(plan).startswith(f"{len(plan.remove_ids)} old conductor(s) ripped up")
+    again = _apply(moved, plan.payload())
+    assert {(c.kind, c.side) for c in again.conductors} == {("top-jumper", "top")}
+    assert run_lvs(again, get_footprint).ok
+    assert not [v for v in run_drc(again, get_footprint) if v.severity == "error"]
+
+
+def test_a_stripboard_reroute_keeps_its_cuts_and_lays_links_again() -> None:
+    from perfboard_studio.commands import DEFAULT_BOARD
+
+    strips = dataclasses.replace(DEFAULT_BOARD, type="stripboard", strip_axis="horizontal")
+    doc = _doc(
+        ComponentInstance(id="c-R1", ref="R1", value="", footprint_id="r-axial-4",
+                          anchor=HoleCoord(2, 2), rotation=90, mirrored=False, locked=False),
+        ComponentInstance(id="c-R2", ref="R2", value="", footprint_id="r-axial-4",
+                          anchor=HoleCoord(8, 2), rotation=90, mirrored=False, locked=False),
+        nets=(
+            Net(id="a", name="A", nodes=(_node("R1", "1"), _node("R2", "2"))),
+            Net(id="b", name="B", nodes=(_node("R1", "2"), _node("R2", "1"))),
+        ),
+        board=strips,
+    )
+    wired = _apply(doc, plan_joined_board(doc, get_footprint).payload())
+    plan = plan_joined_reroute(wired, get_footprint)
+    again = _apply(wired, plan.payload())
+    assert again.cuts == wired.cuts
+    assert {c.kind for c in again.conductors} <= {"top-jumper"}
+    assert run_lvs(again, get_footprint).ok
+
+
+def test_an_agent_reroutes_a_breadboard_with_jumpers() -> None:
+    session = BoardSession(document=TIMER)
+    assert session.autoroute()["committed"]
+    result = session.reroute()
+    assert result["ok"], result
+    assert {c.kind for c in session.document.conductors} == {"top-jumper"}
+    assert not [v for v in run_drc(session.document, get_footprint) if v.severity == "error"]
 
 
 # ---------------------------------------------------------------------------

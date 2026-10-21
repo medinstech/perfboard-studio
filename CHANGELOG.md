@@ -62,6 +62,16 @@ closed without a bump.
   Board Setup's size line wraps instead of running off the dialog ("0.64 m"), and the pin
   table in a part's properties is as wide as its heading.
 
+- **Re-route Everything on a stripboard or a breadboard uses that board's planner.** It went
+  to the perfboard router, which took a breadboard's jumpers up and laid solder traces and
+  bare wire in their place -- nineteen errors and a short on the NE555 -- and replaced a
+  stripboard's links with traces along strips already joined. It now takes the links or
+  jumpers up and lays them again in one undo step, and the cuts stay. The MCP `reroute`
+  does the same. Autoroute after Auto-place on such a board clears the stale jumpers and
+  asks about the moved nets first, as the status line said it would, and Preferred
+  Connection, Crossings and Lay Wires Along the Grid are greyed out there, since its
+  planner reads none of them.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

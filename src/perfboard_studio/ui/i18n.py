@@ -541,6 +541,16 @@ TURKISH: Mapping[str, str] = {
         "yönlendirme için Yönlendir ▸ Tercih Edilen Bağlantı ya da Yönlendir ▸ Kesişmeler "
         "ayarını değiştirin."
     ),
+    "This board is wired by its own planner -- cuts and links on stripboard, jumpers on a "
+    "breadboard -- so this does not apply to it.": (
+        "Bu kartı kendi planlayıcısı kurar — şeritli kartta kesim ve köprü, breadboard'da "
+        "jumper — bu yüzden bu ayar ona uygulanmaz."
+    ),
+    "Planned again, and it came out exactly as it is ({elapsed:.0f} ms). "
+    "Moving a part is what gives a different one.": (
+        "Yeniden planlandı ve tıpatıp aynısı çıktı ({elapsed:.0f} ms). Farklı bir sonucu "
+        "bir parçayı taşımak verir."
+    ),
     "Nothing to re-route": "Yeniden yönlendirilecek bir şey yok",
     "Ctrl+Z puts them back.": "Ctrl+Z geri getirir.",
     "Nothing to route:": "Yönlendirilecek bir şey yok:",
