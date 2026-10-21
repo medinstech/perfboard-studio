@@ -51,7 +51,9 @@ from perfboard_studio.commands import (
     PlaceComponentPayload,
     create_document_id_generator,
 )
-from perfboard_studio.geometry import is_inside_board
+from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.drc import courtyard_box
+from perfboard_studio.geometry import all_pin_holes, hole_key, is_inside_board, unusable_holes
 from perfboard_studio.model import (
     ComponentInstance,
     Conductor,
@@ -63,6 +65,7 @@ from perfboard_studio.model import (
     SolderTraceConductor,
     StripConductor,
     WireConductor,
+    contacts_every_path_hole,
     normalized_pin_names,
 )
 
@@ -393,8 +396,25 @@ class Paste:
         return not self.payload.components and not self.payload.conductors
 
 
-def paste_position(doc: PerfDocument, block: Block, near: HoleCoord | None = None) -> HoleCoord:
+#: How far from where it was asked for a paste looks for room, in holes. Past this it lands
+#: where it was asked for and the board's checks say what it is on top of.
+PASTE_SEARCH_HOLES = 12
+
+
+def paste_position(
+    doc: PerfDocument,
+    block: Block,
+    near: HoleCoord | None = None,
+    lookup: FootprintLookup | None = None,
+) -> HoleCoord:
     """Where a paste lands: beside what is already there rather than on top of it.
+
+    With a ``lookup`` it lands where the block FITS: the nearest position, ring by ring
+    round the one asked for, where every pin is in a hole of its own that can take one and
+    no courtyard runs into another part's. Checking anchors alone put a duplicate one hole
+    diagonally off its original -- bodies overlapping, pins sharing holes, on a breadboard
+    pins in the channel -- so every Duplicate was a DRC error to drag away. Without one it
+    is the anchor walk below, which is what a block of parts nobody can look up gets.
 
     Stepping diagonally one hole at a time from the requested corner until no part's
     anchor is already sitting there. Counted from the DOCUMENT rather than from a paste
@@ -408,6 +428,10 @@ def paste_position(doc: PerfDocument, block: Block, near: HoleCoord | None = Non
     board = doc.board
     cols, rows = block.size()
     start = near if near is not None else block.origin
+    if lookup is not None:
+        found = _room_for(doc, block, start, lookup)
+        if found is not None:
+            return found
     taken = {(c.anchor.col, c.anchor.row) for c in doc.components}
     anchors = [c.anchor for c in block.components]
 
@@ -419,6 +443,73 @@ def paste_position(doc: PerfDocument, block: Block, near: HoleCoord | None = Non
             return at
         at = HoleCoord(at.col + 1, at.row + 1)
     return start
+
+
+def _room_for(
+    doc: PerfDocument, block: Block, start: HoleCoord, lookup: FootprintLookup
+) -> HoleCoord | None:
+    """The nearest position to ``start`` where the block's parts break none of the rules
+    a placement is held to, or None within ``PASTE_SEARCH_HOLES``."""
+    board = doc.board
+    dead = unusable_holes(doc)
+    pins: set[str] = set()
+    boxes: list[tuple[float, float, float, float]] = []
+    for component in doc.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is None:
+            continue
+        pins.update(hole_key(h) for _, h in all_pin_holes(component, footprint))
+        box = courtyard_box(component, footprint, board)
+        if box is not None:
+            boxes.append(box)
+    # A pin in a hole somebody's copper is soldered into joins that copper's net: every pad
+    # a solder run crosses, and the two ends of a wire.
+    for conductor in doc.conductors:
+        soldered = (
+            conductor.path
+            if contacts_every_path_hole(conductor)
+            else (conductor.path[0], conductor.path[-1])
+        )
+        pins.update(hole_key(h) for h in soldered)
+    parts = [(c, lookup(c.footprint_id)) for c in block.components]
+
+    def fits(at: HoleCoord) -> bool:
+        own: set[str] = set()
+        for component, footprint in parts:
+            if footprint is None:
+                continue
+            moved = replace(
+                component,
+                anchor=HoleCoord(at.col + component.anchor.col, at.row + component.anchor.row),
+            )
+            for _, hole in all_pin_holes(moved, footprint):
+                key = hole_key(hole)
+                if not is_inside_board(hole, board) or key in dead or key in pins or key in own:
+                    return False
+                own.add(key)
+            box = courtyard_box(moved, footprint, board)
+            if box is not None and any(
+                box[0] < b[2] and box[2] > b[0] and box[1] < b[3] and box[3] > b[1]
+                for b in boxes
+            ):
+                return False
+        return True
+
+    for reach in range(PASTE_SEARCH_HOLES + 1):
+        # Ring by ring, the nearest first within one, then down the page and along it.
+        ring = sorted(
+            (
+                (abs(dc) + abs(dr), dr, dc)
+                for dr in range(-reach, reach + 1)
+                for dc in range(-reach, reach + 1)
+                if max(abs(dc), abs(dr)) == reach
+            ),
+        )
+        for _, dr, dc in ring:
+            at = HoleCoord(start.col + dc, start.row + dr)
+            if fits(at):
+                return at
+    return None
 
 
 def paste_payload(doc: PerfDocument, block: Block, at: HoleCoord, label: str = "") -> Paste:

@@ -10300,7 +10300,7 @@ class MainWindow(QMainWindow):
         # person pasting is looking. Off the board -- the menu was used, or the pointer
         # has not moved yet -- it lands beside where the block was cut from.
         near = self._hovered_hole if self._pointer_is_on_board() else None
-        at = paste_position(self.bus.document, block, near)
+        at = paste_position(self.bus.document, block, near, self.lookup)
         paste = paste_payload(self.bus.document, block, at, label=f"{what} at {format_hole(at, self.bus.document.board)}")
         if paste.is_empty:
             self.statusBar().showMessage(t("That block does not fit on this board."), 6000)

@@ -432,6 +432,16 @@ def _component_aabb(
     return _aabb_of(_component_courtyard(component, footprint, board))
 
 
+def courtyard_box(
+    component: ComponentInstance, footprint: Footprint, board: Board
+) -> tuple[float, float, float, float] | None:
+    """A placed part's courtyard box as (min x, min y, max x, max y), board mm: what body
+    overlap measures a rectangle by, for a caller looking for room rather than judging it
+    (a paste). Exact for the 53 rectangles and generous for the 8 round courtyards."""
+    box = _component_aabb(component, footprint, board)
+    return None if box is None else (box.min_x, box.min_y, box.max_x, box.max_y)
+
+
 def _aabb_overlap(a: _Aabb, b: _Aabb) -> bool:
     return a.min_x < b.max_x and a.max_x > b.min_x and a.min_y < b.max_y and a.max_y > b.min_y
 

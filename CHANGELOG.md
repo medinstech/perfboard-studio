@@ -79,6 +79,13 @@ closed without a bump.
   Box button draws the shape it shows (after Line was picked it said Line and drew a box),
   and its menu has the box on it to go back to; a new net cannot be OK'd without a name.
 
+- **Duplicate and Paste land where the copy fits.** A copy went one hole diagonally off
+  its original, which kept the two anchors apart and put the bodies on top of each other:
+  every Duplicate was an overlap, a shared pin hole or, on a breadboard, pins in the
+  channel, to be dragged away. It now goes to the nearest position where its courtyard is
+  clear, every pin has a hole of its own that can take one, and no pin lands in somebody's
+  copper.
+
 ## [0.20.0] - 2026-10-19
 
 ### Added

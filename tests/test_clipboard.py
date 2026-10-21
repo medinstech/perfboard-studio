@@ -239,6 +239,37 @@ def test_a_block_that_would_run_off_the_board_is_left_where_it_was_asked_for() -
     assert paste_position(doc, block) == corner
 
 
+def test_a_paste_lands_where_it_fits_not_merely_off_the_anchors() -> None:
+    """One hole diagonally off the original kept the anchors apart and put the bodies on
+    top of each other: every Duplicate was a DRC error to drag away. With the footprints
+    to hand it lands at the nearest place it breaks no placement rule -- clear of the
+    other courtyards, every pin in a hole of its own, none in somebody's copper."""
+    from perfboard_studio.drc import run_drc
+    from perfboard_studio.footprints import footprint_lookup
+
+    lookup = footprint_lookup()
+    trace = SolderTraceConductor(
+        id="cond-1", kind="solder-trace", path=(HoleCoord(4, 6), HoleCoord(5, 6), HoleCoord(6, 6))
+    )
+    doc = _doc((_resistor("cmp-1", "R1", HoleCoord(4, 4)),), (trace,))
+    block = block_from_json(block_to_json(doc, ["cmp-1"]))
+    assert block is not None
+
+    at = paste_position(doc, block, None, lookup)
+    assert at != HoleCoord(5, 5)
+    paste = paste_payload(doc, block, at)
+    bus = _bus(doc)
+    assert bus.dispatch("block.place", paste.payload).ok
+    errors = [v for v in run_drc(bus.document, lookup) if v.severity == "error"]
+    assert errors == [], errors
+    pasted = next(c for c in bus.document.components if c.id != "cmp-1")
+    footprint = lookup(pasted.footprint_id)
+    assert footprint is not None
+    from perfboard_studio.geometry import all_pin_holes
+
+    assert not {h for _, h in all_pin_holes(pasted, footprint)} & set(trace.path)
+
+
 # ---------------------------------------------------------------------------
 # The command it turns into
 # ---------------------------------------------------------------------------
