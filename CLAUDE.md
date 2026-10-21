@@ -491,10 +491,14 @@ Three things hold it together:
   millimetre offset, which would drift off the hole on another pitch -- and DRC, the placer
   and both views move with it. Pin 1 stays the anchor and a diode's cathode either way
   round. Its height is a standoff + the body + the loop of the bent lead, MEASURED off KiCad
-  10's `*_Vertical*` models (the table is in `footprints.py`): one pair for a resistor and
-  one for a diode, within 0.25 mm of every model and exact for the DIN0207, so
-  `component-too-tall` and the guide's order (phase 3, the small bodies) see a standing part
-  at the height it stands. A resistor and a diode are still one archetype each:
+  10's `*_Vertical*` models on the exact B-rep (`BRepBndLib.AddOptimal`; the plain `Add` box
+  pads by the shape tolerance and reads 0.06-0.12 mm high). The table is in `footprints.py`:
+  a size KiCad models takes its own loop, every other size its family's measurements joined
+  by straight lines in the diameter (`upright_loop_mm`), so every borrowed mesh of one is
+  inside the envelope with no tolerance, and `component-too-tall` and the guide's order
+  (`guide._standing_phase`, by height) see a standing part at the height it stands. The
+  DO-35 is KiCad's 4.0 mm long (`parsers.kicad_parts._DIODE_BODY_MM`), because a standing
+  part's height is its length. A resistor and a diode are still one archetype each:
   `bodies.AXIAL_ARCHETYPES` is what the colour, the bands, the diode's band and the `D`
   letter ask, lying or standing. From above it is its end cap, so 2D prints no bands on it
   (3D does, read from the top) and a diode's band only as a ring when the cathode is up. The
@@ -869,6 +873,14 @@ What keeps everything D6 was protecting:
 - **The generated body is still the fallback, for every part.** A footprint nobody mapped, a
   part asked for by a generated id, a build that shipped without the meshes — all of them
   draw exactly as they did. `test_a_board_still_renders_with_no_models_at_all` is the pin.
+  ONE exception, and it is narrow: a resistor or a diode stood on end exists only as a
+  generated id, so the ids that are EXACTLY one of KiCad's `_Vertical` packages -- the id the
+  importer gives that package, read off it by the converter (`STANDING_MODELS`), never a
+  second table -- have its model. Every other standing size is generated.
+  `tests/test_axial_upright_meshes.py` holds the index to the importer and every piece inside
+  DRC's envelope at every turn and flip. A resistor over pin 2 is the pin-1 model turned
+  (`like` in the index, placed by `partmodels.PartModel.turn_deg`/`offset` before the mirror),
+  not a copy; and a piece that is the same triangles as another is one file, named twice.
 - **Only the shape ABOVE the board is borrowed.** The converter cuts every model at the
   board surface and this application draws the leads, because it knows the board's
   thickness, where the copper is and how far past it a trimmed lead stands. A model's own

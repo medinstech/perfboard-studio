@@ -2230,40 +2230,13 @@ def _axial_upright_pieces(body: _WorldBody) -> list[_Piece]:
                 material=_material_of(surface),
             )
         )
+    pieces.extend(_upright_markings(body, (radius, centre_z, length)))
 
-    for index, colour in enumerate(body.bands):
-        fraction = 0.16 + index * 0.15 if index < len(body.bands) - 1 else 0.80
-        pieces.append(
-            _Piece(
-                source=_cylinder(radius * 1.03, length * 0.11, resolution=20),
-                rgb=_rgb(colour),
-                position=(body.x, body.y, centre_z + (0.5 - fraction) * length),
-                orientation=_ALONG_Z,
-                material=CERAMIC,
-            )
-        )
-
-    def over(point: tuple[float, float]) -> bool:
-        return math.hypot(point[0] - body.x, point[1] - body.y) <= 0.05
-
-    if body.polarity is not None:
-        band_width = max(length * 0.16, 0.5)
-        down = -1.0 if over(body.polarity) else 1.0
-        pieces.append(
-            _Piece(
-                source=_cylinder(radius * 1.04, band_width),
-                rgb=_rgb(body.style.accent),
-                position=(body.x, body.y, centre_z + down * (length / 2 - band_width)),
-                orientation=_ALONG_Z,
-                material=CERAMIC,
-            )
-        )
-
-    under = tuple(pin for pin in body.pins if over(pin))
+    under = tuple(pin for pin in body.pins if _over_body(body, pin))
     pieces.extend(_through_hole_pieces(replace(body, pins=under), _LIFT + bottom + dome))
     crown = _LIFT + body.height - LEAD_RADIUS_MM
     for pin_x, pin_y in body.pins:
-        if over((pin_x, pin_y)):
+        if _over_body(body, (pin_x, pin_y)):
             continue
         path = [
             (body.x, body.y, _LIFT + top - dome),
@@ -2278,6 +2251,54 @@ def _axial_upright_pieces(body: _WorldBody) -> list[_Piece]:
                 rgb=LEAD_RGB,
                 position=(0.0, 0.0, 0.0),
                 material=TINNED,
+            )
+        )
+    return pieces
+
+
+def _over_body(body: _WorldBody, point: tuple[float, float]) -> bool:
+    """Whether a pin is the one a standing axial body is over."""
+    return math.hypot(point[0] - body.x, point[1] - body.y) <= 0.05
+
+
+def _upright_markings(
+    body: _WorldBody,
+    barrel: tuple[float, float, float],
+    *,
+    polarity_band: bool = True,
+) -> list[_Piece]:
+    """What is PRINTED on a standing barrel: the lying part's print turned upright -- the
+    colour code read from the top down, and a diode's band at whichever end the cathode is,
+    which on a part standing on its cathode is the bottom.
+
+    ``barrel`` is (radius, centre height, length), as ``_axial_markings`` takes a lying one:
+    the generated barrel's, or a borrowed mesh's own (``_standing_barrel_of``), because KiCad's
+    barrel and the footprint's need not be one size and bands printed inside a barrel vanish.
+    ``polarity_band`` is off where the mesh carries its own band (see ``_pieces_for``).
+    """
+    radius, centre_z, length = barrel
+    pieces: list[_Piece] = []
+    for index, colour in enumerate(body.bands):
+        fraction = 0.16 + index * 0.15 if index < len(body.bands) - 1 else 0.80
+        pieces.append(
+            _Piece(
+                source=_cylinder(radius * 1.03, length * 0.11, resolution=20),
+                rgb=_rgb(colour),
+                position=(body.x, body.y, centre_z + (0.5 - fraction) * length),
+                orientation=_ALONG_Z,
+                material=CERAMIC,
+            )
+        )
+    if body.polarity is not None and polarity_band:
+        band_width = max(length * 0.16, 0.5)
+        down = -1.0 if _over_body(body, body.polarity) else 1.0
+        pieces.append(
+            _Piece(
+                source=_cylinder(radius * 1.04, band_width),
+                rgb=_rgb(body.style.accent),
+                position=(body.x, body.y, centre_z + down * (length / 2 - band_width)),
+                orientation=_ALONG_Z,
+                material=CERAMIC,
             )
         )
     return pieces
@@ -3431,14 +3452,45 @@ def _offset_along(body: _WorldBody, offset: float, z: float) -> tuple[float, flo
     return (body.x, body.y + offset, z)
 
 
-def _mesh(path: str, mirrored: bool = False) -> vtk.vtkPolyData:
+def _mesh(
+    path: str,
+    mirrored: bool = False,
+    turn_deg: float = 0.0,
+    offset: tuple[float, float] = (0.0, 0.0),
+) -> vtk.vtkPolyData:
     """One borrowed mesh -- see ``_read_mesh`` -- reflected for a part on the solder side.
 
+    ``turn_deg`` and ``offset`` place it in the model's own frame first, for an entry that is
+    another one turned (``partmodels.PartModel.turn_deg``): turned and shifted, THEN
+    reflected, the order a part is made, flipped and fitted -- so a mirrored part's turned
+    model is reflected about the part's own anchor like every other.
+
     Not cached itself: ``lru_cache`` keys ``_mesh(p)`` and ``_mesh(p, False)`` apart, and a
-    mesh that is two objects defeats every comparison by identity made of it. The two
-    caches behind it each hold one object per file.
+    mesh that is two objects defeats every comparison by identity made of it. The caches
+    behind it each hold one object per file and placement.
     """
-    return _reflected_mesh(path) if mirrored else _read_mesh(path)
+    if turn_deg == 0.0 and offset == (0.0, 0.0):
+        return _reflected_mesh(path) if mirrored else _read_mesh(path)
+    return _placed_mesh(path, mirrored, turn_deg, offset)
+
+
+@lru_cache(maxsize=64)
+def _placed_mesh(
+    path: str, mirrored: bool, turn_deg: float, offset: tuple[float, float]
+) -> vtk.vtkPolyData:
+    """``_read_mesh`` turned about z and shifted, then reflected if ``mirrored``. A turn is
+    a rotation, so it keeps the winding and needs nothing put back; the reflection after it
+    is ``_reflected_x``'s."""
+    turn = vtk.vtkTransform()
+    turn.Translate(offset[0], offset[1], 0.0)
+    turn.RotateZ(turn_deg)  # VTK pre-multiplies: the turn is applied first, then the shift.
+    placed = vtk.vtkTransformPolyDataFilter()
+    placed.SetTransform(turn)
+    placed.SetInputData(_read_mesh(path))
+    placed.Update()
+    out = vtk.vtkPolyData()
+    out.DeepCopy(placed.GetOutput())
+    return _reflected_x(out) if mirrored else out
 
 
 @lru_cache(maxsize=128)
@@ -3547,7 +3599,7 @@ def _model_pieces(
             colour = piece.color
         pieces.append(
             _Piece(
-                source=_mesh(str(piece.path), comp.mirrored),
+                source=_mesh(str(piece.path), comp.mirrored, model.turn_deg, model.offset),
                 rgb=_rgb(colour),
                 position=(x, y, 0.0),
                 orientation=turn,
@@ -3841,15 +3893,26 @@ def _barrel_of(model: PartModel) -> tuple[float, float, float] | None:
     return ((z1 - z0) / 2, (z0 + z1) / 2, x1 - x0)
 
 
+def _standing_barrel_of(model: PartModel) -> tuple[float, float, float] | None:
+    """A standing cylinder's radius, centre height and length, measured off the mesh: the
+    BODY piece's box, which on a standing part is as wide as it is deep and runs up z."""
+    piece = model.body
+    if piece is None or len(piece.bounds) != 6:
+        return None
+    x0, _y0, z0, x1, _y1, z1 = piece.bounds
+    return ((x1 - x0) / 2, (z0 + z1) / 2, z1 - z0)
+
+
 def _pieces_for(
     body: _WorldBody, footprint: Any, comp: Any, board: Board
 ) -> list[_Piece]:
     """The solids of one part: a borrowed package where there is one, generated otherwise.
 
     THE GENERATED BODY IS STILL THE ANSWER FOR EVERYTHING ELSE and it is still the fallback
-    here -- a footprint nobody mapped, a part asked for by a generated id, a build that
-    shipped without the meshes. Nothing depends on a model existing, which is what lets the
-    borrowed ones be an improvement rather than a requirement.
+    here -- a footprint nobody mapped, a part asked for by a generated id (but a standing
+    axial one that IS a KiCad package: ``partmodels``), a build that shipped without the
+    meshes. Nothing depends on a model existing, which is what lets the borrowed ones be an
+    improvement rather than a requirement.
 
     Leads are ours either way. A model is cut off at the board surface by the converter, and
     what goes through the hole and stands trimmed on the solder side is drawn from the
@@ -3884,14 +3947,16 @@ def _pieces_for(
                 *_through_hole_pieces(body, 0.0),
             ]
     if model is not None:
-        axial = footprint.body.archetype == "axial-cylinder"
+        archetype = footprint.body.archetype
         # A borrowed polarised part already carries its mark where the real part has it --
         # a diode's band, a can's stripe -- so ours is not added (on a diode it made two
         # bands) and the model's is painted in the style's accent, the colour 2D draws it.
         mark = _polarity_mark(model) if body.polarity is not None else None
-        markings = (
-            _axial_markings(body, _barrel_of(model), polarity_band=mark is None) if axial else []
-        )
+        markings: list[_Piece] = []
+        if archetype == "axial-cylinder":
+            markings = _axial_markings(body, _barrel_of(model), polarity_band=mark is None)
+        elif archetype == "axial-upright" and (barrel := _standing_barrel_of(model)) is not None:
+            markings = _upright_markings(body, barrel, polarity_band=mark is None)
         return [
             *_model_pieces(
                 body,

@@ -245,7 +245,7 @@ def _standing_phase(height_mm: Mm) -> PhaseNumber:
 
     Every other kind of part has the phase of its kind, because its kind fixes its height
     closely enough. A standing resistor's height is its body's LENGTH: a DIN0207 stands
-    9.6 mm, among the LEDs, and a 5 W wirewound twice that -- taller than anything the small
+    9.5 mm, among the LEDs, and a 5 W wirewound twice that -- taller than anything the small
     bodies hold, and fitted before the medium ones it would then stop lying flat on the bench
     for. So it goes in the first phase whose tallest standard body is at least as tall,
     measured off the library rather than chosen."""

@@ -29,7 +29,9 @@ RUN IT WITH KiCad INSTALLED. It needs ``cadquery-ocp`` for the STEP reader -- 7.
 and a KiCad installation to read from; neither is a dependency of the application, and neither is
 needed to run it -- the meshes are written into the source tree and shipped. A footprint
 with no entry in ``MODELS`` below keeps the generated body, which is still the fallback for
-every part and the whole answer for a generated id.
+every part and the whole answer for a generated id -- but for a resistor or a diode stood on
+end, which is ONLY a generated id: the ids that are exactly one of KiCad's ``_Vertical``
+packages have its model (``STANDING_MODELS``).
 
     python tools/import_kicad_models.py            # find KiCad, write src/.../ui/models/
     python tools/import_kicad_models.py --kicad "C:/Program Files/KiCad/9.0"
@@ -53,6 +55,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "src" / "perfboard_studio" / "ui" / "models"
+# This tree's engine, not whichever one is installed: the standing parts' ids are the
+# importer's (``_standing``), and a checkout's converter must ask its own importer.
+sys.path.insert(0, str(ROOT / "src"))
 
 #: How finely a curve is broken into flat pieces, in millimetres, and how far a facet may
 #: turn. A 5 mm LED dome at 0.04 mm is smooth at every zoom this view reaches, and the
@@ -88,6 +93,38 @@ class Model:
     #: Bend the model's bare leads onto our holes, as whoever fits the part bends its legs
     #: to the grid. For a package made on a pitch the grid does not have. See ``splay_leads``.
     splay: bool = False
+    #: How far a facet may turn, in radians, where it is not ``ANGULAR``. See
+    #: ``STANDING_ANGULAR``.
+    angular: float | None = None
+
+
+@dataclass(frozen=True)
+class Turned:
+    """A footprint drawn as another one's model turned in its own frame: the same files,
+    written into the index as ``like`` with the turn and the shift, never copied.
+    ``partmodels`` places the meshes; see ``STANDING_TURNED``."""
+
+    footprint: str
+    like: str
+    rotate: float
+    offset: tuple[float, float]
+
+
+#: The angular limit for the standing axial parts, chosen by size and by looking: see
+#: ``STANDING_MODELS``.
+STANDING_ANGULAR = 0.5
+
+
+def _standing(library: str, step: str) -> Model:
+    """A KiCad ``_Vertical`` axial package, under the id the IMPORTER gives it: the mesh
+    index and ``parsers.kicad_parts`` cannot disagree about which part a model is, because
+    the one is read off the other (``tests/test_axial_upright_meshes.py`` holds them)."""
+    from perfboard_studio.parsers.kicad_parts import kicad_footprint_ids
+
+    ids, note = kicad_footprint_ids(f"{library}:{step}")
+    if not ids:
+        raise SystemExit(f"{step}: the importer maps it to nothing ({note})")
+    return Model(ids[0], library, step, angular=STANDING_ANGULAR)
 
 
 #: WHICH KiCad PACKAGE IS THE SAME PART. Chosen by PITCH first and outline second: a model
@@ -213,6 +250,59 @@ MODELS: tuple[Model, ...] = (
     Model("hdr-pin", "Connector_PinHeader_2.54mm", "PinHeader_1x01_P2.54mm_Vertical"),
 )
 
+#: RESISTORS AND DIODES STOOD ON END, which exist only as generated ids
+#: (``axial-<n>h-<L>x<D>[-pol]-v|-v2``): each is the id the importer gives KiCad's package,
+#: so only an id that IS one of KiCad's packages has a model and every other standing size
+#: is generated, as every generated id is. Both pitches a perfboard has; a diode's AnodeUp
+#: stands over pad 1 (``-pol-v``) and its CathodeUp over pad 2 (``-pol-v2``), two models
+#: because the band is at the other end. The heights in ``footprints`` ("Stood on end") are
+#: these models' tops, measured on the B-rep, so every mesh is inside the envelope DRC
+#: measures with no tolerance.
+#:
+#: Tessellated at ``STANDING_ANGULAR`` rather than ``ANGULAR``: the bent-over lead is a tube
+#: a quarter of a millimetre in radius, and at 0.3 rad it alone was half of 1.2 MB for these
+#: fourteen models -- facets nobody sees on a part a few millimetres across.
+STANDING_MODELS: tuple[Model, ...] = tuple(
+    [
+        _standing("Resistor_THT", f"{body}_{pitch}_Vertical")
+        for body in (
+            "R_Axial_DIN0204_L3.6mm_D1.6mm",
+            "R_Axial_DIN0207_L6.3mm_D2.5mm",
+            "R_Axial_DIN0309_L9.0mm_D3.2mm",
+        )
+        for pitch in ("P2.54mm", "P5.08mm")
+    ]
+    + [
+        _standing("Diode_THT", f"{body}_{pitch}_Vertical_{up}")
+        for body in ("D_DO-35_SOD27", "D_DO-41_SOD81")
+        for pitch in ("P2.54mm", "P5.08mm")
+        for up in ("AnodeUp", "CathodeUp")
+    ]
+)
+
+
+def _turned_end_for_end(model: Model) -> Turned:
+    """A resistor stood over its SECOND pin: KiCad has one model of each size, over pad 1,
+    and a resistor has no ends to tell apart -- so it is that model turned half round
+    about z and shifted by the span, which puts the barrel on pin 2 and leaves pin 1 at the
+    origin. Not a diode: its band would end up at the wrong pin, which is why KiCad draws
+    CathodeUp as a model of its own."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.model import STANDARD_PITCH_MM
+
+    footprint = get_footprint(model.footprint)
+    if footprint is None or footprint.polarized or not model.footprint.endswith("-v"):
+        raise SystemExit(f"{model.footprint}: not a resistor stood over pin 1")
+    span = max(pin.d_col for pin in footprint.pins) * STANDARD_PITCH_MM
+    return Turned(model.footprint + "2", model.footprint, 180.0, (span, 0.0))
+
+
+STANDING_TURNED: tuple[Turned, ...] = tuple(
+    _turned_end_for_end(model) for model in STANDING_MODELS if model.library == "Resistor_THT"
+)
+
+MODELS = MODELS + STANDING_MODELS
+
 #: WHAT EACH OF KiCad'S COLOURS IS MADE OF. A table and not a heuristic, because the whole
 #: library turns out to use THIRTEEN colours across every through-hole package in it -- and
 #: a rule guessing from the numbers gets gold plating wrong (it is saturated, so every
@@ -284,7 +374,9 @@ def _cut_and_mesh(shape: Any) -> Any:
     return common.Shape() if common.IsDone() else shape
 
 
-def groups_of(path: Path, rotate: float, offset: tuple[float, float]) -> dict[tuple[int, int, int], tuple[list[Any], list[Any]]]:
+def groups_of(
+    path: Path, rotate: float, offset: tuple[float, float], angular: float | None = None
+) -> dict[tuple[int, int, int], tuple[list[Any], list[Any]]]:
     """Every face of a model, gathered by the colour KiCad gave it."""
     from OCP.BRep import BRep_Tool
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
@@ -327,7 +419,7 @@ def groups_of(path: Path, rotate: float, offset: tuple[float, float]) -> dict[tu
     for index in range(1, labels.Length() + 1):
         shape = shapes.GetShape_s(labels.Value(index))
         shape = _cut_and_mesh(shape)
-        BRepMesh_IncrementalMesh(shape, DEFLECTION, False, ANGULAR, True)
+        BRepMesh_IncrementalMesh(shape, DEFLECTION, False, ANGULAR if angular is None else angular, True)
         explorer = TopExp_Explorer(shape, TopAbs_FACE)
         while explorer.More():
             face = TopoDS.Face_s(explorer.Current())
@@ -509,7 +601,7 @@ def splay_leads(
     return moved
 
 
-def write_ply(path: Path, points: list[Any], faces: list[Any]) -> None:
+def ply_bytes(points: list[Any], faces: list[Any]) -> bytes:
     """Binary little-endian PLY, which is what ``vtkPLYReader`` wants and what a mesh tool
     on any platform can open if somebody wants to look at one."""
     header = (
@@ -521,12 +613,16 @@ def write_ply(path: Path, points: list[Any], faces: list[Any]) -> None:
         "property list uchar int vertex_indices\n"
         "end_header\n"
     )
-    with path.open("wb") as handle:
-        handle.write(header.encode("ascii"))
-        for x, y, z in points:
-            handle.write(struct.pack("<3f", x, y, z))
-        for a, b, c in faces:
-            handle.write(struct.pack("<B3i", 3, a, b, c))
+    out = bytearray(header.encode("ascii"))
+    for x, y, z in points:
+        out += struct.pack("<3f", x, y, z)
+    for a, b, c in faces:
+        out += struct.pack("<B3i", 3, a, b, c)
+    return bytes(out)
+
+
+def write_ply(path: Path, points: list[Any], faces: list[Any]) -> None:
+    path.write_bytes(ply_bytes(points, faces))
 
 
 def _fit(model: Model, groups: dict[Any, tuple[list[Any], list[Any]]]) -> str:
@@ -561,17 +657,28 @@ def _fit(model: Model, groups: dict[Any, tuple[list[Any], list[Any]]]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--kicad", help="A KiCad install directory, e.g. C:/Program Files/KiCad/9.0")
-    parser.add_argument("--only", help="Convert one footprint id, for trying a mapping out")
+    parser.add_argument(
+        "--only", nargs="+", help="Convert these footprint ids, for trying a mapping out"
+    )
+    parser.add_argument("--out", help="Write here instead of the source tree, to compare settings")
     args = parser.parse_args(argv)
 
     kicad = find_kicad(args.kicad)
     print(f"KiCad: {kicad}")
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(args.out) if args.out else OUT_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
 
+    # A piece that is the same triangles as one already written is not written twice: the
+    # index names that file instead. A standing part's barrel is one solid at both pitches,
+    # and only its lead reaches a different hole. Seeded with what is on disk, so a run with
+    # ``--only`` shares with the files it is adding to.
+    written: dict[bytes, str] = {
+        existing.read_bytes(): existing.name for existing in sorted(out_dir.glob("*.ply"))
+    }
     index: dict[str, Any] = {}
     missing: list[str] = []
     for model in MODELS:
-        if args.only and model.footprint != args.only:
+        if args.only and model.footprint not in args.only:
             continue
         source = _step_path(kicad, model)
         if not source.is_file():
@@ -579,7 +686,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         parts = []
         if model.clip is None:
-            groups = groups_of(source, model.rotate, model.offset)
+            groups = groups_of(source, model.rotate, model.offset, model.angular)
             if model.splay:
                 groups = splay_leads(groups, pin_positions(model.footprint))
         else:
@@ -615,8 +722,11 @@ def main(argv: list[str] | None = None) -> int:
             None,
         )
         for order, (colour, (points, faces)) in enumerate(ordered):
-            name = f"{model.footprint}.{order}.ply"
-            write_ply(OUT_DIR / name, points, faces)
+            data = ply_bytes(points, faces)
+            name = written.get(data)
+            if name is None:
+                name = written[data] = f"{model.footprint}.{order}.ply"
+                (out_dir / name).write_bytes(data)
             hex_colour = hexed(colour)
             if hex_colour not in MATERIALS and hex_colour not in overrides:
                 print(f"  UNKNOWN COLOUR {hex_colour} in {model.footprint}", file=sys.stderr)
@@ -641,11 +751,23 @@ def main(argv: list[str] | None = None) -> int:
         total = sum(len(faces) for _points, faces in groups.values())
         print(f"  {model.footprint:20} {len(parts)} part(s) {total:6} triangles  {_fit(model, groups)}")
 
-    if args.only:
-        existing = json.loads((OUT_DIR / "index.json").read_text(encoding="utf-8"))
+    for turned in STANDING_TURNED:
+        if args.only and turned.footprint not in args.only and turned.like not in args.only:
+            continue
+        base = index.get(turned.like, {})
+        index[turned.footprint] = {
+            "like": turned.like,
+            "rotate": turned.rotate,
+            "offset": list(turned.offset),
+            "source": f"{base.get('source', turned.like)}, turned end for end",
+        }
+        print(f"  {turned.footprint:20} {turned.like} turned {turned.rotate:g} deg")
+
+    if args.only and (out_dir / "index.json").is_file():
+        existing = json.loads((out_dir / "index.json").read_text(encoding="utf-8"))
         existing.update(index)
         index = existing
-    (OUT_DIR / "index.json").write_text(
+    (out_dir / "index.json").write_text(
         json.dumps(index, indent=1, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
     )
     for line in missing:

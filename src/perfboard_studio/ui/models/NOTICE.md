@@ -29,7 +29,11 @@ The meshes are not the KiCad models unaltered:
   through the holes, because it knows the board's thickness and how far past the copper a
   trimmed lead stands; a model's own legs are drawn untrimmed and would hang out of the
   solder side.
-- **They were tessellated** from STEP into triangles at 0.04 mm.
+- **They were tessellated** from STEP into triangles at 0.04 mm, and a facet turning at most
+  0.3 rad -- 0.5 rad for the resistors and diodes stood on end (`STANDING_ANGULAR`), whose
+  thin bent-over leads were half of their size at 0.3 for no difference anybody can see.
+  A mesh that is the same triangles as another (a standing part's barrel at both pitches)
+  is one file, named by both entries.
 - **They were split by colour**, one mesh per colour the model was drawn with, so that the
   application can shade a metal tab and a plastic case differently.
 - **Some were turned or shifted** so that the package sits on the holes of the footprint it
@@ -45,6 +49,10 @@ The meshes are not the KiCad models unaltered:
   `Connector_Phoenix_MSTB/PhoenixContact_MSTBVA_2,5_3-G-5,08_1x03_P5.08mm_Vertical`, each moved
   so its own pin is at the origin; the application puts them side by side to draw a block, or
   a header, of any length.
+- **Six are another model turned.** A resistor stood over its second pin
+  (`axial-<n>h-<L>x<D>-v2`) is the same KiCad `R_Axial_..._Vertical` model as the one over
+  its first, turned half round and shifted by the span: `index.json` says `like`, with the
+  turn and the shift, and names no files of its own.
 
 Nothing about the source models' geometry was otherwise altered, and no colours or
 materials were taken from them into the application's own tables.

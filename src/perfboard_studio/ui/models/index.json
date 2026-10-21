@@ -1,4 +1,792 @@
 {
+ "axial-1h-3.6x1.6-v": {
+  "parts": [
+   {
+    "bounds": [
+     -0.8,
+     -0.7942,
+     1.0,
+     0.8,
+     0.7942,
+     4.6
+    ],
+    "color": "#c07635",
+    "material": "ceramic",
+    "mesh": "axial-1h-3.6x1.6-v.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     4.6,
+     2.79,
+     0.2482,
+     6.6
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-1h-3.6x1.6-v.1.ply"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     -0.05,
+     2.79,
+     0.2482,
+     5.6
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-1h-3.6x1.6-v.2.ply"
+   }
+  ],
+  "source": "Resistor_THT/R_Axial_DIN0204_L3.6mm_D1.6mm_P2.54mm_Vertical"
+ },
+ "axial-1h-3.6x1.6-v2": {
+  "like": "axial-1h-3.6x1.6-v",
+  "offset": [
+   2.54,
+   0.0
+  ],
+  "rotate": 180.0,
+  "source": "Resistor_THT/R_Axial_DIN0204_L3.6mm_D1.6mm_P2.54mm_Vertical, turned end for end"
+ },
+ "axial-1h-4x2-pol-v": {
+  "parts": [
+   {
+    "bounds": [
+     -1.0,
+     -0.9927,
+     0.5,
+     1.0,
+     0.9927,
+     4.5
+    ],
+    "color": "#005b84",
+    "material": "moulded",
+    "mesh": "axial-1h-4x2-pol-v.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     4.5,
+     2.79,
+     0.2482,
+     5.75
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-1h-4x2-pol-v.1.ply"
+   },
+   {
+    "bounds": [
+     -1.01,
+     -1.0026,
+     1.1,
+     1.01,
+     1.0026,
+     2.1
+    ],
+    "color": "#720301",
+    "material": "gloss",
+    "mesh": "axial-1h-4x2-pol-v.2.ply"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     -0.05,
+     2.79,
+     0.2482,
+     5.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-1h-4x2-pol-v.3.ply"
+   }
+  ],
+  "source": "Diode_THT/D_DO-35_SOD27_P2.54mm_Vertical_AnodeUp"
+ },
+ "axial-1h-4x2-pol-v2": {
+  "parts": [
+   {
+    "bounds": [
+     1.54,
+     -0.9927,
+     0.5,
+     3.54,
+     0.9927,
+     4.5
+    ],
+    "color": "#005b84",
+    "material": "moulded",
+    "mesh": "axial-1h-4x2-pol-v2.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     4.5,
+     2.79,
+     0.2482,
+     5.75
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-1h-4x2-pol-v2.1.ply"
+   },
+   {
+    "bounds": [
+     1.53,
+     -1.0026,
+     2.9,
+     3.55,
+     1.0026,
+     3.9
+    ],
+    "color": "#720301",
+    "material": "gloss",
+    "mesh": "axial-1h-4x2-pol-v2.2.ply"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     -0.05,
+     2.79,
+     0.2482,
+     5.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-1h-4x2-pol-v2.3.ply"
+   }
+  ],
+  "source": "Diode_THT/D_DO-35_SOD27_P2.54mm_Vertical_CathodeUp"
+ },
+ "axial-1h-5.2x2.7-pol-v": {
+  "parts": [
+   {
+    "bounds": [
+     -0.4,
+     -0.3971,
+     5.7,
+     2.94,
+     0.3971,
+     7.4
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-1h-5.2x2.7-pol-v.0.ply"
+   },
+   {
+    "bounds": [
+     -1.35,
+     -1.3402,
+     0.5,
+     1.35,
+     1.3402,
+     5.7
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "axial-1h-5.2x2.7-pol-v.1.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -1.36,
+     -1.3501,
+     1.28,
+     1.36,
+     1.3501,
+     2.58
+    ],
+    "color": "#c6c4a0",
+    "material": "moulded",
+    "mesh": "axial-1h-5.2x2.7-pol-v.2.ply"
+   },
+   {
+    "bounds": [
+     -0.4,
+     -0.3971,
+     -0.05,
+     2.94,
+     0.3971,
+     6.2
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-1h-5.2x2.7-pol-v.3.ply"
+   }
+  ],
+  "source": "Diode_THT/D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp"
+ },
+ "axial-1h-5.2x2.7-pol-v2": {
+  "parts": [
+   {
+    "bounds": [
+     -0.4,
+     -0.3971,
+     5.7,
+     2.94,
+     0.3971,
+     7.4
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-1h-5.2x2.7-pol-v2.0.ply"
+   },
+   {
+    "bounds": [
+     1.19,
+     -1.3402,
+     0.5,
+     3.89,
+     1.3402,
+     5.7
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "axial-1h-5.2x2.7-pol-v2.1.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     1.18,
+     -1.3501,
+     3.62,
+     3.9,
+     1.3501,
+     4.92
+    ],
+    "color": "#c6c4a0",
+    "material": "moulded",
+    "mesh": "axial-1h-5.2x2.7-pol-v2.2.ply"
+   },
+   {
+    "bounds": [
+     -0.4,
+     -0.3971,
+     -0.05,
+     2.94,
+     0.3971,
+     6.2
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-1h-5.2x2.7-pol-v2.3.ply"
+   }
+  ],
+  "source": "Diode_THT/D_DO-41_SOD81_P2.54mm_Vertical_CathodeUp"
+ },
+ "axial-1h-6.3x2.5-v": {
+  "parts": [
+   {
+    "bounds": [
+     -1.25,
+     -1.2409,
+     1.0,
+     1.25,
+     1.2409,
+     7.3
+    ],
+    "color": "#c07635",
+    "material": "ceramic",
+    "mesh": "axial-1h-6.3x2.5-v.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.3,
+     -0.2978,
+     7.3,
+     2.84,
+     0.2978,
+     9.5
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-1h-6.3x2.5-v.1.ply"
+   },
+   {
+    "bounds": [
+     -0.3,
+     -0.2978,
+     -0.05,
+     2.84,
+     0.2978,
+     8.3
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-1h-6.3x2.5-v.2.ply"
+   }
+  ],
+  "source": "Resistor_THT/R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+ },
+ "axial-1h-6.3x2.5-v2": {
+  "like": "axial-1h-6.3x2.5-v",
+  "offset": [
+   2.54,
+   0.0
+  ],
+  "rotate": 180.0,
+  "source": "Resistor_THT/R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical, turned end for end"
+ },
+ "axial-1h-9x3.2-v": {
+  "parts": [
+   {
+    "bounds": [
+     -1.6,
+     -1.5883,
+     1.0,
+     1.6,
+     1.5883,
+     10.0
+    ],
+    "color": "#c07635",
+    "material": "ceramic",
+    "mesh": "axial-1h-9x3.2-v.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.35,
+     -0.3474,
+     10.0,
+     2.89,
+     0.3474,
+     12.4
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-1h-9x3.2-v.1.ply"
+   },
+   {
+    "bounds": [
+     -0.35,
+     -0.3474,
+     -0.05,
+     2.89,
+     0.3474,
+     11.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-1h-9x3.2-v.2.ply"
+   }
+  ],
+  "source": "Resistor_THT/R_Axial_DIN0309_L9.0mm_D3.2mm_P2.54mm_Vertical"
+ },
+ "axial-1h-9x3.2-v2": {
+  "like": "axial-1h-9x3.2-v",
+  "offset": [
+   2.54,
+   0.0
+  ],
+  "rotate": 180.0,
+  "source": "Resistor_THT/R_Axial_DIN0309_L9.0mm_D3.2mm_P2.54mm_Vertical, turned end for end"
+ },
+ "axial-2h-3.6x1.6-v": {
+  "parts": [
+   {
+    "bounds": [
+     -0.8,
+     -0.7942,
+     1.0,
+     0.8,
+     0.7942,
+     4.6
+    ],
+    "color": "#c07635",
+    "material": "ceramic",
+    "mesh": "axial-1h-3.6x1.6-v.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     4.6,
+     5.33,
+     0.2482,
+     6.6
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-2h-3.6x1.6-v.1.ply"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     -0.05,
+     5.33,
+     0.2482,
+     5.6
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-2h-3.6x1.6-v.2.ply"
+   }
+  ],
+  "source": "Resistor_THT/R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Vertical"
+ },
+ "axial-2h-3.6x1.6-v2": {
+  "like": "axial-2h-3.6x1.6-v",
+  "offset": [
+   5.08,
+   0.0
+  ],
+  "rotate": 180.0,
+  "source": "Resistor_THT/R_Axial_DIN0204_L3.6mm_D1.6mm_P5.08mm_Vertical, turned end for end"
+ },
+ "axial-2h-4x2-pol-v": {
+  "parts": [
+   {
+    "bounds": [
+     -1.0,
+     -0.9927,
+     0.5,
+     1.0,
+     0.9927,
+     4.5
+    ],
+    "color": "#005b84",
+    "material": "moulded",
+    "mesh": "axial-1h-4x2-pol-v.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     4.5,
+     5.33,
+     0.2482,
+     5.75
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-2h-4x2-pol-v.1.ply"
+   },
+   {
+    "bounds": [
+     -1.01,
+     -1.0026,
+     1.1,
+     1.01,
+     1.0026,
+     2.1
+    ],
+    "color": "#720301",
+    "material": "gloss",
+    "mesh": "axial-1h-4x2-pol-v.2.ply"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     -0.05,
+     5.33,
+     0.2482,
+     5.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-2h-4x2-pol-v.3.ply"
+   }
+  ],
+  "source": "Diode_THT/D_DO-35_SOD27_P5.08mm_Vertical_AnodeUp"
+ },
+ "axial-2h-4x2-pol-v2": {
+  "parts": [
+   {
+    "bounds": [
+     4.08,
+     -0.9927,
+     0.5,
+     6.08,
+     0.9927,
+     4.5
+    ],
+    "color": "#005b84",
+    "material": "moulded",
+    "mesh": "axial-2h-4x2-pol-v2.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     4.5,
+     5.33,
+     0.2482,
+     5.75
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-2h-4x2-pol-v2.1.ply"
+   },
+   {
+    "bounds": [
+     4.07,
+     -1.0026,
+     2.9,
+     6.09,
+     1.0026,
+     3.9
+    ],
+    "color": "#720301",
+    "material": "gloss",
+    "mesh": "axial-2h-4x2-pol-v2.2.ply"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.2482,
+     -0.05,
+     5.33,
+     0.2482,
+     5.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-2h-4x2-pol-v2.3.ply"
+   }
+  ],
+  "source": "Diode_THT/D_DO-35_SOD27_P5.08mm_Vertical_CathodeUp"
+ },
+ "axial-2h-5.2x2.7-pol-v": {
+  "parts": [
+   {
+    "bounds": [
+     -0.4,
+     -0.3971,
+     5.7,
+     5.48,
+     0.3971,
+     7.4
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-2h-5.2x2.7-pol-v.0.ply"
+   },
+   {
+    "bounds": [
+     -1.35,
+     -1.3402,
+     0.5,
+     1.35,
+     1.3402,
+     5.7
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "axial-1h-5.2x2.7-pol-v.1.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -1.36,
+     -1.3501,
+     1.28,
+     1.36,
+     1.3501,
+     2.58
+    ],
+    "color": "#c6c4a0",
+    "material": "moulded",
+    "mesh": "axial-1h-5.2x2.7-pol-v.2.ply"
+   },
+   {
+    "bounds": [
+     -0.4,
+     -0.3971,
+     -0.05,
+     5.48,
+     0.3971,
+     6.2
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-2h-5.2x2.7-pol-v.3.ply"
+   }
+  ],
+  "source": "Diode_THT/D_DO-41_SOD81_P5.08mm_Vertical_AnodeUp"
+ },
+ "axial-2h-5.2x2.7-pol-v2": {
+  "parts": [
+   {
+    "bounds": [
+     -0.4,
+     -0.3971,
+     5.7,
+     5.48,
+     0.3971,
+     7.4
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-2h-5.2x2.7-pol-v2.0.ply"
+   },
+   {
+    "bounds": [
+     3.73,
+     -1.3402,
+     0.5,
+     6.43,
+     1.3402,
+     5.7
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "axial-2h-5.2x2.7-pol-v2.1.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     3.72,
+     -1.3501,
+     3.62,
+     6.44,
+     1.3501,
+     4.92
+    ],
+    "color": "#c6c4a0",
+    "material": "moulded",
+    "mesh": "axial-2h-5.2x2.7-pol-v2.2.ply"
+   },
+   {
+    "bounds": [
+     -0.4,
+     -0.3971,
+     -0.05,
+     5.48,
+     0.3971,
+     6.2
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-2h-5.2x2.7-pol-v2.3.ply"
+   }
+  ],
+  "source": "Diode_THT/D_DO-41_SOD81_P5.08mm_Vertical_CathodeUp"
+ },
+ "axial-2h-6.3x2.5-v": {
+  "parts": [
+   {
+    "bounds": [
+     -1.25,
+     -1.2409,
+     1.0,
+     1.25,
+     1.2409,
+     7.3
+    ],
+    "color": "#c07635",
+    "material": "ceramic",
+    "mesh": "axial-1h-6.3x2.5-v.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.3,
+     -0.2978,
+     7.3,
+     5.38,
+     0.2978,
+     9.5
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-2h-6.3x2.5-v.1.ply"
+   },
+   {
+    "bounds": [
+     -0.3,
+     -0.2978,
+     -0.05,
+     5.38,
+     0.2978,
+     8.3
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-2h-6.3x2.5-v.2.ply"
+   }
+  ],
+  "source": "Resistor_THT/R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical"
+ },
+ "axial-2h-6.3x2.5-v2": {
+  "like": "axial-2h-6.3x2.5-v",
+  "offset": [
+   5.08,
+   0.0
+  ],
+  "rotate": 180.0,
+  "source": "Resistor_THT/R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical, turned end for end"
+ },
+ "axial-2h-9x3.2-v": {
+  "parts": [
+   {
+    "bounds": [
+     -1.6,
+     -1.5883,
+     1.0,
+     1.6,
+     1.5883,
+     10.0
+    ],
+    "color": "#c07635",
+    "material": "ceramic",
+    "mesh": "axial-1h-9x3.2-v.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.35,
+     -0.3474,
+     10.0,
+     5.43,
+     0.3474,
+     12.4
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "axial-2h-9x3.2-v.1.ply"
+   },
+   {
+    "bounds": [
+     -0.35,
+     -0.3474,
+     -0.05,
+     5.43,
+     0.3474,
+     11.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "axial-2h-9x3.2-v.2.ply"
+   }
+  ],
+  "source": "Resistor_THT/R_Axial_DIN0309_L9.0mm_D3.2mm_P5.08mm_Vertical"
+ },
+ "axial-2h-9x3.2-v2": {
+  "like": "axial-2h-9x3.2-v",
+  "offset": [
+   5.08,
+   0.0
+  ],
+  "rotate": 180.0,
+  "source": "Resistor_THT/R_Axial_DIN0309_L9.0mm_D3.2mm_P5.08mm_Vertical, turned end for end"
+ },
  "c-disc-p2": {
   "parts": [
    {

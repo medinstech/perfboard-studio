@@ -13,7 +13,14 @@ borrowed, and everything D6 was protecting is kept by being careful about WHAT i
     part nobody has mapped -- all of them draw exactly as they did. Nothing depends on a
     model existing. (A screw terminal of any length, and the header a vertical one's plug
     stands in, are the generated ids drawn from borrowed geometry, because each package is a
-    repetition -- see ``TERMINAL_HEAD`` and ``VERTICAL_HEADER_HEAD``.)
+    repetition -- see ``TERMINAL_HEAD`` and ``VERTICAL_HEADER_HEAD``. And a resistor or a
+    diode stood on end exists ONLY as a generated id, so the ids that are exactly one of
+    KiCad's ``_Vertical`` packages -- the id the importer gives that package -- have its
+    model; every other standing size is generated.)
+  * **An entry may be another entry turned** (``like`` in the index): the same files,
+    placed in the model's own frame by a turn and a shift before the part's own mirror and
+    turn. A resistor stood over its SECOND pin is KiCad's one model of it turned end for
+    end, and a copy of the files would be the same triangles twice.
   * **Only the shape above the board is taken.** The leads are this application's own, drawn
     by ``view3d._through_hole_pieces``, which knows the board's thickness, where the copper
     is and how far past it a trimmed lead stands. A model's own legs are drawn untrimmed for
@@ -42,7 +49,8 @@ board is mostly the same twenty parts over and over and a refresh happens on eve
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -78,11 +86,39 @@ class PartModel:
     #: Where it came from, kept so a mesh can be traced back to a KiCad package by name.
     source: str
     pieces: tuple[ModelPiece, ...]
+    #: How the meshes are placed in the model's own frame before anything else: a turn about
+    #: z, in degrees, then a shift in millimetres. Zero for every entry with files of its
+    #: own; an entry that is another one turned (``like``) reuses that one's files with this.
+    #: The pieces' ``bounds`` are already the placed ones.
+    turn_deg: float = 0.0
+    offset: tuple[float, float] = (0.0, 0.0)
 
     @property
     def body(self) -> ModelPiece | None:
         """The case, which is the piece anything printed on the part goes on."""
         return next((piece for piece in self.pieces if piece.is_body), None)
+
+    def placed(self, x: float, y: float) -> tuple[float, float]:
+        """A point of a mesh file, where it is in this model's frame."""
+        return _turned(x, y, self.turn_deg, self.offset)
+
+
+def _turned(x: float, y: float, turn_deg: float, offset: tuple[float, float]) -> tuple[float, float]:
+    angle = math.radians(turn_deg)
+    cos, sin = math.cos(angle), math.sin(angle)
+    return (x * cos - y * sin + offset[0], x * sin + y * cos + offset[1])
+
+
+def _placed_bounds(
+    bounds: tuple[float, ...], turn_deg: float, offset: tuple[float, float]
+) -> tuple[float, ...]:
+    """A piece's box after the turn and the shift: the box of its four turned corners."""
+    if len(bounds) != 6 or (turn_deg == 0.0 and offset == (0.0, 0.0)):
+        return bounds
+    x0, y0, z0, x1, y1, z1 = bounds
+    corners = [_turned(x, y, turn_deg, offset) for x in (x0, x1) for y in (y0, y1)]
+    xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+    return (min(xs), min(ys), z0, max(xs), max(ys), z1)
 
 
 @lru_cache(maxsize=1)
@@ -91,7 +127,8 @@ def _index() -> dict[str, PartModel]:
 
     A missing or unreadable index is "there are no models", not an error: the generated
     bodies are the fallback for every part anyway, so a build that shipped without the
-    meshes draws a complete board rather than refusing to draw one.
+    meshes draws a complete board rather than refusing to draw one. An entry that is
+    another one turned (``like``) is skipped if that one is missing, for the same reason.
     """
     try:
         raw: dict[str, Any] = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
@@ -99,6 +136,8 @@ def _index() -> dict[str, PartModel]:
         return {}
     models: dict[str, PartModel] = {}
     for footprint_id, entry in raw.items():
+        if "like" in entry:
+            continue
         pieces = tuple(
             ModelPiece(
                 mesh=piece["mesh"],
@@ -113,6 +152,23 @@ def _index() -> dict[str, PartModel]:
             models[footprint_id] = PartModel(
                 footprint_id=footprint_id, source=entry.get("source", ""), pieces=pieces
             )
+    for footprint_id, entry in raw.items():
+        base = models.get(entry.get("like", ""))
+        if base is None:
+            continue
+        turn = float(entry.get("rotate", 0.0))
+        shift = tuple(float(v) for v in entry.get("offset", (0.0, 0.0)))
+        offset = (shift[0], shift[1])
+        models[footprint_id] = PartModel(
+            footprint_id=footprint_id,
+            source=entry.get("source", base.source),
+            pieces=tuple(
+                replace(piece, bounds=_placed_bounds(piece.bounds, turn, offset))
+                for piece in base.pieces
+            ),
+            turn_deg=turn,
+            offset=offset,
+        )
     return models
 
 

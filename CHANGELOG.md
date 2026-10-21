@@ -26,14 +26,18 @@ closed without a bump.
   resistor stood over pin 1 with its other lead bent back over the top into the next hole,
   and `-v2` stands it over pin 2 -- the way a part is fitted where a board has no room to
   lay it down. It is that part everywhere, not only in the picture: its body is over the
-  one hole in DRC, the placer and both views; it is as tall as KiCad's own model of it (9.6
+  one hole in DRC, the placer and both views; it is as tall as KiCad's own model of it (9.5
   mm for the DIN0207, measured), so a height limit catches it where the lying one fits; the
   guide fits it with the small bodies and says which hole it stands over, which way to bend
   the lead, and for a diode which end is up; the STEP file stands it upright. KiCad's
   `R_Axial_..._Vertical` and `D_..._Vertical_AnodeUp` / `_CathodeUp` footprints import as
   one, and Custom Part ▸ Axial asks how it is mounted. The guide fits one with the bodies
   as tall as it stands -- a DIN0207 among the LEDs, a long power resistor later, with the
-  electrolytics or the tall parts. (thanks @vindavs)
+  electrolytics or the tall parts. The 3D view draws the DIN0204, DIN0207 and DIN0309
+  resistors and the DO-35 and DO-41 diodes from KiCad's own `_Vertical` models, at both
+  pitches and over either pin, each exactly as tall as DRC measures it -- so an imported
+  lying DO-35 is now `axial-<n>h-4x2-pol`, KiCad's 4.0 mm body rather than 3.5. (thanks
+  @vindavs)
 
 - **A breadboard can have a wide channel**, for the modules too wide for the 0.3 inch one:
   an ESP32 devkit's pins are 1000 mil apart and on an ordinary board leave no hole free

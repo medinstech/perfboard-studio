@@ -73,9 +73,11 @@ def _feet(model: partmodels.PartModel) -> list[tuple[float, float]]:
     for piece in model.pieces:
         if piece.material != "tinned":
             continue
-        for x, y, z in _vertices(piece.path):
+        for vx, vy, z in _vertices(piece.path):
             if z > CUT_Z + FOOT_BAND:
                 continue
+            # An entry that is another one turned places the same files (partmodels).
+            x, y = model.placed(vx, vy)
             touching = [
                 patch
                 for patch in patches

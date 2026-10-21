@@ -292,27 +292,54 @@ def axial_footprint(
 # pitch is not 2.54 the way a millimetre offset would.
 #
 # The heights were MEASURED off KiCad 10's own models, `Resistor_THT.3dshapes` and
-# `Diode_THT.3dshapes`, `*_Vertical*.step`, read with OpenCASCADE: the body's ends (its
-# rounded caps' tori) and the top of the bent-over lead.
+# `Diode_THT.3dshapes`, `*_Vertical*.step`, on the exact B-rep with OpenCASCADE
+# (`BRepBndLib.AddOptimal`, no triangulation, no shape tolerance): the body's ends and the
+# top of the bent-over lead.
 #
-#   R_Axial_DIN0204 L3.6   body 1.00..4.60   lead to 6.68   loop over the body 2.08
-#   R_Axial_DIN0207 L6.3   body 1.00..7.30   lead to 9.60   loop 2.30
-#   R_Axial_DIN0309 L9.0   body 1.00..10.00  lead to 12.52  loop 2.52
-#   D_DO-35 (4.0 long)     body 0.50..4.50   lead to 5.81   loop 1.31
-#   D_DO-41 (5.2 long)     body 0.50..5.70   lead to 7.50   loop 1.80
+#   R_Axial_DIN0204 L3.6 D1.6   body 1.00..4.60   lead to  6.60   loop over the body 2.00
+#   R_Axial_DIN0207 L6.3 D2.5   body 1.00..7.30   lead to  9.50   loop 2.20
+#   R_Axial_DIN0309 L9.0 D3.2   body 1.00..10.00  lead to 12.40   loop 2.40
+#   D_DO-35_SOD27  L4.0 D2.0    body 0.50..4.50   lead to  5.75   loop 1.25
+#   D_DO-41_SOD81  L5.2 D2.7    body 0.50..5.70   lead to  7.40   loop 1.70
 #
-# So a resistor stands 1 mm off the board and a diode half that, and the loop grows a little
-# with the lead's thickness. One standoff and one loop per kind is within a quarter of a
-# millimetre of every model above -- exact for the DIN0207 everybody buys -- and an id has
-# no room for a lead gauge, which is why the loop is not a formula in one.
+# Identical at P2.54 and P5.08, and for a diode AnodeUp and CathodeUp alike: the span and the
+# pin do not move the top. OpenCASCADE's ordinary box (`BRepBndLib.Add`) pads every face by
+# the shape's tolerance and reads 0.06-0.12 mm higher (6.68, 9.60, 12.52, 5.81, 7.50); a
+# tessellated mesh lies on the surface, so a height taken from the B-rep holds every borrowed
+# mesh inside the envelope DRC measures with no tolerance at all (``ui/partmodels``).
+#
+# So a resistor stands 1 mm off the board and a diode half that, and the loop grows with the
+# body's diameter -- KiCad bends a fatter part's lead over a wider radius. A size KiCad
+# models takes its measured loop; every other size takes its family's measurements joined
+# by straight lines in the diameter and carried straight on past the end points
+# (:func:`upright_loop_mm`). Over the id's whole range of diameters, 0.1 mm up, that never
+# comes out below zero.
 
-#: How far a standing resistor's body is off the board, and how far its bent-over lead
-#: rises above the body's top: measured, see above.
+#: How far a standing resistor's body is off the board, and a diode's: measured, see above.
 UPRIGHT_RESISTOR_STANDOFF_MM: Mm = 1.0
-UPRIGHT_RESISTOR_LOOP_MM: Mm = 2.3
-#: The same for a diode, which KiCad's models stand lower and bend tighter.
 UPRIGHT_DIODE_STANDOFF_MM: Mm = 0.5
-UPRIGHT_DIODE_LOOP_MM: Mm = 1.55
+
+#: How far the bent-over lead rises above the body's top, by body diameter, for a resistor
+#: (False) and a diode (True): KiCad 10's models as measured above, thinnest first.
+UPRIGHT_LOOP_MEASURED_MM: dict[bool, tuple[tuple[Mm, Mm], ...]] = {
+    False: ((1.6, 2.0), (2.5, 2.2), (3.2, 2.4)),
+    True: ((2.0, 1.25), (2.7, 1.7)),
+}
+
+
+def upright_loop_mm(diameter_mm: Mm, polarized: bool) -> Mm:
+    """How far a standing axial part's bent-over lead rises above its body's top.
+
+    The measured value for a diameter KiCad models; between two of them, the straight line
+    joining them; past either end, the end segment carried on. See "Stood on end" above.
+    """
+    points = UPRIGHT_LOOP_MEASURED_MM[polarized]
+    for diameter, loop in points:
+        if diameter == diameter_mm:
+            return loop
+    index = next((i for i, (d, _loop) in enumerate(points) if d > diameter_mm), len(points))
+    (d0, l0), (d1, l1) = points[min(max(index - 1, 0), len(points) - 2):][:2]
+    return l0 + (l1 - l0) * (diameter_mm - d0) / (d1 - d0)
 
 
 def upright_body_span(footprint: Footprint) -> tuple[Mm, Mm]:
@@ -359,10 +386,8 @@ def _upright_axial_footprint(
     outline = _offset_rect_outline(
         pins_mm, body_diameter_mm, body_diameter_mm, offset_x, 0.0, COURTYARD_MARGIN_MM
     )
-    if polarized:
-        standoff, loop = UPRIGHT_DIODE_STANDOFF_MM, UPRIGHT_DIODE_LOOP_MM
-    else:
-        standoff, loop = UPRIGHT_RESISTOR_STANDOFF_MM, UPRIGHT_RESISTOR_LOOP_MM
+    standoff = UPRIGHT_DIODE_STANDOFF_MM if polarized else UPRIGHT_RESISTOR_STANDOFF_MM
+    loop = upright_loop_mm(body_diameter_mm, polarized)
     size = f"{_format_mm_token(body_length_mm)}x{_format_mm_token(body_diameter_mm)}"
     fp_id = id if id is not None else (
         f"axial-{span_holes}h-{size}{'-pol' if polarized else ''}"

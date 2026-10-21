@@ -25,9 +25,8 @@ from perfboard_studio.commands import (
 from perfboard_studio.drc import placed_body_box, run_drc
 from perfboard_studio.footprints import (
     GENERATED_ID_GRAMMAR,
-    UPRIGHT_DIODE_LOOP_MM,
     UPRIGHT_DIODE_STANDOFF_MM,
-    UPRIGHT_RESISTOR_LOOP_MM,
+    UPRIGHT_LOOP_MEASURED_MM,
     UPRIGHT_RESISTOR_STANDOFF_MM,
     body_extent,
     footprint_lookup,
@@ -96,7 +95,7 @@ def _place(
     [
         ("axial-1h-6.3x2.5-v", "1"),
         ("axial-1h-6.3x2.5-v2", "2"),
-        ("axial-2h-3.5x2-pol-v", "1"),
+        ("axial-2h-4x2-pol-v", "1"),
         ("axial-1h-5.2x2.7-pol-v2", "2"),
     ],
 )
@@ -169,14 +168,14 @@ def test_the_courtyard_holds_the_standing_body_and_both_pins(fid: str) -> None:
         assert min(xs) < pin.d_col * 2.54 < max(xs)
 
 
-#: KiCad 10's own models, `*_Vertical*.step`, measured with OpenCASCADE: body length, and
+#: KiCad 10's own models, `*_Vertical*.step`, measured on the exact B-rep with OpenCASCADE:
 #: the top of the bent-over lead. The numbers in footprints.py's "Stood on end".
 KICAD_TOPS = [
-    ("axial-1h-3.6x1.6-v", 6.68),  # R_Axial_DIN0204
-    ("axial-1h-6.3x2.5-v", 9.60),  # R_Axial_DIN0207
-    ("axial-1h-9x3.2-v", 12.52),  # R_Axial_DIN0309
-    ("axial-1h-4x2-pol-v", 5.81),  # D_DO-35, its model 4.0 long
-    ("axial-1h-5.2x2.7-pol-v", 7.50),  # D_DO-41
+    ("axial-1h-3.6x1.6-v", 6.60),  # R_Axial_DIN0204
+    ("axial-1h-6.3x2.5-v", 9.50),  # R_Axial_DIN0207
+    ("axial-1h-9x3.2-v", 12.40),  # R_Axial_DIN0309
+    ("axial-1h-4x2-pol-v", 5.75),  # D_DO-35_SOD27, its model 4.0 long
+    ("axial-1h-5.2x2.7-pol-v", 7.40),  # D_DO-41_SOD81
 ]
 
 
@@ -184,17 +183,35 @@ KICAD_TOPS = [
 def test_a_standing_part_is_as_tall_as_kicads_model_of_it(fid: str, measured: float) -> None:
     footprint = get_footprint(fid)
     assert footprint is not None
-    assert footprint.body_height == pytest.approx(measured, abs=0.25)
+    # Exactly, now that a size KiCad models takes its own measured loop: a borrowed mesh of
+    # it is held inside this height with no tolerance (test_axial_upright_meshes).
+    assert footprint.body_height == pytest.approx(measured, abs=1e-9)
+
+
+def test_the_loop_is_measured_where_kicad_has_the_size_and_a_straight_line_elsewhere() -> None:
+    """A size KiCad models takes its own loop, exactly; between two, the straight line
+    joining them; past either end, the end segment carried on -- and over the whole range
+    of diameters an id accepts, never below zero."""
+    from perfboard_studio.footprints import _MAX_BODY_MM, upright_loop_mm
+
+    for polarized, points in UPRIGHT_LOOP_MEASURED_MM.items():
+        for diameter, loop in points:
+            assert upright_loop_mm(diameter, polarized) == loop
+        (d0, l0), (d1, l1) = points[0], points[1]
+        assert upright_loop_mm((d0 + d1) / 2, polarized) == pytest.approx((l0 + l1) / 2)
+        below = d0 - 0.5
+        assert upright_loop_mm(below, polarized) == pytest.approx(l0 - 0.5 * (l1 - l0) / (d1 - d0))
+        (dn1, ln1), (dn, ln) = points[-2], points[-1]
+        assert upright_loop_mm(dn + 1.0, polarized) == pytest.approx(ln + (ln - ln1) / (dn - dn1))
+        assert upright_loop_mm(0.1, polarized) > 0 and upright_loop_mm(_MAX_BODY_MM, polarized) > 0
 
 
 def test_the_height_is_the_standoff_the_body_and_the_loop() -> None:
     resistor = get_footprint(RESISTOR)
     diode = get_footprint(DIODE_CATHODE_UP)
     assert resistor is not None and diode is not None
-    assert resistor.body_height == pytest.approx(
-        UPRIGHT_RESISTOR_STANDOFF_MM + 6.3 + UPRIGHT_RESISTOR_LOOP_MM
-    )
-    assert diode.body_height == pytest.approx(UPRIGHT_DIODE_STANDOFF_MM + 5.2 + UPRIGHT_DIODE_LOOP_MM)
+    assert resistor.body_height == pytest.approx(UPRIGHT_RESISTOR_STANDOFF_MM + 6.3 + 2.2)
+    assert diode.body_height == pytest.approx(UPRIGHT_DIODE_STANDOFF_MM + 5.2 + 1.7)
     assert upright_body_span(resistor) == pytest.approx((1.0, 7.3))
     lying = get_footprint("axial-1h-6.3x2.5")
     assert lying is not None and upright_body_span(lying) == (0.0, lying.body_height)
@@ -235,7 +252,7 @@ def test_the_guide_fits_it_with_the_small_bodies_and_says_how_to_bend_it() -> No
     phase, resistor = _part_step(bus.document, "R1")
     assert phase == 3
     assert resistor.bend_template_mm is None, "it is bent back over itself, not to a pitch"
-    assert resistor.height_mm == pytest.approx(9.6)
+    assert resistor.height_mm == pytest.approx(9.5)
     assert any(
         note.startswith("Stand it on end over E5 and bend the top lead back over and down into F5")
         for note in resistor.notes
@@ -326,8 +343,10 @@ def test_drc_the_3d_view_and_the_step_file_put_the_body_over_one_hole(
 
     actors = view3d.build_component(LOOKUP, comp, document.board)
     tops = [actor.GetBounds()[5] for actor in actors]
-    # The bent-over lead is the top of the part, at the height DRC measured.
-    assert max(tops) == pytest.approx(footprint.body_height + view3d._LIFT, abs=0.02)
+    # The bent-over lead is the top of the part, at the height DRC measured: KiCad's model of
+    # this package sits on the board as every borrowed mesh does, and the generated body (a
+    # size KiCad has no model of) _LIFT above it, as every generated body does.
+    assert footprint.body_height - 0.02 <= max(tops) <= footprint.body_height + view3d._LIFT + 0.02
 
     part = next(p for p in board_model(document, LOOKUP)[1:] if p.name == "D1")
     envelope = part.solids[0].shape
@@ -413,7 +432,7 @@ def test_the_3d_band_is_at_the_cathode_end() -> None:
         ("Diode_THT:D_DO-41_SOD81_P2.54mm_Vertical_AnodeUp", "axial-1h-5.2x2.7-pol-v"),
         ("Diode_THT:D_DO-41_SOD81_P5.08mm_Vertical_CathodeUp", "axial-2h-5.2x2.7-pol-v2"),
         # KiCad spelled it with a K before version 7.
-        ("Diode_THT:D_DO-35_SOD27_P2.54mm_Vertical_KathodeUp", "axial-1h-3.5x2-pol-v2"),
+        ("Diode_THT:D_DO-35_SOD27_P2.54mm_Vertical_KathodeUp", "axial-1h-4x2-pol-v2"),
     ],
 )
 def test_kicads_standing_parts_come_in_standing(kicad: str, expected: str) -> None:
@@ -443,5 +462,9 @@ def test_the_custom_part_dialog_stands_one_up() -> None:
     values = {"span": 1.0, "length": 6.3, "diameter": 2.5, "polarized": 1.0}
     built = {mount: axial.build({**values, "mount": float(mount)}).id for mount in (0, 1, 2)}
     assert built == {0: "axial-1h-6.3x2.5-pol", 1: "axial-1h-6.3x2.5-pol-v", 2: "axial-1h-6.3x2.5-pol-v2"}
-    # A diode's standoff and loop, on a body the size of a quarter-watt resistor's.
-    assert math.isclose(get_footprint(built[2]).body_height, 0.5 + 6.3 + 1.55)  # type: ignore[union-attr]
+    # A diode's standoff and loop, on a body the size of a quarter-watt resistor's: 2.5 mm
+    # across is between the DO-35's 2.0 and the DO-41's 2.7, so the loop is between theirs.
+    from perfboard_studio.footprints import upright_loop_mm
+
+    assert 1.25 < upright_loop_mm(2.5, True) < 1.7
+    assert math.isclose(get_footprint(built[2]).body_height, 0.5 + 6.3 + upright_loop_mm(2.5, True))  # type: ignore[union-attr]

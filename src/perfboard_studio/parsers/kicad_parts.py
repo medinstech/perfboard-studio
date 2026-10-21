@@ -98,9 +98,12 @@ _PITCH_MM = 2.54
 _CAN_HEIGHT_MM = {5.0: 11.0, 6.3: 11.0, 8.0: 11.5, 10.0: 12.5, 12.5: 20.0, 16.0: 25.0}
 
 #: Axial diode bodies KiCad names by package only: length x diameter, from the JEDEC
-#: outlines KiCad's own footprints are drawn to.
+#: outlines KiCad's own footprints are drawn to. The DO-35 is KiCad's own 4.0 mm, measured
+#: on its models (it was 3.5, inside JEDEC's range and not the part KiCad draws): this table
+#: maps KiCad's names, so KiCad's number is the one that IS the package -- and a standing
+#: DO-35's height is its length.
 _DIODE_BODY_MM = {
-    "DO-35": (3.5, 2.0),
+    "DO-35": (4.0, 2.0),
     "DO-41": (5.2, 2.7),
     "DO-15": (7.6, 3.6),
     "DO-201": (9.5, 5.3),
