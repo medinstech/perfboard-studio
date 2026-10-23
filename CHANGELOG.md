@@ -430,6 +430,11 @@ closed without a bump.
   a minute, and said the three-platform test matrix ran on `main` only; it runs on every
   push. Both READMEs now say what ERC, the catalog, Add a Part and Change Part do.
 
+- **New Project asks where the project goes starting from your Documents folder.** Every
+  other file dialog already started there, but New Project's started in the home folder,
+  so the first project of anybody who had never made one went in beside AppData. After
+  that it still starts where the last project went.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added

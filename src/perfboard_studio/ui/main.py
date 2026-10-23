@@ -399,6 +399,14 @@ def work_left(*, wiring: bool, stripboard: bool) -> frozenset[str]:
     return frozenset(left)
 
 
+def _user_documents() -> Path:
+    """The user's documents folder, or their home folder on a system that names none."""
+    documents = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+    if documents and Path(documents).is_dir():
+        return Path(documents)
+    return Path.home()
+
+
 def refused(result: DispatchResult) -> str:
     """Why a command was refused, in the window's language.
 
@@ -11903,13 +11911,16 @@ class MainWindow(QMainWindow):
         return True
 
     def _project_home(self) -> Path:
-        """Where a project dialog opens: beside the current board, or the last one used."""
+        """Where a project dialog opens: beside the current board, or the last one used,
+        else the user's documents -- as every other file dialog does. It was the home
+        folder, so the first project of everybody who had never made one went in beside
+        AppData and the dotfiles."""
         if self.current_path is not None:
             return self.current_path.parent.parent
         stored = app_settings().value(PROJECT_HOME_KEY, "")
         if isinstance(stored, str) and stored and Path(stored).is_dir():
             return Path(stored)
-        return Path.home()
+        return _user_documents()
 
     def _refresh_recent_menu(self) -> None:
         """Rebuild the submenu from the stored list, skipping files that are gone.
@@ -11958,12 +11969,7 @@ class MainWindow(QMainWindow):
             folder = Path(entry).parent
             if folder.is_dir():
                 return folder
-        documents = QStandardPaths.writableLocation(
-            QStandardPaths.StandardLocation.DocumentsLocation
-        )
-        if documents and Path(documents).is_dir():
-            return Path(documents)
-        return Path.home()
+        return _user_documents()
 
     def on_open(self) -> None:
         if not self._offer_to_save():

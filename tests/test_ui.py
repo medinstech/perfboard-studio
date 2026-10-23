@@ -12523,6 +12523,35 @@ def test_file_dialogs_never_start_in_the_folder_the_process_started_in(
     _close(window)
 
 
+def test_the_first_project_goes_in_the_documents_folder(
+    tmp_path, monkeypatch, _settings_in_a_temp_file
+) -> None:
+    """Every file dialog started in the user's documents but New Project's, which asked
+    where the project should go from the home folder -- beside AppData and the dotfiles."""
+    from perfboard_studio.ui import main as main_module
+
+    documents = tmp_path / "Documents"
+    documents.mkdir()
+    monkeypatch.setattr(
+        main_module.QStandardPaths, "writableLocation", lambda _where: str(documents)
+    )
+    monkeypatch.setattr(
+        main_module.QInputDialog, "getText", staticmethod(lambda *args, **kwargs: ("Blinker", True))
+    )
+    started: list[str] = []
+    monkeypatch.setattr(
+        main_module.QFileDialog,
+        "getExistingDirectory",
+        staticmethod(lambda *args, **kwargs: started.append(args[2]) or ""),
+    )
+    window = _blank_window()
+    try:
+        window.on_new_project()
+        assert started == [str(documents)]
+    finally:
+        _close(window)
+
+
 def test_a_named_board_is_not_renamed_by_saving(tmp_path) -> None:
     window = _window_on(_load_dense())
     before = window.bus.document.meta.name
