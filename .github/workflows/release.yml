@@ -241,6 +241,9 @@ jobs:
           ./dist/perfboard-studio/perfboard-studio-cli.exe --headless examples/ne555-astable.perf
           test -f ./headless_out/out_2d.png
           bash packaging/check-bundle-models.sh ./dist
+          # What an MCP client is pointed at on Windows: a whole session through the frozen
+          # launcher and the window's main, and nothing on stdout that is not the protocol.
+          python packaging/check-mcp-stdio.py ./dist/perfboard-studio/perfboard-studio-cli.exe --mcp
 
       - name: Install NSIS
         shell: pwsh
@@ -422,6 +425,9 @@ jobs:
           esac
           xvfb-run -a ./squashfs-root/AppRun --headless examples/ne555-astable.perf
           test -f ./headless_out/out_2d.png
+          # The MCP server through the image itself, as a client would start it: a whole
+          # session, and nothing on stdout that is not the protocol.
+          python packaging/check-mcp-stdio.py ./squashfs-root/AppRun --mcp
           rm -rf squashfs-root
 
       - uses: actions/upload-artifact@v7
@@ -485,6 +491,7 @@ jobs:
           # that view at start, so nothing else this job runs would notice a module the
           # spec failed to pack. Windows and Linux run `--headless`, which does.
           ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --probe-offscreen-gl
+          python packaging/check-mcp-stdio.py ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --mcp
 
       - name: Build the disk image
         run: bash packaging/macos.sh

@@ -16,6 +16,9 @@ document.
         non-zero if the pipeline itself failed (bad file, a scale check that doesn't
         pass, a 3D render exception) -- NOT merely because DRC/LVS found violations,
         which is the normal, expected output of checking a real board.
+    python -m perfboard_studio.ui.main --mcp [path]
+        be the MCP server on stdio instead of the window -- what an MCP client is pointed
+        at on an install with no Python of its own (docs/MCP.md)
 """
 
 from __future__ import annotations
@@ -13591,6 +13594,13 @@ def _install_qt_translations(app: QApplication) -> QTranslator | None:
 #: ``view3d.PROBE_FLAG``: the argument that makes this process the offscreen-GL probe.
 PROBE_FLAG = "--probe-offscreen-gl"
 
+#: The argument that makes this process the MCP server instead of the window: what an MCP
+#: client is pointed at on an install that has no Python of its own to run
+#: ``python -m perfboard_studio.mcp`` with -- ``perfboard-studio-cli.exe --mcp`` from the
+#: Windows installer. Every other argument goes to the server as ``perfboard-studio-mcp``
+#: would take it, so ``--mcp board.perf`` opens the board and ``--mcp --http`` serves HTTP.
+MCP_FLAG = "--mcp"
+
 
 def main() -> int:
     # Answered before Qt is touched: --version has to work on a machine where the GUI
@@ -13610,6 +13620,24 @@ def main() -> int:
         from . import view3d
 
         return view3d.probe_offscreen_gl()
+
+    # Before Qt, the language and anything else that could write a byte: on stdio, stdout
+    # IS the protocol (docs/MCP.md). tests/test_mcp_stdio.py holds a whole session through
+    # this door, and release.yml holds every built bundle to the same check.
+    if MCP_FLAG in sys.argv:
+        try:
+            from perfboard_studio.mcp.server import main as serve_mcp
+        except ImportError as missing:
+            # Only the optional package itself; a broken import of our own is a bug and
+            # says so with its traceback.
+            if (missing.name or "").split(".")[0] != "mcp":
+                raise
+            print(
+                'The MCP server is an optional part: pip install "perfboard-studio[mcp]"',
+                file=sys.stderr,
+            )
+            return 1
+        return serve_mcp([argument for argument in sys.argv[1:] if argument != MCP_FLAG])
 
     # Chosen before the window is built, because every menu label is translated once at
     # construction. --lang wins over PERFBOARD_STUDIO_LANG, which wins over the View menu's own

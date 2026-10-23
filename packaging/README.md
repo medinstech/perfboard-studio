@@ -10,6 +10,7 @@ ritual around it is in [docs/RELEASING.md](../docs/RELEASING.md).
 | `appimage.sh` | The Linux AppImage. |
 | `macos.sh` | The macOS disk image. |
 | `check-bundle-models.sh` | Fails unless a built bundle carries every package mesh and its licence. Run by all three release jobs. |
+| `check-mcp-stdio.py` | Fails unless a command serves a whole MCP session over stdio with nothing else on stdout. Run on every built bundle's `--mcp`, and by `tests/test_mcp_stdio.py` on the source. |
 | `winget/` | A **draft** winget manifest for the current release. Not submitted. |
 | `scoop/` | A **draft** Scoop manifest for the current release. Not submitted. |
 

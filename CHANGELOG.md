@@ -71,6 +71,15 @@ closed without a bump.
 - **Draft winget and Scoop manifests**, in `packaging/winget/` and `packaging/scoop/`, for
   0.21.0. Not published: `packaging/README.md` says what checking and submitting them
   takes, and that whether to is the owner's call.
+- **The installers carry the MCP server, and `--mcp` starts it.** The Windows, Linux and
+  macOS bundles have packed the server all along with no way to run it -- `python -m
+  perfboard_studio.mcp` needs a Python an installer does not give you. An MCP client can
+  now be pointed at the installed application: `perfboard-studio-cli.exe --mcp` on
+  Windows, the AppImage or the app's own binary with `--mcp` elsewhere, and `--mcp
+  board.perf` opens a board as `perfboard-studio-mcp board.perf` does. On stdio a single
+  stray byte on stdout breaks the protocol, so a test holds a whole session through the
+  window's own entry point to nothing else on stdout, and every release runs the same
+  check on the built bundle.
 
 - **Change Part, for a part already on the board.** A 5 mm LED that should have been 3 mm,
   or a resistor on a wider span, used to mean delete it, add another and wire it again. Edit
