@@ -523,6 +523,20 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "on them, are estimates."
                 ),
                 aliases=("ultrasonic", "sonar", "distance")),
+    # The receiver's body stands on its three legs with its dome facing down the rows, as
+    # KiCad's model of Vishay's MINICAST package has it.
+    CatalogPart("tsop38238", "TSOP38238", "sensor", "box-3x1-p1-r1-5.92x4.8x10.35-o0x1",
+                "IR receiver for 38 kHz remote controls, 2.5 to 5.5 V",
+                _legs("OUT", "GND", "VS"), ref_prefix="U",
+                source=(
+                    "Vishay TSOP382 datasheet: 1 OUT, 2 GND, 3 VS; the MINICAST body as KiCad "
+                    "OptoDevice:Vishay_MINICAST-3Pin and its model measure it"
+                ),
+                check=(
+                    "The VS1838B in kits is usually pinned the same, OUT, GND, VCC from the "
+                    "left with the dome towards you, but not always: check yours."
+                ),
+                aliases=("infrared", "IR receiver", "remote", "VS1838B")),
     # -- displays ---------------------------------------------------------------------
     CatalogPart("ssd1306-i2c-gnd-vcc", "SSD1306 OLED 0.96in I2C (GND VCC SCL SDA)", "display",
                 _OLED_FOOTPRINT, "128 x 64 OLED on I2C, pins printed GND, VCC, SCL, SDA",
@@ -532,6 +546,25 @@ CATALOG: tuple[CatalogPart, ...] = (
                 _OLED_FOOTPRINT, "128 x 64 OLED on I2C, pins printed VCC, GND, SCL, SDA",
                 _legs("VCC", "GND", "SCL", "SDA"), value="SSD1306 OLED", ref_prefix="U",
                 source=_OLED_SOURCE, check=_OLED_CHECK, aliases=("oled", "display", "screen")),
+    # The classic 16 x 2 on its 1 x 16 header, pin 1 at the left of the top edge, standing
+    # on its own pins as KiCad's model of Winstar's WC1602A stands.
+    CatalogPart("lcd-1602", "16x2 character LCD (HD44780)", "display",
+                "box-16x1-p1-r1-80x36x15-o12.95x15.5",
+                "Two lines of 16 characters, 5 V, on a 16-pin header",
+                _legs("VSS", "VDD", "VO", "RS", "RW", "E", "D0", "D1", "D2", "D3", "D4", "D5",
+                      "D6", "D7", "A", "K"),
+                value="LCD 16x2", ref_prefix="U",
+                source=(
+                    "KiCad Display:WC1602A footprint and Display_Character:WC1602A symbol "
+                    "(Winstar WC1602A: the 80 x 36 mm module, the header, the names), and the "
+                    "15 mm it stands from KiCad's WC1602A model"
+                ),
+                check=(
+                    "VO sets the contrast: a 10k pot across VDD and VSS with its wiper on VO. A "
+                    "and K are the backlight. A few modules put those two before pin 1: count "
+                    "from the pin marked 1. On an I2C backpack it is a different part."
+                ),
+                aliases=("1602", "HD44780", "character display")),
     # -- integrated circuits ------------------------------------------------------------
     CatalogPart("ne555", "NE555", "ic", "dip-8", "Timer",
                 _legs("GND", "TRIG", "OUT", "RESET", "CTRL", "THR", "DIS", "VCC"),

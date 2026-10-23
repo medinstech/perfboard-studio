@@ -143,6 +143,18 @@ def test_the_oled_is_two_entries_because_it_is_sold_two_ways() -> None:
     assert {part.id for part in search_catalog("oled")} == {first.id, second.id}
 
 
+def test_the_lcd_and_the_ir_receiver_are_pinned_as_their_sources_have_them() -> None:
+    """The 16 x 2 LCD as KiCad's WC1602A symbol numbers it, backlight last; the TSOP38238 as
+    Vishay's datasheet does."""
+    lcd = catalog_part("lcd-1602")
+    ir = catalog_part("tsop38238")
+    assert lcd is not None and ir is not None
+    names = [name for _, name in lcd.pin_names]
+    assert names[:6] == ["VSS", "VDD", "VO", "RS", "RW", "E"]
+    assert names[6:14] == [f"D{bit}" for bit in range(8)] and names[14:] == ["A", "K"]
+    assert [name for _, name in ir.pin_names] == ["OUT", "GND", "VS"]
+
+
 def test_the_hc_sr04_is_pinned_as_elecfreaks_prints_it() -> None:
     sensor = catalog_part("hc-sr04")
     assert sensor is not None and sensor.category == "sensor"

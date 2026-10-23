@@ -29,6 +29,11 @@ closed without a bump.
   terminal, a battery clip's or a jack's pads -- and no module has a pin on any of those nets.
   Whether the way in reaches both rails, or comes through a regulator, is not judged. None of
   the shipped examples is touched by it.
+- **The 16x2 character LCD and the TSOP38238 IR receiver.** The LCD is pinned as KiCad's
+  Winstar WC1602A symbol numbers it and is as large and as tall as KiCad's model of it; its
+  check says how VO sets the contrast and that a few modules put the backlight first. The
+  receiver is Vishay's OUT, GND, VS. "lcd", "1602", "infrared" and "remote" find them.
+
 - **The HC-SR04 and the 0.96 inch OLED.** The HC-SR04 is pinned as ElecFreaks prints it and
   stands on its edge as the real one does. The OLED is in a new Displays group TWICE, named
   by the order its pins are printed in -- "(GND VCC SCL SDA)" and "(VCC GND SCL SDA)" --

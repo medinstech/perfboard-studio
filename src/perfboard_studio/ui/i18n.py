@@ -1954,6 +1954,25 @@ TURKISH: Mapping[str, str] = {
     "Power in": "Güç girişi",
     "Connectors": "Konnektörler",
     "Sound": "Ses",
+    "IR receiver for 38 kHz remote controls, 2.5 to 5.5 V": (
+        "38 kHz uzaktan kumandalar için IR alıcı, 2,5 ile 5,5 V arası"
+    ),
+    "The VS1838B in kits is usually pinned the same, OUT, GND, VCC from the left with the "
+    "dome towards you, but not always: check yours.": (
+        "Setlerdeki VS1838B'nin dizilişi de çoğu zaman aynıdır, kubbe size bakarken soldan "
+        "OUT, GND, VCC; ama her zaman değil: sizinkini kontrol edin."
+    ),
+    "16x2 character LCD (HD44780)": "16x2 karakter LCD (HD44780)",
+    "Two lines of 16 characters, 5 V, on a 16-pin header": (
+        "16 karakterlik iki satır, 5 V, 16 pinli header üzerinde"
+    ),
+    "VO sets the contrast: a 10k pot across VDD and VSS with its wiper on VO. A and K are "
+    "the backlight. A few modules put those two before pin 1: count from the pin marked 1. "
+    "On an I2C backpack it is a different part.": (
+        "Kontrastı VO ayarlar: VDD ile VSS arasına bir 10k pot, orta ucu VO'ya. A ve K arka "
+        "ışıktır. Bazı modüller bu ikisini 1 numaralı pinden önceye koyar: 1 yazan pinden "
+        "sayın. I2C sırt kartlı olanı başka bir parçadır."
+    ),
     "Displays": "Ekranlar",
     "Ultrasonic distance sensor, 2 cm to 4 m, 5 V; stands on its edge": (
         "Ultrasonik mesafe sensörü, 2 cm ile 4 m arası, 5 V; kenarı üzerinde dik durur"
