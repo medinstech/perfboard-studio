@@ -80,6 +80,17 @@ if _assets.is_dir():
         if p.suffix in {".png", ".ico"}
     ]
 
+# The package meshes borrowed from KiCad, with the licence and notice that have to travel
+# with them (CC-BY-SA 4.0; see their NOTICE.md).  Data, so collect_submodules never saw
+# them, and every installer from 0.12.0 to 0.21.0 shipped without them: the 3D view drew
+# the generated fallback for every part, which is exactly why nothing noticed --
+# `partmodels` reads a missing directory as "no models".  release.yml now checks the
+# bundle for them as it checks the wheel.  2.5 MB, 0.3 MB of the installer.
+_models = Path("src/perfboard_studio/ui/models")
+if not (_models / "LICENSE").is_file():           # pragma: no cover - build-time guard
+    raise SystemExit(f"{_models} has no LICENSE; the meshes cannot ship without it")
+datas += [(str(p), "perfboard_studio/ui/models") for p in _models.iterdir() if p.is_file()]
+
 # The examples travel with the build.  They are 50 KB in total and they are the answer to
 # "it installed, now what" -- a first run with nothing to open is a worse introduction
 # than the download was worth.

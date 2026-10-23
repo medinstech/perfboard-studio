@@ -240,6 +240,7 @@ jobs:
           ./dist/perfboard-studio/perfboard-studio-cli.exe --version
           ./dist/perfboard-studio/perfboard-studio-cli.exe --headless examples/ne555-astable.perf
           test -f ./headless_out/out_2d.png
+          bash packaging/check-bundle-models.sh ./dist
 
       - name: Install NSIS
         shell: pwsh
@@ -391,6 +392,7 @@ jobs:
           test -x ./dist/perfboard-studio/perfboard-studio
           test ! -e ./dist/perfboard-studio/perfboard-studio-cli
           ./dist/perfboard-studio/perfboard-studio --version
+          bash packaging/check-bundle-models.sh ./dist
 
       # Through `bash` rather than as `packaging/appimage.sh`. The executable bit is in
       # the index, but this repository is developed on Windows, where git's core.filemode
@@ -477,6 +479,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" \
             ./dist/PerfboardStudio.app/Contents/Info.plist
           ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --version
+          bash packaging/check-bundle-models.sh ./dist/PerfboardStudio.app
 
       - name: Build the disk image
         run: bash packaging/macos.sh

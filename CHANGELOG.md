@@ -144,6 +144,13 @@ closed without a bump.
 - **Both READMEs counted 54 MCP tools and ~4250 tests.** There are 57 and ~4700.
   `docs/MCP.md`'s count was already held to the server; `tests/test_docs.py` now holds
   every count of MCP tools in either README to `docs/MCP.md`.
+- **The installers carry KiCad's package models.** Every Windows, Linux and macOS
+  installer since 0.12.0 shipped without the meshes the 3D view draws real packages from,
+  so it drew the generated block for every part -- a DIP as a slab, an electrolytic as a
+  plain can -- while a `pip` install drew the real ones. The meshes are data, not code, and
+  the build only ever collected code. They are in the bundle now with their licence and
+  notice, and the release checks every bundle for every one of them, as it already checked
+  the wheel.
 
 ## [0.21.0] - 2026-10-21
 
