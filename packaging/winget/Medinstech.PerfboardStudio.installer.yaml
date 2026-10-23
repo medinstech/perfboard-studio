@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+#
+# DRAFT, not submitted. See packaging/README.md for what submitting takes; it is the
+# owner's decision, not a step of the release.
+#
+# Everything here is read off packaging/perfboard-studio.nsi, and has to change with it:
+# the uninstall key is named after APP_NAME, so that is the ProductCode; the installer
+# elevates itself (RequestExecutionLevel admin) and installs for the whole machine; it
+# associates .perf. A silent install is NSIS's own `/S`, which winget passes for
+# `nullsoft` without being told.
+PackageIdentifier: Medinstech.PerfboardStudio
+PackageVersion: 0.21.0
+InstallerLocale: en-US
+Platform:
+  - Windows.Desktop
+MinimumOSVersion: 10.0.0.0
+InstallerType: nullsoft
+Scope: machine
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+ElevationRequirement: elevatesSelf
+FileExtensions:
+  - perf
+ProductCode: Perfboard Studio
+AppsAndFeaturesEntries:
+  - DisplayName: Perfboard Studio
+    Publisher: Medinstech
+    ProductCode: Perfboard Studio
+ReleaseDate: 2026-10-21
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/medinstech/perfboard-studio/releases/download/v0.21.0/PerfboardStudio_v0.21.0_Setup.exe
+    # From the release's own SHA256SUMS.
+    InstallerSha256: AD2600E2E1516F5BD698FDEA7D0D07E1A805122451F52AE3573B50C43CB61CDF
+ManifestType: installer
+ManifestVersion: 1.10.0

@@ -1,0 +1,49 @@
+{
+    "##": [
+        "DRAFT, not submitted -- see packaging/README.md.",
+        "Scoop installs without elevation into the user's own folder, so it does not RUN the",
+        "NSIS installer: 7-Zip unpacks it (`#/dl.7z`), and what an install would have put in",
+        "$INSTDIR is what lands in $dir. The `$PLUGINSDIR` NSIS packs for its own pages is",
+        "removed. No file association and no Start menu entry beyond Scoop's own shortcut:",
+        "those are the installer's, and Scoop never runs it."
+    ],
+    "version": "0.21.0",
+    "description": "Perfboard layout designer: netlist-driven placement and routing, perfboard-specific design rules, layout-vs-schematic verification, and a step-by-step soldering guide with measurement checkpoints.",
+    "homepage": "https://github.com/medinstech/perfboard-studio",
+    "license": {
+        "identifier": "Apache-2.0,CC-BY-SA-4.0",
+        "url": "https://github.com/medinstech/perfboard-studio/blob/main/NOTICE"
+    },
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/medinstech/perfboard-studio/releases/download/v0.21.0/PerfboardStudio_v0.21.0_Setup.exe#/dl.7z",
+            "hash": "ad2600e2e1516f5bd698fdea7d0d07e1a805122451f52ae3573b50c43cb61cdf"
+        }
+    },
+    "pre_install": "Remove-Item \"$dir\\`$PLUGINSDIR\" -Recurse -Force -ErrorAction SilentlyContinue",
+    "bin": [
+        [
+            "perfboard-studio-cli.exe",
+            "perfboard-studio"
+        ]
+    ],
+    "shortcuts": [
+        [
+            "perfboard-studio.exe",
+            "Perfboard Studio"
+        ]
+    ],
+    "checkver": {
+        "github": "https://github.com/medinstech/perfboard-studio"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/medinstech/perfboard-studio/releases/download/v$version/PerfboardStudio_v$version_Setup.exe#/dl.7z",
+                "hash": {
+                    "url": "$baseurl/SHA256SUMS"
+                }
+            }
+        }
+    }
+}

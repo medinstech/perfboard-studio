@@ -41,6 +41,9 @@ closed without a bump.
   MCP3008 ADC. Each from its datasheet and checked pin for pin against KiCad 10, and each
   check says what catches people: the CD4017's Q0 is pin 3, the 74HC165's output to read
   is pin 9 and not the inverted one on 7, the MCP23017's RESET has no pull-up.
+- **Draft winget and Scoop manifests**, in `packaging/winget/` and `packaging/scoop/`, for
+  0.21.0. Not published: `packaging/README.md` says what checking and submitting them
+  takes, and that whether to is the owner's call.
 
 - **Change Part, for a part already on the board.** A 5 mm LED that should have been 3 mm,
   or a resistor on a wider span, used to mean delete it, add another and wire it again. Edit
