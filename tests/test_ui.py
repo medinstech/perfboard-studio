@@ -10169,6 +10169,23 @@ def test_editing_a_custom_part_does_not_turn_it_into_a_resistor() -> None:
     dialog.select_footprint("box-4x2-p1-r3-15x10x8")
     assert dialog.chosen_footprint_id() == "box-4x2-p1-r3-15x10x8"
     dialog.deleteLater()
+
+
+def test_the_part_list_counts_sizes_as_numbers() -> None:
+    """By string order "LED, 10 mm" came first, so "LED" and Enter gave a 10 mm LED, and a
+    1x10 header stood between the 1x1 and the 1x2."""
+    from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID, AddPartDialog
+
+    dialog = AddPartDialog(_load_dense())
+    dialog.filter.setText("LED")
+    assert dialog.chosen_footprint_id() == "led-3mm"
+    dialog.filter.setText("header, 1x")
+    ids = [leaf.data(0, ROLE_FOOTPRINT_ID) for leaf in dialog._leaves()]
+    assert ids[:3] == ["hdr-1x1", "hdr-1x2", "hdr-1x3"]
+    assert ids.index("hdr-1x9") < ids.index("hdr-1x10")
+    dialog.deleteLater()
+
+
 def _dirty(window) -> None:
     """Move a part, so the window differs from what is on disk.
 

@@ -563,6 +563,20 @@ def _folded(text: str) -> str:
     return text.translate(_I_FOLD).lower()
 
 
+def _natural_key(text: str) -> tuple[str | float, ...]:
+    """``text`` sorted as a person reads it: the numbers in it as numbers.
+
+    By plain string order "LED, 10 mm" came before "LED, 3 mm" and "Pin header, 1x10" before
+    "1x2" -- and since Enter takes the first match, filtering "LED" gave a 10 mm LED. The
+    pieces alternate text and number from the start, so two keys always compare like with
+    like.
+    """
+    return tuple(
+        float(piece) if index % 2 else piece
+        for index, piece in enumerate(re.split(r"(\d+(?:\.\d+)?)", text))
+    )
+
+
 def _rotation_after(current: Rotation, delta: int) -> Rotation:
     """The next legal rotation, wrapping. ``model.VALID_ROTATIONS`` is 0/90/180/270 and the
     command refuses anything else, so the wrap happens here rather than being discovered as
@@ -718,7 +732,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     needle = _folded(text.strip())
     tree.clear()
     by_archetype: dict[BodyArchetype, list[Footprint]] = {}
-    for footprint in sorted(standard_footprints().values(), key=lambda f: f.name):
+    for footprint in sorted(standard_footprints().values(), key=lambda f: _natural_key(f.name)):
         # In either language, as the catalog rows are: "direnç" finds a resistor as
         # "resistor" does.
         haystack = (
@@ -735,7 +749,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     # found by knowing what it is, because the only thing that distinguishes it is that
     # the library does not have it.
     if custom:
-        ordered = sorted(custom.values(), key=lambda f: f.name)
+        ordered = sorted(custom.values(), key=lambda f: _natural_key(f.name))
         group = QTreeWidgetItem([t("this board"), ""])
         group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
         group.setIcon(0, icons.part_icon(ordered[0]))

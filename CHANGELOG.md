@@ -81,6 +81,10 @@ closed without a bump.
   the board opened last, else in Documents, and an unsaved board is proposed under its own
   name -- an example opened untitled keeps the example's.
 
+- **The part list counts sizes as numbers.** "LED, 10 mm" sorted before 3 mm and 5 mm, so
+  typing "LED" and pressing Enter added a 10 mm LED; a 1x10 header stood between the 1x1 and
+  the 1x2. The Parts panel and Add a Part now list sizes smallest first.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added
