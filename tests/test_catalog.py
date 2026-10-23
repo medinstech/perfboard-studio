@@ -256,6 +256,15 @@ def test_search_matches_the_name_the_summary_and_the_kind() -> None:
         ("servo", "servo-header"),
         ("SG90", "servo-header"),
         ("buzzer", "buzzer-active-12mm"),
+        # From the findability sweep: what a beginner types, in either language.
+        ("microcontroller", "atmega328p"),
+        ("mikrodenetleyici", "attiny85"),
+        ("terminal block", "power-terminal-2"),
+        ("batarya", "battery-aa-holder"),
+        ("adaptör", "dc-jack-panel"),
+        ("kızılötesi", "tsop38238"),
+        ("voltaj regülatörü", "ld1117v33"),
+        ("anahtar", "tact-6x6"),
     ],
 )
 def test_a_part_is_found_by_what_somebody_would_type(typed, found) -> None:
@@ -277,6 +286,15 @@ def test_a_part_whose_name_says_it_comes_before_one_whose_summary_does() -> None
     assert found[:2] == ["tact-6x6", "tact-12x12"] and "2n2222a" in found[2:]
     # With nothing typed, nothing moves.
     assert search_catalog("") == list(CATALOG)
+
+
+def test_a_name_is_named_from_the_start_of_a_word() -> None:
+    """"led" is inside "SSD1306 OLED" and names no display: the MAX7219, whose alias is
+    "LED matrix", comes first, and the OLEDs only after it. And "voltage regulator" names
+    the regulators by their kind, which no 7805's own words say."""
+    led = [part.id for part in search_catalog("led")]
+    assert led[0] == "max7219" and {"ssd1306-i2c-gnd-vcc", "ssd1306-i2c-vcc-gnd"} <= set(led[1:])
+    assert search_catalog("voltage regulator")[0].category == "regulator"
 
 
 def test_the_window_can_hand_the_search_its_own_words_and_its_own_letters() -> None:

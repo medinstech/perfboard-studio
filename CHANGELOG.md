@@ -29,6 +29,13 @@ closed without a bump.
   terminal, a battery clip's or a jack's pads -- and no module has a pin on any of those nets.
   Whether the way in reaches both rails, or comes through a regulator, is not judged. None of
   the shipped examples is touched by it.
+- **Eight more searches find their part**, from a sweep of 130 things a beginner types in
+  English and Turkish: "voltage regulator" and "voltaj regülatörü" find the regulators,
+  "microcontroller" and "mikrodenetleyici" the ATtiny85 and ATmega328P, "terminal block"
+  the power terminal, "batarya" the batteries, "adaptör" the DC jack, "kızılötesi" the IR
+  receiver, "anahtar" the push buttons. And a name is named only from the start of a word,
+  so "led" no longer ranks an OLED as named.
+
 - **The 16x2 character LCD and the TSOP38238 IR receiver.** The LCD is pinned as KiCad's
   Winstar WC1602A symbol numbers it and is as large and as tall as KiCad's model of it; its
   check says how VO sets the contrast and that a few modules put the backlight first. The

@@ -404,7 +404,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "Red is +. If both leads of yours are one colour, find + with a meter on "
                     "the battery before soldering."
                 ),
-                aliases=(*_POWER_WORDS, "PP3", "9V")),
+                aliases=(*_POWER_WORDS, "batarya", "PP3", "9V")),
     CatalogPart("battery-aa-holder", "AA battery holder", "power", "wire-2",
                 "Two to four AA or AAA cells in series, on two leads",
                 _legs("+", "-"), value="AA holder", ref_prefix="BT",
@@ -413,7 +413,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "Red is + and black is -. With no colours, measure across it with the "
                     "cells in."
                 ),
-                aliases=(*_POWER_WORDS, "AAA")),
+                aliases=(*_POWER_WORDS, "batarya", "AAA")),
     CatalogPart("dc-jack-panel", "DC barrel jack 5.5 x 2.1 mm, panel mount", "power", "wire-2",
                 "On the case, wired to the board from its centre pin and its sleeve",
                 _legs("+", "-"), value="DC IN",
@@ -426,7 +426,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "adapter says which. A third lug, if yours has one, is a switch and stays "
                     "unconnected here."
                 ),
-                aliases=(*_POWER_WORDS, "jack", "adapter")),
+                aliases=(*_POWER_WORDS, "jack", "adapter", "adaptör")),
     CatalogPart("power-terminal-2", "Power in, 2-way screw terminal", "power",
                 "screw-terminal-2", "Two wires in under screws, named + and -",
                 _legs("+", "-"), value="DC IN",
@@ -435,7 +435,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "from; which way is + is the board's choice, not the terminal's"
                 ),
                 check="Print + and - beside it: the terminal itself does not say.",
-                aliases=_POWER_WORDS),
+                aliases=(*_POWER_WORDS, "terminal block")),
     CatalogPart("power-header-2", "Power in, 2-pin header", "power", "hdr-1x2",
                 "Two header pins named + and -, for a lead that plugs on",
                 _legs("+", "-"), value="DC IN",
@@ -536,7 +536,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "The VS1838B in kits is usually pinned the same, OUT, GND, VCC from the "
                     "left with the dome towards you, but not always: check yours."
                 ),
-                aliases=("infrared", "IR receiver", "remote", "VS1838B")),
+                aliases=("infrared", "IR receiver", "remote", "VS1838B", "kızılötesi")),
     # -- displays ---------------------------------------------------------------------
     CatalogPart("ssd1306-i2c-gnd-vcc", "SSD1306 OLED 0.96in I2C (GND VCC SCL SDA)", "display",
                 _OLED_FOOTPRINT, "128 x 64 OLED on I2C, pins printed GND, VCC, SCL, SDA",
@@ -606,7 +606,8 @@ CATALOG: tuple[CatalogPart, ...] = (
                 )),
     CatalogPart("attiny85", "ATtiny85", "ic", "dip-8", "8-bit AVR, 8 kB flash, five I/O pins",
                 _legs("RESET", "PB3", "PB4", "GND", "PB0", "PB1", "PB2", "VCC"),
-                ref_prefix="U", source="Microchip ATtiny25/45/85 datasheet, PDIP"),
+                ref_prefix="U", source="Microchip ATtiny25/45/85 datasheet, PDIP",
+                aliases=("microcontroller", "mikrodenetleyici")),
     CatalogPart("ds1307", "DS1307", "ic", "dip-8",
                 "Real-time clock, I2C, with battery backup, 5 V",
                 _legs("X1", "X2", "VBAT", "GND", "SDA", "SCL", "SQW/OUT", "VCC"),
@@ -700,7 +701,8 @@ CATALOG: tuple[CatalogPart, ...] = (
                 _legs("RESET", "RXD", "TXD", "PD2", "PD3", "PD4", "VCC", "GND", "XTAL1",
                       "XTAL2", "PD5", "PD6", "PD7", "PB0", "PB1", "PB2", "MOSI", "MISO",
                       "SCK", "AVCC", "AREF", "GND", "PC0", "PC1", "PC2", "PC3", "PC4", "PC5"),
-                ref_prefix="U", source="Microchip ATmega328P datasheet, PDIP"),
+                ref_prefix="U", source="Microchip ATmega328P datasheet, PDIP",
+                aliases=("microcontroller", "mikrodenetleyici")),
     CatalogPart("mcp23017", "MCP23017", "ic", "dip-28", "16-bit I/O expander, I2C",
                 _legs("GPB0", "GPB1", "GPB2", "GPB3", "GPB4", "GPB5", "GPB6", "GPB7",
                       "VDD", "VSS", "NC", "SCL", "SDA", "NC", "A0", "A1", "A2", "RESET",
@@ -980,29 +982,68 @@ def names_part(part: CatalogPart, text: str, *, fold: Callable[[str], str] = str
     """Whether every word of ``text`` finds this part in what it is CALLED -- id, name, kind
     and aliases -- and not only in what its summary says about it. "switch" names a push
     button and is merely a word in a 2N2222A's "switching", and the button is what somebody
-    typing it wants first."""
-    return _finds(part, text, (), fold)
+    typing it wants first.
+
+    A word names a part only from the START of one of those words: "led" is inside "SSD1306
+    OLED" and names no display, the rule the Add a Part dialog's Enter keeps
+    (``ui.main.typed_names``)."""
+    return _finds(part, text, (), fold, starts=True)
+
+
+#: Words for a kind of part that its parts' names and summaries do not say: nothing in a
+#: 7805's "Linear regulator, +5 V" says VOLTAGE regulator, which is what is typed.
+_CATEGORY_WORDS: dict[str, tuple[str, ...]] = {
+    "regulator": ("voltage regulator", "voltaj regülatörü"),
+    # A push button is a "Tact buton" in Turkish and an "anahtar" to somebody looking for
+    # one, which is also the word in a switching transistor's Turkish summary.
+    "switch": ("anahtar",),
+}
 
 
 def _finds(
-    part: CatalogPart, text: str, said: tuple[str, ...], fold: Callable[[str], str]
+    part: CatalogPart,
+    text: str,
+    said: tuple[str, ...],
+    fold: Callable[[str], str],
+    *,
+    starts: bool = False,
 ) -> bool:
     words = fold(text).split()
     if not words:
         return True
-    haystack = fold(" ".join((part.id, part.name, part.category, *part.aliases, *said)))
+    kind = (part.category, *_CATEGORY_WORDS.get(part.category, ()))
+    haystack = fold(" ".join((part.id, part.name, *kind, *part.aliases, *said)))
     squeezed = _squeezed(haystack)
+    # Where each word of the haystack begins once it is squeezed, for ``starts``.
+    begins: set[int] = set()
+    at = 0
+    for token in haystack.split():
+        begins.add(at)
+        at += len(_squeezed(token))
     numbers = {_squeezed(fold(number)) for number in (part.id, part.placed_value)}
     numbers = {number for number in numbers if len(number) >= 4}
-    return all(_word_finds(word, haystack, squeezed, numbers) for word in words)
+    return all(
+        _word_finds(word, haystack, squeezed, numbers, begins if starts else None)
+        for word in words
+    )
 
 
-def _word_finds(word: str, haystack: str, squeezed: str, numbers: set[str]) -> bool:
-    if word in haystack:
+def _word_finds(
+    word: str, haystack: str, squeezed: str, numbers: set[str], begins: set[int] | None
+) -> bool:
+    if begins is None:
+        if word in haystack:
+            return True
+    elif re.search(rf"(?<!\w){re.escape(word)}", haystack):
         return True
     plain = _squeezed(word)
     # A word that is all punctuation -- a lone "-" -- says nothing to look for.
-    if not plain or plain in squeezed:
+    if not plain:
+        return True
+    if begins is None:
+        if plain in squeezed:
+            return True
+    elif any(squeezed.startswith(plain, index) for index in begins):
         return True
     # An ordering code after a hyphen is the same part: ATtiny85-20PU is an ATtiny85, whose
     # "20" would otherwise read as more of its number.
