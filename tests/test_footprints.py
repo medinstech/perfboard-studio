@@ -630,6 +630,23 @@ def test_the_srd_relay_is_songles_legs_bent_to_the_nearest_holes() -> None:
     assert get_footprint("relay-srd") == relay and get_footprint("relay-xyz") is None
 
 
+def test_an_rgb_led_is_the_round_led_with_four_legs_in_a_row() -> None:
+    """Kingbright's 1.27 mm legs bent out to holes one apart, as KiCad's
+    LED_D5.0mm-4_RGB_Wide_Pins has them, under the same lens as the two-legged LED. Only
+    red is named: the makers agree on nothing else, and the common leg is an anode on one
+    and a cathode on the next."""
+    rgb = get_footprint("led-5mm-rgb")
+    plain = get_footprint("led-5mm")
+    assert rgb is not None and plain is not None
+    assert [(pin.number, pin.d_col, pin.d_row) for pin in rgb.pins] == [
+        ("1", 0, 0), ("2", 1, 0), ("3", 2, 0), ("4", 3, 0),
+    ]
+    assert [pin.name for pin in rgb.pins] == ["R", None, None, None]
+    assert (rgb.body, rgb.body_height, rgb.polarized) == (plain.body, plain.body_height, True)
+    assert rgb.name == "RGB LED, 5 mm round, 4 legs"
+    assert get_footprint("led-05mm-rgb") is None and get_footprint("led-5mm-RGB") is None
+
+
 def test_the_grammar_names_every_family_the_parser_accepts() -> None:
     """`GENERATED_ID_GRAMMAR` is the only thing that tells a person or an agent what to
     type, so a family added to the parser and left out of it is a feature nobody can reach.

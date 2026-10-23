@@ -176,8 +176,8 @@ def list_catalog(search: str = "", category: str = "") -> list[dict[str, Any]]:
     each already described: its package, what its datasheet calls each lead, the symbol
     it is drawn as, its value and its reference letter. Pass an id to place_component or
     add_part as `part` and all of that is filled in. `check` says what to verify on the
-    part in hand. Categories: transistor, mosfet, regulator, power, diode, protection,
-    passive, sensor, display, ic, switch, relay, connector, sound, module."""
+    part in hand. Categories: transistor, mosfet, regulator, power, diode, led,
+    protection, passive, sensor, display, ic, switch, relay, connector, sound, module."""
     return session.list_catalog(search, category)
 
 

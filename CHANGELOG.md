@@ -87,6 +87,17 @@ closed without a bump.
   check says how VO sets the contrast and that a few modules put the backlight first. The
   receiver is Vishay's OUT, GND, VS. "lcd", "1602", "infrared" and "remote" find them.
 
+- **Catalog: LEDs, plain and RGB, under a new LEDs group.** The plain 3 mm and 5 mm LED (A,
+  K, from Kingbright's drawings) come first, so "LED" and Enter still takes an ordinary LED.
+  The four-legged RGB LED is a new generated footprint, `led-5mm-rgb` (`led-<D>mm[-rgb]`):
+  the 1.27 mm legs bent out to holes one apart, pin 1 red, pin 2 the common leg. Makers
+  disagree about green and blue, so there are four entries, each with its leg order in its
+  name: common cathode (R K G B, Young Sun's, which SparkFun sells), common anode (R A G B,
+  Fedy's, which Adafruit sells), and Kingbright's two (R K B G, R A B G). The build guide
+  sends the builder to the LONGEST leg for an RGB LED's common pin, and names the red leg.
+  On a two-legged LED, "K" means the short lead with the flat on the rim; read that way, it
+  would have pointed at the wrong leg.
+
 - **The Songle SRD relay, as it is.** `relay-srd` is the SRD-05VDC-SL-C and its family on
   the holes nearest its legs, which are not on the 2.54 mm grid: COM alone between the coil
   legs at one end, the contacts at the other, numbered as KiCad's SANYOU SRD (1 COM, 2 and

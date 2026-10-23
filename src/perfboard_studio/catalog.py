@@ -27,7 +27,8 @@ of a TO-220, left to right looking at the printed face with the tab behind -- th
 footprints number them in, and KiCad's. A module's dimensions are measured from a drawing
 (``source``), and anything that varies between suppliers or could not be measured -- a
 clone's board, the height of what is on it -- is said in ``check``, which the interface
-shows beside the part. A part whose pinout differs between makers is not in here at all.
+shows beside the part. A part whose pinout differs between makers is not in here at all,
+or is in once per pinout with the order in its name: the two OLEDs, the RGB LEDs.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ CatalogCategory = Literal[
     "regulator",
     "power",
     "diode",
+    "led",
     "protection",
     "passive",
     "sensor",
@@ -68,6 +70,7 @@ CATEGORY_ORDER: tuple[CatalogCategory, ...] = (
     # first circuit drawn from nothing has no other way to find.
     "power",
     "diode",
+    "led",
     "protection",
     "passive",
     "sensor",
@@ -125,6 +128,7 @@ _PREFIX_BY_CATEGORY: dict[str, str] = {
     "transistor": "Q",
     "mosfet": "Q",
     "diode": "D",
+    "led": "D",
     "protection": "F",
     "power": "J",
     "relay": "K",
@@ -165,6 +169,16 @@ _TO92_ORDER = "TO-92 legs 1-2-3 left to right, flat face towards you, legs down"
 _TO220_ORDER = "TO-220 legs 1-2-3 left to right, printed face towards you, tab behind"
 _CHECK_LEGS = "Check the legs against the datasheet of the part you have before soldering."
 _DIODE = _legs("K", "A")  # pin 1 is the banded end: the registry's and KiCad's convention
+_LED_CHECK = (
+    "The longer leg is the anode; the flat on the rim is on the cathode's side. It needs a "
+    "resistor in series: about 330 ohm from 5 V."
+)
+_RGB_CHECK = (
+    "Makers do not agree where green and blue go, so before soldering touch a 3 V coin cell "
+    "across the longest leg and each of the others (+ to the longest on a common anode, - "
+    "on a common cathode) and see which colour lights. Each colour needs its own resistor. "
+    "The legs leave the lens 1.27 mm apart: fan them out to the four holes."
+)
 
 # -- modules --------------------------------------------------------------------------
 #
@@ -465,6 +479,67 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("bzx55c15", "BZX55C15", "diode", "d-do35",
                 "Zener, 15 V, 0.5 W (a MOSFET gate clamp)",
                 _DIODE, "zener", value="15V", source="Vishay BZX55; cathode is the banded end"),
+    # -- LEDs -------------------------------------------------------------------------
+    # The plain ones first, smallest first as the library lists them, and on the library's
+    # own footprints: "LED" and Enter in Add a Part takes the first row the word names,
+    # and that has to be an LED everybody means rather than a four-legged one.
+    CatalogPart("led-3mm", "LED 3 mm", "led", "led-3mm",
+                "The small indicator LED, any colour; legs 2.54 mm apart",
+                _legs("A", "K"), "led", value="LED",
+                source=(
+                    "Kingbright WP710A10ID datasheet: the cathode is the shorter lead, on the "
+                    "flat of the rim; leads 2.54 mm apart"
+                ),
+                check=_LED_CHECK, aliases=("indicator", "light", "ışık")),
+    CatalogPart("led-5mm", "LED 5 mm", "led", "led-5mm",
+                "The standard indicator LED, any colour; legs 2.54 mm apart",
+                _legs("A", "K"), "led", value="LED",
+                source=(
+                    "Kingbright WP7113ID datasheet: the cathode is the shorter lead, on the "
+                    "flat of the rim; leads 2.54 mm apart"
+                ),
+                check=_LED_CHECK, aliases=("indicator", "light", "ışık")),
+    # Two makers, two orders for green and blue, so the order is in the name, as the two
+    # OLEDs' supply pins are. The common leg's names are KiCad's (LED_RKGB and its kin).
+    CatalogPart("rgb-led-5mm-cc", "RGB LED 5 mm, common cathode (R K G B)", "led",
+                "led-5mm-rgb",
+                "Red, green and blue in one lens, the three cathodes on the longest leg",
+                _legs("RA", "K", "GA", "BA"), value="RGB LED",
+                source=(
+                    "Young Sun YSL-R596CR3G4B5W-F12 datasheet (the one SparkFun sells as "
+                    "COM-09264): 1 red, 2 common cathode (the longest leg), 3 green, 4 blue"
+                ),
+                check=_RGB_CHECK, aliases=("RGB", "tri-colour")),
+    CatalogPart("rgb-led-5mm-ca", "RGB LED 5 mm, common anode (R A G B)", "led",
+                "led-5mm-rgb",
+                "Red, green and blue in one lens, the three anodes on the longest leg",
+                _legs("RK", "A", "GK", "BK"), value="RGB LED",
+                source=(
+                    "Fedy FD-5WSRGB-A datasheet (the one Adafruit sells as #159): red, the "
+                    "common anode (the longest leg), green, blue in a row. Its note misprints "
+                    "the fourth leg's colour as '2:Y'; blue by elimination, and where Young "
+                    "Sun puts blue on its common-cathode twin"
+                ),
+                check=_RGB_CHECK, aliases=("RGB", "tri-colour")),
+    CatalogPart("rgb-led-5mm-cc-kingbright", "RGB LED 5 mm, common cathode, Kingbright (R K B G)",
+                "led", "led-5mm-rgb",
+                "Red, blue and green in one lens, the three cathodes on the longest leg",
+                _legs("RA", "K", "BA", "GA"), value="RGB LED",
+                source=(
+                    "Kingbright L-154A4SUREQBFZGEW and L-154A4SUREQBFZGC datasheets: 1 red, "
+                    "2 common cathode (the longest leg), 3 blue, 4 green, 1.27 mm apart"
+                ),
+                check=_RGB_CHECK,
+                aliases=("RGB", "L-154A4SUREQBFZGEW", "L-154A4SUREQBFZGC")),
+    CatalogPart("rgb-led-5mm-ca-kingbright", "RGB LED 5 mm, common anode, Kingbright (R A B G)",
+                "led", "led-5mm-rgb",
+                "Red, blue and green in one lens, the three anodes on the longest leg",
+                _legs("RK", "A", "BK", "GK"), value="RGB LED",
+                source=(
+                    "Kingbright WP154A4SEJ3VBDZGW/CA datasheet: 1 red, 2 common anode (the "
+                    "longest leg), 3 blue, 4 green, 1.27 mm apart"
+                ),
+                check=_RGB_CHECK, aliases=("RGB", "WP154A4SEJ3VBDZGW/CA")),
     # -- protection -------------------------------------------------------------------
     CatalogPart("ptc-radial", "PTC resettable fuse", "protection", "c-disc-d8-p2-t3",
                 "Polymer PTC (polyfuse), radial, leads 5 mm apart",

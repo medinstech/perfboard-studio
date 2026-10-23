@@ -313,11 +313,15 @@ def test_a_part_whose_name_says_it_comes_before_one_whose_summary_does() -> None
 
 
 def test_a_name_is_named_from_the_start_of_a_word() -> None:
-    """"led" is inside "SSD1306 OLED" and names no display: the MAX7219, whose alias is
-    "LED matrix", comes first, and the OLEDs only after it. And "voltage regulator" names
-    the regulators by their kind, which no 7805's own words say."""
+    """"led" is inside "SSD1306 OLED" and names no display: the LEDs come first, a plain
+    one at their head, then the MAX7219, whose alias is "LED matrix", and the OLEDs
+    only after it. And "voltage regulator" names the regulators by their kind, which no
+    7805's own words say."""
     led = [part.id for part in search_catalog("led")]
-    assert led[0] == "max7219" and {"ssd1306-i2c-gnd-vcc", "ssd1306-i2c-vcc-gnd"} <= set(led[1:])
+    assert led[0] == "led-3mm"
+    leds = [part.id for part in CATALOG if part.category == "led"]
+    assert led[: len(leds)] == leds and led[len(leds)] == "max7219"
+    assert {"ssd1306-i2c-gnd-vcc", "ssd1306-i2c-vcc-gnd"} <= set(led[len(leds) + 1 :])
     assert search_catalog("voltage regulator")[0].category == "regulator"
 
 
@@ -371,6 +375,62 @@ def test_the_songle_relay_is_on_its_own_footprint_and_named_as_kicad_numbers_it(
     twelve = catalog_part("srd-12vdc-sl-c")
     assert twelve is not None
     assert (twelve.footprint_id, twelve.pin_names) == (relay.footprint_id, relay.pin_names)
+
+
+#: Each RGB LED's legs as its maker draws them: red, the common leg, then green and blue in
+#: that maker's order -- Young Sun's and Fedy's green first, Kingbright's blue.
+RGB_LEDS = {
+    "rgb-led-5mm-cc": ("RA", "K", "GA", "BA"),
+    "rgb-led-5mm-ca": ("RK", "A", "GK", "BK"),
+    "rgb-led-5mm-cc-kingbright": ("RA", "K", "BA", "GA"),
+    "rgb-led-5mm-ca-kingbright": ("RK", "A", "BK", "GK"),
+}
+
+
+@pytest.mark.parametrize("part_id", sorted(RGB_LEDS))
+def test_an_rgb_led_says_its_leg_order_in_its_name(part_id: str) -> None:
+    """A row that only said "RGB LED, common cathode" would be right for one maker and
+    swap two colours for the other, so the order is printed in the name, letter for letter,
+    and the guide sends the builder to the LONGEST leg for the common one -- the opposite
+    of what "K" means on a two-legged LED."""
+    from perfboard_studio.guide import _polarity_note
+
+    led = catalog_part(part_id)
+    assert led is not None and led.footprint_id == "led-5mm-rgb"
+    names = RGB_LEDS[part_id]
+    assert tuple(name for _, name in led.pin_names) == names
+    common = names[1]
+    assert led.name.endswith(f"(R {common} {names[2][0]} {names[3][0]})")
+    assert ("common anode" in led.name) == (common == "A")
+
+    session = BoardSession(document=new_board(cols=12, rows=8, name="rgb"))
+    assert session.place_component("", "", "C3", part=part_id)["ok"]
+    footprint = get_footprint("led-5mm-rgb")
+    assert footprint is not None
+    anchor = session.document.components[0].anchor
+    holes = tuple(
+        (pin.number, dataclasses.replace(anchor, col=anchor.col + pin.d_col))
+        for pin in footprint.pins
+    )
+    note = _polarity_note(footprint, holes, session.document.components[0], board=None)
+    kind = "anode" if common == "A" else "cathode"
+    assert note == f"Red leg in C3; Common {kind} (the longest leg) in D3"
+
+
+def test_a_plain_led_is_still_told_by_its_short_leg() -> None:
+    """The two-legged LED's names keep the meaning they always had in the guide."""
+    from perfboard_studio.guide import _polarity_note
+
+    led = catalog_part("led-5mm")
+    assert led is not None and dict(led.pin_names) == {"1": "A", "2": "K"}
+    footprint = get_footprint("led-5mm")
+    assert footprint is not None
+    session = BoardSession(document=new_board(cols=12, rows=8, name="led"))
+    assert session.place_component("", "", "C3", part="led-5mm")["ok"]
+    anchor = session.document.components[0].anchor
+    holes = (("1", anchor), ("2", dataclasses.replace(anchor, col=anchor.col + 1)))
+    note = _polarity_note(footprint, holes, session.document.components[0], board=None)
+    assert note == "Anode (long lead) in C3; Cathode (short lead, flat on the rim) in D3"
 
 
 def test_a_free_reference_counts_the_board_and_the_design() -> None:

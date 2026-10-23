@@ -1459,6 +1459,19 @@ _LEAD_NAME_MEANING: dict[str, str] = {
 }
 
 
+#: The same names on an LED with more than two legs -- an RGB one -- where they say the
+#: opposite about the leg: its common anode or cathode is the LONGEST leg, so "short lead,
+#: flat on the rim" would send the builder to the wrong one. Red is named because it is
+#: the one colour every maker puts in the same place, which fixes which way the row runs.
+_COMMON_LEG_MEANING: dict[str, str] = {
+    "A": "Common anode (the longest leg)",
+    "K": "Common cathode (the longest leg)",
+    "R": "Red leg",
+    "RA": "Red leg",
+    "RK": "Red leg",
+}
+
+
 def _polarity_note(
     footprint: Footprint,
     pin_holes: tuple[tuple[str, HoleCoord], ...],
@@ -1473,12 +1486,17 @@ def _polarity_note(
     """
     by_number = dict(pin_holes)
 
+    meanings = (
+        _COMMON_LEG_MEANING
+        if footprint.body.archetype == "led-round" and len(footprint.pins) > 2
+        else _PIN_NAME_MEANING
+    )
     named = []
     off_board = footprint.body.archetype == "flying-leads"
     for pin in footprint.pins:
         name = pin_name_of(component, pin)
-        if name in _PIN_NAME_MEANING and pin.number in by_number:
-            lead_said = say(_PIN_NAME_MEANING[name])
+        if name in meanings and pin.number in by_number:
+            lead_said = say(meanings[name])
             where = format_hole(by_number[pin.number], board)
             if off_board:
                 # Off the board the lead is not IN the hole -- the wire to it is.

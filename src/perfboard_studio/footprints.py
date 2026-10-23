@@ -680,16 +680,35 @@ def led_footprint(
     lead_diameter_mm: Mm | None = None,
     id: str | None = None,
     name: str | None = None,
+    rgb: bool = False,
 ) -> Footprint:
     """Round LED: 3, 5 or 10 mm. Pin 1 (the anchor, anode "A") sits at (0,0); pin 2
     (cathode "K", the flat-side/shorter lead) sits one hole to the right.
+
+    ``rgb`` is the four-legged one: red, the common leg (the longest), then green and blue
+    in an order the makers do not agree on, in one row. Its legs leave the lens 1.27 mm
+    apart and are bent out to holes one apart, as KiCad's LED_D5.0mm-4_RGB_Wide_Pins has
+    them. Only pin 1 is named here, because red is the one leg every maker puts in the same
+    place, and the common leg is an anode on one LED and a cathode on the next: the catalog
+    names the rest, part by part.
     """
     lead_diameter = 0.5 if lead_diameter_mm is None else lead_diameter_mm
     body_height = _LED_HEIGHT_BY_DIAMETER_MM[diameter_mm] if body_height_mm is None else body_height_mm
-    pins = (_make_pin("1", 0, 0, "A"), _make_pin("2", 1, 0, "K"))
+    pins: tuple[FootprintPin, ...]
+    if rgb:
+        pins = (
+            _make_pin("1", 0, 0, "R"),
+            _make_pin("2", 1, 0),
+            _make_pin("3", 2, 0),
+            _make_pin("4", 3, 0),
+        )
+    else:
+        pins = (_make_pin("1", 0, 0, "A"), _make_pin("2", 1, 0, "K"))
     outline = _circle_outline(_to_mm(pins), diameter_mm, COURTYARD_MARGIN_MM)
-    fp_id = id if id is not None else f"led-{diameter_mm}mm"
-    fp_name = name if name is not None else f"LED, {diameter_mm} mm round"
+    fp_id = id if id is not None else f"led-{diameter_mm}mm" + ("-rgb" if rgb else "")
+    fp_name = name if name is not None else (
+        f"RGB LED, {diameter_mm} mm round, 4 legs" if rgb else f"LED, {diameter_mm} mm round"
+    )
     return Footprint(
         id=fp_id,
         name=fp_name,
@@ -1998,7 +2017,10 @@ most two decimals and are written without units.
   c-elec-d<D>-p<pitch>-h<H>                             radial electrolytic
   c-disc-d<D>-p<pitch>-t<T>                             disc ceramic
   c-film-<L>x<W>x<H>-p<pitch>                           boxed film capacitor
-  led-<D>mm                                             round LED
+  led-<D>mm[-rgb]                                       round LED; -rgb has four legs
+                                                        in a row, pin 1 red and pin 2
+                                                        the common one, bent out to
+                                                        the grid
   sw-tactile-6x6 | sw-tactile-12x12                     a 4-leg push button as made: pins
                                                         1 and 2 are the switched pair, 3 and
                                                         4 are joined inside to 1 and 2
@@ -2164,8 +2186,8 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
         ),
     ),
     (
-        re.compile(r"^led-(\d+)mm$"),
-        lambda m: led_footprint(diameter_mm=_grid(m[1])),
+        re.compile(r"^led-(\d+)mm(-rgb)?$"),
+        lambda m: led_footprint(diameter_mm=_grid(m[1]), rgb=m[2] is not None),
     ),
     (
         re.compile(r"^sw-tactile-(\d+x\d+)$"),

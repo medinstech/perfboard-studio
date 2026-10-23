@@ -2003,6 +2003,46 @@ TURKISH: Mapping[str, str] = {
         "takımları da çoğu zaman aynı bağlanır: bir kopyaya güvenmeden önce bir tuşu "
         "multimetreyle deneyin."
     ),
+    "The standard indicator LED, any colour; legs 2.54 mm apart": (
+        "Standart gösterge LED'i, her renk; bacaklar 2.54 mm arayla"
+    ),
+    "The small indicator LED, any colour; legs 2.54 mm apart": (
+        "Küçük gösterge LED'i, her renk; bacaklar 2.54 mm arayla"
+    ),
+    "The longer leg is the anode; the flat on the rim is on the cathode's side. It needs a "
+    "resistor in series: about 330 ohm from 5 V.": (
+        "Uzun bacak anottur; kenardaki düz taraf katot tarafıdır. Seri bir direnç ister: "
+        "5 V beslemede yaklaşık 330 ohm."
+    ),
+    "RGB LED 5 mm, common cathode (R K G B)": "RGB LED 5 mm, ortak katot (R K G B)",
+    "RGB LED 5 mm, common anode (R A G B)": "RGB LED 5 mm, ortak anot (R A G B)",
+    "RGB LED 5 mm, common cathode, Kingbright (R K B G)": (
+        "RGB LED 5 mm, ortak katot, Kingbright (R K B G)"
+    ),
+    "RGB LED 5 mm, common anode, Kingbright (R A B G)": (
+        "RGB LED 5 mm, ortak anot, Kingbright (R A B G)"
+    ),
+    "Red, green and blue in one lens, the three cathodes on the longest leg": (
+        "Tek mercekte kırmızı, yeşil ve mavi; üç katot en uzun bacakta"
+    ),
+    "Red, green and blue in one lens, the three anodes on the longest leg": (
+        "Tek mercekte kırmızı, yeşil ve mavi; üç anot en uzun bacakta"
+    ),
+    "Red, blue and green in one lens, the three cathodes on the longest leg": (
+        "Tek mercekte kırmızı, mavi ve yeşil; üç katot en uzun bacakta"
+    ),
+    "Red, blue and green in one lens, the three anodes on the longest leg": (
+        "Tek mercekte kırmızı, mavi ve yeşil; üç anot en uzun bacakta"
+    ),
+    "Makers do not agree where green and blue go, so before soldering touch a 3 V coin cell "
+    "across the longest leg and each of the others (+ to the longest on a common anode, - "
+    "on a common cathode) and see which colour lights. Each colour needs its own resistor. "
+    "The legs leave the lens 1.27 mm apart: fan them out to the four holes.": (
+        "Üreticiler yeşille mavinin yerinde anlaşmıyor; lehimlemeden önce 3 V'luk bir düğme "
+        "pili en uzun bacakla diğerlerinin her biri arasına tutun (ortak anotta + en uzun "
+        "bacağa, ortak katotta -) ve hangi rengin yandığına bakın. Her renk kendi direncini "
+        "ister. Bacaklar mercekten 1.27 mm arayla çıkar: dört deliğe açarak yerleştirin."
+    ),
     "IR receiver for 38 kHz remote controls, 2.5 to 5.5 V": (
         "38 kHz uzaktan kumandalar için IR alıcı, 2,5 ile 5,5 V arası"
     ),
