@@ -168,6 +168,12 @@ FunctionEnd
 ; Installing over a running copy leaves half the old bundle in place, and the symptom is
 ; an application that starts and fails on an import - which reads as a bug in the
 ; application rather than as a failed install.
+;
+; Every MessageBox in this file carries /SD, the answer a SILENT install (`/S`, which is
+; how winget runs it) gives without asking. NSIS's documentation names a message box with
+; no /SD as the most common thing that stops a silent install: a package manager upgrading
+; a copy that is still open would wait on a question nobody is looking at. Cancel here, so
+; the install fails and says why.
 Function AssertExeClosed
   Pop $R0
   ${If} ${FileExists} "$R0\${EXE_NAME}"
@@ -175,7 +181,7 @@ Function AssertExeClosed
       ClearErrors
       FileOpen $R1 "$R0\${EXE_NAME}" a
       ${If} ${Errors}
-        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(S_StillRunning)" IDRETRY retry
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(S_StillRunning)" /SD IDCANCEL IDRETRY retry
         Abort
       ${Else}
         FileClose $R1
@@ -251,7 +257,7 @@ Section "$(S_SecMain)" SecMain
   ClearErrors
   CreateDirectory "$INSTDIR"
   IfErrors 0 +3
-    MessageBox MB_OK|MB_ICONSTOP "$(S_WriteError)"
+    MessageBox MB_OK|MB_ICONSTOP "$(S_WriteError)" /SD IDOK
     Abort
   SetOutPath "$INSTDIR"
 

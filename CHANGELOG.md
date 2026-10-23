@@ -165,6 +165,13 @@ closed without a bump.
   notice, and the release checks every bundle for every one of them, as it already checked
   the wheel.
 
+- **A silent install answers its own questions.** The Windows installer's two message
+  boxes, "Perfboard Studio appears to be running" and "Cannot write to the installation
+  folder", named no answer for a silent run (`/S`, which is how a package manager runs it),
+  and NSIS's documentation names exactly that as what stops a silent install. Under `/S`
+  they now cancel and the installer exits with an error, so an upgrade over a copy that is
+  still open fails and says so rather than waiting.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added
