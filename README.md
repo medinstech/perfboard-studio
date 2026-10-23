@@ -344,6 +344,8 @@ claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-
 
 Nothing has to be installed first — `uvx` fetches the package into its own cache. From a
 clone it is `pip install -e ".[mcp]"` and then `claude mcp add perfboard-studio -- perfboard-studio-mcp`.
+From 0.22.0 the installed application is the server too, with no Python at all: on Windows
+`perfboard-studio-cli.exe --mcp`, and the path on each platform is in docs/MCP.md.
 
 Fifty-four tools, every hole addressed the way people talk about perfboard (`A1`, `C7`,
 `AC12`) — or, on a breadboard, the way it prints them (`e12`, `T+12`) — and never as raw

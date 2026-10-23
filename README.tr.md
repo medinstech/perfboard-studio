@@ -346,7 +346,9 @@ claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-
 
 Önceden bir şey kurmak gerekmiyor — `uvx` paketi kendi önbelleğine indiriyor. Klondan
 çalışırken `pip install -e ".[mcp]"` ve ardından
-`claude mcp add perfboard-studio -- perfboard-studio-mcp`.
+`claude mcp add perfboard-studio -- perfboard-studio-mcp`. 0.22.0'dan itibaren kurulan
+uygulama da Python'suz olarak aynı sunucu: Windows'ta `perfboard-studio-cli.exe --mcp`;
+her platformdaki yolu docs/MCP.md'de.
 
 Elli dört tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
 (`A1`, `C7`, `AC12`) — breadboard'da ise tahtanın bastığı gibi (`e12`, `T+12`) — hiçbir

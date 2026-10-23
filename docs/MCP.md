@@ -46,6 +46,42 @@ Perfboard Studio installed — a virtualenv's `bin/` (or `Scripts\perfboard-stud
 A bare `python -m perfboard_studio.mcp` finds whichever Python is first on `PATH`, which is the
 usual reason a client reports that the server exited immediately.
 
+**The installed application, with no Python at all.** From 0.22.0 the application a
+download installs is the server too, given `--mcp`; every other argument means what it means
+to `perfboard-studio-mcp`, so `--mcp board.perf` opens a board and `--mcp --http` serves
+HTTP. The 0.21.0 installers do not have it.
+
+| | the command a client starts |
+|---|---|
+| **Windows** | `C:\Program Files\Perfboard Studio\perfboard-studio-cli.exe --mcp` |
+| **macOS** | `/Applications/PerfboardStudio.app/Contents/MacOS/perfboard-studio --mcp` |
+| **Linux** | `/path/to/perfboard-studio-<version>-x86_64.AppImage --mcp` |
+
+On Windows it is `perfboard-studio-cli.exe`, the console build of the same program, and not
+the `perfboard-studio.exe` the Start menu opens. The AppImage needs FUSE 2 for this as for
+anything else. For Claude Code on Windows:
+
+```sh
+claude mcp add perfboard-studio -- "C:\Program Files\Perfboard Studio\perfboard-studio-cli.exe" --mcp
+```
+
+and for a JSON config:
+
+```json
+{
+  "mcpServers": {
+    "perfboard-studio": {
+      "command": "C:\\Program Files\\Perfboard Studio\\perfboard-studio-cli.exe",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+From a pip install `perfboard-studio --mcp` works as well; `perfboard-studio-mcp` is still the
+one to point a client at there, because it starts the server directly rather than by way of
+the window's module and every Qt module that one imports.
+
 ## The shape of a session
 
 One board per server process. There is no workspace of several, on purpose: "which board
