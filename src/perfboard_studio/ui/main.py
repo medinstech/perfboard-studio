@@ -3902,6 +3902,7 @@ def _erc_title(rule: str) -> str:
         "supply-on-wrong-net": t("Supply on the wrong net"),
         "polarity-reversed": t("Part drawn backwards"),
         "pin-not-on-part": t("Net names a missing pin"),
+        "no-power-entry": t("Nothing brings power in"),
         "supply-pin-open": t("Supply pin left open"),
         "nc-pin-connected": t("NC pin wired"),
         "single-pin-net": t("Net reaches one pin"),

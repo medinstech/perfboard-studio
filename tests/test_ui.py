@@ -8237,7 +8237,8 @@ def test_the_step_bar_follows_the_document() -> None:
 
 def _unpowered_555() -> PerfDocument:
     """A 555 from the catalog in the design, its output and ground wired and its VCC on
-    nothing -- the circuit LVS would pass and the guide would build."""
+    nothing -- the circuit LVS would pass and the guide would build. A terminal on its
+    ground is the way power comes in, so the one thing wrong with it is the VCC."""
     from perfboard_studio.catalog import catalog_part
     from perfboard_studio.commands import create_empty_document
     from perfboard_studio.model import DocumentMeta, Net, NetNode, SchematicPart
@@ -8251,10 +8252,14 @@ def _unpowered_555() -> PerfDocument:
         ),
         SchematicPart(id="r1", ref="R1", value="1k", footprint_id="r-axial-3"),
         SchematicPart(id="c1", ref="C1", value="100n", footprint_id="c-disc-p2"),
+        SchematicPart(id="j1", ref="J1", value="9V IN", footprint_id="screw-terminal-2"),
     )
     nets = (
         Net(id="n1", name="OUT", nodes=(NetNode("U1", "3"), NetNode("R1", "1"))),
-        Net(id="n2", name="GND", nodes=(NetNode("U1", "1"), NetNode("C1", "2")), net_class="ground"),
+        Net(
+            id="n2", name="GND", nodes=(NetNode("U1", "1"), NetNode("C1", "2"), NetNode("J1", "2")),
+            net_class="ground",
+        ),
     )
     blank = create_empty_document(DocumentMeta(name="t", created="", modified=""))
     return dataclasses.replace(blank, parts=parts, nets=nets)

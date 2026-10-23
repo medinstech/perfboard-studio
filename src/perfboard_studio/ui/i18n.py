@@ -643,6 +643,7 @@ TURKISH: Mapping[str, str] = {
     "Part drawn backwards": "Parça ters çizilmiş",
     "Net names a missing pin": "Net olmayan bir pini anıyor",
     "Supply pin left open": "Besleme pini boşta",
+    "Nothing brings power in": "Karta güç getiren bir şey yok",
     "NC pin wired": "NC pini bağlanmış",
     "Net reaches one pin": "Net tek pine ulaşıyor",
     "Part connected to nothing": "Parça hiçbir yere bağlı değil",

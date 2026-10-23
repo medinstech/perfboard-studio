@@ -22,6 +22,14 @@ closed without a bump.
 
 ### Added
 
+- **ERC says when nothing brings power onto the board.** A 555 blinker drawn pin to pin,
+  with VCC and GND joined and no battery clip or terminal anywhere, passed every check and
+  the guide wrote its build. `no-power-entry` is a warning: a chip or module has a supply pin
+  wired (or a net is of the power or ground class), and no connector -- a pin header, a screw
+  terminal, a battery clip's or a jack's pads -- and no module has a pin on any of those nets.
+  Whether the way in reaches both rails, or comes through a regulator, is not judged. None of
+  the shipped examples is touched by it.
+
 - **An SRD-12VDC-SL-C relay** joins the catalog beside the 5 V one, on `relay-srd`.
 
 - **The LM2596 buck module is in the catalog**, drawn as itself -- its two cans, inductor,

@@ -435,8 +435,11 @@ def test_an_agent_is_told_its_circuit_is_wrong_before_anything_is_placed(
 
     erc = session.run_erc()
     assert erc["ok"] is True
-    assert erc["errors"] == 1 and erc["warnings"] == 0
-    (finding,) = erc["findings"]
+    # One error, and the one warning is that nothing brings power onto this board -- true
+    # of a circuit with no connector, and not what this test is about.
+    assert erc["errors"] == 1 and erc["warnings"] == 1
+    assert [f["rule"] for f in erc["findings"] if f["severity"] == "warning"] == ["no-power-entry"]
+    (finding,) = [f for f in erc["findings"] if f["rule"] == "supply-unconnected"]
     assert finding == {
         "rule": "supply-unconnected",
         "severity": "error",
@@ -445,10 +448,12 @@ def test_an_agent_is_told_its_circuit_is_wrong_before_anything_is_placed(
         "pins": ["U1.8"],
         "nets": [],
     }
-    assert session.get_status()["erc"] == {"errors": 1, "warnings": 0}
+    assert session.get_status()["erc"] == {"errors": 1, "warnings": 1}
 
     session.create_net("+9V", "power", ["U1.8", "C1.1"])
-    assert session.run_erc()["errors"] == 0
+    erc = session.run_erc()
+    assert erc["errors"] == 0
+    assert [f["rule"] for f in erc["findings"]] == ["no-power-entry"]
 
 
 def test_ok_means_the_call_ran_and_never_the_verdict(loaded: BoardSession) -> None:

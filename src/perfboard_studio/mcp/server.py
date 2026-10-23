@@ -741,7 +741,8 @@ def optimize_placement(seed: int = 0, apply: bool = True) -> dict[str, Any]:
 def run_erc() -> dict[str, Any]:
     """Check the CIRCUIT before the board: a chip with a supply pin wired to nothing, a VCC
     on ground, an electrolytic or an LED drawn the wrong way round, a wired NC pin, a net
-    reaching one pin, a part joined to nothing. Read from the pins' names, so it checks what
+    reaching one pin, a part joined to nothing, a supply that no connector, battery clip or
+    module brings onto the board (a warning). Read from the pins' names, so it checks what
     the parts declare -- a catalog part, an LED, an electrolytic -- and works on a design
     with nothing placed. LVS cannot catch any of these: it proves the board is the circuit,
     and an unpowered chip is faithfully reproduced.

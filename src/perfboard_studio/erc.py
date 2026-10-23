@@ -89,6 +89,7 @@ RULES: tuple[str, ...] = (
     "polarity-reversed",
     "pin-not-on-part",
     "supply-pin-open",
+    "no-power-entry",
     "nc-pin-connected",
     "single-pin-net",
     "part-unconnected",
@@ -101,6 +102,7 @@ SEVERITY: dict[str, ErcSeverity] = {
     "polarity-reversed": "error",
     "pin-not-on-part": "error",
     "supply-pin-open": "warning",
+    "no-power-entry": "warning",
     "nc-pin-connected": "warning",
     "single-pin-net": "warning",
     "part-unconnected": "warning",
@@ -306,7 +308,89 @@ def run_erc(doc: PerfDocument, lookup: FootprintLookup) -> tuple[ErcFinding, ...
         if kind != "connector":
             _check_no_connect(circuit, ref, footprint, pins)
 
+    if anything_joined:
+        _check_power_entry(circuit, doc.nets)
     return tuple(finding for rule in RULES for finding in circuit.findings[rule])
+
+
+#: How many supply nets a ``no-power-entry`` finding names before it says how many more: a
+#: fixture of random parts can have a dozen, and a sentence listing them all is not read.
+NAMED_SUPPLY_NETS = 3
+
+#: The kinds of part through which power can come onto the board: a connector -- a pin
+#: header, a screw terminal, a box header, or the pads a battery clip, a holder or a panel
+#: jack is wired to (flying leads) -- or a module, a devkit powered by its own USB.
+_ENTRY_KINDS: frozenset[PartKind] = frozenset({"connector", "module"})
+
+
+def _check_power_entry(circuit: _Circuit, nets: tuple[Net, ...]) -> None:
+    """``no-power-entry``: the circuit needs a supply, and nothing brings one onto the board.
+
+    A 555 blinker drawn pin to pin, with VCC and GND joined and no battery clip or terminal
+    anywhere, passed every check and the guide wrote its build: a board with no way to
+    power it. The rule is that and no more. It NEEDS a supply when a chip or a module has a
+    supply pin (``supply_kind``, or a regulator's IN) on a net that joins it to something,
+    or when a net is of the power or ground class; and power ENTERS when any connector or
+    module has a pin on one of those nets. Whether the entry reaches both the rail and
+    ground, or comes in through a regulator, is the circuit's topology and is not judged:
+    a terminal on a regulator's IN is an entry.
+    """
+    supply: dict[NetId, Net] = {
+        net.id: net
+        for net in nets
+        if net.net_class in ("power", "ground") and len(circuit.real_nodes[net.id]) >= 2
+    }
+    needing: list[tuple[NetNode, SupplyKind | None]] = []
+    for ref, part in circuit.parts.items():
+        footprint = circuit.footprints[ref]
+        if footprint is None or KIND_BY_ARCHETYPE[footprint.body.archetype] not in (
+            "chip",
+            "module",
+        ):
+            continue
+        pins = tuple(_Pin(pin.number, pin_name_of(part, pin)) for pin in footprint.pins)
+        regulator = frozenset(_upper(pin.name) for pin in pins) in _REGULATOR_SHAPES
+        for pin in pins:
+            kind = supply_kind(pin.name)
+            if kind is None and not (regulator and _upper(pin.name) == "IN"):
+                continue
+            net = circuit.joined(ref, pin.number)
+            if net is not None:
+                supply[net.id] = net
+                needing.append((NetNode(component_ref=ref, pin=pin.number), kind))
+    if not supply:
+        return
+    for ref in circuit.parts:
+        footprint = circuit.footprints[ref]
+        if footprint is None or KIND_BY_ARCHETYPE[footprint.body.archetype] not in _ENTRY_KINDS:
+            continue
+        for lead in footprint.pins:
+            net = circuit.net_of.get((ref, lead.number))
+            if net is not None and net.id in supply:
+                return
+
+    ordered = [net for net in nets if net.id in supply]
+    names = [net.name for net in ordered[:NAMED_SUPPLY_NETS]]
+    more = len(ordered) - len(names)
+    if more:
+        named = f"{', '.join(names)} and {more} more"
+    elif len(names) > 1:
+        named = f"{', '.join(names[:-1])} and {names[-1]}"
+    else:
+        named = names[0]
+    # Ringed on the pin that most wants the power: a positive supply pin if one is wired.
+    ring = next(
+        (node for node, kind in needing if kind == "positive"),
+        needing[0][0] if needing else None,
+    )
+    circuit.report(
+        "no-power-entry",
+        f"Nothing brings power onto the board: no connector, terminal, battery clip or module "
+        f"is wired to {named}. Wire one to the supply and to ground.",
+        refs=tuple(dict.fromkeys(node.component_ref for node, _kind in needing)),
+        pins=(ring,) if ring is not None else (),
+        nets=tuple(ordered),
+    )
 
 
 def _check_net(circuit: _Circuit, net: Net) -> None:
