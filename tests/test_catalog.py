@@ -102,6 +102,8 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "pololu-a4988": 12.7,
         "pololu-drv8825": 12.7,
         "seeed-xiao-esp32c3": 15.24,
+        # The grid nearest Handsontec's 39.50 mm, which its check says: pads, not pins.
+        "lm2596-module": 40.64,
     }
     modules = [part for part in CATALOG if part.category == "module"]
     assert {part.id for part in modules} == set(expected_rows_mm)

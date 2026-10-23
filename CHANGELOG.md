@@ -22,6 +22,12 @@ closed without a bump.
 
 ### Added
 
+- **The LM2596 buck module is in the catalog**, drawn as itself -- its two cans, inductor,
+  regulator and trimmer -- because the layout it was missing was already there, keyed on a
+  name nothing could choose. IN+, IN-, OUT+ and OUT- are named, and its check says what a
+  seller's page does not: the pads are not on the grid, set the output before connecting
+  anything, and the input capacitor is the real voltage limit.
+
 - **The Songle SRD relay, as it is.** `relay-srd` is the SRD-05VDC-SL-C and its family on
   the holes nearest its legs, which are not on the 2.54 mm grid: COM alone between the coil
   legs at one end, the contacts at the other, numbered as KiCad's SANYOU SRD (1 COM, 2 and

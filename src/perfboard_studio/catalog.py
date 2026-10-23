@@ -754,6 +754,25 @@ CATALOG: tuple[CatalogPart, ...] = (
                 _two_columns(_D1_MINI_LEFT, _D1_MINI_RIGHT), ref_prefix="U",
                 source="KiCad RF_Module:WEMOS_D1_mini_light footprint and WEMOS_D1_mini symbol",
                 check=_MODULE_TOP),
+    # Pads, not header pins, at the four corners: IN on one end and OUT on the other, + on
+    # the trimmer's side. Its layout in ``ui/moduleart.py`` is Handsontec's drawing.
+    CatalogPart("lm2596-module", "LM2596 buck module", "module",
+                "mod-2x2-p16-r7-43.18x21.08x12-s5",
+                "Step-down converter on the LM2596: up to 40 V in, from 1.25 V out, set by "
+                "its trimmer",
+                (("1", "IN+"), ("2", "OUT+"), ("3", "IN-"), ("4", "OUT-")),
+                value="LM2596 module", ref_prefix="U",
+                source=(
+                    "Handsontec LM2596S module drawing: board 43.18 x 21.08 mm, pads 39.50 x "
+                    "17.15 mm apart; TI LM2596 datasheet: 40 V in, 1.23 to 37 V out, 3 A"
+                ),
+                check=(
+                    "Its pads are 39.5 x 17.15 mm apart, not on the 2.54 mm grid: stand it on "
+                    "pins bent about 0.6 mm to the holes drawn, or wire it. Set the output "
+                    "with the trimmer before anything is connected to it; its input "
+                    "capacitor's rating, often 35 V, is its real limit."
+                ),
+                aliases=("buck", "step-down", "DC-DC", "voltage regulator")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

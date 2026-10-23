@@ -1945,6 +1945,21 @@ TURKISH: Mapping[str, str] = {
     "Power in": "Güç girişi",
     "Connectors": "Konnektörler",
     "Sound": "Ses",
+    "LM2596 buck module": "LM2596 voltaj düşürücü modül",
+    "Step-down converter on the LM2596: up to 40 V in, from 1.25 V out, set by its "
+    "trimmer": (
+        "LM2596'lı voltaj düşürücü: girişte en çok 40 V, çıkışta 1,25 V'tan başlayarak, "
+        "trimpotuyla ayarlanır"
+    ),
+    "Its pads are 39.5 x 17.15 mm apart, not on the 2.54 mm grid: stand it on pins bent "
+    "about 0.6 mm to the holes drawn, or wire it. Set the output with the trimmer before "
+    "anything is connected to it; its input capacitor's rating, often 35 V, is its real "
+    "limit.": (
+        "Pedleri arası 39,5 × 17,15 mm'dir, 2,54 mm ızgarada değildir: çizilen deliklere "
+        "yaklaşık 0,6 mm bükülen pinlerin üzerine oturtun ya da kabloyla bağlayın. Çıkışa "
+        "bir şey bağlamadan önce gerilimi trimpotla ayarlayın; asıl sınırı giriş "
+        "kondansatörünün değeridir, çoğu zaman 35 V."
+    ),
     "Songle SRD-05VDC-SL-C relay": "Songle SRD-05VDC-SL-C röle",
     "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC": (
         "SPDT röle, 70 ohm'luk 5 V bobin, kontaklar 125 V AC'de 10 A"

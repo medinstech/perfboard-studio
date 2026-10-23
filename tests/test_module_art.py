@@ -84,9 +84,9 @@ def _footprint(footprint_id: str):
 @pytest.mark.parametrize(
     ("value", "key"),
     [
-        ("LM2596S modülü (7,0 V'a ayarlı)", "lm2596"),
-        ("lm2596 buck", "lm2596"),
-        ("LM2596S-ADJ", "lm2596"),
+        ("LM2596S modülü (7,0 V'a ayarlı)", "lm2596-module"),
+        ("lm2596 buck", "lm2596-module"),
+        ("LM2596S-ADJ", "lm2596-module"),
         ("SN65HVD230 modülü", "sn65hvd230"),
         ("CJMCU-230", "sn65hvd230"),
         ("VP230 CAN", "sn65hvd230"),
@@ -546,6 +546,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "pololu-a4988": PICO_MODULE.board_colour,
         "pololu-drv8825": POLOLU_DRV8825_MODULE.board_colour,
         "seeed-xiao-esp32c3": ESPRESSIF_BLACK,
+        "lm2596-module": None,  # the blue every seller's board is
     }
     # A Pico named on a board the layout was not drawn for is not coloured as one.
     square = "mod-2x20-p7-r1-30x30x3.5-s8.5"

@@ -286,7 +286,7 @@ class PlacedArt:
 #: 39.50 x 17.15 mm apart); cans 8 x 12 mm (220 uF / 35-50 V), inductor 12 x 12 x 7 mm,
 #: trimmer Bourns 3296W (9.53 x 4.83 x 10.03 mm), D2PAK per TI's KTT drawing.
 LM2596_MODULE = ModuleArt(
-    key="lm2596",
+    key="lm2596-module",
     names=("lm2596",),
     board=(43.18, 21.08),
     pins=4,
