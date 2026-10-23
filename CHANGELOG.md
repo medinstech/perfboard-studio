@@ -59,6 +59,12 @@ closed without a bump.
   with the board's Connect tool alike, in one undo step. Two different supplies wired together
   name nothing.
 
+- **The Next button goes on past the build guide.** It said "Open the Build Guide" for
+  ever, and pressed with the guide open it raised the guide it was looking at, while the
+  board the whole walk had produced sat untitled. Once the guide is in front it saves a board
+  that has no file, takes a checked breadboard on to perfboard (File ▸ New Board from This
+  Design, which nobody found from the steps), and otherwise exports the guide for the bench.
+
 ### Changed
 
 - **The architecture notes are `docs/ARCHITECTURE.md` now, and `CLAUDE.md` is a fifth of

@@ -80,6 +80,36 @@ class WorkflowFacts:
     #: A stripboard: its strips join every net along them until the wiring cuts them, so a
     #: short there is also the wiring's news until the wiring is done.
     shorts_wait_for_wiring: bool = False
+    #: Whether the build guide is in front of the user -- once it is, opening it again is
+    #: not a next step (``build_action``).
+    guide_showing: bool = False
+    #: Whether the board has no file yet.
+    untitled: bool = False
+    #: A solderless breadboard, which is tried out before it is soldered on something else.
+    solderless_breadboard: bool = False
+
+
+#: What the Next button does once everything before Build is done.
+type BuildAction = Literal["open-guide", "save", "to-perfboard", "export-guide"]
+
+
+def build_action(facts: WorkflowFacts) -> BuildAction:
+    """What comes after the build guide, which is the last step and never "done".
+
+    THE BUTTON USED TO END IN A LOOP. "Open the Build Guide" was the next step for ever, and
+    pressing it with the guide open raised the guide it was looking at -- while the board
+    the whole walk produced sat untitled, and a breadboard that had just been checked had
+    its way on to perfboard in the File menu only. So once the guide is in front: a board
+    with no file is saved first, a checked breadboard goes on to a board to solder (File >
+    New Board from This Design), and anything else exports the guide to take to the bench.
+    """
+    if not facts.guide_showing:
+        return "open-guide"
+    if facts.untitled:
+        return "save"
+    if facts.solderless_breadboard:
+        return "to-perfboard"
+    return "export-guide"
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +152,17 @@ def step_action(key: StepKey, facts: WorkflowFacts | None = None) -> str:
         "place": t("Place on the Board"),
         "route": t("Autoroute"),
         "check": t("See the Findings"),
-        "build": t("Open the Build Guide"),
+        "build": _build_label(build_action(facts) if facts is not None else "open-guide"),
     }[key]
+
+
+def _build_label(action: BuildAction) -> str:
+    return {
+        "open-guide": t("Open the Build Guide"),
+        "save": t("Save the Board…"),
+        "to-perfboard": t("Take It to Perfboard…"),
+        "export-guide": t("Export the Guide…"),
+    }[action]
 
 
 def step_tooltip(key: StepKey) -> str:

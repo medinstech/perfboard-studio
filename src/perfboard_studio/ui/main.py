@@ -350,6 +350,7 @@ from .workflow import (
     StepKey,
     WorkflowBar,
     WorkflowFacts,
+    build_action,
     step_title,
     workflow_steps,
 )
@@ -4211,6 +4212,9 @@ class MainWindow(QMainWindow):
             erc_warnings=sum(1 for f in self._last_erc if f.severity == "warning"),
             lvs_shorts=lvs.summary.shorts if lvs is not None else 0,
             shorts_wait_for_wiring=is_stripboard(board),
+            guide_showing=self._is_in_front(getattr(self, "dock_guide", None)),
+            untitled=self.current_path is None,
+            solderless_breadboard=is_breadboard(board),
         )
 
     def _refresh_workflow(self) -> None:
@@ -4237,6 +4241,8 @@ class MainWindow(QMainWindow):
     def on_workflow_next(self, key: str) -> None:
         """The Next button: the step's own action, reached from where it already was."""
         step = cast(StepKey, key)
+        # The last step's own action, which depends on what is in front (``build_action``).
+        after = build_action(self.workflow_facts()) if step == "build" else "open-guide"
         if step == "circuit" and any(f.severity == "error" for f in self._last_erc):
             # What step_action promised: the circuit's errors, beside the sheet they are on.
             self.show_circuit_findings()
@@ -4257,8 +4263,18 @@ class MainWindow(QMainWindow):
         elif step == "route":
             self.show_board()
             self.on_autoroute_all()
+        elif after == "save":
+            self.on_save()
+        elif after == "to-perfboard":
+            self.on_board_from_design()
+        elif after == "export-guide":
+            self.on_export_guide()
         else:
             self.on_workflow_step(step)
+        # The last step's button reads what is in front and whether there is a file, which
+        # no command changes -- so the bar is asked again rather than left saying the step
+        # just done.
+        self._refresh_workflow()
 
     def on_choose_board(self) -> None:
         """Which board this goes on: tried against the circuit when there is one to try.
@@ -8280,6 +8296,8 @@ class MainWindow(QMainWindow):
     def _on_guide_visibility_changed(self, visible: bool) -> None:
         if visible and self._guide_stale:
             self._refresh_guide_panel()
+        # The Next button's last step depends on whether the guide is in front.
+        self._refresh_workflow()
 
     def _refresh_guide_panel(self) -> None:
         """Fill the panel from the guide, or mark it stale and do nothing.
@@ -12297,6 +12315,8 @@ class MainWindow(QMainWindow):
     def _mark_saved(self) -> None:
         self._saved_document = self.bus.document
         self._refresh_title()
+        # A board that has a file now is no longer one the Next button asks to save.
+        self._refresh_workflow()
 
     def _refresh_title(self) -> None:
         self.setWindowTitle(window_title(self.current_path, modified=self.is_modified))

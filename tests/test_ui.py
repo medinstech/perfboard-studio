@@ -8306,6 +8306,43 @@ def test_a_circuit_error_comes_first_in_the_findings_and_is_where_next_goes() ->
         _close(window)
 
 
+def test_the_next_button_goes_on_past_the_open_guide(tmp_path, monkeypatch) -> None:
+    """With everything checked and the guide in front, Next saves a board that has no file
+    and then exports the guide -- it used to raise the guide it was looking at, for ever."""
+    from perfboard_studio.ui import main as main_module
+
+    example = pathlib.Path(__file__).resolve().parent.parent / "examples" / "ne555-astable.perf"
+    result = persist.deserialize_document(example.read_text(encoding="utf-8"))
+    window = _window_on(result.document)
+    try:
+        assert window.workflow_bar.next_key == "build"
+        assert window.workflow_bar.next_button.text().startswith("Open the Build Guide")
+        window.dock_guide.show()
+        window._on_guide_visibility_changed(True)
+        assert window.workflow_bar.next_button.text().startswith("Save the Board…")
+
+        saved: list[bool] = []
+
+        def save(self) -> bool:
+            saved.append(True)
+            self.current_path = tmp_path / "blinker.perf"
+            return self._save_to(self.current_path)
+
+        monkeypatch.setattr(main_module.MainWindow, "on_save", save)
+        window.on_workflow_next("build")
+        assert saved and window.current_path == tmp_path / "blinker.perf"
+        assert window.workflow_bar.next_button.text().startswith("Export the Guide…")
+
+        exported: list[bool] = []
+        monkeypatch.setattr(
+            main_module.MainWindow, "on_export_guide", lambda self: exported.append(True)
+        )
+        window.on_workflow_next("build")
+        assert exported
+    finally:
+        _close(window)
+
+
 def test_a_pin_with_an_error_and_a_warning_is_an_error_and_says_both() -> None:
     from perfboard_studio.erc import ErcFinding
     from perfboard_studio.model import NetNode

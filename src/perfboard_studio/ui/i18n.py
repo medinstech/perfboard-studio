@@ -2196,6 +2196,8 @@ TURKISH: Mapping[str, str] = {
     ),
     "See the Findings": "Bulguları Gör",
     "Open the Build Guide": "Montaj Rehberini Aç",
+    "Save the Board…": "Kartı Kaydet…",
+    "Take It to Perfboard…": "Perfboard'a Taşı…",
     "no parts yet": "henüz parça yok",
     "{parts} part(s) · {nets} net(s)": "{parts} parça · {nets} net",
     "{parts} part(s) · {errors} error(s)": "{parts} parça · {errors} hata",

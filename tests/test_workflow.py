@@ -174,3 +174,27 @@ def test_circuit_warnings_do_not_hold_anything_back() -> None:
     facts = dataclasses.replace(EMPTY, parts_off_board=8, nets=7, erc_warnings=3)
     assert statuses(facts)["circuit"] == "done"
     assert next_step(workflow_steps(facts)) == "board"
+
+
+def test_after_the_guide_the_button_saves_the_board_then_moves_it_on() -> None:
+    """"Open the Build Guide" was the next step for ever, and pressed with the guide open it
+    raised the guide it was looking at. Once the guide is in front there is one more thing
+    to do: save a board that has no file, take a checked breadboard on to perfboard, or take
+    the guide to the bench."""
+    from perfboard_studio.ui.workflow import build_action
+
+    ready = dataclasses.replace(EMPTY, parts_on_board=8, nets=7)
+    assert build_action(ready) == "open-guide"
+    showing = dataclasses.replace(ready, guide_showing=True)
+    assert build_action(dataclasses.replace(showing, untitled=True)) == "save"
+    assert build_action(dataclasses.replace(showing, untitled=True, solderless_breadboard=True)) == "save"
+    assert build_action(dataclasses.replace(showing, solderless_breadboard=True)) == "to-perfboard"
+    assert build_action(showing) == "export-guide"
+
+    def label(facts: WorkflowFacts) -> str:
+        return next(step.action for step in workflow_steps(facts) if step.key == "build")
+
+    assert label(ready) == "Open the Build Guide"
+    assert label(dataclasses.replace(showing, untitled=True)) == "Save the Board…"
+    assert label(dataclasses.replace(showing, solderless_breadboard=True)) == "Take It to Perfboard…"
+    assert label(showing) == "Export the Guide…"
