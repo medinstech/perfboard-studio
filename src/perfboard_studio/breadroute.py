@@ -43,7 +43,7 @@ Pure and deterministic, like every planner: the same board plans the same way.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from itertools import pairwise
 
 from .breadboard import (
@@ -65,17 +65,28 @@ from .commands import (
     create_document_id_generator,
 )
 from .connectivity import FootprintLookup, PhysicalPinRef, extract_physical_nets
-from .geometry import format_hole, hole_key, holes_under_line, manhattan
-from .model import ComponentId, HoleCoord, Net, NetClass, NetId, PerfDocument
+from .geometry import format_hole, hole_key, manhattan
+from .model import HoleCoord, Net, NetClass, NetId, PerfDocument
 from .occupancy import OccupancyIndex, build_occupancy
 from .router import WirePath
 from .striproute import (
+    UNDER_BODY_COST,
+    Cover,
+    Join,
+    JumperRoute,
     PlannedLink,
+    Router,
     StripboardPlan,
     StripProblem,
+    cheapest_join,
+    cover_of,
+    free_holes,
     net_of_pin,
+    parts_under,
     pins_by_hole,
     plan_stripboard,
+    straight_router,
+    take_join,
     wanted_nets,
 )
 from .wiregauge import wire_gauge_for_current
@@ -85,13 +96,6 @@ RAILS_FOR_CLASS: dict[NetClass, tuple[Rail, Rail]] = {
     "ground": ("top-", "bottom-"),
     "power": ("top+", "bottom+"),
 }
-
-#: What a jumper passing under a part costs, in holes of extra length. Enough that a
-#: jumper round the part always wins when there is one -- the router's position (it
-#: refuses such a jumper) softened to a preference, because on a breadboard laying a flat
-#: jumper first and the part over it is ordinary practice, and a refusal could leave a
-#: clip unreachable that a person would simply wire under the chip.
-UNDER_BODY_COST = 100
 
 #: What one bend in a jumper laid along the grid costs, in holes of extra length: enough
 #: that an L beats a Z of the same length, never enough to buy a run under a part.
@@ -106,11 +110,7 @@ ALONG_COST = 1
 #: One hole-to-hole step of a grid jumper: the lower hole, and whether it runs along a row.
 type Step = tuple[int, int, bool]
 
-#: A jumper: its two ends.
-type Join = tuple[HoleCoord, HoleCoord]
 
-#: The holes a jumper runs through, ends and corners: two of them for a straight one.
-type JumperRoute = tuple[HoleCoord, ...]
 
 
 def plan_joined_board(
@@ -183,7 +183,7 @@ def plan_breadboard(
     pins = pins_by_hole(doc, lookup)
     net_of = net_of_pin(doc, every_net)
     occupancy = build_occupancy(doc, lookup)
-    cover = _cover(doc, occupancy)
+    cover = cover_of(doc, occupancy)
     route = _router(doc, occupancy, wire_path, cover)
     problems = _shorts(doc, pins, net_of, every_net) + _wrong_rails(doc, pins, net_of)
 
@@ -462,86 +462,26 @@ def _reach(doc: PerfDocument, holes: Iterable[HoleCoord]) -> tuple[set[Rail], li
     return rails, list(reach.values())
 
 
-def _free(holes: Iterable[HoleCoord], used: set[str]) -> list[HoleCoord]:
-    """The holes a jumper end could go into: nothing in them yet. A hole under a part's
-    body counts -- the jumper goes in first and the part over it, which is ordinary on a
-    breadboard and the only way to reach a clip a trimmer or a can stands over -- but it
-    is priced (:func:`_cost`), so it is never chosen while an open hole will do."""
-    return sorted({h for h in holes if hole_key(h) not in used}, key=lambda h: (h.row, h.col))
-
-
-#: The parts standing over each row and each column of the board, as (position, part) in
-#: order along it: :func:`_cover`.
-type Cover = tuple[dict[int, list[tuple[int, ComponentId]]], dict[int, list[tuple[int, ComponentId]]]]
-
-
-def _cover(doc: PerfDocument, occupancy: OccupancyIndex) -> Cover:
-    """Every hole a body covers, by row and by column, read once. A run along a row or a
-    column is answered from these instead of walking it hole by hole: a grid jumper is
-    priced along a hundred-odd shapes for every pair of holes it might join, and walking
-    them was almost all of the time a breadboard took to plan (50 s on atmega328-relay)."""
-    by_row: dict[int, list[tuple[int, ComponentId]]] = {}
-    by_col: dict[int, list[tuple[int, ComponentId]]] = {}
-    for row in range(doc.board.rows):
-        for col in range(doc.board.cols):
-            part = occupancy.body_covers(HoleCoord(col, row))
-            if part is not None:
-                by_row.setdefault(row, []).append((col, part))
-                by_col.setdefault(col, []).append((row, part))
-    return by_row, by_col
-
-
-def _under_bodies(path: JumperRoute, occupancy: OccupancyIndex, cover: Cover | None = None) -> int:
-    """How many parts a jumper along ``path`` passes under: the holes under it other than
-    its two ends, counted as ``jumper-under-body`` counts them -- a corner included, since
-    the wire lies over it. A run along a row or a column is read off ``cover`` when it is
-    given, which is the same holes: ``holes_under_line`` of such a run is every hole on it."""
-    ends = {(path[0].col, path[0].row), (path[-1].col, path[-1].row)}
-    crossed: set[ComponentId | None] = set()
-    for p, q in pairwise(path):
-        if cover is not None and p.row == q.row:
-            low, high = sorted((p.col, q.col))
-            crossed.update(
-                part for col, part in cover[0].get(p.row, ()) if low <= col <= high and (col, p.row) not in ends
-            )
-        elif cover is not None and p.col == q.col:
-            low, high = sorted((p.row, q.row))
-            crossed.update(
-                part for row, part in cover[1].get(p.col, ()) if low <= row <= high and (p.col, row) not in ends
-            )
-        else:
-            crossed.update(
-                occupancy.body_covers(h) for h in holes_under_line(p, q) if (h.col, h.row) not in ends
-            )
-    crossed.discard(None)
-    return len(crossed)
-
-
-#: How a jumper between two holes is laid, and what that costs: :func:`_router`.
-type Router = Callable[[HoleCoord, HoleCoord], tuple[int, JumperRoute]]
-
-
 def _router(
     doc: PerfDocument, occupancy: OccupancyIndex, wire_path: WirePath, cover: Cover | None = None
 ) -> Router:
     """The jumper between two holes for this ``wire_path``, with its cost: its length in
     holes, plus :data:`UNDER_BODY_COST` for every part it runs under and for each end that
-    goes in under one, plus :data:`BEND_COST` a bend. Remembered per pair, because the
-    planner asks again for the jumper it chose."""
-    seen: dict[tuple[str, str], tuple[int, JumperRoute]] = {}
+    goes in under one, plus :data:`BEND_COST` a bend. A straight one is a stripboard link,
+    priced by the same function (``striproute.straight_router``). Remembered per pair,
+    because the planner asks again for the jumper it chose."""
     if cover is None:
-        cover = _cover(doc, occupancy)
+        cover = cover_of(doc, occupancy)
+    if wire_path != "grid":
+        return straight_router(occupancy, cover)
+    seen: dict[tuple[str, str], tuple[int, JumperRoute]] = {}
 
     def route(a: HoleCoord, b: HoleCoord) -> tuple[int, JumperRoute]:
         key = (hole_key(a), hole_key(b))
         found = seen.get(key)
         if found is None:
             covered = sum(occupancy.body_covers(end) is not None for end in (a, b))
-            if wire_path == "grid":
-                cost, path = _grid_path(a, b, doc, occupancy, cover=cover)
-            else:
-                path = (a, b)
-                cost = manhattan(a, b) + UNDER_BODY_COST * _under_bodies(path, occupancy, cover)
+            cost, path = _grid_path(a, b, doc, occupancy, cover=cover)
             found = seen[key] = (cost + UNDER_BODY_COST * covered, path)
         return found
 
@@ -591,7 +531,7 @@ def _grid_path(
     or column of the board, so a jumper can step round a part rather than under it, and off
     the lanes other jumpers already run (``lanes``, :data:`ALONG_COST`). The
     length of a two-bend path is at least the Manhattan distance, which is what keeps
-    :func:`_cheapest`'s early stop exact. Ties go to the fewest corners, then the lowest
+    :func:`striproute.cheapest_join`'s early stop exact. Ties go to the fewest corners, then the lowest
     row and column, so the plan is the same every time.
 
     A shape whose length and bends alone already cost more than the best found is not
@@ -599,7 +539,7 @@ def _grid_path(
     exhaustive one, ties included.
     """
     if cover is None:
-        cover = _cover(doc, occupancy)
+        cover = cover_of(doc, occupancy)
     candidates = {
         _corners((a, HoleCoord(a.col, row), HoleCoord(b.col, row), b)) for row in range(doc.board.rows)
     } | {_corners((a, HoleCoord(col, a.row), HoleCoord(col, b.row), b)) for col in range(doc.board.cols)}
@@ -609,7 +549,7 @@ def _grid_path(
         length = sum(manhattan(p, q) for p, q in pairwise(path))
         if best is not None and length + BEND_COST * bends > best[0][0]:
             continue
-        cost = length + BEND_COST * bends + UNDER_BODY_COST * _under_bodies(path, occupancy, cover)
+        cost = length + BEND_COST * bends + UNDER_BODY_COST * parts_under(path, occupancy, cover)
         if lanes:
             cost += ALONG_COST * len(_steps(path) & lanes)
         key = (cost, bends, tuple((p.row, p.col) for p in path))
@@ -617,34 +557,6 @@ def _grid_path(
             best = (key, path)
     assert best is not None  # a board has a row
     return best[0][0], best[1]
-
-
-def _cheapest(
-    left: Iterable[HoleCoord], right: Iterable[HoleCoord], used: set[str], route: Router
-) -> tuple[int, Join] | None:
-    """The cheapest jumper between two sets of holes, ties broken by position so the plan
-    is the same every time.
-
-    Pairs are tried shortest first and the search stops once a pair's LENGTH alone reaches
-    the best COST found: the length is a lower bound on the cost, so nothing later can
-    win, and the answer is exactly the exhaustive one. It matters -- a supply island is
-    priced against every hole of two fifty-hole rails, and walking each jumper's holes for
-    the parts it passes under was nearly all of a placement trial on a breadboard.
-    """
-    pairs = sorted(
-        (manhattan(a, b), a.col, a.row, b.col, b.row, a, b)
-        for a in _free(left, used)
-        for b in _free(right, used)
-        if a != b
-    )
-    best: tuple[tuple[int, int, int, int, int], Join] | None = None
-    for length, a_col, a_row, b_col, b_row, a, b in pairs:
-        if best is not None and length > best[0][0]:
-            break
-        key = (route(a, b)[0], a_col, a_row, b_col, b_row)
-        if best is None or key < best[0]:
-            best = (key, (a, b))
-    return None if best is None else (best[0][0], best[1])
 
 
 def _unreachable(net: Net, holes: list[HoleCoord], doc: PerfDocument) -> StripProblem:
@@ -658,11 +570,6 @@ def _unreachable(net: Net, holes: list[HoleCoord], doc: PerfDocument) -> StripPr
         ),
         holes=tuple(first),
     )
-
-
-def _take(join: Join, used: set[str]) -> Join:
-    used.update((hole_key(join[0]), hole_key(join[1])))
-    return join
 
 
 def _nearest_first(
@@ -680,14 +587,14 @@ def _nearest_first(
         choice: tuple[int, int, int, Join] | None = None
         for i, left in enumerate(groups):
             for j in range(i + 1, len(groups)):
-                found = _cheapest(left, groups[j], used, route)
+                found = cheapest_join(left, groups[j], used, route)
                 if found is not None and (choice is None or found[0] < choice[0]):
                     choice = (found[0], i, j, found[1])
         if choice is None:
             problems.append(_unreachable(net, groups[-1], doc))
             break
         _, i, j, join = choice
-        joins.append(_take(join, used))
+        joins.append(take_join(join, used))
         groups[i] = groups[i] + groups[j]
         del groups[j]
     return joins
@@ -718,20 +625,20 @@ def _to_rails(
             continue
         choice: tuple[int, Rail, Join] | None = None
         for rail in own_rails:
-            found = _cheapest(reach, rail_holes[rail], used, route)
+            found = cheapest_join(reach, rail_holes[rail], used, route)
             if found is not None and (choice is None or found[0] < choice[0]):
                 choice = (found[0], rail, found[1])
         if choice is None:
             problems.append(_unreachable(net, reach, doc))
             continue
-        joins.append(_take(choice[2], used))
+        joins.append(take_join(choice[2], used))
         reached.add(choice[1])
 
     if len(reached) == 2 and not any(reached <= rails for rails in joined):
         top, bottom = sorted(reached, key=lambda rail: not rail.startswith("top"))
         bridge = _bridge(rail_holes[top], rail_holes[bottom], doc, used, route)
         if bridge is not None:
-            joins.append(_take(bridge, used))
+            joins.append(take_join(bridge, used))
     return joins
 
 
@@ -744,10 +651,10 @@ def _bridge(
 ) -> Join | None:
     """The jumper joining a rail pair: straight across, at the end of the board nearest an
     edge where nothing stands in the way."""
-    below = {hole.col: hole for hole in _free(bottom, used)}
+    below = {hole.col: hole for hole in free_holes(bottom, used)}
     cols = doc.board.cols
     best: tuple[tuple[int, int, int], Join] | None = None
-    for a in _free(top, used):
+    for a in free_holes(top, used):
         b = below.get(a.col)
         if b is None:
             continue

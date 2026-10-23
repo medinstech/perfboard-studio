@@ -12,7 +12,9 @@ there, in whole rows, so the question splits in two and the first half is subtra
   **WHAT IS STILL NOT JOINED?** After the cuts, a net's pins sit in some number of
   separate islands. Each island has to be linked to the next, and on stripboard that is a
   wire link over the COMPONENT side: the solder side is one sheet of parallel copper, so
-  anything laid across it there shorts every strip it crosses.
+  anything laid across it there shorts every strip it crosses. A link goes into a FREE
+  hole of each strip -- one lead to a hole, as a breadboard jumper goes into a free hole
+  of its clip -- and under a part only where no pair of free holes keeps it out.
 
 WHY THE CUTS AND THE LINKS ARE ONE COMMAND. They are one decision. A cut removes a
 connection the board was providing and a link puts back the one the circuit wanted;
@@ -35,6 +37,7 @@ Pure and deterministic, like every planner above it: the same board plans the sa
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from itertools import pairwise
 
@@ -49,13 +52,15 @@ from .commands import (
     create_document_id_generator,
 )
 from .connectivity import FootprintLookup, PhysicalPinRef, extract_physical_nets
-from .geometry import all_pin_holes, format_hole, hole_key, manhattan
-from .model import HoleCoord, NetId, PerfDocument, TrackCut
+from .geometry import all_pin_holes, format_hole, hole_key, holes_under_line, manhattan
+from .model import ComponentId, HoleCoord, NetId, PerfDocument, TrackCut
+from .occupancy import OccupancyIndex, build_occupancy
 from .stripboard import (
     cut_between,
     is_stripboard,
     joined_by_board,
     position_along,
+    segment_holes,
     strip_index,
 )
 from .wiregauge import wire_gauge_for_current
@@ -317,26 +322,183 @@ def _plan_cuts(
     return working, tuple(cuts), planned, problems
 
 
+# ---------------------------------------------------------------------------
+# Where a link goes in: shared with breadroute, which jumpers a breadboard's clips
+# ---------------------------------------------------------------------------
+#
+# One lead to a hole. A pin fills its own, so a link reaches a strip by a FREE hole of it,
+# the way a breadboard jumper reaches a clip, and both planners choose those holes by the one
+# search below: this module is beneath breadroute, which imports it.
+
+#: What a link or a jumper passing under a part costs, in holes of extra length. Enough that
+#: one round the part always wins when there is one -- the perfboard router's position (it
+#: refuses such a jumper) softened to a preference, because laying a link or a flat jumper
+#: first and the part over it is ordinary practice on stripboard and on a breadboard, and a
+#: refusal could leave a strip or a clip unreachable that a person would simply link under
+#: the chip. ``jumper-under-body`` still warns about it, and the guide fits it first.
+UNDER_BODY_COST = 100
+
+#: A link or a jumper: its two ends.
+type Join = tuple[HoleCoord, HoleCoord]
+
+#: The holes it runs through, ends and corners: two of them for a straight one.
+type JumperRoute = tuple[HoleCoord, ...]
+
+#: The parts standing over each row and each column of the board, as (position, part) in
+#: order along it: :func:`cover_of`.
+type Cover = tuple[dict[int, list[tuple[int, ComponentId]]], dict[int, list[tuple[int, ComponentId]]]]
+
+#: How a link between two holes is laid, and what that costs: :func:`straight_router`, or
+#: breadroute's along the grid.
+type Router = Callable[[HoleCoord, HoleCoord], tuple[int, JumperRoute]]
+
+
+def free_holes(holes: Iterable[HoleCoord], used: set[str]) -> list[HoleCoord]:
+    """The holes a link end could go into: nothing in them yet. A hole under a part's body
+    counts -- the link goes in first and the part over it, which is ordinary practice and
+    the only way to reach a strip or a clip a trimmer or a can stands over -- but it is
+    priced (:func:`straight_router`), so it is never chosen while an open hole will do."""
+    return sorted({h for h in holes if hole_key(h) not in used}, key=lambda h: (h.row, h.col))
+
+
+def cover_of(doc: PerfDocument, occupancy: OccupancyIndex) -> Cover:
+    """Every hole a body covers, by row and by column, read once. A run along a row or a
+    column is answered from these instead of walking it hole by hole: a breadboard's grid
+    jumper is priced along a hundred-odd shapes for every pair of holes it might join, and
+    walking them was almost all of the time a breadboard took to plan (50 s on
+    atmega328-relay)."""
+    by_row: dict[int, list[tuple[int, ComponentId]]] = {}
+    by_col: dict[int, list[tuple[int, ComponentId]]] = {}
+    for row in range(doc.board.rows):
+        for col in range(doc.board.cols):
+            part = occupancy.body_covers(HoleCoord(col, row))
+            if part is not None:
+                by_row.setdefault(row, []).append((col, part))
+                by_col.setdefault(col, []).append((row, part))
+    return by_row, by_col
+
+
+def parts_under(path: JumperRoute, occupancy: OccupancyIndex, cover: Cover | None = None) -> int:
+    """How many parts a link along ``path`` passes under: the holes under it other than its
+    two ends, counted as ``jumper-under-body`` counts them -- a corner included, since the
+    wire lies over it. A run along a row or a column is read off ``cover`` when it is given,
+    which is the same holes: ``holes_under_line`` of such a run is every hole on it."""
+    ends = {(path[0].col, path[0].row), (path[-1].col, path[-1].row)}
+    crossed: set[ComponentId | None] = set()
+    for p, q in pairwise(path):
+        if cover is not None and p.row == q.row:
+            low, high = sorted((p.col, q.col))
+            crossed.update(
+                part for col, part in cover[0].get(p.row, ()) if low <= col <= high and (col, p.row) not in ends
+            )
+        elif cover is not None and p.col == q.col:
+            low, high = sorted((p.row, q.row))
+            crossed.update(
+                part for row, part in cover[1].get(p.col, ()) if low <= row <= high and (p.col, row) not in ends
+            )
+        else:
+            crossed.update(
+                occupancy.body_covers(h) for h in holes_under_line(p, q) if (h.col, h.row) not in ends
+            )
+    crossed.discard(None)
+    return len(crossed)
+
+
+def straight_router(occupancy: OccupancyIndex, cover: Cover) -> Router:
+    """A straight link between two holes, with its cost: its length in holes, plus
+    :data:`UNDER_BODY_COST` for every part it runs under and for each end that goes in
+    under one. Remembered per pair, because a planner asks again for the link it chose."""
+    seen: dict[tuple[str, str], tuple[int, JumperRoute]] = {}
+
+    def route(a: HoleCoord, b: HoleCoord) -> tuple[int, JumperRoute]:
+        key = (hole_key(a), hole_key(b))
+        found = seen.get(key)
+        if found is None:
+            covered = sum(occupancy.body_covers(end) is not None for end in (a, b))
+            path = (a, b)
+            cost = manhattan(a, b) + UNDER_BODY_COST * parts_under(path, occupancy, cover)
+            found = seen[key] = (cost + UNDER_BODY_COST * covered, path)
+        return found
+
+    return route
+
+
+def cheapest_join(
+    left: Iterable[HoleCoord], right: Iterable[HoleCoord], used: set[str], route: Router
+) -> tuple[int, Join] | None:
+    """The cheapest link between two sets of holes, ties broken by position so the plan is
+    the same every time.
+
+    Pairs are tried shortest first and the search stops once a pair's LENGTH alone reaches
+    the best COST found: the length is a lower bound on the cost, so nothing later can
+    win, and the answer is exactly the exhaustive one. It matters -- a breadboard's supply
+    island is priced against every hole of two fifty-hole rails, and walking each jumper's
+    holes for the parts it passes under was nearly all of a placement trial on a breadboard.
+    """
+    pairs = sorted(
+        (manhattan(a, b), a.col, a.row, b.col, b.row, a, b)
+        for a in free_holes(left, used)
+        for b in free_holes(right, used)
+        if a != b
+    )
+    best: tuple[tuple[int, int, int, int, int], Join] | None = None
+    for length, a_col, a_row, b_col, b_row, a, b in pairs:
+        if best is not None and length > best[0][0]:
+            break
+        key = (route(a, b)[0], a_col, a_row, b_col, b_row)
+        if best is None or key < best[0]:
+            best = (key, (a, b))
+    return None if best is None else (best[0][0], best[1])
+
+
+def take_join(join: Join, used: set[str]) -> Join:
+    used.update((hole_key(join[0]), hole_key(join[1])))
+    return join
+
+
 def _plan_links(
     doc: PerfDocument,
     lookup: FootprintLookup,
     pins: dict[str, tuple[PhysicalPinRef, HoleCoord]],
     wanted: dict[NetId, str],
 ) -> tuple[list[NewConductor], list[PlannedLink], list[StripProblem]]:
-    """Join up the islands each net is left in, nearest pair first.
+    """Join up the islands each net is left in, nearest pair first, each link from a FREE
+    hole of one island's strip to a free hole of the other's.
 
     Islands come from the CONNECTIVITY engine rather than from the strips, so a link the
     user already fitted, a solder blob between two rows and a strip all count as the one
     thing they physically are -- something that already joins these pins. The alternative,
     grouping by strip, would propose a link parallel to every wire already on the board.
+
+    ONE LEAD TO A HOLE. A pin fills its own hole, so a link goes into another hole of the
+    same strip, as a link is fitted on Veroboard: through the board and soldered to the
+    copper, which connectivity counts. The ends are chosen by length, plus
+    :data:`UNDER_BODY_COST` for every part the link would run under or end beneath, so a
+    link goes under a part only when no pair of free holes keeps it out -- and then
+    ``jumper-under-body`` says so and the guide fits it first. Linked pin to pin, as this
+    used to be, 103 of the 128 links on the six finished examples and the placed blinker
+    made into stripboard ran under a part (150 warnings), every end in a hole a lead already
+    filled; from free holes it is 30 (34 warnings), 19 ends of 256 beside a lead, and a
+    sixth less wire.
+
+    A strip with no free hole left is linked at a pin's own hole, beside its lead, so no
+    island is left unjoined for want of a hole.
     """
-    islands_on_board = extract_physical_nets(doc, lookup)
     island_of: dict[tuple[str, str], str] = {}
-    for island in islands_on_board:
+    island_holes: dict[str, list[HoleCoord]] = {}
+    for island in extract_physical_nets(doc, lookup):
+        island_holes[island.id] = [node.hole for node in island.nodes]
         for pin in island.pins:
             island_of[(pin.component_ref, pin.pin)] = island.id
 
     hole_of = {(ref.component_ref, ref.pin): hole for ref, hole in pins.values()}
+    occupancy = build_occupancy(doc, lookup)
+    route = straight_router(occupancy, cover_of(doc, occupancy))
+    # One lead to a hole: a pin fills its own, and so does each end of a conductor.
+    used: set[str] = set(pins)
+    for conductor in doc.conductors:
+        if conductor.path:
+            used.update((hole_key(conductor.path[0]), hole_key(conductor.path[-1])))
 
     conductors: list[NewConductor] = []
     links: list[PlannedLink] = []
@@ -345,16 +507,15 @@ def _plan_links(
     for net in doc.nets:
         if net.id not in wanted:
             continue
-        islands: dict[str, list[HoleCoord]] = {}
+        islands: dict[str, None] = {}
         missing = 0
         for node in net.nodes:
             key = (node.component_ref, node.pin)
-            hole = hole_of.get(key)
             island_id = island_of.get(key)
-            if hole is None or island_id is None:
+            if key not in hole_of or island_id is None:
                 missing += 1
                 continue
-            islands.setdefault(island_id, []).append(hole)
+            islands.setdefault(island_id, None)
         if missing:
             problems.append(
                 StripProblem(
@@ -373,19 +534,13 @@ def _plan_links(
         # Nearest-pair merging: join the two closest islands, merge them, repeat. The
         # links a person would fit, in the order they would fit them, and short links
         # first means a later one is never made redundant by an earlier one.
-        groups = [sorted(holes, key=lambda h: (h.col, h.row)) for _, holes in sorted(islands.items())]
+        groups = [_on_its_strips(doc, island_holes[island]) for island in sorted(islands)]
         while len(groups) > 1:
-            best: tuple[int, HoleCoord, HoleCoord, int, int] | None = None
-            for i, left in enumerate(groups):
-                for j, right in enumerate(groups[i + 1 :], start=i + 1):
-                    for a in left:
-                        for b in right:
-                            distance = manhattan(a, b)
-                            candidate = (distance, a, b, i, j)
-                            if best is None or _link_key(candidate) < _link_key(best):
-                                best = candidate
-            assert best is not None  # len(groups) > 1 means at least one pair exists.
-            distance, a, b, i, j = best
+            choice = _nearest(groups, used, route) or _nearest(groups, used - set(pins), route)
+            if choice is None:  # pragma: no cover - every island has a pin, and a pin a hole
+                break
+            i, j, (a, b) = choice
+            take_join((a, b), used)
             conductors.append(
                 NewWireConductor(
                     path=(a, b),
@@ -405,17 +560,34 @@ def _plan_links(
             )
             links.append(
                 PlannedLink(
-                    net_id=net.id, net_name=net.name, from_hole=a, to_hole=b, holes=distance
+                    net_id=net.id, net_name=net.name, from_hole=a, to_hole=b, holes=manhattan(a, b)
                 )
             )
-            groups[i] = sorted(groups[i] + groups[j], key=lambda h: (h.col, h.row))
-            groups.pop(j)
+            groups[i] = groups[i] + groups[j]
+            del groups[j]
 
     return conductors, links, problems
 
 
-def _link_key(candidate: tuple[int, HoleCoord, HoleCoord, int, int]) -> tuple[int, int, int, int, int]:
-    """Distance first, then position: two links of equal length must be chosen between
-    the same way on every run, or the plan stops being reproducible."""
-    distance, a, b, _i, _j = candidate
-    return (distance, a.col, a.row, b.col, b.row)
+def _on_its_strips(doc: PerfDocument, holes: list[HoleCoord]) -> list[HoleCoord]:
+    """Every hole of every strip an island is on -- where a link can reach it. A hole on no
+    strip (a pin in a cut hole) is reachable only at itself."""
+    reach: dict[str, HoleCoord] = {}
+    for hole in holes:
+        for other in segment_holes(doc, hole) or (hole,):
+            reach.setdefault(hole_key(other), other)
+    return list(reach.values())
+
+
+def _nearest(
+    groups: list[list[HoleCoord]], used: set[str], route: Router
+) -> tuple[int, int, Join] | None:
+    """The cheapest link between any two islands, and which two: the first pair wins a tie,
+    so the plan is the same every time."""
+    choice: tuple[int, int, int, Join] | None = None
+    for i, left in enumerate(groups):
+        for j in range(i + 1, len(groups)):
+            found = cheapest_join(left, groups[j], used, route)
+            if found is not None and (choice is None or found[0] < choice[0]):
+                choice = (found[0], i, j, found[1])
+    return None if choice is None else (choice[1], choice[2], choice[3])

@@ -28,7 +28,6 @@ and pay for the full default run.
 from __future__ import annotations
 
 import dataclasses
-import math
 import random
 from pathlib import Path
 
@@ -1672,11 +1671,12 @@ def test_a_stripboard_candidate_is_judged_by_the_planner_that_suits_it() -> None
 
     unfinished, cost = _build_cost(doc, LOOKUP)
 
-    # One link over the component side, and no cut: the two strips are already apart.
+    # One link over the component side, and no cut: the two strips are already apart. The
+    # link runs straight across them between free holes, four rows, not from pin to pin.
     assert unfinished == 0
     assert cost == pytest.approx(
         DEFAULT_ROUTER_COSTS.top_jumper_fixed
-        + DEFAULT_ROUTER_COSTS.top_jumper_per_mm * math.hypot(7, 4) * STRIPBOARD.pitch
+        + DEFAULT_ROUTER_COSTS.top_jumper_per_mm * 4 * STRIPBOARD.pitch
     )
 
 

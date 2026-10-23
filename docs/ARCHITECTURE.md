@@ -339,7 +339,9 @@ must not be allowed to disagree with it:
   DRC's `((anchor+min)+(anchor+max))/2` in the last place — and a count on a threshold is
   exactly where the last place decides.
 - **`jumper-under-body` and the router** both ask `occupancy.body_covers`. The router
-  refuses to lay such a jumper at all, so DRC deliberately checks *less*: only holes
+  refuses to lay such a jumper at all, and the stripboard and breadboard planners lay
+  one only where no pair of free holes keeps it out (`striproute.UNDER_BODY_COST`, by
+  the same predicate), so DRC deliberately checks *less*: only holes
   strictly between the jumper's ends, because a body's bounding box covers its own pin
   holes and counting the ends would flag every jumper that lands on a part. DRC must
   never object to copper the router was willing to lay.
@@ -1450,7 +1452,12 @@ which is DRC's `cut-track-conflict`, the twin of `mounting-hole-conflict`.
 
 `striproute.py` is that board's router and it subtracts before it adds: cuts first, then
 links over the COMPONENT side — the solder side is one sheet of parallel copper, and a
-wire laid across it there shorts every strip it crosses. Both halves commit as one
+wire laid across it there shorts every strip it crosses. **A link goes into a free hole
+of each strip**, chosen by length plus `UNDER_BODY_COST` for every part it would run
+under: the one search breadroute jumpers a clip by, which lives here because breadroute
+is above this module. Linked pin to pin, as it first was, 103 of 128 links on the
+examples made into stripboard ran under a part and every end shared a hole with a
+lead; a strip with no free hole left is still linked at a pin. Both halves commit as one
 command (`stripboard.apply`), because separately one Ctrl+Z leaves the board cut apart
 with nothing linking it, or linked with nothing cut, which is a short. Pairs it cannot
 separate (adjacent pins, no hole between them to drill) are reported, never routed around:

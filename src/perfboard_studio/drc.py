@@ -2221,9 +2221,12 @@ def _check_component_height(doc: PerfDocument, lookup: FootprintLookup) -> list[
 def _check_jumper_under_body(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
     """A component-side jumper that has to run underneath a part.
 
-    The router already refuses to lay one (see router.py's top-jumper branch, which asks
-    ``occupancy.body_covers`` exactly as this does), so a routed board never contains
-    one. Two things still produce them and neither said a word before this rule existed:
+    The perfboard router refuses to lay one (see router.py's top-jumper branch, which asks
+    ``occupancy.body_covers`` exactly as this does), and the stripboard and breadboard
+    planners lay one only where no pair of free holes keeps it out
+    (``striproute.UNDER_BODY_COST``), so a routed board holds one only where nothing
+    else would join its islands. Two things still produce them and neither said a word
+    before this rule existed:
     drawing a jumper by hand, and — the common one — MOVING A PART ON TOP OF AN EXISTING
     JUMPER, where the copper was legal when it was laid and is not any more.
 

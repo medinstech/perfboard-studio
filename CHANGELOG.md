@@ -373,6 +373,14 @@ closed without a bump.
   link's end now counts as soldered to its strip, as a lead does. If LVS passed a
   stripboard of yours that has hand-drawn links, run it again.
 
+- **Autoroute on stripboard links strips through free holes, and round the parts where it
+  can.** Every link ran from one pin's hole to another's, so each end shared a hole with a
+  lead, and a link between two of a chip's pins ran under the chip: one Autoroute of the
+  NE555 blinker on a 5 x 7 cm stripboard gave 18 `jumper-under-body` warnings. A link now
+  goes into a free hole of each strip, and under a part only where no pair of free holes
+  keeps it out, so the same board gives 8, and the six finished examples auto-placed on
+  stripboard go from 132 to 32. A strip with no free hole left is still linked at a pin.
+
 - **Enter in Add a Part takes the part the filter names.** The catalog is listed first and
   searched by what a part does as well as by its name, so typing "LED" and pressing Enter
   added a MAX7219, an LED display driver with 24 pins. Enter now takes the first row whose

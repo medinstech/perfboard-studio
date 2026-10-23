@@ -12,12 +12,9 @@ import pytest
 
 from perfboard_studio.breadboard import clip_holes, clip_of
 from perfboard_studio.breadroute import (
-    UNDER_BODY_COST,
-    _cover,
     _grid_path,
     _router,
     _steps,
-    _under_bodies,
     plan_breadboard,
     plan_joined_reroute,
 )
@@ -43,6 +40,7 @@ from perfboard_studio.model import ComponentInstance, HoleCoord, PerfDocument, S
 from perfboard_studio.occupancy import build_occupancy
 from perfboard_studio.persist import deserialize_document
 from perfboard_studio.placer import PlacementOptions, _pick_best, place_design, plan_placement
+from perfboard_studio.striproute import UNDER_BODY_COST, cover_of, parts_under
 from tests.test_breadroute import FULL, TIMER, _apply, _conflicts, _node, _part
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -352,7 +350,7 @@ def test_the_parts_over_a_run_are_the_same_read_off_the_cover_or_walked() -> Non
     took grid jumpers on atmega328-relay from 50 s to about one. It has to be the same
     answer as walking it, ends excluded, for every shape -- or the plan moves."""
     occupancy = build_occupancy(TIMER, get_footprint)
-    cover = _cover(TIMER, occupancy)
+    cover = cover_of(TIMER, occupancy)
     # Every covered hole as the far end of a run and the near end of one, out and back
     # along a row and along a column: the hole the run turns on is the one only it covers.
     for row, along in cover[0].items():
@@ -361,7 +359,7 @@ def test_the_parts_over_a_run_are_the_same_read_off_the_cover_or_walked() -> Non
             for d_col, d_row in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                 near = HoleCoord(col + d_col, row + d_row)
                 path = (near, hole, near)
-                assert _under_bodies(path, occupancy, cover) == _under_bodies(path, occupancy) == 1, path
+                assert parts_under(path, occupancy, cover) == parts_under(path, occupancy) == 1, path
     rng = random.Random(3)
     for _ in range(2000):
         points = [HoleCoord(rng.randrange(TIMER.board.cols), rng.randrange(TIMER.board.rows))]
@@ -372,7 +370,7 @@ def test_the_parts_over_a_run_are_the_same_read_off_the_cover_or_walked() -> Non
             row = rng.randrange(TIMER.board.rows) if step != "row" else last.row
             points.append(HoleCoord(col, row))
         path = tuple(points)
-        assert _under_bodies(path, occupancy, cover) == _under_bodies(path, occupancy), path
+        assert parts_under(path, occupancy, cover) == parts_under(path, occupancy), path
 
 
 def test_a_grid_jumper_takes_a_lane_of_its_own() -> None:

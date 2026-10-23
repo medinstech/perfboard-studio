@@ -24,6 +24,7 @@ from perfboard_studio.commands import (
 )
 from perfboard_studio.connectivity import PhysicalPinRef, are_pins_connected, extract_physical_nets
 from perfboard_studio.drc import run_drc
+from perfboard_studio.footprints import generic_box_footprint
 from perfboard_studio.guide import build_guide
 from perfboard_studio.guide_export import guide_to_html
 from perfboard_studio.lvs import run_lvs
@@ -400,10 +401,35 @@ def test_a_net_split_across_two_strips_gets_a_link_over_the_component_side() -> 
     link = plan.conductors[0]
     assert link.kind == "top-jumper"
     assert link.side == "top"
-    assert set(link.path) == {HoleCoord(1, 1), HoleCoord(6, 4)}
+    # Into a free hole of each strip, straight across them, not from pin to pin: one lead
+    # to a hole, and three holes of wire where the pins are eight apart.
+    start, end = link.path
+    assert {start.row, end.row} == {1, 4} and start.col == end.col
+    assert not {start, end} & {HoleCoord(1, 1), HoleCoord(6, 4)}
     assert are_pins_connected(
         plan.document, LOOKUP, PhysicalPinRef("R1", "1"), PhysicalPinRef("R2", "1")
     )
+
+
+def test_a_link_goes_round_a_part_when_a_free_hole_lets_it() -> None:
+    """Strips 1 and 4 can be linked down any column, and the nearest columns run under
+    B1. The link takes the first column clear of it rather than running under the part,
+    which ``jumper-under-body`` would warn of and the guide would have to fit first."""
+    block = generic_box_footprint(cols=1, rows=1, width_mm=17, depth_mm=4, height_mm=5, id="block")
+    lookup = {PIN.id: PIN, block.id: block}.get
+    blocker = dataclasses.replace(_pin("B1", HoleCoord(3, 2)), footprint_id="block")
+    doc = dataclasses.replace(
+        _doc(),
+        components=(_pin("R1", HoleCoord(1, 1)), _pin("R2", HoleCoord(1, 4)), blocker),
+        nets=(_net("n1", "IN", ("R1", "1"), ("R2", "1")),),
+    )
+
+    plan = plan_stripboard(doc, lookup)
+
+    (start, end), = (link.path for link in plan.conductors)
+    assert start.col == end.col == 7, (start, end)
+    assert not [v for v in run_drc(plan.document, lookup) if v.rule == "jumper-under-body"]
+    assert are_pins_connected(plan.document, lookup, PhysicalPinRef("R1", "1"), PhysicalPinRef("R2", "1"))
 
 
 def test_pins_it_cannot_separate_are_reported_rather_than_routed_around() -> None:
