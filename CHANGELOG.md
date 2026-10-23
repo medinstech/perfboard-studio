@@ -50,6 +50,15 @@ closed without a bump.
   is in. The dialog says before OK that the lead bends bent to the old pins go with them, and
   a locked part says why it cannot change instead of being refused afterwards.
 
+- **A net joined at a supply pin is named after it.** Wiring a 555's VCC to a resistor
+  made a net called "N1" of the signal class, so the sheet drew no rail glyph, the guide wired
+  it in no colour and the router laid no ground first. A pin called GND, VCC, VSS or V- now
+  names the net it starts, with the class its name says (VSS is ground, V- and VEE a negative
+  rail); a pin whose name is already a net's joins that net instead of making a second one;
+  and an automatically named net takes the name when such a pin joins it. On the sheet and
+  with the board's Connect tool alike, in one undo step. Two different supplies wired together
+  name nothing.
+
 ### Changed
 
 - **The architecture notes are `docs/ARCHITECTURE.md` now, and `CLAUDE.md` is a fifth of

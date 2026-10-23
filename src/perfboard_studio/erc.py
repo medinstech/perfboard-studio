@@ -60,7 +60,6 @@ read, so a design with nothing placed is checked exactly as a finished board is.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -74,7 +73,10 @@ from .model import (
     NetNode,
     PerfDocument,
     SchematicPart,
+    SupplyKind,
+    is_negative_rail,
     pin_name_of,
+    supply_kind,
 )
 
 type ErcSeverity = Literal["error", "warning"]
@@ -162,17 +164,6 @@ KIND_BY_ARCHETYPE: dict[BodyArchetype, PartKind] = {
     "axial-upright": "passive",
 }
 
-type SupplyKind = Literal["positive", "ground", "negative"]
-
-#: A positive supply: VCC, VDD and their numbered, analogue and I/O forms, V+, VS.
-_POSITIVE = re.compile(r"^(?:[AD]?V(?:CC|DD)(?:\d+|[ABD]|IO)?|V\+|\+VS|VS\+?)$")
-#: Ground: GND and its analogue, digital, power, signal and numbered forms, and 0V.
-_GROUND = re.compile(r"^(?:[ADPS]?GND\d*|GND[ADP]|0V)$")
-#: Ground OR a negative supply, depending on the circuit -- VSS is a CMOS chip's ground
-#: and some op-amps' negative rail, VEE and V- the same. Needed like any supply; never
-#: compared with a net's class, since either class can be right.
-_NEGATIVE = re.compile(r"^(?:A?VSS\d*|VSSA|VEE|V-|-VS|VS-)$")
-
 #: Names a pin with nothing inside it is given.
 _NO_CONNECT = frozenset({"NC", "N.C.", "N/C", "DNC"})
 #: Names that make NC a contact rather than an absence: a relay's set, a switch's.
@@ -185,28 +176,6 @@ _REGULATOR_SHAPES: tuple[frozenset[str], ...] = (
     frozenset({"IN", "OUT", "GND"}),
     frozenset({"IN", "OUT", "ADJ"}),
 )
-
-
-def supply_kind(name: str | None) -> SupplyKind | None:
-    """Which kind of supply pin a pin's name says it is, or None. Case is ignored."""
-    if not name:
-        return None
-    upper = name.strip().upper()
-    if _POSITIVE.match(upper):
-        return "positive"
-    if _GROUND.match(upper):
-        return "ground"
-    if _NEGATIVE.match(upper):
-        return "negative"
-    return None
-
-
-def is_negative_rail(net: Net) -> bool:
-    """Whether a net is BELOW ground: declared so, or named so (-12V, VEE, V-)."""
-    if net.voltage_v is not None:
-        return net.voltage_v < 0
-    upper = net.name.strip().upper()
-    return upper.startswith(("-", "VEE")) or upper in {"V-", "VNEG"}
 
 
 def _is_positive_rail(net: Net) -> bool:

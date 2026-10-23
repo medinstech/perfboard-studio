@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import Any, Literal, cast, get_args
@@ -98,7 +100,9 @@ from .model import (
     SymbolPlacement,
     TrackCut,
     WireConductor,
+    declared_pin_name,
     normalized_pin_names,
+    supply_net_class,
 )
 
 # ---------------------------------------------------------------------------
@@ -1150,6 +1154,10 @@ class ConnectPinsPayload:
     id: NetId
     nodes: tuple[NetNode, ...]
     label: str | None = None
+    #: A new name and class for the net, in the same step: what an automatically named
+    #: net takes from a supply pin joining it (``plan_pin_join``). None leaves both alone.
+    rename: str | None = None
+    net_class: NetClass | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2159,6 +2167,11 @@ class PinJoin:
 
     The message is the CALLER's to write. This is an engine module and the refusals are
     read by people, in their own language.
+
+    WHAT A NEW NET IS CALLED is decided here too, for the same reason: a pin called GND
+    joined to anything makes a net called GND, of the ground class, by either door. It was
+    "N6", a signal, so the sheet drew no rail glyph, the guide wired it in no colour and the
+    router laid no ground first -- for a circuit drawn the obvious way, pin to pin.
     """
 
     kind: Literal["same-net", "two-nets", "extend", "create"]
@@ -2166,23 +2179,94 @@ class PinJoin:
     #: "same-net". Empty for "create".
     net_a: Net | None = None
     net_b: Net | None = None
-    #: The node that has to be attached, for "extend".
-    node: NetNode | None = None
+    #: The pins to attach to ``net_a``, for "extend": the one not on it yet -- or both,
+    #: when a supply pin's name is the name of a net neither is on.
+    nodes: tuple[NetNode, ...] = ()
+    #: What the net is called and its class: the new net's, for "create"; for "extend", the
+    #: name an automatically named net takes from a supply pin joining it, or None.
+    name: str | None = None
+    net_class: NetClass = "signal"
+
+
+#: The names ``next_net_name`` hands out: a placeholder somebody may still rename, and the
+#: only kind a supply pin joining the net renames for them.
+_AUTOMATIC_NET_NAME = re.compile(r"N\d+")
+
+
+def _supply_names(doc: PerfDocument, nodes: Sequence[NetNode]) -> dict[str, str]:
+    """The supply names these pins declare, upper case to as written (``model.supply_kind``).
+
+    Declared names only, and that is the whole answer rather than a shortcut: no footprint
+    in the registry names a supply pin (they say A, K, + and -), so a pin is a supply here
+    exactly when ``pin_name_of`` would say so -- and a command has no footprint lookup.
+    """
+    owners = {part.ref: part for part in doc.parts} | {c.ref: c for c in doc.components}
+    found: dict[str, str] = {}
+    for node in nodes:
+        owner = owners.get(node.component_ref)
+        name = declared_pin_name(owner, node.pin) if owner is not None else None
+        if name is not None and supply_net_class(name) is not None:
+            found.setdefault(name.strip().upper(), name.strip())
+    return found
+
+
+def _joined(net: Net, plan: PinJoin) -> Net:
+    """``net`` with an "extend" plan's pins on it, and the name it takes, if it takes one."""
+    joined = dataclasses.replace(net, nodes=(*net.nodes, *plan.nodes))
+    if plan.name is not None:
+        joined = dataclasses.replace(joined, name=plan.name, net_class=plan.net_class)
+    return joined
+
+
+def _net_called(doc: PerfDocument, name: str) -> Net | None:
+    upper = name.upper()
+    return next((net for net in doc.nets if net.name.strip().upper() == upper), None)
 
 
 def plan_pin_join(doc: PerfDocument, a: NetNode, b: NetNode) -> PinJoin:
-    """What ought to happen if these two pins are joined. Decides nothing about wording."""
+    """What ought to happen if these two pins are joined. Decides nothing about wording.
+
+    A net and its name are one thing here, so a supply pin never makes a second one: a pin
+    called GND joins the net called GND if there is one (both pins, when neither is on a
+    net yet), and otherwise the new net is called GND. An automatically named net ("N3")
+    that a supply pin joins takes the pin's name, unless something else is called that.
+    Two different supplies on one join -- VCC to GND -- name nothing: that is a short to
+    be seen, not a net to be named after one end of it.
+    """
     net_a = next((n for n in doc.nets if a in n.nodes), None)
     net_b = next((n for n in doc.nets if b in n.nodes), None)
     if net_a is not None and net_b is not None:
         if net_a.id == net_b.id:
             return PinJoin(kind="same-net", net_a=net_a, net_b=net_b)
         return PinJoin(kind="two-nets", net_a=net_a, net_b=net_b)
-    if net_a is not None:
-        return PinJoin(kind="extend", net_a=net_a, node=b)
-    if net_b is not None:
-        return PinJoin(kind="extend", net_a=net_b, node=a)
-    return PinJoin(kind="create")
+    if net_a is not None or net_b is not None:
+        net = net_a if net_a is not None else net_b
+        node = b if net_a is not None else a
+        assert net is not None
+        supplies = _supply_names(doc, (*net.nodes, node))
+        if (
+            len(supplies) == 1
+            and _AUTOMATIC_NET_NAME.fullmatch(net.name.strip())
+            and net.net_class == "signal"
+        ):
+            name = next(iter(supplies.values()))
+            if _net_called(doc, name) is None:
+                return PinJoin(
+                    kind="extend",
+                    net_a=net,
+                    nodes=(node,),
+                    name=name,
+                    net_class=supply_net_class(name) or "signal",
+                )
+        return PinJoin(kind="extend", net_a=net, nodes=(node,))
+    supplies = _supply_names(doc, (a, b))
+    if len(supplies) == 1:
+        name = next(iter(supplies.values()))
+        existing = _net_called(doc, name)
+        if existing is not None:
+            return PinJoin(kind="extend", net_a=existing, nodes=(a, b))
+        return PinJoin(kind="create", name=name, net_class=supply_net_class(name) or "signal")
+    return PinJoin(kind="create", name=next_net_name(doc))
 
 
 class _MoveSymbols:
@@ -2352,18 +2436,15 @@ class _DrawSheetWire:
         if plan.kind == "same-net":
             return dataclasses.replace(doc, sheet_wires=tuple(drawn))
         if plan.kind == "extend":
-            assert plan.net_a is not None and plan.node is not None
+            assert plan.net_a is not None
             nets = tuple(
-                dataclasses.replace(net, nodes=(*net.nodes, plan.node))
-                if net.id == plan.net_a.id
-                else net
-                for net in doc.nets
+                _joined(net, plan) if net.id == plan.net_a.id else net for net in doc.nets
             )
             return dataclasses.replace(doc, nets=nets, sheet_wires=tuple(drawn))
         net = Net(
             id=ctx.next_id("net"),
-            name=next_net_name(doc),
-            net_class="signal",
+            name=plan.name or next_net_name(doc),
+            net_class=plan.net_class,
             nodes=(wire.a, wire.b),
         )
         return dataclasses.replace(
@@ -2815,8 +2896,21 @@ class _ConnectPins:
                 "the undo history.",
             )
         nodes = assert_pins_free(doc, p.nodes, joining=p.id)
+        name = assert_net_name_free(doc, p.rename, ignoring=p.id) if p.rename else None
+        if p.net_class is not None and p.net_class not in ("power", "ground", "signal"):
+            raise CommandError(
+                "invalid-net-class",
+                f'A net is "power", "ground" or "signal"; got "{p.net_class}".',
+            )
         nets = tuple(
-            dataclasses.replace(net, nodes=net.nodes + nodes) if net.id == p.id else net
+            dataclasses.replace(
+                net,
+                nodes=net.nodes + nodes,
+                name=name if name is not None else net.name,
+                net_class=p.net_class if p.net_class is not None else net.net_class,
+            )
+            if net.id == p.id
+            else net
             for net in doc.nets
         )
         return dataclasses.replace(doc, nets=nets)
@@ -2825,7 +2919,7 @@ class _ConnectPins:
         if p.label:
             return p.label
         existing = next((n for n in doc.nets if n.id == p.id), None)
-        name = existing.name if existing is not None else p.id
+        name = p.rename or (existing.name if existing is not None else p.id)
         if len(p.nodes) == 1:
             node = p.nodes[0]
             return f"Connect {node.component_ref.strip()}.{node.pin.strip()} to {name}"

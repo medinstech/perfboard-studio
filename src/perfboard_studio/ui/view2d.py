@@ -81,6 +81,7 @@ from perfboard_studio.commands import (
     PlaceComponentPayload,
     UpdateBoardNotePayload,
     next_net_name,
+    plan_pin_join,
     wire_side,
 )
 from perfboard_studio.connectivity import FootprintLookup, PhysicalNet, extract_physical_nets
@@ -1474,20 +1475,24 @@ def join_pins(
     both on DIFFERENT nets, which is refused because merging two nets is a decision about
     the circuit rather than about two clicks.
 
+    WHAT the join does is ``commands.plan_pin_join``, the same plan ``sheet.wire`` follows,
+    so a pin called GND makes or joins the net called GND by either door. This used to be a
+    copy of that plan, which the two docstrings said was shared.
+
     Module level and untyped in the bus, because ``CommandBus`` lives above this file in
     the import order and the alternative is a cycle for one parameter.
     """
     document: PerfDocument = bus.document
-    net_a = net_holding(document, *first)
-    net_b = net_holding(document, *second)
     a = NetNode(component_ref=first[0], pin=first[1])
     b = NetNode(component_ref=second[0], pin=second[1])
+    plan = plan_pin_join(document, a, b)
+    net_a, net_b = plan.net_a, plan.net_b
 
-    if net_a is not None and net_b is not None:
-        if net_a.id == net_b.id:
-            return None, t("{a} and {b} are both already on {net}.").format(
-                a=f"{first[0]}.{first[1]}", b=f"{second[0]}.{second[1]}", net=net_a.name
-            )
+    if plan.kind == "same-net" and net_a is not None:
+        return None, t("{a} and {b} are both already on {net}.").format(
+            a=f"{first[0]}.{first[1]}", b=f"{second[0]}.{second[1]}", net=net_a.name
+        )
+    if plan.kind == "two-nets" and net_a is not None and net_b is not None:
         return None, t(
             "{a} is on {net_a} and {b} is on {net_b}. Joining two nets is a change to "
             "the circuit — disconnect one of the pins first."
@@ -1498,14 +1503,28 @@ def join_pins(
             net_b=net_b.name,
         )
 
-    if net_a is not None:
-        return bus.dispatch("net.connect", ConnectPinsPayload(id=net_a.id, nodes=(b,))), None
-    if net_b is not None:
-        return bus.dispatch("net.connect", ConnectPinsPayload(id=net_b.id, nodes=(a,))), None
+    if plan.kind == "extend" and net_a is not None:
+        # One command, so one undo step, even when the net takes a supply pin's name.
+        return (
+            bus.dispatch(
+                "net.connect",
+                ConnectPinsPayload(
+                    id=net_a.id,
+                    nodes=plan.nodes,
+                    rename=plan.name,
+                    net_class=plan.net_class if plan.name is not None else None,
+                ),
+            ),
+            None,
+        )
     return (
         bus.dispatch(
             "net.add",
-            AddNetPayload(name=next_net_name(document), net_class="signal", nodes=(a, b)),
+            AddNetPayload(
+                name=plan.name or next_net_name(document),
+                net_class=plan.net_class,
+                nodes=(a, b),
+            ),
         ),
         None,
     )

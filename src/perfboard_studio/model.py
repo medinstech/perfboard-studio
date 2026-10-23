@@ -19,6 +19,7 @@ project rests on.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
@@ -557,6 +558,71 @@ def pin_name_of(
         if declared is not None:
             return declared
     return pin.name
+
+
+# ---------------------------------------------------------------------------
+# What a supply pin's name says
+# ---------------------------------------------------------------------------
+#
+# Here rather than in ``erc``, which reads them first: drawing a wire from a pin called GND
+# makes a net called GND (``commands.plan_pin_join``), and a command cannot import the
+# circuit checker. One set of names, two consumers.
+
+type SupplyKind = Literal["positive", "ground", "negative"]
+
+#: A positive supply: VCC, VDD and their numbered, analogue and I/O forms, V+, VS.
+_POSITIVE = re.compile(r"^(?:[AD]?V(?:CC|DD)(?:\d+|[ABD]|IO)?|V\+|\+VS|VS\+?)$")
+#: Ground: GND and its analogue, digital, power, signal and numbered forms, and 0V.
+_GROUND = re.compile(r"^(?:[ADPS]?GND\d*|GND[ADP]|0V)$")
+#: Ground OR a negative supply, depending on the circuit -- VSS is a CMOS chip's ground
+#: and some op-amps' negative rail, VEE and V- the same. Needed like any supply; never
+#: compared with a net's class, since either class can be right.
+_NEGATIVE = re.compile(r"^(?:A?VSS\d*|VSSA|VEE|V-|-VS|VS-)$")
+
+
+def supply_kind(name: str | None) -> SupplyKind | None:
+    """Which kind of supply pin a pin's name says it is, or None. Case is ignored."""
+    if not name:
+        return None
+    upper = name.strip().upper()
+    if _POSITIVE.match(upper):
+        return "positive"
+    if _GROUND.match(upper):
+        return "ground"
+    if _NEGATIVE.match(upper):
+        return "negative"
+    return None
+
+
+def names_a_negative_rail(name: str) -> bool:
+    """Whether a net's NAME puts it below ground: -12V, VEE, V-."""
+    upper = name.strip().upper()
+    return upper.startswith(("-", "VEE")) or upper in {"V-", "VNEG"}
+
+
+def is_negative_rail(net: Net) -> bool:
+    """Whether a net is BELOW ground: declared so, or named so (-12V, VEE, V-)."""
+    if net.voltage_v is not None:
+        return net.voltage_v < 0
+    return names_a_negative_rail(net.name)
+
+
+def supply_net_class(name: str | None) -> NetClass | None:
+    """The class of a net named after a supply pin, or None for a name that is no supply.
+
+    Ground is ground and a positive supply is power. The names that can be either (VSS,
+    VEE, V-) are a negative rail -- power, as KiCad's import classes ``-12V`` and ``VEE``
+    -- when the name says it is below ground, and ground otherwise: VSS is a CMOS chip's
+    ground far more often than anybody's negative rail.
+    """
+    kind = supply_kind(name)
+    if kind is None or name is None:
+        return None
+    if kind == "ground":
+        return "ground"
+    if kind == "positive":
+        return "power"
+    return "power" if names_a_negative_rail(name) else "ground"
 
 
 @dataclass(frozen=True, slots=True)
