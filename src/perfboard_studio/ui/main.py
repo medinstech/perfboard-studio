@@ -372,6 +372,12 @@ if TYPE_CHECKING:
 SHEET_PICK_MM = 1.6
 
 
+#: DRC rules whose findings are the wiring not being done yet rather than anything wrong:
+#: a pin of a net with nothing touching it. Kept out of the step bar's Verify count and the
+#: status bar's while connections are left to route.
+UNWIRED_RULES = frozenset({"pin-not-connected"})
+
+
 def refused(result: DispatchResult) -> str:
     """Why a command was refused, in the window's language.
 
@@ -4359,6 +4365,7 @@ class MainWindow(QMainWindow):
             unrouted=summarize(self._last_ratsnest).links,
             drc_errors=sum(1 for v in self._last_violations if v.severity == "error"),
             drc_warnings=sum(1 for v in self._last_violations if v.severity == "warning"),
+            drc_unwired=sum(1 for v in self._last_violations if v.rule in UNWIRED_RULES),
             lvs_problems=problems,
             erc_errors=sum(1 for f in self._last_erc if f.severity == "error"),
             erc_warnings=sum(1 for f in self._last_erc if f.severity == "warning"),
@@ -9397,7 +9404,14 @@ class MainWindow(QMainWindow):
         )
 
         errors = sum(1 for v in self._last_violations if v.severity == "error")
-        warns = sum(1 for v in self._last_violations if v.severity == "warning")
+        # Not the pins nothing is wired to yet while there is wiring left to do: the step bar
+        # does not count them either (``WorkflowFacts.drc_unwired``).
+        wiring = summarize(self._last_ratsnest).links > 0
+        warns = sum(
+            1
+            for v in self._last_violations
+            if v.severity == "warning" and not (wiring and v.rule in UNWIRED_RULES)
+        )
         drc_colour = ERROR if errors else (WARNING if warns else OK)
         drc_text = t("DRC {errors} err / {warnings} warn").format(errors=errors, warnings=warns)
         # The count and nothing else. How long the check took is a number for whoever is

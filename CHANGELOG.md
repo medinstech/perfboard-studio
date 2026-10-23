@@ -231,6 +231,12 @@ closed without a bump.
   the step bar's rule: an open is the wiring's news until the wiring is done, and a part not
   yet placed is the placement's.
 
+- **Pins nothing is wired to yet are not warnings yet.** A board just placed has every pin
+  of every net touching nothing, and DRC says so pin by pin: Verify read "17 warning(s)" on a
+  six-part board before any wiring existed, and the status bar went amber with it. Until the
+  wiring is done they are its news, as an open is; after it, a pin still touching nothing is
+  counted like any other warning. The findings panel still lists them.
+
 - **Both READMEs counted 54 MCP tools and ~4250 tests.** There are 57 and ~4700.
   `docs/MCP.md`'s count was already held to the server; `tests/test_docs.py` now holds
   every count of MCP tools in either README to `docs/MCP.md`.

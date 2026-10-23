@@ -77,6 +77,11 @@ class WorkflowFacts:
     #: Of ``lvs_problems``, the shorts. A short is wrong however much is left to route; an
     #: open is only the wiring not being finished until the wiring is.
     lvs_shorts: int = 0
+    #: Of ``drc_warnings``, pins that touch nothing yet (``pin-not-connected``) -- every pin of
+    #: every net on a board just placed. The wiring's news until the wiring is done, as an
+    #: open is: counted, they put seventeen warnings under Verify on a six-part board that
+    #: nobody had done anything wrong to yet.
+    drc_unwired: int = 0
     #: A stripboard: its strips join every net along them until the wiring cuts them, so a
     #: short there is also the wiring's news until the wiring is done.
     shorts_wait_for_wiring: bool = False
@@ -233,8 +238,9 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     if facts.parts_on_board == 0:
         checked = t("nothing to check yet")
     else:
+        warnings = facts.drc_warnings - (0 if route_done else facts.drc_unwired)
         checked = t("{errors} error(s) · {warnings} warning(s)").format(
-            errors=facts.drc_errors + lvs_errors, warnings=facts.drc_warnings
+            errors=facts.drc_errors + lvs_errors, warnings=warnings
         )
 
     done = {

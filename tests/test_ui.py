@@ -12976,3 +12976,20 @@ def test_a_label_on_the_solder_side_is_seen_from_the_solder_side() -> None:
         assert len(_label_items(window)) == 1
     finally:
         _close(window)
+
+
+
+def test_the_status_bar_does_not_count_pins_waiting_for_their_wiring() -> None:
+    """The step bar's rule, on the status bar: pins that touch nothing while connections are
+    left to route are not counted as warnings there either."""
+    from perfboard_studio.ratsnest import summarize
+
+    window = _window_on(dataclasses.replace(_load_dense(), conductors=()))
+    try:
+        assert summarize(window._last_ratsnest).links > 0
+        unwired = window.workflow_facts().drc_unwired
+        assert unwired > 0
+        warnings = sum(1 for v in window._last_violations if v.severity == "warning")
+        assert f"{warnings - unwired} warn" in window.label_drc.text()
+    finally:
+        _close(window)

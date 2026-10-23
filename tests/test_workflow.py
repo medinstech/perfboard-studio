@@ -198,3 +198,21 @@ def test_after_the_guide_the_button_saves_the_board_then_moves_it_on() -> None:
     assert label(dataclasses.replace(showing, untitled=True)) == "Save the Board…"
     assert label(dataclasses.replace(showing, solderless_breadboard=True)) == "Take It to Perfboard…"
     assert label(showing) == "Export the Guide…"
+
+
+
+def test_pins_nothing_is_wired_to_yet_are_the_wirings_news() -> None:
+    """A board just placed has every pin of every net touching nothing, and DRC says so pin
+    by pin: seventeen warnings under Verify on a six-part board before any wiring existed.
+    Until the wiring is done they are its news; after it, a pin still touching nothing is a
+    warning like any other."""
+    placed = dataclasses.replace(
+        EMPTY, parts_on_board=6, nets=6, unrouted=11, drc_warnings=17, drc_unwired=17
+    )
+    check = next(step for step in workflow_steps(placed) if step.key == "check")
+    assert check.summary == "0 error(s) · 0 warning(s)"
+    assert check.status == "todo"
+
+    routed = dataclasses.replace(placed, unrouted=0, drc_warnings=3, drc_unwired=2)
+    check = next(step for step in workflow_steps(routed) if step.key == "check")
+    assert check.summary == "0 error(s) · 3 warning(s)"
