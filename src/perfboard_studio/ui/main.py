@@ -372,6 +372,17 @@ if TYPE_CHECKING:
 SHEET_PICK_MM = 1.6
 
 
+def refused(result: DispatchResult) -> str:
+    """Why a command was refused, in the window's language.
+
+    The engine's sentence through ``say``, and without its code. "[two-nets] U1.8 is on N1
+    and U1.1 is on N6..." was what the window showed, in English in a Turkish window: the
+    code is the engine's handle for the refusal -- an agent branches on it -- and nobody
+    reading the status bar has a use for it.
+    """
+    return say(result.message)
+
+
 def _distance_to_segment(point: Point2, start: Point2, end: Point2) -> float:
     dx, dy = end.x - start.x, end.y - start.y
     length = dx * dx + dy * dy
@@ -5454,7 +5465,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
         return result
 
     def on_edit_board_label(self, note_id: str) -> None:
@@ -5472,7 +5483,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok and result.code != "nothing-to-do":
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
 
     def _pin_names_shown(self) -> bool:
         action = getattr(self, "act_pin_names", None)
@@ -7416,7 +7427,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
 
     def on_schematic_rotate(self, quarter_turns: int = 1) -> None:
         """Turn the selected symbols a quarter at a time.
@@ -7451,7 +7462,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
 
     def on_schematic_mirror(self) -> None:
         """Flip the selected symbols about their own vertical centre."""
@@ -7474,7 +7485,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
 
     def _ref_of_id(self, part_id: str) -> str | None:
         document = self.bus.document
@@ -7524,7 +7535,7 @@ class MainWindow(QMainWindow):
         )
         result = self.bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=wire))
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(say(result.description), 6000)
 
@@ -7559,7 +7570,7 @@ class MainWindow(QMainWindow):
         )
         result = self.bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=wire))
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(say(result.description), 6000)
 
@@ -7609,7 +7620,7 @@ class MainWindow(QMainWindow):
                 "net.connect", ConnectPinsPayload(id=net.id, nodes=(node,))
             )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(say(result.description), 6000)
 
@@ -7638,7 +7649,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(say(result.description), 6000)
         self.schematic_view.set_tool("select")
@@ -7665,7 +7676,7 @@ class MainWindow(QMainWindow):
                     "sheet.note.delete", DeleteSheetNotesPayload(ids=ids)
                 )
                 if not result.ok:
-                    self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+                    self.statusBar().showMessage(refused(result), 8000)
             self.schematic_view.set_selection([], [])
             return
         for ref in self._sheet_selection():
@@ -7718,7 +7729,7 @@ class MainWindow(QMainWindow):
                 ),
             )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(say(result.description), 6000)
         self._sync_schematic_highlight()
@@ -7781,7 +7792,7 @@ class MainWindow(QMainWindow):
                 ),
             )
             if not result.ok:
-                return f"[{result.code}] {result.message}"
+                return refused(result)
             self._schematic_ref = ref
             self._sync_schematic_highlight()
             self.statusBar().showMessage(say(result.description), 6000)
@@ -7821,7 +7832,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self._schematic_ref = ref
         self._sync_schematic_highlight()
@@ -7900,7 +7911,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self._schematic_ref = ref
         self._refresh_schematic_panel()
@@ -7986,7 +7997,7 @@ class MainWindow(QMainWindow):
                 ),
             )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return False
         self.statusBar().showMessage(
             t(
@@ -8018,7 +8029,7 @@ class MainWindow(QMainWindow):
                 return
             result = self.bus.dispatch("part.delete", DeletePartPayload(id=part.id))
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         if component is None:
             self._schematic_ref = None
@@ -8065,7 +8076,7 @@ class MainWindow(QMainWindow):
             assert part is not None
             result = self.bus.dispatch("part.update", UpdatePartPayload(id=part.id, ref=chosen))
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self._schematic_ref = chosen
         self._sync_schematic_highlight()
@@ -8101,7 +8112,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self._sync_schematic_highlight()
         self.statusBar().showMessage(say(result.description), 6000)
@@ -8115,7 +8126,7 @@ class MainWindow(QMainWindow):
         """
         result = self.bus.dispatch("symbol.auto", AutoSymbolsPayload(ids=(part_id,)))
         self.statusBar().showMessage(
-            say(result.description) if result.ok else f"[{result.code}] {result.message}", 6000
+            say(result.description) if result.ok else refused(result), 6000
         )
 
     def _disconnect_one_pin(self, net_id: NetId, node: NetNode) -> None:
@@ -8128,7 +8139,7 @@ class MainWindow(QMainWindow):
             "net.disconnect", DisconnectPinsPayload(id=net_id, nodes=(node,))
         )
         self.statusBar().showMessage(
-            say(result.description) if result.ok else f"[{result.code}] {result.message}", 6000
+            say(result.description) if result.ok else refused(result), 6000
         )
 
     def _rename_net(self, net_id: NetId) -> None:
@@ -8153,7 +8164,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(say(result.description), 6000)
 
@@ -8171,7 +8182,7 @@ class MainWindow(QMainWindow):
             "net.update", UpdateNetPayload(id=net_id, net_class=net_class)
         )
         self.statusBar().showMessage(
-            say(result.description) if result.ok else f"[{result.code}] {result.message}", 6000
+            say(result.description) if result.ok else refused(result), 6000
         )
 
     def on_schematic_place_all(self) -> None:
@@ -8239,7 +8250,7 @@ class MainWindow(QMainWindow):
 
         result = self.bus.dispatch("part.place", placed.payload())
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 10000)
+            self.statusBar().showMessage(refused(result), 10000)
             return
         unplaced = len(placed.unplaced)
         note = "; " + t("{count} would not fit").format(count=unplaced) if unplaced else ""
@@ -8353,7 +8364,7 @@ class MainWindow(QMainWindow):
         """
         result = self.bus.dispatch("board.applyPreset", preset_payload(chosen.preset, chosen.board))
         if not result.ok:
-            QMessageBox.warning(self, t("Board refused"), f"[{result.code}] {result.message}")
+            QMessageBox.warning(self, t("Board refused"), refused(result))
             return False
         verdict = choice.verdict_for(chosen.preset)
         if (
@@ -9061,7 +9072,7 @@ class MainWindow(QMainWindow):
             "sheet.wire.delete", DeleteSheetWiresPayload(wires=(wire,))
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(say(result.description), 6000)
 
@@ -9438,7 +9449,7 @@ class MainWindow(QMainWindow):
         if not failed:
             return
         self.scene.set_document(self.bus.document)
-        message = "; ".join(f"Move refused: {r.message}" for r in failed)
+        message = "; ".join(t("Move refused: {reason}").format(reason=refused(r)) for r in failed)
         self.statusBar().showMessage(message)
 
     # -- DRC / LVS dock ----------------------------------------------------
@@ -10119,7 +10130,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             QMessageBox.warning(
                 self,
-                t("Placement refused"), f"[{result.code}] {result.message}")
+                t("Placement refused"), refused(result))
             return
 
         stale = len(stale_conductor_ids(self.bus.document, self.lookup))
@@ -10351,7 +10362,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             QMessageBox.warning(
                 self,
-                t("Re-route refused"), f"[{result.code}] {result.message}")
+                t("Re-route refused"), refused(result))
             return
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
@@ -10381,7 +10392,7 @@ class MainWindow(QMainWindow):
             "conductor.deleteMany", DeleteConductorsPayload(ids=strays, label=label)
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return 0
         if not quiet:
             self.statusBar().showMessage(f"{label} — {t('Ctrl+Z puts them back.')}", 6000)
@@ -10514,7 +10525,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             QMessageBox.warning(
                 self,
-                t("Routing refused"), f"[{result.code}] {result.message}"
+                t("Routing refused"), refused(result)
             )
             return
 
@@ -10559,7 +10570,7 @@ class MainWindow(QMainWindow):
 
         result = self.bus.dispatch("stripboard.apply", plan.payload())
         if not result.ok:
-            QMessageBox.warning(self, t("Routing refused"), f"[{result.code}] {result.message}")
+            QMessageBox.warning(self, t("Routing refused"), refused(result))
             return
 
         self.statusBar().showMessage(
@@ -10624,7 +10635,7 @@ class MainWindow(QMainWindow):
 
         result = self.bus.dispatch("stripboard.apply", plan.payload())
         if not result.ok:
-            QMessageBox.warning(self, t("Re-route refused"), f"[{result.code}] {result.message}")
+            QMessageBox.warning(self, t("Re-route refused"), refused(result))
             return
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
@@ -10847,7 +10858,7 @@ class MainWindow(QMainWindow):
 
         result = self.bus.dispatch("block.place", paste.payload)
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
 
         # Selected, so the very next thing -- a drag, R, M -- lands on what was just
@@ -10926,7 +10937,7 @@ class MainWindow(QMainWindow):
     def _on_cut_made(self, result: Any) -> None:
         if result is None:
             return
-        message = say(result.description) if result.ok else f"[{result.code}] {result.message}"
+        message = say(result.description) if result.ok else refused(result)
         self.statusBar().showMessage(message, 6000)
 
     def on_measure_mode(self, checked: bool) -> None:
@@ -11020,7 +11031,7 @@ class MainWindow(QMainWindow):
 
     def _on_conductor_drawn(self, result: Any) -> None:
         if result is not None and not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
 
     def on_delete_selection(self) -> None:
         """Delete whatever is selected -- parts, conductors, or both.
@@ -11040,7 +11051,7 @@ class MainWindow(QMainWindow):
         if note_ids:
             result = self.bus.dispatch("board.note.delete", DeleteBoardNotesPayload(ids=note_ids))
             if not result.ok:
-                self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+                self.statusBar().showMessage(refused(result), 8000)
             conductor_ids = self.scene.selected_conductor_ids()
             components = [
                 item.comp
@@ -11062,7 +11073,7 @@ class MainWindow(QMainWindow):
                 DeleteConductorsPayload(ids=conductor_ids, label=label),
             )
             if not result.ok:
-                self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+                self.statusBar().showMessage(refused(result), 8000)
             return
 
         components = self._require_selection(t("delete it"))
@@ -11201,7 +11212,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             # A duplicate reference is the refusal this actually meets, and it is worth a
             # dialog rather than a status line: the edit the user typed is gone otherwise.
-            QMessageBox.warning(self, t("Cannot change this part"), f"[{result.code}] {result.message}")
+            QMessageBox.warning(self, t("Cannot change this part"), refused(result))
             return
         # Re-selected because the rebuild dropped the selection with the old item, and the
         # part somebody just named is the one they are still working on.
@@ -11293,7 +11304,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            QMessageBox.warning(self, t("Cannot change this part"), f"[{result.code}] {result.message}")
+            QMessageBox.warning(self, t("Cannot change this part"), refused(result))
             return False
         footprint = get_footprint(footprint_id)
         self.statusBar().showMessage(
@@ -11517,7 +11528,7 @@ class MainWindow(QMainWindow):
             return
         result = self.bus.dispatch("document.rename", RenameDocumentPayload(name=name))
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
             return
         self.statusBar().showMessage(say(result.description), 6000)
 
@@ -12074,7 +12085,7 @@ class MainWindow(QMainWindow):
             # A dialog and the same form again, filled in: a duplicate name refused into
             # the status bar threw away everything typed, at the bottom of the window.
             QMessageBox.warning(
-                self, t("Cannot create this net"), f"[{result.code}] {result.message}"
+                self, t("Cannot create this net"), refused(result)
             )
         net = next((n for n in self.bus.document.nets if n.name == name), None)
         if net is None:  # pragma: no cover - the command just made it
@@ -12108,7 +12119,7 @@ class MainWindow(QMainWindow):
     def _on_pins_connected(self, result: Any) -> None:
         if result is None:
             return
-        message = say(result.description) if result.ok else f"[{result.code}] {result.message}"
+        message = say(result.description) if result.ok else refused(result)
         self.statusBar().showMessage(message, 6000)
 
     def on_add_pins_to_net(self) -> None:
@@ -12157,7 +12168,7 @@ class MainWindow(QMainWindow):
         )
         if not result.ok:
             QMessageBox.warning(
-                self, t("Cannot change this net"), f"[{result.code}] {result.message}"
+                self, t("Cannot change this net"), refused(result)
             )
 
     def on_disconnect_pins(self) -> None:
@@ -12211,7 +12222,7 @@ class MainWindow(QMainWindow):
             return
         result = self.bus.dispatch("net.delete", DeleteNetPayload(id=net.id))
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
+            self.statusBar().showMessage(refused(result), 8000)
 
     # -- the pin-picking session, reported as it goes -------------------------
 
@@ -12246,7 +12257,7 @@ class MainWindow(QMainWindow):
         if result is None:
             return
         message = (
-            say(result.description) if result.ok else f"[{result.code}] {result.message}"
+            say(result.description) if result.ok else refused(result)
         )
         self.statusBar().showMessage(message, 8000)
 
@@ -12326,7 +12337,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             QMessageBox.critical(
                 self,
-                t("Import failed"), f"[{result.code}] {result.message}")
+                t("Import failed"), refused(result))
             return
 
         note = t("Imported {count} net(s) from {name}").format(
@@ -12391,7 +12402,7 @@ class MainWindow(QMainWindow):
             ),
         )
         if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 10000)
+            self.statusBar().showMessage(refused(result), 10000)
             return
         counts = {
             source: sum(s.source == source for s in wanted)

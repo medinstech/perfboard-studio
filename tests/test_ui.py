@@ -1602,7 +1602,8 @@ def test_a_duplicate_reference_is_refused_and_said_out_loud(monkeypatch) -> None
     window.on_component_properties(first.id)
 
     assert [c.ref for c in window.bus.document.components][:2] == [first.ref, second.ref]
-    assert warned and "duplicate-ref" in warned[0]
+    # Said in words, naming the reference -- not the engine's code for the refusal.
+    assert warned and second.ref in warned[0] and "duplicate-ref" not in warned[0]
     _close(window)
 
 
@@ -11222,7 +11223,7 @@ def test_a_refused_new_net_is_said_in_a_dialog_and_the_form_comes_back(monkeypat
         window.on_new_net()
 
         assert window.bus.document is before
-        assert warned and "duplicate-net-name" in warned[0]
+        assert warned and existing in warned[0] and "duplicate-net-name" not in warned[0]
         assert _StubNetDialog.opened == 2, "the form is offered again, filled in"
     finally:
         _StubNetDialog.accept_times = None

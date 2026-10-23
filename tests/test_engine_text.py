@@ -379,3 +379,42 @@ def test_what_the_planners_could_not_do_comes_out_in_turkish(turkish: None) -> N
     untranslated = [line for line in said if say(line) == line]
     assert untranslated == [], untranslated
 
+
+
+def test_the_refusals_a_person_meets_are_said_in_turkish(turkish: None) -> None:
+    """A refusal reached the status bar as "[two-nets] U1.8 is on N1 ..." -- English in a
+    Turkish window, behind a code nobody reading it has a use for. Each refusal here is
+    produced by the real command, so a sentence reworded in the engine shows up as one that
+    no longer matches its template, rather than as English nobody noticed."""
+    result = persist.deserialize_document(EXAMPLE.read_text(encoding="utf-8"))
+    bus = CommandBus(
+        result.document,
+        create_standard_registry(),
+        CommandContext(next_id=create_document_id_generator(result.document)),
+    )
+    document = bus.document
+    first, second = document.components[0], document.components[1]
+    net_a, net_b = document.nets[0], document.nets[1]
+    a, b = net_a.nodes[0], net_b.nodes[0]
+    path = (Point2(x=0, y=0), Point2(x=5, y=0))
+    refusals = [
+        bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=SheetWire(a=a, b=b, path=path))),
+        bus.dispatch("part.add", AddPartPayload(ref=first.ref, footprint_id="r-axial-3")),
+        bus.dispatch(
+            "component.move", MoveComponentPayload(id=first.id, anchor=HoleCoord(col=500, row=2))
+        ),
+        bus.dispatch("net.connect", ConnectPinsPayload(id=net_a.id, nodes=(b,))),
+        bus.dispatch("net.add", AddNetPayload(name=net_b.name)),
+        bus.dispatch("net.update", UpdateNetPayload(id=net_a.id, name=net_b.name)),
+    ]
+    assert bus.dispatch(
+        "component.update", UpdateComponentPayload(id=second.id, locked=True)
+    ).ok
+    refusals.append(
+        bus.dispatch(
+            "component.move", MoveComponentPayload(id=second.id, anchor=HoleCoord(col=1, row=1))
+        )
+    )
+    for refusal in refusals:
+        assert not refusal.ok
+        assert say(refusal.message) != refusal.message, refusal.message

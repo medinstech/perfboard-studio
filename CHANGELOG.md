@@ -185,6 +185,13 @@ closed without a bump.
   7 x 9 cm and every part was placed again; it routes with no DRC error or warning, and ERC
   finds nothing.
 
+- **A refusal is said in words, in the window's language.** Joining two pins that are on
+  different nets, a reference already taken, a part moved off the board or a locked one
+  moved: the status bar said "[two-nets] U1.8 is on N1 and U1.1 is on N6...", the engine's
+  code in front of an English sentence, in a Turkish window as well. The code is gone from
+  every refused edit the window reports, and the refusals a person meets are translated. A
+  file that will not open still names its code, which is what a bug report needs.
+
 - **A value typed over a catalog part takes that part's pinout with it.** Changing a
   BC547 to a 2N3904 in Part Properties kept the BC547's C-B-E under a transistor that is
   E-B-C, and nothing downstream could tell: the sheet, the guide and ERC all read the names
