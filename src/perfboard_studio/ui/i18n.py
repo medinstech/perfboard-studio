@@ -1978,6 +1978,20 @@ TURKISH: Mapping[str, str] = {
         "satılır ve ters bağlanırsa yanar. Sizinkiyle aynı sıradaki girişi seçin. Pinlerin "
         "kartın neresinde durduğu ve header'ında ne kadar yükseldiği tahmindir."
     ),
+    "SparkFun TB6612FNG motor driver": "SparkFun TB6612FNG motor sürücüsü",
+    "Two DC motors, 2.5 to 13.5 V, 1 A each (3.2 A peak), rows 15.24 mm apart": (
+        "İki DC motor, 2,5 ile 13,5 V arası, motor başına 1 A (tepe 3,2 A), sıralar arası "
+        "15,24 mm"
+    ),
+    "STBY is pulled low inside the chip: drive it high or neither motor turns. VCC is the "
+    "logic's supply, 2.7 to 5.5 V; VM is the motors'. The height of what is on the board is "
+    "an estimate, and so is its colour; the pins, the rows and the board outline are "
+    "measured.": (
+        "STBY entegrenin içinde aşağı çekilidir: yükseğe sürün, yoksa iki motor da dönmez. "
+        "VCC lojiğin beslemesidir, 2,7 ile 5,5 V arası; VM motorlarınkidir. Kartın "
+        "üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart çevresi "
+        "ölçülmüştür."
+    ),
     "nRF24L01+ module": "nRF24L01+ modülü",
     "2.4 GHz radio on SPI, 1.9 to 3.6 V, the board with its antenna printed on it": (
         "SPI ile bağlanan 2,4 GHz telsiz, 1,9 ile 3,6 V arası, anteni kartına basılı olan"

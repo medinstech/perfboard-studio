@@ -93,6 +93,9 @@ ArtKind = Literal[
     "soic8",
     # A 28-leg TSSOP (HTSSOP's outline, 9.7 x 4.4 mm, legs 0.65 mm apart): the DRV8825's.
     "tssop28",
+    # A 24-leg SSOP (Toshiba's SSOP24-P-300-0.65A, 7.8 x 5.6 mm, legs 0.65 mm apart): the
+    # TB6612FNG's. Drawn as the TSSOP is, from ``GULL_WING_LEGS``.
+    "ssop24",
     "qfn",
     "tqfp32",
     "rf-module",
@@ -122,6 +125,15 @@ ArtKind = Literal[
 TSSOP28_LEGS_PER_SIDE = 14
 TSSOP28_PITCH_MM = 0.65
 TSSOP28_REACH_MM = 1.0
+
+#: The chips with gull-wing legs down their two long sides, by kind: legs per side, how far
+#: apart, and how far each reaches past the moulding. One table, so the 2D view and the 3D
+#: builder draw a chip with the same legs. The SSOP-24's reach is the 7.6 mm span less the
+#: 5.6 mm body, halved -- Toshiba's SSOP24-P-300-0.65A drawing.
+GULL_WING_LEGS: dict[str, tuple[int, float, float]] = {
+    "tssop28": (TSSOP28_LEGS_PER_SIDE, TSSOP28_PITCH_MM, TSSOP28_REACH_MM),
+    "ssop24": (12, 0.65, 1.0),
+}
 
 ART_COLOURS: dict[str, str] = {
     "ferrite": "#2a2b2f",
@@ -595,6 +607,38 @@ XIAO_ESP32C3_MODULE = ModuleArt(
 )
 
 #: Every module there is a layout for, in the order they are tried.
+#: SparkFun's red solder mask: its boards are red, and a blue block would be somebody else's.
+SPARKFUN_RED = "#b8262b"
+
+#: SparkFun's dual TB6612FNG motor driver (ROB-14451, v1.1c): the SSOP-24 in the middle with
+#: its pin 1 towards VM, the two 0402 decoupling capacitors above it and the 10 uF tantalum
+#: above them, its + end towards the left-hand pins. Every position and package read off
+#: SparkFun's own Eagle board (SparkFun_Motor_Driver-TB6612FNG_v11c.brd); the chip's size is
+#: Toshiba's SSOP24-P-300-0.65A drawing and the tantalum EIA 3528's, drawn as the moulded
+#: part with its band on the + end that tantalums mark. The chip's pin 1 is at its top LEFT
+#: on the real board; the builders put a chip's dot on one side of its axis only, so here it
+#: is drawn at the top right -- the right end, the wrong side.
+SPARKFUN_TB6612_MODULE = ModuleArt(
+    key="sparkfun-tb6612fng",
+    board_colour=SPARKFUN_RED,
+    names=("sparkfun tb6612",),
+    board=(20.32, 20.32),
+    pins=16,
+    frame="columns",
+    landmark=("VM", -1, -1),
+    parts=(
+        ArtPart("ssop24", 1.27, 0.0, 7.8, 7.6, 1.5, facing=-1, text="TB6612"),
+        ArtPart("chip-c", -3.81, 1.27, 1.0, 0.5, 0.5, along_v=True),
+        ArtPart("chip-c", -3.81, -1.27, 1.0, 0.5, 0.5, along_v=True),
+        ArtPart("sma", -6.35, 0.0, 3.5, 2.8, 1.9, along_v=True, facing=-1),
+    ),
+    source=(
+        "SparkFun Motor Driver - Dual TB6612FNG v1.1c Eagle board (the 0.8 x 0.8 inch board, "
+        "every part's position); Toshiba TB6612FNG SSOP24-P-300-0.65A (the chip); EIA 3528 "
+        "(the tantalum)"
+    ),
+)
+
 MODULE_ARTS: tuple[ModuleArt, ...] = (
     LM2596_MODULE,
     SN65HVD230_MODULE,
@@ -606,6 +650,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     POLOLU_A4988_MODULE,
     POLOLU_DRV8825_MODULE,
     XIAO_ESP32C3_MODULE,
+    SPARKFUN_TB6612_MODULE,
 )
 
 

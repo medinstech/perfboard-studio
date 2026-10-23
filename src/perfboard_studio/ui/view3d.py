@@ -130,13 +130,11 @@ from .bodies import (
 )
 from .moduleart import (
     ART_COLOURS,
+    GULL_WING_LEGS,
     TQFP32_BODY_MM,
     TQFP32_LEG_MM,
     TQFP32_LEGS_PER_SIDE,
     TQFP32_PITCH_MM,
-    TSSOP28_LEGS_PER_SIDE,
-    TSSOP28_PITCH_MM,
-    TSSOP28_REACH_MM,
     PlacedArt,
     board_colour_for,
     fit_module_art,
@@ -4580,10 +4578,12 @@ def _art_trimmer(s: _ArtSolid) -> list[_Piece]:
     ]
 
 
-def _art_tssop28(s: _ArtSolid) -> list[_Piece]:
-    """A 28-leg TSSOP: the body on its stand-off, fourteen gull-wing legs down each long
-    side as ``_art_soic8`` draws an SO-8's, and the pin-1 dot."""
-    body_w = s.width - 2 * TSSOP28_REACH_MM
+def _art_gull_wing(s: _ArtSolid) -> list[_Piece]:
+    """A TSSOP or an SSOP: the body on its stand-off, gull-wing legs down each long side as
+    ``_art_soic8`` draws an SO-8's -- as many, as far apart and reaching as far as
+    ``moduleart.GULL_WING_LEGS`` says for the kind -- and the pin-1 dot."""
+    count, pitch, reach = GULL_WING_LEGS[s.kind]
+    body_w = s.width - 2 * reach
     standoff = 0.1
     body_h = s.height - standoff
     pieces = [
@@ -4594,12 +4594,8 @@ def _art_tssop28(s: _ArtSolid) -> list[_Piece]:
             material=MOULDED,
         )
     ]
-    legs = [
-        (index - (TSSOP28_LEGS_PER_SIDE - 1) / 2) * TSSOP28_PITCH_MM
-        for index in range(TSSOP28_LEGS_PER_SIDE)
-    ]
+    legs = [(index - (count - 1) / 2) * pitch for index in range(count)]
     shoulder_z = standoff + body_h * 0.45
-    reach = TSSOP28_REACH_MM
     for run, across, z, height in (
         (reach * 0.5, body_w / 2 + reach * 0.2, shoulder_z, 0.15),
         (reach * 0.2, body_w / 2 + reach * 0.45, (shoulder_z + 0.08) / 2, shoulder_z),
@@ -5330,7 +5326,8 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "trimpot": _art_trimpot,
     "trimmer": _art_trimmer,
     "soic8": _art_soic8,
-    "tssop28": _art_tssop28,
+    "tssop28": _art_gull_wing,
+    "ssop24": _art_gull_wing,
     "qfn": _art_qfn,
     "tqfp32": _art_tqfp32,
     "rf-module": _art_rf_module,

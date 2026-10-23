@@ -104,6 +104,7 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "seeed-xiao-esp32c3": 15.24,
         # The grid nearest Handsontec's 39.50 mm, which its check says: pads, not pins.
         "lm2596-module": 40.64,
+        "sparkfun-tb6612fng": 15.24,
         # Two headers of four, side by side, at one end of the board.
         "nrf24l01": 2.54,
         # Two ROWS of four across the end of the board: Ai-Thinker's figure 2.1.

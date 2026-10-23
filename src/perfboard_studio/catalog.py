@@ -219,6 +219,10 @@ _POLOLU_DRV8825_RIGHT = ("VMOT", "GND", "B2", "B1", "A1", "A2", "FLT", "GND")
 # header rows on Seeed's KiCad board, functions from its pin map.
 _XIAO_LEFT = ("D0", "D1", "D2", "D3", "D4/SDA", "D5/SCL", "D6/TX")
 _XIAO_RIGHT = ("5V", "GND", "3V3", "D10/MOSI", "D9/MISO", "D8/SCK", "D7/RX")
+# SparkFun's dual TB6612FNG board, its silkscreen upright: the motor side down the left,
+# the logic down the right, read off the nets of the two header rows on its Eagle board.
+_TB6612_LEFT = ("VM", "VCC", "GND", "A01", "A02", "B02", "B01", "GND")
+_TB6612_RIGHT = ("PWMA", "AIN2", "AIN1", "STBY", "BIN1", "BIN2", "PWMB", "GND")
 
 _SWITCH_LEGS = (
     "The two legs on one side are the switched pair; the two straight across are one "
@@ -857,6 +861,21 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "capacitor's rating, often 35 V, is its real limit."
                 ),
                 aliases=("buck", "step-down", "DC-DC", "voltage regulator")),
+    CatalogPart("sparkfun-tb6612fng", "SparkFun TB6612FNG motor driver", "module",
+                "mod-2x8-p6-r1-20.32x20.32x2-s8.5",
+                "Two DC motors, 2.5 to 13.5 V, 1 A each (3.2 A peak), rows 15.24 mm apart",
+                _two_columns(_TB6612_LEFT, _TB6612_RIGHT), ref_prefix="U",
+                value="SparkFun TB6612FNG",
+                source=(
+                    "SparkFun Motor Driver - Dual TB6612FNG v1.1c Eagle board: the 0.8 x 0.8 "
+                    "inch board, the header rows and their nets; Toshiba TB6612FNG datasheet: "
+                    "VM 2.5 to 13.5 V, VCC 2.7 to 5.5 V, 1 A per channel, 3.2 A peak"
+                ),
+                check=(
+                    "STBY is pulled low inside the chip: drive it high or neither motor turns. "
+                    "VCC is the logic's supply, 2.7 to 5.5 V; VM is the motors'. " + _MODULE_TOP
+                ),
+                aliases=("motor driver", "H-bridge", "DC motor")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

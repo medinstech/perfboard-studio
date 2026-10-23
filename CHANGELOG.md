@@ -34,6 +34,12 @@ closed without a bump.
   by the order its pins are printed in -- "(GND VCC SCL SDA)" and "(VCC GND SCL SDA)" --
   because it is sold both ways and the wrong one kills it; the check says to read the
   board in hand. "oled", "ultrasonic" and "sonar" find them.
+- **SparkFun's dual TB6612FNG motor driver**, drawn as itself on its red board: the
+  SSOP-24, its two decoupling capacitors and its tantalum, every position read off
+  SparkFun's own Eagle board and named from the nets of its two header rows. Its check says
+  what stops people: STBY is pulled low inside the chip, so neither motor turns until it is
+  driven high. The 2D and 3D views now draw any gull-wing chip from one table of legs, so
+  the SSOP-24 is the TSSOP-28's code with twelve legs a side.
 
 - **The nRF24L01+ radio and the ESP-01 are in the catalog**, pinned from KiCad's breakout
   symbol and from Ai-Thinker's manual, whose figure and table agree pin for pin. Nobody

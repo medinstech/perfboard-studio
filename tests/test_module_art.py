@@ -31,6 +31,7 @@ from perfboard_studio.ui.moduleart import (
     NAME_ROOM_ENOUGH_MM,
     NANO_MODULE,
     SN65HVD230_MODULE,
+    SPARKFUN_RED,
     TQFP32_BODY_MM,
     TQFP32_LEG_MM,
     TQFP32_LEGS_PER_SIDE,
@@ -117,6 +118,7 @@ def _footprint(footprint_id: str):
         ("D1 mini", "wemos-d1-mini"),
         ("Pololu A4988", "pololu-a4988"),
         ("Pololu DRV8825", "pololu-drv8825"),
+        ("SparkFun TB6612FNG", "sparkfun-tb6612fng"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
     ],
@@ -581,6 +583,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "pololu-drv8825": POLOLU_DRV8825_MODULE.board_colour,
         "seeed-xiao-esp32c3": ESPRESSIF_BLACK,
         "lm2596-module": None,  # the blue every seller's board is
+        "sparkfun-tb6612fng": SPARKFUN_RED,
     }
     # A Pico named on a board the layout was not drawn for is not coloured as one.
     square = "mod-2x20-p7-r1-30x30x3.5-s8.5"

@@ -182,13 +182,11 @@ from .i18n import language as current_language
 from .i18n import t
 from .moduleart import (
     ART_COLOURS,
+    GULL_WING_LEGS,
     TQFP32_BODY_MM,
     TQFP32_LEG_MM,
     TQFP32_LEGS_PER_SIDE,
     TQFP32_PITCH_MM,
-    TSSOP28_LEGS_PER_SIDE,
-    TSSOP28_PITCH_MM,
-    TSSOP28_REACH_MM,
     PlacedArt,
     board_colour_for,
     fit_module_art,
@@ -2659,14 +2657,15 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         _art_box(painter, -half_l, half_l, body_half, _art_colour("epoxy"))
         painter.setBrush(QBrush(_art_colour("dot")))
         painter.drawEllipse(QPointF(half_l - 0.75, -(body_half - 0.7)), 0.32, 0.32)
-    elif kind == "tssop28":
-        body_half = half_w - TSSOP28_REACH_MM
+    elif kind in GULL_WING_LEGS:
+        legs, pitch, reach = GULL_WING_LEGS[kind]
+        body_half = half_w - reach
         painter.setBrush(QBrush(LEAD))
-        for index in range(TSSOP28_LEGS_PER_SIDE):
-            along = (index - (TSSOP28_LEGS_PER_SIDE - 1) / 2) * TSSOP28_PITCH_MM
+        for index in range(legs):
+            along = (index - (legs - 1) / 2) * pitch
             for side in (-1.0, 1.0):
                 painter.drawRect(
-                    QRectF(along - 0.15, min(side * body_half, side * half_w), 0.3, TSSOP28_REACH_MM)
+                    QRectF(along - 0.15, min(side * body_half, side * half_w), 0.3, reach)
                 )
         _art_box(painter, -half_l, half_l, body_half, _art_colour("epoxy"))
         painter.setBrush(QBrush(_art_colour("dot")))
