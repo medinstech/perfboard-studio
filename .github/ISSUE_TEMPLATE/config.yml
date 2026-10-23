@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/medinstech/perfboard-studio/security/advisories/new
     about: Report privately. Please do not open a public issue for these.
   - name: How the thing is built
-    url: https://github.com/medinstech/perfboard-studio/blob/main/CLAUDE.md
-    about: The architecture tour — why the document is immutable, what the golden fixtures prove, and which conventions are load-bearing.
+    url: https://github.com/medinstech/perfboard-studio/blob/main/docs/ARCHITECTURE.md
+    about: The architecture tour — one decision to a section, what was tried first, and which test holds it.

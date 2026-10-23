@@ -110,11 +110,11 @@ type SheetTool = Literal["select", "wire", "label", "text", "line", "rectangle",
 # Colours
 # ---------------------------------------------------------------------------
 #
-# A third colour table, and the reason there are three is set out in CLAUDE.md: `theme`
-# colours the application, `view2d`'s block colours the physical object, and this colours
-# a DRAWING -- which is neither. A schematic is ink on paper, so it is drawn as ink on
-# paper: one line weight for everything, colour used only to separate the three net
-# classes and to say what is selected.
+# A third colour table, and the reason there are three is set out in docs/ARCHITECTURE.md
+# ("Appearance is a view setting"): `theme` colours the application, `view2d`'s block
+# colours the physical object, and this colours a DRAWING -- which is neither. A schematic
+# is ink on paper, so it is drawn as ink on paper: one line weight for everything, colour
+# used only to separate the three net classes and to say what is selected.
 
 SHEET = "#161a21"
 INK = "#c8d0de"

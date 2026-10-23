@@ -20,6 +20,17 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Changed
+
+- **The architecture notes are `docs/ARCHITECTURE.md` now, and `CLAUDE.md` is a fifth of
+  the size.** CLAUDE.md is loaded whole into every agent session and had grown a section
+  per feature to 159 000 characters. It keeps the commands, the gates and the rules every
+  change has to keep -- the immutable document, the pure engine, the differential proof,
+  conductors, hole addressing, layering and i18n -- and ends with every other section
+  listed by what somebody is about to touch. The sections moved word for word.
+  `tests/test_docs.py` fails on a section that list does not name, and on CLAUDE.md
+  growing past 40 000 characters.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added

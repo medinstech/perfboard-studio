@@ -18,6 +18,13 @@ in English only. And its "İki yüz" jump link pointed at an anchor no heading h
 Only the README is in two languages. ``docs/`` is English on purpose -- its readers are
 developers and agents, and three pages kept in two languages cost more than they give -- so
 there is nothing there to compare, and only its in-page links are checked.
+
+``CLAUDE.md`` is held to two things more, because every agent session loads it whole and
+loads ``docs/ARCHITECTURE.md`` not at all. It grew a section per feature to 159 000
+characters and was split: what every change has to keep stayed, the record of why
+everything else is the way it is moved, and CLAUDE.md ends with a list of every section
+there by what somebody is about to touch. A size that only grows and a list that only
+drifts are both silent, so both are tested.
 """
 
 from __future__ import annotations
@@ -32,6 +39,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = REPO_ROOT / "README.md"
 README_TR = REPO_ROOT / "README.tr.md"
+CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
+ARCHITECTURE = REPO_ROOT / "docs" / "ARCHITECTURE.md"
+
+#: What CLAUDE.md may grow to. It was split to 31 000; a new section belongs in
+#: docs/ARCHITECTURE.md, with one line in CLAUDE.md's list saying when to read it.
+CLAUDE_MD_BUDGET = 40_000
 
 FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
 SPAN = re.compile(r"`([^`]+)`")
@@ -87,7 +100,7 @@ def test_the_two_readmes_have_the_same_shape() -> None:
 
 @pytest.mark.parametrize(
     "page",
-    [README, README_TR, *sorted((REPO_ROOT / "docs").glob("*.md"))],
+    [README, README_TR, CLAUDE_MD, *sorted((REPO_ROOT / "docs").glob("*.md"))],
     ids=lambda p: p.name,
 )
 def test_every_link_within_a_page_lands_on_a_heading(page: Path) -> None:
@@ -97,3 +110,33 @@ def test_every_link_within_a_page_lands_on_a_heading(page: Path) -> None:
     anchors = {_slug(title) for _, title in HEADING.findall(_prose(text))}
     for target in ANCHOR_LINK.findall(text):
         assert target in anchors, f"{page.name} links to #{target}, which is no heading"
+
+
+def _links_into(text: str, page: str) -> list[str]:
+    """The anchors of every link from ``text`` to a heading on ``page``."""
+    return re.findall(rf"\]\({re.escape(page)}#([^)]+)\)", _prose(text))
+
+
+def test_claude_md_lists_every_section_of_the_architecture() -> None:
+    """The list at the end of CLAUDE.md is how an agent learns that a section exists at all,
+    so a section added to ARCHITECTURE.md and not listed is one nobody reads before breaking
+    what it describes; and a listed one that was renamed sends an agent after nothing."""
+    claude = CLAUDE_MD.read_text(encoding="utf-8")
+    architecture = ARCHITECTURE.read_text(encoding="utf-8")
+
+    sections = {_slug(t) for hashes, t in HEADING.findall(_prose(architecture)) if hashes == "##"}
+    listed = set(_links_into(claude, "docs/ARCHITECTURE.md"))
+    assert not sections - listed, f"CLAUDE.md does not list: {sorted(sections - listed)}"
+    assert not listed - sections, f"CLAUDE.md lists what is not there: {sorted(listed - sections)}"
+
+    # ...and the foundations ARCHITECTURE.md sends its reader back to are still in CLAUDE.md.
+    kept = {_slug(title) for _, title in HEADING.findall(_prose(claude))}
+    for target in _links_into(architecture, "../CLAUDE.md"):
+        assert target in kept, f"ARCHITECTURE.md links to CLAUDE.md#{target}, which is no heading"
+
+
+def test_claude_md_stays_small_enough_to_load_into_every_session() -> None:
+    size = len(CLAUDE_MD.read_text(encoding="utf-8"))
+    assert size <= CLAUDE_MD_BUDGET, (
+        f"CLAUDE.md is {size} characters; move a section to docs/ARCHITECTURE.md and list it"
+    )

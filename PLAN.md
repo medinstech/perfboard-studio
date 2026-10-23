@@ -15,8 +15,9 @@
 > değişebilir; değişince burası da değişir. Bir öngörü tutmadıysa ne olduğu bir cümleyle
 > yazılır ve devam edilir, çünkü tutmayan öngörü tutan öngörü kadar bilgi taşır.
 >
-> Ne nerede: **burası** ne yapılacağı ve neyin bilerek yapılmadığı. **`CLAUDE.md`** nasıl
-> inşa edildiği ve neden öyle. **`CHANGELOG.md`** ne zaman ne değişti. Aynı şeyi üç yerde
+> Ne nerede: **burası** ne yapılacağı ve neyin bilerek yapılmadığı. **`docs/ARCHITECTURE.md`**
+> nasıl inşa edildiği ve neden öyle; **`CLAUDE.md`** her değişikliğin uyması gereken kurallar
+> ve o belgenin dizini. **`CHANGELOG.md`** ne zaman ne değişti. Aynı şeyi üç yerde
 > anlatmamak için buradaki bölümler kısa tutulur ve ayrıntı için oraya işaret edilir.
 
 ---

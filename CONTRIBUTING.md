@@ -109,7 +109,8 @@ file needs migrating in order to load, with the migration in the same commit.
 direction. The ritual is in [docs/RELEASING.md](./docs/RELEASING.md).
 
 There is a longer tour of the architecture, and of why each of these is the way it is, in
-[CLAUDE.md](./CLAUDE.md).
+[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md). [CLAUDE.md](./CLAUDE.md) holds the rules
+every change has to keep, and says which section to read before touching what.
 
 ## The licence boundary
 

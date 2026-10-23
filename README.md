@@ -455,7 +455,8 @@ Next, in the order [PLAN.md](https://github.com/medinstech/perfboard-studio/blob
 | [CONTRIBUTING.md](https://github.com/medinstech/perfboard-studio/blob/main/CONTRIBUTING.md) | running the suite, which checks are gates and which are reports |
 | [SECURITY.md](https://github.com/medinstech/perfboard-studio/blob/main/SECURITY.md) · [CODE_OF_CONDUCT.md](https://github.com/medinstech/perfboard-studio/blob/main/CODE_OF_CONDUCT.md) | reporting a vulnerability, and how people are expected to behave here |
 | [PLAN.md](https://github.com/medinstech/perfboard-studio/blob/main/PLAN.md) | the project plan, **written in Turkish**: what is to be done and what is deliberately not. It is not frozen; it changes when the plan does, and a prediction that did not hold stays where it was with a sentence saying what happened |
-| [CLAUDE.md](https://github.com/medinstech/perfboard-studio/blob/main/CLAUDE.md) | why the code is shaped the way it is. Written for agents working in the repository, and the most useful thing here for a person about to change something |
+| [docs/ARCHITECTURE.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/ARCHITECTURE.md) | why the code is shaped the way it is, one decision to a section, and the most useful thing here for a person about to change something |
+| [CLAUDE.md](https://github.com/medinstech/perfboard-studio/blob/main/CLAUDE.md) | the commands, the gates and the rules every change has to keep, and which section of the architecture to read before touching what. Written for agents working in the repository, who load it in every session |
 
 ## Contributing
 

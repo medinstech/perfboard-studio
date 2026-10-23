@@ -11458,8 +11458,8 @@ def _piece_top(piece) -> float:
 def test_a_mounting_hole_is_drawn_where_its_offset_puts_it_in_2d_too() -> None:
     """The offset is what lets a corner hole sit in the BORDER. view2d read the hole
     ADDRESS alone, so it drew every corner bore back on the grid -- a whole pad's width
-    from where the 3D view and DRC both put it. CLAUDE.md has said not to do that since
-    the feature was written."""
+    from where the 3D view and DRC both put it. docs/ARCHITECTURE.md says not to do that,
+    and has since the feature was written."""
     from perfboard_studio.geometry import mounting_hole_centre_mm
     from perfboard_studio.model import MountingHole
     from perfboard_studio.ui.view2d import MountingHoleItem, mm_to_screen

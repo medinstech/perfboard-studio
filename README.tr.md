@@ -460,7 +460,8 @@ Sırada, [PLAN.md](./PLAN.md) §11'in koyduğu sırayla:
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | test paketinin çalıştırılması, hangi kontrollerin kapı hangilerinin rapor olduğu (yalnızca İngilizce) |
 | [SECURITY.md](./SECURITY.md) · [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) | güvenlik açığı bildirimi, ve burada insanlardan beklenen davranış (yalnızca İngilizce) |
 | [PLAN.md](./PLAN.md) | **Türkçe** yazılmış proje planı: ne yapılacağı ve neyin bilerek yapılmadığı. Dondurulmuş değil, plan değiştikçe o da değişiyor; tutmayan bir öngörü ne olduğunu söyleyen bir cümleyle yerinde kalıyor |
-| [CLAUDE.md](./CLAUDE.md) | kodun neden bu şekilde olduğu. Repoda çalışan ajanlar için yazıldı, ama bir şeyi değiştirmek üzere olan bir insan için buradaki en faydalı belge (yalnızca İngilizce) |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | kodun neden bu şekilde olduğu, her karar kendi bölümünde; bir şeyi değiştirmek üzere olan bir insan için buradaki en faydalı belge (yalnızca İngilizce) |
+| [CLAUDE.md](./CLAUDE.md) | komutlar, kapılar ve her değişikliğin uyması gereken kurallar, ve neye dokunmadan önce mimarinin hangi bölümünün okunacağı. Repoda çalışan ajanlar için yazıldı, her oturumda yükleniyor (yalnızca İngilizce) |
 
 ## Katkı
 
