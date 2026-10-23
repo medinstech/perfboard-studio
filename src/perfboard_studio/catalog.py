@@ -230,6 +230,12 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("bc558", "BC558", "transistor", "to92", "PNP, 30 V, 100 mA, general purpose",
                 _legs("C", "B", "E"), "pnp", source=f"onsemi BC556/D; {_TO92_ORDER}",
                 check=_CHECK_LEGS),
+    CatalogPart("bc337", "BC337", "transistor", "to92", "NPN, 45 V, 800 mA, switching",
+                _legs("C", "B", "E"), "npn", source=f"onsemi BC337/D; {_TO92_ORDER}",
+                check=_CHECK_LEGS),
+    CatalogPart("bc327", "BC327", "transistor", "to92", "PNP, 45 V, 800 mA, switching",
+                _legs("C", "B", "E"), "pnp", source=f"onsemi BC327/D; {_TO92_ORDER}",
+                check=_CHECK_LEGS),
     CatalogPart("2n2222a", "2N2222A", "transistor", "to92",
                 "NPN, 40 V, 600 mA, switching (plastic TO-92, sold as PN2222A)",
                 _legs("E", "B", "C"), "npn", source=f"onsemi P2N2222A/D; {_TO92_ORDER}",
@@ -314,6 +320,15 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("78l05", "78L05", "regulator", "to92", "Linear regulator, +5 V, 100 mA",
                 _legs("OUT", "GND", "IN"), ref_prefix="U",
                 source=f"TI LM78L datasheet; {_TO92_ORDER}", check=_CHECK_LEGS),
+    CatalogPart("mcp1700-3302", "MCP1700-3302E/TO", "regulator", "to92",
+                "Low-dropout regulator, +3.3 V, 250 mA, 1.6 uA quiescent",
+                _legs("GND", "IN", "OUT"), value="MCP1700-3.3", ref_prefix="U",
+                source=f"Microchip MCP1700 datasheet, TO-92; {_TO92_ORDER}",
+                check=(
+                    "NOT pinned like a 78L05: GND, IN, OUT. Its input is 6 V at most, and it "
+                    "needs 1 uF on both sides."
+                ),
+                aliases=("3.3 V regulator",)),
     CatalogPart("ld1117v33", "LD1117V33", "regulator", "to220",
                 "Low-dropout regulator, +3.3 V, 800 mA",
                 _legs("GND", "OUT", "IN"), ref_prefix="U",
@@ -440,11 +455,43 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "VBAT goes to GND."
                 ),
                 aliases=("RTC",)),
+    CatalogPart("24lc256", "24LC256", "ic", "dip-8", "EEPROM, 256 kbit (32 kB), I2C",
+                _legs("A0", "A1", "A2", "VSS", "SDA", "SCL", "WP", "VCC"),
+                ref_prefix="U", source="Microchip 24AA256/24LC256 datasheet, PDIP",
+                check="WP to VSS lets it be written; A0-A2 set its address."),
     CatalogPart("lm324", "LM324", "ic", "dip-14", "Quad op-amp, single supply",
                 _legs("OUT1", "IN1-", "IN1+", "VCC", "IN2+", "IN2-", "OUT2",
                       "OUT3", "IN3-", "IN3+", "GND", "IN4+", "IN4-", "OUT4"),
                 ref_prefix="U", source="TI LM324 datasheet, N package",
                 check="VCC is pin 4 and GND pin 11, not the corners."),
+    CatalogPart("74hc165", "74HC165", "ic", "dip-16", "8-bit shift register, parallel in, serial out",
+                _legs("SH/LD", "CLK", "E", "F", "G", "H", "~QH", "GND",
+                      "QH", "SER", "A", "B", "C", "D", "CLKINH", "VCC"),
+                ref_prefix="U", source="TI SN74HC165 datasheet, N package",
+                check=(
+                    "Pin 7 is QH inverted. The output to read, and to chain the next one from, "
+                    "is pin 9."
+                )),
+    CatalogPart("cd4017", "CD4017", "ic", "dip-16", "Decade counter with ten decoded outputs",
+                _legs("Q5", "Q1", "Q0", "Q2", "Q6", "Q7", "Q3", "VSS",
+                      "Q8", "Q4", "Q9", "COUT", "INH", "CLK", "RESET", "VDD"),
+                ref_prefix="U", source="TI CD4017B datasheet, E package",
+                check="The outputs are not in order round the package: Q0 is pin 3."),
+    CatalogPart("pcf8574", "PCF8574", "ic", "dip-16",
+                "8-bit I/O expander, I2C (the chip on an LCD's I2C backpack)",
+                _legs("A0", "A1", "A2", "P0", "P1", "P2", "P3", "VSS",
+                      "P4", "P5", "P6", "P7", "INT", "SCL", "SDA", "VDD"),
+                ref_prefix="U", source="NXP PCF8574/PCF8574A datasheet, DIP16",
+                check=(
+                    "The PCF8574A is pinned the same and answers at another address "
+                    "(0x38-0x3F, not 0x20-0x27)."
+                ),
+                aliases=("port expander",)),
+    CatalogPart("mcp3008", "MCP3008", "ic", "dip-16", "8-channel 10-bit ADC, SPI",
+                _legs("CH0", "CH1", "CH2", "CH3", "CH4", "CH5", "CH6", "CH7",
+                      "DGND", "CS/SHDN", "DIN", "DOUT", "CLK", "AGND", "VREF", "VDD"),
+                ref_prefix="U", source="Microchip MCP3004/3008 datasheet, PDIP",
+                aliases=("analog to digital",)),
     CatalogPart("74hc595", "74HC595", "ic", "dip-16", "8-bit shift register, latched outputs",
                 _legs("QB", "QC", "QD", "QE", "QF", "QG", "QH", "GND",
                       "QH'", "SRCLR", "SRCLK", "RCLK", "OE", "SER", "QA", "VCC"),
@@ -493,6 +540,17 @@ CATALOG: tuple[CatalogPart, ...] = (
                       "XTAL2", "PD5", "PD6", "PD7", "PB0", "PB1", "PB2", "MOSI", "MISO",
                       "SCK", "AVCC", "AREF", "GND", "PC0", "PC1", "PC2", "PC3", "PC4", "PC5"),
                 ref_prefix="U", source="Microchip ATmega328P datasheet, PDIP"),
+    CatalogPart("mcp23017", "MCP23017", "ic", "dip-28", "16-bit I/O expander, I2C",
+                _legs("GPB0", "GPB1", "GPB2", "GPB3", "GPB4", "GPB5", "GPB6", "GPB7",
+                      "VDD", "VSS", "NC", "SCL", "SDA", "NC", "A0", "A1", "A2", "RESET",
+                      "INTB", "INTA", "GPA0", "GPA1", "GPA2", "GPA3", "GPA4", "GPA5", "GPA6",
+                      "GPA7"),
+                ref_prefix="U", source="Microchip MCP23017 datasheet DS20001952, SP package",
+                check=(
+                    "RESET has no pull-up of its own: tie it to VDD or the chip stays in reset. "
+                    "GPA7 and GPB7 are outputs only."
+                ),
+                aliases=("port expander",)),
     # -- modules ----------------------------------------------------------------------
     # -- switches ----------------------------------------------------------
     # A push button's four legs are two strips of metal, and which two legs are one strip is

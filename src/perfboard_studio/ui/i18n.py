@@ -1976,6 +1976,46 @@ TURKISH: Mapping[str, str] = {
         "İki GND pini de bağlanmalıdır. ISET ile V+ arasındaki direnç (9,53k ya da daha "
         "büyük) segment akımını belirler."
     ),
+    "NPN, 45 V, 800 mA, switching": "NPN, 45 V, 800 mA, anahtarlama",
+    "PNP, 45 V, 800 mA, switching": "PNP, 45 V, 800 mA, anahtarlama",
+    "Low-dropout regulator, +3.3 V, 250 mA, 1.6 uA quiescent": (
+        "Düşük düşümlü (LDO) regülatör, +3,3 V, 250 mA, 1,6 µA boşta akım"
+    ),
+    "NOT pinned like a 78L05: GND, IN, OUT. Its input is 6 V at most, and it needs 1 uF "
+    "on both sides.": (
+        "Bacak dizilişi 78L05 gibi DEĞİL: GND, IN, OUT. Girişi en çok 6 V olabilir ve iki "
+        "tarafında da 1 µF ister."
+    ),
+    "EEPROM, 256 kbit (32 kB), I2C": "I2C EEPROM bellek, 256 kbit (32 kB)",
+    "WP to VSS lets it be written; A0-A2 set its address.": (
+        "WP VSS'ye bağlıyken yazılabilir; A0-A2 adresini belirler."
+    ),
+    "8-bit shift register, parallel in, serial out": (
+        "8 bit kaydırmalı yazmaç, paralel giriş, seri çıkış"
+    ),
+    "Pin 7 is QH inverted. The output to read, and to chain the next one from, is pin 9.": (
+        "7 numaralı pin QH'nin tersidir. Okunacak çıkış, bir sonrakini zincirleyeceğiniz "
+        "çıkış da 9 numaralı pindir."
+    ),
+    "Decade counter with ten decoded outputs": "Onluk sayıcı, on çözülmüş çıkışlı",
+    "The outputs are not in order round the package: Q0 is pin 3.": (
+        "Çıkışlar kılıf etrafında sırayla dizilmez: Q0, 3 numaralı pindir."
+    ),
+    "8-bit I/O expander, I2C (the chip on an LCD's I2C backpack)": (
+        "8 bit G/Ç genişletici, I2C (LCD'lerin I2C sırt kartındaki entegre)"
+    ),
+    "The PCF8574A is pinned the same and answers at another address (0x38-0x3F, not "
+    "0x20-0x27).": (
+        "PCF8574A'nın dizilişi aynıdır, başka bir adreste yanıt verir (0x20-0x27 değil, "
+        "0x38-0x3F)."
+    ),
+    "8-channel 10-bit ADC, SPI": "8 kanallı 10 bit ADC, SPI",
+    "16-bit I/O expander, I2C": "16 bit G/Ç genişletici, I2C",
+    "RESET has no pull-up of its own: tie it to VDD or the chip stays in reset. GPA7 and "
+    "GPB7 are outputs only.": (
+        "RESET'in kendi pull-up'ı yoktur: VDD'ye bağlayın, yoksa entegre resette kalır. "
+        "GPA7 ve GPB7 yalnızca çıkıştır."
+    ),
     "ESP32-WROOM-32 dev board, 38 pins, rows 25.4 mm apart": (
         "ESP32-WROOM-32 geliştirme kartı, 38 pin, sıralar arası 25,4 mm"
     ),

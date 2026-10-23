@@ -28,6 +28,12 @@ closed without a bump.
   driver (a 24-pin DIP, generated) and the DS1307 clock. Every pin was checked against
   KiCad 10's symbol for the same part as well. The TL072 names its rails V+ and V-, so ERC
   holds its negative rail to a net without asking it to be ground.
+- **And nine more**: the BC337 and BC327 (800 mA), the MCP1700 3.3 V regulator for a
+  battery-fed board (GND, IN, OUT -- not like a 78L05), the 24LC256 EEPROM, the 74HC165
+  shift-in register, the CD4017 counter, the PCF8574 and MCP23017 I/O expanders and the
+  MCP3008 ADC. Each from its datasheet and checked pin for pin against KiCad 10, and each
+  check says what catches people: the CD4017's Q0 is pin 3, the 74HC165's output to read
+  is pin 9 and not the inverted one on 7, the MCP23017's RESET has no pull-up.
 
 ### Changed
 

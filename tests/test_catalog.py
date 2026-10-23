@@ -73,6 +73,10 @@ def test_the_parts_whose_pinout_is_the_classic_trap_are_pinned_the_way_their_dat
     assert legs["lm317t"] == ("ADJ", "OUT", "IN")
     assert legs["78l05"] == ("OUT", "GND", "IN")
     assert legs["ld1117v33"] == ("GND", "OUT", "IN")  # NOT a 7805's either
+    assert legs["mcp1700-3302"] == ("GND", "IN", "OUT")  # NOT a 78L05's
+    assert legs["bc337"] == legs["bc327"] == ("C", "B", "E")
+    assert legs["cd4017"][2] == "Q0"  # pin 3: the outputs are not in order
+    assert (legs["74hc165"][6], legs["74hc165"][8]) == ("~QH", "QH")  # the one to read is 9
     assert legs["irf9540n"] == ("G", "D", "S")
 
 
@@ -175,6 +179,11 @@ def test_search_matches_the_name_the_summary_and_the_kind() -> None:
         ("3.3V regulator", "ld1117v33"),
         ("LM1117T-3.3", "ld1117v33"),
         ("opamp", "tl072"),
+        ("MCP1700-3302E/TO", "mcp1700-3302"),
+        ("PCF8574AP", "pcf8574"),
+        ("port expander", "mcp23017"),
+        ("eeprom", "24lc256"),
+        ("adc", "mcp3008"),
     ],
 )
 def test_a_part_is_found_by_what_somebody_would_type(typed, found) -> None:
@@ -192,7 +201,8 @@ def test_a_different_number_is_not_the_same_part(typed) -> None:
 
 def test_a_part_whose_name_says_it_comes_before_one_whose_summary_does() -> None:
     """"switch" is a push button's name and only a word in the 2N2222A's "switching"."""
-    assert [part.id for part in search_catalog("switch")] == ["tact-6x6", "tact-12x12", "2n2222a"]
+    found = [part.id for part in search_catalog("switch")]
+    assert found[:2] == ["tact-6x6", "tact-12x12"] and "2n2222a" in found[2:]
     # With nothing typed, nothing moves.
     assert search_catalog("") == list(CATALOG)
 
