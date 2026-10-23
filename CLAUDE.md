@@ -19,7 +19,7 @@ pytest tests/test_drc.py::test_name -x       # one test, stop on first failure
 pytest -k "proximity"             # by name fragment
 
 mypy --strict src                 # `src` ONLY — see below
-ruff check src tests --statistics # reports; NOT a gate — see below
+ruff check src tests              # a gate: CI fails on a finding — see below
 
 perfboard-studio                  # launch on a blank board
 perfboard-studio some/board.perf  # ...or open a document
