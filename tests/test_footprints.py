@@ -74,6 +74,7 @@ from perfboard_studio.footprints import (
     radial_electrolytic_footprint,
     relay_footprint,
     screw_terminal_footprint,
+    srd_relay_footprint,
     standard_footprints,
     tactile_switch_footprint,
     to92_footprint,
@@ -474,6 +475,7 @@ def _generated_examples() -> list[Footprint]:
         disc_ceramic_footprint(pitch_holes=2, body_diameter_mm=7, body_thickness_mm=3),
         box_film_capacitor_footprint(pitch_holes=3, body_length_mm=10, body_width_mm=5, body_height_mm=8),
         led_footprint(diameter_mm=10),
+        srd_relay_footprint(),
     ]
 
 
@@ -599,6 +601,33 @@ def test_a_generated_footprint_is_as_complete_as_a_library_one(footprint: Footpr
     for pin in footprint.pins:
         assert min(xs) <= pin.d_col * STANDARD_PITCH_MM <= max(xs)
         assert min(ys) <= pin.d_row * STANDARD_PITCH_MM <= max(ys)
+
+
+def test_the_srd_relay_is_songles_legs_bent_to_the_nearest_holes() -> None:
+    """Songle's drilling drawing, measured from COM: the coil legs 2.0 along and 6.0 either
+    side, the contacts 14.2 along and 6.0 either side, the body from 1.4 behind COM to 17.7
+    past it. Standing the body where ``body_extent`` puts it, every leg reaches its hole by
+    bending at most 1.1 mm -- and COM is alone at the coil end, which is the whole difference
+    from ``relay-spdt``, a grid of no particular relay with COM between the contacts."""
+    from perfboard_studio.footprints import body_extent
+
+    relay = srd_relay_footprint()
+    extent = body_extent(relay, STANDARD_PITCH_MM)
+    com_x = extent.centre_x - (17.7 - 1.4) / 2  # where the real COM leg comes out
+    measured = {"1": (0.0, 0.0), "2": (2.0, 6.0), "5": (2.0, -6.0), "3": (14.2, 6.0), "4": (14.2, -6.0)}
+    for pin in relay.pins:
+        leg_x, leg_y = measured[pin.number]
+        bend = math.hypot(
+            com_x + leg_x - pin.d_col * STANDARD_PITCH_MM, leg_y - pin.d_row * STANDARD_PITCH_MM
+        )
+        assert bend <= 1.1, (pin.number, bend)
+    assert (extent.size_x, extent.size_y) == (19.1, 15.5) and relay.body_height == 15.3
+    # COM alone at one end; NC on the same side as coil leg 5, as Songle's wiring diagram has
+    # it seen from the legs and KiCad's SANYOU SRD footprint from the top.
+    pins = {pin.number: pin for pin in relay.pins}
+    assert pins["1"].d_col < min(pin.d_col for pin in relay.pins if pin.number != "1")
+    assert pins["4"].d_row == pins["5"].d_row and pins["3"].d_row == pins["2"].d_row
+    assert get_footprint("relay-srd") == relay and get_footprint("relay-xyz") is None
 
 
 def test_the_grammar_names_every_family_the_parser_accepts() -> None:

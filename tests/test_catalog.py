@@ -255,6 +255,17 @@ def test_a_servo_header_has_its_plus_in_the_middle() -> None:
     assert servo is not None and dict(servo.pin_names) == {"1": "PWM", "2": "+", "3": "-"}
 
 
+def test_the_songle_relay_is_on_its_own_footprint_and_named_as_kicad_numbers_it() -> None:
+    """The relay nearly every hobby board uses, on ``relay-srd`` and never on ``relay-spdt``,
+    whose COM is somewhere else; and found by what is printed on it."""
+    relay = catalog_part("srd-05vdc-sl-c")
+    assert relay is not None and relay.footprint_id == "relay-srd"
+    assert dict(relay.pin_names) == {"1": "COM", "2": "COIL", "3": "NO", "4": "NC", "5": "COIL"}
+    assert relay.reference_prefix == "K"
+    assert [part.id for part in search_catalog("relay")] == ["srd-05vdc-sl-c"]
+    assert [part.id for part in search_catalog("SRD-05VDC-SL-C")] == ["srd-05vdc-sl-c"]
+
+
 def test_a_free_reference_counts_the_board_and_the_design() -> None:
     session = BoardSession(document=new_board(cols=20, rows=12))
     session.place_component("Q1", "to92", "C3")

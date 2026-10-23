@@ -51,6 +51,7 @@ CatalogCategory = Literal[
     "sensor",
     "ic",
     "switch",
+    "relay",
     "connector",
     "sound",
     "module",
@@ -69,6 +70,7 @@ CATEGORY_ORDER: tuple[CatalogCategory, ...] = (
     "sensor",
     "ic",
     "switch",
+    "relay",
     "connector",
     "sound",
     "module",
@@ -121,6 +123,7 @@ _PREFIX_BY_CATEGORY: dict[str, str] = {
     "diode": "D",
     "protection": "F",
     "power": "J",
+    "relay": "K",
     "connector": "J",
     "sound": "BZ",
 }
@@ -631,6 +634,20 @@ CATALOG: tuple[CatalogPart, ...] = (
                 value="12x12 tactile",
                 source="KiCad Button_Switch_THT:SW_PUSH-12mm and the Wuerth 430476085716 model",
                 check=_SWITCH_LEGS),
+    # -- relays -----------------------------------------------------------------------
+    CatalogPart("srd-05vdc-sl-c", "Songle SRD-05VDC-SL-C relay", "relay", "relay-srd",
+                "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC",
+                _legs("COM", "COIL", "NO", "NC", "COIL"), value="SRD-05VDC-SL-C",
+                source=(
+                    "Songle SRD datasheet: coil data, contact rating, the 19.1 x 15.5 x 15.3 mm "
+                    "body, its drilling and wiring diagram; numbered as KiCad "
+                    "Relay_SPDT_SANYOU_SRD_Series_Form_C"
+                ),
+                check=(
+                    "Its legs are off the 2.54 mm grid and bend to the holes drawn: about "
+                    "0.5 mm for COM, 0.9 mm for a coil leg, 1.1 mm for a contact leg. With the "
+                    "coil off, NC reads shut to COM: check that with a meter before soldering."
+                )),
     # -- connectors -------------------------------------------------------------------
     CatalogPart("servo-header", "Servo header", "connector", "hdr-1x3",
                 "Three header pins for a hobby servo's plug: PWM, + in the middle, -",

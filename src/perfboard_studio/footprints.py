@@ -1262,10 +1262,11 @@ def relay_footprint(
     id: str | None = None,
     name: str | None = None,
 ) -> Footprint:
-    """Small SPDT relay (e.g. Songle SRD-05VDC-SL-C style), on-grid approximation:
-    2 coil pins in one column (2 holes apart), 3 switch pins (NO/COM/NC) in a
-    second column 5 holes over (1 hole apart from each other). Real relay
-    pinouts are rarely a clean 2.54 mm grid; verify against your specific part's
+    """Small SPDT relay, an on-grid approximation of no particular part: 2 coil pins in
+    one column (2 holes apart), 3 switch pins (NO/COM/NC) in a second column 5 holes over
+    (1 hole apart from each other). It is NOT the Songle SRD's arrangement, whose COM
+    stands alone between the coil legs at one end -- that relay is :func:`srd_relay_footprint`.
+    Real relay pinouts are rarely a clean 2.54 mm grid; verify against your specific part's
     datasheet before relying on this for anything but layout planning.
     """
     lead_diameter = 0.6 if lead_diameter_mm is None else lead_diameter_mm
@@ -1289,6 +1290,61 @@ def relay_footprint(
         lead_diameter=lead_diameter,
         polarized=False,
     )
+
+
+#: How far the Songle SRD's body sits towards its contacts from the middle of the holes its
+#: legs are bent into, in mm. Its legs, measured from COM (Songle's drilling drawing): the
+#: coil pair 2.0 along and 6.0 either side, the contacts 14.2 along and 6.0 either side; the
+#: body from 1.4 behind COM to 17.7 past it. The holes are 1 and 6 pitches along and 2
+#: either side, so the legs land 0.54 and 1.04 mm short along the body; standing the body
+#: 0.52 mm on from COM's hole halves the worst of it. Every leg then bends 0.92 mm across
+#: and at most 0.52 along -- COM 0.52, a coil leg 0.92, a contact leg 1.06 in all.
+SRD_BODY_OFFSET_MM = 1.05
+
+
+def srd_relay_footprint() -> Footprint:
+    """The Songle SRD relay -- SRD-05VDC-SL-C and its family, and Sanyou's SRD of the same
+    outline -- with its legs bent to the nearest holes.
+
+    Its legs are not on the 2.54 mm grid (see ``SRD_BODY_OFFSET_MM`` for how far each one
+    bends), which is why ``relay-spdt`` was never this part: that is a grid of no particular
+    relay, with COM between the other two contacts. Here COM is where the SRD has it, alone
+    between the coil legs at one end, and the contacts are the pair at the other.
+
+    Numbered as KiCad's ``Relay_SPDT_SANYOU_SRD_Series_Form_C``, so a netlist drawn on it
+    lands as drawn: 1 COM, 2 and 5 the coil, 3 NO, 4 NC. Songle's wiring diagram, drawn from
+    the legs, rests the blade on the contact on the coil leg's side that KiCad's footprint,
+    seen from the top, calls 4 -- and LCSC's model of the SRD-05VDC-SL-C agrees. The body is
+    Songle's 19.1 x 15.5 x 15.3 mm maximum.
+    """
+    pins = (
+        _make_pin("1", 0, 0),  # COM
+        _make_pin("2", 1, 2),  # coil
+        _make_pin("3", 6, 2),  # NO
+        _make_pin("4", 6, -2),  # NC
+        _make_pin("5", 1, -2),  # coil
+    )
+    length, width = 19.1, 15.5
+    outline = _offset_rect_outline(
+        _to_mm(pins), length, width, SRD_BODY_OFFSET_MM, 0.0, COURTYARD_MARGIN_MM
+    )
+    return Footprint(
+        id="relay-srd",
+        name="Songle SRD relay",
+        pins=pins,
+        body_outline=outline,
+        body_height=15.3,
+        body=BodySpec(
+            archetype="relay-box",
+            dims={"length": length, "width": width, "offsetX": SRD_BODY_OFFSET_MM},
+        ),
+        lead_diameter=0.6,
+        polarized=False,
+    )
+
+
+#: ``relay-<family>``: the relays whose legs are measured, by family.
+_RELAY_FAMILIES: dict[str, Callable[[], Footprint]] = {"srd": srd_relay_footprint}
 
 
 # ---------------------------------------------------------------------------
@@ -1946,7 +2002,10 @@ most two decimals and are written without units.
   sw-tactile-6x6 | sw-tactile-12x12                     a 4-leg push button as made: pins
                                                         1 and 2 are the switched pair, 3 and
                                                         4 are joined inside to 1 and 2
-  wire-<n>[-p<step>][-l<L>]                             a part that is NOT on the board -- a
+  relay-srd                                             a Songle SRD relay, its legs bent to
+                                                        the nearest holes: 1 COM, 2 and 5
+                                                        the coil, 3 NO, 4 NC
+  wire-<n>[-p<step>][-l<L>]                           a part that is NOT on the board -- a
                                                         pot or jack on the panel -- as the n
                                                         pads its wires are soldered into,
                                                         <step> holes apart, each wire cut L
@@ -2111,6 +2170,12 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
     (
         re.compile(r"^sw-tactile-(\d+x\d+)$"),
         lambda m: push_button_footprint(size=m[1]),
+    ),
+    (
+        # A relay by its family: its legs are where its maker put them, not on a grid, so
+        # there is nothing to parameterise. An unknown family is a KeyError, which is None.
+        re.compile(r"^relay-([a-z]+)$"),
+        lambda m: _RELAY_FAMILIES[m[1]](),
     ),
     (
         re.compile(r"^wire-(\d+)(?:-p(\d+))?(?:-l(\d+))?$"),

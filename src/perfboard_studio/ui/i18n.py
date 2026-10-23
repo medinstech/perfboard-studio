@@ -1945,6 +1945,17 @@ TURKISH: Mapping[str, str] = {
     "Power in": "Güç girişi",
     "Connectors": "Konnektörler",
     "Sound": "Ses",
+    "Songle SRD-05VDC-SL-C relay": "Songle SRD-05VDC-SL-C röle",
+    "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC": (
+        "SPDT röle, 70 ohm'luk 5 V bobin, kontaklar 125 V AC'de 10 A"
+    ),
+    "Its legs are off the 2.54 mm grid and bend to the holes drawn: about 0.5 mm for COM, "
+    "0.9 mm for a coil leg, 1.1 mm for a contact leg. With the coil off, NC reads shut to "
+    "COM: check that with a meter before soldering.": (
+        "Bacakları 2,54 mm ızgarada değildir, çizilen deliklere bükülür: COM yaklaşık "
+        "0,5 mm, bir bobin bacağı 0,9 mm, bir kontak bacağı 1,1 mm. Bobin enerjisizken NC "
+        "COM'a kısa devre okur: lehimlemeden önce bunu multimetreyle doğrulayın."
+    ),
     "9 V battery clip": "9 V pil klipsi",
     "PP3 snap on two leads, for a 9 V battery": "İki kablolu PP3 başlığı, 9 V pil için",
     "Red is +. If both leads of yours are one colour, find + with a meter on the battery "

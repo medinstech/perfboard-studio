@@ -650,6 +650,7 @@ def _catalog_headings() -> dict[str, str]:
         "sensor": t("Sensors"),
         "ic": t("ICs"),
         "switch": t("Switches"),
+        "relay": t("Relays"),
         "connector": t("Connectors"),
         "sound": t("Sound"),
         "module": t("Modules"),

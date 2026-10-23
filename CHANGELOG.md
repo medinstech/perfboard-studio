@@ -22,6 +22,15 @@ closed without a bump.
 
 ### Added
 
+- **The Songle SRD relay, as it is.** `relay-srd` is the SRD-05VDC-SL-C and its family on
+  the holes nearest its legs, which are not on the 2.54 mm grid: COM alone between the coil
+  legs at one end, the contacts at the other, numbered as KiCad's SANYOU SRD (1 COM, 2 and
+  5 the coil, 3 NO, 4 NC) and measured off Songle's own drilling drawing. The body stands
+  where the bends are least, and the catalog's SRD-05VDC-SL-C says how far each leg bends
+  -- 0.5 mm for COM, 0.9 for a coil leg, 1.1 for a contact leg -- and to check NC with a
+  meter. "relay" finds it, under a Relays group. `relay-spdt`, a grid of no particular
+  relay with COM between the contacts, no longer calls itself Songle-style.
+
 - **A way to bring power onto the board, a servo header and a buzzer.** "battery", "9V",
   "jack", "pil" and "power" used to find nothing, so a first circuit drawn from scratch had
   no way to be fed. The catalog has a new group, Power in: a 9 V battery clip and an AA
