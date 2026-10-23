@@ -87,7 +87,7 @@ closed without a bump.
   check says how VO sets the contrast and that a few modules put the backlight first. The
   receiver is Vishay's OUT, GND, VS. "lcd", "1602", "infrared" and "remote" find them.
 
-- **Catalog: LEDs, plain and RGB, under a new LEDs group.** The plain 3 mm and 5 mm LED (A,
+- **LEDs, plain and RGB, under a new LEDs group.** The plain 3 mm and 5 mm LED (A,
   K, from Kingbright's drawings) come first, so "LED" and Enter still takes an ordinary LED.
   The four-legged RGB LED is a new generated footprint, `led-5mm-rgb` (`led-<D>mm[-rgb]`):
   the 1.27 mm legs bent out to holes one apart, pin 1 red, pin 2 the common leg. Makers
@@ -98,14 +98,14 @@ closed without a bump.
   On a two-legged LED, "K" means the short lead with the flat on the rim; read that way, it
   would have pointed at the wrong leg.
 
-- **Catalog: Kingbright's 0.56 inch 7-segment displays.** The SA56-11 (common anode) and
+- **Kingbright's 0.56 inch 7-segment displays.** The SA56-11 (common anode) and
   SC56-11 (common cathode) single digits, and the CA56-12 and CC56-12 four-digit ones,
   pinned from Kingbright's circuit diagrams, segments lower case as printed. A 7-segment
   display is numbered like a DIP but is a block, not a chip, so `box-` gained `-ccw`. It
   numbers two columns down one and back up the other, exactly as `dip_footprint` and KiCad's
   Display_7Segment:CA56-12EWA do: `box-2x5-p6-r1-19.05x12.7x8-ccw` is one digit.
 
-- **Catalog: seventeen DIP classics from TI's datasheets.** The 74HC00, 04, 08, 14, 32, 86,
+- **Seventeen DIP classics from TI's datasheets.** The 74HC00, 04, 08, 14, 32, 86,
   138 and 4051; the CD4011B, 4013B, 4060B, 4066B and 4093B; the NE5532, LM741, LM339 and
   LM311. Every pin was checked against KiCad's symbol for the same part, and where the
   names differ the pins do not. The 74HC138 is named as TI names it and KiCad as NXP does;
@@ -114,7 +114,7 @@ closed without a bump.
   J beside inputs A and B. A test pins the one difference a builder would trip over: the
   CD4011's outputs are on pins 3, 4, 10 and 11, the 74HC00's on 3, 6, 8 and 11.
 
-- **Catalog: the GY-521 MPU-6050 board.** Its eight pins are named as every GY-521 prints
+- **The GY-521 MPU-6050 board.** Its eight pins are named as every GY-521 prints
   them (VCC GND SCL SDA XDA XCL AD0 INT). Nobody publishes a drawing of the board, so its
   21.2 x 16.4 mm is the sellers' figure, and `check` says the header's place and the height
   are estimates. The HC-SR501 PIR stays out: no maker drawing exists, and the boards and the
