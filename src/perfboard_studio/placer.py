@@ -3364,10 +3364,11 @@ def _pick_best(
     **What DRC warns cannot be BUILT is ranked ahead of what it costs to route**
     (:attr:`PlacementCost.physical_warnings`). The router knows nothing about a body over the
     edge or a resistor in front of a terminal's mouth, so the routed cost alone kept whatever
-    board routed cheapest: on the DELTA-ATLAS plaket the annealer found an arrangement with
-    both blocked wire entries cleared, it routed for 812 against the original's 726, and the
-    original -- two terminals nobody could push a wire into -- was handed back as "nothing
-    cheaper to build". Cheaper to route is not cheaper to build when the wire cannot go in.
+    board routed cheapest: on the first real board laid out with this tool the annealer
+    found an arrangement with both blocked wire entries cleared, it routed for 812 against
+    the original's 726, and the original -- two terminals nobody could push a wire into --
+    was handed back as "nothing cheaper to build". Cheaper to route is not cheaper to
+    build when the wire cannot go in.
     Every fixture has zero of both, so the ordering there is exactly what it was.
 
     **On a breadboard a clip shared by two nets outranks even legality**

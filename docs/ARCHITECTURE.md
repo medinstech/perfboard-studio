@@ -123,9 +123,9 @@ Four consumers, one fact:
   ranking by routed cost alone handed back a board with two unwirable terminals because the
   one with them cleared routed 812 against 726. Zero on every fixture, so nothing moved.
   The mouth-facing PREFERENCE (`entry_run`) was not in that key and lost to routing: over
-  four seeds on the DELTA-ATLAS plaket 0–2 of six terminals still faced into clear board
-  at `entry` weights 1 to 4 — and with the finished `optimize_placement`, four of six stood
-  ON an edge facing in. So that case became a rule.
+  four seeds on the first real board laid out with this tool, 0–2 of six terminals still
+  faced into clear board at `entry` weights 1 to 4 — and with the finished
+  `optimize_placement`, four of six stood ON an edge facing in. So that case became a rule.
 - **`terminal-entry-faces-in`** (warning): a terminal whose body is within
   `geometry.on_edge_reach_mm` (two pitches) of an edge while its mouth faces none of the
   edges it stands on (`geometry.entry_faces_away`; a corner may face either). The placer

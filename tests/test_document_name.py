@@ -63,9 +63,9 @@ def test_an_unnamed_board_takes_its_files_name_when_saved(tmp_path: Path) -> Non
 def test_a_board_somebody_named_keeps_its_name_whatever_the_file_is_called(
     tmp_path: Path,
 ) -> None:
-    session = BoardSession(document=new_board(name="Manipulator plaket"))
+    session = BoardSession(document=new_board(name="LED driver plaket"))
     session.save_document(str(tmp_path / "v1.perf"))
-    assert session.document.meta.name == "Manipulator plaket"
+    assert session.document.meta.name == "LED driver plaket"
     assert session.history() == []
 
 

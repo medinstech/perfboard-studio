@@ -65,7 +65,7 @@ def test_a_part_alone_is_printed_as_it_would_be_anyway() -> None:
 
 
 def test_the_first_real_board_two_terminals_side_by_side() -> None:
-    """The DELTA-ATLAS plaket's J1 and J6, where they stand on it. J6 feeds its wires from
+    """J1 and J6 of the first real board, where they stand on it. J6 feeds its wires from
     above, so its names may go either side and go to the clear one; J1's mouth faces the
     board's edge, so its names can only go behind it -- under J6 -- and are left off."""
     session = _session(cols=27, rows=35)

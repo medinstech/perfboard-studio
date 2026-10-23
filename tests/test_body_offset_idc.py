@@ -1,10 +1,10 @@
 """A body that is not centred on its pins, and the IDC box header.
 
 Two things a generated id could not say until now, both found laying out the first real
-board with this tool (the DELTA-ATLAS manipulator plaket):
+board with this tool:
 
 - A breakout module whose header runs along one EDGE of its board. ``box-`` centred every
-  body on its pins, so a 16 x 14.5 mm CAN transceiver board with its six pins along one
+  body on its pins, so a 16 x 14.5 mm breakout board with its six pins along one
   side could only be described as reaching 14.5 mm past the header in BOTH directions --
   ``box-6x1-p1-r1-16x29x7`` -- claiming board it does not use, or else claiming too
   little on the side it does. ``-o<X>x<Y>`` moves the body, and zero is not written, so
@@ -44,7 +44,7 @@ from perfboard_studio.model import (
 from perfboard_studio.schematic import symbol_kind_for
 
 LOOKUP = footprint_lookup()
-#: The CAN transceiver breakout from the DELTA-ATLAS plaket: six pins along the top edge
+#: The breakout module from the first real board: six pins along the top edge
 #: of a 16 x 14.5 mm board, so the board's centre is 6 mm below the row of pins.
 MODULE = "box-6x1-p1-r1-16x14.5x7-o0x6"
 

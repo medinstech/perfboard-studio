@@ -2371,8 +2371,7 @@ def _outline_extent(footprint: Footprint) -> tuple[Mm, Mm]:
 # box centred on the pins, so nothing in the application knew which face the wire came in
 # by. A terminal turned with its mouth against a capacitor, or pointing into the middle of a
 # populated board, looked exactly like one that could be wired -- and the first real board
-# laid out with this tool (six terminals on the DELTA-ATLAS manipulator plaket) had them
-# facing every which way.
+# laid out with this tool had its six terminals facing every which way.
 #
 # One fact, and it lives here because it is a fact about the PACKAGE: ``drc`` reports a
 # blocked entry, ``placer`` prices the same predicate and turns the mouth outward, the guide
