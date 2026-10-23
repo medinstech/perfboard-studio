@@ -22,117 +22,11 @@ closed without a bump.
 
 ### Added
 
-- **ERC says when nothing brings power onto the board.** A 555 blinker drawn pin to pin,
-  with VCC and GND joined and no battery clip or terminal anywhere, passed every check and
-  the guide wrote its build. `no-power-entry` is a warning: a chip or module has a supply pin
-  wired (or a net is of the power or ground class), and no connector -- a pin header, a screw
-  terminal, a battery clip's or a jack's pads -- and no module has a pin on any of those nets.
-  Whether the way in reaches both rails, or comes through a regulator, is not judged. None of
-  the shipped examples is touched by it.
-- **A trimmer, an LDR, a passive buzzer, an inductor and a 4x4 keypad**, the parts the
-  findability sweep found missing that a beginner's first projects use: the Bourns 3296W
-  (drawn as a pot, its wiper in the middle, its check saying how to read "103"), the GL5528
-  photoresistor, a 12 mm passive buzzer whose check says it is silent on DC, Bourns'
-  78F101J 100 uH choke, and the membrane keypad on the header its ribbon plugs onto,
-  numbered as Parallax's datasheet numbers it. "trimmer", "ldr", "speaker", "inductor" and
-  "keypad" find them, and so do "trimpot", "ışık sensörü", "hoparlör", "bobin" and "tuş
-  takımı".
-
-- **Eight more searches find their part**, from a sweep of 130 things a beginner types in
-  English and Turkish: "voltage regulator" and "voltaj regülatörü" find the regulators,
-  "microcontroller" and "mikrodenetleyici" the ATtiny85 and ATmega328P, "terminal block"
-  the power terminal, "batarya" the batteries, "adaptör" the DC jack, "kızılötesi" the IR
-  receiver, "anahtar" the push buttons. And a name is named only from the start of a word,
-  so "led" no longer ranks an OLED as named.
-
-- **The 16x2 character LCD and the TSOP38238 IR receiver.** The LCD is pinned as KiCad's
-  Winstar WC1602A symbol numbers it and is as large and as tall as KiCad's model of it; its
-  check says how VO sets the contrast and that a few modules put the backlight first. The
-  receiver is Vishay's OUT, GND, VS. "lcd", "1602", "infrared" and "remote" find them.
-
-- **The HC-SR04 and the 0.96 inch OLED.** The HC-SR04 is pinned as ElecFreaks prints it and
-  stands on its edge as the real one does. The OLED is in a new Displays group TWICE, named
-  by the order its pins are printed in -- "(GND VCC SCL SDA)" and "(VCC GND SCL SDA)" --
-  because it is sold both ways and the wrong one kills it; the check says to read the
-  board in hand. "oled", "ultrasonic" and "sonar" find them.
-- **Pololu's DRV8833 dual motor driver carrier**, drawn as itself from Pololu's own top-view
-  pinout picture -- the QFN, the reverse-protection MOSFET and its diode, the capacitors and
-  resistors -- with its names printed over the parts, as Pololu prints them on the back.
-  Its check says VMM is an output after the protection MOSFET, and that AISEN and BISEN are
-  joined to GND until their traces are cut.
-
-- **SparkFun's dual TB6612FNG motor driver**, drawn as itself on its red board: the
-  SSOP-24, its two decoupling capacitors and its tantalum, every position read off
-  SparkFun's own Eagle board and named from the nets of its two header rows. Its check says
-  what stops people: STBY is pulled low inside the chip, so neither motor turns until it is
-  driven high. The 2D and 3D views now draw any gull-wing chip from one table of legs, so
-  the SSOP-24 is the TSSOP-28's code with twelve legs a side.
-
-- **The nRF24L01+ radio and the ESP-01 are in the catalog**, pinned from KiCad's breakout
-  symbol and from Ai-Thinker's manual, whose figure and table agree pin for pin. Nobody
-  publishes a drawing of the parts on either board, so both are drawn as the plain block --
-  the room they take, claiming nothing about what stands on them -- and the module-art test
-  names them as the two exceptions, failing if either gains a layout.
-- **An SRD-12VDC-SL-C relay** joins the catalog beside the 5 V one, on `relay-srd`.
-
-- **The LM2596 buck module is in the catalog**, drawn as itself -- its two cans, inductor,
-  regulator and trimmer -- because the layout it was missing was already there, keyed on a
-  name nothing could choose. IN+, IN-, OUT+ and OUT- are named, and its check says what a
-  seller's page does not: the pads are not on the grid, set the output before connecting
-  anything, and the input capacitor is the real voltage limit.
-
-- **The Songle SRD relay, as it is.** `relay-srd` is the SRD-05VDC-SL-C and its family on
-  the holes nearest its legs, which are not on the 2.54 mm grid: COM alone between the coil
-  legs at one end, the contacts at the other, numbered as KiCad's SANYOU SRD (1 COM, 2 and
-  5 the coil, 3 NO, 4 NC) and measured off Songle's own drilling drawing. The body stands
-  where the bends are least, and the catalog's SRD-05VDC-SL-C says how far each leg bends
-  -- 0.5 mm for COM, 0.9 for a coil leg, 1.1 for a contact leg -- and to check NC with a
-  meter. "relay" finds it, under a Relays group. `relay-spdt`, a grid of no particular
-  relay with COM between the contacts, no longer calls itself Songle-style.
-
-- **A way to bring power onto the board, a servo header and a buzzer.** "battery", "9V",
-  "jack", "pil" and "power" used to find nothing, so a first circuit drawn from scratch had
-  no way to be fed. The catalog has a new group, Power in: a 9 V battery clip and an AA
-  holder on their leads, a 5.5 x 2.1 mm panel jack wired from its centre pin and sleeve,
-  and a screw terminal and a header named + and -. Under Connectors, a servo header (PWM,
-  + in the middle, -, as an SG90's plug), and under Sound, a 12 mm active buzzer whose
-  check says how to tell it from a passive one.
-
-- **The examples' chips have their pin names.** The NE555 on the front page was a box of
-  numbered pins on the sheet, and ERC had nothing to check it by, because an example that
-  names its footprints never asked the catalog what its parts are. It asks now, as an
-  import does, and takes the answer only when the catalog's package is the example's: the
-  NE555, the LM317, the ATmega328P, the L7805, the BC547 and the diodes are named, and so
-  is the NE555 in the blinker project, and ERC finds nothing wrong with any of them. No
-  part moved and no wire changed.
-- **The examples' connectors and buttons say what they are for.** Where the netlist has a
-  library's name for a part because nobody typed a value -- "Conn_01x02", "SW_Push",
-  "Arduino_Nano_v3.x" -- the board now says "DC IN", "BUTTON", "Arduino Nano". The `.net`
-  files stay exactly as a schematic tool exports them.
-- **Eight more parts in the catalog, each pinned from its datasheet**: the ATtiny85, the
-  LD1117V33 3.3 V regulator (pinned GND, OUT, IN -- not like a 7805, and its check says so),
-  the TL072 and LM324 op-amps, the LM386 audio amplifier, the ULN2803A, the MAX7219 LED
-  driver (a 24-pin DIP, generated) and the DS1307 clock. Every pin was checked against
-  KiCad 10's symbol for the same part as well. The TL072 names its rails V+ and V-, so ERC
-  holds its negative rail to a net without asking it to be ground.
-- **And nine more**: the BC337 and BC327 (800 mA), the MCP1700 3.3 V regulator for a
-  battery-fed board (GND, IN, OUT -- not like a 78L05), the 24LC256 EEPROM, the 74HC165
-  shift-in register, the CD4017 counter, the PCF8574 and MCP23017 I/O expanders and the
-  MCP3008 ADC. Each from its datasheet and checked pin for pin against KiCad 10, and each
-  check says what catches people: the CD4017's Q0 is pin 3, the 74HC165's output to read
-  is pin 9 and not the inverted one on 7, the MCP23017's RESET has no pull-up.
-- **Draft winget and Scoop manifests**, in `packaging/winget/` and `packaging/scoop/`, for
-  0.21.0. Not published: `packaging/README.md` says what checking and submitting them
-  takes, and that whether to is the owner's call.
-- **The installers carry the MCP server, and `--mcp` starts it.** The Windows, Linux and
-  macOS bundles have packed the server all along with no way to run it -- `python -m
-  perfboard_studio.mcp` needs a Python an installer does not give you. An MCP client can
-  now be pointed at the installed application: `perfboard-studio-cli.exe --mcp` on
-  Windows, the AppImage or the app's own binary with `--mcp` elsewhere, and `--mcp
-  board.perf` opens a board as `perfboard-studio-mcp board.perf` does. On stdio a single
-  stray byte on stdout breaks the protocol, so a test holds a whole session through the
-  window's own entry point to nothing else on stdout, and every release runs the same
-  check on the built bundle.
+- **Add a Part stays open for the next part.** A 555 blinker is six parts and it was six
+  trips through a dialog that closed after each, with the Next button offering "Connect the
+  Pins" from the first part on. Add (or Enter) puts the part in the design, says so in the
+  dialog and readies the next one with a fresh reference; Done closes it. Each part is its
+  own undo step, and a refusal is said in the dialog rather than behind it.
 
 - **Change Part, for a part already on the board.** A 5 mm LED that should have been 3 mm,
   or a resistor on a wider span, used to mean delete it, add another and wire it again. Edit
@@ -157,86 +51,120 @@ closed without a bump.
   that has no file, takes a checked breadboard on to perfboard (File ▸ New Board from This
   Design, which nobody found from the steps), and otherwise exports the guide for the bench.
 
-- **Add a Part stays open for the next part.** A 555 blinker is six parts and it was six
-  trips through a dialog that closed after each, with the Next button offering "Connect the
-  Pins" from the first part on. Add (or Enter) puts the part in the design, says so in the
-  dialog and readies the next one with a fresh reference; Done closes it. Each part is its
-  own undo step, and a refusal is said in the dialog rather than behind it.
+- **ERC says when nothing brings power onto the board.** A 555 blinker drawn pin to pin,
+  with VCC and GND joined and no battery clip or terminal anywhere, passed every check and
+  the guide wrote its build. `no-power-entry` is a warning: a chip or module has a supply pin
+  wired (or a net is of the power or ground class), and no connector -- a pin header, a screw
+  terminal, a battery clip's or a jack's pads -- and no module has a pin on any of those nets.
+  Whether the way in reaches both rails, or comes through a regulator, is not judged. None of
+  the shipped examples is touched by it.
+
+- **A way to bring power onto the board, a servo header and a buzzer.** "battery", "9V",
+  "jack", "pil" and "power" used to find nothing, so a first circuit drawn from scratch had
+  no way to be fed. The catalog has a new group, Power in: a 9 V battery clip and an AA
+  holder on their leads, a 5.5 x 2.1 mm panel jack wired from its centre pin and sleeve,
+  and a screw terminal and a header named + and -. Under Connectors, a servo header (PWM,
+  + in the middle, -, as an SG90's plug), and under Sound, a 12 mm active buzzer whose
+  check says how to tell it from a passive one.
+
+- **A trimmer, an LDR, a passive buzzer, an inductor and a 4x4 keypad**, the parts the
+  findability sweep found missing that a beginner's first projects use: the Bourns 3296W
+  (drawn as a pot, its wiper in the middle, its check saying how to read "103"), the GL5528
+  photoresistor, a 12 mm passive buzzer whose check says it is silent on DC, Bourns'
+  78F101J 100 uH choke, and the membrane keypad on the header its ribbon plugs onto,
+  numbered as Parallax's datasheet numbers it. "trimmer", "ldr", "speaker", "inductor" and
+  "keypad" find them, and so do "trimpot", "ışık sensörü", "hoparlör", "bobin" and "tuş
+  takımı".
+
+- **The HC-SR04 and the 0.96 inch OLED.** The HC-SR04 is pinned as ElecFreaks prints it and
+  stands on its edge as the real one does. The OLED is in a new Displays group TWICE, named
+  by the order its pins are printed in -- "(GND VCC SCL SDA)" and "(VCC GND SCL SDA)" --
+  because it is sold both ways and the wrong one kills it; the check says to read the
+  board in hand. "oled", "ultrasonic" and "sonar" find them.
+
+- **The 16x2 character LCD and the TSOP38238 IR receiver.** The LCD is pinned as KiCad's
+  Winstar WC1602A symbol numbers it and is as large and as tall as KiCad's model of it; its
+  check says how VO sets the contrast and that a few modules put the backlight first. The
+  receiver is Vishay's OUT, GND, VS. "lcd", "1602", "infrared" and "remote" find them.
+
+- **The Songle SRD relay, as it is.** `relay-srd` is the SRD-05VDC-SL-C and its family on
+  the holes nearest its legs, which are not on the 2.54 mm grid: COM alone between the coil
+  legs at one end, the contacts at the other, numbered as KiCad's SANYOU SRD (1 COM, 2 and
+  5 the coil, 3 NO, 4 NC) and measured off Songle's own drilling drawing. The body stands
+  where the bends are least, and the catalog's SRD-05VDC-SL-C says how far each leg bends
+  -- 0.5 mm for COM, 0.9 for a coil leg, 1.1 for a contact leg -- and to check NC with a
+  meter. "relay" finds it, under a Relays group. `relay-spdt`, a grid of no particular
+  relay with COM between the contacts, no longer calls itself Songle-style.
+  The SRD-12VDC-SL-C joins the catalog beside the 5 V one, on the same footprint.
+
+- **The LM2596 buck module is in the catalog**, drawn as itself -- its two cans, inductor,
+  regulator and trimmer -- because the layout it was missing was already there, keyed on a
+  name nothing could choose. IN+, IN-, OUT+ and OUT- are named, and its check says what a
+  seller's page does not: the pads are not on the grid, set the output before connecting
+  anything, and the input capacitor is the real voltage limit.
+
+- **Pololu's DRV8833 dual motor driver carrier**, drawn as itself from Pololu's own top-view
+  pinout picture -- the QFN, the reverse-protection MOSFET and its diode, the capacitors and
+  resistors -- with its names printed over the parts, as Pololu prints them on the back.
+  Its check says VMM is an output after the protection MOSFET, and that AISEN and BISEN are
+  joined to GND until their traces are cut.
+
+- **SparkFun's dual TB6612FNG motor driver**, drawn as itself on its red board: the
+  SSOP-24, its two decoupling capacitors and its tantalum, every position read off
+  SparkFun's own Eagle board and named from the nets of its two header rows. Its check says
+  what stops people: STBY is pulled low inside the chip, so neither motor turns until it is
+  driven high. The 2D and 3D views now draw any gull-wing chip from one table of legs, so
+  the SSOP-24 is the TSSOP-28's code with twelve legs a side.
+
+- **The nRF24L01+ radio and the ESP-01 are in the catalog**, pinned from KiCad's breakout
+  symbol and from Ai-Thinker's manual, whose figure and table agree pin for pin. Nobody
+  publishes a drawing of the parts on either board, so both are drawn as the plain block --
+  the room they take, claiming nothing about what stands on them -- and the module-art test
+  names them as the two exceptions, failing if either gains a layout.
+
+- **Eight more parts in the catalog, each pinned from its datasheet**: the ATtiny85, the
+  LD1117V33 3.3 V regulator (pinned GND, OUT, IN -- not like a 7805, and its check says so),
+  the TL072 and LM324 op-amps, the LM386 audio amplifier, the ULN2803A, the MAX7219 LED
+  driver (a 24-pin DIP, generated) and the DS1307 clock. Every pin was checked against
+  KiCad 10's symbol for the same part as well. The TL072 names its rails V+ and V-, so ERC
+  holds its negative rail to a net without asking it to be ground.
+
+- **And nine more**: the BC337 and BC327 (800 mA), the MCP1700 3.3 V regulator for a
+  battery-fed board (GND, IN, OUT -- not like a 78L05), the 24LC256 EEPROM, the 74HC165
+  shift-in register, the CD4017 counter, the PCF8574 and MCP23017 I/O expanders and the
+  MCP3008 ADC. Each from its datasheet and checked pin for pin against KiCad 10, and each
+  check says what catches people: the CD4017's Q0 is pin 3, the 74HC165's output to read
+  is pin 9 and not the inverted one on 7, the MCP23017's RESET has no pull-up.
+
+- **The examples' chips have their pin names.** The NE555 on the front page was a box of
+  numbered pins on the sheet, and ERC had nothing to check it by, because an example that
+  names its footprints never asked the catalog what its parts are. It asks now, as an
+  import does, and takes the answer only when the catalog's package is the example's: the
+  NE555, the LM317, the ATmega328P, the L7805, the BC547 and the diodes are named, and so
+  is the NE555 in the blinker project, and ERC finds nothing wrong with any of them. No
+  part moved and no wire changed.
+
+- **The examples' connectors and buttons say what they are for.** Where the netlist has a
+  library's name for a part because nobody typed a value -- "Conn_01x02", "SW_Push",
+  "Arduino_Nano_v3.x" -- the board now says "DC IN", "BUTTON", "Arduino Nano". The `.net`
+  files stay exactly as a schematic tool exports them.
+
+- **The installers carry the MCP server, and `--mcp` starts it.** The Windows, Linux and
+  macOS bundles have packed the server all along with no way to run it -- `python -m
+  perfboard_studio.mcp` needs a Python an installer does not give you. An MCP client can
+  now be pointed at the installed application: `perfboard-studio-cli.exe --mcp` on
+  Windows, the AppImage or the app's own binary with `--mcp` elsewhere, and `--mcp
+  board.perf` opens a board as `perfboard-studio-mcp board.perf` does. On stdio a single
+  stray byte on stdout breaks the protocol, so a test holds a whole session through the
+  window's own entry point to nothing else on stdout, and every release runs the same
+  check on the built bundle.
+
+- **Draft winget and Scoop manifests**, in `packaging/winget/` and `packaging/scoop/`, for
+  0.21.0. Not published: `packaging/README.md` says what checking and submitting them
+  takes, and that whether to is the owner's call.
 
 ### Changed
 
-- **The findings panel no longer calls pins waiting for their wiring violations.** With an
-  NE555 placed and not yet routed, the status bar and the step bar read "DRC 0 err / 0
-  warn" while the panel's DRC group said "28 violation(s)" over "Pin connected to nothing
-  (warning)" in amber. While connections are left to route, those pins are counted apart
-  ("0 violation(s) · 28 pin(s) not wired yet"), titled "Pin not wired yet", dimmed in the
-  colour the status bar gives the connections left to route, and listed after anything
-  actually wrong. LVS's "Net not wired yet" and "Part not on the board" are dimmed the
-  same way, and so, while there is wiring left, is "Open: a net in pieces" -- red until
-  now, beside the bar's dimmed LVS count -- and on stripboard a short, by the status bar's
-  own rule. Once the last connection is routed, a pin still touching nothing is a warning
-  in amber again.
-
-- **DRC and LVS findings are said in Turkish in a Turkish window.** The findings panel
-  was the one place a Turkish window still read English sentence after sentence: "Pin 1 of
-  X7 (net 'GND') is not connected to anything...". Every finding the checkers write -- 47
-  sentences and the words they are built from -- is now said in the window's language, with
-  its copper named by its ends and its parts by their references. The findings themselves
-  are unchanged: MCP, the headless run and the goldens read the English as they did. A
-  finding no sentence recognises is shown in English, whole, rather than half-translated.
-- **Choosing a board takes a seventh less time.** Each board trial routed the winning
-  placement again after the placer had already routed exactly that board to choose it. A
-  trial now takes the placer's route when its document is that same document, and routes
-  afresh when it is not. Every example's chosen board, every verdict and every placed part
-  are byte for byte what they were, over seeds 0 to 3. Measured under the team's heavy-job
-  lock, four seeds summed, before and after: atmega328-relay 129.8 → 115.2 s, nano-relay
-  60.9 → 49.9, ne555-blinker 44.1 → 36.5, lm317-supply 40.0 → 33.8, arduino-io-shield
-  23.3 → 21.7, lpb1-booster 16.3 → 13.5, ne555-astable 12.7 → 10.8.
-- **And a further tenth, by the placer remembering what it has worked out.** 45 % of the
-  placer's questions about whether two parts overlap or run hot were ones it had answered
-  before: the same two parts at the same two spots, as parts move away and back. One
-  planning run now keeps those answers, and nothing outlives it. The same proof, and the
-  same measurement, after the change above and then with this one too: atmega328-relay
-  115.2 → 108.4 s, nano-relay 49.9 → 48.5, ne555-blinker 36.5 → 31.0, lm317-supply 33.8 →
-  28.8, arduino-io-shield 21.7 → 19.0, lpb1-booster 13.5 → 12.1, ne555-astable 10.8 → 9.5.
-  Choosing a board takes 21 % less time than it did: 327 s became 257 for all of them.
-- **New Project asks a name and a place, and the board comes second.** It asked which
-  board before there was a circuit to try on one, and then the Board step asked again: a
-  breadboard chosen twice, and a perfboard size picked blind where step 2 would have tried
-  every stock size with the circuit laid out on it. The board question has an Other Board
-  button now -- a breadboard, a stripboard or any size, through Board Setup -- which is
-  where a project's board is chosen.
-
-- **The architecture notes are `docs/ARCHITECTURE.md` now, and `CLAUDE.md` is a fifth of
-  the size.** CLAUDE.md is loaded whole into every agent session and had grown a section
-  per feature to 159 000 characters. It keeps the commands, the gates and the rules every
-  change has to keep -- the immutable document, the pure engine, the differential proof,
-  conductors, hole addressing, layering and i18n -- and ends with every other section
-  listed by what somebody is about to touch. The sections moved word for word.
-  `tests/test_docs.py` fails on a section that list does not name, and on CLAUDE.md
-  growing past 40 000 characters.
-- **A catalog search reads a word the way a person types it.** "LM358N", "NE555P",
-  "SN74HC595N", "L7805CV" and "ATtiny85-20PU" find the part whose number they carry, with a
-  package letter, a maker's prefix or an ordering code on it, and "LM350" still does not
-  find the LM35. Hyphens and spaces no longer count, so "opamp" finds the op-amp and "5v
-  regulator" the 7805. A part can carry aliases for words its summary does not say:
-  "stepper" and "28BYJ-48" find the ULN2003A, "motor driver" the L293D. Parts the words
-  NAME come before parts whose summary merely mentions them, so "switch" lists the push
-  buttons ahead of the 2N2222A. The Parts panel and `list_catalog` search one way, through
-  `catalog.part_matches` -- the panel used to look for the whole text as one piece, so "op
-  amp" found nothing there.
-- **In Turkish, a catalog part named for what it is is named in Turkish**: "Tact buton 6×6
-  mm" beside the package row "Tact buton, 4 pin", where it said "Tactile switch 6x6 mm",
-  and the Turkish name finds it. A part number is printed as it is on the part.
-- **The README opens with three steps**: download it, draw a circuit or open an
-  example, and press the button at the end of the step bar until the build guide opens.
-  The two install links moved into the first step. In both languages.
-- **And with the window in motion.** The picture at the top of both READMEs is now the
-  application itself taking the 555 blinker example from the sheet to its build guide:
-  the welcome screen, the board dialog with every stock size tried, placing, routing, the
-  guide. `tools/make_workflow_demo.py` drives the real window offscreen and writes it in
-  either language, and `docs/RELEASING.md` re-records both after a version bump. The still
-  it replaced moved down beside the solder side.
 - **The Windows installer is about 58 MB instead of 103, and installs 275 MB instead of
   507.** The bundle packed all of VTK for the thirteen modules the 3D view uses -- VTK-m,
   HDF5, NetCDF, volume rendering, the web exporter -- and, from Qt and the MCP server's
@@ -250,12 +178,14 @@ closed without a bump.
   view and the guide's step pictures exactly as a source run does. The AppImage and the
   disk image are built from the same spec and lose the same VTK and Python parts; their
   new sizes are not measured yet.
+
 - **The window opens in about half the time.** It imported the 3D view -- VTK and numpy --
   at start, for a panel that starts shut; it now imports it when the panel is first opened,
   or a 3D picture is first asked for. Time from launch to a window on screen, from source
   on a desktop: 1.2 s became 0.65 s. A test holds a window start to importing nothing 3D,
   and another holds every method that draws in 3D to importing the view itself, which is
   the one mistake here the type checker cannot see.
+
 - **The 3D view loads VTK in a third of the time.** It imported the whole of VTK -- forty
   modules, from the web exporter to volume rendering -- to draw with thirteen, and that
   was 425 of the 560 ms the window spent importing before it could show anything. It
@@ -263,15 +193,81 @@ closed without a bump.
   never imports the rest and compares the picture with one that does: on the machine it
   was written on they are identical to the byte.
 
-### Fixed
+- **Choosing a board takes a seventh less time.** Each board trial routed the winning
+  placement again after the placer had already routed exactly that board to choose it. A
+  trial now takes the placer's route when its document is that same document, and routes
+  afresh when it is not. Every example's chosen board, every verdict and every placed part
+  are byte for byte what they were, over seeds 0 to 3. Measured under the team's heavy-job
+  lock, four seeds summed, before and after: atmega328-relay 129.8 → 115.2 s, nano-relay
+  60.9 → 49.9, ne555-blinker 44.1 → 36.5, lm317-supply 40.0 → 33.8, arduino-io-shield
+  23.3 → 21.7, lpb1-booster 16.3 → 13.5, ne555-astable 12.7 → 10.8.
 
-- **The board view, the guide's step pictures and the 1:1 print drew a round LED's flat on
-  the anode.** The flat on a real LED marks the cathode, so anyone who oriented an LED by
-  the picture or the print put it in backwards. If you built a board that way, turn the
-  LED round: it lights only one way. The flat was cut beside pin 1, and an LED's pin 1 is
-  its anode; the 3D view always had it right. A two-leg LED's flat is now on the lead it
-  calls K; an LED with more legs keeps it beside pin 1, as the makers' drawings of RGB
-  LEDs have it.
+- **And a further tenth, by the placer remembering what it has worked out.** 45 % of the
+  placer's questions about whether two parts overlap or run hot were ones it had answered
+  before: the same two parts at the same two spots, as parts move away and back. One
+  planning run now keeps those answers, and nothing outlives it. The same proof, and the
+  same measurement, after the change above and then with this one too: atmega328-relay
+  115.2 → 108.4 s, nano-relay 49.9 → 48.5, ne555-blinker 36.5 → 31.0, lm317-supply 33.8 →
+  28.8, arduino-io-shield 21.7 → 19.0, lpb1-booster 13.5 → 12.1, ne555-astable 10.8 → 9.5.
+  Choosing a board takes 21 % less time than it did: 327 s became 257 for all of them.
+
+- **New Project asks a name and a place, and the board comes second.** It asked which
+  board before there was a circuit to try on one, and then the Board step asked again: a
+  breadboard chosen twice, and a perfboard size picked blind where step 2 would have tried
+  every stock size with the circuit laid out on it. The board question has an Other Board
+  button now -- a breadboard, a stripboard or any size, through Board Setup -- which is
+  where a project's board is chosen.
+
+- **DRC and LVS findings are said in Turkish in a Turkish window.** The findings panel
+  was the one place a Turkish window still read English sentence after sentence: "Pin 1 of
+  X7 (net 'GND') is not connected to anything...". Every finding the checkers write -- 47
+  sentences and the words they are built from -- is now said in the window's language, with
+  its copper named by its ends and its parts by their references. The findings themselves
+  are unchanged: MCP, the headless run and the goldens read the English as they did. A
+  finding no sentence recognises is shown in English, whole, rather than half-translated.
+
+- **A catalog search reads a word the way a person types it.** "LM358N", "NE555P",
+  "SN74HC595N", "L7805CV" and "ATtiny85-20PU" find the part whose number they carry, with a
+  package letter, a maker's prefix or an ordering code on it, and "LM350" still does not
+  find the LM35. Hyphens and spaces no longer count, so "opamp" finds the op-amp and "5v
+  regulator" the 7805. A part can carry aliases for words its summary does not say:
+  "stepper" and "28BYJ-48" find the ULN2003A, "motor driver" the L293D. Parts the words
+  NAME come before parts whose summary merely mentions them, so "switch" lists the push
+  buttons ahead of the 2N2222A. The Parts panel and `list_catalog` search one way, through
+  `catalog.part_matches` -- the panel used to look for the whole text as one piece, so "op
+  amp" found nothing there.
+
+- **Eight more searches find their part**, from a sweep of 130 things a beginner types in
+  English and Turkish: "voltage regulator" and "voltaj regülatörü" find the regulators,
+  "microcontroller" and "mikrodenetleyici" the ATtiny85 and ATmega328P, "terminal block"
+  the power terminal, "batarya" the batteries, "adaptör" the DC jack, "kızılötesi" the IR
+  receiver, "anahtar" the push buttons. And a name is named only from the start of a word,
+  so "led" no longer ranks an OLED as named.
+
+- **In Turkish, a catalog part named for what it is is named in Turkish**: "Tact buton 6×6
+  mm" beside the package row "Tact buton, 4 pin", where it said "Tactile switch 6x6 mm",
+  and the Turkish name finds it. A part number is printed as it is on the part.
+
+- **The README opens with the window in motion, and three steps.** The picture at the top of
+  both READMEs is now the application itself taking the 555 blinker example from the sheet
+  to its build guide: the welcome screen, the board dialog with every stock size tried,
+  placing, routing, the guide. `tools/make_workflow_demo.py` drives the real window
+  offscreen and writes it in either language, and `docs/RELEASING.md` re-records both after
+  a version bump. The still it replaced moved down beside the solder side. Above it, three
+  steps: download it, draw a circuit or open an example, and press the button at the end of
+  the step bar until the build guide opens. The two install links moved into the first step.
+  In both languages.
+
+- **The architecture notes are `docs/ARCHITECTURE.md` now, and `CLAUDE.md` is a fifth of
+  the size.** CLAUDE.md is loaded whole into every agent session and had grown a section
+  per feature to 159 000 characters. It keeps the commands, the gates and the rules every
+  change has to keep -- the immutable document, the pure engine, the differential proof,
+  conductors, hole addressing, layering and i18n -- and ends with every other section
+  listed by what somebody is about to touch. The sections moved word for word.
+  `tests/test_docs.py` fails on a section that list does not name, and on CLAUDE.md
+  growing past 40 000 characters.
+
+### Fixed
 
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,
   was wired wrong for the real relay.** Such a relay was guessed onto `relay-spdt`, so the
@@ -284,6 +280,73 @@ closed without a bump.
   example is rebuilt on it: the real relay is larger, so it moved from a 6 x 8 cm board to
   7 x 9 cm and every part was placed again; it routes with no DRC error or warning, and ERC
   finds nothing.
+
+- **The board view, the guide's step pictures and the 1:1 print drew a round LED's flat on
+  the anode.** The flat on a real LED marks the cathode, so anyone who oriented an LED by
+  the picture or the print put it in backwards. If you built a board that way, turn the
+  LED round: it lights only one way. The flat was cut beside pin 1, and an LED's pin 1 is
+  its anode; the 3D view always had it right. A two-leg LED's flat is now on the lead it
+  calls K; an LED with more legs keeps it beside pin 1, as the makers' drawings of RGB
+  LEDs have it.
+
+- **A value typed over a catalog part takes that part's pinout with it.** Changing a
+  BC547 to a 2N3904 in Part Properties kept the BC547's C-B-E under a transistor that is
+  E-B-C, and nothing downstream could tell: the sheet, the guide and ERC all read the names
+  the part carries. The names a value brought now follow the value -- in Part Properties and
+  in the sheet's Edit a Part alike -- and the dialog says so under the names. Names somebody
+  typed are still theirs; the dialog says what the catalog has instead of overwriting them.
+  Part Properties also gives an unnamed part the catalog's names when its value is one, as
+  Add a Part always did.
+
+- **The installers carry KiCad's package models.** Every Windows, Linux and macOS
+  installer since 0.12.0 shipped without the meshes the 3D view draws real packages from,
+  so it drew the generated block for every part -- a DIP as a slab, an electrolytic as a
+  plain can -- while a `pip` install drew the real ones. The meshes are data, not code, and
+  the build only ever collected code. They are in the bundle now with their licence and
+  notice, and the release checks every bundle for every one of them, as it already checked
+  the wheel.
+
+- **Enter in Add a Part takes the part the filter names.** The catalog is listed first and
+  searched by what a part does as well as by its name, so typing "LED" and pressing Enter
+  added a MAX7219, an LED display driver with 24 pins. Enter now takes the first row whose
+  name has what was typed as a word, or the start of one -- "LED" is inside "OLED" too, and
+  "ATtiny" still names the ATtiny85 -- the one where the word comes EARLIEST ("header" takes
+  a pin header, not "Power in, 2-pin header"); when no name has it, a catalog part named by an
+  alias or its kind ("anahtar", "pil"); and the first match only when nothing names one.
+
+- **The part list counts sizes as numbers.** "LED, 10 mm" sorted before 3 mm and 5 mm, so
+  typing "LED" and pressing Enter added a 10 mm LED; a 1x10 header stood between the 1x1 and
+  the 1x2. The Parts panel and Add a Part now list sizes smallest first.
+
+- **Work still ahead is not shown as wrong.** A part still in the design was listed in red
+  under LVS from the moment it was drawn, and the status bar's LVS count turned red the
+  moment a placement landed, because every net is open until it is wired. Both now follow
+  the step bar's rule: an open is the wiring's news until the wiring is done, and a part not
+  yet placed is the placement's.
+  Pins nothing is wired to yet are not warnings yet either: a board just placed has every pin
+  of every net touching nothing, and DRC says so pin by pin: Verify read "17 warning(s)" on a
+  six-part board before any wiring existed, and the status bar went amber with it. Until the
+  wiring is done they are its news, as an open is; after it, a pin still touching nothing is
+  counted like any other warning. The findings panel still lists them.
+
+- **The findings panel no longer calls pins waiting for their wiring violations.** With an
+  NE555 placed and not yet routed, the status bar and the step bar read "DRC 0 err / 0
+  warn" while the panel's DRC group said "28 violation(s)" over "Pin connected to nothing
+  (warning)" in amber. While connections are left to route, those pins are counted apart
+  ("0 violation(s) · 28 pin(s) not wired yet"), titled "Pin not wired yet", dimmed in the
+  colour the status bar gives the connections left to route, and listed after anything
+  actually wrong. LVS's "Net not wired yet" and "Part not on the board" are dimmed the
+  same way, and so, while there is wiring left, is "Open: a net in pieces" -- red until
+  now, beside the bar's dimmed LVS count -- and on stripboard a short, by the status bar's
+  own rule. Once the last connection is routed, a pin still touching nothing is a warning
+  in amber again.
+
+- **Save As, Open and Import start where your boards are.** They started in the folder the
+  process was launched from, which from the Start menu is the folder the application is
+  installed in: the first board anybody saved was proposed as `board.perf` beside the
+  program, or refused under Program Files. They now start beside the board open, else beside
+  the board opened last, else in Documents, and an unsaved board is proposed under its own
+  name -- an example opened untitled keeps the example's.
 
 - **A refusal is said in words, in the window's language.** Joining two pins that are on
   different nets, a reference already taken, a part moved off the board or a locked one
@@ -299,57 +362,6 @@ closed without a bump.
   bracket out. The findings themselves are unchanged -- MCP, the headless run and the goldens
   read them as they were -- this is how the window shows them.
 
-- **A value typed over a catalog part takes that part's pinout with it.** Changing a
-  BC547 to a 2N3904 in Part Properties kept the BC547's C-B-E under a transistor that is
-  E-B-C, and nothing downstream could tell: the sheet, the guide and ERC all read the names
-  the part carries. The names a value brought now follow the value -- in Part Properties and
-  in the sheet's Edit a Part alike -- and the dialog says so under the names. Names somebody
-  typed are still theirs; the dialog says what the catalog has instead of overwriting them.
-  Part Properties also gives an unnamed part the catalog's names when its value is one, as
-  Add a Part always did.
-
-- **Save As, Open and Import start where your boards are.** They started in the folder the
-  process was launched from, which from the Start menu is the folder the application is
-  installed in: the first board anybody saved was proposed as `board.perf` beside the
-  program, or refused under Program Files. They now start beside the board open, else beside
-  the board opened last, else in Documents, and an unsaved board is proposed under its own
-  name -- an example opened untitled keeps the example's.
-
-- **The part list counts sizes as numbers.** "LED, 10 mm" sorted before 3 mm and 5 mm, so
-  typing "LED" and pressing Enter added a 10 mm LED; a 1x10 header stood between the 1x1 and
-  the 1x2. The Parts panel and Add a Part now list sizes smallest first.
-
-- **Enter in Add a Part takes the part the filter names.** The catalog is listed first and
-  searched by what a part does as well as by its name, so typing "LED" and pressing Enter
-  added a MAX7219, an LED display driver with 24 pins. Enter now takes the first row whose
-  name has what was typed as a word, or the start of one -- "LED" is inside "OLED" too, and
-  "ATtiny" still names the ATtiny85 -- the one where the word comes EARLIEST ("header" takes
-  a pin header, not "Power in, 2-pin header"); when no name has it, a catalog part named by an
-  alias or its kind ("anahtar", "pil"); and the first match only when nothing names one.
-
-- **Work still ahead is not shown as wrong.** A part still in the design was listed in red
-  under LVS from the moment it was drawn, and the status bar's LVS count turned red the
-  moment a placement landed, because every net is open until it is wired. Both now follow
-  the step bar's rule: an open is the wiring's news until the wiring is done, and a part not
-  yet placed is the placement's.
-
-- **Pins nothing is wired to yet are not warnings yet.** A board just placed has every pin
-  of every net touching nothing, and DRC says so pin by pin: Verify read "17 warning(s)" on a
-  six-part board before any wiring existed, and the status bar went amber with it. Until the
-  wiring is done they are its news, as an open is; after it, a pin still touching nothing is
-  counted like any other warning. The findings panel still lists them.
-
-- **Both READMEs counted 54 MCP tools and ~4250 tests.** There are 57 and ~4700.
-  `docs/MCP.md`'s count was already held to the server; `tests/test_docs.py` now holds
-  every count of MCP tools in either README to `docs/MCP.md`.
-- **The installers carry KiCad's package models.** Every Windows, Linux and macOS
-  installer since 0.12.0 shipped without the meshes the 3D view draws real packages from,
-  so it drew the generated block for every part -- a DIP as a slab, an electrolytic as a
-  plain can -- while a `pip` install drew the real ones. The meshes are data, not code, and
-  the build only ever collected code. They are in the bundle now with their licence and
-  notice, and the release checks every bundle for every one of them, as it already checked
-  the wheel.
-
 - **A silent install answers its own questions.** The Windows installer's two message
   boxes, "Perfboard Studio appears to be running" and "Cannot write to the installation
   folder", named no answer for a silent run (`/S`, which is how a package manager runs it),
@@ -360,6 +372,14 @@ closed without a bump.
 - **The MCP server tells a client its own version.** It answered `initialize` with the
   version of the `mcp` library it is built on, so a client listed "perfboard-studio
   1.29.0", a release that does not exist. It reports this release's version now.
+
+- **The docs said things that were no longer so.** Both READMEs counted 54 MCP tools -- once
+  in figures and once in words -- and ~4250 tests; there are 57 and ~5000. `docs/MCP.md`'s
+  count was already held to the server, and `tests/test_docs.py` now holds every count of
+  tools in either README to `docs/MCP.md`. CONTRIBUTING's clone command named a repository
+  that does not exist (`perfboard_studio`, with an underscore), counted ~2070 tests in under
+  a minute, and said the three-platform test matrix ran on `main` only; it runs on every
+  push. Both READMEs now say what ERC, the catalog, Add a Part and Change Part do.
 
 ## [0.21.0] - 2026-10-21
 
