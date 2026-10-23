@@ -13219,3 +13219,22 @@ def test_an_leds_flat_is_on_its_cathode_in_2d_too(footprint_id: str) -> None:
     # Cut on the cathode's side, and only there.
     assert flat.right() < circle.right() - 0.1
     assert flat.left() == pytest.approx(circle.left())
+
+
+def test_an_rgb_leds_flat_is_beside_its_red_leg() -> None:
+    """Kingbright's and Fedy's drawings put an RGB LED's flat beside red, pin 1, whatever the
+    common leg is -- an anode on one LED and a cathode on the next."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.bodies import placement_for, polarity_pin_offset
+    from perfboard_studio.ui.view2d import _body_path, _body_rect
+
+    footprint = get_footprint("led-5mm-rgb")
+    assert footprint is not None and footprint.pins[0].name == "R"
+    pitch = 2.54
+    placement = placement_for(footprint, pitch)
+    keyed = polarity_pin_offset(footprint, pitch)
+    assert keyed is not None and keyed[0] < placement.centre_x
+    circle = _body_rect(placement)
+    flat = _body_path(footprint, placement, keyed, pitch).boundingRect()
+    assert flat.left() > circle.left() + 0.1
+    assert flat.right() == pytest.approx(circle.right())
