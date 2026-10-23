@@ -2090,6 +2090,16 @@ TURKISH: Mapping[str, str] = {
         "Setlerdeki VS1838B'nin dizilişi de çoğu zaman aynıdır, kubbe size bakarken soldan "
         "OUT, GND, VCC; ama her zaman değil: sizinkini kontrol edin."
     ),
+    "Accelerometer and gyroscope, three axes each, on I2C": (
+        "İvmeölçer ve jiroskop, her biri üç eksenli, I2C üzerinden"
+    ),
+    "VCC takes 3.3 to 5 V: the board has its own 3.3 V regulator. XDA and XCL are for a "
+    "second sensor and can stay open. Sellers give the board as 20 to 21.2 by 15.5 to 16.4 "
+    "mm: where the header sits on it and how tall its parts stand are estimates.": (
+        "VCC 3.3 ile 5 V arası alır: kartın kendi 3.3 V regülatörü vardır. XDA ve XCL ikinci "
+        "bir sensör içindir, boş kalabilir. Satıcılar kartı 20-21.2 x 15.5-16.4 mm verir: "
+        "header'ın kart üzerindeki yeri ve parçaların yüksekliği tahmindir."
+    ),
     "Quad 2-input NAND gate": "Dörtlü 2 girişli NAND kapısı",
     "Hex inverter": "Altılı evirici",
     "Quad 2-input AND gate": "Dörtlü 2 girişli AND kapısı",

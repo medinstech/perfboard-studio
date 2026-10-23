@@ -114,6 +114,12 @@ closed without a bump.
   J beside inputs A and B. A test pins the one difference a builder would trip over: the
   CD4011's outputs are on pins 3, 4, 10 and 11, the 74HC00's on 3, 6, 8 and 11.
 
+- **Catalog: the GY-521 MPU-6050 board.** Its eight pins are named as every GY-521 prints
+  them (VCC GND SCL SDA XDA XCL AD0 INT). Nobody publishes a drawing of the board, so its
+  21.2 x 16.4 mm is the sellers' figure, and `check` says the header's place and the height
+  are estimates. The HC-SR501 PIR stays out: no maker drawing exists, and the boards and the
+  tutorials give its three pins in opposite orders.
+
 - **The Songle SRD relay, as it is.** `relay-srd` is the SRD-05VDC-SL-C and its family on
   the holes nearest its legs, which are not on the 2.54 mm grid: COM alone between the coil
   legs at one end, the contacts at the other, numbered as KiCad's SANYOU SRD (1 COM, 2 and

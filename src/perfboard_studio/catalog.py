@@ -665,6 +665,23 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "on them, are estimates."
                 ),
                 aliases=("ultrasonic", "sonar", "distance")),
+    # The MPU-6050 board everybody sells: its eight names are printed on it and the same on
+    # every one; nobody publishes a drawing of the board, so its size is the sellers'.
+    CatalogPart("gy-521", "GY-521 MPU-6050", "sensor", "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x6.7",
+                "Accelerometer and gyroscope, three axes each, on I2C",
+                _legs("VCC", "GND", "SCL", "SDA", "XDA", "XCL", "AD0", "INT"), ref_prefix="U",
+                source=(
+                    "The eight names as the board prints them; the 21.2 x 16.4 mm board as "
+                    "sellers list it; the chip, InvenSense's MPU-6050 (I2C address 0x68 with AD0 "
+                    "low, 0x69 high)"
+                ),
+                check=(
+                    "VCC takes 3.3 to 5 V: the board has its own 3.3 V regulator. XDA and XCL are "
+                    "for a second sensor and can stay open. Sellers give the board as 20 to 21.2 "
+                    "by 15.5 to 16.4 mm: where the header sits on it and how tall its parts "
+                    "stand are estimates."
+                ),
+                aliases=("MPU6050", "accelerometer", "gyroscope", "IMU", "ivmeölçer", "jiroskop")),
     # The receiver's body stands on its three legs with its dome facing down the rows, as
     # KiCad's model of Vishay's MINICAST package has it.
     CatalogPart("tsop38238", "TSOP38238", "sensor", "box-3x1-p1-r1-5.92x4.8x10.35-o0x1",
