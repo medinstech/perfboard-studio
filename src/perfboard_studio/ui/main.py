@@ -644,11 +644,14 @@ def _catalog_headings() -> dict[str, str]:
         "transistor": t("Transistors"),
         "mosfet": t("MOSFETs"),
         "regulator": t("Regulators and references"),
+        "power": t("Power in"),
         "diode": t("Diodes"),
         "protection": t("Protection"),
         "sensor": t("Sensors"),
         "ic": t("ICs"),
         "switch": t("Switches"),
+        "connector": t("Connectors"),
+        "sound": t("Sound"),
         "module": t("Modules"),
     }
 

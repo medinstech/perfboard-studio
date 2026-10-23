@@ -22,6 +22,14 @@ closed without a bump.
 
 ### Added
 
+- **A way to bring power onto the board, a servo header and a buzzer.** "battery", "9V",
+  "jack", "pil" and "power" used to find nothing, so a first circuit drawn from scratch had
+  no way to be fed. The catalog has a new group, Power in: a 9 V battery clip and an AA
+  holder on their leads, a 5.5 x 2.1 mm panel jack wired from its centre pin and sleeve,
+  and a screw terminal and a header named + and -. Under Connectors, a servo header (PWM,
+  + in the middle, -, as an SG90's plug), and under Sound, a 12 mm active buzzer whose
+  check says how to tell it from a passive one.
+
 - **The examples' chips have their pin names.** The NE555 on the front page was a box of
   numbered pins on the sheet, and ERC had nothing to check it by, because an example that
   names its footprints never asked the catalog what its parts are. It asks now, as an

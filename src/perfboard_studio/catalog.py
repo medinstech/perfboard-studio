@@ -45,11 +45,14 @@ CatalogCategory = Literal[
     "transistor",
     "mosfet",
     "regulator",
+    "power",
     "diode",
     "protection",
     "sensor",
     "ic",
     "switch",
+    "connector",
+    "sound",
     "module",
 ]
 
@@ -58,11 +61,16 @@ CATEGORY_ORDER: tuple[CatalogCategory, ...] = (
     "transistor",
     "mosfet",
     "regulator",
+    # Beside the regulators: how the supply gets onto the board in the first place, which a
+    # first circuit drawn from nothing has no other way to find.
+    "power",
     "diode",
     "protection",
     "sensor",
     "ic",
     "switch",
+    "connector",
+    "sound",
     "module",
 )
 
@@ -112,6 +120,9 @@ _PREFIX_BY_CATEGORY: dict[str, str] = {
     "mosfet": "Q",
     "diode": "D",
     "protection": "F",
+    "power": "J",
+    "connector": "J",
+    "sound": "BZ",
 }
 
 
@@ -214,6 +225,10 @@ _MODULE_TOP = (
     "The height of what is on the board is an estimate, and so is its colour; the pins, "
     "the rows and the board outline are measured."
 )
+
+#: Off the board: what the leads of a battery or a panel jack are soldered into, one pad
+#: each (``footprints.off_board_mount``). Every word a beginner looks for power by.
+_POWER_WORDS = ("power", "supply", "battery", "pil", "besleme")
 
 
 CATALOG: tuple[CatalogPart, ...] = (
@@ -338,6 +353,53 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "10 uF on the output to stay stable. The LM1117T-3.3 is pinned the same."
                 ),
                 aliases=("3.3 V regulator", "LM1117T-3.3")),
+    # -- power in ---------------------------------------------------------------------
+    CatalogPart("battery-9v-clip", "9 V battery clip", "power", "wire-2",
+                "PP3 snap on two leads, for a 9 V battery",
+                _legs("+", "-"), value="9V", ref_prefix="BT",
+                source="Keystone 233 9 V battery snap: red and black 26 AWG leads, 6 in",
+                check=(
+                    "Red is +. If both leads of yours are one colour, find + with a meter on "
+                    "the battery before soldering."
+                ),
+                aliases=(*_POWER_WORDS, "PP3", "9V")),
+    CatalogPart("battery-aa-holder", "AA battery holder", "power", "wire-2",
+                "Two to four AA or AAA cells in series, on two leads",
+                _legs("+", "-"), value="AA holder", ref_prefix="BT",
+                source="Keystone 2463 2 x AA holder: red and black 26 AWG leads, 150 mm",
+                check=(
+                    "Red is + and black is -. With no colours, measure across it with the "
+                    "cells in."
+                ),
+                aliases=(*_POWER_WORDS, "AAA")),
+    CatalogPart("dc-jack-panel", "DC barrel jack 5.5 x 2.1 mm, panel mount", "power", "wire-2",
+                "On the case, wired to the board from its centre pin and its sleeve",
+                _legs("+", "-"), value="DC IN",
+                source=(
+                    "IEC 60130-10 type A plug, 5.5 mm outside and 2.1 mm pin; the jack's "
+                    "centre pin is pin 1 here and its sleeve pin 2"
+                ),
+                check=(
+                    "Centre-positive is the usual way and not a rule: the symbol on the "
+                    "adapter says which. A third lug, if yours has one, is a switch and stays "
+                    "unconnected here."
+                ),
+                aliases=(*_POWER_WORDS, "jack", "adapter")),
+    CatalogPart("power-terminal-2", "Power in, 2-way screw terminal", "power",
+                "screw-terminal-2", "Two wires in under screws, named + and -",
+                _legs("+", "-"), value="DC IN",
+                source=(
+                    "Phoenix Contact MKDS 1,5/ 2-5,08, the terminal screw-terminal-2 is drawn "
+                    "from; which way is + is the board's choice, not the terminal's"
+                ),
+                check="Print + and - beside it: the terminal itself does not say.",
+                aliases=_POWER_WORDS),
+    CatalogPart("power-header-2", "Power in, 2-pin header", "power", "hdr-1x2",
+                "Two header pins named + and -, for a lead that plugs on",
+                _legs("+", "-"), value="DC IN",
+                source="2.54 mm pin header; which way is + is the board's choice",
+                check="Print + and - beside it: the header itself does not say.",
+                aliases=_POWER_WORDS),
     CatalogPart("tl431", "TL431", "regulator", "to92",
                 "Adjustable shunt reference, 2.5 to 36 V",
                 _legs("REF", "A", "K"), ref_prefix="U",
@@ -569,6 +631,33 @@ CATALOG: tuple[CatalogPart, ...] = (
                 value="12x12 tactile",
                 source="KiCad Button_Switch_THT:SW_PUSH-12mm and the Wuerth 430476085716 model",
                 check=_SWITCH_LEGS),
+    # -- connectors -------------------------------------------------------------------
+    CatalogPart("servo-header", "Servo header", "connector", "hdr-1x3",
+                "Three header pins for a hobby servo's plug: PWM, + in the middle, -",
+                _legs("PWM", "+", "-"), value="SERVO",
+                source=(
+                    "TowerPro SG90 datasheet: orange PWM, red +, brown -, the + in the middle "
+                    "as on Futaba, Hitec and JR plugs"
+                ),
+                check=(
+                    "Turned round, PWM and - swap and the servo does nothing. Feed it from its "
+                    "own 5 V, not from a board's regulator pin."
+                ),
+                aliases=("servo", "SG90", "motor")),
+    # -- sound ------------------------------------------------------------------------
+    CatalogPart("buzzer-active-12mm", "Active buzzer 12 mm", "sound",
+                "box-2x1-p3-r1-12x12x9.5",
+                "Beeps on DC, 12 mm across and 9.5 mm tall, legs 7.6 mm apart",
+                _legs("+", "-"), value="Buzzer",
+                source=(
+                    "KiCad Buzzer_Beeper:Buzzer_12x9.5RM7.6 (pad 1 is +, as Device:Buzzer "
+                    "pin 1); drawn as the 12 mm square its round body sits in"
+                ),
+                check=(
+                    "An ACTIVE buzzer is sealed underneath; a PASSIVE one shows its board "
+                    "there and needs a tone, not DC. The longer leg, under the + on top, is +."
+                ),
+                aliases=("beeper", "piezo", "alarm")),
     CatalogPart("esp32-devkitc", "ESP32-DevKitC V4", "module",
                 "mod-2x19-p10-r1-27.94x54.3x3.5-s8.5-o0x-3",
                 "ESP32-WROOM-32 dev board, 38 pins, rows 25.4 mm apart",

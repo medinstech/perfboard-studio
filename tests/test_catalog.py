@@ -184,6 +184,17 @@ def test_search_matches_the_name_the_summary_and_the_kind() -> None:
         ("port expander", "mcp23017"),
         ("eeprom", "24lc256"),
         ("adc", "mcp3008"),
+        # A first circuit drawn from nothing needs a way to bring power in, in either
+        # language.
+        ("battery", "battery-9v-clip"),
+        ("9V", "battery-9v-clip"),
+        ("pil", "battery-aa-holder"),
+        ("jack", "dc-jack-panel"),
+        ("power", "power-terminal-2"),
+        ("supply", "power-header-2"),
+        ("servo", "servo-header"),
+        ("SG90", "servo-header"),
+        ("buzzer", "buzzer-active-12mm"),
     ],
 )
 def test_a_part_is_found_by_what_somebody_would_type(typed, found) -> None:
@@ -218,6 +229,30 @@ def test_the_window_can_hand_the_search_its_own_words_and_its_own_letters() -> N
     dotless = str.maketrans({"I": "i", "ı": "i", "İ": "i"})
     assert not part_matches(lm358, "ISI", also="ısı")
     assert part_matches(lm358, "ISI", also="ısı", fold=lambda text: text.translate(dotless).lower())
+
+
+def test_power_comes_in_on_a_plus_and_a_minus_and_a_battery_is_off_the_board() -> None:
+    """Every way in is named + and -, in that order, so the guide's polarity note and the
+    net colours have something to read; a battery and a panel jack are the pads their leads
+    land in (``footprints.off_board_mount``), and a battery is BT, not J."""
+    for part in CATALOG:
+        if part.category == "power":
+            assert part.pin_names == (("1", "+"), ("2", "-")), part.id
+    for part_id in ("battery-9v-clip", "battery-aa-holder", "dc-jack-panel"):
+        part = catalog_part(part_id)
+        assert part is not None and part.footprint_id.startswith("wire-")
+    clip = catalog_part("battery-9v-clip")
+    assert clip is not None and clip.reference_prefix == "BT"
+    session = BoardSession(document=new_board(cols=30, rows=20))
+    assert session.add_part("", "", part="battery-9v-clip")["ok"]
+    assert session.add_part("", "", part="buzzer-active-12mm")["ok"]
+    assert [part.ref for part in session.document.parts] == ["BT1", "BZ1"]
+
+
+def test_a_servo_header_has_its_plus_in_the_middle() -> None:
+    """As every hobby servo's plug has it: turned round, PWM and - swap, and nothing burns."""
+    servo = catalog_part("servo-header")
+    assert servo is not None and dict(servo.pin_names) == {"1": "PWM", "2": "+", "3": "-"}
 
 
 def test_a_free_reference_counts_the_board_and_the_design() -> None:

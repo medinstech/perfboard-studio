@@ -12668,6 +12668,22 @@ def test_the_filter_finds_a_part_by_what_it_is() -> None:
         _close(window)
 
 
+def test_every_catalog_category_has_a_heading_and_power_is_found_from_nothing() -> None:
+    """A category with no heading is a KeyError the moment the panel fills. And a first
+    circuit drawn from nothing -- a 555 blinker -- has to be able to find its battery."""
+    from perfboard_studio.catalog import CATEGORY_ORDER
+    from perfboard_studio.ui.main import _catalog_headings
+
+    assert set(_catalog_headings()) == set(CATEGORY_ORDER)
+    window = _blank_window()
+    try:
+        for typed, part_id in (("battery", "battery-9v-clip"), ("jack", "dc-jack-panel")):
+            window.library_filter.setText(typed)
+            assert _catalog_leaf(window, part_id) is not None, typed
+    finally:
+        _close(window)
+
+
 def test_the_filter_reads_words_the_way_the_catalog_search_does() -> None:
     """The panel asks ``catalog.part_matches``, the same question ``list_catalog`` asks: it
     used to look for the whole text as one piece, so "op amp" found nothing here while the

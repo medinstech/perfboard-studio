@@ -1942,6 +1942,63 @@ TURKISH: Mapping[str, str] = {
     "PTC resettable fuse": "PTC kendini sıfırlayan sigorta",
     "Pololu A4988 carrier": "Pololu A4988 taşıyıcı kartı",
     "Pololu DRV8825 carrier": "Pololu DRV8825 taşıyıcı kartı",
+    "Power in": "Güç girişi",
+    "Connectors": "Konnektörler",
+    "Sound": "Ses",
+    "9 V battery clip": "9 V pil klipsi",
+    "PP3 snap on two leads, for a 9 V battery": "İki kablolu PP3 başlığı, 9 V pil için",
+    "Red is +. If both leads of yours are one colour, find + with a meter on the battery "
+    "before soldering.": (
+        "Kırmızı kablo +'dır. Sizinkinin iki kablosu da aynı renkteyse, lehimlemeden önce "
+        "pil takılıyken +'yı multimetreyle bulun."
+    ),
+    "AA battery holder": "AA pil yuvası",
+    "Two to four AA or AAA cells in series, on two leads": (
+        "Seri bağlı iki ile dört AA ya da AAA pil, iki kablolu"
+    ),
+    "Red is + and black is -. With no colours, measure across it with the cells in.": (
+        "Kırmızı +, siyah -'dir. Renk yoksa piller takılıyken uçlarını ölçün."
+    ),
+    "DC barrel jack 5.5 x 2.1 mm, panel mount": "DC jak 5,5 × 2,1 mm, panele takılan",
+    "On the case, wired to the board from its centre pin and its sleeve": (
+        "Kutunun üzerinde durur; karta merkez piminden ve gövdesinden kabloyla bağlanır"
+    ),
+    "Centre-positive is the usual way and not a rule: the symbol on the adapter says "
+    "which. A third lug, if yours has one, is a switch and stays unconnected here.": (
+        "Merkezin + olması en yaygın olanıdır ama kural değildir: adaptörün üzerindeki "
+        "sembol hangisi olduğunu söyler. Sizinkinde üçüncü bir uç varsa o bir anahtardır "
+        "ve burada boş kalır."
+    ),
+    "Power in, 2-way screw terminal": "Güç girişi, 2'li klemens",
+    "Two wires in under screws, named + and -": "Vidayla sıkılan iki kablo girişi, + ve - adlı",
+    "Print + and - beside it: the terminal itself does not say.": (
+        "Yanına + ve - yazın: klemensin kendisi bunu söylemez."
+    ),
+    "Power in, 2-pin header": "Güç girişi, 2 pinli header",
+    "Two header pins named + and -, for a lead that plugs on": (
+        "Takılıp çıkarılan bir kablo için + ve - adlı iki header pini"
+    ),
+    "Print + and - beside it: the header itself does not say.": (
+        "Yanına + ve - yazın: header'ın kendisi bunu söylemez."
+    ),
+    "Servo header": "Servo konnektörü",
+    "Three header pins for a hobby servo's plug: PWM, + in the middle, -": (
+        "Hobi servosunun fişi için üç header pini: PWM, ortada +, -"
+    ),
+    "Turned round, PWM and - swap and the servo does nothing. Feed it from its own 5 V, "
+    "not from a board's regulator pin.": (
+        "Ters takılırsa PWM ile - yer değiştirir ve servo hiçbir şey yapmaz. Servoyu bir "
+        "kartın regülatör pininden değil, kendi 5 V'undan besleyin."
+    ),
+    "Active buzzer 12 mm": "Aktif buzzer 12 mm",
+    "Beeps on DC, 12 mm across and 9.5 mm tall, legs 7.6 mm apart": (
+        "DC verilince öter, 12 mm çapında ve 9,5 mm yüksekliğinde, bacaklar arası 7,6 mm"
+    ),
+    "An ACTIVE buzzer is sealed underneath; a PASSIVE one shows its board there and "
+    "needs a tone, not DC. The longer leg, under the + on top, is +.": (
+        "AKTİF buzzer'ın altı kapalıdır; PASİF olanın altında kartı görünür ve DC değil "
+        "bir ton ister. Üstteki + işaretinin altındaki uzun bacak +'dır."
+    ),
     "Momentary push button, legs 6.5 x 4.5 mm": (
         "Basılı tutulduğunda kapanan buton, bacaklar arası 6,5 × 4,5 mm"
     ),
