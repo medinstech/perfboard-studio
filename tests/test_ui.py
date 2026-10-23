@@ -12049,7 +12049,10 @@ def monkeypatch_exec(window, shown: list[int]) -> None:
 def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatch) -> None:
     """New Project makes the directory, saves the board into it immediately and starts in
     the schematic. A board with a home has somewhere to autosave to and something to put
-    in the recent list; an untitled one has neither until it is saved."""
+    in the recent list; an untitled one has neither until it is saved.
+
+    And it asks no board: that is the Board step's, once there is a circuit to try on it.
+    It used to ask here too, and a breadboard chosen in New Project was chosen again."""
     window = _blank_window()
     monkeypatch.setattr(
         "perfboard_studio.ui.main.QInputDialog.getText",
@@ -12061,9 +12064,11 @@ def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatc
     )
     import perfboard_studio.ui.main as main_module
 
+    asked: list[str] = []
     monkeypatch.setattr(
-        "perfboard_studio.ui.main.BoardSetupDialog.exec",
-        lambda self: int(main_module.QDialog.DialogCode.Accepted),
+        main_module.BoardSetupDialog,
+        "exec",
+        lambda self: asked.append("board") or int(main_module.QDialog.DialogCode.Accepted),
     )
 
     window.on_new_project()
@@ -12073,6 +12078,32 @@ def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatc
     assert window.current_path == folder / "ne555-astable.perf"
     assert not window.is_modified
     assert window.schematic_is_showing()
+    assert asked == []
+    assert window.workflow_bar.buttons["board"].property("status") == "todo"
+    _close(window)
+
+
+def test_the_board_question_has_a_way_to_the_other_kinds_of_board(monkeypatch) -> None:
+    """A breadboard or a stripboard is not a stock perfboard size, and New Project no longer
+    asks which kind: Other Board, beside the stock sizes, goes to Board Setup, and what it
+    set up is the board kept."""
+    import perfboard_studio.ui.main as main_module
+    from perfboard_studio.boardfit import BoardChoice
+    from perfboard_studio.placer import recommended_board, suggest_boards
+    from perfboard_studio.ui.main import BoardSizeDialog, design_entries
+
+    window = _blank_window()
+    document = window.bus.document
+    suggestions = suggest_boards(
+        document.board, design_entries(document), document.nets, window.lookup
+    )
+    reference = recommended_board(suggestions) if suggestions else None
+    choice = BoardChoice(tuple(suggestions), reference, (), reference, False)
+    set_up: list[bool] = []
+    monkeypatch.setattr(main_module.MainWindow, "on_board_setup", lambda self: set_up.append(True) or True)
+    monkeypatch.setattr(BoardSizeDialog, "exec", lambda self: BoardSizeDialog.OTHER_BOARD)
+    assert window._ask_which_board(choice, document) == (True, None)
+    assert set_up == [True]
     _close(window)
 
 

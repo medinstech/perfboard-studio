@@ -3584,9 +3584,23 @@ class BoardSizeDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        # The kinds of board no list of stock sizes holds -- a breadboard to try it on first,
+        # a stripboard, a piece cut to size -- one press away from the question about which
+        # board, which is where somebody looks for them.
+        self.other_board = buttons.addButton(
+            t("Other Board…"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.other_board.setToolTip(
+            t("A breadboard, a stripboard, or a board of any size: Board Setup.")
+        )
+        self.other_board.clicked.connect(lambda: self.done(self.OTHER_BOARD))
         layout.addWidget(buttons)
         if pictures:
             self.resize(4 * (self.THUMBNAIL.width() + 40) + 60, 2 * (self.THUMBNAIL.height() + 64) + 160)
+
+    #: What ``exec`` returns when Other Board was pressed: a breadboard, a stripboard or a
+    #: size cut by hand, which Board Setup asks about. New Project used to ask it up front.
+    OTHER_BOARD = 2
 
     def chosen(self) -> BoardSuggestion | None:
         """The board to switch to, or None to keep the one the document already has."""
@@ -5363,8 +5377,9 @@ class MainWindow(QMainWindow):
         act_new_project = file_menu.addAction(t("New &Project…"))
         act_new_project.setToolTip(
             t(
-                "Name the board, choose what it is built on, and start in the schematic. "
-                "Makes a folder to keep the board and everything generated from it."
+                "Name the board and start in the schematic; which board it goes on is the "
+                "next step. Makes a folder to keep the board and everything generated from "
+                "it."
             )
         )
         act_new_project.triggered.connect(self.on_new_project)
@@ -8167,7 +8182,10 @@ class MainWindow(QMainWindow):
     def _ask_which_board(
         self, choice: BoardChoice, document: PerfDocument
     ) -> tuple[bool, BoardSuggestion | None]:
-        """(accepted, the board chosen or None to keep the one it has)."""
+        """(accepted, the board chosen or None to keep the one it has).
+
+        Other Board goes to Board Setup, and what it set up is the board kept.
+        """
         dialog = BoardSizeDialog(
             choice.suggestions,
             document.board,
@@ -8178,7 +8196,10 @@ class MainWindow(QMainWindow):
             verdicts=choice.verdicts,
             complete=choice.complete,
         )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        answer = dialog.exec()
+        if answer == BoardSizeDialog.OTHER_BOARD:
+            return self.on_board_setup(), None
+        if answer != QDialog.DialogCode.Accepted:
             return False, None
         return True, dialog.chosen()
 
@@ -11455,12 +11476,18 @@ class MainWindow(QMainWindow):
         )
 
     def on_new_project(self) -> None:
-        """Name a project, choose the board it goes on, and start in the schematic.
+        """Name a project, give it a folder, and start in the schematic.
 
         A DIRECTORY IS CREATED AND THE DOCUMENT IS SAVED IMMEDIATELY, which is the whole
         difference between this and File ▸ New Board. An untitled board has nowhere to
         autosave to, nowhere to put a build guide and nothing to put in the recent list --
         every one of which starts working the moment it has a home.
+
+        THE BOARD IS NOT ASKED HERE. It used to be, before there was a circuit to try on
+        it, and then the Board step asked again: a breadboard chosen twice, and a perfboard
+        size picked blind where step 2 would have tried every stock size with the circuit
+        laid out on it. The project starts on the board a blank window starts on, and the
+        Board step chooses -- a breadboard or a stripboard through its Other Board button.
         """
         if not self._offer_to_save():
             return
@@ -11487,28 +11514,9 @@ class MainWindow(QMainWindow):
             )
             return
 
-        starter = create_starter_document(
+        document = create_starter_document(
             DocumentMeta(name=name.strip(), created=_now_iso(), modified=_now_iso())
         )
-        dialog = BoardSetupDialog(
-            starter.board,
-            self,
-            title=t("Board for {name}").format(name=name.strip()),
-            document=starter,
-            lookup=self.lookup,
-        )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        document = create_empty_document(
-            DocumentMeta(name=name.strip(), created=_now_iso(), modified=_now_iso()),
-            dialog.board(),
-        )
-        features = dialog.preset_features()
-        if features is not None:
-            connectors, holes = features
-            document = dataclasses.replace(
-                document, edge_connectors=connectors, mounting_holes=holes
-            )
 
         try:
             directory.mkdir(parents=True, exist_ok=True)
@@ -11529,9 +11537,10 @@ class MainWindow(QMainWindow):
         self.view.fit_board()
         self._open_the_schematic_on_an_empty_design()
         self.statusBar().showMessage(
-            t("New project in {path}. Draw the circuit, then Place on the Board.").format(
-                path=directory
-            ),
+            t(
+                "New project in {path}. Draw the circuit; the board it goes on is the next "
+                "step, tried with the circuit on it."
+            ).format(path=directory),
             12000,
         )
 

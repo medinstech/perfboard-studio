@@ -67,6 +67,13 @@ closed without a bump.
 
 ### Changed
 
+- **New Project asks a name and a place, and the board comes second.** It asked which
+  board before there was a circuit to try on one, and then the Board step asked again: a
+  breadboard chosen twice, and a perfboard size picked blind where step 2 would have tried
+  every stock size with the circuit laid out on it. The board question has an Other Board
+  button now -- a breadboard, a stripboard or any size, through Board Setup -- which is
+  where a project's board is chosen.
+
 - **The architecture notes are `docs/ARCHITECTURE.md` now, and `CLAUDE.md` is a fifth of
   the size.** CLAUDE.md is loaded whole into every agent session and had grown a section
   per feature to 159 000 characters. It keeps the commands, the gates and the rules every

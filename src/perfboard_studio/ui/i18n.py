@@ -1039,10 +1039,11 @@ TURKISH: Mapping[str, str] = {
     ),
     # -- projects: the folder a board and everything made from it live in ------
     "New &Project…": "Yeni &Proje…",
-    "Name the board, choose what it is built on, and start in the schematic. "
-    "Makes a folder to keep the board and everything generated from it.": (
-        "Karta bir ad ver, neyin üzerine kurulacağını seç ve şemadan başla. Kartı ve "
-        "ondan üretilen her şeyi bir arada tutacak bir klasör oluşturur."
+    "Name the board and start in the schematic; which board it goes on is the "
+    "next step. Makes a folder to keep the board and everything generated from "
+    "it.": (
+        "Karta bir ad ver ve şemadan başla; hangi karta gideceği sonraki adımdır. Kartı "
+        "ve ondan üretilen her şeyi bir arada tutacak bir klasör oluşturur."
     ),
     "A blank board with no home on disk yet.": "Diskte henüz bir yeri olmayan boş kart.",
     "Open P&roject…": "P&roje Aç…",
@@ -1064,10 +1065,15 @@ TURKISH: Mapping[str, str] = {
     "{path} already has something in it. Pick another place, or another name.": (
         "{path} içinde zaten bir şeyler var. Başka bir yer ya da başka bir ad seçin."
     ),
-    "Board for {name}": "{name} için kart",
     "Could not make the folder": "Klasör oluşturulamadı",
-    "New project in {path}. Draw the circuit, then Place on the Board.": (
-        "{path} içinde yeni proje. Devreyi çiz, sonra Kart Üzerine Yerleştir."
+    "New project in {path}. Draw the circuit; the board it goes on is the next "
+    "step, tried with the circuit on it.": (
+        "{path} içinde yeni proje. Devreyi çiz; gideceği kart sonraki adımdır ve devre "
+        "üzerine yerleştirilerek denenir."
+    ),
+    "Other Board…": "Başka Kart…",
+    "A breadboard, a stripboard, or a board of any size: Board Setup.": (
+        "Breadboard, şeritli kart ya da istenen boyutta bir kart: Kart Ayarları."
     ),
     "Open a project": "Bir proje aç",
     "Could not open the project": "Proje açılamadı",
