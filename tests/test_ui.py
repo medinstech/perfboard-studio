@@ -13298,6 +13298,10 @@ def test_the_guide_panel_says_to_cut_the_tracks_first(monkeypatch, _settings_in_
         assert guide.track_cuts
         heading = next(row for row in _guide_rows(window) if row.text(0).startswith("Cut these tracks first"))
         assert heading.text(0) == f"Cut these tracks first ({len(guide.track_cuts)})"
+        # Open, not folded away: the first build of this opened the heading before it was
+        # in the tree, and Qt keeps such an item shut.
+        assert heading.isExpanded()
+        assert not any(heading.child(i).isHidden() for i in range(heading.childCount()))
         assert "copper side" in heading.toolTip(0)
         cuts = [heading.child(i) for i in range(heading.childCount())]
         assert [row.text(0).split(" · ")[0] for row in cuts] == [

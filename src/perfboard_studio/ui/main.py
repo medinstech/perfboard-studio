@@ -8604,7 +8604,12 @@ class MainWindow(QMainWindow):
             head.setFlags(head.flags() & ~Qt.ItemFlag.ItemIsSelectable)
             tree.addTopLevelItem(head)
             if cuts:
-                head.addChild(self._track_cut_rows(guide, done))
+                cut_rows = self._track_cut_rows(guide, done)
+                head.addChild(cut_rows)
+                # Opened once it is in the tree: an item told to open before it has a tree
+                # to be open in stays shut, which is how the cuts were first shipped --
+                # folded away under a heading nobody had a reason to open.
+                cut_rows.setExpanded(True)
             for step in phase.steps:
                 line = _step_line(step, guide.language)
                 leaf = QTreeWidgetItem([line])
@@ -8666,7 +8671,6 @@ class MainWindow(QMainWindow):
             row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             row.setCheckState(0, Qt.CheckState.Checked if focus in done else Qt.CheckState.Unchecked)
             group.addChild(row)
-        group.setExpanded(True)
         return group
 
     # -- progress through the build ---------------------------------------------------
