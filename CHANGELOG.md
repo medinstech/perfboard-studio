@@ -172,7 +172,14 @@ closed without a bump.
   its copper named by its ends and its parts by their references. The findings themselves
   are unchanged: MCP, the headless run and the goldens read the English as they did. A
   finding no sentence recognises is shown in English, whole, rather than half-translated.
-
+- **Choosing a board takes a seventh less time.** Each board trial routed the winning
+  placement again after the placer had already routed exactly that board to choose it. A
+  trial now takes the placer's route when its document is that same document, and routes
+  afresh when it is not. Every example's chosen board, every verdict and every placed part
+  are byte for byte what they were, over seeds 0 to 3. Measured under the team's heavy-job
+  lock, four seeds summed, before and after: atmega328-relay 129.8 → 115.2 s, nano-relay
+  60.9 → 49.9, ne555-blinker 44.1 → 36.5, lm317-supply 40.0 → 33.8, arduino-io-shield
+  23.3 → 21.7, lpb1-booster 16.3 → 13.5, ne555-astable 12.7 → 10.8.
 - **New Project asks a name and a place, and the board comes second.** It asked which
   board before there was a circuit to try on one, and then the Board step asked again: a
   breadboard chosen twice, and a perfboard size picked blind where step 2 would have tried

@@ -33,7 +33,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import Literal, TypeAlias
 
-from .autoroute import DEFAULT_AUTOROUTE_OPTIONS, AutorouteOptions, plan_autoroute
+from .autoroute import DEFAULT_AUTOROUTE_OPTIONS, AutorouteOptions, AutoroutePlan, plan_autoroute
 from .command import CommandError
 from .commands import document_on_preset
 from .connectivity import FootprintLookup
@@ -245,7 +245,9 @@ def try_board(
     known = {part.ref for part in on.parts if lookup(part.footprint_id) is not None}
     unplaced = tuple(ref for ref in placed.unplaced if ref in known)
 
-    route = plan_autoroute(placed.document, lookup, options.routing)
+    route = _route_already_planned(placed, options.routing) or plan_autoroute(
+        placed.document, lookup, options.routing
+    )
     findings = run_drc(route.document, lookup)
     return BoardTrial(
         suggestion=suggestion,
@@ -260,6 +262,25 @@ def try_board(
             for rule in PLACEMENT_WARNING_RULES
         ),
     )
+
+
+def _route_already_planned(
+    placed: DesignPlacement, routing: AutorouteOptions
+) -> AutoroutePlan | None:
+    """The route the placer priced this very placement with, when it is one.
+
+    The placer routes every candidate it shortlists to choose between them, so the winner
+    has already been routed -- on the same board, with the copper stripped, with the
+    engine's default options -- and planning it again here was one route in eight of every
+    trial, for an answer already in hand. Taken only when the document is EQUAL to the one
+    that route was made on and the options are the defaults it was made with: the planner
+    is pure, so that is the same answer by construction; anything less -- a part sent back
+    to the design after placing, options of a caller's own -- is planned again.
+    """
+    routed = placed.plan.routed if placed.plan is not None else None
+    if routed is None or routing != DEFAULT_AUTOROUTE_OPTIONS:
+        return None
+    return routed.plan if routed.document == placed.document else None
 
 
 def _no_warnings() -> tuple[int, ...]:

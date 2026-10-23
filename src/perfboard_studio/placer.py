@@ -91,7 +91,7 @@ import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 
-from .autoroute import plan_autoroute
+from .autoroute import AutoroutePlan, plan_autoroute
 from .breadboard import clip_of, has_breadboard_pattern, rail_of, rail_takes
 from .breadroute import plan_joined_board
 from .command import CommandContext
@@ -539,6 +539,22 @@ class PlacementChange:
 
 
 @dataclass(frozen=True, slots=True)
+class RoutedPlacement:
+    """The route a placement was judged by, and the exact document it was planned on.
+
+    Carried out on the winning :class:`PlacementPlan` so a caller about to route that same
+    document with the same options can take this instead of planning it again --
+    ``boardfit.try_board`` did exactly that, for one route in eight of every board trial.
+    The document is kept beside the plan because ``==`` on it is the only proof that the
+    caller's document is this one: the planner is pure, so the same document and options
+    give the same plan, and anything less than the same document gives no such promise.
+    """
+
+    document: PerfDocument
+    plan: AutoroutePlan
+
+
+@dataclass(frozen=True, slots=True)
 class PlacementPlan:
     """A proposed placement, not a committed one.
 
@@ -574,6 +590,9 @@ class PlacementPlan:
     #: reads as a tool that did not work. The two numbers beside each other say that it
     #: looked, and what it decided.
     route_runner_up: float | None = None
+    #: The autorouter's plan ``route_cost`` came from, on a pad-per-hole board (the default
+    #: options, the copper stripped); None wherever ``route_cost`` came from elsewhere.
+    routed: RoutedPlacement | None = None
 
     def payload(self) -> MoveComponentsPayload:
         """The one command that commits this plan, as a single undo step."""
@@ -3306,6 +3325,20 @@ def _strip_build_cost(plan: StripboardPlan, board: Board) -> float:
 def _build_cost(doc: PerfDocument, lookup: FootprintLookup) -> tuple[int, float]:
     """(connections this placement cannot finish, what BUILDING it would cost).
 
+    :func:`_judge_build`'s first two answers; see there.
+    """
+    unfinished, cost, _ = _judge_build(doc, lookup)
+    return unfinished, cost
+
+
+def _judge_build(
+    doc: PerfDocument, lookup: FootprintLookup
+) -> tuple[int, float, RoutedPlacement | None]:
+    """(connections this placement cannot finish, what BUILDING it would cost, the route).
+
+    The route is the autorouter's plan with the document it was made on, kept so the winner
+    can carry it out (:class:`RoutedPlacement`); None on a board ``striproute`` judges.
+
     The two numbers a candidate is judged on, from the planner that suits the board.
     Which planner that is, is not a detail: a stripboard is not routed by ``autoroute.py``
     at all -- its copper is subtracted rather than added, and a wire laid on its solder
@@ -3331,9 +3364,9 @@ def _build_cost(doc: PerfDocument, lookup: FootprintLookup) -> tuple[int, float]
         # Every problem, not only the inseparable pairs: a pin the planner could not find
         # and a strip it could not cut are both "this board cannot be finished as placed",
         # which is what the first number means on the other branch too.
-        return len(plan.problems), _strip_build_cost(plan, doc.board)
+        return len(plan.problems), _strip_build_cost(plan, doc.board), None
     route = plan_autoroute(doc, lookup)
-    return route.summary.links_unrouted, route.summary.total_cost
+    return route.summary.links_unrouted, route.summary.total_cost, RoutedPlacement(doc, route)
 
 
 def _pick_best(
@@ -3398,9 +3431,11 @@ def _pick_best(
     if len(shortlist) < 2:
         return legal_first[0]
 
-    scored: list[tuple[tuple[int, int, int, int, float, float], PlacementPlan]] = []
+    scored: list[
+        tuple[tuple[int, int, int, int, float, float], PlacementPlan, RoutedPlacement | None]
+    ] = []
     for plan in shortlist:
-        unfinished, cost = _build_cost(plan.document, lookup)
+        unfinished, cost, routed = _judge_build(plan.document, lookup)
         scored.append(
             (
                 (
@@ -3412,15 +3447,17 @@ def _pick_best(
                     plan.after.total(options.weights),  # Deterministic tie-break.
                 ),
                 plan,
+                routed,
             )
         )
     # Sorted on the KEY alone, and stably, so two arrangements that cost the same to build
     # keep the shortlist's own order rather than being compared as objects.
     scored.sort(key=lambda item: item[0])
-    best_key, best = scored[0]
+    best_key, best, best_routed = scored[0]
     runner_up = scored[1][0][4] if len(scored) > 1 else None
     return replace(
         best,
+        routed=best_routed,
         route_cost=best_key[4],
         route_unrouted=best_key[2],
         route_runner_up=runner_up,
@@ -3476,7 +3513,7 @@ def _settle_winner(
         # guaranteed it did not go up.
         return settled
 
-    unfinished, cost = _build_cost(settled.document, lookup)
+    unfinished, cost, routed = _judge_build(settled.document, lookup)
     # The same order ``_pick_best`` chose by: what cannot be built outranks what it costs.
     if (unfinished, settled.after.physical_warnings, cost) <= (
         plan.route_unrouted,
@@ -3487,6 +3524,7 @@ def _settle_winner(
             settled,
             route_cost=cost,
             route_unrouted=unfinished,
+            routed=routed,
         )
     return plan
 

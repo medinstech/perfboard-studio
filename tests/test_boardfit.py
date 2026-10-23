@@ -19,6 +19,7 @@ import dataclasses
 import pytest
 
 from perfboard_studio import boardfit
+from perfboard_studio.autoroute import DEFAULT_AUTOROUTE_OPTIONS
 from perfboard_studio.boardfit import (
     MAX_SMALLER_BOARDS_TRIED,
     PLACEMENT_WARNING_RULES,
@@ -351,6 +352,57 @@ def test_the_placement_a_trial_judged_is_the_one_the_window_commits() -> None:
     assert bus.dispatch("part.place", trial.placed.payload()).ok
     assert bus.document.components == trial.placed.document.components
     assert bus.document.parts == ()
+
+
+def test_a_trial_takes_the_route_the_placer_already_made_of_the_same_board(monkeypatch) -> None:
+    """The placer routes its shortlist to choose between them, so the winner has been routed
+    before the trial asks. Taking that route is right only because it IS the route a fresh
+    plan would make -- the same document, the same options, a pure planner -- so both halves
+    are held here: the trial does not route again, and what it took equals a route planned
+    from nothing."""
+    doc = _design()
+    suggestion = _real_suggestion(doc, "3 x 7 cm")
+    real = boardfit.plan_autoroute
+    calls: list[object] = []
+
+    def counted(*args, **kwargs):
+        calls.append(args)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(boardfit, "plan_autoroute", counted)
+    trial = try_board(doc, suggestion, REGISTRY)
+
+    assert trial is not None and trial.placed is not None and trial.placed.plan is not None
+    assert calls == [], "the trial planned a route the placer had already made"
+    routed = trial.placed.plan.routed
+    assert routed is not None and routed.document == trial.placed.document
+    fresh = real(trial.placed.document, REGISTRY)
+    assert routed.plan == fresh
+    assert (trial.unrouted, trial.route_cost) == (
+        fresh.summary.links_unrouted,
+        fresh.summary.total_cost,
+    )
+
+
+def test_a_route_made_on_another_document_or_with_other_options_is_not_taken() -> None:
+    doc = _design()
+    trial = try_board(doc, _real_suggestion(doc, "3 x 7 cm"), REGISTRY)
+    assert trial is not None and trial.placed is not None and trial.placed.plan is not None
+    placed = trial.placed
+    routed = placed.plan.routed
+    assert routed is not None
+
+    assert boardfit._route_already_planned(placed, DEFAULT_AUTOROUTE_OPTIONS) is routed.plan
+    other = dataclasses.replace(DEFAULT_AUTOROUTE_OPTIONS, max_passes=1)
+    assert boardfit._route_already_planned(placed, other) is None
+    # A part sent back to the design after placing: not the board that was routed.
+    fewer = dataclasses.replace(
+        placed,
+        document=dataclasses.replace(
+            placed.document, components=placed.document.components[1:]
+        ),
+    )
+    assert boardfit._route_already_planned(fewer, DEFAULT_AUTOROUTE_OPTIONS) is None
 
 
 def test_labels_written_for_a_bigger_board_do_not_stop_a_trial() -> None:
