@@ -95,6 +95,12 @@ closed without a bump.
 - **The README opens with three steps**: download it, draw a circuit or open an
   example, and press the button at the end of the step bar until the build guide opens.
   The two install links moved into the first step. In both languages.
+- **The 3D view loads VTK in a third of the time.** It imported the whole of VTK -- forty
+  modules, from the web exporter to volume rendering -- to draw with thirteen, and that
+  was 425 of the 560 ms the window spent importing before it could show anything. It
+  imports the thirteen now, in about 165 ms. A test renders a board in a process that
+  never imports the rest and compares the picture with one that does: on the machine it
+  was written on they are identical to the byte.
 
 ### Fixed
 

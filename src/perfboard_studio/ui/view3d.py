@@ -23,9 +23,24 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from itertools import pairwise
+from types import SimpleNamespace
 from typing import Any, Literal
 
-import vtk  # type: ignore[import-untyped]
+from vtkmodules import (
+    vtkCommonCore,
+    vtkCommonDataModel,
+    vtkCommonTransforms,
+    vtkFiltersCore,
+    vtkFiltersGeneral,
+    vtkFiltersModeling,
+    vtkFiltersSources,
+    vtkInteractionStyle,
+    vtkIOImage,
+    vtkIOPLY,
+    vtkRenderingCore,
+    vtkRenderingFreeType,
+    vtkRenderingOpenGL2,
+)
 from vtkmodules.util import numpy_support
 
 from perfboard_studio.breadboard import (
@@ -134,6 +149,38 @@ from .partmodels import (
     vertical_header_models,
 )
 from .partmodels import model_for as _model_for
+
+#: What ``vtk.`` means in this module: the thirteen of VTK's modules it draws with, and
+#: not ``import vtk``, which imports all forty -- the web exporter, volume rendering,
+#: charts, the widgets -- and was 425 of the 560 ms the window spent importing before it
+#: could show anything (`tests/test_startup.py`). Importing ``vtkRenderingOpenGL2``,
+#: ``vtkRenderingFreeType`` and ``vtkInteractionStyle`` is also what REGISTERS the OpenGL
+#: backend, text and the interactor styles, so a module dropped from this list because
+#: nothing names a class in it can still be one the view needs: that test renders through
+#: it. A namespace rather than 260 rewritten call sites, so every name stays ``Any`` to
+#: mypy as it was under the untyped umbrella.
+vtk: Any = SimpleNamespace(
+    **{
+        name: getattr(module, name)
+        for module in (
+            vtkCommonCore,
+            vtkCommonDataModel,
+            vtkCommonTransforms,
+            vtkFiltersCore,
+            vtkFiltersGeneral,
+            vtkFiltersModeling,
+            vtkFiltersSources,
+            vtkInteractionStyle,
+            vtkIOImage,
+            vtkIOPLY,
+            vtkRenderingCore,
+            vtkRenderingFreeType,
+            vtkRenderingOpenGL2,
+        )
+        for name in dir(module)
+        if name.startswith(("vtk", "VTK_"))
+    }
+)
 
 SUBSTRATE_RGB = {
     "FR4": (0.16, 0.36, 0.21),
