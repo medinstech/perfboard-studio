@@ -30,7 +30,7 @@ import os
 import re
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -1887,6 +1887,33 @@ class NetDialog(QDialog):
         )
 
 
+def pinout_for_retyped_value(
+    footprint_id: str | None, before: str, after: str, names: Mapping[str, str]
+) -> CatalogPart | None:
+    """The catalog part whose pinout a value typed in place of ``before`` brings, or None.
+
+    A value that names a catalog part in the package the part already has brings that part's
+    pin names when there are none yet -- "NE555" typed onto a DIP-8 -- and ALSO when the
+    names there are exactly the catalog's pinout for the value being typed over. Those names
+    were never anybody's declaration: they came with the old value, and they are wrong for
+    the new one. BC547 to 2N3904 on one TO-92 was the case that found it: C-B-E stayed under
+    a part that is E-B-C, and nothing downstream could tell, because a pinout is the one fact
+    about a transistor that only the part knows.
+
+    Names that differ from the old value's pinout were typed by somebody, and a value is not
+    allowed to overwrite a declaration (``PinoutEditor.follow_value`` says so instead).
+    """
+    part = catalog_part_for(after)
+    if part is None or footprint_id is None or part.footprint_id != footprint_id:
+        return None
+    if not names:
+        return part
+    previous = catalog_part_for(before)
+    if previous is None or previous.footprint_id != footprint_id or previous.id == part.id:
+        return None
+    return part if dict(names) == dict(previous.pin_names) else None
+
+
 class PinoutEditor(QWidget):
     """What a part is and what it calls its leads -- the two things its package cannot say.
 
@@ -1940,10 +1967,19 @@ class PinoutEditor(QWidget):
                 "soldering guide, so a module's pin reads as GPIO21 rather than 21."
             )
         )
+        # What a value typed in the dialog did to the names below, said where the names are:
+        # a pinout that changes under somebody's eyes without a word is one they may not
+        # notice changed (``pinout_for_retyped_value``).
+        self.note = QLabel()
+        self.note.setWordWrap(True)
+        self.note.setStyleSheet(f"color: {WARNING};")
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.addRow(t("Symbol"), self.symbol)
         form.addRow(t("Pin names"), self.table)
+        form.addRow("", self.note)
+        form.setRowVisible(self.note, False)
+        self._form = form
         self.setLayout(form)
         self._hints: dict[str, str] = {}
 
@@ -1952,6 +1988,40 @@ class PinoutEditor(QWidget):
         index = self.symbol.findData(symbol)
         self.symbol.setCurrentIndex(max(index, 0))
         self.set_footprint(footprint, dict(names))
+
+    def say(self, text: str) -> None:
+        """One line under the names about where they came from, or nothing."""
+        self.note.setText(text)
+        self._form.setRowVisible(self.note, bool(text))
+
+    def follow_value(self, footprint: Footprint | None, before: str, after: str) -> None:
+        """Bring the catalog's pinout for a value typed over ``before``, where that is safe.
+
+        See ``pinout_for_retyped_value`` for when it is. When it is not because somebody
+        typed the names, and the catalog pins the new value differently, the names stay and
+        the difference is said out loud: a BC547's C-B-E kept under "2N3904", which is E-B-C,
+        is a transistor soldered in backwards.
+        """
+        footprint_id = footprint.id if footprint is not None else None
+        names = self.names_dict()
+        part = pinout_for_retyped_value(footprint_id, before, after, names)
+        if part is not None and names != dict(part.pin_names):
+            self.set_part(footprint, part.pin_names, part.symbol)
+            self.say(t("Pin names from the catalog's {part}.").format(part=part.name))
+            return
+        named = catalog_part_for(after)
+        if (
+            named is not None
+            and named.footprint_id == footprint_id
+            and names
+            and names != dict(named.pin_names)
+        ):
+            self.say(
+                t("These names were typed here and are kept. The catalog's {part} is {pins}.")
+                .format(part=named.name, pins=" ".join(f"{n}={name}" for n, name in named.pin_names))
+            )
+        else:
+            self.say("")
 
     def set_footprint(self, footprint: Footprint | None, names: dict[str, str] | None = None) -> None:
         """Rebuild the rows for a (possibly different) footprint, keeping typed names.
@@ -2137,6 +2207,12 @@ class ComponentDialog(QDialog):
 
         self.pinout_editor = PinoutEditor()
         self.pinout_editor.set_part(footprint, component.pin_names, component.symbol)
+        # A value that names another catalog part in this package brings its pinout, as
+        # it does when the part is added: the names a BC547 came with are wrong under a
+        # 2N3904. Followed from the value the part HAD, and then from each one typed.
+        self._footprint = footprint
+        self._value_seen = component.value
+        self.value.editingFinished.connect(self._on_value_typed)
 
         layout = QVBoxLayout()
         layout.addLayout(form)
@@ -2147,6 +2223,11 @@ class ComponentDialog(QDialog):
         # already right, because the application generated it.
         self.value.setFocus()
         self.value.selectAll()
+
+    def _on_value_typed(self) -> None:
+        typed = self.value.text().strip()
+        self.pinout_editor.follow_value(self._footprint, self._value_seen, typed)
+        self._value_seen = typed
 
     def values(self) -> tuple[str, str, bool]:
         return self.ref.text().strip(), self.value.text().strip(), self.locked.isChecked()
@@ -2709,6 +2790,9 @@ class AddPartDialog(QDialog):
         #: take it back -- a TO-92 picked after a BC547 is not a BC547 -- while a value the
         #: user typed stays. The same rule the Parts panel follows.
         self._catalog_value = ""
+        #: The value as it stood before the last one typed: the pinout a value brought is
+        #: the pinout a value typed over it may take back (``pinout_for_retyped_value``).
+        self._value_seen = ""
         #: Parts described in this dialog, plus any the document already uses that the
         #: library does not have. Not saved anywhere: the id is the definition, so the
         #: document is already carrying everything there is to keep.
@@ -2859,19 +2943,21 @@ class AddPartDialog(QDialog):
         """A value that names a catalog part in the package already chosen brings its pinout.
 
         "NE555" typed onto a DIP-8 is the NE555 as surely as picking it from the catalog --
-        but only in the SAME package, and only onto a part whose pins nobody has named: a
-        value is not allowed to overwrite a declaration somebody typed.
+        but only in the SAME package, and only onto a part whose pins nobody has named, or
+        whose names came with the value being typed over: a value is not allowed to
+        overwrite a declaration somebody typed (``pinout_for_retyped_value``).
         """
+        typed = self.value.text().strip()
+        before, self._value_seen = self._value_seen, typed
         if self.chosen_catalog_part() is not None:
             return
         footprint_id = self.chosen_footprint_id()
-        part = catalog_part_for(self.value.text())
-        if part is None or footprint_id != part.footprint_id:
+        if footprint_id is None:
             return
-        if self.pinout_editor.names_dict():
-            return
-        self.pinout_editor.set_part(get_footprint(footprint_id), part.pin_names, part.symbol)
-        self._suggest_reference()
+        self.pinout_editor.follow_value(get_footprint(footprint_id), before, typed)
+        part = catalog_part_for(typed)
+        if part is not None and part.footprint_id == footprint_id:
+            self._suggest_reference()
 
     def _suggest_reference(self) -> None:
         """Refill the reference whenever the kind of part changes.
@@ -2933,8 +3019,10 @@ class AddPartDialog(QDialog):
         return self.ref.text().strip(), self.value.text().strip(), footprint_id
 
     def set_pinout(self, names: PinNames, symbol: PartSymbol | None) -> None:
-        """Show an existing part's declaration, for editing it."""
+        """Show an existing part's declaration, for editing it -- after its value, which is
+        what a value typed over it is measured from."""
         self.pinout_editor.set_part(get_footprint(self.chosen_footprint_id() or ""), names, symbol)
+        self._value_seen = self.value.text().strip()
 
     def pinout(self) -> tuple[PinNames, PartSymbol | None]:
         return self.pinout_editor.values()

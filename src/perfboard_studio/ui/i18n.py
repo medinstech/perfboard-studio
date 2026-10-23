@@ -1701,6 +1701,10 @@ TURKISH: Mapping[str, str] = {
     "Symbol": "Sembol",
     "Pin names": "Pin adları",
     "The footprint calls this pin {name}.": "Footprint bu pini {name} olarak adlandırıyor.",
+    "Pin names from the catalog's {part}.": "Pin adları katalogdaki {part} parçasından.",
+    "These names were typed here and are kept. The catalog's {part} is {pins}.": (
+        "Bu adlar burada yazıldı ve korunuyor. Katalogdaki {part}: {pins}."
+    ),
     # -- naming the board ------------------------------------------------------------
     "Rena&me Board…": "Kar&tı Yeniden Adlandır…",
     "The board's title, printed on the build guide, on the schematic and on "

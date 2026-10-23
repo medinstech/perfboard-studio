@@ -12045,6 +12045,75 @@ def test_properties_writes_a_declaration_in_the_same_undo_step(monkeypatch) -> N
     _close(window)
 
 
+BC547_PINS = (("1", "C"), ("2", "B"), ("3", "E"))
+N2N3904_PINS = (("1", "E"), ("2", "B"), ("3", "C"))
+
+
+def test_a_value_typed_over_a_catalog_part_takes_the_pinout_that_came_with_it() -> None:
+    """BC547 to 2N3904 on one TO-92: the C-B-E the BC547 brought is wrong under a part
+    that is E-B-C, so the new value's pinout replaces it. Names somebody TYPED are a
+    declaration, and stay; so does everything when the package or the part does not change."""
+    from perfboard_studio.ui.main import pinout_for_retyped_value
+
+    def follows(before: str, after: str, names: dict[str, str], footprint: str = "to92"):
+        part = pinout_for_retyped_value(footprint, before, after, names)
+        return part.id if part is not None else None
+
+    assert follows("BC547", "2N3904", dict(BC547_PINS)) == "2n3904"
+    # Nothing named yet: the value brings its pinout, as it always did.
+    assert follows("", "2N3904", {}) == "2n3904"
+    # Typed by somebody: not the old value's pinout, so not the value's to replace.
+    assert follows("BC547", "2N3904", {"1": "C", "2": "B", "3": "EMITTER"}) is None
+    # The same part under another spelling, or a value that is no catalog part.
+    assert follows("BC547", "BC547B", dict(BC547_PINS)) is None
+    assert follows("BC547", "10k", dict(BC547_PINS)) is None
+    # A part in another package is not this one, whatever its name.
+    assert follows("BC547", "NE555", dict(BC547_PINS)) is None
+
+
+def test_part_properties_follows_a_retyped_value_and_says_so() -> None:
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import ComponentDialog
+
+    component = dataclasses.replace(
+        _load_dense().components[0],
+        footprint_id="to92",
+        value="BC547",
+        pin_names=BC547_PINS,
+        symbol="npn",
+    )
+    dialog = ComponentDialog(component, get_footprint("to92"))
+    assert dialog.pinout_editor.note.text() == ""
+    dialog.value.setText("2N3904")
+    dialog.value.editingFinished.emit()
+    assert dialog.pinout() == (N2N3904_PINS, "npn")
+    assert "2N3904" in dialog.pinout_editor.note.text()
+
+    # A pinout somebody typed is kept, and the catalog's other answer is said beside it.
+    typed = dataclasses.replace(component, pin_names=(("1", "C"), ("2", "B"), ("3", "EMIT")))
+    kept = ComponentDialog(typed, get_footprint("to92"))
+    kept.value.setText("2N3904")
+    kept.value.editingFinished.emit()
+    assert kept.pinout() == ((("1", "C"), ("2", "B"), ("3", "EMIT")), "npn")
+    assert "1=E 2=B 3=C" in kept.pinout_editor.note.text()
+    dialog.deleteLater()
+    kept.deleteLater()
+
+
+def test_editing_a_design_part_follows_a_retyped_value_too() -> None:
+    """The sheet's Edit a Part is the same dialog as Add a Part, and the same rule."""
+    from perfboard_studio.ui.main import AddPartDialog
+
+    dialog = AddPartDialog(_load_dense())
+    dialog.select_footprint("to92")
+    dialog.value.setText("BC547")
+    dialog.set_pinout(BC547_PINS, "npn")
+    dialog.value.setText("2N3904")
+    dialog.value.editingFinished.emit()
+    assert dialog.pinout() == (N2N3904_PINS, "npn")
+    dialog.deleteLater()
+
+
 # ---------------------------------------------------------------------------
 # The board's name
 # ---------------------------------------------------------------------------

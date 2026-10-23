@@ -63,6 +63,17 @@ closed without a bump.
   and `list_catalog` search one way, through `catalog.part_matches` -- the panel used to
   look for the whole text as one piece, so "op amp" found nothing there.
 
+### Fixed
+
+- **A value typed over a catalog part takes that part's pinout with it.** Changing a
+  BC547 to a 2N3904 in Part Properties kept the BC547's C-B-E under a transistor that is
+  E-B-C, and nothing downstream could tell: the sheet, the guide and ERC all read the names
+  the part carries. The names a value brought now follow the value -- in Part Properties and
+  in the sheet's Edit a Part alike -- and the dialog says so under the names. Names somebody
+  typed are still theirs; the dialog says what the catalog has instead of overwriting them.
+  Part Properties also gives an unnamed part the catalog's names when its value is one, as
+  Add a Part always did.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added
