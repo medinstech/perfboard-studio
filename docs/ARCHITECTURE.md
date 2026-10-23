@@ -731,8 +731,10 @@ CC-BY-SA 4.0 with KiCad's design exception, and their `LICENSE` and `NOTICE.md` 
 `src/perfboard_studio/ui/models/` and travel with them. The exception means a board designed
 with this tool is unaffected; redistribution means keeping that directory intact. The wheel
 declares `Apache-2.0 AND CC-BY-SA-4.0` and `release.yml` checks the meshes and their licence
-are actually in it, because a wheel without them still draws every board — which is exactly
-why nothing else would notice them going missing.
+are actually in it, and in every installer bundle (`packaging/check-bundle-models.sh`, file
+for file against the source), because a wheel or a bundle without them still draws every
+board — which is exactly why nothing else would notice them going missing. Nothing did: the
+installers from 0.12.0 to 0.21.0 shipped without them, while only the wheel was checked.
 
 ## A module is drawn by what it is called, and never past its envelope
 
