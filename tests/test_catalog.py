@@ -156,6 +156,9 @@ def test_search_matches_the_name_the_summary_and_the_kind() -> None:
         ("L7805CV", "7805"),
         ("LM7805", "7805"),
         ("BC547B", "bc547"),
+        # ...or an ordering code after a hyphen, which may start with a digit.
+        ("ATtiny85-20PU", "attiny85"),
+        ("ATmega328P-PU", "atmega328p"),
         # Hyphens and spaces are not what anybody remembers about a word.
         ("opamp", "lm358"),
         ("op amp", "lm358"),

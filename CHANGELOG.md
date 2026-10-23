@@ -40,8 +40,9 @@ closed without a bump.
   `tests/test_docs.py` fails on a section that list does not name, and on CLAUDE.md
   growing past 40 000 characters.
 - **A catalog search reads a word the way a person types it.** "LM358N", "NE555P",
-  "SN74HC595N" and "L7805CV" find the part whose number they carry, with a package letter
-  or a maker's prefix on it, and "LM350" still does not find the LM35. Hyphens and spaces no
+  "SN74HC595N", "L7805CV" and "ATtiny85-20PU" find the part whose number they carry, with a
+  package letter, a maker's prefix or an ordering code on it, and "LM350" still does not
+  find the LM35. Hyphens and spaces no
   longer count, so "opamp" finds the op-amp and "5v regulator" the 7805. A part can carry
   aliases for words its summary does not say: "stepper" and "28BYJ-48" find the ULN2003A,
   "motor driver" the L293D. Parts the words NAME come before parts whose summary merely

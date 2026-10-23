@@ -664,7 +664,10 @@ def _word_finds(word: str, haystack: str, squeezed: str, numbers: set[str]) -> b
     # A word that is all punctuation -- a lone "-" -- says nothing to look for.
     if not plain or plain in squeezed:
         return True
-    for form in dict.fromkeys((plain, _MAKER_PREFIX.sub("", plain))):
+    # An ordering code after a hyphen is the same part: ATtiny85-20PU is an ATtiny85, whose
+    # "20" would otherwise read as more of its number.
+    ordered = re.split(r"[\W_]+", word.strip("-"), maxsplit=1)[0]
+    for form in dict.fromkeys((plain, _MAKER_PREFIX.sub("", plain), ordered)):
         for number in numbers:
             if form.startswith(number) and not form[len(number) : len(number) + 1].isdigit():
                 return True
