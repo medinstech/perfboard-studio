@@ -284,6 +284,29 @@ _OLED_CHECK = (
     "pins sit on the board and how tall it stands in its header are estimates."
 )
 
+#: Kingbright's 0.56 inch 7-segment displays: a block over two rows of pins 0.6 inch apart,
+#: numbered as a DIP is (``-ccw``) and centred on the block, as KiCad's
+#: Display_7Segment:CA56-12EWA has the four-digit one.
+_DIGIT_FOOTPRINT = "box-2x5-p6-r1-19.05x12.7x8-ccw"
+_FOUR_DIGITS_FOOTPRINT = "box-2x6-p6-r1-19x50.3x8.1-ccw"
+_FOUR_DIGITS_PINS = (
+    "segments a 11, b 7, c 4, d 2, e 1, f 10, g 5, DP 3; digits 12, 9, 8, 6 from the left; "
+    "50.3 x 19 x 8.1 mm, the rows 15.24 mm apart"
+)
+_DIGIT_ALIASES = ("7-segment", "seven segment", "digit", "gösterge")
+_DIGIT_CHECK = (
+    "Pin 1 is at the bottom left with the digit upright and its decimal point at the bottom "
+    "right. Each segment needs its own resistor. Unbranded 0.56 inch digits are usually "
+    "pinned the same, but not always: light one segment with a 3 V coin cell before soldering."
+)
+_FOUR_DIGITS_CHECK = (
+    "The digits share their segment pins, so they are lit one at a time, faster than the eye "
+    "can follow: a resistor on each segment pin, and each digit's DIG pin switched in turn, "
+    "through a transistor, since one digit carries all its segments' current. Unbranded "
+    "four-digit displays are usually pinned the same, but not always: light one segment with "
+    "a 3 V coin cell before soldering."
+)
+
 #: Off the board: what the leads of a battery or a panel jack are soldered into, one pad
 #: each (``footprints.off_board_mount``). Every word a beginner looks for power by.
 _POWER_WORDS = ("power", "supply", "battery", "pil", "besleme")
@@ -681,6 +704,48 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "from the pin marked 1. On an I2C backpack it is a different part."
                 ),
                 aliases=("1602", "HD44780", "character display")),
+    # Kingbright's 0.56 inch digits are pinned like a DIP under a block, which is what
+    # ``-ccw`` says: on the board the pins run down one column and back up the other, and
+    # the part reads upright turned so that pin 1 is at its bottom left.
+    CatalogPart("sa56-11", "SA56-11 7-segment digit (common anode)", "display",
+                _DIGIT_FOOTPRINT, "One 0.56 inch digit, common anode, decimal point at the right",
+                _legs("e", "d", "CA", "c", "DP", "b", "a", "CA", "f", "g"),
+                value="SA56-11", ref_prefix="U",
+                source=(
+                    "Kingbright SA56-11EWA and SA56-11GWA datasheets: 1 e, 2 d, 3 and 8 the "
+                    "common anode, 4 c, 5 DP, 6 b, 7 a, 9 f, 10 g; 12.7 x 19.05 x 8 mm, the "
+                    "rows 15.24 mm apart"
+                ),
+                check=_DIGIT_CHECK,
+                aliases=(*_DIGIT_ALIASES, "SA56-11EWA", "SA56-11GWA")),
+    CatalogPart("sc56-11", "SC56-11 7-segment digit (common cathode)", "display",
+                _DIGIT_FOOTPRINT,
+                "One 0.56 inch digit, common cathode, decimal point at the right",
+                _legs("e", "d", "CC", "c", "DP", "b", "a", "CC", "f", "g"),
+                value="SC56-11", ref_prefix="U",
+                source=(
+                    "Kingbright SC56-11EWA and SC56-11GWA datasheets: 1 e, 2 d, 3 and 8 the "
+                    "common cathode, 4 c, 5 DP, 6 b, 7 a, 9 f, 10 g; 12.7 x 19.05 x 8 mm, the "
+                    "rows 15.24 mm apart"
+                ),
+                check=_DIGIT_CHECK,
+                aliases=(*_DIGIT_ALIASES, "SC56-11EWA", "SC56-11GWA")),
+    CatalogPart("ca56-12", "CA56-12 4-digit 7-segment (common anode)", "display",
+                _FOUR_DIGITS_FOOTPRINT,
+                "Four 0.56 inch digits, lit in turn: one common anode per digit",
+                _legs("e", "d", "DP", "c", "g", "DIG4", "b", "DIG3", "DIG2", "f", "a", "DIG1"),
+                value="CA56-12", ref_prefix="U",
+                source=f"Kingbright CA56-12EWA datasheet: {_FOUR_DIGITS_PINS}",
+                check=_FOUR_DIGITS_CHECK,
+                aliases=(*_DIGIT_ALIASES, "CA56-12EWA")),
+    CatalogPart("cc56-12", "CC56-12 4-digit 7-segment (common cathode)", "display",
+                _FOUR_DIGITS_FOOTPRINT,
+                "Four 0.56 inch digits, lit in turn: one common cathode per digit",
+                _legs("e", "d", "DP", "c", "g", "DIG4", "b", "DIG3", "DIG2", "f", "a", "DIG1"),
+                value="CC56-12", ref_prefix="U",
+                source=f"Kingbright CC56-12EWA datasheet: {_FOUR_DIGITS_PINS}",
+                check=_FOUR_DIGITS_CHECK,
+                aliases=(*_DIGIT_ALIASES, "CC56-12EWA")),
     # -- integrated circuits ------------------------------------------------------------
     CatalogPart("ne555", "NE555", "ic", "dip-8", "Timer",
                 _legs("GND", "TRIG", "OUT", "RESET", "CTRL", "THR", "DIS", "VCC"),

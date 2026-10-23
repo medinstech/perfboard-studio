@@ -433,6 +433,38 @@ def test_a_plain_led_is_still_told_by_its_short_leg() -> None:
     assert note == "Anode (long lead) in C3; Cathode (short lead, flat on the rim) in D3"
 
 
+#: Kingbright's circuit diagrams, segment by segment: which pin lights it.
+ONE_DIGIT = {"a": "7", "b": "6", "c": "4", "d": "2", "e": "1", "f": "9", "g": "10", "DP": "5"}
+FOUR_DIGITS = {"a": "11", "b": "7", "c": "4", "d": "2", "e": "1", "f": "10", "g": "5", "DP": "3",
+               "DIG1": "12", "DIG2": "9", "DIG3": "8", "DIG4": "6"}
+
+
+@pytest.mark.parametrize(
+    ("part_id", "segments", "common"),
+    [
+        ("sa56-11", ONE_DIGIT, ("CA", {"3", "8"})),
+        ("sc56-11", ONE_DIGIT, ("CC", {"3", "8"})),
+        ("ca56-12", FOUR_DIGITS, None),
+        ("cc56-12", FOUR_DIGITS, None),
+    ],
+)
+def test_a_seven_segment_display_lights_the_segment_its_datasheet_says(
+    part_id: str, segments: dict[str, str], common: tuple[str, set[str]] | None
+) -> None:
+    """A segment on the wrong pin is a digit that shows the wrong number and looks right on
+    the screen. Lower-case, as Kingbright prints them -- and so never read as an LED's "A"
+    by the guide or ERC."""
+    display = catalog_part(part_id)
+    assert display is not None and display.footprint_id.endswith("-ccw")
+    names = dict(display.pin_names)
+    assert {name: number for number, name in names.items() if name in segments} == segments
+    if common is not None:
+        name, pins = common
+        assert {number for number, said in names.items() if said == name} == pins
+    assert set(names.values()) <= set(segments) | {"CA", "CC"}
+    assert ("anode" in display.name) == part_id.startswith(("sa", "ca"))
+
+
 def test_a_free_reference_counts_the_board_and_the_design() -> None:
     session = BoardSession(document=new_board(cols=20, rows=12))
     session.place_component("Q1", "to92", "C3")

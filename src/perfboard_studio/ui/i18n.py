@@ -2043,6 +2043,45 @@ TURKISH: Mapping[str, str] = {
         "bacağa, ortak katotta -) ve hangi rengin yandığına bakın. Her renk kendi direncini "
         "ister. Bacaklar mercekten 1.27 mm arayla çıkar: dört deliğe açarak yerleştirin."
     ),
+    "SA56-11 7-segment digit (common anode)": "SA56-11 7 segmentli tek hane (ortak anot)",
+    "SC56-11 7-segment digit (common cathode)": "SC56-11 7 segmentli tek hane (ortak katot)",
+    "CA56-12 4-digit 7-segment (common anode)": (
+        "CA56-12 4 haneli 7 segmentli gösterge (ortak anot)"
+    ),
+    "CC56-12 4-digit 7-segment (common cathode)": (
+        "CC56-12 4 haneli 7 segmentli gösterge (ortak katot)"
+    ),
+    "One 0.56 inch digit, common anode, decimal point at the right": (
+        "Tek 0.56 inç hane, ortak anot, ondalık nokta sağda"
+    ),
+    "One 0.56 inch digit, common cathode, decimal point at the right": (
+        "Tek 0.56 inç hane, ortak katot, ondalık nokta sağda"
+    ),
+    "Four 0.56 inch digits, lit in turn: one common anode per digit": (
+        "Dört 0.56 inç hane, sırayla yakılır: her hanenin kendi ortak anodu"
+    ),
+    "Four 0.56 inch digits, lit in turn: one common cathode per digit": (
+        "Dört 0.56 inç hane, sırayla yakılır: her hanenin kendi ortak katodu"
+    ),
+    "Pin 1 is at the bottom left with the digit upright and its decimal point at the bottom "
+    "right. Each segment needs its own resistor. Unbranded 0.56 inch digits are usually "
+    "pinned the same, but not always: light one segment with a 3 V coin cell before "
+    "soldering.": (
+        "Hane dik dururken ve ondalık noktası sağ altta iken 1. pin sol alttadır. Her segment "
+        "kendi direncini ister. Markasız 0.56 inç haneler çoğu zaman aynı bağlanır ama her "
+        "zaman değil: lehimlemeden önce 3 V'luk bir düğme pille bir segmenti yakıp deneyin."
+    ),
+    "The digits share their segment pins, so they are lit one at a time, faster than the eye "
+    "can follow: a resistor on each segment pin, and each digit's DIG pin switched in turn, "
+    "through a transistor, since one digit carries all its segments' current. Unbranded "
+    "four-digit displays are usually pinned the same, but not always: light one segment with "
+    "a 3 V coin cell before soldering.": (
+        "Haneler segment pinlerini paylaşır, bu yüzden gözün seçemeyeceği hızda tek tek "
+        "yakılır: her segment pinine bir direnç, ve her hanenin DIG pini sırayla, bir "
+        "transistör üzerinden anahtarlanır, çünkü bir hane bütün segmentlerinin akımını "
+        "taşır. Markasız dört haneli göstergeler çoğu zaman aynı bağlanır ama her zaman "
+        "değil: lehimlemeden önce 3 V'luk bir düğme pille bir segmenti yakıp deneyin."
+    ),
     "IR receiver for 38 kHz remote controls, 2.5 to 5.5 V": (
         "38 kHz uzaktan kumandalar için IR alıcı, 2,5 ile 5,5 V arası"
     ),

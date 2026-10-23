@@ -1395,6 +1395,7 @@ def generic_box_footprint(
     row_step: int = 1,
     offset_x_mm: Mm = 0.0,
     offset_y_mm: Mm = 0.0,
+    anticlockwise: bool = False,
     lead_diameter_mm: Mm | None = None,
     id: str | None = None,
     name: str | None = None,
@@ -1417,6 +1418,11 @@ def generic_box_footprint(
     two-row header or a display module expects -- and `dip_footprint` already exists for
     when the answer is the other one.
 
+    ``anticlockwise`` (``-ccw``) is that other one under a body that is not a chip's: two
+    columns numbered as ``dip_footprint`` numbers them, down the first and back up the
+    second. A 7-segment display is pinned like a DIP and is a 19 x 12.7 mm block 8 mm
+    tall, and as a DIP it would be drawn as a 4 mm chip with a notch it does not have.
+
     ``col_step``/``row_step`` are whole grid steps, so a part on a 5.08 mm pitch is
     ``col_step=2``. A single row or column forces its own step to 1: with one line of pins
     the other spacing describes nothing, and leaving it free would give one part two ids.
@@ -1431,16 +1437,26 @@ def generic_box_footprint(
         raise ValueError("a body needs a positive width, depth and height")
     if abs(offset_x_mm) > _MAX_BODY_MM or abs(offset_y_mm) > _MAX_BODY_MM:
         raise ValueError(f"a body offset is limited to {_MAX_BODY_MM} mm either way")
+    if anticlockwise and cols != 2:
+        raise ValueError("a box numbered as a DIP has two columns")
     # One line of pins has no second spacing to describe, so it gets exactly one spelling.
     col_step = col_step if cols > 1 else 1
     row_step = row_step if rows > 1 else 1
 
     lead_diameter = 0.6 if lead_diameter_mm is None else lead_diameter_mm
-    pins = tuple(
-        _make_pin(str(row * cols + col + 1), col * col_step, row * row_step)
-        for row in range(rows)
-        for col in range(cols)
-    )
+    if anticlockwise:
+        down = [(0, row) for row in range(rows)]
+        up = [(1, row) for row in reversed(range(rows))]
+        pins = tuple(
+            _make_pin(str(index + 1), col * col_step, row * row_step)
+            for index, (col, row) in enumerate(down + up)
+        )
+    else:
+        pins = tuple(
+            _make_pin(str(row * cols + col + 1), col * col_step, row * row_step)
+            for row in range(rows)
+            for col in range(cols)
+        )
     outline = _offset_rect_outline(
         _to_mm(pins), width_mm, depth_mm, offset_x_mm, offset_y_mm, COURTYARD_MARGIN_MM
     )
@@ -1451,6 +1467,7 @@ def generic_box_footprint(
     fp_id = id if id is not None else (
         f"box-{cols}x{rows}-p{col_step}-r{row_step}-{_format_mm_token(width_mm)}"
         f"x{_format_mm_token(depth_mm)}x{_format_mm_token(height_mm)}{offset_token}"
+        + ("-ccw" if anticlockwise else "")
     )
     fp_name = name if name is not None else (
         f"Custom part, {cols}x{rows} pins, {_format_mm_token(width_mm)}"
@@ -1461,6 +1478,7 @@ def generic_box_footprint(
             if offset
             else ""
         )
+        + (", numbered as a DIP" if anticlockwise else "")
     )
     dims: dict[str, Mm] = {"width": width_mm, "depth": depth_mm, "height": height_mm}
     if offset:
@@ -1990,10 +2008,12 @@ GENERATED_ID_GRAMMAR = """A footprint the library does not have can be asked for
 that carries its own parameters. Steps are whole 2.54 mm grid steps; millimetres take at
 most two decimals and are written without units.
 
-  box-<cols>x<rows>-p<colStep>-r<rowStep>-<W>x<D>x<H>[-o<X>x<Y>]
+  box-<cols>x<rows>-p<colStep>-r<rowStep>-<W>x<D>x<H>[-o<X>x<Y>][-ccw]
                                                         any rectangular part: a grid of
                                                         pins, a body in mm, and where the
-                                                        body sits off the pins' centre
+                                                        body sits off the pins' centre;
+                                                        -ccw numbers two columns as a
+                                                        DIP is, down one and up the other
   dip-<pins>[-wide]                                     a DIP of any pin count
   hdr-<rows>x<cols>                                     a pin header
   mod-<cols>x<rows>-p<colStep>-r<rowStep>-<W>x<D>x<T>-s<S>[-o<X>x<Y>]
@@ -2088,7 +2108,7 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
     (
         re.compile(
             r"^box-(\d+)x(\d+)-p(\d+)-r(\d+)-([\d.]+)x([\d.]+)x([\d.]+)"
-            r"(?:-o(-?[\d.]+)x(-?[\d.]+))?$"
+            r"(?:-o(-?[\d.]+)x(-?[\d.]+))?(-ccw)?$"
         ),
         lambda m: generic_box_footprint(
             cols=_grid(m[1]),
@@ -2102,6 +2122,7 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
             # comparison in generated_footprint: zero is spelled by leaving it out.
             offset_x_mm=_offset(m[8]),
             offset_y_mm=_offset(m[9]),
+            anticlockwise=m[10] is not None,
         ),
     ),
     (

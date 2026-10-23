@@ -98,6 +98,13 @@ closed without a bump.
   On a two-legged LED, "K" means the short lead with the flat on the rim; read that way, it
   would have pointed at the wrong leg.
 
+- **Catalog: Kingbright's 0.56 inch 7-segment displays.** The SA56-11 (common anode) and
+  SC56-11 (common cathode) single digits, and the CA56-12 and CC56-12 four-digit ones,
+  pinned from Kingbright's circuit diagrams, segments lower case as printed. A 7-segment
+  display is numbered like a DIP but is a block, not a chip, so `box-` gained `-ccw`. It
+  numbers two columns down one and back up the other, exactly as `dip_footprint` and KiCad's
+  Display_7Segment:CA56-12EWA do: `box-2x5-p6-r1-19.05x12.7x8-ccw` is one digit.
+
 - **The Songle SRD relay, as it is.** `relay-srd` is the SRD-05VDC-SL-C and its family on
   the holes nearest its legs, which are not on the 2.54 mm grid: COM alone between the coil
   legs at one end, the contacts at the other, numbered as KiCad's SANYOU SRD (1 COM, 2 and

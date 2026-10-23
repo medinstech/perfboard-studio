@@ -139,6 +139,8 @@ NAME_TEMPLATES: tuple[str, ...] = (
     "Tactile switch, {0} mm",
     "Crystal, HC-49/U",
     "Small SPDT relay",
+    "Custom part, {0} pins, {1} mm, body offset {2} mm, numbered as a DIP",
+    "Custom part, {0} pins, {1} mm, numbered as a DIP",
     "Custom part, {0} pins, {1} mm, body offset {2} mm",
     "Custom part, {0} pins, {1} mm",
     "Module, {0} pins, {1} mm, seated {2} mm up",
@@ -1013,6 +1015,12 @@ TURKISH: dict[str, str] = {
     "Tactile switch, {0} mm": "Tact buton, {0} mm",
     "Crystal, HC-49/U": "Kristal, HC-49/U",
     "Small SPDT relay": "Küçük SPDT röle",
+    "Custom part, {0} pins, {1} mm, body offset {2} mm, numbered as a DIP": (
+        "Özel parça, {0} pin, {1} mm, gövde kaydırması {2} mm, DIP gibi numaralı"
+    ),
+    "Custom part, {0} pins, {1} mm, numbered as a DIP": (
+        "Özel parça, {0} pin, {1} mm, DIP gibi numaralı"
+    ),
     "Custom part, {0} pins, {1} mm, body offset {2} mm": (
         "Özel parça, {0} pin, {1} mm, gövde kaydırması {2} mm"
     ),

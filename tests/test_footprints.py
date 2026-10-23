@@ -565,6 +565,34 @@ def test_a_generated_box_anchors_pin_one_and_numbers_straight_across() -> None:
     ]
 
 
+def test_a_box_numbered_as_a_dip_is_numbered_exactly_as_the_dip() -> None:
+    """``-ccw``: a 7-segment display is pinned like a DIP under a block that is not a chip.
+    Its pins are where ``dip-10-wide``'s are, number for number -- and where KiCad's
+    Display_7Segment:CA56-12EWA puts the four-digit one's -- and only two columns can be
+    numbered that way."""
+    digit = get_footprint("box-2x5-p6-r1-19.05x12.7x8-ccw")
+    dip = get_footprint("dip-10-wide")
+    assert digit is not None and dip is not None
+    assert [(p.number, p.d_col, p.d_row) for p in digit.pins] == [
+        (p.number, p.d_col, p.d_row) for p in dip.pins
+    ]
+    assert digit.body.archetype == "generic-box" and digit.body_height == 8
+    assert digit.name.endswith(", numbered as a DIP")
+    four = get_footprint("box-2x6-p6-r1-19x50.3x8.1-ccw")
+    assert four is not None
+    kicad = [(0, 0), (0, 2.54), (0, 5.08), (0, 7.62), (0, 10.16), (0, 12.7),
+             (15.24, 12.7), (15.24, 10.16), (15.24, 7.62), (15.24, 5.08), (15.24, 2.54),
+             (15.24, 0)]
+    assert [
+        (round(p.d_col * STANDARD_PITCH_MM, 2), round(p.d_row * STANDARD_PITCH_MM, 2))
+        for p in four.pins
+    ] == kicad
+    # Without the suffix it is the same grid numbered straight across, a different part.
+    assert get_footprint("box-2x5-p6-r1-19.05x12.7x8") != digit
+    assert get_footprint("box-3x2-p1-r1-5x5x5-ccw") is None
+    assert "[-ccw]" in GENERATED_ID_GRAMMAR
+
+
 def test_a_single_line_of_pins_has_exactly_one_spelling() -> None:
     """With one row there is no row spacing to describe, so it is forced to 1 rather than
     left free -- otherwise `box-6x1-p1-r1-...` and `box-6x1-p1-r9-...` are the same part
