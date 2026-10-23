@@ -180,6 +180,14 @@ closed without a bump.
   lock, four seeds summed, before and after: atmega328-relay 129.8 → 115.2 s, nano-relay
   60.9 → 49.9, ne555-blinker 44.1 → 36.5, lm317-supply 40.0 → 33.8, arduino-io-shield
   23.3 → 21.7, lpb1-booster 16.3 → 13.5, ne555-astable 12.7 → 10.8.
+- **And a further tenth, by the placer remembering what it has worked out.** 45 % of the
+  placer's questions about whether two parts overlap or run hot were ones it had answered
+  before: the same two parts at the same two spots, as parts move away and back. One
+  planning run now keeps those answers, and nothing outlives it. The same proof, and the
+  same measurement, after the change above and then with this one too: atmega328-relay
+  115.2 → 108.4 s, nano-relay 49.9 → 48.5, ne555-blinker 36.5 → 31.0, lm317-supply 33.8 →
+  28.8, arduino-io-shield 21.7 → 19.0, lpb1-booster 13.5 → 12.1, ne555-astable 10.8 → 9.5.
+  Choosing a board takes 21 % less time than it did: 327 s became 257 for all of them.
 - **New Project asks a name and a place, and the board comes second.** It asked which
   board before there was a circuit to try on one, and then the Board step asked again: a
   breadboard chosen twice, and a perfboard size picked blind where step 2 would have tried

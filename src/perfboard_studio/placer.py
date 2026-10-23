@@ -1349,6 +1349,13 @@ class _Mount:
 _MOUNT_SKIP_SLACK_MM = 1.0
 
 
+#: How many pair answers one planning run keeps before it starts again from none. A bound
+#: on memory, not a tuning knob: emptying the memo costs only recomputation, never a
+#: different answer. 131 072 entries is about 34 MB, measured; atmega328-relay, the largest
+#: example, met 332 000 distinct pairs over its four board trials, 83 000 a trial.
+PAIR_MEMO_LIMIT = 1 << 17
+
+
 @dataclass(slots=True)
 class _Scorer:
     board_pitch: float
@@ -1385,6 +1392,18 @@ class _Scorer:
     #: The document's screw holes. Empty on a board without one, which is every golden
     #: fixture -- and then nothing below asks about a screw at all.
     mounts: tuple[_Mount, ...] = ()
+    #: :meth:`pair_terms` answers already worked out, keyed on everything they depend on:
+    #: the two parts and where and how each stands. The annealer asks about the same pair at
+    #: the same two spots again and again as parts move away and back -- 45 % of the calls
+    #: across the examples' board trials -- and the exact convex test under it is the most
+    #: expensive arithmetic in the placer. Held by the scorer, so it lives exactly as long as
+    #: one planning run and never outlives the document it was worked out on.
+    _pair_memo: dict[tuple[int, int, int, int, int, int, int, int], tuple[int, float, float]] = (
+        field(default_factory=dict, repr=False, compare=False)
+    )
+    #: The part list ``_pair_memo`` was filled from. Every state one scorer is handed shares
+    #: it; a different one empties the memo rather than trusting indices into another list.
+    _pair_memo_parts: list[_Part] | None = field(default=None, repr=False, compare=False)
 
     # -- individual terms, each returning millimetres (or mm^2) -------------
 
@@ -1632,7 +1651,24 @@ class _Scorer:
         The AREA stays the boxes' intersection: it is the annealer's gradient, not a
         verdict, and it is charged only for a pair the verdict above says overlaps -- so
         it never prices a square millimetre of overlap that does not exist.
+
+        Answered from ``_pair_memo`` when this pair has stood exactly here before, which is
+        the same answer: it is worked out from the key and from parts that do not change.
         """
+        if state.parts is not self._pair_memo_parts:
+            self._pair_memo.clear()
+            self._pair_memo_parts = state.parts
+        key = (a, b, state.rot[a], state.col[a], state.row[a], state.rot[b], state.col[b], state.row[b])
+        known = self._pair_memo.get(key)
+        if known is not None:
+            return known
+        if len(self._pair_memo) >= PAIR_MEMO_LIMIT:
+            self._pair_memo.clear()
+        known = self._pair_memo[key] = self._pair_terms(state, a, b)
+        return known
+
+    def _pair_terms(self, state: _State, a: int, b: int) -> tuple[int, float, float]:
+        """:meth:`pair_terms`, worked out."""
         part_a, part_b = state.parts[a], state.parts[b]
         box_a = part_a.rel_box[state.rot[a]]
         box_b = part_b.rel_box[state.rot[b]]
