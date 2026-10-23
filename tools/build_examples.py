@@ -328,7 +328,10 @@ def _the_design(example: Example, parsed, bus: CommandBus, lookup) -> bool:
         if unknown:
             print(f"  {example.stem}: no such footprint for {unknown}")
             return False
-        parts = tuple(_told(example, parsed, ref) for ref in refs)
+        parts = tuple(
+            _told(example.footprints, example.pin_names, parsed, ref, f"c-{ref.lower()}")
+            for ref in refs
+        )
         nets = parsed.nets
     else:
         plan = plan_import(parsed, bus.document, lookup)
@@ -363,28 +366,34 @@ def _the_design(example: Example, parsed, bus: CommandBus, lookup) -> bool:
     return True
 
 
-def _told(example: Example, parsed, ref: str) -> AddPartPayload:
-    """A part this example names the footprint of -- and, where its value or its symbol's
+def _told(
+    footprints: dict[str, str],
+    pin_names: dict[str, dict[str, str]],
+    parsed,
+    ref: str,
+    id: str,
+) -> AddPartPayload:
+    """A part an example names the footprint of -- and, where its value or its symbol's
     name is a part the catalog knows IN THAT PACKAGE, the pin names and symbol an import
     would have given it. Without them the NE555 on the front page was a numbered box on the
     sheet, and ERC had nothing to check it by."""
     component = next((c for c in parsed.components if c.ref == ref), None)
     value = (component.value or "") if component is not None else ""
-    footprint_id = example.footprints[ref]
+    footprint_id = footprints[ref]
     part = catalog_part_for(value, component.lib_part) if component is not None else None
     if part is not None and part.footprint_id != footprint_id:
         part = None
-    if ref in example.pin_names:
-        pin_names = tuple(example.pin_names[ref].items())
+    if ref in pin_names:
+        names = tuple(pin_names[ref].items())
     else:
-        pin_names = part.pin_names if part is not None else ()
+        names = part.pin_names if part is not None else ()
     return AddPartPayload(
         ref=ref,
         footprint_id=footprint_id,
         value=value,
-        pin_names=pin_names,
+        pin_names=names,
         symbol=part.symbol if part is not None else None,
-        id=f"c-{ref.lower()}",
+        id=id,
     )
 
 
@@ -597,13 +606,7 @@ def build_project(lookup, *, write: bool) -> bool:
             print(f"  {PROJECT_STEM}: no such footprint {footprint_id!r} for {ref}")
             return False
         result = bus.dispatch(
-            "part.add",
-            AddPartPayload(
-                ref=ref,
-                footprint_id=footprint_id,
-                value=next((c.value or "" for c in parsed.components if c.ref == ref), ""),
-                id=f"p-{ref.lower()}",
-            ),
+            "part.add", _told(PROJECT_FOOTPRINTS, {}, parsed, ref, f"p-{ref.lower()}")
         )
         if not result.ok:
             print(f"  {PROJECT_STEM}: adding {ref} refused [{result.code}] {result.message}")

@@ -77,7 +77,17 @@
       "id": "p-u1",
       "ref": "U1",
       "value": "NE555",
-      "footprintId": "dip-8"
+      "footprintId": "dip-8",
+      "pinNames": {
+        "1": "GND",
+        "2": "TRIG",
+        "3": "OUT",
+        "4": "RESET",
+        "5": "CTRL",
+        "6": "THR",
+        "7": "DIS",
+        "8": "VCC"
+      }
     }
   ],
   "nets": [
