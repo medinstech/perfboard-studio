@@ -350,7 +350,7 @@ claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-
 uygulama da Python'suz olarak aynı sunucu: Windows'ta `perfboard-studio-cli.exe --mcp`;
 her platformdaki yolu docs/MCP.md'de.
 
-Elli dört tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
+57 tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
 (`A1`, `C7`, `AC12`) — breadboard'da ise tahtanın bastığı gibi (`e12`, `T+12`) — hiçbir
 yerde ham koordinat yok; bitmiş kartı kutusunun çizildiği CAD
 programına teslim eden `export_step` de dahil. Tool listesi, diğer istemcilerin
