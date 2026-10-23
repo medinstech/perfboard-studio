@@ -9161,7 +9161,15 @@ class MainWindow(QMainWindow):
 
         if self._last_lvs is not None:
             s = self._last_lvs.summary
-            lvs_colour = OK if s.opens == 0 and s.shorts == 0 else ERROR
+            # Wrong by the rule the step bar uses (``workflow_steps``): an open is only the
+            # wiring not being finished until the wiring is, and on stripboard so is a short.
+            # Red for every open put an alarm on the bar the moment a placement landed, over
+            # a board nobody had done anything wrong to yet.
+            wiring = summarize(self._last_ratsnest).links > 0
+            wrong = (0 if wiring else s.opens) + (
+                0 if wiring and is_stripboard(self.bus.document.board) else s.shorts
+            )
+            lvs_colour = ERROR if wrong else (TEXT_DIM if s.opens or s.shorts else OK)
             lvs_text = t("LVS {matched}/{total} · {opens} open · {shorts} short").format(
                 matched=s.matched_nets, total=s.schematic_nets, opens=s.opens, shorts=s.shorts
             )
@@ -9198,7 +9206,9 @@ class MainWindow(QMainWindow):
     #: LVS issue kinds that mean the board is wired differently from the schematic, as
     #: opposed to merely incomplete. An unrouted net is work left to do; a short is a
     #: board that will not work, and the two should not be the same colour.
-    _LVS_WRONG = frozenset({"open", "short", "unplaced-component", "unknown-footprint"})
+    #: A part still in the design is work left to do as well: in red, it greeted every
+    #: circuit with an alarm under the Circuit step, before anything could be placed.
+    _LVS_WRONG = frozenset({"open", "short", "unknown-footprint"})
 
     def _refresh_drc_panel(self, violations: tuple[DrcViolation, ...], lvs: LvsResult) -> None:
         """Rebuild the findings, keeping the reader's place.

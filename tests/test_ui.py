@@ -10171,6 +10171,35 @@ def test_editing_a_custom_part_does_not_turn_it_into_a_resistor() -> None:
     dialog.deleteLater()
 
 
+def test_work_left_to_do_is_not_shown_as_wrong() -> None:
+    """A part still in the design and a net not wired yet are the steps ahead, and the step
+    bar says so -- while the findings put the first in red under the Circuit step and the
+    status bar turned red the moment a placement landed. Both now wait, as the bar does,
+    until there is something actually wrong."""
+    from perfboard_studio.commands import UnplaceComponentPayload
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY
+    from perfboard_studio.ui.theme import ERROR, WARNING
+
+    window = _window_on(dataclasses.replace(_load_dense(), conductors=()))
+    assert window._last_lvs is not None and window._last_lvs.summary.opens > 0
+    assert ERROR not in window.label_lvs.text()
+
+    # A part the netlist names, or LVS has nothing to say about where it is.
+    wired = window.bus.document.nets[0].nodes[0].component_ref
+    component = next(c for c in window.bus.document.components if c.ref == wired)
+    result = window.bus.dispatch("component.unplace", UnplaceComponentPayload(id=component.id))
+    assert result.ok, result.message
+    tree = window.drc_tree
+    kinds = {}
+    for index in range(tree.topLevelItemCount()):
+        root = tree.topLevelItem(index)
+        for row in range(root.childCount()):
+            child = root.child(row)
+            kinds[child.data(0, ROLE_FINDING_KEY)] = child.foreground(0).color().name()
+    assert kinds["lvs:unplaced-component"] == WARNING.lower(), kinds
+    _close(window)
+
+
 def test_the_part_list_counts_sizes_as_numbers() -> None:
     """By string order "LED, 10 mm" came first, so "LED" and Enter gave a 10 mm LED, and a
     1x10 header stood between the 1x1 and the 1x2."""

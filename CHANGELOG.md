@@ -85,6 +85,12 @@ closed without a bump.
   typing "LED" and pressing Enter added a 10 mm LED; a 1x10 header stood between the 1x1 and
   the 1x2. The Parts panel and Add a Part now list sizes smallest first.
 
+- **Work still ahead is not shown as wrong.** A part still in the design was listed in red
+  under LVS from the moment it was drawn, and the status bar's LVS count turned red the
+  moment a placement landed, because every net is open until it is wired. Both now follow
+  the step bar's rule: an open is the wiring's news until the wiring is done, and a part not
+  yet placed is the placement's.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added
