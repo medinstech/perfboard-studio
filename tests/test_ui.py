@@ -10237,6 +10237,38 @@ def test_work_left_to_do_is_not_shown_as_wrong() -> None:
     _close(window)
 
 
+def test_add_a_part_stays_open_for_the_next_part(monkeypatch) -> None:
+    """A blinker is six parts, and it was six trips through a dialog that closed after each.
+    Add puts the part in the design and readies the next -- a fresh reference, an empty
+    value -- one undo step each; Done closes; a refusal is said in the dialog."""
+    from perfboard_studio.ui import main as main_module
+
+    window = _blank_window()
+    before = len(window.bus.history())
+    seen: list = []
+
+    def work(dialog):
+        seen.append(dialog)
+        dialog.filter.setText("resistor")
+        dialog.value.setText("1k")
+        assert dialog.add_chosen()
+        assert dialog.ref.text() == "R2" and dialog.value.text() == ""
+        dialog.value.setText("10k")
+        dialog.accept()  # Enter, while adding parts, adds
+        dialog.filter.setText("555")
+        dialog.ref.setText("R1")  # taken: refused, in the dialog
+        assert not dialog.add_chosen()
+        assert "R1" in dialog.result_line.text()
+        return main_module.QDialog.DialogCode.Rejected  # Done
+
+    monkeypatch.setattr(main_module.AddPartDialog, "exec", work)
+    window.on_schematic_add_part()
+    assert [(p.ref, p.value) for p in window.bus.document.parts] == [("R1", "1k"), ("R2", "10k")]
+    assert len(window.bus.history()) == before + 2
+    assert seen[0].added == 2
+    _close(window)
+
+
 def test_enter_takes_the_part_the_filter_names() -> None:
     """The catalog comes first in the list and is searched by what a part does as well as
     by its name, so "LED" put the MAX7219 -- an LED display driver -- ahead of every LED,

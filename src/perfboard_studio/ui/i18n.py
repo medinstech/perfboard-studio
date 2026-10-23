@@ -1152,6 +1152,14 @@ TURKISH: Mapping[str, str] = {
     ),
     "Cancelled.": "İptal edildi.",
     "Add a Part": "Parça Ekle",
+    "Add": "Ekle",
+    "Done": "Bitti",
+    "Put this part in the design and pick the next. Enter does the same.": (
+        "Bu parçayı tasarıma koyar ve sıradakini seçmeye hazırlar. Enter da aynısını yapar."
+    ),
+    "Added {part}. Choose the next part, or Done.": (
+        "{part} eklendi. Sıradaki parçayı seç ya da Bitti'ye bas."
+    ),
     "Edit a Part": "Parçayı Düzenle",
     "Filter parts…  (555, BC547, resistor, dip-8)": "Parçaları süz…  (555, BC547, direnç, dip-8)",
     "The designator this part is known by, on the schematic and on the board. "

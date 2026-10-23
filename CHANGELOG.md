@@ -106,6 +106,12 @@ closed without a bump.
   that has no file, takes a checked breadboard on to perfboard (File ▸ New Board from This
   Design, which nobody found from the steps), and otherwise exports the guide for the bench.
 
+- **Add a Part stays open for the next part.** A 555 blinker is six parts and it was six
+  trips through a dialog that closed after each, with the Next button offering "Connect the
+  Pins" from the first part on. Add (or Enter) puts the part in the design, says so in the
+  dialog and readies the next one with a fresh reference; Done closes it. Each part is its
+  own undo step, and a refusal is said in the dialog rather than behind it.
+
 ### Changed
 
 - **New Project asks a name and a place, and the board comes second.** It asked which

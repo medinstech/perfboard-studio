@@ -2839,6 +2839,13 @@ class CustomPartDialog(QDialog):
         return tuple(zip(numbers, self._typed_names(), strict=False))
 
 
+#: What Add a Part calls to put a part in the design: ``(reference, value, footprint id)``
+#: and ``(pin names, symbol)`` in, the design as it now is out -- or why it was refused.
+type AddPart = Callable[
+    [tuple[str, str, str], tuple[PinNames, PartSymbol | None]], PerfDocument | str
+]
+
+
 class AddPartDialog(QDialog):
     """Pick a part for the schematic: what it is, what it is called, what it is worth.
 
@@ -2854,13 +2861,28 @@ class AddPartDialog(QDialog):
     on a schematic and is the right one here: this tool generates the symbol FROM the
     footprint (``schematic.symbol_kind_for``), and the footprint is what the board, the
     guide, the 3D view and the BOM all need anyway.
+
+    IT STAYS OPEN WHILE PARTS ARE ADDED, when it is given ``add`` (``AddPart``). A 555
+    blinker is six parts, and it was six round trips through a dialog that closed after
+    each -- with the Next button no longer offering it, because one part is a circuit that
+    wants connecting. Add puts the part in the design and readies the next one; Done
+    closes. Editing a part (the sheet's Edit a Part, the board's Change Part) is one part,
+    and keeps OK and Cancel.
     """
 
-    def __init__(self, document: PerfDocument, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        document: PerfDocument,
+        parent: QWidget | None = None,
+        add: AddPart | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(t("Add a Part"))
         self.resize(520, 640)
         self._document = document
+        self._add = add
+        #: How many parts this dialog has added, for the line that says so.
+        self.added = 0
         #: Every reference this dialog has proposed, so it can tell its own suggestion
         #: from something the user typed. A set rather than one value: scrolling the list
         #: proposes several before anything is chosen. Per instance, not per class -- a
@@ -2929,11 +2951,39 @@ class AddPartDialog(QDialog):
         # tree changes, because the rows ARE the footprint's pins.
         self.pinout_editor = PinoutEditor()
 
-        self.buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
+        if add is None:
+            self.buttons = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+            )
+            self.buttons.accepted.connect(self.accept)
+            self.buttons.rejected.connect(self.reject)
+            ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+            assert ok is not None
+            #: The button a choice in the tree enables: OK here, Add below.
+            self.confirm: QPushButton = ok
+        else:
+            self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+            done = self.buttons.button(QDialogButtonBox.StandardButton.Close)
+            assert done is not None
+            done.setText(t("Done"))
+            done.setAutoDefault(False)
+            self.buttons.rejected.connect(self.reject)
+            # The accepting role, so the box makes it the default and Enter adds; its
+            # ``accepted`` is not connected, so it never closes the dialog.
+            self.confirm = self.buttons.addButton(
+                t("Add"), QDialogButtonBox.ButtonRole.AcceptRole
+            )
+            self.confirm.setDefault(True)
+            self.confirm.setToolTip(
+                t("Put this part in the design and pick the next. Enter does the same.")
+            )
+            self.confirm.clicked.connect(self.add_chosen)
+
+        #: What the last Add did, or why it could not -- in the dialog, because the status
+        #: bar it used to go to is behind it.
+        self.result_line = QLabel()
+        self.result_line.setWordWrap(True)
+        self.result_line.hide()
 
         self.custom = QPushButton(t("Custom Part…"))
         self.custom.setToolTip(
@@ -2943,6 +2993,8 @@ class AddPartDialog(QDialog):
             )
         )
         self.custom.clicked.connect(self.on_custom_part)
+        # Never the button Enter presses: that is OK, or Add.
+        self.custom.setAutoDefault(False)
 
         #: What the caller needs said before OK -- Change Part's "pin 1 stays where it is,
         #: the lead bends go". Hidden until there is something to say.
@@ -2958,10 +3010,57 @@ class AddPartDialog(QDialog):
         layout.addWidget(self.custom)
         layout.addLayout(form)
         layout.addWidget(self.pinout_editor)
+        layout.addWidget(self.result_line)
         layout.addWidget(self.buttons)
         self.setLayout(layout)
         self._refilter("")
         self.filter.setFocus()
+
+    def add_chosen(self) -> bool:
+        """Add the part as chosen, and ready the dialog for the next one. True if added.
+
+        The tree keeps its filter and its row -- the next part is often another of the same
+        (a second resistor) -- with the filter selected so typing starts a new search. The
+        value is cleared and a fresh reference suggested from the design as it now is.
+        """
+        if self._add is None:
+            return False
+        chosen = self.values()
+        if chosen is None:
+            return False
+        outcome = self._add(chosen, self.pinout())
+        if isinstance(outcome, str):
+            self.result_line.setText(f"<span style='color:{WARNING}'>{outcome}</span>")
+            self.result_line.show()
+            return False
+        self._document = outcome
+        self.added += 1
+        ref, value, _footprint_id = chosen
+        self.result_line.setText(
+            f"<span style='color:{TEXT_DIM}'>"
+            + t("Added {part}. Choose the next part, or Done.").format(
+                part=f"{ref} {value}".strip()
+            )
+            + "</span>"
+        )
+        self.result_line.show()
+        self.ref.clear()
+        self._suggestions = set()
+        self.value.clear()
+        self._catalog_value = ""
+        self._value_seen = ""
+        self._on_choice()
+        self.filter.setFocus()
+        self.filter.selectAll()
+        return True
+
+    def accept(self) -> None:
+        """Enter, or a double-click on a part: adds it while adding parts, and closes only
+        when editing one."""
+        if self._add is not None:
+            self.add_chosen()
+            return
+        super().accept()
 
     def set_notice(self, text: str) -> None:
         self.notice.setText(text)
@@ -3019,9 +3118,7 @@ class AddPartDialog(QDialog):
 
     def _on_choice(self) -> None:
         footprint_id = self.chosen_footprint_id()
-        ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
-        if ok is not None:
-            ok.setEnabled(footprint_id is not None)
+        self.confirm.setEnabled(footprint_id is not None)
         if footprint_id is None:
             return
         footprint = get_footprint(footprint_id)
@@ -7668,30 +7765,31 @@ class MainWindow(QMainWindow):
         not be drawn before the layout was, which is the wrong way round and the opposite
         of how every other EDA tool works.
         """
-        dialog = AddPartDialog(self.bus.document, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        chosen = dialog.values()
-        if chosen is None:
-            return
-        ref, value, footprint_id = chosen
-        pin_names, symbol = dialog.pinout()
-        result = self.bus.dispatch(
-            "part.add",
-            AddPartPayload(
-                ref=ref,
-                footprint_id=footprint_id,
-                value=value,
-                pin_names=pin_names,
-                symbol=symbol,
-            ),
-        )
-        if not result.ok:
-            self.statusBar().showMessage(f"[{result.code}] {result.message}", 8000)
-            return
-        self._schematic_ref = ref
-        self._sync_schematic_highlight()
-        self.statusBar().showMessage(say(result.description), 6000)
+        def add(
+            chosen: tuple[str, str, str], pinout: tuple[PinNames, PartSymbol | None]
+        ) -> PerfDocument | str:
+            ref, value, footprint_id = chosen
+            pin_names, symbol = pinout
+            result = self.bus.dispatch(
+                "part.add",
+                AddPartPayload(
+                    ref=ref,
+                    footprint_id=footprint_id,
+                    value=value,
+                    pin_names=pin_names,
+                    symbol=symbol,
+                ),
+            )
+            if not result.ok:
+                return f"[{result.code}] {result.message}"
+            self._schematic_ref = ref
+            self._sync_schematic_highlight()
+            self.statusBar().showMessage(say(result.description), 6000)
+            return self.bus.document
+
+        # One dialog for the whole parts list: each Add lands on the sheet behind it as it
+        # is made, one undo step each, and Done closes it.
+        AddPartDialog(self.bus.document, self, add=add).exec()
 
     def on_schematic_part_properties(self, part_id: str) -> None:
         """The same fields ``AddPartDialog`` asks for, on a part that exists."""
