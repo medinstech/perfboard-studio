@@ -904,7 +904,7 @@ instead of choosing a board), the guide (`erc-error`, first of the netlist warni
 (`run_erc` and `get_status["erc"]`) and `--headless`. It never reads the board, the copper
 or the sheet's geometry, so a design with nothing placed is checked exactly as a finished one.
 
-Five things are load-bearing, each with a test in `tests/test_erc.py`:
+Six things are load-bearing, each with a test in `tests/test_erc.py`:
 
 - **It reads pin NAMES and nothing else** (`model.pin_name_of`). A DIP whose pins nobody
   named is not checked, and that is deliberately not filled in from the catalog by the
@@ -931,6 +931,17 @@ Five things are load-bearing, each with a test in `tests/test_erc.py`:
 - **It is quiet until something is joined.** No `part-unconnected` until some net joins two
   pins, and no supply finding on a part with nothing wired, so a circuit half drawn is one
   warning per unwired part rather than a wall of errors about chips nobody has reached yet.
+- **`no-power-entry` asks whether a way in EXISTS, not where it goes**
+  (`_check_power_entry`). A circuit needs a supply when a chip or a module has a supply pin
+  wired -- a regulator's IN included -- or a net is of the power or ground class, and power
+  enters when any connector or module has a pin on one of those nets: a header, a screw
+  terminal, the pads a battery clip or a jack is wired to, a devkit on its own USB, because
+  that is how power reaches a perfboard. Whether the entry reaches both rails, or comes in
+  through a regulator (a terminal on a 7805's IN counts), is the circuit's function, and is
+  deliberately not judged: a wrong error there would hold the step bar back on a circuit
+  that works. So it is a warning and never an error. No shipped example fires it and none
+  is exempted by name; it fires on `dense`, `sparse` and nine `random-*` fixtures, which are
+  random parts with no connector, and nothing reads ERC on them.
 
 Engine messages are English like DRC's; the panel's titles are `ui/main._erc_title`, held to
 `erc.RULES` by `test_every_rule_and_every_lvs_finding_has_a_title_in_words`. No golden moved:
