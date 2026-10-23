@@ -379,6 +379,26 @@ SHEET_PICK_MM = 1.6
 UNWIRED_RULES = frozenset({"pin-not-connected"})
 
 
+def work_left(*, wiring: bool, stripboard: bool) -> frozenset[str]:
+    """The findings -- DRC rule ids and LVS kinds in one set -- that are the work left to do
+    rather than anything wrong, read by the status bar's counts and the findings panel's
+    colours alike so the two cannot say different things about one finding. They did: the
+    panel said "28 violation(s)" in amber under a bar reading "DRC 0 err / 0 warn", and an
+    open was red in the panel and grey on the bar.
+
+    A part still in the design and a net nothing is wired to are always the steps ahead.
+    While there are connections left to route (``wiring``) so are a pin nothing touches yet
+    and an open -- an unrouted net some of whose pins are already joined (``lvs.py``) -- and
+    on stripboard a short, which is the strips not cut yet.
+    """
+    left = {"unplaced-component", "unrouted-net"}
+    if wiring:
+        left |= UNWIRED_RULES | {"open"}
+        if stripboard:
+            left.add("short")
+    return frozenset(left)
+
+
 def refused(result: DispatchResult) -> str:
     """Why a command was refused, in the window's language.
 
@@ -9449,11 +9469,9 @@ class MainWindow(QMainWindow):
         errors = sum(1 for v in self._last_violations if v.severity == "error")
         # Not the pins nothing is wired to yet while there is wiring left to do: the step bar
         # does not count them either (``WorkflowFacts.drc_unwired``).
-        wiring = summarize(self._last_ratsnest).links > 0
+        waiting = self._work_left()
         warns = sum(
-            1
-            for v in self._last_violations
-            if v.severity == "warning" and not (wiring and v.rule in UNWIRED_RULES)
+            1 for v in self._last_violations if v.severity == "warning" and v.rule not in waiting
         )
         drc_colour = ERROR if errors else (WARNING if warns else OK)
         drc_text = t("DRC {errors} err / {warnings} warn").format(errors=errors, warnings=warns)
@@ -9473,10 +9491,7 @@ class MainWindow(QMainWindow):
             # wiring not being finished until the wiring is, and on stripboard so is a short.
             # Red for every open put an alarm on the bar the moment a placement landed, over
             # a board nobody had done anything wrong to yet.
-            wiring = summarize(self._last_ratsnest).links > 0
-            wrong = (0 if wiring else s.opens) + (
-                0 if wiring and is_stripboard(self.bus.document.board) else s.shorts
-            )
+            wrong = (0 if "open" in waiting else s.opens) + (0 if "short" in waiting else s.shorts)
             lvs_colour = ERROR if wrong else (TEXT_DIM if s.opens or s.shorts else OK)
             lvs_text = t("LVS {matched}/{total} · {opens} open · {shorts} short").format(
                 matched=s.matched_nets, total=s.schematic_nets, opens=s.opens, shorts=s.shorts
@@ -9518,6 +9533,16 @@ class MainWindow(QMainWindow):
     #: circuit with an alarm under the Circuit step, before anything could be placed.
     _LVS_WRONG = frozenset({"open", "short", "unknown-footprint"})
 
+    def _work_left(self) -> frozenset[str]:
+        """``work_left`` for the board in the window as it stands. What it names is shown
+        in the colour the status bar gives the connections left to route, whatever colour
+        it would be otherwise: amber said "look at this" about a board that merely was not
+        finished yet, beside the same count dimmed on the bar below it."""
+        return work_left(
+            wiring=summarize(self._last_ratsnest).links > 0,
+            stripboard=is_stripboard(self.bus.document.board),
+        )
+
     def _refresh_drc_panel(self, violations: tuple[DrcViolation, ...], lvs: LvsResult) -> None:
         """Rebuild the findings, keeping the reader's place.
 
@@ -9533,32 +9558,48 @@ class MainWindow(QMainWindow):
 
         self._add_erc_findings(needle, expanded)
 
-        drc_root = QTreeWidgetItem(
-            ["DRC", t("{count} violation(s)").format(count=len(violations))]
-        )
+        # The pins nothing is wired to yet, while there are connections left to route, are
+        # the next step rather than anything wrong: the status bar and the step bar leave
+        # them out of their counts, so here they are said, coloured and counted as LVS's
+        # unwired nets are -- not "28 violation(s)" in amber under a bar reading "0 warn".
+        left = self._work_left()
+        to_do = left & UNWIRED_RULES
+        unwired = sum(1 for v in violations if v.rule in to_do)
+        drc_count = t("{count} violation(s)").format(count=len(violations))
+        if unwired:
+            drc_count = t("{count} violation(s) · {unwired} pin(s) not wired yet").format(
+                count=len(violations) - unwired, unwired=unwired
+            )
+        drc_root = QTreeWidgetItem(["DRC", drc_count])
         drc_root.setData(0, ROLE_FINDING_KEY, "DRC")
         tree.addTopLevelItem(drc_root)
+
+        def rule_title(rule: str, severity: str) -> str:
+            if rule in to_do:  # ``pin-not-connected``, the one rule in UNWIRED_RULES
+                return t("Pin not wired yet")
+            return f"{_rule_title(rule)} ({_severity_word(severity)})"
+
         by_rule: dict[str, list[DrcViolation]] = {}
         for v in violations:
             haystack = _folded(
-                f"{v.rule} {_rule_title(v.rule)} {v.severity} {_severity_word(v.severity)} "
-                f"{self._finding_text(v.message, v.conductor_ids)}"
+                f"{v.rule} {_rule_title(v.rule)} {rule_title(v.rule, v.severity)} {v.severity} "
+                f"{_severity_word(v.severity)} {self._finding_text(v.message, v.conductor_ids)}"
             )
             if needle and needle not in haystack:
                 continue
             by_rule.setdefault(v.rule, []).append(v)
-        for rule in sorted(by_rule):
+        # What is wrong first, the work left to do after it.
+        for rule in sorted(by_rule, key=lambda rule: (rule in to_do, rule)):
             items = by_rule[rule]
             severity = items[0].severity
-            rule_item = QTreeWidgetItem(
-                [f"{_rule_title(rule)} ({_severity_word(severity)})", f"{len(items)}"]
-            )
+            rule_item = QTreeWidgetItem([rule_title(rule, severity), f"{len(items)}"])
             # The id stays one hover away: it is what the documentation and the MCP
             # server call the rule, and what somebody searching for it will type.
             rule_item.setToolTip(0, rule)
             # The colour the status bar already uses for the same count, so a warning
             # reads the same whether it is a number on the bar or a row in this tree.
-            rule_item.setForeground(0, QColor(ERROR if severity == "error" else WARNING))
+            colour = ERROR if severity == "error" else WARNING
+            rule_item.setForeground(0, QColor(TEXT_DIM if rule in to_do else colour))
             rule_item.setData(0, ROLE_FINDING_KEY, f"drc:{rule}")
             drc_root.addChild(rule_item)
             self._add_drc_findings(rule_item, rule, items, expanded)
@@ -9592,7 +9633,8 @@ class MainWindow(QMainWindow):
             kind_issues = by_kind[kind]
             kind_item = QTreeWidgetItem([_lvs_title(kind), f"{len(kind_issues)}"])
             kind_item.setToolTip(0, kind)
-            kind_item.setForeground(0, QColor(ERROR if kind in self._LVS_WRONG else WARNING))
+            colour = ERROR if kind in self._LVS_WRONG else WARNING
+            kind_item.setForeground(0, QColor(TEXT_DIM if kind in left else colour))
             kind_item.setData(0, ROLE_FINDING_KEY, f"lvs:{kind}")
             lvs_root.addChild(kind_item)
             for iss in kind_issues:

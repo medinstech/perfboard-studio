@@ -656,6 +656,10 @@ TURKISH: Mapping[str, str] = {
     "Copper joined to no pin": "Hiçbir pine bağlı olmayan bakır",
     "Part not on the board": "Parça kartta değil",
     "Net not wired yet": "Net henüz bağlanmadı",
+    "Pin not wired yet": "Pin henüz bağlanmadı",
+    "{count} violation(s) · {unwired} pin(s) not wired yet": (
+        "{count} ihlal · {unwired} pin henüz bağlanmadı"
+    ),
     "error": "hata",
     "warning": "uyarı",
     "Design rules checked in {ms} ms. Click to see the findings.": (

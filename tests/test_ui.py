@@ -5654,16 +5654,23 @@ def test_a_run_past_a_row_of_pins_is_one_row_with_every_pad_underneath() -> None
 
 
 def test_a_severity_has_the_same_colour_in_the_tree_as_on_the_status_bar() -> None:
-    from perfboard_studio.ui.theme import ERROR, WARNING
+    """...and a pin waiting for its wiring, which the bar does not count while there are
+    connections left to route, is dimmed in the tree, as the bar dims those connections."""
+    from perfboard_studio.ratsnest import summarize
+    from perfboard_studio.ui.main import UNWIRED_RULES
+    from perfboard_studio.ui.theme import ERROR, TEXT_DIM, WARNING
 
     window = _window_on(_load_dense())
     root = _findings_root(window, "DRC")
     by_rule = {v.rule: v.severity for v in window._last_violations}
+    wiring = summarize(window._last_ratsnest).links > 0
 
     for j in range(root.childCount()):
         item = root.child(j)
         rule = item.toolTip(0)  # the row is in words; the rule's id is its tooltip
         expected = ERROR if by_rule[rule] == "error" else WARNING
+        if wiring and rule in UNWIRED_RULES:
+            expected = TEXT_DIM
         assert item.foreground(0).color().name() == expected, rule
     _close(window)
 
@@ -10221,7 +10228,7 @@ def test_work_left_to_do_is_not_shown_as_wrong() -> None:
     until there is something actually wrong."""
     from perfboard_studio.commands import UnplaceComponentPayload
     from perfboard_studio.ui.main import ROLE_FINDING_KEY
-    from perfboard_studio.ui.theme import ERROR, WARNING
+    from perfboard_studio.ui.theme import ERROR, TEXT_DIM
 
     window = _window_on(dataclasses.replace(_load_dense(), conductors=()))
     assert window._last_lvs is not None and window._last_lvs.summary.opens > 0
@@ -10239,7 +10246,10 @@ def test_work_left_to_do_is_not_shown_as_wrong() -> None:
         for row in range(root.childCount()):
             child = root.child(row)
             kinds[child.data(0, ROLE_FINDING_KEY)] = child.foreground(0).color().name()
-    assert kinds["lvs:unplaced-component"] == WARNING.lower(), kinds
+    # In the dimmed colour the status bar gives the connections left to route: amber said
+    # "look at this" about a board that was merely not finished yet.
+    assert kinds["lvs:unplaced-component"] == TEXT_DIM.lower(), kinds
+    assert kinds["lvs:unrouted-net"] == TEXT_DIM.lower(), kinds
     _close(window)
 
 
@@ -13028,6 +13038,162 @@ def test_the_status_bar_does_not_count_pins_waiting_for_their_wiring() -> None:
     finally:
         _close(window)
 
+
+def test_the_findings_do_not_call_pins_waiting_for_their_wiring_violations() -> None:
+    """The bar read "DRC 0 err / 0 warn" over a placed, unrouted NE555 while the findings
+    said "28 violation(s)" over "Pin connected to nothing (warning)" in amber. While there
+    is wiring left to do, those pins are counted apart, said as the work left to do, dimmed
+    as LVS's unwired nets are and listed after anything wrong; once nothing is left to
+    route, a pin touching nothing is a warning again."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.lvs import run_lvs
+    from perfboard_studio.model import Net, NetNode
+    from perfboard_studio.ratsnest import summarize
+    from perfboard_studio.ui.theme import TEXT_DIM, WARNING
+
+    window = _window_on(dataclasses.replace(_load_dense(), conductors=()))
+    try:
+        assert summarize(window._last_ratsnest).links > 0
+        unwired = window.workflow_facts().drc_unwired
+        assert unwired > 0
+        root = _findings_root(window, "DRC")
+        wrong = len(window._last_violations) - unwired
+        assert root.text(1) == f"{wrong} violation(s) · {unwired} pin(s) not wired yet"
+        group = _drc_group(window, "drc:pin-not-connected")
+        assert group is not None
+        assert (group.text(0), group.text(1)) == ("Pin not wired yet", str(unwired))
+        dimmed = group.foreground(0).color().name()
+        assert dimmed == TEXT_DIM.lower()
+        assert dimmed == _drc_group(window, "lvs:unrouted-net").foreground(0).color().name()
+        last = root.child(root.childCount() - 1)
+        assert last.data(0, _finding_key_role()) == "drc:pin-not-connected"
+    finally:
+        _close(window)
+
+    # Routed, with one pin a net names and nothing touches: that is a finding about the board.
+    doc = _example_document("ne555-astable")
+    named = {(node.component_ref, node.pin) for net in doc.nets for node in net.nodes}
+    lone = next(
+        (component.ref, pin.number)
+        for component in doc.components
+        if (footprint := get_footprint(component.footprint_id)) is not None
+        for pin in footprint.pins
+        if (component.ref, pin.number) not in named
+    )
+    doc = dataclasses.replace(
+        doc, nets=(*doc.nets, Net(id="net-lone", name="LONE", nodes=(NetNode(*lone),)))
+    )
+    window = _window_on(doc)
+    try:
+        assert summarize(window._last_ratsnest).links == 0
+        group = _drc_group(window, "drc:pin-not-connected")
+        assert group is not None
+        assert group.text(0).endswith("(warning)")
+        assert group.foreground(0).color().name() == WARNING.lower()
+        assert _findings_root(window, "DRC").text(1) == (
+            f"{len(window._last_violations)} violation(s)"
+        )
+    finally:
+        _close(window)
+
+    # An open is an unrouted net some of whose pins are already joined (``lvs.py``): the
+    # same work left to do, so it waits in the same colour, by the bar's own rule.
+    doc = _example_document("ne555-astable")
+    opened = None
+    for conductor in doc.conductors:
+        rest = tuple(c for c in doc.conductors if c is not conductor)
+        candidate = dataclasses.replace(doc, conductors=rest)
+        if any(issue.kind == "open" for issue in run_lvs(candidate, get_footprint).issues):
+            opened = candidate
+            break
+    assert opened is not None, "one conductor taken away should leave a net in pieces"
+    window = _window_on(opened)
+    try:
+        assert summarize(window._last_ratsnest).links > 0
+        group = _drc_group(window, "lvs:open")
+        assert group is not None
+        assert group.foreground(0).color().name() == TEXT_DIM.lower()
+    finally:
+        _close(window)
+
+
+def _a_short(doc: PerfDocument) -> PerfDocument:
+    """``doc`` with an insulated wire from a pin of its first net to a pin of its second."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.geometry import pin_hole
+    from perfboard_studio.model import WireConductor
+
+    def hole(node):
+        component = next(c for c in doc.components if c.ref == node.component_ref)
+        footprint = get_footprint(component.footprint_id)
+        assert footprint is not None
+        return pin_hole(component, footprint, node.pin)
+
+    a, b = hole(doc.nets[0].nodes[0]), hole(doc.nets[1].nodes[0])
+    wire = WireConductor(id="w-short", path=(a, b), kind="insulated-wire")
+    return dataclasses.replace(doc, conductors=(*doc.conductors, wire))
+
+
+def test_the_findings_and_the_status_bar_colour_a_finding_by_one_rule() -> None:
+    """The panel said "28 violation(s)" in amber under a bar reading "DRC 0 err / 0 warn",
+    and an open was red in the panel and grey on the bar: two rules for one finding, which
+    drifted. Both read ``work_left`` now, and this holds them to it on boards wired not at
+    all, partly, fully, open, shorted, and on stripboard with its strips uncut: the bar
+    counts as errors and warnings exactly the panel's red and amber rows, and its LVS
+    colour is the colour the panel gives the opens and shorts."""
+    import re
+
+    from perfboard_studio.ratsnest import summarize
+    from perfboard_studio.ui.theme import ERROR, OK, TEXT_DIM, WARNING
+
+    example = _example_document("ne555-astable")
+    strips = dataclasses.replace(
+        example,
+        board=dataclasses.replace(example.board, type="stripboard", strip_axis="horizontal"),
+        conductors=(),
+    )
+    states = {
+        "partly wired": _load_dense(),
+        "not wired": dataclasses.replace(_load_dense(), conductors=()),
+        "wired": example,
+        "open": dataclasses.replace(example, conductors=example.conductors[1:]),
+        "shorted": _a_short(example),
+        "strips uncut": strips,
+    }
+    seen: set[tuple[str, str]] = set()
+    for state, doc in states.items():
+        window = _window_on(doc)
+        try:
+            wiring = summarize(window._last_ratsnest).links > 0
+            drc = _findings_root(window, "DRC")
+            counted = {ERROR.lower(): 0, WARNING.lower(): 0, TEXT_DIM.lower(): 0}
+            for row in range(drc.childCount()):
+                group = drc.child(row)
+                counted[group.foreground(0).color().name()] += int(group.text(1))
+            bar = re.search(r"DRC (\d+) err / (\d+) warn", window.label_drc.text())
+            assert bar is not None, window.label_drc.text()
+            assert (int(bar[1]), int(bar[2])) == (
+                counted[ERROR.lower()],
+                counted[WARNING.lower()],
+            ), (state, counted)
+
+            lvs = _findings_root(window, "LVS")
+            colours = {}
+            for row in range(lvs.childCount()):
+                group = lvs.child(row)
+                colours[group.toolTip(0)] = group.foreground(0).color().name()
+            bar_colour = re.search(r"color:(#[0-9a-fA-F]{6})", window.label_lvs.text())
+            assert bar_colour is not None, window.label_lvs.text()
+            under = {colours[kind] for kind in ("open", "short", "unrouted-net") if kind in colours}
+            assert len(under) <= 1, (state, colours)
+            expected = next(iter(under), OK.lower())
+            assert bar_colour[1].lower() == expected, (state, colours)
+            seen |= {(kind, "wiring" if wiring else "wired") for kind in colours}
+        finally:
+            _close(window)
+    # Every state the rule tells apart was reached, or the test would pass on less.
+    for reached in [("open", "wiring"), ("short", "wiring"), ("short", "wired")]:
+        assert reached in seen, (reached, sorted(seen))
 
 
 @pytest.mark.parametrize("footprint_id", ["led-3mm", "led-5mm", "led-10mm"])

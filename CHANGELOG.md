@@ -165,6 +165,18 @@ closed without a bump.
 
 ### Changed
 
+- **The findings panel no longer calls pins waiting for their wiring violations.** With an
+  NE555 placed and not yet routed, the status bar and the step bar read "DRC 0 err / 0
+  warn" while the panel's DRC group said "28 violation(s)" over "Pin connected to nothing
+  (warning)" in amber. While connections are left to route, those pins are counted apart
+  ("0 violation(s) · 28 pin(s) not wired yet"), titled "Pin not wired yet", dimmed in the
+  colour the status bar gives the connections left to route, and listed after anything
+  actually wrong. LVS's "Net not wired yet" and "Part not on the board" are dimmed the
+  same way, and so, while there is wiring left, is "Open: a net in pieces" -- red until
+  now, beside the bar's dimmed LVS count -- and on stripboard a short, by the status bar's
+  own rule. Once the last connection is routed, a pin still touching nothing is a warning
+  in amber again.
+
 - **DRC and LVS findings are said in Turkish in a Turkish window.** The findings panel
   was the one place a Turkish window still read English sentence after sentence: "Pin 1 of
   X7 (net 'GND') is not connected to anything...". Every finding the checkers write -- 47
