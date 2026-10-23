@@ -84,7 +84,8 @@ def test_a_kicad_footprint_name_is_read_for_its_package(kicad: str, expected: st
         # nothing to go on.
         ("Resistor_SMD:R_0805_2012Metric", "surface-mount"),
         ("Package_TO_SOT_SMD:SOT-23", "surface-mount"),
-        ("Relay_THT:Relay_SPDT_SANYOU_SRD_Series_Form_C", "relay"),
+        # Every relay but the measured SRD (relay-srd) still says why it was not mapped.
+        ("Relay_THT:Relay_DPDT_Finder_30.22", "relay"),
         ("Button_Switch_THT:SW_PUSH_1P1T_6x3.5mm_H4.3_APEM_MJTP1243", "push button"),
         ("Module:Arduino_Nano", "module"),
         ("Package_TO_SOT_THT:TO-220-3_Horizontal_TabDown", "upright"),
@@ -242,8 +243,10 @@ def test_each_part_is_read_for_what_it_is() -> None:
     assert any("DIP adapter" in line for line in plan.notes["U3"])
     assert got["C1"] == ("c-elec-d6.3-p1-h11", "kicad", None, "100u")
     assert got["R1"] == ("r-axial-4", "kicad", None, "4k7")
-    assert got["K1"][0:2] == ("relay-spdt", "guess")
-    assert any("relay" in line for line in plan.notes["K1"])
+    # KiCad's SANYOU SRD is the one relay whose legs are measured, numbered as KiCad
+    # numbers it -- so the netlist's pins land as drawn, and nothing needs saying.
+    assert got["K1"] == ("relay-srd", "kicad", None, "SRD-05VDC")
+    assert "K1" not in plan.notes
     assert got["J1"] == ("hdr-1x2", "kicad", None, "PWR")
 
 

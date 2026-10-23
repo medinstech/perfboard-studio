@@ -309,6 +309,9 @@ _KICAD_NAMES: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], list[str]]]
     # switch lands on them as drawn. See footprints.push_button_footprint.
     (re.compile(r"^SW_PUSH_6mm"), lambda m: ["sw-tactile-6x6"]),
     (re.compile(r"^SW_PUSH-12mm"), lambda m: ["sw-tactile-12x12"]),
+    # The one relay whose legs are measured, numbered as KiCad numbers it: 1 COM, 2 and 5
+    # the coil, 3 NO, 4 NC. Every other relay still says why it was not mapped, below.
+    (re.compile(r"^Relay_SPDT_SANYOU_SRD_Series_Form_C"), lambda m: ["relay-srd"]),
     # Connector_Wire: a part that is NOT on the board, wired to it -- see
     # footprints.flying_leads_footprint.
     (

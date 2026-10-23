@@ -22,6 +22,8 @@ closed without a bump.
 
 ### Added
 
+- **An SRD-12VDC-SL-C relay** joins the catalog beside the 5 V one, on `relay-srd`.
+
 - **The LM2596 buck module is in the catalog**, drawn as itself -- its two cans, inductor,
   regulator and trimmer -- because the layout it was missing was already there, keyed on a
   name nothing could choose. IN+, IN-, OUT+ and OUT- are named, and its check says what a
@@ -164,6 +166,18 @@ closed without a bump.
   was written on they are identical to the byte.
 
 ### Fixed
+
+- **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,
+  was wired wrong for the real relay.** Such a relay was guessed onto `relay-spdt`, so the
+  netlist's pin 1 -- COM, in KiCad's numbering -- landed on a hole `relay-spdt` gives a
+  COIL leg, its NC on the hole for COM, and the copper was laid for that -- wrong for a real
+  SRD, whose legs are not where those holes are either. If you built the nano-relay example,
+  or a board imported this way, check
+  the relay's wiring against its datasheet. `Relay_SPDT_SANYOU_SRD_Series_Form_C` now maps
+  to `relay-srd`, the measured footprint, numbered as KiCad numbers it. The nano-relay
+  example is rebuilt on it: the real relay is larger, so it moved from a 6 x 8 cm board to
+  7 x 9 cm and every part was placed again; it routes with no DRC error or warning, and ERC
+  finds nothing.
 
 - **A value typed over a catalog part takes that part's pinout with it.** Changing a
   BC547 to a 2N3904 in Part Properties kept the BC547's C-B-E under a transistor that is

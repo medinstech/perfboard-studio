@@ -224,6 +224,19 @@ _SWITCH_LEGS = (
     "pressed."
 )
 
+#: The Songle SRD relays: one package for every coil voltage, numbered as KiCad's SANYOU SRD
+#: footprint (``footprints.srd_relay_footprint``).
+_SRD_LEGS = _legs("COM", "COIL", "NO", "NC", "COIL")
+_SRD_SOURCE = (
+    "Songle SRD datasheet: coil data, contact rating, the 19.1 x 15.5 x 15.3 mm body, its "
+    "drilling and wiring diagram; numbered as KiCad Relay_SPDT_SANYOU_SRD_Series_Form_C"
+)
+_SRD_CHECK = (
+    "Its legs are off the 2.54 mm grid and bend to the holes drawn: about 0.5 mm for COM, "
+    "0.9 mm for a coil leg, 1.1 mm for a contact leg. With the coil off, NC reads shut to "
+    "COM: check that with a meter before soldering."
+)
+
 _MODULE_TOP = (
     "The height of what is on the board is an estimate, and so is its colour; the pins, "
     "the rows and the board outline are measured."
@@ -637,17 +650,10 @@ CATALOG: tuple[CatalogPart, ...] = (
     # -- relays -----------------------------------------------------------------------
     CatalogPart("srd-05vdc-sl-c", "Songle SRD-05VDC-SL-C relay", "relay", "relay-srd",
                 "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC",
-                _legs("COM", "COIL", "NO", "NC", "COIL"), value="SRD-05VDC-SL-C",
-                source=(
-                    "Songle SRD datasheet: coil data, contact rating, the 19.1 x 15.5 x 15.3 mm "
-                    "body, its drilling and wiring diagram; numbered as KiCad "
-                    "Relay_SPDT_SANYOU_SRD_Series_Form_C"
-                ),
-                check=(
-                    "Its legs are off the 2.54 mm grid and bend to the holes drawn: about "
-                    "0.5 mm for COM, 0.9 mm for a coil leg, 1.1 mm for a contact leg. With the "
-                    "coil off, NC reads shut to COM: check that with a meter before soldering."
-                )),
+                _SRD_LEGS, value="SRD-05VDC-SL-C", source=_SRD_SOURCE, check=_SRD_CHECK),
+    CatalogPart("srd-12vdc-sl-c", "Songle SRD-12VDC-SL-C relay", "relay", "relay-srd",
+                "SPDT relay, 12 V coil of 400 ohm, contacts 10 A at 125 V AC",
+                _SRD_LEGS, value="SRD-12VDC-SL-C", source=_SRD_SOURCE, check=_SRD_CHECK),
     # -- connectors -------------------------------------------------------------------
     CatalogPart("servo-header", "Servo header", "connector", "hdr-1x3",
                 "Three header pins for a hobby servo's plug: PWM, + in the middle, -",

@@ -1961,6 +1961,10 @@ TURKISH: Mapping[str, str] = {
         "kondansatörünün değeridir, çoğu zaman 35 V."
     ),
     "Songle SRD-05VDC-SL-C relay": "Songle SRD-05VDC-SL-C röle",
+    "Songle SRD-12VDC-SL-C relay": "Songle SRD-12VDC-SL-C röle",
+    "SPDT relay, 12 V coil of 400 ohm, contacts 10 A at 125 V AC": (
+        "SPDT röle, 400 ohm'luk 12 V bobin, kontaklar 125 V AC'de 10 A"
+    ),
     "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC": (
         "SPDT röle, 70 ohm'luk 5 V bobin, kontaklar 125 V AC'de 10 A"
     ),
