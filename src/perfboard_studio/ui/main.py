@@ -408,6 +408,17 @@ def _user_documents() -> Path:
     return Path.home()
 
 
+def did(description: str) -> str:
+    """What a command did, for the status bar: its undo label, said as done.
+
+    The label is an order -- "Use a 2 x 8 cm board", "Şemaya R1 10k ekle" -- which is right
+    in the Edit menu, where Undo offers to take it back, and wrong under the board after it
+    has happened: in Turkish especially, "2 x 8 cm kart kullan" on the bar read as the
+    application telling somebody which board to use.
+    """
+    return t("Done: {what}").format(what=say(description))
+
+
 def refused(result: DispatchResult) -> str:
     """Why a command was refused, in the window's language.
 
@@ -6962,7 +6973,7 @@ class MainWindow(QMainWindow):
             else:
                 note = ""
             self.statusBar().showMessage(
-                f"{say(result.description)}{note} — {t('Esc to stop placing.')}", 6000
+                f"{did(result.description)}{note} — {t('Esc to stop placing.')}", 6000
             )
             self._on_placement_armed(self.scene.armed_footprint_id or "")
             self._remember_a_part_was_placed()
@@ -7627,7 +7638,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def _on_sheet_tee_started(self, wire: str) -> None:
         self.statusBar().showMessage(
@@ -7662,7 +7673,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def on_sheet_label(self, ref: str, pin: str) -> None:
         """Join a pin to a net by NAME rather than by drawing a line to it.
@@ -7712,7 +7723,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def on_sheet_note_drawn(
         self, kind: str, x0: float, y0: float, x1: float, y1: float
@@ -7741,7 +7752,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
         self.schematic_view.set_tool("select")
         if hasattr(self, "act_sheet_tool"):
             self.act_sheet_tool["select"].setChecked(True)
@@ -7785,7 +7796,7 @@ class MainWindow(QMainWindow):
                 t("Nothing on this sheet has been moved by hand."), 6000
             )
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def _on_part_dropped(self, ref: str, hole: object) -> None:
         """A symbol was dragged off the sheet and dropped on a hole.
@@ -7821,7 +7832,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
         self._sync_schematic_highlight()
 
     def _on_footprint_dropped(self, footprint_id: str, hole: object) -> None:
@@ -7885,7 +7896,7 @@ class MainWindow(QMainWindow):
                 return refused(result)
             self._schematic_ref = ref
             self._sync_schematic_highlight()
-            self.statusBar().showMessage(say(result.description), 6000)
+            self.statusBar().showMessage(did(result.description), 6000)
             return self.bus.document
 
         # One dialog for the whole parts list: each Add lands on the sheet behind it as it
@@ -8009,7 +8020,7 @@ class MainWindow(QMainWindow):
             {ref: Point2(x=x, y=y)}, f"Add {ref} to the sheet at ({x:.0f}, {y:.0f})"
         )
         self._sync_schematic_highlight()
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def _on_schematic_pin_clicked(self, ref: str, pin: str) -> None:
         """Say what the half-made pair is waiting for, and nothing else.
@@ -8124,7 +8135,7 @@ class MainWindow(QMainWindow):
         if component is None:
             self._schematic_ref = None
         self._sync_schematic_highlight()
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     # -- editing the circuit from the sheet ------------------------------------
     #
@@ -8170,7 +8181,7 @@ class MainWindow(QMainWindow):
             return
         self._schematic_ref = chosen
         self._sync_schematic_highlight()
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def _duplicate_symbol(self, ref: str) -> None:
         """Another part of the same kind and value, with the next free designator.
@@ -8205,7 +8216,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(refused(result), 8000)
             return
         self._sync_schematic_highlight()
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def _auto_one_symbol(self, part_id: str) -> None:
         """Give one symbol back to the layout, leaving the rest where they were put.
@@ -8216,7 +8227,7 @@ class MainWindow(QMainWindow):
         """
         result = self.bus.dispatch("symbol.auto", AutoSymbolsPayload(ids=(part_id,)))
         self.statusBar().showMessage(
-            say(result.description) if result.ok else refused(result), 6000
+            did(result.description) if result.ok else refused(result), 6000
         )
 
     def _disconnect_one_pin(self, net_id: NetId, node: NetNode) -> None:
@@ -8229,7 +8240,7 @@ class MainWindow(QMainWindow):
             "net.disconnect", DisconnectPinsPayload(id=net_id, nodes=(node,))
         )
         self.statusBar().showMessage(
-            say(result.description) if result.ok else refused(result), 6000
+            did(result.description) if result.ok else refused(result), 6000
         )
 
     def _rename_net(self, net_id: NetId) -> None:
@@ -8256,7 +8267,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def _set_net_class(self, net_id: NetId, net_class: NetClass) -> None:
         """Signal, ground or power -- which is not a label on this sheet.
@@ -8272,7 +8283,7 @@ class MainWindow(QMainWindow):
             "net.update", UpdateNetPayload(id=net_id, net_class=net_class)
         )
         self.statusBar().showMessage(
-            say(result.description) if result.ok else refused(result), 6000
+            did(result.description) if result.ok else refused(result), 6000
         )
 
     def on_schematic_place_all(self) -> None:
@@ -8345,8 +8356,8 @@ class MainWindow(QMainWindow):
         unplaced = len(placed.unplaced)
         note = "; " + t("{count} would not fit").format(count=unplaced) if unplaced else ""
         self.statusBar().showMessage(
-            f"{say(result.description)}{note}. "
-            + t("Ctrl+R routes it; Ctrl+Shift+A arranges it again from a different seed."),
+            f"{did(result.description)}{note}. "
+            + t("Ctrl+R wires it; Ctrl+Shift+A tries another arrangement."),
             12000,
         )
         self._sync_schematic_highlight()
@@ -9226,7 +9237,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def _add_net_entries(self, menu: QMenu, net_id: str) -> None:
         """What can be done to the net a wire draws.
@@ -9404,7 +9415,7 @@ class MainWindow(QMainWindow):
         # document to work that out -- so placing R4 has to move the banner on to R5.
         self._refresh_mode_banner()
         if entry is not None:
-            self.statusBar().showMessage(say(entry.description), 6000)
+            self.statusBar().showMessage(did(entry.description), 6000)
 
     #: Commands after which a net's existing copper describes a board that no longer
     #: exists. Not a guess: the bus says exactly which command ran.
@@ -10306,7 +10317,7 @@ class MainWindow(QMainWindow):
             # exactly like the button doing nothing.
             self.statusBar().showMessage(
                 f"{say(describe_placement(plan))}  "
-                + t("Pressing Auto-place again searches from another seed."),
+                + t("Pressing Auto-place again tries another arrangement."),
                 0,
             )
             return
@@ -11117,7 +11128,7 @@ class MainWindow(QMainWindow):
     def _on_cut_made(self, result: Any) -> None:
         if result is None:
             return
-        message = say(result.description) if result.ok else refused(result)
+        message = did(result.description) if result.ok else refused(result)
         self.statusBar().showMessage(message, 6000)
 
     def on_measure_mode(self, checked: bool) -> None:
@@ -11710,7 +11721,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self.statusBar().showMessage(say(result.description), 6000)
+        self.statusBar().showMessage(did(result.description), 6000)
 
     def on_board_features(self) -> None:
         """Mounting holes and edge connectors.
@@ -12297,7 +12308,7 @@ class MainWindow(QMainWindow):
     def _on_pins_connected(self, result: Any) -> None:
         if result is None:
             return
-        message = say(result.description) if result.ok else refused(result)
+        message = did(result.description) if result.ok else refused(result)
         self.statusBar().showMessage(message, 6000)
 
     def on_add_pins_to_net(self) -> None:
@@ -12435,7 +12446,7 @@ class MainWindow(QMainWindow):
         if result is None:
             return
         message = (
-            say(result.description) if result.ok else refused(result)
+            did(result.description) if result.ok else refused(result)
         )
         self.statusBar().showMessage(message, 8000)
 

@@ -306,6 +306,14 @@ closed without a bump.
   milliseconds to a tooltip earlier. The question before applying a placement lost its
   milliseconds too.
 
+- **The status bar says what was done as done.** After every edit it showed the edit's
+  undo label, which is an order: "Use a 2 x 8 cm board", and in Turkish "2 x 8 cm kart
+  kullan", which read as the application telling somebody which board to use. It says
+  "Done: Use a 2 x 8 cm board" now ("Yapıldı: …"), and the Edit menu keeps the label as it
+  was, where Undo offers to take it back. After Place on the Board it says "Ctrl+Shift+A
+  tries another arrangement" instead of arranging "from a different seed", the placer's
+  word for it.
+
 ### Fixed
 
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,

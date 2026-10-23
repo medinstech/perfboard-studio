@@ -536,12 +536,13 @@ TURKISH: Mapping[str, str] = {
         "{ref} yalnızca bir nette adı geçiyor; kaldırmak için neti düzenle."
     ),
     "{count} would not fit": "{count} tanesi sığmadı",
-    "Ctrl+R routes it; Ctrl+Shift+A arranges it again from a different seed.": (
-        "Ctrl+R yönlendirir; Ctrl+Shift+A farklı bir tohumla yeniden yerleştirir."
+    "Ctrl+R wires it; Ctrl+Shift+A tries another arrangement.": (
+        "Ctrl+R bağlantıları kurar; Ctrl+Shift+A başka bir yerleşim dener."
     ),
-    "Pressing Auto-place again searches from another seed.": (
-        "Otomatik Yerleştir'e yeniden basmak başka bir tohumla arar."
+    "Pressing Auto-place again tries another arrangement.": (
+        "Otomatik Yerleştir'e yeniden basmak başka bir yerleşim dener."
     ),
+    "Done: {what}": "Yapıldı: {what}",
     "Everything is routed already, so Autoroute plans it again.": (
         "Her şey zaten yönlendirilmiş; Otomatik Yönlendir hepsini yeniden planlıyor."
     ),

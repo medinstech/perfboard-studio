@@ -2271,7 +2271,7 @@ def test_in_turkish_the_undo_menu_says_what_it_undoes_in_turkish() -> None:
             _add(window, "R1", "r-axial-3", "10k")
             assert "Şemaya R1 10k ekle" in window.act_undo.text()
             assert "schematic" not in window.act_undo.text()
-            assert window.statusBar().currentMessage() in ("", "Şemaya R1 10k ekle")
+            assert window.statusBar().currentMessage() in ("", "Yapıldı: Şemaya R1 10k ekle")
         finally:
             _close(window)
     finally:
@@ -8707,7 +8707,12 @@ def test_place_on_the_board_arranges_the_whole_design_in_one_undo_step(monkeypat
     assert {c.ref for c in window.bus.document.components} == {"U1", "R1", "R2"}
     # Arranged, not dropped in a grid: the button does the whole job now, and says what
     # the next step is rather than what the missing one was.
-    assert "Ctrl+R" in window.statusBar().currentMessage()
+    said = window.statusBar().currentMessage()
+    assert "Ctrl+R" in said
+    # What was done, as done -- the undo label alone read as an order -- and no "seed",
+    # which is the placer's word, not a builder's.
+    assert said.startswith("Done: "), said
+    assert "seed" not in said
 
     window.bus.undo()
     assert len(window.bus.document.parts) == 3
