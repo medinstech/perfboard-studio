@@ -1954,6 +1954,29 @@ TURKISH: Mapping[str, str] = {
     "Power in": "Güç girişi",
     "Connectors": "Konnektörler",
     "Sound": "Ses",
+    "nRF24L01+ module": "nRF24L01+ modülü",
+    "2.4 GHz radio on SPI, 1.9 to 3.6 V, the board with its antenna printed on it": (
+        "SPI ile bağlanan 2,4 GHz telsiz, 1,9 ile 3,6 V arası, anteni kartına basılı olan"
+    ),
+    "VCC is 3.3 V at most -- 5 V kills it -- though its inputs take 5 V logic. The version "
+    "with an amplifier and an antenna socket has these pins on a longer board. Drawn as a "
+    "plain block: what stands on its board is not drawn, only the room it takes.": (
+        "VCC en çok 3,3 V'tur -- 5 V onu yakar -- ama girişleri 5 V lojiği kaldırır. "
+        "Yükselteçli ve anten soketli sürümünde aynı pinler daha uzun bir karttadır. Düz "
+        "bir blok olarak çizilir: kartının üzerindekiler çizilmez, yalnızca kapladığı yer."
+    ),
+    "ESP-01 (ESP8266 module)": "ESP-01 (ESP8266 modülü)",
+    "Wi-Fi on an ESP8266, 3.3 V: serial, two GPIOs, enable and reset on 8 pins": (
+        "ESP8266 ile Wi-Fi, 3,3 V: 8 pinde seri port, iki GPIO, etkinleştirme ve reset"
+    ),
+    "3.3 V only. EN (CH_PD) must be high for it to run, and IO0 low as it starts puts it "
+    "in download mode (Ai-Thinker's table 2.3). The ESP-01S is pinned the same. Drawn as a "
+    "plain block: what stands on its board is not drawn, only the room it takes.": (
+        "Yalnızca 3,3 V. Çalışması için EN (CH_PD) yüksekte olmalıdır; açılırken IO0 "
+        "düşükteyse yükleme kipine geçer (Ai-Thinker'ın tablo 2.3'ü). ESP-01S'in dizilişi "
+        "de aynıdır. Düz bir blok olarak çizilir: kartının üzerindekiler çizilmez, yalnızca "
+        "kapladığı yer."
+    ),
     "LM2596 buck module": "LM2596 voltaj düşürücü modül",
     "Step-down converter on the LM2596: up to 40 V in, from 1.25 V out, set by its "
     "trimmer": (

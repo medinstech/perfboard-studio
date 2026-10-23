@@ -46,8 +46,27 @@ BUCK_NAMES = (("1", "IN+"), ("2", "OUT+"), ("3", "IN-"), ("4", "OUT-"))
 CAN = "mod-6x1-p1-r1-16x14.5x3-s8.5-o0x6"
 CAN_NAMES = (("1", "3V3"), ("2", "GND"), ("3", "CTX"), ("4", "CRX"), ("5", "CANH"), ("6", "CANL"))
 
-#: The catalog's modules, as choosing one places it: its footprint, value and pin names.
-CATALOG_MODULES = tuple(part for part in CATALOG if part.category == "module")
+#: Catalog modules drawn as the plain block ON PURPOSE, each with the reason. A layout is
+#: measured from a drawing of what is on the board, and a layout guessed from a seller's
+#: photograph would be a picture of parts that may not be there; the block claims nothing.
+#: ``test_a_module_drawn_as_the_block_is_one_on_purpose`` fails if one of these gains a
+#: layout, so the reason cannot outlive the fact, or leaves the catalog.
+DRAWN_AS_THE_BLOCK: dict[str, str] = {
+    "nrf24l01": (
+        "no maker drawing exists; drawn as the envelope block, which claims nothing about the "
+        "parts on it"
+    ),
+    "esp-01": (
+        "no drawing of the parts on it exists, only Ai-Thinker's of its pins and board; drawn "
+        "as the envelope block, which claims nothing about the parts on it"
+    ),
+}
+
+#: The catalog's modules that are drawn as themselves, as choosing one places it: its
+#: footprint, value and pin names.
+CATALOG_MODULES = tuple(
+    part for part in CATALOG if part.category == "module" and part.id not in DRAWN_AS_THE_BLOCK
+)
 
 PITCH = 2.54
 TURNS = (0, 90, 180, 270)
@@ -145,6 +164,21 @@ def test_every_catalog_module_is_drawn_as_what_is_on_it(part) -> None:
         _footprint(part.footprint_id), _part(part.footprint_id, part.placed_value, part.pin_names), PITCH
     )
     assert placed is not None and len(placed) == len(art.parts)
+
+
+def test_a_module_drawn_as_the_block_is_one_on_purpose() -> None:
+    """Every exception is a catalog module, has its reason, and really is drawn as the block:
+    a layout written for one later means the exception has to go, and says so here."""
+    from perfboard_studio.ui import view3d
+
+    modules = {part.id: part for part in CATALOG if part.category == "module"}
+    assert set(DRAWN_AS_THE_BLOCK) <= set(modules), "an exception the catalog no longer has"
+    for part_id, why in DRAWN_AS_THE_BLOCK.items():
+        part = modules[part_id]
+        assert why.strip(), part_id
+        assert recognise_module(part.placed_value) is None, f"{part_id} has a layout now"
+        _body, _fp, pieces = _board_and_pieces(part.footprint_id, part.placed_value, part.pin_names)
+        assert len([piece for piece in pieces if piece.rgb == view3d._MODULE_BLOCK_RGB]) == 1
 
 
 def test_the_plaket_modules_get_their_parts() -> None:

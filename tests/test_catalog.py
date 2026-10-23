@@ -104,6 +104,10 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "seeed-xiao-esp32c3": 15.24,
         # The grid nearest Handsontec's 39.50 mm, which its check says: pads, not pins.
         "lm2596-module": 40.64,
+        # Two headers of four, side by side, at one end of the board.
+        "nrf24l01": 2.54,
+        # Two ROWS of four across the end of the board: Ai-Thinker's figure 2.1.
+        "esp-01": 2.54,
     }
     modules = [part for part in CATALOG if part.category == "module"]
     assert {part.id for part in modules} == set(expected_rows_mm)
@@ -111,11 +115,29 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         footprint = get_footprint(part.footprint_id)
         assert footprint is not None and footprint.body.archetype == "module-board"
         columns = sorted({pin.d_col for pin in footprint.pins})
-        assert len(columns) == 2, part.id
-        assert (columns[1] - columns[0]) * STANDARD_PITCH_MM == pytest.approx(
+        rows = sorted({pin.d_row for pin in footprint.pins})
+        # A devkit's two columns run down the board; a radio's two rows run across its end.
+        lines = columns if len(columns) == 2 else rows
+        assert len(lines) == 2, part.id
+        assert (lines[1] - lines[0]) * STANDARD_PITCH_MM == pytest.approx(
             expected_rows_mm[part.id]
         ), part.id
         assert part.check, f"{part.id}: a module's estimates have to be said"
+
+
+def test_the_radios_are_pinned_as_their_sources_number_them() -> None:
+    """The nRF24L01+'s 2 x 4 header as KiCad's breakout symbol has it, GND at pin 1; the
+    ESP-01's two rows as Ai-Thinker's figure 2.1 and table 2.2 both have them."""
+    nrf = catalog_part("nrf24l01")
+    esp = catalog_part("esp-01")
+    assert nrf is not None and esp is not None
+    assert [name for _, name in nrf.pin_names] == [
+        "GND", "VCC", "CE", "CSN", "SCK", "MOSI", "MISO", "IRQ"
+    ]
+    assert [name for _, name in esp.pin_names] == [
+        "GND", "IO2", "IO0", "RXD", "TXD", "EN", "RST", "VCC"
+    ]
+    assert search_catalog("nrf24")[0] is nrf and search_catalog("ESP8266 wifi")[0] is esp
 
 
 def test_the_devkitc_is_pinned_like_espressifs_own_tables() -> None:

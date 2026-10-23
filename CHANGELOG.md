@@ -30,6 +30,11 @@ closed without a bump.
   Whether the way in reaches both rails, or comes through a regulator, is not judged. None of
   the shipped examples is touched by it.
 
+- **The nRF24L01+ radio and the ESP-01 are in the catalog**, pinned from KiCad's breakout
+  symbol and from Ai-Thinker's manual, whose figure and table agree pin for pin. Nobody
+  publishes a drawing of the parts on either board, so both are drawn as the plain block --
+  the room they take, claiming nothing about what stands on them -- and the module-art test
+  names them as the two exceptions, failing if either gains a layout.
 - **An SRD-12VDC-SL-C relay** joins the catalog beside the 5 V one, on `relay-srd`.
 
 - **The LM2596 buck module is in the catalog**, drawn as itself -- its two cans, inductor,
