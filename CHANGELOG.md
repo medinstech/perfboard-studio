@@ -288,7 +288,9 @@ closed without a bump.
   searched by what a part does as well as by its name, so typing "LED" and pressing Enter
   added a MAX7219, an LED display driver with 24 pins. Enter now takes the first row whose
   name has what was typed as a word, or the start of one -- "LED" is inside "OLED" too, and
-  "ATtiny" still names the ATtiny85 -- and the first match only when no name does.
+  "ATtiny" still names the ATtiny85 -- the one where the word comes EARLIEST ("header" takes
+  a pin header, not "Power in, 2-pin header"); when no name has it, a catalog part named by an
+  alias or its kind ("anahtar", "pil"); and the first match only when nothing names one.
 
 - **Work still ahead is not shown as wrong.** A part still in the design was listed in red
   under LVS from the moment it was drawn, and the status bar's LVS count turned red the

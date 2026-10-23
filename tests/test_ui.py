@@ -10311,6 +10311,35 @@ def test_enter_takes_the_part_the_filter_names() -> None:
     dialog.deleteLater()
 
 
+def test_enter_takes_the_row_the_text_names_earliest() -> None:
+    """"header" names the pin header four letters in, and "Power in, 2-pin header" sixteen:
+    the one somebody typing it wants is the pin header."""
+    from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID, AddPartDialog, named_choice
+
+    dialog = AddPartDialog(_load_dense())
+    dialog.filter.setText("header")
+    item = dialog.tree.currentItem()
+    assert item is not None and str(item.data(0, ROLE_FOOTPRINT_ID)).startswith("hdr-1x"), item.text(0)
+    dialog.deleteLater()
+    assert named_choice("header", [("Power in, 2-pin header", None), ("Pin header, 1x2", None)]) == 1
+    assert named_choice("LED", [("SSD1306 OLED 0.96in", None), ("LED, 3 mm round", None)]) == 1
+
+
+def test_a_catalog_part_is_named_by_its_aliases_when_no_label_names_it() -> None:
+    """"anahtar" is in no label: the tact switch is named by its alias. An alias counts only
+    after every label, since it is matched inside words."""
+    from perfboard_studio.catalog import catalog_part
+    from perfboard_studio.ui.main import named_choice
+
+    switch = catalog_part("tact-6x6")
+    assert switch is not None
+    switch = dataclasses.replace(switch, aliases=(*switch.aliases, "anahtar"))
+    rows = [("BC547", catalog_part("bc547")), ("Tactile switch 6x6 mm", switch)]
+    assert named_choice("anahtar", rows) == 1
+    # Named by a label beats named by an alias.
+    assert named_choice("switch", [("Tactile switch 6x6 mm", switch), ("Switch, 4-pin", None)]) == 1
+
+
 def test_a_name_is_named_by_a_word_or_the_start_of_one() -> None:
     """"LED" is inside "SSD1306 OLED", and Enter on "LED" took the display: the text has to
     be a word of the name, or the start of one, for the row to count as named."""

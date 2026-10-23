@@ -146,6 +146,7 @@ from perfboard_studio.catalog import (
     CATEGORY_ORDER,
     CatalogPart,
     catalog_part,
+    names_part,
     part_matches,
 )
 from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
@@ -591,15 +592,49 @@ def _folded(text: str) -> str:
     return text.translate(_I_FOLD).lower()
 
 
-def typed_names(text: str, label: str) -> bool:
-    """Whether what was typed NAMES this row: a word of its label, or the start of one.
+def named_at(text: str, label: str) -> int | None:
+    """Where what was typed NAMES this row -- a word of its label, or the start of one --
+    as the position in the label, or None.
 
     Not anywhere in it: "LED" is inside "SSD1306 OLED", and Enter on "LED" took the display.
     The start of a word is enough for a part number -- "ATtiny" names the ATtiny85 -- and
     both sides are folded as every filter in the window folds them (``_folded``).
     """
     needle = _folded(text.strip())
-    return bool(needle) and re.search(rf"(?<!\w){re.escape(needle)}", _folded(label)) is not None
+    if not needle:
+        return None
+    found = re.search(rf"(?<!\w){re.escape(needle)}", _folded(label))
+    return found.start() if found is not None else None
+
+
+def typed_names(text: str, label: str) -> bool:
+    """Whether what was typed names this row at all (``named_at``)."""
+    return named_at(text, label) is not None
+
+
+def named_choice(text: str, rows: Sequence[tuple[str, CatalogPart | None]]) -> int:
+    """Which of the rows a filter matched Enter takes: their labels, and the catalog part a
+    row is, if it is one. Never more than ``len(rows) - 1``; ``rows`` is never empty.
+
+    1. The row the text names EARLIEST in its label: "header" names "Pin header, 1x2" four
+       letters in and "Power in, 2-pin header" sixteen, and the pin header is what somebody
+       typing it wants. A name that starts with it is the earliest there is.
+    2. Else the first catalog part the text names by what it is CALLED -- its id, kind or
+       aliases (``catalog.names_part``): "anahtar" names the tact switch though no label
+       has the word. Last, because an alias is matched inside words, and "led" is in "oled".
+    3. Else the first row the filter matched.
+    """
+    named = [
+        (at, index)
+        for index, (label, _part) in enumerate(rows)
+        if (at := named_at(text, label)) is not None
+    ]
+    if named:
+        return min(named)[1]
+    for index, (_label, part) in enumerate(rows):
+        if part is not None and names_part(part, text, fold=_folded):
+            return index
+    return 0
 
 
 def _natural_key(text: str) -> tuple[str | float, ...]:
@@ -3122,13 +3157,18 @@ class AddPartDialog(QDialog):
         # word: "LED" is in "SSD1306 OLED" too. "ATtiny" still names the ATtiny85.
         leaves = self._leaves()
         if text.strip() and leaves:
-            named = next((leaf for leaf in leaves if typed_names(text, leaf.text(0))), leaves[0])
-            self.tree.setCurrentItem(named)
+            rows = [(leaf.text(0), self._catalog_part_of(leaf)) for leaf in leaves]
+            self.tree.setCurrentItem(leaves[named_choice(text, rows)])
         self._on_choice()
 
     def _on_double_click(self, item: QTreeWidgetItem, _column: int) -> None:
         if item.data(0, ROLE_FOOTPRINT_ID):
             self.accept()
+
+    @staticmethod
+    def _catalog_part_of(item: QTreeWidgetItem) -> CatalogPart | None:
+        chosen = item.data(0, ROLE_CATALOG_ID)
+        return catalog_part(chosen) if isinstance(chosen, str) else None
 
     def chosen_catalog_part(self) -> CatalogPart | None:
         item = self.tree.currentItem()
