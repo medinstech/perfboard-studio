@@ -314,6 +314,13 @@ closed without a bump.
   tries another arrangement" instead of arranging "from a different seed", the placer's
   word for it.
 
+- **The step bar counts in words, and the Turkish findings lost their brackets.** The bar
+  said "10 part(s) · 7 net(s)" and "0 error(s) · 18 warning(s)" all the time; it says "1
+  part", "10 parts" now. In Turkish, which says "parça" after any number, nothing changed
+  there, but four findings read "pin(ler)ini … parça(lar)ı": they are said so that no
+  suffix is needed, as "'GND' netinin bağlandığı BT1, C1 henüz kartta yerleştirilmedi
+  (pinler: BT1.2, C1.2)".
+
 ### Fixed
 
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,

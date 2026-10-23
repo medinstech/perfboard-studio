@@ -331,8 +331,10 @@ def test_every_catalogue_translates_to_something_different() -> None:
         # everything else that comes out identical is a translation somebody started and
         # did not finish, which is the whole thing this catches.
         # "3D" was "3B" on the toolbar alone while every menu, dialog and the README said
-        # "3D" -- one view, two names.
-        assert same == ["3D", "ERC / DRC / LVS", "LED"], f"{code} has untranslated entries: {same}"
+        # "3D" -- one view, two names. "1 net" is "1 net" in Turkish too.
+        assert same == ["3D", "ERC / DRC / LVS", "LED", "{count} net"], (
+            f"{code} has untranslated entries: {same}"
+        )
 
 
 def test_accelerators_survive_translation() -> None:

@@ -194,6 +194,11 @@ def step_tooltip(key: StepKey) -> str:
     }[key]
 
 
+def _counted(count: int, one: str, many: str) -> str:
+    """``one`` or ``many`` -- each already through ``t()`` -- with the count in it."""
+    return (one if count == 1 else many).format(count=count)
+
+
 def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     """Every step's status and one line about it. The first step not done is ``current``."""
     parts = facts.parts_off_board + facts.parts_on_board
@@ -215,14 +220,17 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     check_bad = facts.parts_on_board > 0 and (facts.drc_errors > 0 or lvs_errors > 0)
     check_done = route_done and not check_bad
 
+    # Counted in words -- "1 part", "10 parts" -- where it said "10 part(s)": the bar is
+    # on screen the whole time, and nobody writes "(s)". Two keys rather than one with a
+    # bracket, so a language that does not inflect after a number says one word for both.
+    part_count = _counted(parts, t("{count} part"), t("{count} parts"))
     if parts == 0:
         circuit = t("no parts yet")
     elif circuit_bad:
-        circuit = t("{parts} part(s) · {errors} error(s)").format(
-            parts=parts, errors=facts.erc_errors
-        )
+        errors = _counted(facts.erc_errors, t("{count} error"), t("{count} errors"))
+        circuit = f"{part_count} · {errors}"
     else:
-        circuit = t("{parts} part(s) · {nets} net(s)").format(parts=parts, nets=facts.nets)
+        circuit = f"{part_count} · {_counted(facts.nets, t('{count} net'), t('{count} nets'))}"
     if parts == 0:
         placed = t("nothing to place")
     else:
@@ -232,16 +240,19 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     if facts.parts_on_board == 0 or facts.nets == 0:
         wired = t("nothing to wire yet")
     elif facts.unrouted:
-        wired = t("{count} connection(s) left").format(count=facts.unrouted)
+        wired = _counted(
+            facts.unrouted, t("{count} connection left"), t("{count} connections left")
+        )
     else:
         wired = t("all joined")
     if facts.parts_on_board == 0:
         checked = t("nothing to check yet")
     else:
         warnings = facts.drc_warnings - (0 if route_done else facts.drc_unwired)
-        checked = t("{errors} error(s) · {warnings} warning(s)").format(
-            errors=facts.drc_errors + lvs_errors, warnings=warnings
+        errors = _counted(
+            facts.drc_errors + lvs_errors, t("{count} error"), t("{count} errors")
         )
+        checked = f"{errors} · {_counted(warnings, t('{count} warning'), t('{count} warnings'))}"
 
     done = {
         "circuit": circuit_done,

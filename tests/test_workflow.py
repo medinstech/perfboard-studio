@@ -120,7 +120,7 @@ def test_a_net_left_open_by_wiring_not_yet_done_is_the_wiring_steps_news() -> No
     assert steps["check"] == "todo"
     assert next_step(workflow_steps(placed)) == "route"
     check = next(step for step in workflow_steps(placed) if step.key == "check")
-    assert check.summary == "0 error(s) · 21 warning(s)"
+    assert check.summary == "0 errors · 21 warnings"
 
     shorted = dataclasses.replace(placed, lvs_problems=8, lvs_shorts=1)
     assert statuses(shorted)["check"] == "problem"
@@ -159,7 +159,7 @@ def test_a_circuit_with_an_error_in_it_is_not_drawn_yet() -> None:
     assert next_step(workflow_steps(facts)) == "circuit"
     circuit = workflow_steps(facts)[0]
     assert circuit.action == "See the Findings"
-    assert circuit.summary == "8 part(s) · 2 error(s)"
+    assert circuit.summary == "8 parts · 2 errors"
 
 
 def test_a_circuit_error_comes_before_a_board_error() -> None:
@@ -210,9 +210,24 @@ def test_pins_nothing_is_wired_to_yet_are_the_wirings_news() -> None:
         EMPTY, parts_on_board=6, nets=6, unrouted=11, drc_warnings=17, drc_unwired=17
     )
     check = next(step for step in workflow_steps(placed) if step.key == "check")
-    assert check.summary == "0 error(s) · 0 warning(s)"
+    assert check.summary == "0 errors · 0 warnings"
     assert check.status == "todo"
 
     routed = dataclasses.replace(placed, unrouted=0, drc_warnings=3, drc_unwired=2)
     check = next(step for step in workflow_steps(routed) if step.key == "check")
-    assert check.summary == "0 error(s) · 3 warning(s)"
+    assert check.summary == "0 errors · 3 warnings"
+
+
+def test_the_bar_counts_one_of_a_thing_as_one() -> None:
+    """"10 part(s) · 7 net(s)" on a bar that is on screen the whole time: nobody writes
+    "(s)". One is one and two is two, in the words a person would use."""
+    one = dataclasses.replace(EMPTY, parts_on_board=1, nets=1, unrouted=1, drc_warnings=1)
+    summaries = {step.key: step.summary for step in workflow_steps(one)}
+    assert summaries["circuit"] == "1 part · 1 net"
+    assert summaries["route"] == "1 connection left"
+    assert summaries["check"] == "0 errors · 1 warning"
+    many = dataclasses.replace(EMPTY, parts_on_board=2, nets=3, unrouted=4)
+    summaries = {step.key: step.summary for step in workflow_steps(many)}
+    assert summaries["circuit"] == "2 parts · 3 nets"
+    assert summaries["route"] == "4 connections left"
+    assert all("(s)" not in summary for summary in summaries.values())
