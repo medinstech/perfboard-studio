@@ -243,6 +243,19 @@ closed without a bump.
   115.2 → 108.4 s, nano-relay 49.9 → 48.5, ne555-blinker 36.5 → 31.0, lm317-supply 33.8 →
   28.8, arduino-io-shield 21.7 → 19.0, lpb1-booster 13.5 → 12.1, ne555-astable 10.8 → 9.5.
   Choosing a board takes 21 % less time than it did: 327 s became 257 for all of them.
+- **Place on the Board, choosing a board and Auto-place use up to four processor cores.**
+  A placement is four independent searches, each from its own fixed seed, and a few
+  independent routes that judge them; they now run side by side in worker processes and
+  take the time of the slowest instead of the sum. The answer cannot change: on every
+  example at seeds 0 to 3, every chosen board, every verdict and every placed part is byte
+  for byte what one process gives. Choosing a board on all seven examples, alternated run
+  by run with the one-process build under the team's heavy-job lock, the pool's own start
+  included: 84.1 s became 28.4 -- atmega328-relay 36.3 → 12.8 s, nano-relay 15.5 → 5.2,
+  ne555-blinker 10.5 → 3.3, lm317-supply 9.1 → 3.0, arduino-io-shield 5.4 → 1.7,
+  lpb1-booster 3.9 → 1.4, ne555-astable 3.4 → 1.0. Cancel still keeps the best found so
+  far: every worker hands back where it had got to. A machine with two cores or fewer
+  places in one process as before, and `PERFBOARD_STUDIO_PLANNER_WORKERS` sets the number;
+  the MCP server places in one process for now.
 
 - **New Project asks a name and a place, and the board comes second.** It asked which
   board before there was a circuit to try on one, and then the Board step asked again: a

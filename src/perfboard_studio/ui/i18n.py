@@ -1467,6 +1467,10 @@ TURKISH: Mapping[str, str] = {
     ),
     # -- the status bar's fixed sentences --------------------------------------
     "Nothing to place: the board is empty.": "Yerleştirilecek bir şey yok: kart boş.",
+    "Cancelled before an arrangement was finished; the board is as it was.": (
+        "Bir yerleşim tamamlanmadan iptal edildi; kart olduğu gibi kaldı."
+    ),
+    "Cancelled before a board was tried; nothing changed.": "Hiçbir kart denenmeden iptal edildi; hiçbir şey değişmedi.",
     "Select a net in the Nets panel, or a part on the board, then route.": (
         "Netler panelinden bir net ya da kart üzerinden bir parça seç, sonra yönlendir."
     ),

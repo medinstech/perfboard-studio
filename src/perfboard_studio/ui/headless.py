@@ -55,7 +55,7 @@ from perfboard_studio.stripboard import board_joins_holes
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
 from perfboard_studio.version import describe as describe_version
 
-from . import view3d
+from . import planner_pool, view3d
 from .export_pdf import export_pdf, verify_scale
 from .export_schematic import svg_to_pdf, svg_to_png
 from .export_step import export_step
@@ -308,11 +308,23 @@ def headless(argv: list[str]) -> int:
     # --- Placement, also a dry run. The number CI should watch is the routing cost
     # before and after: it is the one that says whether the placer is still earning its
     # runtime, and it moves when either the placer or the router changes.
+    #
+    # Through the planner's worker processes when this machine gets any, as the window's
+    # placement does, and the line says which. It is how release.yml knows a frozen
+    # bundle can start its workers at all: a pool that cannot start fails here, on the
+    # runner, rather than at somebody's first Place on the Board.
     if doc.components:
+        workers = planner_pool.worker_count()
         t0 = time.perf_counter()
-        placement = plan_placement(doc, lookup)
+        try:
+            placement = plan_placement(
+                doc, lookup, mapper=planner_pool.mapper_for(lambda: False)
+            )
+        finally:
+            planner_pool.shutdown()
         t_place = (time.perf_counter() - t0) * 1000
-        print(f"\nauto-place   {t_place:6.1f} ms   (dry run, nothing committed)")
+        how = f"{workers} worker processes" if workers else "in this process"
+        print(f"\nauto-place   {t_place:6.1f} ms   (dry run, nothing committed, {how})")
         print(f"             {describe_placement(placement)}")
         placed_errors = sum(
             1 for v in run_drc(placement.document, lookup) if v.severity == "error"

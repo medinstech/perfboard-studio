@@ -1784,8 +1784,9 @@ def test_every_press_of_auto_place_searches_from_a_new_seed(monkeypatch) -> None
     monkeypatch.setattr(
         main_module,
         "plan_placement",
-        lambda doc, lookup, options, should_stop=None: (
-            seeds.append(options.seed) or real(doc, lookup, options, should_stop=should_stop)
+        lambda doc, lookup, options, should_stop=None, mapper=None: (
+            seeds.append(options.seed)
+            or real(doc, lookup, options, should_stop=should_stop, mapper=mapper)
         ),
     )
 
@@ -8958,7 +8959,7 @@ def test_the_boards_are_tried_off_the_ui_thread_and_named_as_they_are(monkeypatc
         document = window.bus.document
         labels: list[str] = []
 
-        def planner(self, label, work):
+        def planner(self, label, work, **_):
             labels.append(label())
             result = work(lambda: False)
             labels.append(label())
@@ -8997,7 +8998,7 @@ def test_a_design_is_judged_once_until_it_changes_and_a_cancelled_judgement_is_n
             return _choice(doc, complete=complete[0])
 
         monkeypatch.setattr(
-            main_module.MainWindow, "_run_planner", lambda self, label, work: work(lambda: False)
+            main_module.MainWindow, "_run_planner", lambda self, label, work, **_: work(lambda: False)
         )
         monkeypatch.setattr(main_module, "choose_board", choose)
         suggestions = main_module.suggest_boards(
@@ -9033,7 +9034,7 @@ def _tried_on_a_board(window, monkeypatch):
     _add(window, "C1", "c-elec-d5-p2")
 
     monkeypatch.setattr(
-        main_module.MainWindow, "_run_planner", lambda self, label, work: work(lambda: False)
+        main_module.MainWindow, "_run_planner", lambda self, label, work, **_: work(lambda: False)
     )
     monkeypatch.setattr(
         main_module.MainWindow,

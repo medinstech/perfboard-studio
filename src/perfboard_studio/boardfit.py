@@ -44,6 +44,7 @@ from .placer import (
     PHYSICAL_WARNING_RULES,
     BoardSuggestion,
     DesignPlacement,
+    Mapper,
     PlacementOptions,
     design_entries,
     place_design,
@@ -203,6 +204,7 @@ def try_board(
     lookup: FootprintLookup,
     options: BoardTrialOptions = BoardTrialOptions(),  # noqa: B008 -- frozen, shared safely
     should_stop: Callable[[], bool] | None = None,
+    mapper: Mapper | None = None,
 ) -> BoardTrial | None:
     """Put ``document``'s design on ``suggestion``'s board, route it and check it.
 
@@ -239,7 +241,7 @@ def try_board(
         stranded = tuple(sorted(c.ref for c in document.components))
         return BoardTrial(suggestion, None, None, stranded, 0, 0.0, 0, _no_warnings())
 
-    placed = place_design(on, lookup, options.placement, should_stop=latch)
+    placed = place_design(on, lookup, options.placement, should_stop=latch, mapper=mapper)
     if latch():
         return None
     known = {part.ref for part in on.parts if lookup(part.footprint_id) is not None}
@@ -345,6 +347,7 @@ def choose_board(
     options: BoardTrialOptions = BoardTrialOptions(),  # noqa: B008 -- frozen, shared safely
     should_stop: Callable[[], bool] | None = None,
     on_trial: Callable[[BoardPreset], None] | None = None,
+    mapper: Mapper | None = None,
 ) -> BoardChoice:
     """The smallest stock board ``document``'s design builds as well on as on a roomy one.
 
@@ -358,7 +361,8 @@ def choose_board(
     no tolerance here was measured on, nor when there is no smaller board to try; the
     reference is the answer, as it always was.
 
-    ``on_trial`` is told each board just before it is tried, for a progress label.
+    ``on_trial`` is told each board just before it is tried, for a progress label, and
+    ``mapper`` is handed to the placer for each trial (``placer.Mapper``).
     """
     if suggestions is None:
         suggestions = suggest_boards(document.board, design_entries(document), document.nets, lookup)
@@ -375,7 +379,7 @@ def choose_board(
 
     if on_trial is not None:
         on_trial(reference.preset)
-    yardstick = try_board(document, reference, lookup, options, should_stop)
+    yardstick = try_board(document, reference, lookup, options, should_stop, mapper)
     if yardstick is None:
         return BoardChoice(everything, reference, (), reference, False)
     verdicts = [reference_verdict(yardstick)]
@@ -388,7 +392,7 @@ def choose_board(
                 break
             if on_trial is not None:
                 on_trial(suggestion.preset)
-            trial = try_board(document, suggestion, lookup, options, should_stop)
+            trial = try_board(document, suggestion, lookup, options, should_stop, mapper)
             if trial is None:
                 complete = False
                 break

@@ -193,10 +193,12 @@ class _Script:
     def __init__(self, outcomes: dict[str, dict | None]) -> None:
         self.outcomes = outcomes
         self.tried: list[str] = []
+        self.mappers: list[object] = []
 
-    def __call__(self, document, suggestion, lookup, options, should_stop=None):
+    def __call__(self, document, suggestion, lookup, options, should_stop=None, mapper=None):
         name = suggestion.preset.name
         self.tried.append(name)
+        self.mappers.append(mapper)
         outcome = self.outcomes[name]
         return None if outcome is None else _trial(name, **outcome)
 
@@ -275,6 +277,23 @@ def test_each_board_is_named_before_it_is_tried(monkeypatch) -> None:
         on_trial=lambda preset: named.append(preset.name),
     )
     assert named == script.tried == ["6 x 8 cm", "5 x 7 cm"]
+
+
+def test_every_trial_is_handed_the_callers_mapper(monkeypatch) -> None:
+    """The window's process pool reaches the placer through ``choose_board``: every trial
+    gets the same map, and a caller that passes none gets none."""
+    script = _Script({"6 x 8 cm": {}, "5 x 7 cm": {"cost": 500.0}})
+    monkeypatch.setattr(boardfit, "try_board", script)
+
+    def mapper(work, jobs):  # type: ignore[no-untyped-def]
+        return map(lambda job: work(job, None), jobs)
+
+    doc = create_empty_document(META, DEFAULT_BOARD)
+    choose_board(doc, REGISTRY, _suggestions(), mapper=mapper)
+    assert script.mappers == [mapper, mapper]
+    script.mappers.clear()
+    choose_board(doc, REGISTRY, _suggestions())
+    assert script.mappers == [None, None]
 
 
 def test_the_trial_options_are_the_ones_measured() -> None:

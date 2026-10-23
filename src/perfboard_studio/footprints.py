@@ -2275,8 +2275,12 @@ def get_footprint(id: str) -> Footprint | None:
 def footprint_lookup() -> Callable[[str], Footprint | None]:
     """A lookup function over the standard registry, in the shape connectivity.py
     and the DRC/LVS modules expect (`(footprint_id) -> Footprint | None`).
+
+    :func:`get_footprint` itself, not a lambda around it: a module-level function pickles
+    by name, so a host can hand this lookup to a worker process with the work that needs
+    it (``placer.Mapper``), and a lambda cannot be pickled at all.
     """
-    return lambda id: get_footprint(id)
+    return get_footprint
 
 
 # ---------------------------------------------------------------------------

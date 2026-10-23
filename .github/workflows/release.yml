@@ -238,7 +238,14 @@ jobs:
         run: |
           test -f ./dist/perfboard-studio/perfboard-studio.exe
           ./dist/perfboard-studio/perfboard-studio-cli.exe --version
-          ./dist/perfboard-studio/perfboard-studio-cli.exe --headless examples/ne555-astable.perf
+          # Two of the placer's worker processes, asked for by name because a runner's few
+          # processors would otherwise get none: the dry-run placement then runs through
+          # freeze_support and spawn in the bundle exactly as Place on the Board will, and
+          # the line it prints says it did.
+          PERFBOARD_STUDIO_PLANNER_WORKERS=2 \
+            ./dist/perfboard-studio/perfboard-studio-cli.exe --headless examples/ne555-astable.perf \
+            | tee headless.log
+          grep -q "nothing committed, 2 worker processes" headless.log
           test -f ./headless_out/out_2d.png
           bash packaging/check-bundle-models.sh ./dist
           # What an MCP client is pointed at on Windows: a whole session through the frozen
@@ -423,7 +430,12 @@ jobs:
             "Perfboard Studio $version"*) ;;
             *) echo "::error::AppImage reports '$reported', expected Perfboard Studio $version"; exit 1 ;;
           esac
-          xvfb-run -a ./squashfs-root/AppRun --headless examples/ne555-astable.perf
+          # With two of the placer's worker processes, started from the image as Place on the
+          # Board will start them (see the Windows job).
+          PERFBOARD_STUDIO_PLANNER_WORKERS=2 \
+            xvfb-run -a ./squashfs-root/AppRun --headless examples/ne555-astable.perf \
+            | tee headless.log
+          grep -q "nothing committed, 2 worker processes" headless.log
           test -f ./headless_out/out_2d.png
           # The MCP server through the image itself, as a client would start it: a whole
           # session, and nothing on stdout that is not the protocol.

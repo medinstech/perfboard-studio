@@ -324,7 +324,7 @@ from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 
-from . import icons, updater
+from . import icons, planner_pool, updater
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .boardcolors import SCHEMES as BOARD_SCHEMES
@@ -8337,6 +8337,7 @@ class MainWindow(QMainWindow):
                     self.lookup,
                     PlacementOptions(seed=self._place_seed),
                     should_stop=should_stop,
+                    mapper=planner_pool.mapper_for(should_stop),
                 ),
             )
             if placed is None:
@@ -8419,7 +8420,9 @@ class MainWindow(QMainWindow):
                 should_stop=should_stop,
                 # On the worker thread: a plain assignment, which the label reads back.
                 on_trial=lambda preset: trying.__setitem__("board", preset.name),
+                mapper=planner_pool.mapper_for(should_stop),
             ),
+            stopped=t("Cancelled before a board was tried; nothing changed."),
         )
         if not isinstance(choice, BoardChoice):
             # Only a stub in a test gets here; the question still has to be answerable.
@@ -10148,6 +10151,7 @@ class MainWindow(QMainWindow):
         self,
         label: str | Callable[[], str],
         work: Callable[[Callable[[], bool]], Any],
+        stopped: str | None = None,
     ) -> Any:
         """Run a planner off the UI thread, with a progress dialog that can cancel it.
 
@@ -10189,6 +10193,12 @@ class MainWindow(QMainWindow):
         Held off rather than tuned: refcounting still frees everything acyclic as it always
         did, only cycles wait, and they wait for the length of one route. ``gc.collect()``
         on the way out is what pays for it, once, on the thread that is allowed to.
+
+        A placement may run in the planner's worker processes (``planner_pool``), and a
+        Cancel reaches them as it reaches this thread's anneal: each hands back its best.
+        Only workers that do not answer are ended, and then there is nothing to keep --
+        ``stopped`` is what the status bar says then, and the caller gets None, which
+        every caller already reads as a cancel.
         """
         cancelled = False
 
@@ -10265,6 +10275,11 @@ class MainWindow(QMainWindow):
                 progress.close()
             self.setEnabled(True)
 
+        if isinstance(error.get("exc"), planner_pool.PlannerStopped):
+            self.statusBar().showMessage(
+                stopped or t("Cancelled before an arrangement was finished; the board is as it was."), 10000
+            )
+            return None
         if "exc" in error:
             raise error["exc"]
         return holder.get("result")
@@ -10309,7 +10324,11 @@ class MainWindow(QMainWindow):
         plan = self._run_planner(
             t("Trying arrangements, and routing each one to compare them…"),
             lambda should_stop: plan_placement(
-                document, self.lookup, options, should_stop=should_stop
+                document,
+                self.lookup,
+                options,
+                should_stop=should_stop,
+                mapper=planner_pool.mapper_for(should_stop),
             ),
         )
         if plan is None:
@@ -12787,6 +12806,8 @@ class MainWindow(QMainWindow):
             self._autosave.clear()
             # A redraw still waiting on the last edit would land on a window being torn down.
             self._3d_refresh_timer.stop()
+            # The placer's workers, if this session started any, end with it.
+            planner_pool.shutdown()
             event.accept()
         else:
             event.ignore()

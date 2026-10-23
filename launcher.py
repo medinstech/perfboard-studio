@@ -10,6 +10,7 @@ It exists only for the packaged builds. Running from source goes through the
 """
 
 import io
+import multiprocessing
 import sys
 
 
@@ -29,6 +30,14 @@ def _ensure_streams() -> None:
 
 
 _ensure_streams()
+
+# The placer's worker processes (``ui/planner_pool.py``) are this executable started again
+# with multiprocessing's own arguments. Here, before the window's import below, is where
+# such a process is recognised, runs its work and exits: it never imports Qt or the window,
+# which is 40 MB and 0.4 s a worker. Without this line a frozen worker would run the whole
+# application instead. Streams first, so a worker of the windowed build has somewhere to
+# write a traceback.
+multiprocessing.freeze_support()
 
 from perfboard_studio.ui.main import main  # noqa: E402  - streams first, then imports
 

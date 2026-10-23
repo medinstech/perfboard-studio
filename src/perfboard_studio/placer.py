@@ -88,8 +88,9 @@ from __future__ import annotations
 import itertools
 import math
 import random
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
+from typing import Any
 
 from .autoroute import AutoroutePlan, plan_autoroute
 from .breadboard import clip_of, has_breadboard_pattern, rail_of, rail_takes
@@ -2633,6 +2634,7 @@ def place_design(
     lookup: FootprintLookup,
     options: PlacementOptions = DEFAULT_PLACEMENT_OPTIONS,
     should_stop: Callable[[], bool] | None = None,
+    mapper: Mapper | None = None,
 ) -> DesignPlacement:
     """Every part in the design onto the board, arranged and then annealed -- the whole of
     "Place on the Board", as a question about a document.
@@ -2697,7 +2699,7 @@ def place_design(
             c if c.id in positions else replace(c, locked=True) for c in preview.components
         ),
     )
-    plan = plan_placement(preview, lookup, options, should_stop=should_stop)
+    plan = plan_placement(preview, lookup, options, should_stop=should_stop, mapper=mapper)
 
     placed = plan.document
     crowded_ids = {id_ for id_, ref in refs.items() if ref in crowded}
@@ -2983,11 +2985,89 @@ def design_entries(doc: PerfDocument) -> tuple[ArrangeRequest, ...]:
 # ---------------------------------------------------------------------------
 
 
+#: How a planning run hands its independent pieces of work to the caller: called as
+#: ``mapper(work, jobs)``, it returns ``work(job, should_stop)`` for every job, IN ORDER,
+#: with whatever stop predicate it can offer where the work runs (or None). The window
+#: hands in a process pool's (``ui/planner_pool.py``); nothing here knows or asks which,
+#: and the answer cannot depend on it: every job is a pure function of what it carries.
+#: Whatever runs a job elsewhere has to be able to pickle it, which is why
+#: ``footprints.footprint_lookup`` is a module function and not a lambda.
+type Mapper = Callable[[Callable[[Any, Callable[[], bool] | None], Any], Sequence[Any]], Iterable[Any]]
+
+#: One restart's result: its cost, the moves it accepted, and where it left the parts.
+type _RestartOutcome = tuple[PlacementCost, int, tuple[PlacementChange, ...]]
+
+
+@dataclass(frozen=True, slots=True)
+class _RestartJob:
+    """Everything one restart needs, and nothing that cannot be pickled."""
+
+    doc: PerfDocument
+    lookup: FootprintLookup
+    options: PlacementOptions
+    iterations: int
+    seed: int
+    arrangement: Arrangement | None
+
+
+def _restart(
+    doc: PerfDocument,
+    parts: list[_Part],
+    strips: _Strips | None,
+    scorer: _Scorer,
+    movable: list[int],
+    options: PlacementOptions,
+    iterations: int,
+    seed: int,
+    arrangement: Arrangement | None,
+    should_stop: Callable[[], bool] | None,
+) -> _RestartOutcome:
+    """One anneal, from the document's own layout or from ``arrangement``."""
+    run_state = _initial_state(doc, parts, strips)
+    if arrangement is not None:
+        _apply_arrangement(run_state, arrangement)
+    after, accepted = _anneal(
+        run_state, scorer, movable, doc, options, iterations, seed, should_stop
+    )
+    return after, accepted, _changes(doc, run_state)
+
+
+def _run_restart(job: _RestartJob, should_stop: Callable[[], bool] | None) -> _RestartOutcome:
+    """:func:`_restart` for a :data:`Mapper`, wherever it runs: the parts, the nets and the
+    scorer rebuilt from the document and the lookup, as :func:`plan_placement` builds them."""
+    parts = _build_parts(job.doc, job.lookup)
+    nets, nets_of, pin_nets = _build_nets(job.doc, parts)
+    strips = _build_strips(job.doc, parts, pin_nets)
+    scorer = _make_scorer(
+        job.doc.board,
+        job.options.weights,
+        nets,
+        nets_of,
+        strips,
+        _dead_hole_keys(job.doc),
+        job.doc.mounting_holes,
+    )
+    movable = [position for position, part in enumerate(parts) if part.movable]
+    return _restart(
+        job.doc, parts, strips, scorer, movable, job.options, job.iterations, job.seed,
+        job.arrangement, should_stop,
+    )
+
+
+def _run_judge(
+    job: tuple[PerfDocument, FootprintLookup], should_stop: Callable[[], bool] | None
+) -> tuple[int, float, RoutedPlacement | None]:
+    """:func:`_judge_build` for a :data:`Mapper`. A route is not cut short: it is the
+    measure the candidates are compared by, and half of one compares nothing."""
+    return _judge_build(*job)
+
+
 def plan_placement(
     doc: PerfDocument,
     lookup: FootprintLookup,
     options: PlacementOptions = DEFAULT_PLACEMENT_OPTIONS,
     should_stop: Callable[[], bool] | None = None,
+    mapper: Mapper | None = None,
 ) -> PlacementPlan:
     """Anneal the placement of every unlocked component and return a plan.
 
@@ -3002,6 +3082,11 @@ def plan_placement(
     get back the best placement found so far rather than nothing. Stopping early yields a
     worse answer, never an invalid one: every candidate is a complete, legal placement.
     Leave it None and the function is exactly as deterministic as before.
+
+    ``mapper`` runs the independent pieces -- the restarts, and the routes that judge
+    their results -- however the caller likes (:data:`Mapper`); the answer is the same
+    either way, which ``tests/test_placer_mapper.py`` holds. A stop then reaches the
+    restarts through whatever predicate the mapper hands them.
     """
     parts = _build_parts(doc, lookup)
     nets, nets_of, pin_nets = _build_nets(doc, parts)
@@ -3039,39 +3124,57 @@ def plan_placement(
         else None
     )
 
-    candidates: list[PlacementPlan] = []
-    for attempt in range(max(1, options.restarts)):
-        if candidates and should_stop is not None and should_stop():
-            # At least one complete candidate exists, so stopping here returns a real
-            # placement rather than nothing. Checked between restarts as well as inside
-            # the anneal so a cancel lands promptly either way.
-            break
-        # Every restart starts from the original placement or from the constructive one,
-        # never from the last restart's result: restarts exist to sample independent
-        # basins, and chaining them would just be one longer anneal with the temperature
-        # reset. Odd attempts take the constructive seed, so a run of one is still the
-        # document's own layout and "try another arrangement" alternates between them.
-        run_state = _initial_state(doc, parts, strips)
-        if seeded is not None and attempt % 2 == 1:
-            _apply_arrangement(run_state, seeded)
-        after, accepted = _anneal(
-            run_state, scorer, movable, doc, options, iterations, options.seed + attempt,
-            should_stop,
-        )
-        changes = _changes(doc, run_state)
-        candidates.append(
-            _plan_from(
-                doc, changes, before, after, options, iterations, accepted,
-                len(movable), locked, options.seed + attempt,
+    # Every restart starts from the original placement or from the constructive one,
+    # never from the last restart's result: restarts exist to sample independent
+    # basins, and chaining them would just be one longer anneal with the temperature
+    # reset. Odd attempts take the constructive seed, so a run of one is still the
+    # document's own layout and "try another arrangement" alternates between them.
+    attempts = range(max(1, options.restarts))
+    outcomes: list[_RestartOutcome] = []
+    if mapper is None or len(attempts) < 2:
+        for attempt in attempts:
+            if outcomes and should_stop is not None and should_stop():
+                # At least one complete candidate exists, so stopping here returns a real
+                # placement rather than nothing. Checked between restarts as well as inside
+                # the anneal so a cancel lands promptly either way.
+                break
+            outcomes.append(
+                _restart(
+                    doc, parts, strips, scorer, movable, options, iterations,
+                    options.seed + attempt, seeded if attempt % 2 == 1 else None, should_stop,
+                )
+            )
+    else:
+        # The same restarts, handed to the caller's map. Being independent is what makes
+        # that possible, and being seeded is what makes the answer the same however they
+        # run: _run_restart rebuilds each one's parts and scorer from the document and the
+        # lookup, which is deterministic, and anneals exactly as the loop above does.
+        outcomes = list(
+            mapper(
+                _run_restart,
+                [
+                    _RestartJob(
+                        doc, lookup, options, iterations, options.seed + attempt,
+                        seeded if attempt % 2 == 1 else None,
+                    )
+                    for attempt in attempts
+                ],
             )
         )
+    candidates = [
+        _plan_from(
+            doc, changes, before, after, options, iterations, accepted,
+            len(movable), locked, options.seed + attempt,
+        )
+        for attempt, (after, accepted, changes) in zip(attempts, outcomes, strict=False)
+    ]
 
     # Leaving the board exactly as it is, as a candidate in its own right. Without it a
     # constructive seed could win the routing comparison against the other CANDIDATES
     # while still being worse than doing nothing, and a placer that can hand back a worse
     # board than it was given is one nobody presses twice.
     baseline = _plan_from(doc, (), before, before, options, iterations, 0, len(movable), locked, None)
-    winner = _pick_best(candidates, baseline, doc, lookup, options)
+    winner = _pick_best(candidates, baseline, doc, lookup, options, mapper)
     # AFTER the winner is chosen, and only to the winner. Settling every candidate before
     # the choice changes what the router is shown and therefore which candidate wins --
     # measured on the dense fixture, where doing it that way left the mean routed cost
@@ -3411,6 +3514,7 @@ def _pick_best(
     doc: PerfDocument,
     lookup: FootprintLookup,
     options: PlacementOptions,
+    mapper: Mapper | None = None,
 ) -> PlacementPlan:
     """Choose between independent anneals -- by ROUTING each one, when it is worth it.
 
@@ -3467,11 +3571,17 @@ def _pick_best(
     if len(shortlist) < 2:
         return legal_first[0]
 
+    # Each route is independent of the others, so a caller's mapper may run them side by
+    # side; the answers come back in the shortlist's order either way.
+    judged = (
+        [_judge_build(plan.document, lookup) for plan in shortlist]
+        if mapper is None
+        else list(mapper(_run_judge, [(plan.document, lookup) for plan in shortlist]))
+    )
     scored: list[
         tuple[tuple[int, int, int, int, float, float], PlacementPlan, RoutedPlacement | None]
     ] = []
-    for plan in shortlist:
-        unfinished, cost, routed = _judge_build(plan.document, lookup)
+    for plan, (unfinished, cost, routed) in zip(shortlist, judged, strict=True):
         scored.append(
             (
                 (
