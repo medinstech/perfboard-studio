@@ -418,3 +418,24 @@ def test_the_refusals_a_person_meets_are_said_in_turkish(turkish: None) -> None:
     for refusal in refusals:
         assert not refusal.ok
         assert say(refusal.message) != refusal.message, refusal.message
+
+
+def test_a_finding_names_copper_by_its_ends() -> None:
+    """"Top jumper cond-14 (d27 to c33) ... [axis-aligned bounding-box check]": the id is
+    the document's handle and the bracket is the checker talking about itself. The panel
+    shows the ends, and only for the ids the finding carries."""
+    from perfboard_studio.ui.engine_text import finding_text
+
+    said = finding_text(
+        "Top jumper cond-14 (d27 to c33) passes under J1, which is 10 mm tall and covers c27 "
+        "[axis-aligned bounding-box check]. Solder the jumper before fitting J1.",
+        {"cond-14": "d27\u2013c33"},
+    )
+    assert said == (
+        "Top jumper d27\u2013c33 passes under J1, which is 10 mm tall and covers c27. "
+        "Solder the jumper before fitting J1."
+    )
+    # A bare id gets its ends, and an id that only starts the same is another conductor.
+    assert finding_text("Solder trace cond-2 meets cond-21.", {"cond-2": "C1\u2013C4"}) == (
+        "Solder trace C1\u2013C4 meets cond-21."
+    )

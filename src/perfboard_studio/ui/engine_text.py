@@ -33,6 +33,7 @@ comes out untranslated -- which is what a new ``describe`` without a template lo
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from functools import cache
 
 from perfboard_studio.guide import conductor_word
@@ -319,6 +320,33 @@ def _capitalised(sentence: str) -> str:
     if not first.islower():
         return sentence
     return ("İ" if first == "i" else first.upper()) + sentence[1:]
+
+
+#: What a checker says about its own method, in brackets at the end of a clause: true, and
+#: about the checker rather than the board.
+_CHECKER_NOTE = re.compile(r" \[[a-z -]+ check\]")
+
+
+def finding_text(message: str, conductor_ends: Mapping[str, str]) -> str:
+    """A DRC finding as the findings panel shows it: copper named by where it runs.
+
+    A finding about a wire names it "cond-14 (d27 to c33)" -- the id is the document's
+    handle for it, which DRC and an agent need and nobody at the bench can look up; the
+    ends were added beside it for that reason. The panel shows the ends alone ("d27-c33",
+    from ``conductor_ends``, keyed on the ids the finding carries), and drops what the
+    checker says about its own method ("[axis-aligned bounding-box check]").
+
+    The finding itself is untouched: its message is compared byte for byte by the goldens,
+    so this is a way of SHOWING it, kept in the window.
+    """
+    for conductor_id, ends in conductor_ends.items():
+        message = re.sub(
+            rf"\b{re.escape(conductor_id)}\b(?: \([^()]*\))?",
+            # Literal: a backslash in the replacement would read as a group reference.
+            ends.replace("\\", "\\\\"),
+            message,
+        )
+    return _CHECKER_NOTE.sub("", message)
 
 
 def say(text: str) -> str:

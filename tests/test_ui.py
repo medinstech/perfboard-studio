@@ -10270,6 +10270,26 @@ def test_add_a_part_stays_open_for_the_next_part(monkeypatch) -> None:
     _close(window)
 
 
+def test_the_findings_panel_names_copper_by_where_it_runs() -> None:
+    """Fourteen findings on the dense fixture name a conductor by its id ("Solder trace
+    cond-21 passes through C13"), which nothing at the bench can look up."""
+    import re
+
+    window = _window_on(_load_dense())
+    texts: list[str] = []
+
+    def walk(item) -> None:
+        texts.append(item.text(1))
+        for row in range(item.childCount()):
+            walk(item.child(row))
+
+    for index in range(window.drc_tree.topLevelItemCount()):
+        walk(window.drc_tree.topLevelItem(index))
+    assert any("–" in text for text in texts)
+    assert not [text for text in texts if re.search(r"\bcond-\d+", text)]
+    _close(window)
+
+
 def test_enter_takes_the_part_the_filter_names() -> None:
     """The catalog comes first in the list and is searched by what a part does as well as
     by its name, so "LED" put the MAX7219 -- an LED display driver -- ahead of every LED,

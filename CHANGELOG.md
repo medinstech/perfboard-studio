@@ -192,6 +192,13 @@ closed without a bump.
   every refused edit the window reports, and the refusals a person meets are translated. A
   file that will not open still names its code, which is what a bug report needs.
 
+- **The findings panel names copper by where it runs.** A DRC or LVS finding about a wire
+  said "Solder trace cond-21 passes through C13" or "Top jumper cond-14 (d27 to c33) ...
+  [axis-aligned bounding-box check]": an id nothing at the bench can look up, and the
+  checker talking about its own method. The panel says "Solder trace C10–C14" and leaves the
+  bracket out. The findings themselves are unchanged -- MCP, the headless run and the goldens
+  read them as they were -- this is how the window shows them.
+
 - **A value typed over a catalog part takes that part's pinout with it.** Changing a
   BC547 to a 2N3904 in Part Properties kept the BC547's C-B-E under a transistor that is
   E-B-C, and nothing downstream could tell: the sheet, the guide and ERC all read the names

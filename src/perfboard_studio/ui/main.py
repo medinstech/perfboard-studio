@@ -330,7 +330,7 @@ from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
 from .boardpreview import render_board, with_arrangement, with_board
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
-from .engine_text import net_class_word, say
+from .engine_text import finding_text, net_class_word, say
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
@@ -9485,7 +9485,7 @@ class MainWindow(QMainWindow):
         for v in violations:
             haystack = _folded(
                 f"{v.rule} {_rule_title(v.rule)} {v.severity} {_severity_word(v.severity)} "
-                f"{v.message}"
+                f"{self._finding_text(v.message, v.conductor_ids)}"
             )
             if needle and needle not in haystack:
                 continue
@@ -9525,7 +9525,10 @@ class MainWindow(QMainWindow):
         tree.addTopLevelItem(lvs_root)
         by_kind: dict[str, list[LvsIssue]] = {}
         for iss in lvs.issues:
-            if needle and needle not in _folded(f"{iss.kind} {_lvs_title(iss.kind)} {iss.message}"):
+            if needle and needle not in _folded(
+                f"{iss.kind} {_lvs_title(iss.kind)} "
+                f"{self._finding_text(iss.message, iss.conductor_ids)}"
+            ):
                 continue
             by_kind.setdefault(iss.kind, []).append(iss)
         for kind in sorted(by_kind):
@@ -9536,7 +9539,7 @@ class MainWindow(QMainWindow):
             kind_item.setData(0, ROLE_FINDING_KEY, f"lvs:{kind}")
             lvs_root.addChild(kind_item)
             for iss in kind_issues:
-                leaf = QTreeWidgetItem(["", iss.message])
+                leaf = QTreeWidgetItem(["", self._finding_text(iss.message, iss.conductor_ids)])
                 issue_refs = {p.component_ref for p in iss.pins}
                 issue_component_ids = tuple(c.id for c in self.bus.document.components if c.ref in issue_refs)
                 leaf.setData(0, ROLE_COMPONENT_IDS, issue_component_ids)
@@ -9615,6 +9618,21 @@ class MainWindow(QMainWindow):
     #: about. Three, because two or three rows are quicker to read than a heading.
     COLLAPSE_FINDINGS_ABOVE = 3
 
+    def _finding_text(self, message: str, conductor_ids: Sequence[str]) -> str:
+        """A DRC or LVS finding as the panel says it (``engine_text.finding_text``): the
+        copper it is about named by its two ends rather than by its id."""
+        document = self.bus.document
+        wanted = set(conductor_ids)
+        ends = {
+            conductor.id: (
+                f"{format_hole(conductor.path[0], document.board)}\u2013"
+                f"{format_hole(conductor.path[-1], document.board)}"
+            )
+            for conductor in document.conductors
+            if conductor.id in wanted and conductor.path
+        }
+        return finding_text(message, ends)
+
     def _add_drc_findings(
         self,
         rule_item: QTreeWidgetItem,
@@ -9664,9 +9682,8 @@ class MainWindow(QMainWindow):
             node.setExpanded(f"drc:{rule}:{key}" in expanded)
             rule_item.addChild(node)
 
-    @staticmethod
-    def _drc_leaf(violation: DrcViolation) -> QTreeWidgetItem:
-        leaf = QTreeWidgetItem(["", violation.message])
+    def _drc_leaf(self, violation: DrcViolation) -> QTreeWidgetItem:
+        leaf = QTreeWidgetItem(["", self._finding_text(violation.message, violation.conductor_ids)])
         leaf.setData(0, ROLE_HOLES, violation.holes)
         leaf.setData(0, ROLE_COMPONENT_IDS, violation.component_ids)
         return leaf
