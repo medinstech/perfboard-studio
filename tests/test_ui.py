@@ -10253,6 +10253,20 @@ def test_enter_takes_the_part_the_filter_names() -> None:
     dialog.deleteLater()
 
 
+def test_a_name_is_named_by_a_word_or_the_start_of_one() -> None:
+    """"LED" is inside "SSD1306 OLED", and Enter on "LED" took the display: the text has to
+    be a word of the name, or the start of one, for the row to count as named."""
+    from perfboard_studio.ui.main import typed_names
+
+    assert typed_names("LED", "LED, 5 mm round")
+    assert typed_names("led", "LED, 3 mm yuvarlak")
+    assert not typed_names("LED", "SSD1306 OLED 0.96in I2C")
+    assert typed_names("ATtiny", "ATtiny85")
+    assert typed_names("switch", "Tactile switch 6x6 mm")
+    assert typed_names("dip-8", "DIP-8")
+    assert not typed_names("  ", "LED, 5 mm round")
+
+
 def test_the_part_list_counts_sizes_as_numbers() -> None:
     """By string order "LED, 10 mm" came first, so "LED" and Enter gave a 10 mm LED, and a
     1x10 header stood between the 1x1 and the 1x2."""

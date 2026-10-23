@@ -574,6 +574,17 @@ def _folded(text: str) -> str:
     return text.translate(_I_FOLD).lower()
 
 
+def typed_names(text: str, label: str) -> bool:
+    """Whether what was typed NAMES this row: a word of its label, or the start of one.
+
+    Not anywhere in it: "LED" is inside "SSD1306 OLED", and Enter on "LED" took the display.
+    The start of a word is enough for a part number -- "ATtiny" names the ATtiny85 -- and
+    both sides are folded as every filter in the window folds them (``_folded``).
+    """
+    needle = _folded(text.strip())
+    return bool(needle) and re.search(rf"(?<!\w){re.escape(needle)}", _folded(label)) is not None
+
+
 def _natural_key(text: str) -> tuple[str | float, ...]:
     """``text`` sorted as a person reads it: the numbers in it as numbers.
 
@@ -2989,11 +3000,11 @@ class AddPartDialog(QDialog):
         # The first row the text NAMES, though, not the first row it matched: the catalog
         # comes first and is searched by what a part does as well as what it is called, so
         # "LED" found the MAX7219 (an LED display driver) ahead of every LED, and Enter
-        # added a 24-pin chip.
+        # added a 24-pin chip. And named by a WORD, or the start of one, not anywhere in a
+        # word: "LED" is in "SSD1306 OLED" too. "ATtiny" still names the ATtiny85.
         leaves = self._leaves()
         if text.strip() and leaves:
-            needle = _folded(text.strip())
-            named = next((leaf for leaf in leaves if needle in _folded(leaf.text(0))), leaves[0])
+            named = next((leaf for leaf in leaves if typed_names(text, leaf.text(0))), leaves[0])
             self.tree.setCurrentItem(named)
         self._on_choice()
 
