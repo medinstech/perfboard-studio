@@ -72,7 +72,20 @@ def test_the_parts_whose_pinout_is_the_classic_trap_are_pinned_the_way_their_dat
     assert legs["7905"] == ("GND", "IN", "OUT")  # NOT a 7805's
     assert legs["lm317t"] == ("ADJ", "OUT", "IN")
     assert legs["78l05"] == ("OUT", "GND", "IN")
+    assert legs["ld1117v33"] == ("GND", "OUT", "IN")  # NOT a 7805's either
     assert legs["irf9540n"] == ("G", "D", "S")
+
+
+def test_the_chips_whose_supply_is_not_at_the_corners_say_where_it_is() -> None:
+    """A quad op-amp is fed on pins 4 and 11, and a split-supply one names its rails V+ and
+    V- -- which is what lets ERC hold a TL072's negative rail to a net without asking it to
+    be ground."""
+    lm324 = dict(catalog_part("lm324").pin_names)  # type: ignore[union-attr]
+    assert (lm324["4"], lm324["11"]) == ("VCC", "GND")
+    tl072 = dict(catalog_part("tl072").pin_names)  # type: ignore[union-attr]
+    assert (tl072["4"], tl072["8"]) == ("V-", "V+")
+    max7219 = dict(catalog_part("max7219").pin_names)  # type: ignore[union-attr]
+    assert (max7219["4"], max7219["9"], max7219["19"]) == ("GND", "GND", "V+")
 
 
 def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() -> None:
@@ -153,6 +166,12 @@ def test_search_matches_the_name_the_summary_and_the_kind() -> None:
         ("28BYJ-48", "uln2003a"),
         ("motor driver", "l293d"),
         ("ds18b20 one wire", "ds18b20"),
+        ("attiny", "attiny85"),
+        ("rtc", "ds1307"),
+        ("led matrix", "max7219"),
+        ("3.3V regulator", "ld1117v33"),
+        ("LM1117T-3.3", "ld1117v33"),
+        ("opamp", "tl072"),
     ],
 )
 def test_a_part_is_found_by_what_somebody_would_type(typed, found) -> None:

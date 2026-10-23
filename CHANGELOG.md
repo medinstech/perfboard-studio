@@ -20,6 +20,15 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **Eight more parts in the catalog, each pinned from its datasheet**: the ATtiny85, the
+  LD1117V33 3.3 V regulator (pinned GND, OUT, IN -- not like a 7805, and its check says so),
+  the TL072 and LM324 op-amps, the LM386 audio amplifier, the ULN2803A, the MAX7219 LED
+  driver (a 24-pin DIP, generated) and the DS1307 clock. Every pin was checked against
+  KiCad 10's symbol for the same part as well. The TL072 names its rails V+ and V-, so ERC
+  holds its negative rail to a net without asking it to be ground.
+
 ### Changed
 
 - **The architecture notes are `docs/ARCHITECTURE.md` now, and `CLAUDE.md` is a fifth of

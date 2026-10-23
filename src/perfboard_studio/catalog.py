@@ -314,6 +314,15 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("78l05", "78L05", "regulator", "to92", "Linear regulator, +5 V, 100 mA",
                 _legs("OUT", "GND", "IN"), ref_prefix="U",
                 source=f"TI LM78L datasheet; {_TO92_ORDER}", check=_CHECK_LEGS),
+    CatalogPart("ld1117v33", "LD1117V33", "regulator", "to220",
+                "Low-dropout regulator, +3.3 V, 800 mA",
+                _legs("GND", "OUT", "IN"), ref_prefix="U",
+                source=f"ST LD1117 datasheet, TO-220; {_TO220_ORDER}",
+                check=(
+                    "NOT pinned like a 7805: GND, OUT, IN, and the tab is the output. It needs "
+                    "10 uF on the output to stay stable. The LM1117T-3.3 is pinned the same."
+                ),
+                aliases=("3.3 V regulator", "LM1117T-3.3")),
     CatalogPart("tl431", "TL431", "regulator", "to92",
                 "Adjustable shunt reference, 2.5 to 36 V",
                 _legs("REF", "A", "K"), ref_prefix="U",
@@ -403,6 +412,39 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("max485", "MAX485", "ic", "dip-8", "RS-485 transceiver, half duplex, 5 V",
                 _legs("RO", "RE", "DE", "DI", "GND", "A", "B", "VCC"),
                 ref_prefix="U", source="Analog Devices MAX485 datasheet, PDIP"),
+    CatalogPart("tl072", "TL072", "ic", "dip-8",
+                "Dual JFET-input op-amp, low noise, for a split supply",
+                _legs("OUT1", "IN1-", "IN1+", "V-", "IN2+", "IN2-", "OUT2", "V+"),
+                ref_prefix="U", source="TI TL07x datasheet, P package",
+                check=(
+                    "Not a rail-to-rail part: on one low supply its inputs and its output cannot "
+                    "come near either rail. The LM358 is the single-supply one."
+                )),
+    CatalogPart("lm386", "LM386", "ic", "dip-8",
+                "Audio power amplifier, 0.3 to 1 W, gain 20 to 200",
+                _legs("GAIN", "IN-", "IN+", "GND", "VOUT", "VS", "BYPASS", "GAIN"),
+                ref_prefix="U", source="TI LM386 datasheet, P package",
+                check=(
+                    "Pins 1 and 8 are both GAIN: left open the gain is 20, and 10 uF between "
+                    "them makes it 200."
+                )),
+    CatalogPart("attiny85", "ATtiny85", "ic", "dip-8", "8-bit AVR, 8 kB flash, five I/O pins",
+                _legs("RESET", "PB3", "PB4", "GND", "PB0", "PB1", "PB2", "VCC"),
+                ref_prefix="U", source="Microchip ATtiny25/45/85 datasheet, PDIP"),
+    CatalogPart("ds1307", "DS1307", "ic", "dip-8",
+                "Real-time clock, I2C, with battery backup, 5 V",
+                _legs("X1", "X2", "VBAT", "GND", "SDA", "SCL", "SQW/OUT", "VCC"),
+                ref_prefix="U", source="Analog Devices DS1307 datasheet, PDIP",
+                check=(
+                    "X1 and X2 take a 32.768 kHz crystal made for 12.5 pF. With no coin cell, "
+                    "VBAT goes to GND."
+                ),
+                aliases=("RTC",)),
+    CatalogPart("lm324", "LM324", "ic", "dip-14", "Quad op-amp, single supply",
+                _legs("OUT1", "IN1-", "IN1+", "VCC", "IN2+", "IN2-", "OUT2",
+                      "OUT3", "IN3-", "IN3+", "GND", "IN4+", "IN4-", "OUT4"),
+                ref_prefix="U", source="TI LM324 datasheet, N package",
+                check="VCC is pin 4 and GND pin 11, not the corners."),
     CatalogPart("74hc595", "74HC595", "ic", "dip-16", "8-bit shift register, latched outputs",
                 _legs("QB", "QC", "QD", "QE", "QF", "QG", "QH", "GND",
                       "QH'", "SRCLR", "SRCLK", "RCLK", "OE", "SER", "QA", "VCC"),
@@ -424,11 +466,28 @@ CATALOG: tuple[CatalogPart, ...] = (
                       "OSC1", "VSS", "RX1BF", "RX0BF", "INT", "SCK", "SI", "SO", "CS",
                       "RESET", "VDD"),
                 ref_prefix="U", source="Microchip MCP2515 datasheet, PDIP"),
+    CatalogPart("uln2803a", "ULN2803A", "ic", "dip-18",
+                "Eight Darlington sinks, 50 V, 500 mA, with flyback diodes",
+                _legs("IN1", "IN2", "IN3", "IN4", "IN5", "IN6", "IN7", "IN8", "GND",
+                      "COM", "OUT8", "OUT7", "OUT6", "OUT5", "OUT4", "OUT3", "OUT2", "OUT1"),
+                ref_prefix="U", source="TI ULN2803A datasheet, N package"),
     CatalogPart("74hc245", "74HC245", "ic", "dip-20",
                 "Octal bus transceiver (74HCT245 for 3.3 V in, 5 V out)",
                 _legs("DIR", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "GND",
                       "B8", "B7", "B6", "B5", "B4", "B3", "B2", "B1", "OE", "VCC"),
                 ref_prefix="U", source="TI SN74HC245 datasheet, N package"),
+    CatalogPart("max7219", "MAX7219", "ic", "dip-24",
+                "LED display driver: eight 7-segment digits or an 8 x 8 matrix, serial in",
+                _legs("DIN", "DIG0", "DIG4", "GND", "DIG6", "DIG2", "DIG3", "DIG7", "GND",
+                      "DIG5", "DIG1", "LOAD", "CLK", "SEGA", "SEGF", "SEGB", "SEGG", "ISET",
+                      "V+", "SEGC", "SEGE", "SEGDP", "SEGD", "DOUT"),
+                ref_prefix="U",
+                source="Analog Devices MAX7219/MAX7221 datasheet, 24-pin narrow PDIP (0.3 inch)",
+                check=(
+                    "Both GND pins have to be wired. A resistor from ISET to V+, 9.53k or more, "
+                    "sets the segment current."
+                ),
+                aliases=("LED matrix", "seven segment")),
     CatalogPart("atmega328p", "ATmega328P", "ic", "dip-28", "8-bit AVR, the Arduino Uno's",
                 _legs("RESET", "RXD", "TXD", "PD2", "PD3", "PD4", "VCC", "GND", "XTAL1",
                       "XTAL2", "PD5", "PD6", "PD7", "PB0", "PB1", "PB2", "MOSI", "MISO",

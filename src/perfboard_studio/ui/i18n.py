@@ -1931,6 +1931,51 @@ TURKISH: Mapping[str, str] = {
         "Sekizli veri yolu alıcı-vericisi (3,3 V giriş, 5 V çıkış için 74HCT245)"
     ),
     "8-bit AVR, the Arduino Uno's": "8 bit AVR, Arduino Uno'nunki",
+    "Low-dropout regulator, +3.3 V, 800 mA": "Düşük düşümlü (LDO) regülatör, +3,3 V, 800 mA",
+    "NOT pinned like a 7805: GND, OUT, IN, and the tab is the output. It needs 10 uF on "
+    "the output to stay stable. The LM1117T-3.3 is pinned the same.": (
+        "Bacak dizilişi 7805 gibi DEĞİL: GND, OUT, IN; tırnak çıkışa bağlıdır. Kararlı "
+        "kalması için çıkışta 10 µF ister. LM1117T-3.3'ün dizilişi de aynıdır."
+    ),
+    "Dual JFET-input op-amp, low noise, for a split supply": (
+        "Çift JFET girişli op-amp, düşük gürültülü, simetrik besleme için"
+    ),
+    "Not a rail-to-rail part: on one low supply its inputs and its output cannot come "
+    "near either rail. The LM358 is the single-supply one.": (
+        "Besleme hatlarına kadar çalışan (rail-to-rail) bir parça değildir: tek ve düşük "
+        "bir beslemede girişleri de çıkışı da iki hatta da yaklaşamaz. Tek besleme için "
+        "olanı LM358'dir."
+    ),
+    "Audio power amplifier, 0.3 to 1 W, gain 20 to 200": (
+        "Ses güç yükselteci, 0,3 ile 1 W arası, kazanç 20 ile 200 arası"
+    ),
+    "Pins 1 and 8 are both GAIN: left open the gain is 20, and 10 uF between them makes "
+    "it 200.": (
+        "1 ve 8 numaralı pinlerin ikisi de GAIN'dir: boş bırakılırsa kazanç 20'dir, "
+        "aralarına 10 µF konursa 200 olur."
+    ),
+    "8-bit AVR, 8 kB flash, five I/O pins": "8 bit AVR, 8 kB flash, beş G/Ç pini",
+    "Real-time clock, I2C, with battery backup, 5 V": "Gerçek zamanlı saat, I2C, pil yedekli, 5 V",
+    "X1 and X2 take a 32.768 kHz crystal made for 12.5 pF. With no coin cell, VBAT goes "
+    "to GND.": (
+        "X1 ve X2'ye 12,5 pF için yapılmış 32,768 kHz'lik bir kristal bağlanır. Düğme pil "
+        "yoksa VBAT GND'ye bağlanır."
+    ),
+    "Quad op-amp, single supply": "Dörtlü op-amp, tek besleme",
+    "VCC is pin 4 and GND pin 11, not the corners.": (
+        "VCC 4, GND 11 numaralı pindir; köşelerdeki pinler değil."
+    ),
+    "Eight Darlington sinks, 50 V, 500 mA, with flyback diodes": (
+        "Sekiz Darlington akım çekici, 50 V, 500 mA, serbest geçiş diyotlu"
+    ),
+    "LED display driver: eight 7-segment digits or an 8 x 8 matrix, serial in": (
+        "LED gösterge sürücüsü: sekiz 7 segmentli hane ya da 8 × 8 matris, seri girişli"
+    ),
+    "Both GND pins have to be wired. A resistor from ISET to V+, 9.53k or more, sets the "
+    "segment current.": (
+        "İki GND pini de bağlanmalıdır. ISET ile V+ arasındaki direnç (9,53k ya da daha "
+        "büyük) segment akımını belirler."
+    ),
     "ESP32-WROOM-32 dev board, 38 pins, rows 25.4 mm apart": (
         "ESP32-WROOM-32 geliştirme kartı, 38 pin, sıralar arası 25,4 mm"
     ),

@@ -112,7 +112,9 @@ def test_no_shipped_example_has_a_finding() -> None:
 
 def test_the_catalog_s_supply_pins_are_exactly_the_ones_named_as_supplies() -> None:
     """Measured over every pin name the catalog has. VP and VN on an ESP32 are GPIOs, VIN,
-    VBUS and 3V3 on a module may be outputs, and none of them is a chip's supply."""
+    VBUS and 3V3 on a module may be outputs, and none of them is a chip's supply. V+ and V-
+    are a split-supply op-amp's rails and VS the LM386's; VBAT on a DS1307 is a coin cell it
+    can run without."""
     found: dict[str, set[str]] = {}
     for entry in search_catalog(""):
         for _, name in entry.pin_names:
@@ -120,9 +122,9 @@ def test_the_catalog_s_supply_pins_are_exactly_the_ones_named_as_supplies() -> N
             if kind is not None:
                 found.setdefault(kind, set()).add(name)
     assert found == {
-        "positive": {"VCC", "VCC1", "VCC2", "VDD", "AVCC", "+VS"},
+        "positive": {"VCC", "VCC1", "VCC2", "VDD", "AVCC", "+VS", "V+", "VS"},
         "ground": {"GND", "AGND"},
-        "negative": {"VSS"},
+        "negative": {"VSS", "V-"},
     }
 
 
