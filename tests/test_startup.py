@@ -146,6 +146,42 @@ def test_the_window_imports_no_vtk_until_the_3d_view_is_opened() -> None:
     assert out.strip() == "[]", f"importing the window imported {out.strip()}"
 
 
+#: The Qt modules a window start may import. Each is a few megabytes of DLL to map before
+#: the first frame, and the window uses these five; a sixth arriving at module scope
+#: -- QtWebEngine for a help page, QtCharts for a plot -- should be a decision, made by
+#: adding it here with the milliseconds it costs.
+_QT_AT_START = frozenset({"QtCore", "QtGui", "QtWidgets", "QtNetwork", "QtSvg"})
+
+
+def test_a_window_start_imports_nothing_but_qt_and_this_package() -> None:
+    """The ceiling on what a start may import, as a list rather than a stopwatch.
+
+    A time budget flakes on a shared CI runner, and a count of modules moves with every
+    Python release. What does not move is WHICH packages arrive: a start imports the
+    standard library, five Qt modules and this package, and anything else -- numpy, VTK,
+    the MCP stack, Pillow -- is a third-party import somebody added at module scope, which
+    is how VTK came to cost the window 425 ms. Measured against a process that has
+    already imported those Qt modules, so shiboken's own helpers and whatever a ``.pth``
+    file loads at interpreter start are the baseline and not the finding.
+    """
+    qt = ", ".join(f"PySide6.{name}" for name in sorted(_QT_AT_START))
+    out = _run(
+        "import sys\n"
+        f"import {qt}\n"
+        "before = set(sys.modules)\n"
+        "import perfboard_studio.ui.main\n"
+        "new = set(sys.modules) - before\n"
+        # PySide6 is the next line's question, module by module.
+        "print(sorted({m.split('.')[0] for m in new} - set(sys.stdlib_module_names) - {'PySide6'}))\n"
+        "print(sorted(m.split('.')[1] for m in sys.modules\n"
+        "    if m.startswith('PySide6.Qt') and m.count('.') == 1))\n"
+    )
+    packages, qt_modules = out.strip().splitlines()
+    assert packages == "['perfboard_studio']", f"a window start imports {packages}"
+    unexpected = set(ast.literal_eval(qt_modules)) - _QT_AT_START
+    assert not unexpected, f"a window start imports PySide6.{sorted(unexpected)}"
+
+
 def test_every_function_that_draws_in_3d_imports_the_3d_view_itself() -> None:
     """mypy cannot catch a missing one: it sees the TYPE_CHECKING import at the top.
 
