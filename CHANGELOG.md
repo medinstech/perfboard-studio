@@ -22,6 +22,13 @@ closed without a bump.
 
 ### Added
 
+- **The examples' chips have their pin names.** The NE555 on the front page was a box of
+  numbered pins on the sheet, and ERC had nothing to check it by, because an example that
+  names its footprints never asked the catalog what its parts are. It asks now, as an
+  import does, and takes the answer only when the catalog's package is the example's: the
+  NE555, the LM317, the ATmega328P, the L7805, the BC547 and the diodes are named, and
+  ERC finds nothing wrong with any of them. No part moved and no wire changed.
+
 - **Eight more parts in the catalog, each pinned from its datasheet**: the ATtiny85, the
   LD1117V33 3.3 V regulator (pinned GND, OUT, IN -- not like a 7805, and its check says so),
   the TL072 and LM324 op-amps, the LM386 audio amplifier, the ULN2803A, the MAX7219 LED

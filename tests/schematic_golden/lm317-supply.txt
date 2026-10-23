@@ -9,8 +9,8 @@ symbol C3 polarised-capacitor c-elec-d6.3-p2 at 50.80,88.90 size 20.32x10.16 val
     pin 1 name='+' left 0.00,5.08
     pin 2 name='-' right 20.32,5.08
 symbol D1 diode d-do41 at 81.28,22.86 size 20.32x10.16 value='1N4007'
-    pin 1 name=None left 0.00,5.08
-    pin 2 name=None right 20.32,5.08
+    pin 1 name='K' left 0.00,5.08
+    pin 2 name='A' right 20.32,5.08
 symbol J1 connector hdr-1x2 at 81.28,86.36 size 20.32x15.24 value='Conn_01x02'
     pin 1 name=None left 0.00,5.08
     pin 2 name=None left 0.00,10.16
@@ -31,9 +31,9 @@ symbol RV1 potentiometer pot-3 at 111.76,86.36 size 20.32x15.24 value='5k'
     pin 2 name=None right 20.32,2.54
     pin 3 name=None right 20.32,10.16
 symbol U1 box to220 at 20.32,48.26 size 20.32x20.32 value='LM317'
-    pin 1 name=None left 0.00,5.08
-    pin 2 name=None left 0.00,10.16
-    pin 3 name=None left 0.00,15.24
+    pin 1 name='ADJ' left 0.00,5.08
+    pin 2 name='OUT' left 0.00,10.16
+    pin 3 name='IN' left 0.00,15.24
 wire VIN [signal] 81.28,91.44 -> 78.74,91.44 -> 78.74,73.66
 wire VIN [signal] 50.80,58.42 -> 43.18,58.42 -> 43.18,73.66
 wire VIN [signal] 50.80,93.98 -> 45.72,93.98 -> 45.72,73.66
@@ -97,9 +97,12 @@ label [ref/centre] 121.92,84.46 RV1
 label [value/centre] 121.92,102.62 5k
 label [ref/centre] 30.48,46.35 U1
 label [value/centre] 30.48,69.60 LM317
-label [pin/left] 26.67,53.34 1
-label [pin/left] 26.67,58.42 2
-label [pin/left] 26.67,63.50 3
+label [pin/left] 26.67,53.34 ADJ
+label [pin/centre] 22.86,54.48 1
+label [pin/left] 26.67,58.42 OUT
+label [pin/centre] 22.86,59.56 2
+label [pin/left] 26.67,63.50 IN
+label [pin/centre] 22.86,64.64 3
 label [net/left] 16.00,72.77 VIN
 label [net/left] 13.46,37.21 VOUT
 label [net/left] 16.00,75.31 ADJ

@@ -125,7 +125,11 @@
       },
       "rotation": 180,
       "mirrored": false,
-      "locked": false
+      "locked": false,
+      "pinNames": {
+        "1": "K",
+        "2": "A"
+      }
     },
     {
       "id": "c-d2",
@@ -138,7 +142,11 @@
       },
       "rotation": 90,
       "mirrored": false,
-      "locked": false
+      "locked": false,
+      "pinNames": {
+        "1": "K",
+        "2": "A"
+      }
     },
     {
       "id": "c-j1",
@@ -229,7 +237,13 @@
       },
       "rotation": 180,
       "mirrored": false,
-      "locked": false
+      "locked": false,
+      "pinNames": {
+        "1": "C",
+        "2": "B",
+        "3": "E"
+      },
+      "symbol": "npn"
     },
     {
       "id": "c-r1",
@@ -307,7 +321,37 @@
       },
       "rotation": 0,
       "mirrored": false,
-      "locked": false
+      "locked": false,
+      "pinNames": {
+        "1": "RESET",
+        "2": "RXD",
+        "3": "TXD",
+        "4": "PD2",
+        "5": "PD3",
+        "6": "PD4",
+        "7": "VCC",
+        "8": "GND",
+        "9": "XTAL1",
+        "10": "XTAL2",
+        "11": "PD5",
+        "12": "PD6",
+        "13": "PD7",
+        "14": "PB0",
+        "15": "PB1",
+        "16": "PB2",
+        "17": "MOSI",
+        "18": "MISO",
+        "19": "SCK",
+        "20": "AVCC",
+        "21": "AREF",
+        "22": "GND",
+        "23": "PC0",
+        "24": "PC1",
+        "25": "PC2",
+        "26": "PC3",
+        "27": "PC4",
+        "28": "PC5"
+      }
     },
     {
       "id": "c-u2",
@@ -320,7 +364,12 @@
       },
       "rotation": 90,
       "mirrored": false,
-      "locked": false
+      "locked": false,
+      "pinNames": {
+        "1": "IN",
+        "2": "GND",
+        "3": "OUT"
+      }
     },
     {
       "id": "c-y1",

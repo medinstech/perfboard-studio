@@ -73,7 +73,11 @@
       },
       "rotation": 0,
       "mirrored": false,
-      "locked": false
+      "locked": false,
+      "pinNames": {
+        "1": "K",
+        "2": "A"
+      }
     },
     {
       "id": "c-j1",
@@ -164,7 +168,12 @@
       },
       "rotation": 270,
       "mirrored": false,
-      "locked": false
+      "locked": false,
+      "pinNames": {
+        "1": "ADJ",
+        "2": "OUT",
+        "3": "IN"
+      }
     }
   ],
   "conductors": [

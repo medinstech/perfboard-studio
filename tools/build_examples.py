@@ -56,7 +56,7 @@ from perfboard_studio.guide import build_guide  # noqa: E402
 from perfboard_studio.lvs import run_lvs  # noqa: E402
 from perfboard_studio.model import Board, DocumentMeta, HoleCoord, PerfDocument  # noqa: E402
 from perfboard_studio.parsers.kicad import parse_kicad_netlist  # noqa: E402
-from perfboard_studio.parsers.kicad_parts import plan_import  # noqa: E402
+from perfboard_studio.parsers.kicad_parts import catalog_part_for, plan_import  # noqa: E402
 from perfboard_studio.placer import (  # noqa: E402
     DesignPlacement,
     PlacementOptions,
@@ -328,15 +328,7 @@ def _the_design(example: Example, parsed, bus: CommandBus, lookup) -> bool:
         if unknown:
             print(f"  {example.stem}: no such footprint for {unknown}")
             return False
-        parts = tuple(
-            AddPartPayload(
-                ref=ref,
-                footprint_id=example.footprints[ref],
-                value=next((c.value or "" for c in parsed.components if c.ref == ref), ""),
-                id=f"c-{ref.lower()}",
-            )
-            for ref in refs
-        )
+        parts = tuple(_told(example, parsed, ref) for ref in refs)
         nets = parsed.nets
     else:
         plan = plan_import(parsed, bus.document, lookup)
@@ -369,6 +361,31 @@ def _the_design(example: Example, parsed, bus: CommandBus, lookup) -> bool:
         print(f"  {example.stem}: netlist import refused [{result.code}] {result.message}")
         return False
     return True
+
+
+def _told(example: Example, parsed, ref: str) -> AddPartPayload:
+    """A part this example names the footprint of -- and, where its value or its symbol's
+    name is a part the catalog knows IN THAT PACKAGE, the pin names and symbol an import
+    would have given it. Without them the NE555 on the front page was a numbered box on the
+    sheet, and ERC had nothing to check it by."""
+    component = next((c for c in parsed.components if c.ref == ref), None)
+    value = (component.value or "") if component is not None else ""
+    footprint_id = example.footprints[ref]
+    part = catalog_part_for(value, component.lib_part) if component is not None else None
+    if part is not None and part.footprint_id != footprint_id:
+        part = None
+    if ref in example.pin_names:
+        pin_names = tuple(example.pin_names[ref].items())
+    else:
+        pin_names = part.pin_names if part is not None else ()
+    return AddPartPayload(
+        ref=ref,
+        footprint_id=footprint_id,
+        value=value,
+        pin_names=pin_names,
+        symbol=part.symbol if part is not None else None,
+        id=f"c-{ref.lower()}",
+    )
 
 
 def _print_choice(example: Example, choice: BoardChoice) -> None:
