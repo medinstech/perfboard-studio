@@ -1954,6 +1954,30 @@ TURKISH: Mapping[str, str] = {
     "Power in": "Güç girişi",
     "Connectors": "Konnektörler",
     "Sound": "Ses",
+    "Displays": "Ekranlar",
+    "Ultrasonic distance sensor, 2 cm to 4 m, 5 V; stands on its edge": (
+        "Ultrasonik mesafe sensörü, 2 cm ile 4 m arası, 5 V; kenarı üzerinde dik durur"
+    ),
+    "ECHO is a 5 V output: put a divider between it and a 3.3 V pin. How far the "
+    "transducers stand in front of the pins, and how high the board sits on them, are "
+    "estimates.": (
+        "ECHO 5 V'luk bir çıkıştır: 3,3 V'luk bir pine bağlamadan önce araya bir bölücü "
+        "koyun. Dönüştürücülerin pinlerin ne kadar önünde durduğu ve kartın pinlerin "
+        "üzerinde ne kadar yüksekte oturduğu tahmindir."
+    ),
+    "128 x 64 OLED on I2C, pins printed GND, VCC, SCL, SDA": (
+        "I2C ile bağlanan 128 × 64 OLED, pinlerinde GND, VCC, SCL, SDA yazar"
+    ),
+    "128 x 64 OLED on I2C, pins printed VCC, GND, SCL, SDA": (
+        "I2C ile bağlanan 128 × 64 OLED, pinlerinde VCC, GND, SCL, SDA yazar"
+    ),
+    "Read the four names printed on yours: this board is sold with VCC and GND either way "
+    "round, and the wrong way round kills it. Choose the entry with your order. Where the "
+    "pins sit on the board and how tall it stands in its header are estimates.": (
+        "Sizinkinin üzerinde yazan dört adı okuyun: bu kart VCC ve GND iki sırayla da "
+        "satılır ve ters bağlanırsa yanar. Sizinkiyle aynı sıradaki girişi seçin. Pinlerin "
+        "kartın neresinde durduğu ve header'ında ne kadar yükseldiği tahmindir."
+    ),
     "nRF24L01+ module": "nRF24L01+ modülü",
     "2.4 GHz radio on SPI, 1.9 to 3.6 V, the board with its antenna printed on it": (
         "SPI ile bağlanan 2,4 GHz telsiz, 1,9 ile 3,6 V arası, anteni kartına basılı olan"

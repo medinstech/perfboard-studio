@@ -125,6 +125,29 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         assert part.check, f"{part.id}: a module's estimates have to be said"
 
 
+def test_the_oled_is_two_entries_because_it_is_sold_two_ways() -> None:
+    """The four-pin OLED is sold with VCC and GND either way round, and the wrong way round
+    kills it: two entries named by the order printed on the board, identical but for those
+    two pins, and both found by "oled"."""
+    first = catalog_part("ssd1306-i2c-gnd-vcc")
+    second = catalog_part("ssd1306-i2c-vcc-gnd")
+    assert first is not None and second is not None
+    assert [name for _, name in first.pin_names] == ["GND", "VCC", "SCL", "SDA"]
+    assert [name for _, name in second.pin_names] == ["VCC", "GND", "SCL", "SDA"]
+    for part in (first, second):
+        order = " ".join(name for _, name in part.pin_names)
+        assert f"({order})" in part.name and "VCC and GND" in part.check
+    assert first.footprint_id == second.footprint_id
+    assert {part.id for part in search_catalog("oled")} == {first.id, second.id}
+
+
+def test_the_hc_sr04_is_pinned_as_elecfreaks_prints_it() -> None:
+    sensor = catalog_part("hc-sr04")
+    assert sensor is not None and sensor.category == "sensor"
+    assert [name for _, name in sensor.pin_names] == ["VCC", "TRIG", "ECHO", "GND"]
+    assert search_catalog("ultrasonic") == [sensor]
+
+
 def test_the_radios_are_pinned_as_their_sources_number_them() -> None:
     """The nRF24L01+'s 2 x 4 header as KiCad's breakout symbol has it, GND at pin 1; the
     ESP-01's two rows as Ai-Thinker's figure 2.1 and table 2.2 both have them."""

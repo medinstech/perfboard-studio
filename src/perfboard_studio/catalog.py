@@ -49,6 +49,7 @@ CatalogCategory = Literal[
     "diode",
     "protection",
     "sensor",
+    "display",
     "ic",
     "switch",
     "relay",
@@ -68,6 +69,7 @@ CATEGORY_ORDER: tuple[CatalogCategory, ...] = (
     "diode",
     "protection",
     "sensor",
+    "display",
     "ic",
     "switch",
     "relay",
@@ -240,6 +242,22 @@ _SRD_CHECK = (
 _MODULE_TOP = (
     "The height of what is on the board is an estimate, and so is its colour; the pins, "
     "the rows and the board outline are measured."
+)
+
+#: The 0.96 inch 128 x 64 OLED on its four-pin I2C board, which is sold with its supply pins
+#: in either order -- and swapped supply pins kill it. Two entries named by the order printed
+#: on the board, so the one chosen is the one in hand. A box, not a module: nobody publishes
+#: a drawing of the board, so nothing is drawn on it but the room it takes, seated in a
+#: female header: the four pins along one edge, 2 mm in from it.
+_OLED_FOOTPRINT = "box-4x1-p1-r1-27.3x27.8x12.2-o0x11.9"
+_OLED_SOURCE = (
+    "The four names as the board prints them; the 27.3 x 27.8 mm board as sellers list it; "
+    "the controller, Solomon Systech's SSD1306"
+)
+_OLED_CHECK = (
+    "Read the four names printed on yours: this board is sold with VCC and GND either way "
+    "round, and the wrong way round kills it. Choose the entry with your order. Where the "
+    "pins sit on the board and how tall it stands in its header are estimates."
 )
 
 #: Off the board: what the leads of a battery or a panel jack are soldered into, one pad
@@ -482,6 +500,30 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "connected, and so does this. Also sold on a small board with three pins: "
                     "on one of those, go by what the board itself has printed."
                 )),
+    # Its board stands up on its four pins, the transducers facing down the rows: a box as
+    # wide as the board, as deep as the transducers stand out, as tall as it stands.
+    CatalogPart("hc-sr04", "HC-SR04", "sensor", "box-4x1-p1-r1-45x15x22.5-o0x3.5",
+                "Ultrasonic distance sensor, 2 cm to 4 m, 5 V; stands on its edge",
+                _legs("VCC", "TRIG", "ECHO", "GND"), ref_prefix="U",
+                source=(
+                    "ElecFreaks HC-SR04 user guide: Vcc, Trig, Echo, GND left to right with "
+                    "the transducers towards you; 45 x 20 x 15 mm; 5 V"
+                ),
+                check=(
+                    "ECHO is a 5 V output: put a divider between it and a 3.3 V pin. How far "
+                    "the transducers stand in front of the pins, and how high the board sits "
+                    "on them, are estimates."
+                ),
+                aliases=("ultrasonic", "sonar", "distance")),
+    # -- displays ---------------------------------------------------------------------
+    CatalogPart("ssd1306-i2c-gnd-vcc", "SSD1306 OLED 0.96in I2C (GND VCC SCL SDA)", "display",
+                _OLED_FOOTPRINT, "128 x 64 OLED on I2C, pins printed GND, VCC, SCL, SDA",
+                _legs("GND", "VCC", "SCL", "SDA"), value="SSD1306 OLED", ref_prefix="U",
+                source=_OLED_SOURCE, check=_OLED_CHECK, aliases=("oled", "display", "screen")),
+    CatalogPart("ssd1306-i2c-vcc-gnd", "SSD1306 OLED 0.96in I2C (VCC GND SCL SDA)", "display",
+                _OLED_FOOTPRINT, "128 x 64 OLED on I2C, pins printed VCC, GND, SCL, SDA",
+                _legs("VCC", "GND", "SCL", "SDA"), value="SSD1306 OLED", ref_prefix="U",
+                source=_OLED_SOURCE, check=_OLED_CHECK, aliases=("oled", "display", "screen")),
     # -- integrated circuits ------------------------------------------------------------
     CatalogPart("ne555", "NE555", "ic", "dip-8", "Timer",
                 _legs("GND", "TRIG", "OUT", "RESET", "CTRL", "THR", "DIS", "VCC"),

@@ -29,6 +29,11 @@ closed without a bump.
   terminal, a battery clip's or a jack's pads -- and no module has a pin on any of those nets.
   Whether the way in reaches both rails, or comes through a regulator, is not judged. None of
   the shipped examples is touched by it.
+- **The HC-SR04 and the 0.96 inch OLED.** The HC-SR04 is pinned as ElecFreaks prints it and
+  stands on its edge as the real one does. The OLED is in a new Displays group TWICE, named
+  by the order its pins are printed in -- "(GND VCC SCL SDA)" and "(VCC GND SCL SDA)" --
+  because it is sold both ways and the wrong one kills it; the check says to read the
+  board in hand. "oled", "ultrasonic" and "sonar" find them.
 
 - **The nRF24L01+ radio and the ESP-01 are in the catalog**, pinned from KiCad's breakout
   symbol and from Ai-Thinker's manual, whose figure and table agree pin for pin. Nobody
