@@ -2918,9 +2918,16 @@ class AddPartDialog(QDialog):
         # Narrowed down, the first match is the answer more often than not, so Enter takes
         # it. Unfiltered, nothing is chosen for the user: the first row of the whole
         # library is not a suggestion, and it used to be a crystal.
+        #
+        # The first row the text NAMES, though, not the first row it matched: the catalog
+        # comes first and is searched by what a part does as well as what it is called, so
+        # "LED" found the MAX7219 (an LED display driver) ahead of every LED, and Enter
+        # added a 24-pin chip.
         leaves = self._leaves()
         if text.strip() and leaves:
-            self.tree.setCurrentItem(leaves[0])
+            needle = _folded(text.strip())
+            named = next((leaf for leaf in leaves if needle in _folded(leaf.text(0))), leaves[0])
+            self.tree.setCurrentItem(named)
         self._on_choice()
 
     def _on_double_click(self, item: QTreeWidgetItem, _column: int) -> None:

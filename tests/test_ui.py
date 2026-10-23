@@ -10200,6 +10200,22 @@ def test_work_left_to_do_is_not_shown_as_wrong() -> None:
     _close(window)
 
 
+def test_enter_takes_the_part_the_filter_names() -> None:
+    """The catalog comes first in the list and is searched by what a part does as well as
+    by its name, so "LED" put the MAX7219 -- an LED display driver -- ahead of every LED,
+    and Enter added a 24-pin chip to somebody's blinker."""
+    from perfboard_studio.ui.main import AddPartDialog
+
+    dialog = AddPartDialog(_load_dense())
+    dialog.filter.setText("LED")
+    chosen = dialog.chosen_footprint_id()
+    assert chosen is not None and chosen.startswith("led-"), chosen
+    # A search that names nothing still takes the first match rather than nothing.
+    dialog.filter.setText("op amp")
+    assert dialog.chosen_footprint_id() is not None
+    dialog.deleteLater()
+
+
 def test_the_part_list_counts_sizes_as_numbers() -> None:
     """By string order "LED, 10 mm" came first, so "LED" and Enter gave a 10 mm LED, and a
     1x10 header stood between the 1x1 and the 1x2."""

@@ -85,6 +85,11 @@ closed without a bump.
   typing "LED" and pressing Enter added a 10 mm LED; a 1x10 header stood between the 1x1 and
   the 1x2. The Parts panel and Add a Part now list sizes smallest first.
 
+- **Enter in Add a Part takes the part the filter names.** The catalog is listed first and
+  searched by what a part does as well as by its name, so typing "LED" and pressing Enter
+  added a MAX7219, an LED display driver with 24 pins. Enter now takes the first row whose
+  name holds what was typed, and the first match only when no name does.
+
 - **Work still ahead is not shown as wrong.** A part still in the design was listed in red
   under LVS from the moment it was drawn, and the status bar's LVS count turned red the
   moment a placement landed, because every net is open until it is wired. Both now follow
