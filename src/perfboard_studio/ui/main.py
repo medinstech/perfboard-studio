@@ -45,6 +45,7 @@ from PySide6.QtCore import (
     QPointF,
     QSettings,
     QSize,
+    QStandardPaths,
     Qt,
     QThread,
     QTimer,
@@ -11449,12 +11450,37 @@ class MainWindow(QMainWindow):
         app_settings().setValue(RECENT_FILES_KEY, [])
         self._refresh_recent_menu()
 
+    def _documents_folder(self) -> Path:
+        """Where Open, Save As and Import start: beside this board, else beside the board
+        opened last, else the user's documents.
+
+        NEVER THE FOLDER THE PROCESS STARTED IN, which is what it was. From a terminal that
+        is wherever somebody happened to be; from the Start menu it is the folder the
+        application is installed in, so the first board anybody saved went in beside the
+        program -- or failed, under Program Files -- and Open showed them the program's own
+        files.
+        """
+        if self.current_path is not None:
+            return self.current_path.parent
+        for entry in self._recent_paths():
+            folder = Path(entry).parent
+            if folder.is_dir():
+                return folder
+        documents = QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.DocumentsLocation
+        )
+        if documents and Path(documents).is_dir():
+            return Path(documents)
+        return Path.home()
+
     def on_open(self) -> None:
         if not self._offer_to_save():
             return
-        start_dir = str(self.current_path.parent) if self.current_path else str(Path.cwd())
         path_str, _ = QFileDialog.getOpenFileName(
-            self, t("Open a board"), start_dir, t("Perfboard Studio documents (*.perf)")
+            self,
+            t("Open a board"),
+            str(self._documents_folder()),
+            t("Perfboard Studio documents (*.perf)"),
         )
         if not path_str:
             return
@@ -11889,9 +11915,11 @@ class MainWindow(QMainWindow):
         both existed from the first commit with nothing able to reach them, so for a while
         nets could only arrive by hand-editing a .perf file.
         """
-        start_dir = str(self.current_path.parent) if self.current_path else str(Path.cwd())
         path_str, _ = QFileDialog.getOpenFileName(
-            self, t("Import KiCad netlist"), start_dir, t("KiCad netlists (*.net);;All files (*)")
+            self,
+            t("Import KiCad netlist"),
+            str(self._documents_folder()),
+            t("KiCad netlists (*.net);;All files (*)"),
         )
         if not path_str:
             return
@@ -12017,7 +12045,14 @@ class MainWindow(QMainWindow):
         return self._save_to(self.current_path)
 
     def on_save_as(self) -> bool:
-        default = str(self.current_path) if self.current_path else str(Path.cwd() / "board.perf")
+        if self.current_path is not None:
+            default = str(self.current_path)
+        else:
+            # Named after the board when it has a name -- an example opened as untitled is
+            # still called what it is -- and "board" when it has none.
+            name = self.bus.document.meta.name
+            stem = project_name(name) if name != UNTITLED_NAME else "board"
+            default = str(self._documents_folder() / f"{stem}{DOCUMENT_SUFFIX}")
         path_str, _ = QFileDialog.getSaveFileName(
             self, t("Save As"), default, t("Perfboard Studio documents (*.perf)")
         )

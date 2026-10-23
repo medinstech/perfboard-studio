@@ -12135,6 +12135,59 @@ def test_saving_an_unnamed_board_names_it_after_its_file(tmp_path) -> None:
     _close(window)
 
 
+def test_file_dialogs_never_start_in_the_folder_the_process_started_in(
+    tmp_path, monkeypatch, _settings_in_a_temp_file
+) -> None:
+    """From the Start menu the process starts in the folder the application is installed
+    in, and Save As used to propose ``board.perf`` there. A board with no file starts
+    beside the board opened last, else in the user's documents, named after itself."""
+    from perfboard_studio.model import UNTITLED_NAME
+    from perfboard_studio.ui import main as main_module
+
+    install = tmp_path / "Program Files" / "Perfboard Studio"
+    install.mkdir(parents=True)
+    monkeypatch.chdir(install)
+    documents = tmp_path / "Documents"
+    documents.mkdir()
+    monkeypatch.setattr(
+        main_module.QStandardPaths, "writableLocation", lambda _where: str(documents)
+    )
+    asked: list[str] = []
+
+    def ask(*args, **kwargs):
+        asked.append(args[2])
+        return ("", "")
+
+    monkeypatch.setattr(main_module.QFileDialog, "getSaveFileName", ask)
+    monkeypatch.setattr(main_module.QFileDialog, "getOpenFileName", ask)
+
+    dense = _load_dense()
+    window = _window_on(dataclasses.replace(
+        dense, meta=dataclasses.replace(dense.meta, name="NE555 Astable")
+    ))
+    assert window.current_path is None
+    window.on_save_as()
+    assert asked[-1] == str(documents / "ne555-astable.perf")
+    untitled = _window_on(dataclasses.replace(
+        dense, meta=dataclasses.replace(dense.meta, name=UNTITLED_NAME)
+    ))
+    untitled.on_save_as()
+    assert asked[-1] == str(documents / "board.perf")
+    _close(untitled)
+
+    # A board opened before says where this person keeps boards.
+    boards = tmp_path / "boards"
+    boards.mkdir()
+    (boards / "old.perf").write_text("{}", encoding="utf-8")
+    _settings_in_a_temp_file.setValue(main_module.RECENT_FILES_KEY, [str(boards / "old.perf")])
+    window._mark_saved()
+    window.on_open()
+    window.on_import_netlist()
+    assert asked[-2:] == [str(boards), str(boards)]
+    assert not any(entry.startswith(str(install)) for entry in asked)
+    _close(window)
+
+
 def test_a_named_board_is_not_renamed_by_saving(tmp_path) -> None:
     window = _window_on(_load_dense())
     before = window.bus.document.meta.name

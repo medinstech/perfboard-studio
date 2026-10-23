@@ -74,6 +74,13 @@ closed without a bump.
   Part Properties also gives an unnamed part the catalog's names when its value is one, as
   Add a Part always did.
 
+- **Save As, Open and Import start where your boards are.** They started in the folder the
+  process was launched from, which from the Start menu is the folder the application is
+  installed in: the first board anybody saved was proposed as `board.perf` beside the
+  program, or refused under Program Files. They now start beside the board open, else beside
+  the board opened last, else in Documents, and an unsaved board is proposed under its own
+  name -- an example opened untitled keeps the example's.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added
