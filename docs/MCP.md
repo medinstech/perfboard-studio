@@ -201,7 +201,8 @@ reads the pins' NAMES: a supply pin of a chip connected to nothing (for a module
 ground), a VCC on a ground net or a GND on a power net, an electrolytic or an LED with its
 positive lead on ground and its negative on a supply, a net naming a pin the part does not
 have -- those are `errors`; a second GND left open, a wired NC pin, a net reaching one pin,
-a part joined to nothing and a net naming a part nobody has are `warnings`. A part whose
+a part joined to nothing, a net naming a part nobody has, and a supply that no connector,
+battery clip or module brings onto the board are `warnings`. A part whose
 pins nobody named is not checked, which is the argument for placing from the catalog
 (`part=`): its parts arrive named. `get_status` carries the two counts, and the guide
 warns (`erc-error`) when it is describing a circuit with an error in it.
