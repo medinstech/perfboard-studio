@@ -32,7 +32,7 @@ import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from PySide6.QtCore import (
     QEvent,
@@ -319,7 +319,7 @@ from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 
-from . import icons, updater, view3d
+from . import icons, updater
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .boardcolors import SCHEMES as BOARD_SCHEMES
@@ -354,6 +354,13 @@ from .workflow import (
     step_title,
     workflow_steps,
 )
+
+if TYPE_CHECKING:
+    # Only for annotations. Every method that draws in 3D imports it where it does,
+    # because importing it is importing VTK and numpy -- most of what the window
+    # spent importing before it could show anything, for a panel that starts shut
+    # (tests/test_startup.py).
+    from . import view3d
 
 #: How close a click has to land to a drawn wire to be about that wire, in millimetres of
 #: sheet. The panel's own ``PICK_MM``, which is what the click that opened the menu was
@@ -4839,6 +4846,8 @@ class MainWindow(QMainWindow):
         try:
             from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
+            from . import view3d
+
             widget: Any = QVTKRenderWindowInteractor()  # type: ignore[no-untyped-call]
             if not vtk_paints_on_screen(sys.platform, qVersion()):
                 widget.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen, False)
@@ -4911,6 +4920,8 @@ class MainWindow(QMainWindow):
         the selection down, as a click on bare board does in 2D."""
         if self._vtk_renderer is None:
             return
+        from . import view3d
+
         owner = view3d.owner_at(self._vtk_renderer, self._3d_owners, x, y)
         if owner is None:
             self.scene.clearSelection()
@@ -4965,6 +4976,8 @@ class MainWindow(QMainWindow):
             if not selected:
                 nets = set(self._selected_net_ids())
                 selected = {c.id for c in self.bus.document.conductors if c.net_id in nets}
+        from . import view3d
+
         changed = view3d.show_selection(self._3d_owners, selected, self._3d_tinted)
         if changed and self._3d_is_live():
             self.vtk_widget.GetRenderWindow().Render()
@@ -5260,6 +5273,8 @@ class MainWindow(QMainWindow):
 
         self._3d_owners.clear()
         self._3d_tinted.clear()
+        from . import view3d
+
         view3d.populate_renderer(
             self._vtk_renderer,
             document,
@@ -5360,6 +5375,8 @@ class MainWindow(QMainWindow):
     def on_reset_3d_camera(self) -> None:
         if self._vtk_renderer is None:
             return
+        from . import view3d
+
         view3d.apply_default_camera(self._vtk_renderer, flipped=(self.side == "bottom"))
         if self.vtk_widget is not None:
             self.vtk_widget.GetRenderWindow().Render()
@@ -12976,6 +12993,8 @@ class MainWindow(QMainWindow):
         if chosen is None:
             return
         out = chosen.with_suffix(".png")
+        from . import view3d
+
         # The same guard the guide export has, for the same reason: on a machine with no
         # offscreen GL, VTK does not raise, it ends the process -- with every unsaved
         # edit in it.
@@ -13082,6 +13101,8 @@ class MainWindow(QMainWindow):
         the events are pumped from there, behind the same guard ``_run_planner`` raises: the
         window disabled, and the file watcher and ``closeEvent`` standing down.
         """
+        from . import view3d
+
         if not view3d.offscreen_gl_available():
             return {}
         started = time.perf_counter()
@@ -13558,6 +13579,10 @@ def _install_qt_translations(app: QApplication) -> QTranslator | None:
     return translator
 
 
+#: ``view3d.PROBE_FLAG``: the argument that makes this process the offscreen-GL probe.
+PROBE_FLAG = "--probe-offscreen-gl"
+
+
 def main() -> int:
     # Answered before Qt is touched: --version has to work on a machine where the GUI
     # cannot start, since "it will not launch" is exactly when someone is asked which
@@ -13569,8 +13594,12 @@ def main() -> int:
     # Before Qt, and before anything else: this is the child process of
     # view3d.offscreen_gl_available, whose entire job is to find out whether VTK can open
     # an offscreen context here -- by crashing where a crash costs nothing if it cannot.
-    # Not a documented option; see PROBE_FLAG.
-    if view3d.PROBE_FLAG in sys.argv:
+    # Not a documented option; see PROBE_FLAG. Spelled here rather than read off view3d,
+    # because reading it would import VTK on every start to answer a question asked in
+    # one process of each run; tests/test_startup.py holds the two spellings together.
+    if PROBE_FLAG in sys.argv:
+        from . import view3d
+
         return view3d.probe_offscreen_gl()
 
     # Chosen before the window is built, because every menu label is translated once at

@@ -24,7 +24,6 @@ from perfboard_studio.step_export import Palette, Rgb, document_to_step
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import style_for
 from .moduleart import board_colour_for
-from .view3d import LEAD_RGB, net_colouring, wire_rgb
 
 
 def _rgb(colour: str) -> Rgb:
@@ -48,6 +47,10 @@ def _component_rgb(pitch: float) -> Callable[[ComponentInstance, Footprint], Rgb
 
 def step_palette(doc: PerfDocument) -> Palette:
     """The colours the 3D view paints this board with, as sRGB -- what STEP reads."""
+    # Here and not at the top: the window imports this module at start, and view3d
+    # is VTK. The colours are the 3D view's so a wire is one red in both.
+    from .view3d import LEAD_RGB, net_colouring, wire_rgb
+
     net_class, signal_index = net_colouring(doc)
 
     def wire(conductor: Conductor) -> Rgb:

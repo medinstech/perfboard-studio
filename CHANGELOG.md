@@ -95,6 +95,12 @@ closed without a bump.
 - **The README opens with three steps**: download it, draw a circuit or open an
   example, and press the button at the end of the step bar until the build guide opens.
   The two install links moved into the first step. In both languages.
+- **The window opens in about half the time.** It imported the 3D view -- VTK and numpy --
+  at start, for a panel that starts shut; it now imports it when the panel is first opened,
+  or a 3D picture is first asked for. Time from launch to a window on screen, from source
+  on a desktop: 1.2 s became 0.65 s. A test holds a window start to importing nothing 3D,
+  and another holds every method that draws in 3D to importing the view itself, which is
+  the one mistake here the type checker cannot see.
 - **The 3D view loads VTK in a third of the time.** It imported the whole of VTK -- forty
   modules, from the web exporter to volume rendering -- to draw with thirteen, and that
   was 425 of the 560 ms the window spent importing before it could show anything. It

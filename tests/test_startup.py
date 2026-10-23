@@ -124,3 +124,86 @@ def _pixels(path: Path) -> bytes:
     data = bytes(image.constBits())
     stride = image.bytesPerLine()
     return b"".join(data[y * stride : y * stride + row] for y in range(image.height()))
+
+
+# ---------------------------------------------------------------------------
+# The window imports no VTK until the 3D view is opened
+# ---------------------------------------------------------------------------
+
+#: The modules a window start must not import: the 3D view starts shut, and these were
+#: most of what the window imported before it could show anything even once view3d had
+#: stopped importing all of VTK.
+_ONLY_FOR_3D = ("perfboard_studio.ui.view3d", "vtkmodules", "numpy")
+
+
+def test_the_window_imports_no_vtk_until_the_3d_view_is_opened() -> None:
+    """``ui/main.py`` and everything it imports at the top, and nothing 3D among them."""
+    out = _run(
+        "import sys, perfboard_studio.ui.main\n"
+        f"print(sorted({{m.split('.')[0] if m.startswith(('vtk', 'numpy')) else m\n"
+        f"    for m in sys.modules if m.startswith({_ONLY_FOR_3D!r})}}))"
+    )
+    assert out.strip() == "[]", f"importing the window imported {out.strip()}"
+
+
+def test_every_function_that_draws_in_3d_imports_the_3d_view_itself() -> None:
+    """mypy cannot catch a missing one: it sees the TYPE_CHECKING import at the top.
+
+    So a method that names ``view3d`` and does not import it is a NameError that waits
+    for somebody to open the 3D panel. Read off the source -- every top-level function
+    and method of the two modules that dropped the import, nested functions covered by
+    the one they sit in, and annotations left out, because under ``from __future__ import
+    annotations`` they are never evaluated.
+    """
+    names = {"view3d", "LEAD_RGB", "net_colouring", "wire_rgb"}
+    unimported: list[str] = []
+    for module in ("main.py", "export_step.py"):
+        tree = ast.parse((SRC / "perfboard_studio" / "ui" / module).read_text(encoding="utf-8"))
+        for function in _outermost_functions(tree):
+            annotations = {
+                id(node)
+                for holder in ast.walk(function)
+                for part in _annotation_parts(holder)
+                for node in ast.walk(part)
+            }
+            used = {
+                node.id
+                for node in ast.walk(function)
+                if isinstance(node, ast.Name) and node.id in names and id(node) not in annotations
+            }
+            imported = {
+                alias.asname or alias.name
+                for node in ast.walk(function)
+                if isinstance(node, ast.ImportFrom)
+                for alias in node.names
+            }
+            if used - imported:
+                unimported.append(f"{module}::{function.name} uses {sorted(used - imported)}")
+    assert not unimported, "\n".join(unimported)
+
+
+def test_the_probe_flag_is_spelled_the_same_where_it_is_read_and_where_it_is_sent() -> None:
+    """``main`` reads it without importing view3d; ``view3d`` sends it to the child."""
+    from perfboard_studio.ui import main
+
+    assert main.PROBE_FLAG == view3d.PROBE_FLAG
+
+
+def _outermost_functions(tree: ast.Module) -> list[ast.FunctionDef]:
+    found: list[ast.FunctionDef] = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            found.append(node)
+        elif isinstance(node, ast.ClassDef):
+            found.extend(n for n in node.body if isinstance(n, ast.FunctionDef))
+    return found
+
+
+def _annotation_parts(node: ast.AST) -> list[ast.expr]:
+    if isinstance(node, ast.AnnAssign):
+        return [node.annotation]
+    if isinstance(node, ast.arg) and node.annotation is not None:
+        return [node.annotation]
+    if isinstance(node, ast.FunctionDef) and node.returns is not None:
+        return [node.returns]
+    return []
