@@ -11,10 +11,10 @@ symbol C3 polarised-capacitor c-elec-d6.3-p2 at 50.80,88.90 size 20.32x10.16 val
 symbol D1 diode d-do41 at 81.28,22.86 size 20.32x10.16 value='1N4007'
     pin 1 name='K' left 0.00,5.08
     pin 2 name='A' right 20.32,5.08
-symbol J1 connector hdr-1x2 at 81.28,86.36 size 20.32x15.24 value='Conn_01x02'
+symbol J1 connector hdr-1x2 at 81.28,86.36 size 20.32x15.24 value='DC IN'
     pin 1 name=None left 0.00,5.08
     pin 2 name=None left 0.00,10.16
-symbol J2 connector hdr-1x2 at 81.28,50.80 size 20.32x15.24 value='Conn_01x02'
+symbol J2 connector hdr-1x2 at 81.28,50.80 size 20.32x15.24 value='DC OUT'
     pin 1 name=None left 0.00,5.08
     pin 2 name=None left 0.00,10.16
 symbol LED1 led led-5mm at 144.78,53.34 size 20.32x10.16 value='LED'
@@ -80,11 +80,11 @@ label [value/centre] 60.96,100.08 100uF
 label [ref/centre] 91.44,20.95 D1
 label [value/centre] 91.44,34.04 1N4007
 label [ref/centre] 91.44,84.46 J1
-label [value/centre] 91.44,102.62 Conn_01x02
+label [value/centre] 91.44,102.62 DC IN
 label [pin/left] 87.63,91.44 1
 label [pin/left] 87.63,96.52 2
 label [ref/centre] 91.44,48.89 J2
-label [value/centre] 91.44,67.06 Conn_01x02
+label [value/centre] 91.44,67.06 DC OUT
 label [pin/left] 87.63,55.88 1
 label [pin/left] 87.63,60.96 2
 label [ref/centre] 154.94,51.43 LED1

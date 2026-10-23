@@ -26,7 +26,7 @@
     {
       "id": "c-a1",
       "ref": "A1",
-      "value": "Arduino_Nano_v3.x",
+      "value": "Arduino Nano",
       "footprintId": "mod-2x15-p6-r1-17.78x45.72x4-s8.5-o0x1.27",
       "anchor": {
         "col": 18,
@@ -233,7 +233,7 @@
     {
       "id": "c-sw1",
       "ref": "SW1",
-      "value": "SW_Push",
+      "value": "BUTTON",
       "footprintId": "sw-tactile-6x6",
       "anchor": {
         "col": 21,

@@ -108,6 +108,7 @@ class Example:
         family: BoardFamily = "double-sided-fr4",
         pin_names: dict[str, dict[str, str]] | None = None,
         labels: tuple[tuple[str, str], ...] = (),
+        values: dict[str, str] | None = None,
     ) -> None:
         self.stem = stem
         self.title = title
@@ -119,6 +120,11 @@ class Example:
         self.pin_names = pin_names or {}
         #: Words written on the board: (text, the ref it goes beside).
         self.labels = labels
+        #: What the parts list says where the netlist has a LIBRARY's name for a part --
+        #: "Conn_01x02", "SW_Push" -- by ref. A schematic tool exports the symbol's name when
+        #: nobody typed a value, and the .net is kept exactly as one exports it; the board
+        #: somebody opens says what the part is for.
+        self.values = values or {}
 
 
 CATALOGUE: tuple[Example, ...] = (
@@ -135,6 +141,7 @@ CATALOGUE: tuple[Example, ...] = (
             "LED1": "led-5mm",
             "J1": "hdr-1x2",
         },
+        values={"J1": "DC IN"},
     ),
     Example(
         stem="lm317-supply",
@@ -156,6 +163,7 @@ CATALOGUE: tuple[Example, ...] = (
             "J1": "hdr-1x2",
             "J2": "hdr-1x2",
         },
+        values={"J1": "DC IN", "J2": "DC OUT"},
     ),
     Example(
         stem="lpb1-booster",
@@ -195,6 +203,7 @@ CATALOGUE: tuple[Example, ...] = (
             "SW1": "sw-tactile-6x6",
             "C1": "c-disc-p2",
         },
+        values={"J1": "D0-D7", "J2": "POWER", "SW1": "BUTTON"},
     ),
     Example(
         stem="atmega328-relay",
@@ -240,6 +249,7 @@ CATALOGUE: tuple[Example, ...] = (
             "J2": {"1": "COM", "2": "NO", "3": "NC"},
         },
         labels=(("12V IN", "J1"), ("LOAD", "J2")),
+        values={"A1": "Arduino Nano", "SW1": "BUTTON"},
     ),
 )
 
@@ -329,7 +339,10 @@ def _the_design(example: Example, parsed, bus: CommandBus, lookup) -> bool:
             print(f"  {example.stem}: no such footprint for {unknown}")
             return False
         parts = tuple(
-            _told(example.footprints, example.pin_names, parsed, ref, f"c-{ref.lower()}")
+            _told(
+                example.footprints, example.pin_names, parsed, ref, f"c-{ref.lower()}",
+                example.values,
+            )
             for ref in refs
         )
         nets = parsed.nets
@@ -342,7 +355,7 @@ def _the_design(example: Example, parsed, bus: CommandBus, lookup) -> bool:
             AddPartPayload(
                 ref=suggestion.ref,
                 footprint_id=suggestion.footprint_id,
-                value=suggestion.value,
+                value=example.values.get(suggestion.ref, suggestion.value),
                 pin_names=(
                     tuple(example.pin_names[suggestion.ref].items())
                     if suggestion.ref in example.pin_names
@@ -372,6 +385,7 @@ def _told(
     parsed,
     ref: str,
     id: str,
+    values: dict[str, str] | None = None,
 ) -> AddPartPayload:
     """A part an example names the footprint of -- and, where its value or its symbol's
     name is a part the catalog knows IN THAT PACKAGE, the pin names and symbol an import
@@ -390,7 +404,8 @@ def _told(
     return AddPartPayload(
         ref=ref,
         footprint_id=footprint_id,
-        value=value,
+        # The catalog was asked about the value the netlist has, and the board shows this.
+        value=(values or {}).get(ref, value),
         pin_names=names,
         symbol=part.symbol if part is not None else None,
         id=id,

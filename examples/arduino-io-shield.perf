@@ -39,7 +39,7 @@
     {
       "id": "c-j1",
       "ref": "J1",
-      "value": "Conn_01x08",
+      "value": "D0-D7",
       "footprintId": "hdr-1x8",
       "anchor": {
         "col": 9,
@@ -52,7 +52,7 @@
     {
       "id": "c-j2",
       "ref": "J2",
-      "value": "Conn_01x06",
+      "value": "POWER",
       "footprintId": "hdr-1x6",
       "anchor": {
         "col": 0,
@@ -156,7 +156,7 @@
     {
       "id": "c-sw1",
       "ref": "SW1",
-      "value": "SW_Push",
+      "value": "BUTTON",
       "footprintId": "sw-tactile-6x6",
       "anchor": {
         "col": 9,

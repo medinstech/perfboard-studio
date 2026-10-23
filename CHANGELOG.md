@@ -29,7 +29,10 @@ closed without a bump.
   NE555, the LM317, the ATmega328P, the L7805, the BC547 and the diodes are named, and so
   is the NE555 in the blinker project, and ERC finds nothing wrong with any of them. No
   part moved and no wire changed.
-
+- **The examples' connectors and buttons say what they are for.** Where the netlist has a
+  library's name for a part because nobody typed a value -- "Conn_01x02", "SW_Push",
+  "Arduino_Nano_v3.x" -- the board now says "DC IN", "BUTTON", "Arduino Nano". The `.net`
+  files stay exactly as a schematic tool exports them.
 - **Eight more parts in the catalog, each pinned from its datasheet**: the ATtiny85, the
   LD1117V33 3.3 V regulator (pinned GND, OUT, IN -- not like a 7805, and its check says so),
   the TL072 and LM324 op-amps, the LM386 audio amplifier, the ULN2803A, the MAX7219 LED

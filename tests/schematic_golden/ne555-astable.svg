@@ -56,7 +56,7 @@
 <text x="73.66" y="89.535" font-size="1.7" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">C2</text>
 <text x="73.66" y="103.736" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">0.01uF</text>
 <text x="134.62" y="53.975" font-size="1.7" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">J1</text>
-<text x="134.62" y="73.256" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">Conn_01x02</text>
+<text x="134.62" y="73.256" font-size="1.4" fill="#444444" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">DC IN</text>
 <text x="130.81" y="61.31" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">1</text>
 <text x="130.81" y="66.39" font-size="1" fill="#444444" text-anchor="start" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">2</text>
 <text x="104.14" y="89.535" font-size="1.7" fill="#111111" text-anchor="middle" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-weight="bold">LED1</text>

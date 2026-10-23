@@ -82,7 +82,7 @@
     {
       "id": "c-j1",
       "ref": "J1",
-      "value": "Conn_01x02",
+      "value": "DC IN",
       "footprintId": "hdr-1x2",
       "anchor": {
         "col": 0,
@@ -95,7 +95,7 @@
     {
       "id": "c-j2",
       "ref": "J2",
-      "value": "Conn_01x02",
+      "value": "DC OUT",
       "footprintId": "hdr-1x2",
       "anchor": {
         "col": 1,
