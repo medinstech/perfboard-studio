@@ -25,6 +25,7 @@ should depend on it.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,8 @@ from perfboard_studio.connectivity import (
     extract_physical_nets,
     net_of_pin,
 )
+from perfboard_studio.geometry import all_pin_holes, hole_key
+from perfboard_studio.lvs import run_lvs
 from perfboard_studio.model import (
     Board,
     BoardSide,
@@ -47,17 +50,23 @@ from perfboard_studio.model import (
     ComponentInstance,
     Conductor,
     DocumentMeta,
+    EdgeConnector,
     Footprint,
     FootprintPin,
     HoleCoord,
     LeadBendConductor,
+    MountingHole,
+    Net,
+    NetNode,
     PerfDocument,
     Point2,
     Rotation,
     SolderTraceConductor,
     SpineSpec,
     StripConductor,
+    TrackCut,
     WireConductor,
+    contacts_every_path_hole,
 )
 
 # ---------------------------------------------------------------------------
@@ -244,6 +253,56 @@ def test_golden_case_count_is_fifteen() -> None:
     perf_files = sorted(GOLDEN_DIR.glob("*.perf"))
     assert len(perf_files) == 15
     assert {p.stem for p in perf_files} == set(GOLDEN_CASE_NAMES)
+
+
+#: Joins this engine makes and the TypeScript one did not: each a physical fact the
+#: original's model had no way to say. None of them is excluded from the comparison above,
+#: because no fixture holds the case -- and that is a TEST rather than an assumption. The
+#: day a regenerated fixture holds one, test_no_fixture_holds_a_join_the_original_did_not_make
+#: fails, instead of the byte-for-byte comparison quietly agreeing with a different rule.
+JOINED_BEYOND_TYPESCRIPT: dict[str, str] = {
+    "top-and-bottom-at-a-pad": (
+        "a conductor on the component side and copper on the solder side ending in one hole "
+        "that has a pad and no pin are one joint (connectivity pass 2b). A jumper's end "
+        "passes through the hole and is soldered underneath exactly like a component lead, "
+        "so it joins its hole's two sides for the same reason a pin does. REVERSES the "
+        "original's 'keeps a top-jumper from connecting the bottom side except through a "
+        "pin' (connectivity.test.ts), which treated two identical physical objects "
+        "differently and gave no reason anywhere"
+    ),
+}
+
+
+def _pad_meetings(doc: PerfDocument, lookup: FootprintLookup) -> list[HoleCoord]:
+    """The holes ``top-and-bottom-at-a-pad`` joins: a top conductor's contact and bottom copper
+    in one hole, with no pin there to have joined them already."""
+
+    def contacts(conductor: Conductor) -> tuple[HoleCoord, ...]:
+        path = conductor.path
+        if not path:
+            return ()
+        return path if contacts_every_path_hole(conductor) else (path[0], path[-1])
+
+    pins: set[str] = set()
+    for component in doc.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is not None:
+            pins.update(hole_key(at) for _pin, at in all_pin_holes(component, footprint))
+    top = {hole_key(h): h for c in doc.conductors if c.side == "top" for h in contacts(c)}
+    bottom = {hole_key(h) for c in doc.conductors if c.side == "bottom" for h in contacts(c)}
+    return sorted(
+        (h for key, h in top.items() if key in bottom and key not in pins),
+        key=lambda h: (h.row, h.col),
+    )
+
+
+@pytest.mark.parametrize("case_name", GOLDEN_CASE_NAMES)
+def test_no_fixture_holds_a_join_the_original_did_not_make(case_name: str) -> None:
+    """Why ``JOINED_BEYOND_TYPESCRIPT`` excludes nothing: eleven top wires in these fixtures
+    end in 22 holes without a pin, and none of those holes has copper from the solder side."""
+    doc, _expected = _load_golden(case_name)
+
+    assert _pad_meetings(doc, _FOOTPRINT_LOOKUP) == []
 
 
 # ---------------------------------------------------------------------------
@@ -510,10 +569,14 @@ def test_solder_trace_joins_both_components_pins_and_records_conductor_id() -> N
     assert net.conductor_ids == ("t1",)
 
 
-def test_top_jumper_does_not_bridge_to_bottom_side_without_a_pin() -> None:
+def test_a_top_jumper_joins_the_bottom_side_at_its_pad_as_a_pin_does() -> None:
+    """REVERSES the original's "keeps a top-jumper from connecting the bottom side except
+    through a pin" (connectivity.test.ts), on its own board: top jumper A-B, solder trace
+    A-C, no pin at A. A jumper's end passes through the hole and is soldered underneath
+    exactly like a component lead, so it joins its hole's two sides for the same reason a
+    pin does. The original treated the two identical physical objects differently and gave
+    no reason anywhere. See JOINED_BEYOND_TYPESCRIPT."""
     a, b, c = hole(0, 0), hole(1, 0), hole(2, 0)
-    # top-jumper A-B on top; unrelated solder-trace A-C on bottom. Nothing bridges
-    # top and bottom at A because there is no component pin there.
     doc = make_doc((), (top_jumper("j1", (a, b)), solder_trace("t1", (a, c))))
     lookup = make_lookup(())
 
@@ -523,9 +586,10 @@ def test_top_jumper_does_not_bridge_to_bottom_side_without_a_pin() -> None:
 
     assert net_top_a is not None
     assert net_bottom_a is not None
-    assert net_top_a.id != net_bottom_a.id
+    assert net_top_a.id == net_bottom_a.id
     assert PhysicalNodeRef(b, "top") in net_top_a.nodes
-    assert PhysicalNodeRef(c, "bottom") in net_bottom_a.nodes
+    assert PhysicalNodeRef(c, "bottom") in net_top_a.nodes
+    assert net_top_a.conductor_ids == ("j1", "t1")
 
 
 def test_deterministic_across_repeats_and_input_reordering() -> None:
@@ -585,3 +649,103 @@ def test_pin_holes_under_mirror_then_rotation() -> None:
     assert net2 is not None
     assert [n.hole for n in net1.nodes] == [anchor, anchor]
     assert [n.hole for n in net2.nodes] == [expected_pin2_hole, expected_pin2_hole]
+
+
+# ---------------------------------------------------------------------------
+# A pad is one joint, whichever side it is soldered from (JOINED_BEYOND_TYPESCRIPT)
+# ---------------------------------------------------------------------------
+
+
+def _jumper_between_two_traces(board: Board = BOARD) -> PerfDocument:
+    """P1 -- trace -- C1, a top jumper from C1 to C5, C5 -- trace -- P2. The jumper's ends
+    are pads only the traces use, so no lead is there to join the two sides."""
+    return dataclasses.replace(
+        make_doc(
+            (
+                make_component("c1", "P1", "fp1", hole(0, 0)),
+                make_component("c2", "P2", "fp1", hole(0, 4)),
+            ),
+            (
+                solder_trace("t1", (hole(0, 0), hole(1, 0), hole(2, 0))),
+                top_jumper("j1", (hole(2, 0), hole(2, 4))),
+                solder_trace("t2", (hole(2, 4), hole(1, 4), hole(0, 4))),
+            ),
+        ),
+        board=board,
+    )
+
+
+def test_a_top_jumper_ending_on_a_traces_pad_joins_the_trace() -> None:
+    """How a crossing is mended by hand: solder up to it, a jumper over the top, solder on.
+    The jumper's ends go down through their holes onto the traces' pads. Only a lead used to
+    join the two sides, so this board read as open, and the 15 fixtures never held one."""
+    doc = _jumper_between_two_traces()
+    lookup = make_lookup((one_pin_footprint("fp1"),))
+
+    assert _pad_meetings(doc, lookup) == [hole(2, 0), hole(2, 4)]
+    assert are_pins_connected(doc, lookup, PhysicalPinRef("P1", "1"), PhysicalPinRef("P2", "1"))
+
+
+@pytest.mark.parametrize("taken", ["a bore", "an undrilled finger", "a stripboard cut"])
+def test_nothing_joins_at_a_hole_with_no_copper(taken: str) -> None:
+    """The pad is what joins the two sides, so where there is none -- a mounting bore took
+    it, an edge-connector finger has no bore for the wire to go down, a cut drilled the strip
+    away -- the jumper's end and the copper below it are joined by nothing."""
+    lookup = make_lookup((one_pin_footprint("fp1"),))
+    if taken == "a bore":
+        doc = dataclasses.replace(
+            _jumper_between_two_traces(), mounting_holes=(MountingHole(id="mh1", at=hole(2, 0)),)
+        )
+    elif taken == "an undrilled finger":
+        doc = dataclasses.replace(
+            _jumper_between_two_traces(),
+            edge_connectors=(EdgeConnector(id="ec1", edge="top", start=2, count=1),),
+        )
+    else:
+        # Strips run down the columns: the jumper's C5 end is on P2's column strip below the
+        # cut, and C1 is in the cut itself, with the trace from P1 under it.
+        board = dataclasses.replace(BOARD, type="stripboard", strip_axis="vertical")
+        doc = dataclasses.replace(
+            _jumper_between_two_traces(board),
+            components=(
+                make_component("c1", "P1", "fp1", hole(0, 0)),
+                make_component("c2", "P2", "fp1", hole(2, 6)),
+            ),
+            conductors=(
+                solder_trace("t1", (hole(0, 0), hole(1, 0), hole(2, 0))),
+                top_jumper("j1", (hole(2, 0), hole(2, 4))),
+            ),
+            cuts=(TrackCut(id="cut-1", at=hole(2, 0)),),
+        )
+        uncut = dataclasses.replace(doc, cuts=())
+        assert are_pins_connected(uncut, lookup, PhysicalPinRef("P1", "1"), PhysicalPinRef("P2", "1"))
+
+    assert not are_pins_connected(doc, lookup, PhysicalPinRef("P1", "1"), PhysicalPinRef("P2", "1"))
+
+
+def test_lvs_sees_a_short_made_at_a_pad_from_both_sides() -> None:
+    """The half that builds a dead board: a top jumper landing on the pads of two nets'
+    traces shorts them, and while only a lead joined the sides LVS passed it."""
+    lookup = make_lookup((one_pin_footprint("fp1"),))
+    doc = dataclasses.replace(
+        make_doc(
+            (
+                make_component("c1", "P1", "fp1", hole(0, 0)),
+                make_component("c2", "P2", "fp1", hole(0, 2)),
+                make_component("c3", "P3", "fp1", hole(4, 4)),
+                make_component("c4", "P4", "fp1", hole(6, 4)),
+            ),
+            (
+                solder_trace("t1", (hole(0, 0), hole(0, 1), hole(0, 2))),
+                solder_trace("t2", (hole(4, 4), hole(5, 4), hole(6, 4))),
+                top_jumper("j1", (hole(0, 1), hole(5, 4))),
+            ),
+        ),
+        nets=(
+            Net(id="n1", name="A", nodes=(NetNode("P1", "1"), NetNode("P2", "1"))),
+            Net(id="n2", name="B", nodes=(NetNode("P3", "1"), NetNode("P4", "1"))),
+        ),
+    )
+
+    result = run_lvs(doc, lookup)
+    assert result.summary.shorts == 1, [issue.message for issue in result.issues]

@@ -1502,7 +1502,11 @@ every empty pad into a net, which is what the module's own docstring says not to
 side goes down through its hole and is soldered to the copper, as a lead is. Only the
 copper side used to count, so a link ending in a free hole joined nothing. LVS called
 that ordinary way of linking two strips an open, and could not see a short such a link
-made (`test_lvs_sees_the_short_a_free_hole_link_makes`).
+made (`test_lvs_sees_the_short_a_free_hole_link_makes`). The same holds at a pad on any
+board (connectivity's pass 2b): a jumper's end passes through the hole and is soldered
+underneath exactly like a lead, so it joins its hole's two sides as a pin does. The
+TypeScript engine joined them only through a pin, which is recorded as
+`JOINED_BEYOND_TYPESCRIPT` in `tests/test_connectivity.py`.
 
 `stripboard.py` owns the geometry, and one decision governs it: **a cut destroys the
 copper AT a hole** (`TrackCut.at`), because that is how a track is broken — a drill turned

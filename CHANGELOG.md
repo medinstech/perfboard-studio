@@ -432,6 +432,17 @@ closed without a bump.
   keeps it out, so the same board gives 8, and the six finished examples auto-placed on
   stripboard go from 132 to 32. A strip with no free hole left is still linked at a pin.
 
+- **A component-side jumper ending on a pad joins whatever is soldered to that pad
+  underneath.** A jumper's end passes through the hole and is soldered underneath exactly
+  like a component lead, but only a lead was counted as joining a hole's two sides. A
+  jumper mending a crossing -- trace up to the obstacle, a jumper over the top, trace on
+  -- read as joining nothing, so LVS could call a working board open and could miss a
+  short made through such a pad. A jumper's end now joins its pad's two sides as a pin
+  does, except where the hole has no copper (a bore, an undrilled finger, a cut). This
+  reverses the original engine's own rule, "keeps a top-jumper from connecting the bottom
+  side except through a pin"; none of the fifteen reference boards holds such a pad, and
+  a test now says so. If LVS passed a board of yours with hand-drawn jumpers, run it again.
+
 - **Enter in Add a Part takes the part the filter names.** The catalog is listed first and
   searched by what a part does as well as by its name, so typing "LED" and pressing Enter
   added a MAX7219, an LED display driver with 24 pins. Enter now takes the first row whose

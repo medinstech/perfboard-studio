@@ -13,6 +13,13 @@ Connection semantics -- the crux of this module:
  a) Every component pin occupies a hole. Its lead passes through the board, so it
     creates nodes at that hole on BOTH sides and unions them together.
 
+ a') A wire's end passes through its hole and is soldered underneath exactly like a
+    component lead, so it joins its hole's two sides for the same reason a pin does: a
+    top jumper ending on a trace's pad joins the trace. The TypeScript engine joined the
+    sides only through a pin and gave no reason; that is reversed here, and recorded as
+    JOINED_BEYOND_TYPESCRIPT in tests/test_connectivity.py. Not where the hole has no
+    copper -- a bore took the pad, an undrilled finger, a stripboard cut.
+
  b) For 'solder-trace', 'solder-trace-wired' and 'strip': EVERY hole along ``path`` is
     an electrical contact -- the conductor is soldered down at each pad it crosses. All
     consecutive holes on the conductor's side are unioned.
@@ -47,7 +54,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from itertools import pairwise
 
-from .geometry import all_pin_holes, hole_key
+from .geometry import all_pin_holes, hole_key, unusable_holes
 from .model import (
     BoardSide,
     ConductorId,
@@ -56,7 +63,7 @@ from .model import (
     PerfDocument,
     contacts_every_path_hole,
 )
-from .stripboard import board_joins_holes, segment_of
+from .stripboard import board_joins_holes, cut_holes, segment_of
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -226,6 +233,7 @@ def _extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[P
 
     # --- Pass 1: component pins bridge top and bottom at their hole (rule a). ---
     pin_entries: list[tuple[PhysicalPinRef, str]] = []
+    pin_holes: set[str] = set()
 
     for component in doc.components:
         footprint = lookup(component.footprint_id)
@@ -236,6 +244,7 @@ def _extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[P
             top_key = touch(hole, "top")
             bottom_key = touch(hole, "bottom")
             ds.union(top_key, bottom_key)
+            pin_holes.add(hole_key(hole))
             pin_entries.append(
                 (PhysicalPinRef(component_ref=component.ref, pin=pin.number), top_key)
             )
@@ -268,6 +277,34 @@ def _extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[P
 
         if contact is not None:
             conductor_contact[conductor.id] = contact
+
+    # --- Pass 2b: a hole's pad joins what is soldered to it from either side (rule a'). ---
+    #
+    # A wire's end on the component side passes through its hole and is soldered underneath
+    # exactly like a component lead -- to the pad a trace or a wire on the copper side in the
+    # same hole is soldered to -- so it joins the hole's two sides for the same reason a pin
+    # does. Only a pin used to, as the original engine had it, so a top jumper ending on a
+    # trace's pad joined nothing: LVS called that board open, and could not see a short made
+    # through it. Where the hole has no copper left (a bore took its pad, it is an undrilled
+    # finger, a cut took the strip there) nothing joins, as nothing would.
+    #
+    # No node is ADDED, only two that are already here joined, which is why the fifteen
+    # golden fixtures -- none of which has such a hole -- keep every node they had. The
+    # TypeScript engine did not join them; see JOINED_BEYOND_TYPESCRIPT in
+    # tests/test_connectivity.py.
+    meeting = sorted(
+        key
+        for key, info in node_info.items()
+        if info.side == "top"
+        and hole_key(info.hole) not in pin_holes
+        and _node_key(info.hole, "bottom") in node_info
+    )
+    if meeting:
+        no_copper = unusable_holes(doc) | cut_holes(doc)
+        for key in meeting:
+            hole = node_info[key].hole
+            if hole_key(hole) not in no_copper:
+                ds.union(key, _node_key(hole, "bottom"))
 
     # --- Pass 3: the board's own joins (stripboard and breadboard only). ---
     #
