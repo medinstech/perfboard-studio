@@ -10218,14 +10218,12 @@ class MainWindow(QMainWindow):
         document = self.bus.document
         options = PlacementOptions(seed=self._place_seed)
         self._place_seed += 1
-        t0 = time.perf_counter()
         plan = self._run_planner(
             t("Trying arrangements, and routing each one to compare them…"),
             lambda should_stop: plan_placement(
                 document, self.lookup, options, should_stop=should_stop
             ),
         )
-        elapsed = (time.perf_counter() - t0) * 1000
         if plan is None:
             return
 
@@ -10234,13 +10232,13 @@ class MainWindow(QMainWindow):
             # of work, and one that vanished while somebody looked back at the board read
             # exactly like the button doing nothing.
             self.statusBar().showMessage(
-                f"{say(describe_placement(plan))} ({elapsed:.0f} ms). "
+                f"{say(describe_placement(plan))}  "
                 + t("Pressing Auto-place again searches from another seed."),
                 0,
             )
             return
 
-        if not self._confirm_placement(plan, elapsed):
+        if not self._confirm_placement(plan):
             return
 
         result = self.bus.dispatch("component.moveMany", plan.payload())
@@ -10261,7 +10259,7 @@ class MainWindow(QMainWindow):
         )
         self.statusBar().showMessage(f"{say(describe_placement(plan))}{note}", 0)
 
-    def _confirm_placement(self, plan: PlacementPlan, elapsed_ms: float) -> bool:
+    def _confirm_placement(self, plan: PlacementPlan) -> bool:
         moving = t("{moved} of {movable} movable part(s) move").format(
             moved=len(plan.changes), movable=plan.movable
         )
@@ -10304,7 +10302,7 @@ class MainWindow(QMainWindow):
 
         box = QMessageBox(self)
         box.setWindowTitle(t("Apply this placement?"))
-        box.setText(f"<b>{say(describe_placement(plan))}</b>  <span>({elapsed_ms:.0f} ms)</span>")
+        box.setText(f"<b>{say(describe_placement(plan))}</b>")
         box.setInformativeText("\n".join(detail))
         box.setStandardButtons(QMessageBox.StandardButton.Apply | QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(QMessageBox.StandardButton.Apply)
@@ -10427,7 +10425,6 @@ class MainWindow(QMainWindow):
             return
 
         document = self.bus.document
-        t0 = time.perf_counter()
         plan = self._run_planner(
             t("Ripping up and routing again…"),
             lambda _should_stop: plan_reroute(
@@ -10435,12 +10432,11 @@ class MainWindow(QMainWindow):
                 options=self._autoroute_options(),
             ),
         )
-        elapsed = (time.perf_counter() - t0) * 1000
         if plan is None:
             return
 
         if plan.is_empty:
-            self.statusBar().showMessage(f"{t('Nothing to re-route')} ({elapsed:.0f} ms)", 6000)
+            self.statusBar().showMessage(t("Nothing to re-route"), 6000)
             return
 
         removing = set(plan.remove_ids)
@@ -10450,10 +10446,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"{why + '  ' if why else ''}"
                 + t(
-                    "Routed again, and it came out exactly as it is ({elapsed:.0f} ms). "
+                    "Routed again, and it came out exactly as it is. "
                     "A different Route ▸ Preferred Connection or Route ▸ Crossings gives a "
                     "different routing."
-                ).format(elapsed=elapsed),
+                ),
                 0,
             )
             return
@@ -10484,7 +10480,7 @@ class MainWindow(QMainWindow):
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
         self._nets_from_old_layout -= rerouted
-        self.statusBar().showMessage(f"{say(describe_reroute(plan))}  ({elapsed:.0f} ms)", 0)
+        self.statusBar().showMessage(say(describe_reroute(plan)), 0)
         self._report_unrouted_items(
             [item for outcome in plan.nets for item in outcome.unrouted]
         )
@@ -10574,7 +10570,6 @@ class MainWindow(QMainWindow):
         document = self.bus.document
         options = self._autoroute_options()
         sweep = self._routing_style == "best"
-        t0 = time.perf_counter()
         if sweep:
             best = self._run_planner(
                 t("Routing every style…"),
@@ -10591,7 +10586,6 @@ class MainWindow(QMainWindow):
                     document, self.lookup, options, only_net_ids=only_net_ids
                 ),
             )
-        elapsed = (time.perf_counter() - t0) * 1000
         if plan is None:
             return
         cleared_note = (
@@ -10626,7 +10620,7 @@ class MainWindow(QMainWindow):
                 )
                 return
             self.statusBar().showMessage(
-                f"{t('Nothing to route:')} {say(describe_plan(plan))}{cleared_note} ({elapsed:.0f} ms)",
+                f"{t('Nothing to route:')} {say(describe_plan(plan))}{cleared_note}",
                 8000,
             )
             return
@@ -10650,7 +10644,7 @@ class MainWindow(QMainWindow):
         # miss (PLAN.md Sec 13), so they go in the status line and, if there are any, into a
         # dialog that names each one.
         self.statusBar().showMessage(
-            f"{say(describe_plan(plan))}{cleared_note}{style_note}  ({elapsed:.0f} ms)", 0
+            f"{say(describe_plan(plan))}{cleared_note}{style_note}", 0
         )
         self._report_unrouted(plan)
 
@@ -10664,12 +10658,10 @@ class MainWindow(QMainWindow):
         """
         document = self.bus.document
         wire_path = self._autoroute_options().router.wire_path
-        t0 = time.perf_counter()
         plan = self._run_planner(
             t("Planning jumpers…") if has_breadboard_pattern(document.board) else t("Planning cuts and links…"),
             lambda _should_stop: plan_joined_board(document, self.lookup, only_net_ids, wire_path),
         )
-        elapsed = (time.perf_counter() - t0) * 1000
         if plan is None:
             return
 
@@ -10680,7 +10672,7 @@ class MainWindow(QMainWindow):
         )
         if plan.is_empty:
             self.statusBar().showMessage(
-                f"{say(describe_strip_plan(plan))} ({elapsed:.0f} ms){cleared_note}", 8000
+                f"{say(describe_strip_plan(plan))}{cleared_note}", 8000
             )
             self._report_strip_problems(plan)
             return
@@ -10691,7 +10683,7 @@ class MainWindow(QMainWindow):
             return
 
         self.statusBar().showMessage(
-            f"{say(describe_strip_plan(plan))}  ({elapsed:.0f} ms){cleared_note}", 0
+            f"{say(describe_strip_plan(plan))}{cleared_note}", 0
         )
         self._report_strip_problems(plan)
 
@@ -10706,16 +10698,14 @@ class MainWindow(QMainWindow):
         """
         document = self.bus.document
         wire_path = self._autoroute_options().router.wire_path
-        t0 = time.perf_counter()
         plan = self._run_planner(
             t("Ripping up and routing again…"),
             lambda _should_stop: plan_joined_reroute(document, self.lookup, only_net_ids, wire_path),
         )
-        elapsed = (time.perf_counter() - t0) * 1000
         if plan is None:
             return
         if plan.is_empty:
-            self.statusBar().showMessage(f"{t('Nothing to re-route')} ({elapsed:.0f} ms)", 6000)
+            self.statusBar().showMessage(t("Nothing to re-route"), 6000)
             self._report_strip_problems(plan)
             return
 
@@ -10728,9 +10718,9 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"{why + '  ' if why else ''}"
                 + t(
-                    "Planned again, and it came out exactly as it is ({elapsed:.0f} ms). "
+                    "Planned again, and it came out exactly as it is. "
                     "Moving a part is what gives a different one."
-                ).format(elapsed=elapsed),
+                ),
                 0,
             )
             return
@@ -10757,7 +10747,7 @@ class MainWindow(QMainWindow):
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
         self._nets_from_old_layout -= rerouted
-        self.statusBar().showMessage(f"{say(describe_strip_plan(plan))}  ({elapsed:.0f} ms)", 0)
+        self.statusBar().showMessage(say(describe_strip_plan(plan)), 0)
         self._report_strip_problems(plan)
 
     def _report_strip_problems(self, plan: StripboardPlan) -> None:

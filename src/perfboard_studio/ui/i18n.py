@@ -545,10 +545,10 @@ TURKISH: Mapping[str, str] = {
     "Everything is routed already, so Autoroute plans it again.": (
         "Her şey zaten yönlendirilmiş; Otomatik Yönlendir hepsini yeniden planlıyor."
     ),
-    "Routed again, and it came out exactly as it is ({elapsed:.0f} ms). "
+    "Routed again, and it came out exactly as it is. "
     "A different Route ▸ Preferred Connection or Route ▸ Crossings gives a "
     "different routing.": (
-        "Yeniden yönlendirildi ve tıpatıp aynısı çıktı ({elapsed:.0f} ms). Farklı bir "
+        "Yeniden yönlendirildi ve tıpatıp aynısı çıktı. Farklı bir "
         "yönlendirme için Yönlendir ▸ Tercih Edilen Bağlantı ya da Yönlendir ▸ Kesişmeler "
         "ayarını değiştirin."
     ),
@@ -564,9 +564,9 @@ TURKISH: Mapping[str, str] = {
         "satır boyunca ve bir sütun aşağı, bir parçanın altından değil etrafından. "
         "Kapalıyken her jumper klipsten klipse tek bir düz parçadır."
     ),
-    "Planned again, and it came out exactly as it is ({elapsed:.0f} ms). "
+    "Planned again, and it came out exactly as it is. "
     "Moving a part is what gives a different one.": (
-        "Yeniden planlandı ve tıpatıp aynısı çıktı ({elapsed:.0f} ms). Farklı bir sonucu "
+        "Yeniden planlandı ve tıpatıp aynısı çıktı. Farklı bir sonucu "
         "bir parçayı taşımak verir."
     ),
     "Nothing to re-route": "Yeniden yönlendirilecek bir şey yok",

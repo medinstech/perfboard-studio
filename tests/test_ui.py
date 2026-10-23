@@ -1749,7 +1749,7 @@ def test_autoplace_asks_before_moving_the_users_board(monkeypatch) -> None:
     window = _window_on(_load_dense())
     before = window.bus.document
 
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan, ms: False)
+    monkeypatch.setattr(window, "_confirm_placement", lambda plan: False)
     window.on_autoplace()
 
     assert window.bus.document is before
@@ -1760,7 +1760,7 @@ def test_autoplace_commits_through_the_bus_as_one_undo_step(monkeypatch) -> None
     window = _window_on(_load_dense())
     before = window.bus.document
 
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan, ms: True)
+    monkeypatch.setattr(window, "_confirm_placement", lambda plan: True)
     window.on_autoplace()
 
     assert window.bus.document is not before
@@ -1778,7 +1778,7 @@ def test_every_press_of_auto_place_searches_from_a_new_seed(monkeypatch) -> None
     from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan, ms: False)
+    monkeypatch.setattr(window, "_confirm_placement", lambda plan: False)
     seeds: list[int] = []
     real = main_module.plan_placement
     monkeypatch.setattr(
@@ -1843,7 +1843,7 @@ def test_autoplace_on_an_empty_board_says_so_rather_than_running(monkeypatch) ->
         )
     )
     called = []
-    monkeypatch.setattr(window, "_confirm_placement", lambda plan, ms: called.append(1) or True)
+    monkeypatch.setattr(window, "_confirm_placement", lambda plan: called.append(1) or True)
 
     window.on_autoplace()
 
@@ -13223,6 +13223,31 @@ def test_the_findings_and_the_status_bar_colour_a_finding_by_one_rule() -> None:
     # Every state the rule tells apart was reached, or the test would pass on less.
     for reached in [("open", "wiring"), ("short", "wiring"), ("short", "wired")]:
         assert reached in seen, (reached, sorted(seen))
+
+
+def test_what_routing_says_carries_no_timing(monkeypatch) -> None:
+    """"6/6 nets routed… (91 ms)": how long the router took is a number for whoever tunes
+    it, not for somebody reading whether their board is wired -- which is why the DRC count
+    lost its milliseconds to a tooltip. Perfboard and stripboard both."""
+    import re
+
+    example = _example_document("ne555-astable")
+    strips = dataclasses.replace(
+        example,
+        board=dataclasses.replace(example.board, type="stripboard", strip_axis="horizontal"),
+        conductors=(),
+    )
+    # What could not be routed is said in a dialog, which would wait for a click forever.
+    monkeypatch.setattr("perfboard_studio.ui.main.QMessageBox.information", lambda *args, **kwargs: None)
+    for doc in (_golden_document("ne555"), strips):
+        window = _window_on(doc)
+        try:
+            window.on_autoroute_all()
+            said = window.statusBar().currentMessage()
+            assert said, doc.board.type
+            assert not re.search(r"\d ms\b", said), said
+        finally:
+            _close(window)
 
 
 @pytest.mark.parametrize("footprint_id", ["led-3mm", "led-5mm", "led-10mm"])

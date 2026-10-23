@@ -300,6 +300,12 @@ closed without a bump.
   `tests/test_docs.py` fails on a section that list does not name, and on CLAUDE.md
   growing past 40 000 characters.
 
+- **What placing and routing say on the status bar no longer ends in milliseconds.** "6/6
+  nets routed… (91 ms)": how long the router took is a number for whoever tunes it, not
+  for somebody reading whether their board is wired, which is why the DRC count lost its
+  milliseconds to a tooltip earlier. The question before applying a placement lost its
+  milliseconds too.
+
 ### Fixed
 
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,
