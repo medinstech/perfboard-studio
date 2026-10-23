@@ -32,6 +32,8 @@ shows beside the part. A part whose pinout differs between makers is not in here
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -90,6 +92,9 @@ class CatalogPart:
     source: str = ""
     #: What to check on the part in hand, when something about it varies. Shown to the user.
     check: str = ""
+    #: Words somebody looks for it by that its name and summary do not say: "stepper" for
+    #: the chip a 28BYJ-48 hangs off. Searched, never shown.
+    aliases: tuple[str, ...] = ()
 
     @property
     def placed_value(self) -> str:
@@ -346,7 +351,8 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("ds18b20", "DS18B20", "sensor", "to92",
                 "Temperature sensor, 1-Wire, needs a 4.7k pull-up on DQ",
                 _legs("GND", "DQ", "VDD"), ref_prefix="U",
-                source=f"Analog Devices DS18B20 datasheet; {_TO92_ORDER}", check=_CHECK_LEGS),
+                source=f"Analog Devices DS18B20 datasheet; {_TO92_ORDER}", check=_CHECK_LEGS,
+                aliases=("one-wire",)),
     # The bare sensors, four legs in a row on 2.54 mm and the body standing on them: a box
     # with the legs along its width, as wide and as thick as the sensor and as tall.
     CatalogPart("dht11", "DHT11", "sensor", "box-4x1-p1-r1-12x5.5x15.5",
@@ -386,9 +392,11 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ref_prefix="U", source="TI LM393 datasheet, P package"),
     CatalogPart("6n137", "6N137", "ic", "dip-8", "High-speed optocoupler, 10 Mbit/s",
                 _legs("NC", "A", "K", "NC", "GND", "VO", "VE", "VCC"),
-                ref_prefix="U", source="Broadcom 6N137 datasheet"),
+                ref_prefix="U", source="Broadcom 6N137 datasheet",
+                aliases=("opto-isolator",)),
     CatalogPart("pc817", "PC817", "ic", "dip-4", "Optocoupler, transistor output",
-                _legs("A", "K", "E", "C"), ref_prefix="U", source="Sharp PC817 datasheet"),
+                _legs("A", "K", "E", "C"), ref_prefix="U", source="Sharp PC817 datasheet",
+                aliases=("opto-isolator",)),
     CatalogPart("mcp2551", "MCP2551", "ic", "dip-8", "CAN transceiver, 5 V, 1 Mbit/s",
                 _legs("TXD", "VSS", "VDD", "RXD", "VREF", "CANL", "CANH", "RS"),
                 ref_prefix="U", source="Microchip MCP2551 datasheet, PDIP"),
@@ -403,11 +411,13 @@ CATALOG: tuple[CatalogPart, ...] = (
                 "Seven Darlington sinks, 50 V, 500 mA, with flyback diodes",
                 _legs("IN1", "IN2", "IN3", "IN4", "IN5", "IN6", "IN7", "GND",
                       "COM", "OUT7", "OUT6", "OUT5", "OUT4", "OUT3", "OUT2", "OUT1"),
-                ref_prefix="U", source="TI ULN2003A datasheet, N package"),
+                ref_prefix="U", source="TI ULN2003A datasheet, N package",
+                aliases=("stepper", "28BYJ-48")),
     CatalogPart("l293d", "L293D", "ic", "dip-16", "Dual H-bridge, 600 mA, with clamp diodes",
                 _legs("EN12", "1A", "1Y", "GND", "GND", "2Y", "2A", "VCC2",
                       "EN34", "3A", "3Y", "GND", "GND", "4Y", "4A", "VCC1"),
                 ref_prefix="U", source="TI L293D datasheet, NE package",
+                aliases=("motor driver",),
                 check="The four GND pins are also its heatsink: solder them to a copper area."),
     CatalogPart("mcp2515", "MCP2515", "ic", "dip-18", "CAN controller, SPI",
                 _legs("TXCAN", "RXCAN", "CLKOUT", "TX0RTS", "TX1RTS", "TX2RTS", "OSC2",
@@ -531,14 +541,83 @@ def catalog_part(part_id: str) -> CatalogPart | None:
     return _BY_ID.get(part_id.strip().lower())
 
 
+#: A maker's letters in front of a part number, as a bag or a value prints them: SN74HC595N
+#: is TI's 74HC595 and L7805CV is ST's 7805. The importer's list (``parsers.kicad_parts``)
+#: and TI's SN, which a search box meets more often than a netlist does.
+_MAKER_PREFIX = re.compile(r"^(?:sn|lm|mc|ua|ka|l)(?=\d)")
+
+
+def _squeezed(text: str) -> str:
+    """Letters and digits only: "HC-SR04", "hc sr04" and "HCSR04" are one word, and
+    "+3.3 V" is "33v"."""
+    return re.sub(r"[\W_]+", "", text)
+
+
+def part_matches(
+    part: CatalogPart,
+    text: str,
+    *,
+    also: str = "",
+    fold: Callable[[str], str] = str.lower,
+) -> bool:
+    """Whether every word of ``text`` finds this part -- the one answer for the MCP
+    server's ``list_catalog`` and the window's Parts panel, which passes the summary and
+    the heading in its own language as ``also`` and its own ``fold`` for the Turkish i.
+
+    A word finds a part three ways, because a search box is typed by somebody holding the
+    part or reading a parts list:
+
+    * it is IN what the part says about itself -- id, name, kind, aliases, summary;
+    * it is in there once punctuation and spaces are taken out of both, so "opamp" finds
+      "op-amp" and "5v" finds "+5 V";
+    * it is the part's NUMBER with a package or a maker's letters on: "LM358N", "NE555P",
+      "SN74HC595N". What follows the number may not be another digit, so an LM350 is not
+      an LM35 -- the importer's rule (``parsers.kicad_parts.catalog_part_for``).
+    """
+    return _finds(part, text, (part.summary, also), fold)
+
+
+def names_part(part: CatalogPart, text: str, *, fold: Callable[[str], str] = str.lower) -> bool:
+    """Whether every word of ``text`` finds this part in what it is CALLED -- id, name, kind
+    and aliases -- and not only in what its summary says about it. "switch" names a push
+    button and is merely a word in a 2N2222A's "switching", and the button is what somebody
+    typing it wants first."""
+    return _finds(part, text, (), fold)
+
+
+def _finds(
+    part: CatalogPart, text: str, said: tuple[str, ...], fold: Callable[[str], str]
+) -> bool:
+    words = fold(text).split()
+    if not words:
+        return True
+    haystack = fold(" ".join((part.id, part.name, part.category, *part.aliases, *said)))
+    squeezed = _squeezed(haystack)
+    numbers = {_squeezed(fold(number)) for number in (part.id, part.placed_value)}
+    numbers = {number for number in numbers if len(number) >= 4}
+    return all(_word_finds(word, haystack, squeezed, numbers) for word in words)
+
+
+def _word_finds(word: str, haystack: str, squeezed: str, numbers: set[str]) -> bool:
+    if word in haystack:
+        return True
+    plain = _squeezed(word)
+    # A word that is all punctuation -- a lone "-" -- says nothing to look for.
+    if not plain or plain in squeezed:
+        return True
+    for form in dict.fromkeys((plain, _MAKER_PREFIX.sub("", plain))):
+        for number in numbers:
+            if form.startswith(number) and not form[len(number) : len(number) + 1].isdigit():
+                return True
+    return False
+
+
 def search_catalog(text: str = "", category: CatalogCategory | None = None) -> list[CatalogPart]:
-    """Parts whose id, name or summary contain every word of ``text``, in catalog order."""
-    words = text.lower().split()
-    found = []
-    for part in CATALOG:
-        if category is not None and part.category != category:
-            continue
-        haystack = f"{part.id} {part.name} {part.summary} {part.category}".lower()
-        if all(word in haystack for word in words):
-            found.append(part)
-    return found
+    """Parts every word of ``text`` finds (``part_matches``): those it NAMES first
+    (``names_part``), then the rest, each in catalog order."""
+    found = [
+        part
+        for part in CATALOG
+        if (category is None or part.category == category) and part_matches(part, text)
+    ]
+    return sorted(found, key=lambda part: not names_part(part, text))

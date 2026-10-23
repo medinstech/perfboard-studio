@@ -19,6 +19,7 @@ from perfboard_studio.catalog import (
     CATEGORY_ORDER,
     catalog_part,
     free_reference,
+    part_matches,
     search_catalog,
 )
 from perfboard_studio.footprints import get_footprint
@@ -128,6 +129,63 @@ def test_search_matches_the_name_the_summary_and_the_kind() -> None:
     assert {part.category for part in search_catalog(category="regulator")} == {"regulator"}
     assert catalog_part("  BC547 ") is catalog_part("bc547")
     assert catalog_part("nothing-like-it") is None
+
+
+@pytest.mark.parametrize(
+    ("typed", "found"),
+    [
+        # What is printed on the part or the bag: the number with a package letter, a
+        # maker's prefix, or both.
+        ("LM358N", "lm358"),
+        ("NE555P", "ne555"),
+        ("74HC595N", "74hc595"),
+        ("SN74HC595N", "74hc595"),
+        ("L7805CV", "7805"),
+        ("LM7805", "7805"),
+        ("BC547B", "bc547"),
+        # Hyphens and spaces are not what anybody remembers about a word.
+        ("opamp", "lm358"),
+        ("op amp", "lm358"),
+        ("5v regulator", "7805"),
+        ("opto isolator", "pc817"),
+        # Words a part is looked for by that its summary does not say.
+        ("stepper", "uln2003a"),
+        ("28BYJ-48", "uln2003a"),
+        ("motor driver", "l293d"),
+        ("ds18b20 one wire", "ds18b20"),
+    ],
+)
+def test_a_part_is_found_by_what_somebody_would_type(typed, found) -> None:
+    """Every one of these found nothing before the search learned to read a word the way
+    a person types it."""
+    assert found in [part.id for part in search_catalog(typed)]
+
+
+@pytest.mark.parametrize("typed", ["LM350", "LM3580", "BC5470", "10k", "100n"])
+def test_a_different_number_is_not_the_same_part(typed) -> None:
+    """A package letter after the number is the same part; another DIGIT is another part --
+    an LM350 is a regulator and not an LM35 -- and a quantity is no part at all."""
+    assert search_catalog(typed) == []
+
+
+def test_a_part_whose_name_says_it_comes_before_one_whose_summary_does() -> None:
+    """"switch" is a push button's name and only a word in the 2N2222A's "switching"."""
+    assert [part.id for part in search_catalog("switch")] == ["tact-6x6", "tact-12x12", "2n2222a"]
+    # With nothing typed, nothing moves.
+    assert search_catalog("") == list(CATALOG)
+
+
+def test_the_window_can_hand_the_search_its_own_words_and_its_own_letters() -> None:
+    """The Parts panel passes the summary and heading in its own language, and its own
+    fold for the Turkish i."""
+    lm358 = catalog_part("lm358")
+    assert lm358 is not None
+    assert not part_matches(lm358, "işlemsel")
+    assert part_matches(lm358, "işlemsel yükselteç", also="Çift işlemsel yükselteç")
+    # "ISI".lower() is "isi" and "ısı".lower() is "ısı": only the window's fold joins them.
+    dotless = str.maketrans({"I": "i", "ı": "i", "İ": "i"})
+    assert not part_matches(lm358, "ISI", also="ısı")
+    assert part_matches(lm358, "ISI", also="ısı", fold=lambda text: text.translate(dotless).lower())
 
 
 def test_a_free_reference_counts_the_board_and_the_design() -> None:
