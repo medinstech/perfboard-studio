@@ -85,6 +85,9 @@ closed without a bump.
   mentions them, so "switch" lists the push buttons ahead of the 2N2222A. The Parts panel
   and `list_catalog` search one way, through `catalog.part_matches` -- the panel used to
   look for the whole text as one piece, so "op amp" found nothing there.
+- **The README opens with three steps**: download it, draw a circuit or open an
+  example, and press the button at the end of the step bar until the build guide opens.
+  The two install links moved into the first step. In both languages.
 
 ### Fixed
 

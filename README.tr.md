@@ -17,9 +17,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/medinstech/perfboard-studio/releases/latest"><b>İndir</b></a>
-  &nbsp;·&nbsp; <a href="#çalıştırmak"><b>uv tool install perfboard-studio</b></a>
-  &nbsp;·&nbsp; <a href="./docs/MCP.md">MCP sunucusu</a>
+  <b>1.</b> Windows, macOS ya da Linux için kurulum dosyasını <a href="https://github.com/medinstech/perfboard-studio/releases/latest"><b>indirin</b></a> — ya da <a href="#çalıştırmak"><code>uv tool install perfboard-studio</code></a><br>
+  <b>2.</b> Şemada yeni bir devre çizin ya da başlangıç ekranındaki örneklerden birini açın<br>
+  <b>3.</b> Montaj rehberi açılana kadar adım çubuğunun sonundaki düğmeye basın — sıradakinin adını hep o söyler
+</p>
+
+<p align="center">
+  <a href="./docs/MCP.md">MCP sunucusu</a>
   &nbsp;·&nbsp; <a href="#ya-da-hazır-bir-kart-açın">Örnek kartlar</a>
   &nbsp;·&nbsp; <a href="./CHANGELOG.md">Changelog</a>
   &nbsp;·&nbsp; <a href="./README.md">English</a>

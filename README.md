@@ -17,9 +17,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/medinstech/perfboard-studio/releases/latest"><b>Download</b></a>
-  &nbsp;·&nbsp; <a href="#running-it"><b>uv tool install perfboard-studio</b></a>
-  &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md">MCP server</a>
+  <b>1.</b> <a href="https://github.com/medinstech/perfboard-studio/releases/latest"><b>Download</b></a> the installer for Windows, macOS or Linux — or <a href="#running-it"><code>uv tool install perfboard-studio</code></a><br>
+  <b>2.</b> Draw a new circuit on the sheet, or open one of the examples the start screen lists<br>
+  <b>3.</b> Press the button at the end of the step bar until the build guide opens — it always names what comes next
+</p>
+
+<p align="center">
+  <a href="https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md">MCP server</a>
   &nbsp;·&nbsp; <a href="#or-open-one-that-is-already-built">Example boards</a>
   &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard-studio/blob/main/CHANGELOG.md">Changelog</a>
   &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard-studio/blob/main/README.tr.md">Türkçe</a>
