@@ -135,6 +135,18 @@ def test_claude_md_lists_every_section_of_the_architecture() -> None:
         assert target in kept, f"ARCHITECTURE.md links to CLAUDE.md#{target}, which is no heading"
 
 
+def test_the_readmes_count_the_mcp_tools_as_docs_mcp_does() -> None:
+    """docs/MCP.md's count is held to the server by tests/test_mcp.py, and nothing held the
+    READMEs to docs/MCP.md: they still said 54 tools when it said 57."""
+    mcp_doc = (REPO_ROOT / "docs" / "MCP.md").read_text(encoding="utf-8")
+    stated = re.search(r"^(\d+) tools,", mcp_doc, re.MULTILINE)
+    assert stated, "docs/MCP.md no longer states its tool count as 'N tools,'"
+    for page in (README, README_TR):
+        counts = re.findall(r"(\d+) MCP tool", page.read_text(encoding="utf-8"))
+        assert counts, f"{page.name} no longer counts the MCP tools"
+        assert set(counts) == {stated.group(1)}, f"{page.name} says {counts}"
+
+
 def test_claude_md_stays_small_enough_to_load_into_every_session() -> None:
     size = len(CLAUDE_MD.read_text(encoding="utf-8"))
     assert size <= CLAUDE_MD_BUDGET, (

@@ -389,7 +389,7 @@ src/perfboard_studio/ui/         Qt application: 2D editor, VTK 3D view, 1:1 PDF
 src/perfboard_studio/mcp/        the MCP server (docs/MCP.md)
 src/perfboard_studio/catalog.py  the real parts, by name, each with its datasheet
 examples/                  netlists to import, and the boards they become
-tests/                     ~4250 tests; the engine is mypy --strict clean
+tests/                     ~4700 tests; the engine is mypy --strict clean
 packages/                  the original TypeScript engine, kept as the reference the
                            Python port is proved against
 ```
@@ -447,7 +447,7 @@ Next, in the order [PLAN.md](https://github.com/medinstech/perfboard-studio/blob
 
 | | |
 |---|---|
-| [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | the 54 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
+| [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | the 57 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
 | [examples/README.md](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) | what each example board is there to demonstrate |
 | [CHANGELOG.md](https://github.com/medinstech/perfboard-studio/blob/main/CHANGELOG.md) | every release, and what an unreleased build is accumulating towards the next one |
 | [docs/RELEASING.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/RELEASING.md) | the tag ritual, and what `release.yml` builds out of it on three platforms |
