@@ -137,7 +137,13 @@ from perfboard_studio.breadboard import (
     size_of,
 )
 from perfboard_studio.breadroute import plan_joined_board, plan_joined_reroute
-from perfboard_studio.catalog import CATALOG, CATEGORY_ORDER, CatalogPart, catalog_part
+from perfboard_studio.catalog import (
+    CATALOG,
+    CATEGORY_ORDER,
+    CatalogPart,
+    catalog_part,
+    part_matches,
+)
 from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
     AddBoardNotePayload,
@@ -756,14 +762,9 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
             part
             for part in CATALOG
             if part.category == category
-            and (
-                not needle
-                # In either language: "regülatör" finds a 7805 as "regulator" does.
-                or needle
-                in _folded(
-                    f"{part.id} {part.name} {part.summary} {t(part.summary)} "
-                    f"{category} {headings[category]}"
-                )
+            # In either language: "regülatör" finds a 7805 as "regulator" does.
+            and part_matches(
+                part, text, also=f"{t(part.summary)} {headings[category]}", fold=_folded
             )
         ]
         if not parts:

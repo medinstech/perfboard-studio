@@ -12322,6 +12322,20 @@ def test_the_filter_finds_a_part_by_what_it_is() -> None:
         _close(window)
 
 
+def test_the_filter_reads_words_the_way_the_catalog_search_does() -> None:
+    """The panel asks ``catalog.part_matches``, the same question ``list_catalog`` asks: it
+    used to look for the whole text as one piece, so "op amp" found nothing here while the
+    MCP server found the LM358, and a number with its package letter on found nothing at all."""
+    window = _blank_window()
+    try:
+        for typed, part_id in (("LM358N", "lm358"), ("op amp", "lm358"), ("28BYJ-48", "uln2003a")):
+            window.library_filter.setText(typed)
+            assert _catalog_leaf(window, part_id) is not None, typed
+            assert _catalog_leaf(window, "bc547") is None, typed
+    finally:
+        _close(window)
+
+
 def test_in_turkish_the_catalog_says_what_a_part_is_in_turkish() -> None:
     """The tooltip under a Turkish parts list, and the filter, in the user's language."""
     from perfboard_studio.catalog import catalog_part

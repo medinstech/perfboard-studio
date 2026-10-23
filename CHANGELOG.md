@@ -36,8 +36,9 @@ closed without a bump.
   longer count, so "opamp" finds the op-amp and "5v regulator" the 7805. A part can carry
   aliases for words its summary does not say: "stepper" and "28BYJ-48" find the ULN2003A,
   "motor driver" the L293D. Parts the words NAME come before parts whose summary merely
-  mentions them, so "switch" lists the push buttons ahead of the 2N2222A. `list_catalog`
-  searches this way, through `catalog.part_matches`.
+  mentions them, so "switch" lists the push buttons ahead of the 2N2222A. The Parts panel
+  and `list_catalog` search one way, through `catalog.part_matches` -- the panel used to
+  look for the whole text as one piece, so "op amp" found nothing there.
 
 ## [0.21.0] - 2026-10-21
 
