@@ -13,11 +13,11 @@ It is stricter here than in most projects and it is not negotiable.
 Requires Python 3.12+.
 
 ```sh
-git clone https://github.com/medinstech/perfboard_studio.git
+git clone https://github.com/medinstech/perfboard-studio.git
 cd perfboard-studio
 pip install -e ".[dev,mcp]"
 
-pytest                 # the whole suite, ~2070 tests in under a minute
+pytest                 # the whole suite, ~5000 tests in about five minutes
 perfboard-studio       # launch the app on a blank board
 ```
 
@@ -55,8 +55,8 @@ load-bearing rather than noise; each says why at the line.
 every line of blame in the repository at a reformat, which is its own decision to take
 deliberately and not a side effect of an unrelated change.
 
-**The full suite — a gate**, on Linux for every push and on all three platforms for
-`main`, tags and manual dispatch.
+**The full suite — a gate**, on Linux, Windows and macOS for every push and every pull
+request.
 
 UI tests run under `QT_QPA_PLATFORM=offscreen`. Qt's offscreen plugin ships no font
 database on Windows, so tests that assert on rendered *text* are skipped there — see the

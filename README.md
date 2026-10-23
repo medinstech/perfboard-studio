@@ -45,10 +45,10 @@
   exact rather than generic advice.
 - **The circuit is checked, then the board.** While the circuit is still being
   drawn, ERC catches a chip whose supply pin is wired to nothing, an electrolytic or
-  an LED drawn the wrong way round, and a net that reaches only one pin. Once it is on
-  the board, perfboard LVS extracts the board's real connectivity and compares it
-  against the schematic: opens, shorts and floating conductors are reported before
-  you pick up the iron.
+  an LED drawn the wrong way round, a net that reaches only one pin, and a supply that
+  no connector or battery brings onto the board. Once it is on the board, perfboard LVS
+  extracts the board's real connectivity and compares it against the schematic: opens,
+  shorts and floating conductors are reported before you pick up the iron.
 - **Six kinds of connection, not one.** A lead bend, a solder trace, a wired
   solder trace, bare wire, insulated wire and a top jumper have different costs,
   limits and failure modes, and the router prices all six — which is what makes
@@ -161,9 +161,12 @@ save puts one beside the other outputs.
 
 A package is not a part. A TO-92 is a BC547 or a 2N7000 or a 78L05, and which leg is the
 base is the fact the board depends on. The Parts panel starts with a **catalog** of the parts
-a perfboard is actually built from — transistors and MOSFETs, regulators, diodes, DIP ICs,
-push buttons and dev boards — and picking one places it with its value, what its datasheet
-calls every lead and the symbol it is drawn as, each with the datasheet it came from.
+a perfboard is actually built from — transistors and MOSFETs, regulators and the ways power
+comes in, diodes, sensors and displays, ICs, switches, relays, buzzers and dev boards — and
+picking one places it with its value, what its datasheet calls every lead and the symbol it
+is drawn as, each with the datasheet it came from. A part already on the board becomes
+another with **Change Part…** in its properties: the same place, the same reference and the
+same nets, in one undo step.
 
 **Those names are printed beside the pins**, on the board and in 3D, because a terminal or a
 devkit is wired by them. They are laid out for the whole board at once: a name stops at
@@ -307,9 +310,11 @@ Build** — says where the board stands on each step, and its **Next** button do
 comes next. By hand, it goes like this.
 
 Open the schematic panel (`Ctrl+2`) and draw the circuit: drag parts onto the sheet out
-of the Parts panel, move and turn them where you want them, **Wire** from pin to pin or
-onto a wire already drawn (click both ends, or drag) — or **Label** a pin to join it to a
-net by name, or right-click it for GND and +5V — then **Place on the Board**, which first
+of the Parts panel, or add them one after another with **Add Part**, which stays open for
+the next; move and turn them where you want them, **Wire** from pin to pin or onto a wire
+already drawn (click both ends, or drag; a net joined at a supply pin takes its name, VCC
+or GND) — or **Label** a pin to join it to a net by name, or right-click it for GND and
++5V — then **Place on the Board**, which first
 asks which stock board to use: your circuit is placed, wired and checked on a roomy board
 and on each smaller one, and the suggestion is the smallest it builds as well on. From there
 **Place → Auto-place Board** (`Ctrl+Shift+A`), **`Ctrl+R`** to route, and
@@ -403,7 +408,7 @@ src/perfboard_studio/ui/         Qt application: 2D editor, VTK 3D view, 1:1 PDF
 src/perfboard_studio/mcp/        the MCP server (docs/MCP.md)
 src/perfboard_studio/catalog.py  the real parts, by name, each with its datasheet
 examples/                  netlists to import, and the boards they become
-tests/                     ~4700 tests; the engine is mypy --strict clean
+tests/                     ~5000 tests; the engine is mypy --strict clean
 packages/                  the original TypeScript engine, kept as the reference the
                            Python port is proved against
 ```

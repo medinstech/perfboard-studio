@@ -44,8 +44,9 @@
   vermeden önce: GND ile V+ arası 10 kΩ üzerinde okumalı"*. Netlist'ten
   türetildiği için genel tavsiye değil, o karta özel.
 - **Önce devre, sonra kart denetlenir.** Devre daha çizilirken ERC, besleme pini
-  hiçbir yere bağlanmamış bir entegreyi, ters çizilmiş bir elektrolitiği ya da LED'i ve
-  tek bir pine ulaşan bir neti yakalar. Devre karta geçince perfboard için LVS kartın
+  hiçbir yere bağlanmamış bir entegreyi, ters çizilmiş bir elektrolitiği ya da LED'i,
+  tek bir pine ulaşan bir neti ve hiçbir konnektörün ya da pilin karta getirmediği bir
+  beslemeyi yakalar. Devre karta geçince perfboard için LVS kartın
   gerçek bağlantısallığını çıkarır ve şemayla karşılaştırır: açık devreler, kısa
   devreler ve boşta kalan iletkenler havyayı elinize almadan önce raporlanır.
 - **Tek tip değil, altı tip bağlantı.** Bacak bükme, lehim yolu, telli lehim yolu,
@@ -161,9 +162,12 @@ gerekir, ve bir proje kaydı onu diğer çıktıların yanına koyar.
 Bir kılıf bir parça değildir. Bir TO-92 bir BC547 de olabilir, bir 2N7000 ya da bir 78L05
 de; kartın dayandığı bilgi hangi bacağın beyz olduğudur. Parçalar paneli, delikli bir
 kartın gerçekten yapıldığı parçaların **kataloğuyla** başlar — transistörler ve MOSFET'ler,
-regülatörler, diyotlar, DIP entegreler, butonlar ve geliştirme kartları — ve birini seçmek
-onu değeri, veri sayfasının her bacağa verdiği ad ve çizildiği sembolle yerleştirir; her
-birinin hangi veri sayfasından geldiği de yazılıdır.
+regülatörler ve gücün karta giriş yolları, diyotlar, sensörler ve ekranlar, entegreler,
+anahtarlar, röleler, buzzer'lar ve geliştirme kartları — ve birini seçmek onu değeri, veri
+sayfasının her bacağa verdiği ad ve çizildiği sembolle yerleştirir; her birinin hangi veri
+sayfasından geldiği de yazılıdır. Kartta duran bir parça, özelliklerindeki **Parçayı
+Değiştir…** ile başka bir parça olur: aynı yerde, aynı referans ve aynı netlerle, tek bir
+geri alma adımında.
 
 **Bu adlar pinlerin yanına basılır**, kartta ve 3D'de; bir klemens ya da bir geliştirme
 kartı onlara bakılarak kablolanır. Bütün kart için bir kerede yerleşirler: bir ad önüne
@@ -307,8 +311,10 @@ Yönlendirme, Kontrol, Montaj** —, kartın her adımda nerede durduğunu söyl
 düğmesi sıradaki adımı yapar. Elle yapıldığında akış şöyle:
 
 Şema panelini açın (`Ctrl+2`) ve devreyi çizin: parçaları Parçalar panelinden sayfaya
-sürükleyin, istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine ya da çizilmiş
-bir telin üstüne tel çekin (iki ucuna tıklayarak ya da sürükleyerek) — ya da bir pini
+sürükleyin ya da bir sonraki için açık kalan **Parça Ekle** ile art arda ekleyin;
+istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine ya da çizilmiş bir telin
+üstüne tel çekin (iki ucuna tıklayarak ya da sürükleyerek; bir besleme pininde birleşen
+net o pinin adını alır, VCC ya da GND) — ya da bir pini
 **Etiket** ile adına göre bir nete bağlayın, ya da sağ tıklayıp GND ve +5V'ye bağlayın —
 sonra **Kart Üzerine Yerleştir**; önce hangi hazır kartın kullanılacağını sorar: devreniz
 geniş bir kartta ve ondan küçük her boyda yerleştirilir, tellenir ve denetlenir, ve öneri
@@ -406,7 +412,7 @@ src/perfboard_studio/ui/         Qt uygulaması: 2D editör, VTK 3D görünüm, 
 src/perfboard_studio/mcp/        MCP sunucusu (docs/MCP.md)
 src/perfboard_studio/catalog.py  gerçek parçalar, adlarıyla ve veri sayfalarıyla
 examples/                  içe aktarılacak netlist'ler ve çıktıkları kartlar
-tests/                     ~4700 test; motor mypy --strict temiz
+tests/                     ~5000 test; motor mypy --strict temiz
 packages/                  Python portunun karşısında kanıtlandığı referans olarak
                            saklanan orijinal TypeScript motoru
 ```
