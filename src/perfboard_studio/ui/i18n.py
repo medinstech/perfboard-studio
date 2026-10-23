@@ -1954,6 +1954,51 @@ TURKISH: Mapping[str, str] = {
     "Power in": "Güç girişi",
     "Connectors": "Konnektörler",
     "Sound": "Ses",
+    "Trimmers and inductors": "Trimpotlar ve bobinler",
+    "Bourns 3296W trimmer": "Bourns 3296W trimpot",
+    "Multi-turn trimmer potentiometer, 25 turns, adjusted from the top": (
+        "Çok turlu trimpot, 25 tur, üstten ayarlanır"
+    ),
+    "Its resistance is printed on it in three digits: 103 is 10 kohm, 502 is 5 kohm. Put "
+    "that in the value.": (
+        "Direnci üzerinde üç rakamla yazar: 103, 10 kohm; 502, 5 kohm demektir. Bunu "
+        "değere yazın."
+    ),
+    "Bourns 78F101J axial inductor": "Bourns 78F101J eksenel bobin",
+    "100 uH RF choke, 165 mA, laid flat like a resistor": (
+        "100 µH RF şok bobini, 165 mA, direnç gibi yatırılır"
+    ),
+    "A larger inductance in this series is a larger body: measure yours.": (
+        "Bu serinin daha büyük endüktanslısı daha büyük gövdelidir: sizinkini ölçün."
+    ),
+    "GL5528 photoresistor (LDR)": "GL5528 fotodirenç (LDR)",
+    "Light-dependent resistor: 10 to 20 kohm at 10 lux, 1 Mohm in the dark": (
+        "Işığa bağımlı direnç: 10 lüks ışıkta 10 ile 20 kohm, karanlıkta 1 Mohm"
+    ),
+    "Its legs are 3 mm apart: bend each a quarter of a millimetre in to the holes drawn. "
+    "Either way round works.": (
+        "Bacakları 3 mm arayla durur: çizilen deliklere girmesi için her birini çeyrek "
+        "milimetre içe bükün. İki yönde de takılabilir."
+    ),
+    "Passive buzzer 12 mm": "Pasif buzzer 12 mm",
+    "Sounds only when driven with a tone, 12 mm across, legs 7.6 mm apart": (
+        "Yalnızca bir tonla sürülünce öter, 12 mm çapında, bacaklar arası 7,6 mm"
+    ),
+    "A PASSIVE buzzer is silent on DC: drive it with a square wave from a pin (tone() on "
+    "an Arduino). Its board shows underneath, which is how to tell it from an active one.": (
+        "PASİF buzzer DC'de ses çıkarmaz: bir pinden kare dalgayla sürün (Arduino'da "
+        "tone()). Altında kartı görünür; aktif olandan böyle ayırt edilir."
+    ),
+    "4x4 membrane keypad (on a header)": "4x4 membran tuş takımı (header üzerinde)",
+    "Sixteen keys in four rows and four columns, eight leads": (
+        "Dört satır ve dört sütunda on altı tuş, sekiz uç"
+    ),
+    "Seen from the front its leftmost lead is R1 and its rightmost C4. Other makers' keypads "
+    "are usually wired the same: test one key with a meter before trusting a clone.": (
+        "Önden bakınca en soldaki ucu R1, en sağdaki C4'tür. Başka üreticilerin tuş "
+        "takımları da çoğu zaman aynı bağlanır: bir kopyaya güvenmeden önce bir tuşu "
+        "multimetreyle deneyin."
+    ),
     "IR receiver for 38 kHz remote controls, 2.5 to 5.5 V": (
         "38 kHz uzaktan kumandalar için IR alıcı, 2,5 ile 5,5 V arası"
     ),

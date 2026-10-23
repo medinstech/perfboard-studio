@@ -29,6 +29,15 @@ closed without a bump.
   terminal, a battery clip's or a jack's pads -- and no module has a pin on any of those nets.
   Whether the way in reaches both rails, or comes through a regulator, is not judged. None of
   the shipped examples is touched by it.
+- **A trimmer, an LDR, a passive buzzer, an inductor and a 4x4 keypad**, the parts the
+  findability sweep found missing that a beginner's first projects use: the Bourns 3296W
+  (drawn as a pot, its wiper in the middle, its check saying how to read "103"), the GL5528
+  photoresistor, a 12 mm passive buzzer whose check says it is silent on DC, Bourns'
+  78F101J 100 uH choke, and the membrane keypad on the header its ribbon plugs onto,
+  numbered as Parallax's datasheet numbers it. "trimmer", "ldr", "speaker", "inductor" and
+  "keypad" find them, and so do "trimpot", "ışık sensörü", "hoparlör", "bobin" and "tuş
+  takımı".
+
 - **Eight more searches find their part**, from a sweep of 130 things a beginner types in
   English and Turkish: "voltage regulator" and "voltaj regülatörü" find the regulators,
   "microcontroller" and "mikrodenetleyici" the ATtiny85 and ATmega328P, "terminal block"

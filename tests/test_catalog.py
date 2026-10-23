@@ -155,6 +155,21 @@ def test_the_lcd_and_the_ir_receiver_are_pinned_as_their_sources_have_them() -> 
     assert [name for _, name in ir.pin_names] == ["OUT", "GND", "VS"]
 
 
+def test_the_keypad_is_numbered_as_parallax_numbers_it() -> None:
+    """Right to left with the keys facing you: pins 1-4 the columns from C4, 5-8 the rows
+    from R4 -- so the leftmost lead is R1, as most tutorials wire it."""
+    keypad = catalog_part("keypad-4x4")
+    assert keypad is not None
+    names = dict(keypad.pin_names)
+    assert (names["1"], names["4"], names["5"], names["8"]) == ("C4", "C1", "R4", "R1")
+
+
+def test_the_trimmer_is_a_pot_whose_middle_leg_is_the_wiper() -> None:
+    trimmer = catalog_part("bourns-3296w")
+    assert trimmer is not None and trimmer.symbol == "potentiometer"
+    assert dict(trimmer.pin_names)["2"] == "W"
+
+
 def test_the_hc_sr04_is_pinned_as_elecfreaks_prints_it() -> None:
     sensor = catalog_part("hc-sr04")
     assert sensor is not None and sensor.category == "sensor"
@@ -265,6 +280,15 @@ def test_search_matches_the_name_the_summary_and_the_kind() -> None:
         ("kızılötesi", "tsop38238"),
         ("voltaj regülatörü", "ld1117v33"),
         ("anahtar", "tact-6x6"),
+        ("trimmer", "bourns-3296w"),
+        ("trimpot", "bourns-3296w"),
+        ("ldr", "gl5528"),
+        ("ışık sensörü", "gl5528"),
+        ("speaker", "buzzer-passive-12mm"),
+        ("inductor", "bourns-78f101j"),
+        ("bobin", "bourns-78f101j"),
+        ("keypad", "keypad-4x4"),
+        ("tuş takımı", "keypad-4x4"),
     ],
 )
 def test_a_part_is_found_by_what_somebody_would_type(typed, found) -> None:

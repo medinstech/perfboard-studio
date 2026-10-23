@@ -48,6 +48,7 @@ CatalogCategory = Literal[
     "power",
     "diode",
     "protection",
+    "passive",
     "sensor",
     "display",
     "ic",
@@ -68,6 +69,7 @@ CATEGORY_ORDER: tuple[CatalogCategory, ...] = (
     "power",
     "diode",
     "protection",
+    "passive",
     "sensor",
     "display",
     "ic",
@@ -472,6 +474,31 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "Its size grows with its hold current: if yours is larger than 8 mm, "
                     "describe it as a disc capacitor of its real size and mark it a fuse."
                 )),
+    # -- passives ---------------------------------------------------------------------
+    CatalogPart("bourns-3296w", "Bourns 3296W trimmer", "passive",
+                "box-3x1-p1-r1-9.53x4.83x11.05",
+                "Multi-turn trimmer potentiometer, 25 turns, adjusted from the top",
+                _legs("1", "W", "3"), "potentiometer", value="3296W", ref_prefix="RV",
+                source=(
+                    "Bourns 3296 datasheet: terminals 1, 2 (the wiper) and 3, 2.54 mm apart, the "
+                    "W body 9.53 x 4.83 mm; its height with the screw from KiCad's "
+                    "Potentiometer_Bourns_3296W_Vertical model"
+                ),
+                check=(
+                    "Its resistance is printed on it in three digits: 103 is 10 kohm, 502 is "
+                    "5 kohm. Put that in the value."
+                ),
+                aliases=("trimmer", "trimpot", "potentiometer", "potansiyometre", "preset")),
+    CatalogPart("bourns-78f101j", "Bourns 78F101J axial inductor", "passive",
+                "axial-4h-7.11x2.79",
+                "100 uH RF choke, 165 mA, laid flat like a resistor",
+                value="100uH", ref_prefix="L",
+                source=(
+                    "Bourns 78F series: the 78F101J's body 2.79 mm across and 7.11 mm long, "
+                    "100 uH, 165 mA, 4.1 ohm"
+                ),
+                check="A larger inductance in this series is a larger body: measure yours.",
+                aliases=("inductor", "choke", "bobin", "endüktans")),
     # -- sensors ----------------------------------------------------------------------
     CatalogPart("lm35", "LM35", "sensor", "to92", "Temperature sensor, 10 mV per degree C",
                 _legs("+VS", "VOUT", "GND"), ref_prefix="U",
@@ -537,6 +564,20 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "left with the dome towards you, but not always: check yours."
                 ),
                 aliases=("infrared", "IR receiver", "remote", "VS1838B", "kızılötesi")),
+    # A light-dependent resistor standing on its legs, as KiCad's model of the 5 x 4.1 mm
+    # cell has it; its legs are 3 mm apart and bend in to holes one apart.
+    CatalogPart("gl5528", "GL5528 photoresistor (LDR)", "sensor", "box-2x1-p1-r1-5x4.1x4",
+                "Light-dependent resistor: 10 to 20 kohm at 10 lux, 1 Mohm in the dark",
+                value="GL5528", ref_prefix="R",
+                source=(
+                    "Senba GL55 series datasheet (the GL5528's resistances); the 5 x 4.1 mm "
+                    "cell and its height from KiCad's R_LDR_5.0x4.1mm_P3mm_Vertical model"
+                ),
+                check=(
+                    "Its legs are 3 mm apart: bend each a quarter of a millimetre in to the "
+                    "holes drawn. Either way round works."
+                ),
+                aliases=("ldr", "photoresistor", "light sensor", "ışık sensörü", "fotodirenç")),
     # -- displays ---------------------------------------------------------------------
     CatalogPart("ssd1306-i2c-gnd-vcc", "SSD1306 OLED 0.96in I2C (GND VCC SCL SDA)", "display",
                 _OLED_FOOTPRINT, "128 x 64 OLED on I2C, pins printed GND, VCC, SCL, SDA",
@@ -732,6 +773,25 @@ CATALOG: tuple[CatalogPart, ...] = (
                 value="12x12 tactile",
                 source="KiCad Button_Switch_THT:SW_PUSH-12mm and the Wuerth 430476085716 model",
                 check=_SWITCH_LEGS),
+    # -- relays
+    # The 4 x 4 membrane keypad's ribbon ends in a 0.1 inch socket, so on the board it is the
+    # header that socket goes on. Numbered as Parallax numbers it, right to left with the keys
+    # facing you; its figure 1 says which lead is which row and column.
+    CatalogPart("keypad-4x4", "4x4 membrane keypad (on a header)", "switch", "hdr-1x8",
+                "Sixteen keys in four rows and four columns, eight leads",
+                _legs("C4", "C3", "C2", "C1", "R4", "R3", "R2", "R1"),
+                value="4x4 keypad", ref_prefix="J",
+                source=(
+                    "Parallax 4x4 Matrix Membrane Keypad (#27899) datasheet v1.2, figure 1: "
+                    "pins 1 to 4 the columns from the A-B-C-D column, 5 to 8 the rows from the "
+                    "bottom row"
+                ),
+                check=(
+                    "Seen from the front its leftmost lead is R1 and its rightmost C4. Other "
+                    "makers' keypads are usually wired the same: test one key with a meter "
+                    "before trusting a clone."
+                ),
+                aliases=("keypad", "tuş takımı", "membrane", "matrix keypad")),
     # -- relays -----------------------------------------------------------------------
     CatalogPart("srd-05vdc-sl-c", "Songle SRD-05VDC-SL-C relay", "relay", "relay-srd",
                 "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC",
@@ -766,6 +826,21 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "there and needs a tone, not DC. The longer leg, under the + on top, is +."
                 ),
                 aliases=("beeper", "piezo", "alarm")),
+    CatalogPart("buzzer-passive-12mm", "Passive buzzer 12 mm", "sound",
+                "box-2x1-p3-r1-12x12x8.5",
+                "Sounds only when driven with a tone, 12 mm across, legs 7.6 mm apart",
+                _legs("+", "-"), value="Passive buzzer", ref_prefix="BZ",
+                source=(
+                    "CUI CEM-1203(42) magnetic transducer: 12 mm across and 8.5 mm tall, "
+                    "externally driven at 2048 Hz from 3 to 5 V; the legs as KiCad's "
+                    "Buzzer_Beeper:Buzzer_12x9.5RM7.6"
+                ),
+                check=(
+                    "A PASSIVE buzzer is silent on DC: drive it with a square wave from a pin "
+                    "(tone() on an Arduino). Its board shows underneath, which is how to tell "
+                    "it from an active one."
+                ),
+                aliases=("speaker", "hoparlör", "beeper", "piezo")),
     CatalogPart("esp32-devkitc", "ESP32-DevKitC V4", "module",
                 "mod-2x19-p10-r1-27.94x54.3x3.5-s8.5-o0x-3",
                 "ESP32-WROOM-32 dev board, 38 pins, rows 25.4 mm apart",
