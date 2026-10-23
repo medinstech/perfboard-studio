@@ -105,6 +105,15 @@ closed without a bump.
   numbers two columns down one and back up the other, exactly as `dip_footprint` and KiCad's
   Display_7Segment:CA56-12EWA do: `box-2x5-p6-r1-19.05x12.7x8-ccw` is one digit.
 
+- **Catalog: seventeen DIP classics from TI's datasheets.** The 74HC00, 04, 08, 14, 32, 86,
+  138 and 4051; the CD4011B, 4013B, 4060B, 4066B and 4093B; the NE5532, LM741, LM339 and
+  LM311. Every pin was checked against KiCad's symbol for the same part, and where the
+  names differ the pins do not. The 74HC138 is named as TI names it and KiCad as NXP does;
+  on the CD4060B, ST's naming moves the bar from pin 10 to pin 9. The 4000-series gates are
+  named gate by gate as the 74HC ones are, because TI's letters A to M put an output called
+  J beside inputs A and B. A test pins the one difference a builder would trip over: the
+  CD4011's outputs are on pins 3, 4, 10 and 11, the 74HC00's on 3, 6, 8 and 11.
+
 - **The Songle SRD relay, as it is.** `relay-srd` is the SRD-05VDC-SL-C and its family on
   the holes nearest its legs, which are not on the 2.54 mm grid: COM alone between the coil
   legs at one end, the contacts at the other, numbered as KiCad's SANYOU SRD (1 COM, 2 and

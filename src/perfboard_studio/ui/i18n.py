@@ -2090,6 +2090,97 @@ TURKISH: Mapping[str, str] = {
         "Setlerdeki VS1838B'nin dizilişi de çoğu zaman aynıdır, kubbe size bakarken soldan "
         "OUT, GND, VCC; ama her zaman değil: sizinkini kontrol edin."
     ),
+    "Quad 2-input NAND gate": "Dörtlü 2 girişli NAND kapısı",
+    "Hex inverter": "Altılı evirici",
+    "Quad 2-input AND gate": "Dörtlü 2 girişli AND kapısı",
+    "Hex inverter with Schmitt-trigger inputs: debouncing, slow edges, oscillators": (
+        "Schmitt tetikli girişli altılı evirici: buton sıçraması, yavaş kenarlar, osilatörler"
+    ),
+    "Quad 2-input OR gate": "Dörtlü 2 girişli OR kapısı",
+    "Quad 2-input XOR gate": "Dörtlü 2 girişli XOR kapısı",
+    "3-to-8 line decoder, the chosen output goes low": (
+        "3'ten 8'e kod çözücü, seçilen çıkış lojik 0'a iner"
+    ),
+    "8-channel analogue multiplexer: one common pin to any of eight": (
+        "8 kanallı analog çoklayıcı: bir ortak pin sekizinden birine"
+    ),
+    "Quad 2-input NAND gate, 3 to 18 V": "Dörtlü 2 girişli NAND kapısı, 3 ile 18 V arası",
+    "Quad 2-input NAND with Schmitt-trigger inputs, 3 to 18 V": (
+        "Schmitt tetikli girişli dörtlü 2 girişli NAND, 3 ile 18 V arası"
+    ),
+    "Dual D flip-flop with set and reset, 3 to 18 V": (
+        "Set ve reset girişli ikili D flip-flop, 3 ile 18 V arası"
+    ),
+    "14-stage binary counter with its own oscillator, 3 to 18 V": (
+        "Kendi osilatörü olan 14 kademeli ikili sayıcı, 3 ile 18 V arası"
+    ),
+    "Quad analogue switch, 3 to 18 V": "Dörtlü analog anahtar, 3 ile 18 V arası",
+    "Dual low-noise op-amp for audio, for a split supply": (
+        "Ses için düşük gürültülü ikili op-amp, simetrik besleme için"
+    ),
+    "The classic single op-amp, for a split supply": (
+        "Klasik tekli op-amp, simetrik besleme için"
+    ),
+    "Quad comparator, open-collector outputs, single supply": (
+        "Dörtlü karşılaştırıcı, açık kollektör çıkışlı, tek besleme"
+    ),
+    "Comparator with an open-collector output and its emitter on a pin": (
+        "Açık kollektör çıkışlı, emiteri de bir pine çıkarılmış karşılaştırıcı"
+    ),
+    "Tie every unused input to the supply or to ground: a CMOS input left open picks up "
+    "noise, draws current and switches at random.": (
+        "Kullanılmayan her girişi beslemeye ya da toprağa bağlayın: boşta bırakılan bir CMOS "
+        "girişi gürültü toplar, akım çeker ve rastgele konum değiştirir."
+    ),
+    "An output is chosen only while G1 is high and G2A and G2B are both low: tie them so, or "
+    "every output stays high. The outputs are not in order round the package: Y0 is pin 15 "
+    "and Y7 pin 7.": (
+        "Bir çıkış yalnızca G1 lojik 1, G2A ile G2B ikisi de lojik 0 iken seçilir: onları "
+        "böyle bağlayın, yoksa bütün çıkışlar 1'de kalır. Çıkışlar kılıfın çevresinde sırayla "
+        "dizilmez: Y0 15. pin, Y7 7. pindir."
+    ),
+    "VEE (pin 7) goes to GND unless the signals swing below ground, and E (pin 6) low turns "
+    "the switch on. The channels are not in order round the package: A0 is pin 13.": (
+        "Sinyaller toprağın altına inmiyorsa VEE (7. pin) GND'ye gider; E (6. pin) lojik 0 "
+        "iken seçilen kanal iletime geçer. Kanallar kılıfın çevresinde sırayla dizilmez: A0 "
+        "13. pindir."
+    ),
+    "SET and RESET are active high: tie both low on a flip-flop that should clock. Wire "
+    "Q-bar back to D and it divides its clock by two.": (
+        "SET ve RESET lojik 1'de etkindir: saatle çalışması gereken flip-flopta ikisini de "
+        "0'a bağlayın. Q-bar'ı D'ye geri bağlarsanız saatini ikiye böler."
+    ),
+    "An RC or a crystal on pins 9, 10 and 11 makes the clock (TI's figures 12 and 13). Q1 "
+    "to Q3 and Q11 are not brought out: Q4 is the first output. RESET is active high: tie it "
+    "low to count.": (
+        "9, 10 ve 11. pinlere bağlanan bir RC ya da kristal saati üretir (TI'nin 12. ve 13. "
+        "şekilleri). Q1-Q3 ve Q11 dışarı çıkarılmamıştır: ilk çıkış Q4'tür. RESET lojik 1'de "
+        "etkindir: saymak için 0'a bağlayın."
+    ),
+    "A switch is on while its CTL pin is high. The signal has to stay between VSS and VDD.": (
+        "Bir anahtar CTL pini lojik 1 iken iletimdedir. Sinyal VSS ile VDD arasında "
+        "kalmalıdır."
+    ),
+    "Not a rail-to-rail part, and it wants about 10 V across it at least: on one 5 V supply "
+    "the LM358 is the one to use.": (
+        "Rail-to-rail değildir ve uçları arasında en az 10 V kadar ister: tek 5 V beslemede "
+        "kullanılacak olan LM358'dir."
+    ),
+    "Pins 1 and 5 are for a 10k offset-trim pot and can stay open; pin 8 is not connected. "
+    "It needs a split supply of about +-5 V or more.": (
+        "1. ve 5. pinler 10k'lık ofset ayar trimpotu içindir, boş kalabilir; 8. pin bağlı "
+        "değildir. Yaklaşık +-5 V ya da daha büyük simetrik besleme ister."
+    ),
+    "VCC is pin 3 and GND pin 12, and OUT1 is pin 2, not 1. The outputs only pull down: "
+    "each one needs a pull-up resistor.": (
+        "VCC 3. pin, GND 12. pindir; OUT1 de 1. değil 2. pindir. Çıkışlar yalnızca aşağı "
+        "çeker: her biri bir pull-up direnci ister."
+    ),
+    "For a logic output put pin 1 (the emitter) on ground and a pull-up on pin 7 (the "
+    "collector). V- is pin 4: on one supply, ground it too.": (
+        "Lojik çıkış için 1. pini (emiter) toprağa, 7. pine (kollektör) bir pull-up koyun. "
+        "V- 4. pindir: tek beslemede onu da toprağa bağlayın."
+    ),
     "16x2 character LCD (HD44780)": "16x2 karakter LCD (HD44780)",
     "Two lines of 16 characters, 5 V, on a 16-pin header": (
         "16 karakterlik iki satır, 5 V, 16 pinli header üzerinde"

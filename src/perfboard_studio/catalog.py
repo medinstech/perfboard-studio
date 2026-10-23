@@ -169,6 +169,23 @@ _TO92_ORDER = "TO-92 legs 1-2-3 left to right, flat face towards you, legs down"
 _TO220_ORDER = "TO-220 legs 1-2-3 left to right, printed face towards you, tab behind"
 _CHECK_LEGS = "Check the legs against the datasheet of the part you have before soldering."
 _DIODE = _legs("K", "A")  # pin 1 is the banded end: the registry's and KiCad's convention
+#: Four two-input gates and six inverters, as TI names a 74HC's pins.
+_QUAD_GATE = _legs("1A", "1B", "1Y", "2A", "2B", "2Y", "GND",
+                   "3Y", "3A", "3B", "4Y", "4A", "4B", "VCC")
+_HEX_INVERTER = _legs("1A", "1Y", "2A", "2Y", "3A", "3Y", "GND",
+                      "4Y", "4A", "5Y", "5A", "6Y", "6A", "VCC")
+#: The 4000 series' quad gate is pinned differently from the 74HC's: its second and fourth
+#: outputs are on the inside, pins 4 and 11.
+_QUAD_GATE_4000 = _legs("1A", "1B", "1Y", "2Y", "2A", "2B", "VSS",
+                        "3A", "3B", "3Y", "4Y", "4A", "4B", "VDD")
+_CD4000_NAMES = (
+    "TI's letters A to M renamed gate by gate: 1 and 2 drive 3, 5 and 6 drive 4, 8 and 9 "
+    "drive 10, 12 and 13 drive 11"
+)
+_UNUSED_INPUTS = (
+    "Tie every unused input to the supply or to ground: a CMOS input left open picks up "
+    "noise, draws current and switches at random."
+)
 _LED_CHECK = (
     "The longer leg is the anode; the flat on the rim is on the cathode's side. It needs a "
     "resistor in series: about 330 ohm from 5 V."
@@ -895,6 +912,130 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "GPA7 and GPB7 are outputs only."
                 ),
                 aliases=("port expander",)),
+    # The 74HC gates and the 4000 series: pinned by TI, and named gate by gate, 1A and 1B
+    # into 1Y, as TI names the 74HC ones (KiCad's units group the same pins the same way).
+    CatalogPart("74hc00", "74HC00", "ic", "dip-14", "Quad 2-input NAND gate",
+                _QUAD_GATE, ref_prefix="U", source="TI SN74HC00 datasheet, N package",
+                check=_UNUSED_INPUTS, aliases=("nand", "logic gate", "mantık kapısı")),
+    CatalogPart("74hc04", "74HC04", "ic", "dip-14", "Hex inverter",
+                _HEX_INVERTER, ref_prefix="U", source="TI SN74HC04 datasheet, N package",
+                check=_UNUSED_INPUTS, aliases=("not", "inverter", "logic gate", "mantık kapısı")),
+    CatalogPart("74hc08", "74HC08", "ic", "dip-14", "Quad 2-input AND gate",
+                _QUAD_GATE, ref_prefix="U", source="TI SN74HC08 datasheet, N package",
+                check=_UNUSED_INPUTS, aliases=("and", "logic gate", "mantık kapısı")),
+    CatalogPart("74hc14", "74HC14", "ic", "dip-14",
+                "Hex inverter with Schmitt-trigger inputs: debouncing, slow edges, oscillators",
+                _HEX_INVERTER, ref_prefix="U", source="TI SN74HC14 datasheet, N package",
+                check=_UNUSED_INPUTS, aliases=("schmitt", "inverter", "debounce")),
+    CatalogPart("74hc32", "74HC32", "ic", "dip-14", "Quad 2-input OR gate",
+                _QUAD_GATE, ref_prefix="U", source="TI SN74HC32 datasheet, N package",
+                check=_UNUSED_INPUTS, aliases=("or", "logic gate", "mantık kapısı")),
+    CatalogPart("74hc86", "74HC86", "ic", "dip-14", "Quad 2-input XOR gate",
+                _QUAD_GATE, ref_prefix="U", source="TI SN74HC86 datasheet, N package",
+                check=_UNUSED_INPUTS, aliases=("xor", "logic gate", "mantık kapısı")),
+    CatalogPart("74hc138", "74HC138", "ic", "dip-16",
+                "3-to-8 line decoder, the chosen output goes low",
+                _legs("A", "B", "C", "~G2A", "~G2B", "G1", "Y7", "GND",
+                      "Y6", "Y5", "Y4", "Y3", "Y2", "Y1", "Y0", "VCC"),
+                ref_prefix="U", source="TI SN74HC138 datasheet, N package",
+                check=(
+                    "An output is chosen only while G1 is high and G2A and G2B are both low: "
+                    "tie them so, or every output stays high. The outputs are not in order "
+                    "round the package: Y0 is pin 15 and Y7 pin 7."
+                ),
+                aliases=("decoder", "demultiplexer")),
+    CatalogPart("74hc4051", "74HC4051", "ic", "dip-16",
+                "8-channel analogue multiplexer: one common pin to any of eight",
+                _legs("A4", "A6", "COM", "A7", "A5", "~E", "VEE", "GND",
+                      "S2", "S1", "S0", "A3", "A0", "A1", "A2", "VCC"),
+                ref_prefix="U", source="TI CD74HC4051 datasheet, E package",
+                check=(
+                    "VEE (pin 7) goes to GND unless the signals swing below ground, and E (pin "
+                    "6) low turns the switch on. The channels are not in order round the "
+                    "package: A0 is pin 13."
+                ),
+                aliases=("multiplexer", "mux", "analog")),
+    CatalogPart("cd4011", "CD4011B", "ic", "dip-14", "Quad 2-input NAND gate, 3 to 18 V",
+                _QUAD_GATE_4000, ref_prefix="U",
+                source=f"TI CD4011B datasheet, E package; {_CD4000_NAMES}",
+                check=_UNUSED_INPUTS, aliases=("4011", "nand", "logic gate", "mantık kapısı")),
+    CatalogPart("cd4093", "CD4093B", "ic", "dip-14",
+                "Quad 2-input NAND with Schmitt-trigger inputs, 3 to 18 V",
+                _QUAD_GATE_4000, ref_prefix="U",
+                source=f"TI CD4093B datasheet, E package; {_CD4000_NAMES}",
+                check=_UNUSED_INPUTS, aliases=("4093", "nand", "schmitt")),
+    CatalogPart("cd4013", "CD4013B", "ic", "dip-14",
+                "Dual D flip-flop with set and reset, 3 to 18 V",
+                _legs("Q1", "~Q1", "CLK1", "RESET1", "D1", "SET1", "VSS",
+                      "SET2", "D2", "RESET2", "CLK2", "~Q2", "Q2", "VDD"),
+                ref_prefix="U", source="TI CD4013B datasheet, E package",
+                check=(
+                    "SET and RESET are active high: tie both low on a flip-flop that should "
+                    "clock. Wire Q-bar back to D and it divides its clock by two."
+                ),
+                aliases=("4013", "flip-flop", "divider")),
+    CatalogPart("cd4060", "CD4060B", "ic", "dip-16",
+                "14-stage binary counter with its own oscillator, 3 to 18 V",
+                _legs("Q12", "Q13", "Q14", "Q6", "Q5", "Q7", "Q4", "VSS",
+                      "PHO", "~PHO", "PHI", "RESET", "Q9", "Q8", "Q10", "VDD"),
+                ref_prefix="U",
+                source=(
+                    "TI CD4060B datasheet, E package: 9 phi-O, 10 phi-O bar, 11 phi-I. KiCad's "
+                    "4060, drawn from ST's M74HC4060, puts the bar on pin 9 instead; the pins "
+                    "are the same pins"
+                ),
+                check=(
+                    "An RC or a crystal on pins 9, 10 and 11 makes the clock (TI's figures 12 "
+                    "and 13). Q1 to Q3 and Q11 are not brought out: Q4 is the first output. "
+                    "RESET is active high: tie it low to count."
+                ),
+                aliases=("4060", "counter", "oscillator", "divider")),
+    CatalogPart("cd4066", "CD4066B", "ic", "dip-14", "Quad analogue switch, 3 to 18 V",
+                _legs("A1", "A2", "B2", "B1", "CTLB", "CTLC", "VSS",
+                      "C1", "C2", "D2", "D1", "CTLD", "CTLA", "VDD"),
+                ref_prefix="U",
+                source=(
+                    "TI CD4066B datasheet, N package; each switch's two ends named 1 (TI's "
+                    "IN/OUT) and 2 (OUT/IN), and CTL its control"
+                ),
+                check=(
+                    "A switch is on while its CTL pin is high. The signal has to stay between "
+                    "VSS and VDD."
+                ),
+                aliases=("4066", "analog", "bilateral")),
+    CatalogPart("ne5532", "NE5532", "ic", "dip-8",
+                "Dual low-noise op-amp for audio, for a split supply",
+                _legs("OUT1", "IN1-", "IN1+", "V-", "IN2+", "IN2-", "OUT2", "V+"),
+                ref_prefix="U", source="TI NE5532 datasheet, P package",
+                check=(
+                    "Not a rail-to-rail part, and it wants about 10 V across it at least: on "
+                    "one 5 V supply the LM358 is the one to use."
+                )),
+    CatalogPart("lm741", "LM741", "ic", "dip-8",
+                "The classic single op-amp, for a split supply",
+                _legs("NULL1", "IN-", "IN+", "V-", "NULL2", "OUT", "V+", "NC"),
+                ref_prefix="U", source="TI LM741 datasheet, P package",
+                check=(
+                    "Pins 1 and 5 are for a 10k offset-trim pot and can stay open; pin 8 is "
+                    "not connected. It needs a split supply of about +-5 V or more."
+                )),
+    CatalogPart("lm339", "LM339", "ic", "dip-14",
+                "Quad comparator, open-collector outputs, single supply",
+                _legs("OUT2", "OUT1", "VCC", "IN1-", "IN1+", "IN2-", "IN2+",
+                      "IN3-", "IN3+", "IN4-", "IN4+", "GND", "OUT4", "OUT3"),
+                ref_prefix="U", source="TI LM339 datasheet, N package",
+                check=(
+                    "VCC is pin 3 and GND pin 12, and OUT1 is pin 2, not 1. The outputs only "
+                    "pull down: each one needs a pull-up resistor."
+                )),
+    CatalogPart("lm311", "LM311", "ic", "dip-8",
+                "Comparator with an open-collector output and its emitter on a pin",
+                _legs("EMIT", "IN+", "IN-", "V-", "BAL", "BAL/STRB", "COL", "V+"),
+                ref_prefix="U", source="TI LM311 datasheet, P package",
+                check=(
+                    "For a logic output put pin 1 (the emitter) on ground and a pull-up on pin 7 "
+                    "(the collector). V- is pin 4: on one supply, ground it too."
+                )),
     # -- modules ----------------------------------------------------------------------
     # -- switches ----------------------------------------------------------
     # A push button's four legs are two strips of metal, and which two legs are one strip is

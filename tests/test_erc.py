@@ -131,7 +131,8 @@ def test_the_catalog_s_supply_pins_are_exactly_the_ones_named_as_supplies() -> N
     """Measured over every pin name the catalog has. VP and VN on an ESP32 are GPIOs, VIN,
     VBUS and 3V3 on a module may be outputs, and none of them is a chip's supply. V+ and V-
     are a split-supply op-amp's rails and VS the LM386's; VBAT on a DS1307 is a coin cell it
-    can run without, and VREF on an ADC is the scale it measures against."""
+    can run without, and VREF on an ADC is the scale it measures against. VEE is the
+    74HC4051's negative rail, which lets it switch signals below ground."""
     found: dict[str, set[str]] = {}
     for entry in search_catalog(""):
         for _, name in entry.pin_names:
@@ -141,7 +142,7 @@ def test_the_catalog_s_supply_pins_are_exactly_the_ones_named_as_supplies() -> N
     assert found == {
         "positive": {"VCC", "VCC1", "VCC2", "VDD", "AVCC", "+VS", "V+", "VS"},
         "ground": {"GND", "AGND", "DGND"},
-        "negative": {"VSS", "V-"},
+        "negative": {"VSS", "V-", "VEE"},
     }
 
 

@@ -433,6 +433,19 @@ def test_a_plain_led_is_still_told_by_its_short_leg() -> None:
     assert note == "Anode (long lead) in C3; Cathode (short lead, flat on the rim) in D3"
 
 
+def test_a_4000_series_gate_is_not_pinned_like_a_74hc_one() -> None:
+    """The mistake a 74HC00 drawn on a CD4011's pins makes: two of its four outputs are on
+    the inside of the 4000-series package, pins 4 and 11, where the 74HC has an input."""
+    outputs = {}
+    for part_id in ("74hc00", "74hc08", "74hc32", "74hc86", "cd4011", "cd4093"):
+        part = catalog_part(part_id)
+        assert part is not None
+        outputs[part_id] = {number for number, name in part.pin_names if name.endswith("Y")}
+    assert outputs["74hc00"] == outputs["74hc08"] == outputs["74hc32"] == outputs["74hc86"]
+    assert outputs["74hc00"] == {"3", "6", "8", "11"}
+    assert outputs["cd4011"] == outputs["cd4093"] == {"3", "4", "10", "11"}
+
+
 #: Kingbright's circuit diagrams, segment by segment: which pin lights it.
 ONE_DIGIT = {"a": "7", "b": "6", "c": "4", "d": "2", "e": "1", "f": "9", "g": "10", "DP": "5"}
 FOUR_DIGITS = {"a": "11", "b": "7", "c": "4", "d": "2", "e": "1", "f": "10", "g": "5", "DP": "3",
