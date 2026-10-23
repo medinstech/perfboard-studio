@@ -196,6 +196,12 @@ closed without a bump.
 - **The README opens with three steps**: download it, draw a circuit or open an
   example, and press the button at the end of the step bar until the build guide opens.
   The two install links moved into the first step. In both languages.
+- **And with the window in motion.** The picture at the top of both READMEs is now the
+  application itself taking the 555 blinker example from the sheet to its build guide:
+  the welcome screen, the board dialog with every stock size tried, placing, routing, the
+  guide. `tools/make_workflow_demo.py` drives the real window offscreen and writes it in
+  either language, and `docs/RELEASING.md` re-records both after a version bump. The still
+  it replaced moved down beside the solder side.
 - **The Windows installer is about 58 MB instead of 103, and installs 275 MB instead of
   507.** The bundle packed all of VTK for the thirteen modules the 3D view uses -- VTK-m,
   HDF5, NetCDF, volume rendering, the web exporter -- and, from Qt and the MCP server's

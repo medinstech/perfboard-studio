@@ -29,12 +29,12 @@
   &nbsp;·&nbsp; <a href="./README.md">English</a>
 </p>
 
-![NE555 astable devresi yerleştirilmiş ve yönlendirilmiş hâliyle 2D editör](./docs/images/editor-component-side.png)
+![Pencere, çizilmiş bir NE555 devresinden montaj rehberine: adım çubuğunun sonundaki düğme bir kart seçtiriyor, parçaları yerleştiriyor, bağlantıları çekiyor ve rehberi açıyor](./docs/images/workflow.tr.gif)
 
 <p align="center">
-  İddianın tamamı durum çubuğunda: yedi net üzerinde on dört bağlantı, DRC hatası yok ve<br>
-  LVS şemayla aynı fikirde — bir de yalıtımı ölçülecek bir ped: aşağıdaki uyarı, montaj<br>
-  rehberinin multimetreyle yapılacak bir kontrole çevirdiği.
+  Çizilmiş ama henüz kurulmamış 555 flaşör örneği, adım çubuğunun sonundaki düğmeyle<br>
+  montaj rehberine kadar: devrenin denendiği hazır kart boylarından biri seçiliyor,<br>
+  parçalar yerleşiyor, bağlantılar çekilip denetleniyor.
 </p>
 
 ---
@@ -118,6 +118,14 @@ gelen rehber de yeniden bir lehimleme rehberidir.
 <a id="iki-yuz"></a>
 
 ## Her iki yüz, ve üçüncü boyut
+
+![NE555 astable devresi yerleştirilmiş ve yönlendirilmiş hâliyle 2D editör](./docs/images/editor-component-side.png)
+
+<p align="center">
+  İddianın tamamı durum çubuğunda: yedi net üzerinde on dört bağlantı, DRC hatası yok ve<br>
+  LVS şemayla aynı fikirde — bir de yalıtımı ölçülecek bir ped: aşağıdaki uyarı, montaj<br>
+  rehberinin multimetreyle yapılacak bir kontrole çevirdiği.
+</p>
 
 Bakır lehim yüzeyindedir; bu yüzden lehim yüzeyi bir "ayna modu" değil, tam yetkili bir
 görünümdür — ve **bakmadığınız** yüzdeki bakır taralı çizilir, çünkü kart saydam değildir

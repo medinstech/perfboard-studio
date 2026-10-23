@@ -29,12 +29,12 @@
   &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard-studio/blob/main/README.tr.md">Türkçe</a>
 </p>
 
-![the 2D editor, with an NE555 astable placed and routed](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/editor-component-side.png)
+![The window, from a drawn NE555 circuit to its build guide: the button at the end of the step bar chooses a board, places the parts, routes them and opens the guide](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/workflow.gif)
 
 <p align="center">
-  The status bar is the whole claim: fourteen connections across seven nets, no DRC<br>
-  error and LVS agreeing with the schematic — and one pad to measure for isolation, the<br>
-  warning below, which the build guide turns into a check with a meter.
+  The 555 blinker example, drawn and not yet built, taken to its build guide by the button<br>
+  at the end of the step bar: a board picked from every stock size the circuit was tried<br>
+  on, the parts placed, the connections routed and checked.
 </p>
 
 ---
@@ -120,6 +120,14 @@ holes it had, and the guide that comes with it is a soldering guide again.
 ![The NE555 astable on a half-size breadboard, placed and wired](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/breadboard-3d.png)
 
 ## Both faces, and the third dimension
+
+![the 2D editor, with an NE555 astable placed and routed](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/editor-component-side.png)
+
+<p align="center">
+  The status bar is the whole claim: fourteen connections across seven nets, no DRC<br>
+  error and LVS agreeing with the schematic — and one pad to measure for isolation, the<br>
+  warning below, which the build guide turns into a check with a meter.
+</p>
 
 The solder side is where the copper is, so it is a first-class view rather than a mirror
 mode — and copper on the face you are *not* looking at is hatched, because a board is

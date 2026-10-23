@@ -35,6 +35,10 @@ link definitions at the bottom of the file.
 __version__ = "0.4.0"
 ```
 
+Then re-record the two workflow GIFs the READMEs open with, so the version on their welcome
+screen is the release and not a `.dev` build (Pillow needed; on Windows, for the font):
+`python tools/make_workflow_demo.py && python tools/make_workflow_demo.py --lang tr`.
+
 **3. Dry-run the release workflow, before the tag exists.**
 
 ```sh
