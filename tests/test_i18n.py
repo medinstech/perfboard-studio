@@ -97,10 +97,15 @@ def loop_built_labels() -> set[str]:
     }
     # Every sentence the engine's descriptions are recognised by (ui/engine_text.py): data,
     # read through ``t(template)`` when one is shown.
-    from perfboard_studio.ui.engine_text import TEMPLATES
+    from perfboard_studio.ui.engine_text import FINDING_TEMPLATES, TEMPLATES
 
     return (
-        {scheme.label for scheme in SCHEMES} | tools | pairs | catalog_texts() | set(TEMPLATES)
+        {scheme.label for scheme in SCHEMES}
+        | tools
+        | pairs
+        | catalog_texts()
+        | set(TEMPLATES)
+        | set(FINDING_TEMPLATES)
     )
 
 

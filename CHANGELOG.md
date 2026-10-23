@@ -165,6 +165,14 @@ closed without a bump.
 
 ### Changed
 
+- **DRC and LVS findings are said in Turkish in a Turkish window.** The findings panel
+  was the one place a Turkish window still read English sentence after sentence: "Pin 1 of
+  X7 (net 'GND') is not connected to anything...". Every finding the checkers write -- 47
+  sentences and the words they are built from -- is now said in the window's language, with
+  its copper named by its ends and its parts by their references. The findings themselves
+  are unchanged: MCP, the headless run and the goldens read the English as they did. A
+  finding no sentence recognises is shown in English, whole, rather than half-translated.
+
 - **New Project asks a name and a place, and the board comes second.** It asked which
   board before there was a circuit to try on one, and then the Board step asked again: a
   breadboard chosen twice, and a perfboard size picked blind where step 2 would have tried

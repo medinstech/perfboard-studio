@@ -439,3 +439,51 @@ def test_a_finding_names_copper_by_its_ends() -> None:
     assert finding_text("Solder trace cond-2 meets cond-21.", {"cond-2": "C1\u2013C4"}) == (
         "Solder trace C1\u2013C4 meets cond-21."
     )
+
+
+
+def test_every_finding_template_is_in_the_catalogue_with_the_same_fields() -> None:
+    from perfboard_studio.ui.engine_text import FINDING_TEMPLATES
+
+    assert len(set(FINDING_TEMPLATES)) == len(FINDING_TEMPLATES)
+    for template in FINDING_TEMPLATES:
+        assert template in TURKISH, f"no Turkish for {template!r}"
+        assert _fields(TURKISH[template]) == _fields(template), template
+
+
+def test_every_finding_on_every_board_is_said_in_turkish(turkish: None) -> None:
+    """Every DRC and LVS finding on every board in the repository, as the panel shows it:
+    with its copper named by its ends, and in Turkish. A rule added, or a message reworded,
+    without its template shows up here as the English it would have shown."""
+    from perfboard_studio.drc import run_drc
+    from perfboard_studio.lvs import run_lvs
+    from perfboard_studio.ui.engine_text import finding_text, names_in
+
+    root = Path(__file__).resolve().parents[1]
+    boards = sorted((root / "tools" / "diffcheck" / "golden").glob("*.perf"))
+    boards += sorted((root / "examples").rglob("*.perf"))
+    untranslated: dict[str, str] = {}
+    seen: set[str] = set()
+    for path in boards:
+        document = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+        for bare in (False, True):
+            # And unrouted, where the findings are the ones a board just placed has.
+            doc = dataclasses.replace(document, conductors=()) if bare else document
+            drc = run_drc(doc, LOOKUP)
+            violations = drc.violations if hasattr(drc, "violations") else drc
+            lvs = run_lvs(doc, LOOKUP)
+            found = [(v.rule, v.message, v.conductor_ids) for v in violations]
+            found += [(i.kind, i.message, i.conductor_ids) for i in lvs.issues]
+            for rule, message, conductor_ids in found:
+                seen.add(rule)
+                names = names_in(doc, message, conductor_ids)
+                shown = finding_text(message, names)
+                set_language("en")
+                english = finding_text(message, names)
+                set_language("tr")
+                assert not re.search(r"\bcond-\d+|\bcmp-\d+", english), english
+                if shown == english:
+                    untranslated.setdefault(rule, english)
+    assert not untranslated, untranslated
+    # The boards reach most rules; the ones no board reaches are pinned by the template test.
+    assert {"pin-not-connected", "solder-trace-proximity", "unrouted-net"} <= seen
