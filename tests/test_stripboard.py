@@ -39,6 +39,7 @@ from perfboard_studio.model import (
     NetNode,
     PerfDocument,
     TrackCut,
+    WireConductor,
 )
 from perfboard_studio.stripboard import (
     cut_between,
@@ -539,6 +540,52 @@ def test_a_routed_stripboard_matches_its_schematic_under_lvs() -> None:
     result = run_lvs(bus.document, LOOKUP)
     assert result.summary.opens == 0, [issue.message for issue in result.issues]
     assert result.summary.shorts == 0, [issue.message for issue in result.issues]
+
+
+def _link(start: HoleCoord, end: HoleCoord) -> WireConductor:
+    """A link as anybody fits one: over the component side, from a free hole to a free hole."""
+    return WireConductor(id=f"link-{start.col}-{start.row}", path=(start, end), kind="top-jumper", side="top")
+
+
+def test_a_link_between_free_holes_joins_the_strips_it_lands_in() -> None:
+    """How a link goes onto Veroboard: into a free hole of each strip, through the board and
+    soldered to the copper, as a lead is. Only the copper side used to count, so this link
+    joined nothing, and LVS called a board that works open."""
+    doc = dataclasses.replace(
+        _doc(),
+        components=(_pin("R1", HoleCoord(1, 2)), _pin("R2", HoleCoord(1, 4))),
+        conductors=(_link(HoleCoord(6, 2), HoleCoord(6, 4)),),
+        nets=(_net("n1", "IN", ("R1", "1"), ("R2", "1")),),
+    )
+
+    assert are_pins_connected(doc, LOOKUP, PhysicalPinRef("R1", "1"), PhysicalPinRef("R2", "1"))
+    result = run_lvs(doc, LOOKUP)
+    assert result.summary.opens == 0, [issue.message for issue in result.issues]
+    # A link ending in a cut hole is soldered to nothing: the cut took that copper away.
+    cut = dataclasses.replace(doc, cuts=(TrackCut(id="cut-1", at=HoleCoord(6, 4)),))
+    assert not are_pins_connected(cut, LOOKUP, PhysicalPinRef("R1", "1"), PhysicalPinRef("R2", "1"))
+
+
+def test_lvs_sees_the_short_a_free_hole_link_makes() -> None:
+    """The half that builds a dead board: the same link between strips of two nets is a
+    short, and while only the copper side counted, LVS passed it."""
+    doc = dataclasses.replace(
+        _doc(),
+        components=(
+            _pin("R1", HoleCoord(1, 2)),
+            _pin("R2", HoleCoord(8, 2)),
+            _pin("R3", HoleCoord(1, 4)),
+            _pin("R4", HoleCoord(8, 4)),
+        ),
+        conductors=(_link(HoleCoord(5, 2), HoleCoord(5, 4)),),
+        nets=(
+            _net("n1", "IN", ("R1", "1"), ("R2", "1")),
+            _net("n2", "OUT", ("R3", "1"), ("R4", "1")),
+        ),
+    )
+
+    result = run_lvs(doc, LOOKUP)
+    assert result.summary.shorts == 1, [issue.message for issue in result.issues]
 
 
 def test_drc_reports_a_pin_standing_in_a_cut_hole() -> None:

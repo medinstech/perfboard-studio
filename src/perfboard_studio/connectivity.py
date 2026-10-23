@@ -26,6 +26,8 @@ Connection semantics -- the crux of this module:
     is one node. Nobody soldered those connections, which is the whole character of the
     board -- the design problem there is where to BREAK the copper, not where to add it.
     See stripboard.py; a cut destroys the copper at a hole and splits its strip in two.
+    Whatever ends in a hole on a run is on it, from either side: a link on the component
+    side goes down through its hole and is soldered to the strip, as a lead is.
 
 A node exists here only if something makes electrical contact at it: a component pin,
 or a conductor contact point. The pads a wire merely passes over are deliberately NOT
@@ -45,7 +47,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from itertools import pairwise
 
-from .breadboard import has_breadboard_pattern
 from .geometry import all_pin_holes, hole_key
 from .model import (
     BoardSide,
@@ -280,16 +281,16 @@ def _extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[P
     # see the note in the docstring. Registering them would put every empty hole on the
     # board into a net, and every consumer would filter them straight back out.
     #
-    # A breadboard's clip is INSIDE the hole and grips whatever is pushed into it from
-    # above, so there every node in a hole takes part -- a jumper's end is in the clip as
-    # surely as a lead is -- where on stripboard only the copper side does.
+    # Every node in a hole takes part, whichever side it was registered on. A breadboard's
+    # clip is INSIDE the hole and grips whatever is pushed into it from above, and a
+    # stripboard link's end goes down through its hole and is soldered to the strip under
+    # it, as a lead is. Only the copper side used to count on stripboard, so a link ending
+    # in a free hole joined nothing: LVS called the ordinary way of linking two strips an
+    # open, and could not see a link that shorted them.
     if board_joins_holes(doc.board):
-        either_side = has_breadboard_pattern(doc.board)
         by_segment: dict[tuple[int, int], list[str]] = {}
         for key in sorted(node_info):
             info = node_info[key]
-            if info.side != "bottom" and not either_side:
-                continue
             segment = segment_of(doc, info.hole)
             if segment is not None:
                 by_segment.setdefault(segment, []).append(key)

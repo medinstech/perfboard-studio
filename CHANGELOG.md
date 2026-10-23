@@ -348,6 +348,13 @@ closed without a bump.
   notice, and the release checks every bundle for every one of them, as it already checked
   the wheel.
 
+- **A link on stripboard joins the strips it is soldered into.** A link ending in a free
+  hole -- the usual way to link two strips -- was read as joining nothing, because only
+  what touched the copper side counted, and a link is fitted from the other side. So LVS
+  could call a board that works open, and could miss a short a link really makes. A
+  link's end now counts as soldered to its strip, as a lead does. If LVS passed a
+  stripboard of yours that has hand-drawn links, run it again.
+
 - **Enter in Add a Part takes the part the filter names.** The catalog is listed first and
   searched by what a part does as well as by its name, so typing "LED" and pressing Enter
   added a MAX7219, an LED display driver with 24 pins. Enter now takes the first row whose

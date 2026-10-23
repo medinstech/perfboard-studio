@@ -1437,6 +1437,11 @@ beside its three: on that board type the BOARD joins the holes along an uncut ru
 nobody soldered those connections. Only holes something is soldered into take part — a
 strip physically joins all thirty holes in its row, and registering the rest would put
 every empty pad into a net, which is what the module's own docstring says not to do.
+**What ends in a hole is on its strip from either side**: a link fitted over the component
+side goes down through its hole and is soldered to the copper, as a lead is. Only the
+copper side used to count, so a link ending in a free hole joined nothing. LVS called
+that ordinary way of linking two strips an open, and could not see a short such a link
+made (`test_lvs_sees_the_short_a_free_hole_link_makes`).
 
 `stripboard.py` owns the geometry, and one decision governs it: **a cut destroys the
 copper AT a hole** (`TrackCut.at`), because that is how a track is broken — a drill turned
@@ -1491,7 +1496,8 @@ Four decisions carry it, each with a test in `tests/test_breadboard.py`:
   `striproute` and the placer take a breadboard without a line about plastic. Two pins of
   different nets in one clip are an LVS short, never a DRC finding: the document is fine,
   the circuit is not. Connectivity's board pass takes EITHER side on a breadboard, because
-  the clip is inside the hole and grips a jumper pushed in from above.
+  the clip is inside the hole and grips a jumper pushed in from above (and on stripboard,
+  because a link's end is soldered through to its strip).
 - **A position with no hole is the third member of `unusable_holes`**
   (`geometry.holeless_positions`): the channel, the strips beside the rails, the column a
   rail skips. DRC calls a pin or a wire end there `no-hole`, and the placer and the router
