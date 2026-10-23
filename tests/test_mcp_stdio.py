@@ -23,6 +23,8 @@ from types import ModuleType
 
 import pytest
 
+from perfboard_studio.version import __version__
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC = REPO_ROOT / "src"
 CHECKER = REPO_ROOT / "packaging" / "check-mcp-stdio.py"
@@ -57,6 +59,17 @@ def _environment() -> dict[str, str]:
 def test_the_window_door_serves_mcp_with_nothing_else_on_stdout(door: list[str]) -> None:
     summary = _checker().check([sys.executable, *door], cwd=str(REPO_ROOT), env=_environment())
     assert "stdout clean" in summary
+    # The version a client is told is this release's, not the `mcp` library's.
+    assert summary.startswith(f"perfboard-studio {__version__}:"), summary
+
+
+def test_the_server_reports_this_release_as_its_version() -> None:
+    """``initialize`` answers serverInfo from these options; FastMCP alone gives the
+    ``mcp`` package's version there, which names a Perfboard Studio that does not exist."""
+    from perfboard_studio.mcp.server import mcp
+
+    options = mcp._mcp_server.create_initialization_options()
+    assert (options.server_name, options.server_version) == ("perfboard-studio", __version__)
 
 
 def test_the_checker_notices_a_stray_line_before_the_server() -> None:

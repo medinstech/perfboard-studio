@@ -228,6 +228,10 @@ closed without a bump.
   they now cancel and the installer exits with an error, so an upgrade over a copy that is
   still open fails and says so rather than waiting.
 
+- **The MCP server tells a client its own version.** It answered `initialize` with the
+  version of the `mcp` library it is built on, so a client listed "perfboard-studio
+  1.29.0", a release that does not exist. It reports this release's version now.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added

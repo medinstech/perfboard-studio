@@ -113,6 +113,10 @@ Nothing here writes to disk unless you name a path.
 """
 
 mcp: FastMCP[Any] = FastMCP("perfboard-studio", instructions=INSTRUCTIONS)
+# What `initialize` reports as serverInfo.version. FastMCP takes no version, and the server
+# under it then reports the `mcp` library's own -- a client listed "perfboard-studio 1.30.0",
+# a release that does not exist. The low-level server has the field; FastMCP never fills it.
+mcp._mcp_server.version = __version__
 
 #: One board per server process. See BoardSession for why it is not a workspace of them.
 session = BoardSession()
