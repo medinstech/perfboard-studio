@@ -105,19 +105,27 @@ def loop_built_labels() -> set[str]:
 
 
 def catalog_texts() -> set[str]:
-    """What the parts catalog says about each part, which its tooltip passes through t()."""
+    """What the parts catalog says about each part, which its row and tooltip pass through
+    t(): its summary, its check, and its NAME where the name describes the part -- a word
+    in lower case, as in "Tactile switch 6x6 mm" -- rather than being a number or a maker's
+    product name ("BC547", "Raspberry Pi Pico"), which reads the same in any language."""
     from perfboard_studio.catalog import CATALOG
 
-    return {text for part in CATALOG for text in (part.summary, part.check) if text}
+    described = {
+        part.name for part in CATALOG if re.search(r"(?<![A-Za-z])[a-z]{3,}(?![A-Za-z])", part.name)
+    }
+    return described | {text for part in CATALOG for text in (part.summary, part.check) if text}
 
 
-#: Catalog summaries that read the same in Turkish, and so have no entry: an entry mapped to
-#: itself is what ``test_every_catalogue_translates_to_something_different`` refuses.
+#: Catalog summaries and names that read the same in Turkish, and so have no entry: an entry
+#: mapped to itself is what ``test_every_catalogue_translates_to_something_different`` refuses.
 SAME_IN_TURKISH = {
     "NPN Darlington, 60 V, 5 A",
     "NPN Darlington, 100 V, 5 A",
     "PNP Darlington, 100 V, 5 A",
     "Schottky, 40 V, 1 A",
+    # A product's own name, "mini" and all.
+    "WEMOS D1 mini",
 }
 
 

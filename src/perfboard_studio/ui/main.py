@@ -694,7 +694,7 @@ def _archetype_headings() -> dict[BodyArchetype, str]:
 def _catalog_tooltip(part: CatalogPart) -> str:
     """What a catalog row says on hover: what the part is, how it is pinned, where that
     comes from and -- the line that matters -- what to check on the one in hand."""
-    lines = [f"{part.name} — {t(part.summary)}", part.footprint_id]
+    lines = [f"{t(part.name)} — {t(part.summary)}", part.footprint_id]
     if part.pin_names:
         lines.append(" ".join(f"{number}={name}" for number, name in part.pin_names[:12])
                      + (" …" if len(part.pin_names) > 12 else ""))
@@ -787,7 +787,10 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
             if part.category == category
             # In either language: "regülatör" finds a 7805 as "regulator" does.
             and part_matches(
-                part, text, also=f"{t(part.summary)} {headings[category]}", fold=_folded
+                part,
+                text,
+                also=f"{t(part.name)} {t(part.summary)} {headings[category]}",
+                fold=_folded,
             )
         ]
         if not parts:
@@ -800,8 +803,10 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
         tree.addTopLevelItem(group)
         for part in parts:
             packaged = get_footprint(part.footprint_id)
+            # A part NUMBER is the same in every language and has no entry; a name that
+            # describes the part -- "Tactile switch 6x6 mm" -- is said in the window's.
             leaf = QTreeWidgetItem(
-                [part.name, str(len(packaged.pins)) if packaged is not None else ""]
+                [t(part.name), str(len(packaged.pins)) if packaged is not None else ""]
             )
             leaf.setData(0, ROLE_FOOTPRINT_ID, part.footprint_id)
             leaf.setData(0, ROLE_CATALOG_ID, part.id)

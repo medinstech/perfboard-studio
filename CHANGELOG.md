@@ -92,13 +92,16 @@ closed without a bump.
 - **A catalog search reads a word the way a person types it.** "LM358N", "NE555P",
   "SN74HC595N", "L7805CV" and "ATtiny85-20PU" find the part whose number they carry, with a
   package letter, a maker's prefix or an ordering code on it, and "LM350" still does not
-  find the LM35. Hyphens and spaces no
-  longer count, so "opamp" finds the op-amp and "5v regulator" the 7805. A part can carry
-  aliases for words its summary does not say: "stepper" and "28BYJ-48" find the ULN2003A,
-  "motor driver" the L293D. Parts the words NAME come before parts whose summary merely
-  mentions them, so "switch" lists the push buttons ahead of the 2N2222A. The Parts panel
-  and `list_catalog` search one way, through `catalog.part_matches` -- the panel used to
-  look for the whole text as one piece, so "op amp" found nothing there.
+  find the LM35. Hyphens and spaces no longer count, so "opamp" finds the op-amp and "5v
+  regulator" the 7805. A part can carry aliases for words its summary does not say:
+  "stepper" and "28BYJ-48" find the ULN2003A, "motor driver" the L293D. Parts the words
+  NAME come before parts whose summary merely mentions them, so "switch" lists the push
+  buttons ahead of the 2N2222A. The Parts panel and `list_catalog` search one way, through
+  `catalog.part_matches` -- the panel used to look for the whole text as one piece, so "op
+  amp" found nothing there.
+- **In Turkish, a catalog part named for what it is is named in Turkish**: "Tact buton 6×6
+  mm" beside the package row "Tact buton, 4 pin", where it said "Tactile switch 6x6 mm",
+  and the Turkish name finds it. A part number is printed as it is on the part.
 - **The README opens with three steps**: download it, draw a circuit or open an
   example, and press the button at the end of the step bar until the build guide opens.
   The two install links moved into the first step. In both languages.

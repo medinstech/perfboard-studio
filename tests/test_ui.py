@@ -12706,6 +12706,29 @@ def test_in_turkish_the_catalog_says_what_a_part_is_in_turkish() -> None:
         set_language(before)
 
 
+def test_in_turkish_a_part_named_for_what_it_is_is_named_in_turkish() -> None:
+    """"Tactile switch 6x6 mm" sat in English beside the package row "Tact buton, 4 pin". A
+    name that describes the part is said in the window's language, and found by it; a part
+    NUMBER is printed as it is on the part."""
+    from perfboard_studio.ui.i18n import language, set_language
+
+    before = language()
+    set_language("tr")
+    try:
+        window = _blank_window()
+        try:
+            window.library_filter.setText("buton")
+            switch = _catalog_leaf(window, "tact-6x6")
+            assert switch is not None and switch.text(0) == "Tact buton 6×6 mm"
+            window.library_filter.setText("BC547")
+            transistor = _catalog_leaf(window, "bc547")
+            assert transistor is not None and transistor.text(0) == "BC547"
+        finally:
+            _close(window)
+    finally:
+        set_language(before)
+
+
 def test_the_module_wizard_describes_a_module_and_its_pin_names() -> None:
     from perfboard_studio.footprints import get_footprint
     from perfboard_studio.ui.main import CustomPartDialog

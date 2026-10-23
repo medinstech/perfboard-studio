@@ -1936,6 +1936,12 @@ TURKISH: Mapping[str, str] = {
     ),
     "Timer": "Zamanlayıcı",
     "Switches": "Anahtarlar",
+    # Catalog names that describe the part; a part NUMBER has no entry and stays as printed.
+    "Tactile switch 6x6 mm": "Tact buton 6×6 mm",
+    "Tactile switch 12x12 mm": "Tact buton 12×12 mm",
+    "PTC resettable fuse": "PTC kendini sıfırlayan sigorta",
+    "Pololu A4988 carrier": "Pololu A4988 taşıyıcı kartı",
+    "Pololu DRV8825 carrier": "Pololu DRV8825 taşıyıcı kartı",
     "Momentary push button, legs 6.5 x 4.5 mm": (
         "Basılı tutulduğunda kapanan buton, bacaklar arası 6,5 × 4,5 mm"
     ),
