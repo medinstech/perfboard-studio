@@ -223,6 +223,10 @@ _XIAO_RIGHT = ("5V", "GND", "3V3", "D10/MOSI", "D9/MISO", "D8/SCK", "D7/RX")
 # the logic down the right, read off the nets of the two header rows on its Eagle board.
 _TB6612_LEFT = ("VM", "VCC", "GND", "A01", "A02", "B02", "B01", "GND")
 _TB6612_RIGHT = ("PWMA", "AIN2", "AIN1", "STBY", "BIN1", "BIN2", "PWMB", "GND")
+# Pololu's DRV8833 carrier from the top, as its pinout picture has it; the board prints the
+# names on its back, with SLP and FLT for nSLEEP and nFAULT.
+_DRV8833_LEFT = ("GND", "VMM", "BIN1", "BIN2", "AIN2", "AIN1", "SLP", "FLT")
+_DRV8833_RIGHT = ("GND", "VIN", "BOUT1", "BOUT2", "AOUT2", "AOUT1", "AISEN", "BISEN")
 
 _SWITCH_LEGS = (
     "The two legs on one side are the switched pair; the two straight across are one "
@@ -876,6 +880,23 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "VCC is the logic's supply, 2.7 to 5.5 V; VM is the motors'. " + _MODULE_TOP
                 ),
                 aliases=("motor driver", "H-bridge", "DC motor")),
+    CatalogPart("pololu-drv8833", "Pololu DRV8833 carrier", "module",
+                "mod-2x8-p4-r1-12.7x20.32x2-s8.5",
+                "Two DC motors or one stepper, 2.7 to 10.8 V, 1.2 A per channel (2 A peak), "
+                "rows 10.16 mm apart",
+                _two_columns(_DRV8833_LEFT, _DRV8833_RIGHT), ref_prefix="U",
+                value="Pololu DRV8833",
+                source=(
+                    "Pololu item 2130: the 0.5 x 0.8 inch board from the dimension diagram, "
+                    "the pins from the pinout picture, voltages and currents from its "
+                    "specifications"
+                ),
+                check=(
+                    "VMM is the motor supply after the board's reverse-protection MOSFET: an "
+                    "output, not a second input. AISEN and BISEN are joined to GND on the board "
+                    "until the traces are cut for sense resistors. " + _MODULE_TOP
+                ),
+                aliases=("motor driver", "H-bridge", "DC motor", "stepper")),
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}

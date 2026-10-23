@@ -34,6 +34,12 @@ closed without a bump.
   by the order its pins are printed in -- "(GND VCC SCL SDA)" and "(VCC GND SCL SDA)" --
   because it is sold both ways and the wrong one kills it; the check says to read the
   board in hand. "oled", "ultrasonic" and "sonar" find them.
+- **Pololu's DRV8833 dual motor driver carrier**, drawn as itself from Pololu's own top-view
+  pinout picture -- the QFN, the reverse-protection MOSFET and its diode, the capacitors and
+  resistors -- with its names printed over the parts, as Pololu prints them on the back.
+  Its check says VMM is an output after the protection MOSFET, and that AISEN and BISEN are
+  joined to GND until their traces are cut.
+
 - **SparkFun's dual TB6612FNG motor driver**, drawn as itself on its red board: the
   SSOP-24, its two decoupling capacitors and its tantalum, every position read off
   SparkFun's own Eagle board and named from the nets of its two header rows. Its check says

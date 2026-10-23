@@ -1978,6 +1978,21 @@ TURKISH: Mapping[str, str] = {
         "satılır ve ters bağlanırsa yanar. Sizinkiyle aynı sıradaki girişi seçin. Pinlerin "
         "kartın neresinde durduğu ve header'ında ne kadar yükseldiği tahmindir."
     ),
+    "Pololu DRV8833 carrier": "Pololu DRV8833 taşıyıcı kartı",
+    "Two DC motors or one stepper, 2.7 to 10.8 V, 1.2 A per channel (2 A peak), rows "
+    "10.16 mm apart": (
+        "İki DC motor ya da bir step motor, 2,7 ile 10,8 V arası, kanal başına 1,2 A (tepe "
+        "2 A), sıralar arası 10,16 mm"
+    ),
+    "VMM is the motor supply after the board's reverse-protection MOSFET: an output, not a "
+    "second input. AISEN and BISEN are joined to GND on the board until the traces are cut "
+    "for sense resistors. The height of what is on the board is an estimate, and so is its "
+    "colour; the pins, the rows and the board outline are measured.": (
+        "VMM, kartın ters kutup koruma MOSFET'inden sonraki motor beslemesidir: ikinci bir "
+        "giriş değil, bir çıkıştır. AISEN ve BISEN, akım algılama dirençleri için yollar "
+        "kesilene kadar kart üzerinde GND'ye bağlıdır. Kartın üzerindekilerin yüksekliği "
+        "ve rengi tahmindir; pinler, sıralar ve kart çevresi ölçülmüştür."
+    ),
     "SparkFun TB6612FNG motor driver": "SparkFun TB6612FNG motor sürücüsü",
     "Two DC motors, 2.5 to 13.5 V, 1 A each (3.2 A peak), rows 15.24 mm apart": (
         "İki DC motor, 2,5 ile 13,5 V arası, motor başına 1 A (tepe 3,2 A), sıralar arası "

@@ -119,6 +119,7 @@ def _footprint(footprint_id: str):
         ("Pololu A4988", "pololu-a4988"),
         ("Pololu DRV8825", "pololu-drv8825"),
         ("SparkFun TB6612FNG", "sparkfun-tb6612fng"),
+        ("Pololu DRV8833", "pololu-drv8833"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
     ],
@@ -584,6 +585,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "seeed-xiao-esp32c3": ESPRESSIF_BLACK,
         "lm2596-module": None,  # the blue every seller's board is
         "sparkfun-tb6612fng": SPARKFUN_RED,
+        "pololu-drv8833": PICO_MODULE.board_colour,
     }
     # A Pico named on a board the layout was not drawn for is not coloured as one.
     square = "mod-2x20-p7-r1-30x30x3.5-s8.5"

@@ -639,6 +639,41 @@ SPARKFUN_TB6612_MODULE = ModuleArt(
     ),
 )
 
+#: Pololu's DRV8833 dual motor driver carrier (item 2130) as its own top-view pinout picture
+#: has it: the 10 uF capacitor and the 180 ohm resistor along the top, the reverse-
+#: protection MOSFET and its diode under them, the QFN in the middle, small capacitors and
+#: resistors down the left, and the four pads for the sense resistors, unfitted, at the
+#: bottom (bare copper, not drawn). Positions measured on that picture at 19.7 px/mm against
+#: the 0.4 inch between its header rows; sizes are the packages' own (TI's RTY outline for
+#: the chip). The parts stand close to the pins on both sides, and Pololu prints the names
+#: on the back, so they are printed over the parts.
+POLOLU_DRV8833_MODULE = ModuleArt(
+    key="pololu-drv8833",
+    board_colour=PICO_MODULE.board_colour,
+    names=("pololu drv8833",),
+    board=(20.32, 12.7),
+    pins=16,
+    frame="columns",
+    landmark=("VMM", -1, -1),
+    names_over_parts=True,
+    parts=(
+        ArtPart("chip-c", -8.42, 1.6, 3.2, 1.6, 1.6, along_v=True),
+        ArtPart("chip-r", -8.08, -2.27, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("sma", -6.31, -1.42, 1.7, 1.25, 0.9, along_v=True),
+        ArtPart("sot23", -5.49, 1.9, 2.4, 2.9, 1.1, along_v=True),
+        ArtPart("chip-c", -4.71, -1.88, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", -3.17, 2.01, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("chip-c", -0.34, -3.01, 1.6, 0.8, 0.8),
+        ArtPart("qfn", 0.8, 0.51, 4.0, 4.0, 0.8, text="8833"),
+        ArtPart("chip-c", 3.85, -2.96, 1.6, 0.8, 0.8),
+        ArtPart("chip-r", 7.31, -2.65, 1.6, 0.8, 0.45),
+    ),
+    source=(
+        "Pololu item 2130: the top-view pinout picture (positions) and the dimension diagram "
+        "(the 0.5 x 0.8 inch board); TI DRV8833 RTY package (the 4 x 4 mm chip)"
+    ),
+)
+
 MODULE_ARTS: tuple[ModuleArt, ...] = (
     LM2596_MODULE,
     SN65HVD230_MODULE,
@@ -651,6 +686,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     POLOLU_DRV8825_MODULE,
     XIAO_ESP32C3_MODULE,
     SPARKFUN_TB6612_MODULE,
+    POLOLU_DRV8833_MODULE,
 )
 
 
