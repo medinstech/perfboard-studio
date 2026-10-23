@@ -328,6 +328,18 @@ closed without a bump.
   calls K; an LED with more legs keeps it beside pin 1, as the makers' drawings of RGB
   LEDs have it.
 
+- **The window's build guide never said to cut a stripboard's tracks.** The exported guide
+  has always had a table of them, but the Build Guide panel listed only the steps and the
+  checks, so the cuts were in it only as "I11 ↔ K11 must be open", and Next Step to Do went
+  straight past them to the first part. A stripboard built from the panel kept every strip
+  whole, with every part on a strip joined to its neighbours. If you built one from the
+  panel, check it against the exported guide's "Cut these tracks first" table before
+  powering it. The cuts are the first rows of Preparation now,
+  "Cut these tracks first": ticked and remembered like steps, the first place Next Step to
+  Do stops, and picking one shows the hole on the board. The guide's summary counts them
+  ("9 track(s) to cut"). A check in the panel says how to measure it when hovered, and
+  shows where the probes go when picked.
+
 - **The build guide says what a lead's name means on the part it is on.** A pin called A
   or K was read as an LED's lead wherever it was. A catalog 1N4148 was "Cathode (short
   lead, flat on the rim)", though a diode has neither; a 6N137, a 74HC165 or a MAX485 was

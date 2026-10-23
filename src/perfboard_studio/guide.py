@@ -2765,8 +2765,13 @@ def describe(guide: Guide) -> str:
             steps=guide.total_steps,
             phases=phases,
         ),
-        say("{count} check(s)", count=guide.checkpoint_count),
     ]
+    # Before the checks, as the cuts come before everything on the bench. A stripboard's
+    # summary said "15 wire(s) to cut" and nothing about the nine tracks, which the window's
+    # guide did not list either.
+    if guide.track_cuts:
+        parts.append(say("{count} track(s) to cut", count=len(guide.track_cuts)))
+    parts.append(say("{count} check(s)", count=guide.checkpoint_count))
     if guide.cut_list:
         parts.append(say("{count} wire(s) to cut", count=len(guide.cut_list)))
     if guide.lead_list:

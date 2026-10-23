@@ -237,6 +237,7 @@ from perfboard_studio.geometry import (
     preset_mounting_holes,
 )
 from perfboard_studio.guide import (
+    Checkpoint,
     Guide,
     GuideOptions,
     GuideStep,
@@ -290,7 +291,7 @@ from perfboard_studio.parsers.kicad_parts import (  # noqa: F401 - guess_footpri
     guess_footprint_id,
     plan_import,
 )
-from perfboard_studio.phrasebook import GuideLanguage, guide_language
+from perfboard_studio.phrasebook import GuideLanguage, guide_language, phrasebook
 from perfboard_studio.placer import (
     BoardSuggestion,
     DesignPlacement,
@@ -4013,6 +4014,16 @@ def _step_line(step: GuideStep, language: GuideLanguage) -> str:
     if isinstance(step, PartStep):
         return step.title
     return f"{step.net_name} · {conductor_word(step.conductor_kind, language)} — {step.span}"
+
+
+def _check_row(checkpoint: Checkpoint) -> QTreeWidgetItem:
+    """A check in the guide panel: what to measure, how and what to expect one hover away,
+    and where the probes go on the board when it is picked."""
+    row = QTreeWidgetItem([f"✓ {checkpoint.title}"])
+    row.setForeground(0, QColor(OK))
+    row.setToolTip(0, f"{checkpoint.instruction}\n{checkpoint.expected}")
+    row.setData(0, ROLE_HOLES, checkpoint.holes)
+    return row
 
 
 class _OpensPanel(QObject):
@@ -8571,8 +8582,9 @@ class MainWindow(QMainWindow):
         blocked = tree.blockSignals(True)
         tree.clear()
         index = 0
-        for phase in guide.phases:
-            if phase.is_empty:
+        for number, phase in enumerate(guide.phases):
+            cuts = guide.track_cuts if number == 0 else ()
+            if phase.is_empty and not cuts:
                 # The order is physical, not editorial (guide.py), and a board simply may
                 # not need a phase. An empty heading reads as a step somebody forgot.
                 continue
@@ -8580,6 +8592,8 @@ class MainWindow(QMainWindow):
             head.setData(0, ROLE_PHASE_TITLE, f"{phase.number}. {phase.title}")
             head.setFlags(head.flags() & ~Qt.ItemFlag.ItemIsSelectable)
             tree.addTopLevelItem(head)
+            if cuts:
+                head.addChild(self._track_cut_rows(guide, done))
             for step in phase.steps:
                 line = _step_line(step, guide.language)
                 leaf = QTreeWidgetItem([line])
@@ -8594,16 +8608,55 @@ class MainWindow(QMainWindow):
                 head.addChild(leaf)
                 index += 1
             for checkpoint in phase.checkpoints:
-                mark = QTreeWidgetItem([f"✓ {checkpoint.title}"])
-                mark.setForeground(0, QColor(OK))
-                mark.setFlags(mark.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-                head.addChild(mark)
+                head.addChild(_check_row(checkpoint))
             head.setExpanded(True)
         self._show_guide_progress()
         tree.blockSignals(blocked)
         # Every step accounted for, or the panel and the slider are counting different
         # things and one of them is wrong.
         assert index == len(steps), f"{index} steps in phases, {len(steps)} in the flat list"
+
+    def _track_cut_rows(self, guide: Guide, done: set[str]) -> QTreeWidgetItem:
+        """The tracks to cut on stripboard, one tickable row each, first in Preparation.
+
+        The panel had none of them. The export has always had a table of them, "Cut these
+        tracks first", but the window listed only the steps and the checks, so the cuts
+        were in it only as "I11 ↔ K11 must be open" -- and Next Step to Do walked straight
+        past them to the first resistor: a board built from the window was a board with
+        every strip still whole. They are rows here, ticked and remembered like steps and
+        the first thing Next Step to Do stops at; they are not steps in the slider's count,
+        because a cut adds nothing to the board the 3D view could show going in.
+        """
+        say = phrasebook(guide.language)
+        board = guide.board
+        title = say("Cut these tracks first")
+        group = QTreeWidgetItem([title])
+        group.setData(0, ROLE_PHASE_TITLE, title)
+        group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        # The export's own paragraph, word for word: how a cut is made, and why all of
+        # them come before the first part.
+        group.setToolTip(
+            0,
+            say(
+                "{count} cut(s), made from the copper side with a spot-face cutter or a 3 mm "
+                "drill turned by hand. Each one takes the pad with it, so the hole it is made in "
+                "has nothing to solder to afterwards. Do them all before the first part goes in "
+                "— once a part is over a hole there is no way back to it.",
+                count=len(guide.track_cuts),
+            ),
+        )
+        for cut in guide.track_cuts:
+            focus = f"cut:{cut.at.col},{cut.at.row}"
+            line = f"{format_hole(cut.at, board)} · {cut.strip}"
+            row = QTreeWidgetItem([line])
+            row.setToolTip(0, line)
+            row.setData(0, ROLE_STEP_FOCUS, focus)
+            row.setData(0, ROLE_HOLES, (cut.at, *(cut.separates or ())))
+            row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            row.setCheckState(0, Qt.CheckState.Checked if focus in done else Qt.CheckState.Unchecked)
+            group.addChild(row)
+        group.setExpanded(True)
+        return group
 
     # -- progress through the build ---------------------------------------------------
 
@@ -8640,12 +8693,13 @@ class MainWindow(QMainWindow):
             settings.setValue(progress_key(new), sorted(ticks))
 
     def _guide_leaves(self) -> list[QTreeWidgetItem]:
-        """Every step's row, in build order."""
+        """Every row that is ticked off -- the tracks to cut, then the steps -- in build
+        order."""
         found = QTreeWidgetItemIterator(self.guide_tree)
         leaves = []
         while found.value() is not None:
             item = found.value()
-            if item.data(0, ROLE_STEP_INDEX) is not None:
+            if item.data(0, ROLE_STEP_FOCUS) is not None:
                 leaves.append(item)
             found += 1
         return leaves
@@ -8659,12 +8713,20 @@ class MainWindow(QMainWindow):
         try:
             leaves = self._guide_leaves()
             done = sum(leaf.checkState(0) == Qt.CheckState.Checked for leaf in leaves)
-            for index in range(tree.topLevelItemCount()):
-                head = tree.topLevelItem(index)
+            # Every phase, and the cuts' own heading inside Preparation.
+            heads = [tree.topLevelItem(index) for index in range(tree.topLevelItemCount())]
+            heads += [
+                child
+                for phase in list(heads)
+                if phase is not None
+                for child in (phase.child(i) for i in range(phase.childCount()))
+                if child is not None and child.data(0, ROLE_PHASE_TITLE) is not None
+            ]
+            for head in heads:
                 if head is None:
                     continue
                 children = [head.child(i) for i in range(head.childCount())]
-                rows = [c for c in children if c is not None and c.data(0, ROLE_STEP_INDEX) is not None]
+                rows = [c for c in children if c is not None and c.data(0, ROLE_STEP_FOCUS) is not None]
                 ticked = sum(row.checkState(0) == Qt.CheckState.Checked for row in rows)
                 title = str(head.data(0, ROLE_PHASE_TITLE))
                 if rows:
@@ -8742,6 +8804,17 @@ class MainWindow(QMainWindow):
             return
         index = items[0].data(0, ROLE_STEP_INDEX)
         if index is None:
+            # A track to cut, or a check: the holes it is about -- the cut and the two it
+            # separates, or where the probes go. A cut comes before any part, so the 3D
+            # view shows the bare board for it.
+            holes = items[0].data(0, ROLE_HOLES)
+            if holes:
+                self.scene.clearSelection()
+                self.view.reveal_holes(list(holes), self.bus.document.board, self.side)
+            focus = items[0].data(0, ROLE_STEP_FOCUS)
+            cut = isinstance(focus, str) and focus.startswith("cut:")
+            if cut and self.assembly_slider is not None and self.assembly_slider.isEnabled():
+                self.assembly_slider.setValue(0)
             return
         steps = self._assembly_cached
         if not 0 <= index < len(steps):

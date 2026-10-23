@@ -13250,6 +13250,97 @@ def test_what_routing_says_carries_no_timing(monkeypatch) -> None:
             _close(window)
 
 
+def _routed_on_stripboard(monkeypatch):
+    """ne555-astable on a stripboard, planned by the window: a board with tracks to cut."""
+    # A problem the planner had is said in a dialog, which would wait for a click forever.
+    monkeypatch.setattr("perfboard_studio.ui.main.QMessageBox.information", lambda *args, **kwargs: None)
+    example = _example_document("ne555-astable")
+    strips = dataclasses.replace(
+        example,
+        board=dataclasses.replace(example.board, type="stripboard", strip_axis="horizontal"),
+        conductors=(),
+    )
+    window = _window_on(strips)
+    window.on_autoroute_all()
+    assert window.bus.document.cuts, "the planner should have cut a track"
+    window.dock_guide.show()
+    window._refresh_guide_panel()
+    return window
+
+
+def _guide_rows(window):
+    from perfboard_studio.ui.main import QTreeWidgetItemIterator
+
+    found = QTreeWidgetItemIterator(window.guide_tree)
+    rows = []
+    while found.value() is not None:
+        rows.append(found.value())
+        found += 1
+    return rows
+
+
+def test_the_guide_panel_says_to_cut_the_tracks_first(monkeypatch, _settings_in_a_temp_file) -> None:
+    """The export has a table of the tracks to cut, and the window's guide had nothing:
+    the cuts were there only as "I11 ↔ K11 must be open" checks, and Next Step to Do went
+    straight past them to the first resistor -- a board built from the window kept every
+    strip whole. They are the first rows of Preparation now, ticked like steps, and the
+    first place Next Step to Do stops."""
+    from perfboard_studio.ui.main import ROLE_STEP_FOCUS
+
+    window = _routed_on_stripboard(monkeypatch)
+    try:
+        guide = window.current_guide()
+        assert guide.track_cuts
+        heading = next(row for row in _guide_rows(window) if row.text(0).startswith("Cut these tracks first"))
+        assert heading.text(0) == f"Cut these tracks first ({len(guide.track_cuts)})"
+        assert "copper side" in heading.toolTip(0)
+        cuts = [heading.child(i) for i in range(heading.childCount())]
+        assert [row.text(0).split(" · ")[0] for row in cuts] == [
+            format_hole(cut.at, window.bus.document.board) for cut in guide.track_cuts
+        ]
+        assert "track(s) to cut" in window.guide_summary.text()
+        # A cut's check says how to measure it, one hover away.
+        check = next(row for row in _guide_rows(window) if "must be open" in row.text(0))
+        assert "measure resistance" in check.toolTip(0)
+
+        window.on_next_step_to_do()
+        assert window.guide_tree.currentItem().text(0) == cuts[0].text(0)
+
+        # Every cut ticked: Next Step to Do moves on to the first part, and the cuts stay
+        # ticked across a rebuild of the panel.
+        for row in cuts:
+            row.setCheckState(0, Qt.CheckState.Checked)
+        assert heading.text(0).endswith(f"({len(cuts)}/{len(cuts)})")
+        window._refresh_guide_panel()
+        window.on_next_step_to_do()
+        picked = window.guide_tree.currentItem()
+        assert not str(picked.data(0, ROLE_STEP_FOCUS)).startswith("cut:")
+        assert picked.data(0, ROLE_STEP_FOCUS) is not None
+    finally:
+        _close(window)
+
+
+def test_the_tracks_to_cut_are_said_in_turkish_in_a_turkish_window(
+    monkeypatch, _settings_in_a_temp_file
+) -> None:
+    from perfboard_studio.ui.i18n import language, set_language
+
+    before = language()
+    set_language("tr")
+    try:
+        window = _routed_on_stripboard(monkeypatch)
+        try:
+            texts = [row.text(0) for row in _guide_rows(window)]
+            heading = next(row for row in _guide_rows(window) if row.text(0).startswith("Önce bu şeritleri kes"))
+            assert "bakır" in heading.toolTip(0), heading.toolTip(0)
+            assert not any(text.startswith("Cut these") for text in texts)
+            assert "kesilecek" in window.guide_summary.text() and "şerit" in window.guide_summary.text()
+        finally:
+            _close(window)
+    finally:
+        set_language(before)
+
+
 @pytest.mark.parametrize("footprint_id", ["led-3mm", "led-5mm", "led-10mm"])
 def test_an_leds_flat_is_on_its_cathode_in_2d_too(footprint_id: str) -> None:
     """The 2D twin of ``test_model_leads::test_an_leds_flat_is_on_its_cathode``. The flat

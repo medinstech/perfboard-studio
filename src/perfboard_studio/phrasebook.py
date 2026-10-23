@@ -806,6 +806,7 @@ TURKISH: dict[str, str] = {
     # -- the summary line -----------------------------------------------------------------
     "{steps} step(s) across {phases} phase(s)": "{phases} aşamada {steps} adım",
     "{count} check(s)": "{count} kontrol",
+    "{count} track(s) to cut": "kesilecek {count} şerit",
     "{count} wire(s) to cut": "kesilecek {count} tel",
     "{count} warning(s)": "{count} uyarı",
     # -- the exported guide ---------------------------------------------------------------
