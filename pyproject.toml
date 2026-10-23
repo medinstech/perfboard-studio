@@ -69,6 +69,10 @@ dev = [
     "mypy>=1.13",
     "ruff>=0.8",
     "pyinstaller>=6.10",
+    # The first release with a hook per VTK module. perfboard-studio.spec packs only the
+    # VTK modules the application imports and relies on those hooks for the ones VTK
+    # imports from C; an older one builds a bundle whose 3D view cannot start.
+    "pyinstaller-hooks-contrib>=2025.3",
     # PyPI's own classifier list, as data. `twine check --strict` does NOT validate
     # classifiers -- it only checks that the description renders -- so an invented one
     # passes every local check and is refused by the upload, after the tag exists.

@@ -95,6 +95,19 @@ closed without a bump.
 - **The README opens with three steps**: download it, draw a circuit or open an
   example, and press the button at the end of the step bar until the build guide opens.
   The two install links moved into the first step. In both languages.
+- **The Windows installer is about 58 MB instead of 103, and installs 275 MB instead of
+  507.** The bundle packed all of VTK for the thirteen modules the 3D view uses -- VTK-m,
+  HDF5, NetCDF, volume rendering, the web exporter -- and, from Qt and the MCP server's
+  dependencies, things the application never loads: Qt's software OpenGL, the on-screen
+  keyboard and the Qt Quick under it, the PDF image plugin, Pillow, the `cryptography`
+  package and a copy of mypy. They are gone, and so are Qt's dialog translations for the
+  thirty languages the window cannot be switched to. Measured on a Windows build of this
+  tree, before and after, both installers compiled by makensis 3.11: 103.4 MB became
+  57.8 MB, 1,637 installed files became 1,077, and the built
+  application -- with the change below -- starts in 1.1 s instead of 1.8 and draws the 3D
+  view and the guide's step pictures exactly as a source run does. The AppImage and the
+  disk image are built from the same spec and lose the same VTK and Python parts; their
+  new sizes are not measured yet.
 - **The window opens in about half the time.** It imported the 3D view -- VTK and numpy --
   at start, for a panel that starts shut; it now imports it when the panel is first opened,
   or a 3D picture is first asked for. Time from launch to a window on screen, from source

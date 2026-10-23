@@ -1,9 +1,16 @@
 # PyInstaller build spec.  Build with:  pyinstaller perfboard-studio.spec --noconfirm
 #
-# VTK is the awkward dependency here, for the same reason OCCT is awkward elsewhere: it
-# ships a large number of binary extension modules that are imported by name at run time
-# rather than by a statement PyInstaller's analysis can see.  collect_all pulls them in
-# wholesale, which is heavy but reliable.
+# VTK is packed by what the application IMPORTS, not collected wholesale.  It used to be
+# `collect_all("vtkmodules")`, because VTK's binary modules import one another by name
+# from C, where PyInstaller's analysis cannot see it -- true, and answered since
+# pyinstaller-hooks-contrib 2025.3 by a hook per VTK module naming exactly those imports
+# (hence the floor in pyproject.toml).  `ui/view3d.py` imports the thirteen modules it
+# draws with by name (`tests/test_startup.py`), so the analysis finds them and the hooks
+# find the rest.  Collecting everything packed 290 MB of VTK binaries where 140 MB are
+# used: VTK-m, HDF5, NetCDF, volume rendering, the web exporter, charts and every reader
+# nobody calls.  What catches a module missing from this is release.yml running the built
+# bundle: `--headless` on Windows and Linux (rendering through it under xvfb), and the
+# offscreen-GL probe on macOS.
 #
 # PySide6 needs no such help -- PyInstaller has shipped a hook for it for years -- so it
 # is deliberately NOT collected wholesale.  Doing that pulls in QtWebEngine and a dozen
@@ -12,17 +19,9 @@ import re
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_submodules
 
 datas, binaries, hiddenimports = [], [], []
-for package in ("vtkmodules",):
-    try:
-        d, b, h = collect_all(package)
-        datas += d
-        binaries += b
-        hiddenimports += h
-    except Exception as exc:                      # optional at build time
-        print(f"[spec] skipping {package}: {exc}")
 
 hiddenimports += collect_submodules("perfboard_studio")
 
@@ -157,9 +156,51 @@ a = Analysis(
     datas=datas,
     hiddenimports=hiddenimports,
     excludes=["tkinter", "PyQt5", "PyQt6", "IPython", "jupyter", "pytest",
-              "matplotlib", "numba", "llvmlite"],
+              "matplotlib", "numba", "llvmlite",
+              # Reached only through pygments' image formatter, which takes its absence.
+              # 13 MB.
+              "PIL",
+              # Imported by PyJWT for the MCP *client's* OAuth, which takes its absence;
+              # the server this bundle carries never signs anything.  9 MB, and a
+              # runtime hook that ran on every start.
+              "cryptography",
+              # pydantic's mypy plugin, which brings mypy: a type checker in an
+              # application.  3 MB.
+              "mypy", "pydantic.mypy", "pydantic.v1.mypy",
+              # VTK's Qt widget imports these only when `vtkmodules.qt.QVTKRWIBase` is
+              # "QOpenGLWidget".  It is "QWidget" unless somebody sets it, and nothing
+              # here does: VTK opens its own context on the system's OpenGL.  10 MB.
+              "PySide6.QtOpenGL", "PySide6.QtOpenGLWidgets"],
     noarchive=False,
 )
+
+# What PySide6's hook packs for every application that uses QtGui and this one never
+# loads, taken out with what only it pulls in -- 40 MB.  What would notice one of these
+# being needed after all is release.yml running the built bundle on all three systems:
+#   - Qt's software OpenGL (`opengl32sw.dll`, 20 MB), which Qt loads only to draw with
+#     OpenGL ITSELF -- a QOpenGLWidget or Qt Quick, and there is neither;
+#   - the on-screen keyboard's input plugin, which is Qt Quick and QML underneath (15 MB).
+#     Only that plugin: the compose and IBus plugins beside it on Linux are how dead keys
+#     and input methods reach the window;
+#   - the image-format plugin that reads PDF pages as images, and QtPdf under it.
+_UNUSED_QT = re.compile(
+    r"opengl32sw|virtualkeyboard|qt6?quick|qt6?qml|qt6?pdf|(^|[/\\])(lib)?qpdf\.",
+    re.IGNORECASE,
+)
+a.binaries = [entry for entry in a.binaries if not _UNUSED_QT.search(entry[0])]
+
+# Qt's own words in the languages the window speaks and no others: `_install_qt_translations`
+# loads `qtbase_<language>` and nothing else, and the other 6 MB were 30 languages of Qt
+# dialogs nobody can choose.
+sys.path.insert(0, "src")
+from perfboard_studio.ui.i18n import CATALOGUES  # noqa: E402
+
+_QT_WORDS = {f"qtbase_{code}.qm" for code in CATALOGUES}
+a.datas = [
+    entry for entry in a.datas
+    if not (entry[0].startswith("PySide6") and entry[0].endswith(".qm")
+            and Path(entry[0]).name not in _QT_WORDS)
+]
 pyz = PYZ(a.pure)
 
 # Windows takes an .ico and nothing else; on Linux the parameter is ignored, so the icon

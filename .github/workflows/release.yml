@@ -480,6 +480,11 @@ jobs:
             ./dist/PerfboardStudio.app/Contents/Info.plist
           ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --version
           bash packaging/check-bundle-models.sh ./dist/PerfboardStudio.app
+          # The bundle's VTK, imported and asked for one offscreen frame. The spec packs
+          # only the VTK modules the 3D view imports, and the window no longer imports
+          # that view at start, so nothing else this job runs would notice a module the
+          # spec failed to pack. Windows and Linux run `--headless`, which does.
+          ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --probe-offscreen-gl
 
       - name: Build the disk image
         run: bash packaging/macos.sh
