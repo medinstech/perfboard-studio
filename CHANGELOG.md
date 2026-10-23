@@ -42,6 +42,14 @@ closed without a bump.
   check says what catches people: the CD4017's Q0 is pin 3, the 74HC165's output to read
   is pin 9 and not the inverted one on 7, the MCP23017's RESET has no pull-up.
 
+- **Change Part, for a part already on the board.** A 5 mm LED that should have been 3 mm,
+  or a resistor on a wider span, used to mean delete it, add another and wire it again. Edit
+  ▸ Change Part, the board's right-click menu and a button beside the package in Part
+  Properties now open the sheet's Edit a Part on it: the whole library, the same rules about
+  what a value brings, and one undo step that keeps its reference, its nets and the hole pin 1
+  is in. The dialog says before OK that the lead bends bent to the old pins go with them, and
+  a locked part says why it cannot change instead of being refused afterwards.
+
 ### Changed
 
 - **The architecture notes are `docs/ARCHITECTURE.md` now, and `CLAUDE.md` is a fifth of

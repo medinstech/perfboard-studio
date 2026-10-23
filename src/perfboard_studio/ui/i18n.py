@@ -725,6 +725,32 @@ TURKISH: Mapping[str, str] = {
         "Her parça referansıyla tanınır, dolayısıyla boş bırakılamaz."
     ),
     "Cannot change this part": "Bu parça değiştirilemedi",
+    # -- changing a placed part's package ---------------------------------------------
+    "C&hange Part…": "&Farklı Parça Seç…",
+    "Change Part…": "Parçayı Değiştir…",
+    "Change {ref}": "{ref} parçasını değiştir",
+    "Another package or another part from the library, on the same holes and the same "
+    "nets.": "Kütüphaneden başka bir gövde ya da parça; aynı deliklerde, aynı netlerde.",
+    "Another package or another part from the library on the same holes: a 3 mm LED for "
+    "a 5 mm one, a resistor on a wider span. Its nets stay.": (
+        "Aynı deliklere kütüphaneden başka bir gövde ya da parça: 5 mm LED yerine 3 mm, "
+        "daha geniş açıklıklı bir direnç. Netleri kalır."
+    ),
+    "Locked: a new package would move its pins. Unlock it first.": (
+        "Kilitli: yeni bir gövde pinlerini kaydırır. Önce kilidini aç."
+    ),
+    "{ref} is locked, and a new package would move its pins. Unlock it first (Toggle "
+    "Lock).": (
+        "{ref} kilitli ve yeni bir gövde pinlerini kaydırır. Önce kilidini aç "
+        "(Kilidi Aç/Kapat)."
+    ),
+    "Pin 1 stays in {hole}, and every net it is on stays.": (
+        "1. pin {hole} deliğinde kalır; bağlı olduğu bütün netler de kalır."
+    ),
+    "Its {count} lead bend(s) were bent to this package's pins and go with it.": (
+        "{count} bacak bükümü bu gövdenin pinlerine göre bükülmüştü; onunla birlikte kalkar."
+    ),
+    "{ref} is a {part} now.": "{ref} artık bir {part}.",
     "Properties edits one part at a time — select a single part.": (
         "Özellikler tek seferde tek parçayı düzenler — tek bir parça seç."
     ),
@@ -1528,6 +1554,7 @@ TURKISH: Mapping[str, str] = {
     "delete it": "sil",
     "lock or unlock it": "kilitle ya da kilidini aç",
     "edit its properties": "özelliklerini düzenle",
+    "change it": "değiştir",
     "{count} refused: {reasons}": "{count} reddedildi: {reasons}",
     "Rotated {count} part(s)": "{count} parça döndürüldü",
     "Mirrored {count} part(s)": "{count} parça aynalandı",

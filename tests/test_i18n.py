@@ -351,7 +351,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Check Automatically at &Startup", "&About Perfboard Studio"],
         "edit": ["&Undo", "&Redo", "Cop&y", "&Paste", "Dupl&icate", "Rotate &Clockwise",
                  "Rotate Counter-clock&wise", "&Mirror", "Toggle &Lock", "&Delete",
-                 "Proper&ties…", "Add La&bel…"],
+                 "Proper&ties…", "C&hange Part…", "Add La&bel…"],
         "draw": ["&Solder Trace", "Solder Trace with S&pine", "&Bare Wire",
                  "&Insulated Wire", "Top &Jumper", "&Cut Track",
                  "&Stop the Current Tool"],

@@ -12176,6 +12176,100 @@ def test_editing_a_design_part_follows_a_retyped_value_too() -> None:
     dialog.deleteLater()
 
 
+def _choose_in_change_part(monkeypatch, footprint_id: str, seen: list | None = None) -> None:
+    """Stand in for a person picking ``footprint_id`` in the Change Part dialog."""
+    from perfboard_studio.ui import main as main_module
+
+    def pick(dialog):
+        if seen is not None:
+            seen.append(dialog)
+        dialog.select_footprint(footprint_id)
+        return main_module.QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_module.AddPartDialog, "exec", pick)
+
+
+def test_change_part_puts_another_package_on_the_same_holes(monkeypatch) -> None:
+    """A 5 mm LED that should have been 3 mm meant delete, add and wire again. Now it is one
+    ``component.update``: one undo step, the same id, pin 1 in the same hole, the same nets
+    -- and the lead bends bent for the old pins said to go, and gone."""
+    from perfboard_studio.model import LeadBendConductor
+
+    dense = _load_dense()
+    led = next(c for c in dense.components if c.footprint_id == "led-5mm")
+    bend = LeadBendConductor(
+        id="cond-bend", path=(led.anchor, HoleCoord(led.anchor.col, led.anchor.row + 1)),
+        component_id=led.id, pin_number="1",
+    )
+    window = _window_on(dataclasses.replace(dense, conductors=(*dense.conductors, bend)))
+    nets_before = window.bus.document.nets
+    before = len(window.bus.history())
+    seen: list = []
+    _choose_in_change_part(monkeypatch, "led-3mm", seen)
+
+    assert window.on_change_part(led.id)
+    changed = next(c for c in window.bus.document.components if c.id == led.id)
+    assert (changed.footprint_id, changed.anchor, changed.ref, changed.value) == (
+        "led-3mm", led.anchor, led.ref, led.value
+    )
+    assert window.bus.document.nets == nets_before
+    assert len(window.bus.history()) == before + 1
+    assert "cond-bend" not in {c.id for c in window.bus.document.conductors}
+    # Said before OK, not discovered after it.
+    assert "lead bend" in seen[0].notice.text() and not seen[0].notice.isHidden()
+    _close(window)
+
+
+def test_a_locked_part_says_why_it_cannot_change(monkeypatch) -> None:
+    """The command refuses a locked part a new package; the window says so where the
+    choice is offered rather than after a dialog the user filled in."""
+    from perfboard_studio.commands import UpdateComponentPayload
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import ComponentDialog
+
+    window = _window_on(_load_dense())
+    component = window.bus.document.components[0]
+    assert window.bus.dispatch(
+        "component.update", UpdateComponentPayload(id=component.id, locked=True)
+    ).ok
+    locked = next(c for c in window.bus.document.components if c.id == component.id)
+
+    dialog = ComponentDialog(locked, get_footprint(locked.footprint_id))
+    assert not dialog.change_part.isEnabled()
+    assert not dialog.locked_note.isHidden()
+    dialog.deleteLater()
+
+    window.scene.select_components([locked.id])
+    assert not window.act_change_part.isEnabled()
+    assert locked.ref in window.act_change_part.toolTip()
+    asked: list = []
+    _choose_in_change_part(monkeypatch, "to92", asked)
+    assert not window.on_change_part(locked.id)
+    assert asked == []
+    assert locked.ref in window.statusBar().currentMessage()
+    _close(window)
+
+
+def test_change_part_from_properties_keeps_what_was_typed(monkeypatch) -> None:
+    """Part Properties hands its fields to Change Part, so a value typed there and then
+    "Change Part…" pressed is not lost on the way."""
+    from perfboard_studio.ui import main as main_module
+
+    window = _window_on(_load_dense())
+    component = next(c for c in window.bus.document.components if c.footprint_id == "r-axial-4")
+
+    def press_change(dialog):
+        dialog.value.setText("4k7")
+        return main_module.ComponentDialog.CHANGE_PART
+
+    monkeypatch.setattr(main_module.ComponentDialog, "exec", press_change)
+    _choose_in_change_part(monkeypatch, "r-axial-5")
+    window.on_component_properties(component.id)
+    changed = next(c for c in window.bus.document.components if c.id == component.id)
+    assert (changed.footprint_id, changed.value) == ("r-axial-5", "4k7")
+    _close(window)
+
+
 # ---------------------------------------------------------------------------
 # The board's name
 # ---------------------------------------------------------------------------

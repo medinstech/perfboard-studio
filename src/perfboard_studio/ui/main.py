@@ -2155,9 +2155,14 @@ class ComponentDialog(QDialog):
     on the undo stack for what the user experienced as one edit -- so it stays on R and
     Shift+R, which is where it can be seen happening anyway.
 
-    Everything else on the part is shown and not editable: a footprint is chosen by
-    placing, and an anchor by dragging.
+    Everything else on the part is shown and not editable here: an anchor is chosen by
+    dragging, and a different package by Change Part (``CHANGE_PART``), which is a dialog
+    of its own because it is the sheet's Edit a Part -- the whole library to choose from.
     """
+
+    #: What ``exec`` returns when Change Part was pressed: the window carries what was
+    #: typed here into that dialog, so nothing typed is lost on the way.
+    CHANGE_PART = 2
 
     def __init__(
         self,
@@ -2203,16 +2208,46 @@ class ComponentDialog(QDialog):
         )
         pins = f"{len(footprint.pins)}" if footprint is not None else "?"
         height = f"{footprint.body_height:.1f} mm" if footprint is not None else "?"
+
+        def fact_label(fact: str) -> QLabel:
+            shown = QLabel(fact)
+            shown.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            shown.setStyleSheet(f"color: {TEXT_DIM};")
+            shown.setWordWrap(True)
+            return shown
+
+        # Change Part beside the package it changes. A 5 mm LED that should have been 3 mm
+        # used to mean delete it, add another and wire it again, while ``component.update``
+        # already took a footprint.
+        self.change_part = QPushButton(t("Change Part…"))
+        self.change_part.setAutoDefault(False)
+        self.change_part.clicked.connect(lambda: self.done(self.CHANGE_PART))
+        self.change_part.setToolTip(
+            t("Another package or another part from the library, on the same holes and the "
+              "same nets.")
+        )
+        package = QVBoxLayout()
+        package_row = QHBoxLayout()
+        package_row.addWidget(fact_label(f"{name}  ({component.footprint_id})"), 1)
+        package_row.addWidget(self.change_part)
+        package.addLayout(package_row)
+        #: Why Change Part is greyed, said where it is greyed: the command refuses a locked
+        #: part a new package, which moves its pins -- what a lock is there to prevent.
+        self.locked_note = QLabel(
+            t("Locked: a new package would move its pins. Unlock it first.")
+        )
+        self.locked_note.setWordWrap(True)
+        self.locked_note.setStyleSheet(f"color: {WARNING};")
+        package.addWidget(self.locked_note)
+        self.change_part.setEnabled(not component.locked)
+        self.locked_note.setVisible(component.locked)
+        form.addRow(t("Footprint"), package)
         for label, fact in (
-            (t("Footprint"), f"{name}  ({component.footprint_id})"),
             (t("Pins"), pins),
             (t("Pin 1 at"), f"{format_hole(component.anchor, board)}  ·  {component.rotation}°"),
             (t("Height"), height),
         ):
-            shown = QLabel(fact)
-            shown.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            shown.setStyleSheet(f"color: {TEXT_DIM};")
-            form.addRow(label, shown)
+            form.addRow(label, fact_label(fact))
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -2878,7 +2913,15 @@ class AddPartDialog(QDialog):
         )
         self.custom.clicked.connect(self.on_custom_part)
 
+        #: What the caller needs said before OK -- Change Part's "pin 1 stays where it is,
+        #: the lead bends go". Hidden until there is something to say.
+        self.notice = QLabel()
+        self.notice.setWordWrap(True)
+        self.notice.setStyleSheet(f"color: {TEXT_DIM};")
+        self.notice.hide()
+
         layout = QVBoxLayout()
+        layout.addWidget(self.notice)
         layout.addWidget(self.filter)
         layout.addWidget(self.tree, 1)
         layout.addWidget(self.custom)
@@ -2888,6 +2931,10 @@ class AddPartDialog(QDialog):
         self.setLayout(layout)
         self._refilter("")
         self.filter.setFocus()
+
+    def set_notice(self, text: str) -> None:
+        self.notice.setText(text)
+        self.notice.setVisible(bool(text))
 
     def on_custom_part(self) -> None:
         dialog = CustomPartDialog(self)
@@ -5554,6 +5601,14 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_properties.triggered.connect(lambda: self.on_component_properties())
+        self.act_change_part = edit_menu.addAction(t("C&hange Part…"))
+        self.act_change_part.setToolTip(
+            t(
+                "Another package or another part from the library on the same holes: a "
+                "3 mm LED for a 5 mm one, a resistor on a wider span. Its nets stay."
+            )
+        )
+        self.act_change_part.triggered.connect(lambda: self.on_change_part())
         # A label is what a builder would write on the board with a marker: which terminal
         # takes the battery, where the module chain goes. Added where the view is looking,
         # then dragged; the right-click menu adds one exactly where it was clicked.
@@ -8527,6 +8582,7 @@ class MainWindow(QMainWindow):
         menu.setToolTipsVisible(True)
         if self.scene.selected_component_ids():
             menu.addAction(self.act_properties)
+            menu.addAction(self.act_change_part)
             menu.addSeparator()
             menu.addAction(self.act_rotate_cw)
             menu.addAction(self.act_rotate_ccw)
@@ -9649,6 +9705,19 @@ class MainWindow(QMainWindow):
         # three of them could only offer the value, and a field that silently overwrites
         # three values with one is not worth the two it destroys.
         self.act_properties.setEnabled(len(components) == 1)
+        # One unlocked part: a locked one would be refused by the command, and the menu
+        # says so in the tooltip rather than offering a dialog that ends in a refusal.
+        only = components[0] if len(components) == 1 else None
+        self.act_change_part.setEnabled(only is not None and not only.locked)
+        self.act_change_part.setToolTip(
+            t("{ref} is locked, and a new package would move its pins. Unlock it first "
+              "(Toggle Lock).").format(ref=only.ref)
+            if only is not None and only.locked
+            else t(
+                "Another package or another part from the library on the same holes: a "
+                "3 mm LED for a 5 mm one, a resistor on a wider span. Its nets stay."
+            )
+        )
 
         if not components:
             # Copper on its own is still a selection, and the actions above are live for
@@ -10914,7 +10983,15 @@ class MainWindow(QMainWindow):
         dialog = ComponentDialog(
             component, self.lookup(component.footprint_id), self, board=self.bus.document.board
         )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        answer = dialog.exec()
+        if answer == ComponentDialog.CHANGE_PART:
+            ref, value, _locked = dialog.values()
+            pin_names, symbol = dialog.pinout()
+            self.on_change_part(
+                component.id, ref=ref, value=value, pinout=(pin_names, symbol)
+            )
+            return
+        if answer != QDialog.DialogCode.Accepted:
             return
         ref, value, locked = dialog.values()
         pin_names, symbol = dialog.pinout()
@@ -10952,6 +11029,105 @@ class MainWindow(QMainWindow):
         # Re-selected because the rebuild dropped the selection with the old item, and the
         # part somebody just named is the one they are still working on.
         self.scene.select_components([component.id])
+
+    def on_change_part(
+        self,
+        component_id: str = "",
+        *,
+        ref: str | None = None,
+        value: str | None = None,
+        pinout: tuple[PinNames, PartSymbol | None] | None = None,
+    ) -> bool:
+        """Put another package, or another part, on a placed part's holes. True if it did.
+
+        THE SHEET'S EDIT A PART, on the board. The same dialog, the same library and the
+        same rules about what a value brings, so a part changed on the board and one changed
+        on the sheet cannot come out differently -- and ONE ``component.update``, so it is
+        one undo step, keeping the part's id, its reference, its nets and pin 1's hole.
+
+        What the new package cannot keep is said before OK rather than discovered after it:
+        a lead bend was bent to the old pins and goes with them, which is what the command
+        does; wires and traces stay where they are for DRC to judge. A locked part is
+        refused here, in words, rather than by the command after the choice was made.
+
+        ``ref``, ``value`` and ``pinout`` carry what was typed in Part Properties when this
+        was reached from there.
+        """
+        if component_id:
+            component = next(
+                (c for c in self.bus.document.components if c.id == component_id), None
+            )
+        else:
+            selected = self._require_selection(t("change it"))
+            component = selected[0] if len(selected) == 1 else None
+        if component is None:
+            return False
+        if component.locked:
+            self.statusBar().showMessage(
+                t("{ref} is locked, and a new package would move its pins. Unlock it first "
+                  "(Toggle Lock).").format(ref=component.ref),
+                8000,
+            )
+            return False
+
+        dialog = AddPartDialog(self.bus.document, self)
+        dialog.setWindowTitle(t("Change {ref}").format(ref=component.ref))
+        dialog.select_footprint(component.footprint_id)
+        dialog.ref.setText(component.ref if ref is None else ref)
+        dialog.value.setText(component.value if value is None else value)
+        names, symbol = (component.pin_names, component.symbol) if pinout is None else pinout
+        dialog.set_pinout(names, symbol)
+        bends = sum(
+            1
+            for c in self.bus.document.conductors
+            if c.kind == "lead-bend" and c.component_id == component.id
+        )
+        notice = t("Pin 1 stays in {hole}, and every net it is on stays.").format(
+            hole=format_hole(component.anchor, self.bus.document.board)
+        )
+        if bends:
+            notice += " " + t(
+                "Its {count} lead bend(s) were bent to this package's pins and go with it."
+            ).format(count=bends)
+        dialog.set_notice(notice)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+        chosen = dialog.values()
+        if chosen is None:
+            return False
+        new_ref, new_value, footprint_id = chosen
+        pin_names, new_symbol = dialog.pinout()
+        if not new_ref:
+            QMessageBox.warning(
+                self,
+                t("A part needs a reference"),
+                t("Every part is identified by its reference, so it cannot be blank."),
+            )
+            return False
+        result = self.bus.dispatch(
+            "component.update",
+            UpdateComponentPayload(
+                id=component.id,
+                ref=new_ref,
+                value=new_value,
+                pin_names=pin_names,
+                symbol=new_symbol,
+                footprint_id=footprint_id,
+            ),
+        )
+        if not result.ok:
+            QMessageBox.warning(self, t("Cannot change this part"), f"[{result.code}] {result.message}")
+            return False
+        footprint = get_footprint(footprint_id)
+        self.statusBar().showMessage(
+            t("{ref} is a {part} now.").format(
+                ref=new_ref,
+                part=footprint_label(footprint.name) if footprint is not None else footprint_id,
+            ),
+            8000,
+        )
+        self.scene.select_components([component.id])
+        return True
 
     def on_fit(self) -> None:
         """Fit whichever view has the keyboard: the sheet if it does, else the board.
