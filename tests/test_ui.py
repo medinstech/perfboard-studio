@@ -13027,3 +13027,29 @@ def test_the_status_bar_does_not_count_pins_waiting_for_their_wiring() -> None:
         assert f"{warnings - unwired} warn" in window.label_drc.text()
     finally:
         _close(window)
+
+
+
+@pytest.mark.parametrize("footprint_id", ["led-3mm", "led-5mm", "led-10mm"])
+def test_an_leds_flat_is_on_its_cathode_in_2d_too(footprint_id: str) -> None:
+    """The 2D twin of ``test_model_leads::test_an_leds_flat_is_on_its_cathode``. The flat
+    was cut on pin 1's side, which on an LED is the ANODE, so the board view, the guide's
+    step images and the 1:1 print had it the other way round from the 3D view and the part:
+    an LED fitted from the picture went in backwards."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.bodies import placement_for, polarity_pin_offset
+    from perfboard_studio.ui.view2d import _body_path, _body_rect
+
+    footprint = get_footprint(footprint_id)
+    assert footprint is not None
+    pitch = 2.54
+    placement = placement_for(footprint, pitch)
+    keyed = polarity_pin_offset(footprint, pitch)
+    assert keyed is not None
+    circle = _body_rect(placement)
+    flat = _body_path(footprint, placement, keyed, pitch).boundingRect()
+    cathode = next(pin for pin in footprint.pins if pin.name == "K")
+    assert cathode.d_col * pitch > placement.centre_x, "the cathode is pin 2, to the right"
+    # Cut on the cathode's side, and only there.
+    assert flat.right() < circle.right() - 0.1
+    assert flat.left() == pytest.approx(circle.left())

@@ -129,6 +129,7 @@ from perfboard_studio.guide import (
     net_colours,
 )
 from perfboard_studio.model import (
+    STANDARD_PITCH_MM,
     Board,
     BoardLabels,
     BoardNote,
@@ -2095,13 +2096,38 @@ def _keyed_direction(placement: BodyPlacement, keyed: tuple[float, float]) -> in
     return 1 if delta >= 0 else -1
 
 
+def _flat_direction(
+    footprint: Footprint, placement: BodyPlacement, keyed: tuple[float, float], pitch: float
+) -> int:
+    """+1 or -1: which way along the body's axis an LED's flat is.
+
+    On a two-leg LED, its CATHODE's side: read off the pin the footprint calls K, and not
+    off ``keyed``, which is pin 1 and on an LED is the ANODE. The flat was cut on the keyed
+    side, so the 2D view, the guide's step images and the 1:1 print all showed it on the
+    anode while the 3D view and the part in the hand had it on the cathode: an LED fitted
+    from the picture went in backwards. A two-leg LED that names no K keeps the registry's
+    numbering, anode first.
+
+    On an LED with more legs -- an RGB one -- the flat is beside PIN 1, whatever the common
+    leg is: the makers' drawings put it there on common-cathode and common-anode parts
+    alike, and the common-anode one has no K at all.
+    """
+    if len(footprint.pins) != 2:
+        return _keyed_direction(placement, keyed)
+    cathode = next((pin for pin in footprint.pins if (pin.name or "").upper() == "K"), None)
+    if cathode is not None:
+        return _keyed_direction(placement, (cathode.d_col * pitch, cathode.d_row * pitch))
+    return -_keyed_direction(placement, keyed)
+
+
 def _body_path(
     footprint: Footprint,
     placement: BodyPlacement,
     keyed: tuple[float, float] | None,
+    pitch: float = STANDARD_PITCH_MM,
 ) -> QPainterPath:
     """The body silhouette. A 'dcut' is a circle with the cathode side flattened, which is
-    exactly how the flat on a real LED tells you which lead is which.
+    exactly how the flat on a real LED tells you which lead is which (``_flat_direction``).
 
     A 'flat-face' is a TO-92's case: the D ``bodies.flat_face_profile`` gives the 3D view
     too, its flat on local +y however the part is turned -- the painter's transform turns
@@ -2138,10 +2164,10 @@ def _body_path(
     if placement.silhouette == "dcut" and keyed is not None:
         circle = QPainterPath()
         circle.addEllipse(rect)
-        # Chop a chord off the keyed side.
+        # Chop a chord off the cathode's side.
         cut = QRectF(rect)
         inset = rect.width() * 0.12 if placement.axis == "x" else rect.height() * 0.12
-        if _keyed_direction(placement, keyed) > 0:
+        if _flat_direction(footprint, placement, keyed, pitch) > 0:
             if placement.axis == "x":
                 cut.setRight(rect.right() - inset)
             else:
@@ -2342,7 +2368,7 @@ def _paint_body(
     art: tuple[PlacedArt, ...] | None = None,
 ) -> None:
     rect = _body_rect(placement)
-    path = _body_path(footprint, placement, keyed)
+    path = _body_path(footprint, placement, keyed, pitch)
 
     painter.setBrush(QBrush(QColor(style.fill)))
     painter.setPen(QPen(QColor(SELECTED if selected else style.edge), 0.2))

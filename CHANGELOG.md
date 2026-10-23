@@ -253,6 +253,14 @@ closed without a bump.
 
 ### Fixed
 
+- **The board view, the guide's step pictures and the 1:1 print drew a round LED's flat on
+  the anode.** The flat on a real LED marks the cathode, so anyone who oriented an LED by
+  the picture or the print put it in backwards. If you built a board that way, turn the
+  LED round: it lights only one way. The flat was cut beside pin 1, and an LED's pin 1 is
+  its anode; the 3D view always had it right. A two-leg LED's flat is now on the lead it
+  calls K; an LED with more legs keeps it beside pin 1, as the makers' drawings of RGB
+  LEDs have it.
+
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,
   was wired wrong for the real relay.** Such a relay was guessed onto `relay-spdt`, so the
   netlist's pin 1 -- COM, in KiCad's numbering -- landed on a hole `relay-spdt` gives a
