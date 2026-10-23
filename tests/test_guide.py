@@ -253,6 +253,40 @@ def test_a_dip_is_oriented_by_pin_one() -> None:
     assert "8 pins" in step.span  # Not "pin 1 to pin 8 is N holes apart", which is a diagonal.
 
 
+@pytest.mark.parametrize(
+    ("part", "note"),
+    [
+        # The LED is what the two-legged meanings were written for, and keeps them.
+        ("led-5mm", "Anode (long lead) in C3; Cathode (short lead, flat on the rim) in D3"),
+        # A diode's leads are the same length and it has no rim: its band says it.
+        ("1n4148", "Cathode (the banded end) in C3; Anode in F3"),
+        # Pin 1's notch, not "Anode (long lead)" for an optocoupler's LED or a shift
+        # register's input A.
+        ("6n137", "Pin 1 (the notched end, marked with a dot) in C3"),
+        ("74hc165", "Pin 1 (the notched end, marked with a dot) in C3"),
+        ("tl431", "REF in C3; A (anode) in D3; K (cathode) in E3 — check against the part's "
+                  "datasheet"),
+        # A backlight's A and K, and one side of a switch's contact, are not LED leads.
+        ("lcd-1602", None),
+        ("tact-6x6", None),
+        # + and - without the electrolytic's long lead and stripe.
+        ("servo-header", "Positive lead in D3; Negative lead in E3"),
+    ],
+)
+def test_a_lead_name_means_what_the_part_is(part: str, note: str | None) -> None:
+    """"A" is an LED's long lead and also a 74HC165's first input, a tactile switch's
+    contact and an LCD's backlight; "Anode (long lead)" was said of every one of them, and
+    the DIPs among them were never told where their notch goes."""
+    from perfboard_studio.mcp.session import BoardSession, new_board
+
+    session = BoardSession(document=new_board(cols=40, rows=30, name="names"))
+    assert session.place_component("", "", "C3", part=part)["ok"]
+    step = next(
+        s for s in all_steps(build_guide(session.document, REGISTRY)) if isinstance(s, PartStep)
+    )
+    assert step.polarity == note
+
+
 def test_a_resistor_has_no_polarity_note() -> None:
     doc = make_doc(components=(component("R1", "r-axial-5", hole(4, 4)),))
     step = next(s for s in all_steps(build_guide(doc, REGISTRY)) if isinstance(s, PartStep))

@@ -300,6 +300,15 @@ closed without a bump.
   calls K; an LED with more legs keeps it beside pin 1, as the makers' drawings of RGB
   LEDs have it.
 
+- **The build guide says what a lead's name means on the part it is on.** A pin called A
+  or K was read as an LED's lead wherever it was. A catalog 1N4148 was "Cathode (short
+  lead, flat on the rim)", though a diode has neither; a 6N137, a 74HC165 or a MAX485 was
+  told "Anode (long lead)" and never where its notch goes. A tactile switch and the
+  LCD 1602's backlight got the same LED wording. Now an LED keeps its long lead and flat, an
+  electrolytic its long lead and stripe, a diode its band, and a TL431 is oriented leg by
+  leg. Anything else with a + or a - (a buzzer, a battery, a servo plug) is told which lead
+  is which and nothing more. `tests/test_guide.py::test_a_lead_name_means_what_the_part_is`.
+
 - **A value typed over a catalog part takes that part's pinout with it.** Changing a
   BC547 to a 2N3904 in Part Properties kept the BC547's C-B-E under a transistor that is
   E-B-C, and nothing downstream could tell: the sheet, the guide and ERC all read the names

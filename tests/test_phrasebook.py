@@ -98,6 +98,8 @@ def said_from_tables() -> set[str]:
         | {iron.note for iron in guide_module.IRON_BY_MATERIAL.values()}
         | set(guide_module._PIN_NAME_MEANING.values())
         | set(guide_module._COMMON_LEG_MEANING.values())
+        | set(guide_module._MARKED_LEAD_MEANING.values())
+        | set(guide_module._DIODE_LEAD_MEANING.values())
         | set(guide_module._LEAD_NAME_MEANING.values())
         | set(guide_module.COLOR_BY_NET_CLASS.values())
         | set(guide_module.SIGNAL_COLORS)

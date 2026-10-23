@@ -537,6 +537,10 @@ TURKISH: dict[str, str] = {
         "1. pin {hole} deliğine; kılıfın dış hatlarını kartla karşılaştır"
     ),
     "Positive (long) lead": "Pozitif (uzun) bacak",
+    "Positive lead": "Pozitif bacak",
+    "Negative lead": "Negatif bacak",
+    "Anode": "Anot",
+    "Cathode (the banded end)": "Katot (bantlı uç)",
     "Negative lead (the side with the printed stripe)": "Negatif bacak (baskılı şeritli taraf)",
     "Anode (long lead)": "Anot (uzun bacak)",
     "Cathode (short lead, flat on the rim)": "Katot (kısa bacak, kenardaki düz taraf)",
@@ -549,6 +553,8 @@ TURKISH: dict[str, str] = {
     "base": "baz",
     "collector": "kolektör",
     "emitter": "emiter",
+    "anode": "anot",
+    "cathode": "katot",
     # -- laying copper ------------------------------------------------------------------
     "(unassigned)": "(atanmamış)",
     "(empty path)": "(boş yol)",

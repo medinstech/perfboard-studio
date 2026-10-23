@@ -1456,6 +1456,9 @@ _LEAD_NAME_MEANING: dict[str, str] = {
     "B": "base",
     "C": "collector",
     "E": "emitter",
+    # A TL431's: a shunt reference is pinned like a diode, on three legs.
+    "A": "anode",
+    "K": "cathode",
 }
 
 
@@ -1470,6 +1473,42 @@ _COMMON_LEG_MEANING: dict[str, str] = {
     "RA": "Red leg",
     "RK": "Red leg",
 }
+
+#: Anything else that names a lead + or -: a buzzer, a battery's wires, a power terminal,
+#: a servo plug. Which lead is the long one, and which side carries a stripe, is the
+#: electrolytic's to say and nobody else's.
+_MARKED_LEAD_MEANING: dict[str, str] = {
+    "+": "Positive lead",
+    "-": "Negative lead",
+}
+
+#: A diode's: both leads are the same length and there is no rim, so the cathode is the
+#: band printed round its end -- what the guide already says of a diode nobody named.
+_DIODE_LEAD_MEANING: dict[str, str] = {
+    **_MARKED_LEAD_MEANING,
+    "A": "Anode",
+    "K": "Cathode (the banded end)",
+}
+
+
+def _lead_meanings(footprint: Footprint, component: ComponentInstance | None) -> dict[str, str]:
+    """Which table above is TRUE of this part.
+
+    A name means what the part is. "A" is an LED's long lead, a 74HC165's first input, one
+    side of a tactile switch's contact, an LCD's backlight; "Anode (long lead)" was said of
+    every one of them, and a DIP with a pin called A was never told where its notch goes
+    because the names had already answered. An LED or a diode is known by its body or by
+    the symbol it was declared as, as ERC's polarity check knows one.
+    """
+    archetype = footprint.body.archetype
+    symbol = component.symbol if component is not None else None
+    if archetype == "led-round" or symbol == "led":
+        return _PIN_NAME_MEANING if len(footprint.pins) == 2 else _COMMON_LEG_MEANING
+    if archetype == "radial-electrolytic":
+        return _PIN_NAME_MEANING
+    if archetype in ("axial-cylinder", "axial-upright") or symbol == "zener":
+        return _DIODE_LEAD_MEANING
+    return _MARKED_LEAD_MEANING
 
 
 def _polarity_note(
@@ -1486,11 +1525,7 @@ def _polarity_note(
     """
     by_number = dict(pin_holes)
 
-    meanings = (
-        _COMMON_LEG_MEANING
-        if footprint.body.archetype == "led-round" and len(footprint.pins) > 2
-        else _PIN_NAME_MEANING
-    )
+    meanings = _lead_meanings(footprint, component)
     named = []
     off_board = footprint.body.archetype == "flying-leads"
     for pin in footprint.pins:
