@@ -402,9 +402,9 @@ growing past 40 000 characters.
 - Before touching `footprints.py`, a generated footprint id, or anything that reads
   `body_outline` → [Footprints are generated, not
   shipped](docs/ARCHITECTURE.md#footprints-are-generated-not-shipped)
-- Before touching `component-too-tall`, `jumper-under-body` or `heat-proximity`, or what the
-  placer, router or guide does about them → [Three rules only the third dimension can
-  see](docs/ARCHITECTURE.md#three-rules-only-the-third-dimension-can-see)
+- Before touching `component-too-tall`, `jumper-under-body`, `heat-proximity` or
+  `under-module`, or what the placer, router or guide does about them → [Four rules only the
+  third dimension can see](docs/ARCHITECTURE.md#four-rules-only-the-third-dimension-can-see)
 - Before touching `placer.arrange`, a placement cost term, `_build_cost`, `_pick_best` or
   `place_design` → [Placement is arranged first and annealed
   second](docs/ARCHITECTURE.md#placement-is-arranged-first-and-annealed-second)

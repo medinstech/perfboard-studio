@@ -57,9 +57,10 @@
   jumper'larla ve raylardan gelen güçle kablolanır, içinde havya olmayan bir kurulum
   rehberi alır. Devre çalışınca aynı tasarım plakete geçer — ya da delik delik
   lehimlenebilir bir breadboard'a.
-- **Yalnızca üçüncü boyutun görebildiği üç kural.** Kutuya sığmayan bir parça,
-  üstüne parça lehimlenecek bir jumper, ve sıcak bir parçanın fazla yakınında
-  duran ısıya duyarlı bir parça. 3D görünüm bir resim değil, kontrol aracı — ve kart,
+- **Yalnızca üçüncü boyutun görebildiği dört kural.** Kutuya sığmayan bir parça,
+  üstüne parça lehimlenecek bir jumper, sıcak bir parçanın fazla yakınında duran
+  ısıya duyarlı bir parça, ve bir modülün yükseltilmiş kartının altına sığan ama modül
+  takılınca kimsenin ulaşamayacağı bir parça. 3D görünüm bir resim değil, kontrol aracı — ve kart,
   aynı gövdelerden oluşan bir STEP modeli olarak da çıkar, kutusu etrafına çizilsin diye.
 - **Gerçek parçalar, adlarıyla.** Katalogdan bir BC547, 7805 ya da Arduino Nano seçin;
   veri sayfasının her bacağa verdiği adla gelir. Elinizde bir KiCad netlist'i varsa o da
@@ -135,9 +136,10 @@ ve dolu çizilen bir iletken *bu senin önünde* der.
 ![Lehim yüzeyi; karşı yüzdeki bakır taralı](./docs/images/editor-solder-side.png)
 
 3D görünüm bir resim değil, bir kontrol aracıdır. Yukarıdan bakışın hiçbir şekilde
-göremeyeceği üç kural vardır: kutuya sığmayacak kadar yüksek bir parça, üzerine
-lehimlenecek bir gövdenin altında sıkışan bir jumper, ve sıcak bir parçaya fazla yakın
-duran ısıya duyarlı bir parça.
+göremeyeceği dört kural vardır: kutuya sığmayacak kadar yüksek bir parça, üzerine
+lehimlenecek bir gövdenin altında sıkışan bir jumper, sıcak bir parçaya fazla yakın duran
+ısıya duyarlı bir parça, ve bir modülün yükseltilmiş kartının altındaki bir parça —
+yukarıdan bakınca çakışma gibi görünür; sığar, ama modül takılınca ona ulaşılamaz.
 
 ![Aynı kart 3D'de](./docs/images/board-3d.png)
 

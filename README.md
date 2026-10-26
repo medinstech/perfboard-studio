@@ -57,10 +57,11 @@
   too: placed, wired with jumpers and power down the rails, and given a building guide
   with no iron in it. When the circuit works, the same design goes on to perfboard — or
   onto a solderable breadboard, hole for hole.
-- **Three rules only the third dimension can see.** A part too tall for the case,
-  a jumper trapped under a body that gets soldered down on top of it, and a
-  heat-sensitive part sitting too close to a hot one. The 3D view is a checking
-  tool, not a picture — and the board leaves as a STEP model of the same bodies, to
+- **Four rules only the third dimension can see.** A part too tall for the case,
+  a jumper trapped under a body that gets soldered down on top of it, a
+  heat-sensitive part sitting too close to a hot one, and a part tucked under a
+  module's raised board, where nobody can reach it once the module is on. The 3D view
+  is a checking tool, not a picture — and the board leaves as a STEP model of the same bodies, to
   draw its case round.
 - **Real parts, by name.** Pick a BC547, a 7805 or an Arduino Nano out of the catalog
   and it arrives with what its datasheet calls every lead. A KiCad netlist, if you have
@@ -135,9 +136,11 @@ opaque and a trace drawn solid says *this is in front of you*.
 
 ![The solder side, with far-side copper hatched](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/editor-solder-side.png)
 
-The 3D view is a checking tool, not a picture. Three rules exist that a top-down view
+The 3D view is a checking tool, not a picture. Four rules exist that a top-down view
 cannot see at all: a part too tall for the case, a jumper trapped under a body that will
-be soldered down on top of it, and a heat-sensitive part sitting too close to a hot one.
+be soldered down on top of it, a heat-sensitive part sitting too close to a hot one, and a
+part under a module's raised board — which from above looks like an overlap, and which
+fits, but cannot be reached once the module is on.
 
 ![The same board in 3D](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/board-3d.png)
 

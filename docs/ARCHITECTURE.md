@@ -412,7 +412,7 @@ Three things hold it together:
   KiCad's `R_Axial_*_Vertical` and `D_*_Vertical_AnodeUp` / `_CathodeUp` (`_KathodeUp`
   before KiCad 7) import as one: anode up is the cathode, pad 1, under the body.
 
-## Three rules only the third dimension can see
+## Four rules only the third dimension can see
 
 `component-too-tall`, `jumper-under-body` and `heat-proximity` are why the 3D view is a
 checking tool and not a picture (PLAN.md §8.4). Each of them has a second consumer that
