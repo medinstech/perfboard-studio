@@ -952,10 +952,10 @@
       "text": "12V IN",
       "at": {
         "col": 15,
-        "row": 30
+        "row": 29
       },
       "offsetXMm": -0.49,
-      "offsetYMm": 1.25,
+      "offsetYMm": -0.02,
       "sizeMm": 2
     },
     {

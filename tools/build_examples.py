@@ -43,13 +43,14 @@ from perfboard_studio.commands import (  # noqa: E402
     preset_payload,
 )
 from perfboard_studio.drc import placed_body_box, placed_entry, run_drc  # noqa: E402
-from perfboard_studio.footprints import footprint_lookup  # noqa: E402
+from perfboard_studio.footprints import body_extent, footprint_lookup  # noqa: E402
 from perfboard_studio.geometry import (  # noqa: E402
     BoardFamily,
     board_note_anchor,
     hole_to_mm,
     mounting_hole_centre_mm,
     substrate_edges_mm,
+    transform_offset,
     unusable_holes,
 )
 from perfboard_studio.guide import build_guide  # noqa: E402
@@ -487,8 +488,9 @@ def _free_spot_beside(
     document: PerfDocument, lookup, ref: str, text: str, size_mm: float = 2.0
 ) -> tuple[HoleCoord, float, float] | None:
     """Where to write ``text`` beside part ``ref``: the nearest place to its body where the
-    label clears every body, every terminal's mouth, the screw heads and the finger strips.
-    Searched rather than placed by hand, because the placer decides where ``ref`` ends up."""
+    label clears every body, every part's printed reference, every terminal's mouth, the
+    screw heads and the finger strips. Searched rather than placed by hand, because the
+    placer decides where ``ref`` ends up."""
     board = document.board
     width = len(text) * size_mm * 0.8 + 1.0
     height = size_mm * 1.8
@@ -500,6 +502,7 @@ def _free_spot_beside(
             continue
         box = placed_body_box(comp, footprint, board)
         boxes.append(box)
+        boxes.append(_reference_zone(comp, footprint, board))
         entry = placed_entry(comp, footprint, board)
         if entry is not None:
             boxes.append(entry[0])
@@ -535,6 +538,23 @@ def _free_spot_beside(
             continue
         return board_note_anchor(x, y, board)
     return None
+
+
+def _reference_zone(component, footprint, board) -> tuple[float, float, float, float]:
+    """Where the window prints ``component``'s reference, as a box a label stays out of.
+
+    At the middle of the top of its body in the part's own frame, turned with the part
+    (``view2d.reference_anchor``), and at a fixed 12 px -- far more than its millimetres at
+    the zoom a README picture is taken at. Keeping clear of the body alone put nano-relay's
+    "12V IN" 0.07 mm off J1, over its "J1" and under the terminal's 3D model, which stands
+    a little past ``body_extent``; a few letters' room each way clears both.
+    """
+    min_x, max_x, min_y, _max_y = body_extent(footprint, board.pitch).box
+    dx, dy = transform_offset((min_x + max_x) / 2, min_y, component.rotation, component.mirrored)
+    anchor = hole_to_mm(component.anchor, board)
+    x, y = anchor.x + dx, anchor.y + dy
+    half_width = len(component.ref) + 1.5
+    return (x - half_width, x + half_width, y - 3.0, y + 3.0)
 
 
 # ---------------------------------------------------------------------------

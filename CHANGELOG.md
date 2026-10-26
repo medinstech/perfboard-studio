@@ -450,6 +450,11 @@ closed without a bump.
   keeps it out, so the same board gives 8, and the six finished examples auto-placed on
   stripboard go from 132 to 32. A strip with no free hole left is still linked at a pin.
 
+- **The nano-relay example's "12V IN" no longer covers J1.** Board labels in the examples
+  were kept clear of every part's body but not of its printed reference, so this one sat on
+  "J1" in 2D and under the terminal in 3D. They keep clear of the reference now; no other
+  example's label moved.
+
 - **A component-side jumper ending on a pad joins whatever is soldered to that pad
   underneath.** A jumper's end passes through the hole and is soldered underneath exactly
   like a component lead, but only a lead was counted as joining a hole's two sides. A
