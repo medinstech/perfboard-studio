@@ -4529,6 +4529,10 @@ class MainWindow(QMainWindow):
         for dock in (self.dock_3d, self.dock_guide):
             dock.dockLocationChanged.connect(self._on_view_dock_moved)
             dock.topLevelChanged.connect(self._on_view_dock_moved)
+        # A side panel dragged into a group, or out of one, loses or regains its title bar.
+        for dock in self._side_docks():
+            dock.dockLocationChanged.connect(lambda _where: self._sync_dock_titlebars())
+            dock.topLevelChanged.connect(lambda _floating: self._sync_dock_titlebars())
         self._build_menu()
         self._build_toolbar()
         self.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
@@ -5204,6 +5208,11 @@ class MainWindow(QMainWindow):
     def _view_docks(self) -> tuple[QDockWidget, ...]:
         return (self.dock_board, self.dock_schematic, self.dock_3d, self.dock_guide)
 
+    def _side_docks(self) -> tuple[QDockWidget, ...]:
+        """The panels that describe the design rather than draw it. Nets and the Part List
+        share a tab group from the first start (#9), and any of these can be stacked."""
+        return (self.dock_library, self.dock_nets, self.dock_part_list, self.dock_drc)
+
     def _sync_dock_titlebars(self) -> None:
         """A tabbed panel has no title bar, because its tab already is one.
 
@@ -5213,8 +5222,12 @@ class MainWindow(QMainWindow):
         lost by taking the second row away while it is stacked; the moment a panel is
         pulled out beside another the title bar comes back, because then it is the only
         handle it has.
+
+        The side panels too: Nets and the Part List open stacked, and said "Nets" on the tab
+        and again under it. Ctrl+5 to Ctrl+8 and the View menu close them, as the toolbar
+        closes a view.
         """
-        for dock in self._view_docks():
+        for dock in (*self._view_docks(), *self._side_docks()):
             stacked = bool(self.tabifiedDockWidgets(dock)) and not dock.isFloating()
             current = dock.titleBarWidget()
             if stacked and current is None:

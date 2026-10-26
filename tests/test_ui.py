@@ -13617,3 +13617,23 @@ def test_the_print_draws_references_and_values_in_millimetres(monkeypatch, tmp_p
         assert value == component.value.strip()
         assert height >= 1.0, "a reference on paper is at least a millimetre tall"
     assert not [ref for ref in on_screen if ref in by_ref], "no screen-sized label on paper"
+
+
+def test_a_stacked_side_panel_says_its_name_once() -> None:
+    """Nets and the Part List open stacked (#9), and Qt drew each one's own title under
+    its tab: "Nets" on the tab and "Nets" again on a row below it. Stacked, a side panel
+    has no title bar, as a stacked view has none; pulled out on its own it gets it back."""
+    from PySide6.QtCore import Qt
+
+    window = _blank_window()
+    try:
+        assert window.tabifiedDockWidgets(window.dock_nets)
+        assert window.dock_nets.titleBarWidget() is not None
+        assert window.dock_part_list.titleBarWidget() is not None
+        window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, window.dock_part_list)
+        window._sync_dock_titlebars()
+        assert not window.tabifiedDockWidgets(window.dock_nets)
+        assert window.dock_nets.titleBarWidget() is None
+        assert window.dock_part_list.titleBarWidget() is None
+    finally:
+        _close(window)
