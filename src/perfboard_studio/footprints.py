@@ -2522,6 +2522,62 @@ WIRE_ENTRY_BY_ARCHETYPE: dict[BodyArchetype, tuple[int, int]] = {
 WIRE_ENTRY_CLEARANCE_MM: Mm = 8.0
 
 
+#: How much air a part under a raised module keeps between its top and the module's own
+#: board, in mm. A TAHMIN -- an estimate -- and written down as one: a module's board is not
+#: bare underneath (a Nano carries its USB chip and crystal there, an ESP32 board its
+#: regulator), and a part standing under it is never pushed quite flat onto its leads. A
+#: millimetre and a half is what those underside parts stand, rounded up, and it is one
+#: constant so DRC and the placer cannot measure different room.
+UNDER_MODULE_CLEARANCE_MM: Mm = 1.5
+
+
+@dataclass(frozen=True, slots=True)
+class RaisedBoard:
+    """A module's own board, held up on its header pins, and the room under it.
+
+    The boxes are ``(min_x, max_x, min_y, max_y)`` in the footprint's own frame around the
+    anchor, before any rotation or mirroring -- the frame of ``BodyExtent.box`` -- so a caller
+    turns them with ``geometry.turned_box`` exactly as it turns the body.
+    """
+
+    #: How high the board's underside is: ``dims["seat"]``.
+    seat: Mm
+    #: The tallest part that fits under it: the seat less ``UNDER_MODULE_CLEARANCE_MM``.
+    headroom: Mm
+    #: The board itself, which is the body.
+    board: tuple[Mm, Mm, Mm, Mm]
+    #: A pitch square round each pin: the header moulding, which stands the whole seat tall,
+    #: so however low a part is, it cannot stand there.
+    headers: tuple[tuple[Mm, Mm, Mm, Mm], ...]
+
+
+def raised_board(footprint: Footprint, pitch: Mm) -> RaisedBoard | None:
+    """The board a module holds up over this one, or ``None`` for any other part.
+
+    Only a module. A chip on a DIP adapter is held up the same way, but always on a male
+    header's 2.5 mm spacer (``ADAPTER_SEAT_MM``), and no through-hole part is short enough
+    for the millimetre that leaves under it; a module's seat is whatever its header is.
+    """
+    if footprint.body.archetype != "module-board":
+        return None
+    seat = footprint.body.dims.get("seat", 0.0)
+    half = pitch / 2
+    return RaisedBoard(
+        seat=seat,
+        headroom=seat - UNDER_MODULE_CLEARANCE_MM,
+        board=body_extent(footprint, pitch).box,
+        headers=tuple(
+            (
+                pin.d_col * pitch - half,
+                pin.d_col * pitch + half,
+                pin.d_row * pitch - half,
+                pin.d_row * pitch + half,
+            )
+            for pin in footprint.pins
+        ),
+    )
+
+
 def wire_entry(footprint: Footprint) -> tuple[int, int] | None:
     """The direction this part's wire entries face in its own frame, or ``None``."""
     return WIRE_ENTRY_BY_ARCHETYPE.get(footprint.body.archetype)

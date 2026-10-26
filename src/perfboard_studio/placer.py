@@ -107,7 +107,7 @@ from .commands import (
     preset_payload,
 )
 from .connectivity import FootprintLookup
-from .footprints import body_extent, entry_corridor, wire_entry
+from .footprints import body_extent, entry_corridor, raised_board, wire_entry
 from .geometry import (
     STANDARD_PRESETS,
     BoardPreset,
@@ -120,6 +120,7 @@ from .geometry import (
     entry_faces_away,
     entry_run_mm,
     entry_side,
+    fits_under_raised_board,
     format_hole,
     hangs_over_edge,
     is_axis_aligned_box,
@@ -127,6 +128,7 @@ from .geometry import (
     mounting_head_reach_mm,
     mounting_hole_centre_mm,
     on_edge_reach_mm,
+    stands_under_raised_board,
     substrate_edges_mm,
     transform_offset,
     turned_box,
@@ -310,6 +312,16 @@ class PlacementWeights:
     #: Per mm the head reaches past the courtyard's nearest point, charged only for a pair
     #: the count above names. The gradient the count does not have, as ``overhang`` is.
     mount: float = 20.0
+    #: Per (part, module) pair where the part stands under the module's raised board --
+    #: exactly the pairs DRC's ``under-module`` names, by the one predicate both ask
+    #: (``geometry.stands_under_raised_board``).
+    #:
+    #: A count on DRC's predicate for the reason ``overhang_part`` is one, and priced the
+    #: same: a WARNING rather than an error -- the part fits, but it is out of reach once the
+    #: module is on -- and still above anything a part could save by tucking in there. The
+    #: placer does not hide a part on its own initiative; a builder who wants one there puts
+    #: it there and locks the two.
+    under_module: float = 100.0
     #: Per pair of pins on one strip, in different nets, with no hole between them to
     #: cut. Stripboard only; always zero on a pad-per-hole board.
     #:
@@ -426,6 +438,9 @@ class PlacementCost:
     #: reach between them. Both zero on a board with no mounting hole.
     mount_covered: int = 0
     mount_mm: float = 0.0
+    #: (part, module) pairs where the part stands under the module's raised board, by the
+    #: predicate DRC's ``under-module`` uses. Zero on a board with no module.
+    under_module: int = 0
 
     def total(self, weights: PlacementWeights) -> float:
         return (
@@ -449,6 +464,8 @@ class PlacementCost:
             # ``x``, and every term before these is added in the order it always was.
             + weights.mount_part * self.mount_covered
             + weights.mount * self.mount_mm
+            # And after them, by the same argument, for a board with no module.
+            + weights.under_module * self.under_module
         )
 
     def warning_count(self, rule: str) -> int:
@@ -461,9 +478,10 @@ class PlacementCost:
     def physical_warnings(self) -> int:
         """Everything DRC will WARN about in where the parts are, though the document is
         legal: a body past the edge, a part in a terminal's wire entry, a terminal on an
-        edge facing away from it, a hot part too close to one that minds, and a part under
-        a screw head. What ``_pick_best`` ranks ahead of the routed cost -- see there for
-        why -- and the list :data:`PHYSICAL_WARNING_RULES` names rule by rule."""
+        edge facing away from it, a hot part too close to one that minds, a part under a
+        screw head, and one under a module's board. What ``_pick_best`` ranks ahead of the
+        routed cost -- see there for why -- and the list :data:`PHYSICAL_WARNING_RULES`
+        names rule by rule."""
         return sum(self.warning_count(rule) for _, rule in PHYSICAL_WARNING_RULES)
 
     @property
@@ -516,6 +534,7 @@ PHYSICAL_WARNING_RULES: tuple[tuple[str, str], ...] = (
     ("entry_facing_in", "terminal-entry-faces-in"),
     ("heat_pairs", "heat-proximity"),
     ("mount_covered", "mounting-hole-clearance"),
+    ("under_module", "under-module"),
 )
 
 
@@ -662,6 +681,8 @@ def describe(plan: PlacementPlan) -> str:
         parts.append(f"{plan.before.heat_pairs} hot pair(s) moved apart")
     if plan.before.mount_covered > 0 and plan.after.mount_covered == 0:
         parts.append(f"{plan.before.mount_covered} part(s) moved out from under a screw head")
+    if plan.before.under_module > 0 and plan.after.under_module == 0:
+        parts.append(f"{plan.before.under_module} part(s) moved out from under a module")
     if plan.route_cost is not None:
         parts.append(f"routing cost {plan.route_cost:.0f}")
     return ", ".join(parts)
@@ -782,6 +803,17 @@ class _Part:
     edge_seeking: bool
     heat_source: bool
     heat_sensitive: bool
+    #: How tall the part stands, ``footprint.body_height``, and whether it is on the solder
+    #: side: the two facts that decide whether it fits under a module's raised board, which
+    #: it can only be on the module's own face.
+    height: float
+    mirrored: bool
+    #: For a module, the tallest part that fits under its board (``footprints.raised_board``)
+    #: and, per rotation index, the board and its header mouldings relative to the anchor in
+    #: mm. ``None``, ``None`` at every index and no mouldings for every other part.
+    headroom: float | None
+    rel_raised: tuple[_Box | None, ...]
+    rel_headers: tuple[tuple[_Box, ...], ...]
 
 
 def _rotation_index(rotation: Rotation) -> int:
@@ -811,6 +843,9 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
         entries: list[_Box | None] = []
         entry_dirs: list[tuple[float, float] | None] = []
         polys: list[tuple[Point2, ...] | None] = []
+        raised = raised_board(footprint, board.pitch)
+        raised_boxes: list[_Box | None] = []
+        headers: list[tuple[_Box, ...]] = []
         bounds: list[tuple[int, int, int, int] | None] = []
         pin_min: list[tuple[int, int]] = []
         for rotation in VALID_ROTATIONS:
@@ -831,6 +866,17 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
             else:
                 entries.append(None)
                 entry_dirs.append(None)
+            if raised is not None:
+                raised_boxes.append(_Box(*turned_box(raised.board, rotation, component.mirrored)))
+                headers.append(
+                    tuple(
+                        _Box(*turned_box(header, rotation, component.mirrored))
+                        for header in raised.headers
+                    )
+                )
+            else:
+                raised_boxes.append(None)
+                headers.append(())
 
             if footprint.body_outline:
                 outline = tuple(
@@ -879,6 +925,11 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 edge_seeking=archetype in EDGE_SEEKING_ARCHETYPES,
                 heat_source=archetype in HEAT_SOURCE_ARCHETYPES,
                 heat_sensitive=archetype in HEAT_SENSITIVE_ARCHETYPES,
+                height=footprint.body_height,
+                mirrored=component.mirrored,
+                headroom=None if raised is None else raised.headroom,
+                rel_raised=tuple(raised_boxes),
+                rel_headers=tuple(headers),
             )
         )
     return parts
@@ -1405,6 +1456,10 @@ class _Scorer:
     #: The part list ``_pair_memo`` was filled from. Every state one scorer is handed shares
     #: it; a different one empties the memo rather than trusting indices into another list.
     _pair_memo_parts: list[_Part] | None = field(default=None, repr=False, compare=False)
+    #: Where the modules are in the part list ``_raised_parts`` was (:meth:`_raised`): empty
+    #: on nearly every board, and then ``local`` asks nothing about a module at all.
+    _raised_positions: tuple[int, ...] = field(default=(), repr=False, compare=False)
+    _raised_parts: list[_Part] | None = field(default=None, repr=False, compare=False)
 
     # -- individual terms, each returning millimetres (or mm^2) -------------
 
@@ -1631,6 +1686,57 @@ class _Scorer:
             return 0
         return count
 
+    def under_pair(self, state: _State, a: int, b: int) -> int:
+        """How many of the two stand under the other's raised board: 0 or 1, since a part
+        tall enough to be a module never fits under one.
+
+        DRC's ``under-module`` counted per (part, module) pair, by :meth:`_beneath`. A pair
+        with no module in it -- every pair on most boards -- returns before any arithmetic.
+        """
+        if state.parts[a].headroom is None and state.parts[b].headroom is None:
+            return 0
+        return self._beneath(state, a, b, covered=True) + self._beneath(state, b, a, covered=True)
+
+    def _beneath(self, state: _State, low: int, high: int, *, covered: bool) -> bool:
+        """Whether ``low`` fits under ``high``'s raised board -- and, when ``covered``, whether
+        the board is over it as well.
+
+        DRC's two questions about a module spelled out: ``drc.fits_under``, which lets rule 1
+        pass the pair, and ``under-module``, which names a part the board covers. The same
+        boxes by the same arithmetic -- the anchor added to each edge of a box turned once, as
+        ``drc.placed_body_box`` and ``drc.placed_raised_board`` build them -- asked of the same
+        predicates in ``geometry``, so the two cannot disagree in the last place.
+        """
+        part_low, part_high = state.parts[low], state.parts[high]
+        headroom = part_high.headroom
+        if headroom is None or part_low.mirrored != part_high.mirrored:
+            return False
+        if part_low.height > headroom:
+            return False  # The predicate's first answer, before any box is built.
+        pitch = self.board_pitch
+        lx = state.col[low] * pitch
+        ly = state.row[low] * pitch
+        hx = state.col[high] * pitch
+        hy = state.row[high] * pitch
+        rot = state.rot[high]
+        body = part_low.rel_body[state.rot[low]]
+        placed = (lx + body.min_x, lx + body.max_x, ly + body.min_y, ly + body.max_y)
+        headers = (
+            (hx + header.min_x, hx + header.max_x, hy + header.min_y, hy + header.max_y)
+            for header in part_high.rel_headers[rot]
+        )
+        if not covered:
+            return fits_under_raised_board(placed, part_low.height, headroom, headers)
+        board = part_high.rel_raised[rot]
+        assert board is not None  # A part with headroom is a module at every rotation.
+        return stands_under_raised_board(
+            placed,
+            part_low.height,
+            (hx + board.min_x, hx + board.max_x, hy + board.min_y, hy + board.max_y),
+            headroom,
+            headers,
+        )
+
     def _on_grid(self, state: _State, position: int) -> bool:
         return all(
             0 <= col < self.board_cols and 0 <= row < self.board_rows
@@ -1691,6 +1797,14 @@ class _Scorer:
                 else:
                     inside = convex_polygons_overlap(
                         _placed(poly_a, box_a, ax, ay), _placed(poly_b, box_b, bx, by)
+                    )
+                if inside and (part_a.headroom is not None or part_b.headroom is not None):
+                    # In the air over the other, not in its way: rule 1 lets the pair go by
+                    # the same predicate (``drc.fits_under``), and ``under_pair`` prices a
+                    # part the board covers instead.
+                    inside = not (
+                        self._beneath(state, a, b, covered=False)
+                        or self._beneath(state, b, a, covered=False)
                     )
                 if inside:
                     touching = 1
@@ -1779,6 +1893,7 @@ class _Scorer:
         pairs = 0
         blocked = 0
         heat_pairs = 0
+        under = 0
         overlap = heat = 0.0
         for a in range(len(state.parts)):
             for b in range(a + 1, len(state.parts)):
@@ -1787,6 +1902,7 @@ class _Scorer:
                 overlap += pair_overlap
                 heat += pair_heat
                 blocked += self.entry_pair(state, a, b)
+                under += self.under_pair(state, a, b)
                 if pair_heat:
                     heat_pairs += self.heat_pair(state, a, b)
 
@@ -1810,6 +1926,7 @@ class _Scorer:
             heat_pairs=heat_pairs,
             mount_covered=mount_covered,
             mount_mm=mount_reach,
+            under_module=under,
         )
 
     def local(self, state: _State, positions: tuple[int, ...]) -> float:
@@ -1910,7 +2027,31 @@ class _Scorer:
                     if blocked:
                         total += weights.entry_blocked * blocked
 
+        # A module's term, asked only on a board that has one, and outside the loop above
+        # so that every other board pays nothing per pair for the question -- asked inside
+        # it, atmega328-relay's anneal took about 3% longer, best of three. A part pairs with
+        # every module, a module with every part, and two moved parts are counted once, at
+        # the smaller position, exactly as above.
+        raised = self._raised_positions if parts is self._raised_parts else self._raised(parts)
+        if raised:
+            for a in positions:
+                for b in range(count) if parts[a].headroom is not None else raised:
+                    if b == a or (b in moved and b < a):
+                        continue
+                    under = self.under_pair(state, a, b)
+                    if under:
+                        total += weights.under_module * under
+
         return total
+
+    def _raised(self, parts: list[_Part]) -> tuple[int, ...]:
+        """The positions of the modules in ``parts``, worked out once per part list."""
+        if parts is not self._raised_parts:
+            self._raised_parts = parts
+            self._raised_positions = tuple(
+                position for position, part in enumerate(parts) if part.headroom is not None
+            )
+        return self._raised_positions
 
 
 def _dead_hole_keys(doc: PerfDocument) -> frozenset[tuple[int, int]]:

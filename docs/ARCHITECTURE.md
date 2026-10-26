@@ -194,8 +194,8 @@ Four consumers, one fact:
   when non-zero. `test_the_placer_counts_the_pairs_drc_names` holds the two counts equal.
 - **`_pick_best` and `_settle_winner` rank `PlacementCost.physical_warnings`** **ahead of the
   routed cost** — every warning DRC gives about where a part IS, one count per rule, listed in
-  `placer.PHYSICAL_WARNING_RULES`: overhangs, blocked entries, terminals facing in, hot pairs
-  and parts under a screw head. The router cannot see any of them, and
+  `placer.PHYSICAL_WARNING_RULES`: overhangs, blocked entries, terminals facing in, hot pairs,
+  parts under a screw head and parts under a module's board. The router cannot see any of them, and
   ranking by routed cost alone handed back a board with two unwirable terminals because the
   one with them cleared routed 812 against 726. Zero on every fixture, so nothing moved.
   The mouth-facing PREFERENCE (`entry_run`) was not in that key and lost to routing: over
@@ -428,6 +428,26 @@ must not be allowed to disagree with it:
 
 `doc.height_limit_mm` is `None` until someone says otherwise, and `component-too-tall` is
 silent until then — with no case chosen there is nothing to be too tall for.
+
+**`under-module` came later, and it is the same argument from the other side.** Rule 1 judges
+every pair by courtyards seen from above, so a resistor between a Nano's header rows was an
+overlap ERROR. But the Nano's board is 8.5 mm up on its female headers.
+`footprints.raised_board` gives a module's seat, its `headroom` (the seat less
+`UNDER_MODULE_CLEARANCE_MM`, 1.5, an estimate written down as one, for the parts on a
+module's underside) and a pitch square of header moulding round each pin. Two predicates
+in `geometry` then decide such a pair. `fits_under_raised_board` is the part's height
+within the headroom and its body on no moulding, on the module's own face. Rule 1 lets
+that pair go (`drc.fits_under`). `stands_under_raised_board` adds the board being over it,
+and draws the WARNING, because the part is out of reach once the module is on. A part
+inside only the courtyard's margin is neither. The placer asks both predicates of the
+same boxes: `_pair_terms` stops counting such a pair as an overlap, and `under_pair` counts
+the warning, priced at a warning's 100 (`PlacementWeights.under_module`), which is in
+`PHYSICAL_WARNING_RULES`. So the placer never hides a part under a module on its own; a
+builder who wants one there locks both. `test_under_module.py` walks the library across a
+Nano, turned and not, and holds both counts to DRC's. The guide notes it at the low part's
+step (`_part_notes_from_drc`). "Before it goes in" holds in any phase, because a module
+soldered on its 2.5 mm spacer has room for nothing in the library, and a socketed one plugs
+in last. No fixture carries a module, so no golden finding moved.
 
 ## Placement is arranged first and annealed second
 

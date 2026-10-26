@@ -245,6 +245,7 @@ FINDING_TEMPLATES: tuple[str, ...] = (
     'Hole {hole} has more than one component pin landing on it: {names}.',
     '{ref} ({archetype}, at {hole}) sits {mm} mm from {ref_b} ({archetype_b}, at {hole_b}), inside the {mm_b} mm heat clearance. An electrolytic loses roughly half its rated life for every 10 °C it runs hotter — move it, turn the tab away, or expect to replace it.',
     '{ref} ({footprint}, at {hole}) stands {mm} mm above the board, over the {mm_b} mm of clear height this build declares. Lay it down, choose a lower-profile part, or raise the limit if the case turned out to be deeper.',
+    '{ref} ({mm} mm tall) sits under {ref_b}, whose board is {mm_b} mm up: fit it first; it cannot be reached afterwards without lifting the module.',
     '{ref} extends under the {mm} mm screw head of mounting hole {mount} at {hole}. The screw cannot be fitted without pressing on the part.',
     "Pin {pin_no} of {ref} (net '{net}') is not connected to anything: no conductor touches it and it shares no hole with another pin.",
     '{ref} pin {pin_no} sits at {hole}, where mounting hole {mount} has removed the pad. There is nothing there to solder to — move the part, or move the mounting hole.',

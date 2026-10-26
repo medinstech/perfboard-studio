@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache
 from typing import Literal
@@ -565,6 +565,55 @@ def entry_blocked_by(
     dx = min(corridor[1], body[1]) - max(corridor[0], body[0])
     dy = min(corridor[3], body[3]) - max(corridor[2], body[2])
     return dx > 0 and dy > 0
+
+
+# ---------------------------------------------------------------------------
+# Under a raised module
+# ---------------------------------------------------------------------------
+#
+# ``footprints.raised_board`` says where a module's board is held up and how much room is
+# under it; these say whether a part fits there. ``drc`` and ``placer`` both read them, in
+# board millimetres, for the reason the entry predicates above are shared.
+
+
+def boxes_overlap(
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+) -> bool:
+    """Whether two board-space ``(min_x, max_x, min_y, max_y)`` boxes share any area.
+    Strict, like the courtyard overlap: touching is not overlapping."""
+    return min(a[1], b[1]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[2], b[2])
+
+
+def fits_under_raised_board(
+    body: tuple[float, float, float, float],
+    height: Mm,
+    headroom: Mm,
+    headers: Iterable[tuple[float, float, float, float]],
+) -> bool:
+    """Whether a part fits under a module's raised board: no taller than the room under it,
+    and standing on none of its header mouldings, all as board-space boxes.
+
+    What lets the two courtyards overlap without the parts meeting -- the module's board is
+    in the air, so a low part is under it rather than in it. A part on a moulding is in it,
+    however low, because the moulding stands the whole seat tall.
+    """
+    return height <= headroom and not any(boxes_overlap(body, header) for header in headers)
+
+
+def stands_under_raised_board(
+    body: tuple[float, float, float, float],
+    height: Mm,
+    board: tuple[float, float, float, float],
+    headroom: Mm,
+    headers: Iterable[tuple[float, float, float, float]],
+) -> bool:
+    """Whether a part fits under a module's raised board AND the board is over it.
+
+    A part beside the board, inside only its courtyard's margin, fits there as well, and
+    nothing covers it -- so it is no finding at all, where this one is out of reach once the
+    module is on.
+    """
+    return boxes_overlap(body, board) and fits_under_raised_board(body, height, headroom, headers)
 
 
 def entry_side(direction: tuple[float, float]) -> EdgeSide:

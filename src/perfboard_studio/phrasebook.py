@@ -425,6 +425,13 @@ TURKISH: dict[str, str] = {
         "{source} ısınıyor ve hemen yakında duruyor. Varsa buraya 105 °C'lik bir parça tak — "
         "bir soğutucunun yanındaki 85 °C'lik elektrolitik, kartta kuruyan ilk şey olur."
     ),
+    "This part sits under {module}'s board. Press it right down onto the board so it "
+    "clears the underside, and check it before {module} goes in: once that is on, this "
+    "part is out of reach.": (
+        "Bu parça {module} modülünün kartının altında kalıyor. Kartın alt yüzüne değmemesi "
+        "için karta tam bastır ve {module} takılmadan önce kontrol et: modül takıldıktan "
+        "sonra bu parçaya ulaşılamaz."
+    ),
     "Fit a socket here if you have one — this phase is the sockets. The IC itself does not "
     "go in until the closing checks in phase 8, socket or no socket: it is the last thing "
     "on the board that should meet an iron.": (

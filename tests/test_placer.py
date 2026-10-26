@@ -2371,6 +2371,14 @@ def _every_pair_local(scorer, state, positions) -> float:
             blocked = scorer.entry_pair(state, a, b)
             if blocked:
                 total += weights.entry_blocked * blocked
+    # A module's term after every other pair term, as ``local`` adds it, and of every pair.
+    for a in positions:
+        for b in range(len(state.parts)):
+            if b == a or (b in moved and b < a):
+                continue
+            under = scorer.under_pair(state, a, b)
+            if under:
+                total += weights.under_module * under
     return total
 
 

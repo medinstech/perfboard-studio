@@ -293,6 +293,11 @@ def _violation_to_jsonable(v: DrcViolation) -> dict[str, Any]:
 #: the soldered end of an insulated wire. The original judged a wire by its two ends, as the
 #: netlist does, so six fixtures that carry exactly that came back clean -- pinned by
 #: test_the_wire_over_joint_rule_fires_where_typescript_was_blind.
+#:
+#: ``under-module`` is a part standing under a module's raised board, which the original
+#: called an overlap because it judged every pair by courtyards seen from above. No fixture
+#: carries a module, so none can fire it, and rule 1's findings on them are the ones they
+#: were -- see test_under_module.py.
 PYTHON_ONLY_RULES = frozenset(
     {
         "conductor-crossing",
@@ -307,6 +312,7 @@ PYTHON_ONLY_RULES = frozenset(
         "no-hole",
         "not-on-breadboard",
         "wrong-rail",
+        "under-module",
     }
 )
 

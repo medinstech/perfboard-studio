@@ -256,6 +256,17 @@ closed without a bump.
 
 ### Changed
 
+- **A part under a module's board is judged by how tall it is.** A module on female headers
+  holds its own board 8.5 mm up, and a resistor lying under it, between the header rows,
+  was an overlap error because the two outlines overlap seen from above. Now a part that
+  is low enough for the room under the board (its seat less 1.5 mm, for the parts on a
+  module's underside), clear of the header strips and on the module's side of the board is
+  not an overlap. DRC warns instead (`under-module`): fit it first, because it cannot be
+  reached once the module is on. The build guide says so at that part's step. Auto-place
+  counts the same warning and keeps parts out from under a module, unless you put one
+  there and lock both. A part that is too tall, or that stands on a header strip, is still
+  an overlap. (suggested by @vindavs, #12)
+
 - **The release dry run rehearses the commit about to be tagged.** `release.yml`'s
   dispatch takes a `version` and then makes the checks a tag makes -- `version.py`, no
   `.dev` suffix, a changelog section -- before building anything, and

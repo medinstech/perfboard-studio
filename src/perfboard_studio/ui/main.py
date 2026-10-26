@@ -4181,6 +4181,7 @@ def _rule_title(rule: str) -> str:
         "solder-trace-too-long": t("Solder trace too long"),
         "terminal-entry-blocked": t("Terminal entry blocked"),
         "terminal-entry-faces-in": t("Terminal faces into the board"),
+        "under-module": t("Part under a module"),
         "unknown-footprint": t("Unknown footprint"),
         "wire-over-joint": t("Bare wire on a joint"),
         "wire-too-thick-for-hole": t("Wire too thick for the hole"),

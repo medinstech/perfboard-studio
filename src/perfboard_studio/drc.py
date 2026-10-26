@@ -49,7 +49,14 @@ from .breadboard import (
     rail_takes,
 )
 from .connectivity import FootprintLookup, PhysicalNet, PhysicalPinRef, extract_physical_nets
-from .footprints import WIRE_ENTRY_CLEARANCE_MM, body_extent, entry_corridor, wire_entry
+from .footprints import (
+    WIRE_ENTRY_CLEARANCE_MM,
+    RaisedBoard,
+    body_extent,
+    entry_corridor,
+    raised_board,
+    wire_entry,
+)
 from .geometry import (
     BODY_OVERHANG_TOLERANCE_MM,
     all_pin_holes,
@@ -62,6 +69,7 @@ from .geometry import (
     entry_blocked_by,
     entry_faces_away,
     entry_side,
+    fits_under_raised_board,
     format_hole,
     hangs_over_edge,
     hole_key,
@@ -78,6 +86,7 @@ from .geometry import (
     path_length_mm,
     paths_cross,
     pin_hole,
+    stands_under_raised_board,
     substrate_edges_mm,
     transform_offset,
     turned_box,
@@ -490,7 +499,7 @@ def _courtyards_overlap(a: _Courtyard, b: _Courtyard) -> bool:
 
 
 def _check_component_body_overlap(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
-    courtyards: list[tuple[ComponentInstance, _Courtyard]] = []
+    courtyards: list[tuple[ComponentInstance, Footprint, _Courtyard]] = []
     for component in doc.components:
         footprint = lookup(component.footprint_id)
         if footprint is None or len(footprint.body_outline) == 0:
@@ -499,6 +508,7 @@ def _check_component_body_overlap(doc: PerfDocument, lookup: FootprintLookup) ->
         courtyards.append(
             (
                 component,
+                footprint,
                 _Courtyard(
                     points=points, box=_aabb_of(points), is_box=is_axis_aligned_box(points)
                 ),
@@ -506,8 +516,16 @@ def _check_component_body_overlap(doc: PerfDocument, lookup: FootprintLookup) ->
         )
 
     violations: list[DrcViolation] = []
-    for (a_component, a_yard), (b_component, b_yard) in itertools.combinations(courtyards, 2):
+    for (a_component, a_footprint, a_yard), (b_component, b_footprint, b_yard) in (
+        itertools.combinations(courtyards, 2)
+    ):
         if not _courtyards_overlap(a_yard, b_yard):
+            continue
+        if fits_under(a_component, a_footprint, b_component, b_footprint, doc.board) or (
+            fits_under(b_component, b_footprint, a_component, a_footprint, doc.board)
+        ):
+            # In the air over the other, not in its way; ``under-module`` names a part the
+            # board covers.
             continue
         violations.append(
             DrcViolation(
@@ -522,6 +540,110 @@ def _check_component_body_overlap(doc: PerfDocument, lookup: FootprintLookup) ->
                 component_ids=(a_component.id, b_component.id),
             )
         )
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Rule 1b -- a part under a module's raised board (warning) -- Python only
+# ---------------------------------------------------------------------------
+
+
+def placed_raised_board(
+    component: ComponentInstance, footprint: Footprint, board: Board
+) -> RaisedBoard | None:
+    """``footprints.raised_board`` placed on the board: the same fields, with the boxes in
+    the millimetre frame of the holes and turned with the part, as its body is."""
+    raised = raised_board(footprint, board.pitch)
+    if raised is None:
+        return None
+    anchor = hole_to_mm(component.anchor, board)
+
+    def placed(box: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+        min_x, max_x, min_y, max_y = turned_box(box, component.rotation, component.mirrored)
+        return anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y
+
+    return RaisedBoard(
+        seat=raised.seat,
+        headroom=raised.headroom,
+        board=placed(raised.board),
+        headers=tuple(placed(header) for header in raised.headers),
+    )
+
+
+def fits_under(
+    part: ComponentInstance,
+    footprint: Footprint,
+    module: ComponentInstance,
+    module_footprint: Footprint,
+    board: Board,
+) -> bool:
+    """Whether ``part`` fits under ``module``'s raised board, the two on one face.
+
+    The pair rule 1 lets go: a module's board is in the air, so a part low enough for the
+    room under it and clear of its header mouldings is not in its way, though the two
+    courtyards overlap (``geometry.fits_under_raised_board``). A part on the other face is
+    the other side of the board from it, and left to rule 1 as it always was. The placer
+    asks the same of the same pairs (``placer._Scorer`` in ``_pair_terms``).
+    """
+    if part.mirrored != module.mirrored:
+        return False
+    raised = placed_raised_board(module, module_footprint, board)
+    if raised is None:
+        return False
+    return fits_under_raised_board(
+        placed_body_box(part, footprint, board),
+        footprint.body_height,
+        raised.headroom,
+        raised.headers,
+    )
+
+
+def _check_under_module(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    """A part standing under a module's raised board.
+
+    Not an overlap -- rule 1 lets the pair go (:func:`fits_under`) -- but not nothing
+    either: once the module is on, the part under it cannot be seen, reached or reworked
+    without lifting it, so it has to be fitted, and checked, first. A part that only stands
+    inside the module's courtyard margin, beside its board, has nothing over it and is not
+    named. The placer counts the same pairs by the same predicate (``under_pair``), and the
+    build guide says it at the part's own step.
+    """
+    placed = [
+        (component, footprint)
+        for component in doc.components
+        if (footprint := lookup(component.footprint_id)) is not None
+    ]
+    modules = [
+        (component, raised)
+        for component, footprint in placed
+        if (raised := placed_raised_board(component, footprint, doc.board)) is not None
+    ]
+    violations: list[DrcViolation] = []
+    for module, raised in modules:
+        for part, footprint in placed:
+            if part.id == module.id or part.mirrored != module.mirrored:
+                continue
+            if not stands_under_raised_board(
+                placed_body_box(part, footprint, doc.board),
+                footprint.body_height,
+                raised.board,
+                raised.headroom,
+                raised.headers,
+            ):
+                continue
+            violations.append(
+                DrcViolation(
+                    rule="under-module",
+                    severity="warning",
+                    message=(
+                        f"{part.ref} ({footprint.body_height:g} mm tall) sits under "
+                        f"{module.ref}, whose board is {raised.seat:g} mm up: fit it first; it "
+                        f"cannot be reached afterwards without lifting the module."
+                    ),
+                    holes=(part.anchor, module.anchor),
+                    component_ids=(part.id, module.id),
+                )
+            )
     return violations
 
 
@@ -2339,6 +2461,7 @@ def run_drc(
 
     violations: list[DrcViolation] = [
         *_check_component_body_overlap(doc, lookup),
+        *_check_under_module(doc, lookup),
         *_check_components_off_board(doc, lookup),
         *_check_conductors_off_board(doc),
         *_check_unknown_footprints(doc, lookup),

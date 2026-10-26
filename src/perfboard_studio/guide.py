@@ -1085,7 +1085,7 @@ def _part_notes_from_drc(
 ) -> dict[str, tuple[str, ...]]:
     """The DRC findings that change how a part is FITTED, moved onto that part's step.
 
-    Only the two that are instructions rather than complaints. Everything else DRC says
+    Only the three that are instructions rather than complaints. Everything else DRC says
     is about the design and belongs in the warning list, not in the middle of a step
     somebody is following with an iron in their hand.
     """
@@ -1124,6 +1124,20 @@ def _part_notes_from_drc(
                     where=say.joined(wheres),
                 )
             notes.setdefault(violation.component_ids[0], []).append(note)
+        elif violation.rule == "under-module" and len(violation.component_ids) == 2:
+            # On the part underneath: it is the one to push down and look at while it can
+            # still be seen. "Before it goes in" holds whatever phase the part is in: nothing
+            # in the library fits under a module soldered on its spacer, and one that plugs
+            # in goes in after everything else.
+            module_ref = ref_by_id.get(violation.component_ids[1], say("the part next to it"))
+            notes.setdefault(violation.component_ids[0], []).append(
+                say(
+                    "This part sits under {module}'s board. Press it right down onto the "
+                    "board so it clears the underside, and check it before {module} goes in: "
+                    "once that is on, this part is out of reach.",
+                    module=module_ref,
+                )
+            )
         elif violation.rule == "heat-proximity" and len(violation.component_ids) == 2:
             source_ref = ref_by_id.get(violation.component_ids[0], say("the part next to it"))
             # On the part that suffers, not the one that gets hot: this is advice about
