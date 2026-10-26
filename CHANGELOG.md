@@ -29,6 +29,11 @@ closed without a bump.
   axis -- the runs it prints, how often it marks a hole, how many digits a number has --
   and the 2D view, the 1:1 print and the 3D board show exactly that, with the editor's
   ruler back beside them, since it is then the one thing on screen saying the addresses.
+  Board Setup ▸ Advanced asks it under "Addresses printed on the board" -- "A-Z, A-P",
+  how often a hole is marked, how many digits -- and says in its own words why OK is held
+  off while what is typed could not be printed; it also stopped putting a legend printed
+  on one face, along one edge, back to both faces and four edges on every OK. The hole
+  under the pointer says its printed name beside its address ("AA7, printed A·G").
   Every address the tool speaks stays its own, because a run that repeats cannot name a
   hole: the build guide's first step says once how the two line up ("AA–AP are printed
   A–P"), in English and Turkish, and asks which corner the board's own numbering starts

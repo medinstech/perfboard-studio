@@ -474,6 +474,33 @@ TURKISH: Mapping[str, str] = {
         "Kendi A-Z / 01-22 cetvelini taşıyan, cetveli kartın üzerine basılı kartlar."
     ),
     "Row digits": "Satır basamağı",
+    "Columns printed as": "Sütunlarda basılı",
+    "Rows printed as": "Satırlarda basılı",
+    "marked every": "işaret aralığı",
+    "digits": "basamak",
+    "What the board prints along its columns when that is not the addresses: runs of "
+    "letters or of numbers from the first hole on. A-Z, A-P is A to Z and then A to P "
+    "again. Left empty, the board prints the addresses.": (
+        "Kart sütunlar boyunca adresleri değil de kendi numaralandırmasını basıyorsa o: "
+        "ilk delikten itibaren harf ya da sayı dizileri. A-Z, A-P: önce A–Z, sonra "
+        "yeniden A–P. Boş bırakılırsa kart adresleri basar."
+    ),
+    "What the board prints down its rows when that is not the addresses: runs of "
+    "letters or of numbers from the first hole on. A-Z, 1-4 is A to Z and then 1 to 4. "
+    "Left empty, the board prints the row numbers.": (
+        "Kart satırlar boyunca adresleri değil de kendi numaralandırmasını basıyorsa o: "
+        "ilk delikten itibaren harf ya da sayı dizileri. A-Z, 1-4: önce A–Z, sonra 1–4. "
+        "Boş bırakılırsa kart satır numaralarını basar."
+    ),
+    "Only every Nth hole carries a label: 5 is a board numbered 05, 10, 15 and so on.": (
+        "Yalnızca her N. delikte bir etiket var: 5, kartın 05, 10, 15 diye numaralandığı "
+        "demek."
+    ),
+    "Numbers are padded to this many digits: 2 prints 5 as 05. Letters never are.": (
+        "Sayılar bu kadar basamağa tamamlanır: 2 ile 5, 05 olarak basılır. Harfler "
+        "tamamlanmaz."
+    ),
+    "{hole}, printed {printed}": "{hole}, kartta {printed} yazar",
     '2 prints row 7 as "07", the way most such boards do.': (
         '2, 7. satırı "07" olarak basar; bu kartların çoğu böyle yapar.'
     ),
@@ -2787,6 +2814,20 @@ TURKISH: Mapping[str, str] = {
     'The router found no route.': 'Yönlendirici bir yol bulamadı.',
     'Skipped {count} unconnected nets': '{count} bağlantısız net atlandı',
     'Skipped {count} unconnected net': '{count} bağlantısız net atlandı',
+    "A printed legend needs at least one run, such as A-Z or 1-60.": (
+        "Basılı bir numaralandırmanın en az bir dizisi olmalı, örneğin A-Z ya da 1-60."
+    ),
+    '"{piece}" is not a run: it needs a first label, as in A-Z.': (
+        '"{piece}" bir dizi değil: bir ilk etiketle başlamalı, örneğin A-Z.'
+    ),
+    "{first}–{last} cannot be printed: it counts backwards.": (
+        "{first}–{last} basılamaz: geriye doğru sayıyor."
+    ),
+    "{first}–{last} cannot be printed: a run is capital letters to capital letters (A–Z) "
+    "or a number to a number (1–60), one kind to a run.": (
+        "{first}–{last} basılamaz: bir dizi ya büyük harften büyük harfe (A–Z) ya da "
+        "sayıdan sayıya (1–60) gider, ikisini karıştırmadan."
+    ),
     # -- refusals, said where they are shown (engine_text) ---------------------------
     'Move refused: {reason}': 'Taşıma reddedildi: {reason}',
     # -- DRC and LVS findings, said where they are shown (engine_text) --------------

@@ -224,6 +224,7 @@ from perfboard_studio.footprints import (
     vertical_screw_terminal_footprint,
 )
 from perfboard_studio.geometry import (
+    MAX_LEGEND_DIGITS,
     STANDARD_PRESETS,
     BoardPreset,
     board_edge_margin_mm,
@@ -232,8 +233,12 @@ from perfboard_studio.geometry import (
     edge_connector_holes,
     format_hole,
     hole_span_mm,
+    legend_label,
+    legend_problem,
+    legend_runs_text,
     pad_edge_gap_mm,
     pad_extent_mm,
+    parse_legend_runs,
     preset_edge_connectors,
     preset_mounting_holes,
 )
@@ -255,6 +260,7 @@ from perfboard_studio.lvs import LvsIssue, LvsResult, run_lvs, stale_conductor_i
 from perfboard_studio.model import (
     UNTITLED_NAME,
     VALID_ROTATIONS,
+    AxisLegend,
     Board,
     BoardEdge,
     BoardLabels,
@@ -1012,6 +1018,16 @@ class PartTree(QTreeWidget):
         drag.exec(Qt.DropAction.CopyAction)
 
 
+@dataclasses.dataclass(frozen=True)
+class _LegendAxisFields:
+    """The row of Board Setup that says how one axis of a legend is printed."""
+
+    row: QWidget
+    runs: QLineEdit
+    every: QSpinBox
+    digits: QSpinBox
+
+
 class BoardSetupDialog(QDialog):
     """Which board this is, and -- behind Advanced -- everything a product already decides.
 
@@ -1252,6 +1268,32 @@ class BoardSetupDialog(QDialog):
         self.row_digits.setValue(board.labels.row_digits if board.labels else 2)
         self.row_digits.setToolTip(t('2 prints row 7 as "07", the way most such boards do.'))
 
+        # A BOARD THAT COUNTS ITS OWN WAY (#13): A..Z and then A..P again, letters down the
+        # side, numbers with every fifth marked. Empty is the addresses, which is what
+        # every board this dialog knew before prints. What is typed is read by the engine
+        # (`parse_legend_runs`) and refused in the engine's words (`legend_problem`), so the
+        # dialog, a .perf file and an agent are told the same thing.
+        self.legend_columns = self._legend_axis(
+            "A-Z, A-P",
+            t(
+                "What the board prints along its columns when that is not the addresses: "
+                "runs of letters or of numbers from the first hole on. A-Z, A-P is A to Z "
+                "and then A to P again. Left empty, the board prints the addresses."
+            ),
+        )
+        self.legend_rows = self._legend_axis(
+            "A-Z, 1-4",
+            t(
+                "What the board prints down its rows when that is not the addresses: runs "
+                "of letters or of numbers from the first hole on. A-Z, 1-4 is A to Z and "
+                "then 1 to 4. Left empty, the board prints the row numbers."
+            ),
+        )
+        self.legend_error = QLabel()
+        self.legend_error.setWordWrap(True)
+        self.legend_error.setStyleSheet(f"color: {ERROR};")
+        self._fill_legend(board.labels)
+
         self._size_note = QLabel()
         # Wrapped: beside the preview the line ran past the dialog's edge, "0.64 mm" cut to "0.64 m".
         self._size_note.setWordWrap(True)
@@ -1263,6 +1305,10 @@ class BoardSetupDialog(QDialog):
         self.narrow_channel.valueChanged.connect(self._update_note)
         self.pad_shape.currentIndexChanged.connect(self._update_enabled)
         self.legend.toggled.connect(self._update_enabled)
+        for fields in (self.legend_columns, self.legend_rows):
+            fields.runs.textChanged.connect(self._check_legend)
+            fields.every.valueChanged.connect(self._check_legend)
+            fields.digits.valueChanged.connect(self._check_legend)
         self._pitch = board.pitch
         self._pad_diameter = board.pad_diameter
         self._update_note()
@@ -1308,6 +1354,10 @@ class BoardSetupDialog(QDialog):
         advanced.addRow(t("Long axis"), self.pad_axis)
         advanced.addRow("", self.legend)
         advanced.addRow(t("Row digits"), self.row_digits)
+        advanced.addRow(t("Columns printed as"), self.legend_columns.row)
+        advanced.addRow(t("Rows printed as"), self.legend_rows.row)
+        advanced.addRow("", self.legend_error)
+        self._advanced_form = advanced
 
         # Open on a board that is NOT one of the products, because then these fields are
         # the only thing describing it -- Board Setup on a document already laid out on a
@@ -1322,6 +1372,8 @@ class BoardSetupDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self._check_legend()
 
         questions = QVBoxLayout()
         questions.addLayout(self._chosen)
@@ -1357,6 +1409,12 @@ class BoardSetupDialog(QDialog):
             self.cols.valueChanged,
             self.rows.valueChanged,
             self.legend.toggled,
+            self.legend_columns.runs.textChanged,
+            self.legend_rows.runs.textChanged,
+            self.legend_columns.every.valueChanged,
+            self.legend_rows.every.valueChanged,
+            self.legend_columns.digits.valueChanged,
+            self.legend_rows.digits.valueChanged,
         ):
             signal.connect(lambda *_args: self._preview_timer.start())
 
@@ -1446,6 +1504,7 @@ class BoardSetupDialog(QDialog):
         self.legend.setChecked(board.labels is not None)
         if board.labels is not None:
             self.row_digits.setValue(board.labels.row_digits)
+        self._fill_legend(board.labels)
         self._update_enabled()
 
     def _channel_extra(self) -> int:
@@ -1464,6 +1523,12 @@ class BoardSetupDialog(QDialog):
         self.pad_length.setEnabled(oblong)
         self.pad_axis.setEnabled(oblong)
         self.row_digits.setEnabled(self.legend.isChecked())
+        # Shown with the legend and hidden without it, as every other row here that only
+        # means something for one kind of board.
+        if hasattr(self, "_advanced_form"):
+            for row in (self.legend_columns.row, self.legend_rows.row):
+                self._advanced_form.setRowVisible(row, self.legend.isChecked())
+        self._check_legend()
         self._chosen.setRowVisible(self.strip_axis, self.board_type.currentData() == "stripboard")
         # A breadboard is chosen by its size and nothing else: the pattern decides its
         # grid, and it has no material, pads or legend of its own to be asked about. A
@@ -1590,12 +1655,111 @@ class BoardSetupDialog(QDialog):
             pad_axis=cast(PadAxis, self.pad_axis.currentData()),
             border_x_mm=border_x,
             border_y_mm=border_y,
-            labels=(
-                BoardLabels(row_digits=self.row_digits.value())
-                if self.legend.isChecked()
-                else None
-            ),
+            labels=self._labels(),
         )
+
+    # -- the board's own numbering (#13) ------------------------------------------------
+
+    def _legend_axis(self, example: str, tooltip: str) -> _LegendAxisFields:
+        """The three fields that say how one axis is printed, in one row of the form."""
+        runs = QLineEdit()
+        # The tool's own vocabulary, like "R1, C3, U2…": the same in every language.
+        runs.setPlaceholderText(example)
+        runs.setToolTip(tooltip)
+        every = QSpinBox()
+        every.setRange(1, 20)
+        every.setToolTip(
+            t("Only every Nth hole carries a label: 5 is a board numbered 05, 10, 15 and so on.")
+        )
+        digits = QSpinBox()
+        digits.setRange(1, MAX_LEGEND_DIGITS)
+        digits.setToolTip(
+            t("Numbers are padded to this many digits: 2 prints 5 as 05. Letters never are.")
+        )
+        row = QWidget()
+        line = QHBoxLayout(row)
+        line.setContentsMargins(0, 0, 0, 0)
+        line.addWidget(runs, 1)
+        line.addWidget(QLabel(t("marked every")))
+        line.addWidget(every)
+        line.addWidget(QLabel(t("digits")))
+        line.addWidget(digits)
+        return _LegendAxisFields(row, runs, every, digits)
+
+    def _fill_legend(self, labels: BoardLabels | None) -> None:
+        for fields, legend in (
+            (self.legend_columns, labels.columns if labels else None),
+            (self.legend_rows, labels.rows if labels else None),
+        ):
+            fields.runs.setText(legend_runs_text(legend.runs) if legend else "")
+            fields.every.setValue(legend.every if legend else 1)
+            fields.digits.setValue(legend.digits if legend else 1)
+
+    def _axis_legend(self, fields: _LegendAxisFields) -> AxisLegend | None:
+        """What one axis prints, or None for the addresses -- and for text that does not
+        read, which :meth:`_check_legend` is already saying, with OK held off."""
+        text = fields.runs.text().strip()
+        if not text:
+            return None
+        try:
+            runs = parse_legend_runs(text)
+        except ValueError:
+            return None
+        return AxisLegend(runs=runs, every=fields.every.value(), digits=fields.digits.value())
+
+    def _labels(self) -> BoardLabels | None:
+        """The legend OK gives: the board's own, with what this dialog asks about replaced.
+
+        Built on the legend the board already had rather than from nothing, because the
+        face it is printed on and whether it runs round all four edges are not asked here
+        -- and building a fresh one put them back to their defaults on every OK.
+        """
+        if not self.legend.isChecked():
+            return None
+        return dataclasses.replace(
+            self._board.labels or BoardLabels(),
+            row_digits=self.row_digits.value(),
+            columns=self._axis_legend(self.legend_columns),
+            rows=self._axis_legend(self.legend_rows),
+        )
+
+    def legend_problem_text(self) -> str | None:
+        """Why OK is held off over the legend, or None: the engine's own sentence."""
+        if not self.legend.isChecked():
+            return None
+        for fields in (self.legend_columns, self.legend_rows):
+            text = fields.runs.text().strip()
+            if text:
+                try:
+                    parse_legend_runs(text)
+                except ValueError as error:
+                    return str(error)
+        labels = self._labels()
+        return legend_problem(labels) if labels is not None else None
+
+    def _check_legend(self) -> None:
+        """Say what is wrong under the fields, and hold OK off until it is put right.
+
+        Also what the fields beside a run mean: nothing while it is empty, so they are
+        greyed then; and "Row digits" pads the row NUMBERS, so it is asked only while the
+        rows print them -- two "digits" for one axis left which one won to guesswork.
+        """
+        if not hasattr(self, "legend_error") or not hasattr(self, "_advanced_form"):
+            return
+        for fields in (self.legend_columns, self.legend_rows):
+            typed = bool(fields.runs.text().strip())
+            fields.every.setEnabled(typed)
+            fields.digits.setEnabled(typed)
+        self._advanced_form.setRowVisible(
+            self.row_digits, not self.legend_rows.runs.text().strip()
+        )
+        problem = self.legend_problem_text()
+        # The engine's sentence, in the window's language (`engine_text.say`).
+        self.legend_error.setText(say(problem) if problem is not None else "")
+        # The ROW, not the label: a hidden label in a visible row still leaves its spacing.
+        self._advanced_form.setRowVisible(self.legend_error, problem is not None)
+        if hasattr(self, "_ok_button") and self._ok_button is not None:
+            self._ok_button.setEnabled(problem is None)
 
 
 def _corner_offset_mm(board: Board, diameter: float) -> float:
@@ -9577,9 +9741,28 @@ class MainWindow(QMainWindow):
         board = self.bus.document.board
         inside = 0 <= col < board.cols and 0 <= row < board.rows
         text = format_hole(HoleCoord(col, row), board) if inside else "—"
+        printed = self._printed_name(col, row) if inside else None
+        if printed is not None:
+            # The address first, because it is what the guide and DRC say; then what the
+            # board in hand has printed beside the hole, when that is not the address.
+            text = t("{hole}, printed {printed}").format(hole=f"<b>{text}</b>", printed=printed)
+        else:
+            text = f"<b>{text}</b>"
         self.label_hole.setText(
-            f'<span style="color:{TEXT_DIM}">{t("hole")}</span> <b>{text}</b>'
+            f'<span style="color:{TEXT_DIM}">{t("hole")}</span> {text}'
         )
+
+    def _printed_name(self, col: int, row: int) -> str | None:
+        """What a board that prints its OWN numbering calls this hole -- ``A·G`` for AA7 on
+        one printing A..Z and then A..P again -- or None when the board prints the addresses,
+        or nothing. Its numbering whether or not the hole is marked, which is what somebody
+        counting from the nearest mark arrives at."""
+        labels = self.bus.document.board.labels
+        if labels is None or (labels.columns is None and labels.rows is None):
+            return None
+        across = legend_label("columns", col, labels) or "–"
+        down = legend_label("rows", row, labels) or "–"
+        return f"{across}·{down}"
 
     def _refresh_status(self) -> None:
         # The ruler is suppressed on a board that prints its own addresses on the side in

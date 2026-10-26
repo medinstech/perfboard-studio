@@ -220,6 +220,13 @@ TEMPLATES: tuple[str, ...] = (
     "A text note needs something in it.",
     "A label with nothing in it is an invisible thing on the board that still has to be found to be deleted.",
     'Net "{name}" does not have pin(s) {pins}.',
+    # -- a board's own printed numbering (geometry.parse_legend_runs), as Board Setup
+    # says why OK is held off
+    "A printed legend needs at least one run, such as A-Z or 1-60.",
+    '"{piece}" is not a run: it needs a first label, as in A-Z.',
+    "{first}–{last} cannot be printed: it counts backwards.",
+    "{first}–{last} cannot be printed: a run is capital letters to capital letters (A–Z) "
+    "or a number to a number (1–60), one kind to a run.",
 )
 
 #: Every DRC and LVS finding as the findings panel shows it in English, after
