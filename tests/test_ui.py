@@ -13736,3 +13736,35 @@ def test_the_sheets_edit_a_part_edits_a_design_parts_note(monkeypatch) -> None:
     assert seen == [(False, "old")]
     assert next(p for p in window.bus.document.parts if p.id == part.id).note == "new reason"
     _close(window)
+
+
+def test_a_board_set_up_from_the_file_menu_is_a_board_chosen(monkeypatch) -> None:
+    """A stripboard set up by hand through File > Board Setup, and Place on the Board then
+    asked "Which board is this going on?" as if nobody had chosen one: only the Board step
+    marked the board chosen. A board set up and accepted is chosen, from either door."""
+    from perfboard_studio.ui import main as main_module
+
+    window = _blank_window()
+    try:
+        _add(window, "R1", "r-axial-3")
+        _add(window, "R2", "r-axial-3")
+
+        def to_stripboard(dialog):
+            dialog.board_type.setCurrentIndex(dialog.board_type.findData("stripboard"))
+            return int(main_module.QDialog.DialogCode.Accepted)
+
+        monkeypatch.setattr(main_module.BoardSetupDialog, "exec", to_stripboard)
+        asked: list[bool] = []
+        monkeypatch.setattr(
+            main_module.MainWindow,
+            "_offer_a_board_size",
+            lambda self, document, always=False: asked.append(always) or True,
+        )
+        assert window.on_board_setup()
+        assert window.bus.document.board.type == "stripboard"
+        assert window._board_chosen
+        window.on_schematic_place_all()
+        assert asked == [], "the board question was asked again"
+        assert window.bus.document.components
+    finally:
+        _close(window)

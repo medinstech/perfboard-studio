@@ -12104,9 +12104,13 @@ class MainWindow(QMainWindow):
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return False
+        # A board set up and accepted here is a board somebody chose, from the File menu as
+        # much as from the Board step: Place on the Board asked "Which board is this going
+        # on?" straight after a stripboard had been set up by hand.
         board = dialog.board()
         features = dialog.preset_features()
         if board == self.bus.document.board and features is None:
+            self._board_chosen = True
             return True
         if features is None:
             result = self.bus.dispatch("board.set", SetBoardPayload(board=board))
@@ -12129,10 +12133,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 t("Board not changed"),
-                f"[{result.code}] {result.message}\n\n"
+                f"{refused(result)}\n\n"
                 + t("Move or delete whatever is in the way and try again."),
             )
             return False
+        self._board_chosen = True
         self.view.fit_board()
         return True
 

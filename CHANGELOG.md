@@ -610,6 +610,12 @@ closed without a bump.
   pixels, and on a 600 dpi page that is half a millimetre, beside pin names printed at
   0.9 mm. On paper they are 1.1 mm tall now, on the same dark plate as on screen.
 
+- **A board set up from the File menu counts as chosen.** Only the Board step marked a board
+  chosen, so after a stripboard was set up by hand through File ▸ Board Setup, Place on the
+  Board asked "Which board is this going on?" all over again. A board set up and accepted
+  is chosen from either door now. A board change Board Setup refuses is also said in the
+  window's language, not as the engine's English with its code in brackets.
+
 ## [0.21.0] - 2026-10-21
 
 ### Added
