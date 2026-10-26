@@ -544,9 +544,20 @@ a pin is a pad from a part soldered three phases ago with a lead for solder to w
 router still prices the proximity, so it steers around it; it just no longer argues with
 the style it was told to use.
 
-`board.labels` is the `A`..`Z` / `01`..`22` legend printed on the board itself. It is the
-same address space `coord_to_hole_ref` produces; `printed_row_label` only adds zero
-padding for *rendering*, and `hole_ref_to_coord` still rejects `A07`. Silkscreen is
+`board.labels` is the legend printed on the board itself, and by default it is the
+`A`..`Z` / `01`..`22` of the addresses `coord_to_hole_ref` produces: `printed_row_label`
+only adds zero padding for *rendering*, and `hole_ref_to_coord` still rejects `A07`.
+**A board may print a numbering of its own instead**, per axis (`BoardLabels.columns` /
+`rows`, an `AxisLegend` of runs, `every` and `digits`): an 8 × 12 cm board prints A..Z and
+then A..P again along its long edge, and a Protopatch numbers both axes and marks every
+fifth hole. That is what is DRAWN and nothing else. Every address stays the tool's own
+(`C7`, `AA12`), because a printed run that repeats cannot name a hole by itself;
+`hole_ref_to_coord` refuses anything printed, the guide says once how the board's print
+maps to the addresses, and the hover names a hole both ways. `geometry.printed_label` is
+the one function the 2D legend, the 3D legend and the 1:1 print draw from;
+`legend_problem` is the one refusal, asked by `board.set` and by `persist` alike; and
+`view2d.legend_is_readable` is true only for a legend of the addresses, so the ruler
+comes back on a board with its own numbering. Silkscreen is
 physical, so it scales with the board (`scenetext.draw_physical_label`) — the exact
 opposite of the rulers and reference labels, which hold a screen size (`draw_label`).
 Both exist because a millimetre-sized font is a fraction of a point, which some engines
