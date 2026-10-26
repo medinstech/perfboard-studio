@@ -7,9 +7,34 @@ Each takes ``(job, should_stop)``, the shape ``placer.Mapper`` hands its work.
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from collections.abc import Callable
+
+
+class DieOnce:
+    """``work``, except that the first worker to run it dies on the spot, the way a worker
+    killed from outside does -- once, marked by a file, so the rerun in the calling process
+    (and every worker after the first) does the real work."""
+
+    def __init__(self, marker: str, work: Callable[[object, Callable[[], bool] | None], object]):
+        self.marker = marker
+        self.work = work
+
+    def __call__(self, job: object, should_stop: Callable[[], bool] | None) -> object:
+        if not os.path.exists(self.marker):
+            with open(self.marker, "w"):
+                pass
+            os._exit(1)
+        return self.work(job, should_stop)
+
+
+def take_a_while_and_say_who(job: object, should_stop: Callable[[], bool] | None) -> int:
+    """Half a second's work, answered with the worker's pid: four of them over two live
+    workers come back with both pids, and over one that is serving with one."""
+    time.sleep(0.5)
+    return os.getpid()
 
 
 def what_the_worker_loaded(job: object, should_stop: Callable[[], bool] | None) -> tuple[bool, bool]:

@@ -8,7 +8,7 @@ it, and :func:`mapper_for` is the one the window hands it. Being seeded, the ans
 same however the work is run -- ``tests/test_planner_pool.py`` holds a pooled placement to
 the serial one -- so the pool decides how long a placement takes and nothing else.
 
-Six things carry it:
+Seven things carry it:
 
 - **Spawn, on every system.** A forked child of a process that has started Qt inherits its
   locks in whatever state they were in, and can hang on the first one held -- Python calls
@@ -34,6 +34,15 @@ Six things carry it:
   waiting on nothing -- the pool is ended, the placement runs in the calling thread as it
   does with no workers, and so does every other for the rest of the session.
   :func:`describe` says which happened, and release.yml's bundle checks read it.
+- **A worker that dies costs a rerun, never a hang.** It was a ``multiprocessing.Pool``,
+  and an idle Pool worker waits for its next job HOLDING the job queue's lock: kill it
+  -- an antivirus, the out-of-memory killer, somebody's Task Manager -- and the lock is
+  never given back, so no worker could take a job again and ``terminate`` itself
+  waited on the same lock. Every later placement hung, Cancel included. It is a
+  ``ProcessPoolExecutor`` now, which watches its workers' process handles and fails what
+  is pending with ``BrokenProcessPool`` instead: a pool found broken before a run is
+  replaced, and the jobs of a run it broke under are run again in the calling thread --
+  the same jobs, so the same answer -- with the next run on a pool of its own.
 """
 
 from __future__ import annotations
@@ -47,7 +56,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from multiprocessing.pool import Pool
+    from concurrent.futures import Future, ProcessPoolExecutor
     from multiprocessing.synchronize import Event
 
     from perfboard_studio.placer import Mapper
@@ -95,17 +104,23 @@ def worker_count() -> int:
 
 
 _lock = threading.Lock()
-_pool: Pool | None = None
+_pool: ProcessPoolExecutor | None = None
 _stop: Event | None = None
 #: Why this session's workers could not be used, once they could not. Until
 #: :func:`shutdown`, every placement then runs in the calling thread.
 _broken: str | None = None
 #: How many workers the running pool has; 0 with none running.
 _running = 0
+#: Undoes :func:`_workers_read_nothing` for the running pool, at :func:`shutdown`.
+_stdin_restored: contextlib.ExitStack | None = None
 
 
 class _WouldNotStart(Exception):
     """The pool could not be made, or its workers did not answer in time."""
+
+
+class _NoAnswer(Exception):
+    """A new pool's workers did not answer their probes within START_TIMEOUT_S."""
 
 
 def mapper_for(should_stop: Callable[[], bool]) -> Mapper | None:
@@ -119,40 +134,86 @@ def mapper_for(should_stop: Callable[[], bool]) -> Mapper | None:
     def run(
         work: Callable[[Any, Callable[[], bool] | None], Any], jobs: Sequence[Any]
     ) -> list[Any]:
-        try:
-            pool, stop = _shared()
-        except _WouldNotStart:
+        from concurrent.futures import BrokenExecutor, wait
+
+        futures = _submitted(work, jobs)
+        if futures is None:
             # Nothing has run yet, so the work is done here instead: the same jobs and
             # the same answers, in order, with the caller's own stop.
             return [work(job, should_stop) for job in jobs]
-        stop.clear()
-        pending = pool.map_async(_call, [(work, job) for job in jobs])
         asked: float | None = None
-        while not pending.ready():
-            pending.wait(POLL_S)
+        pending: set[Future[Any]] = set(futures)
+        while pending:
+            _done, pending = wait(pending, timeout=POLL_S)
+            if not pending:
+                break
             if asked is None:
                 if should_stop():
-                    stop.set()
+                    stop = _stop
+                    if stop is not None:
+                        stop.set()
                     asked = time.monotonic()
-            elif not pending.ready() and time.monotonic() - asked > STOP_GRACE_S:
+            elif time.monotonic() - asked > STOP_GRACE_S:
                 shutdown()
                 raise PlannerStopped(
                     f"the planner's workers did not stop within {STOP_GRACE_S:.0f} s"
                 )
-        return pending.get()
+        try:
+            return [future.result() for future in futures]
+        except BrokenExecutor:
+            # A worker died under this run. The pool is done with -- the next run gets
+            # one of its own -- and these jobs are run again here, which gives the
+            # answer the workers would have.
+            shutdown()
+            return [work(job, should_stop) for job in jobs]
 
     return run
+
+
+def _submitted(
+    work: Callable[[Any, Callable[[], bool] | None], Any], jobs: Sequence[Any]
+) -> list[Future[Any]] | None:
+    """``jobs`` handed to the shared pool, or None when there are no workers to hand
+    them to. A pool found broken -- a worker died since the last run -- is replaced,
+    once: a second at once is not a death, it is a machine that kills them."""
+    from concurrent.futures import BrokenExecutor
+
+    for _attempt in range(2):
+        try:
+            pool, stop = _shared()
+        except _WouldNotStart:
+            return None
+        stop.clear()
+        try:
+            return [pool.submit(_call, (work, job)) for job in jobs]
+        except BrokenExecutor:
+            shutdown()
+    return None
 
 
 def shutdown() -> None:
     """End the workers, at once. The next :func:`mapper_for` starts new ones, and tries
     again if the last ones would not start."""
-    global _pool, _stop, _broken, _running
+    global _pool, _stop, _broken, _running, _stdin_restored
     with _lock:
         pool, _pool, _stop, _broken, _running = _pool, None, None, None, 0
+        stdin, _stdin_restored = _stdin_restored, None
     if pool is not None:
-        pool.terminate()
-        pool.join()
+        _end(pool)
+    if stdin is not None:
+        stdin.close()
+
+
+def _end(pool: ProcessPoolExecutor) -> None:
+    """Every worker ended now, not when it finishes what it is doing, and then waited
+    for: a worker that will not answer a stop is exactly the one that would not finish.
+    The executor sees its workers go and winds itself up."""
+    processes = list((getattr(pool, "_processes", None) or {}).values())
+    for process in processes:
+        process.terminate()
+    pool.shutdown(wait=True, cancel_futures=True)
+    for process in processes:
+        process.join()
 
 
 def describe() -> str:
@@ -169,8 +230,8 @@ def describe() -> str:
     return f"{_running} worker processes" if _pool is not None else "in this process"
 
 
-def _shared() -> tuple[Pool, Event]:
-    global _pool, _stop, _broken, _running
+def _shared() -> tuple[ProcessPoolExecutor, Event]:
+    global _pool, _stop, _broken, _running, _stdin_restored
     with _lock:
         if _broken is not None:
             raise _WouldNotStart(_broken)
@@ -180,32 +241,50 @@ def _shared() -> tuple[Pool, Event]:
             # dozen modules a start does not need (tests/test_startup.py lists what a
             # start may import).
             import multiprocessing
+            from concurrent.futures import wait
 
             context = multiprocessing.get_context("spawn")
             stop = context.Event()
-            pool: Pool | None = None
+            pool: ProcessPoolExecutor | None = None
+            # For the pool's whole life rather than while it is made: whatever starts a
+            # process while the pool runs -- a worker, or anything else this process
+            # runs -- is then given NUL rather than the stdin the MCP server reads.
+            stdin = contextlib.ExitStack()
             try:
                 count = worker_count()
-                with _workers_start_here(), _workers_read_nothing():
-                    pool = _new_pool(context, count, stop)
-                pool.apply_async(_call, ((START_PROBE, None),)).get(timeout=START_TIMEOUT_S)
+                stdin.enter_context(_workers_read_nothing())
+                pool = _new_pool(context, count, stop)
+                # ONE PROBE PER WORKER, handed over while this module is __main__: the
+                # executor starts a worker for each job it has no idle one for, so every
+                # worker starts inside the swap, and the pool has answered before any
+                # placement is handed to it.
+                with _workers_start_here():
+                    probes = [pool.submit(_call, (START_PROBE, None)) for _ in range(count)]
+                answered, unanswered = wait(probes, timeout=START_TIMEOUT_S)
+                if unanswered:
+                    raise _NoAnswer
+                for probe in answered:
+                    probe.result()
             except Exception as failure:
                 if pool is not None:
-                    pool.terminate()
-                    pool.join()
+                    _end(pool)
+                stdin.close()
                 _broken = (
                     f"no answer within {START_TIMEOUT_S:.0f} s"
-                    if isinstance(failure, multiprocessing.TimeoutError)
+                    if isinstance(failure, _NoAnswer)
                     else f"{type(failure).__name__}: {failure}"
                 )
                 raise _WouldNotStart(_broken) from failure
-            _pool, _stop, _running = pool, stop, count
+            _pool, _stop, _running, _stdin_restored = pool, stop, count, stdin
         return _pool, _stop
 
 
-def _new_pool(context: Any, count: int, stop: Event) -> Pool:
-    pool: Pool = context.Pool(count, initializer=_start_worker, initargs=(stop,))
-    return pool
+def _new_pool(context: Any, count: int, stop: Event) -> ProcessPoolExecutor:
+    from concurrent.futures import ProcessPoolExecutor
+
+    return ProcessPoolExecutor(
+        max_workers=count, mp_context=context, initializer=_start_worker, initargs=(stop,)
+    )
 
 
 @contextlib.contextmanager
@@ -237,7 +316,7 @@ _STD_INPUT_HANDLE = 0xFFFFFFF6
 
 @contextlib.contextmanager
 def _workers_read_nothing() -> Iterator[None]:
-    """While the workers spawn, point this process's standard input at the null device.
+    """While the pool runs, point this process's standard input at the null device.
 
     WINDOWS HANDS A NEW PROCESS ITS PARENT'S STANDARD HANDLES, and the MCP server always
     has a read pending on its stdin: that is how it waits for the next request. A pipe
@@ -247,8 +326,9 @@ def _workers_read_nothing() -> Iterator[None]:
     to give. Every placement through the server fell back to one process after
     :data:`START_TIMEOUT_S`. Measured on its own: no answer in 15 s with a read pending,
     0.3 s with stdin on NUL. Only the handle a CHILD is given changes; the server goes on
-    reading its own. Nothing to do elsewhere: a forked-and-exec'd child shares the pipe
-    without queueing behind anybody's read.
+    reading its own, and anything else this process starts while the pool runs reads
+    nothing rather than the server's protocol. Nothing to do elsewhere: a
+    forked-and-exec'd child shares the pipe without queueing behind anybody's read.
     """
     if sys.platform != "win32":
         yield

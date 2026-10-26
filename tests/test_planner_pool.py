@@ -13,6 +13,7 @@ import contextlib
 import dataclasses
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -75,7 +76,7 @@ def _after(seconds: float):  # type: ignore[no-untyped-def]
 
 def _workers() -> list:  # type: ignore[type-arg]
     pool = planner_pool._pool
-    return [] if pool is None else list(pool._pool)  # type: ignore[attr-defined]
+    return [] if pool is None else list((pool._processes or {}).values())  # type: ignore[attr-defined]
 
 
 # -- how many ------------------------------------------------------------------------
@@ -262,18 +263,35 @@ WAITING_ON_STDIN = (
     "planner_pool.shutdown()\n"
 )
 
+#: The same host losing a worker between two placements, killed from outside as an
+#: antivirus or the out-of-memory killer would.
+KILLED_WHILE_WAITING = (
+    "import sys, threading, time\n"
+    "from perfboard_studio.ui import planner_pool\n"
+    "from tests import planner_probe\n"
+    "threading.Thread(target=lambda: sys.stdin.buffer.read(1), daemon=True).start()\n"
+    "time.sleep(0.3)\n"
+    "run = planner_pool.mapper_for(lambda: False)\n"
+    "before = set(run(planner_probe.take_a_while_and_say_who, range(4)))\n"
+    "victim = next(iter(planner_pool._pool._processes.values()))\n"
+    "victim.kill()\n"
+    "victim.join()\n"
+    "time.sleep(1.0)\n"
+    "started = time.monotonic()\n"
+    "after = set(run(planner_probe.take_a_while_and_say_who, range(4)))\n"
+    "took = time.monotonic() - started\n"
+    "print(len(before), len(after), victim.pid in after, planner_pool.describe(), round(took, 1))\n"
+    "planner_pool.shutdown()\n"
+)
 
-def test_workers_start_while_the_host_waits_on_its_stdin() -> None:
-    """The MCP server always has a read pending on stdin, and on Windows a new process is
-    handed that handle and queued behind the read as its Python starts -- so every
-    placement through the server waited out the start and fell back to one process.
-    Workers are now given NUL for stdin (``_workers_read_nothing``); this is a host doing
-    exactly that, with the stdin it waits on held open."""
+
+def _host_waiting_on_stdin(script: str) -> str:
+    """The first line ``script`` prints, run as a host whose stdin is a pipe held open."""
     import subprocess
 
     repo = Path(__file__).resolve().parents[1]
     process = subprocess.Popen(
-        [sys.executable, "-c", WAITING_ON_STDIN],
+        [sys.executable, "-c", script],
         cwd=repo,
         env={**os.environ, "PYTHONPATH": str(repo / "src"), planner_pool.WORKERS_VARIABLE: "2"},
         stdin=subprocess.PIPE,
@@ -281,14 +299,63 @@ def test_workers_start_while_the_host_waits_on_its_stdin() -> None:
         stderr=subprocess.DEVNULL,
     )
     assert process.stdin is not None and process.stdout is not None
+    # A host that hangs fails the test rather than the run: on a multiprocessing.Pool,
+    # the placement after a worker was killed never came back at all.
+    watchdog = threading.Timer(60, process.kill)
+    watchdog.start()
     try:
-        # Answered in about a second; a host whose workers queued behind its read would
-        # give up on them after the 5 s START_TIMEOUT_S above and say so instead.
-        line = process.stdout.readline().decode()
+        return process.stdout.readline().decode().strip()
     finally:
+        watchdog.cancel()
         process.stdin.close()  # only now does the pending read return
         process.wait(timeout=60)
-    assert line.strip() == "[(False, False)] 2 worker processes", line
+
+
+def test_workers_start_while_the_host_waits_on_its_stdin() -> None:
+    """The MCP server always has a read pending on stdin, and on Windows a new process is
+    handed that handle and queued behind the read as its Python starts -- so every
+    placement through the server waited out the start and fell back to one process.
+    Workers are now given NUL for stdin (``_workers_read_nothing``); this is a host doing
+    exactly that, with the stdin it waits on held open. Answered in about a second; a
+    host whose workers queued would give up on them after the 5 s START_TIMEOUT_S its
+    script sets, and say so instead."""
+    line = _host_waiting_on_stdin(WAITING_ON_STDIN)
+    assert line == "[(False, False)] 2 worker processes", line
+
+
+def test_a_worker_killed_between_placements_costs_a_fresh_pool_not_a_hang() -> None:
+    """An idle worker of a ``multiprocessing.Pool`` waits for its next job holding the job
+    queue's lock, so killing one left the lock taken for good: the next placement never
+    came back, and ``terminate`` waited on the same lock. The executor finds its pool
+    broken instead, and the next placement gets a new one -- two workers again, neither
+    the one that was killed, four half-second jobs answered in the time it takes to start
+    a pool and do them two at a time. Run under a host waiting on its stdin, as the MCP
+    server is, so the new pool's workers have to start past that too."""
+    line = _host_waiting_on_stdin(KILLED_WHILE_WAITING)
+    before, after, victim_answered, *how, took = line.split()
+    assert (before, after, victim_answered) == ("2", "2", "False"), line
+    assert " ".join(how) == "2 worker processes", line
+    assert float(took) < 5.0, line
+
+
+def test_a_worker_that_dies_under_a_placement_leaves_the_same_placement(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A worker that dies in the middle of a run breaks the pool under it: the run's jobs
+    are done again in this process -- the same placement as ever -- and the pool is
+    dropped, so the next run starts one of its own."""
+    marker = tmp_path / "died"
+    run = planner_pool.mapper_for(_never)
+    assert run is not None
+
+    def dying(work, jobs):  # type: ignore[no-untyped-def]
+        return run(planner_probe.DieOnce(str(marker), work), jobs)
+
+    doc = _board()
+    assert plan_placement(doc, LOOKUP, QUICK, mapper=dying) == plan_placement(doc, LOOKUP, QUICK)
+    assert marker.exists(), "a worker did die"
+    # The run it died under was done again here, and the placement's next run -- the routes
+    # that judge the restarts -- was handed a new pool, which is the one running now.
+    assert planner_pool.describe() == "2 worker processes"
+    assert all(worker.is_alive() for worker in _workers())
 
 
 def test_an_agent_still_gets_a_placement_when_the_workers_will_not_start(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -344,6 +411,44 @@ def test_the_window_reads_ended_workers_as_a_cancel_and_stays_usable(window) -> 
     )
     assert window._run_planner("Choosing", ended, stopped="Nothing changed.") is None
     assert window.statusBar().currentMessage() == "Nothing changed."
+
+
+def test_a_worker_killed_mid_placement_leaves_a_placed_board_and_a_usable_window(window, monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Auto-place with a worker that dies under it: the placement is made all the same,
+    applied as any other is, and the window is back in the user's hands -- with the next
+    placement on a new pool."""
+    from perfboard_studio.ui import main as main_module
+
+    marker = tmp_path / "died"
+    real_mapper_for = planner_pool.mapper_for
+
+    def dying_mapper_for(should_stop):  # type: ignore[no-untyped-def]
+        run = real_mapper_for(should_stop)
+        if run is None:
+            return None
+        return lambda work, jobs: run(planner_probe.DieOnce(str(marker), work), jobs)
+
+    monkeypatch.setattr(planner_pool, "mapper_for", dying_mapper_for)
+    plans: list[object] = []
+    real = main_module.plan_placement
+
+    def recorded(*args, **kwargs):  # type: ignore[no-untyped-def]
+        plans.append(real(*args, **kwargs))
+        return plans[-1]
+
+    monkeypatch.setattr(main_module, "plan_placement", recorded)
+    monkeypatch.setattr(window, "_confirm_placement", lambda plan: True)
+    before = window.bus.document
+    window.on_autoplace()
+    assert marker.exists(), "a worker did die under the placement"
+    assert len(plans) == 1 and plans[0] is not None
+    placed = plans[0]
+    if not placed.is_empty:  # type: ignore[attr-defined]
+        assert window.bus.document is not before, "and it was applied"
+    assert window.isEnabled() and not window._planner_running
+    monkeypatch.setattr(planner_pool, "mapper_for", real_mapper_for)
+    window.on_autoplace()
+    assert planner_pool.describe() == "2 worker processes", "the next one on a pool of its own"
 
 
 def test_the_window_still_places_when_its_workers_will_not_start(window, monkeypatch) -> None:  # type: ignore[no-untyped-def]

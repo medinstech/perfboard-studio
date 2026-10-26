@@ -319,11 +319,13 @@ closed without a bump.
   ne555-blinker 10.5 → 3.3, lm317-supply 9.1 → 3.0, arduino-io-shield 5.4 → 1.7,
   lpb1-booster 3.9 → 1.4, ne555-astable 3.4 → 1.0. Cancel still keeps the best found so
   far: every worker hands back where it had got to. A machine with two cores or fewer
-  places in one process as before, and `PERFBOARD_STUDIO_PLANNER_WORKERS` sets the number;
-  the MCP server places in one process for now. Where the workers cannot start at all, the
-  first placement waits at most 20 s for them and then runs in one process, and so does
-  every placement after it until the window is closed; every release checks the workers
-  start from the Windows, Linux and macOS bundles.
+  places in one process as before, and `PERFBOARD_STUDIO_PLANNER_WORKERS` sets the number.
+  Where the workers cannot start at all, the first placement waits at most 20 s for them
+  and then runs in one process, and so does every placement after it until the window is
+  closed; every release checks the workers start from the Windows, Linux and macOS
+  bundles. A worker that dies -- an antivirus, the out-of-memory killer, Task Manager --
+  costs that run's jobs being done again in the window's own process, the same placement,
+  and the next placement gets new workers; it never leaves a placement waiting.
 
 - **New Project asks a name and a place, and the board comes second.** It asked which
   board before there was a circuit to try on one, and then the Board step asked again: a
