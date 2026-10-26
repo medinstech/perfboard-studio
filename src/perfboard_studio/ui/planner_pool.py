@@ -8,11 +8,12 @@ it, and :func:`mapper_for` is the one the window hands it. Being seeded, the ans
 same however the work is run -- ``tests/test_planner_pool.py`` holds a pooled placement to
 the serial one -- so the pool decides how long a placement takes and nothing else.
 
-Five things carry it, each with a test:
+Six things carry it:
 
-- **Spawn, on every system.** A forked child of a process that has started Qt shares its
-  locks in whatever state they were in, and dies on the first one held. Spawn starts every
-  worker clean.
+- **Spawn, on every system.** A forked child of a process that has started Qt inherits its
+  locks in whatever state they were in, and can hang on the first one held -- Python calls
+  fork unsafe in a threaded process, and Windows and macOS spawn by default. Spawn starts
+  every worker clean. (The documented reason; it was not measured here.)
 - **The workers import the engine and not the window.** Spawn re-imports the parent's
   ``__main__`` in every child, and from source that is ``ui/main.py``: Qt and the whole
   window, 0.4 s and 40 MB a worker, for nothing. So while the workers start, ``__main__``
