@@ -153,11 +153,11 @@ tests pass". Three things depend on it:
   which is why the goldens, the guide golden and the placer (which prices every candidate
   placement through a balanced plan) did not move and did not slow down.
 
-**Three recorded divergences, none of them a hole in the proof.** The
+**Four recorded divergences, none of them a hole in the proof.** The
 fixtures prove the port reproduces the original; that cannot also mean the port may never
-improve on it. Each is named, excluded from the comparison rather than edited into an
-`.expected.json` (those are dumps from the TypeScript engine, and hand-editing one makes
-the next regeneration silently disagree), and pinned by its own test:
+improve on it. Each is named, kept out of the `.expected.json` files (those are dumps
+from the TypeScript engine, and hand-editing one makes the next regeneration silently
+disagree), and pinned by its own test:
 
 - `PYTHON_ONLY_RULES` — rules the original never had (`conductor-crossing`,
   `jumper-under-body`, `conductor-off-board`, `unknown-footprint`,
@@ -180,6 +180,17 @@ the next regeneration silently disagree), and pinned by its own test:
   is 11.05 × 4.65 mm on the board, so a crystal stood on U1's pin on atmega328-relay and DRC
   saw nothing. Only the outline and `dims` are excused; every other field is still
   compared, and `test_the_crystal_is_as_long_as_the_can` pins the geometry.
+- `JOINED_BEYOND_TYPESCRIPT` in `test_connectivity.py` — a join the original did not make:
+  a component-side conductor's end and the solder-side copper in one hole that has a pad
+  and no pin (connectivity's pass 2b). A jumper's end passes through the hole and is
+  soldered underneath exactly like a component lead, so it joins its hole's two sides for
+  the same reason a pin does. The original's own unit test, "keeps a top-jumper from
+  connecting the bottom side except through a pin", treated two identical physical
+  objects differently and gave no reason anywhere; it is rewritten to the new rule on its
+  own board. Nothing is excluded, because no fixture holds such a pad, and that is a test
+  (`test_no_fixture_holds_a_join_the_original_did_not_make`): the day a regenerated
+  fixture holds one, it fails, instead of the byte-for-byte comparison drifting. The pass
+  adds no node, only joins two already there, so every fixture keeps its nodes.
 
 `persist.py` hand-rolls its JSON writer to match `JSON.stringify(x, null, 2)` byte for
 byte (whole-number floats print as `1`, not `1.0`), and every object's key order comes
