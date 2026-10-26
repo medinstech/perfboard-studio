@@ -255,7 +255,10 @@ closed without a bump.
   lpb1-booster 3.9 → 1.4, ne555-astable 3.4 → 1.0. Cancel still keeps the best found so
   far: every worker hands back where it had got to. A machine with two cores or fewer
   places in one process as before, and `PERFBOARD_STUDIO_PLANNER_WORKERS` sets the number;
-  the MCP server places in one process for now.
+  the MCP server places in one process for now. Where the workers cannot start at all, the
+  first placement waits at most 20 s for them and then runs in one process, and so does
+  every placement after it until the window is closed; every release checks the workers
+  start from the Windows, Linux and macOS bundles.
 
 - **New Project asks a name and a place, and the board comes second.** It asked which
   board before there was a circuit to try on one, and then the Board step asked again: a

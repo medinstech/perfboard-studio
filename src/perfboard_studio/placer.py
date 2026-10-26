@@ -3085,7 +3085,7 @@ def plan_placement(
 
     ``mapper`` runs the independent pieces -- the restarts, and the routes that judge
     their results -- however the caller likes (:data:`Mapper`); the answer is the same
-    either way, which ``tests/test_placer_mapper.py`` holds. A stop then reaches the
+    either way, which ``tests/test_planner_pool.py`` holds. A stop then reaches the
     restarts through whatever predicate the mapper hands them.
     """
     parts = _build_parts(doc, lookup)

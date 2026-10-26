@@ -27,6 +27,12 @@ Five things carry it, each with a test:
   and all, because the MCP server's stdout is its protocol and a worker inherits it.
 - **The suite runs serial.** ``tests/conftest.py`` sets :data:`WORKERS_VARIABLE` to 0: a
   suite that built four processes per window would run the machine out of memory.
+- **Workers that cannot start cost one wait, once.** A new pool's workers must answer an
+  empty job within :data:`START_TIMEOUT_S`; if the pool cannot be made, or they do not
+  answer -- a bundle whose workers cannot start would otherwise leave Place on the Board
+  waiting on nothing -- the pool is ended, the placement runs in the calling thread as it
+  does with no workers, and so does every other for the rest of the session.
+  :func:`describe` says which happened, and release.yml's bundle checks read it.
 """
 
 from __future__ import annotations
@@ -60,6 +66,11 @@ STOP_GRACE_S = 5.0
 #: How often a waiting map looks at the window's Cancel.
 POLL_S = 0.05
 
+#: How long a new pool's workers have to answer their first, empty job. A frozen worker
+#: answers in about a second on the machine this was written on; this is for one that
+#: never will.
+START_TIMEOUT_S = 20.0
+
 
 class PlannerStopped(Exception):
     """The workers did not answer a stop within :data:`STOP_GRACE_S` and were ended, so the
@@ -85,19 +96,32 @@ def worker_count() -> int:
 _lock = threading.Lock()
 _pool: Pool | None = None
 _stop: Event | None = None
+#: Why this session's workers could not be used, once they could not. Until
+#: :func:`shutdown`, every placement then runs in the calling thread.
+_broken: str | None = None
+
+
+class _WouldNotStart(Exception):
+    """The pool could not be made, or its workers did not answer in time."""
 
 
 def mapper_for(should_stop: Callable[[], bool]) -> Mapper | None:
     """A ``placer.Mapper`` that runs on the shared pool and hands every worker the shared
     stop, set when ``should_stop`` turns true -- or None when this machine gets no workers,
-    which leaves the placer in the calling thread exactly as before."""
-    if worker_count() == 0:
+    which leaves the placer in the calling thread exactly as before -- as it does once
+    this session's workers have failed to start."""
+    if worker_count() == 0 or _broken is not None:
         return None
 
     def run(
         work: Callable[[Any, Callable[[], bool] | None], Any], jobs: Sequence[Any]
     ) -> list[Any]:
-        pool, stop = _shared()
+        try:
+            pool, stop = _shared()
+        except _WouldNotStart:
+            # Nothing has run yet, so the work is done here instead: the same jobs and
+            # the same answers, in order, with the caller's own stop.
+            return [work(job, should_stop) for job in jobs]
         stop.clear()
         pending = pool.map_async(_call, [(work, job) for job in jobs])
         asked: float | None = None
@@ -118,18 +142,29 @@ def mapper_for(should_stop: Callable[[], bool]) -> Mapper | None:
 
 
 def shutdown() -> None:
-    """End the workers, at once. The next :func:`mapper_for` starts new ones."""
-    global _pool, _stop
+    """End the workers, at once. The next :func:`mapper_for` starts new ones, and tries
+    again if the last ones would not start."""
+    global _pool, _stop, _broken
     with _lock:
-        pool, _pool, _stop = _pool, None, None
+        pool, _pool, _stop, _broken = _pool, None, None, None
     if pool is not None:
         pool.terminate()
         pool.join()
 
 
+def describe() -> str:
+    """How placements are run in this session, in the words ``--headless`` prints."""
+    if _broken is not None:
+        return f"in this process: the workers would not start ({_broken})"
+    count = worker_count()
+    return f"{count} worker processes" if count else "in this process"
+
+
 def _shared() -> tuple[Pool, Event]:
-    global _pool, _stop
+    global _pool, _stop, _broken
     with _lock:
+        if _broken is not None:
+            raise _WouldNotStart(_broken)
         if _pool is None or _stop is None:
             # Imported here, at the first placement that wants workers, and not with the
             # window: the window imports this module at start, and multiprocessing is a
@@ -138,10 +173,29 @@ def _shared() -> tuple[Pool, Event]:
             import multiprocessing
 
             context = multiprocessing.get_context("spawn")
-            _stop = context.Event()
-            with _workers_start_here():
-                _pool = context.Pool(worker_count(), initializer=_start_worker, initargs=(_stop,))
+            stop = context.Event()
+            pool: Pool | None = None
+            try:
+                with _workers_start_here():
+                    pool = _new_pool(context, worker_count(), stop)
+                pool.apply_async(_call, ((START_PROBE, None),)).get(timeout=START_TIMEOUT_S)
+            except Exception as failure:
+                if pool is not None:
+                    pool.terminate()
+                    pool.join()
+                _broken = (
+                    f"no answer within {START_TIMEOUT_S:.0f} s"
+                    if isinstance(failure, multiprocessing.TimeoutError)
+                    else f"{type(failure).__name__}: {failure}"
+                )
+                raise _WouldNotStart(_broken) from failure
+            _pool, _stop = pool, stop
         return _pool, _stop
+
+
+def _new_pool(context: Any, count: int, stop: Event) -> Pool:
+    pool: Pool = context.Pool(count, initializer=_start_worker, initargs=(stop,))
+    return pool
 
 
 @contextlib.contextmanager
@@ -182,6 +236,15 @@ def _start_worker(stop: Event) -> None:
         os.dup2(quiet.fileno(), 2)
     sys.stdout = quiet
     sys.stderr = quiet
+
+
+def _answer(job: object, should_stop: Callable[[], bool] | None) -> bool:
+    """The empty job a new pool must answer before any placement is handed to it."""
+    return True
+
+
+#: What a new pool is asked first. A name, so a test can ask something that never answers.
+START_PROBE: Callable[[Any, Callable[[], bool] | None], Any] = _answer
 
 
 def _call(item: tuple[Callable[[Any, Callable[[], bool] | None], Any], Any]) -> Any:

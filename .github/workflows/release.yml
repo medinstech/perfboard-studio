@@ -503,6 +503,14 @@ jobs:
           # that view at start, so nothing else this job runs would notice a module the
           # spec failed to pack. Windows and Linux run `--headless`, which does.
           ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --probe-offscreen-gl
+          # The placer's two worker processes started from inside the .app, as Place on
+          # the Board will start them (see the Windows job). A spawn pool in a frozen
+          # macOS bundle is where this could break unseen, and a pool that would not
+          # start prints a different line, so the grep fails here instead.
+          PERFBOARD_STUDIO_PLANNER_WORKERS=2 \
+            ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --headless examples/ne555-astable.perf \
+            | tee headless.log
+          grep -q "nothing committed, 2 worker processes" headless.log
           python packaging/check-mcp-stdio.py ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --mcp
 
       - name: Build the disk image

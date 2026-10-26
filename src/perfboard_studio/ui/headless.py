@@ -314,16 +314,17 @@ def headless(argv: list[str]) -> int:
     # bundle can start its workers at all: a pool that cannot start fails here, on the
     # runner, rather than at somebody's first Place on the Board.
     if doc.components:
-        workers = planner_pool.worker_count()
         t0 = time.perf_counter()
         try:
             placement = plan_placement(
                 doc, lookup, mapper=planner_pool.mapper_for(lambda: False)
             )
+            # Read before the workers go: a pool that would not start says so here,
+            # and the placement above was then made in this process.
+            how = planner_pool.describe()
         finally:
             planner_pool.shutdown()
         t_place = (time.perf_counter() - t0) * 1000
-        how = f"{workers} worker processes" if workers else "in this process"
         print(f"\nauto-place   {t_place:6.1f} ms   (dry run, nothing committed, {how})")
         print(f"             {describe_placement(placement)}")
         placed_errors = sum(

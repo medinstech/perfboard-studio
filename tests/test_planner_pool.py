@@ -202,6 +202,39 @@ def test_closing_leaves_no_worker_behind() -> None:
     assert planner_pool._pool is None
 
 
+# -- workers that will not start ----------------------------------------------------
+
+
+def _refuse(context, count, stop):  # type: ignore[no-untyped-def]
+    raise OSError("no processes here")
+
+
+def test_a_pool_that_cannot_be_made_leaves_the_placement_in_this_process(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(planner_pool, "_new_pool", _refuse)
+    doc = _board()
+    pooled = plan_placement(doc, LOOKUP, QUICK, mapper=planner_pool.mapper_for(_never))
+    assert pooled == plan_placement(doc, LOOKUP, QUICK)
+    assert planner_pool.describe() == (
+        "in this process: the workers would not start (OSError: no processes here)"
+    )
+    assert planner_pool.mapper_for(_never) is None, "the rest of the session stays in one process"
+    planner_pool.shutdown()
+    assert planner_pool.describe() == "2 worker processes", "and the next session tries again"
+
+
+def test_workers_that_never_answer_are_given_up_on(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A bundle whose workers cannot start leaves them running nothing useful: they are
+    given :data:`START_TIMEOUT_S` to answer an empty job, then ended, and the placement is
+    made in this process instead -- the same placement."""
+    monkeypatch.setattr(planner_pool, "START_TIMEOUT_S", 1.0)
+    monkeypatch.setattr(planner_pool, "START_PROBE", planner_probe.ignore_the_stop)
+    doc = _board()
+    pooled = plan_placement(doc, LOOKUP, QUICK, mapper=planner_pool.mapper_for(_never))
+    assert pooled == plan_placement(doc, LOOKUP, QUICK)
+    assert planner_pool.describe() == "in this process: the workers would not start (no answer within 1 s)"
+    assert planner_pool._pool is None, "the workers that did not answer were ended"
+
+
 # -- the window ----------------------------------------------------------------------
 
 
@@ -232,3 +265,22 @@ def test_the_window_reads_ended_workers_as_a_cancel_and_stays_usable(window) -> 
     )
     assert window._run_planner("Choosing", ended, stopped="Nothing changed.") is None
     assert window.statusBar().currentMessage() == "Nothing changed."
+
+
+def test_the_window_still_places_when_its_workers_will_not_start(window, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from perfboard_studio.ui import main as main_module
+
+    monkeypatch.setattr(planner_pool, "_new_pool", _refuse)
+    plans: list[object] = []
+    real = main_module.plan_placement
+
+    def recorded(*args, **kwargs):  # type: ignore[no-untyped-def]
+        plans.append(real(*args, **kwargs))
+        return plans[-1]
+
+    monkeypatch.setattr(main_module, "plan_placement", recorded)
+    monkeypatch.setattr(window, "_confirm_placement", lambda plan: False)
+    window.on_autoplace()
+    assert len(plans) == 1 and plans[0] is not None
+    assert planner_pool.describe().startswith("in this process: the workers would not start")
+    assert window.isEnabled() and not window._planner_running
