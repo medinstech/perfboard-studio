@@ -80,7 +80,7 @@ business, like a file or a clock. Choosing a board on all seven examples, altern
 run with the one-process build under the heavy-job lock and the pool's own start included,
 went from 84.1 s to 28.4 -- atmega328-relay 36.3 → 12.8 s.
 
-Seven things carry it, each with a test in `tests/test_planner_pool.py`:
+Eight things carry it, each with a test in `tests/test_planner_pool.py`:
 
 - **The answer is the same however the work is run.** A restart is a picklable job that a
   worker rebuilds -- parts, nets, scorer -- from the document and the lookup, which is
@@ -115,16 +115,32 @@ Seven things carry it, each with a test in `tests/test_planner_pool.py`:
   four restarts, and one processor is left for the window. Anything below two is none: one
   worker is one restart at a time, which the calling thread does without the cost of a
   process. `tests/conftest.py` sets it to 0, because a suite that built four processes per
-  window would run the machine out of memory. The MCP server places in one process for now.
+  window would run the machine out of memory.
+- **The MCP server places with workers too, and on Windows that took one more thing.**
+  `optimize_placement` hands `plan_placement` the same mapper, its answer carries
+  `planner`, and the server shuts the pool down when it stops serving, so a client that
+  closed stdin is not left waiting on workers still holding the other end -- atmega328-relay
+  went from 8.2 s to 2.3 through the session with four workers. But Windows hands a new
+  process its parent's standard handles, the server always has a read pending on its
+  stdin (that is how it waits for the next request), and a pipe opened for synchronous
+  I/O does one thing at a time: a worker's Python, asking about stdin as it started,
+  queued behind that read, and every placement through the server waited out
+  `START_TIMEOUT_S` and fell back -- measured alone, no answer in 15 s against 0.3 s with
+  stdin on NUL. `_workers_read_nothing` points the process's standard input at the null
+  device while the pool spawns, on Windows only; the server goes on reading its own.
 - **Workers that cannot start cost one wait, once.** A new pool's workers must answer an
   empty job (`START_PROBE`) within `START_TIMEOUT_S`, 20 s. If the pool cannot be made, or
   they do not answer, it is ended and the placement runs in the calling thread -- the same
   jobs, the same answers, with the caller's own stop -- and so does every placement until
   `shutdown()`, which the window calls as it closes. Without it, a bundle whose workers
-  cannot start would leave Place on the Board waiting on nothing. `describe()` says which
-  happened, `--headless` prints it, and `release.yml` runs the pooled headless placement on
-  the Windows bundle, the AppImage and the `.app` and requires "2 worker processes" in what
-  it prints, so a bundle that quietly fell back to one process fails the release.
+  cannot start would leave Place on the Board waiting on nothing. `describe()` says what
+  HAS run, never what the setting would give -- "2 worker processes" only while two are
+  running -- because it once read the setting, and a host that placed without the mapper
+  was still called pooled. `--headless` prints it and `optimize_placement` answers it;
+  `release.yml` runs the pooled headless placement on the Windows bundle, the AppImage and
+  the `.app`, and `packaging/check-mcp-stdio.py` places the NE555 example through the
+  server with two workers, and both require "2 worker processes", so a build that quietly
+  fell back to one process fails the release.
 
 ## A body past the edge is measured on the body
 
