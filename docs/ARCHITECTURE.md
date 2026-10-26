@@ -80,7 +80,7 @@ business, like a file or a clock. Choosing a board on all seven examples, altern
 run with the one-process build under the heavy-job lock and the pool's own start included,
 went from 84.1 s to 28.4 -- atmega328-relay 36.3 → 12.8 s.
 
-Eight things carry it, each with a test in `tests/test_planner_pool.py`:
+Nine things carry it, each with a test in `tests/test_planner_pool.py`:
 
 - **The answer is the same however the work is run.** A restart is a picklable job that a
   worker rebuilds -- parts, nets, scorer -- from the document and the lookup, which is
@@ -97,7 +97,9 @@ Eight things carry it, each with a test in `tests/test_planner_pool.py`:
 - **The workers import the engine and not the window.** Spawn re-imports the parent's
   `__main__` in every child, and from source that is `ui/main.py`: Qt and the whole window,
   0.4 s and 40 MB a worker, for nothing. So while the workers start, `__main__` is
-  `planner_pool` itself (`_workers_start_here`); a frozen build gets the same from
+  `planner_pool` itself (`_workers_start_here`), and EVERY worker starts inside that
+  swap: the executor starts a worker for each job it has no idle one for, so one start
+  probe per worker is handed over inside it. A frozen build gets the same from
   `multiprocessing.freeze_support()`, the first thing `launcher.py` does. And
   `multiprocessing` is imported at the first placement that wants workers, not with the
   window, because it is a dozen modules a start does not need and `tests/test_startup.py`
@@ -127,7 +129,9 @@ Eight things carry it, each with a test in `tests/test_planner_pool.py`:
   queued behind that read, and every placement through the server waited out
   `START_TIMEOUT_S` and fell back -- measured alone, no answer in 15 s against 0.3 s with
   stdin on NUL. `_workers_read_nothing` points the process's standard input at the null
-  device while the pool spawns, on Windows only; the server goes on reading its own.
+  device for as long as the pool runs, on Windows only, so anything this process starts
+  in that time is given NUL rather than the server's protocol; the server goes on
+  reading its own.
 - **Workers that cannot start cost one wait, once.** A new pool's workers must answer an
   empty job (`START_PROBE`) within `START_TIMEOUT_S`, 20 s. If the pool cannot be made, or
   they do not answer, it is ended and the placement runs in the calling thread -- the same
@@ -141,6 +145,17 @@ Eight things carry it, each with a test in `tests/test_planner_pool.py`:
   the `.app`, and `packaging/check-mcp-stdio.py` places the NE555 example through the
   server with two workers, and both require "2 worker processes", so a build that quietly
   fell back to one process fails the release.
+- **A worker that dies costs a rerun, never a hang.** The pool was a
+  `multiprocessing.Pool`, and an idle Pool worker waits for its next job HOLDING the job
+  queue's lock: kill it -- an antivirus, the out-of-memory killer, somebody's Task
+  Manager -- and the lock is never given back, so no worker could take a job again and
+  `terminate` itself waited on the same lock. Every later placement hung, Cancel
+  included; a bare spawn Pool reproduced it. It is a `ProcessPoolExecutor` now, which
+  watches its workers' process handles and fails what is pending with
+  `BrokenProcessPool` instead: a pool found broken when a run hands it work is replaced,
+  once, and the jobs of a run it broke under are done again in the calling thread -- the
+  same jobs, so the same answer -- with the next run on a pool of its own. The window's
+  Auto-place, with a worker killed under it, still places and hands the window back.
 
 ## A body past the edge is measured on the body
 
