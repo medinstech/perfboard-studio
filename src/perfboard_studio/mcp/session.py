@@ -117,6 +117,7 @@ from perfboard_studio.geometry import (
     edge_connector_holes,
     format_hole,
     hole_key,
+    legend_runs_text,
     pad_edge_gap_mm,
     parse_hole,
 )
@@ -387,10 +388,24 @@ class BoardSession:
             info["pad_length_mm"] = board.pad_length
             info["pad_axis"] = board.pad_axis
         if board.labels is not None:
-            info["printed_legend"] = {
+            legend: dict[str, Any] = {
                 "face": board.labels.face,
                 "row_digits": board.labels.row_digits,
             }
+            # What the board prints when it counts in its own way (A..Z then A..P
+            # again). Said so an agent can tell a person what to look for; every address
+            # in and out of this server is still the tool's own.
+            for axis, printed in (
+                ("columns", board.labels.columns),
+                ("rows", board.labels.rows),
+            ):
+                if printed is not None:
+                    legend[axis] = {
+                        "printed": legend_runs_text(printed.runs),
+                        "every": printed.every,
+                        "digits": printed.digits,
+                    }
+            info["printed_legend"] = legend
         if self.document.mounting_holes:
             info["mounting_holes"] = [
                 {

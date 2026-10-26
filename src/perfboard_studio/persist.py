@@ -38,13 +38,14 @@ from decimal import Decimal
 from typing import Literal, cast, get_args
 
 from .breadboard import board_problem, has_breadboard_pattern, is_breadboard
-from .geometry import validate_orthogonal_chain
+from .geometry import legend_problem, validate_orthogonal_chain
 from .model import (
     DEFAULT_BOARD_NOTE_SIZE_MM,
     DEFAULT_NOTE_SIZE_MM,
     DOCUMENT_FORMAT_VERSION,
     SHEET_NOTE_KINDS,
     VALID_ROTATIONS,
+    AxisLegend,
     Board,
     BoardEdge,
     BoardFace,
@@ -248,7 +249,8 @@ BOARD_KEY_ORDER: tuple[str, ...] = (
     "labels",
     "narrowChannelCols",
 )
-BOARD_LABELS_KEY_ORDER: tuple[str, ...] = ("face", "rowDigits", "allEdges")
+BOARD_LABELS_KEY_ORDER: tuple[str, ...] = ("face", "rowDigits", "allEdges", "columns", "rows")
+AXIS_LEGEND_KEY_ORDER: tuple[str, ...] = ("runs", "every", "digits")
 MOUNTING_HOLE_KEY_ORDER: tuple[str, ...] = (
     "id",
     "at",
@@ -356,11 +358,29 @@ def _ordered_board(b: Board) -> JsonObj:
                 "face": b.labels.face,
                 "rowDigits": _num(_field_path(labels_path, "rowDigits"), b.labels.row_digits),
                 "allEdges": b.labels.all_edges,
+                # Only a board that prints its own numbering says so; every other legend
+                # keeps exactly the bytes it had (the stripAxis rule).
+                **{
+                    key: _axis_legend_json(legend)
+                    for key, legend in (("columns", b.labels.columns), ("rows", b.labels.rows))
+                    if legend is not None
+                },
             },
         )
     if b.narrow_channel_cols:
         values["narrowChannelCols"] = b.narrow_channel_cols
     return _build_ordered(BOARD_KEY_ORDER, values)
+
+
+def _axis_legend_json(legend: AxisLegend) -> JsonObj:
+    values: dict[str, JsonValue] = {
+        "runs": [[first, last] for first, last in legend.runs],
+    }
+    if legend.every != 1:
+        values["every"] = legend.every
+    if legend.digits != 1:
+        values["digits"] = legend.digits
+    return _build_ordered(AXIS_LEGEND_KEY_ORDER, values)
 
 
 def _ordered_mounting_hole(m: MountingHole, index: int) -> JsonObj:
@@ -1056,12 +1076,53 @@ def _parse_board_labels(raw: object, path: str, warnings: list[str]) -> BoardLab
             _field_path(path, "rowDigits"),
         )
     all_edges_raw = obj.get("allEdges")
-    return BoardLabels(
+    columns_raw = obj.get("columns")
+    rows_raw = obj.get("rows")
+    labels = BoardLabels(
         face="both" if face_raw is None else _expect_enum(face_raw, _field_path(path, "face"), BOARD_FACES),  # type: ignore[arg-type]
         row_digits=row_digits,
         all_edges=(
             True if all_edges_raw is None else _expect_boolean(all_edges_raw, _field_path(path, "allEdges"))
         ),
+        columns=(
+            None
+            if columns_raw is None
+            else _parse_axis_legend(columns_raw, _field_path(path, "columns"), warnings)
+        ),
+        rows=None if rows_raw is None else _parse_axis_legend(rows_raw, _field_path(path, "rows"), warnings),
+    )
+    # What board.set refuses, in its words: a legend no board can print does not load.
+    if (problem := legend_problem(labels)) is not None:
+        raise ValidationError("invalid-value", problem, path)
+    return labels
+
+
+def _parse_axis_legend(raw: object, path: str, warnings: list[str]) -> AxisLegend:
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, AXIS_LEGEND_KEY_ORDER, path, warnings)
+    runs_path = _field_path(path, "runs")
+    runs: list[tuple[str, str]] = []
+    for i, run_raw in enumerate(_expect_array(_require_field(obj, "runs", path), runs_path)):
+        run_path = _index_path(runs_path, i)
+        pair = _expect_array(run_raw, run_path)
+        if len(pair) != 2:
+            raise ValidationError(
+                "invalid-value",
+                f"A printed run is its first and last label, two of them; got {len(pair)}.",
+                run_path,
+            )
+        runs.append(
+            (
+                _expect_string(pair[0], _index_path(run_path, 0)),
+                _expect_string(pair[1], _index_path(run_path, 1)),
+            )
+        )
+    every_raw = obj.get("every")
+    digits_raw = obj.get("digits")
+    return AxisLegend(
+        runs=tuple(runs),
+        every=1 if every_raw is None else _expect_integer(every_raw, _field_path(path, "every")),
+        digits=1 if digits_raw is None else _expect_integer(digits_raw, _field_path(path, "digits")),
     )
 
 

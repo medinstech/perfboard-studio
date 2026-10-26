@@ -25,6 +25,7 @@ from typing import Literal
 
 from .breadboard import has_breadboard_pattern, hole_name, missing_holes, parse_hole_name
 from .model import (
+    AxisLegend,
     Board,
     BoardEdge,
     BoardLabels,
@@ -37,6 +38,7 @@ from .model import (
     FootprintPin,
     HoleCoord,
     HoleRef,
+    LegendAxis,
     Mm,
     MountingHole,
     PadAxis,
@@ -114,6 +116,161 @@ def printed_row_label(row: int, labels: BoardLabels) -> str:
     :func:`hole_ref_to_coord` deliberately rejects the padded form.
     """
     return row_label(row).rjust(max(1, labels.row_digits), "0")
+
+
+# ---------------------------------------------------------------------------
+# A legend in the board's own numbering (#13)
+# ---------------------------------------------------------------------------
+#
+# A board may count in a way the addresses do not: A..Z and then A..P again, letters down
+# the rows, numbers along both edges with only every fifth marked. What it prints is said
+# here, once, for every renderer of the legend -- the 2D view, the 3D board and the 1:1
+# PDF, which is the 2D scene -- and for the places that tell a person how the two
+# numberings line up. It is never an address: a repeating sequence cannot name a hole,
+# so nothing that parses one reads it.
+
+_LETTER_RUN = re.compile(r"[A-Z]{1,3}")
+_NUMBER_RUN = re.compile(r"[0-9]{1,4}")
+#: The widest a number may be padded to; a board prints two or three digits.
+MAX_LEGEND_DIGITS = 4
+
+
+def _run_span(first: str, last: str) -> tuple[bool, int, int]:
+    """(letters?, first value, last value) of a run :func:`legend_problem` has passed."""
+    if _LETTER_RUN.fullmatch(first):
+        return True, _column_index(first), _column_index(last)
+    return False, int(first), int(last)
+
+
+def _run_problem(first: str, last: str) -> str | None:
+    letters = bool(_LETTER_RUN.fullmatch(first)) and bool(_LETTER_RUN.fullmatch(last))
+    numbers = bool(_NUMBER_RUN.fullmatch(first)) and bool(_NUMBER_RUN.fullmatch(last))
+    if not (letters or numbers):
+        return (
+            "a run is capital letters to capital letters (A–Z) or a number to a number "
+            "(1–60), one kind to a run"
+        )
+    _, start, end = _run_span(first, last)
+    if end < start:
+        return "it counts backwards"
+    return None
+
+
+def legend_problem(labels: BoardLabels) -> str | None:
+    """Why ``labels`` cannot be a board's legend, or None.
+
+    One sentence for both of the places that ask -- ``board.set`` refuses the board and a
+    file carrying it does not load -- so a hand-edited ``.perf`` and an agent's command are
+    told the same thing.
+    """
+    for axis, legend in (("column", labels.columns), ("row", labels.rows)):
+        if legend is None:
+            continue
+        if not legend.runs:
+            return f"A printed {axis} legend needs at least one run to print."
+        for first, last in legend.runs:
+            if (problem := _run_problem(first, last)) is not None:
+                return f"The printed {axis} legend's run {first}–{last} cannot be printed: {problem}."
+        if legend.every < 1:
+            return (
+                f"A printed {axis} legend marks every hole or every Nth one, so it cannot "
+                f"mark every {legend.every}."
+            )
+        if not 1 <= legend.digits <= MAX_LEGEND_DIGITS:
+            return (
+                f"A printed {axis} number is padded to between 1 and {MAX_LEGEND_DIGITS} "
+                f"digits, not {legend.digits}."
+            )
+    return None
+
+
+def _axis_legend(axis: LegendAxis, labels: BoardLabels) -> AxisLegend | None:
+    return labels.columns if axis == "columns" else labels.rows
+
+
+def legend_label(axis: LegendAxis, index: int, labels: BoardLabels) -> str | None:
+    """What the board's own numbering calls the ``index``-th hole along ``axis`` (0-indexed),
+    whether or not it is printed beside that hole.
+
+    The question a person counting from the nearest mark is answering: on a board that
+    marks every fifth hole, the seventh is still "07" in its numbering. None past the end of
+    the printed runs, and for a negative index. With no legend of the board's own on that
+    axis it is this tool's: the column letters, or the row number padded to
+    ``labels.row_digits``.
+    """
+    if index < 0:
+        return None
+    legend = _axis_legend(axis, labels)
+    if legend is None:
+        return column_label(index) if axis == "columns" else printed_row_label(index, labels)
+    remaining = index
+    for first, last in legend.runs:
+        letters, start, end = _run_span(first, last)
+        if remaining <= end - start:
+            value = start + remaining
+            if letters:
+                return _column_letters(value)
+            return str(value).rjust(legend.digits, "0")
+        remaining -= end - start + 1
+    return None
+
+
+def printed_label(axis: LegendAxis, index: int, labels: BoardLabels) -> str | None:
+    """What the legend PRINTS beside the ``index``-th hole along ``axis``, or None where it
+    prints nothing: a hole the board does not mark (``every``), or one past its runs.
+
+    The one function every renderer of the legend draws from, so the screen, the 3D board
+    and the 1:1 print show the board in hand.
+    """
+    legend = _axis_legend(axis, labels)
+    if legend is not None and (index + 1) % legend.every:
+        return None
+    return legend_label(axis, index, labels)
+
+
+def legend_run_spans(legend: AxisLegend, count: int) -> tuple[tuple[int, int], ...]:
+    """The holes each run of ``legend`` prints on an axis ``count`` holes long, as (first,
+    last) 0-indexed and inclusive; a run that starts past the end of the axis is left out
+    and one that runs past it is cut there. What a guide line saying which printed label is
+    which address walks along."""
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for first, last in legend.runs:
+        _, low, high = _run_span(first, last)
+        if start >= count:
+            break
+        end = min(count - 1, start + high - low)
+        spans.append((start, end))
+        start += high - low + 1
+    return tuple(spans)
+
+
+def legend_runs_text(runs: Sequence[tuple[str, str]]) -> str:
+    """Runs as a person writes them, ``A–Z, A–P``; :func:`parse_legend_runs` reads it back."""
+    return ", ".join(first if first == last else f"{first}–{last}" for first, last in runs)
+
+
+def parse_legend_runs(text: str) -> tuple[tuple[str, str], ...]:
+    """Read ``A-Z, A-P`` (or ``A–Z A–P``, any case, either dash) back into runs.
+
+    A single label is a run of one. Raises ``ValueError`` with a sentence a person can act
+    on, which is :func:`legend_problem`'s for anything that parses but cannot be printed.
+    """
+    runs: list[tuple[str, str]] = []
+    dashed = re.sub(r"\s*[-–—]\s*", "-", text.strip().upper())
+    for piece in re.split(r"[,;\s]+", dashed):
+        if not piece:
+            continue
+        first, _, last = piece.partition("-")
+        if not first:
+            raise ValueError(f'"{piece}" is not a run: it needs a first label, as in A-Z.')
+        runs.append((first, last or first))
+    if not runs:
+        raise ValueError("A printed legend needs at least one run, such as A-Z or 1-60.")
+    for first, last in runs:
+        if (problem := _run_problem(first, last)) is not None:
+            raise ValueError(f"{first}–{last} cannot be printed: {problem}.")
+    return tuple(runs)
 
 
 def hole_ref_to_coord(ref: HoleRef) -> HoleCoord:

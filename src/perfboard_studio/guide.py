@@ -52,8 +52,9 @@ import colorsys
 import dataclasses
 import itertools
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
-from functools import cache
+from functools import cache, partial
 from typing import Literal
 
 from .breadboard import has_breadboard_pattern, has_rails, is_breadboard
@@ -77,12 +78,15 @@ from .geometry import (
     hole_to_mm,
     holeless_positions,
     is_inside_board,
+    legend_label,
+    legend_run_spans,
     path_length_mm,
     row_label,
     transform_offset,
 )
 from .lvs import continuity_checks, isolation_checks, run_lvs
 from .model import (
+    AxisLegend,
     Board,
     BoardMaterial,
     BoardSide,
@@ -94,6 +98,7 @@ from .model import (
     Footprint,
     FootprintPin,
     HoleCoord,
+    LegendAxis,
     Mm,
     Net,
     NetClass,
@@ -808,6 +813,65 @@ def _adapters(doc: PerfDocument, lookup: FootprintLookup) -> tuple[tuple[str, st
     return tuple(sorted(found))
 
 
+def _span(low: int, high: int, said: Callable[[int], str | None]) -> str:
+    """``A–Z`` from the labels at both ends, or the one label when they are one hole."""
+    first, last = said(low) or "", said(high) or ""
+    return first if low == high else f"{first}–{last}"
+
+
+def _printed_numbering(board: Board, say: Phrasebook) -> str | None:
+    """How a board that prints its own numbering lines up with the guide's addresses (#13).
+
+    The guide keeps naming every hole its own way -- AA7, never "the second A" -- because a
+    printed run that repeats cannot name a hole by itself. So a board that prints A..Z and
+    then A..P again is told once, before anything is soldered, which of its labels is
+    which of the guide's. None for a board that prints the addresses themselves.
+    """
+    labels = board.labels
+    if labels is None:
+        return None
+    axes: list[str] = []
+    sides: tuple[tuple[LegendAxis, int, Callable[[int], str], AxisLegend | None], ...] = (
+        ("columns", board.cols, column_label, labels.columns),
+        ("rows", board.rows, row_label, labels.rows),
+    )
+    for axis, count, named, legend in sides:
+        if legend is None:
+            continue
+        pieces: list[str] = []
+        printed_to = -1
+        for low, high in legend_run_spans(legend, count):
+            guide_span = _span(low, high, named)
+            printed_span = _span(low, high, partial(legend_label, axis, labels=labels))
+            if low == high:
+                pieces.append(say("{guide} is printed {printed}", guide=guide_span, printed=printed_span))
+            else:
+                pieces.append(say("{guide} are printed {printed}", guide=guide_span, printed=printed_span))
+            printed_to = high
+        runs = ", ".join(pieces)
+        # The marks belong to the printed runs, so they are said before the holes past them.
+        if legend.every > 1:
+            runs = say("{runs}, with a mark every {every} holes", runs=runs, every=legend.every)
+        if printed_to < count - 1:
+            unprinted = _span(printed_to + 1, count - 1, named)
+            if printed_to + 1 == count - 1:
+                runs += ", " + say("{guide} is not printed", guide=unprinted)
+            else:
+                runs += ", " + say("{guide} are not printed", guide=unprinted)
+        axes.append(
+            say("the columns: {runs}", runs=runs)
+            if axis == "columns"
+            else say("the rows: {runs}", runs=runs)
+        )
+    if not axes:
+        return None
+    return say(
+        "This board prints a numbering of its own, and this guide keeps to its own "
+        "addresses — {axes}.",
+        axes="; ".join(axes),
+    )
+
+
 def _phase_summary(
     number: PhaseNumber,
     doc: PerfDocument,
@@ -863,8 +927,12 @@ def _phase_summary(
     if not pattern:
         if board.labels is None:
             parts.append(say("mark hole A1"))
-        else:
+        elif board.labels.columns is None and board.labels.rows is None:
             parts.append(say("check which corner the board's printed A1 is in"))
+        else:
+            # Its corner may not read A1 at all -- A and A, or 1 and 1 -- so the corner is
+            # asked for by where the numbering starts.
+            parts.append(say("check which corner the board's own numbering starts in"))
     parts.append(say("get the iron and the parts ready"))
 
     if len(parts) > 1:
@@ -878,6 +946,9 @@ def _phase_summary(
             "address in this guide is printed on it, row letter first — e12 is row e, "
             "column 12."
         ) + " " + summary
+
+    if not pattern and (numbering := _printed_numbering(board, say)) is not None:
+        summary += " " + numbering
 
     if doc.mounting_holes:
         # Its own sentence, because it is an instruction about ORDER rather than another

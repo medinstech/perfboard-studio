@@ -53,6 +53,7 @@ from .geometry import (
     format_hole,
     hole_to_mm,
     is_inside_board,
+    legend_problem,
     preset_edge_connectors,
     preset_mounting_holes,
     substrate_edges_mm,
@@ -2026,6 +2027,8 @@ class _SetBoard:
             raise CommandError(
                 "invalid-board", "A printed row label cannot be narrower than one digit."
             )
+        if b.labels is not None and (problem := legend_problem(b.labels)) is not None:
+            raise CommandError("invalid-board", problem)
         if (problem := board_problem(b)) is not None:
             raise CommandError("invalid-board", problem)
         if is_breadboard(b) and doc.mounting_holes:

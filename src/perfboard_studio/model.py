@@ -113,6 +113,33 @@ type PadShape = Literal["round", "oblong"]
 #: consecutive ROWS are the close pair), "horizontal" runs along a row.
 type PadAxis = Literal["horizontal", "vertical"]
 
+#: The two runs of a printed legend: along the columns (the top and bottom edges) and down
+#: the rows (the left and right ones).
+type LegendAxis = Literal["columns", "rows"]
+
+
+@dataclass(frozen=True, slots=True)
+class AxisLegend:
+    """One axis of a legend a board prints in ITS OWN numbering rather than this tool's.
+
+    Real boards do not all count the way the addresses do. An 8 × 12 cm board prints A..Z
+    and then A..P again along its long edge, and A..Z then 1..4 along the short one; a
+    Protopatch prints numbers on both axes and marks only every fifth hole. This is what
+    such a board PRINTS, for the legend that is drawn and nothing else: every address the
+    tool speaks stays its own (``C7``, ``AA12``), because a printed sequence that repeats
+    cannot name a hole on its own. ``geometry.printed_label`` is the one reader.
+    """
+
+    #: The printed sequence as runs of (first, last), in order from the first hole: letters
+    #: (``("A", "Z")``, ``("AA", "AP")``) or whole numbers (``("1", "60")``), one kind to a
+    #: run. Holes past the end of the last run print nothing.
+    runs: tuple[tuple[str, str], ...]
+    #: Print every Nth hole only, counted from the first: 5 marks the 5th, the 10th, ...
+    every: int = 1
+    #: Zero-pad a NUMBER to this many digits, so 2 prints 5 as "05". Letters are never
+    #: padded.
+    digits: int = 1
+
 
 @dataclass(frozen=True, slots=True)
 class BoardLabels:
@@ -137,6 +164,12 @@ class BoardLabels:
     #: edge each, half the board is nearer the edge that does not carry its address,
     #: which is exactly where counting starts again.
     all_edges: bool = True
+    #: What the board prints along its columns when that is not this tool's own A..Z,
+    #: AA..: None prints the column letters, which is what every board modelled before
+    #: this did, and leaves the field out of the file.
+    columns: AxisLegend | None = None
+    #: The same down the rows, where None prints the row number padded to ``row_digits``.
+    rows: AxisLegend | None = None
 
 
 @dataclass(frozen=True, slots=True)

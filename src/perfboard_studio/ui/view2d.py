@@ -109,8 +109,8 @@ from perfboard_studio.geometry import (
     mounting_hole_centre_mm,
     pad_extent_mm,
     path_length_mm,
+    printed_label,
     printed_label_is_clear,
-    printed_row_label,
     row_label,
     surviving_finger_holes,
     transform_offset,
@@ -801,7 +801,13 @@ class BoardLegendItem(QGraphicsItem):
         # was not. `printed_label_is_clear` is asked in board millimetres, y growing down,
         # so the column run passes its unmirrored x.
         wide = board.pitch * 0.9
+        # WHAT THE BOARD PRINTS (`printed_label`), the same answer the 3D board gives: a
+        # board counting A..Z and then A..P again shows exactly that, and a hole it
+        # leaves unmarked gets nothing.
         for col in range(board.cols):
+            column_text = printed_label("columns", col, self.labels)
+            if column_text is None:
+                continue
             x = hole_to_screen(HoleCoord(col, 0), board, self.side).x()
             for y in column_ys:
                 if not printed_label_is_clear(
@@ -809,11 +815,13 @@ class BoardLegendItem(QGraphicsItem):
                 ):
                     continue
                 draw_physical_label(
-                    painter, QPointF(x, y), column_label(col), height, max_width_mm=wide
+                    painter, QPointF(x, y), column_text, height, max_width_mm=wide
                 )
 
         for row in range(board.rows):
-            text = printed_row_label(row, self.labels)
+            text = printed_label("rows", row, self.labels)
+            if text is None:
+                continue
             for x in row_xs:
                 # Turned on its side, so its box is turned too.
                 if not printed_label_is_clear(
@@ -3669,7 +3677,14 @@ class BoardScene(QGraphicsScene):
             # So does a solderable one, in silkscreen.
             return self.side == "top"
         labels = self.document.board.labels
-        return labels is not None and labels.face in ("both", self.side)
+        # A board printing its OWN numbering (A..Z and then A..P again) is not printing
+        # the addresses, so the ruler is then the one thing on screen that says them.
+        return (
+            labels is not None
+            and labels.face in ("both", self.side)
+            and labels.columns is None
+            and labels.rows is None
+        )
 
     def set_highlighted_nets(self, net_ids: Sequence[str]) -> None:
         """Light up the given schematic nets: what is left to route, and the copper laid.

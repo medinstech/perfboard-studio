@@ -360,6 +360,21 @@ TURKISH: dict[str, str] = {
     "check which corner the board's printed A1 is in": (
         "kartta basılı A1 işaretinin hangi köşede olduğuna bak"
     ),
+    "check which corner the board's own numbering starts in": (
+        "kartın kendi numaralandırmasının hangi köşeden başladığına bak"
+    ),
+    "This board prints a numbering of its own, and this guide keeps to its own "
+    "addresses — {axes}.": (
+        "Bu kart kendi numaralandırmasını basıyor; bu rehber ise kendi adreslerini "
+        "kullanıyor — {axes}."
+    ),
+    "the columns: {runs}": "sütunlarda {runs}",
+    "the rows: {runs}": "satırlarda {runs}",
+    "{guide} are printed {printed}": "{guide} kartta {printed} olarak basılı",
+    "{guide} is printed {printed}": "{guide} kartta {printed} olarak basılı",
+    "{guide} are not printed": "{guide} için baskı yok",
+    "{guide} is not printed": "{guide} için baskı yok",
+    "{runs}, with a mark every {every} holes": "{runs}, her {every} delikte bir işaretle",
     "get the iron and the parts ready": "havyayı ısıtıp parçaları hazırla",
     "Drill before anything is soldered — the board can still go in a vice, and swarf "
     "brushes off a bare board instead of having to be picked out of a built one.": (

@@ -22,6 +22,21 @@ closed without a bump.
 
 ### Added
 
+- **A board that prints its own numbering is drawn as it prints it.** Real boards do not
+  all count the way the addresses do: an 8 × 12 cm board prints A–Z and then A–P again
+  along its long edge and A–Z then 1–4 along the short one, and a Protopatch prints
+  numbers both ways with every fifth hole marked. A board's legend can now say so, per
+  axis -- the runs it prints, how often it marks a hole, how many digits a number has --
+  and the 2D view, the 1:1 print and the 3D board show exactly that, with the editor's
+  ruler back beside them, since it is then the one thing on screen saying the addresses.
+  Every address the tool speaks stays its own, because a run that repeats cannot name a
+  hole: the build guide's first step says once how the two line up ("AA–AP are printed
+  A–P"), in English and Turkish, and asks which corner the board's own numbering starts
+  in. It is kept in the file as `board.labels.columns` / `rows`, left out when a board
+  prints the addresses, and a legend no board could print (a run counting backwards,
+  letters to numbers) is refused by `board.set` and by the loader in the same words.
+  (suggested by @vindavs, #13)
+
 - **A Part List, in a tab behind Nets.** The Parts panel is the library, so finding R17 on
   a board of forty parts meant Go to Part by name, and the parts still waiting in the
   design were on the sheet and nowhere else. View ▸ Show Part List (Ctrl+8) lists every

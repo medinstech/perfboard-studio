@@ -71,7 +71,6 @@ from perfboard_studio.geometry import (
     board_edge_margin_mm,
     board_note_centre_mm,
     board_size_mm,
-    column_label,
     edge_finger_rect,
     flying_lead_routes,
     hole_key,
@@ -80,8 +79,8 @@ from perfboard_studio.geometry import (
     legend_strip_mm,
     mounting_hole_centre_mm,
     pad_extent_mm,
+    printed_label,
     printed_label_is_clear,
-    printed_row_label,
     surviving_finger_holes,
     transform_offset,
     undrilled_holes,
@@ -1512,14 +1511,22 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
         # Row numbers are turned on their side, as they are on the real boards and in the
         # 2D view: the strip beside a row is narrow across and a whole pitch deep, so a
         # turned number fits where an upright one has to shrink.
+        #
+        # WHAT THE BOARD PRINTS, which is not always the address (`printed_label`): a board
+        # counting A..Z and then A..P again, or marking every fifth hole, shows exactly that,
+        # and a hole it leaves unmarked gets nothing.
+        column_texts = [printed_label("columns", col, labels) for col in range(board.cols)]
+        row_texts = [printed_label("rows", row, labels) for row in range(board.rows)]
         entries: list[tuple[str, float, float, float, float]] = [
-            (column_label(col), col * board.pitch, y, board.pitch * 0.9, 0.0)
-            for col in range(board.cols)
+            (text, col * board.pitch, y, board.pitch * 0.9, 0.0)
+            for col, text in enumerate(column_texts)
+            if text is not None
             for y in column_ys
         ]
         entries += [
-            (printed_row_label(row, labels), x, -row * board.pitch, board.pitch * 0.9, 90.0)
-            for row in range(board.rows)
+            (text, x, -row * board.pitch, board.pitch * 0.9, 90.0)
+            for row, text in enumerate(row_texts)
+            if text is not None
             for x in row_xs
         ]
         for text, x, y, max_width, rotate in entries:
