@@ -38,6 +38,7 @@ from PySide6.QtGui import (
     QDropEvent,
     QFontMetricsF,
     QLinearGradient,
+    QPagedPaintDevice,
     QPainter,
     QPainterPath,
     QPainterPathStroker,
@@ -196,10 +197,13 @@ from .partnames import footprint_label
 from .scenetext import (
     draw_label,
     draw_physical_label,
+    draw_printed_reference,
+    draw_reference,
     label_font,
     label_plate_rect,
     physical_label_width_mm,
     pin_name_width_mm,
+    reference_plate,
 )
 
 # The window's own palette, for the overlays that sit ON the board but belong to the
@@ -369,6 +373,17 @@ REF_LABEL_ALIGN = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
 REF_LABEL_OFFSET = QPointF(0, -2)
 #: Below this many pixels per millimetre the references are not printed at all.
 REF_LABEL_MIN_SCALE = 3.0
+#: A part's value, after its reference on the same plate (View > Show Part Values): a step
+#: dimmer than the reference, so the name still reads first.
+VALUE_LABEL = QColor("#aeb6c8")
+#: The reference and value on paper, in millimetres (``draw_printed_reference``), standing
+#: a gap above the body as the editor's stand a few pixels above it. The reference a little
+#: taller than the pin names' 0.9 mm, as the name of a part outranks the name of a pin; the
+#: value a step under them, so the name reads first and a plate stays short. Chosen from
+#: prints rendered side by side.
+PRINT_REF_LABEL_MM = 1.1
+PRINT_VALUE_LABEL_MM = 0.85
+PRINT_REF_GAP_MM = 0.4
 
 
 # --------------------------------------------------------------------- coordinates
@@ -2954,7 +2969,7 @@ class ComponentItem(QGraphicsItem):
         self._hit_shape: QPainterPath | None = None
         #: The same with the printed reference taken in, for the zoom it was worked out at:
         #: the label holds a pixel size, so its share of the scene changes with every zoom.
-        self._hit_with_label: tuple[float, QPainterPath] | None = None
+        self._hit_with_label: tuple[tuple[float, str], QPainterPath] | None = None
         self._sync_position()
 
     def _sync_position(self) -> None:
@@ -3216,10 +3231,20 @@ class ComponentItem(QGraphicsItem):
         if transform is None or not self.show_reference or transform.m11() < REF_LABEL_MIN_SCALE:
             return self._hit_shape
         scale = transform.m11()
-        if self._hit_with_label is None or self._hit_with_label[0] != scale:
-            plate = label_plate_rect(
-                transform.map(self.reference_anchor()), self.comp.ref, REF_LABEL_PX,
-                REF_LABEL_ALIGN, bold=True, offset=REF_LABEL_OFFSET,
+        value = self.shown_value()
+        if self._hit_with_label is None or self._hit_with_label[0] != (scale, value):
+            # The value is on the reference's plate, so the plate a click lands on is the
+            # whole of it.
+            plate = (
+                reference_plate(
+                    transform.map(self.reference_anchor()), self.comp.ref, value, REF_LABEL_PX,
+                    offset=REF_LABEL_OFFSET,
+                )[0]
+                if value
+                else label_plate_rect(
+                    transform.map(self.reference_anchor()), self.comp.ref, REF_LABEL_PX,
+                    REF_LABEL_ALIGN, bold=True, offset=REF_LABEL_OFFSET,
+                )
             )
             label = QPainterPath()
             label.addRect(
@@ -3227,8 +3252,16 @@ class ComponentItem(QGraphicsItem):
                     self.boundingRect()
                 )
             )
-            self._hit_with_label = (scale, self._hit_shape.united(label))
+            self._hit_with_label = ((scale, value), self._hit_shape.united(label))
         return self._hit_with_label[1]
+
+    def shown_value(self) -> str:
+        """The value printed after this part's reference: its own, when the scene shows
+        values (View > Show Part Values) and it has one, else nothing."""
+        scene = self.scene()
+        if not getattr(scene, "show_values", False):
+            return ""
+        return self.comp.value.strip()
 
     def _view_transform(self) -> QTransform | None:
         """The board view's scene-to-pixel transform, or None in a scene nobody is
@@ -3410,16 +3443,36 @@ class ReferenceLayerItem(QGraphicsItem):
         return scene.sceneRect() if scene is not None else QRectF()
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        # Paper -- the 1:1 PDF -- is told apart by its device, and gets its labels in
+        # millimetres; on a screen they hold a pixel size (``ui/scenetext.py``).
+        printed = isinstance(painter.device(), QPagedPaintDevice)
         scale = painter.transform().m11() or 1.0
-        if scale < REF_LABEL_MIN_SCALE:
+        if scale < REF_LABEL_MIN_SCALE and not printed:
             return
         for item in self._board_scene.component_items.values():
             if not item.show_reference or not item.isVisible():
                 continue
+            colour = SELECTED if item.isSelected() else REF_LABEL
+            value = item.shown_value()
+            if printed:
+                draw_printed_reference(
+                    painter, item.reference_anchor(), item.comp.ref, value,
+                    PRINT_REF_LABEL_MM, PRINT_VALUE_LABEL_MM, PRINT_REF_GAP_MM,
+                    background=REF_PLATE,
+                    reference_colour=REF_LABEL, value_colour=VALUE_LABEL,
+                )
+                continue
+            if value:
+                draw_reference(
+                    painter, item.reference_anchor(), item.comp.ref, value, REF_LABEL_PX,
+                    offset=REF_LABEL_OFFSET, background=REF_PLATE,
+                    reference_colour=colour, value_colour=VALUE_LABEL,
+                )
+                continue
             # AlignTop is ABOVE the point in draw_label's terms (see ``label_alignment``
             # in viewsch): over the body, never on it, where it would hide a resistor's bands.
             # The part's hit area takes the same plate in (ComponentItem.shape).
-            painter.setPen(QPen(SELECTED if item.isSelected() else REF_LABEL))
+            painter.setPen(QPen(colour))
             draw_label(
                 painter, item.reference_anchor(), item.comp.ref, REF_LABEL_PX, REF_LABEL_ALIGN,
                 bold=True, offset=REF_LABEL_OFFSET, background=REF_PLATE,
@@ -3515,11 +3568,15 @@ class BoardScene(QGraphicsScene):
         hatch_far_side: bool = True,
         show_pin_names: bool = True,
         show_references: bool = True,
+        show_values: bool = False,
     ) -> None:
         super().__init__()
         self.lookup = lookup
         self.show_pin_names = show_pin_names
         self.show_references = show_references
+        #: Each part's value after its reference (View > Show Part Values): a view setting,
+        #: like the pin names, never a document field.
+        self.show_values = show_values
         self.side = side
         self.bus = bus
         self.hatch_far_side = hatch_far_side
@@ -3658,6 +3715,18 @@ class BoardScene(QGraphicsScene):
         if show != self.show_pin_names:
             self.show_pin_names = show
             self._build()
+
+    def set_show_values(self, show: bool) -> None:
+        """Print each part's value after its reference, or not. Nothing to rebuild: the
+        reference layer reads it as it paints, and each part's hit area as it is asked."""
+        if show == self.show_values:
+            return
+        self.show_values = show
+        for item in self.component_items.values():
+            item.prepareGeometryChange()
+        if self.reference_layer is not None:
+            self.reference_layer.update()
+        self.update()
 
     def set_show_rulers(self, show: bool) -> None:
         if show != self.show_rulers:

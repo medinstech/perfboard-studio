@@ -15,8 +15,10 @@ them, which means a millimetre-sized label can vanish from CI output while looki
 a developer's screen. Sizing in device pixels puts every label well clear of that floor.
 
 So: the position comes from the scene (the transform maps it), and the size does not (the
-transform is reset before drawing). ``export_pdf`` deliberately does NOT use this -- printed
-text has to scale with the page, and at 600 dpi ordinary point sizes work correctly.
+transform is reset before drawing). Paper is the exception, and a page is told apart by its
+device (``QPagedPaintDevice``): printed text has to scale with the page, so a reference
+drawn into the 1:1 PDF is drawn in millimetres (:func:`draw_printed_reference`). It was
+not, once, and came out half a millimetre tall.
 """
 
 from __future__ import annotations
@@ -186,6 +188,127 @@ def physical_label_width_mm(
         cap = _PHYSICAL_FONT_PX * 0.7
     width = max(metrics.horizontalAdvance(text), 1.0) * height_mm / cap
     return min(width, max_width_mm) if max_width_mm is not None else width
+
+
+def reference_plate(
+    device_anchor: QPointF,
+    reference: str,
+    value: str,
+    pixel_size: int,
+    offset: QPointF | None = None,
+) -> tuple[QRectF, QRectF, QRectF]:
+    """Where a part's reference and, after it on the same plate, its value are drawn, in
+    DEVICE pixels: (plate, reference box, value box), the text standing just above
+    ``device_anchor`` and centred on it, as :func:`draw_label` sets a reference alone.
+
+    ONE PLATE, ONE LINE: "R1 10k". The value is read as part of the name it belongs to,
+    and it lands where the reference already does -- over the body, never on a pin row or
+    a pin name, which is where a label of its own under the part would have had to go.
+    """
+    if offset is not None:
+        device_anchor = device_anchor + offset
+    bold = QFontMetricsF(label_font(pixel_size, True))
+    plain = QFontMetricsF(label_font(pixel_size, False))
+    reference_width = bold.horizontalAdvance(reference)
+    gap = plain.horizontalAdvance(" ") if value else 0.0
+    value_width = plain.horizontalAdvance(value) if value else 0.0
+    height = bold.height()
+    left = device_anchor.x() - (reference_width + gap + value_width) / 2
+    top = device_anchor.y() - height
+    reference_box = QRectF(left, top, reference_width, height)
+    value_box = QRectF(left + reference_width + gap, top, value_width, height)
+    plate = QRectF(left, top, reference_width + gap + value_width, height).adjusted(-4, -1, 4, 1)
+    return plate, reference_box, value_box
+
+
+def draw_reference(
+    painter: QPainter,
+    anchor: QPointF,
+    reference: str,
+    value: str,
+    pixel_size: int,
+    *,
+    offset: QPointF | None,
+    background: QColor,
+    reference_colour: QColor,
+    value_colour: QColor,
+) -> None:
+    """A reference with its value after it, on one plate, at a fixed ``pixel_size``
+    (:func:`reference_plate` says where). The value in the regular weight and its own
+    colour, so the name still reads first."""
+    plate, reference_box, value_box = reference_plate(
+        painter.transform().map(anchor), reference, value, pixel_size, offset
+    )
+    painter.save()
+    painter.resetTransform()
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(background)
+    radius = QFontMetricsF(label_font(pixel_size, True)).height() * 0.3
+    painter.drawRoundedRect(plate, radius, radius)
+    left = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    painter.setPen(reference_colour)
+    painter.setFont(label_font(pixel_size, True))
+    painter.drawText(reference_box, left, reference)
+    painter.setPen(value_colour)
+    painter.setFont(label_font(pixel_size, False))
+    painter.drawText(value_box, left, value)
+    painter.restore()
+
+
+def draw_printed_reference(
+    painter: QPainter,
+    anchor: QPointF,
+    reference: str,
+    value: str,
+    height_mm: float,
+    value_mm: float,
+    gap_mm: float,
+    *,
+    background: QColor,
+    reference_colour: QColor,
+    value_colour: QColor,
+) -> None:
+    """The same plate in MILLIMETRES, for paper: standing ``gap_mm`` above the scene
+    point ``anchor``, the reference ``height_mm`` tall and the value ``value_mm``, their
+    feet on one line.
+
+    The editor's labels hold a pixel size, which is right on a screen and wrong on a
+    page: drawn into the 1:1 PDF, a 12 px reference came out 12 dots of a 600 dpi printer,
+    half a millimetre, beside pin names printed at 0.9 mm. Paper gets its labels the way
+    it gets everything else on it, in millimetres.
+    """
+    reference_width = physical_label_width_mm(reference, height_mm, bold=True)
+    gap = height_mm * 0.45 if value else 0.0
+    value_width = physical_label_width_mm(value, value_mm, bold=False) if value else 0.0
+    width = reference_width + gap + value_width
+    plate_height = height_mm * 1.8
+    pad = height_mm * 0.35
+    centre_y = anchor.y() - gap_mm - plate_height / 2
+    left = anchor.x() - width / 2
+    painter.save()
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(background)
+    plate = QRectF(left - pad, centre_y - plate_height / 2, width + 2 * pad, plate_height)
+    painter.drawRoundedRect(plate, plate_height * 0.3, plate_height * 0.3)
+    painter.setPen(reference_colour)
+    draw_physical_label(
+        painter, QPointF(left + reference_width / 2, centre_y), reference, height_mm, bold=True
+    )
+    if value:
+        painter.setPen(value_colour)
+        # Centred on the line a capital of its own height would stand on with the
+        # reference's: down by half the difference.
+        draw_physical_label(
+            painter,
+            QPointF(
+                left + reference_width + gap + value_width / 2,
+                centre_y + (height_mm - value_mm) / 2,
+            ),
+            value,
+            value_mm,
+            bold=False,
+        )
+    painter.restore()
 
 
 #: Without a font to ask, how far a character of a pin name advances, per millimetre of

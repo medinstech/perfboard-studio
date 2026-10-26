@@ -268,6 +268,12 @@ TURKISH: Mapping[str, str] = {
     "Show &Parts": "Par&çaları Göster",
     "Show &Nets": "&Netleri Göster",
     "Show Part List": "Parça &Listesini Göster",
+    "Show Part Val&ues": "Parça De&ğerlerini Göster",
+    "Print each part's value after its reference — 4k7, 100n, 1N4148 — on the board and on "
+    "the 1:1 print, to check the board against the build at a glance.": (
+        "Her parçanın değerini referansının yanına yazar — 4k7, 100n, 1N4148 — kartta ve 1:1 "
+        "baskıda; kartı bir bakışta montajla karşılaştırmak için."
+    ),
     "Show DRC / L&VS": "DRC / L&VS'yi Göster",
     "Board &Colour": "Kart &Rengi",
     "Follow the &material": "&Malzemeye göre",

@@ -589,6 +589,7 @@ BOARD_COLOUR_KEY = "session/boardColour"
 RATSNEST_KEY = "session/showRatsnest"
 RULERS_KEY = "session/showRulers"
 HATCH_KEY = "session/hatchFarSide"
+VALUES_KEY = "session/showValues"
 ROUTING_STYLE_KEY = "session/routingStyle"
 GRID_WIRES_KEY = "session/gridWires"
 CROSSINGS_KEY = "session/crossings"
@@ -6415,6 +6416,18 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_pin_names.toggled.connect(self._on_toggle_pin_names)
+        # OFF by default: the reference is the name a part is found by, and on a crowded
+        # board the values are clutter. On to check the board against the build at a glance,
+        # and on the 1:1 print, which is read at the bench (#11).
+        self.act_values = view_menu.addAction(t("Show Part Val&ues"))
+        self.act_values.setCheckable(True)
+        self.act_values.setToolTip(
+            t(
+                "Print each part's value after its reference — 4k7, 100n, 1N4148 — on the "
+                "board and on the 1:1 print, to check the board against the build at a glance."
+            )
+        )
+        self.act_values.toggled.connect(self.scene.set_show_values)
         self.act_board_labels = view_menu.addAction(t("Show Labels on &the Board"))
         self.act_board_labels.setCheckable(True)
         self.act_board_labels.setChecked(True)
@@ -13409,6 +13422,7 @@ class MainWindow(QMainWindow):
         settings.setValue(RATSNEST_KEY, self.act_ratsnest.isChecked())
         settings.setValue(RULERS_KEY, self.act_rulers.isChecked())
         settings.setValue(HATCH_KEY, self.act_hatch.isChecked())
+        settings.setValue(VALUES_KEY, self.act_values.isChecked())
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
         settings.setValue(GRID_WIRES_KEY, self._grid_wires)
         settings.setValue(CROSSINGS_KEY, self._crossing_policy)
@@ -13462,6 +13476,7 @@ class MainWindow(QMainWindow):
         self.act_ratsnest.setChecked(_stored_bool(settings, RATSNEST_KEY, True))
         self.act_rulers.setChecked(_stored_bool(settings, RULERS_KEY, True))
         self.act_hatch.setChecked(_stored_bool(settings, HATCH_KEY, True))
+        self.act_values.setChecked(_stored_bool(settings, VALUES_KEY, False))
 
         style = settings.value(ROUTING_STYLE_KEY, self._routing_style)
         if isinstance(style, str) and style in self.act_style:
@@ -13670,8 +13685,17 @@ class MainWindow(QMainWindow):
         self._offer_to_open(written, title=t("PDF written"), open_label=t("Open the Sheet"))
 
     def _export_scene(self, doc: PerfDocument, side: BoardSide) -> BoardScene:
-        """A scene for print: the board and nothing else."""
-        return BoardScene(doc, self.lookup, side=side, show_ratsnest=False, show_rulers=False)
+        """A scene for print: the board and nothing else -- with each part's value after
+        its reference when the view shows them, since the sheet is what the board is
+        checked against at the bench."""
+        return BoardScene(
+            doc,
+            self.lookup,
+            side=side,
+            show_ratsnest=False,
+            show_rulers=False,
+            show_values=self.act_values.isChecked(),
+        )
 
     def on_export_3d_png(self) -> None:
         suggested = f"{self.current_path.stem}.png" if self.current_path else "board_3d.png"

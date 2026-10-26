@@ -227,6 +227,12 @@ closed without a bump.
   0.21.0. Not published: `packaging/README.md` says what checking and submitting them
   takes, and that whether to is the owner's call.
 
+- **Part values on the board (suggested by @vindavs, #11).** View ▸ Show Part Values prints
+  each part's value after its reference, "R1 10k", "U1 NE555", on the reference's own
+  plate, in the board view and on the 1:1 print, so a board can be checked against the
+  build at a glance. It stands where the reference does, over the body and never on a pin
+  row or a pin name. Off by default, and kept with the window's other view settings.
+
 ### Changed
 
 - **The release dry run rehearses the commit about to be tagged.** `release.yml`'s
@@ -565,6 +571,10 @@ closed without a bump.
   other file dialog already started there, but New Project's started in the home folder,
   so the first project of anybody who had never made one went in beside AppData. After
   that it still starts where the last project went.
+
+- **The references on the 1:1 print can be read.** They were drawn at the editor's 12
+  pixels, and on a 600 dpi page that is half a millimetre, beside pin names printed at
+  0.9 mm. On paper they are 1.1 mm tall now, on the same dark plate as on screen.
 
 ## [0.21.0] - 2026-10-21
 

@@ -378,7 +378,8 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Show &Build Guide", "Show &Schematic", "Show &Parts", "Show &Nets",
                  "Show Part List",
                  "Show DRC / L&VS", "&Exploded View", "Reset 3D Ca&mera", "&Language",
-                 "Board &Colour", "Sho&w Pin Names", "Show Labels on &the Board"],
+                 "Board &Colour", "Sho&w Pin Names", "Show Labels on &the Board",
+                 "Show Part Val&ues"],
         "net": ["&Connect Two Pins", "&New Net…", "&Add Pins to Net", "&Finish Adding Pins",
                 "&Edit Net…", "&Disconnect Selected Pins", "De&lete Net"],
         # Route ▸ Preferred Connection. Five items in one submenu, and the one place in the

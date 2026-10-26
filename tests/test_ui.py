@@ -6068,6 +6068,7 @@ def test_a_closed_window_hands_its_layout_to_the_next_one() -> None:
     first = _window_on(_load_dense())
     first.act_ratsnest.setChecked(False)
     first.act_hatch.setChecked(False)
+    first.act_values.setChecked(True)
     first.on_board_colour("blue")
     first.on_routing_style("solder")
     _close(first)
@@ -6083,6 +6084,8 @@ def test_a_closed_window_hands_its_layout_to_the_next_one() -> None:
     assert second.act_ratsnest.isChecked() is False
     assert second.scene.show_ratsnest is False
     assert second.act_hatch.isChecked() is False
+    assert second.act_values.isChecked() is True
+    assert second.scene.show_values is True
     assert chosen_key() == "blue"
     assert second._routing_style == "solder"
     assert second.act_style["solder"].isChecked() is True
@@ -13535,3 +13538,82 @@ def test_only_the_board_question_offers_a_way_aside(monkeypatch) -> None:
         assert not window._planner_took_aside
     finally:
         _close(window)
+
+
+def test_part_values_are_printed_after_their_references() -> None:
+    """#11: View > Show Part Values prints each part's value after its reference, on the
+    reference's own plate -- "R1 10k" -- where the reference already is: over the body,
+    never on a pin row or a pin name. Off by default, and nothing is printed for a part
+    with no value."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        assert not window.act_values.isChecked() and not window.scene.show_values
+        items = list(window.scene.component_items.values())
+        assert all(item.shown_value() == "" for item in items)
+
+        window.act_values.setChecked(True)
+        assert window.scene.show_values
+        for item in items:
+            assert item.shown_value() == item.comp.value.strip(), item.comp.ref
+        assert any(item.shown_value() for item in items)
+
+        window.act_values.setChecked(False)
+        assert all(item.shown_value() == "" for item in items)
+    finally:
+        _close(window)
+
+
+def test_a_value_shares_its_references_plate() -> None:
+    """One plate, one line: the value starts after the reference and both are inside the
+    plate, which is centred where the reference alone would be."""
+    from PySide6.QtCore import QPointF
+
+    from perfboard_studio.ui.scenetext import reference_plate
+
+    anchor = QPointF(200.0, 100.0)
+    alone, _, _ = reference_plate(anchor, "R1", "", 12)
+    plate, ref_box, value_box = reference_plate(anchor, "R1", "10k", 12)
+    assert plate.width() > alone.width()
+    assert value_box.left() >= ref_box.right()
+    assert plate.contains(ref_box) and plate.contains(value_box)
+    # Above the anchor, as the reference stands above its body.
+    assert plate.bottom() <= anchor.y() + 1.0
+    assert abs(plate.center().x() - anchor.x()) < 1.0
+    assert abs(alone.center().x() - anchor.x()) < 1.0
+
+
+def test_the_print_draws_references_and_values_in_millimetres(monkeypatch, tmp_path) -> None:
+    """Drawn into the 1:1 PDF, a reference held its 12 pixels -- 12 dots of a 600 dpi
+    printer, half a millimetre, beside pin names printed at 0.9 mm. Paper gets them in
+    millimetres, with each value after its reference when the view shows values (#11)."""
+    from perfboard_studio.ui import view2d
+    from perfboard_studio.ui.export_pdf import export_pdf
+
+    printed: list[tuple[str, str, float]] = []
+    on_screen: list[str] = []
+    real = view2d.draw_printed_reference
+
+    def record_print(painter, anchor, reference, value, height_mm, value_mm, gap_mm, **kwargs):
+        printed.append((reference, value, height_mm))
+        real(painter, anchor, reference, value, height_mm, value_mm, gap_mm, **kwargs)
+
+    monkeypatch.setattr(view2d, "draw_printed_reference", record_print)
+    monkeypatch.setattr(view2d, "draw_label", lambda *a, **k: on_screen.append(a[2]))
+    monkeypatch.setattr(view2d, "draw_reference", lambda *a, **k: on_screen.append(a[2]))
+
+    doc = _example_document("ne555-astable")
+    window = _window_on(doc)
+    try:
+        window.act_values.setChecked(True)
+        scene = window._export_scene(doc, "top")
+        export_pdf(doc.board, scene, tmp_path / "board.pdf")
+    finally:
+        _close(window)
+
+    by_ref = {reference: (value, height) for reference, value, height in printed}
+    for component in doc.components:
+        assert component.ref in by_ref, component.ref
+        value, height = by_ref[component.ref]
+        assert value == component.value.strip()
+        assert height >= 1.0, "a reference on paper is at least a millimetre tall"
+    assert not [ref for ref in on_screen if ref in by_ref], "no screen-sized label on paper"
