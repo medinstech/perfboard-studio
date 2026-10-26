@@ -341,6 +341,12 @@ closed without a bump.
   rendered side by side. Zoomed in, text is its sheet size as before. The exported SVG,
   PDF and PNG are unchanged.
 
+- **A check in the build guide panel is marked as a measurement, not as passed.** Every
+  check -- "I11 ↔ K11 must be open", "LED1.1 ↔ R3.2" -- was a green tick before anything had
+  been measured, the mark and the colour the window gives a clean board. It is an ohm sign
+  in blue now, in bold when it must pass before power goes on. Chosen from candidates
+  rendered side by side.
+
 ### Fixed
 
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,

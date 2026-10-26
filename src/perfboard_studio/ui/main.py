@@ -4028,10 +4028,21 @@ def _step_line(step: GuideStep, language: GuideLanguage) -> str:
 
 
 def _check_row(checkpoint: Checkpoint) -> QTreeWidgetItem:
-    """A check in the guide panel: what to measure, how and what to expect one hover away,
-    and where the probes go on the board when it is picked."""
-    row = QTreeWidgetItem([f"✓ {checkpoint.title}"])
-    row.setForeground(0, QColor(OK))
+    """A check in the guide panel, marked as a measurement: an ohm sign in the accent
+    colour, in bold when it must pass before power goes on (``Checkpoint.blocking``). How
+    to make it and what to expect are one hover away, and where the probes go is shown on
+    the board when it is picked.
+
+    It was a green tick, which said "passed" over a check nobody had made yet -- the mark
+    and the colour the status bar gives a clean board. Chosen from candidates rendered side
+    by side: a dimmed one read as optional, and a tick box as one more step to tick.
+    """
+    row = QTreeWidgetItem([f"Ω {checkpoint.title}"])
+    row.setForeground(0, QColor(ACCENT))
+    if checkpoint.blocking:
+        font = row.font(0)
+        font.setBold(True)
+        row.setFont(0, font)
     row.setToolTip(0, f"{checkpoint.instruction}\n{checkpoint.expected}")
     row.setData(0, ROLE_HOLES, checkpoint.holes)
     return row

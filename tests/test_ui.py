@@ -13418,3 +13418,30 @@ def test_the_sheets_text_is_read_where_the_sheet_opens() -> None:
         assert min(sizes) >= 9, (scale, sizes)
     # Zoomed in, text is still its sheet size: the floor is a floor, not a fixed size.
     assert label_px(REF_LABEL_MM, REF_PX, 20.0) == round(REF_LABEL_MM * 20.0)
+
+
+def test_a_check_is_marked_as_a_measurement_not_as_passed(
+    monkeypatch, _settings_in_a_temp_file
+) -> None:
+    """A check was a green tick -- "passed", in the colour of a clean board -- before
+    anything had been measured. It is an ohm sign in the accent colour, in bold when it
+    must pass before power goes on, on a stripboard's cut checks and a perfboard's
+    continuity checks alike."""
+    from perfboard_studio.guide import all_checkpoints
+    from perfboard_studio.ui.theme import ACCENT
+
+    window = _routed_on_stripboard(monkeypatch)
+    try:
+        checks = {check.title: check for check in all_checkpoints(window.current_guide())}
+        rows = [row for row in _guide_rows(window) if row.text(0).startswith("Ω ")]
+        assert len(rows) == len(checks)
+        assert not any(row.text(0).startswith("✓") for row in _guide_rows(window))
+        blocking = set()
+        for row in rows:
+            check = checks[row.text(0).removeprefix("Ω ")]
+            assert row.foreground(0).color().name() == ACCENT.lower(), row.text(0)
+            assert row.font(0).bold() == check.blocking, row.text(0)
+            blocking.add(check.blocking)
+        assert blocking == {True, False}, "both kinds should be on this board"
+    finally:
+        _close(window)
