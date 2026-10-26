@@ -350,6 +350,13 @@ closed without a bump.
   in blue now, in bold when it must pass before power goes on. Chosen from candidates
   rendered side by side.
 
+- **Other Board can be chosen while the boards are being tried.** Choosing a board tries the
+  circuit on every stock perfboard first, which is 8.6 s on the 555 blinker, and only then
+  showed the dialog that has Other Board. Anybody holding a stripboard or a breadboard sat
+  through every perfboard trial and threw the verdicts away. The trial's own progress
+  dialog has an "Other Board…" link now: it stops the trial and goes straight to Board
+  Setup.
+
 ### Fixed
 
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,

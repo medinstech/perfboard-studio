@@ -13445,3 +13445,93 @@ def test_a_check_is_marked_as_a_measurement_not_as_passed(
         assert blocking == {True, False}, "both kinds should be on this board"
     finally:
         _close(window)
+
+
+def _take_the_dialogs_link(window, taken: list[str], tries: int = 200) -> None:
+    """Click the link in the planner's progress dialog once it is up, polling for it."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QLabel, QProgressDialog
+
+    for dialog in window.findChildren(QProgressDialog):
+        for label in dialog.findChildren(QLabel):
+            if "<a " in label.text():
+                taken.append(label.text())
+                label.linkActivated.emit("aside")
+                return
+    if tries:
+        QTimer.singleShot(25, lambda: _take_the_dialogs_link(window, taken, tries - 1))
+
+
+def test_other_board_is_offered_while_the_boards_are_tried(monkeypatch) -> None:
+    """Somebody holding a stripboard sat through every perfboard trial -- 8.6 s on the
+    blinker -- before the dialog with Other Board came up, and then threw its verdicts away.
+    The trial's own dialog offers it now: taken, the trial stops, Board Setup opens, no
+    perfboard question is asked and nothing is remembered as judged."""
+    import time
+
+    from PySide6.QtCore import QTimer
+
+    from perfboard_studio.ui import main as main_module
+
+    window = _blank_window()
+    try:
+        _add(window, "R1", "r-axial-3")
+        stopped: list[bool] = []
+
+        def choose(doc, lookup_, suggestions, should_stop=None, **_):
+            deadline = time.monotonic() + 10
+            while not should_stop() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            stopped.append(should_stop())
+            return _choice(doc, complete=False)
+
+        asked: list[int] = []
+        setup: list[int] = []
+        monkeypatch.setattr(main_module, "choose_board", choose)
+        monkeypatch.setattr(
+            type(window), "_ask_which_board", lambda self, choice, doc: asked.append(1) or (True, None)
+        )
+        monkeypatch.setattr(type(window), "on_board_setup", lambda self: setup.append(1) or True)
+
+        taken: list[str] = []
+        QTimer.singleShot(25, lambda: _take_the_dialogs_link(window, taken))
+        assert window._offer_a_board_size(window.bus.document, always=True)
+
+        assert taken and "Other Board…" in taken[0], "the link is on the trial's dialog"
+        assert stopped == [True], "taking it stops the trial"
+        assert setup == [1] and asked == [], "Board Setup, and no perfboard question"
+        assert window._judged is None
+        assert not window._planner_took_aside or setup, "only ever read straight after"
+    finally:
+        _close(window)
+
+
+def test_only_the_board_question_offers_a_way_aside(monkeypatch) -> None:
+    """Any other planner's dialog is as it was: Cancel, and no link in its label."""
+    import time
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QLabel, QProgressDialog
+
+    window = _blank_window()
+    try:
+        seen: list[str] = []
+
+        def look() -> None:
+            for dialog in window.findChildren(QProgressDialog):
+                seen.extend(label.text() for label in dialog.findChildren(QLabel))
+
+        QTimer.singleShot(700, look)
+
+        def work(should_stop):
+            deadline = time.monotonic() + 1.2
+            while not should_stop() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            return "done"
+
+        assert window._run_planner("Routing…", work) == "done"
+        assert seen, "the dialog was up"
+        assert not any("<a " in text for text in seen), seen
+        assert not window._planner_took_aside
+    finally:
+        _close(window)

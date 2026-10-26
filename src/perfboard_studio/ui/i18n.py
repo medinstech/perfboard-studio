@@ -1078,6 +1078,7 @@ TURKISH: Mapping[str, str] = {
         "üzerine yerleştirilerek denenir."
     ),
     "Other Board…": "Başka Kart…",
+    "Stopping…": "Durduruluyor…",
     "A breadboard, a stripboard, or a board of any size: Board Setup.": (
         "Breadboard, şeritli kart ya da istenen boyutta bir kart: Kart Ayarları."
     ),

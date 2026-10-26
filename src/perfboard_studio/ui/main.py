@@ -34,6 +34,7 @@ import re
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
+from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -4222,6 +4223,9 @@ class MainWindow(QMainWindow):
         #: the window can repaint and offer Cancel, which also lets the file watcher and
         #: the close button fire in the middle of it -- see both for what they do then.
         self._planner_running = False
+        #: Whether the last planner run was left by its named way out (``_run_planner``'s
+        #: ``aside``) rather than finished or cancelled.
+        self._planner_took_aside = False
         # PLAN.md §9.3 -- the window notices when the file changes underneath it, so an
         # agent that only writes files is a participant rather than a source of stale
         # screens. See _reload_if_changed for what it does about it.
@@ -8392,7 +8396,12 @@ class MainWindow(QMainWindow):
         )
         if not suggestions:
             return self.on_board_setup() if always else True
+        self._planner_took_aside = False
         choice = self._board_choice(document, suggestions)
+        if self._planner_took_aside:
+            # Other Board, pressed while the stock perfboards were being tried: the answer
+            # is a breadboard or a stripboard, and no perfboard verdict is wanted.
+            return self.on_board_setup()
         accepted, chosen = self._ask_which_board(choice, document)
         if not accepted:
             return False
@@ -8434,6 +8443,7 @@ class MainWindow(QMainWindow):
                 mapper=planner_pool.mapper_for(should_stop),
             ),
             stopped=t("Cancelled before a board was tried; nothing changed."),
+            aside=t("Other Board…"),
         )
         if not isinstance(choice, BoardChoice):
             # Only a stub in a test gets here; the question still has to be answerable.
@@ -10163,6 +10173,7 @@ class MainWindow(QMainWindow):
         label: str | Callable[[], str],
         work: Callable[[Callable[[], bool]], Any],
         stopped: str | None = None,
+        aside: str | None = None,
     ) -> Any:
         """Run a planner off the UI thread, with a progress dialog that can cancel it.
 
@@ -10210,14 +10221,30 @@ class MainWindow(QMainWindow):
         Only workers that do not answer are ended, and then there is nothing to keep --
         ``stopped`` is what the status bar says then, and the caller gets None, which
         every caller already reads as a cancel.
+
+        ``aside`` is a second way out, named: a link under the label that stops the run as
+        Cancel does and leaves ``_planner_took_aside`` set, for a caller with somewhere else
+        to go. The board question has one, Other Board -- somebody holding a stripboard sat
+        through every perfboard trial before the dialog that had that button came up.
         """
         cancelled = False
+        self._planner_took_aside = False
 
         def should_stop() -> bool:
             return cancelled
 
         def text() -> str:
             return label() if callable(label) else label
+
+        def said(body: str, *, offered: bool = True) -> str:
+            """The label as the dialog shows it: under it, when the caller has one and it
+            is still on offer, the other way out by name (``aside``)."""
+            if aside is None:
+                return body
+            lines = "<br>".join(escape(line) for line in body.split("\n"))
+            # In the accent colour: Qt's own link blue is all but invisible on this theme.
+            link = f"<a href='aside' style='color:{ACCENT}'>{escape(aside)}</a>"
+            return f"{lines}<br><br>{link}" if offered else lines
 
         shown = ""
         holder: dict[str, Any] = {}
@@ -10246,7 +10273,7 @@ class MainWindow(QMainWindow):
                 QApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 20)
                 if progress is not None and not cancelled and text() != shown:
                     shown = text()
-                    progress.setLabelText(shown)
+                    progress.setLabelText(said(shown))
                 if progress is None and time.perf_counter() - started > self.PLANNER_GRACE_S:
                     # Only now, so a run that finishes quickly never flashes a dialog: a
                     # window that blinks is worse than one that pauses imperceptibly.
@@ -10257,6 +10284,25 @@ class MainWindow(QMainWindow):
                     progress.setMinimumDuration(0)
                     progress.setAutoClose(False)
                     progress.setAutoReset(False)
+                    if aside is not None:
+                        # A link rather than a second button: the dialog lays out its one
+                        # button itself, and a link sits in the label it already has.
+                        link = QLabel(progress)
+                        link.setTextFormat(Qt.TextFormat.RichText)
+                        link.setTextInteractionFlags(
+                            Qt.TextInteractionFlag.LinksAccessibleByMouse
+                            | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
+                        )
+                        progress.setLabel(link)
+                        progress.setLabelText(said(shown))
+
+                        def on_aside(_href: str, dialog: QProgressDialog = progress) -> None:
+                            nonlocal cancelled
+                            cancelled = True
+                            self._planner_took_aside = True
+                            dialog.setLabelText(said(f"{text()}\n{t('Stopping…')}", offered=False))
+
+                        link.linkActivated.connect(on_aside)
 
                     # The dialog is bound at definition rather than read out of the
                     # enclosing scope. It is created once and this closure is made
@@ -10268,7 +10314,10 @@ class MainWindow(QMainWindow):
                         nonlocal cancelled
                         cancelled = True
                         dialog.setLabelText(
-                            f"{text()}\n{t('Stopping, and keeping the best found so far…')}"
+                            said(
+                                f"{text()}\n{t('Stopping, and keeping the best found so far…')}",
+                                offered=False,
+                            )
                         )
 
                     progress.canceled.connect(on_cancel)
