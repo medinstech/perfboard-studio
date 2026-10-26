@@ -76,7 +76,18 @@ def rasterize(svg: str, width: int, height: int, out: Path) -> None:
         app.processEvents()
         time.sleep(0.01)
 
+    # And painted is not a second either, on a machine with other work on it: one run under
+    # load grabbed the page before it was drawn and wrote a card of plain white, 3 KB where
+    # the real one is 370, which nothing would have noticed until it was the repository's
+    # face. So the grab is taken again until it holds more than one colour.
     image = view.grab().toImage()
+    deadline = time.monotonic() + 20
+    while _one_colour(image):
+        if time.monotonic() > deadline:
+            raise SystemExit("Qt WebEngine loaded the card and drew nothing in 20 s")
+        app.processEvents()
+        time.sleep(0.1)
+        image = view.grab().toImage()
     if (image.width(), image.height()) != (width, height):
         raise SystemExit(f"drew {image.width()} x {image.height()}, not {width} x {height}")
     raw = out.with_suffix(".raw.png")
@@ -86,6 +97,20 @@ def rasterize(svg: str, width: int, height: int, out: Path) -> None:
     with Image.open(raw) as drawn:
         drawn.convert("RGB").save(out, optimize=True)
     raw.unlink()
+
+
+def _one_colour(image: object) -> bool:
+    """Whether a grabbed QImage is a single colour all over, which is what an unpainted page is."""
+    from PySide6.QtGui import QImage
+
+    assert isinstance(image, QImage)
+    first = image.pixel(0, 0)
+    step = max(1, min(image.width(), image.height()) // 64)
+    return all(
+        image.pixel(x, y) == first
+        for y in range(0, image.height(), step)
+        for x in range(0, image.width(), step)
+    )
 
 
 def main() -> int:
