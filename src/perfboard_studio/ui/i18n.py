@@ -261,10 +261,13 @@ TURKISH: Mapping[str, str] = {
     "Show &3D View": "&3D Görünümü Göster",
     # Ca&mera, not &Camera: "Board &Colour" has C in the same menu.
     "Reset 3D Ca&mera": "3D &Kamerayı Sıfırla",
-    # &Listesini / &Netleri / L&VS: L, N and V are the free letters in the Turkish View
-    # menu, where S, Y, U, B, D, T, M, G, K, R, P and Ş are all already spoken for.
-    "Show &Parts": "Parça &Listesini Göster",
+    # Par&çaları / Parça &Listesini / &Netleri / L&VS: ç, L, N and V are the free letters
+    # in the Turkish View menu, where S, Y, U, B, D, T, M, G, K, R and Ş are all spoken
+    # for and P went to "&Patlatılmış Görünüm". The library takes ç, the Part List L; the
+    # English Part List has no letter at all, every one of its own being taken.
+    "Show &Parts": "Par&çaları Göster",
     "Show &Nets": "&Netleri Göster",
+    "Show Part List": "Parça &Listesini Göster",
     "Show DRC / L&VS": "DRC / L&VS'yi Göster",
     "Board &Colour": "Kart &Rengi",
     "Follow the &material": "&Malzemeye göre",
@@ -433,6 +436,7 @@ TURKISH: Mapping[str, str] = {
     # -- docks ---------------------------------------------------------------
     "Parts": "Parçalar",
     "Nets": "Netler",
+    "Part List": "Parça Listesi",
     "3D View": "3D Görünüm",
     "ERC / DRC / LVS": "ERC / DRC / LVS",
     # -- dialogs -------------------------------------------------------------
@@ -604,6 +608,10 @@ TURKISH: Mapping[str, str] = {
     "{count} problem(s):": "{count} sorun:",
     "{count} connection(s) were left unrouted:": "{count} bağlantı yönlendirilemedi:",
     "{ref} is in the design, not on the board yet.": "{ref} tasarımda var, ama henüz kartta değil.",
+    "In the design, not on the board yet.": "Tasarımda var, ama henüz kartta değil.",
+    "{ref} is in the design, not on the board yet. Place on the Board puts it there.": (
+        "{ref} tasarımda var, ama henüz kartta değil. Kart Üzerine Yerleştir onu karta koyar."
+    ),
     "{ref} is named by a net and is not in the design at all.": (
         "{ref} yalnızca bir nette adı geçiyor; tasarımda hiç yok."
     ),
@@ -721,6 +729,8 @@ TURKISH: Mapping[str, str] = {
     "Reference": "Referans",
     "Value": "Değer",
     "Footprint": "Ayak izi",
+    "Position": "Konum",
+    "State": "Durum",
     "Pin 1 at": "1. pin",
     "Height": "Yükseklik",
     "locked — auto-placement leaves it where it is": (

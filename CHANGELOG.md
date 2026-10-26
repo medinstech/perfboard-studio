@@ -22,6 +22,17 @@ closed without a bump.
 
 ### Added
 
+- **A Part List, in a tab behind Nets.** The Parts panel is the library, so finding R17 on
+  a board of forty parts meant Go to Part by name, and the parts still waiting in the
+  design were on the sheet and nowhere else. View ▸ Show Part List (Ctrl+8) lists every
+  part in the document with its value, its package, the hole it stands on and whether it
+  is turned, mirrored or locked, sorted by any column (R2 before R10) and filtered as you
+  type. A click on a placed part selects it and centres the board on it, a part selected
+  on the board is marked in the list, and a part still only in the design, greyed, opens
+  the sheet with its symbol selected. In Turkish the library's own switch now says
+  "Parçaları Göster", the name of its panel, and the list's says "Parça Listesini
+  Göster". (suggested by @vindavs, #9)
+
 - **Add a Part stays open for the next part.** A 555 blinker is six parts and it was six
   trips through a dialog that closed after each, with the Next button offering "Connect the
   Pins" from the first part on. Add (or Enter) puts the part in the design, says so in the

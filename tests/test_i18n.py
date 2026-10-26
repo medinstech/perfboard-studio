@@ -376,6 +376,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Show Hole &Addresses", "&Hatch Copper on the Far Side",
                  "Measure &Distance", "&Go to Part…", "Show &3D View",
                  "Show &Build Guide", "Show &Schematic", "Show &Parts", "Show &Nets",
+                 "Show Part List",
                  "Show DRC / L&VS", "&Exploded View", "Reset 3D Ca&mera", "&Language",
                  "Board &Colour", "Sho&w Pin Names", "Show Labels on &the Board"],
         "net": ["&Connect Two Pins", "&New Net…", "&Add Pins to Net", "&Finish Adding Pins",

@@ -339,6 +339,7 @@ from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .i18n import language as current_language
 from .i18n import set_language, t
+from .partlist import PartListPanel
 from .partnames import footprint_label
 from .project import write_project
 from .theme import ACCENT, ERROR, OK, STYLESHEET, TEXT, TEXT_DIM, WARNING
@@ -574,7 +575,10 @@ WINDOW_STATE_KEY = "session/windowState"
 #: board, sheet and 3D side by side, where a saved layout would have gone on opening the 3D
 #: view as a strip beside a board stacked on the sheet for everybody who had ever closed
 #: the window.
-WINDOW_STATE_VERSION = 6
+#:
+#: 7 is the Part List (#9): a dock no earlier layout has heard of, which ``restoreState``
+#: would leave wherever the constructor happened to put it.
+WINDOW_STATE_VERSION = 7
 BOARD_COLOUR_KEY = "session/boardColour"
 RATSNEST_KEY = "session/showRatsnest"
 RULERS_KEY = "session/showRulers"
@@ -4146,6 +4150,11 @@ class MainWindow(QMainWindow):
         #: rebuilds a whole QGraphicsScene, and a closed panel should cost nothing on
         #: every keystroke for the same reason the other two do not.
         self._schematic_stale = True
+        #: And for the Part List, filled only while its tab is in front. Kept from the
+        #: dock's own visibilityChanged, the one notice a tab behind Nets gets when it is
+        #: clicked: ``isVisible`` reads True for a dock stacked behind another.
+        self._part_list_stale = True
+        self._part_list_showing = False
         #: What is selected ON THE SHEET, which is not always something the board can
         #: select: a part in the design has no board item to click. Held here rather than
         #: in the panel so that a redraw -- which throws the whole scene away -- cannot
@@ -4337,6 +4346,7 @@ class MainWindow(QMainWindow):
         self._build_schematic_dock()
         self._build_library_dock()
         self._build_nets_dock()
+        self._build_part_list_dock()
         self._build_3d_dock()
         self._build_guide_dock()
         self._build_drc_dock()
@@ -4771,6 +4781,11 @@ class MainWindow(QMainWindow):
         # on every start and the opening proportions never reached it.
         self.splitDockWidget(self.dock_board, self.dock_schematic, Qt.Orientation.Horizontal)
         self.splitDockWidget(self.dock_schematic, self.dock_3d, Qt.Orientation.Horizontal)
+        # THE PART LIST BEHIND THE NETS, after every split for the reason above. Nets stays in
+        # front: it is the panel a board is worked from, and the list is one a person goes
+        # to.
+        self.tabifyDockWidget(self.dock_nets, self.dock_part_list)
+        self.dock_nets.raise_()
         # Tabs on top, where a tab bar is: Qt puts a dock area's at the bottom by default,
         # which is where nobody looks for the switch between two views.
         for area in (
@@ -6347,7 +6362,7 @@ class MainWindow(QMainWindow):
         self.act_3d = self.dock_3d.toggleViewAction()
         self.act_guide_panel = self.dock_guide.toggleViewAction()
         view_menu.addSeparator()
-        # The three that describe the design rather than draw it. Closing one from its
+        # The four that describe the design rather than draw it. Closing one from its
         # title bar used to leave no route back but a right-click on the menu bar, which
         # nobody finds.
         self.act_parts_panel = self.dock_library.toggleViewAction()
@@ -6362,6 +6377,12 @@ class MainWindow(QMainWindow):
         self.act_drc_panel.setText(t("Show DRC / L&VS"))
         self.act_drc_panel.setShortcut(QKeySequence("Ctrl+7"))
         view_menu.addAction(self.act_drc_panel)
+        self.act_part_list_panel = self.dock_part_list.toggleViewAction()
+        # No accelerator letter in English: every letter of "Show Part List" is already
+        # taken in this menu. Ctrl+8 is the way to it from the keyboard.
+        self.act_part_list_panel.setText(t("Show Part List"))
+        self.act_part_list_panel.setShortcut(QKeySequence("Ctrl+8"))
+        view_menu.addAction(self.act_part_list_panel)
         view_menu.addSeparator()
         panels = view_menu.addMenu(t("Panels"))
         panels.setToolTipsVisible(True)
@@ -7043,6 +7064,71 @@ class MainWindow(QMainWindow):
         panel.setMinimumWidth(self.SIDE_PANEL_MIN_WIDTH)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
         self.dock_nets = dock
+
+    def _build_part_list_dock(self) -> None:
+        """Every part in the document, on the board or not yet: the Nets panel, for parts.
+
+        The Parts panel is the library, so on a board of forty parts the way to R17 was Go
+        to Part by name, and the parts still waiting in the design were on the sheet and
+        nowhere else (#9). A tab behind Nets rather than a third slice of a left column
+        the library and the netlist already divide between them.
+        """
+        self.part_list = PartListPanel()
+        self.part_list.setMinimumWidth(self.SIDE_PANEL_MIN_WIDTH)
+        self.part_list.componentChosen.connect(self.go_to_component)
+        self.part_list.partChosen.connect(self._on_part_list_design_part)
+        dock = QDockWidget(t("Part List"), self)
+        dock.setObjectName("dockPartList")
+        dock.setWidget(self.part_list)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+        dock.visibilityChanged.connect(self._on_part_list_visibility_changed)
+        # Opened from the View menu it would come back into its tab group BEHIND whatever
+        # is in front there, a menu item that seemed to do nothing. ``triggered``, not
+        # ``toggled``: the switch is also checked by every show, a reset and a restored
+        # layout among them, and those leave Nets in front.
+        dock.toggleViewAction().triggered.connect(
+            lambda opened: dock.raise_() if opened else None
+        )
+        self.dock_part_list = dock
+
+    def _refresh_part_list(self) -> None:
+        """Fill the Part List from the document, or mark it stale while its tab is behind
+        another or shut."""
+        if not self._part_list_showing:
+            self._part_list_stale = True
+            return
+        self._part_list_stale = False
+        self.part_list.refresh(self.bus.document, self.lookup)
+        self.part_list.show_selected(self.scene.selected_component_ids())
+
+    def _on_part_list_visibility_changed(self, visible: bool) -> None:
+        self._part_list_showing = visible
+        if not visible:
+            return
+        if self._part_list_stale:
+            self._refresh_part_list()
+        else:
+            # The document did not change while it was behind Nets, but the selection may
+            # have: it is marked only while the list is showing.
+            self.part_list.show_selected(self.scene.selected_component_ids())
+
+    def _on_part_list_design_part(self, part_id: str) -> None:
+        """A part still in the design was picked in the Part List. The sheet is the one view
+        that has it, so the sheet comes forward with its symbol selected."""
+        part = next((p for p in self.bus.document.parts if p.id == part_id), None)
+        if part is None:
+            return
+        self.show_schematic()
+        self._schematic_ref = part.ref
+        self.schematic_view.set_selection([part.ref])
+        self._sync_schematic_highlight()
+        self.statusBar().showMessage(
+            t(
+                "{ref} is in the design, not on the board yet. Place on the Board puts it "
+                "there."
+            ).format(ref=part.ref),
+            6000,
+        )
 
     # -- the schematic, in the window -----------------------------------------
     #
@@ -9421,6 +9507,7 @@ class MainWindow(QMainWindow):
         self._last_ratsnest = ratsnest(document, self.lookup)
         self._refresh_drc_panel(self._last_violations, self._last_lvs)
         self._refresh_nets_panel(self._last_ratsnest)
+        self._refresh_part_list()
         self._refresh_status()
         self._refresh_workflow()
         # After the rebuild, so it reads the fresh document: a rotate has to show its new
@@ -10106,6 +10193,8 @@ class MainWindow(QMainWindow):
         """
         components = self._selected_components()
         self._sync_schematic_highlight()
+        if self._part_list_showing:
+            self.part_list.show_selected(c.id for c in components)
         for action in self.selection_actions:
             action.setEnabled(bool(components))
         # ...except that copper on its own is a block worth copying: a length of rail,
@@ -13227,6 +13316,7 @@ class MainWindow(QMainWindow):
             self.dock_schematic,
             self.dock_library,
             self.dock_nets,
+            self.dock_part_list,
             self.dock_drc,
             self.dock_3d,
             self.dock_guide,
@@ -13234,13 +13324,22 @@ class MainWindow(QMainWindow):
             dock.setFloating(False)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_library)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_nets)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.dock_part_list)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_board)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_schematic)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_3d)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_guide)
         self._arrange_docks()
-        for dock in (self.dock_board, self.dock_library, self.dock_nets, self.dock_drc):
+        for dock in (
+            self.dock_board,
+            self.dock_library,
+            self.dock_nets,
+            self.dock_part_list,
+            self.dock_drc,
+        ):
             dock.show()
+        # Shown into its tab group, which can bring it forward over Nets.
+        self.dock_nets.raise_()
         # The three that cost something to fill stay shut, exactly as on a first run.
         self.dock_schematic.hide()
         self.dock_3d.hide()
