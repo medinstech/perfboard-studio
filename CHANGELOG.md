@@ -334,6 +334,13 @@ closed without a bump.
   suffix is needed, as "'GND' netinin bağlandığı BT1, C1 henüz kartta yerleştirilmedi
   (pinler: BT1.2, C1.2)".
 
+- **The schematic's text can be read where the sheet opens.** A typical sheet opens at 3 to
+  5 px/mm, where its pin names were drawn 6 px tall and its references 8, so nothing on it
+  could be read without zooming in first. The smallest sizes are now 11 px for a
+  reference, 10 for a value or a net label and 9 for a pin name, chosen from sheets
+  rendered side by side. Zoomed in, text is its sheet size as before. The exported SVG,
+  PDF and PNG are unchanged.
+
 ### Fixed
 
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,

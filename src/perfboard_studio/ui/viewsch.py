@@ -149,13 +149,16 @@ DOT_MM = 0.75
 
 #: The smallest each kind of text is drawn, in pixels, however far the sheet is zoomed out.
 #: Above it text is its sheet size -- the size the layout cleared room for.
-#: A step under the sizes the text is drawn at when a typical sheet is fitted to a
-#: typical panel (about 5 px/mm), so a fitted sheet draws its text at its own size and the
-#: floor is only reached zoomed further out than that.
-REF_PX = 8
-VALUE_PX = 7
-NET_PX = 7
-PIN_PX = 6
+#: Chosen from sheets rendered side by side at the zoom they open at, 3 to 5 px/mm in a
+#: typical panel. The floors were 8/7/7/6, a step under the sheet sizes at 5 px/mm, so a
+#: fitted sheet drew its text at its own size -- and its pin names 6 px tall, which nobody
+#: could read without zooming in first, the first thing anybody opening a sheet then did.
+#: At these the text is read where the sheet opens, a little larger than the room the
+#: layout cleared for it; ``BOUNDS_PAD_MM`` is what keeps that from leaving debris.
+REF_PX = 11
+VALUE_PX = 10
+NET_PX = 10
+PIN_PX = 9
 
 #: The largest, so a sheet zoomed right in to one pin does not ask the font engine for
 #: glyphs a hundred pixels tall.
