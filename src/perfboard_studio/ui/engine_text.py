@@ -414,6 +414,24 @@ _WIRE_KINDS = {
 }
 
 
+def _open_group(group: str) -> str:
+    """One piece of an open net -- "{R1.2} near D18" -- with where it is said in the window's
+    language (``lvs._physical_net_label`` has the three things it can be)."""
+    pins, _, where = group.partition("} ")
+    if not where:
+        return group
+    if where.startswith("near "):
+        said = t("near {hole}").format(hole=where.removeprefix("near "))
+    else:
+        said = {
+            "not connected to any other pin in this net": t(
+                "not connected to any other pin in this net"
+            ),
+            "an unaddressable connection": t("an unaddressable connection"),
+        }.get(where, where)
+    return f"{pins}}} {said}"
+
+
 def _finding_word(field: str, value: str) -> str:
     """The words a DRC or LVS finding is built from, said in the window's language."""
     if field == "kind_b":
@@ -467,6 +485,13 @@ def _finding_word(field: str, value: str) -> str:
         if at == value:
             return t("an unaddressable physical connection")
         return t("the physical connection at {hole}").format(hole=at)
+    if field == "netnames":
+        # "'DISCH' and 'LED_A' and 'THRESH'": the names stay, the word between them is said.
+        return re.sub(r"(?<=') and (?=')", f" {t('and')} ", value)
+    if field == "groups":
+        # "{C3.1, J1.1} near AY19; {U1.4} near AV6": each group's pins stay, and where it is
+        # is said -- the English "near" read in a Turkish sentence otherwise.
+        return "; ".join(_open_group(group) for group in value.split("; "))
     if field == "soldered":
         end = re.fullmatch(r"the end of (.+) (\S+–\S+)", value)
         if end is None:

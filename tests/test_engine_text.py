@@ -487,3 +487,35 @@ def test_every_finding_on_every_board_is_said_in_turkish(turkish: None) -> None:
     assert not untranslated, untranslated
     # The boards reach most rules; the ones no board reaches are pinned by the template test.
     assert {"pin-not-connected", "solder-trace-proximity", "unrouted-net"} <= seen
+
+
+def test_an_open_and_a_short_are_said_without_their_english_joins() -> None:
+    """The release walk found a Turkish window saying "{C3.1, J1.1} near AY19" and
+    "'DISCH' and 'LED_A' netlerini": the sentence was translated, and the words joining the
+    pieces inside its fields were not. Every place an open's piece can be said, and the
+    names a short joins, come out in the window's language."""
+    from perfboard_studio.ui.engine_text import finding_text
+
+    before = language()
+    set_language("tr")
+    try:
+        open_net = finding_text(
+            "Net 'GND' is open: its pins are split across 3 separate physical connections "
+            "instead of one -- {C1.2, C2.2} near AV9; {U1.1} not connected to any other pin "
+            "in this net; {J2.3} an unaddressable connection.",
+            {},
+        )
+        short = finding_text(
+            "SHORT: the physical connection at AN5 ties together schematic nets 'OUT' and "
+            "'THRESH' -- pins RV1.3, U1.3, U1.6. This is almost certainly a solder bridge; "
+            "separate the pads and re-measure isolation before applying power.",
+            {},
+        )
+    finally:
+        set_language(before)
+    assert "{C1.2, C2.2} AV9 yakınında" in open_net, open_net
+    assert "{U1.1} bu netteki başka hiçbir pine bağlı değil" in open_net, open_net
+    assert "{J2.3} adreslenemeyen bir bağlantı" in open_net, open_net
+    assert "'OUT' ve 'THRESH'" in short, short
+    for said in (open_net, short):
+        assert " near " not in said and "' and '" not in said, said
