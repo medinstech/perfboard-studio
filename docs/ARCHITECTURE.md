@@ -91,7 +91,9 @@ Seven things carry it, each with a test in `tests/test_planner_pool.py`:
   `footprint_lookup()` returns `get_footprint` itself rather than a lambda for this reason:
   a lambda does not pickle.
 - **Spawn, on every system, never fork.** A forked child of a process that has started Qt
-  shares its locks in whatever state they were in, and dies on the first one held.
+  inherits its locks in whatever state they were in, and can hang on the first one held --
+  Python's own documentation calls fork unsafe in a threaded process, and Windows and macOS
+  spawn by default anyway. That is the documented reason, not one measured here.
 - **The workers import the engine and not the window.** Spawn re-imports the parent's
   `__main__` in every child, and from source that is `ui/main.py`: Qt and the whole window,
   0.4 s and 40 MB a worker, for nothing. So while the workers start, `__main__` is
@@ -114,7 +116,6 @@ Seven things carry it, each with a test in `tests/test_planner_pool.py`:
   worker is one restart at a time, which the calling thread does without the cost of a
   process. `tests/conftest.py` sets it to 0, because a suite that built four processes per
   window would run the machine out of memory. The MCP server places in one process for now.
-
 - **Workers that cannot start cost one wait, once.** A new pool's workers must answer an
   empty job (`START_PROBE`) within `START_TIMEOUT_S`, 20 s. If the pool cannot be made, or
   they do not answer, it is ended and the placement runs in the calling thread -- the same
