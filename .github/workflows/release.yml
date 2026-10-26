@@ -4,6 +4,11 @@ name: release
 # trusted. A `v0.4.0` tag on a tree that still says 0.4.0.dev0 would otherwise publish an
 # installer that disagrees with its own file properties, and nothing downstream would
 # notice. docs/RELEASING.md is the other half of this.
+#
+# A dispatch is the dry run, and NOTHING it does publishes: every step that does is
+# gated on a tag ref as well as on `dry_run`. Given `version`, it also makes the checks
+# the tag will make -- the source says that version, it is not a .dev build, the
+# changelog has its section -- so the commit about to be tagged is rehearsed whole.
 on:
   push:
     tags: ["v*"]
@@ -13,6 +18,10 @@ on:
         description: "Build the installers but do not publish a release"
         type: boolean
         default: true
+      version:
+        description: "The version about to be tagged, e.g. 0.22.0: checked against the source as the tag will be"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -54,13 +63,15 @@ jobs:
       # The same check the three installer jobs make, and made here as well rather than
       # depended on: this job does not wait for them, so it cannot borrow their answer.
       - name: Check the tag against the source
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
+        env:
+          WANT: ${{ inputs.version }}  # a dry run's; through env, never pasted into a script
         run: |
           source_version=$(python -c "import sys; sys.path.insert(0,'src'); from perfboard_studio.version import __version__; print(__version__)")
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${WANT:-${GITHUB_REF_NAME#v}}"
           echo "tag $tag_version, source $source_version"
           if [ "$source_version" != "$tag_version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match perfboard_studio.version.__version__ ($source_version)"
+            echo "::error::v$tag_version does not match perfboard_studio.version.__version__ ($source_version)"
             exit 1
           fi
           case "$source_version" in
@@ -194,14 +205,16 @@ jobs:
       # source, or a version with no changelog section, is a release that should not
       # exist. Half an hour of packing is a bad time to find that out.
       - name: Check the tag against the source
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
+        env:
+          WANT: ${{ inputs.version }}  # a dry run's; through env, never pasted into a script
         shell: bash
         run: |
           source_version=$(python -c "import sys; sys.path.insert(0,'src'); from perfboard_studio.version import __version__; print(__version__)")
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${WANT:-${GITHUB_REF_NAME#v}}"
           echo "tag $tag_version, source $source_version"
           if [ "$source_version" != "$tag_version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match perfboard_studio.version.__version__ ($source_version)"
+            echo "::error::v$tag_version does not match perfboard_studio.version.__version__ ($source_version)"
             exit 1
           fi
           case "$source_version" in
@@ -383,12 +396,14 @@ jobs:
           python -m pip install -e ".[dev,mcp]"
 
       - name: Check the tag against the source
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
+        env:
+          WANT: ${{ inputs.version }}  # a dry run's; through env, never pasted into a script
         run: |
           source_version=$(python -c "import sys; sys.path.insert(0,'src'); from perfboard_studio.version import __version__; print(__version__)")
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${WANT:-${GITHUB_REF_NAME#v}}"
           if [ "$source_version" != "$tag_version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match perfboard_studio.version.__version__ ($source_version)"
+            echo "::error::v$tag_version does not match perfboard_studio.version.__version__ ($source_version)"
             exit 1
           fi
 
@@ -475,12 +490,14 @@ jobs:
           python -m pip install -e ".[dev,mcp]"
 
       - name: Check the tag against the source
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
+        env:
+          WANT: ${{ inputs.version }}  # a dry run's; through env, never pasted into a script
         run: |
           source_version=$(python -c "import sys; sys.path.insert(0,'src'); from perfboard_studio.version import __version__; print(__version__)")
-          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${WANT:-${GITHUB_REF_NAME#v}}"
           if [ "$source_version" != "$tag_version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match perfboard_studio.version.__version__ ($source_version)"
+            echo "::error::v$tag_version does not match perfboard_studio.version.__version__ ($source_version)"
             exit 1
           fi
 

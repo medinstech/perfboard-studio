@@ -305,7 +305,7 @@ def test_development_builds_have_an_open_unreleased_section() -> None:
     """A development version must not be describing a version that already shipped.
 
     It used to require the Unreleased section to have entries in it as well, which
-    contradicted the ritual the same tests exist to enforce: docs/RELEASING.md step 4
+    contradicted the ritual the same tests exist to enforce: docs/RELEASING.md step 6
     opens the next cycle with an EMPTY Unreleased heading, and nothing has accumulated
     towards it yet by definition. The contradiction survived three releases because it
     can only be reached by finishing one, and 0.4.0 was the first that was.
@@ -322,7 +322,7 @@ def test_development_builds_have_an_open_unreleased_section() -> None:
     released = {s.version for s in _released_sections()}
     assert release_version() not in released, (
         f"{release_version()} is already a released section, but version.py still says "
-        f"{__version__}. Open the next cycle: see docs/RELEASING.md step 4."
+        f"{__version__}. Open the next cycle: see docs/RELEASING.md step 6."
     )
 
 

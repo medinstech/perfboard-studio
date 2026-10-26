@@ -209,6 +209,13 @@ closed without a bump.
 
 ### Changed
 
+- **The release dry run rehearses the commit about to be tagged.** `release.yml`'s
+  dispatch takes a `version` and then makes the checks a tag makes -- `version.py`, no
+  `.dev` suffix, a changelog section -- before building anything, and
+  `docs/RELEASING.md` now pushes the release commit before dispatching it, where it used
+  to dry-run the tree as it was before the release was committed. Nothing a dispatch
+  runs publishes: every step that does needs a tag ref.
+
 - **The Windows installer is about 58 MB instead of 103, and installs 275 MB instead of
   507.** The bundle packed all of VTK for the thirteen modules the 3D view uses -- VTK-m,
   HDF5, NetCDF, volume rendering, the web exporter -- and, from Qt and the MCP server's

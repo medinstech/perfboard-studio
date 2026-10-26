@@ -1,6 +1,6 @@
 # Releasing Perfboard Studio
 
-Six steps, in this order. `tests/test_version.py` enforces the parts that can be
+Seven steps, in this order. `tests/test_version.py` enforces the parts that can be
 enforced, so a half-done release fails the suite rather than shipping.
 
 ## The scheme
@@ -39,23 +39,7 @@ Then re-record the two workflow GIFs the READMEs open with, so the version on th
 screen is the release and not a `.dev` build (Pillow needed; on Windows, for the font):
 `python tools/make_workflow_demo.py && python tools/make_workflow_demo.py --lang tr`.
 
-**3. Dry-run the release workflow, before the tag exists.**
-
-```sh
-gh workflow run release.yml -f dry_run=true
-```
-
-It builds and smoke-tests all three installers *and* the PyPI distributions, and
-publishes nothing. **Do not skip this.** The tag is the only other thing that runs those jobs, and a tag that fails
-halfway leaves a published release with some of its assets and a version number already
-spent. v0.4.0's first dry run failed on all three platforms — an unbounded `mcp>=1.0`
-had picked up a new major, and a Typer submodule the spec was collecting exited the
-interpreter it was being collected in. Neither was visible from a passing local suite.
-The macOS job has also failed once on `hdiutil detach` answering "resource busy" after
-every check in it had passed, which is a flake, and a flake is exactly what you want to
-meet here rather than on the tag.
-
-**4. Verify, commit, tag.**
+**3. Verify, commit and push. No tag yet.**
 
 ```sh
 pytest                       # test_version.py checks steps 1 and 2 agree
@@ -64,8 +48,6 @@ ruff check src tests          # a gate since 0.5.0; `ruff format` deliberately i
 git commit -am "Release 0.4.0"
 git push
 gh run watch --exit-status $(gh run list --workflow=ci.yml --commit $(git rev-parse HEAD) --json databaseId -q '.[0].databaseId')
-git tag -a v0.4.0 -m "Perfboard Studio 0.4.0"
-git push --tags
 ```
 
 **The tag goes on a commit CI has passed**, not on one that passed here. A local run
@@ -75,21 +57,54 @@ tagged green locally with PySide6 6.10 while CI had 6.11, whose stubs made
 `QTreeWidget.currentItem()` optional, and `mypy --strict` failed there. Nothing in the
 dry run type-checks, so this is the only step that would have seen it.
 
+**4. Dry-run the release workflow on that commit, before the tag exists.**
+
+```sh
+gh workflow run release.yml --ref main -f dry_run=true -f version=0.4.0
+# give it a few seconds to appear, then:
+gh run watch --exit-status $(gh run list --workflow=release.yml --event workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId')
+```
+
+It runs on the commit just pushed, which is why it comes after the push and not before:
+dispatched earlier it rehearses the previous tree. `version` makes it check what the tag
+will -- that `version.py` says 0.4.0, that it is not a `.dev` build, that `CHANGELOG.md`
+has the section -- then it builds and smoke-tests all three installers *and* the PyPI
+distributions, runs the checksum job, and publishes nothing: every step that publishes
+needs a tag ref, whatever `dry_run` says. **Read every job, not just the tick** -- PyPI,
+Windows, Linux, macOS and the checksums -- and try a bundle: `gh run download <run id>`
+fetches all of them.
+
+**Do not skip this.** The tag is the only other thing that runs those jobs, and a tag that fails
+halfway leaves a published release with some of its assets and a version number already
+spent. v0.4.0's first dry run failed on all three platforms — an unbounded `mcp>=1.0`
+had picked up a new major, and a Typer submodule the spec was collecting exited the
+interpreter it was being collected in. Neither was visible from a passing local suite.
+The macOS job has also failed once on `hdiutil detach` answering "resource busy" after
+every check in it had passed, which is a flake, and a flake is exactly what you want to
+meet here rather than on the tag.
+
+**5. Tag the commit the dry run built.**
+
+```sh
+git tag -a v0.4.0 -m "Perfboard Studio 0.4.0"
+git push --tags
+```
+
 Pushing the tag is what builds the installers: `.github/workflows/release.yml` refuses
 to publish unless the tag, `version.py` and `CHANGELOG.md` agree, then builds and
 smoke-tests a bundle on each of the three platforms and attaches them to the release.
 See [Packaging](#packaging) below.
 
-**5. Open the next cycle.** Set `__version__` to the next `.dev0` (`0.5.0.dev0`) and add
+**6. Open the next cycle.** Set `__version__` to the next `.dev0` (`0.5.0.dev0`) and add
 the empty `## [Unreleased]` heading if step 1 did not. Commit as `Open 0.5.0
 development`. The empty section is expected here and the suite allows it — it did not
 until 0.4.0, which is the first release anybody ran this far.
 
-**5a. Before the FIRST release that publishes to PyPI**, the trusted publisher has to
+**6a. Before the FIRST release that publishes to PyPI**, the trusted publisher has to
 exist — see [PyPI](#pypi) below. A tag whose upload is refused has already spent its
 version number.
 
-**6. Install what you published**, on at least one machine, and uninstall it again.
+**7. Install what you published**, on at least one machine, and uninstall it again.
 Nothing in CI does this: the jobs unpack the bundle and ask the binary its version, so
 the installer *around* it is only ever built. v0.4.0's — the first anyone ran — put its
 shortcuts in one profile on a machine-wide install and registered itself in the 32-bit
