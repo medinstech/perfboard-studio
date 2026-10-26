@@ -1161,6 +1161,10 @@ def _part_step(
     pin_holes = tuple((pin.number, at) for pin, at in holes)
 
     notes: list[str] = []
+    if component.note:
+        # The builder's own reason for the part, first: it is the one thing on this step
+        # nothing else in the document could have said. Not translated -- it is theirs.
+        notes.append(say("Note: {note}", note=component.note))
     off_board = footprint.body.archetype == "flying-leads"
     if off_board:
         notes.extend(

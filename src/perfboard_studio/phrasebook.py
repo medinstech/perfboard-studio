@@ -564,6 +564,7 @@ TURKISH: dict[str, str] = {
     "Common anode (the longest leg)": "Ortak anot (en uzun bacak)",
     "Common cathode (the longest leg)": "Ortak katot (en uzun bacak)",
     "Red leg": "Kırmızı bacak",
+    "Note: {note}": "Not: {note}",
     "gate": "kapı",
     "drain": "akaç",
     "source": "kaynak",

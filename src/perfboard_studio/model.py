@@ -535,6 +535,11 @@ class ComponentInstance:
     pin_names: PinNames = ()
     #: What this part is when its package cannot say. See ``PartSymbol``.
     symbol: PartSymbol | None = None
+    #: Why this part is here, in the builder's own words ("10R keeps the speaker under
+    #: 190 mA"): shown on hover, in Part Properties and at the part's step in the build
+    #: guide. Months later the reason is the first thing anybody has forgotten. Empty is
+    #: no note -- and the field is left out of the file.
+    note: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -556,8 +561,9 @@ class SchematicPart:
 
     It carries no rotation and no lock. Both are answers about a physical object on a
     board, and this is not on a board yet; they are chosen when it is placed. It DOES carry
-    the pin names and the symbol, because those are answers about the part itself: the
-    same on the sheet before placement as after it, and moved across by ``part.place``.
+    the pin names, the symbol and the note, because those are answers about the part
+    itself: the same on the sheet before placement as after it, and moved across by
+    ``part.place``.
     """
 
     id: ComponentId
@@ -566,6 +572,7 @@ class SchematicPart:
     footprint_id: str
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
+    note: str = ""
 
 
 def declared_pin_name(part: ComponentInstance | SchematicPart, number: str) -> str | None:

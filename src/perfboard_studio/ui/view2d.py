@@ -361,6 +361,10 @@ def explicit_colour(value: str | None) -> QColor | None:
 #: Millimetres of scene reserved outside the substrate for the hole-address rulers.
 RULER_MARGIN_MM = 6.0
 
+#: How much of a part's note its tooltip shows before cutting it with an ellipsis: a
+#: tooltip that fills the screen hides the board it is about. Part Properties shows it all.
+NOTE_TOOLTIP_CHARS = 200
+
 #: Label sizes in SCREEN PIXELS, not millimetres or points -- see ui/scenetext.py. These
 #: hold their size while the board zooms, which is both what an annotation should do and
 #: what keeps them clear of the size below which some font engines draw nothing.
@@ -2956,6 +2960,12 @@ class ComponentItem(QGraphicsItem):
             tip += f"\n{t('No room to print:')} {pins}"
         if fp.body.archetype == "flying-leads":
             tip += "".join(f"\n{line}" for line in self._wire_lines(lead_wires or {}))
+        if comp.note:
+            # The builder's own words (#10), last and set apart by a blank line.
+            note = comp.note
+            if len(note) > NOTE_TOOLTIP_CHARS:
+                note = note[: NOTE_TOOLTIP_CHARS - 1].rstrip() + "…"
+            tip += f"\n\n{note}"
         self.setToolTip(tip)
         #: What stands on a module ``moduleart`` recognises, laid out once: the part is a
         #: frozen snapshot and the item is rebuilt with the document.

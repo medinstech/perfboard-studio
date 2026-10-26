@@ -42,6 +42,14 @@ closed without a bump.
   letters to numbers) is refused by `board.set` and by the loader in the same words.
   (suggested by @vindavs, #13)
 
+- **A note on each part.** Why a part is there, in your own words ("10R keeps the doorbell
+  speaker under 190 mA"), kept with the board. Write it in Part Properties, which keeps it
+  editable on a locked part, or in the sheet's Edit a Part. It shows when the pointer rests
+  on the part, and the build guide prints it at that part's step. Copy and paste, taking a
+  part off the board and placing it again all keep it, and MCP's `update_part(note=...)`
+  sets it. A board with no notes saves exactly as before.
+  (suggested by @vindavs, #10)
+
 - **A Part List, in a tab behind Nets.** The Parts panel is the library, so finding R17 on
   a board of forty parts meant Go to Part by name, and the parts still waiting in the
   design were on the sheet and nowhere else. View ▸ Show Part List (Ctrl+8) lists every

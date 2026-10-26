@@ -427,6 +427,7 @@ def update_part(
     pin_names: dict[str, str] | None = None,
     symbol: str | None = None,
     off_board: bool = False,
+    note: str | None = None,
 ) -> dict[str, Any]:
     """Rename a part or change what it is; omitted fields are left alone. A rename CARRIES
     ITS WIRING, because a reference is the only name a net has for a part — and is refused
@@ -435,8 +436,11 @@ def update_part(
     pin_names replaces the names whole ({} clears them); symbol "" clears it.
     off_board=true takes a pot, jack or switch off the board and wires it to it instead:
     its footprint becomes the pads its wires land in (wire-<n>), on the board or not, and
-    it keeps the pin names and symbol its package gave it."""
-    return session.update_part(ref, new_ref, value, footprint_id, pin_names, symbol, off_board)
+    it keeps the pin names and symbol its package gave it. note is the builder's reason for
+    the part, shown on hover and in the build guide; "" clears it."""
+    return session.update_part(
+        ref, new_ref, value, footprint_id, pin_names, symbol, off_board, note
+    )
 
 
 @mcp.tool()

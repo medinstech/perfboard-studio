@@ -281,8 +281,11 @@ COMPONENT_KEY_ORDER: tuple[str, ...] = (
     "locked",
     "pinNames",
     "symbol",
+    "note",
 )
-PART_KEY_ORDER: tuple[str, ...] = ("id", "ref", "value", "footprintId", "pinNames", "symbol")
+PART_KEY_ORDER: tuple[str, ...] = (
+    "id", "ref", "value", "footprintId", "pinNames", "symbol", "note"
+)
 CONDUCTOR_KEY_ORDER: tuple[str, ...] = (
     "id",
     "kind",
@@ -419,8 +422,9 @@ def _ordered_edge_connector(e: EdgeConnector, index: int) -> JsonObj:
 def _declared_fields(part: ComponentInstance | SchematicPart) -> JsonObj:
     """What a part says about itself beyond its package, and nothing when it says nothing.
 
-    OMITTED AT THEIR DEFAULT, the ``stripAxis`` rule: no fixture declares a pin name or a
-    symbol, so a file that does not either serializes to exactly the bytes it always did.
+    OMITTED AT THEIR DEFAULT, the ``stripAxis`` rule: no fixture declares a pin name, a
+    symbol or a note, so a file that does none of them serializes to exactly the bytes it
+    always did.
     ``pinNames`` is an object in PIN order -- ``normalized_pin_names`` already sorted the
     pairs, and a dict keeps the order it is built in.
     """
@@ -429,6 +433,8 @@ def _declared_fields(part: ComponentInstance | SchematicPart) -> JsonObj:
         values["pinNames"] = {number: name for number, name in part.pin_names}
     if part.symbol is not None:
         values["symbol"] = part.symbol
+    if part.note:
+        values["note"] = part.note
     return values
 
 
@@ -1025,6 +1031,13 @@ def _parse_pin_names(obj: dict[str, object], path: str) -> PinNames:
         raise ValidationError("invalid-value", f"{err} (at \"{field_path}\")", field_path) from err
 
 
+def _parse_note(obj: dict[str, object], path: str) -> str:
+    raw = obj.get("note")
+    if raw is None:
+        return ""
+    return _expect_string(raw, _field_path(path, "note"))
+
+
 def _parse_part_symbol(obj: dict[str, object], path: str) -> PartSymbol | None:
     raw = obj.get("symbol")
     if raw is None:
@@ -1306,6 +1319,7 @@ def _parse_component(raw: object, path: str, warnings: list[str]) -> ComponentIn
         locked=_expect_boolean(_require_field(obj, "locked", path), _field_path(path, "locked")),
         pin_names=_parse_pin_names(obj, path),
         symbol=_parse_part_symbol(obj, path),
+        note=_parse_note(obj, path),
     )
 
 
@@ -1321,6 +1335,7 @@ def _parse_part(raw: object, path: str, warnings: list[str]) -> SchematicPart:
         ),
         pin_names=_parse_pin_names(obj, path),
         symbol=_parse_part_symbol(obj, path),
+        note=_parse_note(obj, path),
     )
 
 

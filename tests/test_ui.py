@@ -13637,3 +13637,102 @@ def test_a_stacked_side_panel_says_its_name_once() -> None:
         assert window.dock_part_list.titleBarWidget() is None
     finally:
         _close(window)
+
+
+def test_a_parts_note_goes_through_part_properties_even_on_a_locked_part(monkeypatch) -> None:
+    """#10: Part Properties shows the note, OK saves what was typed, and the field stays
+    editable on a locked part while Change Part is greyed -- a lock is about where a part
+    is, and the note is about why it is there."""
+    from perfboard_studio.commands import UpdateComponentPayload
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui import main as main_module
+
+    window = _window_on(_load_dense())
+    component = window.bus.document.components[0]
+    assert window.bus.dispatch(
+        "component.update", UpdateComponentPayload(id=component.id, locked=True, note="old")
+    ).ok
+    locked = next(c for c in window.bus.document.components if c.id == component.id)
+
+    dialog = main_module.ComponentDialog(locked, get_footprint(locked.footprint_id))
+    assert dialog.note.toPlainText() == "old"
+    assert dialog.note.isEnabled() and not dialog.note.isReadOnly()
+    assert not dialog.change_part.isEnabled()
+    dialog.deleteLater()
+
+    def typed(self) -> object:
+        self.note.setPlainText("  10R keeps the speaker under 190 mA \n")
+        return main_module.QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_module.ComponentDialog, "exec", typed)
+    window.on_component_properties(locked.id)
+    edited = next(c for c in window.bus.document.components if c.id == component.id)
+    assert edited.note == "10R keeps the speaker under 190 mA"
+    assert edited.locked
+    _close(window)
+
+
+def test_a_parts_note_is_on_its_tooltip_after_a_blank_line_and_cut_when_long() -> None:
+    from perfboard_studio.commands import UpdateComponentPayload
+    from perfboard_studio.ui.view2d import NOTE_TOOLTIP_CHARS
+
+    window = _window_on(_load_dense())
+    component = window.bus.document.components[0]
+    long_note = "x" * (NOTE_TOOLTIP_CHARS + 50)
+    for note, shown in (("why it is here", "\n\nwhy it is here"), (long_note, "…")):
+        assert window.bus.dispatch(
+            "component.update", UpdateComponentPayload(id=component.id, note=note)
+        ).ok
+        tip = window.scene.component_items[component.id].toolTip()
+        assert tip.endswith(shown), tip[-80:]
+        assert len(tip.split("\n\n")[-1]) <= NOTE_TOOLTIP_CHARS
+    _close(window)
+
+
+def test_the_note_field_is_called_not_in_turkish() -> None:
+    from PySide6.QtWidgets import QFormLayout
+
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.i18n import language, set_language
+    from perfboard_studio.ui.main import ComponentDialog
+
+    component = _load_dense().components[0]
+    before = language()
+    set_language("tr")
+    try:
+        dialog = ComponentDialog(component, get_footprint(component.footprint_id))
+        form = next(
+            item.layout()
+            for item in (dialog.layout().itemAt(i) for i in range(dialog.layout().count()))
+            if isinstance(item.layout(), QFormLayout)
+        )
+        label = form.labelForField(dialog.note)
+        assert label is not None and label.text() == "Not"
+        dialog.deleteLater()
+    finally:
+        set_language(before)
+
+
+def test_the_sheets_edit_a_part_edits_a_design_parts_note(monkeypatch) -> None:
+    """A part drawn and not yet placed has its note too, edited where it is edited: the
+    sheet's Edit a Part, which shows the field only when a part that exists is edited."""
+    from perfboard_studio.commands import AddPartPayload
+    from perfboard_studio.ui import main as main_module
+
+    window = _window_on(_load_dense())
+    assert window.bus.dispatch(
+        "part.add", AddPartPayload(ref="R99", footprint_id="r-axial-3", value="1k", note="old")
+    ).ok
+    part = next(p for p in window.bus.document.parts if p.ref == "R99")
+    seen: list = []
+
+    def typed(self) -> object:
+        seen.append((self.note_box.isHidden(), self.note.toPlainText()))
+        self.note.setPlainText("new reason")
+        return main_module.QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_module.AddPartDialog, "exec", typed)
+    window.on_schematic_part_properties(part.id)
+    assert seen == [(False, "old")]
+    assert next(p for p in window.bus.document.parts if p.id == part.id).note == "new reason"
+    _close(window)

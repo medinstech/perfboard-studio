@@ -532,6 +532,7 @@ class BoardSession:
             # Only when declared, like the file: a summary of forty parts that said
             # "symbol: null" forty times would bury the one that says "pmos".
             **({"symbol": component.symbol} if component.symbol is not None else {}),
+            **({"note": component.note} if component.note else {}),
         }
 
     def get_component(self, ref: str) -> dict[str, Any]:
@@ -940,6 +941,7 @@ class BoardSession:
         pin_names: dict[str, str] | None = None,
         symbol: str | None = None,
         off_board: bool = False,
+        note: str | None = None,
     ) -> dict[str, Any]:
         """Rename a part, or change what it is. Omitted fields are left alone.
 
@@ -949,6 +951,8 @@ class BoardSession:
 
         ``pin_names`` REPLACES the part's names whole (``{}`` clears them); ``symbol`` of
         ``""`` clears a declaration, since an omitted argument already means "leave it".
+        ``note`` is the builder's own reason for the part, on the board or not; ``""``
+        clears it. A locked part takes one: the lock is about where it is.
 
         It reaches a part ON THE BOARD as well -- which is how a placed part's VALUE is
         set, ``update_part("R1", value="4k7")``, so there is no separate tool for it. Naming
@@ -1000,6 +1004,7 @@ class BoardSession:
                     value=value,
                     pin_names=names_arg,
                     symbol=symbol_arg,
+                    note=note,
                     footprint_id=footprint_id,
                 ),
             )
@@ -1012,6 +1017,7 @@ class BoardSession:
                 footprint_id=footprint_id,
                 pin_names=names_arg,
                 symbol=symbol_arg,
+                note=note,
             ),
         )
 
@@ -1078,6 +1084,7 @@ class BoardSession:
                     # ``_component_summary`` for why they are not printed empty.
                     **({"pin_names": dict(part.pin_names)} if part.pin_names else {}),
                     **({"symbol": part.symbol} if part.symbol is not None else {}),
+                    **({"note": part.note} if part.note else {}),
                 }
                 for part in self.document.parts
                 for footprint in (self.lookup(part.footprint_id),)

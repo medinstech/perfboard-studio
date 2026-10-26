@@ -203,6 +203,7 @@ def block_to_json(
                 # Only when declared, as in a .perf: a copied MOSFET pastes as a MOSFET.
                 **({"pinNames": dict(c.pin_names)} if c.pin_names else {}),
                 **({"symbol": c.symbol} if c.symbol is not None else {}),
+                **({"note": c.note} if c.note else {}),
             }
             for c in components
         ],
@@ -312,6 +313,7 @@ def _component_from_json(item: Any, index: int) -> ComponentInstance | None:
     except ValueError:
         pin_names = ()
     symbol = item.get("symbol")
+    note = item.get("note")
     return ComponentInstance(
         # The id is the block's own, and is thrown away on paste: it exists so a lead
         # bend inside the block has something to point at before the document does.
@@ -325,6 +327,7 @@ def _component_from_json(item: Any, index: int) -> ComponentInstance | None:
         locked=False,
         pin_names=pin_names,
         symbol=cast(PartSymbol, symbol) if symbol in get_args(PartSymbol) else None,
+        note=note.strip() if isinstance(note, str) else "",
     )
 
 
@@ -554,6 +557,7 @@ def paste_payload(doc: PerfDocument, block: Block, at: HoleCoord, label: str = "
                 id=id_,
                 pin_names=component.pin_names,
                 symbol=component.symbol,
+                note=component.note,
             )
         )
 

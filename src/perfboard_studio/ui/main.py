@@ -2436,6 +2436,22 @@ class BoardLabelDialog(QDialog):
         )
 
 
+def _note_editor(text: str) -> QPlainTextEdit:
+    """A part's note: the builder's own words, a few lines tall so the dialog does not grow
+    with it. Tab leaves it rather than typing a tab, as every other field in the dialog."""
+    editor = QPlainTextEdit(text)
+    editor.setPlaceholderText(t("Why this part is here, for whoever builds or mends it later"))
+    editor.setToolTip(
+        t(
+            "Saved with the board, shown when the pointer rests on the part, and printed at "
+            "its step in the build guide."
+        )
+    )
+    editor.setTabChangesFocus(True)
+    editor.setMaximumHeight(editor.fontMetrics().lineSpacing() * 3 + 12)
+    return editor
+
+
 class ComponentDialog(QDialog):
     """What a placed part is called and what it IS.
 
@@ -2544,6 +2560,10 @@ class ComponentDialog(QDialog):
             (t("Height"), height),
         ):
             form.addRow(label, fact_label(fact))
+        # Why the part is here (#10). Left editable on a locked part: a lock is about where
+        # a part is, and the note is about why it is there.
+        self.note = _note_editor(component.note)
+        form.addRow(t("Note"), self.note)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -2577,6 +2597,9 @@ class ComponentDialog(QDialog):
 
     def values(self) -> tuple[str, str, bool]:
         return self.ref.text().strip(), self.value.text().strip(), self.locked.isChecked()
+
+    def note_text(self) -> str:
+        return self.note.toPlainText().strip()
 
     def pinout(self) -> tuple[PinNames, PartSymbol | None]:
         """What the part says about itself: its pin names and its symbol."""
@@ -3275,6 +3298,15 @@ class AddPartDialog(QDialog):
         layout.addWidget(self.custom)
         layout.addLayout(form)
         layout.addWidget(self.pinout_editor)
+        # A part's note, shown only when an existing part is edited (``edit_note``):
+        # adding one from the library is choosing what it is, and its reason comes after.
+        self.note_box = QWidget()
+        note_form = QFormLayout(self.note_box)
+        note_form.setContentsMargins(0, 0, 0, 0)
+        self.note = _note_editor("")
+        note_form.addRow(t("Note"), self.note)
+        self.note_box.setVisible(False)
+        layout.addWidget(self.note_box)
         layout.addWidget(self.result_line)
         layout.addWidget(self.buttons)
         self.setLayout(layout)
@@ -3493,6 +3525,14 @@ class AddPartDialog(QDialog):
 
     def pinout(self) -> tuple[PinNames, PartSymbol | None]:
         return self.pinout_editor.values()
+
+    def edit_note(self, text: str) -> None:
+        """Show an existing part's note, for editing it."""
+        self.note.setPlainText(text)
+        self.note_box.setVisible(True)
+
+    def note_text(self) -> str:
+        return self.note.toPlainText().strip()
 
 
 class ShortcutsDialog(QDialog):
@@ -8205,6 +8245,7 @@ class MainWindow(QMainWindow):
         dialog.ref.setText(part.ref)
         dialog.value.setText(part.value)
         dialog.set_pinout(part.pin_names, part.symbol)
+        dialog.edit_note(part.note)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         chosen = dialog.values()
@@ -8221,6 +8262,7 @@ class MainWindow(QMainWindow):
                 footprint_id=footprint_id,
                 pin_names=pin_names,
                 symbol=symbol,
+                note=dialog.note_text(),
             ),
         )
         if not result.ok:
@@ -11748,13 +11790,18 @@ class MainWindow(QMainWindow):
             ref, value, _locked = dialog.values()
             pin_names, symbol = dialog.pinout()
             self.on_change_part(
-                component.id, ref=ref, value=value, pinout=(pin_names, symbol)
+                component.id,
+                ref=ref,
+                value=value,
+                pinout=(pin_names, symbol),
+                note=dialog.note_text(),
             )
             return
         if answer != QDialog.DialogCode.Accepted:
             return
         ref, value, locked = dialog.values()
         pin_names, symbol = dialog.pinout()
+        note = dialog.note_text()
         if not ref:
             QMessageBox.warning(
                 self,
@@ -11762,12 +11809,13 @@ class MainWindow(QMainWindow):
                 t("Every part is identified by its reference, so it cannot be blank."),
             )
             return
-        if (ref, value, locked, pin_names, symbol) == (
+        if (ref, value, locked, pin_names, symbol, note) == (
             component.ref,
             component.value,
             component.locked,
             component.pin_names,
             component.symbol,
+            component.note,
         ):
             return
         result = self.bus.dispatch(
@@ -11779,6 +11827,7 @@ class MainWindow(QMainWindow):
                 locked=locked,
                 pin_names=pin_names,
                 symbol=symbol,
+                note=note,
             ),
         )
         if not result.ok:
@@ -11797,6 +11846,7 @@ class MainWindow(QMainWindow):
         ref: str | None = None,
         value: str | None = None,
         pinout: tuple[PinNames, PartSymbol | None] | None = None,
+        note: str | None = None,
     ) -> bool:
         """Put another package, or another part, on a placed part's holes. True if it did.
 
@@ -11810,8 +11860,8 @@ class MainWindow(QMainWindow):
         does; wires and traces stay where they are for DRC to judge. A locked part is
         refused here, in words, rather than by the command after the choice was made.
 
-        ``ref``, ``value`` and ``pinout`` carry what was typed in Part Properties when this
-        was reached from there.
+        ``ref``, ``value``, ``pinout`` and ``note`` carry what was typed in Part Properties
+        when this was reached from there.
         """
         if component_id:
             component = next(
@@ -11872,6 +11922,7 @@ class MainWindow(QMainWindow):
                 value=new_value,
                 pin_names=pin_names,
                 symbol=new_symbol,
+                note=note,
                 footprint_id=footprint_id,
             ),
         )

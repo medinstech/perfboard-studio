@@ -759,6 +759,15 @@ TURKISH: Mapping[str, str] = {
     # -- a part's own properties ----------------------------------------------
     "Proper&ties…": "Ö&zellikler…",
     "Part Properties": "Parça Özellikleri",
+    "Note": "Not",
+    "Why this part is here, for whoever builds or mends it later": (
+        "Bu parça neden burada: sonra onu kuracak ya da onaracak kişi için"
+    ),
+    "Saved with the board, shown when the pointer rests on the part, and printed at its "
+    "step in the build guide.": (
+        "Kartla birlikte kaydedilir; imleç parçanın üzerinde durunca görünür ve yapım "
+        "kılavuzunda o parçanın adımına yazılır."
+    ),
     "Reference": "Referans",
     "Value": "Değer",
     "Footprint": "Ayak izi",

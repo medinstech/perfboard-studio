@@ -231,6 +231,7 @@ def part_of(component: ComponentInstance) -> SchematicPart:
         footprint_id=component.footprint_id,
         pin_names=component.pin_names,
         symbol=component.symbol,
+        note=component.note,
     )
 
 
@@ -430,6 +431,13 @@ def checked_pin_names(names: object, ref: str) -> PinNames:
         return normalized_pin_names(names)
     except ValueError as err:
         raise CommandError("invalid-pin-names", f"{ref}: {err}") from err
+
+
+def checked_note(note: object, ref: str) -> str:
+    """A part's note as it is kept: text, without the blank lines and spaces around it."""
+    if not isinstance(note, str):
+        raise CommandError("invalid-note", f"{ref}: a note is text, not {type(note).__name__}.")
+    return note.strip()
 
 
 def checked_part_symbol(symbol: object, ref: str) -> PartSymbol | None:
@@ -699,6 +707,7 @@ class PlaceComponentPayload:
     #: here so a paste and an agent's ``place_component`` do not lose them on the way in.
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
+    note: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -779,6 +788,9 @@ class UpdateComponentPayload:
     #: than merged, so what the dialog shows is exactly what the part ends up with.
     pin_names: PinNames | None = None
     symbol: PartSymbol | _Keep | None = KEEP
+    #: ``None`` leaves the note alone; an empty string clears it. A lock does not cover it:
+    #: a lock is about where a part is, and the note is about why it is there.
+    note: str | None = None
     #: A different package on the same anchor, or ``None`` to keep this one -- which is how
     #: a part goes off the board (``footprints.off_board_mount``) in one undo step. Its lead
     #: bends go with the old package, since they were bent to its pins; the rest of the
@@ -812,6 +824,7 @@ class AddPartPayload:
     id: ComponentId | None = None
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
+    note: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -839,6 +852,8 @@ class UpdatePartPayload:
     #: As on ``UpdateComponentPayload``: None leaves them, an empty tuple clears them.
     pin_names: PinNames | None = None
     symbol: PartSymbol | _Keep | None = KEEP
+    #: As on ``UpdateComponentPayload``: None leaves it, an empty string clears it.
+    note: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1312,6 +1327,7 @@ def _prepare_component(
         locked=False,
         pin_names=checked_pin_names(p.pin_names, p.ref),
         symbol=checked_part_symbol(p.symbol, p.ref),
+        note=checked_note(p.note, p.ref),
     )
 
 
@@ -1502,6 +1518,7 @@ class _UpdateComponent:
         symbol = (
             existing.symbol if isinstance(p.symbol, _Keep) else checked_part_symbol(p.symbol, ref)
         )
+        note = existing.note if p.note is None else checked_note(p.note, ref)
         footprint_id = existing.footprint_id
         if p.footprint_id is not None and p.footprint_id.strip() != existing.footprint_id:
             footprint_id = p.footprint_id.strip()
@@ -1521,6 +1538,7 @@ class _UpdateComponent:
                 locked=p.locked if p.locked is not None else c.locked,
                 pin_names=pin_names,
                 symbol=symbol,
+                note=note,
                 footprint_id=footprint_id,
             )
             if c.id == p.id
@@ -1610,6 +1628,7 @@ class _AddPart:
             footprint_id=p.footprint_id,
             pin_names=checked_pin_names(p.pin_names, ref),
             symbol=checked_part_symbol(p.symbol, ref),
+            note=checked_note(p.note, ref),
         )
         return dataclasses.replace(doc, parts=(*doc.parts, part))
 
@@ -1652,6 +1671,7 @@ class _UpdatePart:
         symbol = (
             existing.symbol if isinstance(p.symbol, _Keep) else checked_part_symbol(p.symbol, ref)
         )
+        note = existing.note if p.note is None else checked_note(p.note, ref)
         nets = rename_in_nets(doc, existing.ref, ref)
         parts = tuple(
             dataclasses.replace(
@@ -1663,6 +1683,7 @@ class _UpdatePart:
                 ),
                 pin_names=pin_names,
                 symbol=symbol,
+                note=note,
             )
             if part.id == p.id
             else part
@@ -1736,6 +1757,7 @@ def _placed_from(part: SchematicPart, spec: PartPlacement, doc: PerfDocument) ->
         # back into a box the moment it was put down.
         pin_names=part.pin_names,
         symbol=part.symbol,
+        note=part.note,
     )
 
 
