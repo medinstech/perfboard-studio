@@ -162,8 +162,8 @@ disagree), and pinned by its own test:
 - `PYTHON_ONLY_RULES` — rules the original never had (`conductor-crossing`,
   `jumper-under-body`, `conductor-off-board`, `unknown-footprint`,
   `component-overhangs-edge`, `wire-too-thick-for-hole`, `terminal-entry-blocked`,
-  `terminal-entry-faces-in`, `wire-over-joint`, `no-hole`, `not-on-breadboard`), so
-  there is nothing for a fixture to record.
+  `terminal-entry-faces-in`, `wire-over-joint`, `no-hole`, `not-on-breadboard`,
+  `wrong-rail`, `under-module`), so there is nothing for a fixture to record.
   `unknown-footprint` fires on eight of the fifteen fixtures, every time
   on the id `c-disc-1`, which exists in neither engine: the fixtures are dumps of the
   original and are left exactly as they are, so the rule is excluded here and pinned by

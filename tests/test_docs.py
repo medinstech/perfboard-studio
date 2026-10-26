@@ -149,6 +149,34 @@ def test_the_readmes_count_the_mcp_tools_as_docs_mcp_does() -> None:
         assert set(counts) == {stated.group(1)}, f"{page.name} says {counts}"
 
 
+def test_claude_md_names_every_rule_the_original_never_had() -> None:
+    """CLAUDE.md names PYTHON_ONLY_RULES one by one -- the DRC rules the differential proof
+    leaves out because the TypeScript engine never had them -- and an agent reads that list
+    to know what the fixtures do not cover. It fell two behind the test's own set
+    (``wrong-rail``, ``under-module``) with nothing to say so. Read out of test_drc.py's
+    source rather than imported, so this file stays free of the engine."""
+    import ast
+
+    source = (REPO_ROOT / "tests" / "test_drc.py").read_text(encoding="utf-8")
+    assigned = next(
+        node.value
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "PYTHON_ONLY_RULES" for t in node.targets)
+    )
+    assert isinstance(assigned, ast.Call), "PYTHON_ONLY_RULES is no longer frozenset(...)"
+    rules = set(ast.literal_eval(assigned.args[0]))
+
+    claude = CLAUDE_MD.read_text(encoding="utf-8")
+    start = claude.index("- `PYTHON_ONLY_RULES`")
+    end = claude.index("there is nothing for a fixture to record", start)
+    named = set(re.findall(r"`([a-z][a-z0-9-]+)`", claude[start:end]))
+    assert named == rules, (
+        f"CLAUDE.md does not name {sorted(rules - named)}; "
+        f"it names {sorted(named - rules)}, which are not in PYTHON_ONLY_RULES"
+    )
+
+
 def test_claude_md_stays_small_enough_to_load_into_every_session() -> None:
     size = len(CLAUDE_MD.read_text(encoding="utf-8"))
     assert size <= CLAUDE_MD_BUDGET, (
