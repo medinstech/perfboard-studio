@@ -249,7 +249,9 @@ ids off the board as one undo step, all or none: before it, `undo` was the only 
 from a wire an agent had laid. `mirror_component` puts a part on the solder side, and
 `place_component` and each `place_parts` entry take `mirrored` too. A placed part's
 VALUE needs no tool of its own: `update_part(ref, value=...)` reaches parts on the
-board.
+board. Nor does its NOTE, the builder's reason for the part, shown on hover and in the
+build guide: `update_part(ref, note=...)` sets it, `""` clears it and leaving it out keeps
+it, and `get_component` and `list_parts` carry `"note"` only when there is one.
 
 `export_step` is the board leaving for somebody else's program: the CAD one its enclosure
 is drawn in. An agent asked to design the case, or only to say whether the board fits the
