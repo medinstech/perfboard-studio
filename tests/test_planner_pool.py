@@ -106,6 +106,19 @@ def test_a_pooled_placement_is_the_serial_placement() -> None:
     assert pooled.routed is not None, "the routes that judged it ran in the pool too"
 
 
+def test_only_workers_that_ran_are_described() -> None:
+    """``describe`` is what the release check and the MCP stdio check grep to know their
+    placement used workers, so it must not say so for a placement that did not: with two
+    asked for, nothing is running until a mapper runs something."""
+    doc = _board()
+    plan_placement(doc, LOOKUP, QUICK)  # no mapper: this process
+    assert planner_pool.describe() == "in this process"
+    plan_placement(doc, LOOKUP, QUICK, mapper=planner_pool.mapper_for(_never))
+    assert planner_pool.describe() == "2 worker processes"
+    planner_pool.shutdown()
+    assert planner_pool.describe() == "in this process"
+
+
 def test_a_pooled_board_trial_is_the_serial_one() -> None:
     design = _design()
     suggestion = suggest_boards(design.board, [], design.nets, LOOKUP)[0]
@@ -219,7 +232,8 @@ def test_a_pool_that_cannot_be_made_leaves_the_placement_in_this_process(monkeyp
     )
     assert planner_pool.mapper_for(_never) is None, "the rest of the session stays in one process"
     planner_pool.shutdown()
-    assert planner_pool.describe() == "2 worker processes", "and the next session tries again"
+    assert planner_pool.mapper_for(_never) is not None, "and the next session tries again"
+    assert planner_pool.describe() == "in this process", "with nothing running yet"
 
 
 def test_workers_that_never_answer_are_given_up_on(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -233,6 +247,71 @@ def test_workers_that_never_answer_are_given_up_on(monkeypatch) -> None:  # type
     assert pooled == plan_placement(doc, LOOKUP, QUICK)
     assert planner_pool.describe() == "in this process: the workers would not start (no answer within 1 s)"
     assert planner_pool._pool is None, "the workers that did not answer were ended"
+
+
+#: A host waiting on its stdin, as the MCP server always is, asking for a placement.
+WAITING_ON_STDIN = (
+    "import sys, threading, time\n"
+    "from perfboard_studio.ui import planner_pool\n"
+    "from tests import planner_probe\n"
+    "planner_pool.START_TIMEOUT_S = 5.0\n"
+    "threading.Thread(target=lambda: sys.stdin.buffer.read(1), daemon=True).start()\n"
+    "time.sleep(0.3)\n"
+    "run = planner_pool.mapper_for(lambda: False)\n"
+    "print(run(planner_probe.what_the_worker_loaded, [0]), planner_pool.describe())\n"
+    "planner_pool.shutdown()\n"
+)
+
+
+def test_workers_start_while_the_host_waits_on_its_stdin() -> None:
+    """The MCP server always has a read pending on stdin, and on Windows a new process is
+    handed that handle and queued behind the read as its Python starts -- so every
+    placement through the server waited out the start and fell back to one process.
+    Workers are now given NUL for stdin (``_workers_read_nothing``); this is a host doing
+    exactly that, with the stdin it waits on held open."""
+    import subprocess
+
+    repo = Path(__file__).resolve().parents[1]
+    process = subprocess.Popen(
+        [sys.executable, "-c", WAITING_ON_STDIN],
+        cwd=repo,
+        env={**os.environ, "PYTHONPATH": str(repo / "src"), planner_pool.WORKERS_VARIABLE: "2"},
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    assert process.stdin is not None and process.stdout is not None
+    try:
+        # Answered in about a second; a host whose workers queued behind its read would
+        # give up on them after the 5 s START_TIMEOUT_S above and say so instead.
+        line = process.stdout.readline().decode()
+    finally:
+        process.stdin.close()  # only now does the pending read return
+        process.wait(timeout=60)
+    assert line.strip() == "[(False, False)] 2 worker processes", line
+
+
+def test_an_agent_still_gets_a_placement_when_the_workers_will_not_start(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The server places as the window does, falling back the same way: one process, the
+    same plan, and an answer that says so."""
+    from perfboard_studio.mcp.session import BoardSession
+
+    real = planner_pool._new_pool
+    monkeypatch.setattr(planner_pool, "_new_pool", _refuse)
+    session = BoardSession(document=_board())
+    answer = session.optimize_placement(seed=0, apply=False)
+    assert answer["ok"]
+    assert answer["planner"] == (
+        "in this process: the workers would not start (OSError: no processes here)"
+    )
+    # And with workers that start, the same board placed the same way.
+    monkeypatch.setattr(planner_pool, "_new_pool", real)
+    planner_pool.shutdown()
+    pooled = BoardSession(document=_board()).optimize_placement(seed=0, apply=False)
+    assert pooled["planner"] == "2 worker processes"
+    assert {k: v for k, v in pooled.items() if k != "planner"} == {
+        k: v for k, v in answer.items() if k != "planner"
+    }, "the same placement, however it was run"
 
 
 # -- the window ----------------------------------------------------------------------

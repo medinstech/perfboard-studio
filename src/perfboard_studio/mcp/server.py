@@ -899,7 +899,14 @@ def main(argv: list[str] | None = None) -> int:
         log.info("opened %s", args[0])
 
     log.info("Perfboard Studio %s MCP server on %s", __version__, transport)
-    mcp.run(transport=transport)  # type: ignore[arg-type]
+    try:
+        mcp.run(transport=transport)  # type: ignore[arg-type]
+    finally:
+        # The placer's workers, if a placement started them, end with the session rather
+        # than whenever the interpreter gets round to it: a client that closed stdin is
+        # waiting for every process holding the other end of it.
+        if "perfboard_studio.ui.planner_pool" in sys.modules:
+            sys.modules["perfboard_studio.ui.planner_pool"].shutdown()
     return 0
 
 

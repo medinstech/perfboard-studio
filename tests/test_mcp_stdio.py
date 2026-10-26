@@ -59,6 +59,9 @@ def _environment() -> dict[str, str]:
 def test_the_window_door_serves_mcp_with_nothing_else_on_stdout(door: list[str]) -> None:
     summary = _checker().check([sys.executable, *door], cwd=str(REPO_ROOT), env=_environment())
     assert "stdout clean" in summary
+    # ...with a placement in the session that two worker processes made, each handed the
+    # server's stdout and each sending its own streams to the null device first.
+    assert "placed with 2 worker processes" in summary, summary
     # The version a client is told is this release's, not the `mcp` library's.
     assert summary.startswith(f"perfboard-studio {__version__}:"), summary
 
@@ -70,6 +73,22 @@ def test_the_server_reports_this_release_as_its_version() -> None:
 
     options = mcp._mcp_server.create_initialization_options()
     assert (options.server_name, options.server_version) == ("perfboard-studio", __version__)
+
+
+def test_the_checker_notices_a_worker_that_prints() -> None:
+    """The placement in the session is there to catch a worker that writes to the stdout
+    it inherited, so: workers started by an initializer that prints instead of silencing
+    them, behind a real server. The print lands among the answers, where the client
+    would read it as protocol."""
+    loud = (
+        "from perfboard_studio.ui import planner_pool\n"
+        "from tests import planner_probe\n"
+        "planner_pool._start_worker = planner_probe.start_loudly\n"
+        "from perfboard_studio.mcp.server import main\n"
+        "raise SystemExit(main([]))\n"
+    )
+    with pytest.raises(AssertionError, match="not JSON-RPC"):
+        _checker().check([sys.executable, "-c", loud], cwd=str(REPO_ROOT), env=_environment())
 
 
 def test_the_checker_notices_a_stray_line_before_the_server() -> None:

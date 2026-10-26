@@ -185,6 +185,11 @@ def _refused(code: str, message: str) -> dict[str, Any]:
     return {"ok": False, "code": code, "message": message}
 
 
+def _never_stopped() -> bool:
+    """The stop a tool call hands the planner: an MCP call has no Cancel button."""
+    return False
+
+
 def _path_arg(path: str, tool: str) -> Path:
     """A filesystem path from an agent, expanded the way a shell would expand it.
 
@@ -1734,10 +1739,25 @@ class BoardSession:
 
         ``apply=False`` reports what it would do without touching the board, which is
         what an agent should use before spending a user's layout on it.
+
+        The restarts run in worker processes, as the window runs them (``ui/planner_pool``):
+        the same plan, in the time of the slowest restart rather than the sum. None of
+        them may write to stdout, which here is the protocol -- a worker's streams go to
+        the null device before it runs anything -- and a session whose workers will not
+        start places in this process, as one with none does. ``planner`` says which.
+        Imported here, as the renderers are: a server that never places starts no pool.
         """
-        plan = plan_placement(self.document, self.lookup, PlacementOptions(seed=seed))
+        from perfboard_studio.ui import planner_pool
+
+        plan = plan_placement(
+            self.document,
+            self.lookup,
+            PlacementOptions(seed=seed),
+            mapper=planner_pool.mapper_for(_never_stopped),
+        )
         report = {
             "summary": describe_placement(plan),
+            "planner": planner_pool.describe(),
             "seed": plan.seed,
             "moves": [
                 {

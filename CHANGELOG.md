@@ -22,6 +22,19 @@ closed without a bump.
 
 ### Added
 
+- **An agent's `optimize_placement` runs in worker processes, as Place on the Board
+  does.** The same plan, in the time of the slowest restart: atmega328-relay 8.2 → 2.3 s
+  and nano-relay 2.8 → 1.1 s with four workers, through the server's own session, pool
+  start included (the NE555 example is 0.5 s either way). On stdio the server's stdout
+  is its protocol, so every worker sends its streams to the null device before it runs
+  anything, and the release's stdio check now places a board with two workers in its
+  session and fails unless the answer says they did it -- on the source and on every
+  bundle. It also found that on Windows a worker could not start under the server at
+  all: the server always has a read waiting on its stdin, and a new process handed that
+  handle queued behind it, so every placement waited 20 s and fell back to one process.
+  Workers are now started with NUL for stdin. A server whose workers will not start
+  places in one process and says so, as the window does.
+
 - **A board that prints its own numbering is drawn as it prints it.** Real boards do not
   all count the way the addresses do: an 8 × 12 cm board prints A–Z and then A–P again
   along its long edge and A–Z then 1–4 along the short one, and a Protopatch prints

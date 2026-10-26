@@ -100,6 +100,8 @@ _stop: Event | None = None
 #: Why this session's workers could not be used, once they could not. Until
 #: :func:`shutdown`, every placement then runs in the calling thread.
 _broken: str | None = None
+#: How many workers the running pool has; 0 with none running.
+_running = 0
 
 
 class _WouldNotStart(Exception):
@@ -145,24 +147,30 @@ def mapper_for(should_stop: Callable[[], bool]) -> Mapper | None:
 def shutdown() -> None:
     """End the workers, at once. The next :func:`mapper_for` starts new ones, and tries
     again if the last ones would not start."""
-    global _pool, _stop, _broken
+    global _pool, _stop, _broken, _running
     with _lock:
-        pool, _pool, _stop, _broken = _pool, None, None, None
+        pool, _pool, _stop, _broken, _running = _pool, None, None, None, 0
     if pool is not None:
         pool.terminate()
         pool.join()
 
 
 def describe() -> str:
-    """How placements are run in this session, in the words ``--headless`` prints."""
+    """How this session's placements have run, in the words ``--headless`` prints.
+
+    WHAT HAS HAPPENED, NOT WHAT WOULD: "2 worker processes" only while two are running,
+    which only a placement handed :func:`mapper_for` starts. It used to read the setting,
+    so a host that placed without the mapper was still described as pooled -- and the
+    release check and the MCP stdio check, which grep this line to know their placement
+    used workers, would have passed a build that never started one.
+    """
     if _broken is not None:
         return f"in this process: the workers would not start ({_broken})"
-    count = worker_count()
-    return f"{count} worker processes" if count else "in this process"
+    return f"{_running} worker processes" if _pool is not None else "in this process"
 
 
 def _shared() -> tuple[Pool, Event]:
-    global _pool, _stop, _broken
+    global _pool, _stop, _broken, _running
     with _lock:
         if _broken is not None:
             raise _WouldNotStart(_broken)
@@ -177,8 +185,9 @@ def _shared() -> tuple[Pool, Event]:
             stop = context.Event()
             pool: Pool | None = None
             try:
-                with _workers_start_here():
-                    pool = _new_pool(context, worker_count(), stop)
+                count = worker_count()
+                with _workers_start_here(), _workers_read_nothing():
+                    pool = _new_pool(context, count, stop)
                 pool.apply_async(_call, ((START_PROBE, None),)).get(timeout=START_TIMEOUT_S)
             except Exception as failure:
                 if pool is not None:
@@ -190,7 +199,7 @@ def _shared() -> tuple[Pool, Event]:
                     else f"{type(failure).__name__}: {failure}"
                 )
                 raise _WouldNotStart(_broken) from failure
-            _pool, _stop = pool, stop
+            _pool, _stop, _running = pool, stop, count
         return _pool, _stop
 
 
@@ -220,6 +229,45 @@ def _workers_start_here() -> Iterator[None]:
         yield
     finally:
         sys.modules["__main__"] = real
+
+
+#: ``STD_INPUT_HANDLE``, the DWORD -10.
+_STD_INPUT_HANDLE = 0xFFFFFFF6
+
+
+@contextlib.contextmanager
+def _workers_read_nothing() -> Iterator[None]:
+    """While the workers spawn, point this process's standard input at the null device.
+
+    WINDOWS HANDS A NEW PROCESS ITS PARENT'S STANDARD HANDLES, and the MCP server always
+    has a read pending on its stdin: that is how it waits for the next request. A pipe
+    opened for synchronous I/O does one thing at a time, so a worker whose Python asks
+    about that handle as it starts waits behind the read -- until the client says
+    something, which it will not, being busy waiting for the answer the worker was started
+    to give. Every placement through the server fell back to one process after
+    :data:`START_TIMEOUT_S`. Measured on its own: no answer in 15 s with a read pending,
+    0.3 s with stdin on NUL. Only the handle a CHILD is given changes; the server goes on
+    reading its own. Nothing to do elsewhere: a forked-and-exec'd child shares the pipe
+    without queueing behind anybody's read.
+    """
+    if sys.platform != "win32":
+        yield
+        return
+    import ctypes
+    import msvcrt
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetStdHandle.restype = ctypes.c_void_p
+    kernel32.GetStdHandle.argtypes = (ctypes.c_uint32,)
+    kernel32.SetStdHandle.restype = ctypes.c_int
+    kernel32.SetStdHandle.argtypes = (ctypes.c_uint32, ctypes.c_void_p)
+    real = kernel32.GetStdHandle(_STD_INPUT_HANDLE)
+    with open(os.devnull, "rb") as nul:
+        kernel32.SetStdHandle(_STD_INPUT_HANDLE, msvcrt.get_osfhandle(nul.fileno()))
+        try:
+            yield
+        finally:
+            kernel32.SetStdHandle(_STD_INPUT_HANDLE, real)
 
 
 # -- in the worker ------------------------------------------------------------------

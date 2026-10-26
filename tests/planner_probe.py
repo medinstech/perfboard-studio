@@ -24,6 +24,12 @@ def print_and_answer(job: object, should_stop: Callable[[], bool] | None) -> obj
     return job
 
 
+def start_loudly(stop: object) -> None:
+    """A worker initializer that leaves the worker's streams where they were and says so on
+    stdout: what a worker that slipped its silencing would do to an MCP server's protocol."""
+    print("a stray print from a worker starting")
+
+
 def ignore_the_stop(job: object, should_stop: Callable[[], bool] | None) -> object:
     """A worker that never looks at the stop: what the grace period is for."""
     time.sleep(60)
