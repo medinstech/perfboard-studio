@@ -66,6 +66,65 @@ still frees everything acyclic; only cycles wait, for the length of one route, a
 it, including the failure path — a collector left disabled would be a memory leak traded
 for a crash.
 
+## The placer's restarts run in worker processes, and the answer does not depend on how many
+
+A placement is four independent, seeded anneals and a handful of independent routes that
+judge them -- 60 % and 39 % of a board trial -- so run side by side they take the time of
+the slowest instead of the sum. The engine knows none of this. `plan_placement`,
+`place_design`, `try_board` and `choose_board` take an optional `placer.Mapper`, called as
+`mapper(work, jobs)` and returning `work(job, should_stop)` for every job, in order; with
+none, the serial loop runs exactly as it always did, and the engine never creates a pool,
+imports `multiprocessing` or knows that it is parallel. `ui/planner_pool.mapper_for` is the
+mapper the window hands it, and the pool lives under `ui/` because a process is a host's
+business, like a file or a clock. Choosing a board on all seven examples, alternated run by
+run with the one-process build under the heavy-job lock and the pool's own start included,
+went from 84.1 s to 28.4 -- atmega328-relay 36.3 → 12.8 s.
+
+Seven things carry it, each with a test in `tests/test_planner_pool.py`:
+
+- **The answer is the same however the work is run.** A restart is a picklable job that a
+  worker rebuilds -- parts, nets, scorer -- from the document and the lookup, which is
+  deterministic, and the anneal is seeded, so a pooled placement IS the serial one. The
+  tests hold a pooled placement and a pooled board trial equal to the serial ones; when the
+  pool landed, every chosen board, every verdict and the sha256 of every placed document
+  were compared on all seven examples at seeds 0 to 3, and all 28 agreed.
+  `footprint_lookup()` returns `get_footprint` itself rather than a lambda for this reason:
+  a lambda does not pickle.
+- **Spawn, on every system, never fork.** A forked child of a process that has started Qt
+  shares its locks in whatever state they were in, and dies on the first one held.
+- **The workers import the engine and not the window.** Spawn re-imports the parent's
+  `__main__` in every child, and from source that is `ui/main.py`: Qt and the whole window,
+  0.4 s and 40 MB a worker, for nothing. So while the workers start, `__main__` is
+  `planner_pool` itself (`_workers_start_here`); a frozen build gets the same from
+  `multiprocessing.freeze_support()`, the first thing `launcher.py` does. And
+  `multiprocessing` is imported at the first placement that wants workers, not with the
+  window, because it is a dozen modules a start does not need and `tests/test_startup.py`
+  lists what a start may import.
+- **A worker says nothing.** Its stdout and stderr go to the null device, file descriptors
+  and all (`dup2` onto 1 and 2), because the MCP server's stdout is its protocol and a
+  worker inherits it.
+- **A stop keeps the best so far.** Cancel sets one Event every worker shares; each anneal
+  reads it as its `should_stop` and ends on its next check with the best it has, as it would
+  in the window's own thread. A worker that has not answered `STOP_GRACE_S` (5 s) after the
+  stop is ended with the pool, and the window reads that (`PlannerStopped`) as a cancel with
+  nothing to keep.
+- **How many is a setting, and the suite says none.** `PERFBOARD_STUDIO_PLANNER_WORKERS`
+  when it is set; otherwise one less than the processors, at most four -- a placement has
+  four restarts, and one processor is left for the window. Anything below two is none: one
+  worker is one restart at a time, which the calling thread does without the cost of a
+  process. `tests/conftest.py` sets it to 0, because a suite that built four processes per
+  window would run the machine out of memory. The MCP server places in one process for now.
+
+- **Workers that cannot start cost one wait, once.** A new pool's workers must answer an
+  empty job (`START_PROBE`) within `START_TIMEOUT_S`, 20 s. If the pool cannot be made, or
+  they do not answer, it is ended and the placement runs in the calling thread -- the same
+  jobs, the same answers, with the caller's own stop -- and so does every placement until
+  `shutdown()`, which the window calls as it closes. Without it, a bundle whose workers
+  cannot start would leave Place on the Board waiting on nothing. `describe()` says which
+  happened, `--headless` prints it, and `release.yml` runs the pooled headless placement on
+  the Windows bundle, the AppImage and the `.app` and requires "2 worker processes" in what
+  it prints, so a bundle that quietly fell back to one process fails the release.
+
 ## A body past the edge is measured on the body
 
 `component-off-board` asks about PIN holes; `component-overhangs-edge` asks whether the

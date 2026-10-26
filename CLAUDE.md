@@ -373,6 +373,10 @@ growing past 40 000 characters.
 - Before touching `_run_planner`, or anything else that runs Python on a `QThread` → [The
   planner thread holds the cyclic collector
   off](docs/ARCHITECTURE.md#the-planner-thread-holds-the-cyclic-collector-off)
+- Before touching `ui/planner_pool.py`, `placer.Mapper` or
+  `PERFBOARD_STUDIO_PLANNER_WORKERS` → [The placer's restarts run in worker processes, and
+  the answer does not depend on how
+  many](docs/ARCHITECTURE.md#the-placers-restarts-run-in-worker-processes-and-the-answer-does-not-depend-on-how-many)
 - Before measuring a part against the board's edge (`component-overhangs-edge`,
   `body_extent`) → [A body past the edge is measured on the
   body](docs/ARCHITECTURE.md#a-body-past-the-edge-is-measured-on-the-body)
