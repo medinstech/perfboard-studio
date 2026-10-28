@@ -435,6 +435,9 @@ closed without a bump.
   dialog has an "Other Board…" link now: it stops the trial and goes straight to Board
   Setup.
 
+- **A cancelled board trial says so on the status bar**, and after how many boards. The bar
+  kept whatever it said before, over a question that showed only the boards tried so far.
+
 ### Fixed
 
 - **The nano-relay example, and any KiCad netlist with a relay on a SANYOU SRD footprint,

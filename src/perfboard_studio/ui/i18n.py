@@ -1530,6 +1530,7 @@ TURKISH: Mapping[str, str] = {
         "Bir yerleşim tamamlanmadan iptal edildi; kart olduğu gibi kaldı."
     ),
     "Cancelled before a board was tried; nothing changed.": "Hiçbir kart denenmeden iptal edildi; hiçbir şey değişmedi.",
+    "Trying boards was cancelled after {count} board(s).": "Kart denemesi {count} karttan sonra iptal edildi.",
     "Select a net in the Nets panel, or a part on the board, then route.": (
         "Netler panelinden bir net ya da kart üzerinden bir parça seç, sonra yönlendir."
     ),

@@ -8771,6 +8771,16 @@ class MainWindow(QMainWindow):
             return BoardChoice(tuple(suggestions), reference, (), reference, False)
         if choice.complete:
             self._judged = (key, choice)
+        elif not self._planner_took_aside:
+            # Said on the bar, which kept whatever it said before the trial: the question
+            # that follows has only the boards tried before Cancel, and this is why.
+            tried = len(choice.verdicts)
+            self.statusBar().showMessage(
+                t("Trying boards was cancelled after {count} board(s).").format(count=tried)
+                if tried
+                else t("Cancelled before a board was tried; nothing changed."),
+                10000,
+            )
         return choice
 
     def _ask_which_board(

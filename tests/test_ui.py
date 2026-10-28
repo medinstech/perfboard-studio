@@ -13799,3 +13799,33 @@ def test_change_part_says_where_the_last_pin_lands_for_the_package_picked(monkey
         assert "checked again" in said[1]
     finally:
         _close(window)
+
+
+def test_a_cancelled_board_trial_says_so_on_the_status_bar(monkeypatch) -> None:
+    """Cancel on the board trial left the bar saying whatever it said before, over a
+    question showing only the boards tried so far. It says the trial was cancelled, and
+    after how many boards."""
+    from perfboard_studio.boardfit import BoardChoice
+    from perfboard_studio.ui import main as main_module
+
+    window = _blank_window()
+    try:
+        _add(window, "R1", "r-axial-3")
+        document = window.bus.document
+        suggestions = main_module.suggest_boards(document.board, [], document.nets, window.lookup)
+        part_way = _choice(document, complete=False)
+        monkeypatch.setattr(
+            main_module.MainWindow, "_run_planner", lambda self, label, work, **_: part_way
+        )
+        window._board_choice(document, suggestions)
+        assert "cancelled after 2 board(s)" in window.statusBar().currentMessage()
+
+        reference = part_way.reference
+        nothing = BoardChoice(part_way.suggestions, reference, (), reference, False)
+        monkeypatch.setattr(
+            main_module.MainWindow, "_run_planner", lambda self, label, work, **_: nothing
+        )
+        window._board_choice(document, suggestions)
+        assert "Cancelled before a board was tried" in window.statusBar().currentMessage()
+    finally:
+        _close(window)
