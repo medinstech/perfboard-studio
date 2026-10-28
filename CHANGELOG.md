@@ -68,6 +68,12 @@ closed without a bump.
   pans and Ctrl+wheel zooms. The board and the sheet read the wheel through one rule, the
   choice is remembered, and the shortcuts card (F1) lists the new gestures.
 
+- **Text in the accent colour uses the theme's accent for text.** The build guide's
+  checks and its links borrowed the button blue, which is a fill colour; they now take
+  the lighter blue the dark theme keeps for text and the deeper one the light theme
+  does, and every last widget that set its own colour -- the welcome dialog's buttons,
+  the update strip, the board's mode banner and empty-board hint, the status bar's
+  counts -- is styled by the theme instead.
 - **The sheet draws each net class in the board's colours.** Power was amber on the
   sheet and orange in the ratsnest, and signal two different blues, so one net was two
   colours a panel apart -- and the sheet's power was also the warning colour. Both now

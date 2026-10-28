@@ -138,8 +138,8 @@ GRID_MAJOR = theme.ACTIVE.sheet_grid_major
 SIGNAL = theme.NET_COLOURS["signal"]
 POWER = theme.NET_COLOURS["power"]
 GROUND = theme.NET_COLOURS["ground"]
-HIGHLIGHT = theme.ACCENT
-UNDEFINED = theme.WARNING
+HIGHLIGHT = theme.ACTIVE.accent
+UNDEFINED = theme.ACTIVE.warning
 
 #: Line weights in millimetres of sheet. A schematic has one weight for wires and a
 #: slightly heavier one for symbol bodies, which is what makes a body read as a thing and a
@@ -206,8 +206,8 @@ GHOST_MM = 0.35
 #: because the warning amber was ``POWER`` then: a filled amber ring on a +5V wire read as
 #: one more dot on the rail. Power is the ratsnest's orange now, and the shapes still differ,
 #: so severity reads without the colour.
-MARK_ERROR = theme.ERROR
-MARK_WARNING = theme.WARNING
+MARK_ERROR = theme.ACTIVE.danger
+MARK_WARNING = theme.ACTIVE.warning
 MARK_RADIUS_MM = 1.35
 MARK_MM = 0.45
 #: How much of the error colour fills its ring: enough to find from across the sheet, little

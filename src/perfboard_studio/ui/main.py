@@ -351,7 +351,6 @@ from .i18n import set_language, t
 from .partlist import PartListPanel
 from .partnames import footprint_label
 from .project import write_project
-from .theme import ACCENT, ERROR, OK, TEXT, TEXT_DIM, WARNING
 from .view2d import (
     FOOTPRINT_MIME,
     BoardScene,
@@ -1178,7 +1177,7 @@ class BoardSetupDialog(QDialog):
             # Disabled through the item's flags rather than QStandardItemModel.item(),
             # which QComboBox.model() is not typed as returning.
             self.preset.setItemData(
-                heading_index, QColor(TEXT_DIM), Qt.ItemDataRole.ForegroundRole
+                heading_index, QColor(theme.colour("secondary")), Qt.ItemDataRole.ForegroundRole
             )
             self.preset.setItemData(heading_index, 0, Qt.ItemDataRole.UserRole - 1)
             for entry in STANDARD_PRESETS:
@@ -1312,7 +1311,7 @@ class BoardSetupDialog(QDialog):
         )
         self.legend_error = QLabel()
         self.legend_error.setWordWrap(True)
-        self.legend_error.setStyleSheet(f"color: {ERROR};")
+        theme.tone(self.legend_error, "danger")
         self._fill_legend(board.labels)
 
         self._size_note = QLabel()
@@ -1574,7 +1573,7 @@ class BoardSetupDialog(QDialog):
             note = t("{width} × {height} mm ({holes} holes)").format(
                 width=f"{width:.1f}", height=f"{height:.1f}", holes=self.breadboard_size.currentData()
             )
-            self._size_note.setText(f"<span style='color:{TEXT_DIM}'>{note}</span>")
+            self._size_note.setText(theme.ink(note, "secondary"))
             return
         # The physical size, because that is what someone holds against a piece of board
         # they already own -- "80 columns" means nothing at the shop.
@@ -1594,7 +1593,7 @@ class BoardSetupDialog(QDialog):
             note += " — " + t(
                 "{along} mm between pads along a row, {down} mm down a column"
             ).format(along=f"{gaps[0]:.2f}", down=f"{gaps[1]:.2f}")
-        self._size_note.setText(f"<span style='color:{TEXT_DIM}'>{note}</span>")
+        self._size_note.setText(theme.ink(note, "secondary"))
 
     def preset_features(
         self,
@@ -2030,7 +2029,7 @@ class BoardFeaturesDialog(QDialog):
             self.note.setText("")
             self._reload()
         else:
-            self.note.setText(f"<span style='color:{WARNING}'>{result.message}</span>")
+            self.note.setText(theme.ink(result.message, "warning"))
 
     def _on_remove(self) -> None:
         item = self.tree.currentItem()
@@ -2049,11 +2048,7 @@ class BoardFeaturesDialog(QDialog):
         inset = self.mount_inset.value()
         far_col, far_row = board.cols - 1 - inset, board.rows - 1 - inset
         if far_col <= inset or far_row <= inset:
-            self.note.setText(
-                f"<span style='color:{WARNING}'>"
-                + t("That inset does not fit on this board.")
-                + "</span>"
-            )
+            self.note.setText(theme.ink(t("That inset does not fit on this board."), "warning"))
             return
         corners = (
             HoleCoord(inset, inset),
@@ -2347,7 +2342,7 @@ class PinoutEditor(QWidget):
         # notice changed (``pinout_for_retyped_value``).
         self.note = QLabel()
         self.note.setWordWrap(True)
-        self.note.setStyleSheet(f"color: {WARNING};")
+        theme.tone(self.note, "warning")
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.addRow(t("Symbol"), self.symbol)
@@ -2588,7 +2583,7 @@ class ComponentDialog(QDialog):
         def fact_label(fact: str) -> QLabel:
             shown = QLabel(fact)
             shown.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            shown.setStyleSheet(f"color: {TEXT_DIM};")
+            theme.tone(shown, "secondary")
             shown.setWordWrap(True)
             return shown
 
@@ -2613,7 +2608,7 @@ class ComponentDialog(QDialog):
             t("Locked: a new package would move its pins. Unlock it first.")
         )
         self.locked_note.setWordWrap(True)
-        self.locked_note.setStyleSheet(f"color: {WARNING};")
+        theme.tone(self.locked_note, "warning")
         package.addWidget(self.locked_note)
         self.change_part.setEnabled(not component.locked)
         self.locked_note.setVisible(component.locked)
@@ -3047,11 +3042,11 @@ class CustomPartDialog(QDialog):
 
         self.summary = QLabel()
         self.summary.setWordWrap(True)
-        self.summary.setStyleSheet(f"color: {TEXT_DIM};")
+        theme.tone(self.summary, "secondary")
 
         self.identifier = QLabel()
         self.identifier.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.identifier.setStyleSheet("font-family: monospace;")
+        self.identifier.setFont(theme.mono_font(self.identifier.font()))
         self.identifier.setToolTip(
             t(
                 "The identifier this part is stored under. It carries the dimensions, so "
@@ -3352,7 +3347,7 @@ class AddPartDialog(QDialog):
         #: the lead bends go". Hidden until there is something to say.
         self.notice = QLabel()
         self.notice.setWordWrap(True)
-        self.notice.setStyleSheet(f"color: {TEXT_DIM};")
+        theme.tone(self.notice, "secondary")
         self.notice.hide()
 
         layout = QVBoxLayout()
@@ -3391,18 +3386,19 @@ class AddPartDialog(QDialog):
             return False
         outcome = self._add(chosen, self.pinout())
         if isinstance(outcome, str):
-            self.result_line.setText(f"<span style='color:{WARNING}'>{outcome}</span>")
+            self.result_line.setText(theme.ink(outcome, "warning"))
             self.result_line.show()
             return False
         self._document = outcome
         self.added += 1
         ref, value, _footprint_id = chosen
         self.result_line.setText(
-            f"<span style='color:{TEXT_DIM}'>"
-            + t("Added {part}. Choose the next part, or Done.").format(
-                part=f"{ref} {value}".strip()
+            theme.ink(
+                t("Added {part}. Choose the next part, or Done.").format(
+                    part=f"{ref} {value}".strip()
+                ),
+                "secondary",
             )
-            + "</span>"
         )
         self.result_line.show()
         self.ref.clear()
@@ -3791,8 +3787,9 @@ class WelcomeDialog(QDialog):
 
         layout = QVBoxLayout(self)
         heading = QLabel(
-            f"<span style='font-size:18px; font-weight:600'>{t('Perfboard Studio')}</span>"
-            f"&nbsp;&nbsp;<span style='color:{TEXT_DIM}'>{__version__}</span>"
+            theme.heading(t("Perfboard Studio"))
+            + "&nbsp;&nbsp;"
+            + theme.ink(__version__, "secondary")
         )
         layout.addWidget(heading)
         blurb = QLabel(
@@ -3802,7 +3799,7 @@ class WelcomeDialog(QDialog):
             )
         )
         blurb.setWordWrap(True)
-        blurb.setStyleSheet(f"color: {TEXT_DIM};")
+        theme.tone(blurb, "secondary")
         layout.addWidget(blurb)
         steps = QLabel(
             "  ›  ".join(
@@ -3813,7 +3810,7 @@ class WelcomeDialog(QDialog):
         steps.setToolTip(
             t("The steps the bar across the top of the window walks through, in order.")
         )
-        steps.setStyleSheet("padding: 6px 0;")
+        steps.setContentsMargins(0, theme.SPACE["sm"], 0, theme.SPACE["sm"])
         layout.addWidget(steps)
 
         columns = QHBoxLayout()
@@ -3841,10 +3838,7 @@ class WelcomeDialog(QDialog):
             button.setMinimumHeight(34)
             if primary:
                 button.setDefault(True)
-                button.setStyleSheet(
-                    f"QPushButton {{ background: {ACCENT}; color: white; font-weight: 600; "
-                    "border: none; border-radius: 6px; padding: 6px 12px; }"
-                )
+                theme.variant(button, "primary")
             button.clicked.connect(lambda _checked=False, c=choice: self._pick(c))
             begin.addWidget(button)
         begin.addStretch(1)
@@ -3858,10 +3852,7 @@ class WelcomeDialog(QDialog):
         self.import_link.setFlat(True)
         self.import_link.setAutoDefault(False)
         self.import_link.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.import_link.setStyleSheet(
-            f"QPushButton {{ color: {TEXT_DIM}; background: transparent; border: none; "
-            "text-align: left; padding: 2px 4px; text-decoration: underline; }"
-        )
+        theme.variant(self.import_link, "link")
         self.import_link.clicked.connect(lambda _checked=False: self._pick("import"))
         begin.addWidget(self.import_link)
         columns.addLayout(begin, 2)
@@ -3978,7 +3969,7 @@ class BoardSizeDialog(QDialog):
             )
         blurb = QLabel(text)
         blurb.setWordWrap(True)
-        blurb.setStyleSheet(f"color: {TEXT_DIM};")
+        theme.tone(blurb, "secondary")
         layout.addWidget(blurb)
 
         # A PICTURE PER BOARD, with the circuit on it, when there is a document to draw
@@ -4317,7 +4308,7 @@ def _check_row(checkpoint: Checkpoint) -> QTreeWidgetItem:
     by side: a dimmed one read as optional, and a tick box as one more step to tick.
     """
     row = QTreeWidgetItem([f"Ω {checkpoint.title}"])
-    row.setForeground(0, QColor(ACCENT))
+    row.setForeground(0, QColor(theme.colour("accent")))
     if checkpoint.blocking:
         font = row.font(0)
         font.setBold(True)
@@ -4759,7 +4750,7 @@ class MainWindow(QMainWindow):
         # Not in the toolbar area's context menu, which is where a user would hide it.
         strip.toggleViewAction().setVisible(False)
         strip.setContentsMargins(0, 0, 0, 0)
-        strip.setStyleSheet("QToolBar#headerToolbar { border: 0; padding: 0; spacing: 0; }")
+        # Flush with the header around it: styled by name in the one stylesheet.
         strip.addWidget(self.header)
         # Above the tool row, on a row of its own.
         self.insertToolBar(self.views_toolbar, strip)
@@ -4936,7 +4927,8 @@ class MainWindow(QMainWindow):
         self.central_hint = QLabel()
         self.central_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.central_hint.setWordWrap(True)
-        self.central_hint.setStyleSheet(f"color: {TEXT_DIM}; font-size: 13px;")
+        theme.tone(self.central_hint, "secondary")
+        theme.size(self.central_hint, theme.LEAD_PX)
         self.central_hint.setText(
             t(
                 "Every view is closed. Board (Ctrl+1) and Schematic (Ctrl+2) are on the "
@@ -7070,7 +7062,7 @@ class MainWindow(QMainWindow):
             t("Drag a part onto the board or the sheet — or pick one and click. Esc cancels.")
         )
         self.label_place_hint.setWordWrap(True)
-        self.label_place_hint.setStyleSheet(f"color: {TEXT_DIM};")
+        theme.tone(self.label_place_hint, "secondary")
         layout.addWidget(self.label_place_hint)
 
         dock = QDockWidget(t("Library"), self)
@@ -7551,7 +7543,8 @@ class MainWindow(QMainWindow):
 
         self.schematic_summary = QLabel()
         self.schematic_summary.setWordWrap(True)
-        self.schematic_summary.setStyleSheet(f"color: {TEXT_DIM}; padding: 0 8px;")
+        theme.tone(self.schematic_summary, "secondary")
+        self.schematic_summary.setContentsMargins(theme.SPACE["md"], 0, theme.SPACE["md"], 0)
         layout.addWidget(self.schematic_summary)
 
         self.schematic_view = SchematicView()
@@ -9016,7 +9009,7 @@ class MainWindow(QMainWindow):
 
         self.guide_summary = QLabel()
         self.guide_summary.setWordWrap(True)
-        self.guide_summary.setStyleSheet(f"color: {TEXT_DIM};")
+        theme.tone(self.guide_summary, "secondary")
         layout.addWidget(self.guide_summary)
 
         self.guide_tree = QTreeWidget()
@@ -9251,7 +9244,7 @@ class MainWindow(QMainWindow):
                 head.setText(0, title)
                 for row in rows:
                     dim = row.checkState(0) == Qt.CheckState.Checked
-                    row.setForeground(0, QColor(TEXT_DIM) if dim else QColor(TEXT))
+                    row.setForeground(0, QColor(theme.colour("secondary" if dim else "text")))
             summary = describe_guide(self.current_guide())
             if done:
                 summary += "\n" + t("{done} of {total} steps done").format(
@@ -9977,7 +9970,7 @@ class MainWindow(QMainWindow):
         else:
             text = f"<b>{text}</b>"
         self.label_hole.setText(
-            f'<span style="color:{TEXT_DIM}">{t("hole")}</span> {text}'
+            f'{theme.ink(t("hole"), "secondary")} {text}'
         )
 
     def _printed_name(self, col: int, row: int) -> str | None:
@@ -10075,11 +10068,11 @@ class MainWindow(QMainWindow):
 
         erc_errors = sum(1 for f in self._last_erc if f.severity == "error")
         erc_warns = len(self._last_erc) - erc_errors
-        erc_colour = ERROR if erc_errors else (WARNING if erc_warns else OK)
+        erc_role: theme.Role = "danger" if erc_errors else ("warning" if erc_warns else "success")
         erc_text = t("ERC {errors} err / {warnings} warn").format(
             errors=erc_errors, warnings=erc_warns
         )
-        self.label_erc.setText(f'<span style="color:{erc_colour}">{erc_text}</span>')
+        self.label_erc.setText(theme.ink(erc_text, erc_role))
         self.label_erc.setToolTip(
             t("The circuit checked: supplies, polarity, NC pins, nets that join nothing. "
               "Click to see the findings.")
@@ -10092,12 +10085,12 @@ class MainWindow(QMainWindow):
         warns = sum(
             1 for v in self._last_violations if v.severity == "warning" and v.rule not in waiting
         )
-        drc_colour = ERROR if errors else (WARNING if warns else OK)
+        drc_role: theme.Role = "danger" if errors else ("warning" if warns else "success")
         drc_text = t("DRC {errors} err / {warnings} warn").format(errors=errors, warnings=warns)
         # The count and nothing else. How long the check took is a number for whoever is
         # tuning DRC, not for somebody reading whether their board is right -- it is in the
         # tooltip for the first, and off the bar for the second.
-        self.label_drc.setText(f'<span style="color:{drc_colour}">{drc_text}</span>')
+        self.label_drc.setText(theme.ink(drc_text, drc_role))
         self.label_drc.setToolTip(
             t("Design rules checked in {ms} ms. Click to see the findings.").format(
                 ms=f"{self._last_drc_ms:.1f}"
@@ -10111,24 +10104,26 @@ class MainWindow(QMainWindow):
             # Red for every open put an alarm on the bar the moment a placement landed, over
             # a board nobody had done anything wrong to yet.
             wrong = (0 if "open" in waiting else s.opens) + (0 if "short" in waiting else s.shorts)
-            lvs_colour = ERROR if wrong else (TEXT_DIM if s.opens or s.shorts else OK)
+            lvs_role: theme.Role = (
+                "danger" if wrong else ("secondary" if s.opens or s.shorts else "success")
+            )
             lvs_text = t("LVS {matched}/{total} · {opens} open · {shorts} short").format(
                 matched=s.matched_nets, total=s.schematic_nets, opens=s.opens, shorts=s.shorts
             )
-            self.label_lvs.setText(f'<span style="color:{lvs_colour}">{lvs_text}</span>')
+            self.label_lvs.setText(theme.ink(lvs_text, lvs_role))
 
         rn = summarize(self._last_ratsnest)
         if rn.nets:
-            colour = OK if rn.links == 0 else TEXT_DIM
+            role: theme.Role = "success" if rn.links == 0 else "secondary"
             left = t("{count} to route · {length:.0f} mm").format(
                 count=rn.links, length=rn.total_length_mm
             )
-            self.label_ratsnest.setText(f'<span style="color:{colour}">{left}</span>')
+            self.label_ratsnest.setText(theme.ink(left, role))
         else:
-            self.label_ratsnest.setText(f'<span style="color:{TEXT_DIM}">{t("no netlist")}</span>')
+            self.label_ratsnest.setText(theme.ink(t("no netlist"), "secondary"))
 
         side = t("component side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
-        self.label_side.setText(f'<span style="color:{TEXT_DIM}">{side}</span>')
+        self.label_side.setText(theme.ink(side, "secondary"))
 
     def on_move_committed(self, results: list[DispatchResult]) -> None:
         """Failures never emit from the bus (see command.py), so they are handled here
@@ -10217,8 +10212,8 @@ class MainWindow(QMainWindow):
             rule_item.setToolTip(0, rule)
             # The colour the status bar already uses for the same count, so a warning
             # reads the same whether it is a number on the bar or a row in this tree.
-            colour = ERROR if severity == "error" else WARNING
-            rule_item.setForeground(0, QColor(TEXT_DIM if rule in to_do else colour))
+            colour = theme.colour("danger" if severity == "error" else "warning")
+            rule_item.setForeground(0, QColor(theme.colour("secondary") if rule in to_do else colour))
             rule_item.setData(0, ROLE_FINDING_KEY, f"drc:{rule}")
             drc_root.addChild(rule_item)
             self._add_drc_findings(rule_item, rule, items, expanded)
@@ -10251,8 +10246,8 @@ class MainWindow(QMainWindow):
             kind_issues = by_kind[kind]
             kind_item = QTreeWidgetItem([_lvs_title(kind), f"{len(kind_issues)}"])
             kind_item.setToolTip(0, kind)
-            colour = ERROR if kind in self._LVS_WRONG else WARNING
-            kind_item.setForeground(0, QColor(TEXT_DIM if kind in left else colour))
+            colour = theme.colour("danger" if kind in self._LVS_WRONG else "warning")
+            kind_item.setForeground(0, QColor(theme.colour("secondary") if kind in left else colour))
             kind_item.setData(0, ROLE_FINDING_KEY, f"lvs:{kind}")
             lvs_root.addChild(kind_item)
             for iss in kind_issues:
@@ -10300,7 +10295,7 @@ class MainWindow(QMainWindow):
                 [f"{_erc_title(rule)} ({_severity_word(severity)})", f"{len(items)}"]
             )
             rule_item.setToolTip(0, rule)
-            rule_item.setForeground(0, QColor(ERROR if severity == "error" else WARNING))
+            rule_item.setForeground(0, QColor(theme.colour("danger" if severity == "error" else "warning")))
             rule_item.setData(0, ROLE_FINDING_KEY, f"erc:{rule}")
             root.addChild(rule_item)
             for finding in items:
@@ -10460,11 +10455,11 @@ class MainWindow(QMainWindow):
             # placed, and it used to say "done" beside every net of a circuit freshly drawn.
             # Coloured with it: "not placed" was drawn in the green of "done".
             if remaining:
-                left, colour = str(remaining), WARNING if entry.unresolved_pins else TEXT_DIM
+                left, colour = str(remaining), theme.colour("warning" if entry.unresolved_pins else "secondary")
             elif entry.unresolved_pins:
-                left, colour = t("not placed"), TEXT_DIM
+                left, colour = t("not placed"), theme.colour("secondary")
             else:
-                left, colour = t("done"), OK
+                left, colour = t("done"), theme.colour("success")
             item = QTreeWidgetItem(
                 [
                     entry.net_name,
@@ -10494,9 +10489,9 @@ class MainWindow(QMainWindow):
                 )
                 pin_row.setData(0, ROLE_NET_ID, entry.net_id)
                 pin_row.setData(0, ROLE_PIN, (node.component_ref, node.pin))
-                pin_row.setForeground(0, QColor(WARNING if missing else TEXT_DIM))
+                pin_row.setForeground(0, QColor(theme.colour("warning" if missing else "secondary")))
                 if missing:
-                    pin_row.setForeground(3, QColor(WARNING))
+                    pin_row.setForeground(3, QColor(theme.colour("warning")))
                 item.addChild(pin_row)
             tree.addTopLevelItem(item)
             item.setExpanded(entry.net_id in expanded)
@@ -10746,8 +10741,9 @@ class MainWindow(QMainWindow):
             if aside is None:
                 return body
             lines = "<br>".join(escape(line) for line in body.split("\n"))
-            # In the accent colour: Qt's own link blue is all but invisible on this theme.
-            link = f"<a href='aside' style='color:{ACCENT}'>{escape(aside)}</a>"
+            # The palette's link colour is the theme's accent as text: Qt's own link blue
+            # was all but invisible on the dark theme.
+            link = f"<a href='aside'>{escape(aside)}</a>"
             return f"{lines}<br><br>{link}" if offered else lines
 
         shown = ""
@@ -13504,8 +13500,7 @@ class MainWindow(QMainWindow):
             # replaced the message within seconds, and the failure went on for the rest
             # of the session with nothing on screen saying so.
             self.label_warning.setText(
-                f'<span style="color:{WARNING}">'
-                f"{t('Could not write the recovery file — save your work yourself.')}</span>"
+                theme.ink(t("Could not write the recovery file — save your work yourself."), "warning")
             )
 
     def offer_welcome(self) -> None:

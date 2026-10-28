@@ -33,9 +33,9 @@ from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import format_hole
 from perfboard_studio.model import ComponentInstance, PerfDocument, SchematicPart
 
+from . import theme
 from .i18n import t
 from .partnames import footprint_label
-from .theme import TEXT_DIM
 
 #: Where each column is. The order a person reads a part in: what it is called, what it
 #: is, what it looks like, where it is, and anything unusual about how it stands.
@@ -161,7 +161,7 @@ class PartListPanel(QWidget):
         row = self._row(
             part.id, IN_DESIGN, part.ref, part.value, part.footprint_id, lookup, "—", (1, 0, 0), ""
         )
-        dim = QBrush(QColor(TEXT_DIM))
+        dim = QBrush(QColor(theme.colour("secondary")))
         for column in range(self.tree.columnCount()):
             row.setForeground(column, dim)
         row.setToolTip(REF, t("In the design, not on the board yet."))

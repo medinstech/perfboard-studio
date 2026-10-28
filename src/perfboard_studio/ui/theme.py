@@ -237,12 +237,19 @@ CANVAS_HOVER = CANVAS_SELECTED
 CANVAS_GHOST_VALID = CANVAS_SELECTED
 CANVAS_ERROR = "#e5484d"
 CANVAS_GHOST_INVALID = CANVAS_ERROR
+#: How heavy those marks are: COSMETIC pixels, the same on screen at every zoom. In
+#: millimetres a 0.22 mm outline was 0.4 px zoomed out and 6 px zoomed in, and never the
+#: same weight twice. Hover is the lighter of the two, so the two never read alike.
+CANVAS_HOVER_WIDTH_PX = 1.0
+CANVAS_SELECTED_WIDTH_PX = 2.0
 
 # Type: one face, two weights, and these sizes (px). The body is what Windows has always
 # drawn at 9 pt; 13 px was tried in the rendered candidates and cost the toolbar five of
 # its labels.
 FONT_PX = 12
 CAPTION_PX = 11
+#: A paragraph that leads: the empty window's guidance.
+LEAD_PX = 13
 TITLE_PX = 18
 SEMIBOLD = 600
 
@@ -319,13 +326,34 @@ def tone(widget: QWidget, role: Role | None) -> None:
     restyle(widget)
 
 
-Variant = Literal["primary", "link"]
+Variant = Literal["primary", "link", "card"]
 
 
 def variant(widget: QWidget, name: Variant | None) -> None:
-    """A button's kind: the one accent-filled action on a surface, or a link."""
+    """A button's kind -- the one accent-filled action on a surface, or a link -- or a
+    card: a raised surface with a hairline edge, for a frame that groups."""
     widget.setProperty("variant", name or "")
     restyle(widget)
+
+
+def size(widget: QWidget, px: int) -> None:
+    """Set a widget's text to one of the type scale's sizes, keeping its face."""
+    face = widget.font()
+    face.setPixelSize(px)
+    widget.setFont(face)
+
+
+def heading(text: str) -> str:
+    """A title inside rich text, where a whole-label size cannot reach."""
+    return f'<span style="font-size:{TITLE_PX}px; font-weight:{SEMIBOLD}">{text}</span>'
+
+
+def mono_font(base: QFont) -> QFont:
+    """The face for identifiers a person copies character by character."""
+    result = QFont(base)
+    result.setFamilies(["Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Menlo"])
+    result.setStyleHint(QFont.StyleHint.Monospace)
+    return result
 
 
 def stylesheet(k: Tokens, arrows: Mapping[str, str] | None = None) -> str:
@@ -408,6 +436,7 @@ QToolButton::menu-button {{
     width: {s["lg"]}px;
 }}
 QToolButton[popupMode="1"] {{ padding-right: {s["xl"]}px; }}
+QToolBar#headerToolbar {{ border: 0; padding: 0; spacing: 0; }}
 QToolBar::separator {{ width: 1px; background: {k.border}; margin: {s["md"]}px {s["sm"]}px; }}
 
 QDockWidget {{
@@ -494,6 +523,35 @@ QPushButton[variant="link"] {{
     text-decoration: underline;
 }}
 QPushButton[variant="link"]:hover {{ color: {k.accent_text}; }}
+QWidget[variant="card"] {{
+    background: {k.bg_raised};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_LG}px;
+}}
+
+/* The update strip above the board: news, not a question. */
+QFrame#updateBar {{ background: {k.bg_subtle}; border-bottom: 1px solid {k.border}; }}
+QFrame#updateBar QLabel#updateHeadline {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
+QFrame#updateBar QLabel#updateDetail {{ color: {k.text_secondary}; }}
+
+/* Text pinned over the board (view2d.ViewOverlay). The armed mode in the accent: a
+   state the user chose and can leave, not a problem. The empty board's guidance
+   dim, because it is guidance, and OPAQUE, because the pad grid showing through a
+   paragraph is what makes people stop reading it. */
+QLabel#modeBanner {{
+    background: {k.accent_subtle};
+    color: {k.text};
+    border: 1px solid {k.accent};
+    border-radius: {RADIUS_MD}px;
+    padding: {s["sm"]}px {s["lg"]}px;
+}}
+QLabel#emptyHint {{
+    background: {k.bg_raised};
+    color: {k.text_secondary};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_LG}px;
+    padding: {s["xl"]}px {s["2xl"]}px;
+}}
 
 QTreeView, QListView, QTableView {{
     background: {k.bg_surface};

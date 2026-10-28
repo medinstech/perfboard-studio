@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QRectF
-from PySide6.QtGui import QColor, QImage, QPainter
+from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
 from perfboard_studio import persist
@@ -61,7 +61,7 @@ from .export_schematic import svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .i18n import language
 from .main import _document_arguments, read_document_text
-from .view2d import RULER_MARGIN_MM, BoardScene
+from .view2d import BACKGROUND, RULER_MARGIN_MM, BoardScene
 
 
 def _find_repo_root() -> Path:
@@ -152,7 +152,7 @@ def headless(argv: list[str]) -> int:
     src_w, src_h = w_mm + margin + 4, h_mm + margin + 4
     img_w, img_h = int(src_w * px_per_mm), int(src_h * px_per_mm)
     image = QImage(img_w, img_h, QImage.Format.Format_ARGB32)
-    image.fill(QColor("#12131a"))
+    image.fill(BACKGROUND)
     painter = QPainter(image)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     source = QRectF(outline.x - margin, outline.y - margin, src_w, src_h)

@@ -65,7 +65,6 @@ from ..updates import (
     parse_releases,
 )
 from ..version import __version__
-from . import theme
 from .i18n import t
 
 #: The session store's keys, kept here rather than in ``main.py`` with the window's own
@@ -350,16 +349,6 @@ class UpdateChecker(QObject):
             partial.unlink(missing_ok=True)
 
 
-BAR_STYLE = f"""
-QFrame#updateBar {{
-    background: {theme.PANEL_ALT};
-    border-bottom: 1px solid {theme.BORDER};
-}}
-QFrame#updateBar QLabel#updateHeadline {{ color: {theme.TEXT}; font-weight: 600; }}
-QFrame#updateBar QLabel#updateDetail {{ color: {theme.TEXT_DIM}; }}
-"""
-
-
 class ElidingLabel(QLabel):
     """A one-line label that ends in an ellipsis rather than at the edge of its box.
 
@@ -430,8 +419,8 @@ class UpdateBar(QFrame):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # Styled by name in the one stylesheet (``theme.stylesheet``).
         self.setObjectName("updateBar")
-        self.setStyleSheet(BAR_STYLE)
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.hide()
 

@@ -13405,7 +13405,7 @@ def test_a_check_is_marked_as_a_measurement_not_as_passed(
     must pass before power goes on, on a stripboard's cut checks and a perfboard's
     continuity checks alike."""
     from perfboard_studio.guide import all_checkpoints
-    from perfboard_studio.ui.theme import ACCENT
+    from perfboard_studio.ui import theme
 
     window = _routed_on_stripboard(monkeypatch)
     try:
@@ -13416,7 +13416,7 @@ def test_a_check_is_marked_as_a_measurement_not_as_passed(
         blocking = set()
         for row in rows:
             check = checks[row.text(0).removeprefix("Ω ")]
-            assert row.foreground(0).color().name() == ACCENT.lower(), row.text(0)
+            assert row.foreground(0).color().name() == theme.colour("accent"), row.text(0)
             assert row.font(0).bold() == check.blocking, row.text(0)
             blocking.add(check.blocking)
         assert blocking == {True, False}, "both kinds should be on this board"

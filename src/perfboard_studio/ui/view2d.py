@@ -210,15 +210,11 @@ from .scenetext import (
     reference_plate,
 )
 
-# The window's own palette, for the overlays that sit ON the board but belong to the
-# application rather than to the object -- see theme.py's note on why the two are apart.
-from .theme import ACCENT as THEME_ACCENT
+# The window's own palette, for what is drawn round the board, and the marks drawn on
+# it that belong to the application rather than to the object -- see theme.py's note on
+# why the two are apart.
 from .theme import ACTIVE as THEME_TOKENS
-from .theme import BORDER as THEME_BORDER
-from .theme import NET_COLOURS
-from .theme import PANEL as THEME_PANEL
-from .theme import TEXT as THEME_TEXT
-from .theme import TEXT_DIM as THEME_TEXT_DIM
+from .theme import CANVAS_ERROR, CANVAS_SELECTED, NET_COLOURS
 
 # --------------------------------------------------------------------------- theme
 
@@ -261,14 +257,14 @@ REF_LABEL = QColor("#eef1f8")
 #: The plate behind a reference: dark enough to carry light text over tinned pads, clear
 #: enough that the board still shows through at its edges.
 REF_PLATE = QColor(14, 16, 22, 185)
-SELECTED = QColor("#4c9dff")
-ERROR_OUTLINE = QColor("#e5484d")
+SELECTED = QColor(CANVAS_SELECTED)
+ERROR_OUTLINE = QColor(CANVAS_ERROR)
 #: The part on the far side, seen through the board. Dim on purpose: on the solder side
 #: the pads are the subject, and anything that competes with them for attention is a way
 #: to solder the wrong pad.
 BODY_SHADOW = QColor("#95a3b8")
 BODY_SHADOW_EDGE = QColor("#6d7a8c")
-RISK_RING = QColor("#e5484d")
+RISK_RING = QColor(CANVAS_ERROR)
 #: The ruler is drawn on the canvas, outside the board, so it is the theme's too.
 RULER_TEXT = QColor(THEME_TOKENS.canvas_ruler)
 RULER_TEXT_MAJOR = QColor(THEME_TOKENS.canvas_ruler_major)
@@ -285,7 +281,7 @@ MOUNT_KEEPOUT = QColor(229, 116, 61, 150)
 FINGER_FAR = QColor(150, 130, 70, 110)
 #: A track cut. The error colour, because a cut in the wrong hole is an error you cannot
 #: see on the finished board from more than arm's length.
-CUT_MARK = QColor("#e5484d")
+CUT_MARK = QColor(CANVAS_ERROR)
 
 #: Ratsnest colours by net class -- ground and power read as rails at a glance, which is
 #: the same distinction the router orders its work by. The sheet draws its wires in the
@@ -5379,12 +5375,13 @@ class ViewOverlay(QLabel):
     ate the click it is describing would be worse than no overlay.
     """
 
-    def __init__(self, parent: Any, style: str) -> None:
+    def __init__(self, parent: Any, name: str) -> None:
         super().__init__(parent)
+        # Styled by name in the one stylesheet (``theme.stylesheet``).
+        self.setObjectName(name)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setWordWrap(True)
-        self.setStyleSheet(style)
         self.hide()
 
     def show_text(self, text: str) -> None:
@@ -5396,27 +5393,6 @@ class ViewOverlay(QLabel):
         self.adjustSize()
         self.show()
 
-
-#: Armed mode. The accent: this is a state the user chose and can leave, not a problem.
-MODE_BANNER_STYLE = f"""
-    background: {THEME_TOKENS.accent_subtle};
-    color: {THEME_TEXT};
-    border: 1px solid {THEME_ACCENT};
-    border-radius: 6px;
-    padding: 6px 14px;
-"""
-
-#: An empty board. Dim, because it is guidance rather than a message about anything wrong,
-#: and OPAQUE, because the pad grid showing through a paragraph is what makes people stop
-#: reading it. There is nothing on the board underneath worth seeing anyway -- that is the
-#: condition this block appears in.
-EMPTY_HINT_STYLE = f"""
-    background: {THEME_PANEL};
-    color: {THEME_TEXT_DIM};
-    border: 1px solid {THEME_BORDER};
-    border-radius: 8px;
-    padding: 16px 24px;
-"""
 
 
 #: What a symbol dragged off the schematic carries. Its own type rather than plain text:
@@ -5506,8 +5482,8 @@ class BoardView(QGraphicsView):
         # Children of the VIEWPORT, not of the view: the viewport is what the scrollbars
         # leave behind, so an overlay parented to it stays inside the board area and does
         # not drift under a scrollbar when one appears.
-        self.mode_banner = ViewOverlay(self.viewport(), MODE_BANNER_STYLE)
-        self.empty_hint = ViewOverlay(self.viewport(), EMPTY_HINT_STYLE)
+        self.mode_banner = ViewOverlay(self.viewport(), "modeBanner")
+        self.empty_hint = ViewOverlay(self.viewport(), "emptyHint")
         self.viewport().installEventFilter(self)
 
     # -- a part dropped from the sheet ---------------------------------------
