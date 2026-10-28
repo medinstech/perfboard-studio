@@ -13768,3 +13768,34 @@ def test_a_board_set_up_from_the_file_menu_is_a_board_chosen(monkeypatch) -> Non
         assert window.bus.document.components
     finally:
         _close(window)
+
+
+def test_change_part_says_where_the_last_pin_lands_for_the_package_picked(monkeypatch) -> None:
+    """Change Part said only "Pin 1 stays in D14": a longer resistor's other leg landed on a
+    joint or another part's hole with nothing in the dialog to say so. It says where the last
+    pin of the package picked lands, as it is picked, and that the wiring is checked again."""
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.geometry import format_hole, pin_hole
+    from perfboard_studio.ui import main as main_module
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        resistor = next(c for c in window.bus.document.components if c.ref.startswith("R"))
+        board = window.bus.document.board
+        said: list[str] = []
+
+        def look(dialog):
+            said.append(dialog.notice.text())
+            dialog.select_footprint("r-axial-4")
+            said.append(dialog.notice.text())
+            return int(main_module.QDialog.DialogCode.Rejected)
+
+        monkeypatch.setattr(main_module.AddPartDialog, "exec", look)
+        window.on_change_part(resistor.id)
+        longer = get_footprint("r-axial-4")
+        lands = format_hole(pin_hole(resistor, longer, longer.pins[-1].number), board)
+        assert said[1] != said[0], "the note follows the package picked"
+        assert f"Pin {longer.pins[-1].number} lands in {lands}." in said[1], said[1]
+        assert "checked again" in said[1]
+    finally:
+        _close(window)

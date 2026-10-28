@@ -806,6 +806,11 @@ TURKISH: Mapping[str, str] = {
     "Pin 1 stays in {hole}, and every net it is on stays.": (
         "1. pin {hole} deliğinde kalır; bağlı olduğu bütün netler de kalır."
     ),
+    "Pin {pin} lands in {hole}.": "{pin} pini {hole} deliğine gelir.",
+    "Pin {pin} would land off the board.": "{pin} pini kartın dışına düşer.",
+    "The wiring is checked again after the change.": (
+        "Değişiklikten sonra bağlantılar yeniden denetlenir."
+    ),
     "Its {count} lead bend(s) were bent to this package's pins and go with it.": (
         "{count} bacak bükümü bu gövdenin pinlerine göre bükülmüştü; onunla birlikte kalkar."
     ),

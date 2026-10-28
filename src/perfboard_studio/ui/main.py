@@ -239,6 +239,7 @@ from perfboard_studio.geometry import (
     pad_edge_gap_mm,
     pad_extent_mm,
     parse_legend_runs,
+    pin_hole,
     preset_edge_connectors,
     preset_mounting_holes,
 )
@@ -11893,14 +11894,35 @@ class MainWindow(QMainWindow):
             for c in self.bus.document.conductors
             if c.kind == "lead-bend" and c.component_id == component.id
         )
-        notice = t("Pin 1 stays in {hole}, and every net it is on stays.").format(
-            hole=format_hole(component.anchor, self.bus.document.board)
-        )
-        if bends:
-            notice += " " + t(
-                "Its {count} lead bend(s) were bent to this package's pins and go with it."
-            ).format(count=bends)
-        dialog.set_notice(notice)
+        board = self.bus.document.board
+
+        def say_where() -> None:
+            """Where the package chosen NOW puts its pins: pin 1 stays, and the last pin is
+            the one that moves -- said for whichever package is picked, as it is picked. It
+            said only "Pin 1 stays", and a longer resistor's other leg landed on a joint or
+            another part's hole with nothing in the dialog to say so."""
+            notice = t("Pin 1 stays in {hole}, and every net it is on stays.").format(
+                hole=format_hole(component.anchor, board)
+            )
+            footprint = self.lookup(dialog.chosen_footprint_id() or component.footprint_id)
+            if footprint is not None and len(footprint.pins) > 1:
+                last = footprint.pins[-1]
+                hole = pin_hole(component, footprint, last.number)
+                if hole is None or not (0 <= hole.col < board.cols and 0 <= hole.row < board.rows):
+                    notice += " " + t("Pin {pin} would land off the board.").format(pin=last.number)
+                else:
+                    notice += " " + t("Pin {pin} lands in {hole}.").format(
+                        pin=last.number, hole=format_hole(hole, board)
+                    )
+            notice += " " + t("The wiring is checked again after the change.")
+            if bends:
+                notice += " " + t(
+                    "Its {count} lead bend(s) were bent to this package's pins and go with it."
+                ).format(count=bends)
+            dialog.set_notice(notice)
+
+        say_where()
+        dialog.tree.currentItemChanged.connect(lambda _now, _then: say_where())
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return False
         chosen = dialog.values()
