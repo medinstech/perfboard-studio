@@ -107,6 +107,7 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
     QTreeWidgetItemIterator,
     QVBoxLayout,
+    QWhatsThis,
     QWidget,
 )
 
@@ -334,7 +335,7 @@ from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 
-from . import icons, planner_pool, theme, updater
+from . import helpcards, icons, planner_pool, theme, updater
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .boardcolors import SCHEMES as BOARD_SCHEMES
@@ -4642,6 +4643,8 @@ class MainWindow(QMainWindow):
         self._build_header()
         self._build_status_bar()
         self._sync_toolbars_to_view()
+        # What F1 and What's This say about each panel and tool (ui/helpcards.py).
+        helpcards.install(self, self._help_action)
 
         self._subscribe_bus()
         self.on_bus_changed(self.bus.document, None)
@@ -4658,6 +4661,14 @@ class MainWindow(QMainWindow):
             text, _problem = read_document_text(self.current_path)
             self._disk_text = text
             self._watch_current_path()
+
+    def _help_action(self, name: str) -> QAction | None:
+        """The action a help text is for, by name: ``draw:<kind>`` for a drawing tool, else
+        the window's attribute. A name this window does not have answers None."""
+        if name.startswith("draw:"):
+            return self.act_draw.get(name.removeprefix("draw:"))
+        found = getattr(self, name, None)
+        return found if isinstance(found, QAction) else None
 
     # -- bus wiring ----------------------------------------------------------
 
@@ -6835,8 +6846,22 @@ class MainWindow(QMainWindow):
             file_menu, edit_menu, draw_menu, place_menu, net_menu, route_menu, view_menu,
             help_menu,
         )
+        # F1 is help for what is under the pointer, as everywhere else; the shortcut card,
+        # which F1 used to open, is Ctrl+/ (ui/helpcards.py).
+        act_help = help_menu.addAction(t("Help for What's Under the &Pointer"))
+        act_help.setShortcut(QKeySequence("F1"))
+        act_help.setToolTip(t("Point at a panel or a tool and press F1 to read what it is."))
+        act_help.triggered.connect(lambda _checked=False: helpcards.show_card(self))
+        act_whats_this = help_menu.addAction(t("What's &This?"))
+        act_whats_this.setShortcut(QKeySequence("Shift+F1"))
+        act_whats_this.setToolTip(t("Then click on anything to read what it is."))
+        act_whats_this.triggered.connect(lambda _checked=False: QWhatsThis.enterWhatsThisMode())
+        act_glossary = help_menu.addAction(t("&Glossary…"))
+        act_glossary.setToolTip(t("The words this window and the build guide use, explained."))
+        act_glossary.triggered.connect(lambda _checked=False: helpcards.GlossaryDialog(self).exec())
+        help_menu.addSeparator()
         act_keys = help_menu.addAction(t("&Keyboard Shortcuts…"))
-        act_keys.setShortcut(QKeySequence("F1"))
+        act_keys.setShortcut(QKeySequence("Ctrl+/"))
         act_keys.setToolTip(
             t(
                 "Every binding, read off this menu bar — plus the board gestures, which are "

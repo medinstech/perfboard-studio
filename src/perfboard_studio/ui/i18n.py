@@ -2732,6 +2732,231 @@ TURKISH: Mapping[str, str] = {
         "KiCad kılıfından eşleşti, {guess} tanesi referansından tahmin edildi — onları "
         "kontrol edin. Sıradaki: bir kart seçip parçaları yerleştirin."
     ),
+    # -- help (ui/helpcards.py): F1, What's This and the glossary say one text -----------
+    "Help for What's Under the &Pointer": "İmlecin Altındakinin &Yardımı",
+    "What's &This?": "Bu &Nedir?",
+    "&Glossary…": "&Sözlük…",
+    "Point at a panel or a tool and press F1 to read what it is.": (
+        "Bir panelin ya da aracın üzerine gelip F1'e basın; ne olduğunu okuyun."
+    ),
+    "Then click on anything to read what it is.": (
+        "Sonra herhangi bir şeye tıklayın; ne olduğunu okuyun."
+    ),
+    "The words this window and the build guide use, explained.": (
+        "Bu pencerenin ve montaj rehberinin kullandığı kelimeler, açıklamalarıyla."
+    ),
+    "Help": "Yardım",
+    "Help ▸ Glossary explains the words. Ctrl+/ lists the shortcuts.": (
+        "Yardım ▸ Sözlük kelimeleri açıklar. Ctrl+/ kısayolları listeler."
+    ),
+    "Point at a panel or a tool and press F1 to read what it is. Shift+F1 lets you click "
+    "on anything instead. Help ▸ Glossary explains the words; Ctrl+/ lists the keyboard "
+    "shortcuts.": (
+        "Bir panelin ya da aracın üzerine gelip F1'e basın; ne olduğunu okuyun. Shift+F1 "
+        "ile bunun yerine herhangi bir şeye tıklayabilirsiniz. Yardım ▸ Sözlük kelimeleri "
+        "açıklar; Ctrl+/ klavye kısayollarını listeler."
+    ),
+    "Glossary": "Sözlük",
+    "Find a word…": "Kelime ara…",
+    "Word": "Kelime",
+    "What it means": "Anlamı",
+    "The next step": "Sıradaki adım",
+    "Always the one thing to do next, from drawing the circuit to opening the build guide. "
+    "Pressing it is the whole workflow; the menus hold the same commands.": (
+        "Her zaman yapılacak sıradaki tek şey: devreyi çizmekten montaj rehberini açmaya "
+        "kadar. Ona basmak iş akışının tamamıdır; menüler aynı komutları içerir."
+    ),
+    "Every part you can add. Drag one onto the circuit or the board, or pick it and click "
+    "where it goes. The filter finds a part by name, value or package.": (
+        "Ekleyebileceğiniz bütün parçalar. Birini devreye ya da karta sürükleyin veya "
+        "seçip gideceği yere tıklayın. Süzgeç bir parçayı adından, değerinden ya da "
+        "kılıfından bulur."
+    ),
+    "What is in this design, with values: the list to buy from. Click one to find it on "
+    "the board or the sheet.": (
+        "Bu tasarımdaki parçalar, değerleriyle: alışveriş listesi. Birine tıklayın; kartta "
+        "ya da şemada bulunsun."
+    ),
+    "A net is a group of pins that must all be joined, like GND or +5V. The last column "
+    "counts the connections in it still to wire; double-click a net to wire just that one.": (
+        "Net, hepsi birbirine bağlanması gereken bir pin grubudur: GND ya da +5V gibi. Son "
+        "sütun, içinde henüz kablolanmamış bağlantıları sayar; yalnızca o neti kablolamak "
+        "için nete çift tıklayın."
+    ),
+    "What the three checks found. The circuit check (ERC) looks at the circuit itself, the "
+    "board check (DRC) at whether the board can be built, and Matches circuit (LVS) at "
+    "whether the copper joins what the circuit says. Click a row to see it on the board.": (
+        "Üç denetimin bulduğu her şey. Devre denetimi (ERC) devrenin kendisine, kart "
+        "denetimi (DRC) kartın yapılıp yapılamayacağına, devreyle uyum (LVS) ise bakırın "
+        "devrenin söylediğini bağlayıp bağlamadığına bakar. Kartta görmek için bir satıra "
+        "tıklayın."
+    ),
+    "The board from the parts side (Ctrl+1). Flip shows the solder side, where the traces "
+    "and bare wires are. A hole is named like C7: column letter, row number.": (
+        "Kart, parça yüzünden (Ctrl+1). Çevir, lehim yollarının ve çıplak tellerin "
+        "bulunduğu lehim yüzünü gösterir. Bir delik C7 gibi adlandırılır: sütun harfi, "
+        "satır numarası."
+    ),
+    "The circuit as a drawing (Ctrl+2): the parts, and what connects to what. Clicking a "
+    "symbol selects the same part on the board.": (
+        "Devrenin çizimi (Ctrl+2): parçalar ve neyin neye bağlandığı. Bir sembole tıklamak "
+        "aynı parçayı kartta da seçer."
+    ),
+    "The board as it will look, parts and all (Ctrl+3). Drag to turn it: it is the "
+    "quickest way to see a part that stands too tall or too close.": (
+        "Kartın, parçalarıyla birlikte bitince nasıl görüneceği (Ctrl+3). Döndürmek için "
+        "sürükleyin: fazla yüksek ya da fazla yakın duran bir parçayı görmenin en hızlı "
+        "yolu budur."
+    ),
+    "The soldering order, one step at a time: lowest parts first, ICs last. Tick a step as "
+    "you finish it and the next one lights up on the board and in 3D.": (
+        "Lehimleme sırası, adım adım: önce en alçak parçalar, entegreler en son. "
+        "Bitirdiğiniz adımı işaretleyin; sıradaki kartta ve 3D'de yanar."
+    ),
+    "Solder trace": "Lehim yolu",
+    "A line of solder joining neighbouring pads on the underside. It only goes straight "
+    "from pad to pad: solder bridges the 0.6 mm gap to the next pad, not the 1.7 mm "
+    "diagonal one.": (
+        "Alt yüzde komşu pedleri birleştiren bir lehim çizgisi. Yalnızca pedden pede düz "
+        "gider: lehim yandaki pede olan 0,6 mm boşluğu kapatır, çaprazdaki 1,7 mm boşluğu "
+        "kapatmaz."
+    ),
+    "Reinforced solder trace": "Telli lehim yolu",
+    "Solder over a bare wire laid along the pads: about ten times less resistance, and "
+    "long runs stop lifting pads. For power and ground.": (
+        "Pedler boyunca yatırılmış çıplak bir telin üzerine lehim: yaklaşık on kat az "
+        "direnç ve uzun yollar pedleri kaldırmaz. Güç ve toprak için."
+    ),
+    "Bare wire": "Çıplak tel",
+    "Uninsulated wire on the underside, soldered at its two ends. It may not cross other "
+    "copper.": (
+        "Alt yüzde yalıtımsız tel, iki ucundan lehimlenir. Başka bakırın üzerinden geçemez."
+    ),
+    "Insulated wire": "İzoleli tel",
+    "Wire with insulation, on the underside. It can cross anything; stripping its ends is "
+    "the cost.": (
+        "Alt yüzde izoleli tel. Her şeyin üzerinden geçebilir; bedeli uçlarını soymaktır."
+    ),
+    "Jumper over the parts": "Parçaların üstünden jumper",
+    "An insulated wire on the parts' side, hopping over everything below. It takes room a "
+    "part would use, so no part may stand on it.": (
+        "Parça yüzünde, alttaki her şeyin üstünden atlayan izoleli tel. Bir parçanın "
+        "kullanacağı yeri kaplar; bu yüzden üstünde parça duramaz."
+    ),
+    "Click a pin, then the pin it joins. They become one net: the one either pin is on "
+    "already, or a new one.": (
+        "Bir pine, sonra bağlanacağı pine tıklayın. İkisi tek bir net olur: pinlerden "
+        "birinin zaten bulunduğu net ya da yeni bir net."
+    ),
+    "Lays solder traces, wires and jumpers for every connection still missing, in the "
+    "style chosen under Wiring. It only adds: after moving parts, Redo All Wiring starts "
+    "again from nothing.": (
+        "Eksik her bağlantı için, Kablolama altında seçilen tarzda lehim yolları, teller "
+        "ve jumperlar döşer. Yalnızca ekler: parçaları taşıdıktan sonra Bütün Kablolamayı "
+        "Yeniden Yap sıfırdan başlar."
+    ),
+    "Moves the unlocked parts so their connections get shorter and more of them can be "
+    "solder traces. It shows the result before applying it.": (
+        "Kilitsiz parçaları, bağlantıları kısalsın ve daha çoğu lehim yolu olabilsin diye "
+        "taşır. Sonucu uygulamadan önce gösterir."
+    ),
+    "Missing connections": "Eksik bağlantılar",
+    "Dashed lines between pins the circuit joins and the board does not yet — KiCad calls "
+    "them the ratsnest. They go as the wiring is laid.": (
+        "Devrenin bağladığı ama kartın henüz bağlamadığı pinler arasındaki kesikli "
+        "çizgiler — KiCad bunlara ratsnest der. Kablolama döşendikçe kaybolurlar."
+    ),
+    "Turns the board over to the solder side and back, mirrored exactly as it is with the "
+    "board in your hand.": (
+        "Kartı lehim yüzüne çevirir ve geri getirir; kart elinizdeyken nasılsa tam öyle "
+        "aynalanmış olarak."
+    ),
+    "A group of pins that must all be joined: GND, +5V, OUT.": (
+        "Hepsi birbirine bağlanması gereken pin grubu: GND, +5V, OUT."
+    ),
+    "A part's leg, numbered as its datasheet numbers it.": (
+        "Parçanın bacağı; datasheet'te nasıl numaralandıysa öyle numaralanır."
+    ),
+    "Pin (leg)": "Pin (bacak)",
+    "Pad": "Ped",
+    "The copper ring round a hole, where a joint is soldered.": (
+        "Deliğin etrafındaki, lehimin yapıldığı bakır halka."
+    ),
+    "Hole address": "Delik adresi",
+    "A hole named by its column letter and row number, like C7.": (
+        "Sütun harfi ve satır numarasıyla adlandırılan delik, C7 gibi."
+    ),
+    "A part's body and leg spacing: TO-220, DIP-8, a 5 mm LED.": (
+        "Parçanın gövdesi ve bacak aralığı: TO-220, DIP-8, 5 mm LED."
+    ),
+    "A part's short name on the board and in the guide: R1, C3, U2.": (
+        "Parçanın kartta ve rehberdeki kısa adı: R1, C3, U2."
+    ),
+    "What to buy: 10k, 100nF, NE555.": "Ne alınacağı: 10k, 100nF, NE555.",
+    "A line of solder joining neighbouring pads, straight steps only.": (
+        "Komşu pedleri birleştiren lehim çizgisi; yalnızca düz adımlar."
+    ),
+    "A solder trace laid over a bare wire, for power and ground.": (
+        "Çıplak bir telin üzerine çekilen lehim yolu; güç ve toprak için."
+    ),
+    "Uninsulated wire on the underside. It may not cross other copper.": (
+        "Alt yüzde yalıtımsız tel. Başka bakırın üzerinden geçemez."
+    ),
+    "Wire with insulation, on the underside. It may cross anything.": (
+        "Alt yüzde izoleli tel. Her şeyin üzerinden geçebilir."
+    ),
+    "An insulated wire on the parts' side, over everything below.": (
+        "Parça yüzünde, alttaki her şeyin üstünden geçen izoleli tel."
+    ),
+    "Bent leg": "Bükülen bacak",
+    "A part's own leg folded to a nearby hole: the cheapest connection.": (
+        "Parçanın kendi bacağının yakındaki bir deliğe bükülmesi: en ucuz bağlantı."
+    ),
+    "Parts side": "Parça yüzü",
+    "The side the parts stand on.": "Parçaların durduğu yüz.",
+    "Solder side": "Lehim yüzü",
+    "The side the joints, traces and bare wires are on.": (
+        "Lehim noktalarının, lehim yollarının ve çıplak tellerin bulunduğu yüz."
+    ),
+    "Stripboard": "Şeritli kart",
+    "A board whose rows are joined strips of copper, cut where they must stop.": (
+        "Satırları birleşik bakır şeritlerden oluşan, durması gereken yerde kesilen kart."
+    ),
+    "Breadboard": "Lehimsiz breadboard",
+    "A plug-in board for trying a circuit with no solder.": (
+        "Bir devreyi lehimsiz denemek için takmalı kart."
+    ),
+    "Rail": "Ray",
+    "A long run for power or ground; on a breadboard, the edge rows.": (
+        "Güç ya da toprak için uzun hat; breadboard'da kenar sıraları."
+    ),
+    "Checks the circuit itself — power, polarity, pins left open — before any board.": (
+        "Devrenin kendisini denetler — besleme, kutup, boşta pinler — daha kart yokken."
+    ),
+    "Checks the board can be built: nothing overlaps, sits too close or hangs off the edge.": (
+        "Kartın yapılabildiğini denetler: çakışan, fazla yakın duran ya da kenardan taşan "
+        "bir şey yok."
+    ),
+    "Checks the copper joins exactly what the circuit says: nothing missing, nothing extra.": (
+        "Bakırın tam olarak devrenin söylediğini bağladığını denetler: eksik yok, fazla "
+        "yok."
+    ),
+    "Pins the circuit joins and the board does not yet, drawn as dashed lines (the "
+    "ratsnest).": (
+        "Devrenin bağladığı ama kartın henüz bağlamadığı pinler, kesikli çizgilerle "
+        "(ratsnest)."
+    ),
+    "Netlist": "Netlist (devre listesi)",
+    "A circuit as a list of parts and what connects to what; KiCad writes one as a .net "
+    "file.": (
+        "Parçaların ve neyin neye bağlandığının listesi olarak bir devre; KiCad bunu .net "
+        "dosyası olarak yazar."
+    ),
+    "Phenolic": "Pertinaks",
+    "The brown paper-based board. Its pads lift easily, so the guide solders it cooler.": (
+        "Kahverengi, kâğıt tabanlı kart. Pedleri kolay kalkar; bu yüzden rehber onu daha "
+        "düşük sıcaklıkta lehimletir."
+    ),
     # -- Home (ui/home.py): the page before there is a board ---------------------------
     # The sentences speak to the builder as "siz"; the buttons are command names and keep
     # the bare form, except the first door, which is an invitation with "your" in it.
