@@ -1826,6 +1826,17 @@ holes the obvious way took 124 ms/frame; a single even-odd `QPainterPath` took 5
 and `ui/scenetext.py` sizes annotation labels in **screen pixels** so they hold their size
 as the board zooms — physical silkscreen scales with the board, annotations do not.
 
+**What is drawn for the eye stays off the paper.** On screen, pads nothing lands in are
+drawn quieter (`UNUSED_PAD_MIX`, from `used_holes`: every lead, every pad a run is
+soldered to, a wire's two ends), bodies get a contact shadow and a light from the
+top left, references are outlined rather than plated, and far-face copper is drawn at
+`FAR_SIDE_OPACITY`. All of it is gated on `_on_paper(painter)` -- a `QPagedPaintDevice`
+-- because the 1:1 PDF is taped to the board in someone's hand, where every pad is alike
+and no part casts a shadow. The pad blit survives it: two cached pixmaps, used and
+quiet, instead of one. `tests/test_board_look.py` holds the screen and the paper apart.
+The shadow and the light are overlays on the body's outline, so `bodies.BODY_STYLES`
+stays the one colour table the 3D view and the guide share.
+
 ## A solder run is IN the surface and a wire is ON it
 
 **A solder run is IN the surface and a wire is ON it, and that is geometry, not colour.**

@@ -34,6 +34,14 @@ closed without a bump.
 
 ### Changed
 
+- **The board looks like a board with parts on it.** Pads nothing lands in step back --
+  their copper mixed toward the substrate, with no catch of light -- so the pads a lead,
+  a run or a wire's end uses draw the circuit, where 945 equally bright rings used to
+  bury it. Parts stand on the board with a contact shadow and are lit from the top left;
+  a DIP carries its value on its top as the chip does; references are outlined letters
+  instead of a dark pill beside every part; pin names sit on light chips; copper on the
+  far face is quieter. Chosen from rendered looks. The 1:1 print is unchanged: every
+  pad as the board has it, every part flat, references on their plates.
 - **One header row instead of three.** The menu bar, the toolbar's save, undo and redo,
   and the step bar's own row are one slim header: ☰ with every menu behind it, the
   board's name and whether it is saved ("Not saved" saves it in one click), the six steps

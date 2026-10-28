@@ -4216,6 +4216,8 @@ def _legend_labels_drawn(doc, monkeypatch):
         return real(painter, centre, text, height_mm, *args, **kwargs)
 
     monkeypatch.setattr(view2d, "draw_physical_label", record)
+    # A chip's top marking is physical ink too, but it is the part's, not the board's.
+    monkeypatch.setattr(view2d, "_paint_top_marking", lambda *args: None)
     _render_scene(BoardScene(doc, footprint_lookup(), show_rulers=False, show_ratsnest=False))
     return drawn
 
@@ -13573,7 +13575,7 @@ def test_the_print_draws_references_and_values_in_millimetres(monkeypatch, tmp_p
 
     monkeypatch.setattr(view2d, "draw_printed_reference", record_print)
     monkeypatch.setattr(view2d, "draw_label", lambda *a, **k: on_screen.append(a[2]))
-    monkeypatch.setattr(view2d, "draw_reference", lambda *a, **k: on_screen.append(a[2]))
+    monkeypatch.setattr(view2d, "draw_outlined_reference", lambda *a, **k: on_screen.append(a[2]))
 
     doc = _example_document("ne555-astable")
     window = _window_on(doc)

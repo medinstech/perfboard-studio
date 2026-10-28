@@ -24,7 +24,15 @@ not, once, and came out half a millimetre tall.
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QPainter
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetricsF,
+    QGuiApplication,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
 
 from .bodies import PIN_NAME_HEIGHT_MM
 
@@ -252,6 +260,57 @@ def draw_reference(
     painter.setPen(value_colour)
     painter.setFont(label_font(pixel_size, False))
     painter.drawText(value_box, left, value)
+    painter.restore()
+
+
+def _outlined_text(painter: QPainter, box: QRectF, text: str, font: QFont, colour: QColor, halo: QColor) -> None:
+    """``text`` left-aligned and vertically centred in a DEVICE box, with a halo round each
+    glyph instead of a plate under the whole word."""
+    if not text:
+        return
+    metrics = QFontMetricsF(font)
+    baseline = box.center().y() + (metrics.ascent() - metrics.descent()) / 2
+    path = QPainterPath()
+    path.addText(QPointF(box.left(), baseline), font, text)
+    pen = QPen(halo, OUTLINE_PX)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    painter.strokePath(path, pen)
+    painter.fillPath(path, colour)
+
+
+#: How far the halo round outlined text reaches, in device pixels each side of a glyph's
+#: edge -- the stroke is centred on the edge, so half of it is outside the letter.
+OUTLINE_PX = 3.0
+
+
+def draw_outlined_reference(
+    painter: QPainter,
+    anchor: QPointF,
+    reference: str,
+    value: str,
+    pixel_size: int,
+    *,
+    offset: QPointF | None,
+    reference_colour: QColor,
+    value_colour: QColor,
+    halo: QColor,
+) -> None:
+    """:func:`draw_reference` with no plate: each glyph outlined in ``halo``.
+
+    A plate is a dark pill beside every part, and at the zoom a board opens at those pills
+    were most of what the eye found. An outline keeps the text readable over pads, bodies
+    and copper the way the plate did, and lets the board show between the letters.
+    Laid out by :func:`reference_plate`, so the text lands where the plate's did and a
+    click on it is measured against the same rectangle.
+    """
+    _plate, reference_box, value_box = reference_plate(
+        painter.transform().map(anchor), reference, value, pixel_size, offset
+    )
+    painter.save()
+    painter.resetTransform()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    _outlined_text(painter, reference_box, reference, label_font(pixel_size, True), reference_colour, halo)
+    _outlined_text(painter, value_box, value, label_font(pixel_size, False), value_colour, halo)
     painter.restore()
 
 

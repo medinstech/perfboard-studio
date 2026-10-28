@@ -200,9 +200,9 @@ from .moduleart import (
 from .partnames import footprint_label
 from .scenetext import (
     draw_label,
+    draw_outlined_reference,
     draw_physical_label,
     draw_printed_reference,
-    draw_reference,
     label_font,
     label_plate_rect,
     physical_label_width_mm,
@@ -254,9 +254,28 @@ FLYING_LEAD_MARKER_EDGE = QColor("#2a2c31")
 FLYING_LEAD_MARKER_INK = QColor("#15151a")
 LABEL = QColor("#15151a")
 REF_LABEL = QColor("#eef1f8")
-#: The plate behind a reference: dark enough to carry light text over tinned pads, clear
-#: enough that the board still shows through at its edges.
+#: The plate behind a reference ON PAPER: dark enough to carry light text over tinned
+#: pads. On screen a reference is outlined instead (``REF_HALO``).
 REF_PLATE = QColor(14, 16, 22, 185)
+#: The outline round a reference's letters on screen, in place of a plate. Chosen on
+#: 2026-10-28 from three rendered looks: the plates were a dark pill beside every part.
+REF_HALO = QColor(10, 12, 16, 210)
+
+#: A pad nothing lands in, ON SCREEN, is its copper mixed this far toward the substrate,
+#: with no catch of light. Every hole drawn at full weight -- 945 bright rings on a 7 x 9
+#: cm board -- left the parts as small things lost in a grid, and the pads that ARE used
+#: are the circuit. A deliberate departure from the photograph, where every pad is
+#: alike, and so screen-only: the 1:1 print shows every pad as the board has it.
+UNUSED_PAD_MIX = 0.62
+#: A body's contact shadow (the nearer of its two layers; the farther is half) and the
+#: light across it from the top left, as alpha out of 255. Screen-only, like the pads:
+#: paper gets the flat part.
+CONTACT_SHADOW_ALPHA = 85
+CONTACT_SHADOW_MM = (0.28, 0.55)
+BODY_LIGHT_ALPHA = 40
+#: Copper on the face away from the viewer, drawn at this opacity on screen: at full
+#: strength its hatch fought the pads in front of it.
+FAR_SIDE_OPACITY = 0.55
 SELECTED = QColor(CANVAS_SELECTED)
 ERROR_OUTLINE = QColor(CANVAS_ERROR)
 #: The part on the far side, seen through the board. Dim on purpose: on the solder side
@@ -509,10 +528,14 @@ class PadGridItem(QGraphicsItem):
         side: BoardSide,
         consumed: frozenset[str] = frozenset(),
         copper: bool = True,
+        used: frozenset[str] | None = None,
     ) -> None:
         super().__init__()
         self.board = board
         self.side = side
+        #: Hole keys something lands in -- a lead, a run, a wire's end. The rest are drawn
+        #: quieter on screen (``UNUSED_PAD_MIX``). None draws every pad alike.
+        self.used = used
         #: False draws the drilled holes with no copper round them -- the component side
         #: of a single-sided board, which still has every hole and none of the pads.
         #: Without this that face renders as a blank slab, which is the same mistake the
@@ -524,14 +547,14 @@ class PadGridItem(QGraphicsItem):
         #: must not walk the mounting holes once per hole.
         self.consumed = consumed
         self.drawn = 0
-        self._pad_pixmap: QPixmap | None = None
-        self._pad_pixmap_px = 0
+        #: (quiet, long side in px) -> the pad rasterised that way.
+        self._pads: dict[tuple[bool, int], QPixmap] = {}
         self.setZValue(-90)
 
     def boundingRect(self) -> QRectF:
         return _outline_rect(self.board)
 
-    def _pad_for(self, long_px: float) -> QPixmap:
+    def _pad_for(self, long_px: float, quiet: bool = False) -> QPixmap:
         """A pad rasterised for roughly this on-screen size, cached between frames.
 
         Not necessarily square. An oblong pad is a stadium -- a rectangle capped with a
@@ -546,8 +569,9 @@ class PadGridItem(QGraphicsItem):
         # Rendered at twice the on-screen size so the downscale stays crisp when the zoom
         # sits between two buckets, and capped so a deep zoom cannot ask for a huge one.
         long_side = min(256, max(6, bucket * 2))
-        if self._pad_pixmap is not None and self._pad_pixmap_px == long_side:
-            return self._pad_pixmap
+        cached = self._pads.get((quiet, long_side))
+        if cached is not None:
+            return cached
 
         extent_x, extent_y = pad_extent_mm(self.board)
         longest = max(extent_x, extent_y)
@@ -568,14 +592,16 @@ class PadGridItem(QGraphicsItem):
                 )
             )
             painter.end()
-            self._pad_pixmap = pixmap
-            self._pad_pixmap_px = long_side
+            self._pads[(quiet, long_side)] = pixmap
             return pixmap
         inset = long_side * 0.03
         ring = QRectF(inset, inset, width - 2 * inset, height - 2 * inset)
         scheme = scheme_for(self.board.material)
-        painter.setPen(QPen(QColor(scheme.pad_ring), max(1.0, long_side * 0.05)))
-        painter.setBrush(QBrush(QColor(scheme.pad)))
+        mix = UNUSED_PAD_MIX if quiet else 0.0
+        painter.setPen(
+            QPen(_mixed(scheme.pad_ring, scheme.fill, mix * 0.7), max(1.0, long_side * 0.05))
+        )
+        painter.setBrush(QBrush(_mixed(scheme.pad, scheme.fill, mix)))
         # Radius = half the short side, which turns the rounded rect into a true stadium
         # and, on a square pad, into the circle this used to draw.
         radius = min(ring.width(), ring.height()) / 2
@@ -584,7 +610,7 @@ class PadGridItem(QGraphicsItem):
         # The sheen reads as tinned copper catching the light rather than a flat yellow
         # disc, and it is what makes the board look like a board. Skipped only when the
         # pad is too small on screen for the arc to be more than a smudge.
-        if long_side >= 20:
+        if long_side >= 20 and not quiet:
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(QColor(scheme.pad_sheen), max(1.0, long_side * 0.055)))
             sheen_w, sheen_h = width * 0.68, height * 0.68
@@ -602,8 +628,7 @@ class PadGridItem(QGraphicsItem):
         )
         painter.end()
 
-        self._pad_pixmap = pixmap
-        self._pad_pixmap_px = long_side
+        self._pads[(quiet, long_side)] = pixmap
         return pixmap
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
@@ -618,7 +643,11 @@ class PadGridItem(QGraphicsItem):
         r1 = min(b.rows - 1, int((area.bottom() + half_y) / b.pitch) + 1)
 
         px_per_mm = painter.transform().m11() or 1.0
-        pixmap = self._pad_for(max(extent_x, extent_y) * abs(px_per_mm))
+        long_px = max(extent_x, extent_y) * abs(px_per_mm)
+        pixmap = self._pad_for(long_px)
+        # Paper shows every pad as the board has it; only the screen quiets the unused.
+        used = None if _on_paper(painter) else self.used
+        quiet = pixmap if used is None else self._pad_for(long_px, quiet=True)
         source = QRectF(0, 0, pixmap.width(), pixmap.height())
 
         count = 0
@@ -630,8 +659,9 @@ class PadGridItem(QGraphicsItem):
                 if self.consumed and hole_key(HoleCoord(col, row)) in self.consumed:
                     continue
                 p = hole_to_screen(HoleCoord(col, row), b, self.side)
+                drawn = pixmap if used is None or hole_key(HoleCoord(col, row)) in used else quiet
                 painter.drawPixmap(
-                    QRectF(p.x() - half_x, p.y() - half_y, extent_x, extent_y), pixmap, source
+                    QRectF(p.x() - half_x, p.y() - half_y, extent_x, extent_y), drawn, source
                 )
                 count += 1
         self.drawn = count
@@ -2015,6 +2045,24 @@ class ConductorItem(QGraphicsItem):
             painter.drawEllipse(point, radius, radius)
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        # Copper on the far face, quieter on screen (FAR_SIDE_OPACITY) -- but never what is
+        # selected or lit, which is being looked for, and never on paper.
+        if (
+            self.is_far_side()
+            and not self.isSelected()
+            and not self.net_lit
+            and not _on_paper(painter)
+        ):
+            painter.save()
+            painter.setOpacity(painter.opacity() * FAR_SIDE_OPACITY)
+            try:
+                self._paint_conductor(painter)
+            finally:
+                painter.restore()
+            return
+        self._paint_conductor(painter)
+
+    def _paint_conductor(self, painter: QPainter) -> None:
         kind = self.conductor.kind
         _default, width, dashed = CONDUCTOR_STYLE.get(kind, (QColor("#888"), 0.6, False))
         colour = self._colour()
@@ -2339,12 +2387,13 @@ def _paint_resistor_bands(
     painter.restore()
 
 
-#: The ink pin names are printed in on this board: the colour of the board's own legend.
-PIN_NAME_INK = "#eceef2"
-#: What a name on THIS board is printed on. White on a grid of white pad rings is
-#: unreadable wherever the name crosses one, so a name off a module sits on a dark tag --
-#: a label stuck to the board, which is also what the builder will put there.
-PIN_NAME_TAG = QColor(18, 20, 24, 215)
+#: The ink a pin name on the board is printed in, and what it is printed on. White on a
+#: grid of white pad rings is unreadable wherever the name crosses one, so a name off a
+#: module sits on a tag -- a label stuck to the board, which is also what the builder
+#: will put there. LIGHT, dark ink on a pale chip, chosen on 2026-10-28 with the board's
+#: look: the dark tags were the largest dark shapes on a zoomed board after the chips.
+PIN_NAME_INK = "#15171c"
+PIN_NAME_TAG = QColor(236, 239, 244, 225)
 
 
 def _paint_pin_names(
@@ -2405,6 +2454,126 @@ def _paint_pin_names(
         painter.restore()
 
 
+def _on_paper(painter: QPainter) -> bool:
+    """Whether this is the 1:1 print: what is drawn for the eye on screen -- quiet pads, a
+    shadow, a light -- stays off the sheet that gets taped to the board."""
+    return isinstance(painter.device(), QPagedPaintDevice)
+
+
+def _mixed(a: str, b: str, k: float) -> QColor:
+    """``a`` taken ``k`` of the way toward ``b``."""
+    ca, cb = QColor(a), QColor(b)
+    return QColor(
+        round(ca.red() + (cb.red() - ca.red()) * k),
+        round(ca.green() + (cb.green() - ca.green()) * k),
+        round(ca.blue() + (cb.blue() - ca.blue()) * k),
+    )
+
+
+def used_holes(document: PerfDocument, lookup: FootprintLookup) -> frozenset[str]:
+    """The holes something lands in: every placed lead, every pad a run is soldered to
+    (``contacts_every_path_hole``), and the two ends of every wire."""
+    used: set[str] = set()
+    for comp in document.components:
+        footprint = lookup(comp.footprint_id)
+        if footprint is None:
+            continue
+        used.update(hole_key(hole) for _pin, hole in all_pin_holes(comp, footprint))
+    for conductor in document.conductors:
+        path = conductor.path
+        if not path:
+            continue
+        if contacts_every_path_hole(conductor):
+            used.update(hole_key(hole) for hole in path)
+        else:
+            used.update((hole_key(path[0]), hole_key(path[-1])))
+    return frozenset(used)
+
+
+def _screen_offset(painter: QPainter, dx_mm: float, dy_mm: float) -> QPointF:
+    """A scene-space offset -- down and right on the screen, whichever way the part is
+    turned or the board flipped -- in the painter's local frame."""
+    world = painter.worldTransform()
+    inverse, _invertible = world.inverted()
+    scale = math.hypot(world.m11(), world.m12()) or 1.0
+    origin = inverse.map(QPointF(0.0, 0.0))
+    reach = inverse.map(QPointF(dx_mm * scale, dy_mm * scale))
+    return QPointF(reach.x() - origin.x(), reach.y() - origin.y())
+
+
+def _paint_contact_shadow(painter: QPainter, path: QPainterPath) -> None:
+    """The body's own outline twice, dark and offset down-right on screen: what stands a
+    part ON the board instead of printing it there. Two hard layers rather than a blur,
+    which costs a filter pass per part per frame."""
+    near, far = CONTACT_SHADOW_MM
+    painter.save()
+    painter.setPen(Qt.PenStyle.NoPen)
+    for distance, alpha in ((far, CONTACT_SHADOW_ALPHA // 2), (near, CONTACT_SHADOW_ALPHA)):
+        painter.setBrush(QColor(0, 0, 0, alpha))
+        painter.drawPath(path.translated(_screen_offset(painter, distance, distance * 1.3)))
+    painter.restore()
+
+
+def _paint_body_light(painter: QPainter, path: QPainterPath) -> None:
+    """Light from the top left across the body, dark toward the bottom right, clipped to
+    it -- the screen's top-left, so every part on the board is lit from one side."""
+    box = path.boundingRect()
+    towards = _screen_offset(painter, -1.0, -1.0)
+    length = math.hypot(towards.x(), towards.y()) or 1.0
+    ux, uy = towards.x() / length, towards.y() / length
+    reach = max(box.width(), box.height()) / 2
+    centre = box.center()
+    gradient = QLinearGradient(
+        QPointF(centre.x() + ux * reach, centre.y() + uy * reach),
+        QPointF(centre.x() - ux * reach, centre.y() - uy * reach),
+    )
+    gradient.setColorAt(0.0, QColor(255, 255, 255, BODY_LIGHT_ALPHA))
+    gradient.setColorAt(0.5, QColor(255, 255, 255, 0))
+    gradient.setColorAt(1.0, QColor(0, 0, 0, round(BODY_LIGHT_ALPHA * 1.3)))
+    painter.save()
+    painter.setClipPath(path)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QBrush(gradient))
+    painter.drawPath(path)
+    painter.restore()
+
+
+def _paint_top_marking(
+    painter: QPainter, footprint: Footprint, placement: BodyPlacement, comp: ComponentInstance
+) -> None:
+    """What a DIP says on its top: its value, along the package, as the chip carries it.
+    Physical ink, so it scales with the board and prints on the 1:1 sheet too."""
+    if footprint.body.archetype != "dip" or not comp.value.strip():
+        return
+    rect = _body_rect(placement)
+    along_x = rect.width() >= rect.height()
+    long_side, short_side = (rect.width(), rect.height()) if along_x else (rect.height(), rect.width())
+    rotation = 0.0 if along_x else 90.0
+    # Never upside down on screen, as the pin names are not.
+    if 90.0 < (rotation + float(comp.rotation)) % 360.0 < 270.0:
+        rotation += 180.0
+    painter.save()
+    painter.translate(rect.center())
+    if comp.mirrored:
+        painter.scale(-1.0, 1.0)
+    painter.setPen(TOP_MARKING_INK)
+    draw_physical_label(
+        painter,
+        QPointF(0.0, 0.0),
+        comp.value.strip().upper(),
+        min(TOP_MARKING_MM, short_side * 0.16),
+        bold=False,
+        max_width_mm=long_side * 0.62,
+        rotation_deg=rotation,
+    )
+    painter.restore()
+
+
+#: A chip's top marking: laser-etched grey on black, about a millimetre tall.
+TOP_MARKING_INK = QColor(220, 224, 232, 150)
+TOP_MARKING_MM = 1.0
+
+
 def _paint_body(
     painter: QPainter,
     footprint: Footprint,
@@ -2418,6 +2587,9 @@ def _paint_body(
 ) -> None:
     rect = _body_rect(placement)
     path = _body_path(footprint, placement, keyed, pitch)
+    on_screen = not _on_paper(painter)
+    if on_screen:
+        _paint_contact_shadow(painter, path)
 
     painter.setBrush(QBrush(QColor(style.fill)))
     painter.setPen(QPen(QColor(SELECTED if selected else style.edge), 0.2))
@@ -2429,6 +2601,8 @@ def _paint_body(
     # Before the marks, so a cathode band or a pin-1 dot stays flat and readable on top of
     # it rather than being washed out by a highlight painted over it.
     _paint_body_sheen(painter, path, rect, placement, style)
+    if on_screen:
+        _paint_body_light(painter, path)
 
     # From above, a resistor stood on end is its end cap: the bands are round its side,
     # where this view cannot see them (the 3D view prints them).
@@ -3385,6 +3559,7 @@ class ComponentItem(QGraphicsItem):
                     bands=resistor_bands(self.fp, self.comp.value),
                     art=self.art,
                 )
+                _paint_top_marking(painter, self.fp, placement, self.comp)
             if self.show_pin_names:
                 _paint_pin_names(painter, self.pin_names, self.comp, style.accent)
             painter.restore()
@@ -3494,20 +3669,13 @@ class ReferenceLayerItem(QGraphicsItem):
                     reference_colour=REF_LABEL, value_colour=VALUE_LABEL,
                 )
                 continue
-            if value:
-                draw_reference(
-                    painter, item.reference_anchor(), item.comp.ref, value, REF_LABEL_PX,
-                    offset=REF_LABEL_OFFSET, background=REF_PLATE,
-                    reference_colour=colour, value_colour=VALUE_LABEL,
-                )
-                continue
-            # AlignTop is ABOVE the point in draw_label's terms (see ``label_alignment``
-            # in viewsch): over the body, never on it, where it would hide a resistor's bands.
-            # The part's hit area takes the same plate in (ComponentItem.shape).
-            painter.setPen(QPen(colour))
-            draw_label(
-                painter, item.reference_anchor(), item.comp.ref, REF_LABEL_PX, REF_LABEL_ALIGN,
-                bold=True, offset=REF_LABEL_OFFSET, background=REF_PLATE,
+            # Over the body, never on it, where it would hide a resistor's bands, and laid
+            # out as the plate was, so the part's hit area (ComponentItem.shape) still
+            # takes it in. Outlined rather than plated: see REF_HALO.
+            draw_outlined_reference(
+                painter, item.reference_anchor(), item.comp.ref, value, REF_LABEL_PX,
+                offset=REF_LABEL_OFFSET, reference_colour=colour, value_colour=VALUE_LABEL,
+                halo=REF_HALO,
             )
 
 
@@ -3960,6 +4128,7 @@ class BoardScene(QGraphicsScene):
                 | cut_holes(self.document)
                 | holeless_positions(board),
                 copper=not (board.single_sided and self.side == "top"),
+                used=used_holes(self.document, self.lookup),
             )
             self.addItem(self.pad_grid)
         for cut in self.document.cuts:
