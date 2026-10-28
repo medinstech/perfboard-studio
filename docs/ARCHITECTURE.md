@@ -1491,10 +1491,15 @@ possible at all: it used to be a left drag on empty sheet, so arming the wire to
 turn panning off, and with more than two tools that trade stops working — a rubber band, a
 rectangle and a wire all want the left button on empty sheet. A laptop has no middle
 button, so **Space held turns the left one into the hand** on both canvases, and the wheel
-is read by one rule for both (`ui/canvasinput.wheel_intent`): a mouse wheel's whole notches
-zoom, anything finer is a trackpad and pans, and Ctrl zooms either. On Windows a precision
-touchpad hands Qt no pixel deltas and no device type, only angle deltas that are not
-multiples of 120, so a high-resolution mouse wheel pans too. Ctrl+wheel still zooms it.
+is read by one rule for both (`ui/canvasinput.wheel_intent`). **A trackpad is recognised
+only by what only a trackpad sends**, pixel deltas or a scroll phase, and pans; every wheel
+zooms by however far it turned; Ctrl zooms either. The first version also called any delta
+short of a whole notch a trackpad, which is what a Windows touchpad sends -- and what a
+smooth or free-spin mouse wheel sends, so one mouse zoomed and another panned. On Windows a
+touchpad's scrolling arrives as `WM_MOUSEWHEEL` and Qt hands it on with a null pixel delta,
+no phase and no device of its own (read in Qt 6.10's `qwindowspointerhandler.cpp`, not
+measured on hardware), so nothing there tells the two apart: **View ▸ Mouse Wheel ▸
+Scrolls** (`session/wheelScrolls`) is the way out, panning every wheel with Ctrl zooming.
 
 **Nothing is committed until the button comes up.** The dragged symbols, the wire following
 the pointer and the shape being pulled out are all painted by `SheetItem._ghost` as pictures

@@ -114,16 +114,32 @@ def test_a_mouse_wheel_notch_zooms() -> None:
     assert wheel_intent(_wheel(angle=(0, -2 * NOTCH))) == WheelIntent(zoom_steps=-2.0)
 
 
-def test_two_fingers_pan_whichever_way_the_platform_reports_them() -> None:
-    """Pixel deltas (macOS, Wayland), a fraction of a notch (a Windows precision
-    touchpad), a sideways component, or a scroll phase: each is a trackpad, and pans."""
+def test_a_trackpad_is_known_only_by_what_only_a_trackpad_sends() -> None:
+    """Pixel deltas (macOS, Wayland) or a scroll phase pan. Nothing else counts: on Windows
+    Qt hands a touchpad's scrolling on exactly as a mouse wheel's (``canvasinput``)."""
     assert wheel_intent(_wheel(angle=(0, -30), pixels=(0, -12))) == WheelIntent(pan_y=-12.0)
-    fraction = wheel_intent(_wheel(angle=(0, 48)))
-    assert fraction.zoom_steps == 0 and fraction.pan_y > 0
-    sideways = wheel_intent(_wheel(angle=(NOTCH, 0)))
-    assert sideways.zoom_steps == 0 and sideways.pan_x > 0 and sideways.pan_y == 0
     phased = wheel_intent(_wheel(angle=(0, NOTCH), phase=Qt.ScrollPhase.ScrollUpdate))
     assert phased.zoom_steps == 0 and phased.pan_y > 0
+
+
+def test_a_smooth_wheel_zooms_by_the_fraction_it_turned() -> None:
+    """A Logitech MX-style smooth or free-spin wheel sends fractions of a notch. The first
+    rule read those as a trackpad and panned, so one mouse zoomed and another did not."""
+    assert wheel_intent(_wheel(angle=(0, 30))) == WheelIntent(zoom_steps=0.25)
+    assert wheel_intent(_wheel(angle=(0, -48))) == WheelIntent(zoom_steps=-0.4)
+
+
+def test_a_wheel_tilted_sideways_pans_sideways() -> None:
+    sideways = wheel_intent(_wheel(angle=(NOTCH, 0)))
+    assert sideways.zoom_steps == 0 and sideways.pan_x > 0 and sideways.pan_y == 0
+
+
+def test_a_wheel_told_to_scroll_pans_and_ctrl_still_zooms() -> None:
+    """View > Mouse Wheel > Scrolls: the way out for anyone the detection gets wrong."""
+    scrolled = wheel_intent(_wheel(angle=(0, -NOTCH)), wheel_scrolls=True)
+    assert scrolled.zoom_steps == 0 and scrolled.pan_y < 0
+    zoomed = wheel_intent(_wheel(angle=(0, NOTCH), modifiers=CTRL), wheel_scrolls=True)
+    assert zoomed == WheelIntent(zoom_steps=1.0)
 
 
 def test_ctrl_zooms_from_anything_and_a_pinch_by_what_it_amounts_to() -> None:
@@ -670,3 +686,48 @@ def test_m_flips_the_part_about_to_be_placed_and_r_leaves_the_selection_alone() 
     finally:
         window._mark_saved()
         window.close()
+
+
+# -- the wheel choice in the window ------------------------------------------------------------
+
+
+def test_the_mouse_wheel_choice_reaches_both_canvases_and_outlives_the_window(
+    _settings_and_recovery_in_temp,  # type: ignore[no-untyped-def]
+) -> None:
+    from perfboard_studio.ui.main import WHEEL_SCROLLS_KEY, MainWindow
+
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    window = MainWindow(document)
+    try:
+        assert not window.view.wheel_scrolls and window.act_wheel[False].isChecked()
+        window.act_wheel[True].trigger()
+        assert window.view.wheel_scrolls and window.schematic_view.wheel_scrolls
+        assert window.act_wheel[True].isChecked() and not window.act_wheel[False].isChecked()
+        window._save_session()
+    finally:
+        window._mark_saved()
+        window.close()
+    assert _settings_and_recovery_in_temp.value(WHEEL_SCROLLS_KEY) in (True, "true")
+
+    again = MainWindow(document)
+    try:
+        again._restore_session()
+        assert again.view.wheel_scrolls and again.schematic_view.wheel_scrolls
+        assert again.act_wheel[True].isChecked()
+    finally:
+        again._mark_saved()
+        again.close()
+
+
+def test_a_board_told_to_scroll_pans_under_a_mouse_wheel() -> None:
+    view = _board_view()
+    try:
+        view.wheel_scrolls = True
+        scale, scroll = view.current_scale(), _scroll(view)
+        QApplication.sendEvent(view.viewport(), _wheel(angle=(0, -NOTCH)))
+        assert view.current_scale() == pytest.approx(scale)
+        assert _scroll(view)[1] > scroll[1]
+        QApplication.sendEvent(view.viewport(), _wheel(angle=(0, NOTCH), modifiers=CTRL))
+        assert view.current_scale() == pytest.approx(scale * 1.15)
+    finally:
+        view.close()

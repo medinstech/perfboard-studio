@@ -608,6 +608,8 @@ RATSNEST_KEY = "session/showRatsnest"
 RULERS_KEY = "session/showRulers"
 HATCH_KEY = "session/hatchFarSide"
 VALUES_KEY = "session/showValues"
+#: Whether the canvas wheel pans rather than zooms (View > Mouse Wheel).
+WHEEL_SCROLLS_KEY = "session/wheelScrolls"
 ROUTING_STYLE_KEY = "session/routingStyle"
 GRID_WIRES_KEY = "session/gridWires"
 CROSSINGS_KEY = "session/crossings"
@@ -3619,7 +3621,6 @@ class ShortcutsDialog(QDialog):
         return (
             (t("Middle-drag"), t("Pan the board")),
             (t("Space+drag"), t("Pan the board")),
-            (t("Two-finger scroll"), t("Pan the board")),
             (t("Wheel"), t("Zoom about the pointer")),
             (t("Pinch, or Ctrl+wheel"), t("Zoom about the pointer")),
             (t("Drag a part"), t("Move it, snapping to the nearest hole")),
@@ -6558,6 +6559,27 @@ class MainWindow(QMainWindow):
         act_zoom_out = view_menu.addAction(t("Zoom &Out"))
         act_zoom_out.setShortcut(QKeySequence.StandardKey.ZoomOut)
         act_zoom_out.triggered.connect(lambda: self.on_zoom(1 / 1.25))
+        # THE WAY OUT FOR WHOEVER THE WHEEL RULE GETS WRONG. A trackpad is recognised only by
+        # what only a trackpad sends (``canvasinput``), and on Windows it sends nothing of
+        # the kind -- so there two fingers zoom like a wheel unless this says otherwise.
+        wheel_menu = view_menu.addMenu(t("Mouse Wheel"))
+        wheel_menu.setToolTipsVisible(True)
+        self.menu_wheel = wheel_menu
+        self.act_wheel: dict[bool, QAction] = {}
+        for scrolls, label, tip in (
+            (False, t("&Zooms"), t("The wheel zooms about the pointer; a trackpad that says it is one pans.")),
+            (
+                True,
+                t("&Scrolls (Ctrl+Wheel Zooms)"),
+                t("The wheel and two fingers on a trackpad move the board; Ctrl+wheel or a pinch zooms."),
+            ),
+        ):
+            action = wheel_menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(not scrolls)
+            action.setToolTip(tip)
+            action.triggered.connect(lambda _checked=False, s=scrolls: self.on_wheel_scrolls(s))
+            self.act_wheel[scrolls] = action
         view_menu.addSeparator()
 
         self.act_ratsnest = view_menu.addAction(t("Show &Missing Connections"))
@@ -6810,6 +6832,7 @@ class MainWindow(QMainWindow):
         self._menus = [
             file_menu, self.menu_recent, edit_menu, draw_menu, place_menu, net_menu,
             route_menu, style_menu, view_menu, language_menu, colour_menu, help_menu,
+            wheel_menu,
         ]
         #: The menu bar's own menus, in its order: what ☰ holds (``_build_header``).
         self._top_menus = (
@@ -13708,6 +13731,7 @@ class MainWindow(QMainWindow):
         settings.setValue(RULERS_KEY, self.act_rulers.isChecked())
         settings.setValue(HATCH_KEY, self.act_hatch.isChecked())
         settings.setValue(VALUES_KEY, self.act_values.isChecked())
+        settings.setValue(WHEEL_SCROLLS_KEY, self.view.wheel_scrolls)
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
         settings.setValue(GRID_WIRES_KEY, self._grid_wires)
         settings.setValue(CROSSINGS_KEY, self._crossing_policy)
@@ -13762,6 +13786,7 @@ class MainWindow(QMainWindow):
         self.act_rulers.setChecked(_stored_bool(settings, RULERS_KEY, True))
         self.act_hatch.setChecked(_stored_bool(settings, HATCH_KEY, True))
         self.act_values.setChecked(_stored_bool(settings, VALUES_KEY, False))
+        self.on_wheel_scrolls(_stored_bool(settings, WHEEL_SCROLLS_KEY, False))
 
         style = settings.value(ROUTING_STYLE_KEY, self._routing_style)
         if isinstance(style, str) and style in self.act_style:
@@ -14045,6 +14070,13 @@ class MainWindow(QMainWindow):
             )
             return
         self.statusBar().showMessage(t("Exported {path}").format(path=out), 8000)
+
+    def on_wheel_scrolls(self, scrolls: bool) -> None:
+        """Make the wheel pan both canvases (Ctrl+wheel zooms), or zoom them."""
+        self.view.wheel_scrolls = scrolls
+        self.schematic_view.wheel_scrolls = scrolls
+        for value, action in self.act_wheel.items():
+            action.setChecked(value == scrolls)
 
     def on_board_colour(self, key: str | None) -> None:
         """Recolour the board in both views at once.

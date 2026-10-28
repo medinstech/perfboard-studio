@@ -411,6 +411,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
         "sheet net": ["Re&name Net…", "Net &Class", "&Edit Net…", "De&lete Net"],
         "sheet net class": ["&Signal", "&Ground", "&Power"],
         "sheet": ["&Add Part…", "Arran&ge the Sheet", "&Fit the Sheet"],
+        "mouse wheel": ["&Zooms", "&Scrolls (Ctrl+Wheel Zooms)"],
     }
     for name, keys in groups.items():
         for code, catalogue in CATALOGUES.items():

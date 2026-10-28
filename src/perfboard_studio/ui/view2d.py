@@ -5410,6 +5410,8 @@ class BoardView(QGraphicsView):
         self._pan_button = Qt.MouseButton.MiddleButton
         #: Space is down, so the left button pans -- the laptop's middle button.
         self._space_held = False
+        #: Every wheel pans, and Ctrl+wheel zooms (View > Mouse Wheel). The window sets it.
+        self.wheel_scrolls = False
         # Children of the VIEWPORT, not of the view: the viewport is what the scrollbars
         # leave behind, so an overlay parented to it stays inside the board area and does
         # not drift under a scrollbar when one appears.
@@ -5629,7 +5631,7 @@ class BoardView(QGraphicsView):
 
     def wheelEvent(self, event: Any) -> None:
         """Zoom or pan, by the rule the sheet uses too (``canvasinput.wheel_intent``)."""
-        intent = wheel_intent(event)
+        intent = wheel_intent(event, self.wheel_scrolls)
         if intent.zoom_steps:
             factor = self._clamped_factor(1.15**intent.zoom_steps)
             if factor != 1.0:

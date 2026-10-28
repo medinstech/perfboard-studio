@@ -362,7 +362,13 @@ TURKISH: Mapping[str, str] = {
     "Every part on the board, or every symbol on the sheet when the sheet has the keyboard.":
         "Karttaki bütün parçalar; klavye şemadaysa şemadaki bütün semboller.",
     "Space+drag": "Boşluk+sürükle",
-    "Two-finger scroll": "İki parmakla kaydır",
+    "Mouse Wheel": "Fare Tekerleği",
+    "&Zooms": "&Yakınlaştırır",
+    "&Scrolls (Ctrl+Wheel Zooms)": "&Kaydırır (Ctrl+Tekerlek yakınlaştırır)",
+    "The wheel zooms about the pointer; a trackpad that says it is one pans.":
+        "Tekerlek imlecin çevresinde yakınlaştırır; kendini dokunmatik yüzey olarak bildiren bir yüzey kaydırır.",
+    "The wheel and two fingers on a trackpad move the board; Ctrl+wheel or a pinch zooms.":
+        "Tekerlek ve dokunmatik yüzeyde iki parmak kartı kaydırır; Ctrl+tekerlek ya da sıkıştırma yakınlaştırır.",
     "Pinch, or Ctrl+wheel": "Sıkıştır ya da Ctrl+tekerlek",
     "Wheel": "Tekerlek",
     "Zoom about the pointer": "İmlecin çevresinde yakınlaştır",

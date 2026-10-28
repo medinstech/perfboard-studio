@@ -51,12 +51,16 @@ closed without a bump.
   sideways went down the wrong way and was turned afterwards. The ghost now turns under the
   pointer, red where the turned part does not fit, and goes down as shown; the next one of
   the same part goes down the same way round.
-- **A trackpad pans the board and the sheet.** The wheel always zoomed, so on a laptop two
-  fingers zoomed, a sideways swipe zoomed out, and with no middle button the scrollbars were
-  the only way across a board. Now a mouse wheel's notches still zoom, two fingers pan,
-  Ctrl+wheel or a pinch zooms, Shift+wheel pans sideways, and holding Space turns the left
-  button into the hand in every tool. The board and the sheet read the wheel through one
-  rule, and the shortcuts card (F1) lists the new gestures.
+- **A trackpad pans the board and the sheet, and the wheel can be told to.** The wheel
+  always zoomed, so on a laptop two fingers zoomed, a sideways swipe zoomed out, and with
+  no middle button the scrollbars were the only way across a board. Now holding Space turns
+  the left button into the hand in every tool; a trackpad that says it is one (macOS, and
+  Linux under libinput) pans with two fingers; Ctrl+wheel or a pinch zooms; Shift+wheel or
+  a wheel tilted sideways pans sideways; and a wheel, notched or smooth, still zooms.
+  Windows hands a touchpad's scrolling to the application exactly as a mouse wheel's, so
+  there two fingers zoom unless View ▸ Mouse Wheel ▸ Scrolls is chosen: then every wheel
+  pans and Ctrl+wheel zooms. The board and the sheet read the wheel through one rule, the
+  choice is remembered, and the shortcuts card (F1) lists the new gestures.
 
 - **The sheet draws each net class in the board's colours.** Power was amber on the
   sheet and orange in the ratsnest, and signal two different blues, so one net was two

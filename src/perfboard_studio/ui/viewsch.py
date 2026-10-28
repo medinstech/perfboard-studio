@@ -811,6 +811,8 @@ class SchematicView(QGraphicsView):
         self._pan_button = Qt.MouseButton.MiddleButton
         #: Space is down, so the left button pans -- the laptop's middle button.
         self._space_held = False
+        #: Every wheel pans, and Ctrl+wheel zooms (View > Mouse Wheel). The window sets it.
+        self.wheel_scrolls = False
         #: The rubber band, while one is being pulled over empty sheet.
         self._band_from: QPointF | None = None
         #: What a band pulled with Shift or Ctrl adds to: the selection when it started.
@@ -1151,7 +1153,7 @@ class SchematicView(QGraphicsView):
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         """Zoom or pan, by the rule the board uses too (``canvasinput.wheel_intent``)."""
-        intent = wheel_intent(event)
+        intent = wheel_intent(event, self.wheel_scrolls)
         if intent.zoom_steps:
             factor = self._clamped_factor(1.18**intent.zoom_steps)
             if factor != 1.0:
