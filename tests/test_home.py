@@ -85,12 +85,19 @@ def test_a_returning_user_gets_one_row_of_examples_and_the_rest_on_request(app, 
     assert all(not card.isHidden() for card in home.cards)
 
 
-def test_the_new_here_card_opens_the_circuit_that_is_drawn_and_not_built(app) -> None:
+def test_the_new_here_card_starts_the_tour(app) -> None:
     home = make(app)
-    opened: list[str] = []
-    home.openExample.connect(opened.append)
+    asked: list[str] = []
+    home.startTour.connect(lambda: asked.append("tour"))
     home.walkthrough_button.click()
-    assert Path(opened[0]).stem == WALKTHROUGH
+    assert asked == ["tour"]
+    assert not home.walkthrough_card.isHidden()
+
+
+def test_a_copy_without_the_walkthrough_example_offers_no_tour(app) -> None:
+    others = [e for e in shipped() if e.path.stem != WALKTHROUGH]
+    home = Home(others, LOOKUP)
+    assert home.walkthrough_card.isHidden()
 
 
 def test_the_pictures_are_drawn_after_home_is_on_screen(app) -> None:

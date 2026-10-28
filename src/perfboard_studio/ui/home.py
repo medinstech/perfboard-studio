@@ -147,6 +147,8 @@ class Home(QWidget):
     newCircuit = Signal()
     openFile = Signal()
     importNetlist = Signal()
+    #: The getting-started tour (ui/tour.py), which opens the walkthrough example itself.
+    startTour = Signal()
     #: An example's path, as a string.
     openExample = Signal(str)
     #: A recent board's path, as a string.
@@ -352,23 +354,19 @@ class Home(QWidget):
         caption = QLabel(t("New here?"))
         theme.size(caption, theme.CAPTION_PX)
         theme.tone(caption, "secondary")
-        heading = QLabel(theme.heading(t("See it work in a minute")))
+        heading = QLabel(theme.heading(t("Take the 1-minute tour")))
         body = QLabel(
             t(
-                "Open a circuit that is already drawn and press the blue button at the top "
-                "right five times: board, placement, wiring, checks, guide."
+                "Opens a circuit that is already drawn and walks through it: board, "
+                "placement, wiring, checks, guide."
             )
         )
         body.setWordWrap(True)
         theme.tone(body, "secondary")
-        self.walkthrough_button = QPushButton(t("Open the Example"))
-        walkthrough = next((e for e in self._examples if e.path.stem == WALKTHROUGH), None)
-        if walkthrough is None:
-            card.hide()
-        else:
-            self.walkthrough_button.clicked.connect(
-                lambda _checked=False: self.openExample.emit(str(walkthrough.path))
-            )
+        self.walkthrough_button = QPushButton(t("Start the Tour"))
+        if not any(e.path.stem == WALKTHROUGH for e in self._examples):
+            card.hide()  # the tour runs on that example, and this copy has none
+        self.walkthrough_button.clicked.connect(lambda _checked=False: self.startTour.emit())
         for widget in (caption, heading, body):
             layout.addWidget(widget)
         layout.addWidget(self.walkthrough_button, 0, Qt.AlignmentFlag.AlignLeft)

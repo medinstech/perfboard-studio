@@ -369,6 +369,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "&Import KiCad Netlist…", "Export &Build Guide…",
                  "Export Sc&hematic…", "&Quit"],
         "help": ["Help for What's Under the &Pointer", "What's &This?", "&Glossary…",
+                 "Getting Started T&our",
                  "&Keyboard Shortcuts…", "Check for &Updates…",
                  "Check Automatically at &Startup", "&About Perfboard Studio"],
         "edit": ["&Undo", "&Redo", "Cop&y", "&Paste", "Dupl&icate", "Select &All",

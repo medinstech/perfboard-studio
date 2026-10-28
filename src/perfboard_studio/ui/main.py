@@ -354,6 +354,7 @@ from .i18n import set_language, t
 from .partlist import PartListPanel
 from .partnames import footprint_label
 from .project import write_project
+from .tour import Tour
 from .view2d import (
     FOOTPRINT_MIME,
     BoardScene,
@@ -4514,6 +4515,8 @@ class MainWindow(QMainWindow):
 
         #: Set once the user has ever placed a part, in any session. See _refresh_empty_hint.
         self._has_placed_a_part = _stored_bool(app_settings(), HAS_PLACED_KEY, False)
+        #: The getting-started tour while one runs (``start_tour``).
+        self._tour: Tour | None = None
         #: Whether somebody chose the board this document is on, in this window -- see
         #: ``workflow.WorkflowFacts.board_chosen``. Not stored: a board with parts on it
         #: has been chosen by definition, and one without has been chosen by nobody yet.
@@ -4661,6 +4664,33 @@ class MainWindow(QMainWindow):
             text, _problem = read_document_text(self.current_path)
             self._disk_text = text
             self._watch_current_path()
+
+    def start_tour(self) -> None:
+        """The getting-started tour (ui/tour.py), on the example that is drawn and not built.
+
+        Opened as an untitled copy like any example, so nothing the tour does touches the
+        shipped file; if the open is declined (unsaved work kept), there is no tour."""
+        walkthrough = next(
+            (path for path, _line in example_boards() if path.stem == "ne555-blinker"), None
+        )
+        if walkthrough is None:
+            self.statusBar().showMessage(t("This copy has no examples to tour."), 6000)
+            return
+        before = self.bus
+        self.on_open_example(walkthrough)
+        if self.bus is before:
+            return
+        # The tour reads "the guide is open" as its last stop; it starts with the guide shut.
+        self.dock_guide.hide()
+        if self._tour is not None and self._tour.running:
+            self._tour.stop()
+        self._tour = Tour(
+            self,
+            self.workflow_bar.next_button,
+            lambda: self.workflow_bar.next_key,
+            lambda: not self.dock_guide.isHidden(),
+        )
+        self._tour.start()
 
     def _help_action(self, name: str) -> QAction | None:
         """The action a help text is for, by name: ``draw:<kind>`` for a drawing tool, else
@@ -6859,6 +6889,12 @@ class MainWindow(QMainWindow):
         act_glossary = help_menu.addAction(t("&Glossary…"))
         act_glossary.setToolTip(t("The words this window and the build guide use, explained."))
         act_glossary.triggered.connect(lambda _checked=False: helpcards.GlossaryDialog(self).exec())
+        act_tour = help_menu.addAction(t("Getting Started T&our"))
+        act_tour.setToolTip(
+            t("Opens a circuit that is already drawn and walks through it: board, placement, "
+              "wiring, checks, guide.")
+        )
+        act_tour.triggered.connect(lambda _checked=False: self.start_tour())
         help_menu.addSeparator()
         act_keys = help_menu.addAction(t("&Keyboard Shortcuts…"))
         act_keys.setShortcut(QKeySequence("Ctrl+/"))

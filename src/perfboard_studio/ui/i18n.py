@@ -2973,13 +2973,41 @@ TURKISH: Mapping[str, str] = {
     "A board you saved (.perf).": "Kaydettiğiniz bir kart (.perf).",
     "Import from KiCad…": "KiCad'den İçe Aktar…",
     "New here?": "Yeni misiniz?",
-    "See it work in a minute": "Bir dakikada nasıl çalıştığını görün",
-    "Open a circuit that is already drawn and press the blue button at the top right five "
-    "times: board, placement, wiring, checks, guide.": (
-        "Önceden çizilmiş bir devreyi açın ve sağ üstteki mavi düğmeye beş kez basın: kart, "
-        "yerleşim, kablolama, kontrol, rehber."
+    "Take the 1-minute tour": "1 dakikalık turu başlatın",
+    "Opens a circuit that is already drawn and walks through it: board, placement, wiring, "
+    "checks, guide.": (
+        "Önceden çizilmiş bir devreyi açar ve adım adım üzerinden geçer: kart, yerleşim, "
+        "kablolama, kontrol, rehber."
     ),
-    "Open the Example": "Örneği Aç",
+    "Start the Tour": "Turu Başlat",
+    # -- the tour (ui/tour.py): the five presses of the next button ----------------------
+    "Getting Started T&our": "&Başlangıç Turu",
+    "This copy has no examples to tour.": "Bu kopyada tur için örnek yok.",
+    "Skip Tour": "Turu Geç",
+    "Finish": "Bitir",
+    "The circuit is already drawn. This blue button is always your next step. Press it: "
+    "Choose a Board.": (
+        "Devre zaten çizili. Bu mavi düğme her zaman sıradaki adımınızdır. Basın: Kart Seç."
+    ),
+    "Every board you can buy was tried with this circuit; the one chosen is the smallest that "
+    "wires well. Next: Place on the Board.": (
+        "Satın alabileceğiniz her kart bu devreyle denendi; seçilen, iyi kablolanan en "
+        "küçüğüdür. Sıradaki: Karta Yerleştir."
+    ),
+    "The parts are arranged for you. Drag any of them if you like. Next: Auto-wire.": (
+        "Parçalar sizin için dizildi. İsterseniz herhangi birini sürükleyin. Sıradaki: "
+        "Otomatik Kablola."
+    ),
+    "Wired: solder traces first, a wire only where solder can't go. The checks ran by "
+    "themselves; what they found is below. Next: open the build guide.": (
+        "Kablolandı: önce lehim yolu, lehimin gidemediği yerde tel. Denetimler kendiliğinden "
+        "çalıştı; bulduklarını aşağıda görürsünüz. Sıradaki: montaj rehberini açın."
+    ),
+    "This is what you build from: the soldering order, lowest parts first. Tick a step and "
+    "the next one lights up on the board. That's the whole app.": (
+        "Kuracağınız şey bu: lehimleme sırası, önce en alçak parçalar. Bir adımı işaretleyin, "
+        "sıradaki kartta yanar. Uygulamanın hepsi bu."
+    ),
     "Welcome back": "Tekrar hoş geldiniz",
     "Recent": "Son açılanlar",
     "Enter opens the highlighted one.": "Enter seçili olanı açar.",
