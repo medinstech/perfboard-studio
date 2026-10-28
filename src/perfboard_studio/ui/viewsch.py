@@ -961,6 +961,11 @@ class SchematicView(QGraphicsView):
         if self.item is not None:
             self.item.set_selection(refs, {f"n{index}" for index in notes})
 
+    def gesture_in_flight(self) -> bool:
+        """Whether the left button is in the middle of something Escape can call off: a
+        drag of symbols, a rubber band, or a shape being pulled out."""
+        return self._dragging or self._band_from is not None or self._shape_from is not None
+
     def _clear_ghosts(self) -> None:
         self._dragging = False
         self._band_from = None
@@ -1543,6 +1548,17 @@ class SchematicView(QGraphicsView):
         ):
             event.accept()
             return True
+        # Escape too, but only in the middle of a gesture: the window's Escape shortcut
+        # took the key first, so the "never mind" below was unreachable in the running
+        # application and a drag let go wherever the pointer happened to be.
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
+            and event.key() == Qt.Key.Key_Escape
+            and self.gesture_in_flight()
+        ):
+            event.accept()
+            return True
         if (
             isinstance(event, QNativeGestureEvent)
             and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture
@@ -1568,7 +1584,11 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
         if event.key() == Qt.Key.Key_Escape:
-            if self.tool != "select":
+            if self.gesture_in_flight():
+                # Called off, and nothing else: the selection the drag was carrying stays,
+                # which is what a second Escape is for.
+                self._clear_ghosts()
+            elif self.tool != "select":
                 self.set_tool("select")
             else:
                 self._clear_ghosts()

@@ -20,13 +20,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent, QWheelEvent
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QGraphicsItem, QWidget
 
 from perfboard_studio import persist
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.schematic import build_schematic
 from perfboard_studio.ui.canvasinput import NOTCH, WheelIntent, wheel_intent
-from perfboard_studio.ui.view2d import BoardScene, BoardView
+from perfboard_studio.ui.view2d import BoardScene, BoardView, hole_to_screen
 from perfboard_studio.ui.viewsch import SchematicView
 
 GOLDEN = pathlib.Path(__file__).resolve().parent.parent / "tools" / "diffcheck" / "golden" / "dense.perf"
@@ -242,3 +242,101 @@ def test_space_turns_the_left_button_into_the_hand_on_the_sheet() -> None:
     finally:
         view.close()
 
+
+# -- Escape in the middle of a drag ---------------------------------------------------------
+
+
+def _escape(view: QWidget) -> bool:
+    """Escape as the window delivers it: the shortcut-override question first -- a WINDOW
+    shortcut owns Escape, so a view that does not take it back never sees the key -- then
+    the key itself. Returns whether the view took it back."""
+    override = QKeyEvent(QEvent.Type.ShortcutOverride, Qt.Key.Key_Escape, NO_KEYS)
+    QApplication.sendEvent(view, override)
+    QApplication.sendEvent(view, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, NO_KEYS))
+    return override.isAccepted()
+
+
+def test_escape_puts_a_dragged_part_back_and_moves_nothing() -> None:
+    from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
+    from perfboard_studio.commands import create_standard_registry
+
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    bus = CommandBus(document, create_standard_registry(), CommandContext(next_id=create_id_generator()))
+    scene = BoardScene(document, footprint_lookup(), side="top", bus=bus)
+    view = BoardView(scene)
+    view.resize(800, 600)
+    view.show()
+    view.fit_board()
+    QApplication.processEvents()
+    try:
+        port = view.viewport()
+        def first_to_take_a_click(point: QPointF) -> object:
+            # Qt offers a press to each item under it, top first, until one takes it, and
+            # only a selectable item does.
+            selectable = QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+            return next((under for under in scene.items(point) if under.flags() & selectable), None)
+
+        # A two-pin part with nothing selectable over its middle, so the press lands on it.
+        item = next(
+            i
+            for i in scene.component_items.values()
+            if len(i.fp.pins) == 2 and first_to_take_a_click(i.sceneBoundingRect().center()) is i
+        )
+        comp_id, anchor = item.comp.id, item.comp.anchor
+        start = view.mapFromScene(item.sceneBoundingRect().center())
+        step = round(3 * document.board.pitch * view.current_scale())
+        view.setFocus()
+        _mouse(port, QEvent.Type.MouseButtonPress, start, LEFT)
+        for i in range(1, 6):
+            _mouse(port, QEvent.Type.MouseMove, start + QPoint(step * i // 5, 0), LEFT)
+        assert scene.component_items[comp_id].pending_anchor != anchor
+
+        assert _escape(view)
+        assert scene.component_items[comp_id].pos() == hole_to_screen(anchor, document.board, "top")
+
+        # The rest of the gesture is inert: more movement, then the release.
+        _mouse(port, QEvent.Type.MouseMove, start + QPoint(2 * step, step), LEFT)
+        _mouse(port, QEvent.Type.MouseButtonRelease, start + QPoint(2 * step, step), NONE)
+        assert not bus.history()
+        assert scene.component_items[comp_id].pending_anchor == anchor
+    finally:
+        view.close()
+
+
+def test_escape_is_left_to_the_window_when_nothing_is_being_dragged() -> None:
+    """Taken back only mid-drag: otherwise Escape is the window's, which is what leaves a
+    tool from anywhere (``MainWindow.on_stop_tool``)."""
+    view = _board_view()
+    try:
+        assert not _escape(view)
+    finally:
+        view.close()
+
+
+def test_escape_puts_dragged_symbols_back_and_keeps_them_selected() -> None:
+    """The sheet's own Escape cleared the drag -- but in the window it never arrived,
+    because the window's Escape shortcut took the key first."""
+    view = _sheet_view()
+    try:
+        moved: list[object] = []
+        view.symbolsMoved.connect(moved.append)
+        port = view.viewport()
+        symbol = view.item.drawing.symbols[0]
+        centre = QPointF(symbol.at.x + symbol.width / 2, symbol.at.y + symbol.height / 2)
+        view.centerOn(centre)
+        start = view.mapFromScene(centre)
+        view.setFocus()
+        _mouse(port, QEvent.Type.MouseButtonPress, start, LEFT)
+        for i in range(1, 6):
+            _mouse(port, QEvent.Type.MouseMove, start + QPoint(12 * i, 6 * i), LEFT)
+        assert view.item.drag_offset is not None
+
+        assert _escape(view)
+        assert view.item.drag_offset is None
+        assert view.selected_refs == [symbol.ref]
+
+        _mouse(port, QEvent.Type.MouseMove, start + QPoint(90, 40), LEFT)
+        _mouse(port, QEvent.Type.MouseButtonRelease, start + QPoint(90, 40), NONE)
+        assert moved == []
+    finally:
+        view.close()

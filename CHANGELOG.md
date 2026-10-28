@@ -35,6 +35,13 @@ closed without a bump.
   button into the hand in every tool. The board and the sheet read the wheel through one
   rule, and the shortcuts card (F1) lists the new gestures.
 
+### Fixed
+
+- **Escape calls off a drag in the middle of it.** Let go after Escape and the part, the
+  label, the symbols or the rubber band went where the pointer was: the window's Escape
+  shortcut took the key before the board or the sheet saw it. Both now take Escape back
+  while a drag is in flight, and only then, and put everything back where it was.
+
 ## [0.22.0] - 2026-10-28
 
 ### Added

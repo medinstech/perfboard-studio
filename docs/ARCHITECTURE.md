@@ -1499,7 +1499,11 @@ multiples of 120, so a high-resolution mouse wheel pans too. Ctrl+wheel still zo
 **Nothing is committed until the button comes up.** The dragged symbols, the wire following
 the pointer and the shape being pulled out are all painted by `SheetItem._ghost` as pictures
 of an edit that has not happened, which is what lets Escape and a drag off the sheet both
-mean "never mind" without a command having to be undone.
+mean "never mind" without a command having to be undone. Escape is a window shortcut, so it
+reaches the sheet (and the board, whose drag is put back by a rebuild,
+`BoardScene.cancel_drag`) only because each view accepts the `ShortcutOverride` for it
+while a gesture is in flight, and only then: the shortcut fires first otherwise, and for
+a long time it did, so the drag landed wherever it was let go.
 
 `viewsch` paints the grid in `drawBackground` at `schematic.GRID_MM`, not as items: a line
 per square on a 460 mm sheet is nine thousand things to hold, transform and hit-test for

@@ -37,6 +37,7 @@ from PySide6.QtGui import (
     QDragMoveEvent,
     QDropEvent,
     QFontMetricsF,
+    QKeyEvent,
     QLinearGradient,
     QNativeGestureEvent,
     QPagedPaintDevice,
@@ -5069,6 +5070,9 @@ class BoardScene(QGraphicsScene):
             Qt.Key.Key_Up: (0, -1),
             Qt.Key.Key_Down: (0, 1),
         }
+        if event.key() == Qt.Key.Key_Escape and self.cancel_drag():
+            event.accept()
+            return
         if event.key() == Qt.Key.Key_Escape and self.in_a_mode:
             self.leave_mode()
             event.accept()
@@ -5145,6 +5149,29 @@ class BoardScene(QGraphicsScene):
                 ),
             )
         ]
+
+    def drag_in_flight(self) -> bool:
+        """Whether a part or a label is being dragged and has left where it was: what an
+        Escape now would put back."""
+        if not isinstance(self.mouseGrabberItem(), ComponentItem | BoardNoteItem):
+            return False
+        return any(
+            item.pending_anchor != item.comp.anchor for item in self.component_items.values()
+        ) or any(item.moved for item in self.board_note_items.values())
+
+    def cancel_drag(self) -> bool:
+        """Put back everything a drag in flight has moved, and make the rest of the
+        gesture inert. True if there was one.
+
+        By a REBUILD, which is the one source of truth this scene already has for "where
+        is everything": the items are re-made at the document's anchors, the item holding
+        the mouse goes with them, and the release that follows finds nothing pending. The
+        same thing happens to a move the bus refuses (see ``ComponentItem``).
+        """
+        if not self.drag_in_flight():
+            return False
+        self._build()
+        return True
 
     def commit_pending_moves(self) -> list[DispatchResult]:
         """Dispatch ``component.move`` for every item whose snapped position differs
@@ -5545,6 +5572,19 @@ class BoardView(QGraphicsView):
         event.accept()
 
     def event(self, event: QEvent) -> bool:
+        # ESCAPE IS THE WINDOW'S, except in the middle of a drag. The window's shortcut
+        # leaves a tool from anywhere and fires before this view sees the key, so a drag
+        # could not be called off: let go, and the part landed wherever the pointer was.
+        # Accepting the override is how a focused widget takes a key back -- the sheet does
+        # the same for R -- and only while there is a drag to cancel.
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
+            and event.key() == Qt.Key.Key_Escape
+            and self.board_scene.drag_in_flight()
+        ):
+            event.accept()
+            return True
         # A trackpad pinch the platform reports as a gesture (macOS) rather than as the
         # Ctrl+wheel ``wheelEvent`` already zooms (Windows).
         if (
