@@ -568,3 +568,86 @@ def test_undo_with_nothing_behind_it_leaves_the_bar_alone() -> None:
     finally:
         window._mark_saved()
         window.close()
+
+
+# -- turning a part before it is put down -------------------------------------------------------
+
+
+def _window_placing(footprint_id: str = "r-axial-3"):  # type: ignore[no-untyped-def]
+    from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.model import DocumentMeta
+    from perfboard_studio.ui.main import MainWindow
+
+    stamp = "2026-01-01T00:00:00.000Z"
+    window = MainWindow(create_starter_document(DocumentMeta(name="t", created=stamp, modified=stamp)))
+    window.scene.arm_placement(footprint_id)
+    return window
+
+
+def test_r_turns_the_part_about_to_be_placed_and_it_goes_down_turned() -> None:
+    """R turned the SELECTION while a part was armed, and the ghost stayed upright."""
+    from perfboard_studio.geometry import transform_pin_offset
+    from perfboard_studio.model import HoleCoord
+
+    window = _window_placing()
+    try:
+        window.act_rotate_cw.trigger()
+        assert window.scene.armed_orientation == (90, False)
+        assert window.scene._ghost is not None and window.scene._ghost.part_rotation == 90
+
+        result = window.scene.place_armed(HoleCoord(4, 4))
+        assert result is not None and result.ok
+        placed = window.bus.document.components[-1]
+        assert (placed.rotation, placed.mirrored) == (90, False)
+        footprint = window.lookup("r-axial-3")
+        far = footprint.pins[-1]
+        d_col, d_row = transform_pin_offset(far.d_col, far.d_row, 90, False)
+        assert d_col == 0 and d_row != 0  # Its leads now run down the board, not across it.
+
+        # The next one of the same part goes down the same way round...
+        assert window.scene.armed_orientation == (90, False)
+        # ...and another part starts upright.
+        window.scene.arm_placement("led-5mm")
+        assert window.scene.armed_orientation == (0, False)
+    finally:
+        window._mark_saved()
+        window.close()
+
+
+def test_the_ghost_is_judged_turned() -> None:
+    """Red where the turned part does not fit, which is not where the upright one doesn't."""
+    from perfboard_studio.geometry import transform_pin_offset
+    from perfboard_studio.model import HoleCoord
+
+    window = _window_placing()
+    try:
+        board = window.bus.document.board
+        far = window.lookup("r-axial-3").pins[-1]
+        d_col, d_row = transform_pin_offset(far.d_col, far.d_row, 90, False)
+        # On the last column, with room for the turned leads above or below.
+        anchor = HoleCoord(board.cols - 1, board.rows // 2 - d_row // 2)
+        assert window.scene._placement_blocked(anchor)  # Upright, its leads run off the edge.
+        window.act_rotate_cw.trigger()
+        assert d_col == 0
+        assert not window.scene._placement_blocked(anchor)
+    finally:
+        window._mark_saved()
+        window.close()
+
+
+def test_m_flips_the_part_about_to_be_placed_and_r_leaves_the_selection_alone() -> None:
+    from perfboard_studio.model import HoleCoord
+
+    window = _window_placing()
+    try:
+        window.scene.place_armed(HoleCoord(4, 4))
+        first = window.bus.document.components[-1]
+        window.scene.select_components([first.id])
+        window.act_mirror.trigger()
+        assert window.scene.armed_orientation == (0, True)
+        window.act_rotate_cw.trigger()
+        # Still armed, so R was about the part under the pointer, not the selected one.
+        assert next(c for c in window.bus.document.components if c.id == first.id).rotation == 0
+    finally:
+        window._mark_saved()
+        window.close()

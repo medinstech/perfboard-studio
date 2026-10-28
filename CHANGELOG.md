@@ -34,6 +34,11 @@ closed without a bump.
   selection and take it back out, for a click and for a rubber band, on both. Edit ▸ Select
   All (Ctrl+A) selects every part on the board, or every symbol when the sheet has the
   keyboard; a text field keeps Ctrl+A for its own text.
+- **R, Shift+R and M turn and flip the part about to be placed.** They turned the selection
+  while a part was armed and the ghost stayed upright, so a part that had to go in
+  sideways went down the wrong way and was turned afterwards. The ghost now turns under the
+  pointer, red where the turned part does not fit, and goes down as shown; the next one of
+  the same part goes down the same way round.
 - **A trackpad pans the board and the sheet.** The wheel always zoomed, so on a laptop two
   fingers zoomed, a sideways swipe zoomed out, and with no middle button the scrollbars were
   the only way across a board. Now a mouse wheel's notches still zoom, two fingers pan,

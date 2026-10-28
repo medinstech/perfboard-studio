@@ -7157,6 +7157,8 @@ class MainWindow(QMainWindow):
         self._catalog_value = ""
 
     def _on_placement_armed(self, footprint_id: str) -> None:
+        # R and M turn an armed part, so they come on and go off with the arming.
+        self._refresh_selection_state()
         if not footprint_id:
             self.label_place_hint.setText(t("Pick a part, then click the board. Esc cancels."))
             self.view.viewport().unsetCursor()
@@ -10569,6 +10571,11 @@ class MainWindow(QMainWindow):
             self.part_list.show_selected(c.id for c in components)
         for action in self.selection_actions:
             action.setEnabled(bool(components))
+        # Turning and flipping also mean the part about to be placed, while one is armed
+        # (``on_rotate_selection``): greyed out with nothing selected, R did nothing to it.
+        if self.scene.armed_footprint_id is not None:
+            for action in (self.act_rotate_cw, self.act_rotate_ccw, self.act_mirror):
+                action.setEnabled(True)
         # ...except that copper on its own is a block worth copying: a length of rail,
         # or the three traces that make an input stage. Rotate and Mirror mean nothing
         # without a part, so they stay off.
@@ -11511,14 +11518,20 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(done, 5000)
 
     def on_rotate_selection(self, delta: int) -> None:
-        components = self._require_selection(t("rotate it"))
-        if not components:
-            return
         # "Clockwise" is what the person sees. The solder side is the board mirrored, so a
         # rotation that is clockwise in the document turns the other way on that screen;
         # the keys are corrected the same way the arrow keys are in view2d.
         if self.side == "bottom":
             delta = -delta
+        # While a part is armed, R is about THAT part: the one under the pointer, not yet
+        # put down (``BoardScene.orient_armed``).
+        if self.scene.armed_footprint_id is not None:
+            rotation, mirrored = self.scene.armed_orientation
+            self.scene.orient_armed(_rotation_after(rotation, delta), mirrored)
+            return
+        components = self._require_selection(t("rotate it"))
+        if not components:
+            return
         results = [
             self.bus.dispatch(
                 "component.rotate",
@@ -11529,6 +11542,10 @@ class MainWindow(QMainWindow):
         self._report_refusals(results, t("Rotated {count} part(s)").format(count=len(results)))
 
     def on_mirror_selection(self) -> None:
+        if self.scene.armed_footprint_id is not None:
+            rotation, mirrored = self.scene.armed_orientation
+            self.scene.orient_armed(rotation, not mirrored)
+            return
         components = self._require_selection(t("mirror it"))
         if not components:
             return

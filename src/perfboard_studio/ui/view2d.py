@@ -3618,6 +3618,11 @@ class BoardScene(QGraphicsScene):
         self._ratsnest_item: RatsnestItem | None = None
         self._ratsnest_links: tuple[RatsnestLink, ...] = ()
         self._armed_footprint: Footprint | None = None
+        #: How the part about to be placed is turned and flipped (R, Shift+R and M while
+        #: placing). Kept across placements of the same part -- a row of resistors all go
+        #: down the same way round -- and back to upright when another part is armed.
+        self._armed_rotation: Rotation = 0
+        self._armed_mirrored = False
         self._armed_id: str | None = None
         self._draw_kind: ConductorKind | None = None
         self._draw_path: list[HoleCoord] = []
@@ -4047,7 +4052,13 @@ class BoardScene(QGraphicsScene):
         # The ghost is an item like any other, so the rebuild above removed it. Placement is a
         # mode that survives placing a part -- you usually want several -- so it comes back.
         if self._armed_footprint is not None:
-            self._ghost = PlacementGhostItem(self._armed_footprint, board, self.side)
+            self._ghost = PlacementGhostItem(
+                self._armed_footprint,
+                board,
+                self.side,
+                self._armed_rotation,
+                self._armed_mirrored,
+            )
             self.addItem(self._ghost)
             # Back under the pointer, not at A1: a fresh ghost starts at the origin, and
             # placing a part is exactly the moment the next one is being lined up.
@@ -4715,6 +4726,9 @@ class BoardScene(QGraphicsScene):
 
     def arm_placement(self, footprint_id: str | None) -> None:
         """Arm (or, with None, disarm) placing a footprint on the next board click."""
+        if footprint_id is None or footprint_id != self._armed_id:
+            self._armed_rotation = 0
+            self._armed_mirrored = False
         self._armed_footprint = None if footprint_id is None else self.lookup(footprint_id)
         self._armed_id = footprint_id if self._armed_footprint is not None else None
         self._clear_ghost()
@@ -4728,7 +4742,13 @@ class BoardScene(QGraphicsScene):
             self._disarm_connect()
             self._disarm_measure()
             self._disarm_cutting()
-            self._ghost = PlacementGhostItem(self._armed_footprint, self.document.board, self.side)
+            self._ghost = PlacementGhostItem(
+                self._armed_footprint,
+                self.document.board,
+                self.side,
+                self._armed_rotation,
+                self._armed_mirrored,
+            )
             self.addItem(self._ghost)
             if self._last_hole is not None:
                 self._ghost.set_anchor(self._last_hole, self._placement_blocked(self._last_hole))
@@ -4737,6 +4757,33 @@ class BoardScene(QGraphicsScene):
     @property
     def armed_footprint_id(self) -> str | None:
         return self._armed_id
+
+    @property
+    def armed_orientation(self) -> tuple[Rotation, bool]:
+        """How the part about to be placed is turned, and whether it is flipped."""
+        return self._armed_rotation, self._armed_mirrored
+
+    def orient_armed(self, rotation: Rotation, mirrored: bool) -> None:
+        """Turn or flip the part about to be placed, before it is put down.
+
+        R TURNED THE SELECTION WHILE A PART WAS ARMED, and the ghost stayed upright: an
+        electrolytic that had to go in sideways went down the wrong way and was turned
+        afterwards -- a second command, and a second look at where its pins had gone. The
+        ghost is redrawn in the new orientation under the pointer, red where that
+        orientation does not fit, and the placement takes it (``component.place`` has
+        always accepted a rotation and a flip).
+        """
+        if self._armed_footprint is None:
+            return
+        self._armed_rotation = rotation
+        self._armed_mirrored = mirrored
+        self._clear_ghost()
+        self._ghost = PlacementGhostItem(
+            self._armed_footprint, self.document.board, self.side, rotation, mirrored
+        )
+        self.addItem(self._ghost)
+        if self._last_hole is not None:
+            self._ghost.set_anchor(self._last_hole, self._placement_blocked(self._last_hole))
 
     def _clear_ghost(self) -> None:
         if self._ghost is not None:
@@ -4812,7 +4859,9 @@ class BoardScene(QGraphicsScene):
             return []
         holes = []
         for pin in footprint.pins:
-            d_col, d_row = transform_pin_offset(pin.d_col, pin.d_row, 0, False)
+            d_col, d_row = transform_pin_offset(
+                pin.d_col, pin.d_row, self._armed_rotation, self._armed_mirrored
+            )
             holes.append(HoleCoord(anchor.col + d_col, anchor.row + d_row))
         return holes
 
@@ -4987,6 +5036,8 @@ class BoardScene(QGraphicsScene):
                 value=self.placement_value,
                 footprint_id=self._armed_id,
                 anchor=anchor,
+                rotation=self._armed_rotation,
+                mirrored=self._armed_mirrored,
                 pin_names=self.placement_pin_names,
                 symbol=self.placement_symbol,
             ),
@@ -5437,7 +5488,14 @@ class BoardView(QGraphicsView):
             return (footprint, 0, False, None) if footprint is not None else None
         footprint_id = self._dropped_footprint(event)
         footprint = scene.lookup(footprint_id) if footprint_id is not None else None
-        return (footprint, 0, False, None) if footprint is not None else None
+        if footprint is None:
+            return None
+        # Turned as the armed part is: the drop places it through the arming
+        # (``MainWindow._on_footprint_dropped``), so that is how it will go down.
+        rotation, mirrored = (
+            scene.armed_orientation if scene.armed_footprint_id == footprint_id else (0, False)
+        )
+        return footprint, int(rotation), mirrored, None
 
     def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
         self.show_mode("")
