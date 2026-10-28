@@ -81,6 +81,7 @@ from .model import (
     SymbolPlacement,
     TrackCut,
     WireConductor,
+    body_clearance_problem,
     normalized_pin_names,
 )
 
@@ -209,6 +210,7 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "edgeConnectors",
     "boardNotes",
     "heightLimitMm",
+    "bodyClearanceMm",
     "parts",
     "nets",
     "sheet",
@@ -693,6 +695,13 @@ def serialize_document(doc: PerfDocument) -> str:
             **(
                 {"heightLimitMm": _num("heightLimitMm", doc.height_limit_mm)}
                 if doc.height_limit_mm is not None
+                else {}
+            ),
+            # Omitted when unset -- the courtyard rule every file before it was judged by --
+            # so all fifteen golden fixtures keep their bytes.
+            **(
+                {"bodyClearanceMm": _num("bodyClearanceMm", doc.body_clearance_mm)}
+                if doc.body_clearance_mm is not None
                 else {}
             ),
             # Omitted when empty, like the two arrays above and for the same reason: a
@@ -1831,6 +1840,20 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         )
         height_limit_mm = None
 
+    clearance_raw = migrated.get("bodyClearanceMm")
+    body_clearance_mm = (
+        None if clearance_raw is None else _expect_number(clearance_raw, "bodyClearanceMm")
+    )
+    clearance_problem = (
+        None if body_clearance_mm is None else body_clearance_problem(body_clearance_mm)
+    )
+    if clearance_problem is not None:
+        # Dropped with a warning, as a height limit nothing fits under is: a hand-edited
+        # number should not lock anybody out of their board, and without it the parts are
+        # judged exactly as before the setting existed.
+        warnings.append(f"bodyClearanceMm: {clearance_problem} Ignored.")
+        body_clearance_mm = None
+
     # What ``board.set`` refuses about a breadboard's features, refused here too: a bore
     # or a finger strip in a block of plastic describes no board anybody can hold, and a
     # solderable breadboard's pattern runs to the edge where a finger strip would go.
@@ -1854,6 +1877,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         edge_connectors=edge_connectors,
         board_notes=tuple(board_notes),
         height_limit_mm=height_limit_mm,
+        body_clearance_mm=body_clearance_mm,
         format_version=CURRENT_FORMAT_VERSION,
     )
     return document, warnings

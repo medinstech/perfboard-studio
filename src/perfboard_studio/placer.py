@@ -107,12 +107,13 @@ from .commands import (
     preset_payload,
 )
 from .connectivity import FootprintLookup
-from .footprints import body_extent, entry_corridor, raised_board, wire_entry
+from .footprints import body_extent, body_is_round, entry_corridor, raised_board, wire_entry
 from .geometry import (
     STANDARD_PRESETS,
     BoardPreset,
     SubstrateEdges,
     board_from_preset,
+    bodies_clash,
     box_centre_distance_mm,
     convex_polygons_overlap,
     edge_overhangs_mm,
@@ -405,7 +406,8 @@ class PlacementCost:
     alignment_mm: float
     #: Extra lanes the parts are spread over, as millimetres (one lane, one pitch).
     lane_mm: float
-    #: Pairs whose courtyards overlap, by exactly the predicate DRC rule 1 uses.
+    #: Pairs whose courtyards overlap -- or, on a document with a body clearance, whose
+    #: bodies are in each other's way -- by exactly the predicate DRC rule 1 uses.
     overlap_pairs: int
     overlap_mm2: float
     collisions: int
@@ -814,6 +816,15 @@ class _Part:
     headroom: float | None
     rel_raised: tuple[_Box | None, ...]
     rel_headers: tuple[tuple[_Box, ...], ...]
+    #: Whether the body is round (``footprints.body_is_round``), for a body clearance.
+    round_body: bool
+    #: The box ``_Scorer.local`` skips a pair by, per rotation index: the courtyard box --
+    #: ``rel_box`` itself -- unless the document asks for a body clearance, and then the box
+    #: round the body and the pins grown by half the clearance and a hair. Not the courtyard
+    #: then, because a pin header's courtyard IS its moulding: two of them closer than the
+    #: clearance have courtyards that never meet. Generous by the hair, so a pair it lets
+    #: past is asked in full and a pair it skips has every term exactly zero.
+    rel_gate: tuple[_Box | None, ...]
 
 
 def _rotation_index(rotation: Rotation) -> int:
@@ -843,6 +854,7 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
         entries: list[_Box | None] = []
         entry_dirs: list[tuple[float, float] | None] = []
         polys: list[tuple[Point2, ...] | None] = []
+        gates: list[_Box | None] = []
         raised = raised_board(footprint, board.pitch)
         raised_boxes: list[_Box | None] = []
         headers: list[tuple[_Box, ...]] = []
@@ -887,9 +899,15 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 ys = [p.y for p in outline]
                 boxes.append(_Box(min(xs), max(xs), min(ys), max(ys)))
                 polys.append(None if is_axis_aligned_box(outline) else outline)
+                gates.append(
+                    boxes[-1]
+                    if doc.body_clearance_mm is None
+                    else _gate(bodies[-1], placed, board.pitch, doc.body_clearance_mm)
+                )
             else:
                 boxes.append(None)
                 polys.append(None)
+                gates.append(None)
 
             if placed:
                 min_dc = min(dc for dc, _ in placed)
@@ -930,9 +948,27 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 headroom=None if raised is None else raised.headroom,
                 rel_raised=tuple(raised_boxes),
                 rel_headers=tuple(headers),
+                round_body=body_is_round(footprint),
+                rel_gate=tuple(gates),
             )
         )
     return parts
+
+
+#: How much past half the clearance a body-clearance gate reaches (``_Part.rel_gate``): a
+#: hair, so float rounding in the gate can only ever let one more pair be asked.
+_GATE_SLACK_MM = 1e-6
+
+
+def _gate(
+    body: _Box, pins: tuple[tuple[int, int], ...], pitch: float, clearance: float
+) -> _Box:
+    """The box round a body and its pins, grown by half ``clearance`` and the slack: two of
+    them meet whenever the two parts could clash under ``geometry.bodies_clash``."""
+    grow = clearance / 2 + _GATE_SLACK_MM
+    xs = [body.min_x, body.max_x, *(dc * pitch for dc, _ in pins)]
+    ys = [body.min_y, body.max_y, *(dr * pitch for _, dr in pins)]
+    return _Box(min(xs) - grow, max(xs) + grow, min(ys) - grow, max(ys) + grow)
 
 
 # ---------------------------------------------------------------------------
@@ -1460,6 +1496,19 @@ class _Scorer:
     #: on nearly every board, and then ``local`` asks nothing about a module at all.
     _raised_positions: tuple[int, ...] = field(default=(), repr=False, compare=False)
     _raised_parts: list[_Part] | None = field(default=None, repr=False, compare=False)
+    #: The document's body clearance (``PerfDocument.body_clearance_mm``), or ``None`` for
+    #: the courtyard rule. Read once, in :meth:`__post_init__`, to choose ``_pair_impl``.
+    body_clearance: float | None = None
+    #: :meth:`_pair_terms` or :meth:`_pair_terms_bodies`, chosen once per scorer, so the
+    #: courtyard path is not asked which it is on every pair it works out.
+    _pair_impl: Callable[[_State, int, int], tuple[int, float, float]] = field(
+        init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        self._pair_impl = (
+            self._pair_terms if self.body_clearance is None else self._pair_terms_bodies
+        )
 
     # -- individual terms, each returning millimetres (or mm^2) -------------
 
@@ -1771,7 +1820,7 @@ class _Scorer:
             return known
         if len(self._pair_memo) >= PAIR_MEMO_LIMIT:
             self._pair_memo.clear()
-        known = self._pair_memo[key] = self._pair_terms(state, a, b)
+        known = self._pair_memo[key] = self._pair_impl(state, a, b)
         return known
 
     def _pair_terms(self, state: _State, a: int, b: int) -> tuple[int, float, float]:
@@ -1815,6 +1864,68 @@ class _Scorer:
         if distance is not None:
             heat = max(0.0, HEAT_CLEARANCE_MM - distance)
         return touching, overlap, heat
+
+    def _pair_terms_bodies(self, state: _State, a: int, b: int) -> tuple[int, float, float]:
+        """:meth:`pair_terms` on a document with a body clearance.
+
+        The verdict is ``geometry.bodies_clash`` -- DRC rule 1's on such a document
+        (``drc._check_body_clearance``) -- asked of the pairs whose gates
+        (``_Part.rel_gate``) meet, with a part that fits under a module let go exactly as
+        in :meth:`_pair_terms`; the area, the annealer's gradient, is the gates' overlap,
+        charged only for a pair the verdict names. Heat is the courtyards', as DRC's is.
+        Kept apart from :meth:`_pair_terms` so the courtyard rule is not asked one question
+        more on every board that does not set a clearance.
+        """
+        part_a, part_b = state.parts[a], state.parts[b]
+        gate_a = part_a.rel_gate[state.rot[a]]
+        gate_b = part_b.rel_gate[state.rot[b]]
+        touching = 0
+        overlap = 0.0
+        if gate_a is not None and gate_b is not None:
+            ax = state.col[a] * self.board_pitch
+            ay = state.row[a] * self.board_pitch
+            bx = state.col[b] * self.board_pitch
+            by = state.row[b] * self.board_pitch
+            dx = min(gate_a.max_x + ax, gate_b.max_x + bx) - max(gate_a.min_x + ax, gate_b.min_x + bx)
+            dy = min(gate_a.max_y + ay, gate_b.max_y + by) - max(gate_a.min_y + ay, gate_b.min_y + by)
+            if dx > 0 and dy > 0 and self._bodies_clash(state, a, b):
+                fits = (part_a.headroom is not None or part_b.headroom is not None) and (
+                    self._beneath(state, a, b, covered=False)
+                    or self._beneath(state, b, a, covered=False)
+                )
+                if not fits:
+                    touching = 1
+                    overlap = dx * dy
+
+        heat = 0.0
+        distance = self._heat_distance(state, a, b)
+        if distance is not None:
+            heat = max(0.0, HEAT_CLEARANCE_MM - distance)
+        return touching, overlap, heat
+
+    def _bodies_clash(self, state: _State, a: int, b: int) -> bool:
+        """``geometry.bodies_clash`` for two placed parts, on the boxes and pins DRC builds:
+        the anchor added to each edge of a body turned once (``drc.placed_body_box``), and
+        each pin's hole times the pitch (``geometry.hole_to_mm``)."""
+        part_a, part_b = state.parts[a], state.parts[b]
+        pitch = self.board_pitch
+        clearance = self.body_clearance
+        assert clearance is not None  # Only _pair_terms_bodies asks, and only with one.
+        ax = state.col[a] * pitch
+        ay = state.row[a] * pitch
+        bx = state.col[b] * pitch
+        by = state.row[b] * pitch
+        body_a = part_a.rel_body[state.rot[a]]
+        body_b = part_b.rel_body[state.rot[b]]
+        return bodies_clash(
+            (ax + body_a.min_x, ax + body_a.max_x, ay + body_a.min_y, ay + body_a.max_y),
+            part_a.round_body,
+            ((col * pitch, row * pitch) for col, row in state.pins(a)),
+            (bx + body_b.min_x, bx + body_b.max_x, by + body_b.min_y, by + body_b.max_y),
+            part_b.round_body,
+            ((col * pitch, row * pitch) for col, row in state.pins(b)),
+            clearance,
+        )
 
     def _heat_distance(self, state: _State, a: int, b: int) -> float | None:
         """Body-centre distance of a (source, sensitive) pair, mm, or None for any other.
@@ -1989,7 +2100,7 @@ class _Scorer:
         for a in positions:
             part_a = parts[a]
             rot_a = state.rot[a]
-            box_a = part_a.rel_box[rot_a]
+            box_a = part_a.rel_gate[rot_a]
             a_entry = part_a.rel_entry[rot_a] is not None
             a_source = part_a.heat_source
             a_sensitive = part_a.heat_sensitive
@@ -2005,7 +2116,7 @@ class _Scorer:
                 rot_b = state.rot[b]
                 ask = (a_source and part_b.heat_sensitive) or (part_b.heat_source and a_sensitive)
                 if not ask and box_a is not None:
-                    box_b = part_b.rel_box[rot_b]
+                    box_b = part_b.rel_gate[rot_b]
                     if box_b is not None:
                         bx = state.col[b] * pitch
                         by = state.row[b] * pitch
@@ -2075,6 +2186,7 @@ def _make_scorer(
     strips: _Strips | None,
     dead_holes: frozenset[tuple[int, int]] = frozenset(),
     mounts: Sequence[MountingHole] = (),
+    body_clearance: float | None = None,
 ) -> _Scorer:
     """The one place a board becomes a cost function.
 
@@ -2107,6 +2219,7 @@ def _make_scorer(
             )
             for mount in mounts
         ),
+        body_clearance=body_clearance,
     )
 
 
@@ -2963,7 +3076,14 @@ def _conflicts_by_part(doc: PerfDocument, lookup: FootprintLookup) -> dict[Compo
     strips = _build_strips(doc, parts, pin_nets)
     state = _initial_state(doc, parts, strips)
     scorer = _make_scorer(
-        doc.board, PlacementWeights(), nets, nets_of, strips, _dead_hole_keys(doc), doc.mounting_holes
+        doc.board,
+        PlacementWeights(),
+        nets,
+        nets_of,
+        strips,
+        _dead_hole_keys(doc),
+        doc.mounting_holes,
+        doc.body_clearance_mm,
     )
     counts = [0] * len(parts)
     occupants: dict[tuple[int, int], list[int]] = {}
@@ -3187,6 +3307,7 @@ def _run_restart(job: _RestartJob, should_stop: Callable[[], bool] | None) -> _R
         strips,
         _dead_hole_keys(job.doc),
         job.doc.mounting_holes,
+        job.doc.body_clearance_mm,
     )
     movable = [position for position, part in enumerate(parts) if part.movable]
     return _restart(
@@ -3242,6 +3363,7 @@ def plan_placement(
         strips,
         _dead_hole_keys(doc),
         doc.mounting_holes,
+        doc.body_clearance_mm,
     )
     before = scorer.full(state)
     movable = [position for position, part in enumerate(state.parts) if part.movable]

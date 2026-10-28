@@ -22,6 +22,16 @@ closed without a bump.
 
 ### Added
 
+- **Parts can be judged by their bodies instead of their courtyards.** A courtyard pads
+  every part by half a pitch, so two TO-92s two rows apart, bodies 1.4 mm apart and easy
+  to fit, were an overlap error. Board Features ▸ Measure between bodies sets a body
+  clearance for the design: two parts are then in each other's way only when their real
+  bodies are closer than it (a can measured as the circle it is), or when a lead goes into
+  a hole under another part's body. DRC and Auto-place both use it, MCP's
+  `set_body_clearance` sets it, and it goes with the design to a new board. It is off by
+  default, and a board without it is judged and saved exactly as before.
+  (suggested by @vindavs, #12)
+
 - **An agent's `optimize_placement` runs in worker processes, as Place on the Board
   does.** The same plan, in the time of the slowest restart: atmega328-relay 8.2 → 2.3 s
   and nano-relay 2.8 → 1.1 s with four workers, through the server's own session, pool

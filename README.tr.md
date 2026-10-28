@@ -366,7 +366,7 @@ claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-
 uygulama da Python'suz olarak aynı sunucu: Windows'ta `perfboard-studio-cli.exe --mcp`;
 her platformdaki yolu docs/MCP.md'de.
 
-57 tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
+58 tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
 (`A1`, `C7`, `AC12`) — breadboard'da ise tahtanın bastığı gibi (`e12`, `T+12`) — hiçbir
 yerde ham koordinat yok; bitmiş kartı kutusunun çizildiği CAD
 programına teslim eden `export_step` de dahil. Tool listesi, diğer istemcilerin
@@ -474,7 +474,7 @@ Sırada, [PLAN.md](./PLAN.md) §11'in koyduğu sırayla:
 
 | | |
 |---|---|
-| [docs/MCP.md](./docs/MCP.md) | 57 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
+| [docs/MCP.md](./docs/MCP.md) | 58 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
 | [examples/README.md](./examples/README.md) | her örnek kartın neyi göstermek için orada olduğu (yalnızca İngilizce) |
 | [CHANGELOG.md](./CHANGELOG.md) | her sürüm, ve yayınlanmamış bir yapının bir sonrakine doğru ne biriktirdiği (yalnızca İngilizce) |
 | [docs/RELEASING.md](./docs/RELEASING.md) | etiket ritüeli, ve `release.yml`'in ondan üç platformda ne ürettiği (yalnızca İngilizce) |

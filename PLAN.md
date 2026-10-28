@@ -628,7 +628,7 @@ CI görsel testleri GUI olmadan çalışmalı. `--headless` (`ui/headless.py`) 2
 
 ### 9.2 Tool yüzeyi
 
-**Gerçekleşen: 57 tool**, plandaki "~25"e karşı. Tavan tutmadı, kural tuttu ve asıl
+**Gerçekleşen: 58 tool**, plandaki "~25"e karşı. Tavan tutmadı, kural tuttu ve asıl
 istenen kuraldı: her tool `docs/MCP.md`'de bir gruba ve bir gerekçeye bağlı, ve
 `test_mcp.py` bunu iki yönden birden denetliyor — dokümante edilmemiş bir tool kimsenin
 savunmadığı bir tool, artık var olmayan bir dokümante tool ise ajanı olmayan bir şeye
@@ -748,7 +748,7 @@ güncellemenin kurulumu **başlatmamasının** sebeplerinden biri de bu (§14).
 | ~~Linux WebKitGTK'da WebGL yetersiz~~ | — | **Kapandı, riskten kaçınılarak.** M0 ölçtü ve cevap "bu riski taşımaya değmez" çıktı: çatı Qt + VTK oldu (D5), platform sorusu ortadan kalktı. Yerini alan risk, sürücünün VTK'ya yetmemesi — `PERFBOARD_STUDIO_SIMPLE_3D=1` onun kaçış yolu |
 | Autorouter beklenti tuzağı | **Yüksek** | "Interaktif asistan" konumlandırması; route edilemeyen netler açıkça raporlanır, sessizce bırakılmaz |
 | 3D'de fotogerçekçilik scope creep | Orta | Hedef sabit: "doğru ve anlaşılır". **Hedef bir kez bilerek yükseltildi:** parçalar Phong yerine malzeme olarak gölgelendiriliyor, çünkü hiçbir Phong değeri alüminyumu alüminyum göstermiyordu — ve bir DIP ile kristal kutuyu ayırt edememek doğruluk sorunuydu, süs sorunu değil. Bütçe hâlâ sınırlı: iki ağır parçanın ikisi de kapatılabiliyor |
-| MCP tool sayısı patlaması | Orta | **Gerçekleşen: 57 tool.** Tavan tutmadı, kural tuttu: her tool `docs/MCP.md`'de bir gruba ve bir gerekçeye bağlı (11 grup; sonuncusu "tasarım", yukarıdaki "Devre girişi" notuna bak). ~25 sayısı yüzey bilinmeden atılmış bir tahmindi; korumaya çalıştığı şey sayı değil gerekçe zorunluluğuydu ve o yürürlükte. Kuralın bir kez kaydığı da ölçüldü: `reroute` sunucuda vardı, dokümanda yoktu — sayıyı üç yerde üç farklı yapan buydu, ve artık `test_mcp.py` kaymayı bir daha bırakmıyor |
+| MCP tool sayısı patlaması | Orta | **Gerçekleşen: 58 tool.** Tavan tutmadı, kural tuttu: her tool `docs/MCP.md`'de bir gruba ve bir gerekçeye bağlı (11 grup; sonuncusu "tasarım", yukarıdaki "Devre girişi" notuna bak). ~25 sayısı yüzey bilinmeden atılmış bir tahmindi; korumaya çalıştığı şey sayı değil gerekçe zorunluluğuydu ve o yürürlükte. Kuralın bir kez kaydığı da ölçüldü: `reroute` sunucuda vardı, dokümanda yoktu — sayıyı üç yerde üç farklı yapan buydu, ve artık `test_mcp.py` kaymayı bir daha bırakmıyor |
 | Lisans kirlenmesi (GPL'li rakip kod) | **Yüksek** | Clean-room tutuldu: DIYLC/VeroRoute kaynağına bakılmadı; `docs/prior-art.md` neye bakıldığını yazıyor. Apache-2.0 olmayan tek parça KiCad'in 3D mesh'leri (D6), kendi lisansıyla tek klasörde |
 | Kapsamın 3 kart tipine yayılması | Orta | v1 sadece pad-per-hole. Stripboard artık uçtan uca: `stripboard.py` geometri, `striproute.py` router, 2D'de kesme modu, ve `placer.py` strip hizasını skorluyor |
 | **Lehim yolu güvenilirliği**: araç kullanıcıyı kırılgan yapıya teşvik edebilir | **Yüksek** | DRC bilgilendirir, engellemez: uzun saf yolda omurga önerir, FR-2'de ısı uyarısı verir, R5' risklerini test adımına çevirir. Karar kullanıcının, veri aracın |

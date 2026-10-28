@@ -53,6 +53,7 @@ from .footprints import (
     WIRE_ENTRY_CLEARANCE_MM,
     RaisedBoard,
     body_extent,
+    body_is_round,
     entry_corridor,
     raised_board,
     wire_entry,
@@ -60,6 +61,8 @@ from .footprints import (
 from .geometry import (
     BODY_OVERHANG_TOLERANCE_MM,
     all_pin_holes,
+    bodies_clash,
+    body_gap_mm,
     box_centre_distance_mm,
     consumed_holes,
     convex_polygons_overlap,
@@ -86,6 +89,7 @@ from .geometry import (
     path_length_mm,
     paths_cross,
     pin_hole,
+    point_under_body,
     stands_under_raised_board,
     substrate_edges_mm,
     transform_offset,
@@ -499,6 +503,8 @@ def _courtyards_overlap(a: _Courtyard, b: _Courtyard) -> bool:
 
 
 def _check_component_body_overlap(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    if doc.body_clearance_mm is not None:
+        return _check_body_clearance(doc, lookup, doc.body_clearance_mm)
     courtyards: list[tuple[ComponentInstance, Footprint, _Courtyard]] = []
     for component in doc.components:
         footprint = lookup(component.footprint_id)
@@ -538,6 +544,93 @@ def _check_component_body_overlap(doc: PerfDocument, lookup: FootprintLookup) ->
                 ),
                 holes=(a_component.anchor, b_component.anchor),
                 component_ids=(a_component.id, b_component.id),
+            )
+        )
+    return violations
+
+
+@dataclass(frozen=True, slots=True)
+class _PlacedBody:
+    """One part as a body clearance judges it: its real body on the board, whether that is
+    round, and where its pins are -- all board-space mm, in the frame of the holes."""
+
+    component: ComponentInstance
+    footprint: Footprint
+    box: tuple[float, float, float, float]
+    round: bool
+    pins: tuple[tuple[float, float], ...]
+
+
+def _placed_body(component: ComponentInstance, footprint: Footprint, board: Board) -> _PlacedBody:
+    return _PlacedBody(
+        component=component,
+        footprint=footprint,
+        box=placed_body_box(component, footprint, board),
+        round=body_is_round(footprint),
+        pins=tuple(
+            (point.x, point.y)
+            for point in (hole_to_mm(at, board) for _pin, at in all_pin_holes(component, footprint))
+        ),
+    )
+
+
+def _check_body_clearance(
+    doc: PerfDocument, lookup: FootprintLookup, clearance: float
+) -> list[DrcViolation]:
+    """Rule 1 on a document that asks for a body clearance (#12).
+
+    The same rule, the same id and the same pairs -- every two parts with an outline, a
+    part that fits under a module let go (:func:`fits_under`) -- judged by
+    ``geometry.bodies_clash`` instead of their courtyards: bodies closer than the clearance,
+    or a pin under the other's body. The placer prices exactly this predicate
+    (``placer._Scorer._pair_terms_bodies``). The message says which of the three it is,
+    because "move it 0.2 mm" and "a lead is under the IC" are different fixes.
+    """
+    bodies = [
+        _placed_body(component, footprint, doc.board)
+        for component in doc.components
+        if (footprint := lookup(component.footprint_id)) is not None and footprint.body_outline
+    ]
+    violations: list[DrcViolation] = []
+    for a, b in itertools.combinations(bodies, 2):
+        if not bodies_clash(a.box, a.round, a.pins, b.box, b.round, b.pins, clearance):
+            continue
+        if fits_under(a.component, a.footprint, b.component, b.footprint, doc.board) or (
+            fits_under(b.component, b.footprint, a.component, a.footprint, doc.board)
+        ):
+            continue
+        gap = body_gap_mm(a.box, a.round, b.box, b.round)
+        if gap < 0:
+            first, second, says = a, b, "have overlapping bodies."
+        elif gap < clearance:
+            first, second, says = a, b, (
+                f"are {gap:.2f} mm apart, closer than the {clearance:g} mm body clearance "
+                f"this design asks for."
+            )
+        else:
+            # Not the bodies, so a pin: name the part whose lead is under the other one.
+            first, second = (
+                (a, b)
+                if any(point_under_body(x, y, b.box, b.round) for x, y in a.pins)
+                else (b, a)
+            )
+            says = ""
+        where_first = _safe_hole(first.component.anchor, doc.board)
+        where_second = _safe_hole(second.component.anchor, doc.board)
+        message = (
+            f"Component {first.component.ref} (anchored at {where_first}) has a pin under the "
+            f"body of {second.component.ref} (anchored at {where_second})."
+            if not says
+            else f"Component {first.component.ref} (anchored at {where_first}) and "
+            f"{second.component.ref} (anchored at {where_second}) {says}"
+        )
+        violations.append(
+            DrcViolation(
+                rule="component-body-overlap",
+                severity="error",
+                message=message,
+                holes=(first.component.anchor, second.component.anchor),
+                component_ids=(first.component.id, second.component.id),
             )
         )
     return violations

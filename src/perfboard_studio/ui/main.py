@@ -182,6 +182,7 @@ from perfboard_studio.commands import (
     RenameDocumentPayload,
     RotateComponentPayload,
     SetBoardPayload,
+    SetBodyClearancePayload,
     SetHeightLimitPayload,
     UnplaceComponentPayload,
     UpdateBoardNotePayload,
@@ -1874,6 +1875,35 @@ class BoardFeaturesDialog(QDialog):
         height.addRow(t("Height limit"), self.height_limit)
         height.addRow("", apply_height)
 
+        # Off is the courtyard rule every board has always been judged by; on, the bodies
+        # themselves, that far apart (#12). A box and a spin box rather than a spin box with
+        # a special value, as the height limit has: 0 mm is a real clearance here.
+        self.body_measure = QCheckBox(t("Measure between bodies"))
+        self.body_measure.setToolTip(
+            t(
+                "Off, parts are kept apart by their courtyards (a half-pitch margin round "
+                "each). On, by their real bodies plus this clearance — tighter, for a board "
+                "where every hole counts."
+            )
+        )
+        self.body_clearance = QDoubleSpinBox()
+        self.body_clearance.setRange(0.0, 2.5)
+        self.body_clearance.setSingleStep(0.1)
+        self.body_clearance.setDecimals(2)
+        self.body_clearance.setSuffix(" mm")
+        self.body_clearance.setToolTip(
+            t(
+                "How far apart two parts' bodies must stand. A pin under another part's "
+                "body is still in its way."
+            )
+        )
+        self.body_measure.toggled.connect(self.body_clearance.setEnabled)
+        apply_clearance = QPushButton(t("Set Body Clearance"))
+        apply_clearance.clicked.connect(self._on_set_body_clearance)
+        height.addRow("", self.body_measure)
+        height.addRow(t("Body clearance"), self.body_clearance)
+        height.addRow("", apply_clearance)
+
         mounting = QFormLayout()
         mounting.addRow(t("Hole diameter"), self.mount_diameter)
         mounting.addRow(t("Inset (holes)"), self.mount_inset)
@@ -1895,7 +1925,7 @@ class BoardFeaturesDialog(QDialog):
         # None of them is the dialog's default. Qt makes the first push button it finds
         # the default, which was Remove -- so Enter in the hole-diameter box deleted the
         # selected mounting hole. Each of these is done by clicking it.
-        for button in (self.act_remove, add_corners, add_connector, apply_height):
+        for button in (self.act_remove, add_corners, add_connector, apply_height, apply_clearance):
             button.setAutoDefault(False)
 
         # What this board cannot take is not offered, rather than answered in English with
@@ -1958,6 +1988,10 @@ class BoardFeaturesDialog(QDialog):
         # Read back rather than left as typed, so the box shows what the document says
         # after an undo -- the dialog stays open while the board changes underneath it.
         self.height_limit.setValue(doc.height_limit_mm if doc.height_limit_mm else 0.0)
+        clearance = doc.body_clearance_mm
+        self.body_measure.setChecked(clearance is not None)
+        self.body_clearance.setEnabled(clearance is not None)
+        self.body_clearance.setValue(0.5 if clearance is None else clearance)
 
     def _fit_fingers(self, *_args: object) -> None:
         board = self.bus.document.board
@@ -2053,6 +2087,17 @@ class BoardFeaturesDialog(QDialog):
             self.bus.dispatch(
                 "height-limit.set",
                 SetHeightLimitPayload(height_limit_mm=None if value <= 0 else value),
+            )
+        )
+
+    def _on_set_body_clearance(self) -> None:
+        measured = self.body_measure.isChecked()
+        self._say(
+            self.bus.dispatch(
+                "body-clearance.set",
+                SetBodyClearancePayload(
+                    body_clearance_mm=self.body_clearance.value() if measured else None
+                ),
             )
         )
 

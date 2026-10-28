@@ -13829,3 +13829,51 @@ def test_a_cancelled_board_trial_says_so_on_the_status_bar(monkeypatch) -> None:
         assert "Cancelled before a board was tried" in window.statusBar().currentMessage()
     finally:
         _close(window)
+
+
+def test_board_features_sets_and_clears_the_body_clearance() -> None:
+    """#12: off is the courtyard rule, on is the bodies that far apart. The dialog opens on
+    what the document says, and its button sets it or, with the box clear, takes it off."""
+    from perfboard_studio.ui.main import BoardFeaturesDialog
+
+    bus = _new_bus(_blank_document())
+    dialog = BoardFeaturesDialog(bus)
+    assert not dialog.body_measure.isChecked() and not dialog.body_clearance.isEnabled()
+    assert dialog.body_clearance.value() == 0.5
+
+    dialog.body_measure.setChecked(True)
+    assert dialog.body_clearance.isEnabled()
+    dialog.body_clearance.setValue(0.8)
+    dialog._on_set_body_clearance()
+    assert bus.document.body_clearance_mm == 0.8
+    dialog.deleteLater()
+
+    reopened = BoardFeaturesDialog(bus)
+    assert reopened.body_measure.isChecked() and reopened.body_clearance.value() == 0.8
+    reopened.body_measure.setChecked(False)
+    reopened._on_set_body_clearance()
+    assert bus.document.body_clearance_mm is None
+    assert not reopened.body_clearance.isEnabled()
+    reopened.deleteLater()
+
+
+def test_the_body_clearance_row_is_in_turkish() -> None:
+    from PySide6.QtWidgets import QFormLayout
+
+    from perfboard_studio.ui.i18n import language, set_language
+    from perfboard_studio.ui.main import BoardFeaturesDialog
+
+    before = language()
+    set_language("tr")
+    try:
+        dialog = BoardFeaturesDialog(_new_bus(_blank_document()))
+        assert dialog.body_measure.text() == "Gövdeler arasını ölç"
+        form = next(
+            layout
+            for layout in dialog.findChildren(QFormLayout)
+            if layout.labelForField(dialog.body_clearance) is not None
+        )
+        assert form.labelForField(dialog.body_clearance).text() == "Gövde aralığı"
+        dialog.deleteLater()
+    finally:
+        set_language(before)

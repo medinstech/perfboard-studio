@@ -137,6 +137,8 @@ TEMPLATES: tuple[str, ...] = (
     "Remove edge connector {id}",
     "Limit build height to {mm} mm",
     "Remove the build height limit",
+    "Judge parts by their bodies, {mm} mm apart",
+    "Judge parts by their courtyards",
     "Name the board {name}",
     "Write “{text}” on the board at {hole}",
     "Edit a label on the board",
@@ -236,6 +238,9 @@ TEMPLATES: tuple[str, ...] = (
 FINDING_TEMPLATES: tuple[str, ...] = (
     '{ref} uses footprint "{footprint_id}", which is not in the library and cannot be generated, so it cannot be drawn or built.',
     'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) have overlapping body outlines.',
+    'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) have overlapping bodies.',
+    'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) are {mm} mm apart, closer than the {mm_b} mm body clearance this design asks for.',
+    'Component {ref} (anchored at {hole}) has a pin under the body of {ref_b} (anchored at {hole_b}).',
     'Component {ref} is {whole} off the board: {count} of its {total} pin hole(s) fall outside the {cols}x{rows} grid (e.g. {hole}).',
     'Component {ref} (anchored at {hole}) hangs {mm} mm past the {edges} of the board: its pins are in holes but part of its body is over nothing. {advice}',
     'The part is larger than the board in that direction.',

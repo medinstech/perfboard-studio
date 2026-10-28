@@ -137,13 +137,13 @@ conductor at a time.
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
 | **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `update_net` · `delete_net` |
 | **The board** | `set_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `remove_board_feature` |
-| **Editing** | `place_component` · `move_component` · `rotate_component` · `mirror_component` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` |
+| **Editing** | `place_component` · `move_component` · `rotate_component` · `mirror_component` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` · `set_body_clearance` |
 | **Planning** | `autoroute` · `reroute` · `optimize_placement` |
 | **Verifying** | `run_erc` · `run_drc` · `run_lvs` · `check_heights` |
 | **Output** | `generate_guide` · `export_pdf` · `export_step` |
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 
-57 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+58 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -213,6 +213,16 @@ a picture is taken from. It reports every part tallest-first whether or not a li
 set, because "what decides the enclosure height" is a question worth asking before there
 is an enclosure. `set_height_limit` is what makes DRC's `component-too-tall` reachable
 without the GUI; it goes through the command bus, so it undoes like everything else.
+
+`set_body_clearance` is the other setting the DOCUMENT carries beside the height limit,
+and it changes what "in each other's way" means. With none -- the default -- two parts
+collide when their courtyards do, every body and pin padded by half a pitch. Given a number
+from 0 up to (not including) 2.54 mm, two parts collide when their real BODIES are closer
+than that, or a pin of one stands under the other's body, and DRC
+(`component-body-overlap`, an error) and the placer both judge by it. Outside that range
+it is refused (`invalid-body-clearance`), and `null` goes back to courtyards.
+`get_board_info` carries `body_clearance_mm` only when it is set, as it does
+`height_limit_mm`, and it goes through the command bus like the height limit.
 
 The two that matter most are the ones PLAN.md §9.2 calls out. `render_2d_view` /
 `render_3d_view`, because an agent editing a board it cannot see is working blind — the

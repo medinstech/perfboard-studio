@@ -568,6 +568,86 @@ def entry_blocked_by(
 
 
 # ---------------------------------------------------------------------------
+# Bodies a clearance apart
+# ---------------------------------------------------------------------------
+#
+# How rule 1 and the placer judge two parts when the document asks for a body clearance
+# (``PerfDocument.body_clearance_mm``) instead of their courtyards: by their real bodies
+# placed on the board -- round where ``footprints.body_is_round`` says so, their box
+# otherwise -- and by each one's pins against the other's body. One predicate for both,
+# for the reason the courtyard test is one.
+
+
+def _circle_in(box: tuple[float, float, float, float]) -> tuple[float, float, float]:
+    """The centre and radius of the circle a round body's (square) box was drawn round."""
+    return (box[0] + box[1]) / 2, (box[2] + box[3]) / 2, (box[1] - box[0]) / 2
+
+
+def body_gap_mm(
+    a: tuple[float, float, float, float],
+    a_round: bool,
+    b: tuple[float, float, float, float],
+    b_round: bool,
+) -> float:
+    """The clear distance between two placed bodies, in mm: 0 where they touch, negative
+    where they overlap.
+
+    Between the nearest points, so at a corner it is the diagonal: a box clipping the corner
+    of a can is as far from it as the can really is, which is the case the courtyard rule
+    had to get exact for the same parts. Symmetric to the last bit -- the placer asks a pair
+    either way round and DRC one way.
+    """
+    if a_round and b_round:
+        ax, ay, ar = _circle_in(a)
+        bx, by, br = _circle_in(b)
+        return math.hypot(ax - bx, ay - by) - (ar + br)
+    if a_round or b_round:
+        circle, box = (a, b) if a_round else (b, a)
+        cx, cy, r = _circle_in(circle)
+        dx = max(box[0] - cx, 0.0, cx - box[1])
+        dy = max(box[2] - cy, 0.0, cy - box[3])
+        return math.hypot(dx, dy) - r
+    gap_x = max(a[0] - b[1], b[0] - a[1])
+    gap_y = max(a[2] - b[3], b[2] - a[3])
+    if gap_x > 0 and gap_y > 0:
+        return math.hypot(gap_x, gap_y)
+    return max(gap_x, gap_y)
+
+
+def point_under_body(
+    x: float, y: float, body: tuple[float, float, float, float], round_body: bool
+) -> bool:
+    """Whether a point -- a pin's hole -- is strictly inside a placed body."""
+    if round_body:
+        cx, cy, r = _circle_in(body)
+        return math.hypot(x - cx, y - cy) < r
+    return body[0] < x < body[1] and body[2] < y < body[3]
+
+
+def bodies_clash(
+    a: tuple[float, float, float, float],
+    a_round: bool,
+    a_pins: Iterable[tuple[float, float]],
+    b: tuple[float, float, float, float],
+    b_round: bool,
+    b_pins: Iterable[tuple[float, float]],
+    clearance: Mm,
+) -> bool:
+    """Whether two placed parts are in each other's way under a body clearance.
+
+    Their bodies closer than ``clearance`` -- strictly, so bodies exactly that far apart are
+    clear, as touching courtyards are -- or a pin of either under the other's body. The pins
+    are the half of the courtyard a body clearance would otherwise drop: the courtyard's
+    margin round each pin is what kept a lead out from under the part next to it.
+    """
+    return (
+        body_gap_mm(a, a_round, b, b_round) < clearance
+        or any(point_under_body(x, y, b, b_round) for x, y in a_pins)
+        or any(point_under_body(x, y, a, a_round) for x, y in b_pins)
+    )
+
+
+# ---------------------------------------------------------------------------
 # Under a raised module
 # ---------------------------------------------------------------------------
 #

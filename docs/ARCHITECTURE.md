@@ -464,6 +464,25 @@ step (`_part_notes_from_drc`). "Before it goes in" holds in any phase, because a
 soldered on its 2.5 mm spacer has room for nothing in the library, and a socketed one plugs
 in last. No fixture carries a module, so no golden finding moved.
 
+**A document may ask for a body clearance instead (`body_clearance_mm`, #12).** Unset by
+default, and then nothing above changes. Set, rule 1 and the placer judge a pair by
+`geometry.bodies_clash`: the real bodies (`body_extent`) placed on the board, closer than the
+clearance, or a pin of either strictly under the other's body. The pins are the half of a
+courtyard's work that a clearance would otherwise drop. A body is round where
+`footprints.ROUND_BODY_ARCHETYPES` says, which is exactly the archetypes whose courtyard is
+drawn round, held so by a test. The courtyard margin was not made configurable instead: it
+lives inside the frozen footprints, every courtyard reader would have to re-derive it per
+board, and shrinking it shrinks the room round every pin as well. The clearance is a document
+field beside the height limit, not on `board`, because choosing a board again would lose it
+(Board Setup, and every boardfit trial). Under it the placer cannot skip pairs by courtyard
+boxes: a pin header's courtyard IS its moulding, so two headers within the clearance have
+courtyards that never meet. So `_Part.rel_gate` is the courtyard box when the clearance is
+unset, and the box round body and pins grown by half the clearance and a hair when it is set.
+`_Scorer._pair_impl` picks `_pair_terms` or `_pair_terms_bodies` once per scorer, so the
+unset path asks nothing it did not ask before. `test_body_clearance.py` walks the library past
+a DIP, a can, a header and a TO-92 at two clearances, on both faces, and holds the placer's
+pair count to rule 1's.
+
 ## Placement is arranged first and annealed second
 
 `placer.arrange` builds a placement out of the NETLIST before the annealer ever runs, and

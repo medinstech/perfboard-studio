@@ -92,6 +92,7 @@ from perfboard_studio.commands import (
     RenameDocumentPayload,
     RotateComponentPayload,
     SetBoardPayload,
+    SetBodyClearancePayload,
     SetHeightLimitPayload,
     UnplaceComponentPayload,
     UpdateComponentPayload,
@@ -479,6 +480,8 @@ class BoardSession:
             ]
         if self.document.height_limit_mm is not None:
             info["height_limit_mm"] = self.document.height_limit_mm
+        if self.document.body_clearance_mm is not None:
+            info["body_clearance_mm"] = self.document.body_clearance_mm
         return info
 
     def check_heights(self) -> dict[str, Any]:
@@ -1123,6 +1126,11 @@ class BoardSession:
     def set_height_limit(self, height_limit_mm: float | None) -> dict[str, Any]:
         return self._dispatch(
             "height-limit.set", SetHeightLimitPayload(height_limit_mm=height_limit_mm)
+        )
+
+    def set_body_clearance(self, body_clearance_mm: float | None) -> dict[str, Any]:
+        return self._dispatch(
+            "body-clearance.set", SetBodyClearancePayload(body_clearance_mm=body_clearance_mm)
         )
 
     # -- the board itself, and the things that are part of it ----------------

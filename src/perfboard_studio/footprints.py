@@ -2364,6 +2364,20 @@ BODY_DIM_KEYS: dict[BodyArchetype, tuple[str, str, Literal["x", "y"]]] = {
 }
 
 
+#: The bodies that are circles seen from above, where every other body is its box: the
+#: archetypes whose courtyard ``_circle_outline`` draws round, so a document measuring by
+#: bodies treats as round exactly the parts its courtyard rule did. ``body_extent`` gives
+#: each its diameter both ways, so the circle is the one inside the box.
+ROUND_BODY_ARCHETYPES: frozenset[BodyArchetype] = frozenset(
+    {"radial-electrolytic", "led-round", "potentiometer"}
+)
+
+
+def body_is_round(footprint: Footprint) -> bool:
+    """Whether this part's body is the circle inside its ``body_extent`` box."""
+    return footprint.body.archetype in ROUND_BODY_ARCHETYPES
+
+
 @dataclass(frozen=True, slots=True)
 class BodyExtent:
     """The physical body as a rectangle seen from above, in component-local millimetres.

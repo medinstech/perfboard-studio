@@ -678,6 +678,20 @@ TURKISH: Mapping[str, str] = {
     "Terminal entry blocked": "Klemens girişi kapalı",
     "Terminal faces into the board": "Klemens kartın içine bakıyor",
     "Part under a module": "Modülün altında parça",
+    "Measure between bodies": "Gövdeler arasını ölç",
+    "Body clearance": "Gövde aralığı",
+    "Set Body Clearance": "Gövde Aralığını Ayarla",
+    "Off, parts are kept apart by their courtyards (a half-pitch margin round each). On, by "
+    "their real bodies plus this clearance — tighter, for a board where every hole counts.": (
+        "Kapalıyken parçalar çevrelerindeki yarım adımlık güvenlik paylarıyla ayrı tutulur. "
+        "Açıkken gerçek gövdeleri ve bu aralıkla ölçülür — her deliğin önemli olduğu bir kart "
+        "için daha sıkı."
+    ),
+    "How far apart two parts' bodies must stand. A pin under another part's body is still in "
+    "its way.": (
+        "İki parçanın gövdeleri arasında kalması gereken mesafe. Başka bir parçanın gövdesinin "
+        "altında kalan bir bacak yine engel sayılır."
+    ),
     "Unknown footprint": "Bilinmeyen ayak izi",
     "Bare wire on a joint": "Lehim noktası üzerinde çıplak tel",
     "Wire too thick for the hole": "Tel delik için fazla kalın",
@@ -2855,6 +2869,9 @@ TURKISH: Mapping[str, str] = {
     # -- DRC and LVS findings, said where they are shown (engine_text) --------------
     '{ref} uses footprint "{footprint_id}", which is not in the library and cannot be generated, so it cannot be drawn or built.': '{ref} "{footprint_id}" ayak izini kullanıyor; bu ayak izi kütüphanede yok ve üretilemiyor, bu yüzden ne çizilebilir ne yapılabilir.',
     'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) have overlapping body outlines.': '{ref} ({hole} deliğinde) ile {ref_b} ({hole_b} deliğinde) parçalarının gövdeleri üst üste biniyor.',
+    'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) have overlapping bodies.': '{ref} ({hole} deliğinde) ile {ref_b} ({hole_b} deliğinde) parçalarının gövdeleri üst üste biniyor.',
+    'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) are {mm} mm apart, closer than the {mm_b} mm body clearance this design asks for.': '{ref} ({hole} deliğinde) ile {ref_b} ({hole_b} deliğinde) arasında {mm} mm var; bu tasarımın istediği {mm_b} mm gövde aralığından az.',
+    'Component {ref} (anchored at {hole}) has a pin under the body of {ref_b} (anchored at {hole_b}).': '{ref} parçasının ({hole} deliğinde) bir bacağı {ref_b} parçasının ({hole_b} deliğinde) gövdesinin altında kalıyor.',
     'Component {ref} is {whole} off the board: {count} of its {total} pin hole(s) fall outside the {cols}x{rows} grid (e.g. {hole}).': '{ref} {whole} kartın dışında: {total} pin deliğinden {count} tanesi {cols}x{rows} ızgaranın dışına düşüyor (ör. {hole}).',
     'Component {ref} (anchored at {hole}) hangs {mm} mm past the {edges} of the board: its pins are in holes but part of its body is over nothing. {advice}': '{ref} ({hole} deliğinde) kartın {edges} {mm} mm taşıyor: pinleri deliklerde ama gövdesinin bir kısmı boşlukta. {advice}',
     'The part is larger than the board in that direction.': 'Parça o yönde karttan büyük.',
@@ -2963,6 +2980,8 @@ TURKISH: Mapping[str, str] = {
     "Remove edge connector {id}": "{id} kenar konnektörünü kaldır",
     "Limit build height to {mm} mm": "Montaj yüksekliğini {mm} mm ile sınırla",
     "Remove the build height limit": "Montaj yüksekliği sınırını kaldır",
+    "Judge parts by their bodies, {mm} mm apart": "Parçaları gövdelerine göre ölç ({mm} mm aralık)",
+    "Judge parts by their courtyards": "Parçaları güvenlik paylarına göre ölç",
     "Name the board {name}": "Karta {name} adını ver",
     "Write “{text}” on the board at {hole}": "Karta, {hole} deliğine “{text}” yaz",
     "Edit a label on the board": "Karttaki bir etiketi düzenle",

@@ -989,7 +989,13 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # not a flag on rotate_component, which would make one call two undo steps. Everything
     # else the issue asked for was a parameter -- add_wire's via, mirrored on the two place
     # tools -- or already there: update_part sets a placed part's value.
-    assert len(tools) <= 57, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 58, for set_body_clearance (#12), on set_height_limit's argument: a document
+    # setting two DRC consumers read -- rule 1 and the placer -- that an agent could
+    # otherwise never set, so it would see a board judged by courtyards that a person had
+    # chosen to judge by bodies. Not a parameter on set_board: it is not the board, and is
+    # kept on the document so that choosing a board again does not lose it.
+    assert len(tools) <= 58, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"

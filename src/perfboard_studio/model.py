@@ -32,6 +32,12 @@ type Mm = float
 #: Standard perfboard hole pitch.
 STANDARD_PITCH_MM: Mm = 2.54
 
+#: The widest body clearance a document may ask for (``PerfDocument.body_clearance_mm``),
+#: exclusive: one pitch. The setting is there to let parts stand closer than their
+#: courtyards keep them -- half a pitch round every body, so a pitch between two -- and a
+#: pitch or more would ask for more room than the default already does.
+BODY_CLEARANCE_LIMIT_MM: Mm = STANDARD_PITCH_MM
+
 # ---------------------------------------------------------------------------
 # Geometry
 # ---------------------------------------------------------------------------
@@ -1018,12 +1024,38 @@ class PerfDocument:
     #: can check: a part that is too tall looks exactly like a part that is not, from
     #: directly above.
     height_limit_mm: Mm | None = None
+    #: How far apart two parts' real BODIES must stand, in mm -- or ``None``, which is the
+    #: default and judges every pair by its courtyards, as DRC always has (#12).
+    #:
+    #: A courtyard pads every body and pin by half a pitch, so two TO-92s two rows apart --
+    #: bodies 1.4 mm apart, which any builder fits -- are an overlap error. With a clearance
+    #: set, rule 1 and the placer measure the bodies themselves (round where the body is
+    #: round) and a pin under another part's body, by one predicate
+    #: (``geometry.bodies_clash``). On the document rather than the board for the reason
+    #: ``height_limit_mm`` is: it is how this build is laid out, not the stock it is on, and
+    #: a field on ``board`` would be lost each time the board is chosen again.
+    body_clearance_mm: Mm | None = None
     format_version: int = DOCUMENT_FORMAT_VERSION
 
 
 # ---------------------------------------------------------------------------
 # Predicates
 # ---------------------------------------------------------------------------
+
+
+def body_clearance_problem(clearance_mm: float) -> str | None:
+    """Why ``clearance_mm`` cannot be a document's body clearance, or ``None`` when it can.
+
+    One answer for the two places a clearance comes in: ``body-clearance.set`` refuses one
+    in these words, and the loader drops one from a hand-edited file with them.
+    """
+    if 0 <= clearance_mm < BODY_CLEARANCE_LIMIT_MM:
+        return None
+    return (
+        f"A body clearance is at least 0 mm and less than {BODY_CLEARANCE_LIMIT_MM:g} mm, "
+        f"the pitch the courtyards already keep between two bodies; got {clearance_mm:g}. "
+        f"Pass null to measure parts by their courtyards instead."
+    )
 
 
 def is_solder_trace(c: Conductor) -> bool:

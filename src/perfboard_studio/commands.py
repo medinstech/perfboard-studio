@@ -101,6 +101,7 @@ from .model import (
     SymbolPlacement,
     TrackCut,
     WireConductor,
+    body_clearance_problem,
     declared_pin_name,
     normalized_pin_names,
     supply_net_class,
@@ -257,6 +258,7 @@ def design_on_a_new_board(doc: PerfDocument, meta: DocumentMeta) -> PerfDocument
         sheet_wires=doc.sheet_wires,
         sheet_notes=doc.sheet_notes,
         height_limit_mm=doc.height_limit_mm,
+        body_clearance_mm=doc.body_clearance_mm,
     )
 
 
@@ -1096,6 +1098,14 @@ class SetHeightLimitPayload:
     """``None`` clears the limit, which is a different thing from a limit of zero."""
 
     height_limit_mm: Mm | None
+
+
+@dataclass(frozen=True, slots=True)
+class SetBodyClearancePayload:
+    """``None`` measures parts by their courtyards again; a number, by their bodies that far
+    apart. See ``PerfDocument.body_clearance_mm``."""
+
+    body_clearance_mm: Mm | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -3361,6 +3371,31 @@ class _SetHeightLimit:
         return f"Limit build height to {p.height_limit_mm:g} mm"
 
 
+class _SetBodyClearance:
+    type = "body-clearance.set"
+
+    def apply(
+        self, doc: PerfDocument, p: SetBodyClearancePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        value = p.body_clearance_mm
+        if value is not None:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise CommandError(
+                    "invalid-body-clearance",
+                    f"A body clearance is a number of millimetres or null; got {value!r}.",
+                )
+            problem = body_clearance_problem(float(value))
+            if problem is not None:
+                raise CommandError("invalid-body-clearance", problem)
+            value = float(value)
+        return dataclasses.replace(doc, body_clearance_mm=value)
+
+    def describe(self, p: SetBodyClearancePayload, doc: PerfDocument) -> str:
+        if p.body_clearance_mm is None:
+            return "Judge parts by their courtyards"
+        return f"Judge parts by their bodies, {p.body_clearance_mm:g} mm apart"
+
+
 class _RenameDocument:
     """Name the board.
 
@@ -3435,6 +3470,7 @@ delete_mounting_hole: CommandDefinition[DeleteMountingHolePayload] = _DeleteMoun
 add_edge_connector: CommandDefinition[AddEdgeConnectorPayload] = _AddEdgeConnector()
 delete_edge_connector: CommandDefinition[DeleteEdgeConnectorPayload] = _DeleteEdgeConnector()
 set_height_limit: CommandDefinition[SetHeightLimitPayload] = _SetHeightLimit()
+set_body_clearance: CommandDefinition[SetBodyClearancePayload] = _SetBodyClearance()
 rename_document: CommandDefinition[RenameDocumentPayload] = _RenameDocument()
 
 # Typed with Any because CommandDefinition's payload is contravariant, so a specific
@@ -3488,6 +3524,7 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_edge_connector,
     delete_edge_connector,
     set_height_limit,
+    set_body_clearance,
     rename_document,
 )
 

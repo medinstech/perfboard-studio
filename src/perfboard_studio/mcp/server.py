@@ -12,7 +12,7 @@ module configures logging to stderr before anything else, and nothing anywhere u
 render tools pull in are the real risk, which is another reason they are imported lazily
 inside the tools rather than at module scope.
 
-FIFTY-SEVEN TOOLS, against PLAN.md Sec 2's "~25, deliberately narrow", and the overage is
+FIFTY-EIGHT TOOLS, against PLAN.md Sec 2's "~25, deliberately narrow", and the overage is
 stated rather than hidden. Each tool is a verb an agent cannot compose from the others,
 and the surface was trimmed rather than grown: the history listing folded into
 ``get_status``, and "solder bridge" is not a separate tool from ``add_solder_trace``
@@ -53,6 +53,14 @@ because one call would then be two decisions and two undo steps. The rest of wha
 asked for in the same issue were parameters, not tools: ``add_wire(via=...)`` for a bent
 wire, ``mirrored`` on the two place tools, and a placed part's value, which
 ``update_part`` already set.
+
+``set_body_clearance`` is ``set_height_limit``'s argument again (#12). A document may ask
+for its parts to be judged by their real bodies instead of their courtyards, and DRC's
+rule 1 and the placer both read it; without the tool that choice could only be made in
+the GUI, and an agent would see a board judged one way that a person sees judged another.
+It is not a parameter on ``set_board``, because it is not the board -- it is kept on the
+document so that choosing a board again does not lose it -- and it has nothing to do with
+the height limit beside it but the shape of the call.
 
 The two the plan singles out as critical are here and are worth every byte of their
 schema: ``render_2d_view``/``render_3d_view``, because an agent editing a board it
@@ -790,6 +798,16 @@ def set_height_limit(height_limit_mm: float | None = None) -> dict[str, Any]:
     of the case the board has to fit. DRC then reports any part taller than this. Pass
     nothing (or null) to remove the limit."""
     return session.set_height_limit(height_limit_mm)
+
+
+@mcp.tool()
+def set_body_clearance(body_clearance_mm: float | None = None) -> dict[str, Any]:
+    """Judge how close parts may stand by their real bodies instead of their courtyards.
+    A number from 0 up to (not including) 2.54 mm: two parts are then in each other's way
+    when their bodies are closer than that, or a pin of one is under the other's body, and
+    DRC and the placer both use it. Pass nothing (or null) to go back to courtyards, which
+    pad every body and pin by half a pitch -- the default."""
+    return session.set_body_clearance(body_clearance_mm)
 
 
 # ---------------------------------------------------------------------------
