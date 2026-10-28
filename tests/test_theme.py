@@ -9,8 +9,11 @@ one colour per net class on the board and the sheet -- and the window's side of 
 from __future__ import annotations
 
 import dataclasses
+import io
 import os
 import re
+import tokenize
+import warnings
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -310,3 +313,141 @@ def test_a_checked_tool_has_its_own_picture() -> None:
         if image.pixelColor(x, y).alpha() == 255
     }
     assert DARK.accent_text in inks
+
+
+# -- nothing styles the chrome but theme.py ---------------------------------------------------
+#
+# The tokens end colour drift only if nothing goes round them. Four things went round them
+# before: a stylesheet set on one widget, a hex colour in a string, a rich-text span with its
+# own colour, and the old names (TEXT_DIM, ACCENT, ...) imported straight from theme. Each is
+# looked for in every module of ui/ except theme.py, as tokens, so a comment that mentions
+# one is not a finding.
+
+UI = Path(__file__).resolve().parent.parent / "src" / "perfboard_studio" / "ui"
+
+#: Files whose colour literals are the physical object, the 3D scene or the printed page --
+#: what does NOT follow the theme. Their hex is allowed; their chrome is not.
+PHYSICAL: dict[str, str] = {
+    "view2d.py": "the board as on the bench: substrate, copper, solder, leads, insulation",
+    "view3d.py": "the 3D scene's materials and lights",
+    "boardcolors.py": "the solder-mask schemes the View menu offers",
+    "bodies.py": "part bodies, one table for the 2D view, the 3D view and the guide",
+    "moduleart.py": "module boards, drawn by what they are called",
+    "icons.py": "the part pictures, in the bodies' colours",
+    "export_pdf.py": "the 1:1 print, black ink on white paper whatever the theme",
+    "export_schematic.py": "the exported sheet's paper, white whatever the theme",
+}
+
+#: Files still styled the old way, each waiting on the member who owns it. Printed on every
+#: run, and a test fails the moment one is clean and still listed, so this can only shrink.
+PENDING: dict[str, str] = {
+    "header.py": "ux: rewritten on the tokens together with the header stepper",
+    "workflow.py": "ux: the step bar becomes the header stepper, on the tokens",
+}
+
+_HEX = re.compile(r"#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b")
+_INLINE_COLOUR = re.compile(r"style\s*=\s*['\"][^'\"]*color", re.IGNORECASE)
+_LEGACY = {
+    "WINDOW", "PANEL", "PANEL_ALT", "BORDER", "TEXT", "TEXT_DIM", "ACCENT", "ACCENT_DIM",
+    "ERROR", "WARNING", "OK",
+}
+
+
+def _string_kinds() -> set[int]:
+    kinds = {tokenize.STRING}
+    for name in ("FSTRING_MIDDLE", "TSTRING_MIDDLE"):
+        if hasattr(tokenize, name):
+            kinds.add(getattr(tokenize, name))
+    return kinds
+
+
+def _chrome_findings(path: Path) -> list[str]:
+    """Every way ``path`` styles the chrome without the tokens, one line each."""
+    text = path.read_text(encoding="utf-8")
+    tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    strings = _string_kinds()
+    found: list[str] = []
+    for index, token in enumerate(tokens):
+        where = f"{path.name}:{token.start[0]}"
+        if token.type in strings:
+            if path.name not in PHYSICAL:
+                found += [f"{where}: colour {colour}" for colour in _HEX.findall(token.string)]
+            if _INLINE_COLOUR.search(token.string):
+                found.append(f"{where}: a rich-text colour (theme.ink)")
+        elif token.type == tokenize.NAME and token.string == "setStyleSheet":
+            found.append(f"{where}: setStyleSheet (theme.tone / theme.variant / an objectName)")
+        elif token.type == tokenize.NAME and token.string in _LEGACY:
+            before = [t.string for t in tokens[max(0, index - 2) : index]]
+            if before == ["theme", "."]:
+                found.append(f"{where}: theme.{token.string} (a role or a token)")
+        if token.string == "from" and [t.string for t in tokens[index + 1 : index + 4]] == [
+            ".", "theme", "import",
+        ]:
+            names = []
+            for later in tokens[index + 4 :]:
+                if later.type == tokenize.NEWLINE:
+                    break
+                if later.type == tokenize.NAME and later.string in _LEGACY:
+                    names.append(later.string)
+            if names:
+                found.append(f"{path.name}:{token.start[0]}: imports {', '.join(sorted(names))} from theme")
+    return found
+
+
+def _modules() -> list[Path]:
+    return sorted(path for path in UI.rglob("*.py") if path.name != "theme.py")
+
+
+def test_nothing_styles_the_chrome_but_theme() -> None:
+    """A colour, a stylesheet or an old name outside theme.py is the drift this ended."""
+    findings: list[str] = []
+    for path in _modules():
+        if path.name not in PENDING:
+            findings += _chrome_findings(path)
+    for name, why in PENDING.items():
+        warnings.warn(f"styled the old way, pending: {name} -- {why}", stacklevel=1)
+    assert not findings, "\n".join(findings)
+
+
+def test_the_pending_list_only_shrinks() -> None:
+    """A file moved onto the tokens leaves the list in the same commit, so the list says
+    what is left and nothing else."""
+    for name in PENDING:
+        path = UI / name
+        assert path.is_file(), f"{name} is listed as pending and does not exist"
+        assert _chrome_findings(path), f"{name} is clean now: take it off PENDING"
+
+
+def test_every_physical_file_still_has_its_colours() -> None:
+    """The same for the files allowed a hex colour: one that no longer has any no longer
+    needs the exception."""
+    for name, why in PHYSICAL.items():
+        path = UI / name
+        assert path.is_file(), f"{name} ({why}) does not exist"
+        text = path.read_text(encoding="utf-8")
+        tokens = tokenize.generate_tokens(io.StringIO(text).readline)
+        assert any(
+            _HEX.search(token.string) for token in tokens if token.type in _string_kinds()
+        ), f"{name} has no colour literal left: take it off PHYSICAL"
+
+
+def test_the_guard_finds_each_way_round_the_tokens(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The scanner itself, on a module that does all four -- and on the same words in
+    comments, which are not findings."""
+    module = tmp_path / "sample.py"
+    module.write_text(
+        "from .theme import TEXT_DIM\n"
+        "from . import theme\n"
+        "# setStyleSheet and #ff0000 in a comment are fine\n"
+        "def f(label):\n"
+        "    label.setStyleSheet('color: #ff0000;')\n"
+        "    label.setText(f\"<span style='color:{theme.ACCENT}'>x</span>\")\n",
+        encoding="utf-8",
+    )
+    found = "\n".join(_chrome_findings(module))
+    assert "sample.py:5: setStyleSheet" in found
+    assert "sample.py:5: colour #ff0000" in found
+    assert "sample.py:6: a rich-text colour" in found
+    assert "sample.py:6: theme.ACCENT" in found
+    assert "sample.py:1: imports TEXT_DIM from theme" in found
+    assert "sample.py:3" not in found
