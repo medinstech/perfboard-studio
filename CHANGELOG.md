@@ -20,6 +20,15 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Changed
+
+- **One header row instead of three.** The menu bar, the toolbar's save, undo and redo,
+  and the step bar's own row are one slim header: ☰ with every menu behind it, the
+  board's name and whether it is saved ("Not saved" saves it in one click), the six steps
+  on one line with the one to do saying where it stands, undo and redo, and the button
+  that does the next step. Alt+F and the other menu letters still open their menus, and
+  Alt by itself opens ☰. The board's tools and the view switches keep their row for now.
+
 ## [0.22.0] - 2026-10-28
 
 ### Added

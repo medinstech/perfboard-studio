@@ -1331,8 +1331,8 @@ real board meet on all three operating systems, and the only export that needs n
 
 ## The window walks through six steps
 
-`ui/workflow.py` is the bar under the toolbar -- Circuit, Board, Placement, Wiring, Check,
-Build -- and the Next button beside it. `workflow_steps(WorkflowFacts)` is pure (counts in,
+`ui/workflow.py` is the stepper in the header -- Circuit, Board, Placement, Wiring, Check,
+Build -- and the Next button at the header's right end (`ui/header.py`). `workflow_steps(WorkflowFacts)` is pure (counts in,
 statuses out) and tested in `tests/test_workflow.py`; the window builds the facts from what
 `on_bus_changed` already computed (`MainWindow.workflow_facts`). Every step's action is a
 command that already existed, reached from where it already was: the bar decides nothing
@@ -1341,8 +1341,9 @@ about the document. Three things about it:
 - **A toolbar row, not a dock.** A top-area dock made the top area take a third of the
   window's height, empty, for the reason DRC is split under the board (see below): with the
   central widget capped to nothing, spare height goes to whichever dock area can take it.
-  The bar sheds its summaries, then its names, on a narrow window (`WorkflowBar._fit`) so it
-  never sets the window's minimum width.
+  The stepper sheds the step-to-do's line, then the names, on a narrow window
+  (`WorkflowBar._fit`), and the header claims no minimum width, so neither sets the
+  window's.
 - **Choosing the board is a step**, because a perfboard is bought before it is populated.
   `on_choose_board` asks the stock-board question when the design has parts and the board
   has none (`_offer_a_board_size`, `always=True` so it is never silent), Board Setup
@@ -1366,10 +1367,20 @@ about the document. Three things about it:
 A netlist import feeds the same order: its parts go into the DESIGN in one `part.addMany`
 and the sheet comes forward; nothing lands on the board until a board is chosen.
 
-The main toolbar is three bars (`toolbar`, `board_toolbar`, `views_toolbar`) so the middle one
-can go: the board's tools show only while `board_is_showing()`, which is
-`schematic_is_showing`'s question about the other panel. `_fit_toolbar` sheds words across
-whichever bars are up; `toolbar_button(action)` finds an action's button on any of them.
+**The header is the one row of chrome** (`HeaderBar`, in `header_strip`): ☰ with every menu
+under it, the board's name and "Not saved", the stepper, undo and redo, and Next. It replaced
+a menu bar, a toolbar for the document (save, undo, redo) and the step bar's own row. The
+menu bar is not hidden but kept at **zero height**, because Alt+F is the menu bar's: hidden,
+it takes the letters and Alt's walk between menus with it, while at no height it still drops
+File from the top-left corner, where ☰ is. Alt by itself puts it into its keyboard mode with
+nothing on screen to say so, so `_on_menu_bar_hovered` opens ☰ instead, a turn later and
+only if no menu has opened (Alt+F passes through the same signal on its way to File).
+Shortcuts are unaffected: a menu bar at no height is still on screen to Qt.
+
+The tool row under it is two bars (`views_toolbar`, `board_toolbar`) so the second can go:
+the board's tools show only while `board_is_showing()`, which is `schematic_is_showing`'s
+question about the other panel. `_fit_toolbar` sheds words across whichever bars are up;
+`toolbar_button(action)` finds an action's button on either.
 
 `ui/boardpreview.py` draws a board as a picture through `BoardScene` itself -- the board
 dialogs' previews and the stock-size grid -- so a picture cannot disagree with the board OK

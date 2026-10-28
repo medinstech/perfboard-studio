@@ -2647,7 +2647,11 @@ TURKISH: Mapping[str, str] = {
     "Wiring": "Yönlendirme",
     "Verify": "Kontrol",
     "Build": "Montaj",
-    "Steps": "Adımlar",
+    "Menus: File, Edit, View and the rest. Alt opens them too.": (
+        "Menüler: Dosya, Düzen, Görünüm ve diğerleri. Alt tuşu da açar."
+    ),
+    "Not saved": "Kaydedilmedi",
+    "Save the board (Ctrl+S).": "Kartı kaydedin (Ctrl+S).",
     "Add a Part…": "Parça Ekle…",
     "Choose a Board…": "Kart Seç…",
     "Connect the Pins": "Pinleri Bağla",

@@ -6300,7 +6300,7 @@ def test_a_toolbar_a_little_too_wide_loses_only_the_words_it_must() -> None:
             for button, _saved, _bar in savings
         ]
         assert icon_only == [i <= first for i in range(len(savings))]
-        assert savings[0][0] is window.toolbar_button(window.act_save)
+        assert savings[0][0] is window.toolbar_button(window.act_delete)
         assert savings[-1][0] is window.toolbar_button(window.act_draw["solder-trace"])
         # Every button on the bars is in the order, or one would never give its words up.
         on_bar = [
@@ -6320,7 +6320,12 @@ def test_a_narrow_window_keeps_every_toolbar_button_on_screen() -> None:
 
     window = _window_on(_load_dense())
     window.show()
+    # Narrower than the row's words by more than every button can save: all of them go.
+    # (1100 px was that until save, undo and redo moved into the header.)
     window.resize(1100, 700)
+    QApplication.processEvents()
+    assert window._toolbar_text_width is not None
+    window.resize(window._toolbar_text_width - sum(s for _b, s, _bar in window._toolbar_savings), 700)
     QApplication.processEvents()
     styles = {button.toolButtonStyle() for button, _saved, _bar in window._toolbar_savings}
     assert styles == {Qt.ToolButtonStyle.ToolButtonIconOnly}
@@ -6870,8 +6875,8 @@ def test_the_boards_tools_are_on_the_bar_only_while_the_board_is_on_screen(monke
         _settle_events(QApplication)
         assert window.board_toolbar.isHidden()
         assert window.act_autoroute.isEnabled(), "the menu entry must still work"
-        # Save, undo and the views stay: they are about the document, not about a panel.
-        assert not window.toolbar.isHidden()
+        # The header and the views stay: they are about the document, not about a panel.
+        assert not window.header_strip.isHidden()
         assert not window.views_toolbar.isHidden()
 
         window.show_board()
@@ -13877,3 +13882,125 @@ def test_the_body_clearance_row_is_in_turkish() -> None:
         dialog.deleteLater()
     finally:
         set_language(before)
+
+
+
+def _reachable_from(window, root) -> set:
+    """Every action a person can reach by opening ``root`` and its submenus.
+
+    Submenus are found by matching each menu's own action, not through ``QAction.menu()``,
+    which hands PySide an owning wrapper and deletes the submenu when it is dropped."""
+    import shiboken6
+    from PySide6.QtWidgets import QMenu
+
+    menus = {shiboken6.getCppPointer(m.menuAction())[0]: m for m in window.findChildren(QMenu)}
+    seen: set = set()
+    stack, opened = [root], set()
+    while stack:
+        menu = stack.pop()
+        opened.add(menu)
+        for action in menu.actions():
+            seen.add(action)
+            sub = menus.get(shiboken6.getCppPointer(action)[0])
+            if sub is not None and sub not in opened:
+                stack.append(sub)
+    return seen
+
+
+def test_the_header_is_one_row_with_every_menu_behind_its_button() -> None:
+    """A menu bar, a toolbar for the document and a step bar were three rows of chrome
+    above the board. One row now: the menus behind ☰, the steps and Next in it, undo and
+    redo beside them. The menu bar is kept at no height, because Alt+F is its."""
+    from PySide6.QtWidgets import QToolBar
+
+    window = _window_on(_load_dense())
+    try:
+        names = {bar.objectName() for bar in window.findChildren(QToolBar)}
+        assert "headerToolbar" in names
+        assert not {"mainToolbar", "workflowToolbar"} & names
+        assert window.menuBar().maximumHeight() == 0
+        held = [action.text() for action in window.header.app_menu.actions()]
+        assert held == [menu.title() for menu in window._top_menus]
+        assert held == [action.text() for action in window.menuBar().actions()]
+        assert window.header.undo_button.defaultAction() is window.act_undo
+        assert window.header.redo_button.defaultAction() is window.act_redo
+        assert window.workflow_bar.next_button.parent() is window.header
+        assert window.workflow_bar.parent() is window.header
+    finally:
+        _close(window)
+
+
+#: Every action that was on a toolbar in 0.22, the checklist of the redesign's IA: a slice
+#: that takes a bar away must leave each one somewhere a person can still reach it.
+def _old_toolbar_actions(window) -> list:
+    return [
+        window.act_save, window.act_undo, window.act_redo,
+        window.act_board_panel, window.act_schematic, window.act_3d, window.act_guide_panel,
+        window.act_connect, window.act_new_net,
+        *(window.act_draw[kind] for kind in (
+            "solder-trace", "solder-trace-wired", "bare-wire", "insulated-wire", "top-jumper",
+        )),
+        window.act_autoplace, window.act_autoroute,
+        window.act_rotate_cw, window.act_mirror, window.act_delete,
+        window.act_flip, window.act_ratsnest, window.act_fit,
+    ]
+
+
+def test_every_action_the_old_toolbars_had_is_behind_the_menu_button() -> None:
+    """The toolbars go, and nothing on them goes with them: every one of their actions is
+    in a menu under ☰ (and so in Ctrl+K, which lists the menus)."""
+    window = _window_on(_load_dense())
+    try:
+        reachable = _reachable_from(window, window.header.app_menu)
+        missing = [a.text() for a in _old_toolbar_actions(window) if a not in reachable]
+        assert not missing, f"no longer reachable from the menus: {missing}"
+    finally:
+        _close(window)
+
+
+def test_alt_and_a_letter_drop_that_menu_and_alt_alone_opens_the_button() -> None:
+    """The menus moved behind ☰, and Alt kept working: Alt+F drops File (the menu bar is
+    still there, at no height, at the top-left where ☰ is), and Alt by itself -- which put
+    an invisible menu bar into its keyboard mode with nothing on screen to say so -- opens
+    ☰ instead."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+
+    window = _window_on(_load_dense())
+    try:
+        window.show()
+        window.activateWindow()
+        QTest.qWaitForWindowActive(window)
+        QTest.keyClick(window, Qt.Key.Key_F, Qt.KeyboardModifier.AltModifier)
+        _settle_events(QApplication)
+        assert QApplication.activePopupWidget() is window._top_menus[0]
+        window._top_menus[0].close()
+        _settle_events(QApplication)
+
+        window._alt_opened_the_menu_bar()  # where Alt by itself ends up
+        _settle_events(QApplication)
+        assert QApplication.activePopupWidget() is window.header.app_menu
+        window.header.app_menu.close()
+    finally:
+        _close(window)
+
+
+def test_the_header_says_the_boards_name_and_that_it_is_not_saved() -> None:
+    """Unsaved was a bullet in the title bar, which nobody looks at while working. The
+    header says it beside the board's name, and one click saves."""
+    window = _window_on(_load_dense())
+    try:
+        header = window.header
+        assert header.title.text() == window._document_name()
+        assert not header.unsaved.isVisibleTo(header)
+        first = window.bus.document.components[0]
+        window.bus.dispatch(
+            "component.move", MoveComponentPayload(id=first.id, anchor=HoleCoord(3, 3))
+        )
+        assert header.unsaved.isVisibleTo(header)
+        assert header.unsaved.text() == "Not saved"
+        window._mark_saved()
+        assert not header.unsaved.isVisibleTo(header)
+    finally:
+        _close(window)

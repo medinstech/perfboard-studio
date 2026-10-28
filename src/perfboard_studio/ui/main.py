@@ -345,6 +345,7 @@ from .engine_text import finding_text, names_in, net_class_word, say
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
+from .header import HeaderBar
 from .i18n import language as current_language
 from .i18n import set_language, t
 from .partlist import PartListPanel
@@ -586,7 +587,11 @@ WINDOW_STATE_KEY = "session/windowState"
 #:
 #: 7 is the Part List (#9): a dock no earlier layout has heard of, which ``restoreState``
 #: would leave wherever the constructor happened to put it.
-WINDOW_STATE_VERSION = 7
+#:
+#: 8 is the header (``ui/header.py``): the menu bar, the document's toolbar and the step
+#: bar became one row, and a layout saved with two rows of toolbars would put back a
+#: toolbar that no longer exists above it.
+WINDOW_STATE_VERSION = 8
 BOARD_COLOUR_KEY = "session/boardColour"
 RATSNEST_KEY = "session/showRatsnest"
 RULERS_KEY = "session/showRulers"
@@ -4622,8 +4627,7 @@ class MainWindow(QMainWindow):
             dock.topLevelChanged.connect(lambda _floating: self._sync_dock_titlebars())
         self._build_menu()
         self._build_toolbar()
-        self.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.workflow_strip)
+        self._build_header()
         self._build_status_bar()
         self._sync_toolbars_to_view()
 
@@ -4691,36 +4695,74 @@ class MainWindow(QMainWindow):
     UNCAPPED = (1 << 24) - 1
 
     def _build_workflow_strip(self) -> None:
-        """The six steps across the top of the window, on a row of their own.
-
-        A TOOLBAR ROW AND NOT A DOCK, and the dock was tried first. A window whose central
-        widget is capped to nothing hands its spare height to whichever dock area can take
-        it, and a top-area dock made the TOP area that one: the strip stayed 48 px tall and
-        the area around it grew to a third of the window, empty, above a board squeezed
-        into the rest. A toolbar area is exactly as tall as its toolbars.
-
-        What a toolbar costs is the update strip's lesson (``_build_update_strip``): it
-        lays its widgets out itself and hides one that does not fit. Here that is the
-        right answer rather than a trap -- a window narrower than six steps shows them
-        behind the toolbar's own overflow arrow -- and nothing reads the bar's visibility.
-        Not movable, not closable: a step bar that can be put away is the order of work
-        made optional again.
-        """
+        """The six steps, made before the panels so every refresh finds them; they are laid
+        out in the header (``_build_header``) once the menus exist."""
         self.workflow_bar = WorkflowBar(self)
-        # Filled once before it is shown, so it is measured with its two lines of text in
-        # it rather than as an empty row of buttons.
+        # Filled once before it is shown, so it is measured with its text in it rather than
+        # as an empty row of buttons.
         self.workflow_bar.set_steps(workflow_steps(self.workflow_facts()))
         self.workflow_bar.stepClicked.connect(self.on_workflow_step)
         self.workflow_bar.nextClicked.connect(self.on_workflow_next)
-        strip = QToolBar(t("Steps"), self)
-        strip.setObjectName("workflowToolbar")
+
+    def _build_header(self) -> None:
+        """The one row of chrome: ☰, the board's name, the steps, undo, redo and Next.
+
+        A TOOLBAR ROW AND NOT A DOCK, and the dock was tried first (for the step bar it
+        replaces). A window whose central widget is capped to nothing hands its spare
+        height to whichever dock area can take it, and a top-area dock made the TOP area
+        that one: the strip stayed 48 px tall and the area around it grew to a third of the
+        window, empty, above a board squeezed into the rest. A toolbar area is exactly as
+        tall as its toolbars.
+
+        What a toolbar costs is the update strip's lesson (``_build_update_strip``): it lays
+        its widgets out itself and hides one that does not fit, so the header claims no
+        minimum width (``HeaderBar.minimumSizeHint``) and sheds words instead. Not movable,
+        not closable: a header that can be put away is the order of work made optional
+        again.
+
+        THE MENU BAR STAYS, AT NO HEIGHT. Its menus are behind ☰ now, and a hidden menu bar
+        would take Alt+F with it -- the letters are the menu bar's own, and so is Alt's walk
+        from one menu to the next. Kept at zero height it is still the window's menu bar to
+        Qt: Alt+F drops File from the top-left corner, which is where ☰ is, and Alt by itself
+        opens ☰ (``_on_menu_bar_hovered``).
+        """
+        self.header = HeaderBar(
+            self.workflow_bar,
+            self._top_menus,
+            undo=self.act_undo,
+            redo=self.act_redo,
+            save=self.act_save,
+        )
+        strip = QToolBar(self)
+        strip.setObjectName("headerToolbar")
         strip.setMovable(False)
         strip.setFloatable(False)
         # Not in the toolbar area's context menu, which is where a user would hide it.
         strip.toggleViewAction().setVisible(False)
         strip.setContentsMargins(0, 0, 0, 0)
-        strip.addWidget(self.workflow_bar)
-        self.workflow_strip = strip
+        strip.setStyleSheet("QToolBar#headerToolbar { border: 0; padding: 0; spacing: 0; }")
+        strip.addWidget(self.header)
+        # Above the tool row, on a row of its own.
+        self.insertToolBar(self.views_toolbar, strip)
+        self.insertToolBarBreak(self.views_toolbar)
+        self.header_strip = strip
+        bar = self.menuBar()
+        bar.setFixedHeight(0)
+        bar.hovered.connect(self._on_menu_bar_hovered)
+        self._refresh_title()
+
+    def _on_menu_bar_hovered(self, _action: QAction) -> None:
+        """Alt alone puts the (invisible) menu bar into its keyboard mode on its first
+        menu, with nothing on screen to say so; ☰ opens instead. Alt+F lands here too, a
+        moment before File drops -- so this looks again a turn later, and stands down when
+        a menu is already open."""
+        QTimer.singleShot(0, self._alt_opened_the_menu_bar)
+
+    def _alt_opened_the_menu_bar(self) -> None:
+        if QApplication.activePopupWidget() is not None or not self.isVisible():
+            return
+        self.menuBar().setActiveAction(None)  # type: ignore[arg-type]
+        self.header.open_menu()
 
     def workflow_facts(self) -> WorkflowFacts:
         """What the step bar is measured against, from what the last refresh computed."""
@@ -5148,11 +5190,11 @@ class MainWindow(QMainWindow):
     _toolbar_widths: dict[QToolBar, int]
 
     def _toolbars(self) -> tuple[QToolBar, ...]:
-        """The three bars of the top row, left to right."""
-        return (self.toolbar, self.views_toolbar, self.board_toolbar)
+        """The two bars of the tool row, left to right."""
+        return (self.views_toolbar, self.board_toolbar)
 
     def toolbar_button(self, action: QAction) -> QToolButton | None:
-        """The button ``action`` has on whichever of the three bars it is on."""
+        """The button ``action`` has on whichever of the two bars it is on."""
         for bar in self._toolbars():
             button = bar.widgetForAction(action)
             if isinstance(button, QToolButton):
@@ -5202,16 +5244,13 @@ class MainWindow(QMainWindow):
     def _toolbar_shedding_order(self) -> tuple[QAction, ...]:
         """The toolbar's buttons in the order they give up their words, first to last.
 
-        The pictures everybody already reads -- save, undo, delete -- go first. The four
+        The pictures everybody already reads -- delete, rotate, fit -- go first. The four
         conductor tools go LAST, because their icons deliberately share one drawing and
         differ only in what runs between the two pads (see ``_build_toolbar``): without
         their words, Trace, Spine, Bare and Insulated are four guesses. The views, whose
         pictures are distinct, go just before them.
         """
         return (
-            self.act_save,
-            self.act_undo,
-            self.act_redo,
             self.act_delete,
             self.act_rotate_cw,
             self.act_fit,
@@ -6736,6 +6775,11 @@ class MainWindow(QMainWindow):
             file_menu, self.menu_recent, edit_menu, draw_menu, place_menu, net_menu,
             route_menu, style_menu, view_menu, language_menu, colour_menu, help_menu,
         ]
+        #: The menu bar's own menus, in its order: what ☰ holds (``_build_header``).
+        self._top_menus = (
+            file_menu, edit_menu, draw_menu, place_menu, net_menu, route_menu, view_menu,
+            help_menu,
+        )
         act_keys = help_menu.addAction(t("&Keyboard Shortcuts…"))
         act_keys.setShortcut(QKeySequence("F1"))
         act_keys.setToolTip(
@@ -6776,8 +6820,8 @@ class MainWindow(QMainWindow):
         The four conductor icons deliberately share one drawing and differ only in what
         runs between the two pads, because that difference IS the application.
         """
-        # THREE BARS IN ONE ROW, so the middle one can go: the document's (save, undo,
-        # redo), the BOARD's tools, and the views. With the sheet in front, a row of
+        # TWO BARS IN ONE ROW, so the second can go: the views, and the BOARD's tools.
+        # (Save, undo and redo were a third, and are in the header.) With the sheet in front, a row of
         # solder-trace and jumper tools, and a Rotate and a Mirror that turned whatever was
         # selected on the board rather than on the sheet (which has its own), was thirteen
         # buttons that did nothing to what was on screen -- or did it somewhere else.
@@ -6796,8 +6840,6 @@ class MainWindow(QMainWindow):
             self.addToolBar(made)
             return made
 
-        bar = new_bar("Main", "mainToolbar")
-        self.toolbar = bar
         views_bar = new_bar("Views", "viewsToolbar")
         self.views_toolbar = views_bar
         board_bar = new_bar("Board", "boardToolbar")
@@ -6839,12 +6881,10 @@ class MainWindow(QMainWindow):
 
         # The document, then what makes a circuit, then what turns it into a board, then
         # how you look at it. Grouped in the order a board is actually built.
+        # In the header, and in the menus with the same pictures.
         self.act_save.setIcon(icons.icon("save"))
         self.act_undo.setIcon(icons.icon("undo"))
         self.act_redo.setIcon(icons.icon("redo"))
-        bar.addAction(self.act_save)
-        bar.addAction(self.act_undo)
-        bar.addAction(self.act_redo)
 
         # The netlist, which had been the hardest thing in the application to reach: two
         # levels of menu, then a dialog, before a single pin could be joined to anything.
@@ -13174,6 +13214,16 @@ class MainWindow(QMainWindow):
         """
         return self.bus.document is not self._saved_document
 
+    def _document_name(self) -> str:
+        """What the header calls the board: the name it was given (Rename Board), else
+        its file's, else untitled."""
+        name = self.bus.document.meta.name
+        if name and name != UNTITLED_NAME:
+            return name
+        if self.current_path is not None:
+            return self.current_path.stem
+        return t("untitled")
+
     def _mark_saved(self) -> None:
         self._saved_document = self.bus.document
         self._refresh_title()
@@ -13182,6 +13232,9 @@ class MainWindow(QMainWindow):
 
     def _refresh_title(self) -> None:
         self.setWindowTitle(window_title(self.current_path, modified=self.is_modified))
+        header = getattr(self, "header", None)
+        if header is not None:
+            header.set_document(self._document_name(), modified=self.is_modified)
         # Save has nothing to do on an unmodified board, and doing it anyway rewrote the
         # file -- a new modified stamp, a new mtime -- for nothing.
         if hasattr(self, "act_save"):

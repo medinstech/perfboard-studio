@@ -23,11 +23,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QResizeEvent
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
-    QLabel,
     QLayout,
     QPushButton,
     QSizePolicy,
@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 )
 
 from .i18n import t
-from .theme import ACCENT, BORDER, ERROR, OK, PANEL, PANEL_ALT, TEXT, TEXT_DIM, WARNING
+from .theme import ACCENT, BORDER, ERROR, OK, PANEL_ALT, TEXT, TEXT_DIM, WARNING
 
 type StepKey = Literal["circuit", "board", "place", "route", "check", "build"]
 
@@ -302,28 +302,63 @@ def next_step(steps: tuple[StepState, ...]) -> StepKey:
 # The widget
 # ---------------------------------------------------------------------------
 
-_STATUS_COLOUR: dict[StepStatus, str] = {
-    "done": OK,
-    "current": ACCENT,
-    "problem": ERROR,
-    "todo": TEXT_DIM,
-}
+def _step_dot(number: int, status: StepStatus) -> QIcon:
+    """The round mark in front of a step's name: a tick when it is done, its number --
+    filled in the accent when it is the one to do, outlined when it comes later -- and an
+    exclamation mark on a problem. Drawn, so it is the same in every font and stays crisp
+    on a 200% screen, which a circled digit in the text was not."""
+    size = DOT_SIZE
+    pixmap = QPixmap(size * 2, size * 2)
+    pixmap.setDevicePixelRatio(2)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    ring = QRectF(1, 1, size - 2, size - 2)
+    if status == "todo":
+        painter.setPen(QPen(QColor(TEXT_DIM), 1.2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        ink = TEXT_DIM
+    else:
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor({"done": PANEL_ALT, "current": ACCENT, "problem": ERROR}[status]))
+        ink = OK if status == "done" else "white"
+    painter.drawEllipse(ring)
+    if status == "done":
+        tick = QPen(QColor(ink), 1.8)
+        tick.setCapStyle(Qt.PenCapStyle.RoundCap)
+        tick.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(tick)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPolyline(
+            [QPointF(size * 0.3, size * 0.52), QPointF(size * 0.45, size * 0.67),
+             QPointF(size * 0.72, size * 0.36)]
+        )
+    else:
+        font = QFont()
+        font.setPixelSize(round(size * 0.55))
+        font.setBold(status != "todo")
+        painter.setFont(font)
+        painter.setPen(QColor(ink))
+        painter.drawText(ring, Qt.AlignmentFlag.AlignCenter, "!" if status == "problem" else str(number))
+    painter.end()
+    return QIcon(pixmap)
 
-_STATUS_MARK: dict[StepStatus, str] = {
-    "done": "✓",
-    "current": "●",
-    "problem": "!",
-    "todo": "○",
-}
+
+#: The step dots' size, in logical pixels.
+DOT_SIZE = 20
 
 
 class WorkflowBar(QWidget):
-    """The steps across the top of the window, and the button that does the next one.
+    """The steps across the header, one line: a dot and a name each, and the step to do
+    saying where it stands ("Wiring · 4 connections left").
 
     A step is a button because it is a place to go: pressing Circuit brings the sheet
     forward, Placement and Wiring the board, Check the findings, Build the guide and the 3D
-    view -- which is what the two view-switching buttons and four shortcuts did, arranged in
-    the order they are needed. What it SHOWS is where the document stands on it.
+    view. What it SHOWS is where the document stands on it -- the step to do in full, the
+    rest by name, every one's line in its tooltip. It was two lines under a toolbar of its
+    own, and the window had three rows of chrome before the board; it is one row now, the
+    header's (``ui/header.py``), which also holds the button that does the next step:
+    ``next_button`` is made here, because it is this bar's answer, and laid out there.
     """
 
     stepClicked = Signal(str)
@@ -332,31 +367,32 @@ class WorkflowBar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("workflowBar")
-        # The width of the window: it sits alone in a toolbar row, and a toolbar gives an
-        # expanding widget the room the row has.
+        # As wide as the header can spare: the bar decides how much it says from the width
+        # it is given (``_fit``), and centres what it says in it.
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        # Its own background painted, which a plain QWidget does not do for a stylesheet.
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
         # The bar decides how much it says from the width it is GIVEN (``_fit``), so the
         # layout must not turn the width of its fullest wording into a minimum for the
-        # whole window: with it, a 1100 px window could not be made, and the main toolbar
-        # above kept words it had no room for.
+        # whole window: with it, a 1100 px window could not be made.
         layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
-        #: How much each step says: its summary line too, only its name, or only its number.
+        layout.addStretch(1)
+        #: How much each step says: the step to do with its line, every step by name, or
+        #: only the dots.
         self._mode: Literal["full", "compact", "tiny"] = "full"
         self._fitting = False
         self.buttons: dict[StepKey, QToolButton] = {}
         for index, key in enumerate(STEP_ORDER):
             if index:
-                arrow = QLabel("›")
-                arrow.setStyleSheet(f"color: {TEXT_DIM}; font-size: 16px;")
-                layout.addWidget(arrow)
+                line = QFrame()
+                line.setFixedSize(14, 1)
+                line.setStyleSheet(f"background: {BORDER};")
+                layout.addWidget(line)
             button = QToolButton()
             button.setObjectName(f"workflowStep_{key}")
-            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            button.setIconSize(QSize(DOT_SIZE, DOT_SIZE))
             button.setAutoRaise(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(lambda _checked=False, k=key: self.stepClicked.emit(k))
@@ -369,44 +405,39 @@ class WorkflowBar(QWidget):
         self.next_button.setDefault(False)
         self.next_button.setAutoDefault(False)
         self.next_button.clicked.connect(lambda: self.nextClicked.emit(self._next))
-        layout.addWidget(self.next_button)
         self._next: StepKey = "circuit"
         self.steps: tuple[StepState, ...] = ()
         self.setStyleSheet(
             f"""
-            QWidget#workflowBar {{ background: {PANEL}; border-bottom: 1px solid {BORDER}; }}
             QToolButton {{
-                color: {TEXT}; padding: 3px 10px; border-radius: 6px; text-align: left;
+                color: {TEXT_DIM}; background: transparent; border: none; padding: 3px 6px;
+                border-radius: 6px; text-align: left;
             }}
             QToolButton:hover {{ background: {PANEL_ALT}; }}
-            QPushButton#workflowNext {{
-                background: {ACCENT}; color: white; font-weight: 600;
-                border: none; border-radius: 6px; padding: 6px 16px;
-            }}
-            QPushButton#workflowNext:hover {{ background: #62aaff; }}
             """
         )
+        self.next_button.setStyleSheet(_next_button_sheet(problem=False))
 
     def minimumSizeHint(self) -> QSize:
         return QSize(0, super().minimumSizeHint().height())
 
-    def _label(self, number: int, step: StepState, mode: str) -> str:
-        mark = _STATUS_MARK[step.status]
+    def _label(self, step: StepState, mode: str) -> str:
         if mode == "tiny":
-            return f"{mark} {number}"
-        if mode == "compact":
-            return f"{mark} {number}. {step_title(step.key)}"
-        return f"{mark} {number}. {step_title(step.key)}\n{step.summary}"
+            return ""
+        if mode == "full" and step.status in ("current", "problem"):
+            return f"{step_title(step.key)} · {step.summary}"
+        return step_title(step.key)
 
     def _write_labels(self, mode: str) -> None:
-        for number, step in enumerate(self.steps, start=1):
-            self.buttons[step.key].setText(self._label(number, step, mode))
+        for step in self.steps:
+            self.buttons[step.key].setText(self._label(step, mode))
 
     def _fit(self) -> None:
-        """Say as much as the width allows: summaries, then names only, then numbers.
+        """Say as much as the width allows: the step to do in full, then names only, then
+        the dots alone.
 
         Measured by writing each wording and asking the layout, fullest first, because the
-        widths are the font's and the language's -- "Yönlendirme" is not "Wiring". What a
+        widths are the font's and the language's -- "Kablolama" is not "Wiring". What a
         step stops saying is still in its tooltip.
         """
         if self._fitting or not self.steps:
@@ -435,27 +466,37 @@ class WorkflowBar(QWidget):
         self.steps = steps
         for number, step in enumerate(steps, start=1):
             button = self.buttons[step.key]
-            colour = _STATUS_COLOUR[step.status]
-            weight = "600" if step.status in ("current", "problem") else "normal"
-            button.setText(self._label(number, step, self._mode))
+            button.setIcon(_step_dot(number, step.status))
+            button.setText(self._label(step, self._mode))
             button.setToolTip(
-                f"<b>{step_title(step.key)}</b> — {step.summary}<br>{step_tooltip(step.key)}"
+                f"<b>{number}. {step_title(step.key)}</b> — {step.summary}"
+                f"<br>{step_tooltip(step.key)}"
             )
-            button.setStyleSheet(
-                f"QToolButton {{ color: {colour}; font-weight: {weight}; }}"
-                if step.status != "todo"
-                else f"QToolButton {{ color: {TEXT_DIM}; }}"
-            )
+            if step.status == "current":
+                button.setStyleSheet(f"QToolButton {{ color: {TEXT}; font-weight: 600; }}")
+            elif step.status == "problem":
+                button.setStyleSheet(f"QToolButton {{ color: {ERROR}; font-weight: 600; }}")
+            else:
+                button.setStyleSheet("")
             button.setProperty("status", step.status)
         self._next = next_step(steps)
         label = next(step.action for step in steps if step.key == self._next)
         problem = any(step.status == "problem" for step in steps)
-        self.next_button.setText(("⚠ " if problem else "") + label + "  →")
-        self.next_button.setStyleSheet(
-            f"QPushButton#workflowNext {{ background: {WARNING if problem else ACCENT}; }}"
-        )
+        self.next_button.setText(("⚠ " if problem else "") + label)
+        self.next_button.setStyleSheet(_next_button_sheet(problem=problem))
         self._fit()
 
     @property
     def next_key(self) -> StepKey:
         return self._next
+
+
+def _next_button_sheet(*, problem: bool) -> str:
+    """The one accent button in the window: what the next step is, done when pressed."""
+    return f"""
+        QPushButton#workflowNext {{
+            background: {WARNING if problem else ACCENT}; color: white; font-weight: 600;
+            border: none; border-radius: 6px; padding: 6px 14px;
+        }}
+        QPushButton#workflowNext:hover {{ background: {WARNING if problem else '#62aaff'}; }}
+        """

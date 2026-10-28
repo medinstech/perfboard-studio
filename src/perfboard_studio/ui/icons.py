@@ -408,6 +408,12 @@ def _arrow(p: QPainter) -> None:
     p.drawPath(path)
 
 
+def _menu(p: QPainter) -> None:
+    """Three lines: the menus, all of them, behind one button in the header."""
+    for y in (28, 50, 72):
+        p.drawLine(QPointF(18, y), QPointF(82, y))
+
+
 #: Name -> drawing. The names are what the toolbar and the menus ask for.
 DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "save": _save,
@@ -441,6 +447,7 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "arrow": _arrow,
     "fit": _fit,
     "delete": _delete,
+    "menu": _menu,
 }
 
 
