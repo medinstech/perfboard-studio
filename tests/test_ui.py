@@ -3100,17 +3100,22 @@ def test_a_solder_trace_is_a_chain_and_commits_on_request() -> None:
     assert len(bus.document.conductors[0].path) == 4
 
 
-def test_a_diagonal_step_is_refused_before_the_click_lands() -> None:
-    """Solder spans the 0.6 mm gap to the next pad and not the 1.7 mm diagonal one. The
-    command knows that; the preview has to know it too, or the tool looks broken when a
-    click does nothing."""
+def test_a_diagonal_click_is_a_run_round_the_corner_never_a_diagonal_step() -> None:
+    """Solder spans the 0.6 mm gap to the next pad and not the 1.7 mm diagonal one. A
+    click diagonally away used to be refused; now it is a run along the row and down the
+    column, through the corner pad -- and the copper still never steps diagonally."""
+    from perfboard_studio.geometry import validate_orthogonal_chain
+
     scene, bus = _drawing_scene()
     scene.arm_drawing("solder-trace")
     scene.draw_click(view2d.HoleCoord(4, 4))
-
     assert scene.draw_click(view2d.HoleCoord(5, 5)) is None
-    scene.commit_drawing()
-    assert not bus.document.conductors  # One hole is not a conductor.
+    result = scene.commit_drawing()
+
+    assert result is not None and result.ok, result
+    path = bus.document.conductors[0].path
+    assert path == (view2d.HoleCoord(4, 4), view2d.HoleCoord(5, 4), view2d.HoleCoord(5, 5))
+    assert validate_orthogonal_chain(path).ok
 
 
 def test_a_wire_may_go_diagonally_because_a_wire_physically_can() -> None:

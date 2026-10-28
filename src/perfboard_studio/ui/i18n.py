@@ -111,11 +111,13 @@ TURKISH: Mapping[str, str] = {
     "&Insulated Wire": "İ&zoleli Tel",
     "&Jumper Over the Parts": "Parçaların Üstünden &Jumper",
     "Join adjacent pads with solder. Orthogonal steps only — solder spans the "
-    "0.6 mm gap to the next pad and not the 1.7 mm diagonal one. Click each "
-    "pad, then Enter or right-click to finish.": (
+    "0.6 mm gap to the next pad and not the 1.7 mm diagonal one. Click where "
+    "the run starts and wherever it turns: every pad between is soldered. "
+    "Enter, right-click or a double-click finishes.": (
         "Komşu pedleri lehimle birleştirir. Yalnızca düz adımlar — lehim yandaki pede olan "
-        "0,6 mm boşluğu kapatır, çaprazdaki 1,7 mm boşluğu kapatmaz. Her pede tıklayın, "
-        "bitirmek için Enter veya sağ tık."
+        "0,6 mm boşluğu kapatır, çaprazdaki 1,7 mm boşluğu kapatmaz. Yolun başladığı ve "
+        "döndüğü yerlere tıklayın: aradaki her ped lehimlenir. Enter, sağ tık ya da çift "
+        "tık bitirir."
     ),
     "A solder trace laid over a tinned wire: about ten times lower resistance, and what a "
     "power or ground rail longer than five or six pads wants.": (
@@ -381,6 +383,8 @@ TURKISH: Mapping[str, str] = {
     "Right-click": "Sağ tık",
     "Finish the trace or net being drawn": "Çizilmekte olan lehim yolunu ya da neti bitir",
     "Finish it without moving the pointer": "İmleci oynatmadan bitir",
+    "Turn the corner of the trace being drawn the other way":
+        "Çizilmekte olan yolun köşesini öbür yana çevir",
     "Leave the current mode": "Geçerli kipten çık",
     "Double-click a net": "Bir nete çift tıkla",
     "Wire just that net": "Yalnızca o neti kablola",
@@ -394,8 +398,8 @@ TURKISH: Mapping[str, str] = {
     "click a hole, Esc cancels": "bir deliğe tıklayın, Esc iptal eder",
     "Drawing": "Çiziliyor:",
     "click both ends, Esc cancels": "iki ucu da tıklayın, Esc iptal eder",
-    "click each pad, Enter or right-click finishes, Esc cancels":
-        "her pede tıklayın, Enter veya sağ tık bitirir, Esc iptal eder",
+    "click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels":
+        "döndüğü yere tıklayın, Enter veya sağ tık bitirir, / köşeyi çevirir, Esc iptal eder",
     "Cutting tracks": "Şerit kesiliyor",
     "click a hole, Esc ends": "bir deliğe tıklayın, Esc bitirir",
     "Measuring": "Ölçülüyor",

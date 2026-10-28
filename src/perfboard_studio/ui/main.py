@@ -3628,6 +3628,7 @@ class ShortcutsDialog(QDialog):
             (t("Arrow keys"), t("Nudge the selected part one hole (Shift: five)")),
             (t("Right-click"), t("Finish the trace or net being drawn")),
             ("Enter", t("Finish it without moving the pointer")),
+            ("/", t("Turn the corner of the trace being drawn the other way")),
             ("Esc", t("Leave the current mode")),
             (t("Double-click a net"), t("Wire just that net")),
             (t("Click a problem"), t("Zoom to the holes it names")),
@@ -6294,8 +6295,9 @@ class MainWindow(QMainWindow):
         for kind, label, shortcut, tip in (
             ("solder-trace", "&Solder Trace", "T",
              t("Join adjacent pads with solder. Orthogonal steps only — solder spans the "
-               "0.6 mm gap to the next pad and not the 1.7 mm diagonal one. Click each "
-               "pad, then Enter or right-click to finish.")),
+               "0.6 mm gap to the next pad and not the 1.7 mm diagonal one. Click where "
+               "the run starts and wherever it turns: every pad between is soldered. "
+               "Enter, right-click or a double-click finishes.")),
             ("solder-trace-wired", "&Reinforced Solder Trace", "Shift+T",
              t("A solder trace laid over a tinned wire: about ten times lower resistance, "
                "and what a power or ground rail longer than five or six pads wants.")),
@@ -7272,7 +7274,7 @@ class MainWindow(QMainWindow):
             how = (
                 t("click both ends, Esc cancels")
                 if two_point
-                else t("click each pad, Enter or right-click finishes, Esc cancels")
+                else t("click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels")
             )
             word = conductor_word(kind, self._guide_language())
             return f"{t('Drawing')} {word}  ·  {how}"
@@ -11823,7 +11825,7 @@ class MainWindow(QMainWindow):
             how = (
                 t("click both ends, Esc cancels")
                 if two_point
-                else t("click each pad, Enter or right-click finishes, Esc cancels")
+                else t("click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels")
             )
             self.statusBar().showMessage(
                 f"{t('Drawing')} "

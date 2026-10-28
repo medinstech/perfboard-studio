@@ -1778,16 +1778,26 @@ class DrawPreviewItem(QGraphicsItem):
         # the item's own cursor handling silently stop working.
         self.next_hole: HoleCoord | None = None
         self.next_ok = True
+        #: The pads a click on ``next_hole`` would add, in order: one for a wire's end, the
+        #: whole run to the pointer for a solder trace.
+        self.run: list[HoleCoord] = []
         self.setZValue(120)
 
     def boundingRect(self) -> QRectF:
         pitch = self.board.pitch
         return _outline_rect(self.board).adjusted(-pitch, -pitch, pitch, pitch)
 
-    def set_path(self, path: list[HoleCoord], next_hole: HoleCoord | None, ok: bool) -> None:
+    def set_path(
+        self,
+        path: list[HoleCoord],
+        next_hole: HoleCoord | None,
+        ok: bool,
+        run: Sequence[HoleCoord] = (),
+    ) -> None:
         self.path = path
         self.next_hole = next_hole
         self.next_ok = ok
+        self.run = list(run)
         self.update()
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
@@ -1816,8 +1826,18 @@ class DrawPreviewItem(QGraphicsItem):
                 pen = QPen(tint, width)
                 pen.setDashPattern([1.6, 1.4])
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
                 painter.setPen(pen)
-                painter.drawLine(points[-1], end)
+                # Through every pad of the run, so its corner is where it will be.
+                ahead = QPainterPath(points[-1])
+                for hole in self.run or [self.next_hole]:
+                    ahead.lineTo(hole_to_screen(hole, self.board, self.side))
+                painter.drawPath(ahead)
+                # And a dot on each pad it would solder, because those are the joints.
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(tint))
+                for hole in self.run[:-1]:
+                    painter.drawEllipse(hole_to_screen(hole, self.board, self.side), width * 0.45, width * 0.45)
             painter.setPen(QPen(tint, 0.22))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(end, self.board.pad_diameter * 0.62, self.board.pad_diameter * 0.62)
@@ -3628,6 +3648,8 @@ class BoardScene(QGraphicsScene):
         self._armed_id: str | None = None
         self._draw_kind: ConductorKind | None = None
         self._draw_path: list[HoleCoord] = []
+        #: Whether a solder run goes down the column before along the row (``/`` flips it).
+        self._draw_column_first = False
         self._draw_preview: DrawPreviewItem | None = None
         self._net_pin_target: str | None = None
         self._net_pin_picks: list[tuple[str, str]] = []
@@ -4199,6 +4221,10 @@ class BoardScene(QGraphicsScene):
     _TWO_POINT_KINDS: frozenset[ConductorKind] = frozenset(
         {"bare-wire", "insulated-wire", "top-jumper"}
     )
+    #: Kinds drawn in RUNS: a click is where the copper turns, and every pad between it
+    #: and the last click is soldered on the way. A trace had to be clicked pad by pad --
+    #: seven clicks for seven holes -- and a click two holes away was silently ignored.
+    _RUN_KINDS: frozenset[ConductorKind] = frozenset({"solder-trace", "solder-trace-wired"})
 
     def arm_drawing(self, kind: ConductorKind | None) -> None:
         """Arm (or, with None, disarm) drawing a conductor of this kind."""
@@ -4224,6 +4250,38 @@ class BoardScene(QGraphicsScene):
             self._draw_preview = None
         self._draw_path = []
         self._draw_kind = None
+        self._draw_column_first = False
+
+    def _run_to(self, at: HoleCoord) -> list[HoleCoord]:
+        """The pads an orthogonal run from the last hole drawn to ``at`` takes, ``at`` last.
+
+        Along the row first and then down the column, or the other way round once ``/``
+        has flipped it. ONE RULE, as the sheet's wire tool has (``viewsch._elbow``): a
+        corner that changed sides with the direction the pointer came from could not be
+        aimed. Each step is to an orthogonal neighbour, so the path is still the chain
+        ``validate_orthogonal_chain`` and the command require.
+        """
+        if not self._draw_path:
+            return [at]
+        col, row = self._draw_path[-1].col, self._draw_path[-1].row
+        run: list[HoleCoord] = []
+        for along_the_row in ((False, True) if self._draw_column_first else (True, False)):
+            if along_the_row:
+                while col != at.col:
+                    col += 1 if at.col > col else -1
+                    run.append(HoleCoord(col, row))
+            else:
+                while row != at.row:
+                    row += 1 if at.row > row else -1
+                    run.append(HoleCoord(col, row))
+        return run
+
+    def flip_draw_corner(self) -> None:
+        """Turn the corner of the run being drawn the other way (``/``)."""
+        if self._draw_kind not in self._RUN_KINDS:
+            return
+        self._draw_column_first = not self._draw_column_first
+        self._refresh_draw_preview(self._last_hole)
 
     def _step_is_legal(self, at: HoleCoord) -> bool:
         """Whether the next click may go here, by the same rule the command applies.
@@ -4233,22 +4291,39 @@ class BoardScene(QGraphicsScene):
         reliably span the second. Checked here so the preview can say so before the click
         rather than the command refusing after it.
         """
-        if not is_inside_board(at, self.document.board):
+        board = self.document.board
+        if not is_inside_board(at, board):
             return False
         if not self._draw_path:
             return True
+        if self._draw_kind in self._RUN_KINDS:
+            # The whole run, pad by pad: on the board, and never back over the trace's
+            # own pads, which a chain cannot visit twice.
+            run = self._run_to(at)
+            return bool(run) and all(
+                is_inside_board(hole, board) and hole not in self._draw_path for hole in run
+            )
         if at in self._draw_path:
             return False
-        last = self._draw_path[-1]
-        if self._draw_kind in ("solder-trace", "solder-trace-wired"):
-            return abs(at.col - last.col) + abs(at.row - last.row) == 1
-        return at != last
+        return at != self._draw_path[-1]
 
     def draw_click(self, at: HoleCoord) -> DispatchResult | None:
-        """Extend the conductor being drawn, committing it when it is complete."""
-        if self._draw_kind is None or not self._step_is_legal(at):
+        """Extend the conductor being drawn, committing it when it is complete.
+
+        A solder trace takes the whole run to the click, and a click on its last pad
+        finishes it -- which is also what the second half of a double-click is.
+        """
+        if self._draw_kind is None:
             return None
-        self._draw_path.append(at)
+        runs = self._draw_kind in self._RUN_KINDS
+        if runs and self._draw_path and at == self._draw_path[-1]:
+            return self.commit_drawing()
+        if not self._step_is_legal(at):
+            return None
+        if runs:
+            self._draw_path.extend(self._run_to(at))
+        else:
+            self._draw_path.append(at)
         if self._draw_kind in self._TWO_POINT_KINDS and len(self._draw_path) == 2:
             return self.commit_drawing()
         self._refresh_draw_preview(at)
@@ -4313,7 +4388,12 @@ class BoardScene(QGraphicsScene):
         if self._draw_preview is None:
             return
         ok = cursor is None or self._step_is_legal(cursor)
-        self._draw_preview.set_path(list(self._draw_path), cursor, ok)
+        run = (
+            self._run_to(cursor)
+            if cursor is not None and self._draw_path and self._draw_kind in self._RUN_KINDS
+            else []
+        )
+        self._draw_preview.set_path(list(self._draw_path), cursor, ok, run)
 
     # -- naming a net by clicking its pins -----------------------------------
     #
@@ -5096,6 +5176,13 @@ class BoardScene(QGraphicsScene):
         steps of a trace -- so opening a dialog on top of that would interrupt the tool
         with a window the user did not ask for.
         """
+        if self._draw_kind in self._RUN_KINDS and event.button() == Qt.MouseButton.LeftButton:
+            # The second half of a double-click is a click on the pad the first half just
+            # reached, which is what finishes a solder run (``draw_click``). Said here because
+            # Qt's own double-click handler never calls ``mousePressEvent``.
+            self.draw_click(screen_to_hole(event.scenePos(), self.document.board, self.side))
+            event.accept()
+            return
         if self.in_a_mode or event.button() != Qt.MouseButton.LeftButton:
             super().mouseDoubleClickEvent(event)
             return
@@ -5149,6 +5236,10 @@ class BoardScene(QGraphicsScene):
             Qt.Key.Key_Enter,
         ):
             self.commit_drawing()
+            event.accept()
+            return
+        if self._draw_kind in self._RUN_KINDS and event.key() == Qt.Key.Key_Slash:
+            self.flip_draw_corner()
             event.accept()
             return
         delta = deltas.get(Qt.Key(event.key()))

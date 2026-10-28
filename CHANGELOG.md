@@ -51,6 +51,12 @@ closed without a bump.
   sideways went down the wrong way and was turned afterwards. The ghost now turns under the
   pointer, red where the turned part does not fit, and goes down as shown; the next one of
   the same part goes down the same way round.
+- **A solder trace is drawn in runs, not pad by pad.** Seven holes of solder took seven
+  clicks, and a click two holes away did nothing at all. Now a click is where the trace
+  turns: the preview runs along the row and down the column to the pointer through every
+  pad it will solder, red where it would cross itself or leave the board; `/` turns the
+  corner the other way; Enter, right-click, a double-click or a click on the last pad again
+  finishes. The copper still never steps diagonally.
 - **A trackpad pans the board and the sheet, and the wheel can be told to.** The wheel
   always zoomed, so on a laptop two fingers zoomed, a sideways swipe zoomed out, and with
   no middle button the scrollbars were the only way across a board. Now holding Space turns

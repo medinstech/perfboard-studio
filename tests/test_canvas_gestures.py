@@ -731,3 +731,144 @@ def test_a_board_told_to_scroll_pans_under_a_mouse_wheel() -> None:
         assert view.current_scale() == pytest.approx(scale * 1.15)
     finally:
         view.close()
+
+
+# -- a solder trace is drawn in runs ---------------------------------------------------------
+
+
+def _trace_scene():  # type: ignore[no-untyped-def]
+    from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
+    from perfboard_studio.commands import create_empty_document, create_standard_registry
+    from perfboard_studio.model import DocumentMeta
+
+    stamp = "2026-01-01T00:00:00.000Z"
+    document = create_empty_document(DocumentMeta(name="t", created=stamp, modified=stamp))
+    bus = CommandBus(document, create_standard_registry(), CommandContext(next_id=create_id_generator()))
+    scene = BoardScene(bus.document, footprint_lookup(), side="top", bus=bus)
+    scene.arm_drawing("solder-trace")
+    return scene, bus
+
+
+def _holes(*pairs: tuple[int, int]) -> tuple[object, ...]:
+    from perfboard_studio.model import HoleCoord
+
+    return tuple(HoleCoord(col, row) for col, row in pairs)
+
+
+def test_seven_holes_of_solder_are_two_clicks_not_seven() -> None:
+    """A trace had to be clicked pad by pad, and a click two holes away did nothing."""
+    from perfboard_studio.model import HoleCoord
+
+    scene, bus = _trace_scene()
+    scene.draw_click(HoleCoord(2, 20))
+    scene.draw_click(HoleCoord(8, 20))
+    result = scene.commit_drawing()
+
+    assert result is not None and result.ok, result
+    assert bus.document.conductors[0].path == _holes(*((col, 20) for col in range(2, 9)))
+
+
+def test_a_run_goes_along_the_row_then_down_the_column() -> None:
+    from perfboard_studio.model import HoleCoord
+
+    scene, bus = _trace_scene()
+    scene.draw_click(HoleCoord(2, 2))
+    scene.draw_click(HoleCoord(5, 4))
+    scene.commit_drawing()
+    assert bus.document.conductors[0].path == _holes(
+        (2, 2), (3, 2), (4, 2), (5, 2), (5, 3), (5, 4)
+    )
+
+
+def test_slash_turns_the_corner_the_other_way() -> None:
+    from perfboard_studio.model import HoleCoord
+
+    scene, bus = _trace_scene()
+    scene.draw_click(HoleCoord(2, 2))
+    scene.flip_draw_corner()
+    scene.draw_click(HoleCoord(5, 4))
+    scene.commit_drawing()
+    assert bus.document.conductors[0].path == _holes(
+        (2, 2), (2, 3), (2, 4), (3, 4), (4, 4), (5, 4)
+    )
+
+
+def test_a_click_on_the_last_pad_again_finishes_the_trace() -> None:
+    """Which is also what the second half of a double-click is."""
+    from perfboard_studio.model import HoleCoord
+
+    scene, bus = _trace_scene()
+    scene.draw_click(HoleCoord(2, 2))
+    scene.draw_click(HoleCoord(4, 2))
+    result = scene.draw_click(HoleCoord(4, 2))
+
+    assert result is not None and result.ok, result
+    assert len(bus.document.conductors[0].path) == 3
+    assert scene.armed_draw_kind is None
+
+
+def test_a_run_back_over_the_traces_own_pads_is_refused_and_shown_red() -> None:
+    from perfboard_studio.model import HoleCoord
+    from perfboard_studio.ui.view2d import DrawPreviewItem
+
+    scene, bus = _trace_scene()
+    scene.draw_click(HoleCoord(2, 2))
+    scene.draw_click(HoleCoord(6, 2))
+    assert scene.draw_click(HoleCoord(4, 2)) is None
+    scene.hover_at(hole_to_screen(HoleCoord(4, 2), bus.document.board, "top"))
+
+    preview = next(item for item in scene.items() if isinstance(item, DrawPreviewItem))
+    assert not preview.next_ok
+    assert preview.path == list(_holes(*((col, 2) for col in range(2, 7))))
+
+
+def test_the_preview_shows_every_pad_the_next_click_would_solder() -> None:
+    from perfboard_studio.model import HoleCoord
+    from perfboard_studio.ui.view2d import DrawPreviewItem
+
+    scene, bus = _trace_scene()
+    scene.draw_click(HoleCoord(2, 2))
+    scene.hover_at(hole_to_screen(HoleCoord(4, 3), bus.document.board, "top"))
+
+    preview = next(item for item in scene.items() if isinstance(item, DrawPreviewItem))
+    assert preview.next_ok
+    assert preview.run == list(_holes((3, 2), (4, 2), (4, 3)))
+
+
+def test_a_wire_is_still_its_two_ends() -> None:
+    from perfboard_studio.model import HoleCoord
+
+    scene, bus = _trace_scene()
+    scene.arm_drawing("bare-wire")
+    scene.draw_click(HoleCoord(2, 2))
+    result = scene.draw_click(HoleCoord(6, 5))
+    assert result is not None and result.ok
+    assert bus.document.conductors[0].path == _holes((2, 2), (6, 5))
+
+
+def test_a_double_click_finishes_the_trace() -> None:
+    """Through the view, as a person does it: the second half of a double-click lands on
+    the pad the first half just reached, which is "finish"."""
+    from perfboard_studio.model import HoleCoord
+
+    scene, bus = _trace_scene()
+    view = BoardView(scene)
+    view.resize(600, 500)
+    view.show()
+    view.fit_board()
+    QApplication.processEvents()
+    try:
+        port = view.viewport()
+        board = bus.document.board
+        start = view.mapFromScene(hole_to_screen(HoleCoord(2, 2), board, "top"))
+        end = view.mapFromScene(hole_to_screen(HoleCoord(6, 2), board, "top"))
+        _click(port, start)
+        _mouse(port, QEvent.Type.MouseButtonPress, end, LEFT)
+        _mouse(port, QEvent.Type.MouseButtonRelease, end, NONE)
+        _mouse(port, QEvent.Type.MouseButtonDblClick, end, LEFT)
+        _mouse(port, QEvent.Type.MouseButtonRelease, end, NONE)
+        assert bus.document.conductors, "the double-click should have finished the trace"
+        assert bus.document.conductors[0].path == _holes(*((col, 2) for col in range(2, 7)))
+        assert scene.armed_draw_kind is None
+    finally:
+        view.close()
