@@ -91,6 +91,9 @@ def test_the_stored_choice_is_read_from_the_windows_own_store(monkeypatch) -> No
 
     import PySide6.QtCore
 
+    # The window's REAL store, not the temp one tests/conftest.py gives every test: what is
+    # pinned is which store the theme reads, and that is the name the real one is built with.
+    monkeypatch.undo()
     window_store = main_module.app_settings()
     monkeypatch.setattr(PySide6.QtCore, "QSettings", Recording)
 

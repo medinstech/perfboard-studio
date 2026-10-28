@@ -43,25 +43,6 @@ def qapp() -> QApplication:
     return app  # type: ignore[return-value]
 
 
-@pytest.fixture(autouse=True)
-def _settings_and_recovery_in_temp(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    """Keep the saved session and the autosave records out of the real user's store.
-
-    Every window built here saves its layout when it closes and keeps an autosave record,
-    so without this the suite wrote an offscreen test window's geometry and docks over the
-    developer's own (``tests/test_ui.py``'s fixtures say the same, at more length).
-    """
-    from PySide6.QtCore import QSettings
-
-    from perfboard_studio.ui import autosave as autosave_module
-    from perfboard_studio.ui import main as main_module
-
-    store = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
-    monkeypatch.setattr(main_module, "app_settings", lambda: store)
-    monkeypatch.setattr(autosave_module, "default_directory", lambda: tmp_path / "recovery")
-    return store
-
-
 def _wheel(
     angle: tuple[int, int] = (0, 0),
     pixels: tuple[int, int] = (0, 0),
@@ -692,7 +673,7 @@ def test_m_flips_the_part_about_to_be_placed_and_r_leaves_the_selection_alone() 
 
 
 def test_the_mouse_wheel_choice_reaches_both_canvases_and_outlives_the_window(
-    _settings_and_recovery_in_temp,  # type: ignore[no-untyped-def]
+    _settings_in_a_temp_file,  # type: ignore[no-untyped-def]
 ) -> None:
     from perfboard_studio.ui.main import WHEEL_SCROLLS_KEY, MainWindow
 
@@ -707,7 +688,7 @@ def test_the_mouse_wheel_choice_reaches_both_canvases_and_outlives_the_window(
     finally:
         window._mark_saved()
         window.close()
-    assert _settings_and_recovery_in_temp.value(WHEEL_SCROLLS_KEY) in (True, "true")
+    assert _settings_in_a_temp_file.value(WHEEL_SCROLLS_KEY) in (True, "true")
 
     again = MainWindow(document)
     try:

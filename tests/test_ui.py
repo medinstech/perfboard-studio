@@ -77,42 +77,6 @@ def qapp():
     yield app
 
 
-@pytest.fixture(autouse=True)
-def _settings_in_a_temp_file(tmp_path, monkeypatch):
-    """Keep the recent-file list AND the saved session out of the real user store.
-
-    A test suite has no business writing into somebody's registry, and one that did would
-    also make these tests depend on whatever ran before them -- including on the developer
-    having opened a board that morning. Since the window now saves its layout on close,
-    and every test here closes a window, this fixture is what stands between the suite and
-    the developer's own window geometry.
-    """
-    from PySide6.QtCore import QSettings
-
-    from perfboard_studio.ui import main as main_module
-
-    store = QSettings(str(tmp_path / "recent.ini"), QSettings.Format.IniFormat)
-    monkeypatch.setattr(main_module, "app_settings", lambda: store)
-    yield store
-
-
-@pytest.fixture(autouse=True)
-def _recovery_in_a_temp_dir(tmp_path, monkeypatch):
-    """Keep autosave records out of the real user data directory.
-
-    The same argument as ``_settings_in_a_temp_file`` above and one step sharper: every
-    window built here constructs an ``Autosave``, and closing one deletes its record, so
-    without this the suite would be creating and unlinking files in the developer's own
-    profile -- in the one directory whose whole purpose is to hold work that must not be
-    lost.
-    """
-    from perfboard_studio.ui import autosave as autosave_module
-
-    directory = tmp_path / "recovery"
-    monkeypatch.setattr(autosave_module, "default_directory", lambda: directory)
-    yield directory
-
-
 def _load_dense() -> PerfDocument:
     text = GOLDEN.read_text(encoding="utf-8")
     result = persist.deserialize_document(text)
