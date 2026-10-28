@@ -432,7 +432,6 @@ TURKISH: Mapping[str, str] = {
         "{count} iletken eskidi; Ctrl+R temizler ve yeniden kablolar",
     "{count} out-of-date conductor(s) removed first": "önce {count} eskimiş iletken kaldırıldı",
     "“{style}” beat {count} other style(s)": "“{style}” diğer {count} stilden iyi çıktı",
-    "Nothing on this board yet.": "Bu kartta henüz bir şey yok.",
     "Filter nets…  (gnd, power, U1)": "Netleri süz…  (gnd, güç, U1)",
     "Filter parts…  (resistor, dip, 5mm)": "Parçaları süz…  (direnç, dip, 5mm)",
     # -- toolbar ---------------------------------------------------------------
@@ -1671,11 +1670,6 @@ TURKISH: Mapping[str, str] = {
         "güç ve toprak {count} ray simgesi olarak çizildi"
     ),
     "…and {count} more": "…ve {count} tane daha",
-    "Nothing in the design yet. Add Part… describes one, or "
-    "File ▸ Import KiCad Netlist… brings a whole circuit in.": (
-        "Tasarımda henüz bir şey yok. Parça Ekle… bir tane tanımlar; "
-        "Dosya ▸ KiCad Netlist İçe Aktar… bütün bir devreyi getirir."
-    ),
     "3D view unavailable:": "3D görünüm kullanılamıyor:",
     "conductor(s) selected": "iletken seçili",
     "locked": "kilitli",
@@ -2698,22 +2692,39 @@ TURKISH: Mapping[str, str] = {
     "not placed": "yerleşmedi",
     "Connect {pin} to {net}": "{pin} pinini {net} netine bağla",
     "Connect {pin} to a Net by Name…": "{pin} pinini adıyla bir nete bağla…",
+    # -- empty panels (ui/emptystate.py): what will be here, and how it gets here ------
+    "No nets yet": "Henüz net yok",
+    "Join two pins with Connect, on the schematic or the board. Pins joined together make "
+    "a net.": (
+        "İki pini Bağla ile birleştirin, şemada ya da kartta. Birbirine bağlı pinler bir net "
+        "olur."
+    ),
+    "No parts yet": "Henüz parça yok",
+    "Parts you add show up here with their values. It becomes your shopping list.": (
+        "Eklediğiniz parçalar değerleriyle burada görünür. Alışveriş listeniz olur."
+    ),
+    "Draw your circuit here": "Devrenizi buraya çizin",
+    "Add parts from the Library, then join their pins with Connect. The board comes later.": (
+        "Kütüphaneden parça ekleyin, sonra pinlerini Bağla ile birleştirin. Kart sonra gelir."
+    ),
+    "Open an Example…": "Örnek Aç…",
+    "The guide writes itself": "Rehber kendini yazar",
+    "Once parts are on the board, this becomes the soldering order, one step at a time.": (
+        "Parçalar karta yerleşince burası lehimleme sırası olur, adım adım."
+    ),
+    "{count} part is waiting for a board": "{count} parça bir kart bekliyor",
+    "{count} parts are waiting for a board": "{count} parça bir kart bekliyor",
+    "The blue button at the top right takes them there: Choose a Board, then Place on the "
+    "Board.": (
+        "Sağ üstteki mavi düğme onları oraya götürür: önce Kart Seç, sonra Karta Yerleştir."
+    ),
+    "The board comes after the circuit": "Kart devreden sonra gelir",
+    "Draw the circuit on the schematic first (Ctrl+2). The next step then finds a board you "
+    "can buy.": (
+        "Önce devreyi şemada çizin (Ctrl+2). Sonraki adım satın alabileceğiniz bir kart bulur."
+    ),
+    "Or drag a part here from the Library.": "Ya da Kütüphaneden buraya bir parça sürükleyin.",
     # -- the empty board --------------------------------------------------------------
-    "{count} part(s) in the design, none on the board yet.": (
-        "Tasarımda {count} parça var, kartta henüz hiçbiri yok."
-    ),
-    "Choose a Board and Place on the Board, in the steps above, put them here.": (
-        "Üstteki adımlardan Kart Seç ve Karta Yerleştir onları buraya getirir."
-    ),
-    "Draw the circuit on the sheet (Ctrl+2): the steps above take it to the board.": (
-        "Devreyi şemada çizin (Ctrl+2): üstteki adımlar onu karta taşır."
-    ),
-    "Or drag parts onto the board from the Parts panel and Connect their pins.": (
-        "Ya da parçaları Parçalar panelinden karta sürükleyip pinlerini Bağla ile birleştirin."
-    ),
-    "An existing circuit: File ▸ Import KiCad Netlist, or File ▸ Open Example.": (
-        "Hazır bir devre için: Dosya ▸ KiCad Netlist İçe Aktar ya da Dosya ▸ Örnek Aç."
-    ),
     "{count} part(s) are in the design: {catalog} known from the catalog, {kicad} "
     "matched by their KiCad footprint, {guess} guessed from their reference — check "
     "those. Next: choose a board and place them.": (

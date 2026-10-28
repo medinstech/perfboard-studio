@@ -61,6 +61,7 @@ from PySide6.QtGui import (
     QAction,
     QActionGroup,
     QColor,
+    QCursor,
     QDesktopServices,
     QDrag,
     QIcon,
@@ -341,6 +342,7 @@ from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
 from .boardpreview import render_board, with_arrangement, with_board
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
+from .emptystate import EmptyOverlay, EmptyState
 from .engine_text import finding_text, names_in, net_class_word, say
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
@@ -7345,20 +7347,32 @@ class MainWindow(QMainWindow):
         # a circuit drawn on the sheet, or imported, and a board with nothing on it is the
         # one moment the next step is not obvious from the board -- it is two panels away.
         if document.parts:
+            count = len(document.parts)
+            waiting = (
+                t("{count} part is waiting for a board") if count == 1
+                else t("{count} parts are waiting for a board")
+            ).format(count=count)
             self.view.set_empty_hint(
-                f"<b>{t('{count} part(s) in the design, none on the board yet.').format(count=len(document.parts))}</b>"
-                f"<br><br>{t('Choose a Board and Place on the Board, in the steps above, put them here.')}"
+                f"<b>{waiting}</b><br><br>"
+                + t(
+                    "The blue button at the top right takes them there: Choose a Board, then "
+                    "Place on the Board."
+                )
             )
             return
         if self._has_placed_a_part:
             self.view.set_empty_hint("")
             return
-        # Two ways in, and nothing else: the step bar above says what comes after.
+        # The board comes second, and says so: the circuit is drawn first, and the next
+        # button at the top of the window takes it from there (ui/emptystate.py's words).
         self.view.set_empty_hint(
-            f"<b>{t('Nothing on this board yet.')}</b><br><br>"
-            f"{t('Draw the circuit on the sheet (Ctrl+2): the steps above take it to the board.')}"
-            f"<br>{t('Or drag parts onto the board from the Parts panel and Connect their pins.')}"
-            f"<br><br>{t('An existing circuit: File ▸ Import KiCad Netlist, or File ▸ Open Example.')}"
+            f"<b>{t('The board comes after the circuit')}</b><br><br>"
+            + t(
+                "Draw the circuit on the schematic first (Ctrl+2). The next step then finds "
+                "a board you can buy."
+            )
+            + " "
+            + t("Or drag a part here from the Library.")
         )
 
     def _on_component_placed(self, result: DispatchResult) -> None:
@@ -7426,6 +7440,15 @@ class MainWindow(QMainWindow):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
         self.nets_tree.itemSelectionChanged.connect(self._on_net_selection_changed)
         self.nets_tree.itemDoubleClicked.connect(self._on_net_double_clicked)
+        # Empty, this was four column headings over grey (ui/emptystate.py).
+        self._nets_empty = EmptyOverlay.over_view(
+            self.nets_tree,
+            EmptyState(
+                t("No nets yet"),
+                t("Join two pins with Connect, on the schematic or the board. Pins joined "
+                  "together make a net."),
+            ),
+        )
         self.nets_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.nets_tree.customContextMenuRequested.connect(self._on_nets_context_menu)
         layout.addWidget(self.nets_tree)
@@ -7446,6 +7469,14 @@ class MainWindow(QMainWindow):
         the library and the netlist already divide between them.
         """
         self.part_list = PartListPanel()
+        self._parts_empty = EmptyOverlay.over_view(
+            self.part_list.tree,
+            EmptyState(
+                t("No parts yet"),
+                t("Parts you add show up here with their values. It becomes your shopping "
+                  "list."),
+            ),
+        )
         self.part_list.setMinimumWidth(self.SIDE_PANEL_MIN_WIDTH)
         self.part_list.componentChosen.connect(self.go_to_component)
         self.part_list.partChosen.connect(self._on_part_list_design_part)
@@ -7548,6 +7579,22 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.schematic_summary)
 
         self.schematic_view = SchematicView()
+        #: Whether the sheet has no symbol on it; set where the drawing is handed over.
+        self._sheet_blank = True
+        self._sheet_empty = EmptyOverlay(
+            self.schematic_view.viewport(),
+            EmptyState(
+                t("Draw your circuit here"),
+                t("Add parts from the Library, then join their pins with Connect. The "
+                  "board comes later."),
+                button=(t("Add a Part…"), lambda: self.on_schematic_add_part()),
+                links=(
+                    (t("Open an Example…"), lambda: self.menu_examples.exec(QCursor.pos())),
+                    (t("Import from KiCad…"), lambda: self.on_import_netlist()),
+                ),
+            ),
+            lambda: self._sheet_blank,
+        )
         self.schematic_view.partClicked.connect(self._on_schematic_part_clicked)
         self.schematic_view.partActivated.connect(self._on_schematic_part_activated)
         self.schematic_view.netClicked.connect(self._on_schematic_net_clicked)
@@ -7835,15 +7882,12 @@ class MainWindow(QMainWindow):
 
         parts = len(drawing.symbols)
         nets = len(self.bus.document.nets)
+        # A blank panel and a count of zeros is the screen the empty state exists to
+        # prevent: on an empty sheet it says what goes here and offers the first part.
+        self._sheet_blank = not drawing.symbols
+        self._sheet_empty.refresh()
         if not drawing.symbols:
-            # A blank dark panel and a count of zeros is the screen the board's own empty
-            # hint exists to prevent. Say what the two buttons underneath are for.
-            self.schematic_summary.setText(
-                t(
-                    "Nothing in the design yet. Add Part… describes one, or "
-                    "File ▸ Import KiCad Netlist… brings a whole circuit in."
-                )
-            )
+            self.schematic_summary.setText("")
             return
         summary = t("{parts} part(s), {nets} net(s)").format(parts=parts, nets=nets)
         # Counted rather than complained about: while a circuit is being drawn every part
@@ -9013,6 +9057,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.guide_summary)
 
         self.guide_tree = QTreeWidget()
+        self._guide_empty = EmptyOverlay(
+            self.guide_tree.viewport(),
+            EmptyState(
+                t("The guide writes itself"),
+                t("Once parts are on the board, this becomes the soldering order, one step "
+                  "at a time."),
+                button=(t("Place on the Board"), lambda: self.act_sch_place.trigger()),
+            ),
+            lambda: not self.bus.document.components,
+        )
         # ONE column: what goes in, then where. It was two -- the step and a Where column --
         # in a dock a few hundred pixels wide, and whichever way the width was shared one
         # of them was cut to "R1…" or pushed off the edge. In a single line the part is
@@ -9084,6 +9138,20 @@ class MainWindow(QMainWindow):
         steps = self._assembly_cached
         done = self._done_steps()
 
+        # Nothing placed: the guide says it will write itself, and -- while a drawn circuit
+        # is waiting -- offers the step that places it, as the header's next button does.
+        empty = self._guide_empty.state
+        if empty.button is not None:
+            empty.button.setVisible(bool(self.bus.document.parts))
+        self._guide_empty.refresh()
+        if not self.bus.document.components:
+            # Nothing placed is nothing to solder: an empty board's closing checks were the
+            # only rows, and they read as a guide. The tree stays empty and the empty state
+            # says how it fills.
+            self.guide_tree.clear()
+            self.guide_summary.setText("")
+            self.act_clear_progress.setEnabled(False)
+            return
         tree = self.guide_tree
         blocked = tree.blockSignals(True)
         tree.clear()
