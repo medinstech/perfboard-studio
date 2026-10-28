@@ -75,6 +75,12 @@ closed without a bump.
 - **The left column is one sidebar.** The library, the design's parts and its nets are
   three tabs of one panel, each with the column's whole height, instead of a library over
   a Nets / Part List pair that each had a third of it.
+- **Problems are a drawer with a count.** The findings list folds to one bar under the
+  canvas: a red or amber badge with the number of problems, or "No problems"; how many
+  connections are left to wire; how many nets match the circuit; and the side and the
+  board at its right end. A click on the bar, or Ctrl+7, opens the list, and the Check
+  step opens it. The status bar's six counts (ERC, DRC, LVS, to route, the side) are that
+  bar now, and a pin not wired yet still counts as work left rather than a problem.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

@@ -732,9 +732,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "error": "hata",
     "warning": "uyarı",
-    "Design rules checked in {ms} ms. Click to see the findings.": (
-        "Tasarım kuralları {ms} ms'de denetlendi. Bulguları görmek için tıklayın."
-    ),
     "Export 1:1 PDF": "1:1 PDF Dışa Aktar",
     "Export 1:1 PDF — the solder side is written beside it": (
         "1:1 PDF Dışa Aktar — lehim yüzü yanına yazılır"
@@ -1633,18 +1630,6 @@ TURKISH: Mapping[str, str] = {
     # -- the status bar and the panels' summaries ---------------------------------
     # These were the last English left on a Turkish screen: the menus were translated
     # and the numbers under them were not.
-    "ERC {errors} err / {warnings} warn": "ERC {errors} hata / {warnings} uyarı",
-    "The circuit checked: supplies, polarity, NC pins, nets that join nothing. "
-    "Click to see the findings.": (
-        "Devre denetlendi: beslemeler, kutuplar, NC pinleri, hiçbir şeyi birleştirmeyen "
-        "netler. Bulguları görmek için tıklayın."
-    ),
-    "DRC {errors} err / {warnings} warn": "DRC {errors} hata / {warnings} uyarı",
-    "LVS {matched}/{total} · {opens} open · {shorts} short": (
-        "LVS {matched}/{total} · {opens} açık · {shorts} kısa"
-    ),
-    "{count} to route · {length:.0f} mm": "{count} kablolanacak · {length:.0f} mm",
-    "no netlist": "netlist yok",
     "done": "bitti",
     "Not on the board: {pins}": "Kartta değil: {pins}",
     "not on the board": "kartta değil",
@@ -2672,6 +2657,12 @@ TURKISH: Mapping[str, str] = {
     "Connect": "Bağla",
     "Rearrange": "Yeniden Diz",
     "3D": "3D",
+    "Everything the three checks found, worst first (Ctrl+7).": (
+        "Üç denetimin bulduğu her şey, en ciddisi önce (Ctrl+7)."
+    ),
+    "No problems": "Sorun yok",
+    "{count} to wire": "{count} kablolanacak",
+    "Matches the circuit: {matched} of {total} nets": "Devreyle uyuşan net: {matched}/{total}",
     "Select and move parts. Escape comes back to it from any tool.": (
         "Parçaları seçin ve taşıyın. Escape her araçtan buraya döner."
     ),

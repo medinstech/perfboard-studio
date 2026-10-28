@@ -1522,6 +1522,11 @@ Seven things follow, and each has a test:
   central widget hands every leftover pixel of HEIGHT to the bottom dock area, and no
   `resizeDocks`, size hint or size policy takes it back: a findings list with four rows in
   it opened 556 px tall and squeezed the board into 302.
+  It opens FOLDED, as the Problems drawer (`ui/problems.py`, `set_problems_open`): its
+  title bar is the bar with the count, and folded it is capped to that bar's height, which
+  is what gives the views every other pixel of the column. The bar must report its height
+  in `sizeHint`, not only as a fixed height: a dock sizes its title bar from the hint, and
+  the drawer folded to the 19 px its labels asked for and cut the bar off.
 - **`_apply_default_sizes` caps and lets go**, from `showEvent` and through two turns of the
   event loop, because `resizeDocks` does nothing useful here — it divides the room the
   window HAS, and a window that is not on screen yet has none. A maximum is honoured at any

@@ -353,6 +353,8 @@ from .i18n import language as current_language
 from .i18n import set_language, t
 from .partlist import PartListPanel
 from .partnames import footprint_label
+from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
+from .problems import ProblemsBar
 from .project import write_project
 from .tour import Tour
 from .view2d import (
@@ -4325,28 +4327,6 @@ def _check_row(checkpoint: Checkpoint) -> QTreeWidgetItem:
     return row
 
 
-class _OpensPanel(QObject):
-    """Makes a status-bar count a way to the panel that explains it.
-
-    "DRC 3 err" in the corner of the window said something was wrong and gave no way to
-    find out what, short of knowing the DRC panel was Ctrl+7. A filter rather than a link,
-    so the label keeps its own colours.
-    """
-
-    def __init__(self, label: QLabel, dock: QDockWidget) -> None:
-        super().__init__(label)
-        self._dock = dock
-        label.setCursor(Qt.CursorShape.PointingHandCursor)
-        label.installEventFilter(self)
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if event.type() == QEvent.Type.MouseButtonRelease:
-            self._dock.show()
-            self._dock.raise_()
-            return True
-        return False
-
-
 def vtk_paints_on_screen(platform: str, qt_version: str) -> bool:
     """Whether the 3D panel may keep ``WA_PaintOnScreen``, which VTK's widget sets for itself.
 
@@ -4866,8 +4846,7 @@ class MainWindow(QMainWindow):
             self.show_board()
         elif step == "check":
             self.show_board()
-            self.dock_drc.show()
-            self.dock_drc.raise_()
+            self.set_problems_open(True)
         else:
             self._raise_view(self.dock_guide)
 
@@ -5212,15 +5191,14 @@ class MainWindow(QMainWindow):
     def _cap_for_default_sizes(self, on: bool) -> None:
         # The guide is not here: it is shut on a first run, and a cap on a closed panel
         # changes nothing. It is given its room when it opens (``_make_room``).
-        # ALL THREE of the sidebar's tabs: a tab group is as wide as its widest-allowed
-        # member, so a cap on the library alone left the column free to take every spare
-        # pixel -- 1318 of a 1600 px window, with the board squeezed to the 3D view's
-        # minimum beside it.
+        # The Problems drawer is not here: it opens folded, capped to its bar. ALL THREE of
+        # the sidebar's tabs are: a tab group is as wide as its widest-allowed member, so a
+        # cap on the library alone left the column free to take every spare pixel -- 1318
+        # of a 1600 px window, with the board squeezed to the 3D view's minimum beside it.
         for dock, width, height in (
             (self.dock_library, self.LAYOUT_LEFT_WIDTH, None),
             (self.dock_part_list, self.LAYOUT_LEFT_WIDTH, None),
             (self.dock_nets, self.LAYOUT_LEFT_WIDTH, None),
-            (self.dock_drc, None, self.LAYOUT_DRC_HEIGHT),
         ):
             if width is not None:
                 dock.setMinimumWidth(width if on else 0)
@@ -5303,7 +5281,7 @@ class MainWindow(QMainWindow):
     def _side_docks(self) -> tuple[QDockWidget, ...]:
         """The panels that describe the design rather than draw it. Nets and the Part List
         share a tab group from the first start (#9), and any of these can be stacked."""
-        return (self.dock_library, self.dock_nets, self.dock_part_list, self.dock_drc)
+        return (self.dock_library, self.dock_nets, self.dock_part_list)
 
     def _sync_dock_titlebars(self) -> None:
         """A tabbed panel has no title bar, because its tab already is one.
@@ -6704,7 +6682,10 @@ class MainWindow(QMainWindow):
         self.act_nets_panel.setText(t("Show &Nets"))
         self.act_nets_panel.setShortcut(QKeySequence("Ctrl+6"))
         view_menu.addAction(self.act_nets_panel)
-        self.act_drc_panel = self.dock_drc.toggleViewAction()
+        # Opens and folds the Problems drawer, which is always there (``set_problems_open``).
+        self.act_drc_panel = QAction(self)
+        self.act_drc_panel.setCheckable(True)
+        self.act_drc_panel.toggled.connect(self.set_problems_open)
         self.act_drc_panel.setText(t("Show &Problems"))
         self.act_drc_panel.setShortcut(QKeySequence("Ctrl+7"))
         view_menu.addAction(self.act_drc_panel)
@@ -9407,10 +9388,46 @@ class MainWindow(QMainWindow):
         dock.setObjectName("dockDrc")
         dock.setWidget(panel)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
-        # A clean board is four rows, and this panel was opening a quarter of the window
-        # tall to show them -- taken off the board, which is the thing being worked on. How
-        # tall it actually opens is settled with every other panel in _arrange_docks.
+        # THE PROBLEMS DRAWER (``ui/problems.py``): folded to its bar until there is
+        # something to read. A clean board is four rows, and this panel was opening a
+        # quarter of the window tall to show them, taken off the board. Its bar is its
+        # title bar, so it is the dock's one handle; and it is neither closed nor floated
+        # nor moved -- a drawer that can be put away is a count nobody sees.
+        self.problems_bar = ProblemsBar(dock)
+        self.problems_bar.toggled.connect(self.set_problems_open)
+        dock.setTitleBarWidget(self.problems_bar)
+        dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.dock_drc = dock
+        self.drc_panel = panel
+        self.set_problems_open(False)
+
+    def set_problems_open(self, on: bool) -> None:
+        """Open the drawer to its list, or fold it to its bar.
+
+        Folded, it is capped to the bar's height, which is what gives the views above
+        every other pixel of the column; opened, the cap comes off and it is given the
+        height the findings opened at before it was a drawer, once the list is laid out.
+        """
+        self.problems_bar.set_expanded(on)
+        # Squeezed to nothing rather than HIDDEN. A dock whose contents are hidden reports a
+        # maximum width of its title bar's, and the column it shares with the views took
+        # that as its own: the board stood 544 px wide in a 1600 px window, beside an empty
+        # gap where the rest of the column should have been.
+        self.drc_panel.setMinimumHeight(0)
+        self.drc_panel.setMaximumHeight(self.UNCAPPED if on else 0)
+        dock = self.dock_drc
+        if on:
+            dock.setMaximumHeight(self.UNCAPPED)
+            QTimer.singleShot(
+                0,
+                lambda: self.resizeDocks(
+                    [dock], [self.LAYOUT_DRC_HEIGHT], Qt.Orientation.Vertical
+                ),
+            )
+        else:
+            dock.setMaximumHeight(PROBLEMS_BAR_HEIGHT)
+        if hasattr(self, "act_drc_panel") and self.act_drc_panel.isChecked() != on:
+            self.act_drc_panel.setChecked(on)
 
     def _on_drc_filter_changed(self, _text: str) -> None:
         if self._last_lvs is not None:
@@ -9877,12 +9894,10 @@ class MainWindow(QMainWindow):
         #: cleared when it can again. See _on_autosave_tick.
         self.label_warning = QLabel()
         self.label_selection = QLabel()
-        self.label_erc = QLabel()
-        self.label_drc = QLabel()
-        self.label_lvs = QLabel()
-        self.label_ratsnest = QLabel()
-        self.label_side = QLabel()
         self.label_hole = QLabel()
+        # The ERC, DRC and LVS counts, the connections left and the side were six more
+        # fields here; they are the Problems drawer's bar now, one answer instead of six
+        # vocabularies (``ui/problems.py``).
         # All permanent, including the selection. QStatusBar.showMessage HIDES ordinary
         # widgets for as long as a message is up -- so a selection label added the obvious
         # way vanished at precisely the wrong moment, since acting on a part is exactly what
@@ -9892,11 +9907,6 @@ class MainWindow(QMainWindow):
             self.label_warning,
             self.label_selection,
             self.label_hole,
-            self.label_erc,
-            self.label_ratsnest,
-            self.label_lvs,
-            self.label_drc,
-            self.label_side,
         ):
             # Allowed to be narrower than their text. A label's minimum is otherwise all of
             # it, and seven of them side by side were the window's minimum width -- wider
@@ -9905,10 +9915,6 @@ class MainWindow(QMainWindow):
             label.setMinimumWidth(1)
             bar.addPermanentWidget(label)
         # Each count opens the panel that says what it is counting (see _OpensPanel).
-        _OpensPanel(self.label_erc, self.dock_drc)
-        _OpensPanel(self.label_drc, self.dock_drc)
-        _OpensPanel(self.label_lvs, self.dock_drc)
-        _OpensPanel(self.label_ratsnest, self.dock_nets)
 
     # -- the one repaint path: every successful command, undo and redo funnels here --
 
@@ -10103,64 +10109,48 @@ class MainWindow(QMainWindow):
             self.act_reset_3d.setEnabled(live)
             self.act_exploded.setEnabled(live)
 
+        self._refresh_problems_bar()
+
+    def _refresh_problems_bar(self) -> None:
+        """The drawer's one line: the count, what is left to wire, whether the copper
+        matches the circuit, and the side and board.
+
+        Counted by the rules the step bar uses (``workflow_steps``). A pin not wired yet is
+        work left, not a problem, while there is wiring left to do (``_work_left``); and an
+        open is only the wiring not being finished until the wiring is, as a short is on
+        stripboard. Red for every open put an alarm on the bar the moment a placement
+        landed, over a board nobody had done anything wrong to yet.
+        """
+        waiting = self._work_left()
         erc_errors = sum(1 for f in self._last_erc if f.severity == "error")
         erc_warns = len(self._last_erc) - erc_errors
-        erc_role: theme.Role = "danger" if erc_errors else ("warning" if erc_warns else "success")
-        erc_text = t("ERC {errors} err / {warnings} warn").format(
-            errors=erc_errors, warnings=erc_warns
-        )
-        self.label_erc.setText(theme.ink(erc_text, erc_role))
-        self.label_erc.setToolTip(
-            t("The circuit checked: supplies, polarity, NC pins, nets that join nothing. "
-              "Click to see the findings.")
-        )
-
-        errors = sum(1 for v in self._last_violations if v.severity == "error")
-        # Not the pins nothing is wired to yet while there is wiring left to do: the step bar
-        # does not count them either (``WorkflowFacts.drc_unwired``).
-        waiting = self._work_left()
-        warns = sum(
+        drc_errors = sum(1 for v in self._last_violations if v.severity == "error")
+        drc_warns = sum(
             1 for v in self._last_violations if v.severity == "warning" and v.rule not in waiting
         )
-        drc_role: theme.Role = "danger" if errors else ("warning" if warns else "success")
-        drc_text = t("DRC {errors} err / {warnings} warn").format(errors=errors, warnings=warns)
-        # The count and nothing else. How long the check took is a number for whoever is
-        # tuning DRC, not for somebody reading whether their board is right -- it is in the
-        # tooltip for the first, and off the bar for the second.
-        self.label_drc.setText(theme.ink(drc_text, drc_role))
-        self.label_drc.setToolTip(
-            t("Design rules checked in {ms} ms. Click to see the findings.").format(
-                ms=f"{self._last_drc_ms:.1f}"
-            )
-        )
-
+        lvs_wrong = 0
+        matched: int | None = None
+        nets = 0
         if self._last_lvs is not None:
             s = self._last_lvs.summary
-            # Wrong by the rule the step bar uses (``workflow_steps``): an open is only the
-            # wiring not being finished until the wiring is, and on stripboard so is a short.
-            # Red for every open put an alarm on the bar the moment a placement landed, over
-            # a board nobody had done anything wrong to yet.
-            wrong = (0 if "open" in waiting else s.opens) + (0 if "short" in waiting else s.shorts)
-            lvs_role: theme.Role = (
-                "danger" if wrong else ("secondary" if s.opens or s.shorts else "success")
+            lvs_wrong = (0 if "open" in waiting else s.opens) + (
+                0 if "short" in waiting else s.shorts
             )
-            lvs_text = t("LVS {matched}/{total} · {opens} open · {shorts} short").format(
-                matched=s.matched_nets, total=s.schematic_nets, opens=s.opens, shorts=s.shorts
-            )
-            self.label_lvs.setText(theme.ink(lvs_text, lvs_role))
-
-        rn = summarize(self._last_ratsnest)
-        if rn.nets:
-            role: theme.Role = "success" if rn.links == 0 else "secondary"
-            left = t("{count} to route · {length:.0f} mm").format(
-                count=rn.links, length=rn.total_length_mm
-            )
-            self.label_ratsnest.setText(theme.ink(left, role))
-        else:
-            self.label_ratsnest.setText(theme.ink(t("no netlist"), "secondary"))
-
+            nets = s.schematic_nets
+            if self.bus.document.components:
+                matched = s.matched_nets
+        self.problems_bar.set_counts(
+            errors=erc_errors + drc_errors + lvs_wrong,
+            warnings=erc_warns + drc_warns,
+            to_wire=summarize(self._last_ratsnest).links,
+            matched=matched,
+            nets=nets,
+        )
+        board = self.bus.document.board
+        preset = _matching_preset(board)
+        size = preset.name if preset is not None else f"{board.cols} × {board.rows}"
         side = t("component side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
-        self.label_side.setText(theme.ink(side, "secondary"))
+        self.problems_bar.set_where(f"{side}  ·  {size}")
 
     def on_move_committed(self, results: list[DispatchResult]) -> None:
         """Failures never emit from the bus (see command.py), so they are handled here
@@ -10350,8 +10340,7 @@ class MainWindow(QMainWindow):
     def show_circuit_findings(self) -> None:
         """The findings panel, open on the circuit's group, with the sheet beside it."""
         self.show_schematic()
-        self.dock_drc.show()
-        self.dock_drc.raise_()
+        self.set_problems_open(True)
         root = self.drc_tree.topLevelItem(0)
         if root is None or root.data(0, ROLE_FINDING_KEY) != "ERC":
             return

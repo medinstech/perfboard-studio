@@ -5393,34 +5393,51 @@ def test_a_finding_row_says_what_is_wrong_and_keeps_the_rule_id() -> None:
     _close(window)
 
 
-def test_the_status_bar_counts_open_the_panel_that_explains_them() -> None:
-    """"DRC 3 err" said something was wrong and gave no way to find out what."""
+def test_the_problems_bar_opens_the_list_it_counts() -> None:
+    """"DRC 3 err" in the corner said something was wrong and gave no way to find out
+    what, and the list itself stood 200 px tall under the board with four rows on a clean
+    one. The list folds to its bar now: a click on the bar -- or Ctrl+7 -- opens it, and
+    folds it again, and folded it takes no more than the bar's height from the views."""
     from PySide6.QtCore import QEvent, QPointF, Qt
     from PySide6.QtGui import QMouseEvent
     from PySide6.QtWidgets import QApplication
 
+    from perfboard_studio.ui.problems import BAR_HEIGHT
+
     window = _window_on(_load_dense())
     window.show()
-    for label, dock in (
-        (window.label_erc, window.dock_drc),
-        (window.label_drc, window.dock_drc),
-        (window.label_lvs, window.dock_drc),
-        (window.label_ratsnest, window.dock_nets),
-    ):
-        dock.hide()
-        QApplication.processEvents()
-        click = QMouseEvent(
-            QEvent.Type.MouseButtonRelease,
-            QPointF(2, 2),
-            QPointF(2, 2),
-            Qt.MouseButton.LeftButton,
-            Qt.MouseButton.NoButton,
-            Qt.KeyboardModifier.NoModifier,
-        )
-        QApplication.sendEvent(label, click)
-        assert not dock.isHidden()
-    assert "ms" not in window.label_drc.text()
-    _close(window)
+    try:
+        bar = window.problems_bar
+        assert window.dock_drc.titleBarWidget() is bar
+        assert not bar.expanded and window.drc_panel.maximumHeight() == 0
+        assert window.dock_drc.maximumHeight() == BAR_HEIGHT
+
+        def click() -> None:
+            release = QMouseEvent(
+                QEvent.Type.MouseButtonRelease,
+                QPointF(200, 10),
+                QPointF(200, 10),
+                Qt.MouseButton.LeftButton,
+                Qt.MouseButton.NoButton,
+                Qt.KeyboardModifier.NoModifier,
+            )
+            QApplication.sendEvent(bar, release)
+            QApplication.processEvents()
+
+        click()
+        assert bar.expanded and window.drc_panel.maximumHeight() > BAR_HEIGHT
+        assert window.act_drc_panel.isChecked()
+        click()
+        assert not bar.expanded
+        window.act_drc_panel.trigger()  # Ctrl+7
+        assert bar.expanded
+        assert window.act_drc_panel.shortcut().toString() == "Ctrl+7"
+        # Nothing on the bar is a timing: that is for whoever is tuning DRC.
+        import re
+
+        assert not re.search(r"\d\s*ms", bar.facts.text() + bar.title.text())
+    finally:
+        _close(window)
 
 
 def _board_with_a_corner_bore() -> PerfDocument:
@@ -8319,13 +8336,14 @@ def test_a_circuit_error_comes_first_in_the_findings_and_is_where_next_goes() ->
         assert group is not None
         assert group.text(0).startswith(_erc_title("supply-unconnected"))
         assert group.toolTip(0) == "supply-unconnected"
-        assert "ERC 1 err" in window.label_erc.text()
+        errors_before = window.problems_bar.errors
+        assert errors_before >= 1
         assert window.workflow_bar.next_key == "circuit"
         assert window.workflow_bar.buttons["circuit"].property("status") == "problem"
 
-        window.dock_drc.hide()
+        window.set_problems_open(False)
         window.on_workflow_next("circuit")
-        assert not window.dock_drc.isHidden()
+        assert window.problems_bar.expanded
         assert window.schematic_is_showing()
         group = _drc_group(window, "erc:supply-unconnected")
         assert group.isExpanded()
@@ -8343,7 +8361,7 @@ def test_a_circuit_error_comes_first_in_the_findings_and_is_where_next_goes() ->
         )
         assert result.ok
         assert _drc_group(window, "erc:supply-unconnected") is None
-        assert "ERC 0 err" in window.label_erc.text()
+        assert window.problems_bar.errors == errors_before - 1
         assert window.workflow_bar.next_key == "board"
     finally:
         _close(window)
@@ -8477,7 +8495,7 @@ def test_each_step_goes_where_it_is_done() -> None:
         window.on_workflow_step("place")
         assert window.board_is_showing()
         window.on_workflow_step("check")
-        assert not window.dock_drc.isHidden()
+        assert window.problems_bar.expanded
     finally:
         _close(window)
 
@@ -10263,11 +10281,14 @@ def test_work_left_to_do_is_not_shown_as_wrong() -> None:
     until there is something actually wrong."""
     from perfboard_studio.commands import UnplaceComponentPayload
     from perfboard_studio.ui.main import ROLE_FINDING_KEY
-    from perfboard_studio.ui.theme import ERROR, TEXT_DIM
+    from perfboard_studio.ui.theme import TEXT_DIM
 
     window = _window_on(dataclasses.replace(_load_dense(), conductors=()))
     assert window._last_lvs is not None and window._last_lvs.summary.opens > 0
-    assert ERROR not in window.label_lvs.text()
+    # Not one of the opens is a problem on the bar while there is wiring left to do.
+    drc_errors = sum(1 for v in window._last_violations if v.severity == "error")
+    erc_errors = sum(1 for f in window._last_erc if f.severity == "error")
+    assert window.problems_bar.errors == drc_errors + erc_errors
 
     # A part the netlist names, or LVS has nothing to say about where it is.
     wired = window.bus.document.nets[0].nodes[0].component_ref
@@ -13098,7 +13119,8 @@ def test_the_status_bar_does_not_count_pins_waiting_for_their_wiring() -> None:
         unwired = window.workflow_facts().drc_unwired
         assert unwired > 0
         warnings = sum(1 for v in window._last_violations if v.severity == "warning")
-        assert f"{warnings - unwired} warn" in window.label_drc.text()
+        erc_warnings = sum(1 for f in window._last_erc if f.severity == "warning")
+        assert window.problems_bar.warnings == warnings - unwired + erc_warnings
     finally:
         _close(window)
 
@@ -13205,8 +13227,6 @@ def test_the_findings_and_the_status_bar_colour_a_finding_by_one_rule() -> None:
     all, partly, fully, open, shorted, and on stripboard with its strips uncut: the bar
     counts as errors and warnings exactly the panel's red and amber rows, and its LVS
     colour is the colour the panel gives the opens and shorts."""
-    import re
-
     from perfboard_studio.ratsnest import summarize
     from perfboard_studio.ui.theme import ERROR, OK, TEXT_DIM, WARNING
 
@@ -13234,24 +13254,25 @@ def test_the_findings_and_the_status_bar_colour_a_finding_by_one_rule() -> None:
             for row in range(drc.childCount()):
                 group = drc.child(row)
                 counted[group.foreground(0).color().name()] += int(group.text(1))
-            bar = re.search(r"DRC (\d+) err / (\d+) warn", window.label_drc.text())
-            assert bar is not None, window.label_drc.text()
-            assert (int(bar[1]), int(bar[2])) == (
-                counted[ERROR.lower()],
-                counted[WARNING.lower()],
-            ), (state, counted)
+            bar = window.problems_bar
+            erc_errors = sum(1 for f in window._last_erc if f.severity == "error")
+            erc_warnings = len(window._last_erc) - erc_errors
+            assert bar.warnings == counted[WARNING.lower()] + erc_warnings, (state, counted)
 
             lvs = _findings_root(window, "LVS")
             colours = {}
             for row in range(lvs.childCount()):
                 group = lvs.child(row)
                 colours[group.toolTip(0)] = group.foreground(0).color().name()
-            bar_colour = re.search(r"color:(#[0-9a-fA-F]{6})", window.label_lvs.text())
-            assert bar_colour is not None, window.label_lvs.text()
             under = {colours[kind] for kind in ("open", "short", "unrouted-net") if kind in colours}
             assert len(under) <= 1, (state, colours)
-            expected = next(iter(under), OK.lower())
-            assert bar_colour[1].lower() == expected, (state, colours)
+            # The bar counts LVS's findings as errors exactly when the tree paints them red.
+            lvs_red = next(iter(under), OK.lower()) == ERROR.lower()
+            drc_and_erc = counted[ERROR.lower()] + erc_errors
+            if lvs_red:
+                assert bar.errors > drc_and_erc, (state, colours)
+            else:
+                assert bar.errors == drc_and_erc, (state, colours)
             seen |= {(kind, "wiring" if wiring else "wired") for kind in colours}
         finally:
             _close(window)
