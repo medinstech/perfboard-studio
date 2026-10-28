@@ -3,7 +3,7 @@
 # DRAFT, not submitted -- see packaging/README.md. The application, its installer and
 # README.tr.md speak Turkish, so its package page does too; the words are README.tr.md's.
 PackageIdentifier: Medinstech.PerfboardStudio
-PackageVersion: 0.21.0
+PackageVersion: 0.22.0
 PackageLocale: tr-TR
 Publisher: Medinstech
 PackageName: Perfboard Studio

@@ -22,7 +22,7 @@ warning. Neither is published. Submitting puts the project in a public registry 
 identifier people will script against, so whether to do it, and when, is the owner's
 decision. These files are ready for that decision and are not part of a release.
 
-Both describe **0.21.0**, the newest release whose installer and `SHA256SUMS` exist. A
+Both describe **0.22.0**, the newest release whose installer and `SHA256SUMS` exist. A
 manifest for a release that does not exist yet cannot be checked against anything.
 
 ### winget

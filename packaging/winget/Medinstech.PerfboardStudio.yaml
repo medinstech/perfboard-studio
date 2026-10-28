@@ -2,7 +2,7 @@
 #
 # DRAFT, not submitted -- see packaging/README.md.
 PackageIdentifier: Medinstech.PerfboardStudio
-PackageVersion: 0.21.0
+PackageVersion: 0.22.0
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: 1.10.0

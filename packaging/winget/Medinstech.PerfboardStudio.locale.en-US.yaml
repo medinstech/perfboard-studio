@@ -3,7 +3,7 @@
 # DRAFT, not submitted -- see packaging/README.md. The words are the README's and
 # pyproject.toml's own, so the package page cannot promise what the project does not.
 PackageIdentifier: Medinstech.PerfboardStudio
-PackageVersion: 0.21.0
+PackageVersion: 0.22.0
 PackageLocale: en-US
 Publisher: Medinstech
 PublisherUrl: https://medinstech.com
@@ -38,7 +38,7 @@ Tags:
   - schematic
   - kicad
   - netlist
-ReleaseNotesUrl: https://github.com/medinstech/perfboard-studio/releases/tag/v0.21.0
+ReleaseNotesUrl: https://github.com/medinstech/perfboard-studio/releases/tag/v0.22.0
 Documentations:
   - DocumentLabel: MCP server
     DocumentUrl: https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md

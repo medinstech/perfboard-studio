@@ -9,7 +9,7 @@
 # associates .perf. A silent install is NSIS's own `/S`, which winget passes for
 # `nullsoft` without being told.
 PackageIdentifier: Medinstech.PerfboardStudio
-PackageVersion: 0.21.0
+PackageVersion: 0.22.0
 InstallerLocale: en-US
 Platform:
   - Windows.Desktop
@@ -29,11 +29,11 @@ AppsAndFeaturesEntries:
   - DisplayName: Perfboard Studio
     Publisher: Medinstech
     ProductCode: Perfboard Studio
-ReleaseDate: 2026-10-21
+ReleaseDate: 2026-10-28
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/medinstech/perfboard-studio/releases/download/v0.21.0/PerfboardStudio_v0.21.0_Setup.exe
+    InstallerUrl: https://github.com/medinstech/perfboard-studio/releases/download/v0.22.0/PerfboardStudio_v0.22.0_Setup.exe
     # From the release's own SHA256SUMS.
-    InstallerSha256: AD2600E2E1516F5BD698FDEA7D0D07E1A805122451F52AE3573B50C43CB61CDF
+    InstallerSha256: D6573D8BD16304BFDF75D969F25671AC880584DAB844F9C5216ABC9B1E506BE8
 ManifestType: installer
 ManifestVersion: 1.10.0
