@@ -430,6 +430,17 @@ def did(description: str) -> str:
     return t("Done: {what}").format(what=say(description))
 
 
+def undone(description: str) -> str:
+    """What Undo took back, for the status bar: the command's undo label, said as undone
+    -- the same words ``did`` said when it was done, so the two read as a pair."""
+    return t("Undone: {what}").format(what=say(description))
+
+
+def redone(description: str) -> str:
+    """What Redo put back, for the status bar. See ``undone``."""
+    return t("Redone: {what}").format(what=say(description))
+
+
 def refused(result: DispatchResult) -> str:
     """Why a command was refused, in the window's language.
 
@@ -11407,10 +11418,29 @@ class MainWindow(QMainWindow):
     # -- edit --------------------------------------------------------------
 
     def on_undo(self) -> None:
+        """Take back the last command, and SAY which.
+
+        The Edit menu named it beforehand, and afterwards nothing did: the bar went on
+        showing whatever the last command had said, so "Deleted 3 part(s)" stood over a
+        board that already had one of them back.
+        """
+        if not self.bus.can_undo():
+            return
+        history = self.bus.history()
+        what = history[-1] if history else ""
         self.bus.undo()
+        if what:
+            self.statusBar().showMessage(undone(what), 6000)
 
     def on_redo(self) -> None:
+        """Put the last undone command back, and say which. See ``on_undo``."""
+        if not self.bus.can_redo():
+            return
+        ahead = self.bus.redo_history()
+        what = ahead[-1] if ahead else ""
         self.bus.redo()
+        if what:
+            self.statusBar().showMessage(redone(what), 6000)
 
     def _refresh_undo_actions(self) -> None:
         """Grey out undo and redo when there is nothing behind or ahead, and name what

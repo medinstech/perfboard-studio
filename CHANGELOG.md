@@ -47,6 +47,10 @@ closed without a bump.
   label, the symbols or the rubber band went where the pointer was: the window's Escape
   shortcut took the key before the board or the sheet saw it. Both now take Escape back
   while a drag is in flight, and only then, and put everything back where it was.
+- **Undo and Redo say what they took back and put back.** The Edit menu named the command
+  beforehand and nothing did afterwards: the status bar kept the last command's message,
+  so "Deleted 3 part(s)" stood over a board that already had one of them back. It now
+  reads "Undone: …" or "Redone: …", in the window's language.
 
 ## [0.22.0] - 2026-10-28
 

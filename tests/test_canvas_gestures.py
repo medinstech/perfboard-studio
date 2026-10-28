@@ -502,3 +502,69 @@ def test_ctrl_a_in_a_text_field_stays_the_text_fields() -> None:
     override = QKeyEvent(QEvent.Type.ShortcutOverride, Qt.Key.Key_A, CTRL)
     QApplication.sendEvent(field, override)
     assert override.isAccepted()
+
+
+# -- undo says what it undid ----------------------------------------------------------------
+
+
+def _window_with_a_placed_part(language: str = "en"):  # type: ignore[no-untyped-def]
+    from perfboard_studio.commands import PlaceComponentPayload
+    from perfboard_studio.model import HoleCoord
+    from perfboard_studio.ui.i18n import set_language
+    from perfboard_studio.ui.main import MainWindow
+
+    set_language(language)
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    window = MainWindow(document)
+    result = window.bus.dispatch(
+        "component.place",
+        PlaceComponentPayload(ref="R99", value="", footprint_id="r-axial-3", anchor=HoleCoord(1, 1)),
+    )
+    assert result.ok
+    return window
+
+
+def test_undo_and_redo_say_what_they_took_back_and_put_back() -> None:
+    """The bar went on showing whatever the last command had said: "Deleted 3 part(s)"
+    over a board that already had one of them back."""
+    window = _window_with_a_placed_part()
+    try:
+        placed = window.bus.history()[-1]
+        window.statusBar().showMessage("Deleted 3 part(s)")
+        window.act_undo.trigger()
+        assert window.statusBar().currentMessage() == f"Undone: {placed}"
+        window.act_redo.trigger()
+        assert window.statusBar().currentMessage() == f"Redone: {placed}"
+    finally:
+        window._mark_saved()
+        window.close()
+
+
+def test_undo_says_it_in_the_windows_language() -> None:
+    from perfboard_studio.ui.i18n import set_language
+
+    window = _window_with_a_placed_part("tr")
+    try:
+        window.act_undo.trigger()
+        said = window.statusBar().currentMessage()
+        assert said.startswith("Geri alındı: ")
+        assert "Place" not in said  # The command's own label is said in Turkish too.
+    finally:
+        set_language("en")
+        window._mark_saved()
+        window.close()
+
+
+def test_undo_with_nothing_behind_it_leaves_the_bar_alone() -> None:
+    from perfboard_studio.ui.main import MainWindow
+
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    window = MainWindow(document)
+    try:
+        window.statusBar().showMessage("routing summary")
+        window.on_undo()
+        window.on_redo()
+        assert window.statusBar().currentMessage() == "routing summary"
+    finally:
+        window._mark_saved()
+        window.close()

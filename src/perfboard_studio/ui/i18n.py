@@ -588,6 +588,8 @@ TURKISH: Mapping[str, str] = {
         "Otomatik Yerleştir'e yeniden basmak başka bir yerleşim dener."
     ),
     "Done: {what}": "Yapıldı: {what}",
+    "Undone: {what}": "Geri alındı: {what}",
+    "Redone: {what}": "Yinelendi: {what}",
     "Everything is routed already, so Autoroute plans it again.": (
         "Her şey zaten yönlendirilmiş; Otomatik Yönlendir hepsini yeniden planlıyor."
     ),
