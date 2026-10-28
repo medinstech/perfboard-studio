@@ -205,21 +205,26 @@ def test_the_drawing_tool_labels_are_still_the_ones_the_catalogue_expects() -> N
         assert f'"{label}"' in source, label
 
 
-def test_translation_coverage_is_reported_rather_than_enforced(capsys) -> None:
-    """Missing translations fall through to English on purpose, so this measures rather
-    than fails -- but it prints, so the number cannot quietly go to zero.
+#: The strings that read the same in both languages, and so have no entry on purpose: a
+#: column heading Turkish borrows as it is, and the product's name.
+SAME_IN_BOTH = frozenset({"Net", "Perfboard Studio"})
 
-    The floor was 0.8 while the catalogue covered the menus and nothing else. It is now
-    what a complete catalogue leaves room for: every string the interface translates has
-    a Turkish entry, and the slack is for the ones that come out the same in both
-    languages -- "Net" is the whole list at the time of writing.
+
+def test_every_translated_string_has_a_turkish_entry(capsys) -> None:
+    """A missing translation falls through to English rather than crashing, which is the
+    right failure at run time and the wrong one to leave unnoticed.
+
+    This used to be a ratio with a floor of 0.97, and at 1082 of 1085 the floor could not
+    see a single missing string: the ERC row of the findings panel said "0 error(s) · 0
+    warning(s)" in every Turkish window, in the 0.22.0 workflow GIF among them. So the
+    slack is now named instead of measured.
     """
     literals = translated_literals()
     covered = literals & set(TURKISH)
-    ratio = len(covered) / len(literals) if literals else 1.0
-    missing = sorted(literals - covered)
-    print(f"\nTurkish covers {len(covered)}/{len(literals)} translated strings ({ratio:.0%})")
-    assert ratio > 0.97, f"the Turkish catalogue has fallen behind the interface: {missing}"
+    missing = sorted(literals - covered - SAME_IN_BOTH)
+    print(f"\nTurkish covers {len(covered)}/{len(literals)} translated strings")
+    assert missing == [], f"strings the Turkish window shows in English: {missing}"
+    assert literals >= SAME_IN_BOTH, "a string named as the same in both is no longer used"
 
 
 #: A user-facing string handed straight to a widget, with no ``t()`` around it.

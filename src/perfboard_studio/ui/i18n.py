@@ -1626,6 +1626,7 @@ TURKISH: Mapping[str, str] = {
     "Not on the board: {pins}": "Kartta değil: {pins}",
     "not on the board": "kartta değil",
     "{count} violation(s)": "{count} ihlal",
+    "{errors} error(s) · {warnings} warning(s)": "{errors} hata · {warnings} uyarı",
     "{matched}/{total} matched, {opens} open, {shorts} short, {physical} physical nets": (
         "{matched}/{total} eşleşti, {opens} açık, {shorts} kısa, {physical} fiziksel net"
     ),
