@@ -200,14 +200,14 @@ def test_the_catalogue_names_no_string_the_interface_no_longer_has() -> None:
 def test_the_drawing_tool_labels_are_still_the_ones_the_catalogue_expects() -> None:
     """The one place the scan cannot see, checked against the source of truth instead."""
     source = (UI_DIR / "main.py").read_text(encoding="utf-8")
-    for label in ("&Solder Trace", "Solder Trace with S&pine", "&Bare Wire",
-                  "&Insulated Wire", "Top &Jumper"):
+    for label in ("&Solder Trace", "&Reinforced Solder Trace", "&Bare Wire",
+                  "&Insulated Wire", "&Jumper Over the Parts"):
         assert f'"{label}"' in source, label
 
 
 #: The strings that read the same in both languages, and so have no entry on purpose: a
-#: column heading Turkish borrows as it is, and the product's name.
-SAME_IN_BOTH = frozenset({"Net", "Perfboard Studio"})
+#: column heading and a tool Turkish borrows as they are, and the product's name.
+SAME_IN_BOTH = frozenset({"Net", "Perfboard Studio", "Jumper"})
 
 
 def test_every_translated_string_has_a_turkish_entry(capsys) -> None:
@@ -336,8 +336,9 @@ def test_every_catalogue_translates_to_something_different() -> None:
         # everything else that comes out identical is a translation somebody started and
         # did not finish, which is the whole thing this catches.
         # "3D" was "3B" on the toolbar alone while every menu, dialog and the README said
-        # "3D" -- one view, two names. "1 net" is "1 net" in Turkish too.
-        assert same == ["3D", "ERC / DRC / LVS", "LED", "{count} net"], (
+        # "3D" -- one view, two names. "1 net" is "1 net" in Turkish too. "ERC / DRC / LVS" was
+        # here until the panel was called Problems.
+        assert same == ["3D", "LED", "{count} net"], (
             f"{code} has untranslated entries: {same}"
         )
 
@@ -358,11 +359,11 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
     groups = {
         # The menu bar itself. Turkish had three menus on Y (Yerleştir, Yol, Yardım) and
         # two on Z (Düzen, Çiz), so Alt+Y reached one of three at random.
-        "menu bar": ["&File", "&Edit", "&Draw", "&Place", "&Net", "&Route", "&View",
+        "menu bar": ["&File", "&Edit", "&Draw", "&Place", "&Net", "&Wiring", "&View",
                      "&Help"],
-        "route": ["&Autoroute All Nets", "Route Nets of &Selection", "&Preferred Connection",
-                  "&Crossings", "Lay Wires Along the &Grid", "Re-route &Everything",
-                  "Re-route Nets of Se&lection", "Remove S&tale Conductors"],
+        "route": ["&Auto-wire Everything", "Auto-wire the &Selection", "Wiring &Style",
+                  "When a Trace Must &Cross", "Lay Wires Along the &Grid", "Redo All &Wiring",
+                  "Redo Wiring of the Se&lection", "Remove Ou&t-of-Date Wiring"],
         "file": ["&New Board…", "New Board from This &Design…", "&Open…", "Open &Recent", "Open E&xample", "&Save", "Save &As…",
                  "Re&load from Disk", "&Board Setup…", "Board &Features…", "Rena&me Board…",
                  "&Import KiCad Netlist…", "Export &Build Guide…",
@@ -373,17 +374,17 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Rotate &Clockwise",
                  "Rotate Counter-clock&wise", "&Mirror", "Toggle &Lock", "&Delete",
                  "Proper&ties…", "C&hange Part…", "Add La&bel…"],
-        "draw": ["&Solder Trace", "Solder Trace with S&pine", "&Bare Wire",
-                 "&Insulated Wire", "Top &Jumper", "&Cut Track",
+        "draw": ["&Solder Trace", "&Reinforced Solder Trace", "&Bare Wire",
+                 "&Insulated Wire", "&Jumper Over the Parts", "&Cut Strip",
                  "&Stop the Current Tool"],
         # View is the longest menu and the one the three panel toggles joined; it had a
         # clash in each language before it was listed here.
-        "view": ["&Fit Board", "Zoom &In", "Zoom &Out", "Show &Ratsnest",
+        "view": ["&Fit Board", "Zoom &In", "Zoom &Out", "Show &Missing Connections",
                  "Show Hole &Addresses", "&Hatch Copper on the Far Side",
                  "Measure &Distance", "&Go to Part…", "Show &3D View",
-                 "Show &Build Guide", "Show &Schematic", "Show &Parts", "Show &Nets",
-                 "Show Part List",
-                 "Show DRC / L&VS", "&Exploded View", "Reset 3D Ca&mera", "&Language",
+                 "Show &Build Guide", "Show &Schematic", "Show &Library", "Show &Nets",
+                 "Show Parts",
+                 "Show &Problems", "&Exploded View", "Reset 3D Ca&mera", "&Language",
                  "Theme",
                  "Board &Colour", "Sho&w Pin Names", "Show Labels on &the Board",
                  "Show Part Val&ues"],
@@ -397,7 +398,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                           "&Balanced", "&Wire where possible",
                           "Bend component &legs where possible"],
         "crossings": ["&Hop over it with a short jumper", "Make the whole connection one &wire",
-                      "&Never use wire; leave it unrouted"],
+                      "&Never use wire; leave it unwired"],
         # The sheet's three context menus (`MainWindow.sheet_menu`). The pin entry is not a
         # fourth menu -- a pin is always on a symbol, so "Disconnect ..." sits on top of the
         # symbol's list and shares its letters. The two last entries are alternatives
@@ -436,10 +437,13 @@ def test_english_is_the_source_language_and_needs_no_catalogue() -> None:
 def test_the_turkish_interface_has_one_word_for_each_thing() -> None:
     """Route and Trace were both "Yol" -- a menu and a drawing tool named alike -- the
     Autoroute button read "Oto-yol", which is a motorway, and the rest said "route et" half
-    in English. Routing is "yönlendirmek" and a trace is a "lehim yolu", everywhere."""
+    in English. Then routing was "yönlendirmek", which is "routing" calqued and reads as
+    "steering" to anybody who has not designed a PCB; it is "kablolamak" now, the everyday
+    word for wiring, and a trace is still a "lehim yolu", everywhere."""
     assert [value for value in TURKISH.values() if "route" in value.lower()] == []
-    assert TURKISH["&Route"].replace("&", "") != TURKISH["Trace"]
-    assert "Yönlendir" in TURKISH["Autoroute"]
+    assert [value for value in TURKISH.values() if "yönlendir" in value.lower()] == []
+    assert TURKISH["&Wiring"].replace("&", "") != TURKISH["Solder Trace"]
+    assert "Kablola" in TURKISH["Auto-wire"]
 
 
 def test_turkish_translates() -> None:

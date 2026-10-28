@@ -50,7 +50,7 @@
   extracts the board's real connectivity and compares it against the schematic: opens,
   shorts and floating conductors are reported before you pick up the iron.
 - **Six kinds of connection, not one.** A lead bend, a solder trace, a wired
-  solder trace, bare wire, insulated wire and a top jumper have different costs,
+  solder trace, bare wire, insulated wire and a jumper over the parts have different costs,
   limits and failure modes, and the router prices all six — which is what makes
   a layout that is pleasant to actually solder.
 - **A breadboard first, then the perfboard.** A solderless breadboard is a board type
@@ -99,10 +99,10 @@ actually solder:
 |---|---|---|
 | lead bend | a component leg bent to a nearby hole | effectively free, 3–4 holes |
 | **solder trace** | adjacent pads joined with solder alone | orthogonal only; ~0.6 mm to the next pad |
-| **solder trace, wired** | the same, over a tinned-wire spine | ~10× lower resistance, no length limit |
+| **reinforced solder trace** | the same, laid over a tinned wire | ~10× lower resistance, no length limit |
 | bare wire | tinned wire on the solder side | cannot cross another bare conductor |
 | insulated wire | may cross freely | costs preparation time |
-| top jumper | insulated jumper over the component side | visible, occupies body space |
+| jumper over the parts | insulated jumper on the parts' side | visible, occupies body space |
 
 The 0.6 mm gap to the neighbouring pad is why solder traces are both so useful and so
 easy to get wrong. Perfboard Studio scores that risk into the router's cost function, and turns
@@ -308,7 +308,7 @@ checking tool the application depends on rather than an optional extra.
 
 ### A board from nothing
 
-The bar under the toolbar walks through it — **Circuit, Board, Placement, Wiring, Check,
+The bar under the toolbar walks through it — **Circuit, Board, Placement, Wiring, Checks,
 Build** — says where the board stands on each step, and its **Next** button does whichever
 comes next. By hand, it goes like this.
 
@@ -320,13 +320,13 @@ or GND) — or **Label** a pin to join it to a net by name, or right-click it fo
 +5V — then **Place on the Board**, which first
 asks which stock board to use: your circuit is placed, wired and checked on a roomy board
 and on each smaller one, and the suggestion is the smallest it builds as well on. From there
-**Place → Auto-place Board** (`Ctrl+Shift+A`), **`Ctrl+R`** to route, and
+**Place → Rearrange Parts** (`Ctrl+Shift+A`), **`Ctrl+R`** to auto-wire, and
 **File → Export Build Guide** (`Ctrl+B`). No KiCad anywhere in that.
 
 With a circuit that already exists, start at **File → Import KiCad Netlist** on
 `examples/ne555-astable.net` instead: each part arrives in the design as what its value and
 its KiCad footprint say it is, and the step bar across the top of the window takes it from
-there — **Choose a Board**, **Place on the Board**, route, check, build. That is the
+there — **Choose a Board**, **Place on the Board**, wiring, checks, build. That is the
 sequence the screenshots above come out of — see
 [`tools/screenshots.py`](https://github.com/medinstech/perfboard-studio/blob/main/tools/screenshots.py).
 

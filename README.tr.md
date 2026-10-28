@@ -95,10 +95,10 @@ sebebi tam olarak bu farkı modellemesidir:
 |---|---|---|
 | bacak bükümü | komponent bacağının yakın bir deliğe bükülmesi | pratikte bedava, 3–4 delik |
 | **lehim yolu** | komşu pad'lerin yalnızca lehimle birleştirilmesi | sadece dik (ortogonal); yan pad'e ~0,6 mm |
-| **lehim yolu, omurgalı** | aynısı, kalaylı tel omurga üzerinde | ~10× daha düşük direnç, uzunluk sınırı yok |
+| **telli lehim yolu** | aynısı, kalaylı bir telin üzerinde | ~10× daha düşük direnç, uzunluk sınırı yok |
 | çıplak tel | lehim yüzeyinde kalaylı tel | başka bir çıplak iletkenle kesişemez |
 | yalıtımlı tel | serbestçe kesişebilir | hazırlık süresi maliyeti var |
-| üst jumper | komponent yüzeyinden atlayan yalıtımlı jumper | görünür, gövde alanı işgal eder |
+| parçaların üstünden jumper | parça yüzünden atlayan yalıtımlı jumper | görünür, gövde alanı işgal eder |
 
 Komşu pad'e olan 0,6 mm'lik boşluk, lehim yollarını hem bu kadar kullanışlı hem de bu
 kadar kolay yanlış yapılır kılan şeydir. Perfboard Studio bu riski router'ın maliyet
@@ -121,7 +121,7 @@ gelen rehber de yeniden bir lehimleme rehberidir.
 
 ## Her iki yüz, ve üçüncü boyut
 
-![NE555 astable devresi yerleştirilmiş ve yönlendirilmiş hâliyle 2D editör](./docs/images/editor-component-side.png)
+![NE555 astable devresi yerleştirilmiş ve kablolanmış hâliyle 2D editör](./docs/images/editor-component-side.png)
 
 <p align="center">
   İddianın tamamı durum çubuğunda: yedi net üzerinde on dört bağlantı, DRC hatası yok ve<br>
@@ -204,7 +204,7 @@ renginde kesim listesine koyar ve netlerini ancak telleri takıldıktan sonra ko
 
 Kart neyin nereye gideceğini söyler. Kartın yanında açılan şema paneli (`Ctrl+2`) *ne inşa
 ettiğinizi* söyler — ve onu söylediğiniz yer de burasıdır: **Parça Ekle**, iki pini
-**Bağla**, **Kart Üzerine Yerleştir**. Önce devre, sonra yerleşim; diğer her EDA aracının
+**Bağla**, **Karta Yerleştir**. Önce devre, sonra yerleşim; diğer her EDA aracının
 çalıştığı sıra ve bu aracın şimdiye kadar yapamadığı şey.
 
 ![Şema panelinde NE555 astable](./docs/images/schematic.png)
@@ -309,7 +309,7 @@ ek değil, uygulamanın dayandığı bir kontrol aracı.
 ### Sıfırdan bir kart
 
 Araç çubuğunun altındaki şerit bu yolu adım adım yürür — **Devre, Kart, Yerleşim,
-Yönlendirme, Kontrol, Montaj** —, kartın her adımda nerede durduğunu söyler ve **Sonraki**
+Kablolama, Kontrol, Montaj** —, kartın her adımda nerede durduğunu söyler ve **Sonraki**
 düğmesi sıradaki adımı yapar. Elle yapıldığında akış şöyle:
 
 Şema panelini açın (`Ctrl+2`) ve devreyi çizin: parçaları Parçalar panelinden sayfaya
@@ -318,17 +318,17 @@ istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine ya da çizi
 üstüne tel çekin (iki ucuna tıklayarak ya da sürükleyerek; bir besleme pininde birleşen
 net o pinin adını alır, VCC ya da GND) — ya da bir pini
 **Etiket** ile adına göre bir nete bağlayın, ya da sağ tıklayıp GND ve +5V'ye bağlayın —
-sonra **Kart Üzerine Yerleştir**; önce hangi hazır kartın kullanılacağını sorar: devreniz
+sonra **Karta Yerleştir**; önce hangi hazır kartın kullanılacağını sorar: devreniz
 geniş bir kartta ve ondan küçük her boyda yerleştirilir, tellenir ve denetlenir, ve öneri
 aynı iyilikte kurulduğu en küçük karttır.
 Oradan **Yerleştir →
-Otomatik Yerleştir** (`Ctrl+Shift+A`), yönlendirme için **`Ctrl+R`**, ardından **Dosya → Montaj
+Parçaları Yeniden Diz** (`Ctrl+Shift+A`), otomatik kablolama için **`Ctrl+R`**, ardından **Dosya → Montaj
 Rehberini Dışa Aktar** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
 
 Devre zaten varsa ilk üç adım yerine `examples/ne555-astable.net` üzerinde **Dosya → KiCad
 Netlist İçe Aktar** ile başlayın: her parça, değerinin ve KiCad footprint'inin söylediği şey
 olarak tasarıma gelir; oradan sonrasını pencerenin üstündeki adım çubuğu götürür — **Kart
-Seç**, **Kart Üzerine Yerleştir**, yönlendirme, kontrol, montaj. Yukarıdaki ekran görüntüleri
+Seç**, **Karta Yerleştir**, kablolama, kontrol, montaj. Yukarıdaki ekran görüntüleri
 bu sıradan çıkıyor — bkz. [`tools/screenshots.py`](./tools/screenshots.py).
 
 ### Ya da hazır bir kart açın
@@ -348,7 +348,7 @@ perfboard-studio examples/lm317-supply.perf
 | `atmega328-relay` | ölçek: yirmi dört parça, ve bütün kurallar bir arada |
 | `nano-relay` | KiCad netlist'inden gerçek parçalar — başlıklarındaki bir Nano, katalogdan BC547 ve 7805, pinlerde adlar, kartta etiketler |
 
-Altısı da eksiksiz yönlendiriliyor, LVS'te şemalarıyla örtüşüyor ve hiçbir DRC hatası
+Altısı da eksiksiz kablolanıyor, LVS'te şemalarıyla örtüşüyor ve hiçbir DRC hatası
 taşımıyor — `tests/test_examples.py` bunu her commit'te doğruluyor.
 
 ### Bir ajandan

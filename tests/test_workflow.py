@@ -158,7 +158,7 @@ def test_a_circuit_with_an_error_in_it_is_not_drawn_yet() -> None:
     assert steps["board"] == "todo"
     assert next_step(workflow_steps(facts)) == "circuit"
     circuit = workflow_steps(facts)[0]
-    assert circuit.action == "See the Findings"
+    assert circuit.action == "Show Problems"
     assert circuit.summary == "8 parts · 2 errors"
 
 
@@ -224,10 +224,10 @@ def test_the_bar_counts_one_of_a_thing_as_one() -> None:
     one = dataclasses.replace(EMPTY, parts_on_board=1, nets=1, unrouted=1, drc_warnings=1)
     summaries = {step.key: step.summary for step in workflow_steps(one)}
     assert summaries["circuit"] == "1 part · 1 net"
-    assert summaries["route"] == "1 connection left"
+    assert summaries["route"] == "1 connection to wire"
     assert summaries["check"] == "0 errors · 1 warning"
     many = dataclasses.replace(EMPTY, parts_on_board=2, nets=3, unrouted=4)
     summaries = {step.key: step.summary for step in workflow_steps(many)}
     assert summaries["circuit"] == "2 parts · 3 nets"
-    assert summaries["route"] == "4 connections left"
+    assert summaries["route"] == "4 connections to wire"
     assert all("(s)" not in summary for summary in summaries.values())

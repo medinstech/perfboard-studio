@@ -203,7 +203,7 @@ def cut_list_to_csv(guide: Guide) -> str:
     for spine in guide.spine_list:
         writer.writerow(
             [
-                say("trace spine"),
+                say("reinforcing wire"),
                 spine.net_name,
                 "",
                 "",
@@ -765,7 +765,7 @@ def _html_conductor_step(
         bits.append(
             '<div class="note">'
             + say(
-                "Spine: {length:.0f} mm of {gauge:g} mm {material}.",
+                "Reinforcing wire: {length:.0f} mm of {gauge:g} mm {material}.",
                 length=step.spine.length_mm,
                 gauge=step.spine.gauge_mm,
                 material=escape(say(step.spine.material)),
@@ -1087,7 +1087,7 @@ def _html_tables(guide: Guide, say: Phrasebook) -> str:
             parts.append(_html_lead_row(lead, say, board=guide.board))
         for spine in guide.spine_list:
             parts.append(
-                f"<tr><td>{say('trace spine')}</td><td>{escape(spine.net_name)}</td>"
+                f"<tr><td>{say('reinforcing wire')}</td><td>{escape(spine.net_name)}</td>"
                 f"<td colspan=2>{say('{pads} pads', pads=spine.pads)}</td>"
                 f"<td>{spine.length_mm:.0f} mm</td>"
                 f"<td>{spine.gauge_mm:g} mm</td><td>{escape(say(spine.material))}</td></tr>"

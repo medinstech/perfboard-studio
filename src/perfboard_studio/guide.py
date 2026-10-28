@@ -55,7 +55,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache, partial
-from typing import Literal
+from typing import Literal, get_args
 
 from .breadboard import has_breadboard_pattern, has_rails, is_breadboard
 from .connectivity import FootprintLookup, PhysicalPinRef
@@ -1812,9 +1812,9 @@ def _conductor_step(
             ))
         elif pads >= 3:
             notes.append(say(
-                "Consider laying a lead offcut along these pads as a spine rather than "
-                "building the run out of solder alone: it drops the resistance by roughly "
-                "an order of magnitude and is far easier to make repeatable."
+                "Consider laying a lead offcut along these pads under the solder rather "
+                "than building the run out of solder alone: it drops the resistance by "
+                "roughly an order of magnitude and is far easier to make repeatable."
             ))
         # Tinning applies to every run; the flux sentence says "on a run this long" and
         # was appended to two-pad joints as well. Same threshold as the spine suggestion
@@ -2692,7 +2692,8 @@ def _tools(
         total_spine = sum(spine.length_mm for spine in spines)
         spine_gauges = sorted({spine.gauge_mm for spine in spines})
         tools.append(say(
-            "Tinned copper wire for the trace spines, {gauges} — about {length:.0f} mm "
+            "Tinned copper wire to reinforce the solder traces, {gauges} — about "
+            "{length:.0f} mm "
             "(component lead offcuts do the job just as well)",
             gauges=", ".join(f"{g:g} mm" for g in spine_gauges),
             length=total_spine,
@@ -2872,13 +2873,22 @@ def describe(guide: Guide) -> str:
     return ", ".join(parts)
 
 
+#: What each conductor kind is called where a person reads it. The id read aloud, except
+#: the wired trace: "solder trace wired" was the id with its hyphens taken out, and the
+#: toolbar called the same thing "Spine", a word nobody outside the code used. It is a
+#: solder trace reinforced with a wire, so that is what it is called, here and in the window.
+CONDUCTOR_WORDS: dict[ConductorKind, str] = {
+    kind: kind.replace("-", " ") for kind in get_args(ConductorKind)
+} | {"solder-trace-wired": "reinforced solder trace"}
+
+
 def conductor_word(kind: ConductorKind, language: GuideLanguage = "en") -> str:
     """What a conductor is made of, in words: "solder trace", "çıplak tel".
 
     One spelling for the tag beside a step in the exported guide and the step's line in the
     window's guide panel, which is why it is here and not in either of them.
     """
-    return phrasebook(language)(kind.replace("-", " "))
+    return phrasebook(language)(CONDUCTOR_WORDS[kind])
 
 
 def all_checkpoints(guide: Guide) -> tuple[Checkpoint, ...]:

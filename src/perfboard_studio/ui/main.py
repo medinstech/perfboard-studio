@@ -2137,8 +2137,8 @@ class NetDialog(QDialog):
     #: and never see, or reach from a menu without ever being told what it costs.
     NET_CLASSES: tuple[tuple[NetClass, str, str], ...] = (
         ("signal", "Signal", "&Signal"),
-        ("ground", "Ground — routed first, and wants a rail", "&Ground"),
-        ("power", "Power — routed after ground, same reason", "&Power"),
+        ("ground", "Ground — wired first, and wants a rail", "&Ground"),
+        ("power", "Power — wired after ground, same reason", "&Power"),
     )
 
     def __init__(
@@ -2412,7 +2412,7 @@ class PinoutEditor(QWidget):
             self.table.setItem(row, 0, number)
             name = QTableWidgetItem(kept.get(pin.number, ""))
             if pin.name and pin.number not in kept:
-                name.setToolTip(t("The footprint calls this pin {name}.").format(name=pin.name))
+                name.setToolTip(t("The package calls this pin {name}.").format(name=pin.name))
                 self._hints[pin.number] = pin.name
             self.table.setItem(row, 1, name)
         self.table.resizeColumnToContents(0)
@@ -2570,7 +2570,7 @@ class ComponentDialog(QDialog):
         )
         form.addRow(t("Value"), self.value)
 
-        self.locked = QCheckBox(t("locked — auto-placement leaves it where it is"))
+        self.locked = QCheckBox(t("locked — Rearrange leaves it where it is"))
         self.locked.setChecked(component.locked)
         form.addRow("", self.locked)
 
@@ -2615,7 +2615,7 @@ class ComponentDialog(QDialog):
         package.addWidget(self.locked_note)
         self.change_part.setEnabled(not component.locked)
         self.locked_note.setVisible(component.locked)
-        form.addRow(t("Footprint"), package)
+        form.addRow(t("Package"), package)
         for label, fact in (
             (t("Pins"), pins),
             (t("Pin 1 at"), f"{format_hole(component.anchor, board)}  ·  {component.rotation}°"),
@@ -3628,8 +3628,8 @@ class ShortcutsDialog(QDialog):
             (t("Right-click"), t("Finish the trace or net being drawn")),
             ("Enter", t("Finish it without moving the pointer")),
             ("Esc", t("Leave the current mode")),
-            (t("Double-click a net"), t("Route just that net")),
-            (t("Click a DRC row"), t("Zoom to the holes it names")),
+            (t("Double-click a net"), t("Wire just that net")),
+            (t("Click a problem"), t("Zoom to the holes it names")),
         )
 
     def __init__(self, menus: Any, parent: QWidget | None = None) -> None:
@@ -4133,9 +4133,9 @@ def _verdict_note(verdict: BoardVerdict) -> str:
             rules=", ".join(_rule_title(rule) for rule in verdict.new_warnings)
         )
     if verdict.kind == "unrouted":
-        return t("{count} connection(s) would not route").format(count=trial.unrouted)
+        return t("{count} connection(s) would not wire").format(count=trial.unrouted)
     if verdict.kind == "drc-errors":
-        return t("{count} DRC error(s) once wired").format(count=trial.drc_errors)
+        return t("{count} board-check error(s) once wired").format(count=trial.drc_errors)
     return t("too small — {count} part(s) will not fit").format(count=len(trial.unplaced))
 
 
@@ -4224,17 +4224,17 @@ def _rule_title(rule: str) -> str:
         "component-off-board": t("Part off the board"),
         "component-overhangs-edge": t("Part hangs past the edge"),
         "component-too-tall": t("Part too tall for the case"),
-        "conductor-crossing": t("Conductors cross"),
-        "conductor-off-board": t("Conductor off the board"),
+        "conductor-crossing": t("Wires or traces cross"),
+        "conductor-off-board": t("Wire or trace off the board"),
         "creepage-clearance": t("Too close for the voltage"),
-        "crossing-conductors": t("Conductors share a hole"),
+        "crossing-conductors": t("Two nets in one hole"),
         "current-capacity": t("Too thin for the current"),
-        "cut-track-conflict": t("Pin on a cut track"),
+        "cut-track-conflict": t("Pin on a cut strip"),
         "duplicate-pin-hole": t("Two pins in one hole"),
         "edge-connector-conflict": t("Pin on an edge finger"),
         "heat-proximity": t("Heat source too close"),
         "jumper-under-body": t("Jumper under a part"),
-        "lead-bend-too-long": t("Bent lead too long"),
+        "lead-bend-too-long": t("Bent leg too long"),
         "mounting-hole-clearance": t("Too close to a mounting hole"),
         "mounting-hole-conflict": t("Pin on a mounting hole"),
         "no-hole": t("No hole there"),
@@ -4245,10 +4245,10 @@ def _rule_title(rule: str) -> str:
         "solder-trace-invalid-path": t("Solder trace skips a hole"),
         "solder-trace-proximity": t("Solder next to another net"),
         "solder-trace-too-long": t("Solder trace too long"),
-        "terminal-entry-blocked": t("Terminal entry blocked"),
-        "terminal-entry-faces-in": t("Terminal faces into the board"),
+        "terminal-entry-blocked": t("Screw terminal's wire entry blocked"),
+        "terminal-entry-faces-in": t("Screw terminal faces inward"),
         "under-module": t("Part under a module"),
-        "unknown-footprint": t("Unknown footprint"),
+        "unknown-footprint": t("Unknown package"),
         "wire-over-joint": t("Bare wire on a joint"),
         "wire-too-thick-for-hole": t("Wire too thick for the hole"),
     }
@@ -4258,16 +4258,16 @@ def _rule_title(rule: str) -> str:
 def _erc_title(rule: str) -> str:
     """The same, for a rule about the circuit (``erc.RULES``, held to this by a test)."""
     titles = {
-        "supply-unconnected": t("Supply not connected"),
-        "supply-on-wrong-net": t("Supply on the wrong net"),
+        "supply-unconnected": t("Power pin not connected"),
+        "supply-on-wrong-net": t("Power pin on the wrong net"),
         "polarity-reversed": t("Part drawn backwards"),
         "pin-not-on-part": t("Net names a missing pin"),
         "no-power-entry": t("Nothing brings power in"),
-        "supply-pin-open": t("Supply pin left open"),
-        "nc-pin-connected": t("NC pin wired"),
-        "single-pin-net": t("Net reaches one pin"),
+        "supply-pin-open": t("One power pin left open"),
+        "nc-pin-connected": t("“No connect” pin wired"),
+        "single-pin-net": t("Net with only one pin"),
         "part-unconnected": t("Part connected to nothing"),
-        "part-not-defined": t("Net names an unknown part"),
+        "part-not-defined": t("Net names a part that isn't there"),
     }
     return titles.get(rule, rule)
 
@@ -4275,11 +4275,11 @@ def _erc_title(rule: str) -> str:
 def _lvs_title(kind: str) -> str:
     """The same, for an LVS finding's kind."""
     titles = {
-        "open": t("Open: a net in pieces"),
-        "short": t("Short: two nets joined"),
+        "open": t("Broken: a net in pieces"),
+        "short": t("Short circuit: two nets touch"),
         "floating-conductor": t("Copper joined to no pin"),
         "unplaced-component": t("Part not on the board"),
-        "unknown-footprint": t("Unknown footprint"),
+        "unknown-footprint": t("Unknown package"),
         "unrouted-net": t("Net not wired yet"),
     }
     return titles.get(kind, kind)
@@ -6093,8 +6093,9 @@ class MainWindow(QMainWindow):
         act_features = file_menu.addAction(t("Board &Features…"))
         act_features.setToolTip(
             t(
-                "Mounting holes and edge-connector fingers. A mounting bore takes the copper "
-                "off the pads around it, so DRC treats a pin left there as an error."
+                "Mounting holes and edge-connector fingers. A mounting bore takes the "
+                "copper off the pads around it, so the board check (DRC) treats a pin left "
+                "there as an error."
             )
         )
         act_features.triggered.connect(self.on_board_features)
@@ -6294,16 +6295,17 @@ class MainWindow(QMainWindow):
              t("Join adjacent pads with solder. Orthogonal steps only — solder spans the "
                "0.6 mm gap to the next pad and not the 1.7 mm diagonal one. Click each "
                "pad, then Enter or right-click to finish.")),
-            ("solder-trace-wired", "Solder Trace with S&pine", "Shift+T",
-             t("The same over a tinned-wire spine: about ten times lower resistance, and "
-               "what a power or ground rail longer than five or six pads wants.")),
+            ("solder-trace-wired", "&Reinforced Solder Trace", "Shift+T",
+             t("A solder trace laid over a tinned wire: about ten times lower resistance, "
+               "and what a power or ground rail longer than five or six pads wants.")),
             ("bare-wire", "&Bare Wire", "W",
              t("Tinned wire on the solder side. Cannot cross other copper. Click both "
                "ends.")),
             ("insulated-wire", "&Insulated Wire", "Shift+W",
              t("May cross anything, at the cost of stripping it. Click both ends.")),
-            ("top-jumper", "Top &Jumper", "",
-             t("Insulated, routed over the component side. Occupies body space.")),
+            ("top-jumper", "&Jumper Over the Parts", "",
+             t("An insulated wire on the parts' side, hopping over everything below. It "
+               "takes room the parts would use.")),
         ):
             action = draw_menu.addAction(t(label))
             action.setCheckable(True)
@@ -6317,7 +6319,7 @@ class MainWindow(QMainWindow):
         # The stripboard edit. It is in Draw because it is a board mode with the same
         # shape as the others -- arm it, click holes, Esc leaves -- even though it is the
         # only one that takes copper away rather than adding it.
-        self.act_cut = draw_menu.addAction(t("&Cut Track"))
+        self.act_cut = draw_menu.addAction(t("&Cut Strip"))
         self.act_cut.setCheckable(True)
         self.act_cut.setShortcut(QKeySequence("X"))
         self.CUT_TOOLTIP = t(
@@ -6338,7 +6340,7 @@ class MainWindow(QMainWindow):
 
         place_menu = menu.addMenu(t("&Place"))
         place_menu.setToolTipsVisible(True)
-        self.act_autoplace = place_menu.addAction(t("&Auto-place Board"))
+        self.act_autoplace = place_menu.addAction(t("&Rearrange Parts"))
         self.act_autoplace.setShortcut(QKeySequence("Ctrl+Shift+A"))
         self.act_autoplace.setToolTip(
             t(
@@ -6415,8 +6417,9 @@ class MainWindow(QMainWindow):
         self.act_delete_net = net_menu.addAction(t("De&lete Net"))
         self.act_delete_net.setToolTip(
             t(
-                "Forget what the net was for. Copper already laid for it stays on the board, "
-                "and stops being anything re-route or the stale sweep will touch."
+                "Forget what the net was for. Copper already laid for it stays on the "
+                "board, and Redo Wiring and Remove Out-of-Date Wiring leave it alone from "
+                "then on."
             )
         )
         self.act_delete_net.triggered.connect(self.on_delete_net)
@@ -6430,12 +6433,12 @@ class MainWindow(QMainWindow):
         for action in self.net_actions:
             action.setEnabled(False)
 
-        route_menu = menu.addMenu(t("&Route"))
+        route_menu = menu.addMenu(t("&Wiring"))
         route_menu.setToolTipsVisible(True)
-        self.act_autoroute = route_menu.addAction(t("&Autoroute All Nets"))
+        self.act_autoroute = route_menu.addAction(t("&Auto-wire Everything"))
         self.act_autoroute.setShortcut(QKeySequence("Ctrl+R"))
         self.act_autoroute.triggered.connect(self.on_autoroute_all)
-        self.act_route_selected = route_menu.addAction(t("Route Nets of &Selection"))
+        self.act_route_selected = route_menu.addAction(t("Auto-wire the &Selection"))
         self.act_route_selected.setShortcut(QKeySequence("Ctrl+Shift+R"))
         self.act_route_selected.triggered.connect(self.on_route_selection)
         # HOW the board gets built is the builder's call, not the tool's. The default cost
@@ -6443,25 +6446,23 @@ class MainWindow(QMainWindow):
         # everywhere -- 4 traces against 10 wires on the NE555 fixture -- because R5'
         # proximity risk at 12 a hole prices a trace out exactly where traces are wanted.
         # See router.RoutingStyle for the measurements.
-        style_menu = route_menu.addMenu(t("&Preferred Connection"))
+        style_menu = route_menu.addMenu(t("Wiring &Style"))
         style_menu.setToolTipsVisible(True)
         self.style_menu = style_menu
         self.act_style: dict[str, QAction] = {}
         for style, label, tip in (
             ("best", t("&Try each and keep the best"),
-             t("Route the board once with every style, measure what each would cost to "
+             t("Wire the board once with every style, measure what each would cost to "
                "build — traces, wires, wire length, bridging risk — and keep the best. "
-               "Takes about as long as two ordinary routes; the comparison is reported.")),
+               "Takes about as long as wiring it twice; the comparison is reported.")),
             ("solder", t("&Solder trace where possible"),
-             t("Every connection a solder trace can make, IS one — wire only where a "
-               "trace physically cannot get there. A short jumper carries a run over "
-               "anything it must cross. On the NE555 fixture: all 14 connections, not one "
-               "wire.")),
+             t("Every connection a solder trace can make, IS one — wire only where a trace "
+               "physically cannot get there. A short jumper carries a run over anything it "
+               "must cross. On the NE555 example: all 14 connections, not one wire.")),
             ("balanced", t("&Balanced"),
-             t("No commitment: weigh each primitive on its own cost and take the cheapest "
-               "each time. The default, and what every golden fixture is routed with. On "
-               "a populated board this comes out as wire far more often than people "
-               "expect.")),
+             t("No commitment: weigh each kind of connection on its own cost and take the "
+               "cheapest each time. The default. On a populated board this comes out as "
+               "wire far more often than people expect.")),
             ("wire", t("&Wire where possible"),
              t("For anyone assembling with wire: every connection a wire can make is a "
                "wire, including the rails. Solder only where a wire cannot reach.")),
@@ -6480,7 +6481,7 @@ class MainWindow(QMainWindow):
         # What a trace does where it meets something it may not cross. A judgement about the
         # builder like the style, and a separate one: somebody who prefers solder may still
         # take a jumper over a crossing, or may take no wire at all. See router.CrossingPolicy.
-        crossing_menu = route_menu.addMenu(t("&Crossings"))
+        crossing_menu = route_menu.addMenu(t("When a Trace Must &Cross"))
         crossing_menu.setToolTipsVisible(True)
         self.crossing_menu = crossing_menu
         self.act_crossing: dict[str, QAction] = {}
@@ -6493,9 +6494,9 @@ class MainWindow(QMainWindow):
                 "A connection that has to cross something becomes one insulated wire from "
                 "end to end, for anybody who would rather run one clean wire than solder up "
                 "to a jumper.")),
-            ("refuse", t("&Never use wire; leave it unrouted"), t(
-                "No wire of any kind, whichever connection is preferred: solder traces "
-                "only. A connection a trace cannot make is left unrouted and named, rather "
+            ("refuse", t("&Never use wire; leave it unwired"), t(
+                "No wire of any kind, whichever wiring style is chosen: solder traces "
+                "only. A connection a trace cannot make is left unwired and named, rather "
                 "than made with wire you did not ask for. On a crowded board that can be "
                 "several, and moving parts is usually the answer.")),
         ):
@@ -6524,20 +6525,20 @@ class MainWindow(QMainWindow):
         # Rip-up and re-route is a SEPARATE verb from autoroute, and deliberately not what
         # Ctrl+R does: autoroute completes a board, this one discards work to rebuild it.
         # See autoroute.ReroutePlan for the measurement that made it necessary.
-        self.act_reroute_all = route_menu.addAction(t("Re-route &Everything"))
+        self.act_reroute_all = route_menu.addAction(t("Redo All &Wiring"))
         self.act_reroute_all.setToolTip(
             t(
-                "Rip up the existing routing and plan it again from nothing. Use this after "
-                "moving parts: autoroute only adds, so it leaves the copper laid out for "
-                "where things used to be. Hand-drawn copper with no net is never touched."
+                "Remove the wiring and lay it again from nothing. Use this after moving "
+                "parts: Auto-wire only adds, so it leaves the copper laid out for where "
+                "things used to be. Hand-drawn copper with no net is never touched."
             )
         )
         self.act_reroute_all.triggered.connect(lambda: self.on_reroute(None))
-        self.act_reroute_selected = route_menu.addAction(t("Re-route Nets of Se&lection"))
+        self.act_reroute_selected = route_menu.addAction(t("Redo Wiring of the Se&lection"))
         self.act_reroute_selected.setShortcut(QKeySequence("Ctrl+Alt+R"))
         self.act_reroute_selected.triggered.connect(self.on_reroute_selection)
         route_menu.addSeparator()
-        self.act_clear_strays = route_menu.addAction(t("Remove S&tale Conductors"))
+        self.act_clear_strays = route_menu.addAction(t("Remove Ou&t-of-Date Wiring"))
         self.act_clear_strays.triggered.connect(self.on_clear_strays)
 
         view_menu = menu.addMenu(t("&View"))
@@ -6559,7 +6560,7 @@ class MainWindow(QMainWindow):
         act_zoom_out.triggered.connect(lambda: self.on_zoom(1 / 1.25))
         view_menu.addSeparator()
 
-        self.act_ratsnest = view_menu.addAction(t("Show &Ratsnest"))
+        self.act_ratsnest = view_menu.addAction(t("Show &Missing Connections"))
         self.act_ratsnest.setCheckable(True)
         self.act_ratsnest.setChecked(True)
         self.act_ratsnest.setShortcut(QKeySequence("Ctrl+E"))
@@ -6577,7 +6578,7 @@ class MainWindow(QMainWindow):
         self.act_pin_names.setToolTip(
             t(
                 "Print each part's pin names beside its pins, on the board and in 3D. Turn "
-                "it off while placing or routing a crowded board."
+                "it off while placing or wiring a crowded board."
             )
         )
         self.act_pin_names.toggled.connect(self._on_toggle_pin_names)
@@ -6636,8 +6637,8 @@ class MainWindow(QMainWindow):
         act_go_to.setShortcut(QKeySequence("Ctrl+G"))
         act_go_to.setToolTip(
             t(
-                "Find a part by reference, value or footprint and centre the view on it. "
-                "On a dense board there is otherwise no way to answer “where is R37”."
+                "Find a part by reference, value or package and centre the view on it. On "
+                "a dense board there is otherwise no way to answer “where is R37”."
             )
         )
         act_go_to.triggered.connect(self.on_go_to_part)
@@ -6708,7 +6709,7 @@ class MainWindow(QMainWindow):
         # title bar used to leave no route back but a right-click on the menu bar, which
         # nobody finds.
         self.act_parts_panel = self.dock_library.toggleViewAction()
-        self.act_parts_panel.setText(t("Show &Parts"))
+        self.act_parts_panel.setText(t("Show &Library"))
         self.act_parts_panel.setShortcut(QKeySequence("Ctrl+5"))
         view_menu.addAction(self.act_parts_panel)
         self.act_nets_panel = self.dock_nets.toggleViewAction()
@@ -6716,13 +6717,13 @@ class MainWindow(QMainWindow):
         self.act_nets_panel.setShortcut(QKeySequence("Ctrl+6"))
         view_menu.addAction(self.act_nets_panel)
         self.act_drc_panel = self.dock_drc.toggleViewAction()
-        self.act_drc_panel.setText(t("Show DRC / L&VS"))
+        self.act_drc_panel.setText(t("Show &Problems"))
         self.act_drc_panel.setShortcut(QKeySequence("Ctrl+7"))
         view_menu.addAction(self.act_drc_panel)
         self.act_part_list_panel = self.dock_part_list.toggleViewAction()
         # No accelerator letter in English: every letter of "Show Part List" is already
         # taken in this menu. Ctrl+8 is the way to it from the keyboard.
-        self.act_part_list_panel.setText(t("Show Part List"))
+        self.act_part_list_panel.setText(t("Show Parts"))
         self.act_part_list_panel.setShortcut(QKeySequence("Ctrl+8"))
         view_menu.addAction(self.act_part_list_panel)
         view_menu.addSeparator()
@@ -6894,18 +6895,18 @@ class MainWindow(QMainWindow):
         for action, short in (
             (self.act_connect, t("Connect")),
             (self.act_new_net, t("New Net")),
-            (self.act_draw["solder-trace"], t("Trace")),
-            (self.act_draw["solder-trace-wired"], t("Spine")),
-            (self.act_draw["bare-wire"], t("Bare")),
+            (self.act_draw["solder-trace"], t("Solder Trace")),
+            (self.act_draw["solder-trace-wired"], t("Reinforced")),
+            (self.act_draw["bare-wire"], t("Bare Wire")),
             (self.act_draw["insulated-wire"], t("Insulated")),
             (self.act_draw["top-jumper"], t("Jumper")),
-            (self.act_autoplace, t("Auto-place")),
-            (self.act_autoroute, t("Autoroute")),
+            (self.act_autoplace, t("Rearrange")),
+            (self.act_autoroute, t("Auto-wire")),
             (self.act_rotate_cw, t("Rotate")),
             (self.act_mirror, t("Mirror")),
             (self.act_delete, t("Delete")),
             (self.act_flip, t("Flip")),
-            (self.act_ratsnest, t("Ratsnest")),
+            (self.act_ratsnest, t("Missing")),
             (self.act_board_panel, t("Board")),
             (self.act_schematic, t("Schematic")),
             (self.act_3d, t("3D")),
@@ -7047,7 +7048,7 @@ class MainWindow(QMainWindow):
         self.label_place_hint.setStyleSheet(f"color: {TEXT_DIM};")
         layout.addWidget(self.label_place_hint)
 
-        dock = QDockWidget(t("Parts"), self)
+        dock = QDockWidget(t("Library"), self)
         # Named because QMainWindow.restoreState matches docks BY objectName and silently
         # drops the ones with none -- a layout that half restores is worse than one that
         # does not, because only half of it looks wrong.
@@ -7357,9 +7358,9 @@ class MainWindow(QMainWindow):
             # reach -- but DRC calls it an error, and a status line that only said
             # "placed" would be the last chance anybody had to notice.
             if self.scene.last_placement_on_a_dead_hole:
-                note = f"  ·  {t('a pin has no pad there — see DRC')}"
+                note = f"  ·  {t("a pin has no pad there — see Problems")}"
             elif self.scene.last_placement_overlapped:
-                note = f"  ·  {t('it overlaps an existing pin — see DRC')}"
+                note = f"  ·  {t("it overlaps an existing pin — see Problems")}"
             else:
                 note = ""
             self.statusBar().showMessage(
@@ -7396,7 +7397,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.nets_filter)
 
         self.nets_tree = QTreeWidget()
-        self.nets_tree.setHeaderLabels([t("Net"), t("Class"), t("Pins"), t("To route")])
+        self.nets_tree.setHeaderLabels([t("Net"), t("Class"), t("Pins"), t("To wire")])
         self.nets_tree.setAlternatingRowColors(True)
         self.nets_tree.setRootIsDecorated(True)
         # The net name absorbs the spare width and the three narrow columns keep their
@@ -7431,7 +7432,7 @@ class MainWindow(QMainWindow):
         self.part_list.setMinimumWidth(self.SIDE_PANEL_MIN_WIDTH)
         self.part_list.componentChosen.connect(self.go_to_component)
         self.part_list.partChosen.connect(self._on_part_list_design_part)
-        dock = QDockWidget(t("Part List"), self)
+        dock = QDockWidget(t("Parts"), self)
         dock.setObjectName("dockPartList")
         dock.setWidget(self.part_list)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
@@ -8449,7 +8450,7 @@ class MainWindow(QMainWindow):
         footprint = get_footprint(footprint_id)
         if footprint is None:
             self.statusBar().showMessage(
-                t("No footprint called {id}.").format(id=footprint_id), 6000
+                t("No package called {id}.").format(id=footprint_id), 6000
             )
             return
         # The row dragged is the one selected, and its catalog part -- if it is one -- is
@@ -8525,7 +8526,7 @@ class MainWindow(QMainWindow):
         footprint = get_footprint(target.footprint_id) if target is not None else None
         if target is None or footprint is None:
             self.statusBar().showMessage(
-                t("{ref} has no footprint this program can build.").format(ref=ref), 6000
+                t("{ref} has no package this program can build.").format(ref=ref), 6000
             )
             return False
         try:
@@ -9334,20 +9335,20 @@ class MainWindow(QMainWindow):
         # carry a hundred proximity warnings, and "show me the errors" or "show me R5'"
         # is how anybody reads a list that long.
         self.drc_filter = QLineEdit()
-        self.drc_filter.setPlaceholderText(t("Filter findings…  (error, short, R5', C7)"))
+        self.drc_filter.setPlaceholderText(t("Filter problems…  (error, short, C7)"))
         self.drc_filter.setClearButtonEnabled(True)
         self.drc_filter.textChanged.connect(self._on_drc_filter_changed)
         layout.addWidget(self.drc_filter)
 
         self.drc_tree = QTreeWidget()
-        self.drc_tree.setHeaderLabels([t("Rule / Kind"), t("Message")])
+        self.drc_tree.setHeaderLabels([t("Problem"), t("Details")])
         self.drc_tree.setColumnWidth(0, 260)
         self.drc_tree.itemClicked.connect(self._on_drc_item_clicked)
         self.drc_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.drc_tree.customContextMenuRequested.connect(self._on_drc_context_menu)
         layout.addWidget(self.drc_tree)
 
-        dock = QDockWidget(t("ERC / DRC / LVS"), self)
+        dock = QDockWidget(t("Problems"), self)
         dock.setObjectName("dockDrc")
         dock.setWidget(panel)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
@@ -9618,7 +9619,7 @@ class MainWindow(QMainWindow):
         properties.setToolTip(
             t(
                 "What this part is, what it is called and what it is worth — including "
-                "swapping its footprint for a different one."
+                "swapping its package for a different one."
             )
         )
         properties.triggered.connect(
@@ -9782,13 +9783,13 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         item = self.drc_tree.itemAt(pos)
         if item is not None:
-            copy_one = menu.addAction(t("&Copy This Finding"))
+            copy_one = menu.addAction(t("&Copy This Problem"))
             copy_one.triggered.connect(
                 lambda: QApplication.clipboard().setText(
                     " ".join(part for part in (item.text(0), item.text(1)) if part).strip()
                 )
             )
-        copy_all = menu.addAction(t("Copy &All Findings"))
+        copy_all = menu.addAction(t("Copy &All Problems"))
         copy_all.triggered.connect(self._copy_all_findings)
         return menu
 
@@ -9801,7 +9802,7 @@ class MainWindow(QMainWindow):
             lines += [f"lvs {i.kind}: {i.message}" for i in self._last_lvs.issues]
         QApplication.clipboard().setText("\n".join(lines))
         self.statusBar().showMessage(
-            f"{len(lines)} {t('findings copied to the clipboard')}", 4000
+            f"{len(lines)} {t("problems copied to the clipboard")}", 4000
         )
 
     def _build_status_bar(self) -> None:
@@ -10158,12 +10159,12 @@ class MainWindow(QMainWindow):
         left = self._work_left()
         to_do = left & UNWIRED_RULES
         unwired = sum(1 for v in violations if v.rule in to_do)
-        drc_count = t("{count} violation(s)").format(count=len(violations))
+        drc_count = t("{count} problem(s)").format(count=len(violations))
         if unwired:
-            drc_count = t("{count} violation(s) · {unwired} pin(s) not wired yet").format(
+            drc_count = t("{count} problem(s) · {unwired} pin(s) not wired yet").format(
                 count=len(violations) - unwired, unwired=unwired
             )
-        drc_root = QTreeWidgetItem(["DRC", drc_count])
+        drc_root = QTreeWidgetItem([t("Board check (DRC)"), drc_count])
         drc_root.setData(0, ROLE_FINDING_KEY, "DRC")
         tree.addTopLevelItem(drc_root)
 
@@ -10202,13 +10203,12 @@ class MainWindow(QMainWindow):
         s = lvs.summary
         lvs_root = QTreeWidgetItem(
             [
-                "LVS",
-                t("{matched}/{total} matched, {opens} open, {shorts} short, {physical} physical nets").format(
+                t("Matches circuit (LVS)"),
+                t("{matched} of {total} nets match · {opens} broken · {shorts} shorted").format(
                     matched=s.matched_nets,
                     total=s.schematic_nets,
                     opens=s.opens,
                     shorts=s.shorts,
-                    physical=s.physical_nets,
                 ),
             ]
         )
@@ -10250,7 +10250,7 @@ class MainWindow(QMainWindow):
         errors = sum(1 for f in findings if f.severity == "error")
         root = QTreeWidgetItem(
             [
-                "ERC",
+                t("Circuit check (ERC)"),
                 t("{errors} error(s) · {warnings} warning(s)").format(
                     errors=errors, warnings=len(findings) - errors
                 ),
@@ -10861,7 +10861,7 @@ class MainWindow(QMainWindow):
         options = PlacementOptions(seed=self._place_seed)
         self._place_seed += 1
         plan = self._run_planner(
-            t("Trying arrangements, and routing each one to compare them…"),
+            t("Trying arrangements, and wiring each one to compare them…"),
             lambda should_stop: plan_placement(
                 document,
                 self.lookup,
@@ -10879,7 +10879,7 @@ class MainWindow(QMainWindow):
             # exactly like the button doing nothing.
             self.statusBar().showMessage(
                 f"{say(describe_placement(plan))}  "
-                + t("Pressing Auto-place again tries another arrangement."),
+                + t("Pressing Rearrange again tries another arrangement."),
                 0,
             )
             return
@@ -10897,7 +10897,7 @@ class MainWindow(QMainWindow):
         stale = len(stale_conductor_ids(self.bus.document, self.lookup))
         note = (
             "  ·  "
-            + t("{count} conductor(s) are now stale; Ctrl+R clears and re-routes").format(
+            + t("{count} conductor(s) are now out of date; Ctrl+R clears and rewires them").format(
                 count=stale
             )
             if stale
@@ -10925,7 +10925,7 @@ class MainWindow(QMainWindow):
             # back reproduces this exact plan.
             detail.append(
                 t(
-                    "Each arrangement found was routed, and this is the one cheapest to "
+                    "Each arrangement found was wired, and this is the one cheapest to "
                     "build (cost {cost}; seed {seed})."
                 ).format(cost=f"{plan.route_cost:.0f}", seed=plan.seed)
             )
@@ -10974,7 +10974,8 @@ class MainWindow(QMainWindow):
                 if any(node.component_ref in selected_refs for node in net.nodes)
             )
         if not net_ids:
-            self.statusBar().showMessage(t("Select a net in the Nets panel, or a part on the board, then route."), 6000
+            self.statusBar().showMessage(t("Select a net in the Nets panel, or a part on "
+                                           "the board, then auto-wire."), 6000
             )
             return
         self._route(only_net_ids=net_ids)
@@ -10990,8 +10991,8 @@ class MainWindow(QMainWindow):
         for name, action in self.act_style.items():
             action.setChecked(name == style)
         self.statusBar().showMessage(
-            f"{t('Preferred connection')}: {self.act_style[style].text().replace('&', '')}"
-            f" — {t('applies to the next route')}",
+            f"{t("Wiring style")}: {self.act_style[style].text().replace('&', '')}"
+            f" — {t("applies the next time you auto-wire")}",
             8000,
         )
 
@@ -11002,8 +11003,8 @@ class MainWindow(QMainWindow):
         for name, action in self.act_crossing.items():
             action.setChecked(name == policy)
         self.statusBar().showMessage(
-            f"{t('Crossings')}: {self.act_crossing[policy].text().replace('&', '')}"
-            f" — {t('applies to the next route')}",
+            f"{t("When a trace must cross")}: {self.act_crossing[policy].text().replace('&', '')}"
+            f" — {t("applies the next time you auto-wire")}",
             8000,
         )
 
@@ -11012,7 +11013,7 @@ class MainWindow(QMainWindow):
         self._grid_wires = checked
         self.statusBar().showMessage(
             f"{self.act_grid_wires.text().replace('&', '')}: "
-            f"{t('on') if checked else t('off')} — {t('applies to the next route')}",
+            f"{t('on') if checked else t('off')} — {t("applies the next time you auto-wire")}",
             8000,
         )
 
@@ -11045,7 +11046,8 @@ class MainWindow(QMainWindow):
                 if any(node.component_ref in selected_refs for node in net.nodes)
             )
         if not net_ids:
-            self.statusBar().showMessage(t("Select a net in the Nets panel, or a part on the board, then re-route."), 6000
+            self.statusBar().showMessage(t("Select a net in the Nets panel, or a part on "
+                                           "the board, then redo its wiring."), 6000
             )
             return
         self.on_reroute(net_ids)
@@ -11064,7 +11066,8 @@ class MainWindow(QMainWindow):
         what would give a different answer.
         """
         if not self.bus.document.nets:
-            self.statusBar().showMessage(t("No netlist imported, so there is nothing to route."), 6000)
+            self.statusBar().showMessage(t("There is no circuit yet, so there is nothing "
+                                           "to wire."), 6000)
             return
         if board_joins_holes(self.bus.document.board):
             self._reroute_joined(only_net_ids, why)
@@ -11072,7 +11075,7 @@ class MainWindow(QMainWindow):
 
         document = self.bus.document
         plan = self._run_planner(
-            t("Ripping up and routing again…"),
+            t("Removing the wiring and laying it again…"),
             lambda _should_stop: plan_reroute(
                 document, self.lookup, only_net_ids=only_net_ids,
                 options=self._autoroute_options(),
@@ -11092,9 +11095,9 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(
                 f"{why + '  ' if why else ''}"
                 + t(
-                    "Routed again, and it came out exactly as it is. "
-                    "A different Route ▸ Preferred Connection or Route ▸ Crossings gives a "
-                    "different routing."
+                    "Wired again, and it came out exactly as it is. A different Wiring ▸ "
+                    "Wiring Style or Wiring ▸ When a Trace Must Cross gives different "
+                    "wiring."
                 ),
                 0,
             )
@@ -11114,14 +11117,14 @@ class MainWindow(QMainWindow):
                 + t("One Ctrl+Z puts it all back.")
                 + "</p>"
             )
-            if not self._confirm(t("Re-route?"), body, t("Re-route")):
+            if not self._confirm(t("Redo the wiring?"), body, t("Redo Wiring")):
                 return
 
         result = self.bus.dispatch("conductor.replace", plan.payload())
         if not result.ok:
             QMessageBox.warning(
                 self,
-                t("Re-route refused"), refused(result))
+                t("Redoing the wiring was refused"), refused(result))
             return
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
@@ -11143,7 +11146,8 @@ class MainWindow(QMainWindow):
         strays = stale_conductor_ids(self.bus.document, self.lookup)
         if not strays:
             if not quiet:
-                self.statusBar().showMessage(t("No stale conductors: every one still connects the net it claims."), 6000
+                self.statusBar().showMessage(t("No out-of-date wiring: every piece still "
+                                               "connects the net it claims."), 6000
                 )
             return 0
         label = f"Remove {len(strays)} stale conductor(s)"
@@ -11168,7 +11172,8 @@ class MainWindow(QMainWindow):
         mutation in this application, it reaches the document only through the command bus.
         """
         if not self.bus.document.nets:
-            self.statusBar().showMessage(t("No netlist imported, so there is nothing to route."), 6000)
+            self.statusBar().showMessage(t("There is no circuit yet, so there is nothing "
+                                           "to wire."), 6000)
             return
 
         # Autoroute ADDS. On a net whose parts have moved since it was routed that is the
@@ -11184,12 +11189,12 @@ class MainWindow(QMainWindow):
             names = sorted(n.name for n in self.bus.document.nets if n.id in stale_nets)
             answer = QMessageBox.question(
                 self,
-                t("Re-route the nets whose parts moved?"),
+                t("Redo the wiring of the nets whose parts moved?"),
                 t(
-                    "<b>{names}</b> still carry the copper laid out before a part moved."
-                    "<p>Autoroute only adds, so routing now leaves that copper in place "
-                    "and puts more beside it. Re-routing them rips it up and plans "
-                    "again.</p>"
+                    "<b>{names}</b> still carry the copper laid out before a part "
+                    "moved.<p>Auto-wire only adds, so wiring now leaves that copper in "
+                    "place and puts more beside it. Redoing their wiring removes it and "
+                    "plans again.</p>"
                 ).format(names=", ".join(names)),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,
@@ -11218,7 +11223,7 @@ class MainWindow(QMainWindow):
         sweep = self._routing_style == "best"
         if sweep:
             best = self._run_planner(
-                t("Routing every style…"),
+                t("Wiring with every style…"),
                 lambda _should_stop: plan_best_autoroute(
                     document, self.lookup, options, only_net_ids=only_net_ids
                 ),
@@ -11227,7 +11232,7 @@ class MainWindow(QMainWindow):
         else:
             best = None
             plan = self._run_planner(
-                t("Routing…"),
+                t("Wiring…"),
                 lambda _should_stop: plan_autoroute(
                     document, self.lookup, options, only_net_ids=only_net_ids
                 ),
@@ -11235,7 +11240,7 @@ class MainWindow(QMainWindow):
         if plan is None:
             return
         cleared_note = (
-            "  ·  " + t("{count} stale conductor(s) removed first").format(count=cleared)
+            "  ·  " + t("{count} out-of-date conductor(s) removed first").format(count=cleared)
             if cleared
             else ""
         )
@@ -11262,11 +11267,11 @@ class MainWindow(QMainWindow):
             if any(c.net_id in wanted for c in document.conductors):
                 self.on_reroute(
                     only_net_ids,
-                    why=t("Everything is routed already, so Autoroute plans it again."),
+                    why=t("Everything is wired already, so Auto-wire plans it again."),
                 )
                 return
             self.statusBar().showMessage(
-                f"{t('Nothing to route:')} {say(describe_plan(plan))}{cleared_note}",
+                f"{t("Nothing to wire:")} {say(describe_plan(plan))}{cleared_note}",
                 8000,
             )
             return
@@ -11282,7 +11287,7 @@ class MainWindow(QMainWindow):
         if not result.ok:
             QMessageBox.warning(
                 self,
-                t("Routing refused"), refused(result)
+                t("Wiring refused"), refused(result)
             )
             return
 
@@ -11312,7 +11317,7 @@ class MainWindow(QMainWindow):
             return
 
         cleared_note = (
-            "  ·  " + t("{count} stale conductor(s) removed first").format(count=cleared)
+            "  ·  " + t("{count} out-of-date conductor(s) removed first").format(count=cleared)
             if cleared
             else ""
         )
@@ -11325,7 +11330,7 @@ class MainWindow(QMainWindow):
 
         result = self.bus.dispatch("stripboard.apply", plan.payload())
         if not result.ok:
-            QMessageBox.warning(self, t("Routing refused"), refused(result))
+            QMessageBox.warning(self, t("Wiring refused"), refused(result))
             return
 
         self.statusBar().showMessage(
@@ -11345,7 +11350,7 @@ class MainWindow(QMainWindow):
         document = self.bus.document
         wire_path = self._autoroute_options().router.wire_path
         plan = self._run_planner(
-            t("Ripping up and routing again…"),
+            t("Removing the wiring and laying it again…"),
             lambda _should_stop: plan_joined_reroute(document, self.lookup, only_net_ids, wire_path),
         )
         if plan is None:
@@ -11383,12 +11388,12 @@ class MainWindow(QMainWindow):
                 + t("One Ctrl+Z puts it all back.")
                 + "</p>"
             )
-            if not self._confirm(t("Re-route?"), body, t("Re-route")):
+            if not self._confirm(t("Redo the wiring?"), body, t("Redo Wiring")):
                 return
 
         result = self.bus.dispatch("stripboard.apply", plan.payload())
         if not result.ok:
-            QMessageBox.warning(self, t("Re-route refused"), refused(result))
+            QMessageBox.warning(self, t("Redoing the wiring was refused"), refused(result))
             return
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
@@ -11427,8 +11432,8 @@ class MainWindow(QMainWindow):
             lines.append(t("… and {count} more").format(count=len(failures) - 12))
         QMessageBox.information(
             self,
-            t("Some connections could not be routed"),
-            t("{count} connection(s) were left unrouted:").format(count=len(failures))
+            t("Some connections could not be wired"),
+            t("{count} connection(s) were left unwired:").format(count=len(failures))
             + "\n\n"
             + "\n".join(lines),
         )
@@ -13034,8 +13039,8 @@ class MainWindow(QMainWindow):
         note = (
             "\n\n"
             + t(
-                "{count} conductor(s) already laid for it stay on the board, and stop "
-                "being anything re-route or the stale sweep will touch."
+                "{count} conductor(s) already laid for it stay on the board, and Redo "
+                "Wiring and Remove Out-of-Date Wiring leave them alone from then on."
             ).format(count=freed)
             if freed
             else ""

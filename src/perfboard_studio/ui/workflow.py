@@ -134,7 +134,7 @@ def step_title(key: StepKey) -> str:
         "board": t("Board"),
         "place": t("Placement"),
         "route": t("Wiring"),
-        "check": t("Verify"),
+        "check": t("Checks"),
         "build": t("Build"),
     }[key]
 
@@ -148,15 +148,15 @@ def step_action(key: StepKey, facts: WorkflowFacts | None = None) -> str:
     it, the next thing is reading what is wrong.
     """
     if key == "circuit" and facts is not None and facts.erc_errors:
-        return t("See the Findings")
+        return t("Show Problems")
     if key == "circuit" and facts is not None and facts.parts_off_board + facts.parts_on_board:
         return t("Connect the Pins")
     return {
         "circuit": t("Add a Part…"),
         "board": t("Choose a Board…"),
         "place": t("Place on the Board"),
-        "route": t("Autoroute"),
-        "check": t("See the Findings"),
+        "route": t("Auto-wire"),
+        "check": t("Show Problems"),
         "build": _build_label(build_action(facts) if facts is not None else "open-guide"),
     }[key]
 
@@ -174,8 +174,9 @@ def step_tooltip(key: StepKey) -> str:
     return {
         "circuit": t(
             "What the board is: its parts and what joins them. Drawn on the sheet, or by "
-            "placing parts on the board and connecting their pins. ERC checks it as it is "
-            "drawn: a chip with no supply is an error before any board is chosen."
+            "placing parts on the board and connecting their pins. The circuit check (ERC) "
+            "runs as it is drawn: a chip with no supply is an error before any board is "
+            "chosen."
         ),
         "board": t(
             "Which perfboard it goes on. Chosen before the parts go down, while the size is "
@@ -183,12 +184,12 @@ def step_tooltip(key: StepKey) -> str:
         ),
         "place": t("Where each part goes. Arranged for you, then yours to move."),
         "route": t(
-            "What joins the pins on the board: solder traces, wires and jumpers. Autoroute "
+            "What joins the pins on the board: solder traces, wires and jumpers. Auto-wire "
             "lays them; the Draw menu lays them by hand."
         ),
         "check": t(
-            "Whether it can be built as drawn: design rules (DRC) and whether the board is "
-            "the circuit (LVS)."
+            "Whether it can be built as drawn (the board check, DRC) and whether the board "
+            "matches the circuit (LVS)."
         ),
         "build": t("The soldering guide, step by step, with the board in 3D beside it."),
     }[key]
@@ -241,10 +242,10 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
         wired = t("nothing to wire yet")
     elif facts.unrouted:
         wired = _counted(
-            facts.unrouted, t("{count} connection left"), t("{count} connections left")
+            facts.unrouted, t("{count} connection to wire"), t("{count} connections to wire")
         )
     else:
-        wired = t("all joined")
+        wired = t("all wired")
     if facts.parts_on_board == 0:
         checked = t("nothing to check yet")
     else:
@@ -268,7 +269,7 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
         "place": placed,
         "route": wired,
         "check": checked,
-        "build": t("guide · 3D"),
+        "build": t("guide ready"),
     }
     current = next((key for key in STEP_ORDER if not done[key]), "build")
     steps: list[StepState] = []

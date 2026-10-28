@@ -5141,7 +5141,7 @@ def test_re_routing_asks_through_the_box_with_cancel_under_enter(monkeypatch) ->
 
     window.on_reroute(None)
 
-    assert asked == [i18n.t("Re-route")]
+    assert asked == [i18n.t("Redo Wiring")]
     assert window.bus.document is document or window.bus.document.conductors == document.conductors
     _close(window)
 
@@ -6491,7 +6491,7 @@ def test_the_shortcut_card_is_read_off_the_real_menu_bar() -> None:
     flat = {label: keys for _menu, rows in listed for label, keys in rows}
 
     assert flat["Save"] == window.act_save.shortcut().toString()
-    assert flat["Autoroute All Nets"] == "Ctrl+R"
+    assert flat["Auto-wire Everything"] == "Ctrl+R"
     assert "Rotate Clockwise" in flat
     # Read from the menu, so an action with no binding must not appear at all.
     assert "Finish Adding Pins" not in flat
@@ -6931,8 +6931,8 @@ def test_the_menus_keep_the_full_wording_the_buttons_abbreviate() -> None:
     have overwritten the exact one."""
     window = _window_on(_load_dense())
 
-    assert window.act_autoroute.iconText() == "Autoroute"
-    assert "All Nets" in window.act_autoroute.text()
+    assert window.act_autoroute.iconText() == "Auto-wire"
+    assert "Everything" in window.act_autoroute.text()
     _close(window)
 
 
@@ -13101,7 +13101,7 @@ def test_the_findings_do_not_call_pins_waiting_for_their_wiring_violations() -> 
         assert unwired > 0
         root = _findings_root(window, "DRC")
         wrong = len(window._last_violations) - unwired
-        assert root.text(1) == f"{wrong} violation(s) · {unwired} pin(s) not wired yet"
+        assert root.text(1) == f"{wrong} problem(s) · {unwired} pin(s) not wired yet"
         group = _drc_group(window, "drc:pin-not-connected")
         assert group is not None
         assert (group.text(0), group.text(1)) == ("Pin not wired yet", str(unwired))
@@ -13134,7 +13134,7 @@ def test_the_findings_do_not_call_pins_waiting_for_their_wiring_violations() -> 
         assert group.text(0).endswith("(warning)")
         assert group.foreground(0).color().name() == WARNING.lower()
         assert _findings_root(window, "DRC").text(1) == (
-            f"{len(window._last_violations)} violation(s)"
+            f"{len(window._last_violations)} problem(s)"
         )
     finally:
         _close(window)

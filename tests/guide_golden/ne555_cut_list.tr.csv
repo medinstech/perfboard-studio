@@ -9,4 +9,4 @@ izoleli tel,THRESH,T3,E5,38.4,57.6,5.0,24,mavi,
 izoleli tel,DISCH,M3,E4,20.5,39.7,5.0,24,beyaz,
 çıplak tel,CTRL,B11,E6,14.8,24.0,0.0,24,kalaylı bakır,
 izoleli tel,OUT,I11,B5,23.4,42.6,5.0,24,sarı,
-yol omurgası,GND,,,50.8,50.8,0.0,,kalaylı bakır,"0.6 mm, 21 ped boyunca"
+takviye teli,GND,,,50.8,50.8,0.0,,kalaylı bakır,"0.6 mm, 21 ped boyunca"

@@ -23,7 +23,7 @@
     "Bağlantı teli, AWG 24, renkler: beyaz, mavi, sarı, siyah — toplam yaklaşık 0.21 m",
     "Çıplak kalaylı bakır tel, AWG 24 — toplam yaklaşık 0.14 m",
     "Tel sıyırıcı",
-    "Lehim yolu omurgaları için kalaylı bakır tel, 0.6 mm — yaklaşık 51 mm (parça bacağı artıkları da aynı işi görür)"
+    "Lehim yollarını güçlendirmek için kalaylı bakır tel, 0.6 mm — yaklaşık 51 mm (parça bacağı artıkları da aynı işi görür)"
   ],
   "warnings": [],
   "bom": [
@@ -909,7 +909,7 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "0.6 mm kalaylı bakır omurgayı önce pedler boyunca yatır ve her pedde lehimle. Tek yönde ilerle, soğumuş bir bölümün üzerinden geri dönme.",
+            "0.6 mm kalaylı bakır teli önce pedler boyunca yatır ve her pedde lehimle. Tek yönde ilerle, soğumuş bir bölümün üzerinden geri dönme.",
             "Önce her pedi hafifçe kalayla, sonra birleştir.",
             "Bu uzunlukta bir hatta flux şarttır."
           ]
@@ -1106,7 +1106,7 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca omurga olarak bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
+            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
             "Önce her pedi hafifçe kalayla, sonra birleştir.",
             "Bu uzunlukta bir hatta flux şarttır."
           ]
@@ -1150,7 +1150,7 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca omurga olarak bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
+            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
             "Önce her pedi hafifçe kalayla, sonra birleştir.",
             "Bu uzunlukta bir hatta flux şarttır."
           ]
@@ -1194,7 +1194,7 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca omurga olarak bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
+            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
             "Önce her pedi hafifçe kalayla, sonra birleştir.",
             "Bu uzunlukta bir hatta flux şarttır."
           ]

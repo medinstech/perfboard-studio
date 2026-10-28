@@ -105,7 +105,7 @@ def said_from_tables() -> set[str]:
         | set(guide_module.SIGNAL_COLORS)
         # A step's tag: its package family, or what its copper is made of.
         | set(typing.get_args(model.BodyArchetype))
-        | {kind.replace("-", " ") for kind in typing.get_args(model.ConductorKind)}
+        | set(guide_module.CONDUCTOR_WORDS.values())
         | {material.replace("-", " ") for material in typing.get_args(spine)}
         | set(typing.get_args(guide_module.CheckKind.__value__))
         # The four edges: where a terminal faces, where a strip of fingers runs.

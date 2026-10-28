@@ -97,7 +97,7 @@ class PartListPanel(QWidget):
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(
-            [t("Reference"), t("Value"), t("Footprint"), t("Position"), t("State")]
+            [t("Reference"), t("Value"), t("Package"), t("Position"), t("State")]
         )
         self.tree.setRootIsDecorated(False)
         self.tree.setAlternatingRowColors(True)

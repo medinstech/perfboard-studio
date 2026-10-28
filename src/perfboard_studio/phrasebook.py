@@ -586,13 +586,13 @@ TURKISH: dict[str, str] = {
     "{ends}, {pads} pads": "{ends}, {pads} ped",
     "Lay the {gauge} mm {material} along the pads first and solder it at each one. Work in "
     "one direction and do not go back over a section that has cooled.": (
-        "{gauge} mm {material} omurgayı önce pedler boyunca yatır ve her pedde lehimle. Tek "
+        "{gauge} mm {material} teli önce pedler boyunca yatır ve her pedde lehimle. Tek "
         "yönde ilerle, soğumuş bir bölümün üzerinden geri dönme."
     ),
-    "Consider laying a lead offcut along these pads as a spine rather than building the "
-    "run out of solder alone: it drops the resistance by roughly an order of magnitude "
-    "and is far easier to make repeatable.": (
-        "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca omurga olarak bir "
+    "Consider laying a lead offcut along these pads under the solder rather than building "
+    "the run out of solder alone: it drops the resistance by roughly an order of "
+    "magnitude and is far easier to make repeatable.": (
+        "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir "
         "bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede "
         "tekrarlamak çok daha kolaydır."
     ),
@@ -761,9 +761,10 @@ TURKISH: dict[str, str] = {
         "Montaj delikleri için bir matkap ve {sizes} uç, ayrıca bir çapak alma aleti ya da "
         "elle çevrilen daha büyük bir uç"
     ),
-    "Tinned copper wire for the trace spines, {gauges} — about {length:.0f} mm (component "
-    "lead offcuts do the job just as well)": (
-        "Lehim yolu omurgaları için kalaylı bakır tel, {gauges} — yaklaşık {length:.0f} mm "
+    "Tinned copper wire to reinforce the solder traces, {gauges} — about {length:.0f} mm "
+    "(component lead offcuts do the job just as well)": (
+        "Lehim yollarını güçlendirmek için kalaylı bakır tel, {gauges} — yaklaşık "
+        "{length:.0f} mm "
         "(parça bacağı artıkları da aynı işi görür)"
     ),
     # -- what the guide could not cover --------------------------------------------------
@@ -882,8 +883,8 @@ TURKISH: dict[str, str] = {
     "Cut {length:.0f} mm of {colour} AWG {awg}{strip}.": (
         "{length:.0f} mm {colour} AWG {awg} tel kes{strip}."
     ),
-    "Spine: {length:.0f} mm of {gauge:g} mm {material}.": (
-        "Omurga: {length:.0f} mm, {gauge:g} mm {material}."
+    "Reinforcing wire: {length:.0f} mm of {gauge:g} mm {material}.": (
+        "Takviye teli: {length:.0f} mm, {gauge:g} mm {material}."
     ),
     "Probe {holes}": "Ölçüm noktaları: {holes}",
     "Do not apply power until this passes.": "Bu geçmeden enerji verme.",
@@ -902,7 +903,7 @@ TURKISH: dict[str, str] = {
     "Cut": "Kesim",
     "AWG": "AWG",
     "Colour": "Renk",
-    "trace spine": "yol omurgası",
+    "reinforcing wire": "takviye teli",
     "wire off the board": "kart dışı tel",
     "{count} wire(s) to parts off the board": "kart dışı parçalara {count} tel",
     "cut to fit": "ölçüye göre kes",
@@ -958,7 +959,7 @@ TURKISH: dict[str, str] = {
     # What copper is made of, as a step's tag says it.
     "lead bend": "bacak bükme",
     "solder trace": "lehim yolu",
-    "solder trace wired": "omurgalı lehim yolu",
+    "reinforced solder trace": "telli lehim yolu",
     "top jumper": "üst yüz jumper",
     "strip": "şerit",
     "tinned copper": "kalaylı bakır",

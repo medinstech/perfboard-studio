@@ -22,7 +22,7 @@
     "Hookup wire, AWG 24 in black, blue, white, yellow — about 0.21 m in total",
     "Bare tinned copper wire, AWG 24 — about 0.14 m in total",
     "Wire strippers",
-    "Tinned copper wire for the trace spines, 0.6 mm — about 51 mm (component lead offcuts do the job just as well)"
+    "Tinned copper wire to reinforce the solder traces, 0.6 mm — about 51 mm (component lead offcuts do the job just as well)"
   ],
   "warnings": [],
   "bom": [
@@ -1105,7 +1105,7 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Consider laying a lead offcut along these pads as a spine rather than building the run out of solder alone: it drops the resistance by roughly an order of magnitude and is far easier to make repeatable.",
+            "Consider laying a lead offcut along these pads under the solder rather than building the run out of solder alone: it drops the resistance by roughly an order of magnitude and is far easier to make repeatable.",
             "Tin each pad lightly first, then join them.",
             "Flux is not optional on a run this long."
           ]
@@ -1149,7 +1149,7 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Consider laying a lead offcut along these pads as a spine rather than building the run out of solder alone: it drops the resistance by roughly an order of magnitude and is far easier to make repeatable.",
+            "Consider laying a lead offcut along these pads under the solder rather than building the run out of solder alone: it drops the resistance by roughly an order of magnitude and is far easier to make repeatable.",
             "Tin each pad lightly first, then join them.",
             "Flux is not optional on a run this long."
           ]
@@ -1193,7 +1193,7 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Consider laying a lead offcut along these pads as a spine rather than building the run out of solder alone: it drops the resistance by roughly an order of magnitude and is far easier to make repeatable.",
+            "Consider laying a lead offcut along these pads under the solder rather than building the run out of solder alone: it drops the resistance by roughly an order of magnitude and is far easier to make repeatable.",
             "Tin each pad lightly first, then join them.",
             "Flux is not optional on a run this long."
           ]
