@@ -7678,7 +7678,7 @@ class MainWindow(QMainWindow):
             (
                 "wire",
                 "connect",
-                t("Wire"),
+                t("Connect"),
                 t(
                     "Click a pin, then the pin it joins — or a wire already drawn, and the "
                     "pin branches off it in a T. Neither on a net yet? One gets made. "

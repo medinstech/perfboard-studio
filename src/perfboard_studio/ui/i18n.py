@@ -937,7 +937,6 @@ TURKISH: Mapping[str, str] = {
     "Put a part in the design without deciding where it goes on the board yet.": (
         "Kart üzerinde nereye geleceğine karar vermeden tasarıma bir parça ekler."
     ),
-    "Wire": "Bağla",
     "Click a pin, then the pin it joins — or a wire already drawn, and the pin "
     "branches off it in a T. Neither on a net yet? One gets made. Exactly what the "
     "board's connect tool does, because it is the same code.": (

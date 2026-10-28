@@ -203,7 +203,7 @@ cut list in its net's colour, and checks its nets only once its wires are in.
 ## Draw the circuit first
 
 The board says where everything goes. The schematic panel (`Ctrl+2`), which opens beside
-it, says *what you are building* — and it is where you say it: **Add Part**, **Wire** two
+it, says *what you are building* — and it is where you say it: **Add Part**, **Connect** two
 pins, **Place on the Board**. The circuit comes first and the layout second, which is how
 every other EDA tool works and is the order this one could not do until now.
 
@@ -314,7 +314,7 @@ comes next. By hand, it goes like this.
 
 Open the schematic panel (`Ctrl+2`) and draw the circuit: drag parts onto the sheet out
 of the Parts panel, or add them one after another with **Add Part**, which stays open for
-the next; move and turn them where you want them, **Wire** from pin to pin or onto a wire
+the next; move and turn them where you want them, **Connect** from pin to pin or onto a wire
 already drawn (click both ends, or drag; a net joined at a supply pin takes its name, VCC
 or GND) — or **Label** a pin to join it to a net by name, or right-click it for GND and
 +5V — then **Place on the Board**, which first
