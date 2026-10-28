@@ -1400,10 +1400,23 @@ nothing on screen to say so, so `_on_menu_bar_hovered` opens ☰ instead, a turn
 only if no menu has opened (Alt+F passes through the same signal on its way to File).
 Shortcuts are unaffected: a menu bar at no height is still on screen to Qt.
 
-The tool row under it is two bars (`views_toolbar`, `board_toolbar`) so the second can go:
-the board's tools show only while `board_is_showing()`, which is `schematic_is_showing`'s
-question about the other panel. `_fit_toolbar` sheds words across whichever bars are up;
-`toolbar_button(action)` finds an action's button on either.
+There is no tool row under it. **The board's tools float on the board** (`ui/canvastools.py`,
+`_build_canvas_tools`): the pointer, Connect, a Solder group and a Wire group, Cut Strip on a
+stripboard, and Measure down the left; Show, Flip, zoom and Fit in the bottom-right corner.
+Tools (which arm a mode) and the view (how the canvas is looked at) are two bars, as in any
+drawing program, and a one-off command is on neither: it is Next when it is the next step, a
+menu entry and a Ctrl+K entry always. Each button IS its menu action, so a key, a menu and a
+button cannot disagree about what is armed, and `act_select_tool` -- the pointer -- is lit
+exactly when `scene.in_a_mode` is not (`_sync_select_tool`, from `_refresh_mode_banner`).
+The bars are children of the board's own view, so they go wherever the board goes: behind
+a tab, floated, closed. The row they replaced was fifteen buttons wider than a laptop screen
+that shed its words to fit and came and went with the board panel (`_sync_toolbars_to_view`,
+`_fit_toolbar`, both gone).
+
+**Tools that are one idea share a button** (`FloatingBar.add_group`): solder trace and
+reinforced trace; bare wire, insulated wire and a jumper over the parts. The button shows
+and arms the one picked last -- by the menu, its key or the button -- and offers the rest
+when held or right-clicked, with a small triangle in its corner to say so.
 
 `ui/boardpreview.py` draws a board as a picture through `BoardScene` itself -- the board
 dialogs' previews and the stock-size grid -- so a picture cannot disagree with the board OK
@@ -1483,13 +1496,16 @@ for, and wanting both at once meant a second top-level window (`_DetachedSheet`)
 button and handed back on close. All of that is what a `QDockWidget` already is, and none
 of it could be undone by dragging.
 
-The opening arrangement is parts and nets on the left, **board, sheet and 3D side by side in
-the middle** with DRC under them, and the build guide down the right. Only the board is open
-on a first start; a view opened takes its place in the row and the row is shared out again
-(`_on_view_opened`, two turns of the event loop later — one turn on, the row is not laid out
-yet and the widths come out uneven). The views were tabs for a while, and before that the 3D
-view was split off on its own and opened as a strip 190 px wide, because it is shut on every
-start and the opening proportions never reached it.
+The opening arrangement is parts and nets on the left and **the four views as tabs over the
+canvas** -- board, sheet, 3D, guide, every one open, the board in front -- with DRC under
+them. Open costs nothing behind a tab: a view fills itself only when it comes in front, and
+the 3D view builds nothing until then. They stood side by side from version 6 to 8, and a
+second view open cost the board half its width; they were tabs once before that, and were
+dropped because the tab bar was the dock area's own, at the bottom, and a shut view had no
+tab at all -- both fixed now (`setTabPosition(..., North)`, and every view open from the
+first start). Side by side is still a drag of a tab, and a row of views still shares itself
+out (`_on_view_opened`, two turns of the event loop later — one turn on, the row is not laid
+out yet and the widths come out uneven).
 
 Seven things follow, and each has a test:
 
@@ -1525,11 +1541,11 @@ Seven things follow, and each has a test:
   View ▸ Panels closes it, so nothing is lost; the title bar comes back the moment the
   panel is pulled out beside another and is the only handle it has.
 - **Ctrl+1–4 bring a view FORWARD and never put it away** (`act_show_board` and its three
-  siblings); **the toolbar's view buttons are switches** — the docks' own toggleViewActions,
-  first in the row, lit while a panel is open. That is honest only because the views stand
-  side by side: while they were stacked, open was not in front, both Board and Schematic
-  were lit, and pressing Board to reach the board closed it. A view somebody stacks by hand
-  is still tracked per group (`_note_in_front`, below).
+  siblings), and so does a view's tab. Opening and shutting a view is the docks' own
+  toggleViewActions, under View ▸ Panels. They were the toolbar's view buttons, lit while a
+  panel was open -- honest only while the views stood side by side: stacked, open was not
+  in front, both Board and Schematic were lit, and pressing Board to reach the board closed
+  it. Which view of a group is in front is tracked per group (`_note_in_front`, below).
 - **`WINDOW_STATE_VERSION` is bumped when a dock is added or removed**, or when the opening
   layout moves a view somewhere else. `restoreState` puts back the docks it knows and leaves
   the ones it has never heard of wherever the constructor put them, which landed the board
@@ -2161,9 +2177,11 @@ three `updates/` keys below. A test must point it somewhere temporary; `tests/te
 does, and has to, because every test there closes a window and closing saves.
 
 Two rules it is easy to break: `restoreState` matches docks and toolbars **by
-`objectName`** and silently drops the ones without one, and the **3D panel is forced shut
-after a restore** — reopening it would build VTK's pipeline during startup for a board
-nobody has looked at yet. Its size still comes back with the rest of the layout. The
+`objectName`** and silently drops the ones without one, and the **3D panel never comes back
+in front after a restore** (`_keep_3d_behind`) — in front it would build VTK's pipeline
+during startup for a board nobody has looked at yet. Behind a tab it keeps its tab and costs
+nothing; on its own, where it would be in front by definition, it is shut. Its size still
+comes back with the rest of the layout. The
 build-guide dock (`Ctrl+4`) is the same shape of thing: it fills itself only while open,
 because `build_guide` runs DRC and LVS, and `MainWindow.current_guide()` is the single
 cache both it and the 3D assembly slider read — two views of one list that must not

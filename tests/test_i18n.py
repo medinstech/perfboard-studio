@@ -445,7 +445,7 @@ def test_the_turkish_interface_has_one_word_for_each_thing() -> None:
     word for wiring, and a trace is still a "lehim yolu", everywhere."""
     assert [value for value in TURKISH.values() if "route" in value.lower()] == []
     assert [value for value in TURKISH.values() if "yönlendir" in value.lower()] == []
-    assert TURKISH["&Wiring"].replace("&", "") != TURKISH["Solder Trace"]
+    assert TURKISH["&Wiring"].replace("&", "") != TURKISH["&Solder Trace"].replace("&", "")
     assert "Kablola" in TURKISH["Auto-wire"]
 
 

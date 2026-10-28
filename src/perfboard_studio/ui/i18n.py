@@ -437,21 +437,11 @@ TURKISH: Mapping[str, str] = {
     # -- toolbar ---------------------------------------------------------------
     # Short labels for the buttons; the menus keep the full wording. Qt draws an action's
     # iconText on a toolbar and its text in a menu, so these are the only place they differ.
-    "Connect": "Bağla",
-    "Solder Trace": "Lehim Yolu",
-    "Reinforced": "Telli Yol",
-    "Bare Wire": "Çıplak Tel",
-    "Insulated": "İzoleli Tel",
-    "Rearrange": "Yeniden Diz",
     "Auto-wire": "Otomatik Kablola",
-    "Rotate": "Döndür",
-    "Mirror": "Aynala",
     "Delete": "Sil",
     # "Flip Side" was here until the toolbar stopped making its own action for it and
     # started sharing the View menu's, whose button label is "Flip".
     "Flip": "Çevir",
-    "Missing": "Eksikler",
-    "3D": "3D",
     "Fit": "Sığdır",
     # -- the connect tool ------------------------------------------------------
     "Connecting": "Bağlanıyor",
@@ -1287,7 +1277,6 @@ TURKISH: Mapping[str, str] = {
         "Lehimleme sırası, pencerenin içinde: önce en alçak parça, üzerinde bir şey duran "
         "jumperlar ondan önce, entegreler en sonda. Bir adımı seçmek onu kart üzerinde gösterir."
     ),
-    "Guide": "Rehber",
     "Reset Camera": "Kamerayı Sıfırla",
     "Export the Guide…": "Rehberi Dışa Aktar…",
     "Next Step to Do": "Sıradaki Adım",
@@ -2680,6 +2669,16 @@ TURKISH: Mapping[str, str] = {
         "Menüler: Dosya, Düzen, Görünüm ve diğerleri. Alt tuşu da açar."
     ),
     "Not saved": "Kaydedilmedi",
+    "Connect": "Bağla",
+    "Rearrange": "Yeniden Diz",
+    "3D": "3D",
+    "Select and move parts. Escape comes back to it from any tool.": (
+        "Parçaları seçin ve taşıyın. Escape her araçtan buraya döner."
+    ),
+    "Show": "Göster",
+    "What the board shows: the connections still missing, hole addresses, pin names, values.": (
+        "Kartta görünenler: eksik bağlantılar, delik adresleri, pin adları, değerler."
+    ),
     "Save the board (Ctrl+S).": "Kartı kaydedin (Ctrl+S).",
     "Add a Part…": "Parça Ekle…",
     "Choose a Board…": "Kart Seç…",

@@ -2044,7 +2044,7 @@ def test_the_guide_panel_lists_every_step_the_slider_counts() -> None:
     from perfboard_studio.ui.main import ROLE_STEP_INDEX
 
     window = _window_on(_load_dense())
-    window.dock_guide.show()
+    window._raise_view(window.dock_guide)
     window._refresh_guide_panel()
 
     listed = []
@@ -2066,7 +2066,7 @@ def test_picking_a_step_shows_it_on_the_board() -> None:
     from perfboard_studio.ui.main import ROLE_STEP_INDEX
 
     window = _window_on(_load_dense())
-    window.dock_guide.show()
+    window._raise_view(window.dock_guide)
     window._refresh_guide_panel()
     steps = window._assembly_steps()
     part_index = next(i for i, s in enumerate(steps) if isinstance(s, PartStep))
@@ -2086,7 +2086,7 @@ def test_the_guide_panel_says_where_once() -> None:
     from perfboard_studio.ui.main import ROLE_STEP_INDEX
 
     window = _window_on(_load_dense())
-    window.dock_guide.show()
+    window._raise_view(window.dock_guide)
     window._refresh_guide_panel()
     steps = window._assembly_steps()
     try:
@@ -2115,7 +2115,7 @@ def test_the_guide_panel_says_what_the_guide_says() -> None:
 
     window = _window_on(_example_document("atmega328-relay"))
     try:
-        window.dock_guide.show()
+        window._raise_view(window.dock_guide)
         window._refresh_guide_panel()
         guide = window.current_guide()
         assert window.guide_summary.text() == describe(guide)
@@ -2253,7 +2253,7 @@ def test_in_turkish_the_guide_panel_is_in_turkish() -> None:
     try:
         window = _window_on(_load_dense())
         try:
-            window.dock_guide.show()
+            window._raise_view(window.dock_guide)
             window._refresh_guide_panel()
             headings = [
                 window.guide_tree.topLevelItem(i).text(0)
@@ -4466,7 +4466,7 @@ def test_stepping_the_3d_view_brings_the_guide_to_the_same_step() -> None:
     from perfboard_studio.ui.main import ROLE_STEP_INDEX
 
     window = _window_on(_load_dense())
-    window.dock_guide.show()
+    window._raise_view(window.dock_guide)
     window._refresh_guide_panel()
     window._3d_layout.addWidget(window._build_assembly_bar())
     selected_before = window.scene.selected_component_ids()
@@ -4508,7 +4508,7 @@ def test_a_click_in_3d_goes_through_the_sheets_doors(monkeypatch) -> None:
         conductors=tuple(dataclasses.replace(c, net_id=None) for c in routed.conductors),
     )
     window = _window_on(document)
-    window.dock_guide.show()
+    window._raise_view(window.dock_guide)
     window._refresh_guide_panel()
     window._vtk_renderer = object()  # stands for the live renderer; owner_at is stubbed
     landed: list = [None]
@@ -4568,7 +4568,7 @@ def _guide_window_on_a_file(tmp_path):
     path = tmp_path / "board.perf"
     path.write_text(GOLDEN.read_text(encoding="utf-8"), encoding="utf-8")
     window = MainWindow(_load_dense(), path)
-    window.dock_guide.show()
+    window._raise_view(window.dock_guide)
     window._refresh_guide_panel()
     return window, path
 
@@ -4605,7 +4605,7 @@ def test_a_step_ticked_off_is_remembered_for_that_board(tmp_path) -> None:
     _close(window)
 
     again = MainWindow(_load_dense(), path)
-    again.dock_guide.show()
+    again._raise_view(again.dock_guide)
     again._refresh_guide_panel()
     ticked = [leaf for leaf in again._guide_leaves() if leaf.checkState(0) == Qt.CheckState.Checked]
     assert [leaf.data(0, ROLE_STEP_FOCUS) for leaf in ticked] == [focus]
@@ -4618,7 +4618,7 @@ def test_an_unsaved_boards_ticks_go_with_it_to_its_file(tmp_path) -> None:
     from perfboard_studio.ui.main import ROLE_STEP_FOCUS
 
     window = _window_on(_load_dense())
-    window.dock_guide.show()
+    window._raise_view(window.dock_guide)
     window._refresh_guide_panel()
     focus = _tick(window, 0).data(0, ROLE_STEP_FOCUS)
 
@@ -6246,67 +6246,112 @@ def test_the_examples_open_as_untitled_copies() -> None:
     _close(window)
 
 
-def test_a_toolbar_a_little_too_wide_loses_only_the_words_it_must() -> None:
-    """All the words or none was the old rule, and a Turkish toolbar is 90 px wider than
-    an English one: on a 1920 screen at 125 % it lost every word, and the four conductor
-    tools -- one drawing, differing only in what runs between the pads -- became four
-    identical pictures. Short by a pixel, only the first button in the shedding order
-    goes to its icon; the conductor tools are the last to."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication
+def test_the_boards_tools_float_on_the_board() -> None:
+    """They were a row of fifteen buttons across the window, wider than a laptop screen,
+    that came and went with the board panel. They are on the board now: the pointer,
+    Connect, two groups for the solder and the wire tools, Cut Strip and Measure down the
+    left, and Show, Flip, zoom and Fit in the bottom-right corner. Each button IS its menu
+    action, so a key, a menu and a button cannot disagree about what is armed."""
+    from PySide6.QtWidgets import QToolBar
 
     window = _window_on(_load_dense())
     try:
-        window.show()
-        QApplication.processEvents()
-        savings = window._toolbar_savings
-        assert savings is not None and window._toolbar_text_width is not None
-        first = next((i for i, (_b, saved, _bar) in enumerate(savings) if saved > 0), None)
-        if first is None:
-            pytest.skip("no text has any width on this platform")
-        window.resize(window._toolbar_text_width - 1, 900)
-        QApplication.processEvents()
-        icon_only = [
-            button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
-            for button, _saved, _bar in savings
-        ]
-        assert icon_only == [i <= first for i in range(len(savings))]
-        assert savings[0][0] is window.toolbar_button(window.act_delete)
-        assert savings[-1][0] is window.toolbar_button(window.act_draw["solder-trace"])
-        # Every button on the bars is in the order, or one would never give its words up.
-        on_bar = [
-            a for bar in window._toolbars() for a in bar.actions() if not a.isSeparator()
-        ]
-        assert len(savings) == len(on_bar)
+        assert not {"viewsToolbar", "boardToolbar"} & {
+            bar.objectName() for bar in window.findChildren(QToolBar)
+        }
+        assert window.board_tools.parent() is window.view
+        assert window.board_view_tools.parent() is window.view
+        on_tools = [button.defaultAction() for button in window.board_tools.buttons]
+        assert on_tools[:2] == [window.act_select_tool, window.act_connect]
+        assert window.act_measure in on_tools and window.act_cut in on_tools
+        assert window.act_draw["solder-trace"] in on_tools
+        assert window.act_draw["bare-wire"] in on_tools
+        corner = [button.defaultAction() for button in window.board_view_tools.buttons]
+        for action in (window.act_flip, window.act_zoom_in, window.act_zoom_out, window.act_fit):
+            assert action in corner
+        shown = window.board_view_tools.buttons[0].menu().actions()
+        assert window.act_ratsnest in shown and window.act_values in shown
     finally:
         _close(window)
 
 
-def test_a_narrow_window_keeps_every_toolbar_button_on_screen() -> None:
-    """With its words under the icons the toolbar is wider than a laptop screen, so at
-    1280 px the view switches went behind the overflow arrow. Narrow, it drops the words
-    and keeps the buttons; wide enough, the words come back."""
-    from PySide6.QtCore import Qt
+def test_tools_that_are_one_idea_share_a_button_that_shows_the_one_picked() -> None:
+    """Five conductor buttons that differed only in what ran between two pads became two:
+    solder, and wire. The button arms the tool it shows, offers the rest from its menu,
+    and shows whichever was picked last -- by the menu, the key or the button."""
+    window = _window_on(_load_dense())
+    try:
+        wires = window.wire_tools
+        assert wires.group_menu.actions() == [
+            window.act_draw["bare-wire"],
+            window.act_draw["insulated-wire"],
+            window.act_draw["top-jumper"],
+        ]
+        assert wires.defaultAction() is window.act_draw["bare-wire"]
+        window.act_draw["insulated-wire"].trigger()
+        assert wires.defaultAction() is window.act_draw["insulated-wire"]
+        assert window.act_draw["insulated-wire"].isChecked()
+        assert not window.act_select_tool.isChecked()
+        window.on_stop_tool()
+        assert window.act_select_tool.isChecked()
+        assert window.act_draw["top-jumper"].shortcut().toString() == "J"
+        solder = window.solder_tools.group_menu.actions()
+        assert solder == [window.act_draw["solder-trace"], window.act_draw["solder-trace-wired"]]
+    finally:
+        _close(window)
+
+
+def test_a_tool_the_board_cannot_take_leaves_the_board() -> None:
+    """Cut Strip on a perfboard, solder on a solderless breadboard: a greyed button for a
+    tool that cannot apply is clutter, not information. Cut Strip is there on a stripboard
+    only; a group whose every tool is out goes; a group whose shown tool is out shows one
+    that is in -- the insulated wire, on a breadboard, rather than a bare wire that is not
+    a thing there."""
+    example = _example_document("ne555-astable")
+    window = _window_on(example)
+    try:
+        tools = window.board_tools
+        assert not window.cut_tool.isVisibleTo(tools)
+        for kind in ("solder-trace", "solder-trace-wired", "bare-wire"):
+            window.act_draw[kind].setEnabled(False)
+        assert not window.solder_tools.isVisibleTo(tools)
+        assert window.wire_tools.isVisibleTo(tools)
+        assert window.wire_tools.defaultAction() is window.act_draw["insulated-wire"]
+        window.act_draw["solder-trace"].setEnabled(True)
+        assert window.solder_tools.isVisibleTo(tools)
+    finally:
+        _close(window)
+
+    strips = dataclasses.replace(
+        example,
+        board=dataclasses.replace(example.board, type="stripboard", strip_axis="horizontal"),
+        conductors=(),
+    )
+    window = _window_on(strips)
+    try:
+        assert window.cut_tool.isVisibleTo(window.board_tools)
+        assert window.cut_tool.defaultAction() is window.act_cut
+    finally:
+        _close(window)
+
+
+def test_a_narrow_window_keeps_every_board_tool_on_screen() -> None:
+    """At 1280 px the old toolbar's view switches went behind its overflow arrow, and it
+    shed words to keep the rest. On the canvas every tool keeps its place at any width the
+    window can be, and the side panels keep room for the names they list."""
     from PySide6.QtWidgets import QApplication
 
     window = _window_on(_load_dense())
     window.show()
-    # Narrower than the row's words by more than every button can save: all of them go.
-    # (1100 px was that until save, undo and redo moved into the header.)
     window.resize(1100, 700)
-    QApplication.processEvents()
-    assert window._toolbar_text_width is not None
-    window.resize(window._toolbar_text_width - sum(s for _b, s, _bar in window._toolbar_savings), 700)
-    QApplication.processEvents()
-    styles = {button.toolButtonStyle() for button, _saved, _bar in window._toolbar_savings}
-    assert styles == {Qt.ToolButtonStyle.ToolButtonIconOnly}
-
-    assert window._toolbar_text_width is not None
-    window.resize(window._toolbar_text_width + 40, 900)
-    QApplication.processEvents()
-    styles = {button.toolButtonStyle() for button, _saved, _bar in window._toolbar_savings}
-    assert styles == {Qt.ToolButtonStyle.ToolButtonTextUnderIcon}
-    # ...and the side panels keep room for the names they list.
+    for _ in range(10):
+        QApplication.processEvents()
+    for bar in (window.board_tools, window.board_view_tools):
+        for button in bar.buttons:
+            if button.defaultAction() is window.act_cut:
+                continue  # a stripboard's tool, not on this board
+            assert button.isVisibleTo(window), button.toolTip()
+        assert window.view.rect().contains(bar.geometry())
     assert window.dock_nets.widget().minimumWidth() >= window.SIDE_PANEL_MIN_WIDTH
     assert window.dock_library.widget().minimumWidth() >= window.SIDE_PANEL_MIN_WIDTH
     _close(window)
@@ -6813,52 +6858,52 @@ def test_the_automatic_net_name_counts_from_the_document() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_every_tool_on_the_bar_has_a_picture_and_a_short_label() -> None:
-    """A toolbar of eleven identical grey rectangles is one people read left to right
-    every time, which is how the tools ended up being hunted for in the menus instead."""
+def test_every_tool_on_the_board_has_a_picture_and_says_what_it_does() -> None:
+    """A row of identical grey rectangles is one people read left to right every time,
+    which is how the tools ended up being hunted for in the menus. On the board the buttons
+    are pictures alone, so each one has its picture and says, on hover, what it does."""
     window = _window_on(_load_dense())
+    try:
+        buttons = [*window.board_tools.buttons, *window.board_view_tools.buttons]
+        assert len(buttons) >= 10
+        for button in buttons:
+            action = button.defaultAction()
+            assert not button.icon().isNull(), button.toolTip()
+            said = (action.toolTip() if action is not None else "") or button.toolTip()
+            assert said, f"{action.text() if action is not None else button} says nothing"
+    finally:
+        _close(window)
 
-    tools = [a for bar in window._toolbars() for a in bar.actions() if not a.isSeparator()]
 
-    assert len(tools) >= 15
-    for action in tools:
-        assert not action.icon().isNull(), f"{action.text()} has no icon"
-        assert action.iconText(), f"{action.text()} has no button label"
-        assert len(action.iconText()) <= 12, f"{action.iconText()} is too long for a button"
-    _close(window)
-
-
-def test_the_boards_tools_are_on_the_bar_only_while_the_board_is_on_screen(monkeypatch) -> None:
-    """With the sheet in front the bar still offered five conductor tools, Auto-place and
-    Autoroute, and a Rotate and a Mirror that turned whatever was selected on the BOARD --
-    the sheet has its own. The board's bar goes while the board is off screen: closed, or
-    stacked behind the sheet by hand. Beside the sheet it is on screen, and the bar stays.
-    The menus and shortcuts keep every one of those actions."""
+def test_the_boards_tools_are_on_screen_only_with_the_board(monkeypatch) -> None:
+    """With the sheet in front, the old bar still offered five conductor tools and a
+    Rotate that turned whatever was selected on the BOARD. The tools are the board's own
+    now, so they are on screen exactly when it is -- and the menus and keys keep every one
+    of them either way."""
     from PySide6.QtWidgets import QApplication
 
     window = _shown_window_without_3d(monkeypatch)
     try:
+        window.show_board()
+        _settle_events(QApplication)
+        assert window.board_is_showing() and window.board_tools.isVisible()
+
+        # Children of the board's own view: behind the sheet's tab, floated or closed,
+        # they go where the board goes.
+        assert window.board_tools.parent() is window.view
         window.show_schematic()
         _settle_events(QApplication)
-        assert window.board_is_showing() and not window.board_toolbar.isHidden()
+        assert not window.board_is_showing()
+        assert window.act_autoroute.isEnabled(), "the menu entry must still work"
+        assert not window.header_strip.isHidden()
 
         window.act_board_panel.trigger()  # closed
         _settle_events(QApplication)
-        assert window.board_toolbar.isHidden()
-        assert window.act_autoroute.isEnabled(), "the menu entry must still work"
-        # The header and the views stay: they are about the document, not about a panel.
-        assert not window.header_strip.isHidden()
-        assert not window.views_toolbar.isHidden()
-
-        window.show_board()
-        window.tabifyDockWidget(window.dock_board, window.dock_schematic)  # stacked by hand
-        window.show_schematic()
-        _settle_events(QApplication)
-        assert not window.board_is_showing() and window.board_toolbar.isHidden()
+        assert not window.board_tools.isVisible()
 
         window.show_board()
         _settle_events(QApplication)
-        assert not window.board_toolbar.isHidden()
+        assert window.board_tools.isVisible()
     finally:
         _close(window)
 
@@ -6866,28 +6911,28 @@ def test_the_boards_tools_are_on_the_bar_only_while_the_board_is_on_screen(monke
 def test_opening_a_panel_in_the_other_group_leaves_this_one_in_front(monkeypatch) -> None:
     """Which panel was in front was once ONE variable for the whole window, which has more
     than one place a panel can stand. Opening the guide made it "the one in front", so the
-    board, still showing in a tab group of its own, read as behind: its tools left the bar
-    until somebody clicked the tab that was already open. With the sheet in front the same
-    press stopped the sheet redrawing itself. Kept per group, for views stacked by hand."""
+    board, still showing in a tab group of its own, read as behind until somebody clicked
+    the tab that was already open. Kept per group -- for a guide moved off by hand."""
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
     window = _shown_window_without_3d(monkeypatch)
     try:
-        window.show_schematic()
-        window.tabifyDockWidget(window.dock_board, window.dock_schematic)
+        # The guide out of the views' group, into the left column's.
+        window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, window.dock_guide)
+        window.tabifyDockWidget(window.dock_nets, window.dock_guide)
         window.show_board()
         _settle_events(QApplication)
         window.act_show_guide.trigger()
         _settle_events(QApplication)
         assert window.dock_guide not in window.tabifiedDockWidgets(window.dock_board)
         assert window.board_is_showing()
-        assert not window.board_toolbar.isHidden()
 
         window.show_schematic()
         window.act_show_guide.trigger()
         _settle_events(QApplication)
         assert window.schematic_is_showing()
-        assert window.board_toolbar.isHidden()
+        assert not window.board_is_showing()
 
         # Within a group, the one brought forward still puts the other behind.
         window.show_board()
@@ -6895,16 +6940,6 @@ def test_opening_a_panel_in_the_other_group_leaves_this_one_in_front(monkeypatch
         assert window.board_is_showing() and not window.schematic_is_showing()
     finally:
         _close(window)
-
-
-def test_the_menus_keep_the_full_wording_the_buttons_abbreviate() -> None:
-    """Qt draws iconText on a toolbar and text in a menu, so the short label must not
-    have overwritten the exact one."""
-    window = _window_on(_load_dense())
-
-    assert window.act_autoroute.iconText() == "Auto-wire"
-    assert "Everything" in window.act_autoroute.text()
-    _close(window)
 
 
 def test_an_unknown_icon_is_empty_rather_than_an_exception() -> None:
@@ -7705,8 +7740,8 @@ def test_a_dragged_part_carries_its_reference_in_a_format_of_its_own() -> None:
 
 def test_the_board_and_the_sheet_are_both_panels(monkeypatch) -> None:
     """They were a central widget and a tab beside it -- the one pair in the window that
-    could not be arranged. Side by side, stacked, floated or closed is now a drag, and Qt
-    remembers wherever it was left. They open side by side; the sheet is shut on start."""
+    could not be arranged. Tabbed, side by side, floated or closed is a drag now, and Qt
+    remembers wherever it was left. They open as tabs, the board in front."""
     from PySide6.QtWidgets import QApplication
 
     window = _shown_window_without_3d(monkeypatch)
@@ -7714,48 +7749,45 @@ def test_the_board_and_the_sheet_are_both_panels(monkeypatch) -> None:
     assert window.dock_board.widget() is window.view
     assert window.dock_schematic.widget() is window.schematic_page
     assert window.board_is_showing()
-    assert window.dock_schematic.isHidden() and window.schematic_is_showing() is False
+    assert not window.dock_schematic.isHidden() and window.schematic_is_showing() is False
 
     window.show_schematic()
     _settle_events(QApplication)
-    assert window.dock_schematic not in window.tabifiedDockWidgets(window.dock_board)
-    assert window.dock_schematic.x() > window.dock_board.x()
-    assert window.board_is_showing() and window.schematic_is_showing()
+    assert window.dock_schematic in window.tabifiedDockWidgets(window.dock_board)
+    assert window.schematic_is_showing() and not window.board_is_showing()
     _close(window)
 
 
-def test_the_views_open_side_by_side_and_share_the_middle(monkeypatch) -> None:
-    """Board, sheet and 3D stand side by side, never as tabs: a view opened takes its place
-    in the row and the row is shared out again, one closed gives its room back, and the
-    guide stands apart to the right. The 3D view used to open split off on its own, as a
-    strip 190 px wide -- it is shut on every start, so the opening proportions never
-    reached it."""
-    from PySide6.QtWidgets import QApplication
+def test_the_views_are_tabs_over_the_canvas_and_side_by_side_is_a_drag(monkeypatch) -> None:
+    """Board, sheet, 3D and guide open as tabs on top of the canvas, every one with its tab
+    from the first start, the board in front: side by side, a second view cost the board
+    half its width. Pulled beside the board, a view still shares the middle evenly."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QTabWidget
 
     window = _shown_window_without_3d(monkeypatch)
     width = window.width()
-
-    window.act_schematic.trigger()  # the toolbar's switch
-    _settle_events(QApplication)
-    assert _the_views_stand_in_a_row(window)
-    assert abs(window.dock_board.width() - window.dock_schematic.width()) <= 2
+    group = set(window.tabifiedDockWidgets(window.dock_board))
+    assert group == {window.dock_schematic, window.dock_3d, window.dock_guide}
+    assert all(not dock.isHidden() for dock in window._view_docks())
+    assert window.tabPosition(Qt.DockWidgetArea.RightDockWidgetArea) == QTabWidget.TabPosition.North
+    assert window.board_is_showing()
 
     window.act_show_3d.trigger()
     _settle_events(QApplication)
-    assert _the_views_stand_in_a_row(window)
-    assert window.dock_3d.x() > window.dock_schematic.x()
-    widths = [dock.width() for dock in window._views()]
-    assert max(widths) - min(widths) <= 2, widths
+    assert not window.board_is_showing()
+    assert window.width() == width
+
+    # Beside the board, by hand: the row shares itself out.
+    window.removeDockWidget(window.dock_schematic)
+    window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, window.dock_schematic)
+    window.splitDockWidget(window.dock_drc, window.dock_schematic, Qt.Orientation.Horizontal)
+    window.dock_schematic.show()
+    window.show_board()
+    _settle_events(QApplication)
+    window._share_the_middle()
+    _settle_events(QApplication)
     assert window.board_is_showing() and window.schematic_is_showing()
-
-    board_before = window.dock_board.width()
-    window.act_schematic.trigger()  # closed again
-    _settle_events(QApplication)
-    assert window.dock_board.width() > board_before
-
-    window.act_show_guide.trigger()
-    _settle_events(QApplication)
-    assert window.dock_guide.x() >= window.dock_3d.x() + window.dock_3d.width()
     assert window.width() == width
     _close(window)
 
@@ -7788,21 +7820,43 @@ def _the_views_stand_in_a_row(window) -> bool:
     return xs == sorted(xs) and len(set(xs)) == len(xs)
 
 
-def test_the_guide_beside_three_views_does_not_grow_the_window(monkeypatch) -> None:
-    """Room for the guide is ASKED of its neighbours, never demanded: held at its width
-    while three views stood beside it, it pushed a 1600 px window out to 2110."""
+def test_resetting_the_layout_on_screen_builds_no_3d(monkeypatch) -> None:
+    """Every view joins the tab group on Reset the Panel Layout, and on its way in the 3D
+    view passed through "in front" -- which, in a window on screen, built VTK's whole
+    pipeline for a board nobody had asked to see in 3D, and offscreen aborted the process.
+    The board ends in front, and the 3D view is built when it is clicked."""
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.ui.main import MainWindow
+
+    built: list[bool] = []
+    monkeypatch.setattr(MainWindow, "_create_3d_widget", lambda self: built.append(True))
+    window = _window_on(_golden_document("ne555"))
+    try:
+        window.resize(1600, 950)
+        window.show()
+        _settle_events(QApplication)
+        window.on_reset_layout()
+        _settle_events(QApplication)
+        assert built == []
+        assert window.board_is_showing()
+        assert window.dock_3d in window.tabifiedDockWidgets(window.dock_board)
+    finally:
+        _close(window)
+
+
+def test_every_view_open_does_not_grow_the_window(monkeypatch) -> None:
+    """Room for a view is ASKED of its neighbours, never demanded: held at its width while
+    three views stood beside it, the guide pushed a 1600 px window out to 2110. As tabs
+    they share one place, and opening each in turn leaves the window as it was."""
     from PySide6.QtWidgets import QApplication
 
     window = _shown_window_without_3d(monkeypatch)
-    window.show_schematic()
-    window.act_show_3d.trigger()
-    _settle_events(QApplication)
-    window.act_show_guide.trigger()
-    _settle_events(QApplication)
-
-    assert window.width() == 1600
+    for action in (window.act_show_schematic, window.act_show_3d, window.act_show_guide):
+        action.trigger()
+        _settle_events(QApplication)
+        assert window.width() == 1600
     assert window.dock_guide.width() >= window.PANEL_OPEN_MIN_WIDTH
-    assert _the_views_stand_in_a_row(window)
     _close(window)
 
 
@@ -7894,13 +7948,9 @@ def test_a_view_is_put_away_from_the_panels_submenu() -> None:
 def test_a_tabbed_panel_drops_its_own_title_bar() -> None:
     """Qt draws both: the tab bar for the group, and under it the current dock's title --
     the same word twice, on two rows, above a view that wanted the height. The views open
-    side by side, each with its title; stacked by hand, they lose it."""
+    as tabs, without it; pulled out on their own, they get it back."""
     window = _window_on(_golden_document("ne555"))
-    assert window.dock_board.titleBarWidget() is None
-
-    window.dock_schematic.show()
-    window.tabifyDockWidget(window.dock_board, window.dock_schematic)
-    window._on_view_dock_moved()
+    assert window.dock_schematic in window.tabifiedDockWidgets(window.dock_board)
     assert window.dock_board.titleBarWidget() is not None
 
     window.dock_schematic.setFloating(True)
@@ -8310,7 +8360,7 @@ def test_the_next_button_goes_on_past_the_open_guide(tmp_path, monkeypatch) -> N
     try:
         assert window.workflow_bar.next_key == "build"
         assert window.workflow_bar.next_button.text().startswith("Open the Build Guide")
-        window.dock_guide.show()
+        window._raise_view(window.dock_guide)
         window._on_guide_visibility_changed(True)
         assert window.workflow_bar.next_button.text().startswith("Save the Board…")
 
@@ -13248,7 +13298,7 @@ def _routed_on_stripboard(monkeypatch):
     window = _window_on(strips)
     window.on_autoroute_all()
     assert window.bus.document.cuts, "the planner should have cut a track"
-    window.dock_guide.show()
+    window._raise_view(window.dock_guide)
     window._refresh_guide_panel()
     return window
 
@@ -13926,6 +13976,36 @@ def test_every_action_the_old_toolbars_had_is_behind_the_menu_button() -> None:
         reachable = _reachable_from(window, window.header.app_menu)
         missing = [a.text() for a in _old_toolbar_actions(window) if a not in reachable]
         assert not missing, f"no longer reachable from the menus: {missing}"
+    finally:
+        _close(window)
+
+
+def test_every_action_the_old_toolbars_had_has_a_place_on_screen() -> None:
+    """Behind ☰ is not enough for a tool somebody reaches for all day: each of the old
+    bars' actions has a place on screen as well -- the header, the board's own tools and
+    their groups, the corner of the board, or a view's tab."""
+    window = _window_on(_load_dense())
+    try:
+        on_screen = {window.header.undo_button.defaultAction(),
+                     window.header.redo_button.defaultAction()}
+        for bar in (window.board_tools, window.board_view_tools):
+            for button in bar.buttons:
+                on_screen.add(button.defaultAction())
+                if button.menu() is not None:
+                    on_screen.update(button.menu().actions())
+        on_screen.update((window.act_board_panel, window.act_schematic, window.act_3d,
+                          window.act_guide_panel))  # the views' tabs
+        # Save is "Not saved" in the header, there when there is something to save.
+        on_screen.add(window.act_save)
+        # One-off commands are not tools: they are the header's Next when they are the
+        # next step (Place on the Board, Auto-wire), and the selection's own buttons
+        # (rotate, mirror, delete) arrive with the bar over the selection.
+        later = {window.act_new_net, window.act_autoplace, window.act_autoroute,
+                 window.act_rotate_cw, window.act_mirror, window.act_delete}
+        missing = [a.text() for a in _old_toolbar_actions(window)
+                   if a not in on_screen and a not in later]
+        assert not missing, f"no place on screen for: {missing}"
+        assert {window.workflow_bar.buttons[key] for key in ("place", "route")}
     finally:
         _close(window)
 

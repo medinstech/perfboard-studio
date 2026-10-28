@@ -104,7 +104,8 @@ class HeaderBar(QWidget):
         self.setStyleSheet(
             f"""
             QWidget#header {{ background: {PANEL}; border-bottom: 1px solid {BORDER}; }}
-            QLabel#headerTitle {{ color: {TEXT}; font-weight: 600; padding-left: 4px; }}
+            QLabel#headerTitle {{ color: {TEXT}; font-weight: 600; background: transparent; padding-left: 4px; }}
+            QWidget#workflowBar {{ background: transparent; }}
             QToolButton#headerUnsaved {{ color: {WARNING}; padding: 2px 6px; }}
             QToolButton {{ background: transparent; border: none; border-radius: 6px; padding: 4px; }}
             QToolButton:hover {{ background: {PANEL_ALT}; }}

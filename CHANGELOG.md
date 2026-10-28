@@ -63,7 +63,15 @@ closed without a bump.
   board's name and whether it is saved ("Not saved" saves it in one click), the six steps
   on one line with the one to do saying where it stands, undo and redo, and the button
   that does the next step. Alt+F and the other menu letters still open their menus, and
-  Alt by itself opens ☰. The board's tools and the view switches keep their row for now.
+  Alt by itself opens ☰.
+- **The board's tools are on the board, and the views are tabs.** The row of fifteen
+  buttons under the header is gone. The pointer, Connect, the solder tools, the wire tools,
+  Cut Strip (on a stripboard) and Measure float down the left of the board; what the board
+  shows, Flip, zoom and Fit sit in its bottom-right corner. The three wire tools share one
+  button, and the two solder tools another: it shows the one picked last, and holding it
+  or right-clicking it offers the rest. Board, Schematic, 3D and Build Guide are tabs on
+  top of the canvas, every one there from the first start; dragging a tab beside another
+  still puts two views side by side. Jumper Over the Parts gets a key of its own, J.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

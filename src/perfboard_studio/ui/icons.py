@@ -433,6 +433,55 @@ def _arrow(p: QPainter) -> None:
     p.drawPath(path)
 
 
+def _measure(p: QPainter) -> None:
+    """A ruler laid across the box, with its ticks: Measure Distance."""
+    p.save()
+    p.translate(50, 50)
+    p.rotate(-45)
+    p.drawRoundedRect(QRectF(-42, -14, 84, 28), 5, 5)
+    for x, tall in ((-26, False), (-12, True), (2, False), (16, True), (30, False)):
+        p.drawLine(QPointF(x, -14), QPointF(x, -2 if tall else -6))
+    p.restore()
+
+
+def _show(p: QPainter) -> None:
+    """Two sheets stacked: what is drawn on the board, layer by layer."""
+    sheet = QPainterPath(QPointF(50, 16))
+    sheet.lineTo(QPointF(86, 36))
+    sheet.lineTo(QPointF(50, 56))
+    sheet.lineTo(QPointF(14, 36))
+    sheet.closeSubpath()
+    p.drawPath(sheet)
+    under = QPainterPath(QPointF(14, 58))
+    under.lineTo(QPointF(50, 78))
+    under.lineTo(QPointF(86, 58))
+    p.drawPath(under)
+
+
+def _zoom(p: QPainter, inward: bool) -> None:
+    p.drawEllipse(QPointF(42, 42), 26, 26)
+    p.drawLine(QPointF(61, 61), QPointF(86, 86))
+    p.drawLine(QPointF(30, 42), QPointF(54, 42))
+    if inward:
+        p.drawLine(QPointF(42, 30), QPointF(42, 54))
+
+
+def _zoom_in(p: QPainter) -> None:
+    _zoom(p, True)
+
+
+def _zoom_out(p: QPainter) -> None:
+    _zoom(p, False)
+
+
+def _cut_strip(p: QPainter) -> None:
+    """A copper strip broken at a hole: Cut Strip."""
+    p.drawLine(QPointF(10, 50), QPointF(34, 50))
+    p.drawLine(QPointF(66, 50), QPointF(90, 50))
+    p.drawEllipse(QPointF(50, 50), 12, 12)
+    p.drawLine(QPointF(38, 30), QPointF(62, 70))
+
+
 def _menu(p: QPainter) -> None:
     """Three lines: the menus, all of them, behind one button in the header."""
     for y in (28, 50, 72):
@@ -473,6 +522,11 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "fit": _fit,
     "delete": _delete,
     "menu": _menu,
+    "measure": _measure,
+    "cut-strip": _cut_strip,
+    "show": _show,
+    "zoom-in": _zoom_in,
+    "zoom-out": _zoom_out,
 }
 
 

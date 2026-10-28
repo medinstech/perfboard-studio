@@ -66,7 +66,6 @@ from PySide6.QtGui import (
     QDrag,
     QIcon,
     QKeySequence,
-    QResizeEvent,
     QShortcut,
     QShowEvent,
 )
@@ -342,6 +341,7 @@ from .boardcolors import SCHEMES as BOARD_SCHEMES
 from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
 from .boardpreview import render_board, with_arrangement, with_board
+from .canvastools import FloatingBar
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
 from .emptystate import EmptyOverlay, EmptyState
 from .engine_text import finding_text, names_in, net_class_word, say
@@ -605,7 +605,10 @@ WINDOW_STATE_KEY = "session/windowState"
 #: 8 is the header (``ui/header.py``): the menu bar, the document's toolbar and the step
 #: bar became one row, and a layout saved with two rows of toolbars would put back a
 #: toolbar that no longer exists above it.
-WINDOW_STATE_VERSION = 8
+#:
+#: 9 is the views as tabs over the canvas, and the tool row gone onto it: every saved
+#: layout has the views side by side and two toolbars nobody builds any more.
+WINDOW_STATE_VERSION = 9
 BOARD_COLOUR_KEY = "session/boardColour"
 RATSNEST_KEY = "session/showRatsnest"
 RULERS_KEY = "session/showRulers"
@@ -4628,6 +4631,10 @@ class MainWindow(QMainWindow):
             dock.visibilityChanged.connect(
                 lambda visible, dock=dock: self._make_room(dock) if visible else None
             )
+            # All four open from the start now, so the last one shut can be the 3D view or
+            # the guide, whose own handlers did not ask whether anything was left open:
+            # the window stood blank without the hint that says how to get a view back.
+            dock.visibilityChanged.connect(lambda _visible: self._sync_central_hint())
             # Opened rather than merely uncovered: the switch is checked only by opening.
             dock.toggleViewAction().toggled.connect(
                 lambda opened, dock=dock: self._on_view_opened(dock) if opened else None
@@ -4642,10 +4649,9 @@ class MainWindow(QMainWindow):
             dock.dockLocationChanged.connect(lambda _where: self._sync_dock_titlebars())
             dock.topLevelChanged.connect(lambda _floating: self._sync_dock_titlebars())
         self._build_menu()
-        self._build_toolbar()
+        self._build_canvas_tools()
         self._build_header()
         self._build_status_bar()
-        self._sync_toolbars_to_view()
         # What F1 and What's This say about each panel and tool (ui/helpcards.py).
         helpcards.install(self, self._help_action)
 
@@ -4795,9 +4801,7 @@ class MainWindow(QMainWindow):
         strip.setContentsMargins(0, 0, 0, 0)
         # Flush with the header around it: styled by name in the one stylesheet.
         strip.addWidget(self.header)
-        # Above the tool row, on a row of its own.
-        self.insertToolBar(self.views_toolbar, strip)
-        self.insertToolBarBreak(self.views_toolbar)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, strip)
         self.header_strip = strip
         bar = self.menuBar()
         bar.setFixedHeight(0)
@@ -5035,9 +5039,8 @@ class MainWindow(QMainWindow):
         dock.dockLocationChanged.connect(self._on_view_dock_moved)
         dock.topLevelChanged.connect(self._on_view_dock_moved)
         self.dock_schematic = dock
-        # Shut on start, like the 3D view: side by side, an open sheet is a sheet laid out
-        # again on every edit, and the board is what a window opened on a board is for. It
-        # comes up beside the board when it is asked for, and by itself on an empty design
+        # Opened as a tab behind the board by ``_arrange_docks``, where it is laid out again
+        # only when it comes in front; in front by itself on an empty design
         # (``_open_the_schematic_on_an_empty_design``).
         dock.hide()
 
@@ -5052,7 +5055,6 @@ class MainWindow(QMainWindow):
             else:
                 self._in_front.discard(dock)
         self._sync_central_hint()
-        self._sync_toolbars_to_view()
         if self._schematic_stale and self.schematic_is_showing():
             self._refresh_schematic_panel()
 
@@ -5102,20 +5104,15 @@ class MainWindow(QMainWindow):
     def _arrange_docks(self) -> None:
         """The layout a window opens on the first time, before anyone has rearranged it.
 
-        Parts and nets down the left; the three views of the design -- board, sheet, 3D --
-        side by side in the middle, with the findings under them; the build guide down the
-        right. Everything here is a default that ``restoreState`` overwrites on every later
-        start.
+        Parts and nets down the left; the four views -- board, sheet, 3D, guide -- as tabs
+        over the canvas in the middle, with the findings under them. Everything here is a
+        default that ``restoreState`` overwrites on every later start.
         """
         # EVERY SPLIT BEFORE EVERY TABIFY, and the order is not taste. Qt's
         # splitDockWidget, handed a dock that is already in a tab group, adds the second
         # one to that GROUP instead of splitting -- so a DRC panel asked for underneath the
         # board arrived as a third tab behind it, present, checked and invisible.
-        #
-        # THE GUIDE FIRST, so it is split from the whole column and runs its full height;
-        # the findings are split from the board's half afterwards and stay under the views.
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_drc)
-        self.splitDockWidget(self.dock_board, self.dock_guide, Qt.Orientation.Horizontal)
         # DRC UNDER THE BOARD, NOT ACROSS THE BOTTOM OF THE WINDOW, and that is a layout
         # fact rather than a preference. A window whose central widget is capped to nothing
         # -- which is what gives the panels the whole of it -- hands every leftover pixel of
@@ -5125,14 +5122,26 @@ class MainWindow(QMainWindow):
         # divide their column the way any splitter does. It also puts the findings directly
         # under the thing they are findings about.
         self.splitDockWidget(self.dock_board, self.dock_drc, Qt.Orientation.Vertical)
-        # BOARD, SHEET AND 3D SIDE BY SIDE, never stacked as tabs. Which of the three is
-        # open is the user's; the ones that are share the middle (``_share_the_middle``),
-        # and one opened later takes its place in the row. They were tabs once, and moving
-        # between them was a matter of finding which tab hid which view; before that the 3D
-        # view was split off on its own and opened as a strip 190 px wide, because it is shut
-        # on every start and the opening proportions never reached it.
-        self.splitDockWidget(self.dock_board, self.dock_schematic, Qt.Orientation.Horizontal)
-        self.splitDockWidget(self.dock_schematic, self.dock_3d, Qt.Orientation.Horizontal)
+        # THE FOUR VIEWS AS TABS OVER THE CANVAS, every one of them open, the board in
+        # front. They stood side by side before this, and that cost the board its width
+        # whenever a second view was open; and they were tabs once before that, hidden behind
+        # one another with nothing to say which tab held what, because the tab bar was the
+        # dock area's own, at the bottom. Now the tab bar is on top, every view has its tab
+        # from the first start and its picture on it, and side by side is still one drag of
+        # a tab -- the row shares itself out as it always did (``_share_the_middle``).
+        # Open is not expensive: a view behind a tab fills itself only when it comes in
+        # front, and the 3D view builds nothing until then (``_on_3d_visibility_changed``).
+        # On Reset the Panel Layout, in a window on screen, each view passes through "in
+        # front" as it joins the group -- which the 3D view took as a reason to build VTK's
+        # pipeline, and offscreen to abort the process. ``_arranging_docks`` holds that off.
+        self._arranging_docks = True
+        try:
+            for view in (self.dock_schematic, self.dock_3d, self.dock_guide):
+                view.show()
+                self.tabifyDockWidget(self.dock_board, view)
+            self.dock_board.raise_()
+        finally:
+            self._arranging_docks = False
         # THE PART LIST BEHIND THE NETS, after every split for the reason above. Nets stays in
         # front: it is the panel a board is worked from, and the list is one a person goes
         # to.
@@ -5235,26 +5244,6 @@ class MainWindow(QMainWindow):
     #: the one that says which net a row is -- had no room at all beside Class and Pins.
     SIDE_PANEL_MIN_WIDTH = 240
 
-    _toolbar_text_width: int | None
-    #: Each toolbar button in the order it gives up its words, with the pixels that saves
-    #: and the bar it is on. Measured once, with every button showing its words; see
-    #: ``_fit_toolbar``.
-    _toolbar_savings: list[tuple[QToolButton, int, QToolBar]] | None
-    #: What each bar needs with every word showing, measured with the savings.
-    _toolbar_widths: dict[QToolBar, int]
-
-    def _toolbars(self) -> tuple[QToolBar, ...]:
-        """The two bars of the tool row, left to right."""
-        return (self.views_toolbar, self.board_toolbar)
-
-    def toolbar_button(self, action: QAction) -> QToolButton | None:
-        """The button ``action`` has on whichever of the two bars it is on."""
-        for bar in self._toolbars():
-            button = bar.widgetForAction(action)
-            if isinstance(button, QToolButton):
-                return button
-        return None
-
     def board_is_showing(self) -> bool:
         """Whether the board is in front of the user -- ``schematic_is_showing``'s
         question, and answered the same way, about the other panel."""
@@ -5280,100 +5269,6 @@ class MainWindow(QMainWindow):
         """
         self._in_front.difference_update(self.tabifiedDockWidgets(dock))
         self._in_front.add(dock)
-
-    def _sync_toolbars_to_view(self) -> None:
-        """The board's tools while the board is in front, and not otherwise."""
-        board_bar = getattr(self, "board_toolbar", None)
-        if board_bar is None:
-            return
-        showing = self.board_is_showing()
-        if board_bar.isHidden() == showing:
-            board_bar.setVisible(showing)
-            self._fit_toolbar()
-
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        super().resizeEvent(event)
-        self._fit_toolbar()
-
-    def _toolbar_shedding_order(self) -> tuple[QAction, ...]:
-        """The toolbar's buttons in the order they give up their words, first to last.
-
-        The pictures everybody already reads -- delete, rotate, fit -- go first. The four
-        conductor tools go LAST, because their icons deliberately share one drawing and
-        differ only in what runs between the two pads (see ``_build_toolbar``): without
-        their words, Trace, Spine, Bare and Insulated are four guesses. The views, whose
-        pictures are distinct, go just before them.
-        """
-        return (
-            self.act_delete,
-            self.act_rotate_cw,
-            self.act_fit,
-            self.act_mirror,
-            self.act_flip,
-            self.act_ratsnest,
-            self.act_new_net,
-            self.act_connect,
-            self.act_autoplace,
-            self.act_autoroute,
-            self.act_guide_panel,
-            self.act_3d,
-            self.act_schematic,
-            self.act_board_panel,
-            self.act_draw["top-jumper"],
-            self.act_draw["insulated-wire"],
-            self.act_draw["bare-wire"],
-            self.act_draw["solder-trace-wired"],
-            self.act_draw["solder-trace"],
-        )
-
-    def _fit_toolbar(self) -> None:
-        """Words under the icons while they fit -- and when they do not, one button at a
-        time gives its words up, the most familiar picture first.
-
-        With its words the toolbar is wider than a laptop screen, so at 1280 px Ratsnest,
-        Fit and the Board, Schematic and 3D buttons went behind the overflow arrow -- the
-        view switches, of all things. The answer then was all the words or none, and the
-        toolbar needs 1536 px with them in English and 1624 in Turkish: on a 1920 screen at
-        125 % a Turkish window lost every word to be 90 px short, and Trace, Spine, Bare and
-        Insulated became four identical pictures. Now it sheds only what it must, in
-        ``_toolbar_shedding_order``. Every button keeps its name in its tooltip.
-        """
-        if getattr(self, "views_toolbar", None) is None:
-            return
-        bars = self._toolbars()
-        with_words = Qt.ToolButtonStyle.ToolButtonTextUnderIcon
-        icon_only = Qt.ToolButtonStyle.ToolButtonIconOnly
-        if self._toolbar_savings is None:
-            if any(bar.toolButtonStyle() != with_words for bar in bars):
-                return
-            self._toolbar_widths = {bar: bar.sizeHint().width() for bar in bars}
-            savings: list[tuple[QToolButton, int, QToolBar]] = []
-            for action in self._toolbar_shedding_order():
-                for bar in bars:
-                    button = bar.widgetForAction(action)
-                    if isinstance(button, QToolButton):
-                        break
-                else:
-                    continue
-                wide = button.sizeHint().width()
-                button.setToolButtonStyle(icon_only)
-                savings.append((button, max(0, wide - button.sizeHint().width()), bar))
-                button.setToolButtonStyle(with_words)
-            self._toolbar_savings = savings
-        # The row as it is now: the board's bar counts only while it is up, which is why
-        # the sheet in front gives the other two bars their words back.
-        showing = [bar for bar in bars if not bar.isHidden()]
-        self._toolbar_text_width = sum(self._toolbar_widths[bar] for bar in showing)
-        # Per button, never the bar's own style: setting that re-styles every button.
-        short_by = self._toolbar_text_width - self.width()
-        for button, saved, bar in self._toolbar_savings:
-            if bar.isHidden():
-                continue
-            wanted = icon_only if short_by > 0 else with_words
-            if button.toolButtonStyle() != wanted:
-                button.setToolButtonStyle(wanted)
-            if wanted == icon_only:
-                short_by -= saved
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
@@ -5443,6 +5338,8 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_3d)
         self.dock_3d.setMinimumWidth(280)
         self.dock_3d.hide()
+        #: True while ``_arrange_docks`` puts the views into their group (see there).
+        self._arranging_docks = False
         self.dock_3d.visibilityChanged.connect(self._on_3d_visibility_changed)
 
     def _on_3d_visibility_changed(self, visible: bool) -> None:
@@ -5451,7 +5348,10 @@ class MainWindow(QMainWindow):
             self._note_in_front(self.dock_3d)
         else:
             self._in_front.discard(self.dock_3d)
-        if visible:
+        # Never while the panels are being arranged: the 3D view passes through "in front"
+        # on its way into the views' tab group, and in a window on screen that was enough
+        # to build VTK's pipeline for a board nobody had asked to see in 3D.
+        if visible and not self._arranging_docks:
             if self.vtk_widget is None:
                 self._create_3d_widget()
             elif self._3d_stale:
@@ -6341,7 +6241,7 @@ class MainWindow(QMainWindow):
                "ends.")),
             ("insulated-wire", "&Insulated Wire", "Shift+W",
              t("May cross anything, at the cost of stripping it. Click both ends.")),
-            ("top-jumper", "&Jumper Over the Parts", "",
+            ("top-jumper", "&Jumper Over the Parts", "J",
              t("An insulated wire on the parts' side, hopping over everything below. It "
                "takes room the parts would use.")),
         ):
@@ -6375,6 +6275,18 @@ class MainWindow(QMainWindow):
             t("Leave any board mode: placing a part, drawing a conductor, connecting pins.")
         )
         act_stop_draw.triggered.connect(self.on_stop_tool)
+        # The pointer, as a tool among the tools on the board (``_build_canvas_tools``):
+        # lit while no other is armed, and pressing it is pressing Escape. No key of its
+        # own -- Escape is the line above's, and a second action on it would make the key
+        # ambiguous, which Qt answers by firing neither.
+        self.act_select_tool = QAction(icons.icon("arrow"), t("Select"), self)
+        self.act_select_tool.setCheckable(True)
+        self.act_select_tool.setChecked(True)
+        self.act_select_tool.setToolTip(
+            t("Select and move parts. Escape comes back to it from any tool.")
+        )
+        self.act_select_tool.triggered.connect(lambda _checked=False: self.on_stop_tool())
+        self.act_select_tool.triggered.connect(lambda _checked=False: self._sync_select_tool())
 
         place_menu = menu.addMenu(t("&Place"))
         place_menu.setToolTipsVisible(True)
@@ -6590,12 +6502,12 @@ class MainWindow(QMainWindow):
         self.act_fit = act_fit
         act_fit.setShortcut(QKeySequence("Ctrl+0"))
         act_fit.triggered.connect(self.on_fit)
-        act_zoom_in = view_menu.addAction(t("Zoom &In"))
-        act_zoom_in.setShortcut(QKeySequence.StandardKey.ZoomIn)
-        act_zoom_in.triggered.connect(lambda: self.on_zoom(1.25))
-        act_zoom_out = view_menu.addAction(t("Zoom &Out"))
-        act_zoom_out.setShortcut(QKeySequence.StandardKey.ZoomOut)
-        act_zoom_out.triggered.connect(lambda: self.on_zoom(1 / 1.25))
+        self.act_zoom_in = view_menu.addAction(t("Zoom &In"))
+        self.act_zoom_in.setShortcut(QKeySequence.StandardKey.ZoomIn)
+        self.act_zoom_in.triggered.connect(lambda: self.on_zoom(1.25))
+        self.act_zoom_out = view_menu.addAction(t("Zoom &Out"))
+        self.act_zoom_out.setShortcut(QKeySequence.StandardKey.ZoomOut)
+        self.act_zoom_out.triggered.connect(lambda: self.on_zoom(1 / 1.25))
         # THE WAY OUT FOR WHOEVER THE WHEEL RULE GETS WRONG. A trackpad is recognised only by
         # what only a trackpad sends (``canvasinput``), and on Windows it sends nothing of
         # the kind -- so there two fingers zoom like a wheel unless this says otherwise.
@@ -6923,127 +6835,42 @@ class MainWindow(QMainWindow):
         act_about = help_menu.addAction(t("&About Perfboard Studio"))
         act_about.triggered.connect(self.on_about)
 
-    def _build_toolbar(self) -> None:
-        """Every tool, on the bar, with a picture and its name under it.
+    def _build_canvas_tools(self) -> None:
+        """The board's tools on the board, and how it is looked at in its corner.
 
-        This replaced a row of words. Words are precise, and they are also a row of eleven
-        identical grey rectangles you have to read left to right every time -- so the tools
-        were being hunted for in the menus instead, which is the thing a toolbar exists to
-        prevent. The icons are drawn in ``icons.py`` and the label stays underneath each
-        one: a picture alone would make the specific actions ("flip to the solder side",
-        "route only the selected nets") into guesses.
+        They were a toolbar row across the window -- fifteen buttons with their names under
+        them, wider than a laptop screen, that came and went with the board panel and
+        offered the board's Rotate while the sheet was the thing in front. On the canvas a
+        tool is where it acts, and the row and every rule about when it shows are gone
+        (``ui/canvastools.py`` says why tools and view are two bars).
 
-        The four conductor icons deliberately share one drawing and differ only in what
-        runs between the two pads, because that difference IS the application.
+        Down the left: the pointer, Connect, the solder tools and the wire tools as two
+        groups (one button each, the rest behind it), Cut Strip on a stripboard only, and
+        Measure. In the bottom-right corner: Show (what is drawn), Flip, zoom and Fit. Each
+        button IS its menu action, so a key, a menu and a button can never disagree about
+        whether a tool is armed.
         """
-        # TWO BARS IN ONE ROW, so the second can go: the views, and the BOARD's tools.
-        # (Save, undo and redo were a third, and are in the header.) With the sheet in front, a row of
-        # solder-trace and jumper tools, and a Rotate and a Mirror that turned whatever was
-        # selected on the board rather than on the sheet (which has its own), was thirteen
-        # buttons that did nothing to what was on screen -- or did it somewhere else.
-        # ``_sync_toolbars_to_view`` shows the board's bar only while the board is.
-        def new_bar(title: str, name: str) -> QToolBar:
-            made = QToolBar(title)
-            # Named for the same reason the docks are: restoreState puts an unnamed
-            # toolbar back wherever it likes.
-            made.setObjectName(name)
-            made.setMovable(False)
-            made.setIconSize(QSize(icons.SIZE, icons.SIZE))
-            made.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-            # Out of the toolbar area's right-click menu: which bar shows is the view's
-            # decision, and one put away by hand would stay away after the board came back.
-            made.toggleViewAction().setVisible(False)
-            self.addToolBar(made)
-            return made
-
-        views_bar = new_bar("Views", "viewsToolbar")
-        self.views_toolbar = views_bar
-        board_bar = new_bar("Board", "boardToolbar")
-        self.board_toolbar = board_bar
-        #: What the toolbar needs with its words under the icons. Measured the first time
-        #: the window is laid out, in the mode it was built in -- before that it has no
-        #: buttons to measure -- and only once, because the answer depends on the language
-        #: and the font and neither changes while the window is up.
-        self._toolbar_text_width = None
-        self._toolbar_savings = None
-
-        # Short labels for the BUTTONS only. Qt draws an action's iconText on a toolbar and
-        # its text in a menu, so "Autoroute All Nets" stays exact where there is room for
-        # it and the button says "Autoroute" -- without which sixteen tools at full menu
-        # length run off the end of a 1600 px window and half of them end up behind the
-        # overflow arrow, which is where the menus already were.
-        for action, short in (
-            (self.act_connect, t("Connect")),
-            (self.act_new_net, t("New Net")),
-            (self.act_draw["solder-trace"], t("Solder Trace")),
-            (self.act_draw["solder-trace-wired"], t("Reinforced")),
-            (self.act_draw["bare-wire"], t("Bare Wire")),
-            (self.act_draw["insulated-wire"], t("Insulated")),
-            (self.act_draw["top-jumper"], t("Jumper")),
-            (self.act_autoplace, t("Rearrange")),
-            (self.act_autoroute, t("Auto-wire")),
-            (self.act_rotate_cw, t("Rotate")),
-            (self.act_mirror, t("Mirror")),
-            (self.act_delete, t("Delete")),
-            (self.act_flip, t("Flip")),
-            (self.act_ratsnest, t("Missing")),
-            (self.act_board_panel, t("Board")),
-            (self.act_schematic, t("Schematic")),
-            (self.act_3d, t("3D")),
-            (self.act_guide_panel, t("Guide")),
-            (self.act_fit, t("Fit")),
-        ):
-            action.setIconText(short)
-
-        # The document, then what makes a circuit, then what turns it into a board, then
-        # how you look at it. Grouped in the order a board is actually built.
-        # In the header, and in the menus with the same pictures.
+        # The pictures every menu entry and button shares. A toolbar that teaches one icon
+        # and a menu that shows another teaches nothing.
         self.act_save.setIcon(icons.icon("save"))
         self.act_undo.setIcon(icons.icon("undo"))
         self.act_redo.setIcon(icons.icon("redo"))
-
-        # The netlist, which had been the hardest thing in the application to reach: two
-        # levels of menu, then a dialog, before a single pin could be joined to anything.
         self.act_connect.setIcon(icons.icon("connect"))
         self.act_new_net.setIcon(icons.icon("new-net"))
-        board_bar.addAction(self.act_connect)
-        board_bar.addAction(self.act_new_net)
-
-        board_bar.addSeparator()
         for kind in ("solder-trace", "solder-trace-wired", "bare-wire", "insulated-wire",
                      "top-jumper"):
             self.act_draw[kind].setIcon(icons.icon(kind))
-            board_bar.addAction(self.act_draw[kind])
-
-        board_bar.addSeparator()
         self.act_autoplace.setIcon(icons.icon("autoplace"))
         self.act_autoroute.setIcon(icons.icon("autoroute"))
-        board_bar.addAction(self.act_autoplace)
-        board_bar.addAction(self.act_autoroute)
-
-        board_bar.addSeparator()
         self.act_rotate_cw.setIcon(icons.icon("rotate"))
         self.act_mirror.setIcon(icons.icon("mirror"))
         self.act_delete.setIcon(icons.icon("delete"))
-        board_bar.addAction(self.act_rotate_cw)
-        board_bar.addAction(self.act_mirror)
-        board_bar.addAction(self.act_delete)
-
-        board_bar.addSeparator()
         self.act_flip.setIcon(icons.icon("flip"))
         self.act_ratsnest.setIcon(icons.icon("ratsnest"))
         self.act_fit.setIcon(icons.icon("fit"))
-        board_bar.addAction(self.act_flip)
-        board_bar.addAction(self.act_ratsnest)
-        board_bar.addAction(self.act_fit)
-
-        # THE VIEWS, FIRST AND TOGETHER, as switches: each opens or closes its panel and
-        # is lit while it is open. They were at the far end of the row, where they read as
-        # one more tool rather than as what is on screen, and they could not be switches
-        # while the views were stacked -- open is not in front there, so with the board and
-        # the sheet in one group both were lit and pressing Board closed the board. Side by
-        # side, open IS on screen. Ctrl+1-4 and the View menu's Show entries still only
-        # ever bring a view forward.
+        self.act_measure.setIcon(icons.icon("measure"))
+        self.act_zoom_in.setIcon(icons.icon("zoom-in"))
+        self.act_zoom_out.setIcon(icons.icon("zoom-out"))
         self.act_show_board.setIcon(icons.icon("board"))
         self.act_show_schematic.setIcon(icons.icon("schematic"))
         self.act_show_3d.setIcon(icons.icon("3d"))
@@ -7055,12 +6882,58 @@ class MainWindow(QMainWindow):
             (self.act_guide_panel, "guide"),
         ):
             toggle.setIcon(icons.icon(picture))
-            views_bar.addAction(toggle)
-
-        # The menu entries carry the same pictures. A toolbar that teaches one icon and a
-        # menu that shows another teaches nothing.
+        # The view tabs say which view they are with the same pictures.
+        for dock, picture in (
+            (self.dock_board, "board"),
+            (self.dock_schematic, "schematic"),
+            (self.dock_3d, "3d"),
+            (self.dock_guide, "guide"),
+        ):
+            dock.setWindowIcon(icons.icon(picture))
         self.act_import.setIcon(icons.icon("import"))
         self.act_guide.setIcon(icons.icon("guide"))
+
+        tools = FloatingBar(self.view, Qt.Corner.TopLeftCorner, vertical=True, name="boardTools")
+        tools.add_action(self.act_select_tool)
+        tools.add_action(self.act_connect)
+        tools.add_separator()
+        pictures = {self.act_draw[kind]: icons.icon(kind) for kind in self.act_draw}
+        self.solder_tools = tools.add_group(
+            [self.act_draw["solder-trace"], self.act_draw["solder-trace-wired"]], pictures
+        )
+        self.wire_tools = tools.add_group(
+            [self.act_draw["bare-wire"], self.act_draw["insulated-wire"],
+             self.act_draw["top-jumper"]],
+            pictures,
+        )
+        # Only where there is a strip to cut: on any other board it is a disabled button
+        # for a tool that cannot apply, which is clutter rather than information.
+        self.act_cut.setIcon(icons.icon("cut-strip"))
+        self.cut_tool = tools.add_action(self.act_cut, only_when_enabled=True)
+        tools.add_separator()
+        tools.add_action(self.act_measure)
+        self.board_tools = tools
+
+        shown = QMenu(self)
+        shown.setToolTipsVisible(True)
+        for toggle in (
+            self.act_ratsnest, self.act_rulers, self.act_pin_names, self.act_values,
+            self.act_board_labels, self.act_hatch,
+        ):
+            shown.addAction(toggle)
+        # Kept by the window, and NOT among ``_menus``: those are walked for shortcuts and
+        # accelerators, and every action here is the View menu's own.
+        self.menu_show = shown
+        view = FloatingBar(self.view, Qt.Corner.BottomRightCorner, vertical=False, name="boardView")
+        view.add_menu(icons.icon("show"), shown, t("What the board shows: the connections still "
+                                                  "missing, hole addresses, pin names, values."),
+                      t("Show"))
+        view.add_action(self.act_flip)
+        view.add_separator()
+        view.add_action(self.act_zoom_out)
+        view.add_action(self.act_zoom_in)
+        view.add_action(self.act_fit)
+        self.board_view_tools = view
 
     def _build_library_dock(self) -> None:
         """The footprint registry, with a filter box, arming placement on selection.
@@ -7275,6 +7148,11 @@ class MainWindow(QMainWindow):
     # indistinguishable from an application that has stopped responding to clicks, and it
     # is the state in which every click means something other than what it usually means.
 
+    def _sync_select_tool(self) -> None:
+        """The pointer on the board's tools is lit exactly when no tool is armed."""
+        if hasattr(self, "act_select_tool"):
+            self.act_select_tool.setChecked(not self.scene.in_a_mode)
+
     def _refresh_mode_banner(self) -> None:
         """Put the armed mode over the board, or take the banner away.
 
@@ -7283,6 +7161,7 @@ class MainWindow(QMainWindow):
         """
         text = self._mode_text()
         self.view.show_mode(text)
+        self._sync_select_tool()
         # The cursor says it too. Only placing changed it, so drawing, connecting, cutting
         # and measuring all left the ordinary arrow over a board where a click no longer
         # selected anything.
@@ -7897,12 +7776,14 @@ class MainWindow(QMainWindow):
         dock.show()
         dock.raise_()
         self._note_in_front(dock)
+        # Filled now, in front, for a window with no visibility signals to fill it on.
+        if dock is self.dock_guide and self._guide_stale:
+            self._refresh_guide_panel()
         if dock.isFloating():
             dock.activateWindow()
         # Said here as well as from the signal: Qt emits visibilityChanged only for a
         # window that is on screen, and a headless run has none.
         self._sync_central_hint()
-        self._sync_toolbars_to_view()
 
     def schematic_is_showing(self) -> bool:
         """Whether the sheet is in front of the user.
@@ -9175,6 +9056,14 @@ class MainWindow(QMainWindow):
         dock.visibilityChanged.connect(self._on_guide_visibility_changed)
 
     def _on_guide_visibility_changed(self, visible: bool) -> None:
+        # Which of the views' tab group is in front, as the board, the sheet and the 3D view
+        # record it. Standing apart, the guide was in front whenever it was open; as a tab
+        # it is in front only when Qt says so, and without this the Next button went on
+        # offering to open the guide that was already showing.
+        if visible:
+            self._note_in_front(self.dock_guide)
+        else:
+            self._in_front.discard(self.dock_guide)
         if visible and self._guide_stale:
             self._refresh_guide_panel()
         # The Next button's last step depends on whether the guide is in front.
@@ -9187,11 +9076,13 @@ class MainWindow(QMainWindow):
         step after it, so the step at the index you were on is a different step -- and a
         panel that silently moved your place would be worse than one that lost it.
         """
-        # isHidden(), never isVisible(): a widget is "visible" only once every ancestor
-        # is too, so during construction -- and in any headless run -- a dock that has
-        # been shown is not yet visible, and the panel would refuse to fill itself while
-        # sitting open in front of the user. The same trap as BoardView._place_overlays.
-        if not hasattr(self, "guide_tree") or self.dock_guide.isHidden():
+        # In front, never isVisible(): a widget is "visible" only once every ancestor is
+        # too, so during construction -- and in any headless run -- a dock that has been
+        # shown is not yet visible, and the panel would refuse to fill itself while sitting
+        # open in front of the user. The same trap as BoardView._place_overlays. And not
+        # merely open: as a tab behind the board it is open and nobody can see it, and
+        # filling it there ran DRC and LVS on every edit for nothing.
+        if not hasattr(self, "guide_tree") or not self._is_in_front(self.dock_guide):
             self._guide_stale = True
             return
         self._guide_stale = False
@@ -13879,12 +13770,13 @@ class MainWindow(QMainWindow):
         state = settings.value(WINDOW_STATE_KEY)
         if state is not None:
             self._restored_layout = self.restoreState(state, WINDOW_STATE_VERSION)
-        # ...and then shut the 3D panel regardless of how it was left. Restoring it open
-        # would build VTK's whole pipeline during startup -- an OpenGL context and a few
-        # thousand actors -- to show a board the user has not looked at yet. Its SIZE and
-        # position come back with the rest of the state, so opening it lands where they
-        # put it. See _build_3d_dock for the three costs this avoids.
-        self.dock_3d.hide()
+        # ...and then never with the 3D panel in FRONT. Restoring it in front would build
+        # VTK's whole pipeline during startup -- an OpenGL context and a few thousand
+        # actors -- to show a board the user has not looked at yet (see _build_3d_dock for
+        # the three costs). Behind another view's tab it costs nothing until it is clicked,
+        # so a 3D view left as a tab keeps its tab and goes behind; one left on its own,
+        # where it would be in front by definition, is shut as it always was.
+        self._keep_3d_behind()
         # A saved layout from before the board was a panel names no dockBoard, so
         # restoreState leaves it wherever _arrange_docks put it -- which is right -- but a
         # layout saved with it CLOSED would open this application on the hint screen. The
@@ -13900,10 +13792,6 @@ class MainWindow(QMainWindow):
         self._sync_dock_titlebars()
         self._sync_central_hint()
         self._open_the_schematic_on_an_empty_design()
-        # After the panels are where they will be: restoreState brings back whatever
-        # the board's bar was showing when the window closed, and that was a fact about
-        # which panel was in front THEN.
-        self._sync_toolbars_to_view()
 
         colour = settings.value(BOARD_COLOUR_KEY, "")
         if isinstance(colour, str) and colour in self.act_colour:
@@ -13974,14 +13862,25 @@ class MainWindow(QMainWindow):
             dock.show()
         # Shown into its tab group, which can bring it forward over Nets.
         self.dock_nets.raise_()
-        # The three that cost something to fill stay shut, exactly as on a first run.
-        self.dock_schematic.hide()
-        self.dock_3d.hide()
-        self.dock_guide.hide()
+        # The views are tabs again, the board in front (``_arrange_docks``), exactly as on
+        # a first run.
+        self._raise_view(self.dock_board)
         self._apply_default_sizes()
         self._refresh_schematic_float_button()
         self._sync_central_hint()
         self.statusBar().showMessage(t("Panels put back where they started."), 6000)
+
+    def _keep_3d_behind(self) -> None:
+        """The 3D panel never comes back in front at startup (``_restore_session``)."""
+        if self.dock_3d.isHidden():
+            return
+        group = self.tabifiedDockWidgets(self.dock_3d)
+        if self.dock_3d.isFloating() or not group:
+            self.dock_3d.hide()
+            return
+        front = self.dock_board if self.dock_board in group else group[0]
+        front.raise_()
+        self._note_in_front(front)
 
     def _stamped(self, document: PerfDocument) -> PerfDocument:
         """The document as it goes to disk, with the host's timestamp on it.
