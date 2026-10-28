@@ -55,7 +55,8 @@ TURKISH: Mapping[str, str] = {
     "Only a solderless breadboard's layout moves to a solderable one.": "Yalnızca lehimsiz bir breadboard'un yerleşimi lehimlenebilir bir karta taşınır.",
     "The same layout on a solderable breadboard: {parts} part(s) and {wires} wire(s), each on the holes it had.":
         "Aynı yerleşim lehimlenebilir bir breadboard'da: {parts} parça ve {wires} tel, her biri eski deliklerinde.",
-    "{count} part(s) waiting in the design: choose the board they go on.": "Tasarımda {count} parça bekliyor: hangi karta gideceklerini seç.",
+    "{count} part(s) waiting in the design: choose the board they go on.": "Tasarımda {count} parça bekliyor: hangi "
+                                                                           "karta gideceklerini seçin.",
     "&Open…": "&Aç…",
     "&Save": "&Kaydet",
     "Save &As…": "&Farklı Kaydet…",
@@ -75,8 +76,8 @@ TURKISH: Mapping[str, str] = {
     "Export Sc&hematic…": "&Şemayı Dışa Aktar…",
     "Write the circuit as a sheet: SVG to embed or edit, PDF to print, PNG to "
     "paste into a message asking somebody what is wrong with it.": (
-        "Devreyi bir sayfa olarak yaz: gömmek ya da düzenlemek için SVG, basmak için PDF, "
-        "birine neyin yanlış olduğunu sormak üzere mesaja yapıştırmak için PNG."
+        "Devreyi bir sayfa olarak yazın: gömmek ya da düzenlemek için SVG, basmak için "
+        "PDF, birine neyin yanlış olduğunu sormak üzere mesaja yapıştırmak için PNG."
     ),
     "Export 1:1 PDF (component + solder side)…": "1:1 PDF Dışa Aktar (komponent + lehim yüzü)…",
     "Export 3D Snapshot PNG…": "3D Görüntü PNG Dışa Aktar…",
@@ -84,7 +85,7 @@ TURKISH: Mapping[str, str] = {
     "Write the board as solids for a mechanical CAD program: the board with its holes "
     "and every part as the room it takes, named by its reference — to draw the "
     "enclosure round.": (
-        "Kartı mekanik bir CAD programı için katı olarak yaz: delikleriyle kart ve her "
+        "Kartı mekanik bir CAD programı için katı olarak yazın: delikleriyle kart ve her "
         "parça kapladığı hacim olarak, referansıyla adlandırılmış — kutusunu çevresine "
         "çizmek için."
     ),
@@ -112,8 +113,8 @@ TURKISH: Mapping[str, str] = {
     "Join adjacent pads with solder. Orthogonal steps only — solder spans the "
     "0.6 mm gap to the next pad and not the 1.7 mm diagonal one. Click each "
     "pad, then Enter or right-click to finish.": (
-        "Komşu pedleri lehimle birleştirir. Yalnızca düz adımlar — lehim yandaki pede "
-        "olan 0,6 mm boşluğu kapatır, çaprazdaki 1,7 mm boşluğu kapatmaz. Her pede tıkla, "
+        "Komşu pedleri lehimle birleştirir. Yalnızca düz adımlar — lehim yandaki pede olan "
+        "0,6 mm boşluğu kapatır, çaprazdaki 1,7 mm boşluğu kapatmaz. Her pede tıklayın, "
         "bitirmek için Enter veya sağ tık."
     ),
     "A solder trace laid over a tinned wire: about ten times lower resistance, and what a "
@@ -123,10 +124,10 @@ TURKISH: Mapping[str, str] = {
     ),
     "Tinned wire on the solder side. Cannot cross other copper. Click both "
     "ends.": (
-        "Lehim yüzünde kalaylı tel. Başka bakırın üzerinden geçemez. İki ucuna da tıkla."
+        "Lehim yüzünde kalaylı tel. Başka bakırın üzerinden geçemez. İki ucuna da tıklayın."
     ),
     "May cross anything, at the cost of stripping it. Click both ends.": (
-        "Her şeyin üzerinden geçebilir; bedeli uçlarını soymaktır. İki ucuna da tıkla."
+        "Her şeyin üzerinden geçebilir; bedeli uçlarını soymaktır. İki ucuna da tıklayın."
     ),
     "An insulated wire on the parts' side, hopping over everything below. It takes room "
     "the parts would use.": (
@@ -158,7 +159,7 @@ TURKISH: Mapping[str, str] = {
     "Current": "Akım",
     "Voltage": "Gerilim",
     "not stated": "belirtilmedi",
-    "state a voltage": "gerilim belirt",
+    "state a voltage": "gerilim belirtin",
     # -- place and route -----------------------------------------------------
     "&Rearrange Parts": "Parçaları Yeniden &Diz",
     "&Try Another Arrangement": "&Başka Bir Yerleşim Dene",
@@ -202,7 +203,7 @@ TURKISH: Mapping[str, str] = {
     "Fold a component's own leg to a nearby hole first, then solder, then wire. "
     "The cheapest connection there is — no wire to cut, and already soldered "
     "at one end.": (
-        "Önce parçanın kendi bacağını yakındaki bir deliğe bük, sonra lehim, sonra tel. "
+        "Önce parçanın kendi bacağını yakındaki bir deliğe bükün, sonra lehim, sonra tel. "
         "Olabilecek en ucuz bağlantı — kesilecek tel yok, bir ucu zaten lehimli."
     ),
     "Wiring style": "Kablolama tarzı",
@@ -352,9 +353,9 @@ TURKISH: Mapping[str, str] = {
     "A breadboard's edges are its rails, not fingers.": "Breadboard'un kenarlarında parmak değil, raylar var.",
     "cathode is the banded end": "katot, bantlı uçtur",
     "TO-92 legs 1-2-3 left to right, flat face towards you, legs down":
-        "TO-92 bacakları soldan sağa 1-2-3, düz yüz sana dönük, bacaklar aşağıda",
+        "TO-92 bacakları soldan sağa 1-2-3, düz yüz size dönük, bacaklar aşağıda",
     "TO-220 legs 1-2-3 left to right, printed face towards you, tab behind":
-        "TO-220 bacakları soldan sağa 1-2-3, yazılı yüz sana dönük, metal sırt arkada",
+        "TO-220 bacakları soldan sağa 1-2-3, yazılı yüz size dönük, metal sırt arkada",
     "Middle-drag": "Orta tuşla sürükle",
     "Pan the board": "Kartı kaydır",
     "Select &All": "Tü&münü Seç",
@@ -384,15 +385,15 @@ TURKISH: Mapping[str, str] = {
     "Redo": "Yinele:",
     "Nothing to redo": "Yinelenecek bir şey yok",
     "Placing": "Yerleştiriliyor:",
-    "click a hole, Esc cancels": "bir deliğe tıkla, Esc iptal eder",
+    "click a hole, Esc cancels": "bir deliğe tıklayın, Esc iptal eder",
     "Drawing": "Çiziliyor:",
-    "click both ends, Esc cancels": "iki ucu da tıkla, Esc iptal eder",
+    "click both ends, Esc cancels": "iki ucu da tıklayın, Esc iptal eder",
     "click each pad, Enter or right-click finishes, Esc cancels":
-        "her pede tıkla, Enter veya sağ tık bitirir, Esc iptal eder",
+        "her pede tıklayın, Enter veya sağ tık bitirir, Esc iptal eder",
     "Cutting tracks": "Şerit kesiliyor",
-    "click a hole, Esc ends": "bir deliğe tıkla, Esc bitirir",
+    "click a hole, Esc ends": "bir deliğe tıklayın, Esc bitirir",
     "Measuring": "Ölçülüyor",
-    "click two holes": "iki deliğe tıkla",
+    "click two holes": "iki deliğe tıklayın",
     "from": "başlangıç",
     "Esc ends": "Esc bitirir",
     "Adding pins to": "Pin ekleniyor:",
@@ -445,9 +446,9 @@ TURKISH: Mapping[str, str] = {
     "Fit": "Sığdır",
     # -- the connect tool ------------------------------------------------------
     "Connecting": "Bağlanıyor",
-    "click the first pin, Esc cancels": "ilk pine tıkla, Esc iptal eder",
+    "click the first pin, Esc cancels": "ilk pine tıklayın, Esc iptal eder",
     "Connecting from": "Bağlantı başlangıcı:",
-    "click the pin it joins, Esc cancels": "birleşeceği pine tıkla, Esc iptal eder",
+    "click the pin it joins, Esc cancels": "birleşeceği pine tıklayın, Esc iptal eder",
     # -- docks ---------------------------------------------------------------
     "Library": "Kütüphane",
     "Nets": "Netler",
@@ -579,7 +580,7 @@ TURKISH: Mapping[str, str] = {
     "Esc to stop placing.": "yerleştirmeyi bitirmek için Esc.",
     "Cannot place there: {why}": "Oraya yerleştirilemez: {why}",
     "{ref} is only named by a net; edit the net to remove it.": (
-        "{ref} yalnızca bir nette adı geçiyor; kaldırmak için neti düzenle."
+        "{ref} yalnızca bir nette adı geçiyor; kaldırmak için neti düzenleyin."
     ),
     "{count} would not fit": "{count} tanesi sığmadı",
     "Ctrl+R wires it; Ctrl+Shift+A tries another arrangement.": (
@@ -620,9 +621,9 @@ TURKISH: Mapping[str, str] = {
     "Ctrl+Z puts them back.": "Ctrl+Z geri getirir.",
     "Nothing to wire:": "Kablolanacak bir şey yok:",
     "Move or delete whatever is in the way and try again.": (
-        "Yolda ne varsa taşı ya da sil, sonra yeniden dene."
+        "Yolda ne varsa taşıyın ya da silin, sonra yeniden deneyin."
     ),
-    "From {pin} — click the pin it joins.": "{pin} pininden — birleşeceği pine tıkla.",
+    "From {pin} — click the pin it joins.": "{pin} pininden — birleşeceği pine tıklayın.",
     "Could not write the guide: {err}": "Rehber yazılamadı: {err}",
     "{name} and {count} more": "{name} ve {count} dosya daha",
     "Written to {folder}, with {count} thing(s) it could not cover:": (
@@ -733,7 +734,7 @@ TURKISH: Mapping[str, str] = {
     "error": "hata",
     "warning": "uyarı",
     "Design rules checked in {ms} ms. Click to see the findings.": (
-        "Tasarım kuralları {ms} ms'de denetlendi. Bulguları görmek için tıkla."
+        "Tasarım kuralları {ms} ms'de denetlendi. Bulguları görmek için tıklayın."
     ),
     "Export 1:1 PDF": "1:1 PDF Dışa Aktar",
     "Export 1:1 PDF — the solder side is written beside it": (
@@ -756,7 +757,7 @@ TURKISH: Mapping[str, str] = {
         "Yeni, adsız bir kart olarak açılır: Kaydet, kopyanın nereye gideceğini sorar."
     ),
     "Opened the example {name}. Save keeps a copy of your own.": (
-        "{name} örneği açıldı. Kaydet, kendi kopyanı saklar."
+        "{name} örneği açıldı. Kaydet, kendi kopyanızı saklar."
     ),
     "Drawing step {done} of {total}…": "{total} adımın {done}. adımı çiziliyor…",
     "Skip the Pictures": "Görselleri Atla",
@@ -781,7 +782,7 @@ TURKISH: Mapping[str, str] = {
     "About Perfboard Studio": "Perfboard Studio Hakkında",
     # -- status bar ----------------------------------------------------------
     "hole": "delik",
-    "component side": "komponent yüzü",
+    "component side": "parça yüzü",
     "solder side": "lehim yüzü",
     "mirrored": "aynalanmış",
     # -- a part's own properties ----------------------------------------------
@@ -793,8 +794,8 @@ TURKISH: Mapping[str, str] = {
     ),
     "Saved with the board, shown when the pointer rests on the part, and printed at its "
     "step in the build guide.": (
-        "Kartla birlikte kaydedilir; imleç parçanın üzerinde durunca görünür ve yapım "
-        "kılavuzunda o parçanın adımına yazılır."
+        "Kartla birlikte kaydedilir; imleç parçanın üzerinde durunca görünür ve montaj "
+        "rehberinde o parçanın adımına yazılır."
     ),
     "Reference": "Referans",
     "Value": "Değer",
@@ -822,12 +823,12 @@ TURKISH: Mapping[str, str] = {
         "daha geniş açıklıklı bir direnç. Netleri kalır."
     ),
     "Locked: a new package would move its pins. Unlock it first.": (
-        "Kilitli: yeni bir gövde pinlerini kaydırır. Önce kilidini aç."
+        "Kilitli: yeni bir gövde pinlerini kaydırır. Önce kilidini açın."
     ),
     "{ref} is locked, and a new package would move its pins. Unlock it first (Toggle "
     "Lock).": (
-        "{ref} kilitli ve yeni bir gövde pinlerini kaydırır. Önce kilidini aç "
-        "(Kilidi Aç/Kapat)."
+        "{ref} kilitli ve yeni bir gövde pinlerini kaydırır. Önce kilidini açın (Kilidi "
+        "Aç/Kapat)."
     ),
     "Pin 1 stays in {hole}, and every net it is on stays.": (
         "1. pin {hole} deliğinde kalır; bağlı olduğu bütün netler de kalır."
@@ -842,7 +843,7 @@ TURKISH: Mapping[str, str] = {
     ),
     "{ref} is a {part} now.": "{ref} artık bir {part}.",
     "Properties edits one part at a time — select a single part.": (
-        "Özellikler tek seferde tek parçayı düzenler — tek bir parça seç."
+        "Özellikler tek seferde tek parçayı düzenler — tek bir parça seçin."
     ),
     "The part's reference and value. The value is what the build guide's bill "
     "of materials groups on, and nothing else in the window can set it.": (
@@ -870,7 +871,7 @@ TURKISH: Mapping[str, str] = {
     "Click a hole to place": "Yerleştirmek için bir deliğe tıkla:",
     "Esc cancels.": "Esc iptal eder.",
     "Pick a part, then click the board. Esc cancels.": (
-        "Bir parça seç, sonra karta tıkla. Esc iptal eder."
+        "Bir parça seçin, sonra karta tıklayın. Esc iptal eder."
     ),
     # -- panel headings --------------------------------------------------------
     "Part": "Parça",
@@ -1007,8 +1008,8 @@ TURKISH: Mapping[str, str] = {
     # the one string that must read the same in every language.
     "Draw the circuit, let the tool arrange it on a board a supplier stocks, "
     "and build it from the guide it writes.": (
-        "Devreyi çiz, aracın onu satılan hazır bir kart üzerine yerleştirmesine izin ver "
-        "ve yazdığı rehbere bakarak kur."
+        "Devreyi çizin, aracın onu satılan hazır bir kart üzerine yerleştirmesine izin "
+        "verin ve yazdığı rehbere bakarak kurun."
     ),
     "New Project…": "Yeni Proje…",
     "A folder for the board and everything generated from it.": (
@@ -1018,7 +1019,7 @@ TURKISH: Mapping[str, str] = {
     "A folder built around one board.": "Tek bir kartın etrafında kurulmuş klasör.",
     "Open a Board…": "Kart Aç…",
     "A single .perf file.": "Tek bir .perf dosyası.",
-    "Where you left off": "Kaldığın yer",
+    "Where you left off": "Kaldığınız yer",
     "Show this when Perfboard Studio starts": "Perfboard Studio açılırken bunu göster",
     "Autosave to the &File": "&Dosyaya Otomatik Kaydet",
     "Write the board to its own file every half minute, keeping the last save "
@@ -1076,7 +1077,7 @@ TURKISH: Mapping[str, str] = {
     "D&uplicate": "&Çoğalt",
     "Another part of the same kind and value, with the next free designator "
     "and no connections of its own.": (
-        "Aynı türden ve aynı değerde bir parça daha; sıradaki boş etiketle ve kendine "
+        "Aynı türden ve aynı değerde bir parça daha; sıradaki boş etiketleyin ve kendine "
         "ait hiçbir bağlantı olmadan."
     ),
     "&Arrange This Symbol": "Bu Sembolü &Düzenle",
@@ -1132,8 +1133,8 @@ TURKISH: Mapping[str, str] = {
     "Name the board and start in the schematic; which board it goes on is the "
     "next step. Makes a folder to keep the board and everything generated from "
     "it.": (
-        "Karta bir ad ver ve şemadan başla; hangi karta gideceği sonraki adımdır. Kartı "
-        "ve ondan üretilen her şeyi bir arada tutacak bir klasör oluşturur."
+        "Karta bir ad verin ve şemadan başlayın; hangi karta gideceği sonraki adımdır. "
+        "Kartı ve ondan üretilen her şeyi bir arada tutacak bir klasör oluşturur."
     ),
     "A blank board with no home on disk yet.": "Diskte henüz bir yeri olmayan boş kart.",
     "Open P&roject…": "P&roje Aç…",
@@ -1158,7 +1159,7 @@ TURKISH: Mapping[str, str] = {
     "Could not make the folder": "Klasör oluşturulamadı",
     "New project in {path}. Draw the circuit; the board it goes on is the next "
     "step, tried with the circuit on it.": (
-        "{path} içinde yeni proje. Devreyi çiz; gideceği kart sonraki adımdır ve devre "
+        "{path} içinde yeni proje. Devreyi çizin; gideceği kart sonraki adımdır ve devre "
         "üzerine yerleştirilerek denenir."
     ),
     "Other Board…": "Başka Kart…",
@@ -1183,9 +1184,10 @@ TURKISH: Mapping[str, str] = {
     "no board view to print from": "basılacak bir kart görünümü yok",
     "the design has no parts to draw yet": "tasarımda henüz çizilecek parça yok",
     "Could not write the download: {error}": "İndirilen dosya yazılamadı: {error}",
-    "50 mm — measure this with a ruler to confirm 1:1": "50 mm — 1:1 olduğunu cetvelle ölçerek doğrula",
+    "50 mm — measure this with a ruler to confirm 1:1": "50 mm — 1:1 olduğunu cetvelle ölçerek "
+                                                        "doğrulayın",
     "SOLDER SIDE (mirrored)": "LEHİM YÜZÜ (aynalı)",
-    "COMPONENT SIDE": "KOMPONENT YÜZÜ",
+    "COMPONENT SIDE": "PARÇA YÜZÜ",
     "printed 1:1": "1:1 basıldı",
     "Everything else is saved. These had nothing to write:\n\n{lines}": (
         "Diğer her şey kaydedildi. Bunların yazacak bir şeyi yoktu:\n\n{lines}"
@@ -1249,7 +1251,7 @@ TURKISH: Mapping[str, str] = {
         "Bu parçayı tasarıma koyar ve sıradakini seçmeye hazırlar. Enter da aynısını yapar."
     ),
     "Added {part}. Choose the next part, or Done.": (
-        "{part} eklendi. Sıradaki parçayı seç ya da Bitti'ye bas."
+        "{part} eklendi. Sıradaki parçayı seçin ya da Bitti'ye basın."
     ),
     "Edit a Part": "Parçayı Düzenle",
     "Filter parts…  (555, BC547, resistor, dip-8)": "Parçaları süz…  (555, BC547, direnç, dip-8)",
@@ -1461,8 +1463,8 @@ TURKISH: Mapping[str, str] = {
     ),
     "Break the strip at a hole. The cut is drilled through the pad, so that hole "
     "has nothing to solder to afterwards — click a cut again to take it back.": (
-        "Şeridi bir delikte koparır. Kesik padin içinden delinir, dolayısıyla o deliğin "
-        "ardından lehimlenecek bir şeyi kalmaz — kesiği geri almak için tekrar tıkla."
+        "Şeridi bir delikte koparır. Kesik pedin içinden delinir, dolayısıyla o deliğin "
+        "ardından lehimlenecek bir şeyi kalmaz — kesiği geri almak için tekrar tıklayın."
     ),
     "Leave any board mode: placing a part, drawing a conductor, connecting pins.": (
         "Hangi kart kipindeysen bırakır: parça yerleştirme, iletken çizme, pin bağlama."
@@ -1479,15 +1481,15 @@ TURKISH: Mapping[str, str] = {
     ),
     "Click one pin, then another. They end up on the same net: an existing one if "
     "either pin is already on it, or a new one named for you if neither is.": (
-        "Bir pine, sonra bir başkasına tıkla. İkisi aynı nete girer: pinlerden biri zaten "
-        "bir netteyse o net, hiçbiri değilse senin için adlandırılan yeni bir net."
+        "Bir pine, sonra bir başkasına tıklayın. İkisi aynı nete girer: pinlerden biri "
+        "zaten bir netteyse o net, hiçbiri değilse sizin için adlandırılan yeni bir net."
     ),
     "Name a net, then click its pins on the board. Nothing here needs KiCad.": (
-        "Bir nete ad ver, sonra pinlerine kart üzerinde tıkla. Burada KiCad gerekmez."
+        "Bir nete ad verin, sonra pinlerine kart üzerinde tıklayın. Burada KiCad gerekmez."
     ),
     "Click each pin that belongs to the selected net. Right-click or Enter "
     "finishes, and the whole session goes on the history as one step.": (
-        "Seçili nete ait her pine tıkla. Sağ tık veya Enter bitirir ve oturumun tamamı "
+        "Seçili nete ait her pine tıklayın. Sağ tık veya Enter bitirir ve oturumun tamamı "
         "geçmişe tek adım olarak geçer."
     ),
     "Name, class, and the current and voltage it carries — which nothing else in "
@@ -1497,7 +1499,7 @@ TURKISH: Mapping[str, str] = {
     ),
     "Take the pins selected in the Nets panel off their net. Expand a net to "
     "see them.": (
-        "Netler panelinde seçili pinleri netlerinden çıkarır. Görmek için neti genişlet."
+        "Netler panelinde seçili pinleri netlerinden çıkarır. Görmek için neti genişletin."
     ),
     "Forget what the net was for. Copper already laid for it stays on the board, and Redo "
     "Wiring and Remove Out-of-Date Wiring leave it alone from then on.": (
@@ -1513,15 +1515,15 @@ TURKISH: Mapping[str, str] = {
     ),
     "Draw conductors on the face you are NOT looking at as hatched, the way a part "
     "on the far side already is. Turn it off to see them solid.": (
-        "Bakmadığın yüzdeki iletkenleri, karşı yüzdeki bir parçanın çizildiği gibi taralı "
-        "çizer. Dolu görmek için kapat."
+        "Bakmadığınız yüzdeki iletkenleri, karşı yüzdeki bir parçanın çizildiği gibi "
+        "taralı çizer. Dolu görmek için kapatın."
     ),
     "Click two holes. Says how many holes across they are, how far apart in mm, "
     "and how many steps of solder trace it would take to join them — three "
     "different numbers that answer three different questions.": (
-        "İki deliğe tıkla. Kaç delik ötede olduklarını, mm cinsinden aralarındaki mesafeyi "
-        "ve birleştirmek için kaç adım lehim yolu gerektiğini söyler — üç ayrı soruyu "
-        "yanıtlayan üç ayrı sayı."
+        "İki deliğe tıklayın. Kaç delik ötede olduklarını, mm cinsinden aralarındaki "
+        "mesafeyi ve birleştirmek için kaç adım lehim yolu gerektiğini söyler — üç ayrı "
+        "soruyu yanıtlayan üç ayrı sayı."
     ),
     "Find a part by reference, value or package and centre the view on it. On a dense "
     "board there is otherwise no way to answer “where is R37”.": (
@@ -1583,19 +1585,19 @@ TURKISH: Mapping[str, str] = {
         "Eskimiş kablolama yok: her parçası hâlâ iddia ettiği neti bağlıyor."
     ),
     "Select a part or a conductor on the board first, then copy it.": (
-        "Önce kart üzerinden bir parça ya da iletken seç, sonra kopyala."
+        "Önce kart üzerinden bir parça ya da iletken seçin, sonra kopyalayın."
     ),
     "Select a part or a conductor on the board first, then duplicate it.": (
-        "Önce kart üzerinden bir parça ya da iletken seç, sonra çoğalt."
+        "Önce kart üzerinden bir parça ya da iletken seçin, sonra çoğaltın."
     ),
     "There is no block on the clipboard. Copy a part or some copper first.": (
-        "Panoda blok yok. Önce bir parça ya da biraz bakır kopyala."
+        "Panoda blok yok. Önce bir parça ya da biraz bakır kopyalayın."
     ),
     "That block does not fit on this board.": "O blok bu karta sığmıyor.",
     "There are no parts on this board yet.": "Bu kartta henüz parça yok.",
     "Click a hole to cut the strip there; click a cut again to take it back. "
     "Esc ends.": (
-        "Şeridi kesmek için bir deliğe tıkla; kesiği geri almak için tekrar tıkla. "
+        "Şeridi kesmek için bir deliğe tıklayın; kesiği geri almak için tekrar tıklayın. "
         "Esc bitirir."
     ),
     "This board has never been saved, so there is nothing on disk to reload.": (
@@ -1603,14 +1605,14 @@ TURKISH: Mapping[str, str] = {
     ),
     "Click a pin, then the pin it joins. Neither on a net yet? One gets made. "
     "Esc cancels.": (
-        "Bir pine, sonra birleşeceği pine tıkla. Hiçbiri bir nette değilse yeni bir net "
+        "Bir pine, sonra birleşeceği pine tıklayın. Hiçbiri bir nette değilse yeni bir net "
         "oluşturulur. Esc iptal eder."
     ),
     "Select the pins to disconnect in the Nets panel — expand a net to see "
     "them.": (
-        "Ayrılacak pinleri Netler panelinden seç — görmek için bir neti genişlet."
+        "Ayrılacak pinleri Netler panelinden seçin — görmek için bir neti genişletin."
     ),
-    "Select one net in the Nets panel first.": "Önce Netler panelinden tek bir net seç.",
+    "Select one net in the Nets panel first.": "Önce Netler panelinden tek bir net seçin.",
     "Opening the 3D view builds it — this takes a moment.": (
         "3D görünümü açmak onu kurar — bu biraz sürer."
     ),
@@ -1638,7 +1640,7 @@ TURKISH: Mapping[str, str] = {
     "The circuit checked: supplies, polarity, NC pins, nets that join nothing. "
     "Click to see the findings.": (
         "Devre denetlendi: beslemeler, kutuplar, NC pinleri, hiçbir şeyi birleştirmeyen "
-        "netler. Bulguları görmek için tıkla."
+        "netler. Bulguları görmek için tıklayın."
     ),
     "DRC {errors} err / {warnings} warn": "DRC {errors} hata / {warnings} uyarı",
     "LVS {matched}/{total} · {opens} open · {shorts} short": (
@@ -1670,13 +1672,14 @@ TURKISH: Mapping[str, str] = {
     "parts": "parça",
     "selected": "seçili",
     # -- the selection verbs, spliced into one sentence -----------------------------
-    "Select a part on the board first, then {what}.": "Önce kartta bir parça seç, sonra {what}.",
-    "rotate it": "döndür",
-    "mirror it": "aynala",
-    "delete it": "sil",
-    "lock or unlock it": "kilitle ya da kilidini aç",
-    "edit its properties": "özelliklerini düzenle",
-    "change it": "değiştir",
+    "Select a part on the board first, then {what}.": "Önce kartta bir parça seçin, sonra "
+                                                      "{what}.",
+    "rotate it": "döndürün",
+    "mirror it": "aynalayın",
+    "delete it": "silin",
+    "lock or unlock it": "kilitleyin ya da kilidini açın",
+    "edit its properties": "özelliklerini düzenleyin",
+    "change it": "değiştirin",
     "{count} refused: {reasons}": "{count} reddedildi: {reasons}",
     "Rotated {count} part(s)": "{count} parça döndürüldü",
     "Mirrored {count} part(s)": "{count} parça aynalandı",
@@ -1774,12 +1777,12 @@ TURKISH: Mapping[str, str] = {
         "FR-4 — cam epoksi, yeşil olan. Isıya iyi dayanır."
     ),
     "FR-2 — phenolic paper (\"pertinaks\"), the brown kind. Pads lift easily.": (
-        "FR-2 — fenolik kâğıt (\"pertinaks\"), kahverengi olan. Padler kolay kalkar."
+        "FR-2 — fenolik kâğıt (\"pertinaks\"), kahverengi olan. Pedler kolay kalkar."
     ),
     "FR-1 — phenolic paper, as FR-2.": "FR-1 — fenolik kâğıt, FR-2 gibi.",
     # -- the file watcher, the planner and the nets ------------------------------------
     "Still planning — cancel it or wait for it before closing.": (
-        "Planlama sürüyor — kapatmadan önce iptal et ya da bitmesini bekle."
+        "Planlama sürüyor — kapatmadan önce iptal edin ya da bitmesini bekleyin."
     ),
     "{name} changed on disk but could not be read: {problem}": (
         "{name} diskte değişti ama okunamadı: {problem}"
@@ -1799,8 +1802,8 @@ TURKISH: Mapping[str, str] = {
     "holes": "delik",
     "{mm:.2f} mm apart": "{mm:.2f} mm arayla",
     "{steps} step(s) by trace": "lehim yoluyla {steps} adım",
-    "Click the first hole.": "İlk deliğe tıkla.",
-    "From {hole} — click the second hole.": "{hole} deliğinden — ikinci deliğe tıkla.",
+    "Click the first hole.": "İlk deliğe tıklayın.",
+    "From {hole} — click the second hole.": "{hole} deliğinden — ikinci deliğe tıklayın.",
     "No component pin at {hole}.": "{hole} deliğinde parça pini yok.",
     "{pin} is already on the list.": "{pin} zaten listede.",
     "{pin} is already on {net}.": "{pin} zaten {net} üzerinde.",
@@ -1808,12 +1811,12 @@ TURKISH: Mapping[str, str] = {
     "be on one net.": (
         "{pin} {net} netine ait. Önce oradan ayır — bir pin yalnızca bir nette olabilir."
     ),
-    "{pin} is already the pin you started from.": "{pin} zaten başladığın pin.",
+    "{pin} is already the pin you started from.": "{pin} zaten başladığınız pin.",
     "{a} and {b} are both already on {net}.": "{a} ve {b} zaten {net} üzerinde.",
     "{a} is on {net_a} and {b} is on {net_b}. Joining two nets is a change to "
     "the circuit — disconnect one of the pins first.": (
         "{a} {net_a} üzerinde, {b} ise {net_b} üzerinde. İki neti birleştirmek devreyi "
-        "değiştirmektir — önce pinlerden birini ayır."
+        "değiştirmektir — önce pinlerden birini ayırın."
     ),
     # -- the sheet -----------------------------------------------------------------------
     "not in the design": "tasarımda yok",
@@ -2704,8 +2707,8 @@ TURKISH: Mapping[str, str] = {
     "{count} part(s) are in the design: {catalog} known from the catalog, {kicad} "
     "matched by their KiCad footprint, {guess} guessed from their reference — check "
     "those. Next: choose a board and place them.": (
-        "{count} parça tasarımda: {catalog} tanesi katalogdan tanındı, {kicad} tanesi KiCad "
-        "ayak izinden eşleşti, {guess} tanesi referansından tahmin edildi — onları "
+        "{count} parça tasarımda: {catalog} tanesi katalogdan tanındı, {kicad} tanesi "
+        "KiCad kılıfından eşleşti, {guess} tanesi referansından tahmin edildi — onları "
         "kontrol edin. Sıradaki: bir kart seçip parçaları yerleştirin."
     ),
     # -- the welcome dialog --------------------------------------------------------
@@ -2726,7 +2729,7 @@ TURKISH: Mapping[str, str] = {
     "{parts} part(s), drawn and not yet placed": "{parts} parça, çizilmiş ama henüz yerleşmemiş",
     # -- the board dialogs' pictures and their one line of numbers -----------------
     "The board as it will be drawn, component side up.": (
-        "Kart, çizileceği hâliyle, bileşen yüzü üstte."
+        "Kart, çizileceği hâliyle, parça yüzü üstte."
     ),
     "{width} × {height} mm ({holes} holes)": "{width} × {height} mm ({holes} delik)",
     "{gap} mm between pads": "pedler arası {gap} mm",
@@ -2869,7 +2872,11 @@ TURKISH: Mapping[str, str] = {
     '... and {count} more': '... ve {count} tane daha',
     '{pin} ({net}) and {pin_b} ({net_b}) share the strip through {hole} and there is no free hole between them to cut. Move one of the parts.': '{pin} ({net}) ile {pin_b} ({net_b}), {hole} deliğinden geçen şeridi paylaşıyor ve aralarında kesilecek boş delik yok. Parçalardan birini taşı.',
     '{pin} ({net}) and {pin_b} ({net_b}) are in one clip, {hole} and {hole_b}: the breadboard joins them and nothing can be cut. Move one of the parts.': '{pin} ({net}) ile {pin_b} ({net_b}) aynı klipste, {hole} ve {hole_b}: breadboard onları birleştiriyor ve hiçbir şey kesilemez. Parçalardan birini taşı.',
-    '{count} pin(s) of {net} could not be found on the board: the part is not placed, its footprint is not in the library, or the netlist names a pin the footprint does not have. Nothing was linked to them.': '{net} netinin {count} pini kartta bulunamadı: parça yerleştirilmemiş, ayak izi kütüphanede yok ya da netlist ayak izinde olmayan bir pin adlandırıyor. Onlara hiçbir şey bağlanmadı.',
+    '{count} pin(s) of {net} could not be found on the board: the part is not placed, its footprint is not in the library, or the netlist names a pin the footprint does not have. Nothing was linked to them.': "{net} netinin {count} pini kartta "
+                                                                                                                                                                                                                 "bulunamadı: parça yerleştirilmemiş, "
+                                                                                                                                                                                                                 "kılıf kütüphanede yok ya da netlist "
+                                                                                                                                                                                                                 "kılıfında olmayan bir pin adlandırıyor. "
+                                                                                                                                                                                                                 "Onlara hiçbir şey bağlanmadı.",
     '{count} part(s) of {net} stand where the breadboard has no hole, so nothing was linked to them. Move them onto the holes.': "{net} netinin {count} parçası breadboard'un deliği olmayan bir yerinde duruyor, bu yüzden onlara hiçbir şey bağlanmadı. Onları deliklerin üzerine taşı.",
     '{pin} is in the {edge} {sign} rail at {hole}, which is for {netclass}, and this is a pin no net declares. Move the part off the rail.': '{pin}, {hole} deliğinde, {edge} {sign} rayında; bu ray {netclass} içindir, bu pin ise hiçbir netin bildirmediği bir pin. Parçayı raydan çıkar.',
     '{pin} is in the {edge} {sign} rail at {hole}, which is for {netclass}, and this is a {netclass_b} net. Move the part off the rail.': '{pin}, {hole} deliğinde, {edge} {sign} rayında; bu ray {netclass} içindir, bu ise bir {netclass_b} neti. Parçayı raydan çıkar.',
@@ -2899,7 +2906,10 @@ TURKISH: Mapping[str, str] = {
     # -- refusals, said where they are shown (engine_text) ---------------------------
     'Move refused: {reason}': 'Taşıma reddedildi: {reason}',
     # -- DRC and LVS findings, said where they are shown (engine_text) --------------
-    '{ref} uses footprint "{footprint_id}", which is not in the library and cannot be generated, so it cannot be drawn or built.': '{ref} "{footprint_id}" ayak izini kullanıyor; bu ayak izi kütüphanede yok ve üretilemiyor, bu yüzden ne çizilebilir ne yapılabilir.',
+    '{ref} uses footprint "{footprint_id}", which is not in the library and cannot be generated, so it cannot be drawn or built.': "{ref} \"{footprint_id}\" kılıfını "
+                                                                                                                                   "kullanıyor; bu kılıf kütüphanede yok ve "
+                                                                                                                                   "üretilemiyor, bu yüzden ne çizilebilir "
+                                                                                                                                   "ne yapılabilir.",
     'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) have overlapping body outlines.': '{ref} ({hole} deliğinde) ile {ref_b} ({hole_b} deliğinde) parçalarının gövdeleri üst üste biniyor.',
     'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) have overlapping bodies.': '{ref} ({hole} deliğinde) ile {ref_b} ({hole_b} deliğinde) parçalarının gövdeleri üst üste biniyor.',
     'Component {ref} (anchored at {hole}) and {ref_b} (anchored at {hole_b}) are {mm} mm apart, closer than the {mm_b} mm body clearance this design asks for.': '{ref} ({hole} deliğinde) ile {ref_b} ({hole_b} deliğinde) arasında {mm} mm var; bu tasarımın istediği {mm_b} mm gövde aralığından az.',
@@ -2908,75 +2918,164 @@ TURKISH: Mapping[str, str] = {
     'Component {ref} (anchored at {hole}) hangs {mm} mm past the {edges} of the board: its pins are in holes but part of its body is over nothing. {advice}': '{ref} ({hole} deliğinde) kartın {edges} {mm} mm taşıyor: pinleri deliklerde ama gövdesinin bir kısmı boşlukta. {advice}',
     'The part is larger than the board in that direction.': 'Parça o yönde karttan büyük.',
     'Moving it {count} hole(s) in from the {edges} clears it; a part overhanging on purpose -- a TO-220 reaching a heatsink off the edge -- can stay.': '{edges} {count} delik içeri almak sorunu çözer; bilerek taşan bir parça -- kart dışındaki soğutucuya uzanan bir TO-220 gibi -- kalabilir.',
-    'Screw terminal {ref} (anchored at {hole}) takes its wires in from the {side}, and {names} {verb} in front of the entries ({ref_b} {mm} mm from them; a wire needs {mm_b} mm clear to go in straight). Turn {ref_c} to face a clear side -- a board edge is best -- or move what is in the way.': '{ref} klemensi ({hole} deliğinde) tellerini {side} taraftan alıyor ve girişlerin önünde {names} {verb} ({ref_b} onlara {mm} mm uzakta; bir telin düz girmesi için {mm_b} mm boşluk gerekir). {ref_c} parçasını boş bir tarafa çevir -- en iyisi kart kenarı -- ya da yoldakini taşı.',
-    'Screw terminal {ref} (anchored at {hole}) stands on the {on} edge{plural} of the board but takes its wires in from the {side}: every wire has to come in from outside and double back over the board to reach it. Turn {ref_b} so its entries face the {edge} edge.': '{ref} klemensi ({hole} deliğinde) kartın {on} kenar{plural} duruyor ama tellerini {side} taraftan alıyor: her tel dışarıdan gelip kartın üstünden geri dönerek ona ulaşmak zorunda. {ref_b} parçasını girişleri {edge} kenara bakacak şekilde çevir.',
+    'Screw terminal {ref} (anchored at {hole}) takes its wires in from the {side}, and {names} {verb} in front of the entries ({ref_b} {mm} mm from them; a wire needs {mm_b} mm clear to go in straight). Turn {ref_c} to face a clear side -- a board edge is best -- or move what is in the way.': "{ref} klemensi ({hole} deliğinde) "
+                                                                                                                                                                                                                                                                                                      "tellerini {side} taraftan alıyor ve "
+                                                                                                                                                                                                                                                                                                      "girişlerin önünde {names} {verb} "
+                                                                                                                                                                                                                                                                                                      "({ref_b} onlara {mm} mm uzakta; bir "
+                                                                                                                                                                                                                                                                                                      "telin düz girmesi için {mm_b} mm boşluk "
+                                                                                                                                                                                                                                                                                                      "gerekir). {ref_c} parçasını boş bir "
+                                                                                                                                                                                                                                                                                                      "tarafa çevirin -- en iyisi kart kenarı "
+                                                                                                                                                                                                                                                                                                      "-- ya da yoldakini taşıyın.",
+    'Screw terminal {ref} (anchored at {hole}) stands on the {on} edge{plural} of the board but takes its wires in from the {side}: every wire has to come in from outside and double back over the board to reach it. Turn {ref_b} so its entries face the {edge} edge.': "{ref} klemensi ({hole} deliğinde) "
+                                                                                                                                                                                                                                                                           "kartın {on} kenar{plural} duruyor ama "
+                                                                                                                                                                                                                                                                           "tellerini {side} taraftan alıyor: her "
+                                                                                                                                                                                                                                                                           "tel dışarıdan gelip kartın üstünden "
+                                                                                                                                                                                                                                                                           "geri dönerek ona ulaşmak zorunda. "
+                                                                                                                                                                                                                                                                           "{ref_b} parçasını girişleri {edge} "
+                                                                                                                                                                                                                                                                           "kenara bakacak şekilde çevirin.",
     'Hole {hole} has more than one component pin landing on it: {names}.': '{hole} deliğine birden fazla parça pini düşüyor: {names}.',
-    '{ref} ({archetype}, at {hole}) sits {mm} mm from {ref_b} ({archetype_b}, at {hole_b}), inside the {mm_b} mm heat clearance. An electrolytic loses roughly half its rated life for every 10 °C it runs hotter — move it, turn the tab away, or expect to replace it.': '{ref} ({archetype}, {hole} deliğinde) {ref_b} parçasına ({archetype_b}, {hole_b} deliğinde) {mm} mm uzakta; {mm_b} mm ısı mesafesinin içinde. Bir elektrolitik her 10 °C daha sıcak çalıştığında ömrünün kabaca yarısını kaybeder — onu taşı, soğutucu sırtını öbür yana çevir ya da değiştirmeyi göze al.',
-    '{ref} ({footprint}, at {hole}) stands {mm} mm above the board, over the {mm_b} mm of clear height this build declares. Lay it down, choose a lower-profile part, or raise the limit if the case turned out to be deeper.': '{ref} ({footprint}, {hole} deliğinde) karttan {mm} mm yükseliyor; bu yapının belirttiği {mm_b} mm boş yüksekliğin üstünde. Yatır, daha alçak bir parça seç ya da kutu daha derin çıktıysa sınırı yükselt.',
-    '{ref} ({mm} mm tall) sits under {ref_b}, whose board is {mm_b} mm up: fit it first; it cannot be reached afterwards without lifting the module.': '{ref} ({mm} mm boyunda) {ref_b} modülünün altında kalıyor ve modülün kartı {mm_b} mm yukarıda: önce onu tak, çünkü sonradan modülü çıkarmadan ona ulaşılamaz.',
+    '{ref} ({archetype}, at {hole}) sits {mm} mm from {ref_b} ({archetype_b}, at {hole_b}), inside the {mm_b} mm heat clearance. An electrolytic loses roughly half its rated life for every 10 °C it runs hotter — move it, turn the tab away, or expect to replace it.': "{ref} ({archetype}, {hole} deliğinde) "
+                                                                                                                                                                                                                                                                           "{ref_b} parçasına ({archetype_b}, "
+                                                                                                                                                                                                                                                                           "{hole_b} deliğinde) {mm} mm uzakta; "
+                                                                                                                                                                                                                                                                           "{mm_b} mm ısı mesafesinin içinde. Bir "
+                                                                                                                                                                                                                                                                           "elektrolitik her 10 °C daha sıcak "
+                                                                                                                                                                                                                                                                           "çalıştığında ömrünün kabaca yarısını "
+                                                                                                                                                                                                                                                                           "kaybeder — onu taşıyın, soğutucu "
+                                                                                                                                                                                                                                                                           "sırtını öbür yana çevirin ya da "
+                                                                                                                                                                                                                                                                           "değiştirmeyi göze alın.",
+    '{ref} ({footprint}, at {hole}) stands {mm} mm above the board, over the {mm_b} mm of clear height this build declares. Lay it down, choose a lower-profile part, or raise the limit if the case turned out to be deeper.': "{ref} ({footprint}, {hole} deliğinde) "
+                                                                                                                                                                                                                                "karttan {mm} mm yükseliyor; bu yapının "
+                                                                                                                                                                                                                                "belirttiği {mm_b} mm boş yüksekliğin "
+                                                                                                                                                                                                                                "üstünde. Yatırın, daha alçak bir parça "
+                                                                                                                                                                                                                                "seçin ya da kutu daha derin çıktıysa "
+                                                                                                                                                                                                                                "sınırı yükseltin.",
+    '{ref} ({mm} mm tall) sits under {ref_b}, whose board is {mm_b} mm up: fit it first; it cannot be reached afterwards without lifting the module.': "{ref} ({mm} mm boyunda) {ref_b} "
+                                                                                                                                                       "modülünün altında kalıyor ve modülün "
+                                                                                                                                                       "kartı {mm_b} mm yukarıda: önce onu "
+                                                                                                                                                       "takın, çünkü sonradan modülü çıkarmadan "
+                                                                                                                                                       "ona ulaşılamaz.",
     '{ref} extends under the {mm} mm screw head of mounting hole {mount} at {hole}. The screw cannot be fitted without pressing on the part.': '{ref}, {hole} deliğindeki {mount} montaj deliğinin {mm} mm vida başının altına uzanıyor. Vida parçaya bastırmadan takılamaz.',
     "Pin {pin_no} of {ref} (net '{net}') is not connected to anything: no conductor touches it and it shares no hole with another pin.": "{ref} parçasının {pin_no}. pini ('{net}' neti) hiçbir şeye bağlı değil: ona hiçbir iletken değmiyor ve başka bir pinle delik paylaşmıyor.",
-    '{ref} pin {pin_no} sits at {hole}, where mounting hole {mount} has removed the pad. There is nothing there to solder to — move the part, or move the mounting hole.': '{ref} pin {pin_no}, {hole} deliğinde; orada {mount} montaj deliği pedi götürmüş. Lehimlenecek bir şey yok — parçayı ya da montaj deliğini taşı.',
-    '{ref} pin {pin_no} sits at {hole}, which is part of edge connector {connector}. A finger is solid copper with no hole through it, so the lead cannot be fitted there — move the part, or shorten the connector.': '{ref} pin {pin_no}, {hole} deliğinde; burası {connector} kenar konnektörünün parçası. Parmak deliksiz düz bakırdır, bacak oraya takılamaz — parçayı taşı ya da konnektörü kısalt.',
-    '{ref} pin {pin_no} is at {hole}, where the breadboard has no hole — move the part onto the holes.': "{ref} pin {pin_no}, {hole} konumunda; breadboard'ın orada deliği yok — parçayı deliklerin üstüne taşı.",
-    '{ref} pin {pin_no} sits at {hole}, where the track has been cut. The cut took the pad with it, so there is nothing there to solder to — move the part, or move the cut.': '{ref} pin {pin_no}, {hole} deliğinde, şeridin kesildiği yerde. Kesim pedi de götürdü, lehimlenecek bir şey yok — parçayı ya da kesimi taşı.',
-    '{ref} pin {pin_no} is in the {rail} {sign} rail at {hole}, which is for {railclass}, and it is on {netwhat}. It works, but the board then says {sign_b} over it — move the part off the rail.': '{ref} pin {pin_no}, {hole} deliğinde, {rail} {sign} rayında; bu ray {railclass} için, pin ise {netwhat}. Çalışır ama kartın üstünde {sign_b} yazar — parçayı raydan çıkar.',
+    '{ref} pin {pin_no} sits at {hole}, where mounting hole {mount} has removed the pad. There is nothing there to solder to — move the part, or move the mounting hole.': "{ref} pin {pin_no}, {hole} deliğinde; "
+                                                                                                                                                                           "orada {mount} montaj deliği pedi "
+                                                                                                                                                                           "götürmüş. Lehimlenecek bir şey yok — "
+                                                                                                                                                                           "parçayı ya da montaj deliğini taşıyın.",
+    '{ref} pin {pin_no} sits at {hole}, which is part of edge connector {connector}. A finger is solid copper with no hole through it, so the lead cannot be fitted there — move the part, or shorten the connector.': "{ref} pin {pin_no}, {hole} deliğinde; "
+                                                                                                                                                                                                                       "burası {connector} kenar konnektörünün "
+                                                                                                                                                                                                                       "parçası. Parmak deliksiz düz bakırdır, "
+                                                                                                                                                                                                                       "bacak oraya takılamaz — parçayı taşıyın "
+                                                                                                                                                                                                                       "ya da konnektörü kısaltın.",
+    '{ref} pin {pin_no} is at {hole}, where the breadboard has no hole — move the part onto the holes.': "{ref} pin {pin_no}, {hole} konumunda; "
+                                                                                                         "breadboard'ın orada deliği yok — "
+                                                                                                         "parçayı deliklerin üstüne taşıyın.",
+    '{ref} pin {pin_no} sits at {hole}, where the track has been cut. The cut took the pad with it, so there is nothing there to solder to — move the part, or move the cut.': "{ref} pin {pin_no}, {hole} deliğinde, "
+                                                                                                                                                                               "şeridin kesildiği yerde. Kesim pedi de "
+                                                                                                                                                                               "götürdü, lehimlenecek bir şey yok — "
+                                                                                                                                                                               "parçayı ya da kesimi taşıyın.",
+    '{ref} pin {pin_no} is in the {rail} {sign} rail at {hole}, which is for {railclass}, and it is on {netwhat}. It works, but the board then says {sign_b} over it — move the part off the rail.': "{ref} pin {pin_no}, {hole} deliğinde, "
+                                                                                                                                                                                                     "{rail} {sign} rayında; bu ray "
+                                                                                                                                                                                                     "{railclass} için, pin ise {netwhat}. "
+                                                                                                                                                                                                     "Çalışır ama kartın üstünde {sign_b} "
+                                                                                                                                                                                                     "yazar — parçayı raydan çıkarın.",
     'Conductor {wire} is {whole} off the board: {count} of its {total} hole(s) fall outside the {cols}x{rows} grid (e.g. {hole}).': '{wire} iletkeni {whole} kartın dışında: {total} deliğinden {count} tanesi {cols}x{rows} ızgaranın dışına düşüyor (ör. {hole}).',
     'Conductor {wire} ({kind}) and conductor {wire_b} ({kind_b}) cross each other near {hole} on the {face} side, between holes rather than at one. Neither kind can cross: on perfboard they would touch and short. Reroute one of them, or make it an insulated wire — which may cross — or let the router lay an insulated hop just over the crossing.': "{wire} ({kind}) ile {wire_b} ({kind_b}) "
                                                                                                                                                                                                                                                                                                                                                             "iletkenleri {hole} yakınında, {face} "
                                                                                                                                                                                                                                                                                                                                                             "üzerinde, bir delikte değil delikler "
                                                                                                                                                                                                                                                                                                                                                             "arasında kesişiyor. İkisi de kesişemez: "
                                                                                                                                                                                                                                                                                                                                                             "perfboard'da birbirine değip kısa devre "
-                                                                                                                                                                                                                                                                                                                                                            "yaparlar. Birini yeniden kablola, "
-                                                                                                                                                                                                                                                                                                                                                            "izoleli tele çevir — o kesişebilir — ya "
-                                                                                                                                                                                                                                                                                                                                                            "da kablolama aracının kesişmenin hemen "
-                                                                                                                                                                                                                                                                                                                                                            "üstüne izoleli bir köprü atmasına izin "
-                                                                                                                                                                                                                                                                                                                                                            "ver.",
+                                                                                                                                                                                                                                                                                                                                                            "yaparlar. Birini yeniden kablolayın, "
+                                                                                                                                                                                                                                                                                                                                                            "izoleli tele çevirin — o kesişebilir — "
+                                                                                                                                                                                                                                                                                                                                                            "ya da kablolama aracının kesişmenin "
+                                                                                                                                                                                                                                                                                                                                                            "hemen üstüne izoleli bir köprü atmasına "
+                                                                                                                                                                                                                                                                                                                                                            "izin verin.",
     'Conductor {wire} ({kind}) and conductor {wire_b} ({kind_b}) both occupy hole {hole} on the {face} side without being part of the same electrical net — this is a physical short. Reroute one of them, or replace it with an insulated conductor that can safely cross.': "{wire} ({kind}) ve {wire_b} ({kind_b}) "
                                                                                                                                                                                                                                                                               "iletkenleri {face} üzerinde aynı {hole} "
                                                                                                                                                                                                                                                                               "deliğini kullanıyor ama aynı elektrik "
                                                                                                                                                                                                                                                                               "netinde değiller — bu fiziksel bir kısa "
-                                                                                                                                                                                                                                                                              "devre. Birini yeniden kablola ya da "
+                                                                                                                                                                                                                                                                              "devre. Birini yeniden kablolayın ya da "
                                                                                                                                                                                                                                                                               "güvenle kesişebilen izoleli bir "
-                                                                                                                                                                                                                                                                              "iletkenle değiştir.",
+                                                                                                                                                                                                                                                                              "iletkenle değiştirin.",
     'Solder trace {wire} has an invalid path: {reason}': '{wire} lehim yolunun güzergâhı geçersiz: {reason}',
-    'Conductor {wire} is a {kind} on the {face} side; on a solderless breadboard nothing is soldered and nothing runs underneath — use a jumper wire.': "{wire} iletkeni {face} üzerinde bir {kind}; lehimsiz breadboard'da hiçbir şey lehimlenmez ve altından bir şey geçmez — bir atlama teli kullan.",
+    'Conductor {wire} is a {kind} on the {face} side; on a solderless breadboard nothing is soldered and nothing runs underneath — use a jumper wire.': "{wire} iletkeni {face} üzerinde bir "
+                                                                                                                                                        "{kind}; lehimsiz breadboard'da hiçbir "
+                                                                                                                                                        "şey lehimlenmez ve altından bir şey "
+                                                                                                                                                        "geçmez — bir atlama teli kullanın.",
     "Pure solder trace {wire} spans {count} pads on {board_material} (phenolic) board — beyond the {limit}-pad threshold. Phenolic pads lift under sustained soldering heat far more readily than FR-4; add a wire spine ('solder-trace-wired') or split the run.": "Saf lehim yolu {wire}, {board_material} "
                                                                                                                                                                                                                                                                     "(pertinaks) kartta {count} ped boyunca "
                                                                                                                                                                                                                                                                     "uzanıyor — {limit} pedlik eşiğin "
                                                                                                                                                                                                                                                                     "ötesinde. Pertinaks pedler uzun süren "
                                                                                                                                                                                                                                                                     "lehim ısısında FR-4'ten çok daha kolay "
-                                                                                                                                                                                                                                                                    "kalkar; telli lehim yoluna çevir "
-                                                                                                                                                                                                                                                                    "('solder-trace-wired') ya da yolu böl.",
+                                                                                                                                                                                                                                                                    "kalkar; telli lehim yoluna çevirin "
+                                                                                                                                                                                                                                                                    "('solder-trace-wired') ya da yolu bölün.",
     "Pure solder trace {wire} spans {count} pads, beyond the {limit}-pad feasibility threshold. Long pure-solder runs are mechanically unreliable and hard to reflow evenly; consider a wire spine ('solder-trace-wired').": "Saf lehim yolu {wire} {count} ped "
                                                                                                                                                                                                                              "boyunca uzanıyor; {limit} pedlik "
                                                                                                                                                                                                                              "uygulanabilirlik eşiğinin ötesinde. "
                                                                                                                                                                                                                              "Uzun saf lehim yolları mekanik olarak "
                                                                                                                                                                                                                              "güvenilmez ve eşit eritilmesi zordur; "
-                                                                                                                                                                                                                             "telli lehim yolunu düşün "
+                                                                                                                                                                                                                             "telli lehim yolunu düşünün "
                                                                                                                                                                                                                              "('solder-trace-wired').",
-    "{wirekind} {wire} is AWG {awg}{why}, {dia} mm of copper, and this board's holes are drilled {drill} mm: its ends will not go through them. Lap-solder it onto the pad faces instead, or bring this current onto the board on a terminal rated for it.": '{wirekind} {wire} AWG {awg}{why}, {dia} mm bakır; bu kartın delikleri {drill} mm delinmiş: uçları deliklerden geçmez. Bunun yerine pedlerin yüzeyine yatırarak lehimle ya da bu akımı karta ona uygun bir klemensle getir.',
-    'Lead bend on {ref} pin {pin_no} spans {count} holes ({hole} to {hole_b}), beyond the {limit}-hole reliability threshold. A long bent lead is mechanically fragile — use a wire instead.': '{ref} pin {pin_no} üzerindeki bacak bükme {count} delik boyunca uzanıyor ({hole}–{hole_b}); {limit} deliklik güvenilirlik eşiğinin ötesinde. Uzun bükülmüş bir bacak mekanik olarak kırılgandır — bunun yerine tel kullan.',
+    "{wirekind} {wire} is AWG {awg}{why}, {dia} mm of copper, and this board's holes are drilled {drill} mm: its ends will not go through them. Lap-solder it onto the pad faces instead, or bring this current onto the board on a terminal rated for it.": "{wirekind} {wire} AWG {awg}{why}, {dia} "
+                                                                                                                                                                                                                                                             "mm bakır; bu kartın delikleri {drill} "
+                                                                                                                                                                                                                                                             "mm delinmiş: uçları deliklerden geçmez. "
+                                                                                                                                                                                                                                                             "Bunun yerine pedlerin yüzeyine "
+                                                                                                                                                                                                                                                             "yatırarak lehimleyin ya da bu akımı "
+                                                                                                                                                                                                                                                             "karta ona uygun bir klemensle getirin.",
+    'Lead bend on {ref} pin {pin_no} spans {count} holes ({hole} to {hole_b}), beyond the {limit}-hole reliability threshold. A long bent lead is mechanically fragile — use a wire instead.': "{ref} pin {pin_no} üzerindeki bacak "
+                                                                                                                                                                                               "bükme {count} delik boyunca uzanıyor "
+                                                                                                                                                                                               "({hole}–{hole_b}); {limit} deliklik "
+                                                                                                                                                                                               "güvenilirlik eşiğinin ötesinde. Uzun "
+                                                                                                                                                                                               "bükülmüş bir bacak mekanik olarak "
+                                                                                                                                                                                               "kırılgandır — bunun yerine tel kullanın.",
     'Conductor {wire} is soldered at {hole}, where mounting hole {mount} has removed the pad.': '{wire} iletkeni {hole} deliğinde lehimli; orada {mount} montaj deliği pedi götürmüş.',
     'Conductor {wire} is soldered at {hole}, which is part of edge connector {connector} and has no hole through it.': '{wire} iletkeni {hole} deliğinde lehimli; burası {connector} kenar konnektörünün parçası ve deliği yok.',
     'Conductor {wire} ends at {hole}, where the breadboard has no hole.': "{wire} iletkeni {hole} konumunda bitiyor; breadboard'ın orada deliği yok.",
     'Conductor {wire} is soldered at {hole}, where the track has been cut and the pad is gone.': '{wire} iletkeni {hole} deliğinde lehimli; orada şerit kesilmiş ve ped yok.',
-    'Top jumper {wire} passes under {ref}, which is {height} and covers {hole}. Solder the jumper before fitting {ref_b}, or the part has to come off to reach it.': "Üst yüz jumper {wire}, {ref} altından geçiyor; o {height} ve {hole} deliğini örtüyor. Jumper'ı {ref_b} takılmadan önce lehimle, yoksa ona ulaşmak için parçayı sökmek gerekir.",
-    '{wirekind} {wire} lies across {hole}, where {soldered} is soldered on another net. The netlist joins a wire only at its ends, but bare copper resting on a solder joint is a short at the bench. Route it clear of {hole_b}, or use insulated wire, which may pass over.': '{wirekind} {wire}, {hole} deliğinin üstünden geçiyor; orada başka bir nette {soldered} lehimli. Netlist bir teli yalnızca uçlarından bağlar ama bir lehim noktasına yaslanan çıplak bakır tezgâhta kısa devredir. Onu {hole_b} deliğinden uzak geçir ya da üstten geçebilen izoleli tel kullan.',
-    'Solder trace {wire} passes through {hole}, whose orthogonal neighbour {hole_b} belongs to a different net (~{mm} mm of copper-to-copper gap {direction} on this board). Dragging solder along the trace risks bridging the two nets — the most common way a perfboard build fails. Verify clearance between {hole_c} and {hole_d} before soldering.': 'Lehim yolu {wire}, {hole} deliğinden geçiyor; dik komşusu {hole_b} başka bir nete ait (bu kartta {direction} bakırdan bakıra ~{mm} mm boşluk). Lehimi yol boyunca sürüklemek iki neti köprüleme riski taşır — perfboard yapımının en sık bozulma yolu. Lehimlemeden önce {hole_c} ile {hole_d} arasındaki boşluğu ölç.',
+    'Top jumper {wire} passes under {ref}, which is {height} and covers {hole}. Solder the jumper before fitting {ref_b}, or the part has to come off to reach it.': "Üst yüz jumper {wire}, {ref} altından "
+                                                                                                                                                                     "geçiyor; o {height} ve {hole} deliğini "
+                                                                                                                                                                     "örtüyor. Jumper'ı {ref_b} takılmadan "
+                                                                                                                                                                     "önce lehimleyin, yoksa ona ulaşmak için "
+                                                                                                                                                                     "parçayı sökmek gerekir.",
+    '{wirekind} {wire} lies across {hole}, where {soldered} is soldered on another net. The netlist joins a wire only at its ends, but bare copper resting on a solder joint is a short at the bench. Route it clear of {hole_b}, or use insulated wire, which may pass over.': "{wirekind} {wire}, {hole} deliğinin "
+                                                                                                                                                                                                                                                                                "üstünden geçiyor; orada başka bir nette "
+                                                                                                                                                                                                                                                                                "{soldered} lehimli. Netlist bir teli "
+                                                                                                                                                                                                                                                                                "yalnızca uçlarından bağlar ama bir "
+                                                                                                                                                                                                                                                                                "lehim noktasına yaslanan çıplak bakır "
+                                                                                                                                                                                                                                                                                "tezgâhta kısa devredir. Onu {hole_b} "
+                                                                                                                                                                                                                                                                                "deliğinden uzak geçir ya da üstten "
+                                                                                                                                                                                                                                                                                "geçebilen izoleli tel kullanın.",
+    'Solder trace {wire} passes through {hole}, whose orthogonal neighbour {hole_b} belongs to a different net (~{mm} mm of copper-to-copper gap {direction} on this board). Dragging solder along the trace risks bridging the two nets — the most common way a perfboard build fails. Verify clearance between {hole_c} and {hole_d} before soldering.': "Lehim yolu {wire}, {hole} deliğinden "
+                                                                                                                                                                                                                                                                                                                                                           "geçiyor; dik komşusu {hole_b} başka bir "
+                                                                                                                                                                                                                                                                                                                                                           "nete ait (bu kartta {direction} "
+                                                                                                                                                                                                                                                                                                                                                           "bakırdan bakıra ~{mm} mm boşluk). "
+                                                                                                                                                                                                                                                                                                                                                           "Lehimi yol boyunca sürüklemek iki neti "
+                                                                                                                                                                                                                                                                                                                                                           "köprüleme riski taşır — perfboard "
+                                                                                                                                                                                                                                                                                                                                                           "yapımının en sık bozulma yolu. "
+                                                                                                                                                                                                                                                                                                                                                           "Lehimlemeden önce {hole_c} ile {hole_d} "
+                                                                                                                                                                                                                                                                                                                                                           "arasındaki boşluğu ölçün.",
     "High voltage: net '{net}' ({volts} V) conductor {wire} runs through {hole}, directly next to {hole_b} on a different net. 2.54 mm hole spacing is near the practical creepage limit above {limit} V — increase clearance (skip a row/column) or reroute before building.": "Yüksek gerilim: '{net}' neti ({volts} "
                                                                                                                                                                                                                                                                                 "V) iletkeni {wire}, {hole} deliğinden "
                                                                                                                                                                                                                                                                                 "geçiyor ve başka bir netteki {hole_b} "
                                                                                                                                                                                                                                                                                 "deliğinin hemen yanında. 2.54 mm delik "
                                                                                                                                                                                                                                                                                 "aralığı {limit} V üstünde pratik yüzey "
-                                                                                                                                                                                                                                                                                "kaçağı sınırına yakın — mesafeyi artır "
-                                                                                                                                                                                                                                                                                "(bir satır ya da sütun atla) ya da "
-                                                                                                                                                                                                                                                                                "yapmadan önce yeniden kablola.",
+                                                                                                                                                                                                                                                                                "kaçağı sınırına yakın — mesafeyi "
+                                                                                                                                                                                                                                                                                "artırın (bir satır ya da sütun atlayın) "
+                                                                                                                                                                                                                                                                                "ya da yapmadan önce yeniden kablolayın.",
     'Conductor(s) {wires} form an isolated island at {holes} with no component pin attached -- likely a stray solder trace, wire or bridge left over from editing.': 'Hiçbir parça pinine bağlı olmayan kopuk bir bakır adası: {wires}, {holes} üzerinde -- büyük olasılıkla düzenlemeden kalmış başıboş bir lehim yolu, tel ya da köprü.',
-    'CRITICAL SHORT (power tied to ground): {where} ties together schematic nets {netnames} -- pins {pins}. This is almost certainly a solder bridge; separate the pads and re-measure isolation before applying power.': 'KRİTİK KISA DEVRE (güç toprağa bağlı): {where} şemadaki {netnames} netlerini birleştiriyor -- pinler {pins}. Bu neredeyse kesinlikle bir lehim köprüsü; gücü vermeden önce pedleri ayır ve yalıtımı yeniden ölç.',
-    'SHORT: {where} ties together schematic nets {netnames} -- pins {pins}. This is almost certainly a solder bridge; separate the pads and re-measure isolation before applying power.': 'KISA DEVRE: {where} şemadaki {netnames} netlerini birleştiriyor -- pinler {pins}. Bu neredeyse kesinlikle bir lehim köprüsü; gücü vermeden önce pedleri ayır ve yalıtımı yeniden ölç.',
+    'CRITICAL SHORT (power tied to ground): {where} ties together schematic nets {netnames} -- pins {pins}. This is almost certainly a solder bridge; separate the pads and re-measure isolation before applying power.': "KRİTİK KISA DEVRE (güç toprağa bağlı): "
+                                                                                                                                                                                                                          "{where} şemadaki {netnames} netlerini "
+                                                                                                                                                                                                                          "birleştiriyor -- pinler {pins}. Bu "
+                                                                                                                                                                                                                          "neredeyse kesinlikle bir lehim köprüsü; "
+                                                                                                                                                                                                                          "gücü vermeden önce pedleri ayırın ve "
+                                                                                                                                                                                                                          "yalıtımı yeniden ölçün.",
+    'SHORT: {where} ties together schematic nets {netnames} -- pins {pins}. This is almost certainly a solder bridge; separate the pads and re-measure isolation before applying power.': "KISA DEVRE: {where} şemadaki {netnames} "
+                                                                                                                                                                                          "netlerini birleştiriyor -- pinler "
+                                                                                                                                                                                          "{pins}. Bu neredeyse kesinlikle bir "
+                                                                                                                                                                                          "lehim köprüsü; gücü vermeden önce "
+                                                                                                                                                                                          "pedleri ayırın ve yalıtımı yeniden "
+                                                                                                                                                                                          "ölçün.",
     "Net '{net}' references pin(s) {pins}, but component(s) {refs} are not placed on the board.": "'{net}' netinin bağlandığı {refs} henüz kartta yerleştirilmedi (pinler: {pins}).",
-    "Net '{net}' references pin(s) {pins} on component(s) {refs}, whose footprint could not be resolved.": "'{net}' netinin bağlandığı {refs} için ayak izi bulunamadı (pinler: {pins}).",
+    "Net '{net}' references pin(s) {pins} on component(s) {refs}, whose footprint could not be resolved.": "'{net}' netinin bağlandığı {refs} için "
+                                                                                                           "kılıf bulunamadı (pinler: {pins}).",
     "Net '{net}' is unrouted: all {count} of its pins are present on the board but none of them are connected to each other yet.": "'{net}' neti henüz kablolanmadı: "
                                                                                                                                    "{count} pininin hepsi kartta ama "
                                                                                                                                    "hiçbiri henüz birbirine bağlı değil.",
@@ -3005,9 +3104,17 @@ TURKISH: Mapping[str, str] = {
     'an unaddressable connection': 'adreslenemeyen bir bağlantı',
     "Net '{net}' declares {amps} A but solder trace {wire} ({buildup} buildup{spine}) has an estimated cross-section of {area} mm² (~{cap} A capacity at {density} A/mm²) — inadequate. Estimated resistance ~{mohm} mΩ over {length} mm, giving a ~{mv} mV drop at rated current.{recommendation}": "'{net}' neti {amps} A bildiriyor ama {wire} lehim yolunun ({buildup}{spine}) tahmini kesiti {area} mm² ({density} A/mm² ile ~{cap} A kapasite) — yetersiz. Tahmini direnç {length} mm boyunca ~{mohm} mΩ; anma akımında ~{mv} mV düşüm demek.{recommendation}",
     "Net '{net}' declares {amps} A but {wirelabel} {wire} {stated} {area} mm² (~{cap} A capacity at {density} A/mm²) — inadequate.{gauge_advice}": "'{net}' neti {amps} A bildiriyor ama {wirelabel} {wire} {stated} {area} mm² ({density} A/mm² ile ~{cap} A kapasite) — yetersiz.{gauge_advice}",
-    'No hookup wire up to AWG {awg} carries that: split it across parallel runs, or bring this current onto the board on a terminal rated for it.': 'AWG {awg} dahil hiçbir bağlantı teli bunu taşımaz: birkaç paralel hatta böl ya da bu akımı karta ona uygun bir klemensle getir.',
-    'Use AWG {awg} or heavier.': 'AWG {awg} ya da daha kalın kullan.',
-    "Use AWG {awg} or heavier. AWG {awg_b} is {dia} mm of copper and will not go through this board's {drill} mm holes, so it has to be lap-soldered onto the pads or the current brought in on a terminal.": 'AWG {awg} ya da daha kalın kullan. AWG {awg_b} {dia} mm bakırdır ve bu kartın {drill} mm deliklerinden geçmez; pedlerin üstüne yatırılarak lehimlenmeli ya da akım bir klemensle getirilmeli.',
+    'No hookup wire up to AWG {awg} carries that: split it across parallel runs, or bring this current onto the board on a terminal rated for it.': "AWG {awg} dahil hiçbir bağlantı teli "
+                                                                                                                                                    "bunu taşımaz: birkaç paralel hatta "
+                                                                                                                                                    "bölün ya da bu akımı karta ona uygun "
+                                                                                                                                                    "bir klemensle getirin.",
+    'Use AWG {awg} or heavier.': "AWG {awg} ya da daha kalın kullanın.",
+    "Use AWG {awg} or heavier. AWG {awg_b} is {dia} mm of copper and will not go through this board's {drill} mm holes, so it has to be lap-soldered onto the pads or the current brought in on a terminal.": "AWG {awg} ya da daha kalın kullanın. "
+                                                                                                                                                                                                              "AWG {awg_b} {dia} mm bakırdır ve bu "
+                                                                                                                                                                                                              "kartın {drill} mm deliklerinden geçmez; "
+                                                                                                                                                                                                              "pedlerin üstüne yatırılarak "
+                                                                                                                                                                                                              "lehimlenmeli ya da akım bir klemensle "
+                                                                                                                                                                                                              "getirilmeli.",
     'light buildup': 'az lehim',
     'normal buildup': 'normal lehim',
     'heavy buildup': 'bol lehim',
@@ -3093,8 +3200,8 @@ TURKISH: Mapping[str, str] = {
     "right": "sağ",
     "top": "üst",
     "bottom": "alt",
-    "paste": "yapıştır",
-    "duplicate": "çoğalt",
+    "paste": "yapıştırın",
+    "duplicate": "çoğaltın",
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}

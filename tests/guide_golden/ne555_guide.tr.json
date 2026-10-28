@@ -309,7 +309,7 @@
     {
       "number": 0,
       "title": "Hazırlık",
-      "summary": "Kartı kes, A1 deliğini işaretle ve havyayı ısıtıp parçaları hazırla.",
+      "summary": "Kartı kesin, A1 deliğini işaretleyin ve havyayı ısıtıp parçaları hazırlayın.",
       "steps": [],
       "checkpoints": []
     },
@@ -563,7 +563,7 @@
           "height_mm": 5,
           "polarity": "1. pin (çentikli, noktayla işaretli uç): B3 deliğine",
           "notes": [
-            "Varsa buraya bir soket tak — bu aşama soketlerin aşaması. Entegrenin kendisi, soket olsun olmasın, 8. aşamadaki kapanış kontrollerine kadar takılmaz: kartta havyayla karşılaşması gereken son şey odur."
+            "Varsa buraya bir soket takın — bu aşama soketlerin aşaması. Entegrenin kendisi, soket olsun olmasın, 8. aşamadaki kapanış kontrollerine kadar takılmaz: kartta havyayla karşılaşması gereken son şey odur."
           ]
         }
       ],
@@ -725,7 +725,7 @@
     {
       "number": 6,
       "title": "Lehim yüzü: lehim yolları ve çıplak tel",
-      "summary": "Kartı ters çevir. Lehim yolları ve çıplak tel, her net bir sonraki onun üzerinden geçmeden önce bitsin ve kontrol edilsin diye birer birer.",
+      "summary": "Kartı ters çevirin. Lehim yolları ve çıplak tel, her net bir sonraki onun üzerinden geçmeden önce bitsin ve kontrol edilsin diye birer birer.",
       "steps": [
         {
           "kind": "conductor",
@@ -775,7 +775,7 @@
           },
           "risks": [],
           "notes": [
-            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatır ve komşu hatlarla arasını kontrol et."
+            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatırın ve komşu hatlarla arasını kontrol edin."
           ]
         },
         {
@@ -909,8 +909,8 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "0.6 mm kalaylı bakır teli önce pedler boyunca yatır ve her pedde lehimle. Tek yönde ilerle, soğumuş bir bölümün üzerinden geri dönme.",
-            "Önce her pedi hafifçe kalayla, sonra birleştir.",
+            "0.6 mm kalaylı bakır teli önce pedler boyunca yatırın ve her pedde lehimleyin. Tek yönde ilerleyin, soğumuş bir bölümün üzerinden geri dönmeyin.",
+            "Önce her pedi hafifçe kalaylayın, sonra birleştirin.",
             "Bu uzunlukta bir hatta flux şarttır."
           ]
         },
@@ -962,7 +962,7 @@
           },
           "risks": [],
           "notes": [
-            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatır ve komşu hatlarla arasını kontrol et."
+            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatırın ve komşu hatlarla arasını kontrol edin."
           ]
         },
         {
@@ -1013,7 +1013,7 @@
           },
           "risks": [],
           "notes": [
-            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatır ve komşu hatlarla arasını kontrol et."
+            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatırın ve komşu hatlarla arasını kontrol edin."
           ]
         },
         {
@@ -1064,7 +1064,7 @@
           },
           "risks": [],
           "notes": [
-            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatır ve komşu hatlarla arasını kontrol et."
+            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatırın ve komşu hatlarla arasını kontrol edin."
           ]
         },
         {
@@ -1106,8 +1106,8 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
-            "Önce her pedi hafifçe kalayla, sonra birleştir.",
+            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşünün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
+            "Önce her pedi hafifçe kalaylayın, sonra birleştirin.",
             "Bu uzunlukta bir hatta flux şarttır."
           ]
         },
@@ -1150,8 +1150,8 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
-            "Önce her pedi hafifçe kalayla, sonra birleştir.",
+            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşünün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
+            "Önce her pedi hafifçe kalaylayın, sonra birleştirin.",
             "Bu uzunlukta bir hatta flux şarttır."
           ]
         },
@@ -1194,8 +1194,8 @@
           "cut": null,
           "risks": [],
           "notes": [
-            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
-            "Önce her pedi hafifçe kalayla, sonra birleştir.",
+            "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir bacak artığı yatırmayı düşünün: direnci kabaca on kat düşürür ve aynı kalitede tekrarlamak çok daha kolaydır.",
+            "Önce her pedi hafifçe kalaylayın, sonra birleştirin.",
             "Bu uzunlukta bir hatta flux şarttır."
           ]
         },
@@ -1247,7 +1247,7 @@
           },
           "risks": [],
           "notes": [
-            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatır ve komşu hatlarla arasını kontrol et."
+            "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatırın ve komşu hatlarla arasını kontrol edin."
           ]
         }
       ],
@@ -1255,7 +1255,7 @@
         {
           "kind": "continuity",
           "title": "J1.1 ↔ R1.1",
-          "instruction": "J1 pin 1 ile R1 pin 1 arasını ölç.",
+          "instruction": "J1 pin 1 ile R1 pin 1 arasını ölçün.",
           "expected": "Sürekli — ikisi de VCC netinde.",
           "holes": [],
           "pins": [
@@ -1273,7 +1273,7 @@
         {
           "kind": "continuity",
           "title": "R1.1 ↔ U1.8",
-          "instruction": "R1 pin 1 ile U1 pin 8 arasını ölç.",
+          "instruction": "R1 pin 1 ile U1 pin 8 arasını ölçün.",
           "expected": "Sürekli — ikisi de VCC netinde.",
           "holes": [],
           "pins": [
@@ -1291,7 +1291,7 @@
         {
           "kind": "continuity",
           "title": "LED1.1 ↔ R3.2",
-          "instruction": "LED1 pin 1 ile R3 pin 2 arasını ölç.",
+          "instruction": "LED1 pin 1 ile R3 pin 2 arasını ölçün.",
           "expected": "Sürekli — ikisi de LED_A netinde.",
           "holes": [],
           "pins": [
@@ -1309,7 +1309,7 @@
         {
           "kind": "continuity",
           "title": "C2.1 ↔ U1.5",
-          "instruction": "C2 pin 1 ile U1 pin 5 arasını ölç.",
+          "instruction": "C2 pin 1 ile U1 pin 5 arasını ölçün.",
           "expected": "Sürekli — ikisi de CTRL netinde.",
           "holes": [],
           "pins": [
@@ -1327,8 +1327,8 @@
         {
           "kind": "resistance",
           "title": "GND hattı T11 → D11, 21 ped tam kısa devre okumalı",
-          "instruction": "T11 ile D11 arasını ölç, sonra uçları birbirine değdirip karşılaştır. İyi bir hat okunabilir hiçbir şey eklemez.",
-          "expected": "Uçlar birbirine değerken okunanla aynı, bir basamak artı eksi. Bu hat yaklaşık 2.7 mΩ olmalı, el tipi bir ölçü aletinin çözebildiğinin çok altında — yani gerçekten ayırt edebildiğin her değer bakır değil, soğuk lehim ya da çatlaktır.",
+          "instruction": "T11 ile D11 arasını ölçün, sonra uçları birbirine değdirip karşılaştırın. İyi bir hat okunabilir hiçbir şey eklemez.",
+          "expected": "Uçlar birbirine değerken okunanla aynı, bir basamak artı eksi. Bu hat yaklaşık 2.7 mΩ olmalı, el tipi bir ölçü aletinin çözebildiğinin çok altında — yani gerçekten ayırt edebildiğiniz her değer bakır değil, soğuk lehim ya da çatlaktır.",
           "holes": [
             {
               "col": 19,
@@ -1601,7 +1601,7 @@
         {
           "kind": "continuity",
           "title": "R3.1 ↔ U1.3",
-          "instruction": "R3 pin 1 ile U1 pin 3 arasını ölç.",
+          "instruction": "R3 pin 1 ile U1 pin 3 arasını ölçün.",
           "expected": "Sürekli — ikisi de OUT netinde.",
           "holes": [],
           "pins": [
@@ -1619,7 +1619,7 @@
         {
           "kind": "continuity",
           "title": "C1.2 ↔ C2.2",
-          "instruction": "C1 pin 2 ile C2 pin 2 arasını ölç.",
+          "instruction": "C1 pin 2 ile C2 pin 2 arasını ölçün.",
           "expected": "Sürekli — ikisi de GND netinde.",
           "holes": [],
           "pins": [
@@ -1637,7 +1637,7 @@
         {
           "kind": "continuity",
           "title": "C2.2 ↔ J1.2",
-          "instruction": "C2 pin 2 ile J1 pin 2 arasını ölç.",
+          "instruction": "C2 pin 2 ile J1 pin 2 arasını ölçün.",
           "expected": "Sürekli — ikisi de GND netinde.",
           "holes": [],
           "pins": [
@@ -1655,7 +1655,7 @@
         {
           "kind": "continuity",
           "title": "J1.2 ↔ LED1.2",
-          "instruction": "J1 pin 2 ile LED1 pin 2 arasını ölç.",
+          "instruction": "J1 pin 2 ile LED1 pin 2 arasını ölçün.",
           "expected": "Sürekli — ikisi de GND netinde.",
           "holes": [],
           "pins": [
@@ -1673,7 +1673,7 @@
         {
           "kind": "continuity",
           "title": "LED1.2 ↔ U1.1",
-          "instruction": "LED1 pin 2 ile U1 pin 1 arasını ölç.",
+          "instruction": "LED1 pin 2 ile U1 pin 1 arasını ölçün.",
           "expected": "Sürekli — ikisi de GND netinde.",
           "holes": [],
           "pins": [
@@ -1691,7 +1691,7 @@
         {
           "kind": "continuity",
           "title": "C1.1 ↔ R2.2",
-          "instruction": "C1 pin 1 ile R2 pin 2 arasını ölç.",
+          "instruction": "C1 pin 1 ile R2 pin 2 arasını ölçün.",
           "expected": "Sürekli — ikisi de THRESH netinde.",
           "holes": [],
           "pins": [
@@ -1709,7 +1709,7 @@
         {
           "kind": "continuity",
           "title": "R2.2 ↔ U1.2",
-          "instruction": "R2 pin 2 ile U1 pin 2 arasını ölç.",
+          "instruction": "R2 pin 2 ile U1 pin 2 arasını ölçün.",
           "expected": "Sürekli — ikisi de THRESH netinde.",
           "holes": [],
           "pins": [
@@ -1727,7 +1727,7 @@
         {
           "kind": "continuity",
           "title": "U1.2 ↔ U1.6",
-          "instruction": "U1 pin 2 ile U1 pin 6 arasını ölç.",
+          "instruction": "U1 pin 2 ile U1 pin 6 arasını ölçün.",
           "expected": "Sürekli — ikisi de THRESH netinde.",
           "holes": [],
           "pins": [
@@ -1745,7 +1745,7 @@
         {
           "kind": "continuity",
           "title": "R1.2 ↔ R2.1",
-          "instruction": "R1 pin 2 ile R2 pin 1 arasını ölç.",
+          "instruction": "R1 pin 2 ile R2 pin 1 arasını ölçün.",
           "expected": "Sürekli — ikisi de DISCH netinde.",
           "holes": [],
           "pins": [
@@ -1763,7 +1763,7 @@
         {
           "kind": "continuity",
           "title": "R2.1 ↔ U1.7",
-          "instruction": "R2 pin 1 ile U1 pin 7 arasını ölç.",
+          "instruction": "R2 pin 1 ile U1 pin 7 arasını ölçün.",
           "expected": "Sürekli — ikisi de DISCH netinde.",
           "holes": [],
           "pins": [
@@ -1783,13 +1783,13 @@
     {
       "number": 8,
       "title": "Kapanış",
-      "summary": "Entegreleri tak, son kontrolleri yap ve akım sınırı altında enerji ver.",
+      "summary": "Entegreleri takın, son kontrolleri yapın ve akım sınırı altında enerji verin.",
       "steps": [],
       "checkpoints": [
         {
           "kind": "isolation",
           "title": "VCC ↔ GND ayrı olmalı",
-          "instruction": "J1 pin 1 (VCC) ile C1 pin 2 (GND) arasını ölç.",
+          "instruction": "J1 pin 1 (VCC) ile C1 pin 2 (GND) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1807,7 +1807,7 @@
         {
           "kind": "isolation",
           "title": "VCC ↔ CTRL ayrı olmalı",
-          "instruction": "J1 pin 1 (VCC) ile C2 pin 1 (CTRL) arasını ölç.",
+          "instruction": "J1 pin 1 (VCC) ile C2 pin 1 (CTRL) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1825,7 +1825,7 @@
         {
           "kind": "isolation",
           "title": "VCC ↔ DISCH ayrı olmalı",
-          "instruction": "J1 pin 1 (VCC) ile R1 pin 2 (DISCH) arasını ölç.",
+          "instruction": "J1 pin 1 (VCC) ile R1 pin 2 (DISCH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1843,7 +1843,7 @@
         {
           "kind": "isolation",
           "title": "VCC ↔ LED_A ayrı olmalı",
-          "instruction": "J1 pin 1 (VCC) ile LED1 pin 1 (LED_A) arasını ölç.",
+          "instruction": "J1 pin 1 (VCC) ile LED1 pin 1 (LED_A) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1861,7 +1861,7 @@
         {
           "kind": "isolation",
           "title": "VCC ↔ OUT ayrı olmalı",
-          "instruction": "J1 pin 1 (VCC) ile R3 pin 1 (OUT) arasını ölç.",
+          "instruction": "J1 pin 1 (VCC) ile R3 pin 1 (OUT) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1879,7 +1879,7 @@
         {
           "kind": "isolation",
           "title": "VCC ↔ THRESH ayrı olmalı",
-          "instruction": "J1 pin 1 (VCC) ile C1 pin 1 (THRESH) arasını ölç.",
+          "instruction": "J1 pin 1 (VCC) ile C1 pin 1 (THRESH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1897,7 +1897,7 @@
         {
           "kind": "isolation",
           "title": "DISCH ↔ CTRL ayrı olmalı",
-          "instruction": "R1 pin 2 (DISCH) ile C2 pin 1 (CTRL) arasını ölç.",
+          "instruction": "R1 pin 2 (DISCH) ile C2 pin 1 (CTRL) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1915,7 +1915,7 @@
         {
           "kind": "isolation",
           "title": "GND ↔ CTRL ayrı olmalı",
-          "instruction": "C1 pin 2 (GND) ile C2 pin 1 (CTRL) arasını ölç.",
+          "instruction": "C1 pin 2 (GND) ile C2 pin 1 (CTRL) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1933,7 +1933,7 @@
         {
           "kind": "isolation",
           "title": "GND ↔ DISCH ayrı olmalı",
-          "instruction": "C1 pin 2 (GND) ile R1 pin 2 (DISCH) arasını ölç.",
+          "instruction": "C1 pin 2 (GND) ile R1 pin 2 (DISCH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1951,7 +1951,7 @@
         {
           "kind": "isolation",
           "title": "GND ↔ LED_A ayrı olmalı",
-          "instruction": "C1 pin 2 (GND) ile LED1 pin 1 (LED_A) arasını ölç.",
+          "instruction": "C1 pin 2 (GND) ile LED1 pin 1 (LED_A) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1969,7 +1969,7 @@
         {
           "kind": "isolation",
           "title": "GND ↔ THRESH ayrı olmalı",
-          "instruction": "C1 pin 2 (GND) ile C1 pin 1 (THRESH) arasını ölç.",
+          "instruction": "C1 pin 2 (GND) ile C1 pin 1 (THRESH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -1987,7 +1987,7 @@
         {
           "kind": "isolation",
           "title": "LED_A ↔ CTRL ayrı olmalı",
-          "instruction": "LED1 pin 1 (LED_A) ile C2 pin 1 (CTRL) arasını ölç.",
+          "instruction": "LED1 pin 1 (LED_A) ile C2 pin 1 (CTRL) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2005,7 +2005,7 @@
         {
           "kind": "isolation",
           "title": "LED_A ↔ DISCH ayrı olmalı",
-          "instruction": "LED1 pin 1 (LED_A) ile R1 pin 2 (DISCH) arasını ölç.",
+          "instruction": "LED1 pin 1 (LED_A) ile R1 pin 2 (DISCH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2023,7 +2023,7 @@
         {
           "kind": "isolation",
           "title": "LED_A ↔ THRESH ayrı olmalı",
-          "instruction": "LED1 pin 1 (LED_A) ile C1 pin 1 (THRESH) arasını ölç.",
+          "instruction": "LED1 pin 1 (LED_A) ile C1 pin 1 (THRESH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2041,7 +2041,7 @@
         {
           "kind": "isolation",
           "title": "OUT ↔ CTRL ayrı olmalı",
-          "instruction": "R3 pin 1 (OUT) ile C2 pin 1 (CTRL) arasını ölç.",
+          "instruction": "R3 pin 1 (OUT) ile C2 pin 1 (CTRL) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2059,7 +2059,7 @@
         {
           "kind": "isolation",
           "title": "OUT ↔ DISCH ayrı olmalı",
-          "instruction": "R3 pin 1 (OUT) ile R1 pin 2 (DISCH) arasını ölç.",
+          "instruction": "R3 pin 1 (OUT) ile R1 pin 2 (DISCH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2077,7 +2077,7 @@
         {
           "kind": "isolation",
           "title": "OUT ↔ GND ayrı olmalı",
-          "instruction": "R3 pin 1 (OUT) ile C1 pin 2 (GND) arasını ölç.",
+          "instruction": "R3 pin 1 (OUT) ile C1 pin 2 (GND) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2095,7 +2095,7 @@
         {
           "kind": "isolation",
           "title": "OUT ↔ LED_A ayrı olmalı",
-          "instruction": "R3 pin 1 (OUT) ile LED1 pin 1 (LED_A) arasını ölç.",
+          "instruction": "R3 pin 1 (OUT) ile LED1 pin 1 (LED_A) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2113,7 +2113,7 @@
         {
           "kind": "isolation",
           "title": "OUT ↔ THRESH ayrı olmalı",
-          "instruction": "R3 pin 1 (OUT) ile C1 pin 1 (THRESH) arasını ölç.",
+          "instruction": "R3 pin 1 (OUT) ile C1 pin 1 (THRESH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2131,7 +2131,7 @@
         {
           "kind": "isolation",
           "title": "THRESH ↔ CTRL ayrı olmalı",
-          "instruction": "C1 pin 1 (THRESH) ile C2 pin 1 (CTRL) arasını ölç.",
+          "instruction": "C1 pin 1 (THRESH) ile C2 pin 1 (CTRL) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2149,7 +2149,7 @@
         {
           "kind": "isolation",
           "title": "THRESH ↔ DISCH ayrı olmalı",
-          "instruction": "C1 pin 1 (THRESH) ile R1 pin 2 (DISCH) arasını ölç.",
+          "instruction": "C1 pin 1 (THRESH) ile R1 pin 2 (DISCH) arasını ölçün.",
           "expected": "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil.",
           "holes": [],
           "pins": [
@@ -2167,7 +2167,7 @@
         {
           "kind": "polarity",
           "title": "Enerji vermeden önce kutup taraması",
-          "instruction": "Kutuplu her parçaya bir kez daha bak ve komponent yüzü çıktısıyla karşılaştır: C1, C2.",
+          "instruction": "Kutuplu her parçaya bir kez daha bakın ve parça yüzü çıktısıyla karşılaştırın: C1, C2.",
           "expected": "Her şerit, bant ve düz taraf çıktının gösterdiği yöne bakıyor. Ters takılmış bir elektrolitik gürültüyle bozulur, ters bir diyot ise sessizce.",
           "holes": [],
           "pins": [],
@@ -2175,8 +2175,8 @@
         },
         {
           "kind": "polarity",
-          "title": "Entegreleri tak, 1. pin gösterildiği gibi",
-          "instruction": "U1 entegresini ancak şimdi soketine — soket takmadıysan doğrudan karta — çentiği çıktının işaretlediği uca gelecek şekilde tak. Önce bacaklarını düz bir yüzeyde düzelt.",
+          "title": "Entegreleri takın, 1. pin gösterildiği gibi",
+          "instruction": "U1 entegresini ancak şimdi soketine — soket takmadıysan doğrudan karta — çentiği çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını düz bir yüzeyde düzeltin.",
           "expected": "Her çentik ve nokta çıktıdakiyle aynı yöne bakıyor.",
           "holes": [],
           "pins": [],
@@ -2185,8 +2185,8 @@
         {
           "kind": "power-on",
           "title": "İlk enerji, akım sınırlı",
-          "instruction": "Güç kaynağını devrenin gerilimine, akım sınırını da devrenin çekmesini beklediğin değerin biraz üstüne ayarla. Açarken akımı izle ve elin şalterde olsun.",
-          "expected": "Akım aşağı yukarı beklediğin değerde oturur. Sınıra dayanırsa hemen kapat ve yalıtım kontrollerine geri dön — bir yerde köprü var.",
+          "instruction": "Güç kaynağını devrenin gerilimine, akım sınırını da devrenin çekmesini beklediğiniz değerin biraz üstüne ayarlayın. Açarken akımı izleyin ve eliniz şalterde olsun.",
+          "expected": "Akım aşağı yukarı beklediğiniz değerde oturur. Sınıra dayanırsa hemen kapatın ve yalıtım kontrollerine geri dönün — bir yerde köprü var.",
           "holes": [],
           "pins": [],
           "blocking": true

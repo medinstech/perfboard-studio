@@ -130,7 +130,7 @@ def test_the_finding_is_said_in_a_turkish_window() -> None:
         set_language(before)
     assert said == (
         "R1 (2 mm boyunda) U1 modülünün altında kalıyor ve modülün kartı 8.5 mm yukarıda: önce "
-        "onu tak, çünkü sonradan modülü çıkarmadan ona ulaşılamaz."
+        "onu takın, çünkü sonradan modülü çıkarmadan ona ulaşılamaz."
     )
 
 

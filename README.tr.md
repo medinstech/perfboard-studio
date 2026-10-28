@@ -93,14 +93,14 @@ sebebi tam olarak bu farkı modellemesidir:
 
 | | nedir | notlar |
 |---|---|---|
-| bacak bükümü | komponent bacağının yakın bir deliğe bükülmesi | pratikte bedava, 3–4 delik |
-| **lehim yolu** | komşu pad'lerin yalnızca lehimle birleştirilmesi | sadece dik (ortogonal); yan pad'e ~0,6 mm |
+| bacak bükümü | parça bacağının yakın bir deliğe bükülmesi | pratikte bedava, 3–4 delik |
+| **lehim yolu** | komşu pedlerin yalnızca lehimle birleştirilmesi | sadece dik (ortogonal); yan pede ~0,6 mm |
 | **telli lehim yolu** | aynısı, kalaylı bir telin üzerinde | ~10× daha düşük direnç, uzunluk sınırı yok |
 | çıplak tel | lehim yüzeyinde kalaylı tel | başka bir çıplak iletkenle kesişemez |
-| yalıtımlı tel | serbestçe kesişebilir | hazırlık süresi maliyeti var |
-| parçaların üstünden jumper | parça yüzünden atlayan yalıtımlı jumper | görünür, gövde alanı işgal eder |
+| izoleli tel | serbestçe kesişebilir | hazırlık süresi maliyeti var |
+| parçaların üstünden jumper | parça yüzünden atlayan izoleli jumper | görünür, gövde alanı işgal eder |
 
-Komşu pad'e olan 0,6 mm'lik boşluk, lehim yollarını hem bu kadar kullanışlı hem de bu
+Komşu pede olan 0,6 mm'lik boşluk, lehim yollarını hem bu kadar kullanışlı hem de bu
 kadar kolay yanlış yapılır kılan şeydir. Perfboard Studio bu riski router'ın maliyet
 fonksiyonuna işler ve işaretlenen her noktayı montaj rehberinde bir ölçüm adımına
 dönüştürür.
@@ -343,7 +343,7 @@ perfboard-studio examples/lm317-supply.perf
 |---|---|
 | `ne555-astable` | başlangıç noktası — LED yakıp söndüren bir 555 |
 | `lm317-supply` | TO-220 regülatör, yani ısı kuralının ölçecek bir şeyi var |
-| `lpb1-booster` | **FR-2** üzerine kurulu — pad'leri kalkan pertinaks kart |
+| `lpb1-booster` | **FR-2** üzerine kurulu — pedleri kalkan pertinaks kart |
 | `arduino-io-shield` | iki header; bir shield zaten büyük ölçüde budur |
 | `atmega328-relay` | ölçek: yirmi dört parça, ve bütün kurallar bir arada |
 | `nano-relay` | KiCad netlist'inden gerçek parçalar — başlıklarındaki bir Nano, katalogdan BC547 ve 7805, pinlerde adlar, kartta etiketler |

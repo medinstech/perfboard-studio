@@ -216,26 +216,26 @@ TURKISH: dict[str, str] = {
         "yerine takılınca parçaların kendisine."
     ),
     "Run the final checks, and power up under current limit.": (
-        "Son kontrolleri yap ve akım sınırı altında enerji ver."
+        "Son kontrolleri yapın ve akım sınırı altında enerji verin."
     ),
     "Lay the board down with column 1 on the left and row j at the top: every address in "
     "this guide is printed on it, row letter first — e12 is row e, column 12.": (
-        "Kartı 1. kolon solda, j sırası üstte olacak şekilde yatır: bu rehberdeki her adres "
-        "üstünde basılı, önce sıra harfi — e12, e sırası ve 12. kolon demek."
+        "Kartı 1. kolon solda, j sırası üstte olacak şekilde yatırın: bu rehberdeki her "
+        "adres üstünde basılı, önce sıra harfi — e12, e sırası ve 12. kolon demek."
     ),
     "Lay the breadboard down with column 1 on the left and row j at the top: every "
     "address in this guide is printed on it, row letter first — e12 is row e, column "
     "12. Then get the parts ready.": (
-        "Breadboard'u 1. kolon solda, j sırası üstte olacak şekilde yatır: bu "
-        "rehberdeki her adres üstünde basılı, önce sıra harfi — e12, e sırası ve 12. "
-        "kolon demek. Sonra parçaları hazırla."
+        "Breadboard'u 1. kolon solda, j sırası üstte olacak şekilde yatırın: bu rehberdeki "
+        "her adres üstünde basılı, önce sıra harfi — e12, e sırası ve 12. kolon demek. "
+        "Sonra parçaları hazırlayın."
     ),
     "On some boards each rail is broken in the middle — a gap in its red or blue line. "
     "If yours is, bridge the two halves of every rail with a short jumper before "
     "anything else.": (
-        "Bazı kartlarda her ray ortada kesiktir — kırmızı ya da mavi çizgisinde bir "
-        "boşluk olur. Seninki öyleyse, her şeyden önce her rayın iki yarısını kısa bir "
-        "jumper'la birleştir."
+        "Bazı kartlarda her ray ortada kesiktir — kırmızı ya da mavi çizgisinde bir boşluk "
+        "olur. Seninki öyleyse, her şeyden önce her rayın iki yarısını kısa bir jumper'la "
+        "birleştirin."
     ),
     "A solderless breadboard, {points} points. Nothing on it is cut, drilled or soldered: "
     "every part and every wire is pushed into its holes.": (
@@ -268,8 +268,8 @@ TURKISH: dict[str, str] = {
     ),
     "Across the groove, pin 1 in {hole}. Line both rows of legs up over their holes and "
     "press the body down evenly, so that no leg folds under it.": (
-        "Oluğun üstünden, 1. pin {hole} deliğinde. İki sıra bacağı da deliklerinin "
-        "üstüne hizala ve gövdeyi eşit bastır; hiçbir bacak altına kıvrılmasın."
+        "Oluğun üstünden, 1. pin {hole} deliğinde. İki sıra bacağı da deliklerinin üstüne "
+        "hizalayın ve gövdeyi eşit bastırın; hiçbir bacak altına kıvrılmasın."
     ),
     "A {package} on its DIP adapter, which should already carry the chip (phase 0). "
     "From here on it is a DIP.": (
@@ -279,37 +279,37 @@ TURKISH: dict[str, str] = {
     "It plugs straight into the breadboard on its own pins: check its orientation "
     "against the pin names, line every pin up over its hole and press it down evenly.": (
         "Kendi pinleriyle doğrudan breadboard'a takılır: yönünü pin adlarıyla "
-        "karşılaştır, her pini deliğinin üstüne hizala ve eşit bastır."
+        "karşılaştırın, her pini deliğinin üstüne hizalayın ve eşit bastırın."
     ),
     "The jumpers {wheres} run underneath this part. They went in first, in phase 1; "
     "check they are pressed down flat before this goes over them.": (
-        "{wheres} jumper'ları bu parçanın altından geçiyor. Önce, 1. aşamada "
-        "takıldılar; bu parça üstlerine gelmeden önce düz bastırıldıklarını kontrol et."
+        "{wheres} jumper'ları bu parçanın altından geçiyor. Önce, 1. aşamada takıldılar; "
+        "bu parça üstlerine gelmeden önce düz bastırıldıklarını kontrol edin."
     ),
     "The wire entries face the {side} edge of the board — the screws on top, the "
     "openings towards the {side}. Check before pushing it in: it fits the holes either "
     "way round.": (
         "Kablo girişleri kartın {side} kenarına bakıyor — vidalar üstte, ağızlar {side} "
-        "tarafa. Takmadan önce kontrol et: deliklere iki yönde de oturur."
+        "tarafa. Takmadan önce kontrol edin: deliklere iki yönde de oturur."
     ),
     "{height:.0f} mm tall — check it clears anything meant to go over the board before "
     "you push it in.": (
-        "{height:.0f} mm yüksekliğinde — takmadan önce kartın üstüne gelecek hiçbir "
-        "şeye değmeyeceğini kontrol et."
+        "{height:.0f} mm yüksekliğinde — takmadan önce kartın üstüne gelecek hiçbir şeye "
+        "değmeyeceğini kontrol edin."
     ),
     "{height:g} mm tall, and this build has {limit:g} mm of room. It will not fit as it "
     "stands — lay it down or swap it before you push it in.": (
         "{height:g} mm yüksekliğinde, bu montajda ise {limit:g} mm yer var. Bu hâliyle "
-        "sığmaz — takmadan önce yatır ya da değiştir."
+        "sığmaz — takmadan önce yatırın ya da değiştirin."
     ),
     "Strip {strip:g} mm off each end, bend both ends straight down and push them into "
     "their holes until the insulation meets the plastic.": (
-        "Her iki uçtan {strip:g} mm soy, iki ucu da dik aşağı bük ve izolasyon plastiğe "
-        "değene kadar deliklerine it."
+        "Her iki uçtan {strip:g} mm soyun, iki ucu da dik aşağı bükün ve izolasyon "
+        "plastiğe değene kadar deliklerine itin."
     ),
     "Closing up": "Kapanış",
     "Cut the board, mark hole A1, and get the iron and the parts ready.": (
-        "Kartı kes, A1 deliğini işaretle ve havyayı ısıtıp parçaları hazırla."
+        "Kartı kesin, A1 deliğini işaretleyin ve havyayı ısıtıp parçaları hazırlayın."
     ),
     "Anything that lies flat: axial resistors and diodes. These go first because a board "
     "with a tall part on it will not sit flat on the bench, and a part that cannot be "
@@ -335,8 +335,8 @@ TURKISH: dict[str, str] = {
     ),
     "Turn the board over. Solder traces and bare wire, worked one net at a time so each is "
     "finished and checked before the next crosses it.": (
-        "Kartı ters çevir. Lehim yolları ve çıplak tel, her net bir sonraki onun üzerinden "
-        "geçmeden önce bitsin ve kontrol edilsin diye birer birer."
+        "Kartı ters çevirin. Lehim yolları ve çıplak tel, her net bir sonraki onun "
+        "üzerinden geçmeden önce bitsin ve kontrol edilsin diye birer birer."
     ),
     "Insulated wire, which may cross anything already on the solder side.": (
         "Lehim yüzünde zaten olan her şeyin üzerinden geçebilen izoleli tel."
@@ -347,21 +347,21 @@ TURKISH: dict[str, str] = {
         "yerine takılınca parçaların kendisine."
     ),
     "Fit the ICs, run the final checks, and power up under current limit.": (
-        "Entegreleri tak, son kontrolleri yap ve akım sınırı altında enerji ver."
+        "Entegreleri takın, son kontrolleri yapın ve akım sınırı altında enerji verin."
     ),
-    "Cut the board": "Kartı kes",
+    "Cut the board": "Kartı kesin",
     "drill the {count} mounting hole ({sizes} at {where})": (
-        "{count} montaj deliğini del ({sizes}, yeri: {where})"
+        "{count} montaj deliğini delin ({sizes}, yeri: {where})"
     ),
     "drill the {count} mounting holes ({sizes} at {where})": (
-        "{count} montaj deliğini del ({sizes}, yerleri: {where})"
+        "{count} montaj deliğini delin ({sizes}, yerleri: {where})"
     ),
-    "mark hole A1": "A1 deliğini işaretle",
+    "mark hole A1": "A1 deliğini işaretleyin",
     "check which corner the board's printed A1 is in": (
-        "kartta basılı A1 işaretinin hangi köşede olduğuna bak"
+        "kartta basılı A1 işaretinin hangi köşede olduğuna bakın"
     ),
     "check which corner the board's own numbering starts in": (
-        "kartın kendi numaralandırmasının hangi köşeden başladığına bak"
+        "kartın kendi numaralandırmasının hangi köşeden başladığına bakın"
     ),
     "This board prints a numbering of its own, and this guide keeps to its own "
     "addresses — {axes}.": (
@@ -375,10 +375,10 @@ TURKISH: dict[str, str] = {
     "{guide} are not printed": "{guide} için baskı yok",
     "{guide} is not printed": "{guide} için baskı yok",
     "{runs}, with a mark every {every} holes": "{runs}, her {every} delikte bir işaretle",
-    "get the iron and the parts ready": "havyayı ısıtıp parçaları hazırla",
+    "get the iron and the parts ready": "havyayı ısıtıp parçaları hazırlayın",
     "Drill before anything is soldered — the board can still go in a vice, and swarf "
     "brushes off a bare board instead of having to be picked out of a built one.": (
-        "Delme işini hiçbir şey lehimlenmeden yap — kart hâlâ mengeneye takılabilir ve "
+        "Delme işini hiçbir şey lehimlenmeden yapın — kart hâlâ mengeneye takılabilir ve "
         "talaş, kurulmuş bir karttan tek tek ayıklanmak yerine çıplak karttan fırçayla "
         "silinir."
     ),
@@ -399,9 +399,9 @@ TURKISH: dict[str, str] = {
     ),
     "Phenolic paper board. Its pads lift easily -- work in short touches, let a pad cool "
     "before returning to it, and never drag heat along a long run in one pass.": (
-        "Fenolik kâğıt kart. Pedleri kolay kalkar — kısa dokunuşlarla çalış, bir pede geri "
-        "dönmeden önce soğumasını bekle ve uzun bir hat boyunca ısıyı asla tek seferde "
-        "sürükleme."
+        "Fenolik kâğıt kart. Pedleri kolay kalkar — kısa dokunuşlarla çalışın, bir pede "
+        "geri dönmeden önce soğumasını bekleyin ve uzun bir hat boyunca ısıyı asla tek "
+        "seferde sürükleme."
     ),
     # -- fitting a part -----------------------------------------------------------------
     "The top jumpers {wheres} run underneath this part, so they have to be soldered first "
@@ -409,68 +409,69 @@ TURKISH: dict[str, str] = {
     "this goes in.": (
         "{wheres} üst yüz jumper'ları bu parçanın altından geçiyor, bu yüzden önce onların "
         "lehimlenmesi gerekir — 1. aşamada olmalarının sebebi bu. Bu parça takılmadan önce "
-        "yerlerine oturduklarını ve düz yattıklarını kontrol et."
+        "yerlerine oturduklarını ve düz yattıklarını kontrol edin."
     ),
     "The top jumper {where} runs underneath this part, so it has to be soldered first — it "
     "is in phase 1 for that reason. Check it is down and lying flat before this goes in.": (
         "{where} üst yüz jumper'ı bu parçanın altından geçiyor, bu yüzden önce onun "
         "lehimlenmesi gerekir — 1. aşamada olmasının sebebi bu. Bu parça takılmadan önce "
-        "yerine oturduğunu ve düz yattığını kontrol et."
+        "yerine oturduğunu ve düz yattığını kontrol edin."
     ),
     "on this board": "bu karttaki",
     "from {start} to {end}": "{start} → {end} arasındaki",
     "the part next to it": "yanındaki parça",
     "{source} runs hot and sits close by. Fit a 105 °C-rated part here if you have one — "
     "an 85 °C electrolytic beside a heatsink is the first thing on the board to dry out.": (
-        "{source} ısınıyor ve hemen yakında duruyor. Varsa buraya 105 °C'lik bir parça tak — "
-        "bir soğutucunun yanındaki 85 °C'lik elektrolitik, kartta kuruyan ilk şey olur."
+        "{source} ısınıyor ve hemen yakında duruyor. Varsa buraya 105 °C'lik bir parça "
+        "takın — bir soğutucunun yanındaki 85 °C'lik elektrolitik, kartta kuruyan ilk şey "
+        "olur."
     ),
     "This part sits under {module}'s board. Press it right down onto the board so it "
     "clears the underside, and check it before {module} goes in: once that is on, this "
     "part is out of reach.": (
         "Bu parça {module} modülünün kartının altında kalıyor. Kartın alt yüzüne değmemesi "
-        "için karta tam bastır ve {module} takılmadan önce kontrol et: modül takıldıktan "
-        "sonra bu parçaya ulaşılamaz."
+        "için karta tam bastırın ve {module} takılmadan önce kontrol edin: modül "
+        "takıldıktan sonra bu parçaya ulaşılamaz."
     ),
     "Fit a socket here if you have one — this phase is the sockets. The IC itself does not "
     "go in until the closing checks in phase 8, socket or no socket: it is the last thing "
     "on the board that should meet an iron.": (
-        "Varsa buraya bir soket tak — bu aşama soketlerin aşaması. Entegrenin kendisi, soket "
-        "olsun olmasın, 8. aşamadaki kapanış kontrollerine kadar takılmaz: kartta havyayla "
-        "karşılaşması gereken son şey odur."
+        "Varsa buraya bir soket takın — bu aşama soketlerin aşaması. Entegrenin kendisi, "
+        "soket olsun olmasın, 8. aşamadaki kapanış kontrollerine kadar takılmaz: kartta "
+        "havyayla karşılaşması gereken son şey odur."
     ),
     "This part is mirrored: it goes in from the SOLDER side, not the component side. Check "
     "the pin order against the board before soldering.": (
-        "Bu parça aynalanmış: komponent yüzünden değil, LEHİM yüzünden takılır. "
-        "Lehimlemeden önce pin sırasını kartla karşılaştır."
+        "Bu parça aynalanmış: parça yüzünden değil, LEHİM yüzünden takılır. Lehimlemeden "
+        "önce pin sırasını kartla karşılaştırın."
     ),
     "The wire entries face the {side} edge of the board — the screws on top, the openings "
     "towards the {side}. Check before soldering: it fits the holes either way round.": (
         "Kablo girişleri kartın {side} kenarına bakıyor — vidalar üstte, ağızlar {side} "
-        "tarafa. Lehimlemeden önce kontrol et: deliklere iki yönde de oturur."
+        "tarafa. Lehimlemeden önce kontrol edin: deliklere iki yönde de oturur."
     ),
     "The wires go in from ABOVE: this is the header, and the screw plug is pushed down "
     "into it. Keep the space over it clear for the plug and a screwdriver.": (
         "Kablolar YUKARIDAN girer: bu kısım başlıktır, vidalı fiş bunun içine aşağı doğru "
-        "itilir. Üstünü fiş ve tornavida için boş bırak."
+        "itilir. Üstünü fiş ve tornavida için boş bırakın."
     ),
     "{ref} is not on this board: it is mounted off it, on the panel or in the enclosure, "
     "and these pads are where its wires land. Solder a wire into each pad from the "
     "component side and lead them all out over the {side} edge.": (
-        "{ref} bu kartın üzerinde değil: kartın dışında, panelde ya da kutunun içinde duruyor; "
-        "bu pedler tellerinin geldiği yer. Her pede komponent yüzünden bir tel lehimle ve "
-        "hepsini {side} kenardan dışarı çıkar."
+        "{ref} bu kartın üzerinde değil: kartın dışında, panelde ya da kutunun içinde "
+        "duruyor; bu pedler tellerinin geldiği yer. Her pede parça yüzünden bir tel "
+        "lehimleyin ve hepsini {side} kenardan dışarı çıkarın."
     ),
     "{hole} to {lead}": "{hole} → {lead}",
     "{hole} to {lead} — {net}, {colour} wire": "{hole} → {lead} — {net}, {colour} tel",
     "Wire by wire: {pairs}.": "Tel tel: {pairs}.",
     "Cut each wire {length:g} mm and strip {strip:g} mm at both ends.": (
-        "Her teli {length:g} mm kes ve iki ucundan {strip:g} mm soy."
+        "Her teli {length:g} mm kesin ve iki ucundan {strip:g} mm soyun."
     ),
     "Cut each wire long enough to reach {ref} where it is mounted, with enough slack to "
     "open the enclosure, and strip {strip:g} mm at both ends.": (
-        "Her teli {ref} parçasının takıldığı yere uzanacak, kutuyu açmaya yetecek kadar pay "
-        "bırakarak kes ve iki ucundan {strip:g} mm soy."
+        "Her teli {ref} parçasının takıldığı yere uzanacak, kutuyu açmaya yetecek kadar "
+        "pay bırakarak kesin ve iki ucundan {strip:g} mm soyun."
     ),
     "{lead}: the wire in {hole}": "{lead}: {hole} deliğindeki tel",
     "{hole}, 1 wire": "{hole}, 1 tel",
@@ -478,24 +479,24 @@ TURKISH: dict[str, str] = {
     "Solder the female header strips here, not the module: it plugs in last, after the "
     "power-up checks, and can come out again. Seat each strip square on the board before "
     "soldering its end pins.": (
-        "Buraya modülü değil, dişi pin başlığı şeritlerini lehimle: modül en son, enerji "
-        "kontrollerinden sonra takılır ve yeniden çıkarılabilir. Uç pinlerini lehimlemeden "
-        "önce her şeridi karta dik ve düzgün oturt."
+        "Buraya modülü değil, dişi pin başlığı şeritlerini lehimleyin: modül en son, "
+        "enerji kontrollerinden sonra takılır ve yeniden çıkarılabilir. Uç pinlerini "
+        "lehimlemeden önce her şeridi karta dik ve düzgün oturtun."
     ),
     "Soldered straight in on its own pins, so it cannot come out again without desoldering "
     "every pin: check its orientation against the pin names first.": (
         "Kendi pinleriyle doğrudan lehimlenir, yani her pini sökmeden bir daha çıkmaz: "
-        "önce yönünü pin adlarıyla karşılaştır."
+        "önce yönünü pin adlarıyla karşılaştırın."
     ),
     "{height:g} mm tall, and this build has {limit:g} mm of room. It will not fit as it "
     "stands — lay it down or swap it before you solder it in.": (
         "{height:g} mm yüksekliğinde, bu montajda ise {limit:g} mm yer var. Bu hâliyle "
-        "sığmaz — lehimlemeden önce yatır ya da değiştir."
+        "sığmaz — lehimlemeden önce yatırın ya da değiştirin."
     ),
     "{height:.0f} mm tall — check it clears anything meant to go over the board before you "
     "solder it down.": (
-        "{height:.0f} mm yüksekliğinde — lehimlemeden önce kartın üstüne gelecek hiçbir şeye "
-        "değmeyeceğini kontrol et."
+        "{height:.0f} mm yüksekliğinde — lehimlemeden önce kartın üstüne gelecek hiçbir "
+        "şeye değmeyeceğini kontrol edin."
     ),
     # -- where a part goes, and which way round ------------------------------------------
     "no pins": "pin yok",
@@ -507,7 +508,7 @@ TURKISH: dict[str, str] = {
     ),
     "{lead} in {hole}": "{lead}: {hole} deliğine",
     "{legs} — check against the part's datasheet": (
-        "{legs} — parçanın datasheet'iyle karşılaştır"
+        "{legs} — parçanın datasheet'iyle karşılaştırın"
     ),
     "Pin 1 (the notched end, marked with a dot) in {hole}": (
         "1. pin (çentikli, noktayla işaretli uç): {hole} deliğine"
@@ -520,20 +521,21 @@ TURKISH: dict[str, str] = {
     "these holes, so they come out square and the right distance apart. From here on it is "
     "a DIP: fit a socket here if you have one, and the adapter itself goes in with the other "
     "ICs in phase 8.": (
-        "DIP adaptörü üzerinde bir {package}; çip adaptöre 0. aşamada lehimlenmiş olmalı. Pin "
-        "başlığını adaptöre, uzun uçları bir breadboard'a ya da bu deliklere takılıyken "
-        "lehimle: pinler böylece dik ve doğru aralıkla çıkar. Bundan sonrası bir DIP gibi: "
-        "varsa buraya bir soket tak; adaptörün kendisi diğer entegrelerle birlikte 8. "
-        "aşamada takılır."
+        "DIP adaptörü üzerinde bir {package}; çip adaptöre 0. aşamada lehimlenmiş olmalı. "
+        "Pin başlığını adaptöre, uzun uçları bir breadboard'a ya da bu deliklere "
+        "takılıyken lehimleyin: pinler böylece dik ve doğru aralıkla çıkar. Bundan sonrası "
+        "bir DIP gibi: varsa buraya bir soket takın; adaptörün kendisi diğer entegrelerle "
+        "birlikte 8. aşamada takılır."
     ),
     "Solder the surface-mount chips onto their adapters first: {chips}. Line each chip's "
     "pin-1 dot up with the adapter's pin 1, tack one corner leg, check it is square, then do "
     "the rest with plenty of flux — and look along every leg under a magnifier for a bridge. "
     "Once the adapter is on the board, nobody can reach those legs.": (
-        "Önce yüzey montaj çipleri adaptörlerine lehimle: {chips}. Her çipin 1. pin noktasını "
-        "adaptörün 1. piniyle hizala, bir köşe bacağını puntala, düz durduğunu kontrol et, "
-        "sonra kalanını bol flux ile lehimle — ve her bacağı büyüteçle köprü var mı diye "
-        "kontrol et. Adaptör karta takıldıktan sonra o bacaklara kimse ulaşamaz."
+        "Önce yüzey montaj çipleri adaptörlerine lehimleyin: {chips}. Her çipin 1. pin "
+        "noktasını adaptörün 1. piniyle hizalayın, bir köşe bacağını puntalayın, düz "
+        "durduğunu kontrol edin, sonra kalanını bol flux ile lehimleyin — ve her bacağı "
+        "büyüteçle köprü var mı diye kontrol edin. Adaptör karta takıldıktan sonra o "
+        "bacaklara kimse ulaşamaz."
     ),
     "{ref} ({package})": "{ref} ({package})",
     "Key slot on the side of the pin-1 row; pin 1 in {hole} (the cable's red stripe goes "
@@ -544,21 +546,21 @@ TURKISH: dict[str, str] = {
     "Cathode — the banded end — in {hole}": "Katot — bantlı uç — {hole} deliğine",
     # An axial part stood on end, over one hole, its top lead bent back down into the next.
     "Stand it on end over {hole} and bend the top lead back over and down into {other}.": (
-        "{hole} deliğinin üstüne dik oturt; üstteki bacağı geri kıvırıp {other} deliğine "
-        "indir."
+        "{hole} deliğinin üstüne dik oturtun; üstteki bacağı geri kıvırıp {other} deliğine "
+        "indirin."
     ),
     "Stand it on end over {hole}, the banded end down, and bend the top lead back over "
     "and down into {other}.": (
-        "{hole} deliğinin üstüne bantlı ucu altta kalacak şekilde dik oturt; üstteki "
-        "bacağı geri kıvırıp {other} deliğine indir."
+        "{hole} deliğinin üstüne bantlı ucu altta kalacak şekilde dik oturtun; üstteki "
+        "bacağı geri kıvırıp {other} deliğine indirin."
     ),
     "Stand it on end over {hole}, the banded end up, and bend the top lead back over and "
     "down into {other}.": (
-        "{hole} deliğinin üstüne bantlı ucu üstte kalacak şekilde dik oturt; üstteki "
-        "bacağı geri kıvırıp {other} deliğine indir."
+        "{hole} deliğinin üstüne bantlı ucu üstte kalacak şekilde dik oturtun; üstteki "
+        "bacağı geri kıvırıp {other} deliğine indirin."
     ),
     "Pin 1 in {hole}; check the package outline against the board": (
-        "1. pin {hole} deliğine; kılıfın dış hatlarını kartla karşılaştır"
+        "1. pin {hole} deliğine; kılıfın dış hatlarını kartla karşılaştırın"
     ),
     "Positive (long) lead": "Pozitif (uzun) bacak",
     "Positive lead": "Pozitif bacak",
@@ -586,74 +588,74 @@ TURKISH: dict[str, str] = {
     "{ends}, {pads} pads": "{ends}, {pads} ped",
     "Lay the {gauge} mm {material} along the pads first and solder it at each one. Work in "
     "one direction and do not go back over a section that has cooled.": (
-        "{gauge} mm {material} teli önce pedler boyunca yatır ve her pedde lehimle. Tek "
-        "yönde ilerle, soğumuş bir bölümün üzerinden geri dönme."
+        "{gauge} mm {material} teli önce pedler boyunca yatırın ve her pedde lehimleyin. "
+        "Tek yönde ilerleyin, soğumuş bir bölümün üzerinden geri dönmeyin."
     ),
     "Consider laying a lead offcut along these pads under the solder rather than building "
     "the run out of solder alone: it drops the resistance by roughly an order of "
     "magnitude and is far easier to make repeatable.": (
         "Hattı yalnızca lehimden oluşturmak yerine bu pedler boyunca lehimin altına bir "
-        "bacak artığı yatırmayı düşün: direnci kabaca on kat düşürür ve aynı kalitede "
+        "bacak artığı yatırmayı düşünün: direnci kabaca on kat düşürür ve aynı kalitede "
         "tekrarlamak çok daha kolaydır."
     ),
     "Tin each pad lightly first, then join them.": (
-        "Önce her pedi hafifçe kalayla, sonra birleştir."
+        "Önce her pedi hafifçe kalaylayın, sonra birleştirin."
     ),
     "Flux is not optional on a run this long.": "Bu uzunlukta bir hatta flux şarttır.",
     "AWG {awg} is {copper:.2f} mm of copper and will not go through this board's {drill:g} "
     "mm holes. Lap-solder each end onto the face of its pad instead of passing it "
     "through.": (
-        "AWG {awg}, {copper:.2f} mm bakırdır ve bu kartın {drill:g} mm deliklerinden geçmez. "
-        "Her ucu delikten geçirmek yerine pedin yüzeyine bindirerek lehimle."
+        "AWG {awg}, {copper:.2f} mm bakırdır ve bu kartın {drill:g} mm deliklerinden "
+        "geçmez. Her ucu delikten geçirmek yerine pedin yüzeyine bindirerek lehimleyin."
     ),
     "This one runs over the COMPONENT side, not the solder side. Keep it clear of anything "
     "that has to be reachable later.": (
-        "Bu tel lehim yüzünden değil, KOMPONENT yüzünden geçer. Sonradan erişilmesi gereken "
-        "her şeyden uzak tut."
+        "Bu tel lehim yüzünden değil, PARÇA yüzünden geçer. Sonradan erişilmesi gereken "
+        "her şeyden uzak tutun."
     ),
     "Bare wire: it must not touch any other conductor along its length. Keep it flat "
     "against the board and check it against the neighbouring runs.": (
-        "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatır ve komşu "
-        "hatlarla arasını kontrol et."
+        "Çıplak tel: boyunca başka hiçbir iletkene değmemeli. Karta düz yatırın ve komşu "
+        "hatlarla arasını kontrol edin."
     ),
     "No extra wire: bend the component's own lead over to reach the second hole, and "
     "solder both ends.": (
-        "Ek tel yok: parçanın kendi bacağını ikinci deliğe ulaşacak şekilde bük ve iki ucunu "
-        "da lehimle."
+        "Ek tel yok: parçanın kendi bacağını ikinci deliğe ulaşacak şekilde bükün ve iki "
+        "ucunu da lehimleyin."
     ),
     "{hole} sits about one pad gap from {neighbour}, which is on another net. Do not let "
     "solder run across.": (
         "{hole} deliği, başka bir netteki {neighbour} deliğinden yalnızca bir ped aralığı "
-        "uzakta. Lehimin aradan akmasına izin verme."
+        "uzakta. Lehimin aradan akmasına izin vermeyin."
     ),
     # -- stripboard -----------------------------------------------------------------------
     "row {label}": "satır {label}",
     "column {label}": "sütun {label}",
     "After cutting the track at {cut}, measure resistance between {a} and {b}.": (
-        "{cut} deliğindeki şeridi kestikten sonra {a} ile {b} arasındaki direnci ölç."
+        "{cut} deliğindeki şeridi kestikten sonra {a} ile {b} arasındaki direnci ölçün."
     ),
     "Open circuit. Anything below a few hundred kΩ means copper is still bridging the cut "
     "— clear it before soldering anything.": (
         "Açık devre. Birkaç yüz kΩ'un altındaki her değer, kesiği hâlâ bakırın "
-        "köprülediğini gösterir — bir şey lehimlemeden önce temizle."
+        "köprülediğini gösterir — bir şey lehimlemeden önce temizleyin."
     ),
     # -- checks ---------------------------------------------------------------------------
     "{a} ↔ {b} must be open": "{a} ↔ {b} açık devre olmalı",
     "With the trace for {net} finished, measure resistance between {a} and {b}.": (
-        "{net} lehim yolu bittikten sonra {a} ile {b} arasındaki direnci ölç."
+        "{net} lehim yolu bittikten sonra {a} ile {b} arasındaki direnci ölçün."
     ),
     "Open circuit. Any reading at all means solder has bridged them.": (
         "Açık devre. Herhangi bir değer okunursa lehim ikisini köprülemiş demektir."
     ),
-    "Probe {a} and {b}.": "{a} ile {b} arasını ölç.",
+    "Probe {a} and {b}.": "{a} ile {b} arasını ölçün.",
     "Continuous — they are both on net {net}.": "Sürekli — ikisi de {net} netinde.",
     "{net} run {span}: about {milliohm:.1f} mΩ end to end": (
         "{net} hattı {span}: uçtan uca yaklaşık {milliohm:.1f} mΩ"
     ),
     "Measure between {start} and {end}. Subtract the reading with the probes touched "
     "together, or use four-wire mode if your meter has it.": (
-        "{start} ile {end} arasını ölç. Uçlar birbirine değerken okunan değeri çıkar ya da "
-        "ölçü aletinde varsa dört telli modu kullan."
+        "{start} ile {end} arasını ölçün. Uçlar birbirine değerken okunan değeri çıkarın "
+        "ya da ölçü aletinde varsa dört telli modu kullanın."
     ),
     "About {milliohm:.1f} mΩ (accept {low:.1f}–{high:.1f} mΩ). Much higher means a cold "
     "joint or a crack in the run.": (
@@ -663,29 +665,31 @@ TURKISH: dict[str, str] = {
     "{net} run {span} must read as a dead short": "{net} hattı {span} tam kısa devre okumalı",
     "Measure between {start} and {end}, then touch the probes together and compare. A good "
     "run adds nothing you can read.": (
-        "{start} ile {end} arasını ölç, sonra uçları birbirine değdirip karşılaştır. İyi bir "
-        "hat okunabilir hiçbir şey eklemez."
+        "{start} ile {end} arasını ölçün, sonra uçları birbirine değdirip karşılaştırın. "
+        "İyi bir hat okunabilir hiçbir şey eklemez."
     ),
     "The same as your probes touched together, give or take one count. This run should be "
     "about {milliohm:.1f} mΩ, far below what a hand meter resolves — so any reading you "
     "can actually distinguish is a cold joint or a crack, not the copper.": (
         "Uçlar birbirine değerken okunanla aynı, bir basamak artı eksi. Bu hat yaklaşık "
         "{milliohm:.1f} mΩ olmalı, el tipi bir ölçü aletinin çözebildiğinin çok altında — "
-        "yani gerçekten ayırt edebildiğin her değer bakır değil, soğuk lehim ya da çatlaktır."
+        "yani gerçekten ayırt edebildiğiniz her değer bakır değil, soğuk lehim ya da "
+        "çatlaktır."
     ),
     # The same in Turkish, and on purpose: "J1 pin 1" is how a Turkish bench says it, and
     # "J1 (1. pin)" collided with the net name the isolation probes put in brackets after it.
     "{ref} pin {pin} ({name})": "{ref} pin {pin} ({name})",
     "{ref} pin {pin}": "{ref} pin {pin}",
     "{a} ↔ {b} must be separate": "{a} ↔ {b} ayrı olmalı",
-    "Probe {a} ({net_a}) and {b} ({net_b}).": "{a} ({net_a}) ile {b} ({net_b}) arasını ölç.",
+    "Probe {a} ({net_a}) and {b} ({net_b}).": "{a} ({net_a}) ile {b} ({net_b}) arasını "
+                                              "ölçün.",
     "Open, or at least the circuit's own resistance — never a short.": (
         "Açık devre ya da en az devrenin kendi direnci — asla kısa devre değil."
     ),
     "Polarity sweep before power": "Enerji vermeden önce kutup taraması",
     "Look at every polarised part once more and compare it against the component-side "
     "sheet: {parts}.": (
-        "Kutuplu her parçaya bir kez daha bak ve komponent yüzü çıktısıyla karşılaştır: "
+        "Kutuplu her parçaya bir kez daha bakın ve parça yüzü çıktısıyla karşılaştırın: "
         "{parts}."
     ),
     "Every stripe, band and flat facing the way the sheet shows. A backwards electrolytic "
@@ -693,19 +697,19 @@ TURKISH: dict[str, str] = {
         "Her şerit, bant ve düz taraf çıktının gösterdiği yöne bakıyor. Ters takılmış bir "
         "elektrolitik gürültüyle bozulur, ters bir diyot ise sessizce."
     ),
-    "Fit the ICs, pin 1 as shown": "Entegreleri tak, 1. pin gösterildiği gibi",
+    "Fit the ICs, pin 1 as shown": "Entegreleri takın, 1. pin gösterildiği gibi",
     "Only now put {parts} into its socket, or straight into the board if you did not fit "
     "one, notch to the end the sheet marks. Straighten the legs on a flat surface first.": (
         "{parts} entegresini ancak şimdi soketine — soket takmadıysan doğrudan karta — "
-        "çentiği çıktının işaretlediği uca gelecek şekilde tak. Önce bacaklarını düz bir "
-        "yüzeyde düzelt."
+        "çentiği çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını düz bir "
+        "yüzeyde düzeltin."
     ),
     "Only now put {parts} into their sockets, or straight into the board if you did not "
     "fit one, notch to the end the sheet marks. Straighten the legs on a flat surface "
     "first.": (
-        "{parts} entegrelerini ancak şimdi soketlerine — soket takmadıysan doğrudan karta — "
-        "çentikleri çıktının işaretlediği uca gelecek şekilde tak. Önce bacaklarını düz bir "
-        "yüzeyde düzelt."
+        "{parts} entegrelerini ancak şimdi soketlerine — soket takmadıysan doğrudan karta "
+        "— çentikleri çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını "
+        "düz bir yüzeyde düzeltin."
     ),
     "Every notch and dot pointing the same way as the sheet.": (
         "Her çentik ve nokta çıktıdakiyle aynı yöne bakıyor."
@@ -714,13 +718,14 @@ TURKISH: dict[str, str] = {
     "Set the supply to the circuit's voltage and the current limit to a little above what "
     "you expect it to draw. Watch the current as it comes up, and keep a hand on the "
     "switch.": (
-        "Güç kaynağını devrenin gerilimine, akım sınırını da devrenin çekmesini beklediğin "
-        "değerin biraz üstüne ayarla. Açarken akımı izle ve elin şalterde olsun."
+        "Güç kaynağını devrenin gerilimine, akım sınırını da devrenin çekmesini "
+        "beklediğiniz değerin biraz üstüne ayarlayın. Açarken akımı izleyin ve eliniz "
+        "şalterde olsun."
     ),
     "Current settles at roughly what you expected. If it runs into the limit, power down "
     "at once and go back to the isolation checks — something is bridged.": (
-        "Akım aşağı yukarı beklediğin değerde oturur. Sınıra dayanırsa hemen kapat ve "
-        "yalıtım kontrollerine geri dön — bir yerde köprü var."
+        "Akım aşağı yukarı beklediğiniz değerde oturur. Sınıra dayanırsa hemen kapatın ve "
+        "yalıtım kontrollerine geri dönün — bir yerde köprü var."
     ),
     # -- the bench ------------------------------------------------------------------------
     "Soldering iron with a fine tip, set to {temperature} °C": (
@@ -780,26 +785,26 @@ TURKISH: dict[str, str] = {
     "part of the board, not something to make. Fit whatever mates with them last, and "
     "keep the iron off them until then — a tinned finger no longer fits a connector.": (
         "Bu kartta kenar konnektörü parmakları var ({runs}). Aşağıdaki hiçbir adım bunları "
-        "kapsamaz: kartın bir parçasıdırlar, yapılacak bir şey değil. Onlara takılacak şeyi "
-        "en son tak ve o zamana kadar havyayı onlardan uzak tut — kalaylanmış bir parmak "
-        "artık konnektöre girmez."
+        "kapsamaz: kartın bir parçasıdırlar, yapılacak bir şey değil. Onlara takılacak "
+        "şeyi en son takın ve o zamana kadar havyayı onlardan uzak tutun — kalaylanmış bir "
+        "parmak artık konnektöre girmez."
     ),
     "No netlist has been imported, so there are no continuity checks. The steps describe "
     "what to build; nothing here can confirm it is the right circuit. Import the "
     "schematic's netlist to get the verification half.": (
-        "Netlist içe aktarılmadığı için süreklilik kontrolü yok. Adımlar neyin kurulacağını "
-        "anlatır; burada hiçbir şey bunun doğru devre olduğunu doğrulayamaz. Doğrulama "
-        "yarısını almak için şemanın netlistini içe aktar."
+        "Netlist içe aktarılmadığı için süreklilik kontrolü yok. Adımlar neyin "
+        "kurulacağını anlatır; burada hiçbir şey bunun doğru devre olduğunu doğrulayamaz. "
+        "Doğrulama yarısını almak için şemanın netlistini içe aktarın."
     ),
     "{count} net(s) are not fully connected on this board. Following this guide will "
     "reproduce the board as it is, including those gaps — route them first.": (
         "Bu kartta {count} net tam bağlı değil. Bu rehberi izlemek kartı bu boşluklarla "
-        "birlikte olduğu gibi üretir — önce onları yönlendir."
+        "birlikte olduğu gibi üretir — önce onları kablolayın."
     ),
     "{count} short(s) between nets the schematic keeps apart. Do not build this board "
     "until they are gone.": (
         "Şemanın ayrı tuttuğu netler arasında {count} kısa devre var. Bunlar giderilmeden "
-        "bu kartı kurma."
+        "bu kartı kurmayın."
     ),
     "{count} error(s) in the circuit itself ({parts}) — a chip or a module with its supply "
     "or ground on nothing, a part drawn the wrong way round, or a pin the part does not have. "
@@ -816,7 +821,7 @@ TURKISH: dict[str, str] = {
         "fiziksel olarak mümkün olmayacak."
     ),
     "Nothing is routed yet, so this guide covers fitting the parts and nothing else.": (
-        "Henüz hiçbir şey yönlendirilmedi, bu yüzden bu rehber yalnızca parçaların "
+        "Henüz hiçbir şey kablolanmadı, bu yüzden bu rehber yalnızca parçaların "
         "takılmasını kapsıyor."
     ),
     "unknown-footprint": "bilinmeyen kılıf",
@@ -852,8 +857,8 @@ TURKISH: dict[str, str] = {
     "over a hole there is no way back to it.": (
         "{count} kesik; bakır yüzden bir spot-face frezesiyle ya da elle çevrilen 3 mm "
         "matkap ucuyla açılır. Her biri pedi de götürür, yani açıldığı delikte sonradan "
-        "lehimlenecek bir şey kalmaz. Hepsini ilk parça takılmadan önce yap — bir deliğin "
-        "üstüne parça geldikten sonra ona geri dönmenin yolu yoktur."
+        "lehimlenecek bir şey kalmaz. Hepsini ilk parça takılmadan önce yapın — bir "
+        "deliğin üstüne parça geldikten sonra ona geri dönmenin yolu yoktur."
     ),
     "Hole": "Delik",
     "Strip": "Şerit",
@@ -867,27 +872,27 @@ TURKISH: dict[str, str] = {
     "Cut it to {cols} × {rows} holes ({size}) and mark hole {a1} in the top-left corner on "
     "the COMPONENT side. Every address below is counted from it, so if it is marked wrong, "
     "everything else is.": (
-        "Kartı {cols} × {rows} delik olarak kes ({size}) ve KOMPONENT yüzünde sol üst "
-        "köşedeki {a1} deliğini işaretle. Aşağıdaki her adres ondan sayılır; yanlış "
+        "Kartı {cols} × {rows} delik olarak kesin ({size}) ve PARÇA yüzünde sol üst "
+        "köşedeki {a1} deliğini işaretleyin. Aşağıdaki her adres ondan sayılır; yanlış "
         "işaretlenirse geri kalan her şey de yanlış olur."
     ),
     "{footprint} · pins {holes}": "{footprint} · pinler {holes}",
     "Bend the leads to {pitch:.2f} mm ({holes:.0f} holes).": (
-        "Bacakları {pitch:.2f} mm'ye bük ({holes:.0f} delik)."
+        "Bacakları {pitch:.2f} mm'ye bükün ({holes:.0f} delik)."
     ),
     "{pads} pads": "{pads} ped",
     "about {milliohm:.1f} mΩ": "yaklaşık {milliohm:.1f} mΩ",
     "{drop:.0f} mV drop": "{drop:.0f} mV düşüm",
     "Path: {holes}": "Yol: {holes}",
-    ", strip {strip:.0f} mm at each end": ", iki ucundan {strip:.0f} mm soy",
+    ", strip {strip:.0f} mm at each end": ", iki ucundan {strip:.0f} mm soyun",
     "Cut {length:.0f} mm of {colour} AWG {awg}{strip}.": (
-        "{length:.0f} mm {colour} AWG {awg} tel kes{strip}."
+        "{length:.0f} mm {colour} AWG {awg} tel kesin{strip}."
     ),
     "Reinforcing wire: {length:.0f} mm of {gauge:g} mm {material}.": (
         "Takviye teli: {length:.0f} mm, {gauge:g} mm {material}."
     ),
     "Probe {holes}": "Ölçüm noktaları: {holes}",
-    "Do not apply power until this passes.": "Bu geçmeden enerji verme.",
+    "Do not apply power until this passes.": "Bu geçmeden enerji vermeyin.",
     "Expect: {expected}": "Beklenen: {expected}",
     "Lists": "Listeler",
     "Parts": "Parçalar",
@@ -918,15 +923,16 @@ TURKISH: dict[str, str] = {
     "mark is where the insulation is cut, a solid blue one where the wire goes down "
     "through the board, a dashed one where it turns along it. Then bend it to the "
     "shape beside, drawn as seen from the face the wire lies on.": (
-        "Bu sayfaları %100 ölçekte yazdır — gerçek boyutta, sayfaya sığdırmadan — ve "
-        "aşağıdaki çubuğu bir cetvelle karşılaştır: {ruler} mm değilse yazıcı ölçeği "
-        "değiştirmiştir. Her teli düz çizimindeki boya kes ve işaretlerini oradan al: koyu "
-        "işaret izolasyonun kesileceği yer, düz mavi işaret telin kartın içinden aşağı "
-        "geçtiği yer, kesikli mavi işaret kartın üzerinde döndüğü yer. Sonra yanındaki "
-        "şekle göre bük; şekil, telin durduğu yüzden bakılmış hâliyle çizilmiştir."
+        "Bu sayfaları %100 ölçekte yazdırın — gerçek boyutta, sayfaya sığdırmadan — ve "
+        "aşağıdaki çubuğu bir cetvelle karşılaştırın: {ruler} mm değilse yazıcı ölçeği "
+        "değiştirmiştir. Her teli düz çizimindeki boya kesin ve işaretlerini oradan alın: "
+        "koyu işaret izolasyonun kesileceği yer, düz mavi işaret telin kartın içinden "
+        "aşağı geçtiği yer, kesikli mavi işaret kartın üzerinde döndüğü yer. Sonra "
+        "yanındaki şekle göre bükün; şekil, telin durduğu yüzden bakılmış hâliyle "
+        "çizilmiştir."
     ),
     "{length:.0f} mm · {colour} · AWG {awg}": "{length:.0f} mm · {colour} · AWG {awg}",
-    "from the component side": "komponent yüzünden bakış",
+    "from the component side": "parça yüzünden bakış",
     "from the solder side": "lehim yüzünden bakış",
     "turned to fit the page": "sayfaya sığsın diye döndürüldü",
     # CSV headings: lower case and without spaces, as a spreadsheet column wants them.
