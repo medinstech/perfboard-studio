@@ -38,6 +38,7 @@ from PySide6.QtGui import (
     QDropEvent,
     QFontMetricsF,
     QLinearGradient,
+    QNativeGestureEvent,
     QPagedPaintDevice,
     QPainter,
     QPainterPath,
@@ -180,6 +181,7 @@ from .bodies import (
     style_for,
     surface_for,
 )
+from .canvasinput import wheel_intent
 from .i18n import language as current_language
 from .i18n import t
 from .moduleart import (
@@ -5317,6 +5319,10 @@ class BoardView(QGraphicsView):
         self.scale(6, 6)  # ~6 px per mm to start
         self._panning = False
         self._pan_origin = QPointF()
+        #: Which button the pan started on: the middle one, or the left with Space held.
+        self._pan_button = Qt.MouseButton.MiddleButton
+        #: Space is down, so the left button pans -- the laptop's middle button.
+        self._space_held = False
         # Children of the VIEWPORT, not of the view: the viewport is what the scrollbars
         # leave behind, so an overlay parented to it stays inside the board area and does
         # not drift under a scrollbar when one appears.
@@ -5528,9 +5534,38 @@ class BoardView(QGraphicsView):
             self.scale(factor, factor)
 
     def wheelEvent(self, event: Any) -> None:
-        factor = self._clamped_factor(1.15 if event.angleDelta().y() > 0 else 1 / 1.15)
-        if factor != 1.0:
-            self.scale(factor, factor)
+        """Zoom or pan, by the rule the sheet uses too (``canvasinput.wheel_intent``)."""
+        intent = wheel_intent(event)
+        if intent.zoom_steps:
+            factor = self._clamped_factor(1.15**intent.zoom_steps)
+            if factor != 1.0:
+                self.scale(factor, factor)
+        elif intent.pan_x or intent.pan_y:
+            self._pan_by(intent.pan_x, intent.pan_y)
+        event.accept()
+
+    def event(self, event: QEvent) -> bool:
+        # A trackpad pinch the platform reports as a gesture (macOS) rather than as the
+        # Ctrl+wheel ``wheelEvent`` already zooms (Windows).
+        if (
+            isinstance(event, QNativeGestureEvent)
+            and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture
+        ):
+            factor = self._clamped_factor(1.0 + event.value())
+            if factor != 1.0:
+                self.scale(factor, factor)
+            self._refresh_hover()
+            event.accept()
+            return True
+        return bool(super().event(event))
+
+    def _pan_by(self, dx: float, dy: float) -> None:
+        """Move the board by this many pixels: right and down are positive."""
+        h = self.horizontalScrollBar()
+        v = self.verticalScrollBar()
+        h.setValue(h.value() - round(dx))
+        v.setValue(v.value() - round(dy))
+        self._refresh_hover()
 
     def zoom_by(self, factor: float) -> None:
         """Zoom about the viewport centre, for a toolbar button or a keyboard shortcut."""
@@ -5562,12 +5597,16 @@ class BoardView(QGraphicsView):
         self.board_scene.hover_left()
         super().leaveEvent(event)
 
-    # Middle-button pan. Rubber-band selection owns the left button, and reaching for a
+    # Middle-button pan, and the left button with Space held for a laptop that has no
+    # middle one. Rubber-band selection owns the left button otherwise, and reaching for a
     # scrollbar to cross a 60-column board is the kind of friction that makes an editor
     # feel unfinished.
     def mousePressEvent(self, event: Any) -> None:
-        if event.button() == Qt.MouseButton.MiddleButton:
+        if event.button() == Qt.MouseButton.MiddleButton or (
+            event.button() == Qt.MouseButton.LeftButton and self._space_held
+        ):
             self._panning = True
+            self._pan_button = event.button()
             self._pan_origin = event.position()
             self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
             event.accept()
@@ -5578,22 +5617,60 @@ class BoardView(QGraphicsView):
         if self._panning:
             delta = event.position() - self._pan_origin
             self._pan_origin = event.position()
-            h = self.horizontalScrollBar()
-            v = self.verticalScrollBar()
-            h.setValue(h.value() - int(delta.x()))
-            v.setValue(v.value() - int(delta.y()))
-            self._refresh_hover()
+            self._pan_by(delta.x(), delta.y())
             event.accept()
             return
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: Any) -> None:
-        if self._panning and event.button() == Qt.MouseButton.MiddleButton:
+        if self._panning and event.button() == self._pan_button:
             self._panning = False
-            self.viewport().unsetCursor()
+            self._restore_cursor()
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event: Any) -> None:
+        if event.key() == Qt.Key.Key_Space:
+            # Held, it turns the left button into the hand. Taken here, autorepeat and all,
+            # so it never reaches the scene or a mode as a key of its own.
+            if not event.isAutoRepeat():
+                self._space_held = True
+                if not self._panning:
+                    self.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event: Any) -> None:
+        if event.key() == Qt.Key.Key_Space:
+            if not event.isAutoRepeat():
+                self._space_held = False
+                if not self._panning:
+                    self._restore_cursor()
+            event.accept()
+            return
+        super().keyReleaseEvent(event)
+
+    def focusOutEvent(self, event: Any) -> None:
+        # A Space released while another widget had the keyboard never comes back here,
+        # and a left button that went on panning afterwards would be a board that had
+        # stopped selecting.
+        self._space_held = False
+        if not self._panning:
+            self._restore_cursor()
+        super().focusOutEvent(event)
+
+    def _restore_cursor(self) -> None:
+        """The hand while Space is held, and otherwise what the window gives a mode: the
+        cross. A pan used to unset the cursor outright, so a part being placed lost its
+        cross the first time the board was panned under it."""
+        if self._space_held:
+            self.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
+        elif self.board_scene.in_a_mode:
+            self.viewport().setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.viewport().unsetCursor()
 
     @staticmethod
     def _holes_rect(

@@ -28,6 +28,12 @@ closed without a bump.
   on one line with the one to do saying where it stands, undo and redo, and the button
   that does the next step. Alt+F and the other menu letters still open their menus, and
   Alt by itself opens ☰. The board's tools and the view switches keep their row for now.
+- **A trackpad pans the board and the sheet.** The wheel always zoomed, so on a laptop two
+  fingers zoomed, a sideways swipe zoomed out, and with no middle button the scrollbars were
+  the only way across a board. Now a mouse wheel's notches still zoom, two fingers pan,
+  Ctrl+wheel or a pinch zooms, Shift+wheel pans sideways, and holding Space turns the left
+  button into the hand in every tool. The board and the sheet read the wheel through one
+  rule, and the shortcuts card (F1) lists the new gestures.
 
 ## [0.22.0] - 2026-10-28
 

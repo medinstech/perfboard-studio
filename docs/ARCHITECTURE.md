@@ -1489,7 +1489,12 @@ back to the pointer — an editor whose "no tool" state is unreachable is an edi
 stuck in. **Panning moved to the middle button in every tool**, and that is what makes tools
 possible at all: it used to be a left drag on empty sheet, so arming the wire tool had to
 turn panning off, and with more than two tools that trade stops working — a rubber band, a
-rectangle and a wire all want the left button on empty sheet.
+rectangle and a wire all want the left button on empty sheet. A laptop has no middle
+button, so **Space held turns the left one into the hand** on both canvases, and the wheel
+is read by one rule for both (`ui/canvasinput.wheel_intent`): a mouse wheel's whole notches
+zoom, anything finer is a trackpad and pans, and Ctrl zooms either. On Windows a precision
+touchpad hands Qt no pixel deltas and no device type, only angle deltas that are not
+multiples of 120, so a high-resolution mouse wheel pans too. Ctrl+wheel still zooms it.
 
 **Nothing is committed until the button comes up.** The dragged symbols, the wire following
 the pointer and the shape being pulled out are all painted by `SheetItem._ghost` as pictures

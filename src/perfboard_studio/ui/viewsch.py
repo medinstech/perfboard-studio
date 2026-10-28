@@ -53,8 +53,10 @@ from PySide6.QtGui import (
     QDragEnterEvent,
     QDragMoveEvent,
     QDropEvent,
+    QFocusEvent,
     QKeyEvent,
     QMouseEvent,
+    QNativeGestureEvent,
     QPainter,
     QPen,
     QPixmap,
@@ -92,6 +94,7 @@ from perfboard_studio.schematic import (
 )
 
 from . import theme
+from .canvasinput import wheel_intent
 from .i18n import t
 from .scenetext import draw_label
 
@@ -799,6 +802,10 @@ class SchematicView(QGraphicsView):
         #: Middle-button panning, which every tool leaves alone. See set_tool.
         self._panning = False
         self._pan_origin = QPointF()
+        #: Which button the pan started on: the middle one, or the left with Space held.
+        self._pan_button = Qt.MouseButton.MiddleButton
+        #: Space is down, so the left button pans -- the laptop's middle button.
+        self._space_held = False
         #: The rubber band, while one is being pulled over empty sheet.
         self._band_from: QPointF | None = None
         #: Where a shape tool started.
@@ -942,9 +949,7 @@ class SchematicView(QGraphicsView):
             # tool armed it would be a promise nothing keeps.
             self.item.hover_pin = None
             self.item.update()
-        self.setCursor(
-            Qt.CursorShape.ArrowCursor if tool == "select" else Qt.CursorShape.CrossCursor
-        )
+        self._tool_cursor()
 
     def set_wiring(self, on: bool) -> None:
         """The wire tool, by the name the window's Wire button has always used."""
@@ -1126,15 +1131,34 @@ class SchematicView(QGraphicsView):
         return target / current if current else 1.0
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        steps = event.angleDelta().y() / 120.0
-        if not steps:
-            return
-        factor = self._clamped_factor(1.18**steps)
+        """Zoom or pan, by the rule the board uses too (``canvasinput.wheel_intent``)."""
+        intent = wheel_intent(event)
+        if intent.zoom_steps:
+            factor = self._clamped_factor(1.18**intent.zoom_steps)
+            if factor != 1.0:
+                self.scale(factor, factor)
+            self._fitted = True
+            self._hand_over_framing()
+        elif intent.pan_x or intent.pan_y:
+            self._hand_over_framing()
+            self._pan_by(intent.pan_x, intent.pan_y)
+        event.accept()
+
+    def _pinch(self, factor: float) -> None:
+        """A trackpad pinch the platform reports as a gesture (macOS) rather than as the
+        Ctrl+wheel ``wheelEvent`` already zooms (Windows)."""
+        factor = self._clamped_factor(factor)
         if factor != 1.0:
             self.scale(factor, factor)
         self._fitted = True
         self._hand_over_framing()
-        event.accept()
+
+    def _pan_by(self, dx: float, dy: float) -> None:
+        """Move the content by this many pixels: right and down are positive."""
+        horizontal = self.horizontalScrollBar()
+        vertical = self.verticalScrollBar()
+        horizontal.setValue(horizontal.value() - round(dx))
+        vertical.setValue(vertical.value() - round(dy))
 
     def zoom_by(self, factor: float) -> None:
         """Zoom about the centre, for a keyboard shortcut."""
@@ -1188,8 +1212,11 @@ class SchematicView(QGraphicsView):
         return None
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        # PANNING IS THE MIDDLE BUTTON, in every tool. See set_tool.
-        if event.button() == Qt.MouseButton.MiddleButton:
+        # PANNING IS THE MIDDLE BUTTON, in every tool, and the left one with Space held, for
+        # a laptop that has no middle button. See set_tool.
+        if event.button() == Qt.MouseButton.MiddleButton or (
+            event.button() == Qt.MouseButton.LeftButton and self._space_held
+        ):
             self._start_pan(event)
             event.accept()
             return
@@ -1419,7 +1446,7 @@ class SchematicView(QGraphicsView):
         self.item.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.MiddleButton and self._panning:
+        if self._panning and event.button() == self._pan_button:
             self._end_pan()
             event.accept()
             return
@@ -1516,9 +1543,25 @@ class SchematicView(QGraphicsView):
         ):
             event.accept()
             return True
+        if (
+            isinstance(event, QNativeGestureEvent)
+            and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture
+        ):
+            self._pinch(1.0 + event.value())
+            event.accept()
+            return True
         return super().event(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Space:
+            # Held, it turns the left button into the hand (see mousePressEvent). Taken
+            # here, autorepeat and all, so it never reaches a tool as a key of its own.
+            if not event.isAutoRepeat():
+                self._space_held = True
+                if not self._panning:
+                    self.setCursor(Qt.CursorShape.OpenHandCursor)
+            event.accept()
+            return
         turn = _turn_of(event)
         if turn is not None:
             self.turnRequested.emit(turn)
@@ -1559,10 +1602,30 @@ class SchematicView(QGraphicsView):
             return
         super().keyPressEvent(event)
 
-    # -- panning, on the middle button ---------------------------------------
+    def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Space:
+            if not event.isAutoRepeat():
+                self._space_held = False
+                if not self._panning:
+                    self._tool_cursor()
+            event.accept()
+            return
+        super().keyReleaseEvent(event)
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        # A Space released while another widget had the keyboard never comes back here,
+        # and a left button that still panned afterwards would be a tool that had stopped
+        # working.
+        self._space_held = False
+        if not self._panning:
+            self._tool_cursor()
+        super().focusOutEvent(event)
+
+    # -- panning, on the middle button or Space with the left -------------------------------
 
     def _start_pan(self, event: QMouseEvent) -> None:
         self._panning = True
+        self._pan_button = event.button()
         self._hand_over_framing()
         self._pan_origin = event.position()
         self.setCursor(Qt.CursorShape.ClosedHandCursor)
@@ -1570,13 +1633,16 @@ class SchematicView(QGraphicsView):
     def _pan_to(self, event: QMouseEvent) -> None:
         delta = event.position() - self._pan_origin
         self._pan_origin = event.position()
-        horizontal = self.horizontalScrollBar()
-        vertical = self.verticalScrollBar()
-        horizontal.setValue(horizontal.value() - int(delta.x()))
-        vertical.setValue(vertical.value() - int(delta.y()))
+        self._pan_by(delta.x(), delta.y())
 
     def _end_pan(self) -> None:
         self._panning = False
+        if self._space_held:
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+        else:
+            self._tool_cursor()
+
+    def _tool_cursor(self) -> None:
         self.setCursor(
             Qt.CursorShape.ArrowCursor
             if self.tool == "select"

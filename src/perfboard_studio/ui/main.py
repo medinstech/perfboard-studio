@@ -3607,7 +3607,10 @@ class ShortcutsDialog(QDialog):
         they are said in the window's language, which is chosen after this module loads."""
         return (
             (t("Middle-drag"), t("Pan the board")),
+            (t("Space+drag"), t("Pan the board")),
+            (t("Two-finger scroll"), t("Pan the board")),
             (t("Wheel"), t("Zoom about the pointer")),
+            (t("Pinch, or Ctrl+wheel"), t("Zoom about the pointer")),
             (t("Drag a part"), t("Move it, snapping to the nearest hole")),
             (t("Arrow keys"), t("Nudge the selected part one hole (Shift: five)")),
             (t("Right-click"), t("Finish the trace or net being drawn")),
