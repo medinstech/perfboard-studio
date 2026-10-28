@@ -283,6 +283,64 @@ def _outlined_text(painter: QPainter, box: QRectF, text: str, font: QFont, colou
 OUTLINE_PX = 3.0
 
 
+def draw_outlined_label(
+    painter: QPainter,
+    anchor: QPointF,
+    text: str,
+    pixel_size: int,
+    alignment: Qt.AlignmentFlag,
+    *,
+    bold: bool,
+    colour: QColor,
+    halo: QColor,
+) -> None:
+    """:func:`draw_label` with each glyph outlined in ``halo`` instead of a plate: the text
+    lands exactly where ``draw_label`` puts it, and reads over whatever it crosses."""
+    font = label_font(pixel_size, bold)
+    box = _label_box(painter.transform().map(anchor), text, font, None)
+    metrics = QFontMetricsF(font)
+    rect = metrics.boundingRect(box, int(alignment), text)
+    painter.save()
+    painter.resetTransform()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    path = QPainterPath()
+    path.addText(QPointF(rect.left(), rect.top() + metrics.ascent()), font, text)
+    pen = QPen(halo, OUTLINE_PX)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    painter.strokePath(path, pen)
+    painter.fillPath(path, colour)
+    painter.restore()
+
+
+def draw_flag_label(
+    painter: QPainter,
+    anchor: QPointF,
+    text: str,
+    pixel_size: int,
+    alignment: Qt.AlignmentFlag,
+    *,
+    colour: QColor,
+    fill: QColor,
+) -> None:
+    """A net's name on a flag: the plate :func:`draw_label` would put behind it, filled and
+    edged in the net's own colour, so a name reads as a label on the wire and not as one
+    more piece of floating text beside it."""
+    font = label_font(pixel_size, True)
+    plate = _plate(_label_box(painter.transform().map(anchor), text, font, None), text, font, alignment)
+    painter.save()
+    painter.resetTransform()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    edge = QColor(colour)
+    edge.setAlpha(150)
+    painter.setPen(QPen(edge, 1.0))
+    painter.setBrush(fill)
+    radius = QFontMetricsF(font).height() * 0.25
+    painter.drawRoundedRect(plate, radius, radius)
+    painter.restore()
+    painter.setPen(QPen(colour))
+    draw_label(painter, anchor, text, pixel_size, alignment, bold=True)
+
+
 def draw_outlined_reference(
     painter: QPainter,
     anchor: QPointF,

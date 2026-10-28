@@ -1160,6 +1160,15 @@ Here it is not even a convention — the net IS `doc.nets` and the label is prin
 so two pins carrying one name are the same net because they are. Ground and power keep their
 rail glyphs either way, for the reason they always had them.
 
+**The panel draws the sheet for a screen; the export draws it for paper.** `viewsch`
+puts a net's name on a flag, outlines text in the paper's colour, fills a symbol's body
+with a tint (`BODY_FILL`) and leaves out a pin's name and number while the pins are
+closer together on screen than a line of text is tall (`pin_text_fits`) -- all of it
+about a zoom, which paper does not have. The SVG and PDF come from `schematic_export`,
+drawn from the same `SchematicDrawing`, and the schematic goldens hold them; nothing the
+panel does moves them. Where a label IS -- and so whether two collide -- is the layout's,
+and is fixed there, never by drawing round it.
+
 **A drawn wire carries no net id** (`model.SheetWire`). Which net it belongs to is whichever
 net holds both of its ends, looked up every time (`_wire_net_of`). Three things follow, and
 all three are the point:

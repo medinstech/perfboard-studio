@@ -110,8 +110,8 @@ class Tokens:
     sheet_paper: str
     sheet_ink: str
     sheet_ink_dim: str
-    sheet_grid: str
     sheet_grid_major: str
+    sheet_body: str  # inside a symbol's body, and a net name's flag
     sheet_selected: str
     sheet_note: str
     #: Alternate rows in trees and lists. They help on a dark surface, where the row
@@ -161,8 +161,8 @@ DARK = Tokens(
     sheet_paper="#12131a",
     sheet_ink="#c8d0de",
     sheet_ink_dim="#7d8698",
-    sheet_grid="#1e2531",
     sheet_grid_major="#28313f",
+    sheet_body="#1b1f29",
     sheet_selected="#f0f3f8",
     sheet_note="#9aa6ba",
     zebra=True,
@@ -208,8 +208,8 @@ LIGHT = Tokens(
     sheet_paper="#fdfdfc",
     sheet_ink="#2a2c33",
     sheet_ink_dim="#7b7f8b",
-    sheet_grid="#f0f0f2",
     sheet_grid_major="#e2e2e7",
+    sheet_body="#f3f5f8",
     sheet_selected="#111114",
     sheet_note="#6b7080",
     zebra=False,

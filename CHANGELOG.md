@@ -98,6 +98,13 @@ closed without a bump.
   does, and every last widget that set its own colour -- the welcome dialog's buttons,
   the update strip, the board's mode banner and empty-board hint, the status bar's
   counts -- is styled by the theme instead.
+- **The sheet reads at the size it opens at.** Wires are 0.4 mm and symbols 0.5 mm where
+  they were hairlines; a symbol's body is filled with a tint of the paper; a net's name
+  sits on a flag in the net's colour instead of floating beside the wire; text is larger
+  and outlined in the paper's colour where it crosses a wire; only every fifth grid line
+  is drawn. Zoomed out on a big chip, its pins' names and numbers are left out until
+  they fit, where they used to over-print each other into a grey bar. Chosen from
+  sheets rendered in both themes; the exported SVG and PDF are drawn as before.
 - **The sheet draws each net class in the board's colours.** Power was amber on the
   sheet and orange in the ratsnest, and signal two different blues, so one net was two
   colours a panel apart -- and the sheet's power was also the warning colour. Both now

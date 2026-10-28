@@ -54,6 +54,7 @@ from PySide6.QtGui import (
     QDragMoveEvent,
     QDropEvent,
     QFocusEvent,
+    QFontMetricsF,
     QKeyEvent,
     QMouseEvent,
     QNativeGestureEvent,
@@ -79,6 +80,7 @@ from perfboard_studio.schematic import (
     GRID_MM,
     NET_LABEL_MM,
     PIN_LABEL_MM,
+    PIN_PITCH_MM,
     REF_LABEL_MM,
     VALUE_LABEL_MM,
     Annotation,
@@ -96,7 +98,7 @@ from perfboard_studio.schematic import (
 from . import theme
 from .canvasinput import wheel_intent
 from .i18n import t
-from .scenetext import draw_label
+from .scenetext import draw_flag_label, draw_outlined_label, label_font
 
 # The drag formats live with the board, which is what receives one of them and which
 # already owns the vocabulary a drop lands in (screen_to_hole). Two constants, three views.
@@ -131,8 +133,10 @@ INK_DIM = theme.ACTIVE.sheet_ink_dim
 #: which is what "there is nowhere to look" feels like on an empty document. It is drawn at
 #: the layout's OWN pitch (``schematic.GRID_MM``, 2.54 mm, the same pitch as the board),
 #: so the squares mean something rather than being wallpaper.
-GRID = theme.ACTIVE.sheet_grid
 GRID_MAJOR = theme.ACTIVE.sheet_grid_major
+#: Inside a symbol's body, and behind a net's name: a tint of the paper, so a symbol is a
+#: thing on the sheet rather than an outline over the grid.
+BODY_FILL = theme.ACTIVE.sheet_body
 #: The net classes in the ratsnest's colours, so a net is one colour on the board and on
 #: the sheet. They were two: amber power here and orange there, and two blues.
 SIGNAL = theme.NET_COLOURS["signal"]
@@ -144,8 +148,10 @@ UNDEFINED = theme.ACTIVE.warning
 #: Line weights in millimetres of sheet. A schematic has one weight for wires and a
 #: slightly heavier one for symbol bodies, which is what makes a body read as a thing and a
 #: wire as a connection between things.
-WIRE_MM = 0.30
-BODY_MM = 0.40
+#: Chosen on 2026-10-28 from rendered sheets, heavier than the 0.30 / 0.40 they were: at
+#: the zoom a sheet opens at, a 0.3 mm wire in a light colour was a hairline.
+WIRE_MM = 0.40
+BODY_MM = 0.50
 HIGHLIGHT_MM = 0.85
 
 #: Junction dot radius, in millimetres of sheet, so it is part of the drawing rather than
@@ -162,10 +168,13 @@ DOT_MM = 0.75
 #: could read without zooming in first, the first thing anybody opening a sheet then did.
 #: At these the text is read where the sheet opens, a little larger than the room the
 #: layout cleared for it; ``BOUNDS_PAD_MM`` is what keeps that from leaving debris.
-REF_PX = 11
-VALUE_PX = 10
-NET_PX = 10
-PIN_PX = 9
+REF_PX = 13
+VALUE_PX = 11
+NET_PX = 11
+PIN_PX = 10
+
+#: Text on the sheet is outlined in the paper's colour, so it reads where it crosses a wire.
+TEXT_HALO = theme.ACTIVE.sheet_paper
 
 #: The largest, so a sheet zoomed right in to one pin does not ask the font engine for
 #: glyphs a hundred pixels tall.
@@ -503,7 +512,12 @@ class SheetItem(QGraphicsItem):
                 continue
             polygon = QPolygonF([_point(point) for point in shape.points])
             if shape.kind == "polygon":
-                painter.setBrush(QBrush(QColor(colour)) if shape.filled else Qt.BrushStyle.NoBrush)
+                if shape.filled:
+                    painter.setBrush(QBrush(QColor(colour)))
+                elif _is_body(polygon):
+                    painter.setBrush(QBrush(QColor(BODY_FILL)))
+                else:
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawPolygon(polygon)
             else:
                 painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -656,6 +670,7 @@ class SheetItem(QGraphicsItem):
             "net": label_px(NET_LABEL_MM, NET_PX, scale),
             "pin": label_px(PIN_LABEL_MM, PIN_PX, scale),
         }
+        pins_fit = pin_text_fits(scale, sizes["pin"])
         for label in self.drawing.labels:
             if label.kind == "ref":
                 colour, size, bold = INK, sizes["ref"], True
@@ -664,14 +679,48 @@ class SheetItem(QGraphicsItem):
             elif label.kind in ("net", "rail"):
                 colour, size, bold = SIGNAL, sizes["net"], False
             else:
+                if not pins_fit:
+                    continue
                 colour, size, bold = INK_DIM, sizes["pin"], False
-            painter.setPen(QPen(QColor(colour)))
-            draw_label(painter, _point(label.at), label.text, size, label_alignment(label), bold=bold)
+            if label.kind == "net":
+                draw_flag_label(
+                    painter, _point(label.at), label.text, size, label_alignment(label),
+                    colour=QColor(colour), fill=QColor(BODY_FILL),
+                )
+                continue
+            draw_outlined_label(
+                painter, _point(label.at), label.text, size, label_alignment(label),
+                bold=bold, colour=QColor(colour), halo=QColor(TEXT_HALO),
+            )
 
 
 # ---------------------------------------------------------------------------
 # The view
 # ---------------------------------------------------------------------------
+
+
+def pin_text_fits(px_per_mm: float, pin_px: int) -> bool:
+    """Whether a pin's name and number can be drawn at this zoom without running into the
+    next pin's. Zoomed out on a big chip the pins are closer together on screen than the
+    text is tall, and every name and number over-printed its neighbours into a grey bar; the
+    pins themselves are still drawn, and the text comes back as soon as it fits."""
+    height = QFontMetricsF(label_font(pin_px, False)).height()
+    return PIN_PITCH_MM * px_per_mm >= height * PIN_TEXT_ROOM
+
+
+#: How much more than one line of pin text a pin's pitch on screen has to be.
+PIN_TEXT_ROOM = 1.1
+
+
+def _is_body(polygon: QPolygonF) -> bool:
+    """A closed outline with room inside it -- a symbol's body, a resistor's box -- rather
+    than an arrowhead or a diode's bar, which stay outlines."""
+    box = polygon.boundingRect()
+    return box.width() > BODY_MIN_MM and box.height() > BODY_MIN_MM
+
+
+#: The smallest closed outline that is filled as a body, in sheet millimetres.
+BODY_MIN_MM = 1.5
 
 
 def label_alignment(label: Label) -> Qt.AlignmentFlag:
@@ -862,7 +911,9 @@ class SchematicView(QGraphicsView):
         # Cosmetic pens: a grid line is one pixel at every zoom, like a ruler's, rather
         # than something that thickens as you come in. Same call scenetext makes about
         # annotation holding a screen size.
-        for step, colour in ((GRID_MM, GRID), (GRID_MM * self.GRID_MAJOR_EVERY, GRID_MAJOR)):
+        # The major lines only: every 2.54 mm line drew a dense check over the whole sheet,
+        # and on paper-white a check is louder than the drawing on it. Chosen 2026-10-28.
+        for step, colour in ((GRID_MM * self.GRID_MAJOR_EVERY, GRID_MAJOR),):
             if step * scale < self.MIN_GRID_PX:
                 continue
             pen = QPen(QColor(colour))

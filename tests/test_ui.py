@@ -13377,7 +13377,8 @@ def test_an_rgb_leds_flat_is_beside_its_red_leg() -> None:
 def test_the_sheets_text_is_read_where_the_sheet_opens() -> None:
     """A typical sheet opens at 3 to 5 px/mm, where its pin names were drawn 6 px tall and
     its references 8: nothing on it could be read without zooming in first. The floors are
-    11/10/10/9 px (reference, value, net, pin), chosen from sheets rendered side by side."""
+    13/11/11/10 px (reference, value, net, pin), chosen on 2026-10-28 from sheets rendered
+    side by side in both themes; they were 11/10/10/9 before."""
     from perfboard_studio.schematic import (
         NET_LABEL_MM,
         PIN_LABEL_MM,
@@ -13386,7 +13387,7 @@ def test_the_sheets_text_is_read_where_the_sheet_opens() -> None:
     )
     from perfboard_studio.ui.viewsch import NET_PX, PIN_PX, REF_PX, VALUE_PX, label_px
 
-    assert (REF_PX, VALUE_PX, NET_PX, PIN_PX) == (11, 10, 10, 9)
+    assert (REF_PX, VALUE_PX, NET_PX, PIN_PX) == (13, 11, 11, 10)
     for scale in (3.0, 4.0, 5.0):
         sizes = [
             label_px(REF_LABEL_MM, REF_PX, scale),
@@ -13394,7 +13395,7 @@ def test_the_sheets_text_is_read_where_the_sheet_opens() -> None:
             label_px(NET_LABEL_MM, NET_PX, scale),
             label_px(PIN_LABEL_MM, PIN_PX, scale),
         ]
-        assert min(sizes) >= 9, (scale, sizes)
+        assert min(sizes) >= 10, (scale, sizes)
     # Zoomed in, text is still its sheet size: the floor is a floor, not a fixed size.
     assert label_px(REF_LABEL_MM, REF_PX, 20.0) == round(REF_LABEL_MM * 20.0)
 
