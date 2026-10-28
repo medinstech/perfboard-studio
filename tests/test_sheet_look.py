@@ -15,13 +15,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import QPointF, QRectF
-from PySide6.QtGui import QColor, QImage, QPainter, QPolygonF
+from PySide6.QtGui import QColor, QImage, QPainter, QPolygonF, QTransform
 from PySide6.QtWidgets import QApplication, QGraphicsScene
 
 from perfboard_studio import persist
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.schematic import PIN_PITCH_MM, SchematicDrawing, build_schematic
 from perfboard_studio.ui import viewsch
+from perfboard_studio.ui.scenetext import label_plate_rect
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
@@ -70,8 +71,14 @@ def test_the_sheet_says_each_label_its_own_way(monkeypatch, px_per_mm, expect_pi
     pins = [label.text for label in drawing.labels if label.kind == "pin"]
     others = [label.text for label in drawing.labels if label.kind in ("ref", "value", "rail")]
     assert nets and pins and others
-    assert sorted(flagged) == sorted(nets), "every net's name on a flag, and nothing else"
-    assert all(text in outlined for text in others)
+    # Every name drawn is on a flag and nothing else is; zoomed out, a name with no room
+    # waits for a closer zoom (``visible_labels``), close up every one is there.
+    assert set(flagged) <= set(nets)
+    assert not set(flagged) & set(outlined) - set(nets)
+    if expect_pins:
+        assert sorted(flagged) == sorted(nets)
+    refs = [label.text for label in drawing.labels if label.kind == "ref"]
+    assert all(text in outlined for text in refs)
     drawn_pins = [text for text in outlined if text in pins and text not in others]
     assert bool(drawn_pins) is expect_pins
 
@@ -96,3 +103,56 @@ def test_a_symbol_body_is_filled_and_an_arrowhead_is_not() -> None:
     rectangle = QPolygonF([QPointF(0, 0), QPointF(6, 0), QPointF(6, 3), QPointF(0, 3), QPointF(0, 0)])
     assert not viewsch._is_body(arrowhead)
     assert viewsch._is_body(rectangle)
+
+
+def _sizes(px_per_mm: float) -> dict[str, int]:
+    return {
+        "ref": viewsch.label_px(viewsch.REF_LABEL_MM, viewsch.REF_PX, px_per_mm),
+        "value": viewsch.label_px(viewsch.VALUE_LABEL_MM, viewsch.VALUE_PX, px_per_mm),
+        "net": viewsch.label_px(viewsch.NET_LABEL_MM, viewsch.NET_PX, px_per_mm),
+        "pin": viewsch.label_px(viewsch.PIN_LABEL_MM, viewsch.PIN_PX, px_per_mm),
+    }
+
+
+def _rects(drawing: SchematicDrawing, kept: list[int], px_per_mm: float) -> list[QRectF]:
+    transform = QTransform.fromScale(px_per_mm, px_per_mm)
+    sizes = _sizes(px_per_mm)
+    rects = []
+    for index in kept:
+        label = drawing.labels[index]
+        size = sizes["net"] if label.kind in ("net", "rail") else sizes[label.kind]
+        rects.append(
+            label_plate_rect(
+                transform.map(viewsch._point(label.at)), label.text, size,
+                viewsch.label_alignment(label), bold=label.kind in ("ref", "net"),
+            )
+        )
+    return rects
+
+
+@pytest.mark.parametrize("name", ["atmega328-relay", "ne555-astable", "nano-relay"])
+def test_zoomed_out_no_label_prints_over_another(name: str) -> None:
+    """The layout never overlaps two labels at their size on the sheet; zoomed out, text is
+    held at a readable size two or three times that, and "VCC" landed on "VCC". The panel
+    leaves out what would land on something already drawn."""
+    drawing = _drawing(name)
+    px = 2.5
+    kept = viewsch.visible_labels(drawing.labels, QTransform.fromScale(px, px), _sizes(px))
+    rects = _rects(drawing, kept, px)
+    for first in range(len(rects)):
+        for second in range(first + 1, len(rects)):
+            assert not rects[first].intersects(rects[second]), (
+                drawing.labels[kept[first]].text, drawing.labels[kept[second]].text
+            )
+    # Every part keeps its name: references go first.
+    refs = {i for i, label in enumerate(drawing.labels) if label.kind == "ref"}
+    assert refs <= set(kept)
+
+
+@pytest.mark.parametrize("name", ["atmega328-relay", "ne555-astable", "nano-relay"])
+def test_close_enough_every_label_comes_back(name: str) -> None:
+    drawing = _drawing(name)
+    px = 30.0
+    kept = viewsch.visible_labels(drawing.labels, QTransform.fromScale(px, px), _sizes(px))
+    named = [i for i, label in enumerate(drawing.labels) if label.kind != "pin"]
+    assert sorted(kept) == named

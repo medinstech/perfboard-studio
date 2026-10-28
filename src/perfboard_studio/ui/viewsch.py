@@ -63,6 +63,7 @@ from PySide6.QtGui import (
     QPixmap,
     QPolygonF,
     QResizeEvent,
+    QTransform,
     QWheelEvent,
 )
 from PySide6.QtWidgets import (
@@ -98,7 +99,7 @@ from perfboard_studio.schematic import (
 from . import theme
 from .canvasinput import wheel_intent
 from .i18n import t
-from .scenetext import draw_flag_label, draw_outlined_label, label_font
+from .scenetext import draw_flag_label, draw_outlined_label, label_font, label_plate_rect
 
 # The drag formats live with the board, which is what receives one of them and which
 # already owns the vocabulary a drop lands in (screen_to_hole). Two constants, three views.
@@ -671,7 +672,10 @@ class SheetItem(QGraphicsItem):
             "pin": label_px(PIN_LABEL_MM, PIN_PX, scale),
         }
         pins_fit = pin_text_fits(scale, sizes["pin"])
-        for label in self.drawing.labels:
+        shown = set(visible_labels(self.drawing.labels, painter.transform(), sizes))
+        for index, label in enumerate(self.drawing.labels):
+            if label.kind != "pin" and index not in shown:
+                continue
             if label.kind == "ref":
                 colour, size, bold = INK, sizes["ref"], True
             elif label.kind == "value":
@@ -697,6 +701,47 @@ class SheetItem(QGraphicsItem):
 # ---------------------------------------------------------------------------
 # The view
 # ---------------------------------------------------------------------------
+
+
+#: Which label keeps its place when two would print on one another, most important
+#: first: what a part is called, then what a wire is called, then a supply's name, then a
+#: part's value. Pin text is inside its own symbol and has ``pin_text_fits`` instead.
+LABEL_PRIORITY = {"ref": 0, "net": 1, "rail": 2, "value": 3}
+
+
+def visible_labels(
+    labels: Sequence[Label], transform: QTransform, sizes: dict[str, int]
+) -> list[int]:
+    """The labels that can be drawn at this zoom without printing over one another, by
+    index into ``labels``.
+
+    The LAYOUT never overlaps two labels: each is placed clear of the others at its size on
+    the sheet, and the exports draw them at that size. The panel cannot -- zoomed out, text
+    is held at a size that can be read (``label_px``), two or three times the room the
+    layout gave it, and "VCC" landed on "VCC", a value on a net's name, a whole connector's
+    names in one smudge. So the panel draws them in ``LABEL_PRIORITY`` order and leaves out
+    any that would land on one already drawn; each comes back as the view closes in and
+    there is room, and nothing on paper changes. Deterministic: same sheet, same zoom, same
+    labels.
+    """
+    order = sorted(
+        (index for index, label in enumerate(labels) if label.kind in LABEL_PRIORITY),
+        key=lambda index: (LABEL_PRIORITY[labels[index].kind], index),
+    )
+    kept: list[int] = []
+    taken: list[QRectF] = []
+    for index in order:
+        label = labels[index]
+        size = sizes["net"] if label.kind in ("net", "rail") else sizes[label.kind]
+        rect = label_plate_rect(
+            transform.map(_point(label.at)), label.text, size, label_alignment(label),
+            bold=label.kind in ("ref", "net"),
+        )
+        if any(rect.intersects(other) for other in taken):
+            continue
+        kept.append(index)
+        taken.append(rect)
+    return kept
 
 
 def pin_text_fits(px_per_mm: float, pin_px: int) -> bool:

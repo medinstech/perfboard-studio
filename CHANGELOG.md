@@ -131,6 +131,12 @@ closed without a bump.
   DRC measures, so two parts DRC passed stood into each other on screen. It now takes KiCad's
   0207 made for 10.16 mm, centred, with its legs bent out to the holes as the radial cans'
   are.
+- **Zoomed out, the sheet's labels no longer print over one another.** "VCC" landed on
+  "VCC", a value on a net's name, a connector's five names in one smudge: the layout
+  gives every label its own room at its size on the sheet, and zoomed out the window
+  draws text two or three times that size so it can be read. It now leaves out what
+  would land on a label already drawn -- part names first, then net names, supplies and
+  values -- and each comes back as you zoom in. The exported sheet is unchanged.
 - **Escape calls off a drag in the middle of it.** Let go after Escape and the part, the
   label, the symbols or the rubber band went where the pointer was: the window's Escape
   shortcut took the key before the board or the sheet saw it. Both now take Escape back
