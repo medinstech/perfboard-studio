@@ -400,7 +400,7 @@ growing past 40 000 characters.
 - Before bumping `version.py` or `DOCUMENT_FORMAT_VERSION` → [Two version
   numbers](docs/ARCHITECTURE.md#two-version-numbers)
 - Before touching `footprints.py`, a generated footprint id, or anything that reads
-  `body_outline` → [Footprints are generated, not
+  `body_outline` or `body_clearance_mm` → [Footprints are generated, not
   shipped](docs/ARCHITECTURE.md#footprints-are-generated-not-shipped)
 - Before touching `component-too-tall`, `jumper-under-body`, `heat-proximity` or
   `under-module`, or what the placer, router or guide does about them → [Four rules only the
