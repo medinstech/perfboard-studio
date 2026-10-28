@@ -837,7 +837,11 @@ Three things about the mapping:
   prints the courtyard against the model's own size for every entry, and where nothing
   matched — the 16 mm potentiometer, the 0.3-inch 40-pin DIP — there is no entry and the
   generated body stands. A model whose leads are 5 mm apart on a footprint whose holes are
-  2.54 mm apart is a part standing on nothing.
+  2.54 mm apart is a part standing on nothing. THE BODY COMES FIRST, THE PITCH SECOND: where
+  KiCad has the package only at another pitch, the model is centred and its legs splayed
+  onto our holes (`splay`), as a builder bends them -- the radial cans, and `r-axial-5`, which
+  took KiCad's 9 mm DIN0309 at its own pitch and so drew a part 2.7 mm longer than the body
+  DRC measures.
 - **Position is not measured, because it is already right.** A KiCad through-hole model's
   origin is pin 1 and its axes run the way this world does — x with the column, y against
   the row. Both follow the footprint, and this project's convention is written down as "the

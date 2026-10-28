@@ -90,6 +90,11 @@ closed without a bump.
 
 ### Fixed
 
+- **The 5-hole axial resistor was a different resistor in 3D.** `r-axial-5` is a 6.3 mm
+  0207 body, and the 3D view drew KiCad's 9 mm DIN0309 for it -- 2.7 mm longer than the body
+  DRC measures, so two parts DRC passed stood into each other on screen. It now takes KiCad's
+  0207 made for 10.16 mm, centred, with its legs bent out to the holes as the radial cans'
+  are.
 - **Escape calls off a drag in the middle of it.** Let go after Escape and the part, the
   label, the symbols or the rubber band went where the pointer was: the window's Escape
   shortcut took the key before the board or the sheet saw it. Both now take Escape back
