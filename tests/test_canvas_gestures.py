@@ -56,18 +56,31 @@ def _wheel(
     )
 
 
-def _mouse(widget: QWidget, kind: QEvent.Type, at: QPoint, buttons: Qt.MouseButton) -> None:
+def _mouse(
+    widget: QWidget,
+    kind: QEvent.Type,
+    at: QPoint,
+    buttons: Qt.MouseButton,
+    modifiers: Qt.KeyboardModifier = NO_KEYS,
+) -> None:
     button = NONE if kind == QEvent.Type.MouseMove else LEFT
     QApplication.sendEvent(
-        widget, QMouseEvent(kind, QPointF(at), QPointF(widget.mapToGlobal(at)), button, buttons, NO_KEYS)
+        widget, QMouseEvent(kind, QPointF(at), QPointF(widget.mapToGlobal(at)), button, buttons, modifiers)
     )
 
 
-def _drag(widget: QWidget, start: QPoint, end: QPoint) -> None:
-    _mouse(widget, QEvent.Type.MouseButtonPress, start, LEFT)
+def _drag(
+    widget: QWidget, start: QPoint, end: QPoint, modifiers: Qt.KeyboardModifier = NO_KEYS
+) -> None:
+    _mouse(widget, QEvent.Type.MouseButtonPress, start, LEFT, modifiers)
     for step in range(1, 6):
-        _mouse(widget, QEvent.Type.MouseMove, start + (end - start) * step / 5, LEFT)
-    _mouse(widget, QEvent.Type.MouseButtonRelease, end, NONE)
+        _mouse(widget, QEvent.Type.MouseMove, start + (end - start) * step / 5, LEFT, modifiers)
+    _mouse(widget, QEvent.Type.MouseButtonRelease, end, NONE, modifiers)
+
+
+def _click(widget: QWidget, at: QPoint, modifiers: Qt.KeyboardModifier = NO_KEYS) -> None:
+    _mouse(widget, QEvent.Type.MouseButtonPress, at, LEFT, modifiers)
+    _mouse(widget, QEvent.Type.MouseButtonRelease, at, NONE, modifiers)
 
 
 def _key(widget: QWidget, kind: QEvent.Type, key: Qt.Key) -> None:
@@ -340,3 +353,152 @@ def test_escape_puts_dragged_symbols_back_and_keeps_them_selected() -> None:
         assert moved == []
     finally:
         view.close()
+
+
+# -- one selection grammar ----------------------------------------------------------------
+
+
+def _clickable_parts(view: BoardView, count: int) -> list[tuple[str, QPoint]]:
+    """Parts whose middle a click lands on (nothing selectable drawn over it), and where."""
+    scene = view.board_scene
+    selectable = QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+    found = []
+    for comp_id, item in scene.component_items.items():
+        centre = item.sceneBoundingRect().center()
+        top = next((under for under in scene.items(centre) if under.flags() & selectable), None)
+        at = view.mapFromScene(centre)
+        if top is item and view.viewport().rect().contains(at):
+            found.append((comp_id, at))
+        if len(found) == count:
+            break
+    assert len(found) == count
+    return found
+
+
+@pytest.mark.parametrize("modifier", [SHIFT, CTRL], ids=["shift", "ctrl"])
+def test_shift_or_ctrl_adds_a_part_to_the_selection_and_takes_it_back_out(
+    modifier: Qt.KeyboardModifier,
+) -> None:
+    """Shift used to REPLACE the board's selection (Qt reads only Ctrl), while on the
+    sheet Shift was the one that added: the same gesture did opposite things."""
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    view = BoardView(BoardScene(document, footprint_lookup(), side="top"))
+    view.resize(800, 600)
+    view.show()
+    view.fit_board()
+    QApplication.processEvents()
+    try:
+        port, scene = view.viewport(), view.board_scene
+        (first, at_first), (second, at_second) = _clickable_parts(view, 2)
+        _click(port, at_first)
+        _click(port, at_second, modifier)
+        assert set(scene.selected_component_ids()) == {first, second}
+        _click(port, at_second, modifier)
+        assert scene.selected_component_ids() == (first,)
+    finally:
+        view.close()
+
+
+def test_a_rubber_band_pulled_with_shift_adds_to_the_board_selection() -> None:
+    view = _board_view()
+    try:
+        port, scene = view.viewport(), view.board_scene
+        view.fit_board()
+        QApplication.processEvents()
+        (first, at_first), = _clickable_parts(view, 1)
+        _click(port, at_first)
+        _drag(port, QPoint(2, 2), QPoint(port.width() - 2, port.height() // 3), SHIFT)
+        selected = set(scene.selected_component_ids())
+        assert first in selected and len(selected) > 1
+    finally:
+        view.close()
+
+
+def _symbol_point(view: SchematicView, ref: str) -> QPoint:
+    symbol = next(s for s in view.item.drawing.symbols if s.ref == ref)
+    return view.mapFromScene(QPointF(symbol.at.x + symbol.width / 2, symbol.at.y + symbol.height / 2))
+
+
+@pytest.mark.parametrize("modifier", [SHIFT, CTRL], ids=["shift", "ctrl"])
+def test_shift_or_ctrl_adds_a_symbol_and_takes_it_back_out(modifier: Qt.KeyboardModifier) -> None:
+    """Shift added and never removed on the sheet, and Ctrl did nothing at all."""
+    view = _sheet_view()
+    try:
+        view.fit()
+        QApplication.processEvents()
+        port = view.viewport()
+        first, second = (s.ref for s in view.item.drawing.symbols[:2])
+        _click(port, _symbol_point(view, first))
+        _click(port, _symbol_point(view, second), modifier)
+        assert view.selected_refs == [first, second]
+        _click(port, _symbol_point(view, second), modifier)
+        assert view.selected_refs == [first]
+    finally:
+        view.close()
+
+
+def test_a_rubber_band_pulled_with_shift_adds_to_the_sheet_selection() -> None:
+    view = _sheet_view()
+    try:
+        view.fit()
+        QApplication.processEvents()
+        port = view.viewport()
+        symbols = view.item.drawing.symbols
+        # The symbol furthest down is kept selected; the band takes the top of the sheet.
+        lowest = max(symbols, key=lambda s: s.at.y)
+        _click(port, _symbol_point(view, lowest.ref))
+        top = view.mapFromScene(QPointF(0, 0))
+        band_end = view.mapFromScene(QPointF(view.item.drawing.width, lowest.at.y - 1))
+        _drag(port, top + QPoint(1, 1), band_end, SHIFT)
+        assert lowest.ref in view.selected_refs and len(view.selected_refs) > 1
+    finally:
+        view.close()
+
+
+def test_select_all_takes_every_part_or_every_symbol_by_where_the_keyboard_is() -> None:
+    from perfboard_studio.ui.main import MainWindow
+
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    window = MainWindow(document)
+    try:
+        # Where the keyboard is, without depending on which top-level window an offscreen
+        # run made active: the routing is what is pinned, not Qt's focus.
+        window.schematic_view.hasFocus = lambda: True  # type: ignore[method-assign]
+        asked: list[str] = []
+        window.schematic_view.select_all = lambda: asked.append("sheet")  # type: ignore[method-assign]
+        window.act_select_all.trigger()
+        assert asked == ["sheet"]
+        assert not window.scene.selected_component_ids()
+
+        # Every part the board draws: the fixture's one part on a footprint neither engine
+        # has (``c-disc-1``) is not on the board to be selected.
+        drawn = set(window.scene.component_items)
+        window.schematic_view.hasFocus = lambda: False  # type: ignore[method-assign]
+        window.act_select_all.trigger()
+        assert set(window.scene.selected_component_ids()) == drawn
+        assert len(drawn) == len(document.components) - 1
+    finally:
+        window._mark_saved()
+        window.close()
+
+
+def test_select_all_on_the_sheet_takes_every_symbol() -> None:
+    view = _sheet_view()
+    try:
+        seen: list[object] = []
+        view.selectionChanged.connect(seen.append)
+        view.select_all()
+        assert view.selected_refs == [s.ref for s in view.item.drawing.symbols]
+        assert seen == [view.selected_refs]
+    finally:
+        view.close()
+
+
+def test_ctrl_a_in_a_text_field_stays_the_text_fields() -> None:
+    """Select All is a window shortcut; a line edit takes Ctrl+A back for its own text."""
+    from PySide6.QtWidgets import QLineEdit
+
+    field = QLineEdit("10k")
+    override = QKeyEvent(QEvent.Type.ShortcutOverride, Qt.Key.Key_A, CTRL)
+    QApplication.sendEvent(field, override)
+    assert override.isAccepted()

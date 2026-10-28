@@ -3612,6 +3612,7 @@ class ShortcutsDialog(QDialog):
             (t("Wheel"), t("Zoom about the pointer")),
             (t("Pinch, or Ctrl+wheel"), t("Zoom about the pointer")),
             (t("Drag a part"), t("Move it, snapping to the nearest hole")),
+            (t("Shift- or Ctrl-click"), t("Add to the selection, or take out of it")),
             (t("Arrow keys"), t("Nudge the selected part one hole (Shift: five)")),
             (t("Right-click"), t("Finish the trace or net being drawn")),
             ("Enter", t("Finish it without moving the pointer")),
@@ -6184,6 +6185,15 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_duplicate.triggered.connect(self.on_duplicate)
+        self.act_select_all = edit_menu.addAction(t("Select &All"))
+        self.act_select_all.setShortcut(QKeySequence.StandardKey.SelectAll)
+        self.act_select_all.setToolTip(
+            t(
+                "Every part on the board, or every symbol on the sheet when the sheet has "
+                "the keyboard."
+            )
+        )
+        self.act_select_all.triggered.connect(self.on_select_all)
         edit_menu.addSeparator()
 
         # The engine has had component.rotate and component.mirror since the first commit
@@ -11846,6 +11856,15 @@ class MainWindow(QMainWindow):
         box.setEscapeButton(cancel)
         box.exec()
         return box.clickedButton() is go
+
+    def on_select_all(self) -> None:
+        """Select everything on whichever canvas has the keyboard: the sheet when it does,
+        the board otherwise. A text field keeps Ctrl+A for its own text -- Qt gives the
+        focused line edit the shortcut first."""
+        if self.schematic_view.hasFocus():
+            self.schematic_view.select_all()
+            return
+        self.scene.select_all()
 
     def on_toggle_lock_selection(self) -> None:
         components = self._require_selection(t("lock or unlock it"))

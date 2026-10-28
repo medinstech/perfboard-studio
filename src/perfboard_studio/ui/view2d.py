@@ -39,6 +39,7 @@ from PySide6.QtGui import (
     QFontMetricsF,
     QKeyEvent,
     QLinearGradient,
+    QMouseEvent,
     QNativeGestureEvent,
     QPagedPaintDevice,
     QPainter,
@@ -4122,6 +4123,12 @@ class BoardScene(QGraphicsScene):
         for comp_id, item in self.component_items.items():
             item.setSelected(comp_id in wanted)
 
+    def select_all(self) -> None:
+        """Every part on the board (Edit > Select All). Parts and not their copper: what a
+        selection of everything is for is moving, turning or locking the parts, and none of
+        that carries a trace with it."""
+        self.select_components(list(self.component_items))
+
     def _on_selection_changed(self) -> None:
         """Selecting a part highlights every net it belongs to.
 
@@ -5641,6 +5648,28 @@ class BoardView(QGraphicsView):
     # middle one. Rubber-band selection owns the left button otherwise, and reaching for a
     # scrollbar to cross a 60-column board is the kind of friction that makes an editor
     # feel unfinished.
+    @staticmethod
+    def _shift_as_ctrl(event: Any) -> Any:
+        """The same event with Ctrl added when Shift is held.
+
+        ONE SELECTION GRAMMAR ON BOTH CANVASES: Shift and Ctrl each add a part to the
+        selection or take it back out. Qt's own selection reads only Ctrl, so on the board
+        Shift+click REPLACED the selection, while on the sheet Shift was the one that added
+        -- the same gesture did opposite things a panel apart. Handing Qt the Ctrl it
+        understands is what makes Shift mean it too, for a click and for a rubber band.
+        """
+        modifiers = event.modifiers()
+        if not modifiers & Qt.KeyboardModifier.ShiftModifier:
+            return event
+        return QMouseEvent(
+            event.type(),
+            event.position(),
+            event.globalPosition(),
+            event.button(),
+            event.buttons(),
+            modifiers | Qt.KeyboardModifier.ControlModifier,
+        )
+
     def mousePressEvent(self, event: Any) -> None:
         if event.button() == Qt.MouseButton.MiddleButton or (
             event.button() == Qt.MouseButton.LeftButton and self._space_held
@@ -5651,7 +5680,7 @@ class BoardView(QGraphicsView):
             self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
             event.accept()
             return
-        super().mousePressEvent(event)
+        super().mousePressEvent(self._shift_as_ctrl(event))
 
     def mouseMoveEvent(self, event: Any) -> None:
         if self._panning:
@@ -5668,7 +5697,9 @@ class BoardView(QGraphicsView):
             self._restore_cursor()
             event.accept()
             return
-        super().mouseReleaseEvent(event)
+        # The release too: Qt takes a Ctrl-clicked part back out of the selection on the
+        # release, not the press, so a drag can carry it first.
+        super().mouseReleaseEvent(self._shift_as_ctrl(event))
 
     def keyPressEvent(self, event: Any) -> None:
         if event.key() == Qt.Key.Key_Space:

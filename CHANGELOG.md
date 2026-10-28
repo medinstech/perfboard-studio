@@ -28,6 +28,12 @@ closed without a bump.
   on one line with the one to do saying where it stands, undo and redo, and the button
   that does the next step. Alt+F and the other menu letters still open their menus, and
   Alt by itself opens ☰. The board's tools and the view switches keep their row for now.
+- **One selection grammar on the board and the sheet, and Select All.** Shift+click
+  replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
+  never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the
+  selection and take it back out, for a click and for a rubber band, on both. Edit ▸ Select
+  All (Ctrl+A) selects every part on the board, or every symbol when the sheet has the
+  keyboard; a text field keeps Ctrl+A for its own text.
 - **A trackpad pans the board and the sheet.** The wheel always zoomed, so on a laptop two
   fingers zoomed, a sideways swipe zoomed out, and with no middle button the scrollbars were
   the only way across a board. Now a mouse wheel's notches still zoom, two fingers pan,

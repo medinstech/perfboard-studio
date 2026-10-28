@@ -808,6 +808,8 @@ class SchematicView(QGraphicsView):
         self._space_held = False
         #: The rubber band, while one is being pulled over empty sheet.
         self._band_from: QPointF | None = None
+        #: What a band pulled with Shift or Ctrl adds to: the selection when it started.
+        self._band_keeps: list[str] = []
         #: Where a shape tool started.
         self._shape_from: QPointF | None = None
         self.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -965,6 +967,13 @@ class SchematicView(QGraphicsView):
         """Whether the left button is in the middle of something Escape can call off: a
         drag of symbols, a rubber band, or a shape being pulled out."""
         return self._dragging or self._band_from is not None or self._shape_from is not None
+
+    def select_all(self) -> None:
+        """Every symbol on the sheet (Edit > Select All)."""
+        if self.item is None:
+            return
+        self.set_selection([symbol.ref for symbol in self.item.drawing.symbols])
+        self.selectionChanged.emit(list(self.selected_refs))
 
     def _clear_ghosts(self) -> None:
         self._dragging = False
@@ -1264,11 +1273,24 @@ class SchematicView(QGraphicsView):
             return
 
         # -- the select tool ------------------------------------------------
+        # Shift or Ctrl adds to the selection or takes back out of it, as on the board
+        # (``view2d.BoardView._shift_as_ctrl``): Shift used to add and never remove here,
+        # and Ctrl did nothing, while on the board it was the other way round.
+        additive = bool(
+            event.modifiers()
+            & (Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier)
+        )
         symbol = self.symbol_at(where)
+        if symbol is not None and additive and symbol.ref in self.selected_refs:
+            # Let go of, and nothing more: a symbol just taken out of the selection is not
+            # one to start dragging.
+            self.set_selection([ref for ref in self.selected_refs if ref != symbol.ref])
+            self.selectionChanged.emit(list(self.selected_refs))
+            event.accept()
+            return
         if symbol is not None:
             self._press_ref = symbol.ref
             if symbol.ref not in self.selected_refs:
-                additive = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
                 refs = [*self.selected_refs, symbol.ref] if additive else [symbol.ref]
                 self.set_selection(refs)
                 self.selectionChanged.emit(list(self.selected_refs))
@@ -1293,6 +1315,12 @@ class SchematicView(QGraphicsView):
             return
 
         self._band_from = where
+        if additive:
+            # A band pulled with Shift or Ctrl adds what it takes to what is selected.
+            self._band_keeps = list(self.selected_refs)
+            event.accept()
+            return
+        self._band_keeps = []
         self.set_selection([], [])
         self.selectionChanged.emit([])
         self.cleared.emit()
@@ -1496,7 +1524,9 @@ class SchematicView(QGraphicsView):
             box = QRectF(self._band_from, where).normalized()
             self._clear_ghosts()
             if box.width() > 1.0 or box.height() > 1.0:
-                self.set_selection(self._symbols_within(box))
+                kept = self._band_keeps
+                taken = [ref for ref in self._symbols_within(box) if ref not in kept]
+                self.set_selection([*kept, *taken])
                 self.selectionChanged.emit(list(self.selected_refs))
             event.accept()
             return
