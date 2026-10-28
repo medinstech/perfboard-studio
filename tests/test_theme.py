@@ -125,6 +125,9 @@ def test_text_reads_on_every_panel_surface(tokens: Tokens) -> None:
     # Placeholders, column headers, what is disabled: quieter, still legible.
     for surface in surfaces:
         assert _contrast(tokens.text_tertiary, getattr(tokens, surface)) >= 3.0
+    # A badge and the Next button with a problem: text on a status fill.
+    for fill in (tokens.danger, tokens.warning):
+        assert _contrast(tokens.text_on_status, fill) >= 4.5, fill
     assert _contrast(tokens.sheet_ink, tokens.sheet_paper) >= 4.5
     assert _contrast(tokens.sheet_ink_dim, tokens.sheet_paper) >= 3.0
     assert _contrast(tokens.canvas_ruler_major, tokens.canvas) >= 4.5

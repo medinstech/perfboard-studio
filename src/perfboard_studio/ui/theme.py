@@ -117,6 +117,11 @@ class Tokens:
     #: Alternate rows in trees and lists. They help on a dark surface, where the row
     #: boundaries disappear, and are noise on a light one.
     zebra: bool
+    #: Text on a warning or danger fill -- a badge, the Next button with a problem. White
+    #: on the dark theme's amber reads at under 2:1 and on its red at 3.3:1.
+    text_on_status: str
+    #: How dark what floats casts its shadow, out of 255 (``elevate``).
+    shadow_alpha: int
 
 
 #: The default. Today's dark blue-grey, cleaned up: one surface step fewer, three strengths
@@ -161,6 +166,8 @@ DARK = Tokens(
     sheet_selected="#f0f3f8",
     sheet_note="#9aa6ba",
     zebra=True,
+    text_on_status="#1b1e25",
+    shadow_alpha=120,
 )
 
 #: The light theme: white panels on a pale gutter, a light grey canvas round the board and
@@ -206,6 +213,8 @@ LIGHT = Tokens(
     sheet_selected="#111114",
     sheet_note="#6b7080",
     zebra=False,
+    text_on_status="#ffffff",
+    shadow_alpha=46,
 )
 
 THEMES: dict[str, Tokens] = {DARK.name: DARK, LIGHT.name: LIGHT}
@@ -327,6 +336,19 @@ def tone(widget: QWidget, role: Role | None) -> None:
 
 
 Variant = Literal["primary", "link", "card"]
+
+
+def elevate(widget: QWidget) -> None:
+    """A soft shadow under something that FLOATS over the canvas -- the board's tools, the
+    selection bar -- which a stylesheet cannot draw. Only there: a docked panel is level with
+    its neighbours and is told apart from them by a hairline."""
+    from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+    shadow = QGraphicsDropShadowEffect(widget)
+    shadow.setBlurRadius(18.0)
+    shadow.setOffset(0.0, 4.0)
+    shadow.setColor(QColor(0, 0, 0, ACTIVE.shadow_alpha))
+    widget.setGraphicsEffect(shadow)
 
 
 def variant(widget: QWidget, name: Variant | None) -> None:
@@ -523,6 +545,60 @@ QPushButton[variant="link"] {{
     text-decoration: underline;
 }}
 QPushButton[variant="link"]:hover {{ color: {k.accent_text}; }}
+/* The shell, by name: ux's header, step bar, floating tools, problems drawer and
+   properties panel. Their widgets carry the names and properties; the look lives here. */
+QWidget#header {{ background: {k.bg_surface}; border-bottom: 1px solid {k.border}; }}
+QLabel#headerTitle {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
+QToolButton#headerUnsaved {{
+    color: {k.warning};
+    background: transparent;
+    border: none;
+    text-decoration: underline;
+}}
+QWidget#workflowBar QToolButton {{
+    background: transparent;
+    border: none;
+    border-radius: {RADIUS_SM}px;
+    color: {k.text_secondary};
+}}
+QWidget#workflowBar QToolButton:hover {{ background: {k.bg_hover}; }}
+QWidget#workflowBar QToolButton[status="done"] {{ color: {k.text_secondary}; }}
+QWidget#workflowBar QToolButton[status="current"] {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
+QWidget#workflowBar QToolButton[status="problem"] {{ color: {k.danger}; font-weight: {SEMIBOLD}; }}
+QWidget#workflowBar QToolButton[status="todo"] {{ color: {k.text_tertiary}; }}
+QPushButton[variant="primary"][problem="true"] {{
+    background: {k.warning};
+    border-color: {k.warning};
+    color: {k.text_on_status};
+}}
+QFrame[floating="true"] {{
+    background: {k.bg_raised};
+    border: 1px solid {k.border_strong};
+    border-radius: {RADIUS_LG}px;
+}}
+QFrame[floating="true"] QToolButton {{
+    background: transparent;
+    border: none;
+    border-radius: {RADIUS_SM}px;
+    padding: {s["xs"]}px;
+}}
+QFrame[floating="true"] QToolButton:hover {{ background: {k.bg_hover}; }}
+QFrame[floating="true"] QToolButton:checked {{ background: {k.accent_subtle}; color: {k.accent_text}; }}
+QWidget#problemsBar {{ background: {k.bg_surface}; border-top: 1px solid {k.border}; }}
+QLabel#problemsBadge[tone="danger"], QLabel#problemsBadge[tone="warning"] {{
+    border-radius: 8px;
+    padding: 0 {s["sm"]}px;
+    font-weight: {SEMIBOLD};
+}}
+QLabel#problemsBadge[tone="danger"] {{ background: {k.danger}; color: {k.text_on_status}; }}
+QLabel#problemsBadge[tone="warning"] {{ background: {k.warning}; color: {k.text_on_status}; }}
+QWidget#propertiesPanel {{ background: {k.bg_surface}; border-left: 1px solid {k.border}; }}
+QLabel[role="caption"] {{
+    color: {k.text_secondary};
+    font-size: {CAPTION_PX}px;
+    font-weight: {SEMIBOLD};
+}}
+
 QWidget[variant="card"] {{
     background: {k.bg_raised};
     border: 1px solid {k.border};
