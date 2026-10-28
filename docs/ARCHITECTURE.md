@@ -1496,8 +1496,8 @@ for, and wanting both at once meant a second top-level window (`_DetachedSheet`)
 button and handed back on close. All of that is what a `QDockWidget` already is, and none
 of it could be undone by dragging.
 
-The opening arrangement is parts and nets on the left and **the four views as tabs over the
-canvas** -- board, sheet, 3D, guide, every one open, the board in front -- with DRC under
+The opening arrangement is one sidebar on the left -- the library, the design's parts and
+its nets as three tabs -- and **the four views as tabs over the canvas** -- board, sheet, 3D, guide, every one open, the board in front -- with DRC under
 them. Open costs nothing behind a tab: a view fills itself only when it comes in front, and
 the 3D view builds nothing until then. They stood side by side from version 6 to 8, and a
 second view open cost the board half its width; they were tabs once before that, and were

@@ -5142,11 +5142,22 @@ class MainWindow(QMainWindow):
             self.dock_board.raise_()
         finally:
             self._arranging_docks = False
-        # THE PART LIST BEHIND THE NETS, after every split for the reason above. Nets stays in
-        # front: it is the panel a board is worked from, and the list is one a person goes
-        # to.
-        self.tabifyDockWidget(self.dock_nets, self.dock_part_list)
-        self.dock_nets.raise_()
+        # THE LEFT COLUMN IS ONE SIDEBAR, after every split for the reason above: the
+        # library, the design's parts and its nets as three tabs of one group, one at a
+        # time and each with the column's whole height. It was the library over a Nets /
+        # Part List pair, and each of the three had a third of the height while two of
+        # them were idle -- a parts list of ten rows over a nets list of eight. The library
+        # is in front, because adding parts is what a design starts with; the tabs say
+        # where the other two are.
+        #
+        # All three SHOWN before they are tabified: Reset the Panel Layout comes here with
+        # one of them closed, and Qt tabifying a closed dock into a group it is not shown in
+        # crashed the process (an access violation inside tabifyDockWidget).
+        for dock in (self.dock_library, self.dock_part_list, self.dock_nets):
+            dock.show()
+        self.tabifyDockWidget(self.dock_library, self.dock_part_list)
+        self.tabifyDockWidget(self.dock_library, self.dock_nets)
+        self.dock_library.raise_()
         # Tabs on top, where a tab bar is: Qt puts a dock area's at the bottom by default,
         # which is where nobody looks for the switch between two views.
         for area in (
@@ -5201,8 +5212,14 @@ class MainWindow(QMainWindow):
     def _cap_for_default_sizes(self, on: bool) -> None:
         # The guide is not here: it is shut on a first run, and a cap on a closed panel
         # changes nothing. It is given its room when it opens (``_make_room``).
+        # ALL THREE of the sidebar's tabs: a tab group is as wide as its widest-allowed
+        # member, so a cap on the library alone left the column free to take every spare
+        # pixel -- 1318 of a 1600 px window, with the board squeezed to the 3D view's
+        # minimum beside it.
         for dock, width, height in (
             (self.dock_library, self.LAYOUT_LEFT_WIDTH, None),
+            (self.dock_part_list, self.LAYOUT_LEFT_WIDTH, None),
+            (self.dock_nets, self.LAYOUT_LEFT_WIDTH, None),
             (self.dock_drc, None, self.LAYOUT_DRC_HEIGHT),
         ):
             if width is not None:
@@ -13860,8 +13877,8 @@ class MainWindow(QMainWindow):
             self.dock_drc,
         ):
             dock.show()
-        # Shown into its tab group, which can bring it forward over Nets.
-        self.dock_nets.raise_()
+        # Shown into its tab group, which can bring another forward over the library.
+        self.dock_library.raise_()
         # The views are tabs again, the board in front (``_arrange_docks``), exactly as on
         # a first run.
         self._raise_view(self.dock_board)

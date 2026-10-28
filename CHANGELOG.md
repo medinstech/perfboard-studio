@@ -72,6 +72,9 @@ closed without a bump.
   or right-clicking it offers the rest. Board, Schematic, 3D and Build Guide are tabs on
   top of the canvas, every one there from the first start; dragging a tab beside another
   still puts two views side by side. Jumper Over the Parts gets a key of its own, J.
+- **The left column is one sidebar.** The library, the design's parts and its nets are
+  three tabs of one panel, each with the column's whole height, instead of a library over
+  a Nets / Part List pair that each had a third of it.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

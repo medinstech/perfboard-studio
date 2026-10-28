@@ -202,9 +202,12 @@ def _bring_forward(window) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_it_opens_as_a_tab_behind_nets_and_has_a_way_back(window) -> None:  # type: ignore[no-untyped-def]
-    assert window.tabifiedDockWidgets(window.dock_nets) == [window.dock_part_list]
+    # One tab of the sidebar's three, the library in front.
+    assert set(window.tabifiedDockWidgets(window.dock_library)) == {
+        window.dock_part_list, window.dock_nets,
+    }
     assert window.dock_part_list.objectName() == "dockPartList"
-    # Behind Nets, so nothing has been spent filling it.
+    # Behind the library, so nothing has been spent filling it.
     assert window._part_list_showing is False and window.part_list.rows() == []
     action = window.act_part_list_panel
     assert action.text() == "Show Parts"
@@ -274,5 +277,7 @@ def test_resetting_the_layout_puts_it_back_behind_nets(window) -> None:  # type:
     window.on_reset_layout()
     QApplication.processEvents()
     assert not window.dock_part_list.isFloating() and not window.dock_part_list.isHidden()
-    assert window.tabifiedDockWidgets(window.dock_nets) == [window.dock_part_list]
+    assert set(window.tabifiedDockWidgets(window.dock_library)) == {
+        window.dock_part_list, window.dock_nets,
+    }
     assert window._part_list_showing is False
