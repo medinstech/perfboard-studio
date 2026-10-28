@@ -2721,6 +2721,47 @@ TURKISH: Mapping[str, str] = {
         "KiCad kılıfından eşleşti, {guess} tanesi referansından tahmin edildi — onları "
         "kontrol edin. Sıradaki: bir kart seçip parçaları yerleştirin."
     ),
+    # -- Home (ui/home.py): the page before there is a board ---------------------------
+    # The sentences speak to the builder as "siz"; the buttons are command names and keep
+    # the bare form, except the first door, which is an invitation with "your" in it.
+    "Design it on screen. Solder it from the guide.": (
+        "Ekranda tasarlayın. Rehberden lehimleyin."
+    ),
+    "Draw the circuit. The app picks a board you can buy, lays the parts out and wires "
+    "them, then writes the soldering steps for you.": (
+        "Devreyi çizin. Uygulama satın alabileceğiniz bir kart seçer, parçaları dizer ve "
+        "kablolar, sonra lehimleme adımlarını sizin için yazar."
+    ),
+    "Draw Your First Circuit": "İlk Devrenizi Çizin",
+    "New Circuit": "Yeni Devre",
+    "Open…": "Aç…",
+    "A board you saved (.perf).": "Kaydettiğiniz bir kart (.perf).",
+    "Import from KiCad…": "KiCad'den İçe Aktar…",
+    "New here?": "Yeni misiniz?",
+    "See it work in a minute": "Bir dakikada nasıl çalıştığını görün",
+    "Open a circuit that is already drawn and press the blue button at the top right five "
+    "times: board, placement, wiring, checks, guide.": (
+        "Önceden çizilmiş bir devreyi açın ve sağ üstteki mavi düğmeye beş kez basın: kart, "
+        "yerleşim, kablolama, kontrol, rehber."
+    ),
+    "Open the Example": "Örneği Aç",
+    "Welcome back": "Tekrar hoş geldiniz",
+    "Recent": "Son açılanlar",
+    "Enter opens the highlighted one.": "Enter seçili olanı açar.",
+    "Each opens as an untitled copy. Nothing you change touches the original.": (
+        "Her biri adsız bir kopya olarak açılır. Yaptığınız değişiklik aslına dokunmaz."
+    ),
+    "Show All Examples": "Bütün Örnekleri Göster",
+    "Start here": "Buradan başlayın",
+    "Start on the home page": "Açılışta ana sayfayı göster",
+    # What each example is, in words.
+    "A 555 blinker, drawn and not built": "Çizilmiş, kurulmamış 555 flaşör",
+    "555 LED flasher": "555 LED flaşör",
+    "Adjustable supply (LM317)": "Ayarlı güç kaynağı (LM317)",
+    "Arduino I/O shield": "Arduino giriş/çıkış kartı",
+    "Guitar booster pedal": "Gitar booster pedalı",
+    "Arduino Nano relay switch": "Arduino Nano röle anahtarı",
+    "ATmega328 relay controller": "ATmega328 röle kontrolcüsü",
     # -- the welcome dialog --------------------------------------------------------
     "Start": "Başla",
     "Examples": "Örnekler",
