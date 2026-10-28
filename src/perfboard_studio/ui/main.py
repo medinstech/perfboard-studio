@@ -333,7 +333,7 @@ from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 
-from . import icons, planner_pool, updater
+from . import icons, planner_pool, theme, updater
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .boardcolors import SCHEMES as BOARD_SCHEMES
@@ -351,7 +351,7 @@ from .i18n import set_language, t
 from .partlist import PartListPanel
 from .partnames import footprint_label
 from .project import write_project
-from .theme import ACCENT, ERROR, OK, STYLESHEET, TEXT, TEXT_DIM, WARNING
+from .theme import ACCENT, ERROR, OK, TEXT, TEXT_DIM, WARNING
 from .view2d import (
     FOOTPRINT_MIME,
     BoardScene,
@@ -4549,7 +4549,9 @@ class MainWindow(QMainWindow):
         self._in_front: set[QDockWidget] = set()
         self.setWindowTitle(window_title(path))
         self.resize(1500, 950)
-        self.setStyleSheet(STYLESHEET)
+        # The whole application, not this window: a dialog with no parent and a tooltip
+        # are themed too. Once per process, however many windows are built.
+        theme.apply(cast(QApplication, QApplication.instance()))
         # A board and a netlist both arrive as files, and dragging one onto the window is
         # the first thing anybody tries. See dropEvent.
         self.setAcceptDrops(True)
@@ -6761,6 +6763,15 @@ class MainWindow(QMainWindow):
             action.setChecked(code == current_language())
             action.triggered.connect(lambda _checked, c=code: self.on_language(c))
             self.act_language[code] = action
+        # Beside the language and for its reason: applied at the next start.
+        theme_menu = view_menu.addMenu(t("Theme"))
+        self.act_theme: dict[str, QAction] = {}
+        for name, label in (("dark", t("&Dark")), ("light", t("&Light"))):
+            action = theme_menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(name == theme.ACTIVE.name)
+            action.triggered.connect(lambda _checked, n=name: self.on_theme(n))
+            self.act_theme[name] = action
 
         view_menu.addSeparator()
         # Solder mask colour changes nothing about the circuit, so it is a view setting
@@ -14063,6 +14074,22 @@ class MainWindow(QMainWindow):
             t(
                 "The interface is built in one language when the window opens, so the new "
                 "one appears the next time Perfboard Studio starts."
+            ),
+        )
+
+    def on_theme(self, name: str) -> None:
+        """Record the theme. It takes effect at the next start, for the language's reason:
+        the window's colours are read as it is built, and a live switch would leave whatever
+        a rebuild missed in the old ones."""
+        app_settings().setValue(theme.THEME_KEY, name)
+        for key, action in self.act_theme.items():
+            action.setChecked(key == name)
+        QMessageBox.information(
+            self,
+            t("Theme changed"),
+            t(
+                "The window's colours are set as it opens, so the new theme appears the "
+                "next time Perfboard Studio starts."
             ),
         )
 

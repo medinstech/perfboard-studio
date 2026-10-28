@@ -1404,6 +1404,16 @@ TURKISH: Mapping[str, str] = {
     # -- the language of the interface itself ----------------------------------
     "&Language": "&Dil",
     "Language changed": "Dil değişti",
+    # -- the theme: dark or light, also from the next start ----------------------
+    "Theme": "Tema",
+    "&Dark": "&Koyu",
+    "&Light": "&Açık",
+    "Theme changed": "Tema değişti",
+    "The window's colours are set as it opens, so the new theme appears the next time "
+    "Perfboard Studio starts.": (
+        "Pencerenin renkleri açılırken belirlenir; yeni tema Perfboard Studio'nun bir "
+        "sonraki açılışında görünür."
+    ),
     "The interface is built in one language when the window opens, so the new "
     "one appears the next time Perfboard Studio starts.": (
         "Arayüz, pencere açılırken tek bir dilde kurulur; yeni dil Perfboard Studio'nun "

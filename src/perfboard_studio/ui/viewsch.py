@@ -119,9 +119,11 @@ type SheetTool = Literal["select", "wire", "label", "text", "line", "rectangle",
 # is ink on paper, so it is drawn as ink on paper: one line weight for everything, colour
 # used only to separate the three net classes and to say what is selected.
 
-SHEET = "#161a21"
-INK = "#c8d0de"
-INK_DIM = "#7d8698"
+#: The paper and the ink are the theme's: dark ink on near-white in the light theme, light
+#: on the board's own near-black in the dark one.
+SHEET = theme.ACTIVE.sheet_paper
+INK = theme.ACTIVE.sheet_ink
+INK_DIM = theme.ACTIVE.sheet_ink_dim
 #: The grid, and the every-fifth line that lets you count squares without counting them.
 #:
 #: A schematic without one is a drawing floating in the dark: nothing says how big the
@@ -129,11 +131,13 @@ INK_DIM = "#7d8698"
 #: which is what "there is nowhere to look" feels like on an empty document. It is drawn at
 #: the layout's OWN pitch (``schematic.GRID_MM``, 2.54 mm, the same pitch as the board),
 #: so the squares mean something rather than being wallpaper.
-GRID = "#1e2531"
-GRID_MAJOR = "#28313f"
-SIGNAL = "#7fb2e5"
-POWER = "#e0a33c"
-GROUND = "#8f97a8"
+GRID = theme.ACTIVE.sheet_grid
+GRID_MAJOR = theme.ACTIVE.sheet_grid_major
+#: The net classes in the ratsnest's colours, so a net is one colour on the board and on
+#: the sheet. They were two: amber power here and orange there, and two blues.
+SIGNAL = theme.NET_COLOURS["signal"]
+POWER = theme.NET_COLOURS["power"]
+GROUND = theme.NET_COLOURS["ground"]
 HIGHLIGHT = theme.ACCENT
 UNDEFINED = theme.WARNING
 
@@ -181,14 +185,14 @@ BOUNDS_PAD_MM = 40.0
 #: like one. Highlight says "this is the net you asked about on the board"; selection says
 #: "this is what the next key press acts on", so it gets a box round it rather than a
 #: heavier line -- two symbols, one lit and one selected, must not read the same.
-SELECTED = "#f0f3f8"
+SELECTED = theme.ACTIVE.sheet_selected
 SELECTION_BOX_MM = 0.25
 #: How far outside a symbol's own box the selection rectangle is drawn.
 SELECTION_PAD_MM = 0.8
 
 #: A note: ink on the drawing that is not the circuit, so it is drawn in the dim ink and
 #: never in a net colour.
-NOTE = "#9aa6ba"
+NOTE = theme.ACTIVE.sheet_note
 NOTE_MM = 0.30
 
 #: The line that follows the pointer while a wire is being drawn, and the box that follows
@@ -199,8 +203,9 @@ GHOST_MM = 0.35
 #: colours, because a finding is the application talking about the drawing rather than part
 #: of the drawing. Chosen on 2026-10-19 from three rendered candidates (filled rings for
 #: both, this, and a "!" badge beside the pin). The warning ring is DASHED AND UNFILLED
-#: because the warning amber is ``POWER``: a filled amber ring on a +5V wire read as one more
-#: dot on the rail. The two differ in shape as well as colour, so severity reads without it.
+#: because the warning amber was ``POWER`` then: a filled amber ring on a +5V wire read as
+#: one more dot on the rail. Power is the ratsnest's orange now, and the shapes still differ,
+#: so severity reads without the colour.
 MARK_ERROR = theme.ERROR
 MARK_WARNING = theme.WARNING
 MARK_RADIUS_MM = 1.35

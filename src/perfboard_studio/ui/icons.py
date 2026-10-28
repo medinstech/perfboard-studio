@@ -3,8 +3,13 @@
 WHY NOT A SET OF SVG FILES. Twenty line drawings as assets would mean a Qt resource
 system or a data directory to find at runtime, a licence to track, and a second place
 where the palette lives -- and the first time the chrome colour changed, half of them
-would be the old grey. These are drawn with the same ``theme`` constants every panel uses,
+would be the old grey. These are drawn with the same ``theme`` tokens every panel uses,
 so an icon cannot fall out of step with the window around it.
+
+EACH ICON IS THREE PICTURES, inked for its state: secondary text with accent details at
+rest, the accent when its tool is checked, and the tertiary text when it cannot be used.
+One picture in one colour made a checked tool's icon the same grey as every other, so the
+button's tint was the only thing saying which tool was armed.
 
 Each drawing works in a 100 x 100 box and knows nothing about the icon's real size, so
 the same function serves a 22 px toolbar and a hidpi screen. The pixmap is rendered at
@@ -21,12 +26,13 @@ the icons are built around rather than four unrelated pictures.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 
-from .theme import ACCENT, TEXT
+from .theme import ACTIVE as TOKENS
 
 #: Logical icon size. 22 px is the toolbar's, and the only size anything asks for.
 SIZE = 22
@@ -34,10 +40,29 @@ SIZE = 22
 #: Everything is drawn in this box and scaled down, so the code reads in round numbers.
 BOX = 100.0
 
-#: Stroke width in box units: 8/100 of the icon, which lands on a crisp ~1.8 px at 22 px.
-STROKE = 8.0
+#: Stroke width in box units: 7.5/100 of the icon, a crisp ~1.65 px at 22 px. It was 8,
+#: and the lighter line is the weight the rendered candidates were chosen at.
+STROKE = 7.5
 
 _cache: dict[str, QIcon] = {}
+
+
+@dataclass(slots=True)
+class _Ink:
+    """What the drawing in progress is inked with: its lines, and its one accent."""
+
+    body: str
+    accent: str
+
+
+_ink = _Ink(TOKENS.text_secondary, TOKENS.accent)
+
+#: (mode, state, lines, accent) for each picture an icon carries.
+_STATES = (
+    (QIcon.Mode.Normal, QIcon.State.Off, TOKENS.text_secondary, TOKENS.accent),
+    (QIcon.Mode.Normal, QIcon.State.On, TOKENS.accent_text, TOKENS.accent_text),
+    (QIcon.Mode.Disabled, QIcon.State.Off, TOKENS.text_tertiary, TOKENS.text_tertiary),
+)
 
 
 def _pen(colour: str, width: float = STROKE) -> QPen:
@@ -109,7 +134,7 @@ def _conductor(p: QPainter, run: Callable[[QPainter], None]) -> None:
 
 def _solder_trace(p: QPainter) -> None:
     def run(p: QPainter) -> None:
-        p.setPen(_pen(TEXT, 15))  # thick: solder is the widest thing on the board
+        p.setPen(_pen(_ink.body, 15))  # thick: solder is the widest thing on the board
         p.drawLine(QPointF(30, 64), QPointF(70, 36))
 
     _conductor(p, run)
@@ -119,9 +144,9 @@ def _solder_trace_wired(p: QPainter) -> None:
     """The same run with a wire spine down it -- the whole difference between the two."""
 
     def run(p: QPainter) -> None:
-        p.setPen(_pen(TEXT, 15))
+        p.setPen(_pen(_ink.body, 15))
         p.drawLine(QPointF(30, 64), QPointF(70, 36))
-        p.setPen(_pen(ACCENT, 5))
+        p.setPen(_pen(_ink.accent, 5))
         p.drawLine(QPointF(28, 62), QPointF(72, 34))
 
     _conductor(p, run)
@@ -129,7 +154,7 @@ def _solder_trace_wired(p: QPainter) -> None:
 
 def _bare_wire(p: QPainter) -> None:
     def run(p: QPainter) -> None:
-        p.setPen(_pen(TEXT, 6))
+        p.setPen(_pen(_ink.body, 6))
         p.drawLine(QPointF(30, 64), QPointF(70, 36))
 
     _conductor(p, run)
@@ -137,10 +162,10 @@ def _bare_wire(p: QPainter) -> None:
 
 def _insulated_wire(p: QPainter) -> None:
     def run(p: QPainter) -> None:
-        p.setPen(_pen(TEXT, 6))
+        p.setPen(_pen(_ink.body, 6))
         p.drawLine(QPointF(30, 64), QPointF(70, 36))
         # The sleeve, which is the whole difference between this and bare wire.
-        p.setPen(_pen(TEXT, 16))
+        p.setPen(_pen(_ink.body, 16))
         p.drawLine(QPointF(42, 55), QPointF(58, 45))
 
     _conductor(p, run)
@@ -150,7 +175,7 @@ def _top_jumper(p: QPainter) -> None:
     def run(p: QPainter) -> None:
         path = QPainterPath(QPointF(26, 66))
         path.cubicTo(QPointF(30, 16), QPointF(70, 16), QPointF(74, 32))
-        p.setPen(_pen(TEXT, 6))
+        p.setPen(_pen(_ink.body, 6))
         p.drawPath(path)
 
     _conductor(p, run)
@@ -160,7 +185,7 @@ def _new_net(p: QPainter) -> None:
     _pad(p, 30, 74, 10)
     _pad(p, 76, 40, 10)
     p.drawLine(QPointF(38, 68), QPointF(68, 46))
-    p.setPen(_pen(ACCENT, 10))
+    p.setPen(_pen(_ink.accent, 10))
     p.drawLine(QPointF(14, 26), QPointF(42, 26))
     p.drawLine(QPointF(28, 12), QPointF(28, 40))
 
@@ -173,14 +198,14 @@ def _connect(p: QPainter) -> None:
     """
     _pad(p, 24, 70, 11)
     p.drawLine(QPointF(33, 62), QPointF(67, 38))
-    p.setPen(_pen(ACCENT))
+    p.setPen(_pen(_ink.accent))
     _pad(p, 76, 30, 11)
 
 
 def _autoroute(p: QPainter) -> None:
     _pad(p, 18, 78, 9)
     _pad(p, 82, 22, 9)
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     path = QPainterPath(QPointF(26, 78))
     for point in (QPointF(50, 78), QPointF(50, 50), QPointF(72, 50), QPointF(72, 30)):
         path.lineTo(point)
@@ -189,13 +214,13 @@ def _autoroute(p: QPainter) -> None:
 
 def _autoplace(p: QPainter) -> None:
     """A part moved into its place: where it was, where it goes, and the move."""
-    pen = _pen(TEXT, 6)
+    pen = _pen(_ink.body, 6)
     pen.setStyle(Qt.PenStyle.DashLine)
     p.setPen(pen)
     p.drawRoundedRect(QRectF(10, 14, 36, 24), 4, 4)
-    p.setPen(_pen(TEXT))
+    p.setPen(_pen(_ink.body))
     p.drawRoundedRect(QRectF(54, 58, 36, 24), 4, 4)
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     p.drawLine(QPointF(40, 44), QPointF(62, 56))
     p.drawLine(QPointF(62, 56), QPointF(44, 56))
     p.drawLine(QPointF(62, 56), QPointF(62, 38))
@@ -207,11 +232,11 @@ def _rotate(p: QPainter) -> None:
 
 
 def _mirror(p: QPainter) -> None:
-    pen = _pen(TEXT, 5)
+    pen = _pen(_ink.body, 5)
     pen.setStyle(Qt.PenStyle.DashLine)
     p.setPen(pen)
     p.drawLine(QPointF(50, 10), QPointF(50, 90))
-    p.setPen(_pen(TEXT))
+    p.setPen(_pen(_ink.body))
     for direction in (-1, 1):
         path = QPainterPath(QPointF(50 + 12 * direction, 24))
         path.lineTo(QPointF(50 + 34 * direction, 50))
@@ -228,11 +253,11 @@ def _flip(p: QPainter) -> None:
     single board says nothing about there being two of them.
     """
     p.drawRoundedRect(QRectF(10, 44, 34, 44), 5, 5)
-    pen = _pen(TEXT, 6)
+    pen = _pen(_ink.body, 6)
     pen.setStyle(Qt.PenStyle.DashLine)
     p.setPen(pen)
     p.drawRoundedRect(QRectF(56, 44, 34, 44), 5, 5)
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     path = QPainterPath(QPointF(20, 36))
     path.cubicTo(QPointF(34, 8), QPointF(66, 8), QPointF(80, 36))
     p.drawPath(path)
@@ -242,10 +267,10 @@ def _flip(p: QPainter) -> None:
 
 def _ratsnest(p: QPainter) -> None:
     for x, y in ((22, 30), (78, 26), (34, 78), (76, 74)):
-        p.setBrush(QColor(TEXT))
+        p.setBrush(QColor(_ink.body))
         p.drawEllipse(QPointF(x, y), 7, 7)
     p.setBrush(Qt.BrushStyle.NoBrush)
-    pen = _pen(ACCENT, 6)
+    pen = _pen(_ink.accent, 6)
     pen.setStyle(Qt.PenStyle.DashLine)
     p.setPen(pen)
     p.drawLine(QPointF(22, 30), QPointF(78, 26))
@@ -289,7 +314,7 @@ def _delete(p: QPainter) -> None:
 def _import(p: QPainter) -> None:
     """A netlist arriving from somewhere else: a sheet, and an arrow into the board."""
     p.drawRoundedRect(QRectF(12, 14, 44, 56), 5, 5)
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     p.drawLine(QPointF(46, 78), QPointF(84, 78))
     _arrow_head(p, QPointF(86, 78), -16, -8)
 
@@ -297,7 +322,7 @@ def _import(p: QPainter) -> None:
 def _guide(p: QPainter) -> None:
     """The build guide: a numbered list."""
     p.drawRoundedRect(QRectF(18, 12, 64, 76), 6, 6)
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     for y in (34, 52, 70):
         p.drawLine(QPointF(32, y), QPointF(68, y))
 
@@ -310,7 +335,7 @@ def _board(p: QPainter) -> None:
     grey pixels.
     """
     p.drawRoundedRect(QRectF(12, 18, 76, 64), 6, 6)
-    p.setPen(_pen(ACCENT, 6))
+    p.setPen(_pen(_ink.accent, 6))
     for x in (30, 50, 70):
         for y in (36, 50, 64):
             p.drawEllipse(QPointF(x, y), 5, 5)
@@ -325,7 +350,7 @@ def _schematic(p: QPainter) -> None:
         path.lineTo(QPointF(32 + i * 8, y))
     path.lineTo(QPointF(80, 50))
     p.drawPath(path)
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     p.drawLine(QPointF(80, 50), QPointF(90, 50))
 
 
@@ -334,7 +359,7 @@ def _sch_add(p: QPainter) -> None:
     p.drawRect(QRectF(14, 30, 46, 40))
     p.drawLine(QPointF(6, 50), QPointF(14, 50))
     p.drawLine(QPointF(60, 50), QPointF(68, 50))
-    p.setPen(_pen(ACCENT, 9))
+    p.setPen(_pen(_ink.accent, 9))
     p.drawLine(QPointF(80, 20), QPointF(80, 52))
     p.drawLine(QPointF(64, 36), QPointF(96, 36))
 
@@ -346,7 +371,7 @@ def _sch_place(p: QPainter) -> None:
     for x in (70, 84):
         for y in (38, 50, 62):
             p.drawEllipse(QPointF(x, y), 3.5, 3.5)
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     p.drawLine(QPointF(38, 47), QPointF(54, 47))
     _arrow_head(p, QPointF(56, 47), -12, -7)
 
@@ -354,7 +379,7 @@ def _sch_place(p: QPainter) -> None:
 def _float(p: QPainter) -> None:
     """A panel coming out of the window: a frame, and a smaller one lifted off it."""
     p.drawRect(QRectF(10, 24, 50, 46))
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     p.drawRect(QRectF(44, 44, 46, 38))
     p.drawLine(QPointF(44, 54), QPointF(90, 54))
 
@@ -362,7 +387,7 @@ def _float(p: QPainter) -> None:
 def _export(p: QPainter) -> None:
     """A sheet and an arrow leaving it."""
     p.drawRoundedRect(QRectF(12, 14, 46, 72), 5, 5)
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     p.drawLine(QPointF(52, 50), QPointF(90, 50))
     _arrow_head(p, QPointF(92, 50), -16, -8)
 
@@ -391,7 +416,7 @@ def _text(p: QPainter) -> None:
 def _shape(p: QPainter) -> None:
     """A rectangle and a circle: the two shapes an annotation is made of."""
     p.drawRect(QRectF(10, 28, 48, 40))
-    p.setPen(_pen(ACCENT, 7))
+    p.setPen(_pen(_ink.accent, 7))
     p.drawEllipse(QPointF(70, 62), 22, 22)
 
 
@@ -451,6 +476,23 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
 }
 
 
+def _picture(draw: Callable[[QPainter], None], lines: str, accent: str) -> QPixmap:
+    """One drawing in one pair of inks."""
+    _ink.body, _ink.accent = lines, accent
+    scale = 2  # Drawn at 2x and told so, which is what keeps it sharp on a hidpi screen.
+    pixmap = QPixmap(SIZE * scale, SIZE * scale)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.scale(SIZE * scale / BOX, SIZE * scale / BOX)
+    painter.setPen(_pen(lines))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    draw(painter)
+    painter.end()
+    pixmap.setDevicePixelRatio(float(scale))
+    return pixmap
+
+
 def icon(name: str) -> QIcon:
     """The named icon, drawn once and kept.
 
@@ -465,19 +507,9 @@ def icon(name: str) -> QIcon:
     if draw is None:
         return QIcon()
 
-    scale = 2  # Drawn at 2x and told so, which is what keeps it sharp on a hidpi screen.
-    pixmap = QPixmap(SIZE * scale, SIZE * scale)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.scale(SIZE * scale / BOX, SIZE * scale / BOX)
-    painter.setPen(_pen(TEXT))
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    draw(painter)
-    painter.end()
-    pixmap.setDevicePixelRatio(float(scale))
-
-    built = QIcon(pixmap)
+    built = QIcon()
+    for mode, state, lines, accent in _STATES:
+        built.addPixmap(_picture(draw, lines, accent), mode, state)
     _cache[name] = built
     return built
 

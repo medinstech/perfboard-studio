@@ -213,14 +213,18 @@ from .scenetext import (
 # The window's own palette, for the overlays that sit ON the board but belong to the
 # application rather than to the object -- see theme.py's note on why the two are apart.
 from .theme import ACCENT as THEME_ACCENT
+from .theme import ACTIVE as THEME_TOKENS
 from .theme import BORDER as THEME_BORDER
+from .theme import NET_COLOURS
 from .theme import PANEL as THEME_PANEL
 from .theme import TEXT as THEME_TEXT
 from .theme import TEXT_DIM as THEME_TEXT_DIM
 
 # --------------------------------------------------------------------------- theme
 
-BACKGROUND = QColor("#12131a")
+#: Around the board: the application's canvas, so it follows the theme. The board on it
+#: does not.
+BACKGROUND = QColor(THEME_TOKENS.canvas)
 SUBSTRATE = {"FR4": QColor("#2e6b3f"), "FR2": QColor("#a8834e"), "FR1": QColor("#b8925c")}
 SUBSTRATE_EDGE = QColor("#0d1a12")
 #: The copper comes from the board's own scheme, because a phenolic board's pads are
@@ -265,8 +269,9 @@ ERROR_OUTLINE = QColor("#e5484d")
 BODY_SHADOW = QColor("#95a3b8")
 BODY_SHADOW_EDGE = QColor("#6d7a8c")
 RISK_RING = QColor("#e5484d")
-RULER_TEXT = QColor("#8b93a7")
-RULER_TEXT_MAJOR = QColor("#d3d9e8")
+#: The ruler is drawn on the canvas, outside the board, so it is the theme's too.
+RULER_TEXT = QColor(THEME_TOKENS.canvas_ruler)
+RULER_TEXT_MAJOR = QColor(THEME_TOKENS.canvas_ruler_major)
 #: Silkscreen. White ink on the board it is printed on, and a dim ghost of it when the
 #: board is turned over -- the same convention component bodies on the far side follow.
 LEGEND_INK = QColor("#eef2f8")
@@ -283,12 +288,9 @@ FINGER_FAR = QColor(150, 130, 70, 110)
 CUT_MARK = QColor("#e5484d")
 
 #: Ratsnest colours by net class -- ground and power read as rails at a glance, which is
-#: the same distinction the router orders its work by.
-RATSNEST = {
-    "ground": QColor("#7f8794"),
-    "power": QColor("#e0723c"),
-    "signal": QColor("#3fa9d4"),
-}
+#: the same distinction the router orders its work by. The sheet draws its wires in the
+#: same three, from the same table (``theme.NET_COLOURS``).
+RATSNEST = {net_class: QColor(colour) for net_class, colour in NET_COLOURS.items()}
 RATSNEST_HIGHLIGHT = QColor("#ffd166")
 
 #: kind -> (colour, stroke width mm, dashed).
@@ -5304,9 +5306,9 @@ class ViewOverlay(QLabel):
         self.show()
 
 
-#: Armed mode. Blue: this is a state the user chose and can leave, not a problem.
+#: Armed mode. The accent: this is a state the user chose and can leave, not a problem.
 MODE_BANNER_STYLE = f"""
-    background: rgba(44, 95, 160, 235);
+    background: {THEME_TOKENS.accent_subtle};
     color: {THEME_TEXT};
     border: 1px solid {THEME_ACCENT};
     border-radius: 6px;

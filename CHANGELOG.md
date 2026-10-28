@@ -20,6 +20,18 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
+  Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light`
+  picks it for one run. Both were chosen from candidates rendered on the real window.
+  The window is now styled as one application over Fusion rather than as a dark sheet
+  over the platform's widgets, so on Windows the dock tabs, search fields, check boxes,
+  combo boxes and spin boxes stop drawing as light Windows 11 controls in a dark window,
+  and a dialog with no parent is themed too. Access keys are underlined once Alt is
+  pressed rather than all the time, and a checked tool's icon turns the accent colour.
+  The board itself -- substrate, copper, solder, parts -- looks as it did in both.
+
 ### Changed
 
 - **One header row instead of three.** The menu bar, the toolbar's save, undo and redo,
@@ -45,6 +57,12 @@ closed without a bump.
   Ctrl+wheel or a pinch zooms, Shift+wheel pans sideways, and holding Space turns the left
   button into the hand in every tool. The board and the sheet read the wheel through one
   rule, and the shortcuts card (F1) lists the new gestures.
+
+- **The sheet draws each net class in the board's colours.** Power was amber on the
+  sheet and orange in the ratsnest, and signal two different blues, so one net was two
+  colours a panel apart -- and the sheet's power was also the warning colour. Both now
+  read one table: power orange, signal blue, ground grey. The sheet's background is the
+  board's near-black rather than a second one beside it.
 
 ### Fixed
 

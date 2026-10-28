@@ -1898,6 +1898,37 @@ colours the **physical object** (FR4 green, tinned copper, solder grey), and
 `ui/bodies.py` colours **parts** — in one table, so a resistor is the same beige in the
 editor, the 3D view and the guide's step images.
 
+**The application's table is tokens, and there are two themes.** `theme.Tokens` names
+every colour by role — surfaces, three strengths of text, one accent, the status
+colours, and the canvases round the board and under the sheet — and `DARK` and `LIGHT`
+are the two instances, chosen on 2026-10-28 from candidates rendered on the real window.
+`stylesheet(tokens)` and `palette(tokens)` are the only styling, and `theme.apply` sets
+them on the QApplication over Fusion, once per process, from `MainWindow.__init__`. It
+was a stylesheet on the window over the platform's own style, and on Windows everything
+the sheet did not name drew natively — light dock tabs, search fields and check boxes in
+a dark window — while a dialog with no parent was not themed at all. Four things hold it
+together, each pinned in `tests/test_theme.py`:
+
+- **A theme is chosen once, on import**, and applies at the next start like the
+  language: `PERFBOARD_STUDIO_THEME`, then the View menu's choice (`theme.THEME_KEY` in
+  `main.app_settings()`'s store), then dark. Modules all over `ui/` read the names as they
+  are imported, so a live switch would leave whatever a rebuild missed in the old colours.
+  `tests/conftest.py` sets the variable, so a developer's own choice never reaches the suite.
+- **What is drawn ON the board does not follow the theme.** The net-class colours
+  (`theme.NET_COLOURS`, read by the ratsnest and the sheet alike) and the marks for
+  selection, hover and the placement ghost (`theme.CANVAS_*`) sit on FR4 green in either
+  theme; the light theme's accent all but vanishes there. What is AROUND the board — the
+  canvas, the ruler, the sheet's paper and ink — is the theme's.
+- **Nothing is a file.** Fusion is wrapped in a `QProxyStyle` that draws the check box,
+  the radio button and every arrow from the tokens, and underlines access keys only once
+  Alt is pressed. The one place Qt insists on an image — a restyled combo or spin box's
+  arrows — gets PNGs drawn by the same code into a folder removed at exit.
+- **New code names a role, not a colour**: `theme.tone(widget, role)` and
+  `theme.variant(button, "primary" | "link")` set a property the one stylesheet styles,
+  `theme.ink(text, role)` colours part of a rich-text label, and `theme.colour(role)` is
+  for what Qt paints from a QColor. The old names (`TEXT`, `TEXT_DIM`, `ACCENT`, …) still
+  point at the active theme while their call sites move.
+
 ## Parsers, the headless run and the clipboard
 
 `parsers/` is pure string-to-data: `sexpr.py` knows no KiCad semantics (just text to
@@ -2021,7 +2052,8 @@ bends alone bought straightness with jumpers, so those styles also price a hop a
 ## What the window remembers
 
 `main.app_settings()` is the one `QSettings` store — recent files, the session
-(geometry, dock state, board colour, the view toggles, routing style, language) and the
+(geometry, dock state, board colour, the view toggles, routing style, language,
+theme) and the
 three `updates/` keys below. A test must point it somewhere temporary; `tests/test_ui.py`'s autouse `_settings_in_a_temp_file`
 does, and has to, because every test there closes a window and closing saves.
 

@@ -11,3 +11,8 @@ import os
 # from the environment the suite inherits: a shell where somebody turned workers on to
 # try the window must not change what the suite measures.
 os.environ["PERFBOARD_STUDIO_PLANNER_WORKERS"] = "0"
+
+# The dark theme, for the same reason: ui/theme.py chooses once, on import, and the View
+# menu's choice is in the user's own settings. A developer who picked the light theme in
+# their window must not run the suite in it.
+os.environ["PERFBOARD_STUDIO_THEME"] = "dark"
