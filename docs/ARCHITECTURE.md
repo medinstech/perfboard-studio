@@ -1169,6 +1169,16 @@ drawn from the same `SchematicDrawing`, and the schematic goldens hold them; not
 panel does moves them. Where a label IS -- and so whether two collide -- is the layout's,
 and is fixed there, never by drawing round it.
 
+**Past a fan-out, a net is said by name at its pins on the derived sheet too.** A net
+touching a symbol with `SchematicOptions.name_nets_at` pins or more (12: a
+microcontroller, a module) gets no trunk and no tracks: each pin it reaches gets a stub
+as long as its name with the name on it (`_said_at_pin`), and the channel beside the
+pin grows to hold the longest name, its tracks running beside the names rather than
+under them. `_said_at_pin` is also how the hand-drawn sheet says a connection nobody
+drew, because freezing turns one into the other and a name that sat differently on
+each would move on the first nudge -- `test_freezing_a_sheet_keeps_every_wire_and_every_name`
+holds both. Chosen on 2026-10-28 from atmega328-relay and nano-relay rendered both ways.
+
 **A drawn wire carries no net id** (`model.SheetWire`). Which net it belongs to is whichever
 net holds both of its ends, looked up every time (`_wire_net_of`). Three things follow, and
 all three are the point:

@@ -60,6 +60,7 @@ from perfboard_studio.model import (
 from perfboard_studio.schematic import (
     _KIND_BY_ARCHETYPE,
     _SYMBOL_BUILDERS,
+    DEFAULT_SCHEMATIC_OPTIONS,
     GRID_MM,
     LEAD_MM,
     NET_LABEL_ADVANCE,
@@ -380,8 +381,16 @@ def test_a_net_name_below_its_wire_has_room_under_it(path: Path) -> None:
 
 def test_a_name_with_no_room_above_its_wire_goes_under_it() -> None:
     """The two names on the repository's boards the rule moves, named, so that a change
-    which quietly stops taking the band below fails here rather than nowhere."""
-    drawing = drawing_for(EXAMPLES_DIR / "nano-relay.perf")
+    which quietly stops taking the band below fails here rather than nowhere.
+
+    Drawn with every net wired (``name_nets_at=0``): LED_ON reaches the Nano's 30 pins,
+    so by default it is said at its pins and never looks for room over a run -- and the
+    rule this holds is about a name that does."""
+    drawing = build_schematic(
+        load(EXAMPLES_DIR / "nano-relay.perf"),
+        REGISTRY,
+        dataclasses.replace(DEFAULT_SCHEMATIC_OPTIONS, name_nets_at=0),
+    )
     moved = {
         label.text
         for label in drawing.labels
@@ -1629,17 +1638,23 @@ def test_freezing_a_sheet_keeps_every_wire_and_every_name(path: Path) -> None:
     """Moving one symbol freezes the sheet, and a frozen sheet draws only the wires
     somebody drew -- so the first nudge used to turn every connection on the page into a
     label, and read as all of them having been cut. The freeze now keeps the drawing: the
-    same runs, line for line, the same dots and one name per net as before."""
-    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
-    derived = build_schematic(doc, REGISTRY)
-    drawn = build_schematic(_frozen(doc, derived), REGISTRY)
+    same runs, line for line, the same dots and one name per net as before.
 
-    assert _runs(drawn) == _runs(derived)
-    assert len(drawn.junctions) == len(derived.junctions)
-    assert sorted(label.text for label in drawn.labels if label.kind == "net") == sorted(
-        label.text for label in derived.labels if label.kind == "net"
-    )
-    assert all(wire.ends is not None for wire in drawn.wires), "nothing turned into a label"
+    Twice: as the sheet is drawn, where a chip's nets are said by name at its pins and must
+    come through the freeze as they were; and with every net wired (``name_nets_at=0``),
+    where nothing at all may turn into a label."""
+    doc = dataclasses.replace(load(path), sheet=(), sheet_wires=())
+    for options in (DEFAULT_SCHEMATIC_OPTIONS, dataclasses.replace(DEFAULT_SCHEMATIC_OPTIONS, name_nets_at=0)):
+        derived = build_schematic(doc, REGISTRY, options)
+        drawn = build_schematic(_frozen(doc, derived), REGISTRY, options)
+
+        assert _runs(drawn) == _runs(derived)
+        assert len(drawn.junctions) == len(derived.junctions)
+        assert sorted(label.text for label in drawn.labels if label.kind == "net") == sorted(
+            label.text for label in derived.labels if label.kind == "net"
+        )
+        if not options.name_nets_at:
+            assert all(wire.ends is not None for wire in drawn.wires), "nothing turned into a label"
 
 
 def test_a_frozen_symbol_that_moves_takes_its_wires_with_it() -> None:
@@ -1700,3 +1715,69 @@ def test_a_freeze_draws_only_connections_the_netlist_already_has() -> None:
             "symbol.move", MoveSymbolsPayload(placements=frozen.sheet[:1], wires=(stray,))
         )
         assert not refused.ok and refused.code == "not-one-net"
+
+
+@pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
+def test_no_two_labels_overlap_at_their_size_on_the_sheet(path: Path) -> None:
+    """Every pair, not only a net name against the rest: references and values too.
+
+    At their size on the sheet -- the size the exports draw them at. Zoomed out the panel
+    draws text larger than this so it can be read, and leaves out what would then collide
+    (``viewsch.visible_labels``); that is the panel's to do, and this is what makes it
+    only ever a question of zoom."""
+    drawing = drawing_for(path)
+    texts = [
+        (net_label_box(label) if label.kind in ("net", "rail") else part_label_box(label), label)
+        for label in drawing.labels
+        if label.kind != "pin"
+    ]
+    for index, (box, label) in enumerate(texts):
+        for other, other_label in texts[index + 1 :]:
+            overlapping = (
+                box[0] < other[2] and other[0] < box[2] and box[1] < other[3] and other[1] < box[3]
+            )
+            assert not overlapping, (
+                f"{path.stem}: the {label.kind} {label.text} and the "
+                f"{other_label.kind} {other_label.text} overlap"
+            )
+
+
+#: The example boards with a symbol big enough for its nets to be said by name, and that
+#: symbol: an ATmega328 and an Arduino Nano.
+NAMED_AT_PINS = {"atmega328-relay": "U1", "nano-relay": "A1"}
+
+
+@pytest.mark.parametrize("stem, chip", NAMED_AT_PINS.items())
+def test_a_chips_nets_are_said_by_name_at_its_pins(stem: str, chip: str) -> None:
+    """Every net reaching a chip used to be a wire round it, and atmega328-relay's U1 sat in
+    a bus nobody could follow. Past ``name_nets_at`` pins a net is a stub and its name at
+    each pin it reaches, and the name meets no wire but its own."""
+    drawing = drawing_for(EXAMPLES_DIR / f"{stem}.perf")
+    symbol = next(s for s in drawing.symbols if s.ref == chip)
+    assert len(symbol.pins) >= DEFAULT_SCHEMATIC_OPTIONS.name_nets_at
+    anchors = {Point2(x=symbol.at.x + pin.at.x, y=symbol.at.y + pin.at.y) for pin in symbol.pins}
+    chip_nets = {
+        wire.net_name for wire in drawing.wires if wire.path[0] in anchors or wire.path[-1] in anchors
+    }
+    assert chip_nets
+    for net in sorted(chip_nets):
+        wires = [wire for wire in drawing.wires if wire.net_name == net]
+        assert all(len(wire.path) == 2 for wire in wires), f"{net} is still wired through a channel"
+        names = [label for label in drawing.labels if label.kind == "net" and label.text == net]
+        assert len(names) == len(wires), f"{net}: one name at each pin it reaches"
+        for name in names:
+            box = net_label_box(name)
+            for start, end, what in segments(drawing):
+                if what == f"wire {net}":
+                    continue
+                assert not box_meets_segment(box, start, end), f"{net}'s name meets {what}"
+
+
+def test_with_no_threshold_every_net_is_wired() -> None:
+    """``name_nets_at=0`` is the sheet as it was: the chip's nets back in the channels."""
+    doc = load(EXAMPLES_DIR / "atmega328-relay.perf")
+    wired = build_schematic(doc, REGISTRY, dataclasses.replace(DEFAULT_SCHEMATIC_OPTIONS, name_nets_at=0))
+    named = build_schematic(doc, REGISTRY)
+    longest = max(len(wire.path) for wire in wired.wires)
+    assert longest > 2
+    assert len([w for w in wired.wires if len(w.path) > 2]) > len([w for w in named.wires if len(w.path) > 2])

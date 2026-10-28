@@ -428,6 +428,10 @@ class SchematicOptions:
     rail_min_nodes: int = 2
     show_values: bool = True
     show_pin_numbers: bool = True
+    #: A net touching a symbol with at least this many pins is said by NAME at each of its
+    #: pins instead of being wired through the channels: a chip's every net run as a wire
+    #: round it fills the sheet with a bus nobody can follow. 0 wires everything.
+    name_nets_at: int = 12
 
 
 DEFAULT_SCHEMATIC_OPTIONS = SchematicOptions()
@@ -1828,6 +1832,41 @@ def _assign_tracks(intervals: Sequence[tuple[str, float, float]]) -> tuple[dict[
     return tracks, len(last_end)
 
 
+def _named_stub(name: str, side: PinSide) -> Mm:
+    """How far a pin's stub runs when its net is said by name: under the whole name, when
+    the name runs along the stub; a plain stub when the pin points up or down."""
+    if side in ("top", "bottom"):
+        return LABEL_STUB_MM
+    return max(LABEL_STUB_MM, _text_width(name, NET_LABEL_MM) + 2 * NET_LABEL_INSET_MM)
+
+
+def _said_at_pin(net: Net, anchor: Point2, side: PinSide) -> tuple[Wire, Label]:
+    """A net said by NAME at a pin: a stub out of the pin, and the name on it.
+
+    ONE way, for both kinds of sheet. The derived sheet says a chip's nets this way
+    (``SchematicOptions.name_nets_at``) and the hand-drawn one says every net nobody drew a
+    wire for, and freezing a sheet turns the first into the second -- so a name that sat
+    differently on each would move under the user's hand on the first nudge. Beside a pin
+    that points sideways the name runs along the stub, above it, starting by the pin, as a
+    net name sits over every run on the sheet; the stub runs under the whole of it. Beside
+    one that points up or down the name goes past the stub's end.
+    """
+    dx, dy = PIN_DIRECTION[side]
+    stub = _named_stub(net.name, side)
+    end = _p(anchor.x + dx * stub, anchor.y + dy * stub)
+    wire = Wire(net_id=net.id, net_name=net.name, net_class=net.net_class, path=(anchor, end))
+    if dy == 0:
+        at = _p(anchor.x + dx * NET_LABEL_INSET_MM, anchor.y - NET_LABEL_CLEARANCE_MM)
+    elif dy < 0:
+        at = _p(end.x, end.y - NET_LABEL_CLEARANCE_MM)
+    else:
+        at = _p(end.x, end.y + NET_LABEL_CLEARANCE_MM + NET_LABEL_MM)
+    anchor_side: Literal["left", "right", "centre"] = (
+        "left" if dx > 0 else "right" if dx < 0 else "centre"
+    )
+    return wire, Label(text=net.name, at=at, kind="net", anchor=anchor_side)
+
+
 def _channel_size(track_count: int) -> Mm:
     return max(MIN_CHANNEL_MM, 2 * GRID_MM + max(0, track_count - 1) * TRACK_PITCH_MM)
 
@@ -2657,24 +2696,9 @@ def _hand_drawn_sheet(
                 # connection to something; the derived sheet draws a stub here and says so
                 # in the notes, and so does this.
                 continue
-            dx, dy = PIN_DIRECTION[pin.side]
-            end = _p(anchor.x + dx * LABEL_STUB_MM, anchor.y + dy * LABEL_STUB_MM)
-            wires.append(
-                Wire(
-                    net_id=item.net.id,
-                    net_name=item.net.name,
-                    net_class=item.net.net_class,
-                    path=(anchor, end),
-                )
-            )
-            net_labels.append(
-                Label(
-                    text=item.net.name,
-                    at=end,
-                    kind="net",
-                    anchor="left" if dx > 0 else "right" if dx < 0 else "centre",
-                )
-            )
+            stub, said = _said_at_pin(item.net, anchor, pin.side)
+            wires.append(stub)
+            net_labels.append(said)
 
     # -- the name of every net somebody drew, once, over its longest run ------
     #
@@ -2997,6 +3021,14 @@ def _derived_sheet(
 
     ncols, nrows = _assign_cells(symbols, adjacency)
 
+    named: set[NetId] = set()
+    if options.name_nets_at:
+        for item in resolved:
+            if item.rail or len(item.pins) < 2:
+                continue
+            if any(len(symbols[ref].body.pins) >= options.name_nets_at for ref, _ in item.pins):
+                named.add(item.net.id)
+
     column_width = [0.0] * ncols
     row_height = [0.0] * nrows
     for placed in symbols.values():
@@ -3047,7 +3079,7 @@ def _derived_sheet(
                 lane = float(pin_channel[(item.net.id, ref, pin.number)])
                 horizontal_runs[channel].append((key, lane, lane))
             continue
-        if len(item.pins) < 2:
+        if len(item.pins) < 2 or item.net.id in named:
             continue
         mean_row = sum(symbols[ref].row for ref, _ in item.pins) / len(item.pins)
         channel = min(nrows, int(mean_row) + 1)
@@ -3107,6 +3139,8 @@ def _derived_sheet(
                     -RAIL_GLYPH_DEPTH_MM if glyph < anchor_y else RAIL_GLYPH_DEPTH_MM
                 )
                 low, high = min(anchor_y, beyond), max(anchor_y, beyond)
+            elif item.net.id in named:
+                continue
             elif len(item.pins) < 2:
                 low = high = anchor_y
             else:
@@ -3123,7 +3157,25 @@ def _derived_sheet(
         vertical_track.update(assigned)
         vertical_tracks[channel] = count
 
-    vertical_gap = [_channel_size(count) for count in vertical_tracks]
+    # A named pin's label runs out from its pin into the channel beside it. The channel
+    # takes the widest label from each side, and its tracks run between the two.
+    name_room_left = [0.0] * (ncols + 1)
+    name_room_right = [0.0] * (ncols + 1)
+    for item in resolved:
+        if item.net.id not in named:
+            continue
+        reach = 0.0
+        for ref, pin in item.pins:
+            channel = pin_channel[(item.net.id, ref, pin.number)]
+            reach = _named_stub(item.net.name, pin.side) + NET_LABEL_INSET_MM
+            if pin.side == "left":
+                name_room_right[channel] = max(name_room_right[channel], reach)
+            elif pin.side == "right":
+                name_room_left[channel] = max(name_room_left[channel], reach)
+    vertical_gap = [
+        name_room_left[index] + _channel_size(count) + name_room_right[index]
+        for index, count in enumerate(vertical_tracks)
+    ]
     cursor = MARGIN_MM
     vertical_channel_x = [0.0] * (ncols + 1)
     column_x = [0.0] * ncols
@@ -3142,7 +3194,12 @@ def _derived_sheet(
     def _track_x(net_id: NetId, ref: str, number: str) -> Mm:
         key = _segment_key(net_id, ref, number)
         channel = pin_channel[(net_id, ref, number)]
-        return vertical_channel_x[channel] + GRID_MM + vertical_track[key] * TRACK_PITCH_MM
+        return (
+            vertical_channel_x[channel]
+            + name_room_left[channel]
+            + GRID_MM
+            + vertical_track[key] * TRACK_PITCH_MM
+        )
 
     # -- emit ----------------------------------------------------------------
     wires: list[Wire] = []
@@ -3152,6 +3209,8 @@ def _derived_sheet(
     # (name, the run's x span, the run's y). Placing a net name needs every OTHER run on
     # the sheet to already exist, and half of them are emitted after this one.
     pending_labels: list[tuple[str, tuple[Mm, Mm], Mm]] = []
+    #: Names said at a pin, placed already: the stub and the channel make their room.
+    pin_names: list[Label] = []
 
     for item in resolved:
         net = item.net
@@ -3170,6 +3229,13 @@ def _derived_sheet(
                         direction="up" if end_y < anchor.y else "down",
                     )
                 )
+            continue
+
+        if net.id in named:
+            for ref, pin in item.pins:
+                stub, said = _said_at_pin(net, symbols[ref].anchor_of(pin), pin.side)
+                wires.append(stub)
+                pin_names.append(said)
             continue
 
         if len(item.pins) == 1:
@@ -3252,6 +3318,9 @@ def _derived_sheet(
     rail_names = _rail_names(rails)
     for label in rail_names:
         obstacles.extend(_box_obstacle(_net_name_box(label)))
+    for label in pin_names:
+        obstacles.extend(_box_obstacle(_net_name_box(label)))
+    net_labels.extend(pin_names)
     for name, span, y in pending_labels:
         at = _net_label_at(name, span, y, obstacles)
         net_labels.append(Label(text=name, at=at, kind="net", anchor="left"))

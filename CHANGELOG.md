@@ -98,6 +98,12 @@ closed without a bump.
   does, and every last widget that set its own colour -- the welcome dialog's buttons,
   the update strip, the board's mode banner and empty-board hint, the status bar's
   counts -- is styled by the theme instead.
+- **A chip's nets are said by name at its pins.** Every net reaching a microcontroller
+  or a module was a wire round it through the channels, and atmega328-relay's ATmega
+  sat in a bus nobody could follow. A net touching a symbol with 12 pins or more is now
+  a short stub at each pin it reaches with its name on it, the way a schematic draws a
+  chip; everything else is wired as before. A sheet that has been edited says an
+  undrawn connection the same way, so the first nudge moves no name.
 - **The sheet reads at the size it opens at.** Wires are 0.4 mm and symbols 0.5 mm where
   they were hairlines; a symbol's body is filled with a tint of the paper; a net's name
   sits on a flag in the net's colour instead of floating beside the wire; text is larger
