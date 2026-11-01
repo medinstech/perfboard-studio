@@ -90,6 +90,7 @@ from perfboard_studio.guide import (
     all_steps,
     document_at_step,
     lead_marker,
+    signal_colour_index,
     step_focus,
 )
 from perfboard_studio.model import (
@@ -6176,13 +6177,10 @@ def _flying_lead_colours(
 
 def net_colouring(doc: PerfDocument) -> tuple[dict[str, NetClass], dict[str, int]]:
     """Each net's class, and each signal net's place in the colour cycle -- what
-    :func:`wire_rgb` needs to know about the net a wire is on, worked out once a board."""
+    :func:`wire_rgb` needs to know about the net a wire is on, worked out once a board.
+    The place is ``guide.signal_colour_index``'s, the cut list's own count."""
     net_class_by_id = {net.id: net.net_class for net in doc.nets}
-    signal_index = {
-        net.id: index
-        for index, net in enumerate(n for n in doc.nets if n.net_class == "signal")
-    }
-    return net_class_by_id, signal_index
+    return net_class_by_id, signal_colour_index(doc)
 
 
 # --------------------------------------------------------------------------- scene

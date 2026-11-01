@@ -20,6 +20,16 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A wire is the same colour on a board just built and on the same board opened from its
+  file.** The signal colours were counted over the nets in the order the board happened to
+  hold them, which is the order they were made in, while a `.perf` stores them sorted by id
+  — so on a board with more than nine nets, a cut list and step images produced before
+  saving could call a wire brown that the reopened board drew blue. The guide, the 2D view,
+  the 3D view and the STEP export now count in the file's order, so every board already
+  opened from a file keeps the colours it had.
+
 ## [0.22.0] - 2026-10-28
 
 ### Added

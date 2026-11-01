@@ -128,6 +128,7 @@ from perfboard_studio.guide import (
     lead_end,
     lead_marker,
     net_colours,
+    signal_colour_index,
 )
 from perfboard_studio.model import (
     STANDARD_PITCH_MM,
@@ -332,10 +333,10 @@ SPINE_CORE = QColor("#c08a4a")
 def insulation_color(net_class: NetClass | None, signal_index: int) -> QColor:
     """The colour a wire on this net should be, by the build guide's own convention.
 
-    Red for power and black for ground, then a fixed cycle for signals -- assigned by
-    net order, so the same board always gets the same colours in the editor and in the
-    cut list. A convention that changed between the screen and the printout would be
-    worse than none.
+    Red for power and black for ground, then a fixed cycle for signals -- ``signal_index``
+    is ``guide.signal_colour_index``, so the same board gets the same colours in the editor
+    and in the cut list, just built or reopened. A convention that changed between the
+    screen and the printout would be worse than none.
     """
     if net_class is None:
         return CONDUCTOR_STYLE["insulated-wire"][0]
@@ -3953,10 +3954,9 @@ class BoardScene(QGraphicsScene):
 
         net_class_by_id = {net.id: net.net_class for net in self.document.nets}
         net_name_by_id = {net.id: net.name for net in self.document.nets}
-        signal_index = {
-            net.id: index
-            for index, net in enumerate(n for n in self.document.nets if n.net_class == "signal")
-        }
+        # The cut list's own count, in the saved file's net order: see
+        # guide.signal_colour_index for the board that changed colour when reopened.
+        signal_index = signal_colour_index(self.document)
         # From the engine, so the wire drawn passing over another here is the one drawn
         # passing over it in 3D. See occupancy.stacking_layers.
         conductor_layers = stacking_layers(self.document)

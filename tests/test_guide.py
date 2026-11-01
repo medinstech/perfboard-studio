@@ -60,6 +60,7 @@ from perfboard_studio.guide import (
     build_guide,
     describe,
     document_at_step,
+    net_colours,
     step_focus,
     wire_template,
 )
@@ -822,6 +823,50 @@ def test_wire_colours_follow_the_convention_and_are_stable() -> None:
     assert colors["VCC"] == "red"
     assert colors["OUT"] not in ("black", "red")
     assert build_guide(doc, REGISTRY).cut_list == build_guide(doc, REGISTRY).cut_list
+
+
+def eleven_signal_nets_in_the_order_they_were_made() -> PerfDocument:
+    """Eleven signal nets, an insulated wire on each, held in the order they were made:
+    net-1 ... net-11. The file writes nets sorted by id -- net-1, net-10, net-11, net-2 --
+    so the two orders part at the second net, and the ninth colour of the cycle wraps."""
+    return make_doc(
+        components=(component("R1", "r-axial-4", hole(10, 2)),),
+        conductors=tuple(
+            WireConductor(
+                id=f"cond-{i}",
+                path=(hole(2, i), hole(6, i)),
+                net_id=f"net-{i}",
+                kind="insulated-wire",
+            )
+            for i in range(1, 12)
+        ),
+        nets=tuple(
+            net(f"net-{i}", f"S{i}", "signal", (("R1", "1"), ("R1", "2"))) for i in range(1, 12)
+        ),
+    )
+
+
+def reopened(doc: PerfDocument) -> PerfDocument:
+    """``doc`` as it comes back from its own .perf."""
+    result = persist.deserialize_document(persist.serialize_document(doc))
+    assert result.ok
+    return result.document
+
+
+def test_a_wire_is_the_colour_the_saved_board_calls_it() -> None:
+    """A board built and guided in one session named its wires differently once saved and
+    opened again: the colour cycle walked the nets in the order they were made, and the file
+    writes them sorted by id. On a 22-net board the cut list printed before saving said
+    brown for the OSC1 wire, and the same board reopened said blue."""
+    doc = eleven_signal_nets_in_the_order_they_were_made()
+    again = reopened(doc)
+    assert [n.id for n in again.nets] != [n.id for n in doc.nets], "the orders no longer differ"
+
+    def cut_colours(board: PerfDocument) -> dict[str, str]:
+        return {cut.conductor_id: cut.colour for cut in build_guide(board, REGISTRY).cut_list}
+
+    assert cut_colours(doc) == cut_colours(again)
+    assert net_colours(doc) == net_colours(again)
 
 
 def test_bare_wire_is_the_metal_whatever_net_it_is_on_and_its_own_reel() -> None:
