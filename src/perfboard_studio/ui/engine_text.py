@@ -456,7 +456,7 @@ def _finding_word(field: str, value: str) -> str:
             "down the column": t("down the column"),
         }[value]
     if field == "face":
-        return t("component side") if value == "top" else t("solder side")
+        return t("parts side") if value == "top" else t("solder side")
     if field == "edges":
         words = " ve ".join(t(word) for word in re.findall(r"left|right|top|bottom", value))
         if value.endswith(" edges"):

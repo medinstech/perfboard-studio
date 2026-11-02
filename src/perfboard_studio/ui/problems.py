@@ -22,7 +22,7 @@ from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
 
 from . import theme
-from .i18n import t
+from .i18n import counted, t
 
 #: The bar's height, in logical pixels.
 BAR_HEIGHT = 30
@@ -100,9 +100,9 @@ class ProblemsBar(QWidget):
             self.badge.setText(str(total))
             theme.tone(self.badge, "danger" if errors else "warning")
             self.badge.setToolTip(
-                t("{errors} error(s) · {warnings} warning(s)").format(
-                    errors=errors, warnings=warnings
-                )
+                counted(errors, t("{count} error"), t("{count} errors"))
+                + " · "
+                + counted(warnings, t("{count} warning"), t("{count} warnings"))
             )
             self.badge.show()
         else:

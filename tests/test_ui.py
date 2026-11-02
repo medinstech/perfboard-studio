@@ -13166,7 +13166,10 @@ def test_the_findings_do_not_call_pins_waiting_for_their_wiring_violations() -> 
         assert unwired > 0
         root = _findings_root(window, "DRC")
         wrong = len(window._last_violations) - unwired
-        assert root.text(1) == f"{wrong} problem(s) · {unwired} pin(s) not wired yet"
+        # Real plurals: "1 problem", "28 pins" (i18n.counted).
+        problems = f"{wrong} problem" + ("" if wrong == 1 else "s")
+        pins = f"{unwired} pin" + ("" if unwired == 1 else "s")
+        assert root.text(1) == f"{problems} · {pins} not wired yet"
         group = _drc_group(window, "drc:pin-not-connected")
         assert group is not None
         assert (group.text(0), group.text(1)) == ("Pin not wired yet", str(unwired))
@@ -13199,7 +13202,8 @@ def test_the_findings_do_not_call_pins_waiting_for_their_wiring_violations() -> 
         assert group.text(0).endswith("(warning)")
         assert group.foreground(0).color().name() == WARNING.lower()
         assert _findings_root(window, "DRC").text(1) == (
-            f"{len(window._last_violations)} problem(s)"
+            f"{len(window._last_violations)} problem"
+            + ("" if len(window._last_violations) == 1 else "s")
         )
     finally:
         _close(window)

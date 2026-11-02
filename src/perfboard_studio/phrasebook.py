@@ -700,14 +700,14 @@ TURKISH: dict[str, str] = {
     "Fit the ICs, pin 1 as shown": "Entegreleri takın, 1. pin gösterildiği gibi",
     "Only now put {parts} into its socket, or straight into the board if you did not fit "
     "one, notch to the end the sheet marks. Straighten the legs on a flat surface first.": (
-        "{parts} entegresini ancak şimdi soketine — soket takmadıysan doğrudan karta — "
+        "{parts} entegresini ancak şimdi soketine — soket takmadıysanız doğrudan karta — "
         "çentiği çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını düz bir "
         "yüzeyde düzeltin."
     ),
     "Only now put {parts} into their sockets, or straight into the board if you did not "
     "fit one, notch to the end the sheet marks. Straighten the legs on a flat surface "
     "first.": (
-        "{parts} entegrelerini ancak şimdi soketlerine — soket takmadıysan doğrudan karta "
+        "{parts} entegrelerini ancak şimdi soketlerine — soket takmadıysanız doğrudan karta "
         "— çentikleri çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını "
         "düz bir yüzeyde düzeltin."
     ),

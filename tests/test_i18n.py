@@ -363,7 +363,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                      "&View", "&Help"],
         # The sheet's commands, a row of buttons on its panel until they went onto the sheet
         # and into this menu (the tools under Drawing Tools).
-        "schematic": ["&Add Part…", "&Drawing Tools", "&Turn", "F&lip",
+        "schematic": ["&Add Part…", "&Drawing Tools", "R&otate", "F&lip",
                       "&Remove from the Design", "Arran&ge the Sheet", "&Fit the Sheet",
                       "&Place on the Board", "Float the Pa&nel"],
         "route": ["&Auto-wire Everything", "Auto-wire the &Selection", "Wiring &Style",
@@ -371,7 +371,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                   "Redo Wiring of the Se&lection", "Remove Ou&t-of-Date Wiring"],
         "file": ["&New Board…", "New Board from This &Design…", "&Open…", "Open &Recent", "Open E&xample", "&Save", "Save &As…",
                  "Re&load from Disk", "&Board Setup…", "Board &Features…", "Rena&me Board…",
-                 "&Import KiCad Netlist…", "Export &Build Guide…",
+                 "&Import from KiCad…", "Export &Build Guide…",
                  "Export Sc&hematic…", "&Quit"],
         "help": ["Help for What's Under the &Pointer", "What's &This?", "&Glossary…",
                  "Getting Started T&our",

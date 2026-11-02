@@ -69,7 +69,7 @@ TURKISH: Mapping[str, str] = {
     "Open &Recent": "&Son Kullanılanlar",
     "(nothing yet)": "(henüz yok)",
     "&Clear List": "Listeyi &Temizle",
-    "&Import KiCad Netlist…": "KiCad Netlist &İçe Aktar…",
+    "&Import from KiCad…": "KiCad'den &İçe Aktar…",
     "Export &Build Guide…": "&Montaj Rehberini Dışa Aktar…",
     # Ş rather than S: "&Son Kullanılanlar" has S in this menu, and Turkish treats the two
     # as different letters -- which is exactly what makes it a free accelerator here.
@@ -79,7 +79,7 @@ TURKISH: Mapping[str, str] = {
         "Devreyi bir sayfa olarak yazın: gömmek ya da düzenlemek için SVG, basmak için "
         "PDF, birine neyin yanlış olduğunu sormak üzere mesaja yapıştırmak için PNG."
     ),
-    "Export 1:1 PDF (component + solder side)…": "1:1 PDF Dışa Aktar (komponent + lehim yüzü)…",
+    "Export 1:1 PDF (parts side + solder side)…": "1:1 PDF Dışa Aktar (parça + lehim yüzü)…",
     "Export 3D Snapshot PNG…": "3D Görüntü PNG Dışa Aktar…",
     "Export 3D Model (STEP)…": "3D Modeli Dışa Aktar (STEP)…",
     "Write the board as solids for a mechanical CAD program: the board with its holes "
@@ -251,7 +251,7 @@ TURKISH: Mapping[str, str] = {
     "on": "açık",
     "off": "kapalı",
     # -- view ----------------------------------------------------------------
-    "Flip Board (component / solder side)": "Kartı Çevir (komponent / lehim yüzü)",
+    "Flip Board (parts side / solder side)": "Kartı Çevir (parça yüzü / lehim yüzü)",
     "&Fit Board": "Karta &Sığdır",
     "Zoom &In": "&Yakınlaştır",
     "Zoom &Out": "&Uzaklaştır",
@@ -474,8 +474,8 @@ TURKISH: Mapping[str, str] = {
     "Double-sided green, plated holes": "Çift yüz yeşil, metalize delikli",
     "Single-sided orange phenolic": "Tek yüz turuncu pertinaks",
     # -- board setup: pad shape and the printed legend ------------------------
-    "Pad shape": "Pad şekli",
-    "Pad length": "Pad uzunluğu",
+    "Pad shape": "Ped şekli",
+    "Pad length": "Ped uzunluğu",
     "Long axis": "Uzun eksen",
     "Round": "Yuvarlak",
     "Oblong — solder bridges easily along the long axis": (
@@ -726,9 +726,6 @@ TURKISH: Mapping[str, str] = {
     "Part not on the board": "Parça kartta değil",
     "Net not wired yet": "Net henüz bağlanmadı",
     "Pin not wired yet": "Pin henüz bağlanmadı",
-    "{count} problem(s) · {unwired} pin(s) not wired yet": (
-        "{count} sorun · {unwired} pin henüz bağlanmadı"
-    ),
     "error": "hata",
     "warning": "uyarı",
     "Export 1:1 PDF": "1:1 PDF Dışa Aktar",
@@ -777,7 +774,7 @@ TURKISH: Mapping[str, str] = {
     "About Perfboard Studio": "Perfboard Studio Hakkında",
     # -- status bar ----------------------------------------------------------
     "hole": "delik",
-    "component side": "parça yüzü",
+    "parts side": "parça yüzü",
     "solder side": "lehim yüzü",
     "mirrored": "aynalanmış",
     # -- a part's own properties ----------------------------------------------
@@ -961,8 +958,8 @@ TURKISH: Mapping[str, str] = {
     ),
     "Line": "Çizgi",
     "Circle": "Daire",
-    "Turn the selected symbols a quarter clockwise. R does the same.": (
-        "Seçili sembolleri saat yönünde çeyrek döndürür. R tuşu da aynısını yapar."
+    "Rotate the selected symbols a quarter turn clockwise. R does the same.": (
+        "Seçili sembolleri saat yönünde çeyrek tur döndürür. R tuşu da aynısını yapar."
     ),
     "Flip the selected symbols about their own centre, so their pins swap sides.": (
         "Seçili sembolleri kendi merkezlerine göre aynalar; pinleri taraf değiştirir."
@@ -1398,8 +1395,8 @@ TURKISH: Mapping[str, str] = {
     ),
     "Grid size and substrate. The material is not cosmetic: it decides the iron "
     "temperature the build guide gives and whether the pad-lifting rule applies.": (
-        "Izgara ölçüsü ve taban malzemesi. Malzeme süs değildir: montaj rehberindeki "
-        "havya sıcaklığını ve pad kalkması kuralının geçerli olup olmadığını belirler."
+        "Izgara ölçüsü ve taban malzemesi. Malzeme süs değildir: montaj rehberindeki havya "
+        "sıcaklığını ve ped kalkması kuralının geçerli olup olmadığını belirler."
     ),
     "Mounting holes and edge-connector fingers. A mounting bore takes the copper off the "
     "pads around it, so the board check (DRC) treats a pin left there as an error.": (
@@ -1432,7 +1429,7 @@ TURKISH: Mapping[str, str] = {
         "ardından lehimlenecek bir şeyi kalmaz — kesiği geri almak için tekrar tıklayın."
     ),
     "Leave any board mode: placing a part, drawing a conductor, connecting pins.": (
-        "Hangi kart kipindeysen bırakır: parça yerleştirme, iletken çizme, pin bağlama."
+        "Hangi kart kipindeyseniz bırakır: parça yerleştirme, iletken çizme, pin bağlama."
     ),
     "Rearrange the unlocked parts to shorten the connections and make them "
     "solderable as traces rather than wires. Shows the result before applying it.": (
@@ -1495,10 +1492,10 @@ TURKISH: Mapping[str, str] = {
         "Bir parçayı referansından, değerinden ya da kılıfından bulur ve görünümü ona "
         "ortalar. Kalabalık bir kartta “R37 nerede” sorusunun başka yanıtı yoktur."
     ),
-    "Open the 3D board view (Ctrl+3). Closed by default: it is the "
-    "most expensive thing in the window to keep up to date.": (
-        "3D kart görünümünü açar (Ctrl+3). Varsayılan olarak kapalıdır: pencerede güncel "
-        "tutulması en pahalı şeydir."
+    "The board in 3D (Ctrl+3). It is drawn only while its tab is in front: it is the most "
+    "expensive view in the window to keep up to date.": (
+        "Kart 3D olarak (Ctrl+3). Yalnızca sekmesi öndeyken çizilir: pencerede güncel "
+        "tutulması en pahalı görünüm odur."
     ),
     "Green for FR-4 and brown for phenolic, which is what those substrates "
     "actually look like.": (
@@ -1604,15 +1601,10 @@ TURKISH: Mapping[str, str] = {
     "done": "bitti",
     "Not on the board: {pins}": "Kartta değil: {pins}",
     "not on the board": "kartta değil",
-    "{errors} error(s) · {warnings} warning(s)": "{errors} hata · {warnings} uyarı",
     "{matched} of {total} nets match · {opens} broken · {shorts} shorted": (
         "{total} netin {matched} tanesi uyuşuyor · {opens} kopuk · {shorts} kısa devre"
     ),
-    "{parts} part(s), {nets} net(s)": "{parts} parça, {nets} net",
     "{count} not on the board yet": "{count} tanesi henüz kartta değil",
-    "power and ground drawn as {count} rail symbol(s)": (
-        "güç ve toprak {count} ray simgesi olarak çizildi"
-    ),
     "…and {count} more": "…ve {count} tane daha",
     "3D view unavailable:": "3D görünüm kullanılamıyor:",
     "conductor(s) selected": "iletken seçili",
@@ -2627,7 +2619,7 @@ TURKISH: Mapping[str, str] = {
     "Not saved": "Kaydedilmedi",
     "&Schematic": "&Şema",
     "&Drawing Tools": "Çizim &Araçları",
-    "&Turn": "Dö&ndür",
+    "R&otate": "Dö&ndür",
     "F&lip": "&Çevir",
     "&Place on the Board": "Karta &Yerleştir",
     "Float the Pa&nel": "&Paneli Ayır",
@@ -2647,7 +2639,7 @@ TURKISH: Mapping[str, str] = {
     "{count} pins": "{count} pin",
     "Placing a part": "Parça yerleştiriliyor",
     "Click the board where pin 1 goes. Esc cancels.": (
-        "1. pinin gideceği yere tıklayın. Esc vazgeçer."
+        "1. pinin gideceği yere tıklayın. Esc iptal eder."
     ),
     "{cols} × {rows} holes": "{cols} × {rows} delik",
     "More": "Diğer",
@@ -2663,8 +2655,8 @@ TURKISH: Mapping[str, str] = {
     "No problems": "Sorun yok",
     "{count} to wire": "{count} kablolanacak",
     "Matches the circuit: {matched} of {total} nets": "Devreyle uyuşan net: {matched}/{total}",
-    "Select and move parts. Escape comes back to it from any tool.": (
-        "Parçaları seçin ve taşıyın. Escape her araçtan buraya döner."
+    "Select and move parts. Esc comes back to it from any tool.": (
+        "Parçaları seçin ve taşıyın. Esc her araçtan buraya döner."
     ),
     "Show": "Göster",
     "What the board shows: the connections still missing, hole addresses, pin names, values.": (
@@ -3023,10 +3015,8 @@ TURKISH: Mapping[str, str] = {
     "A circuit drawn in KiCad: its parts and connections come in as the design.": (
         "KiCad'de çizilmiş bir devre: parçaları ve bağlantıları tasarım olarak gelir."
     ),
-    "{parts} part(s) on a {size} board": "{size} kart üzerinde {parts} parça",
-    "{parts} part(s), drawn and not yet placed": "{parts} parça, çizilmiş ama henüz yerleşmemiş",
     # -- the board dialogs' pictures and their one line of numbers -----------------
-    "The board as it will be drawn, component side up.": (
+    "The board as it will be drawn, parts side up.": (
         "Kart, çizileceği hâliyle, parça yüzü üstte."
     ),
     "{width} × {height} mm ({holes} holes)": "{width} × {height} mm ({holes} delik)",
@@ -3039,6 +3029,17 @@ TURKISH: Mapping[str, str] = {
     "Save the Board…": "Kartı Kaydet…",
     "Take It to Perfboard…": "Perfboard'a Taşı…",
     "no parts yet": "henüz parça yok",
+    # Real plurals (i18n.counted): English has two forms, Turkish the singular after a number.
+    "{parts} part on a {size} board": "{size} kart üzerinde {parts} parça",
+    "{parts} parts on a {size} board": "{size} kart üzerinde {parts} parça",
+    "{parts} part, drawn and not yet placed": "{parts} parça, çizilmiş ama henüz yerleşmemiş",
+    "{parts} parts, drawn and not yet placed": "{parts} parça, çizilmiş ama henüz yerleşmemiş",
+    "power and ground drawn as {count} rail symbol": "güç ve toprak {count} ray simgesi olarak çizildi",
+    "power and ground drawn as {count} rail symbols": "güç ve toprak {count} ray simgesi olarak çizildi",
+    "{count} problem": "{count} sorun",
+    "{count} problems": "{count} sorun",
+    "{count} pin not wired yet": "{count} pin henüz bağlanmadı",
+    "{count} pins not wired yet": "{count} pin henüz bağlanmadı",
     "{count} part": "{count} parça",
     "{count} parts": "{count} parça",
     "{count} net": "{count} net",
@@ -3071,9 +3072,9 @@ TURKISH: Mapping[str, str] = {
         "Her parçanın nereye gideceği. Sizin için dizilir, sonra istediğiniz gibi taşırsınız."
     ),
     "What joins the pins on the board: solder traces, wires and jumpers. Auto-wire lays "
-    "them; the Draw menu lays them by hand.": (
+    "them; the board's tools lay them by hand.": (
         "Karttaki pinleri neyin birleştirdiği: lehim yolları, teller ve jumper'lar. "
-        "Otomatik Kablola bunları döşer; Çiz menüsüyle elle döşenir."
+        "Otomatik Kablola bunları döşer; kartın araçlarıyla elle döşenir."
     ),
     "Whether it can be built as drawn (the board check, DRC) and whether the board matches "
     "the circuit (LVS).": (
@@ -3535,6 +3536,13 @@ def _detect() -> str | None:
     except ValueError:  # pragma: no cover - malformed locale on the host
         return None
     return code
+
+
+def counted(count: int, one: str, many: str) -> str:
+    """``one`` or ``many`` -- each already through ``t()``, so the catalogue scan sees both --
+    with the count in it. "3 part(s)" read like a machine. English needs the two forms;
+    Turkish says the singular after a number, so its two entries are the same words."""
+    return (one if count == 1 else many).format(count=count)
 
 
 def t(text: str) -> str:

@@ -2176,7 +2176,7 @@
         {
           "kind": "polarity",
           "title": "Entegreleri takın, 1. pin gösterildiği gibi",
-          "instruction": "U1 entegresini ancak şimdi soketine — soket takmadıysan doğrudan karta — çentiği çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını düz bir yüzeyde düzeltin.",
+          "instruction": "U1 entegresini ancak şimdi soketine — soket takmadıysanız doğrudan karta — çentiği çıktının işaretlediği uca gelecek şekilde takın. Önce bacaklarını düz bir yüzeyde düzeltin.",
           "expected": "Her çentik ve nokta çıktıdakiyle aynı yöne bakıyor.",
           "holes": [],
           "pins": [],

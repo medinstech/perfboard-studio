@@ -355,8 +355,8 @@ from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .header import HeaderBar
 from .home import Home, HomeExample
+from .i18n import counted, set_language, t
 from .i18n import language as current_language
-from .i18n import set_language, t
 from .palette import CommandPalette, Entry
 from .partlist import PartListPanel
 from .partnames import footprint_label
@@ -1434,7 +1434,7 @@ class BoardSetupDialog(QDialog):
         self.preview = QLabel()
         self.preview.setFixedSize(self.PREVIEW)
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview.setToolTip(t("The board as it will be drawn, component side up."))
+        self.preview.setToolTip(t("The board as it will be drawn, parts side up."))
         self._preview_timer = QTimer(self)
         self._preview_timer.setSingleShot(True)
         self._preview_timer.setInterval(60)
@@ -3761,9 +3761,15 @@ def example_boards() -> list[tuple[Path, str]]:
         preset = _matching_preset(document.board)
         size = preset.name if preset is not None else f"{document.board.cols} × {document.board.rows}"
         if document.components:
-            line = t("{parts} part(s) on a {size} board").format(parts=parts, size=size)
+            line = (
+                t("{parts} part on a {size} board") if parts == 1
+                else t("{parts} parts on a {size} board")
+            ).format(parts=parts, size=size)
         else:
-            line = t("{parts} part(s), drawn and not yet placed").format(parts=parts)
+            line = (
+                t("{parts} part, drawn and not yet placed") if parts == 1
+                else t("{parts} parts, drawn and not yet placed")
+            ).format(parts=parts)
         # The circuit that is drawn and not yet built first -- it is the one that walks
         # through the steps -- and then the finished boards, simplest first.
         listed.append(((bool(document.components), parts, path.stem), path, line))
@@ -6109,7 +6115,7 @@ class MainWindow(QMainWindow):
             )
         )
         act_rename.triggered.connect(self.on_rename_board)
-        act_import = file_menu.addAction(t("&Import KiCad Netlist…"))
+        act_import = file_menu.addAction(t("&Import from KiCad…"))
         self.act_import = act_import
         act_import.setShortcut(QKeySequence("Ctrl+I"))
         act_import.triggered.connect(self.on_import_netlist)
@@ -6133,7 +6139,7 @@ class MainWindow(QMainWindow):
             )
         )
         act_sheet.triggered.connect(self.on_export_schematic)
-        act_pdf = file_menu.addAction(t("Export 1:1 PDF (component + solder side)…"))
+        act_pdf = file_menu.addAction(t("Export 1:1 PDF (parts side + solder side)…"))
         act_pdf.triggered.connect(self.on_export_pdf)
         act_png = file_menu.addAction(t("Export 3D Snapshot PNG…"))
         act_png.triggered.connect(self.on_export_3d_png)
@@ -6348,7 +6354,7 @@ class MainWindow(QMainWindow):
         self.act_select_tool.setCheckable(True)
         self.act_select_tool.setChecked(True)
         self.act_select_tool.setToolTip(
-            t("Select and move parts. Escape comes back to it from any tool.")
+            t("Select and move parts. Esc comes back to it from any tool.")
         )
         self.act_select_tool.triggered.connect(lambda _checked=False: self.on_stop_tool())
         self.act_select_tool.triggered.connect(lambda _checked=False: self._sync_select_tool())
@@ -6582,7 +6588,7 @@ class MainWindow(QMainWindow):
 
         view_menu = menu.addMenu(t("&View"))
         view_menu.setToolTipsVisible(True)
-        act_flip = view_menu.addAction(t("Flip Board (component / solder side)"))
+        act_flip = view_menu.addAction(t("Flip Board (parts side / solder side)"))
         self.act_flip = act_flip
         act_flip.setShortcut(QKeySequence("Ctrl+F"))
         act_flip.triggered.connect(self.on_flip_board)
@@ -6745,8 +6751,8 @@ class MainWindow(QMainWindow):
             t("Show &3D View"),
             "Ctrl+3",
             t(
-                "Open the 3D board view (Ctrl+3). Closed by default: it is the "
-                "most expensive thing in the window to keep up to date."
+                "The board in 3D (Ctrl+3). It is drawn only while its tab is in front: it "
+                "is the most expensive view in the window to keep up to date."
             ),
             lambda: self._raise_view(self.dock_3d),
         )
@@ -7853,12 +7859,12 @@ class MainWindow(QMainWindow):
         self.act_sheet_tool["rectangle"].setMenu(shapes)
 
 
-        self.act_sch_rotate = QAction(icons.icon("rotate"), t("&Turn"), self)
+        self.act_sch_rotate = QAction(icons.icon("rotate"), t("R&otate"), self)
         # NO SHORTCUT. R is the board's Rotate, window-wide, and the sheet takes the key back
         # while it has the focus (SchematicView.event) -- a second action on R made the key
         # ambiguous, and Qt fires neither of two ambiguous shortcuts.
         self.act_sch_rotate.setToolTip(
-            t("Turn the selected symbols a quarter clockwise. R does the same.")
+            t("Rotate the selected symbols a quarter turn clockwise. R does the same.")
         )
         self.act_sch_rotate.triggered.connect(lambda: self.on_schematic_rotate(1))
 
@@ -8012,7 +8018,11 @@ class MainWindow(QMainWindow):
         if not drawing.symbols:
             self.schematic_summary.setText("")
             return
-        summary = t("{parts} part(s), {nets} net(s)").format(parts=parts, nets=nets)
+        summary = (
+            counted(parts, t("{count} part"), t("{count} parts"))
+            + ", "
+            + counted(nets, t("{count} net"), t("{count} nets"))
+        )
         # Counted rather than complained about: while a circuit is being drawn every part
         # is unplaced, so this is a progress line and not a warning. It is also the answer
         # to "have I finished", which is the question the Place button exists for.
@@ -8022,8 +8032,10 @@ class MainWindow(QMainWindow):
         if drawing.rails:
             # Said plainly, because a reader who does not know the convention will look for
             # the ground wires and not find any.
-            summary += "; " + t("power and ground drawn as {count} rail symbol(s)").format(
-                count=len(drawing.rails)
+            summary += "; " + counted(
+                len(drawing.rails),
+                t("power and ground drawn as {count} rail symbol"),
+                t("power and ground drawn as {count} rail symbols"),
             )
         if drawing.notes:
             summary += "\n" + "\n".join(f"• {note}" for note in drawing.notes[:4])
@@ -10391,7 +10403,7 @@ class MainWindow(QMainWindow):
         board = self.bus.document.board
         preset = _matching_preset(board)
         size = preset.name if preset is not None else f"{board.cols} × {board.rows}"
-        side = t("component side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
+        side = t("parts side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
         self.problems_bar.set_where(f"{side}  ·  {size}")
 
     def on_move_committed(self, results: list[DispatchResult]) -> None:
@@ -10448,10 +10460,12 @@ class MainWindow(QMainWindow):
         left = self._work_left()
         to_do = left & UNWIRED_RULES
         unwired = sum(1 for v in violations if v.rule in to_do)
-        drc_count = t("{count} problem(s)").format(count=len(violations))
+        drc_count = counted(len(violations), t("{count} problem"), t("{count} problems"))
         if unwired:
-            drc_count = t("{count} problem(s) · {unwired} pin(s) not wired yet").format(
-                count=len(violations) - unwired, unwired=unwired
+            drc_count = (
+                counted(len(violations) - unwired, t("{count} problem"), t("{count} problems"))
+                + " · "
+                + counted(unwired, t("{count} pin not wired yet"), t("{count} pins not wired yet"))
             )
         drc_root = QTreeWidgetItem([t("Board check (DRC)"), drc_count])
         drc_root.setData(0, ROLE_FINDING_KEY, "DRC")
@@ -10540,9 +10554,9 @@ class MainWindow(QMainWindow):
         root = QTreeWidgetItem(
             [
                 t("Circuit check (ERC)"),
-                t("{errors} error(s) · {warnings} warning(s)").format(
-                    errors=errors, warnings=len(findings) - errors
-                ),
+                counted(errors, t("{count} error"), t("{count} errors"))
+                + " · "
+                + counted(len(findings) - errors, t("{count} warning"), t("{count} warnings")),
             ]
         )
         root.setToolTip(0, t("Whether the circuit itself is right, before any board is asked about."))

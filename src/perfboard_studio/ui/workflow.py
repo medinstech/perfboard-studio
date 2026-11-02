@@ -185,7 +185,7 @@ def step_tooltip(key: StepKey) -> str:
         "place": t("Where each part goes. Arranged for you, then yours to move."),
         "route": t(
             "What joins the pins on the board: solder traces, wires and jumpers. Auto-wire "
-            "lays them; the Draw menu lays them by hand."
+            "lays them; the board's tools lay them by hand."
         ),
         "check": t(
             "Whether it can be built as drawn (the board check, DRC) and whether the board "
