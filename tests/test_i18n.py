@@ -359,8 +359,13 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
     groups = {
         # The menu bar itself. Turkish had three menus on Y (Yerleştir, Yol, Yardım) and
         # two on Z (Düzen, Çiz), so Alt+Y reached one of three at random.
-        "menu bar": ["&File", "&Edit", "&Draw", "&Place", "&Net", "&Wiring", "&View",
-                     "&Help"],
+        "menu bar": ["&File", "&Edit", "&Draw", "&Place", "&Net", "&Schematic", "&Wiring",
+                     "&View", "&Help"],
+        # The sheet's commands, a row of buttons on its panel until they went onto the sheet
+        # and into this menu (the tools under Drawing Tools).
+        "schematic": ["&Add Part…", "&Drawing Tools", "&Turn", "F&lip",
+                      "&Remove from the Design", "Arran&ge the Sheet", "&Fit the Sheet",
+                      "&Place on the Board", "Float the Pa&nel"],
         "route": ["&Auto-wire Everything", "Auto-wire the &Selection", "Wiring &Style",
                   "When a Trace Must &Cross", "Lay Wires Along the &Grid", "Redo All &Wiring",
                   "Redo Wiring of the Se&lection", "Remove Ou&t-of-Date Wiring"],

@@ -50,6 +50,7 @@ from PySide6.QtCore import (
     QPoint,
     QPointF,
     QRect,
+    QRectF,
     QSettings,
     QSize,
     QStandardPaths,
@@ -6438,6 +6439,30 @@ class MainWindow(QMainWindow):
         for action in self.net_actions:
             action.setEnabled(False)
 
+        # THE SHEET'S COMMANDS, where the menus are. They were a row of buttons on the
+        # sheet's panel and nowhere else -- so none of them was behind ☰ or in Ctrl+K once
+        # the row went onto the sheet. The same actions: a key, a menu entry and a button
+        # cannot disagree about any of them.
+        schematic_menu = menu.addMenu(t("&Schematic"))
+        schematic_menu.setToolTipsVisible(True)
+        schematic_menu.addAction(self.act_sch_add)
+        sheet_tools = schematic_menu.addMenu(t("&Drawing Tools"))
+        sheet_tools.setToolTipsVisible(True)
+        for name in ("select", "wire", "label", "text", "rectangle"):
+            sheet_tools.addAction(self.act_sheet_tool[name])
+        schematic_menu.addSeparator()
+        schematic_menu.addAction(self.act_sch_rotate)
+        schematic_menu.addAction(self.act_sch_mirror)
+        schematic_menu.addAction(self.act_sch_delete)
+        schematic_menu.addSeparator()
+        schematic_menu.addAction(self.act_sch_auto)
+        schematic_menu.addAction(self.act_sch_fit)
+        schematic_menu.addSeparator()
+        schematic_menu.addAction(self.act_sch_place)
+        schematic_menu.addAction(self.act_sch_float)
+        self.menu_schematic = schematic_menu
+        self.menu_sheet_tools = sheet_tools
+
         route_menu = menu.addMenu(t("&Wiring"))
         route_menu.setToolTipsVisible(True)
         self.act_autoroute = route_menu.addAction(t("&Auto-wire Everything"))
@@ -6838,13 +6863,13 @@ class MainWindow(QMainWindow):
         # shortcut card does, and found a destroyed QMenu on the first attempt.
         self._menus = [
             file_menu, self.menu_recent, edit_menu, draw_menu, place_menu, net_menu,
-            route_menu, style_menu, view_menu, language_menu, colour_menu, help_menu,
-            wheel_menu,
+            schematic_menu, sheet_tools, route_menu, style_menu, view_menu, language_menu,
+            colour_menu, help_menu, wheel_menu,
         ]
         #: The menu bar's own menus, in its order: what ☰ holds (``_build_header``).
         self._top_menus = (
-            file_menu, edit_menu, draw_menu, place_menu, net_menu, route_menu, view_menu,
-            help_menu,
+            file_menu, edit_menu, draw_menu, place_menu, net_menu, schematic_menu,
+            route_menu, view_menu, help_menu,
         )
         # F1 is help for what is under the pointer, as everywhere else; the shortcut card,
         # which F1 used to open, is Ctrl+/ (ui/helpcards.py).
@@ -6992,6 +7017,7 @@ class MainWindow(QMainWindow):
         view.add_action(self.act_zoom_in)
         view.add_action(self.act_fit)
         self.board_view_tools = view
+        self._build_sheet_tools()
 
         # WHAT THE SELECTION CAN DO, OVER THE SELECTION. Rotate, mirror and delete were
         # three buttons on a row across the window, a metre from the part, and lock and
@@ -7015,6 +7041,69 @@ class MainWindow(QMainWindow):
         self.selection_bar = bar
         # It stands over the parts, so it moves whenever the view does.
         bar.track(self._selection_bar_rect, self.view.viewport())
+
+    def _build_sheet_tools(self) -> None:
+        """The sheet's tools on the sheet, as the board's are on the board: the tools down
+        the left (the shape button holds the three shapes), Arrange and the sheet's own zoom
+        and Fit in the corner, and a bar over the selected symbols."""
+        sheet = self.schematic_view
+        tools = FloatingBar(sheet, Qt.Corner.TopLeftCorner, vertical=True, name="sheetTools")
+        for name in ("select", "wire", "label", "text", "rectangle"):
+            tools.add_action(self.act_sheet_tool[name])
+        self.sheet_tools = tools
+
+        # The sheet's own zoom: the View menu's zooms whichever view has the keyboard, and
+        # a button pressed on the sheet does not take the keyboard from the board.
+        self.act_sch_zoom_in = QAction(icons.icon("zoom-in"), t("Zoom In"), self)
+        self.act_sch_zoom_in.triggered.connect(lambda: self.schematic_view.zoom_by(1.25))
+        self.act_sch_zoom_out = QAction(icons.icon("zoom-out"), t("Zoom Out"), self)
+        self.act_sch_zoom_out.triggered.connect(lambda: self.schematic_view.zoom_by(1 / 1.25))
+        corner = FloatingBar(sheet, Qt.Corner.BottomRightCorner, vertical=False, name="sheetView")
+        corner.add_action(self.act_sch_auto)
+        corner.add_separator()
+        corner.add_action(self.act_sch_zoom_out)
+        corner.add_action(self.act_sch_zoom_in)
+        corner.add_action(self.act_sch_fit)
+        self.sheet_view_tools = corner
+
+        self.act_sheet_more = QAction(icons.icon("more"), t("More"), self)
+        self.act_sheet_more.setToolTip(t("Everything a right-click on the selection offers."))
+        self.act_sheet_more.triggered.connect(self._on_sheet_selection_more)
+        bar = FloatingBar(sheet, None, vertical=False, name="sheetSelectionBar")
+        bar.add_action(self.act_sch_rotate)
+        bar.add_action(self.act_sch_mirror)
+        bar.add_separator()
+        bar.add_action(self.act_sch_delete)
+        bar.add_action(self.act_sheet_more)
+        bar.hide()
+        bar.track(self._sheet_selection_rect, sheet.viewport())
+        self.sheet_selection_bar = bar
+
+    def _sheet_selection_rect(self) -> QRect | None:
+        """Where the selected symbols are, in the sheet view's coordinates; nowhere while a
+        drawing tool is armed."""
+        sheet = self.schematic_view
+        if sheet.tool != "select" or not sheet.selected_refs:
+            return None
+        item = sheet.item
+        if item is None:
+            return None
+        chosen = [s for s in item.drawing.symbols if s.ref in sheet.selected_refs]
+        if not chosen:
+            return None
+        area = QRectF(chosen[0].at.x, chosen[0].at.y, chosen[0].width, chosen[0].height)
+        for symbol in chosen[1:]:
+            area = area.united(QRectF(symbol.at.x, symbol.at.y, symbol.width, symbol.height))
+        return sheet.mapFromScene(item.mapToScene(area)).boundingRect()
+
+    def _on_sheet_selection_more(self) -> None:
+        rect = self._sheet_selection_rect()
+        if rect is None:
+            return
+        menu = self.sheet_menu(rect.center())
+        menu.popup(
+            self.sheet_selection_bar.mapToGlobal(QPoint(0, self.sheet_selection_bar.height()))
+        )
 
     def _selection_rect(self) -> QRect | None:
         """Where the selected parts are, in the board view's own coordinates."""
@@ -7608,22 +7697,20 @@ class MainWindow(QMainWindow):
     # where they sit relative to one another is the user's to decide and Qt's to remember.
 
     def _build_schematic_page(self) -> QWidget:
-        """The sheet, its tools and its one line of summary.
+        """The sheet and its one line of summary.
 
-        A TOOLBAR AND NOT A ROW OF BUTTONS, and the reason is measured rather than
-        aesthetic: nine push buttons side by side gave this panel a MINIMUM width of
-        1362 px, which a panel inherits from whatever it contains -- so the window could not
-        be narrower than the row, the panels beside it were pinned at their own minimums
-        too, and nothing in the layout could be resized at all. A QToolBar folds what does
-        not fit into an overflow menu, which is the whole difference between a panel that
-        can be made narrow and one that dictates the size of the window.
+        NO TOOL ROW. The sheet's tools float on the sheet, as the board's float on the board
+        (``_build_canvas_tools``), and its commands are the Schematic menu's: a row of
+        fifteen buttons across the panel was a second toolbar in a window that had just
+        lost its first, and it set the panel's minimum width. Its actions are still made
+        here, because the page is built before the menus that list them.
         """
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        layout.addWidget(self._build_schematic_toolbar())
+        self._build_sheet_actions()
 
         self.schematic_summary = QLabel()
         self.schematic_summary.setWordWrap(True)
@@ -7667,22 +7754,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.schematic_view, 1)
         return page
 
-    def _build_schematic_toolbar(self) -> QToolBar:
-        bar = QToolBar(t("Schematic"), self)
-        bar.setObjectName("schematicToolbar")
-        bar.setMovable(False)
-        bar.setFloatable(False)
-        bar.setIconSize(QSize(icons.SIZE, icons.SIZE))
-        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+    def _build_sheet_actions(self) -> None:
+        """Every command the sheet has, as actions: its tools for the tools floating on
+        the sheet, the rest for the Schematic menu and the bar over the selection."""
 
-        self.act_sch_add = QAction(icons.icon("sch-add"), t("Add Part…"), self)
+        self.act_sch_add = QAction(icons.icon("sch-add"), t("&Add Part…"), self)
         self.act_sch_add.setToolTip(
             t("Put a part in the design without deciding where it goes on the board yet.")
         )
         self.act_sch_add.triggered.connect(self.on_schematic_add_part)
-        bar.addAction(self.act_sch_add)
 
-        bar.addSeparator()
 
         # THE TOOLS, AS A GROUP OF ONE. Every drawing application in the world has this
         # row and this behaviour -- exactly one is armed, pressing another swaps it, and
@@ -7748,14 +7829,13 @@ class MainWindow(QMainWindow):
                     lambda _checked=False, which=name: self.on_sheet_tool(which)
                 )
             tools.addAction(action)
-            bar.addAction(action)
             self.act_sheet_tool[name] = action
         self.act_sheet_tool["select"].setChecked(True)
         self.act_sheet_tools = tools
 
         # Every shape on a menu under the Box button, the box too, so the one shown can be
         # changed back.
-        shapes = QMenu(bar)
+        shapes = QMenu(self)
         for name, label in (("rectangle", t("Box")), ("line", t("Line")), ("circle", t("Circle"))):
             entry = shapes.addAction(label)
             entry.triggered.connect(
@@ -7763,9 +7843,8 @@ class MainWindow(QMainWindow):
             )
         self.act_sheet_tool["rectangle"].setMenu(shapes)
 
-        bar.addSeparator()
 
-        self.act_sch_rotate = QAction(icons.icon("rotate"), t("Turn"), self)
+        self.act_sch_rotate = QAction(icons.icon("rotate"), t("&Turn"), self)
         # NO SHORTCUT. R is the board's Rotate, window-wide, and the sheet takes the key back
         # while it has the focus (SchematicView.event) -- a second action on R made the key
         # ambiguous, and Qt fires neither of two ambiguous shortcuts.
@@ -7773,16 +7852,14 @@ class MainWindow(QMainWindow):
             t("Turn the selected symbols a quarter clockwise. R does the same.")
         )
         self.act_sch_rotate.triggered.connect(lambda: self.on_schematic_rotate(1))
-        bar.addAction(self.act_sch_rotate)
 
-        self.act_sch_mirror = QAction(icons.icon("mirror"), t("Flip"), self)
+        self.act_sch_mirror = QAction(icons.icon("mirror"), t("F&lip"), self)
         self.act_sch_mirror.setToolTip(
             t("Flip the selected symbols about their own centre, so their pins swap sides.")
         )
         self.act_sch_mirror.triggered.connect(self.on_schematic_mirror)
-        bar.addAction(self.act_sch_mirror)
 
-        self.act_sch_delete = QAction(icons.icon("delete"), t("Remove"), self)
+        self.act_sch_delete = QAction(icons.icon("delete"), t("&Remove from the Design"), self)
         self.act_sch_delete.setToolTip(
             t(
                 "Take the selected part out of the design, along with its connections. A "
@@ -7790,11 +7867,9 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_delete.triggered.connect(self.on_schematic_remove)
-        bar.addAction(self.act_sch_delete)
 
-        bar.addSeparator()
 
-        self.act_sch_auto = QAction(icons.icon("autoplace"), t("Arrange"), self)
+        self.act_sch_auto = QAction(icons.icon("autoplace"), t("Arran&ge the Sheet"), self)
         self.act_sch_auto.setToolTip(
             t(
                 "Hand the whole sheet back to the layout: every symbol you moved and every "
@@ -7802,9 +7877,8 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_auto.triggered.connect(self.on_schematic_auto_layout)
-        bar.addAction(self.act_sch_auto)
 
-        self.act_sch_fit = QAction(icons.icon("fit"), t("Fit"), self)
+        self.act_sch_fit = QAction(icons.icon("fit"), t("&Fit the Sheet"), self)
         self.act_sch_fit.setToolTip(
             t(
                 "Put the whole schematic back in the view. The sheet is not re-fitted "
@@ -7812,11 +7886,9 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_fit.triggered.connect(lambda: self.schematic_view.fit())
-        bar.addAction(self.act_sch_fit)
 
-        bar.addSeparator()
 
-        self.act_sch_place = QAction(icons.icon("sch-place"), t("Place on the Board"), self)
+        self.act_sch_place = QAction(icons.icon("sch-place"), t("&Place on the Board"), self)
         self.act_sch_place.setToolTip(
             t(
                 "Put the whole design on the board, arranged: connectors on the edge, the "
@@ -7825,9 +7897,8 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_place.triggered.connect(self.on_schematic_place_all)
-        bar.addAction(self.act_sch_place)
 
-        self.act_sch_float = QAction(icons.icon("float"), t("Float the Panel"), self)
+        self.act_sch_float = QAction(icons.icon("float"), t("Float the Pa&nel"), self)
         self.act_sch_float.setToolTip(
             t(
                 "Put the sheet in a window of its own, so it and the board can sit side by "
@@ -7835,20 +7906,8 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_float.triggered.connect(self.on_schematic_float)
-        bar.addAction(self.act_sch_float)
 
-        self.act_sch_export = QAction(icons.icon("export"), t("Export…"), self)
-        self.act_sch_export.setToolTip(
-            t(
-                "Write the sheet beside the document as SVG, PDF and PNG. All three are "
-                "drawn from the same file, so they cannot disagree about the circuit."
-            )
-        )
-        self.act_sch_export.triggered.connect(self.on_export_schematic)
-        bar.addAction(self.act_sch_export)
 
-        self.schematic_toolbar = bar
-        return bar
 
     def on_schematic_float(self) -> None:
         """Float the sheet's panel, or drop it back into the window.
@@ -7873,7 +7932,7 @@ class MainWindow(QMainWindow):
             return
         floating = self.dock_schematic.isFloating()
         self.act_sch_float.setText(
-            t("Back to the Window") if floating else t("Float the Panel")
+            t("Back to the &Window") if floating else t("Float the Pa&nel")
         )
 
     def show_schematic(self) -> None:

@@ -12228,7 +12228,9 @@ def test_home_before_the_first_showing_still_gets_the_opening_proportions(monkey
         window.leave_home()
         _settle_events(QApplication, rounds=60)
         assert window.dock_library.width() < 600
-        assert window.dock_board.width() > 800
+        # Measured on the view in front: one behind its tab keeps whatever width it last had.
+        front = window.dock_schematic if window.schematic_is_showing() else window.dock_board
+        assert front.width() > 800
     finally:
         _close(window)
 
@@ -14012,13 +14014,27 @@ def _old_toolbar_actions(window) -> list:
     ]
 
 
+#: Every action on the sheet panel's own row in 0.22, the same checklist for the sheet. Its
+#: Export was File ▸ Export Schematic under another name, and is that entry now.
+def _old_sheet_row_actions(window) -> list:
+    return [
+        window.act_sch_add,
+        *(window.act_sheet_tool[name] for name in ("select", "wire", "label", "text", "rectangle")),
+        window.act_sch_rotate, window.act_sch_mirror, window.act_sch_delete,
+        window.act_sch_auto, window.act_sch_fit, window.act_sch_place, window.act_sch_float,
+        window.act_export_schematic,
+    ]
+
+
 def test_every_action_the_old_toolbars_had_is_behind_the_menu_button() -> None:
     """The toolbars go, and nothing on them goes with them: every one of their actions is
-    in a menu under ☰ (and so in Ctrl+K, which lists the menus)."""
+    in a menu under ☰ (and so in Ctrl+K, which lists the menus) -- the window's row and
+    the sheet's own row both."""
     window = _window_on(_load_dense())
     try:
         reachable = _reachable_from(window, window.header.app_menu)
-        missing = [a.text() for a in _old_toolbar_actions(window) if a not in reachable]
+        old = [*_old_toolbar_actions(window), *_old_sheet_row_actions(window)]
+        missing = [a.text() for a in old if a not in reachable]
         assert not missing, f"no longer reachable from the menus: {missing}"
     finally:
         _close(window)
@@ -14032,7 +14048,9 @@ def test_every_action_the_old_toolbars_had_has_a_place_on_screen() -> None:
     try:
         on_screen = {window.header.undo_button.defaultAction(),
                      window.header.redo_button.defaultAction()}
-        for bar in (window.board_tools, window.board_view_tools):
+        bars = (window.board_tools, window.board_view_tools, window.selection_bar,
+                window.sheet_tools, window.sheet_view_tools, window.sheet_selection_bar)
+        for bar in bars:
             for button in bar.buttons:
                 on_screen.add(button.defaultAction())
                 if button.menu() is not None:
@@ -14042,12 +14060,14 @@ def test_every_action_the_old_toolbars_had_has_a_place_on_screen() -> None:
         # Save is "Not saved" in the header, there when there is something to save.
         on_screen.add(window.act_save)
         # One-off commands are not tools: they are the header's Next when they are the
-        # next step (Place on the Board, Auto-wire), and the selection's own buttons
-        # (rotate, mirror, delete) arrive with the bar over the selection.
-        later = {window.act_new_net, window.act_autoplace, window.act_autoroute,
-                 window.act_rotate_cw, window.act_mirror, window.act_delete}
-        missing = [a.text() for a in _old_toolbar_actions(window)
-                   if a not in on_screen and a not in later]
+        # next step (Place on the Board, Rearrange, Auto-wire), a part is added from the
+        # Library, a net from the Nets panel, the sheet floats by dragging its tab, and the
+        # sheet's export is File's.
+        elsewhere = {window.act_new_net, window.act_autoplace, window.act_autoroute,
+                     window.act_sch_add, window.act_sch_place, window.act_sch_float,
+                     window.act_export_schematic}
+        old = [*_old_toolbar_actions(window), *_old_sheet_row_actions(window)]
+        missing = [a.text() for a in old if a not in on_screen and a not in elsewhere]
         assert not missing, f"no place on screen for: {missing}"
         assert {window.workflow_bar.buttons[key] for key in ("place", "route")}
     finally:
@@ -14344,5 +14364,60 @@ def test_escape_closes_the_palette_and_the_header_opens_it() -> None:
         assert window.command_palette.isVisibleTo(window)
         window.on_stop_tool()
         assert not window.command_palette.isVisibleTo(window)
+    finally:
+        _close(window)
+
+
+def test_the_sheets_tools_float_on_the_sheet() -> None:
+    """The sheet had a row of fifteen buttons across its panel: a second toolbar in a
+    window that had just lost its first. Its tools float on the sheet now, as the board's
+    float on the board -- the shape button holding the three shapes -- with Arrange, the
+    sheet's own zoom and Fit in the corner; everything else is the Schematic menu's."""
+    from PySide6.QtWidgets import QToolBar
+
+    window = _window_on(_load_dense())
+    try:
+        assert "schematicToolbar" not in {b.objectName() for b in window.findChildren(QToolBar)}
+        assert window.sheet_tools.parent() is window.schematic_view
+        tools = [button.defaultAction() for button in window.sheet_tools.buttons]
+        assert tools == [window.act_sheet_tool[n] for n in ("select", "wire", "label", "text", "rectangle")]
+        shapes = window.act_sheet_tool["rectangle"].menu()
+        assert shapes is not None and len(shapes.actions()) == 3
+        corner = [button.defaultAction() for button in window.sheet_view_tools.buttons]
+        assert window.act_sch_auto in corner and window.act_sch_fit in corner
+        assert window.act_sch_zoom_in in corner and window.act_sch_zoom_out in corner
+        on_menu = window.menu_schematic.actions()
+        for action in (window.act_sch_add, window.act_sch_rotate, window.act_sch_place,
+                       window.act_sch_float):
+            assert action in on_menu, action.text()
+    finally:
+        _close(window)
+
+
+def test_a_bar_stands_over_the_selected_symbols(monkeypatch) -> None:
+    """The board's selection bar, on the sheet: Turn, Flip, Remove and the right-click's
+    dots over the selected symbols, and gone while a drawing tool is armed."""
+    from PySide6.QtWidgets import QApplication
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        window.show_schematic()
+        _settle_events(QApplication)
+        bar = window.sheet_selection_bar
+        actions = [button.defaultAction() for button in bar.buttons]
+        assert actions[:2] == [window.act_sch_rotate, window.act_sch_mirror]
+        assert window.act_sch_delete in actions and actions[-1] is window.act_sheet_more
+        assert not bar.isVisible()
+
+        ref = window.bus.document.components[0].ref
+        window.schematic_view.set_selection([ref])
+        window.schematic_view.viewport().update()
+        _settle_events(QApplication)
+        assert bar.isVisible()
+
+        window.on_sheet_tool("wire")
+        window.schematic_view.viewport().update()
+        _settle_events(QApplication)
+        assert not bar.isVisible()
     finally:
         _close(window)

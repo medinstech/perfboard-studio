@@ -442,7 +442,6 @@ TURKISH: Mapping[str, str] = {
     # "Flip Side" was here until the toolbar stopped making its own action for it and
     # started sharing the View menu's, whose button label is "Flip".
     "Flip": "Çevir",
-    "Fit": "Sığdır",
     # -- the connect tool ------------------------------------------------------
     "Connecting": "Bağlanıyor",
     "click the first pin, Esc cancels": "ilk pine tıklayın, Esc iptal eder",
@@ -912,13 +911,6 @@ TURKISH: Mapping[str, str] = {
     # The strip the update check puts across the top. Its title is never drawn -- the panel
     # has no title bar -- but it is what Qt calls the dock, so it is named like one.
     "Update": "Güncelleme",
-    "Export…": "Dışa Aktar…",
-    "Write the sheet beside the document as SVG, PDF and PNG. All three are "
-    "drawn from the same file, so they cannot disagree about the circuit.": (
-        "Sayfayı belgenin yanına SVG, PDF ve PNG olarak yazar. Üçü de aynı dosyadan "
-        "çizilir, bu yüzden devre konusunda birbiriyle çelişemezler."
-    ),
-    "Add Part…": "Parça Ekle…",
     "Put a part in the design without deciding where it goes on the board yet.": (
         "Kart üzerinde nereye geleceğine karar vermeden tasarıma bir parça ekler."
     ),
@@ -969,7 +961,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "Line": "Çizgi",
     "Circle": "Daire",
-    "Turn": "Döndür",
     "Turn the selected symbols a quarter clockwise. R does the same.": (
         "Seçili sembolleri saat yönünde çeyrek döndürür. R tuşu da aynısını yapar."
     ),
@@ -1018,7 +1009,6 @@ TURKISH: Mapping[str, str] = {
     ),
     # -- the schematic as a view of its own, not a panel down the side ---------
     # "Board" is already in this catalogue, as the Board Setup dialog's own label.
-    "Arrange": "Diz",
     "Hand the whole sheet back to the layout: every symbol you moved and every "
     "wire you drew. What is connected is not touched — only how it was drawn.": (
         "Sayfanın tamamını düzene geri verir: taşıdığınız her sembol ve çizdiğiniz her tel. "
@@ -1032,8 +1022,6 @@ TURKISH: Mapping[str, str] = {
     "Nothing on this sheet has been moved by hand.": (
         "Bu sayfada elle taşınmış bir şey yok."
     ),
-    "Float the Panel": "Paneli Ayır",
-    "Back to the Window": "Pencereye Geri Al",
     "Put the sheet in a window of its own, so it and the board can sit side by "
     "side. Dragging its title bar does the same, and so does dropping it back.": (
         "Sayfayı kendi penceresine alır, böylece kartla yan yana durabilirler. Başlık "
@@ -2637,6 +2625,15 @@ TURKISH: Mapping[str, str] = {
         "Menüler: Dosya, Düzen, Görünüm ve diğerleri. Alt tuşu da açar."
     ),
     "Not saved": "Kaydedilmedi",
+    "&Schematic": "&Şema",
+    "&Drawing Tools": "Çizim &Araçları",
+    "&Turn": "Dö&ndür",
+    "F&lip": "&Çevir",
+    "&Place on the Board": "Karta &Yerleştir",
+    "Float the Pa&nel": "&Paneli Ayır",
+    "Back to the &Window": "Pencereye &Geri Al",
+    "Zoom In": "Yakınlaştır",
+    "Zoom Out": "Uzaklaştır",
     "Search Commands…": "Komut Ara…",
     "Search or run a command…": "Komut arayın ya da çalıştırın…",
     "Every command by its name, and any part or net (Ctrl+K).": (

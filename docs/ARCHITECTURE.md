@@ -1472,6 +1472,14 @@ and asks it again on every repaint of the view's viewport. A repaint is the one 
 way of changing the view sends (a scroll, the wheel, a pinch, Fit, a command moving the
 part), so the bar follows without a hook in each of them.
 
+**The sheet has the same three** (`_build_sheet_tools`): its tools down the left (the shape
+button holding Box, Line and Circle), Arrange and its own zoom and Fit in the corner -- its
+own, because the View menu's zoom acts on whichever view has the keyboard and a button
+pressed on the sheet does not take it -- and a bar over the selected symbols. Its commands
+were a row on the sheet's panel and nowhere else, so none was behind ☰ or in Ctrl+K until
+they went into the Schematic menu; the sheet's Export was File ▸ Export Schematic under
+another name, and is only that now.
+
 **Tools that are one idea share a button** (`FloatingBar.add_group`): solder trace and
 reinforced trace; bare wire, insulated wire and a jumper over the parts. The button shows
 and arms the one picked last -- by the menu, its key or the button -- and offers the rest

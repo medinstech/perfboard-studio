@@ -105,6 +105,12 @@ closed without a bump.
   it lives in and its key, so "Lay Wires Along the Grid" is four letters away rather than
   three menus deep; a part's reference selects it on the board, and a net's name selects
   it in the Nets panel. Enter runs the one picked, Escape closes it.
+- **The schematic's tools are on the schematic, and its commands have a menu.** The row of
+  buttons across the sheet's panel is gone: Select, Connect, Label, Text and the shapes
+  float down the sheet's left, Arrange, zoom and Fit sit in its corner, and a bar over the
+  selected symbols offers Turn, Flip, Remove and the right-click menu. A new Schematic
+  menu holds Add Part, the drawing tools, Turn, Flip, Remove, Arrange, Fit, Place on the
+  Board and Float the Panel, so every one of them is behind ☰ and in Ctrl+K.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the
