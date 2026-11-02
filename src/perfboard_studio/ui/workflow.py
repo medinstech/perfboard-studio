@@ -35,8 +35,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import theme
 from .i18n import t
-from .theme import ACCENT, BORDER, ERROR, OK, PANEL_ALT, TEXT, TEXT_DIM, WARNING
 
 type StepKey = Literal["circuit", "board", "place", "route", "check", "build"]
 
@@ -315,14 +315,16 @@ def _step_dot(number: int, status: StepStatus) -> QIcon:
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     ring = QRectF(1, 1, size - 2, size - 2)
+    tokens = theme.ACTIVE
     if status == "todo":
-        painter.setPen(QPen(QColor(TEXT_DIM), 1.2))
+        ink = theme.colour("tertiary")
+        painter.setPen(QPen(QColor(ink), 1.2))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        ink = TEXT_DIM
     else:
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor({"done": PANEL_ALT, "current": ACCENT, "problem": ERROR}[status]))
-        ink = OK if status == "done" else "white"
+        fill = {"done": tokens.bg_hover, "current": tokens.accent, "problem": tokens.danger}
+        painter.setBrush(QColor(fill[status]))
+        ink = theme.colour("success") if status == "done" else tokens.text_on_accent
     painter.drawEllipse(ring)
     if status == "done":
         tick = QPen(QColor(ink), 1.8)
@@ -387,8 +389,9 @@ class WorkflowBar(QWidget):
         for index, key in enumerate(STEP_ORDER):
             if index:
                 line = QFrame()
+                line.setFrameShape(QFrame.Shape.HLine)
+                line.setFrameShadow(QFrame.Shadow.Plain)
                 line.setFixedSize(14, 1)
-                line.setStyleSheet(f"background: {BORDER};")
                 layout.addWidget(line)
             button = QToolButton()
             button.setObjectName(f"workflowStep_{key}")
@@ -408,16 +411,9 @@ class WorkflowBar(QWidget):
         self.next_button.clicked.connect(lambda: self.nextClicked.emit(self._next))
         self._next: StepKey = "circuit"
         self.steps: tuple[StepState, ...] = ()
-        self.setStyleSheet(
-            f"""
-            QToolButton {{
-                color: {TEXT_DIM}; background: transparent; border: none; padding: 3px 6px;
-                border-radius: 6px; text-align: left;
-            }}
-            QToolButton:hover {{ background: {PANEL_ALT}; }}
-            """
-        )
-        self.next_button.setStyleSheet(_next_button_sheet(problem=False))
+        # The one accent button in the window: what the next step is, done when pressed.
+        # Warning-filled while a problem outranks the next step (``[problem="true"]``).
+        theme.variant(self.next_button, "primary")
 
     def minimumSizeHint(self) -> QSize:
         return QSize(0, super().minimumSizeHint().height())
@@ -473,31 +469,18 @@ class WorkflowBar(QWidget):
                 f"<b>{number}. {step_title(step.key)}</b> — {step.summary}"
                 f"<br>{step_tooltip(step.key)}"
             )
-            if step.status == "current":
-                button.setStyleSheet(f"QToolButton {{ color: {TEXT}; font-weight: 600; }}")
-            elif step.status == "problem":
-                button.setStyleSheet(f"QToolButton {{ color: {ERROR}; font-weight: 600; }}")
-            else:
-                button.setStyleSheet("")
+            # Its look is the sheet's, by status (``#workflowBar QToolButton[status=...]``).
             button.setProperty("status", step.status)
+            theme.restyle(button)
         self._next = next_step(steps)
         label = next(step.action for step in steps if step.key == self._next)
         problem = any(step.status == "problem" for step in steps)
         self.next_button.setText(("⚠ " if problem else "") + label)
-        self.next_button.setStyleSheet(_next_button_sheet(problem=problem))
+        self.next_button.setProperty("problem", problem)
+        theme.restyle(self.next_button)
         self._fit()
 
     @property
     def next_key(self) -> StepKey:
         return self._next
 
-
-def _next_button_sheet(*, problem: bool) -> str:
-    """The one accent button in the window: what the next step is, done when pressed."""
-    return f"""
-        QPushButton#workflowNext {{
-            background: {WARNING if problem else ACCENT}; color: white; font-weight: 600;
-            border: none; border-radius: 6px; padding: 6px 14px;
-        }}
-        QPushButton#workflowNext:hover {{ background: {WARNING if problem else '#62aaff'}; }}
-        """

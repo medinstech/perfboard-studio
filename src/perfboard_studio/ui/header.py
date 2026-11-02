@@ -30,7 +30,6 @@ from PySide6.QtWidgets import (
 
 from . import icons
 from .i18n import t
-from .theme import BORDER, PANEL, PANEL_ALT, TEXT, WARNING
 from .workflow import WorkflowBar
 
 #: The header's height, in logical pixels: one row, the step dots and the next button
@@ -101,17 +100,8 @@ class HeaderBar(QWidget):
         layout.addSpacing(4)
         layout.addWidget(steps.next_button)
 
-        self.setStyleSheet(
-            f"""
-            QWidget#header {{ background: {PANEL}; border-bottom: 1px solid {BORDER}; }}
-            QLabel#headerTitle {{ color: {TEXT}; font-weight: 600; background: transparent; padding-left: 4px; }}
-            QWidget#workflowBar {{ background: transparent; }}
-            QToolButton#headerUnsaved {{ color: {WARNING}; padding: 2px 6px; }}
-            QToolButton {{ background: transparent; border: none; border-radius: 6px; padding: 4px; }}
-            QToolButton:hover {{ background: {PANEL_ALT}; }}
-            QToolButton::menu-indicator {{ image: none; }}
-            """
-        )
+        # Styled by name in the one sheet (``theme.stylesheet``): #header, #headerTitle,
+        # #headerUnsaved, and the steps as #workflowBar's buttons by their status.
 
     def minimumSizeHint(self) -> QSize:
         # Claims no width: a toolbar hides a widget that does not fit, and the steps shed

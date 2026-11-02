@@ -343,10 +343,7 @@ PHYSICAL: dict[str, str] = {
 
 #: Files still styled the old way, each waiting on the member who owns it. Printed on every
 #: run, and a test fails the moment one is clean and still listed, so this can only shrink.
-PENDING: dict[str, str] = {
-    "header.py": "ux: rewritten on the tokens together with the header stepper",
-    "workflow.py": "ux: the step bar becomes the header stepper, on the tokens",
-}
+PENDING: dict[str, str] = {}
 
 _HEX = re.compile(r"#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b")
 _INLINE_COLOUR = re.compile(r"style\s*=\s*['\"][^'\"]*color", re.IGNORECASE)
