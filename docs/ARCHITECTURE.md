@@ -1413,6 +1413,15 @@ a tab, floated, closed. The row they replaced was fifteen buttons wider than a l
 that shed its words to fit and came and went with the board panel (`_sync_toolbars_to_view`,
 `_fit_toolbar`, both gone).
 
+**Properties stand down the right, always open** (`ui/properties.py`, `dockProperties`, no
+close box, the whole height beside the views and the drawer). The shell is the window's and
+the content the inspector's: `PropertiesPanel.set_content` hosts any widget with
+`set_selection(Selection)` and `refresh(document)` -- one editor per kind of selection, written
+to the commands -- and until one is put in, a summary says what is selected. The window says
+the selection once (`_current_selection`, a `ui/selection.py` value): a library part armed
+for placing first, then the board's selection, then the sheet's, and the board itself when
+nothing is; it hands over the document after every command and the selection on every change.
+
 **What the selection can do stands over the selection** (`selection_bar`): Rotate, Mirror,
 Lock, Auto-wire the Selection, Delete, and the dots for `board_menu`, the right-click menu
 built from the same actions. It is a `FloatingBar` with no corner that `track`s a source --

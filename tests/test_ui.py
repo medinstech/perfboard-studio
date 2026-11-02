@@ -14165,3 +14165,89 @@ def test_the_dots_on_the_selection_bar_offer_what_a_right_click_does(monkeypatch
         assert window.act_properties in offered and window.act_change_part in offered
     finally:
         _close(window)
+
+
+def test_properties_stand_down_the_right_and_cannot_be_closed(monkeypatch) -> None:
+    """Always open, the whole height of the window, beside the views: with nothing selected
+    the board is the selection, so there is never nothing to show and nothing to close it
+    for."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QDockWidget
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        dock = window.dock_properties
+        assert dock.objectName() == "dockProperties"
+        assert window.dockWidgetArea(dock) == Qt.DockWidgetArea.RightDockWidgetArea
+        assert not dock.features() & QDockWidget.DockWidgetFeature.DockWidgetClosable
+        assert not dock.isHidden()
+        _settle_events(QApplication)
+        assert dock.x() > window.dock_board.x() + window.dock_board.width() - 2
+        assert dock.height() >= window.dock_board.height()
+        assert window.properties.selection.kind == "board"
+    finally:
+        _close(window)
+
+
+def test_properties_follow_the_selection_from_the_board_the_sheet_and_the_library() -> None:
+    """One selection, said once: a part selected on the board, several, a part picked on
+    the sheet, a library part armed for placing -- and the board again when nothing is."""
+    window = _window_on(_load_dense())
+    try:
+        first, second = window.bus.document.components[:2]
+        window.scene.select_components([first.id])
+        assert window.properties.selection.kind == "part"
+        assert window.properties.selection.ids == (first.id,)
+        window.scene.select_components([first.id, second.id])
+        assert window.properties.selection.kind == "parts"
+        window.scene.select_components([])
+        assert window.properties.selection.kind == "board"
+
+        window._on_sheet_selection_changed([second.ref])
+        assert window.properties.selection == window._current_selection()
+        assert window.properties.selection.ids == (second.id,)
+        assert window.properties.selection.source == "sheet"
+        window._on_sheet_selection_changed([])
+
+        window._on_placement_armed("r-axial-4")
+        assert window.properties.selection.kind == "placing"
+        assert window.properties.selection.ids == ("r-axial-4",)
+        window._on_placement_armed("")
+        assert window.properties.selection.kind == "board"
+    finally:
+        _close(window)
+
+
+def test_the_inspector_is_put_in_and_handed_the_selection_and_the_document() -> None:
+    """The shell is the window's; what it shows is the inspector's. Put in with
+    set_content, it is handed the document and the selection at once, then every change
+    of either -- the two calls agreed with the inspector."""
+    from PySide6.QtWidgets import QWidget
+
+    class _Inspector(QWidget):
+        def __init__(self) -> None:
+            super().__init__()
+            self.selections: list[object] = []
+            self.documents: list[object] = []
+
+        def set_selection(self, selection: object) -> None:
+            self.selections.append(selection)
+
+        def refresh(self, document: object) -> None:
+            self.documents.append(document)
+
+    window = _window_on(_load_dense())
+    try:
+        inspector = _Inspector()
+        window.properties.set_content(inspector)
+        assert inspector.documents and inspector.documents[-1] is window.bus.document
+        assert inspector.selections and inspector.selections[-1].kind == "board"
+        first = window.bus.document.components[0]
+        window.scene.select_components([first.id])
+        assert inspector.selections[-1].ids == (first.id,)
+        window.bus.dispatch(
+            "component.move", MoveComponentPayload(id=first.id, anchor=HoleCoord(3, 3))
+        )
+        assert inspector.documents[-1] is window.bus.document
+    finally:
+        _close(window)

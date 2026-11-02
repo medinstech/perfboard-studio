@@ -360,6 +360,9 @@ from .partnames import footprint_label
 from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
 from .problems import ProblemsBar
 from .project import write_project
+from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
+from .properties import PropertiesPanel
+from .selection import NOTHING, Selection
 from .tour import Tour
 from .view2d import (
     FOOTPRINT_MIME,
@@ -609,7 +612,9 @@ WINDOW_STATE_KEY = "session/windowState"
 #:
 #: 9 is the views as tabs over the canvas, and the tool row gone onto it: every saved
 #: layout has the views side by side and two toolbars nobody builds any more.
-WINDOW_STATE_VERSION = 9
+#:
+#: 10 is the Properties panel, a dock no earlier layout has heard of.
+WINDOW_STATE_VERSION = 10
 BOARD_COLOUR_KEY = "session/boardColour"
 RATSNEST_KEY = "session/showRatsnest"
 RULERS_KEY = "session/showRulers"
@@ -4438,6 +4443,7 @@ class MainWindow(QMainWindow):
         self._build_3d_dock()
         self._build_guide_dock()
         self._build_drc_dock()
+        self._build_properties_dock()
         self._arrange_docks()
         for dock in self._view_docks():
             dock.visibilityChanged.connect(
@@ -5045,6 +5051,11 @@ class MainWindow(QMainWindow):
         # divide their column the way any splitter does. It also puts the findings directly
         # under the thing they are findings about.
         self.splitDockWidget(self.dock_board, self.dock_drc, Qt.Orientation.Vertical)
+        # PROPERTIES DOWN THE RIGHT, the whole height of the window: beside the views and
+        # the drawer under them, as a column of its own.
+        self.addDockWidget(
+            Qt.DockWidgetArea.RightDockWidgetArea, self.dock_properties, Qt.Orientation.Horizontal
+        )
         # THE FOUR VIEWS AS TABS OVER THE CANVAS, every one of them open, the board in
         # front. They stood side by side before this, and that cost the board its width
         # whenever a second view was open; and they were tabs once before that, hidden behind
@@ -5143,6 +5154,7 @@ class MainWindow(QMainWindow):
             (self.dock_library, self.LAYOUT_LEFT_WIDTH, None),
             (self.dock_part_list, self.LAYOUT_LEFT_WIDTH, None),
             (self.dock_nets, self.LAYOUT_LEFT_WIDTH, None),
+            (self.dock_properties, PROPERTIES_WIDTH, None),
         ):
             if width is not None:
                 dock.setMinimumWidth(width if on else 0)
@@ -7120,6 +7132,7 @@ class MainWindow(QMainWindow):
         self._catalog_value = ""
 
     def _on_placement_armed(self, footprint_id: str) -> None:
+        self._armed_footprint_id: str | None = footprint_id or None
         # R and M turn an armed part, so they come on and go off with the arming.
         self._refresh_selection_state()
         if not footprint_id:
@@ -8072,6 +8085,7 @@ class MainWindow(QMainWindow):
         elif isinstance(refs, list) and not refs:
             self._schematic_ref = None
         self._refresh_schematic_actions()
+        self._refresh_properties()
 
     def _on_sheet_wire_drawn(
         self, ref_a: str, pin_a: str, ref_b: str, pin_b: str, path: object
@@ -9430,6 +9444,59 @@ class MainWindow(QMainWindow):
         if hasattr(self, "act_drc_panel") and self.act_drc_panel.isChecked() != on:
             self.act_drc_panel.setChecked(on)
 
+    def _build_properties_dock(self) -> None:
+        """The Properties panel (``ui/properties.py``): always open, down the right.
+
+        Not closable, and with no title bar of its own -- the panel carries its caption --
+        because a panel that shows "the board" when nothing is selected has nothing to be
+        closed for. What it shows is the inspector's, put in by ``set_content``; the window
+        tells it what is selected (``_refresh_properties``) and what the document is now.
+        """
+        self.properties = PropertiesPanel()
+        dock = QDockWidget(t("Properties"), self)
+        dock.setObjectName("dockProperties")
+        dock.setWidget(self.properties)
+        dock.setTitleBarWidget(QWidget(dock))
+        dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        dock.setMinimumWidth(self.SIDE_PANEL_MIN_WIDTH)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self.dock_properties = dock
+        #: The library part armed for placing, if one is: Properties shows it.
+        self._armed_footprint_id = None
+
+    def _current_selection(self) -> Selection:
+        """What is selected, said once for the Properties panel: a part armed for placing
+        first, then the board's selection, then the sheet's, and the board itself when
+        nothing is."""
+        if self._armed_footprint_id:
+            return Selection("placing", (self._armed_footprint_id,), "library")
+        components = tuple(self.scene.selected_component_ids())
+        conductors = tuple(self.scene.selected_conductor_ids())
+        notes = tuple(self.scene.selected_board_note_ids())
+        if components and not conductors and not notes:
+            return Selection("part" if len(components) == 1 else "parts", components)
+        if conductors and not components and not notes:
+            return Selection("conductor" if len(conductors) == 1 else "conductors", conductors)
+        if notes and not components and not conductors:
+            return Selection("board-note", notes)
+        if components or conductors or notes:
+            return Selection("mixed", (*components, *conductors, *notes))
+        ref = self._schematic_ref
+        if ref is not None:
+            document = self.bus.document
+            design = next((p for p in document.parts if p.ref == ref), None)
+            if design is not None:
+                return Selection("design-part", (design.id,), "sheet")
+            placed = next((c for c in document.components if c.ref == ref), None)
+            if placed is not None:
+                return Selection("part", (placed.id,), "sheet")
+        return NOTHING
+
+    def _refresh_properties(self) -> None:
+        panel = getattr(self, "properties", None)
+        if panel is not None and hasattr(self, "scene"):
+            panel.set_selection(self._current_selection())
+
     def _on_drc_filter_changed(self, _text: str) -> None:
         if self._last_lvs is not None:
             self._refresh_drc_panel(self._last_violations, self._last_lvs)
@@ -9954,6 +10021,11 @@ class MainWindow(QMainWindow):
 
         self._refresh_title()
         self._refresh_undo_actions()
+        # The document first, then what is selected in it: a part deleted by this command
+        # is no longer the selection.
+        if hasattr(self, "properties"):
+            self.properties.refresh(document)
+            self._refresh_properties()
         self._refresh_empty_hint()
         # The banner names the part about to be placed, and next_reference reads the
         # document to work that out -- so placing R4 has to move the banner on to R5.
@@ -10625,6 +10697,7 @@ class MainWindow(QMainWindow):
         address, orientation and whether it is locked. Those are exactly the values someone
         placing a part is trying to get right, so they belong on screen.
         """
+        self._refresh_properties()
         self._place_selection_bar()
         components = self._selected_components()
         self._sync_schematic_highlight()

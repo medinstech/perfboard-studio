@@ -2639,6 +2639,14 @@ TURKISH: Mapping[str, str] = {
         "Menüler: Dosya, Düzen, Görünüm ve diğerleri. Alt tuşu da açar."
     ),
     "Not saved": "Kaydedilmedi",
+    "Properties": "Özellikler",
+    "{count} selected": "{count} seçili",
+    "{count} pins": "{count} pin",
+    "Placing a part": "Parça yerleştiriliyor",
+    "Click the board where pin 1 goes. Esc cancels.": (
+        "1. pinin gideceği yere tıklayın. Esc vazgeçer."
+    ),
+    "{cols} × {rows} holes": "{cols} × {rows} delik",
     "More": "Diğer",
     "Everything a right-click on the selection offers.": (
         "Seçimde sağ tıklamanın sunduğu her şey."

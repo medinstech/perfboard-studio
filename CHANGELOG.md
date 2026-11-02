@@ -91,6 +91,11 @@ closed without a bump.
   bar stands above them: Rotate, Mirror, Lock, Auto-wire the Selection and Delete, and
   the dots for everything a right-click offers. It follows the parts as the view scrolls
   and zooms, and goes while a drawing tool is armed.
+- **A Properties panel down the right, always open.** It says what is selected -- a part,
+  several, a part picked on the sheet, the part about to be placed -- and the board itself
+  when nothing is, so there is never an empty panel and nothing to close it for. This is
+  the panel's frame; what it lets you edit arrives next, in place of the Part Properties
+  dialog.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the
