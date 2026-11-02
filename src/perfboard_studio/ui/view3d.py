@@ -2208,10 +2208,10 @@ def _axial_markings(
     has quietly dropped.
     """
     # ``barrel`` is the borrowed mesh's own (radius, centre height, length), because a
-    # KiCad DIN0207 is 2.5 mm across and 6.3 mm long where this footprint's placement says
-    # 2.0 and 5.0 -- a footprint describes a package family and a model is one part in it.
-    # Printing at the footprint's size puts the bands INSIDE the barrel, which is not a
-    # subtle failure: they vanish.
+    # footprint describes a package family at its largest and a model is one part in it: a
+    # 9 mm resistor's placement says 3.6 mm across where KiCad's DIN0309 is 3.2. Printed at
+    # the footprint's size the bands stand off the barrel; printed at a size smaller than the
+    # barrel they are INSIDE it, which is not a subtle failure: they vanish.
     radius, z, along = barrel or (body.across / 2, body.across / 2 + _LIFT, body.along)
     orientation = _ALONG_X if body.axis == "x" else _ALONG_Y
     pieces: list[_Piece] = []
@@ -2574,7 +2574,11 @@ def _to92_pieces(body: _WorldBody) -> list[_Piece]:
         _Piece(
             source=_d_prism(profile.radius, profile.flat, body.height),
             rgb=_rgb(body.style.fill),
-            position=(body.x, body.y, body.height / 2 + _LIFT),
+            position=(
+                body.x + profile.shift * towards_x,
+                body.y + profile.shift * towards_y,
+                body.height / 2 + _LIFT,
+            ),
             # The profile is built with its flat towards +y; this turns +y onto ``flat``.
             orientation=(0.0, 0.0, math.degrees(math.atan2(-towards_x, towards_y))),
             material=MOULDED,

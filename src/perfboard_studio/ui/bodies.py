@@ -313,22 +313,31 @@ class FlatFaceProfile:
     part is keyed and on both faces of the board.
     """
 
-    #: The round side's radius, from the body's centre.
+    #: The round side's radius.
     radius: float
-    #: From the body's centre to the flat, towards :data:`FLAT_FACE_LOCAL`.
+    #: From the circle's centre to the flat, towards :data:`FLAT_FACE_LOCAL`.
     flat: float
+    #: From the body's centre to the circle's, towards :data:`FLAT_FACE_LOCAL`: the D fills
+    #: the body's box, round side against one face and flat against the other.
+    shift: float
 
 
 def flat_face_profile(size_x: float, size_y: float) -> FlatFaceProfile:
     """The D both views draw a ``flat-face`` case as, from its body's two extents.
 
-    The circle is as wide as the case's longer extent and the chord sits where its DEPTH
-    puts it: a flat at half the depth shaves a sliver off a cylinder and reads as no flat at
-    all, which is what the 3D view first drew. Either extent may be given first -- a quarter
-    turn swaps them and changes nothing here.
+    The circle is as wide as the case's longer extent, its back meets the box's back face and
+    the chord its front one, so the D is exactly the body DRC measures -- for a TO-92, 4.19 mm
+    deep and 5.21 across puts the flat 1.585 mm from the circle's centre. The floor keeps a
+    flat on a case nearly as deep as it is wide: at half the depth a chord shaves a sliver off
+    a cylinder and reads as no flat at all, which is what the 3D view first drew. Either
+    extent may be given first -- a quarter turn swaps them and changes nothing here.
     """
     radius = max(size_x, size_y) / 2
-    return FlatFaceProfile(radius=radius, flat=max(min(size_x, size_y) - radius, radius * 0.25))
+    depth = min(size_x, size_y)
+    flat = max(depth - radius, radius * 0.25)
+    # The D runs from ``radius`` behind its circle's centre to ``flat`` in front of it, so
+    # its middle is on the box's when the circle sits half their difference forward.
+    return FlatFaceProfile(radius=radius, flat=flat, shift=(radius - flat) / 2)
 
 
 def placement_for(footprint: Footprint, pitch: float) -> BodyPlacement:

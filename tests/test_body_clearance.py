@@ -5,7 +5,7 @@ exactly what they were -- courtyards, half a pitch round every body and pin. Set
 a pair by ``geometry.bodies_clash``: bodies closer than the clearance, round where the body
 is round, or a pin under the other's body. What is pinned here: unset is not written and
 changes nothing; the reporter's two TO-92s two rows apart fit at any clearance up to their
-1.38 mm gap; a pin under another part's body is still in its way; a can is measured as the
+0.89 mm gap; a pin under another part's body is still in its way; a can is measured as the
 circle it is; the setting survives a save, refuses what is not a clearance, travels with the
 design to a new board and is said in Turkish; and the placer and DRC agree on every pair
 across the library.
@@ -57,7 +57,8 @@ def _session(*parts: tuple[str, str, str, int]) -> BoardSession:
 
 
 def _to92s() -> BoardSession:
-    """The reporter's pair: two TO-92s two rows apart, their bodies 1.38 mm apart."""
+    """The reporter's pair: two TO-92s two rows apart, their bodies 0.89 mm apart -- 5.08 mm
+    less TI LP0003A's 4.19 mm case, both facing the same way."""
     return _session(("Q1", "to92", "C3", 0), ("Q2", "to92", "C5", 0))
 
 
@@ -75,7 +76,7 @@ def test_unset_is_the_courtyard_rule_and_is_not_written() -> None:
     assert "body_clearance_mm" not in session.get_board_info()
 
 
-@pytest.mark.parametrize("clearance", [0.0, 0.5, 1.0, 1.37])
+@pytest.mark.parametrize("clearance", [0.0, 0.5, 0.88])
 def test_the_reporters_to92s_fit_at_any_clearance_up_to_their_gap(clearance: float) -> None:
     session = _to92s()
     assert session.set_body_clearance(clearance)["ok"]
@@ -86,14 +87,14 @@ def test_closer_than_the_clearance_says_how_far_apart_they_are() -> None:
     session = _to92s()
     assert session.set_body_clearance(1.5)["ok"]
     assert _overlaps(session.document) == [
-        "Component Q1 (anchored at C3) and Q2 (anchored at C5) are 1.38 mm apart, closer than "
+        "Component Q1 (anchored at C3) and Q2 (anchored at C5) are 0.89 mm apart, closer than "
         "the 1.5 mm body clearance this design asks for."
     ]
 
 
 def test_a_pin_under_another_parts_body_is_still_in_its_way() -> None:
     """What the courtyard's margin round each pin bought, and a body clearance alone would
-    drop: a resistor whose lead goes into a hole under a DIP, its own body 0.66 mm clear."""
+    drop: a resistor whose lead goes into a hole under a DIP, its own body 0.56 mm clear."""
     session = _session(("U1", "dip-8", "F6", 0), ("R1", "r-axial-5", "H7", 0))
     assert session.set_body_clearance(0.0)["ok"]
     assert _overlaps(session.document) == [
@@ -102,7 +103,7 @@ def test_a_pin_under_another_parts_body_is_still_in_its_way() -> None:
     # Wider than the bodies' gap, and it is the gap that is reported.
     assert session.set_body_clearance(1.0)["ok"]
     [message] = _overlaps(session.document)
-    assert "are 0.66 mm apart" in message
+    assert "are 0.56 mm apart" in message
 
 
 def test_overlapping_bodies_say_so() -> None:
@@ -222,7 +223,7 @@ def test_choosing_a_board_again_keeps_it() -> None:
 def test_the_placer_names_the_same_parts_in_conflict() -> None:
     """``_conflicts_by_part``, which the window marks parts by, asks the same predicate."""
     session = _to92s()
-    assert session.set_body_clearance(1.0)["ok"]
+    assert session.set_body_clearance(0.88)["ok"]
     assert _conflicts_by_part(session.document, REGISTRY) == {}
     assert session.set_body_clearance(1.5)["ok"]
     conflicts = _conflicts_by_part(session.document, REGISTRY)
@@ -374,7 +375,7 @@ def test_the_three_findings_are_said_in_turkish(turkish: None) -> None:
     assert session.set_body_clearance(0.0)["ok"]
     said += [say_finding(m) for m in _overlaps(session.document)]
     assert said == [
-        "Q1 (C3 deliğinde) ile Q2 (C5 deliğinde) arasında 1.38 mm var; bu tasarımın istediği "
+        "Q1 (C3 deliğinde) ile Q2 (C5 deliğinde) arasında 0.89 mm var; bu tasarımın istediği "
         "1.5 mm gövde aralığından az.",
         "Q1 (C3 deliğinde) ile Q2 (C4 deliğinde) parçalarının gövdeleri üst üste biniyor.",
         "R1 parçasının (H7 deliğinde) bir bacağı U1 parçasının (F6 deliğinde) gövdesinin "

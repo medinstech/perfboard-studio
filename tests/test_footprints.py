@@ -82,6 +82,8 @@ from perfboard_studio.footprints import (
 )
 from perfboard_studio.model import STANDARD_PITCH_MM, Footprint
 
+from .differential import DIVERGES_FROM_TYPESCRIPT, ORIGINAL_FOOTPRINTS
+
 
 def _ulps_apart(a: float, b: float) -> int:
     """Distance between two doubles counted in representable values.
@@ -159,19 +161,9 @@ REGISTRY: dict[str, Footprint] = standard_footprints()
 
 EXPECTED_COUNT = 61
 
-#: Footprints whose GEOMETRY deliberately differs from the TypeScript golden, and why. The
-#: golden proves the port reproduces the original; that cannot also mean the port may never
-#: correct it. Only the outline and the body's dimensions are excused -- every other field is
-#: still compared -- and each entry is pinned by its own test of the geometry it now has,
-#: rather than by the absence of a comparison. Hand-editing the .expected.json instead would
-#: make the next regeneration from the TypeScript engine silently disagree.
-DIVERGES_FROM_TYPESCRIPT = {
-    "xtal-hc49": (
-        "the original had the HC-49/U's can 4.65 x 3.5 mm -- its thickness along the leads "
-        "and a height across them -- where it is 11.05 x 4.65 mm on the board; pinned by "
-        "test_the_crystal_is_as_long_as_the_can"
-    ),
-}
+# The footprints whose geometry deliberately differs from the golden, and why, are
+# ``DIVERGES_FROM_TYPESCRIPT`` in tests/differential.py: one list, because every test that
+# compares with the original's output serves the original's footprint for exactly those ids.
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +246,8 @@ def test_footprint_matches_golden_field_by_field(footprint_id: str) -> None:
         assert_coord(footprint_id, f"bodyOutline[{i}].x", ao.x, eo["x"], term_scale)
         assert_coord(footprint_id, f"bodyOutline[{i}].y", ao.y, eo["y"], term_scale)
 
-    assert actual.body_height == expected["bodyHeight"], (
+    # A lying resistor is as tall as it is thick, so a real 0207 is taller than the original's.
+    assert diverges or actual.body_height == expected["bodyHeight"], (
         f"[{footprint_id}] field 'bodyHeight': {actual.body_height!r} != {expected['bodyHeight']!r}"
     )
 
@@ -266,7 +259,10 @@ def test_footprint_matches_golden_field_by_field(footprint_id: str) -> None:
     expected_dims = expected_body["dims"]
     actual_dim_keys = set(actual.body.dims.keys())
     expected_dim_keys = set(expected_dims.keys())
-    assert actual_dim_keys == expected_dim_keys, (
+    # A divergent body may say MORE than the original's (a TO-92's offset off its pin row),
+    # never less.
+    keys_agree = actual_dim_keys >= expected_dim_keys if diverges else actual_dim_keys == expected_dim_keys
+    assert keys_agree, (
         f"[{footprint_id}] field 'body.dims' keys: {sorted(actual_dim_keys)} != {sorted(expected_dim_keys)}"
     )
     for key, expected_value in expected_dims.items():
@@ -305,8 +301,59 @@ def test_the_crystal_is_as_long_as_the_can() -> None:
 def test_the_divergences_are_real_ones() -> None:
     """An entry that no longer differs from the golden is an excuse nobody needs."""
     for footprint_id in DIVERGES_FROM_TYPESCRIPT:
-        golden = GOLDEN[footprint_id]
-        assert golden["body"]["dims"] != REGISTRY[footprint_id].body.dims
+        golden = ORIGINAL_FOOTPRINTS[footprint_id]
+        actual = REGISTRY[footprint_id]
+        assert (golden.body.dims, golden.body_outline) != (actual.body.dims, actual.body_outline)
+
+
+#: Every body made the real package's, as ``body_extent`` measures it (across the columns,
+#: down the rows, mm), and where the number comes from. The datasheet MAXIMUM, because a body
+#: that is too small lets two parts that touch pass DRC -- or KiCad's model of the package
+#: where that is larger, because the 3D view draws the model and DRC must not measure a
+#: smaller part than the one on screen. A DIP's courtyard now holds its body's length, where
+#: the original's held its pins alone, which is why dip-8, dip-16 and dip-40 diverge with
+#: the same body they always had.
+REAL_PACKAGES: dict[str, tuple[float, float, str]] = {
+    "dip-8": (7.62, 9.82, "length unchanged; the courtyard holds it"),
+    "dip-14": (7.62, 19.69, "TI MPDI002C (N), A max"),
+    "dip-16": (7.62, 19.98, "length unchanged; the courtyard holds it"),
+    "dip-18": (7.62, 23.37, "TI MPDI002C (N), A max"),
+    "dip-20": (7.62, 26.92, "TI MPDI002C (N), A max"),
+    "dip-28": (7.62, 36.2, "TI MPDI004 (NT), A max"),
+    "dip-40": (7.62, 50.46, "length unchanged; the courtyard holds it"),
+    "dip-40-wide": (15.24, 53.09, "TI MPDI008 (N, 600 mil), A max"),
+    "r-axial-3": (6.5, 2.5, "Vishay MBB/SMA 0207 (doc 28766), L and D max"),
+    "r-axial-4": (6.5, 2.5, "Vishay MBB/SMA 0207 (doc 28766), L and D max"),
+    "r-axial-5": (6.5, 2.5, "Vishay MBB/SMA 0207 (doc 28766), L and D max"),
+    "d-do35": (4.0, 2.0, "KiCad's DO-35 model; Vishay's maximum is 3.4"),
+    "led-3mm": (3.8, 3.8, "KiCad's model's flange; Kingbright WP710A10ID gives 3.2 +-0.25"),
+    "led-5mm": (6.15, 6.15, "Kingbright WP7113ID, flange 5.9 +-0.25"),
+    "led-10mm": (11.0, 11.0, "KiCad's model's flange"),
+    "to92": (5.21, 4.19, "TI LP0003A, maxima; 0.54 mm behind its legs, off KiCad's mesh"),
+    "to220": (10.36, 4.7, "TI KCS0003B, maxima"),
+    "screw-terminal-2": (11.66, 9.8, "Phoenix MKDS 1,5 depth, KiCad's model; 0.3 mm behind its pins"),
+    "screw-terminal-3": (16.74, 9.8, "Phoenix MKDS 1,5 depth, KiCad's model; 0.3 mm behind its pins"),
+}
+
+
+def test_every_divergence_but_the_crystal_is_a_real_package() -> None:
+    assert set(REAL_PACKAGES) | {"xtal-hc49"} == set(DIVERGES_FROM_TYPESCRIPT)
+
+
+@pytest.mark.parametrize("footprint_id", sorted(REAL_PACKAGES))
+def test_a_body_is_the_real_package(footprint_id: str) -> None:
+    """Pins each entry in DIVERGES_FROM_TYPESCRIPT by the geometry it now has, and the
+    courtyard holds all of it."""
+    from perfboard_studio.footprints import body_extent
+
+    size_x, size_y, _source = REAL_PACKAGES[footprint_id]
+    footprint = REGISTRY[footprint_id]
+    body = body_extent(footprint, 2.54)
+    assert (round(body.size_x, 2), round(body.size_y, 2)) == (size_x, size_y)
+    xs = [p.x for p in footprint.body_outline]
+    ys = [p.y for p in footprint.body_outline]
+    assert min(xs) <= body.centre_x - body.size_x / 2 and max(xs) >= body.centre_x + body.size_x / 2
+    assert min(ys) <= body.centre_y - body.size_y / 2 and max(ys) >= body.centre_y + body.size_y / 2
 
 
 # ---------------------------------------------------------------------------

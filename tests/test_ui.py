@@ -964,8 +964,9 @@ def test_a_borrowed_body_is_painted_from_our_own_table() -> None:
 def test_a_borrowed_resistor_still_shows_its_colour_code() -> None:
     """KiCad has no way to know what value a part is and this application does. The barrel
     comes from the model and the bands from the document, printed at the BORROWED barrel's
-    size -- a footprint describes a package family and a model is one part in it, so
-    printing at the footprint's size puts the bands inside the body and they vanish."""
+    size -- a footprint describes a package family at its largest and a model is one part in
+    it, so bands printed at the footprint's size would stand off a 9 mm resistor's barrel
+    (3.6 mm across where KiCad's DIN0309 is 3.2), and at a smaller one would vanish in it."""
     from perfboard_studio.command import CommandBus, CommandContext
     from perfboard_studio.commands import (
         DEFAULT_BOARD,
@@ -987,25 +988,26 @@ def test_a_borrowed_resistor_still_shows_its_colour_code() -> None:
     assert bus.dispatch(
         "component.place",
         PlaceComponentPayload(
-            ref="R1", footprint_id="r-axial-3", value="10k", anchor=HoleCoord(4, 4)
+            ref="R1", footprint_id="r-axial-6", value="10k", anchor=HoleCoord(4, 4)
         ),
     ).ok
     component = bus.document.components[0]
 
     body = view3d._world_body(footprint_lookup(), component, DEFAULT_BOARD)
     assert body is not None and body.bands
-    model = partmodels.model_for("r-axial-3")
+    model = partmodels.model_for("r-axial-6")
     assert model is not None
     barrel = view3d._barrel_of(model)
     assert barrel is not None
     radius, _z, _along = barrel
 
-    # The bands have to be printed OUTSIDE the barrel they are printed on.
-    assert radius > body.across / 2, "the borrowed barrel is not the footprint's"
+    # The bands have to be printed ON the barrel they are printed on: just outside it, and
+    # inside the footprint's larger one.
+    assert radius < body.across / 2, "the borrowed barrel is not the footprint's"
     marks = view3d._axial_markings(body, barrel)
     assert len(marks) == len(body.bands)
     for mark in marks:
-        assert mark.source.GetRadius() > radius
+        assert radius < mark.source.GetRadius() < body.across / 2
 
 
 def _placed(footprint_id: str) -> ComponentInstance:

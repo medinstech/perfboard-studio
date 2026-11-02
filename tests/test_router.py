@@ -69,6 +69,8 @@ from perfboard_studio.router import (
     route_connection,
 )
 
+from .differential import differential_lookup
+
 # ---------------------------------------------------------------------------
 # Golden fixtures: minimal *.perf / *.expected.json["routes"] readers.
 #
@@ -191,6 +193,8 @@ def _load_golden_routes(name: str) -> tuple[PerfDocument, list[dict[str, Any]]]:
 
 
 _FOOTPRINT_LOOKUP = footprint_lookup()
+#: What the golden comparisons run on: the original's inputs (tests/differential.py).
+_GOLDEN_LOOKUP = differential_lookup()
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +274,7 @@ def test_matches_typescript_golden_routes(case_name: str) -> None:
         from_hole = _hole(expected["from"])
         to_hole = _hole(expected["to"])
         request = RouteRequest(from_=from_hole, to=to_hole)
-        result = route_connection(doc, _FOOTPRINT_LOOKUP, request)
+        result = route_connection(doc, _GOLDEN_LOOKUP, request)
 
         from_ref = coord_to_hole_ref(from_hole)
         to_ref = coord_to_hole_ref(to_hole)

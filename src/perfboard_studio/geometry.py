@@ -452,11 +452,13 @@ def board_outline_mm(board: Board) -> RectMm:
 
 #: How far a part's body may reach past the edge of the substrate before it is said to
 #: hang over it. Not zero, and the reason is measured rather than cautious: laid on the
-#: outermost row, a DO-41 diode's 2.7 mm barrel reaches 0.08 mm past the board and a 3 mm
-#: LED 0.23 mm -- nothing anybody could see, on a board sheared to roughly that tolerance
-#: anyway, and a warning about either would teach the user to stop reading the rule. Every
-#: part that genuinely hangs over clears it by a margin: a tactile switch 0.46 mm, a TO-92
-#: 0.58, a TO-220 1.03, a 5 mm electrolytic 1.23, a screw terminal 2.02. It sits just under
+#: outermost row, a DO-41 diode's 2.7 mm barrel reaches 0.08 mm past the board -- nothing
+#: anybody could see, on a board sheared to roughly that tolerance anyway, and a warning
+#: about it would teach the user to stop reading the rule. Every part that genuinely hangs
+#: over clears it by a margin: a tactile switch 0.46 mm, a 3 mm LED's flange 0.63, a TO-220
+#: 1.08, a TO-92's back 1.37, a 5 mm electrolytic 1.23, a screw terminal's front 3.33. Three
+#: bodies sized to their datasheet MAXIMA reach just past it and are reported: a DIP-18's
+#: ends 0.26 mm, a TO-92's flat 0.29 and a DIP-28's ends 0.32. It sits just under
 #: ``FINGER_BORE_CLEARANCE_MM``, the smallest gap these boards are made with.
 #:
 #: ONE number for two consumers: ``drc`` reports a body past it and ``placer`` prices one,

@@ -81,6 +81,8 @@ from perfboard_studio.model import (
 )
 from perfboard_studio.occupancy import build_occupancy
 
+from .differential import differential_lookup
+
 # ---------------------------------------------------------------------------
 # Golden fixtures: minimal *.perf reader (board, components, conductors, nets).
 #
@@ -232,6 +234,8 @@ def _load_golden(name: str) -> tuple[PerfDocument, list[dict[str, Any]]]:
 
 
 _FOOTPRINT_LOOKUP = footprint_lookup()
+#: What the golden comparisons run on: the original's inputs (tests/differential.py).
+_GOLDEN_LOOKUP = differential_lookup()
 
 
 def _violation_to_jsonable(v: DrcViolation) -> dict[str, Any]:
@@ -390,7 +394,7 @@ def test_matches_typescript_golden_drc(case_name: str) -> None:
 
     actual_violations = [
         _violation_to_jsonable(v)
-        for v in run_drc(doc, _FOOTPRINT_LOOKUP)
+        for v in run_drc(doc, _GOLDEN_LOOKUP)
         if v.rule not in PYTHON_ONLY_RULES
     ]
 
@@ -1260,8 +1264,9 @@ def test_a_body_hanging_past_the_edge_is_a_warning_even_with_every_pin_in_a_hole
     assert only.severity == "warning"
     assert only.component_ids == ("q",)
     assert only.holes == (hole(5, 0),)
-    # 4.6 / 2 - 2.54 / 2 = 1.03 mm, said to the tenth, with the edge and the way back.
-    assert "1.0 mm past the top edge" in only.message
+    # 4.7 / 2 - 2.54 / 2 = 1.08 mm (TI KCS0003B's 4.7 mm maximum depth), said to the tenth,
+    # with the edge and the way back.
+    assert "1.1 mm past the top edge" in only.message
     assert "1 hole(s) in from the top edge" in only.message
 
     # One row in and the body is over the board.
@@ -1319,9 +1324,10 @@ def test_a_resistor_on_the_outermost_row_is_over_the_board_although_its_courtyar
 def test_the_body_is_turned_and_mirrored_with_the_part() -> None:
     """The body box goes through the component's own transform, the one its pins do.
 
-    A TO-220 is 10 mm wide and 4.6 mm deep. Unturned on row 1 it is the DEPTH that reaches
-    past the top edge (1.03 mm); turned a quarter the 10 mm width runs down the column and
-    reaches 1.19 mm past it instead -- a different number, which is how the test knows the
+    A TO-220 is 10.36 mm wide and 4.7 mm deep (TI KCS0003B, maxima). Unturned on row 1 it is
+    the DEPTH that reaches past the top edge (1.08 mm); turned a quarter the 10.36 mm width runs
+    down the column and reaches 1.37 mm past it instead -- a different number, which is how the
+    test knows the
     turn was applied rather than merely survived. Mirrored against the right-hand edge, its
     pins run leftwards from the anchor and the body follows them; the same anchor unmirrored
     puts two pins off the board, which is rule 2's finding and not this one's.
@@ -1331,7 +1337,7 @@ def test_the_body_is_turned_and_mirrored_with_the_part() -> None:
         run_drc(make_doc(components=(turned,)), _FOOTPRINT_LOOKUP), "component-overhangs-edge"
     )
     assert len(found) == 1
-    assert "1.2 mm past the top edge" in found[0].message
+    assert "1.4 mm past the top edge" in found[0].message
 
     on_the_left = make_component("q", "Q1", "to220", hole(0, 10), rotation=90)
     found = by_rule(
@@ -1339,7 +1345,7 @@ def test_the_body_is_turned_and_mirrored_with_the_part() -> None:
         "component-overhangs-edge",
     )
     assert len(found) == 1
-    assert "1.0 mm past the left edge" in found[0].message
+    assert "1.1 mm past the left edge" in found[0].message
 
     right = BOARD.cols - 1
     mirrored = make_component("q", "Q1", "to220", hole(right, 10), mirrored=True)
@@ -1377,7 +1383,7 @@ def test_a_printed_border_is_board_and_not_overhang() -> None:
     """The edge is the SUBSTRATE, border included, not the hole grid -- the
     ``board_size_mm`` / ``hole_span_mm`` trap. A TO-220 on row 1 of a board cut with 1.5 mm
     of printed border above its first row has 2.77 mm of board over its pins, which covers
-    its 2.3; with half a millimetre of border it still hangs 0.53 mm over."""
+    its 2.35; with half a millimetre of border it still hangs 0.58 mm over."""
     q1 = make_component("q", "Q1", "to220", hole(5, 0))
     bordered = make_doc(board_=board(border_y_mm=1.5), components=(q1,))
     assert by_rule(run_drc(bordered, _FOOTPRINT_LOOKUP), "component-overhangs-edge") == []
@@ -1385,22 +1391,24 @@ def test_a_printed_border_is_board_and_not_overhang() -> None:
     thin = make_doc(board_=board(border_y_mm=0.5), components=(q1,))
     found = by_rule(run_drc(thin, _FOOTPRINT_LOOKUP), "component-overhangs-edge")
     assert len(found) == 1
-    assert "0.5 mm past the top edge" in found[0].message
+    assert "0.6 mm past the top edge" in found[0].message
 
 
 def test_the_overhang_tolerance_is_where_the_measurement_put_it() -> None:
     """The tolerance is a measured line, and this pins both sides of it.
 
-    Laid unturned on row 1: a DO-41's 2.7 mm barrel reaches 0.08 mm past the board and a
-    3 mm LED 0.23 mm -- nothing to see and nothing to warn about. A TO-92 reaches 0.58 mm,
-    the smallest overhang among the parts that genuinely have one, and is reported. The
-    tolerance also stays below the smallest gap these boards are made with.
+    Laid unturned on row 1: a DO-41's 2.7 mm barrel reaches 0.08 mm past the board --
+    nothing to see and nothing to warn about. A 3 mm LED's 3.8 mm flange reaches 0.63 mm and a
+    TO-92's round back 1.37 mm (its case sits 0.54 mm behind its legs), overhangs the parts
+    genuinely have, and both are reported. The tolerance also stays below the smallest gap
+    these boards are made with.
     """
     assert BODY_OVERHANG_TOLERANCE_MM < FINGER_BORE_CLEARANCE_MM
     half_pitch = BOARD.pitch / 2
-    for footprint_id, expected in (("d-do41", 0.08), ("led-3mm", 0.23), ("to92", 0.58)):
+    for footprint_id, expected in (("d-do41", 0.08), ("led-3mm", 0.63), ("to92", 1.37)):
         extent = body_extent(standard_footprints()[footprint_id], BOARD.pitch)
-        assert extent.size_y / 2 - half_pitch == pytest.approx(expected, abs=0.005)
+        # Past the top edge: from the body's top face, which an offset body has off-centre.
+        assert extent.size_y / 2 - extent.centre_y - half_pitch == pytest.approx(expected, abs=0.005)
         part = make_component("x", "X1", footprint_id, hole(5, 0))
         found = by_rule(
             run_drc(make_doc(components=(part,)), _FOOTPRINT_LOOKUP), "component-overhangs-edge"
@@ -1575,7 +1583,7 @@ def test_the_sharper_overlap_rule_clears_a_pair_typescript_could_not() -> None:
 
     still_reported = {
         tuple(v.component_ids)
-        for v in run_drc(doc, _FOOTPRINT_LOOKUP)
+        for v in run_drc(doc, _GOLDEN_LOOKUP)
         if v.rule == "component-body-overlap"
     }
     assert ("cmp-3", "cmp-6") not in still_reported
@@ -1583,7 +1591,7 @@ def test_the_sharper_overlap_rule_clears_a_pair_typescript_could_not() -> None:
     # 24-gon, boxes meeting where the circle does not reach.
     yards = {}
     for component in (x3, x6):
-        footprint = _FOOTPRINT_LOOKUP(component.footprint_id)
+        footprint = _GOLDEN_LOOKUP(component.footprint_id)
         assert footprint is not None
         yards[component.id] = _component_courtyard(component, footprint, doc.board)
     assert sorted(len(points) for points in yards.values()) == [4, 24]
@@ -1593,7 +1601,7 @@ def test_the_sharper_overlap_rule_clears_a_pair_typescript_could_not() -> None:
     total = sum(
         1
         for case_name in GOLDEN_CASE_NAMES
-        for v in run_drc(_load_golden(case_name)[0], _FOOTPRINT_LOOKUP)
+        for v in run_drc(_load_golden(case_name)[0], _GOLDEN_LOOKUP)
         if v.rule == "component-body-overlap"
     )
     assert total == 40

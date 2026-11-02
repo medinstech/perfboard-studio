@@ -314,7 +314,7 @@ Three conventions here are load-bearing:
 - **`body_outline` is the COURTYARD, not the body.** It is padded by
   `COURTYARD_MARGIN_MM` (half a grid step) so its bounding box contains every pin plus
   clearance, which is what overlap DRC needs. For `r-axial-3` it spans 10.16 mm while the
-  resistor body is 5 mm long. Drawing the outline as the part draws a box half again too
+  resistor body is 6.5 mm long. Drawing the outline as the part draws a box half again too
   big — the specific mistake that made both renderers look wrong. The real body comes
   from `BodySpec.dims` via `bodies.placement_for`.
   - **53 of the 61 outlines are rectangles and 8 are 24-gons** (`_circle_outline`: the
@@ -352,6 +352,40 @@ of `tools/diffcheck/golden/footprints.expected.json`, down to the last IEEE-754 
 Preserve the original's arithmetic and generation order, not merely its intent.
 `BodySpec.dims` keys stay camelCase (`"rowSpacing"`, `"tabHeight"`) because `dims` is a
 free-form dict, not a model field — there is nothing there for `persist.py` to rename.
+
+**THE BODIES ARE THE REAL PACKAGES', and there the port departs from the original on
+purpose.** The original's bodies were smaller than the parts they stand for -- a 1/4 W resistor
+5 mm long where a 0207 is 6.5, a 5 mm LED 5 mm across where its flange is 6.15, a TO-92
+4.5 × 3.7 where it is 5.21 × 4.19 -- so DRC passed parts that touch on the bench, and the 3D
+view drew KiCad's real-sized meshes standing into each other. A body is now the datasheet's
+MAXIMUM, because one too small lets two parts that touch pass, or KiCad's model of the package
+where that is larger, because DRC must not measure a smaller part than the one on screen; each
+value is cited where it is set. Three rules came with it:
+
+- **A body is centred on its pins unless its dims say otherwise, and then the mesh says so
+  too.** A TO-92's legs leave its case nearer the flat than the back, and a screw terminal's
+  pins sit behind the middle of its block. Centring a box that holds them made it deeper than
+  the part on both sides: two TO-92s two rows apart, the commonest way to lay transistors out,
+  read 0.26 mm apart where they stand 0.89 mm apart. They take the `offsetY` the generated
+  boxes and the SRD relay already had, and `tests/test_bodies.py` measures each offset
+  against the mesh it describes. The TO-92's D (`bodies.flat_face_profile`) fills that box,
+  round side against one face and flat against the other.
+- **A DIP's courtyard holds its body**, as every other archetype's does. It held the pins
+  alone, so a DIP-14's plastic, which runs 2.2 mm past its end pins, overhung its courtyard.
+- **The differential proof runs on the original's inputs.** The fixtures are what the
+  original produced on ITS footprints, and the proof is about the code. So every test that
+  compares with a fixture's expected output takes its footprints from
+  `tests/differential.py`'s `differential_lookup()`, which serves the original's footprint,
+  rebuilt from `footprints.expected.json`, for every id in `DIVERGES_FROM_TYPESCRIPT` and the
+  registry's for the rest. That list is the one `test_footprints.py` excuses, outline, dims
+  and height only, and `test_a_body_is_the_real_package` pins each entry by its geometry.
+  `tests/test_differential.py` reads the test sources and fails if a comparison with the
+  golden output reaches the registry instead: on a body made larger, that comparison would
+  read the correction as a regression in the rules.
+
+The placer measured the bodies too. Its arrangement seed no longer beats the restarts it
+displaces on the fixtures, and `test_the_constructive_seed_reaches_boards_the_annealer_does_not`
+is a strict xfail carrying the numbers until the placer earns them back.
 
 **A part the library does not have is asked for by an id that carries its parameters.**
 Sixty-one is a good library and not every part anybody owns, and the answer is neither a

@@ -8,8 +8,9 @@ relay's "length" is its x extent, a DIP's is its y extent. It is also what caugh
 and the sideways TO-220 while this was being written.
 
 The rest pin down the details that make a part identifiable rather than merely present: real
-dimensions instead of the padded courtyard, a body centred on its own pins, leads only where
-a lead is actually visible, and a polarity mark on everything that has one.
+dimensions instead of the padded courtyard, a body centred on its own pins unless its mesh
+measures it elsewhere, leads only where a lead is actually visible, and a polarity mark on
+everything that has one.
 """
 
 from __future__ import annotations
@@ -82,16 +83,52 @@ def test_the_body_drawn_is_the_body_drc_measures(footprint_id: str) -> None:
 
 @pytest.mark.parametrize("footprint_id", sorted(ALL_FOOTPRINTS))
 def test_every_body_is_centred_on_its_own_pins(footprint_id: str) -> None:
-    """One rule for every archetype: the pin centroid. It is the midpoint of a two-lead part,
-    the centre of a DIP's pin rectangle and the middle pin of a TO-220, so no archetype needs
-    a table of offsets that could drift out of step with the registry."""
+    """One rule for every archetype: the pin centroid, unless the footprint's dims carry an
+    offset. The centroid is the midpoint of a two-lead part, the centre of a DIP's pin
+    rectangle and the middle pin of a TO-220. A TO-92's case and a screw terminal's block are
+    NOT over the middle of their pins, and their offset is a dim of the footprint itself rather
+    than a table that could drift out of step with the registry -- and it is measured, not
+    chosen (``test_an_offset_body_is_where_its_mesh_is``)."""
     footprint = ALL_FOOTPRINTS[footprint_id]
     placement = placement_for(footprint, PITCH)
     xs = [pin.d_col * PITCH for pin in footprint.pins]
     ys = [pin.d_row * PITCH for pin in footprint.pins]
+    dims = footprint.body.dims
 
-    assert placement.centre_x == pytest.approx((min(xs) + max(xs)) / 2)
-    assert placement.centre_y == pytest.approx((min(ys) + max(ys)) / 2)
+    assert placement.centre_x == pytest.approx((min(xs) + max(xs)) / 2 + dims.get("offsetX", 0.0))
+    assert placement.centre_y == pytest.approx((min(ys) + max(ys)) / 2 + dims.get("offsetY", 0.0))
+
+
+_OFFSET_BODIES = sorted(
+    footprint_id
+    for footprint_id, footprint in ALL_FOOTPRINTS.items()
+    if "offsetX" in footprint.body.dims or "offsetY" in footprint.body.dims
+)
+
+
+def test_the_bodies_off_their_pins_are_the_ones_measured_to_be() -> None:
+    assert _OFFSET_BODIES == ["screw-terminal-2", "screw-terminal-3", "to92"]
+
+
+@pytest.mark.parametrize("footprint_id", _OFFSET_BODIES)
+def test_an_offset_body_is_where_its_mesh_is(footprint_id: str) -> None:
+    """The case of the KiCad mesh the 3D view draws has its middle where the body's is, to
+    the hundredth, and stands inside it. KiCad's TO-92 reaches 2.41 mm behind its pin row
+    and 1.33 in front; its MKDS terminal 5.2 behind and 4.6 in front, where the wires go in."""
+    from perfboard_studio.ui import partmodels
+
+    footprint = ALL_FOOTPRINTS[footprint_id]
+    model = partmodels.model_for(footprint_id)
+    assert model is not None and model.body is not None and len(model.body.bounds) == 6
+    x0, y0, _z0, x1, y1, _z1 = model.body.bounds
+    # A model's y runs AGAINST the row (``view3d._model_pieces``).
+    front, back = -y0, -y1
+    extent = body_extent(footprint, PITCH)
+    half_x, half_y = extent.size_x / 2, extent.size_y / 2
+
+    assert (front + back) / 2 == pytest.approx(extent.centre_y, abs=0.01)
+    assert extent.centre_y - half_y <= back + 1e-6 and front <= extent.centre_y + half_y + 1e-6
+    assert extent.centre_x - half_x <= x0 + 1e-6 and x1 <= extent.centre_x + half_x + 1e-6
 
 
 @pytest.mark.parametrize("footprint_id", sorted(ALL_FOOTPRINTS))
@@ -112,28 +149,28 @@ def test_no_body_is_degenerate(footprint_id: str) -> None:
 
 def test_a_resistor_body_is_its_real_length_not_its_courtyard() -> None:
     """The specific mistake that made every part a blob: r-axial-3's courtyard spans 10.16 mm
-    while the resistor itself is 5 mm long."""
+    while the resistor itself is 6.5 mm long (Vishay MBB/SMA 0207's maximum)."""
     footprint = get_footprint("r-axial-3")
     assert footprint is not None
 
     placement = placement_for(footprint, PITCH)
 
-    assert placement.size_x == pytest.approx(5.0)
-    assert placement.size_y == pytest.approx(2.0)
+    assert placement.size_x == pytest.approx(6.5)
+    assert placement.size_y == pytest.approx(2.5)
     min_x, _min_y, max_x, _max_y = _courtyard("r-axial-3")
-    assert max_x - min_x == pytest.approx(10.16)  # ...and the courtyard is twice that long.
+    assert max_x - min_x == pytest.approx(10.16)  # ...and the courtyard reaches past both holes.
 
 
 def test_a_to220_is_wider_than_it_is_deep() -> None:
-    """Its three pins run along the 10 mm face. Read as (length, width) from key names, this
-    came out 5x10 -- the package turned sideways."""
+    """Its three pins run along the 10.36 mm face (TI KCS0003B). Read as (length, width) from
+    key names, this came out turned sideways."""
     footprint = get_footprint("to220")
     assert footprint is not None
 
     placement = placement_for(footprint, PITCH)
 
-    assert placement.size_x == pytest.approx(10.0)
-    assert placement.size_y == pytest.approx(4.6)
+    assert placement.size_x == pytest.approx(10.36)
+    assert placement.size_y == pytest.approx(4.7)
 
 
 def test_a_dip_runs_along_its_pin_columns() -> None:

@@ -20,10 +20,13 @@ from typing import Any
 
 import pytest
 
-from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.occupancy import build_occupancy
 
+from .differential import differential_lookup
 from .test_drc import GOLDEN_CASE_NAMES, GOLDEN_DIR, _document
+
+#: The original's inputs (tests/differential.py), for every comparison in this file.
+_GOLDEN_LOOKUP = differential_lookup()
 
 
 def _load(name: str) -> tuple[Any, list[dict[str, Any]]]:
@@ -35,7 +38,7 @@ def _load(name: str) -> tuple[Any, list[dict[str, Any]]]:
 @pytest.mark.parametrize("name", GOLDEN_CASE_NAMES)
 def test_matches_typescript_golden_occupancy(name: str) -> None:
     doc, expected = _load(name)
-    occ = build_occupancy(doc, footprint_lookup())
+    occ = build_occupancy(doc, _GOLDEN_LOOKUP)
 
     holes = occ.occupied_holes()
     assert len(holes) == len(expected), (
@@ -101,7 +104,7 @@ def test_occupancy_and_connectivity_disagree_exactly_where_they_should() -> None
     from perfboard_studio.connectivity import extract_physical_nets
     from perfboard_studio.model import contacts_every_path_hole
 
-    lookup = footprint_lookup()
+    lookup = _GOLDEN_LOOKUP
     checked_traces = 0
     checked_wires = 0
 
@@ -151,7 +154,7 @@ def test_known_gap_occupancy_does_not_model_a_straight_run_geometrically() -> No
     with a failing test to announce it.
     """
     doc, _ = _load("dense")
-    occ = build_occupancy(doc, footprint_lookup())
+    occ = build_occupancy(doc, _GOLDEN_LOOKUP)
     long_wires = [
         c
         for c in doc.conductors

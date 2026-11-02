@@ -570,13 +570,17 @@ def dip_footprint(
         pins.append(_make_pin(number, row_spacing_holes, d_row))
     pins_t = tuple(pins)
 
-    outline = _rect_outline(_to_mm(pins_t), 0, 0, COURTYARD_MARGIN_MM)
     row_spacing_mm = row_spacing_holes * STANDARD_PITCH_MM
-    # Approximate realistic package dims: body is a little narrower than the row
-    # spacing and a little longer than the pin column span (the plastic overhangs
-    # the outermost pins at each end). Not tied to a specific datasheet.
+    # The body is a little narrower than the row spacing and longer than the pin column
+    # span (the plastic overhangs the outermost pins at each end): the original's formula,
+    # or the PDIP's datasheet maximum where that is longer (``_PDIP_LENGTH_MAX_MM``).
     body_length_mm = (per_side - 1) * STANDARD_PITCH_MM + 2.2
+    body_length_mm = max(body_length_mm, _PDIP_LENGTH_MAX_MM.get((pin_count, wide), 0.0))
     body_width_mm = row_spacing_mm - 0.2
+    # The courtyard holds the body's length, as every other archetype's does: a DIP-14's
+    # plastic runs 2.2 mm past its end pins, and a courtyard round the pins alone stopped at
+    # the pins.
+    outline = _rect_outline(_to_mm(pins_t), 0, body_length_mm, COURTYARD_MARGIN_MM)
 
     fp_id = id if id is not None else f"dip-{pin_count}{'-wide' if wide else ''}"
     wide_suffix = ' (0.6" wide)' if wide else ""
@@ -602,6 +606,15 @@ def dip_footprint(
 # ---------------------------------------------------------------------------
 
 
+#: A TO-92's case is 5.21 mm across and 4.19 mm from the flat to the back (TI LP0003A,
+#: maxima), and its legs leave it nearer the flat than the back: KiCad's model reaches 2.41 mm
+#: from the pin row behind and 1.33 mm in front, so the case's middle is 0.54 mm behind the
+#: row (``tests/test_bodies.py`` measures it off the mesh). A box CENTRED on the row had to be
+#: 4.82 mm deep to hold the case, and two TO-92s two rows apart -- the commonest way to lay
+#: transistors out -- read 0.26 mm apart where they stand 0.89 mm apart.
+TO92_BODY_OFFSET_MM = -0.54
+
+
 def to92_footprint(
     *,
     lead_diameter_mm: Mm | None = None,
@@ -616,7 +629,9 @@ def to92_footprint(
     """
     lead_diameter = 0.45 if lead_diameter_mm is None else lead_diameter_mm
     pins = (_make_pin("1", 0, 0), _make_pin("2", 1, 0), _make_pin("3", 2, 0))
-    outline = _rect_outline(_to_mm(pins), 4.5, 3.7, COURTYARD_MARGIN_MM)
+    outline = _offset_rect_outline(
+        _to_mm(pins), 5.21, 4.19, 0.0, TO92_BODY_OFFSET_MM, COURTYARD_MARGIN_MM
+    )
     fp_id = id if id is not None else "to92"
     fp_name = name if name is not None else "TO-92 (inline, on-grid)"
     return Footprint(
@@ -625,7 +640,10 @@ def to92_footprint(
         pins=pins,
         body_outline=outline,
         body_height=5.2,
-        body=BodySpec(archetype="to92", dims={"width": 4.5, "depth": 3.7}),
+        body=BodySpec(
+            archetype="to92",
+            dims={"width": 5.21, "depth": 4.19, "offsetY": TO92_BODY_OFFSET_MM},
+        ),
         lead_diameter=lead_diameter,
         polarized=False,
     )
@@ -643,11 +661,12 @@ def to220_footprint(
     name: str | None = None,
 ) -> Footprint:
     """TO-220 power package: 3 pins in a row at 2.54 mm pitch, tall body, plus the
-    metal mounting tab above it (tabHeight / tabHoleDiameter in `body.dims`).
+    metal mounting tab above it (tabHeight / tabHoleDiameter in `body.dims`). The body is
+    10.36 mm wide and 4.7 mm deep, TI KCS0003B's maxima.
     """
     lead_diameter = 0.7 if lead_diameter_mm is None else lead_diameter_mm
     pins = (_make_pin("1", 0, 0), _make_pin("2", 1, 0), _make_pin("3", 2, 0))
-    outline = _rect_outline(_to_mm(pins), 10.0, 4.6, COURTYARD_MARGIN_MM)
+    outline = _rect_outline(_to_mm(pins), 10.36, 4.7, COURTYARD_MARGIN_MM)
     fp_id = id if id is not None else "to220"
     fp_name = name if name is not None else "TO-220"
     return Footprint(
@@ -658,7 +677,7 @@ def to220_footprint(
         body_height=20,
         body=BodySpec(
             archetype="to220",
-            dims={"width": 10.0, "depth": 4.6, "tabHeight": 3.5, "tabHoleDiameter": 3.4},
+            dims={"width": 10.36, "depth": 4.7, "tabHeight": 3.5, "tabHoleDiameter": 3.4},
         ),
         lead_diameter=lead_diameter,
         polarized=False,
@@ -671,6 +690,13 @@ def to220_footprint(
 
 #: Typical total height above the board for each standard round LED size.
 _LED_HEIGHT_BY_DIAMETER_MM: dict[int, Mm] = {3: 4.8, 5: 8.6, 10: 13.0}
+
+
+#: A round LED's flange -- the rim at its base, wider than the dome it is named for -- at its
+#: largest: 5 mm is Kingbright WP7113ID's 5.9 +-0.25, and 3 mm and 10 mm are KiCad's models,
+#: which are larger than the datasheets (WP710A10ID gives 3 mm a 3.2 +-0.25 flange), because
+#: the 3D view draws the model and DRC must not measure a smaller part than the one on screen.
+_LED_FLANGE_MAX_MM: dict[int, float] = {3: 3.8, 5: 6.15, 10: 11.0}
 
 
 def led_footprint(
@@ -704,7 +730,8 @@ def led_footprint(
         )
     else:
         pins = (_make_pin("1", 0, 0, "A"), _make_pin("2", 1, 0, "K"))
-    outline = _circle_outline(_to_mm(pins), diameter_mm, COURTYARD_MARGIN_MM)
+    flange = _LED_FLANGE_MAX_MM.get(diameter_mm, float(diameter_mm))
+    outline = _circle_outline(_to_mm(pins), flange, COURTYARD_MARGIN_MM)
     fp_id = id if id is not None else f"led-{diameter_mm}mm" + ("-rgb" if rgb else "")
     fp_name = name if name is not None else (
         f"RGB LED, {diameter_mm} mm round, 4 legs" if rgb else f"LED, {diameter_mm} mm round"
@@ -715,7 +742,7 @@ def led_footprint(
         pins=pins,
         body_outline=outline,
         body_height=body_height,
-        body=BodySpec(archetype="led-round", dims={"diameter": diameter_mm}),
+        body=BodySpec(archetype="led-round", dims={"diameter": flange}),
         lead_diameter=lead_diameter,
         polarized=True,
     )
@@ -859,6 +886,25 @@ def box_header_footprint(
 # ---------------------------------------------------------------------------
 
 
+#: PDIP body length A, maximum, where it is longer than the formula above gives (MPDI002C N,
+#: MPDI004 NT, MPDI008 N 600 mil).
+_PDIP_LENGTH_MAX_MM: dict[tuple[int, bool], float] = {
+    (14, False): 19.69,
+    (18, False): 23.37,
+    (20, False): 26.92,
+    (28, False): 36.20,
+    (40, True): 53.09,
+}
+
+
+#: A Phoenix MKDS 1,5's block is 9.8 mm deep (KiCad's model of it, MKDS-1,5-x-5.08: Phoenix's
+#: own site refuses a script), and its pins are not in the middle of that: the block reaches
+#: 5.2 mm behind the row and 4.6 mm in front of it, the front being the face its wires go in
+#: by (``WIRE_ENTRY_BY_ARCHETYPE``). Measured off the mesh in ``tests/test_bodies.py``, like
+#: the TO-92's.
+SCREW_TERMINAL_BODY_OFFSET_MM = -0.3
+
+
 def screw_terminal_footprint(
     *,
     ways: int,
@@ -877,8 +923,15 @@ def screw_terminal_footprint(
         pins.append(_make_pin(str(i + 1), i * 2, 0))
     pins_t = tuple(pins)
     body_length_mm = ways * 5.08 + 1.5
-    body_width_mm = 8.0
-    outline = _rect_outline(_to_mm(pins_t), body_length_mm, body_width_mm, COURTYARD_MARGIN_MM)
+    body_width_mm = 9.8
+    outline = _offset_rect_outline(
+        _to_mm(pins_t),
+        body_length_mm,
+        body_width_mm,
+        0.0,
+        SCREW_TERMINAL_BODY_OFFSET_MM,
+        COURTYARD_MARGIN_MM,
+    )
     fp_id = id if id is not None else f"screw-terminal-{ways}"
     fp_name = name if name is not None else f"Screw terminal, {ways}-way, 5.08 mm pitch"
     return Footprint(
@@ -889,7 +942,12 @@ def screw_terminal_footprint(
         body_height=10,
         body=BodySpec(
             archetype="screw-terminal",
-            dims={"length": body_length_mm, "width": body_width_mm, "height": 10},
+            dims={
+                "length": body_length_mm,
+                "width": body_width_mm,
+                "height": 10,
+                "offsetY": SCREW_TERMINAL_BODY_OFFSET_MM,
+            },
         ),
         lead_diameter=lead_diameter,
         polarized=False,
@@ -1813,11 +1871,13 @@ def _smd_package(text: str) -> SmdPackage:
 def _build_standard_footprints() -> dict[str, Footprint]:
     footprint_list: list[Footprint] = []
 
-    # Resistors: axial, 4 standard lead spans.
+    # Resistors: axial, 4 standard lead spans. The three shortest are one package, the 1/4 W
+    # 0207, at its largest (Vishay MBB/SMA 0207, doc 28766: 6.5 mm long, 2.5 across); the
+    # longest is a 0309.
     resistor_spans = (
-        (3, 5.0, 2.0),
-        (4, 6.3, 2.3),
-        (5, 6.3, 2.5),
+        (3, 6.5, 2.5),
+        (4, 6.5, 2.5),
+        (5, 6.5, 2.5),
         (6, 9.0, 3.6),
     )
     for span, length, diameter in resistor_spans:
@@ -1845,7 +1905,8 @@ def _build_standard_footprints() -> dict[str, Footprint]:
     footprint_list.append(
         axial_footprint(
             span_holes=3,
-            body_length_mm=3.5,
+            # KiCad's DO-35 model, which is longer than Vishay's 3.4 mm maximum.
+            body_length_mm=4.0,
             body_diameter_mm=2.0,
             polarized=True,
             id="d-do35",
@@ -2459,9 +2520,10 @@ def body_extent(footprint: Footprint, pitch: Mm) -> BodyExtent:
         size_x = dims.get(x_key) or outline_x
         size_y = dims.get(y_key) or outline_y
 
-    # A body off its pins' centre (``generic_box_footprint``'s offset). Read from dims, which
-    # only carries the keys when the offset is not zero, so every other footprint's centre is
-    # the same float it always was.
+    # A body off its pins' centre: ``generic_box_footprint``'s offset, the SRD relay's, and a
+    # TO-92's and a screw terminal's, measured off their meshes. Read from dims, which only
+    # carries the keys when the offset is not zero, so every other footprint's centre is the
+    # same float it always was.
     centre_x += dims.get("offsetX", 0.0)
     centre_y += dims.get("offsetY", 0.0)
 

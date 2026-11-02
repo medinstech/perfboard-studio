@@ -59,7 +59,6 @@ from perfboard_studio.model import (
     Net,
     NetNode,
     PerfDocument,
-    Point2,
     Rotation,
     SolderTraceConductor,
     SpineSpec,
@@ -68,6 +67,8 @@ from perfboard_studio.model import (
     WireConductor,
     contacts_every_path_hole,
 )
+
+from .differential import differential_lookup
 
 # ---------------------------------------------------------------------------
 # Golden fixtures: minimal *.perf / footprints.expected.json readers.
@@ -184,32 +185,6 @@ def _document(raw: dict[str, Any]) -> PerfDocument:
     )
 
 
-def _footprint(raw: dict[str, Any]) -> Footprint:
-    return Footprint(
-        id=raw["id"],
-        name=raw["name"],
-        pins=tuple(
-            FootprintPin(number=p["number"], d_col=p["dCol"], d_row=p["dRow"], name=p.get("name"))
-            for p in raw["pins"]
-        ),
-        body_outline=tuple(Point2(x=p["x"], y=p["y"]) for p in raw["bodyOutline"]),
-        body_height=raw["bodyHeight"],
-        body=BodySpec(
-            archetype=raw["body"]["archetype"],
-            dims=raw["body"].get("dims", {}),
-            color=raw["body"].get("color"),
-        ),
-        lead_diameter=raw["leadDiameter"],
-        polarized=raw["polarized"],
-    )
-
-
-def _load_footprint_lookup() -> FootprintLookup:
-    raw = json.loads((GOLDEN_DIR / "footprints.expected.json").read_text(encoding="utf-8"))
-    registry = {footprint_id: _footprint(fp) for footprint_id, fp in raw.items()}
-    return registry.get
-
-
 def _load_golden(name: str) -> tuple[PerfDocument, list[dict[str, Any]]]:
     """Load one golden case: the board document and its expected physicalNets."""
     doc = _document(json.loads((GOLDEN_DIR / f"{name}.perf").read_text(encoding="utf-8")))
@@ -217,7 +192,8 @@ def _load_golden(name: str) -> tuple[PerfDocument, list[dict[str, Any]]]:
     return doc, expected["physicalNets"]
 
 
-_FOOTPRINT_LOOKUP = _load_footprint_lookup()
+# The original's inputs (tests/differential.py): this code on the original's footprints.
+_FOOTPRINT_LOOKUP = differential_lookup()
 
 
 def _net_to_jsonable(net: PhysicalNet) -> dict[str, Any]:

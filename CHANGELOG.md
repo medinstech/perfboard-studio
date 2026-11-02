@@ -168,9 +168,9 @@ closed without a bump.
 
 ### Fixed
 
-- **The 5-hole axial resistor was a different resistor in 3D.** `r-axial-5` is a 6.3 mm
-  0207 body, and the 3D view drew KiCad's 9 mm DIN0309 for it -- 2.7 mm longer than the body
-  DRC measures, so two parts DRC passed stood into each other on screen. It now takes KiCad's
+- **The 5-hole axial resistor was a different resistor in 3D.** `r-axial-5` is a 0207
+  body, and the 3D view drew KiCad's 9 mm DIN0309 for it -- 2.7 mm longer than the body DRC
+  measured, so two parts DRC passed stood into each other on screen. It now takes KiCad's
   0207 made for 10.16 mm, centred, with its legs bent out to the holes as the radial cans'
   are.
 - **Zoomed out, the sheet's labels no longer print over one another.** "VCC" landed on
@@ -179,6 +179,14 @@ closed without a bump.
   draws text two or three times that size so it can be read. It now leaves out what
   would land on a label already drawn -- part names first, then net names, supplies and
   values -- and each comes back as you zoom in. The exported sheet is unchanged.
+- **Parts are the size of the real packages.** Sixteen of the library's bodies were smaller
+  than the parts they stand for -- a 1/4 W resistor 5 mm long where a 0207 is 6.5, a 5 mm LED
+  5 mm across where its flange is 6.15, a TO-92 4.5 × 3.7 where it is 5.21 × 4.19 -- so DRC
+  passed parts that touch on the bench. Every body is now the datasheet's maximum, or KiCad's
+  model where that is larger. A TO-92 and a screw terminal stand where the real ones do,
+  behind their pin row rather than centred on it, and a DIP's courtyard now holds its whole
+  body. A board DRC passed before may show an overlap or an edge warning now: the parts
+  always touched.
 - **Escape calls off a drag in the middle of it.** Let go after Escape and the part, the
   label, the symbols or the rubber band went where the pointer was: the window's Escape
   shortcut took the key before the board or the sheet saw it. Both now take Escape back

@@ -72,9 +72,10 @@ def test_a_to92_is_a_d_in_2d_with_its_flat_on_local_plus_y(keyed) -> None:  # ty
     box = _body_path(footprint, placement, keyed).boundingRect()
 
     assert profile.flat < profile.radius, "a D, not a circle"
-    assert box.width() == pytest.approx(2 * profile.radius, abs=1e-6)
-    assert box.top() == pytest.approx(placement.centre_y - profile.radius, abs=1e-6)
-    assert box.bottom() == pytest.approx(placement.centre_y + profile.flat, abs=1e-6)
+    # And exactly the body DRC measures: round side on its back face, flat on its front one.
+    assert box.width() == pytest.approx(placement.size_x, abs=1e-6)
+    assert box.top() == pytest.approx(placement.centre_y - placement.size_y / 2, abs=1e-6)
+    assert box.bottom() == pytest.approx(placement.centre_y + placement.size_y / 2, abs=1e-6)
 
 
 @pytest.mark.parametrize("meshes", [True, False], ids=["mesh", "fallback"])
@@ -105,7 +106,9 @@ def test_a_to92s_flat_is_on_local_plus_y_in_3d_at_every_turn(  # type: ignore[no
             continue  # A lead in its hole, not the case.
         x0, x1 = min(x0, bounds[0]), max(x1, bounds[1])
         y0, y1 = min(y0, bounds[2]), max(y1, bounds[3])
-    reach = {(1.0, 0.0): x1 - body.x, (-1.0, 0.0): body.x - x0, (0.0, 1.0): y1 - body.y, (0.0, -1.0): body.y - y0}
+    # From the pin row -- the middle leg -- not from the body's centre, which sits behind it.
+    row_x, row_y = body.pins[1]
+    reach = {(1.0, 0.0): x1 - row_x, (-1.0, 0.0): row_x - x0, (0.0, 1.0): y1 - row_y, (0.0, -1.0): row_y - y0}
 
     towards = WORLD_OF_LOCAL_PLUS_Y[rotation]
     away = (-towards[0], -towards[1])

@@ -2238,11 +2238,14 @@ def _body_path(
         return path
     if placement.silhouette == "flat-face":
         profile = flat_face_profile(placement.size_x, placement.size_y)
-        centre = QPointF(placement.centre_x, placement.centre_y)
+        towards_x, towards_y = FLAT_FACE_LOCAL
+        centre = QPointF(
+            placement.centre_x + profile.shift * towards_x,
+            placement.centre_y + profile.shift * towards_y,
+        )
         r = profile.radius
         path.addEllipse(centre, r, r)
         side = QRectF(centre.x() - r, centre.y() - r, 2 * r, 2 * r)
-        towards_x, towards_y = FLAT_FACE_LOCAL
         if towards_y > 0:
             side.setBottom(centre.y() + profile.flat)
         elif towards_y < 0:

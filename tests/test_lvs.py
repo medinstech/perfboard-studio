@@ -37,7 +37,6 @@ from typing import Any
 import pytest
 
 from perfboard_studio.connectivity import FootprintLookup, PhysicalPinRef
-from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.lvs import (
     ContinuityCheck,
     IsolationCheck,
@@ -69,6 +68,8 @@ from perfboard_studio.model import (
     StripConductor,
     WireConductor,
 )
+
+from .differential import differential_lookup
 
 # ---------------------------------------------------------------------------
 # Golden fixtures: minimal *.perf reader (board, components, conductors, nets).
@@ -207,9 +208,9 @@ def _load_golden(name: str) -> tuple[PerfDocument, dict[str, Any]]:
     return doc, expected
 
 
-#: The real, verified standard footprint registry -- not a re-parse of
-#: footprints.expected.json, per the task's instruction to reuse it directly.
-_FOOTPRINT_LOOKUP: FootprintLookup = footprint_lookup()
+#: The original's inputs (tests/differential.py): the registry, with the original's
+#: footprint for every id whose body has since become the real package's.
+_FOOTPRINT_LOOKUP: FootprintLookup = differential_lookup()
 
 
 def _pin_to_jsonable(p: PhysicalPinRef) -> dict[str, str]:
