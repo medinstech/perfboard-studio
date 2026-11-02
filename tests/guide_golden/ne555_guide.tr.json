@@ -352,7 +352,7 @@
           "bend_template_mm": 10.16,
           "rotation": 0,
           "mirrored": false,
-          "height_mm": 2.3,
+          "height_mm": 2.5,
           "polarity": null,
           "notes": []
         },
@@ -390,7 +390,7 @@
           "bend_template_mm": 10.16,
           "rotation": 0,
           "mirrored": false,
-          "height_mm": 2.3,
+          "height_mm": 2.5,
           "polarity": null,
           "notes": []
         },
@@ -428,7 +428,7 @@
           "bend_template_mm": 10.16,
           "rotation": 0,
           "mirrored": false,
-          "height_mm": 2.3,
+          "height_mm": 2.5,
           "polarity": null,
           "notes": []
         },
@@ -466,7 +466,7 @@
           "bend_template_mm": 10.16,
           "rotation": 0,
           "mirrored": false,
-          "height_mm": 2.3,
+          "height_mm": 2.5,
           "polarity": null,
           "notes": []
         }

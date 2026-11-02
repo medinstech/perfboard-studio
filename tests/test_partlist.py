@@ -97,7 +97,10 @@ def test_references_sort_as_numbers_not_as_text() -> None:
 
 
 def test_a_placed_part_says_its_value_package_hole_and_how_it_stands() -> None:
-    doc = _changed(_board(), "U1", locked=True)
+    # Turned and locked here, and J1 set straight, rather than read off the example: it is
+    # rebuilt whenever the bodies or the placer change, and an unturned part's state says
+    # no angle at all.
+    doc = _changed(_changed(_board(), "U1", locked=True, rotation=90), "J1", rotation=0, locked=False)
     panel = _panel(doc)
     u1 = next(c for c in doc.components if c.ref == "U1")
     row = next(row for row in panel.rows() if row[REF] == "U1")

@@ -388,7 +388,10 @@ def test_a_known_length_is_what_the_cut_list_says() -> None:
     ).ok
     guide = build_guide(bus.document, REGISTRY)
     assert {lead.cut_mm for lead in guide.lead_list} == {150.0}
-    assert "wire off the board,OUT,I24,RV1 pin 2,,150.0," in cut_list_to_csv(guide)
+    # The pad pin 2's wire lands in is wherever the example's placement put it.
+    out = next(lead for lead in guide.lead_list if lead.ref == "RV1" and lead.pin == "2")
+    pad = format_hole(out.hole, bus.document.board)
+    assert f"wire off the board,OUT,{pad},RV1 pin 2,,150.0," in cut_list_to_csv(guide)
     _phase, step = _step(guide, "RV1")
     assert "Cut each wire 150 mm" in " ".join(step.notes)
 
