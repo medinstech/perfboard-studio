@@ -14229,11 +14229,14 @@ def test_properties_follow_the_selection_from_the_board_the_sheet_and_the_librar
         window.scene.select_components([])
         assert window.properties.selection.kind == "board"
 
-        window._on_sheet_selection_changed([second.ref])
+        # As a click on the sheet does: the view's selection, then its signal.
+        window.schematic_view.set_selection([second.ref])
+        window.schematic_view.selectionChanged.emit([second.ref])
         assert window.properties.selection == window._current_selection()
         assert window.properties.selection.ids == (second.id,)
         assert window.properties.selection.source == "sheet"
-        window._on_sheet_selection_changed([])
+        window.schematic_view.set_selection([])
+        window.schematic_view.selectionChanged.emit([])
 
         window._on_placement_armed("r-axial-4")
         assert window.properties.selection.kind == "placing"
@@ -14423,5 +14426,34 @@ def test_a_bar_stands_over_the_selected_symbols(monkeypatch) -> None:
         window.schematic_view.viewport().update()
         _settle_events(QApplication)
         assert not bar.isVisible()
+    finally:
+        _close(window)
+
+
+def test_properties_describe_the_selection_where_it_was_last_made() -> None:
+    """C1 picked on the sheet with a part still selected on the board behind it: the board
+    came first, and Properties described the board's. The selection is the one the window
+    was last given, in either view; several symbols on the sheet are a selection too."""
+    window = _window_on(_load_dense())
+    try:
+        board_part, sheet_part, other = window.bus.document.components[:3]
+        window.scene.select_components([board_part.id])
+        assert window.properties.selection.ids == (board_part.id,)
+
+        sheet = window.schematic_view
+        sheet.set_selection([sheet_part.ref])
+        sheet.selectionChanged.emit([sheet_part.ref])
+        chosen = window.properties.selection
+        assert (chosen.kind, chosen.ids, chosen.source) == ("part", (sheet_part.id,), "sheet")
+
+        sheet.set_selection([sheet_part.ref, other.ref])
+        sheet.selectionChanged.emit([sheet_part.ref, other.ref])
+        assert window.properties.selection.kind == "parts"
+        assert set(window.properties.selection.ids) == {sheet_part.id, other.id}
+
+        window.scene.select_components([])  # back on the board: a click on bare board,
+        window.scene.select_components([board_part.id])  # then on a part
+        assert window.properties.selection.ids == (board_part.id,)
+        assert window.properties.selection.source == "board"
     finally:
         _close(window)

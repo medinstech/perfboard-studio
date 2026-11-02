@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 #: ``board``: nothing selected, the board's own properties. ``part`` / ``parts``: one or
-#: several parts on the board; ``design-part``: a part in the design and not on the board.
+#: several parts on the board; ``design-part`` / ``design-parts``: in the design and not on
+#: the board.
 #: ``placing``: a library part armed for placing, whose id is its footprint id -- the part
 #: about to be placed, so its value is typed where every other value is.
 type SelectionKind = Literal[
@@ -23,6 +24,7 @@ type SelectionKind = Literal[
     "part",
     "parts",
     "design-part",
+    "design-parts",
     "conductor",
     "conductors",
     "net",

@@ -365,7 +365,7 @@ from .problems import ProblemsBar
 from .project import write_project
 from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
 from .properties import PropertiesPanel
-from .selection import NOTHING, Selection
+from .selection import NOTHING, Selection, SelectionKind
 from .tour import Stop as TourStop
 from .tour import Tour
 from .view2d import (
@@ -8266,6 +8266,7 @@ class MainWindow(QMainWindow):
         elif isinstance(refs, list) and not refs:
             self._schematic_ref = None
         self._refresh_schematic_actions()
+        self._selection_from: Literal["board", "sheet"] = "sheet"
         self._refresh_properties()
 
     def _on_sheet_wire_drawn(
@@ -9644,13 +9645,29 @@ class MainWindow(QMainWindow):
         self.dock_properties = dock
         #: The library part armed for placing, if one is: Properties shows it.
         self._armed_footprint_id = None
+        #: Which view the selection was last made in: the one Properties describes.
+        self._selection_from = "board"
 
     def _current_selection(self) -> Selection:
         """What is selected, said once for the Properties panel: a part armed for placing
-        first, then the board's selection, then the sheet's, and the board itself when
-        nothing is."""
+        first; then the selection of the view it was last MADE in, the board or the sheet;
+        then whichever of the two has one; and the board itself when neither does.
+
+        BY WHERE IT WAS LAST MADE, not by a fixed order. The board came first, and the
+        sheet's selection was one remembered reference: so with C1 picked on the sheet and
+        something left selected on the board behind it, Properties described the board's;
+        and several symbols picked on the sheet were not a selection at all.
+        """
         if self._armed_footprint_id:
             return Selection("placing", (self._armed_footprint_id,), "library")
+        board = self._board_selection()
+        sheet = self._selection_on_the_sheet()
+        if self._selection_from == "sheet" and sheet is not None:
+            return sheet
+        return board or sheet or NOTHING
+
+    def _board_selection(self) -> Selection | None:
+        """What is selected on the board, or None."""
         components = tuple(self.scene.selected_component_ids())
         conductors = tuple(self.scene.selected_conductor_ids())
         notes = tuple(self.scene.selected_board_note_ids())
@@ -9662,16 +9679,25 @@ class MainWindow(QMainWindow):
             return Selection("board-note", notes)
         if components or conductors or notes:
             return Selection("mixed", (*components, *conductors, *notes))
-        ref = self._schematic_ref
-        if ref is not None:
-            document = self.bus.document
-            design = next((p for p in document.parts if p.ref == ref), None)
-            if design is not None:
-                return Selection("design-part", (design.id,), "sheet")
-            placed = next((c for c in document.components if c.ref == ref), None)
-            if placed is not None:
-                return Selection("part", (placed.id,), "sheet")
-        return NOTHING
+        return None
+
+    def _selection_on_the_sheet(self) -> Selection | None:
+        """What is selected on the sheet, as the parts it names, or None: parts on the board
+        by their component ids, parts still only in the design by their part ids."""
+        refs = set(self.schematic_view.selected_refs)
+        if not refs:
+            return None
+        document = self.bus.document
+        placed = tuple(c.id for c in document.components if c.ref in refs)
+        design = tuple(p.id for p in document.parts if p.ref in refs)
+        if placed and not design:
+            return Selection("part" if len(placed) == 1 else "parts", placed, "sheet")
+        if design and not placed:
+            kind: SelectionKind = "design-part" if len(design) == 1 else "design-parts"
+            return Selection(kind, design, "sheet")
+        if placed or design:
+            return Selection("mixed", (*placed, *design), "sheet")
+        return None
 
     def _refresh_properties(self) -> None:
         panel = getattr(self, "properties", None)
@@ -10862,6 +10888,8 @@ class MainWindow(QMainWindow):
     def _on_selection_nets_changed(self, net_ids: list[str]) -> None:
         """Selecting a part on the board highlights its nets in the dock too, so the two
         views never disagree about what is selected."""
+        # The board's selection changed, so it is the one Properties describes now.
+        self._selection_from = "board"
         wanted = set(net_ids)
         self.nets_tree.blockSignals(True)
         for index in range(self.nets_tree.topLevelItemCount()):

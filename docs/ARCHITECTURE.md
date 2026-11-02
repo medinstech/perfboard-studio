@@ -1461,8 +1461,12 @@ the content the inspector's: `PropertiesPanel.set_content` hosts any widget with
 `set_selection(Selection)` and `refresh(document)` -- one editor per kind of selection, written
 to the commands -- and until one is put in, a summary says what is selected. The window says
 the selection once (`_current_selection`, a `ui/selection.py` value): a library part armed
-for placing first, then the board's selection, then the sheet's, and the board itself when
-nothing is; it hands over the document after every command and the selection on every change.
+for placing first, then the selection of the view it was last MADE in (`_selection_from`,
+set by the board's and the sheet's own selection signals), then whichever of the two has
+one, and the board itself when neither does. It was a fixed order once -- the board first,
+the sheet as one remembered reference -- and C1 picked on the sheet showed whatever was
+left selected on the board behind it. The window hands over the document after every
+command and the selection on every change.
 
 **What the selection can do stands over the selection** (`selection_bar`): Rotate, Mirror,
 Lock, Auto-wire the Selection, Delete, and the dots for `board_menu`, the right-click menu
