@@ -1248,8 +1248,8 @@ def test_a_body_hanging_past_the_edge_is_a_warning_even_with_every_pin_in_a_hole
     """Rule 2's blind spot, found on the first real board laid out with this tool.
 
     A TO-220 on row 1: all three pins in holes, so `component-off-board` has nothing to
-    say, and the body -- 4.6 mm deep, centred on its pins -- stands 2.3 mm above them where
-    the board gives it half a pitch. The placer had put it there and called the result
+    say, and the body -- its tab's back 3.28 mm behind its pins -- stands that far above them
+    where the board gives it half a pitch. The placer had put it there and called the result
     legal. A warning, not an error: a part can be meant to overhang, and the board is still
     a board.
     """
@@ -1264,9 +1264,10 @@ def test_a_body_hanging_past_the_edge_is_a_warning_even_with_every_pin_in_a_hole
     assert only.severity == "warning"
     assert only.component_ids == ("q",)
     assert only.holes == (hole(5, 0),)
-    # 4.7 / 2 - 2.54 / 2 = 1.08 mm (TI KCS0003B's 4.7 mm maximum depth), said to the tenth,
-    # with the edge and the way back.
-    assert "1.1 mm past the top edge" in only.message
+    # 0.93 + 4.7 / 2 - 2.54 / 2 = 2.01 mm (TI KCS0003B's 4.7 mm maximum depth, 0.93 mm
+    # behind the pins as KiCad's model has it), said to the tenth, with the edge and the way
+    # back.
+    assert "2.0 mm past the top edge" in only.message
     assert "1 hole(s) in from the top edge" in only.message
 
     # One row in and the body is over the board.
@@ -1324,11 +1325,14 @@ def test_a_resistor_on_the_outermost_row_is_over_the_board_although_its_courtyar
 def test_the_body_is_turned_and_mirrored_with_the_part() -> None:
     """The body box goes through the component's own transform, the one its pins do.
 
-    A TO-220 is 10.36 mm wide and 4.7 mm deep (TI KCS0003B, maxima). Unturned on row 1 it is
-    the DEPTH that reaches past the top edge (1.08 mm); turned a quarter the 10.36 mm width runs
-    down the column and reaches 1.37 mm past it instead -- a different number, which is how the
-    test knows the
-    turn was applied rather than merely survived. Mirrored against the right-hand edge, its
+    A TO-220 is 10.36 mm wide and 4.7 mm deep (TI KCS0003B, maxima), its tab's back 3.28 mm
+    behind its pins and its front 1.42 mm before them. Unturned on row 1 it is the DEPTH that
+    reaches past the top edge (2.01 mm); turned a quarter the 10.36 mm width runs down the
+    column and reaches 1.37 mm past it instead -- a different number, which is how the test
+    knows the turn was applied rather than merely survived. On the left edge, turned three
+    quarters the tab faces it and reaches 2.01 mm past; turned one quarter it is the front, 0.15
+    mm past and under the tolerance, so the body's offset turns with the part too. Mirrored
+    against the right-hand edge, its
     pins run leftwards from the anchor and the body follows them; the same anchor unmirrored
     puts two pins off the board, which is rule 2's finding and not this one's.
     """
@@ -1339,13 +1343,18 @@ def test_the_body_is_turned_and_mirrored_with_the_part() -> None:
     assert len(found) == 1
     assert "1.4 mm past the top edge" in found[0].message
 
-    on_the_left = make_component("q", "Q1", "to220", hole(0, 10), rotation=90)
+    on_the_left = make_component("q", "Q1", "to220", hole(0, 10), rotation=270)
     found = by_rule(
         run_drc(make_doc(components=(on_the_left,)), _FOOTPRINT_LOOKUP),
         "component-overhangs-edge",
     )
     assert len(found) == 1
-    assert "1.1 mm past the left edge" in found[0].message
+    assert "2.0 mm past the left edge" in found[0].message
+    front_to_the_left = make_component("q", "Q1", "to220", hole(0, 10), rotation=90)
+    assert by_rule(
+        run_drc(make_doc(components=(front_to_the_left,)), _FOOTPRINT_LOOKUP),
+        "component-overhangs-edge",
+    ) == []
 
     right = BOARD.cols - 1
     mirrored = make_component("q", "Q1", "to220", hole(right, 10), mirrored=True)
@@ -1381,17 +1390,17 @@ def test_a_round_can_is_measured_as_the_circle_it_is() -> None:
 
 def test_a_printed_border_is_board_and_not_overhang() -> None:
     """The edge is the SUBSTRATE, border included, not the hole grid -- the
-    ``board_size_mm`` / ``hole_span_mm`` trap. A TO-220 on row 1 of a board cut with 1.5 mm
-    of printed border above its first row has 2.77 mm of board over its pins, which covers
-    its 2.35; with half a millimetre of border it still hangs 0.58 mm over."""
+    ``board_size_mm`` / ``hole_span_mm`` trap. A TO-220 on row 1 of a board cut with 2.5 mm
+    of printed border above its first row has 3.77 mm of board over its pins, which covers
+    the 3.28 its tab stands behind them; with 1.5 mm of border it still hangs 0.51 mm over."""
     q1 = make_component("q", "Q1", "to220", hole(5, 0))
-    bordered = make_doc(board_=board(border_y_mm=1.5), components=(q1,))
+    bordered = make_doc(board_=board(border_y_mm=2.5), components=(q1,))
     assert by_rule(run_drc(bordered, _FOOTPRINT_LOOKUP), "component-overhangs-edge") == []
 
-    thin = make_doc(board_=board(border_y_mm=0.5), components=(q1,))
+    thin = make_doc(board_=board(border_y_mm=1.5), components=(q1,))
     found = by_rule(run_drc(thin, _FOOTPRINT_LOOKUP), "component-overhangs-edge")
     assert len(found) == 1
-    assert "0.6 mm past the top edge" in found[0].message
+    assert "0.5 mm past the top edge" in found[0].message
 
 
 def test_the_overhang_tolerance_is_where_the_measurement_put_it() -> None:

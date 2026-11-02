@@ -61,14 +61,7 @@ def _footprints_with_views() -> list[str]:
 #: Cases the BODY has not caught up with yet, by name. Each is a body DRC measures in the
 #: wrong place, not a picture to trim, and each is strict so it asks to be unmarked the day
 #: the body moves.
-BODY_PENDING = {
-    "to220": (
-        "KiCad's TO-220 case stands 0.93 mm behind its pin row, tab at the back, and DRC's box "
-        "is still centred on the row. The offsetY that fixes it (branch parts-to220) waits for "
-        "breadboard placement to be robust: with it, nano-relay's relay is left off an 830 "
-        "breadboard at seed 0."
-    ),
-}
+BODY_PENDING: dict[str, str] = {}
 
 
 def _cases() -> list[object]:

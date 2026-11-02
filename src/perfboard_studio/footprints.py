@@ -654,6 +654,13 @@ def to92_footprint(
 # ---------------------------------------------------------------------------
 
 
+#: A TO-220's legs leave the plastic nearer its front than its back, where the tab is: KiCad's
+#: model of it reaches 3.15 mm behind the pin row and 1.29 in front, so the case's middle is
+#: 0.93 mm behind the row (``tests/test_bodies.py`` measures it off the mesh). Centred on the
+#: row, the box missed the back 0.8 mm of the tab -- the side a heatsink bolts to.
+TO220_BODY_OFFSET_MM = -0.93
+
+
 def to220_footprint(
     *,
     lead_diameter_mm: Mm | None = None,
@@ -666,7 +673,9 @@ def to220_footprint(
     """
     lead_diameter = 0.7 if lead_diameter_mm is None else lead_diameter_mm
     pins = (_make_pin("1", 0, 0), _make_pin("2", 1, 0), _make_pin("3", 2, 0))
-    outline = _rect_outline(_to_mm(pins), 10.36, 4.7, COURTYARD_MARGIN_MM)
+    outline = _offset_rect_outline(
+        _to_mm(pins), 10.36, 4.7, 0.0, TO220_BODY_OFFSET_MM, COURTYARD_MARGIN_MM
+    )
     fp_id = id if id is not None else "to220"
     fp_name = name if name is not None else "TO-220"
     return Footprint(
@@ -677,7 +686,13 @@ def to220_footprint(
         body_height=20,
         body=BodySpec(
             archetype="to220",
-            dims={"width": 10.36, "depth": 4.7, "tabHeight": 3.5, "tabHoleDiameter": 3.4},
+            dims={
+                "width": 10.36,
+                "depth": 4.7,
+                "tabHeight": 3.5,
+                "tabHoleDiameter": 3.4,
+                "offsetY": TO220_BODY_OFFSET_MM,
+            },
         ),
         lead_diameter=lead_diameter,
         polarized=False,
@@ -2521,7 +2536,7 @@ def body_extent(footprint: Footprint, pitch: Mm) -> BodyExtent:
         size_y = dims.get(y_key) or outline_y
 
     # A body off its pins' centre: ``generic_box_footprint``'s offset, the SRD relay's, and a
-    # TO-92's and a screw terminal's, measured off their meshes. Read from dims, which only
+    # TO-92's, a TO-220's and a screw terminal's, measured off their meshes. Read from dims, which only
     # carries the keys when the offset is not zero, so every other footprint's centre is the
     # same float it always was.
     centre_x += dims.get("offsetX", 0.0)

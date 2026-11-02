@@ -107,7 +107,7 @@ _OFFSET_BODIES = sorted(
 
 
 def test_the_bodies_off_their_pins_are_the_ones_measured_to_be() -> None:
-    assert _OFFSET_BODIES == ["screw-terminal-2", "screw-terminal-3", "to92"]
+    assert _OFFSET_BODIES == ["screw-terminal-2", "screw-terminal-3", "to220", "to92"]
 
 
 @pytest.mark.parametrize("footprint_id", _OFFSET_BODIES)

@@ -363,8 +363,8 @@ where that is larger, because DRC must not measure a smaller part than the one o
 value is cited where it is set. Three rules came with it:
 
 - **A body is centred on its pins unless its dims say otherwise, and then the mesh says so
-  too.** A TO-92's legs leave its case nearer the flat than the back, and a screw terminal's
-  pins sit behind the middle of its block. Centring a box that holds them made it deeper than
+  too.** A TO-92's legs leave its case nearer the flat than the back, a TO-220's nearer its
+  front than its tab, and a screw terminal's pins sit behind the middle of its block. Centring a box that holds them made it deeper than
   the part on both sides: two TO-92s two rows apart, the commonest way to lay transistors out,
   read 0.26 mm apart where they stand 0.89 mm apart. They take the `offsetY` the generated
   boxes and the SRD relay already had, and `tests/test_bodies.py` measures each offset
@@ -920,11 +920,10 @@ role is inked is the painter's, not the data's. Three rules hold it:
 
 - **The drawing follows DRC's geometry, never the other way round.**
   `tests/test_topview.py` holds every case inside `body_extent`, to the rasteriser's own
-  0.06 mm. The first run found a TO-220 whose case stands 0.8 mm behind the box DRC
-  measures: that is the BODY that is wrong, and it is the body that moves (an `offsetY`),
-  not the picture. It waits for breadboard placement to take it -- with it, nano-relay's
-  relay was left off a breadboard -- and until then that one case is a strict xfail,
-  `BODY_PENDING`, by name.
+  0.06 mm. The first run found a TO-220 whose case stood 0.8 mm behind the box DRC
+  measured: the BODY was wrong, and it was the body that moved (its `offsetY`, once
+  breadboard placement could take it), not the picture. A case the body has not caught up
+  with yet is a strict xfail by name, `BODY_PENDING`, never a trimmed picture.
 - **The 2D view is what the part is soldered by**, so every pin is either visible as metal
   or listed in `hidden_pins` for the painter to mark: a TO-220's legs are under its case.
 - **No data is still a board.** A header and a terminal block of any length are drawn from

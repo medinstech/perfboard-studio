@@ -273,10 +273,10 @@ closed without a bump.
   than the parts they stand for -- a 1/4 W resistor 5 mm long where a 0207 is 6.5, a 5 mm LED
   5 mm across where its flange is 6.15, a TO-92 4.5 × 3.7 where it is 5.21 × 4.19 -- so DRC
   passed parts that touch on the bench. Every body is now the datasheet's maximum, or KiCad's
-  model where that is larger. A TO-92 and a screw terminal stand where the real ones do,
-  behind their pin row rather than centred on it, and a DIP's courtyard now holds its whole
-  body. A board DRC passed before may show an overlap or an edge warning now: the parts
-  always touched.
+  model where that is larger. A TO-92, a TO-220 and a screw terminal stand where the real
+  ones do, behind their pin row rather than centred on it, and a DIP's courtyard now holds
+  its whole body. A board DRC passed before may show an overlap or an edge warning now: the
+  parts always touched.
 - **Escape calls off a drag in the middle of it.** Let go after Escape and the part, the
   label, the symbols or the rubber band went where the pointer was: the window's Escape
   shortcut took the key before the board or the sheet saw it. Both now take Escape back

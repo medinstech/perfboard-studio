@@ -330,7 +330,7 @@ REAL_PACKAGES: dict[str, tuple[float, float, str]] = {
     "led-5mm": (6.15, 6.15, "Kingbright WP7113ID, flange 5.9 +-0.25"),
     "led-10mm": (11.0, 11.0, "KiCad's model's flange"),
     "to92": (5.21, 4.19, "TI LP0003A, maxima; 0.54 mm behind its legs, off KiCad's mesh"),
-    "to220": (10.36, 4.7, "TI KCS0003B, maxima"),
+    "to220": (10.36, 4.7, "TI KCS0003B, maxima; 0.93 mm behind its legs, off KiCad's mesh"),
     "screw-terminal-2": (11.66, 9.8, "Phoenix MKDS 1,5 depth, KiCad's model; 0.3 mm behind its pins"),
     "screw-terminal-3": (16.74, 9.8, "Phoenix MKDS 1,5 depth, KiCad's model; 0.3 mm behind its pins"),
 }
