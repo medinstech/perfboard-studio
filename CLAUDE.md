@@ -365,6 +365,11 @@ In-page links are checked on every page, against GitHub's slugger exactly, marks
 included: a heading that starts with "İ" gets an anchor with an invisible U+0307 in it,
 so do not start one so.
 
+**Turkish addresses the builder as "siz"; a command's name keeps the bare form.** Hints,
+tooltips, status lines, messages and the guide's instructions say "tıklayın"; a menu item,
+a button and the Undo label say "Kaydet". Routing is "kablolama", a footprint a "kılıf".
+A `t()` string with no Turkish entry fails `test_i18n` unless `SAME_IN_BOTH` names it.
+
 The language is chosen `--lang` → `PERFBOARD_STUDIO_LANG` → the View menu's stored choice → the
 system locale (`main._preferred_language`), and applies at the **next start**: every label
 is translated once, as the window is built, so a live re-translation would leave whatever
@@ -440,6 +445,10 @@ growing past 40 000 characters.
 - Before touching the step bar (`ui/workflow.py`), choosing a board in the window, or the
   toolbars → [The window walks through six
   steps](docs/ARCHITECTURE.md#the-window-walks-through-six-steps)
+- Before adding or renaming a word the user reads, or touching `ui/home.py`,
+  `ui/emptystate.py`, `ui/helpcards.py` or `ui/tour.py` → [The words, the first start and
+  help tell one
+  story](docs/ARCHITECTURE.md#the-words-the-first-start-and-help-tell-one-story)
 - Before touching docks, `WINDOW_STATE_VERSION`, which panel is in front, the sheet's tools,
   dragging between views or the sheet's right-click menu → [The window is panels all the way
   down](docs/ARCHITECTURE.md#the-window-is-panels-all-the-way-down)

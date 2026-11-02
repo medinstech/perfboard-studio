@@ -32,6 +32,22 @@ closed without a bump.
   pressed rather than all the time, and a checked tool's icon turns the accent colour.
   The board itself -- substrate, copper, solder, parts -- looks as it did in both.
 
+- **Help is reached from where the question is.** F1 shows a card for whatever is under
+  the pointer: what it is in plain words, with its technical name beside it. Shift+F1 is
+  What's This: click anything for the same card. Help ▸ Glossary explains the words the
+  window and the build guide use, searchable, in English and Turkish. The keyboard
+  shortcuts card that F1 used to open is Ctrl+/.
+- **A one-minute tour.** Help ▸ Getting Started Tour opens the circuit that is drawn and
+  not yet built and lights the button at the top right that does the next step, with one
+  sentence a stop: choose a board, place, wire, check, open the guide. It never presses
+  anything itself, follows a step done from a menu too, and never starts on its own; Skip
+  ends it anywhere.
+- **An empty panel says what will be there and how it gets there.** Nets, Parts, the
+  schematic and the build guide said nothing when empty. The schematic now offers Add a
+  Part… and links to an example and to KiCad, the guide offers Place on the Board while a
+  drawn circuit waits, and the board names the two steps that bring a circuit to it. A
+  board with nothing on it no longer fills the guide with an empty board's closing checks.
+
 ### Changed
 
 - **The board looks like a board with parts on it.** Pads nothing lands in step back --
@@ -74,7 +90,7 @@ closed without a bump.
   Windows hands a touchpad's scrolling to the application exactly as a mouse wheel's, so
   there two fingers zoom unless View ▸ Mouse Wheel ▸ Scrolls is chosen: then every wheel
   pans and Ctrl+wheel zooms. The board and the sheet read the wheel through one rule, the
-  choice is remembered, and the shortcuts card (F1) lists the new gestures.
+  choice is remembered, and the shortcuts card (Ctrl+/) lists the new gestures.
 
 - **Text in the accent colour uses the theme's accent for text.** The build guide's
   checks and its links borrowed the button blue, which is a fill colour; they now take
@@ -87,6 +103,19 @@ closed without a bump.
   colours a panel apart -- and the sheet's power was also the warning colour. Both now
   read one table: power orange, signal blue, ground grey. The sheet's background is the
   board's near-black rather than a second one beside it.
+
+- **The window says what its tools do.** The words a newcomer could not read are renamed,
+  in English and Turkish: Autoroute is Auto-wire, Auto-place is Rearrange, Spine is a
+  reinforced solder trace, Ratsnest is Missing Connections, the ERC / DRC / LVS panel is
+  Problems with its groups named Circuit check (ERC), Board check (DRC) and Matches circuit
+  (LVS), the Parts panel is the Library and the Part List is Parts, Verify is Checks, a
+  footprint is a package, and the sheet's Wire tool is Connect, as the board's is. The
+  build guide says "reinforced solder trace" and "reinforcing wire". In Turkish, routing is
+  "kablolama". Rule ids, the engine's messages and the MCP tools keep their names.
+- **Turkish speaks to the builder as "siz", and says each thing with one word.** The
+  interface and the build guide mixed "sen" and "siz", sometimes on one screen. Every
+  sentence is "siz" now, and command names keep the bare form ("Kaydet"). One word for each
+  thing: kılıf, ped, parça yüzü, montaj rehberi, izoleli tel.
 
 ### Fixed
 
@@ -103,6 +132,8 @@ closed without a bump.
   beforehand and nothing did afterwards: the status bar kept the last command's message,
   so "Deleted 3 part(s)" stood over a board that already had one of them back. It now
   reads "Undone: …" or "Redone: …", in the window's language.
+- **The findings panel's circuit row was English in a Turkish window** ("0 error(s) · 0
+  warning(s)"). A string the window shows with no Turkish now fails a test.
 
 ## [0.22.0] - 2026-10-28
 

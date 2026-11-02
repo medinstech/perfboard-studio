@@ -1335,7 +1335,7 @@ real board meet on all three operating systems, and the only export that needs n
 
 ## The window walks through six steps
 
-`ui/workflow.py` is the stepper in the header -- Circuit, Board, Placement, Wiring, Check,
+`ui/workflow.py` is the stepper in the header -- Circuit, Board, Placement, Wiring, Checks,
 Build -- and the Next button at the header's right end (`ui/header.py`). `workflow_steps(WorkflowFacts)` is pure (counts in,
 statuses out) and tested in `tests/test_workflow.py`; the window builds the facts from what
 `on_bus_changed` already computed (`MainWindow.workflow_facts`). Every step's action is a
@@ -1389,6 +1389,70 @@ question about the other panel. `_fit_toolbar` sheds words across whichever bars
 `ui/boardpreview.py` draws a board as a picture through `BoardScene` itself -- the board
 dialogs' previews and the stock-size grid -- so a picture cannot disagree with the board OK
 gives. References and pin names are off there (`show_references`, `show_pin_names`).
+
+## The words, the first start and help tell one story
+
+A newcomer met the window's jargon before anything else -- Trace, Spine, Bare, Ratsnest,
+ERC / DRC / LVS -- and had no clear place to start: a welcome dialog over a full editor
+offered four doors that looked the same, the order of the work was told three ways (the
+dialog's step line, the step bar, the empty board's paragraph), and F1 opened a list of
+shortcuts. The redesign of 2026-10-28 made the step bar the one narrator and gave every
+other surface its words.
+
+- **One word for each thing, said the way a beginner reads it.** Autoroute is Auto-wire,
+  Auto-place Rearrange, Spine a reinforced solder trace, Ratsnest Missing Connections, the
+  findings panel Problems with three groups -- Circuit check (ERC), Board check (DRC),
+  Matches circuit (LVS) -- and a footprint a package; the sheet's Wire tool is Connect,
+  because it is the board's Connect and "wire" now means copper. The domain words that ARE
+  the product stay (solder trace, jumper, bare and insulated wire, strip, pad): a plainer
+  word would lie, since the app rests on their difference. An acronym never stands alone on
+  a button; it follows the plain name. Turkish routing is **kablolama** ("yönlendirme" was
+  "routing" calqued, and reads as "steering"), and `test_the_turkish_interface_has_one_word_
+  for_each_thing` refuses "yönlendir" anywhere in the catalogue.
+- **Renamed where it is shown, never in the engine.** The plain names live in the UI
+  catalogue and in `_drc_title` / `_erc_title` / `_lvs_title`; DRC, ERC and LVS messages,
+  rule ids, conductor-kind ids and MCP tool names are unchanged, because the differential
+  proof compares the messages byte for byte and agents read the ids. The build guide is the
+  engine's own output, so its words did change ("reinforced solder trace" through
+  `guide.CONDUCTOR_WORDS`, "reinforcing wire" for the spine) with the guide golden
+  re-blessed for exactly those words.
+- **Turkish addresses the builder as "siz"; a command's NAME keeps the bare form.** The
+  catalogue had 81 entries in "sen" and 37 in "siz", sometimes on one screen. Sentences --
+  hints, tooltips, status lines, findings' advice, the guide's instructions, Home -- are
+  "siz"; a menu item, a button and the Undo menu's label of what a command did keep the
+  bare imperative Windows Turkish uses ("Kaydet", "Otomatik Kablola"). The trap found by
+  reading every converted line: "lehimle" and "işaretle" are sometimes "with solder" and
+  "with a mark", and "tel çıkar" is "wire comes out" -- not orders.
+- **Every translated string has its Turkish, or is named as the same in both.**
+  `test_every_translated_string_has_a_turkish_entry` replaced a 0.97 coverage floor that
+  could not see a single missing string at 1082 of 1085: the findings panel's ERC row was
+  English in every Turkish window. `SAME_IN_BOTH` names the exceptions (Net, Jumper, the
+  product's name).
+- **Home replaces the dialog, and imports nothing from the window** (`ui/home.py`). One
+  primary door ("Draw Your First Circuit"), Open… second, KiCad as a link; recents first
+  for somebody who has boards. The examples are cards with plain titles
+  (`home.example_title`) and pictures drawn by `boardpreview.render_board` -- or the sheet,
+  for the example with nothing placed -- one per turn of the event loop after Home is on
+  screen, so seven boards never hold back the first frame. Home says what was asked through
+  signals; the window opens the file and leaves Home.
+- **An empty panel says what will be there and how it gets there** (`ui/emptystate.py`):
+  a title, at most two lines, at most one button, dim links for the other doors. The button
+  is the step that fills the panel under the next button's own name. `EmptyOverlay.over_view`
+  follows a list's model, so no panel remembers to say it is empty; the guide shows nothing
+  for a board with nothing placed, where it used to list an empty board's closing checks.
+- **Help is one text behind three doors** (`ui/helpcards.py`): F1 shows a card for what is
+  under the pointer, Shift+F1 is Qt's What's This -- the same string, because the card IS
+  the widget's `whatsThis` -- and Help ▸ Glossary lists the words, searchable. The texts are
+  hung on docks by object name and on tools by name, so the module never imports the window,
+  and `test_every_card_is_hung_on_something_the_window_has` fails on a card for a panel or
+  a tool that is gone. The shortcuts card moved from F1 to Ctrl+/.
+- **The tour is five presses of the next button, read off the window** (`ui/tour.py`). It
+  opens the example that is drawn and not built and shows one sentence per stop. Which stop
+  is decided by what the next button would do now and whether the guide is open
+  (`tour.stop_for`), never by counting presses, so a step done from a menu or undone lands
+  on the sentence that is true. Its overlay is transparent to the mouse -- the lit button is
+  the real one and a part can still be dragged -- and it never presses anything itself.
+  Offered on Home and in Help, never automatic (Sinan's decision).
 
 ## The window is panels all the way down
 
