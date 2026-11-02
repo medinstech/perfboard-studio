@@ -96,6 +96,35 @@ def panel_help() -> dict[str, str]:
             t("The soldering order, one step at a time: lowest parts first, ICs last. Tick a "
               "step as you finish it and the next one lights up on the board and in 3D."),
         ),
+        # The bars that float on the canvases (ui/canvastools.py). F1 over one of their
+        # buttons reads the tool's own card first, and this one where a button has none.
+        "boardTools": card(
+            t("The board's tools"),
+            t("Tools that work on the board, one at a time; Esc goes back to Select. A button "
+              "with a small triangle in its corner holds more than one tool of its kind: hold "
+              "it or right-click it to pick another, and it keeps the last one picked."),
+        ),
+        "sheetTools": card(
+            t("The schematic's tools"),
+            t("Tools that work on the schematic, one at a time; Esc goes back to Select. A "
+              "button with a small triangle in its corner holds more than one tool of its "
+              "kind: hold it or right-click it to pick another."),
+        ),
+        "boardView": card(
+            t("How the board is shown"),
+            t("What the board shows, which side is up and how near it is. Nothing here "
+              "changes the board."),
+        ),
+        "sheetView": card(
+            t("How the schematic is shown"),
+            t("How near the schematic is, and fitting it to the window. Nothing here changes "
+              "the circuit."),
+        ),
+        "selectionBar": card(
+            t("What the selection can do"),
+            t("What can be done to the selected parts, right where they are. The last button "
+              "holds everything a right-click offers."),
+        ),
         "workflowNext": card(
             t("The next step"),
             t("Always the one thing to do next, from drawing the circuit to opening the build "

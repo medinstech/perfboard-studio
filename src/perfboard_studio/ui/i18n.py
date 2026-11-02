@@ -2742,6 +2742,39 @@ TURKISH: Mapping[str, str] = {
     "Word": "Kelime",
     "What it means": "Anlamı",
     "The next step": "Sıradaki adım",
+    "The board's tools": "Kartın araçları",
+    "Tools that work on the board, one at a time; Esc goes back to Select. A button with a "
+    "small triangle in its corner holds more than one tool of its kind: hold it or right-click "
+    "it to pick another, and it keeps the last one picked.": (
+        "Kart üzerinde çalışan araçlar, her seferinde biri; Esc Seç'e döner. Köşesinde küçük bir "
+        "üçgen olan düğme aynı türden birden çok aracı taşır: başka birini seçmek için basılı "
+        "tutun ya da sağ tıklayın; düğme son seçileni hatırlar."
+    ),
+    "The schematic's tools": "Şemanın araçları",
+    "Tools that work on the schematic, one at a time; Esc goes back to Select. A button with a "
+    "small triangle in its corner holds more than one tool of its kind: hold it or right-click "
+    "it to pick another.": (
+        "Şema üzerinde çalışan araçlar, her seferinde biri; Esc Seç'e döner. Köşesinde küçük bir "
+        "üçgen olan düğme aynı türden birden çok aracı taşır: başka birini seçmek için basılı "
+        "tutun ya da sağ tıklayın."
+    ),
+    "How the board is shown": "Kartın nasıl gösterildiği",
+    "What the board shows, which side is up and how near it is. Nothing here changes the board.": (
+        "Kartta neyin göründüğü, hangi yüzün üstte olduğu ve ne kadar yakın olduğu. Buradaki "
+        "hiçbir şey kartı değiştirmez."
+    ),
+    "How the schematic is shown": "Şemanın nasıl gösterildiği",
+    "How near the schematic is, and fitting it to the window. Nothing here changes the "
+    "circuit.": (
+        "Şemanın ne kadar yakın olduğu ve pencereye sığdırılması. Buradaki hiçbir şey devreyi "
+        "değiştirmez."
+    ),
+    "What the selection can do": "Seçimle neler yapılabilir",
+    "What can be done to the selected parts, right where they are. The last button holds "
+    "everything a right-click offers.": (
+        "Seçili parçalarla, tam bulundukları yerde yapılabilecekler. Son düğme sağ tıklamanın "
+        "sunduğu her şeyi taşır."
+    ),
     "Always the one thing to do next, from drawing the circuit to opening the build guide. "
     "Pressing it is the whole workflow; the menus hold the same commands.": (
         "Her zaman yapılacak sıradaki tek şey: devreyi çizmekten montaj rehberini açmaya "
