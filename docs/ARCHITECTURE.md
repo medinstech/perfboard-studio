@@ -1434,6 +1434,18 @@ nothing on screen to say so, so `_on_menu_bar_hovered` opens ☰ instead, a turn
 only if no menu has opened (Alt+F passes through the same signal on its way to File).
 Shortcuts are unaffected: a menu bar at no height is still on screen to Qt.
 
+**The menus follow the steps**: File, Edit, Circuit, Board, Wiring, View, Help, the middle
+three being the step bar's first stages. There were nine -- Draw, Place, Net and Schematic
+among them -- and Place on the Board had four plausible homes. The sheet's commands and the
+nets are the circuit's; the board's setup, out of File, and placing are the board's; and the
+drawing tools are Wiring's, because a trace drawn by hand is wiring as much as one Auto-wire
+lays. File's five exports are one Export submenu whose entries no longer repeat the verb.
+View ▸ Show on the Board is the same `QMenu` the board's corner opens as Show (`menu_show`),
+so the two cannot list different toggles. Every menu gives each entry its own Alt letter in
+both languages, and `test_no_two_entries_of_a_menu_share_a_letter_in_either_language` opens
+them all to say so: the catalogue's test checked only the groups it listed, and only in
+Turkish, and nine menus had a letter claimed twice in English.
+
 **Ctrl+K is every command by its name** (`ui/palette.py`, `act_palette`, and the header's
 search field). It keeps no list of its own: `_palette_entries` walks the menus under ☰ --
 by matching each submenu's own action, never through `QAction.menu()` -- and offers every
@@ -1481,7 +1493,7 @@ button holding Box, Line and Circle), Arrange and its own zoom and Fit in the co
 own, because the View menu's zoom acts on whichever view has the keyboard and a button
 pressed on the sheet does not take it -- and a bar over the selected symbols. Its commands
 were a row on the sheet's panel and nowhere else, so none was behind ☰ or in Ctrl+K until
-they went into the Schematic menu; the sheet's Export was File ▸ Export Schematic under
+they went into a Schematic menu, now Circuit's; the sheet's Export was File's Export Schematic under
 another name, and is only that now.
 
 **The guide and the 3D view follow, each as far as it can.** The guide's Next Step to Do,

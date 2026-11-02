@@ -337,8 +337,9 @@ def test_every_catalogue_translates_to_something_different() -> None:
         # did not finish, which is the whole thing this catches.
         # "3D" was "3B" on the toolbar alone while every menu, dialog and the README said
         # "3D" -- one view, two names. "1 net" is "1 net" in Turkish too. "ERC / DRC / LVS" was
-        # here until the panel was called Problems.
-        assert same == ["3D", "LED", "{count} net"], (
+        # here until the panel was called Problems. File ▸ Export ▸ "3D Model (STEP)" is
+        # the same words in Turkish under a submenu that already says "Dışa Aktar".
+        assert same == ["3D", "3D &Model (STEP)…", "LED", "{count} net"], (
             f"{code} has untranslated entries: {same}"
         )
 
@@ -359,20 +360,14 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
     groups = {
         # The menu bar itself. Turkish had three menus on Y (Yerleştir, Yol, Yardım) and
         # two on Z (Düzen, Çiz), so Alt+Y reached one of three at random.
-        "menu bar": ["&File", "&Edit", "&Draw", "&Place", "&Net", "&Schematic", "&Wiring",
-                     "&View", "&Help"],
-        # The sheet's commands, a row of buttons on its panel until they went onto the sheet
-        # and into this menu (the tools under Drawing Tools).
-        "schematic": ["&Add Part…", "&Drawing Tools", "R&otate", "F&lip",
-                      "&Remove from the Design", "Arran&ge the Sheet", "&Fit the Sheet",
-                      "&Place on the Board", "Float the Pa&nel"],
-        "route": ["&Auto-wire Everything", "Auto-wire the &Selection", "Wiring &Style",
-                  "When a Trace Must &Cross", "Lay Wires Along the &Grid", "Redo All &Wiring",
-                  "Redo Wiring of the Se&lection", "Remove Ou&t-of-Date Wiring"],
-        "file": ["&New Board…", "New Board from This &Design…", "&Open…", "Open &Recent", "Open E&xample", "&Save", "Save &As…",
-                 "Re&load from Disk", "&Board Setup…", "Board &Features…", "Rena&me Board…",
-                 "&Import from KiCad…", "Export &Build Guide…",
-                 "Export Sc&hematic…", "&Quit"],
+        "menu bar": ["&File", "&Edit", "&Circuit", "&Board", "&Wiring", "&View", "&Help"],
+        "file": ["New &Project…", "&New Board…", "New Board from This &Design…",
+                 "Same &Layout on a Solderable Breadboard…", "&Open…", "Open P&roject…",
+                 "Open Recen&t", "Open E&xample", "&Save", "Save &As…", "Save Pro&ject",
+                 "Autosave to the &File", "Reload from Dis&k", "&Import from KiCad…",
+                 "&Export", "&Quit"],
+        "export": ["&Build Guide…", "&Schematic…", "1:1 &PDF (parts side + solder side)…",
+                   "3D S&napshot…", "3D &Model (STEP)…"],
         "help": ["Help for What's Under the &Pointer", "What's &This?", "&Glossary…",
                  "Getting Started T&our",
                  "&Keyboard Shortcuts…", "Check for &Updates…",
@@ -380,24 +375,33 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
         "edit": ["&Undo", "&Redo", "Cop&y", "&Paste", "Dupl&icate", "Select &All",
                  "Rotate &Clockwise",
                  "Rotate Counter-clock&wise", "&Mirror", "Toggle &Lock", "&Delete",
-                 "Proper&ties…", "C&hange Part…", "Add La&bel…"],
-        "draw": ["&Solder Trace", "&Reinforced Solder Trace", "&Bare Wire",
-                 "&Insulated Wire", "&Jumper Over the Parts", "&Cut Strip",
-                 "&Stop the Current Tool"],
+                 "Proper&ties…", "C&hange Part…", "Add La&bel…", "&Go to Part…"],
+        # The nets and the sheet, one menu since the menus follow the steps.
+        "circuit": ["Add Pa&rt…", "&Connect Two Pins", "&New Net…", "&Add Pins to Net",
+                    "&Finish Adding Pins", "&Edit Net…", "&Disconnect Selected Pins",
+                    "De&lete Net", "Drawing &Tools", "R&otate", "Fl&ip",
+                    "Remo&ve from the Design", "Arran&ge the Sheet", "Fit the S&heet",
+                    "Float the &Panel"],
+        "board": ["&Board Setup…", "Board &Features…", "Rena&me Board…", "&Place on the Board",
+                  "&Rearrange Parts", "&Try Another Arrangement"],
+        # Drawing a connection by hand and having it drawn, in one menu.
+        "wiring": ["&Solder Trace", "&Reinforced Solder Trace", "&Bare Wire",
+                   "&Insulated Wire", "&Jumper Over the Parts", "C&ut Strip",
+                   "Sto&p the Current Tool", "&Auto-wire Everything", "Auto-wire the S&election",
+                   "Wiring St&yle", "When a Trace Must &Cross", "Lay Wires Along the &Grid",
+                   "Redo All &Wiring", "Redo Wiring of the Se&lection",
+                   "Remove Ou&t-of-Date Wiring"],
         # View is the longest menu and the one the three panel toggles joined; it had a
         # clash in each language before it was listed here.
-        "view": ["&Fit Board", "Zoom &In", "Zoom &Out", "Show &Missing Connections",
-                 "Show Hole &Addresses", "&Hatch Copper on the Far Side",
-                 "Measure &Distance", "&Go to Part…", "Show &3D View",
-                 "Show &Build Guide", "Show &Schematic", "Show &Library", "Show &Nets",
-                 "Show Parts",
-                 "Show &Problems", "&Exploded View", "Reset 3D Ca&mera", "&Language",
-                 "Theme",
-                 "Board &Colour", "Sho&w Pin Names", "Show Labels on &the Board",
-                 "Show Part Val&ues"],
+        "view": ["Show &Board", "Show &Schematic", "Show &3D View", "Show B&uild Guide",
+                 "Show &Library", "Show &Nets", "Show &Problems", "Show P&arts",
+                 "&Reset the Panel Layout", "&Fit Board", "Zoom &In", "Zoom &Out",
+                 "Sho&w on the Board", "Measure &Distance", "&Exploded View",
+                 "Reset 3D Ca&mera", "Lan&guage", "&Theme", "Board &Colour"],
+        "show on the board": ["Show &Missing Connections", "Show Hole &Addresses",
+                              "Sho&w Pin Names", "Show Part Val&ues",
+                              "Show Labels on &the Board", "&Hatch Copper on the Far Side"],
         "theme": ["&Dark", "&Light"],
-        "net": ["&Connect Two Pins", "&New Net…", "&Add Pins to Net", "&Finish Adding Pins",
-                "&Edit Net…", "&Disconnect Selected Pins", "De&lete Net"],
         # Route ▸ Preferred Connection. Five items in one submenu, and the one place in the
         # application where a user picks between whole routing strategies -- so an
         # unreachable item here costs them a strategy, not a shortcut.
@@ -417,11 +421,13 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                          "Take &off the Board", "&Remove from the Design"],
         "sheet net": ["Re&name Net…", "Net &Class", "&Edit Net…", "De&lete Net"],
         "sheet net class": ["&Signal", "&Ground", "&Power"],
-        "sheet": ["&Add Part…", "Arran&ge the Sheet", "&Fit the Sheet"],
+        "sheet": ["&Add Part…", "Arran&ge the Sheet", "Fit the S&heet"],
         "mouse wheel": ["&Zooms", "&Scrolls (Ctrl+Wheel Zooms)"],
     }
+    # English too: it is no catalogue, and its letters went unchecked -- Solder Trace and
+    # Stop the Current Tool were both S, Show Board and Show Build Guide both B.
     for name, keys in groups.items():
-        for code, catalogue in CATALOGUES.items():
+        for code, catalogue in {"en": {}, **CATALOGUES}.items():
             letters = [
                 catalogue.get(key, key).split("&", 1)[1][0].lower()
                 for key in keys

@@ -213,7 +213,7 @@ def test_it_opens_as_a_tab_behind_nets_and_has_a_way_back(window) -> None:  # ty
     # Behind the library, so nothing has been spent filling it.
     assert window._part_list_showing is False and window.part_list.rows() == []
     action = window.act_part_list_panel
-    assert action.text() == "Show Parts"
+    assert action.text() == "Show P&arts"
     assert action.shortcut().toString() == "Ctrl+8"
     # Closed and opened again from the menu, it comes back IN FRONT: back behind Nets it
     # would be a menu item that seemed to do nothing.

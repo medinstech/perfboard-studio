@@ -9368,7 +9368,7 @@ def test_a_right_click_on_bare_sheet_offers_the_sheet() -> None:
 
     labels = _labels(window.sheet_menu(_sheet_at(window, -120.0, -120.0)))
 
-    assert labels == ["&Add Part…", "Arran&ge the Sheet", "&Fit the Sheet"]
+    assert labels == ["&Add Part…", "Arran&ge the Sheet", "Fit the S&heet"]
     _close(window)
 
 
@@ -14393,10 +14393,10 @@ def test_the_sheets_tools_float_on_the_sheet() -> None:
         corner = [button.defaultAction() for button in window.sheet_view_tools.buttons]
         assert window.act_sch_auto in corner and window.act_sch_fit in corner
         assert window.act_sch_zoom_in in corner and window.act_sch_zoom_out in corner
-        on_menu = window.menu_schematic.actions()
-        for action in (window.act_sch_add, window.act_sch_rotate, window.act_sch_place,
-                       window.act_sch_float):
+        on_menu = window.menu_circuit.actions()
+        for action in (window.act_sch_add, window.act_sch_rotate, window.act_sch_float):
             assert action in on_menu, action.text()
+        assert window.act_sch_place in window.menu_board.actions()
     finally:
         _close(window)
 
@@ -14518,3 +14518,76 @@ def test_a_group_button_says_it_holds_more(monkeypatch) -> None:
         assert shown == [button.defaultAction().toolTip() + t(" (hold for more)")]
     finally:
         _close(window)
+
+
+def test_the_menus_follow_the_steps() -> None:
+    """Nine menus -- Draw, Place, Net and Schematic among them -- and four plausible homes
+    for Place on the Board. Seven now, the middle three the step bar's first stages: the
+    sheet and the nets are the circuit's, setting up and placing are the board's, and a
+    trace drawn by hand is wiring as much as one laid by Auto-wire."""
+    from perfboard_studio.ui.i18n import t
+
+    window = _window_on(_load_dense())
+    try:
+        assert [m.title() for m in window._top_menus] == [
+            t(name) for name in ("&File", "&Edit", "&Circuit", "&Board", "&Wiring", "&View",
+                                 "&Help")
+        ]
+        circuit = window.menu_circuit.actions()
+        assert circuit[0] is window.act_sch_add and window.act_connect in circuit
+        assert window.act_board_setup in window.menu_board.actions()
+        wiring = _reachable_from(window, window._top_menus[4])
+        assert window.act_cut in wiring and window.act_autoroute in wiring
+        assert window.act_guide in window.menu_export.actions()
+        # One Show menu: the View menu's submenu is the one the board's corner opens.
+        assert window.act_ratsnest in window.menu_show.actions()
+        assert window.menu_show in window._menus
+    finally:
+        _close(window)
+
+
+def _letters_in_clash(window) -> list[str]:
+    """Every menu under ☰ in which two entries claim the same Alt letter."""
+    from collections import Counter
+
+    import shiboken6
+    from PySide6.QtWidgets import QMenu
+
+    menus = {shiboken6.getCppPointer(m.menuAction())[0]: m for m in window.findChildren(QMenu)}
+    found: list[str] = []
+    stack, opened = [window.header.app_menu], set()
+    while stack:
+        menu = stack.pop()
+        opened.add(menu)
+        letters = []
+        for action in menu.actions():
+            if action.isSeparator() or not action.isVisible():
+                continue
+            text = action.text().replace("&&", "")
+            if "&" in text:
+                letters.append(text.split("&", 1)[1][0].lower())
+            sub = menus.get(shiboken6.getCppPointer(action)[0])
+            if sub is not None and sub not in opened:
+                stack.append(sub)
+        found += [f"{menu.title()}: {x}" for x, n in Counter(letters).items() if n > 1]
+    return found
+
+
+def test_no_two_entries_of_a_menu_share_a_letter_in_either_language() -> None:
+    """The catalogue's test checks the groups it lists, in Turkish; this one opens every
+    menu the window has, in both languages. It found nine menus with a letter claimed
+    twice in English and three in Turkish -- Alt+the letter reaches whichever comes first,
+    and the other never."""
+    from perfboard_studio.ui.i18n import language, set_language
+
+    before = language()
+    try:
+        for code in ("en", "tr"):
+            set_language(code)
+            window = _window_on(_load_dense())
+            try:
+                assert _letters_in_clash(window) == [], code
+            finally:
+                _close(window)
+    finally:
+        set_language(before)

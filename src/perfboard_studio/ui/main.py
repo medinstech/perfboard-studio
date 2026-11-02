@@ -5972,7 +5972,24 @@ class MainWindow(QMainWindow):
     def _build_menu(self) -> None:
         menu = self.menuBar()
 
+        # THE MENUS FOLLOW THE STEPS. Circuit, Board and Wiring are the step bar's first
+        # three stages, and a command is in the menu of the stage it belongs to: there were
+        # nine menus -- Draw, Place, Net and Schematic among them -- and "where is Place on
+        # the Board" had four plausible answers. Drawing a trace by hand is wiring, so the
+        # drawing tools are Wiring's; the sheet's commands and the nets are the circuit's;
+        # the board's setup is the board's, not the file's. Made here, in order, because a
+        # menu bar orders its menus by when they were added and the sections below fill
+        # them out of that order.
         file_menu = menu.addMenu(t("&File"))
+        edit_menu = menu.addMenu(t("&Edit"))
+        circuit_menu = menu.addMenu(t("&Circuit"))
+        board_menu = menu.addMenu(t("&Board"))
+        route_menu = menu.addMenu(t("&Wiring"))
+        view_menu = menu.addMenu(t("&View"))
+        help_menu = menu.addMenu(t("&Help"))
+        for each in (file_menu, edit_menu, circuit_menu, board_menu, route_menu, view_menu,
+                     help_menu):
+            each.setToolTipsVisible(True)
         # A project first, a bare board second, and that order is the recommendation.
         # A board with a home has somewhere to autosave to, somewhere to put its build
         # guide and something to put in the recent list; an untitled one has none of the
@@ -6027,7 +6044,7 @@ class MainWindow(QMainWindow):
         # explanations written for Reload, Board Setup, the exports and the 3D items --
         # and the full path behind each recent file -- never appeared anywhere.
         file_menu.setToolTipsVisible(True)
-        self.menu_recent = file_menu.addMenu(t("Open &Recent"))
+        self.menu_recent = file_menu.addMenu(t("Open Recen&t"))
         self.menu_recent.setToolTipsVisible(True)
         self._refresh_recent_menu()
         # Rebuilt as it opens, so a file moved or deleted while the window was up does not
@@ -6072,7 +6089,7 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_autosave_file.toggled.connect(self.on_autosave_to_file_toggled)
-        act_reload = file_menu.addAction(t("Re&load from Disk"))
+        act_reload = file_menu.addAction(t("Reload from Dis&k"))
         act_reload.setShortcut(QKeySequence("F5"))
         act_reload.setToolTip(
             t(
@@ -6085,7 +6102,7 @@ class MainWindow(QMainWindow):
         # Held on the window because the board's own context menu offers it: right-clicking
         # bare board and being told how to change that board is the obvious thing for a
         # right-click there to do.
-        act_board = self.act_board_setup = file_menu.addAction(t("&Board Setup…"))
+        act_board = self.act_board_setup = board_menu.addAction(t("&Board Setup…"))
         act_board.setToolTip(
             t(
                 "Grid size and substrate. The material is not cosmetic: it decides the iron "
@@ -6093,7 +6110,7 @@ class MainWindow(QMainWindow):
             )
         )
         act_board.triggered.connect(self.on_board_setup)
-        act_features = file_menu.addAction(t("Board &Features…"))
+        act_features = board_menu.addAction(t("Board &Features…"))
         act_features.setToolTip(
             t(
                 "Mounting holes and edge-connector fingers. A mounting bore takes the "
@@ -6102,7 +6119,7 @@ class MainWindow(QMainWindow):
             )
         )
         act_features.triggered.connect(self.on_board_features)
-        act_rename = file_menu.addAction(t("Rena&me Board…"))
+        act_rename = board_menu.addAction(t("Rena&me Board…"))
         act_rename.setToolTip(
             t(
                 "The board's title, printed on the build guide, on the schematic and on "
@@ -6114,8 +6131,11 @@ class MainWindow(QMainWindow):
         self.act_import = act_import
         act_import.setShortcut(QKeySequence("Ctrl+I"))
         act_import.triggered.connect(self.on_import_netlist)
-        file_menu.addSeparator()
-        act_guide = file_menu.addAction(t("Export &Build Guide…"))
+        # One Export submenu, whose name says the verb its entries no longer repeat.
+        export_menu = file_menu.addMenu(t("&Export"))
+        export_menu.setToolTipsVisible(True)
+        self.menu_export = export_menu
+        act_guide = export_menu.addAction(t("&Build Guide…"))
         self.act_guide = act_guide
         act_guide.setShortcut(QKeySequence("Ctrl+B"))
         act_guide.setToolTip(
@@ -6125,7 +6145,7 @@ class MainWindow(QMainWindow):
             )
         )
         act_guide.triggered.connect(self.on_export_guide)
-        act_sheet = file_menu.addAction(t("Export Sc&hematic…"))
+        act_sheet = export_menu.addAction(t("&Schematic…"))
         self.act_export_schematic = act_sheet
         act_sheet.setToolTip(
             t(
@@ -6134,11 +6154,11 @@ class MainWindow(QMainWindow):
             )
         )
         act_sheet.triggered.connect(self.on_export_schematic)
-        act_pdf = file_menu.addAction(t("Export 1:1 PDF (parts side + solder side)…"))
+        act_pdf = export_menu.addAction(t("1:1 &PDF (parts side + solder side)…"))
         act_pdf.triggered.connect(self.on_export_pdf)
-        act_png = file_menu.addAction(t("Export 3D Snapshot PNG…"))
+        act_png = export_menu.addAction(t("3D S&napshot…"))
         act_png.triggered.connect(self.on_export_3d_png)
-        act_step = self.act_export_step = file_menu.addAction(t("Export 3D Model (STEP)…"))
+        act_step = self.act_export_step = export_menu.addAction(t("3D &Model (STEP)…"))
         act_step.setToolTip(
             t(
                 "Write the board as solids for a mechanical CAD program: the board with its holes "
@@ -6156,7 +6176,6 @@ class MainWindow(QMainWindow):
         act_quit.setShortcut(QKeySequence("Ctrl+Q"))
         act_quit.triggered.connect(self.close)
 
-        edit_menu = menu.addMenu(t("&Edit"))
         # Held on the window because their enabled state is now kept in step with the
         # history: an Undo that is greyed out says "there is nothing behind you" without
         # anyone having to press it to find out.
@@ -6284,8 +6303,8 @@ class MainWindow(QMainWindow):
         for action in self.selection_actions:
             action.setEnabled(False)
 
-        draw_menu = menu.addMenu(t("&Draw"))
-        draw_menu.setToolTipsVisible(True)
+        # Drawing a connection by hand is wiring: the tools open the Wiring menu.
+        draw_menu = route_menu
         # The engine has had conductor.add since the first commit with nothing able to
         # reach it, so on a perfboard tool there was no way to run a wire or lay a solder
         # trace by hand -- only to accept the router's output whole or discard it.
@@ -6323,7 +6342,7 @@ class MainWindow(QMainWindow):
         # The stripboard edit. It is in Draw because it is a board mode with the same
         # shape as the others -- arm it, click holes, Esc leaves -- even though it is the
         # only one that takes copper away rather than adding it.
-        self.act_cut = draw_menu.addAction(t("&Cut Strip"))
+        self.act_cut = draw_menu.addAction(t("C&ut Strip"))
         self.act_cut.setCheckable(True)
         self.act_cut.setShortcut(QKeySequence("X"))
         self.CUT_TOOLTIP = t(
@@ -6335,7 +6354,7 @@ class MainWindow(QMainWindow):
         draw_menu.addSeparator()
         # Not "stop drawing" any more, because Escape has to leave whichever mode you are
         # in -- and placing a part is the one it silently did not. See on_stop_tool.
-        act_stop_draw = draw_menu.addAction(t("&Stop the Current Tool"))
+        act_stop_draw = draw_menu.addAction(t("Sto&p the Current Tool"))
         act_stop_draw.setShortcut(QKeySequence("Escape"))
         act_stop_draw.setToolTip(
             t("Leave any board mode: placing a part, drawing a conductor, connecting pins.")
@@ -6354,8 +6373,8 @@ class MainWindow(QMainWindow):
         self.act_select_tool.triggered.connect(lambda _checked=False: self.on_stop_tool())
         self.act_select_tool.triggered.connect(lambda _checked=False: self._sync_select_tool())
 
-        place_menu = menu.addMenu(t("&Place"))
-        place_menu.setToolTipsVisible(True)
+        place_menu = board_menu
+        place_menu.addSeparator()
         self.act_autoplace = place_menu.addAction(t("&Rearrange Parts"))
         self.act_autoplace.setShortcut(QKeySequence("Ctrl+Shift+A"))
         self.act_autoplace.setToolTip(
@@ -6378,8 +6397,7 @@ class MainWindow(QMainWindow):
         # schematic capture package a prerequisite for the ratsnest -- and so for
         # autoroute, LVS and the guide's continuity tests. This menu is the same intent,
         # entered by hand: name the net, then click the pins that are on it.
-        net_menu = menu.addMenu(t("&Net"))
-        net_menu.setToolTipsVisible(True)
+        net_menu = circuit_menu
         # FIRST, and on the toolbar, because it is the whole job in two clicks. Everything
         # below it exists for the cases this cannot cover -- naming a net before it has
         # pins, saying what it carries, taking a pin off one.
@@ -6453,10 +6471,11 @@ class MainWindow(QMainWindow):
         # sheet's panel and nowhere else -- so none of them was behind ☰ or in Ctrl+K once
         # the row went onto the sheet. The same actions: a key, a menu entry and a button
         # cannot disagree about any of them.
-        schematic_menu = menu.addMenu(t("&Schematic"))
-        schematic_menu.setToolTipsVisible(True)
-        schematic_menu.addAction(self.act_sch_add)
-        sheet_tools = schematic_menu.addMenu(t("&Drawing Tools"))
+        schematic_menu = circuit_menu
+        # A part first, as a circuit starts; then connecting it.
+        schematic_menu.insertAction(self.act_connect, self.act_sch_add)
+        schematic_menu.addSeparator()
+        sheet_tools = schematic_menu.addMenu(t("Drawing &Tools"))
         sheet_tools.setToolTipsVisible(True)
         for name in ("select", "wire", "label", "text", "rectangle"):
             sheet_tools.addAction(self.act_sheet_tool[name])
@@ -6467,18 +6486,18 @@ class MainWindow(QMainWindow):
         schematic_menu.addSeparator()
         schematic_menu.addAction(self.act_sch_auto)
         schematic_menu.addAction(self.act_sch_fit)
-        schematic_menu.addSeparator()
-        schematic_menu.addAction(self.act_sch_place)
         schematic_menu.addAction(self.act_sch_float)
-        self.menu_schematic = schematic_menu
+        # Putting the sheet's parts on the board is the board's first step.
+        board_menu.insertAction(self.act_autoplace, self.act_sch_place)
+        self.menu_circuit = circuit_menu
+        self.menu_board = board_menu
         self.menu_sheet_tools = sheet_tools
 
-        route_menu = menu.addMenu(t("&Wiring"))
-        route_menu.setToolTipsVisible(True)
+        route_menu.addSeparator()
         self.act_autoroute = route_menu.addAction(t("&Auto-wire Everything"))
         self.act_autoroute.setShortcut(QKeySequence("Ctrl+R"))
         self.act_autoroute.triggered.connect(self.on_autoroute_all)
-        self.act_route_selected = route_menu.addAction(t("Auto-wire the &Selection"))
+        self.act_route_selected = route_menu.addAction(t("Auto-wire the S&election"))
         self.act_route_selected.setShortcut(QKeySequence("Ctrl+Shift+R"))
         self.act_route_selected.triggered.connect(self.on_route_selection)
         # HOW the board gets built is the builder's call, not the tool's. The default cost
@@ -6486,7 +6505,7 @@ class MainWindow(QMainWindow):
         # everywhere -- 4 traces against 10 wires on the NE555 fixture -- because R5'
         # proximity risk at 12 a hole prices a trace out exactly where traces are wanted.
         # See router.RoutingStyle for the measurements.
-        style_menu = route_menu.addMenu(t("Wiring &Style"))
+        style_menu = route_menu.addMenu(t("Wiring St&yle"))
         style_menu.setToolTipsVisible(True)
         self.style_menu = style_menu
         self.act_style: dict[str, QAction] = {}
@@ -6581,130 +6600,6 @@ class MainWindow(QMainWindow):
         self.act_clear_strays = route_menu.addAction(t("Remove Ou&t-of-Date Wiring"))
         self.act_clear_strays.triggered.connect(self.on_clear_strays)
 
-        view_menu = menu.addMenu(t("&View"))
-        view_menu.setToolTipsVisible(True)
-        act_flip = view_menu.addAction(t("Flip Board (parts side / solder side)"))
-        self.act_flip = act_flip
-        act_flip.setShortcut(QKeySequence("Ctrl+F"))
-        act_flip.triggered.connect(self.on_flip_board)
-        view_menu.addSeparator()
-        act_fit: QAction = view_menu.addAction(t("&Fit Board"))
-        self.act_fit = act_fit
-        act_fit.setShortcut(QKeySequence("Ctrl+0"))
-        act_fit.triggered.connect(self.on_fit)
-        self.act_zoom_in = view_menu.addAction(t("Zoom &In"))
-        self.act_zoom_in.setShortcut(QKeySequence.StandardKey.ZoomIn)
-        self.act_zoom_in.triggered.connect(lambda: self.on_zoom(1.25))
-        self.act_zoom_out = view_menu.addAction(t("Zoom &Out"))
-        self.act_zoom_out.setShortcut(QKeySequence.StandardKey.ZoomOut)
-        self.act_zoom_out.triggered.connect(lambda: self.on_zoom(1 / 1.25))
-        # THE WAY OUT FOR WHOEVER THE WHEEL RULE GETS WRONG. A trackpad is recognised only by
-        # what only a trackpad sends (``canvasinput``), and on Windows it sends nothing of
-        # the kind -- so there two fingers zoom like a wheel unless this says otherwise.
-        wheel_menu = view_menu.addMenu(t("Mouse Wheel"))
-        wheel_menu.setToolTipsVisible(True)
-        self.menu_wheel = wheel_menu
-        self.act_wheel: dict[bool, QAction] = {}
-        for scrolls, label, tip in (
-            (False, t("&Zooms"), t("The wheel zooms about the pointer; a trackpad that says it is one pans.")),
-            (
-                True,
-                t("&Scrolls (Ctrl+Wheel Zooms)"),
-                t("The wheel and two fingers on a trackpad move the board; Ctrl+wheel or a pinch zooms."),
-            ),
-        ):
-            action = wheel_menu.addAction(label)
-            action.setCheckable(True)
-            action.setChecked(not scrolls)
-            action.setToolTip(tip)
-            action.triggered.connect(lambda _checked=False, s=scrolls: self.on_wheel_scrolls(s))
-            self.act_wheel[scrolls] = action
-        view_menu.addSeparator()
-
-        self.act_ratsnest = view_menu.addAction(t("Show &Missing Connections"))
-        self.act_ratsnest.setCheckable(True)
-        self.act_ratsnest.setChecked(True)
-        self.act_ratsnest.setShortcut(QKeySequence("Ctrl+E"))
-        self.act_ratsnest.toggled.connect(self.scene.set_show_ratsnest)
-        self.act_rulers = view_menu.addAction(t("Show Hole &Addresses"))
-        self.act_rulers.setCheckable(True)
-        self.act_rulers.setChecked(True)
-        self.act_rulers.toggled.connect(self.scene.set_show_rulers)
-        # ON by default: which way of a terminal is 24V and which pin of a devkit is GPIO4
-        # is the thing the board is wired by. Off while placing or routing a crowded board,
-        # where the names are clutter.
-        self.act_pin_names = view_menu.addAction(t("Sho&w Pin Names"))
-        self.act_pin_names.setCheckable(True)
-        self.act_pin_names.setChecked(True)
-        self.act_pin_names.setToolTip(
-            t(
-                "Print each part's pin names beside its pins, on the board and in 3D. Turn "
-                "it off while placing or wiring a crowded board."
-            )
-        )
-        self.act_pin_names.toggled.connect(self._on_toggle_pin_names)
-        # OFF by default: the reference is the name a part is found by, and on a crowded
-        # board the values are clutter. On to check the board against the build at a glance,
-        # and on the 1:1 print, which is read at the bench (#11).
-        self.act_values = view_menu.addAction(t("Show Part Val&ues"))
-        self.act_values.setCheckable(True)
-        self.act_values.setToolTip(
-            t(
-                "Print each part's value after its reference — 4k7, 100n, 1N4148 — on the "
-                "board and on the 1:1 print, to check the board against the build at a glance."
-            )
-        )
-        self.act_values.toggled.connect(self.scene.set_show_values)
-        self.act_board_labels = view_menu.addAction(t("Show Labels on &the Board"))
-        self.act_board_labels.setCheckable(True)
-        self.act_board_labels.setChecked(True)
-        self.act_board_labels.setToolTip(
-            t("Show the labels written on the board, on the board and in 3D.")
-        )
-        self.act_board_labels.toggled.connect(self._on_toggle_board_labels)
-        # ON by default, because the board is opaque: copper on the far face drawn solid
-        # reads as copper in front of you, and that is how a board gets soldered on the
-        # wrong side. A toggle rather than a fixed rule because someone tracing a dense
-        # solder side may simply want to see it plainly.
-        self.act_hatch = view_menu.addAction(t("&Hatch Copper on the Far Side"))
-        self.act_hatch.setCheckable(True)
-        self.act_hatch.setChecked(True)
-        self.act_hatch.setToolTip(
-            t(
-                "Draw conductors on the face you are NOT looking at as hatched, the way a part "
-                "on the far side already is. Turn it off to see them solid."
-            )
-        )
-        self.act_hatch.toggled.connect(self.scene.set_hatch_far_side)
-
-        # Perfboard work is full of distances that have to be right before anything is
-        # soldered -- how far apart to bend a resistor's legs, whether a TO-220 clears
-        # the capacitor beside it -- and every one of them was countable off the ruler
-        # and none of them readable. The tool changes nothing on the board, which is why
-        # it is in View rather than Draw.
-        self.act_measure = view_menu.addAction(t("Measure &Distance"))
-        self.act_measure.setCheckable(True)
-        self.act_measure.setShortcut(QKeySequence("Ctrl+M"))
-        self.act_measure.setToolTip(
-            t(
-                "Click two holes. Says how many holes across they are, how far apart in mm, "
-                "and how many steps of solder trace it would take to join them — three "
-                "different numbers that answer three different questions."
-            )
-        )
-        self.act_measure.toggled.connect(self.on_measure_mode)
-
-        act_go_to = view_menu.addAction(t("&Go to Part…"))
-        act_go_to.setShortcut(QKeySequence("Ctrl+G"))
-        act_go_to.setToolTip(
-            t(
-                "Find a part by reference, value or package and centre the view on it. On "
-                "a dense board there is otherwise no way to answer “where is R37”."
-            )
-        )
-        act_go_to.triggered.connect(self.on_go_to_part)
-        view_menu.addSeparator()
-
         # THE FOUR VIEWS OF THE DESIGN FIRST, AND THEY ARE NUMBERED IN THAT ORDER.
         # Board, schematic, 3D, guide -- the things this application is FOR -- then the
         # three panels that describe them. The board and the sheet used to be the two with
@@ -6752,7 +6647,7 @@ class MainWindow(QMainWindow):
             lambda: self._raise_view(self.dock_3d),
         )
         self.act_show_guide = view_action(
-            t("Show &Build Guide"),
+            t("Show B&uild Guide"),
             "Ctrl+4",
             t(
                 "The soldering order, in the window: shortest part first, jumpers before "
@@ -6785,9 +6680,7 @@ class MainWindow(QMainWindow):
         self.act_drc_panel.setShortcut(QKeySequence("Ctrl+7"))
         view_menu.addAction(self.act_drc_panel)
         self.act_part_list_panel = self.dock_part_list.toggleViewAction()
-        # No accelerator letter in English: every letter of "Show Part List" is already
-        # taken in this menu. Ctrl+8 is the way to it from the keyboard.
-        self.act_part_list_panel.setText(t("Show Parts"))
+        self.act_part_list_panel.setText(t("Show P&arts"))
         self.act_part_list_panel.setShortcut(QKeySequence("Ctrl+8"))
         view_menu.addAction(self.act_part_list_panel)
         view_menu.addSeparator()
@@ -6804,6 +6697,134 @@ class MainWindow(QMainWindow):
         )
         act_reset_layout.triggered.connect(self.on_reset_layout)
         view_menu.addSeparator()
+        act_flip = view_menu.addAction(t("Flip Board (parts side / solder side)"))
+        self.act_flip = act_flip
+        act_flip.setShortcut(QKeySequence("Ctrl+F"))
+        act_flip.triggered.connect(self.on_flip_board)
+        view_menu.addSeparator()
+        act_fit: QAction = view_menu.addAction(t("&Fit Board"))
+        self.act_fit = act_fit
+        act_fit.setShortcut(QKeySequence("Ctrl+0"))
+        act_fit.triggered.connect(self.on_fit)
+        self.act_zoom_in = view_menu.addAction(t("Zoom &In"))
+        self.act_zoom_in.setShortcut(QKeySequence.StandardKey.ZoomIn)
+        self.act_zoom_in.triggered.connect(lambda: self.on_zoom(1.25))
+        self.act_zoom_out = view_menu.addAction(t("Zoom &Out"))
+        self.act_zoom_out.setShortcut(QKeySequence.StandardKey.ZoomOut)
+        self.act_zoom_out.triggered.connect(lambda: self.on_zoom(1 / 1.25))
+        # THE WAY OUT FOR WHOEVER THE WHEEL RULE GETS WRONG. A trackpad is recognised only by
+        # what only a trackpad sends (``canvasinput``), and on Windows it sends nothing of
+        # the kind -- so there two fingers zoom like a wheel unless this says otherwise.
+        wheel_menu = view_menu.addMenu(t("Mouse Wheel"))
+        wheel_menu.setToolTipsVisible(True)
+        self.menu_wheel = wheel_menu
+        self.act_wheel: dict[bool, QAction] = {}
+        for scrolls, label, tip in (
+            (False, t("&Zooms"), t("The wheel zooms about the pointer; a trackpad that says it is one pans.")),
+            (
+                True,
+                t("&Scrolls (Ctrl+Wheel Zooms)"),
+                t("The wheel and two fingers on a trackpad move the board; Ctrl+wheel or a pinch zooms."),
+            ),
+        ):
+            action = wheel_menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(not scrolls)
+            action.setToolTip(tip)
+            action.triggered.connect(lambda _checked=False, s=scrolls: self.on_wheel_scrolls(s))
+            self.act_wheel[scrolls] = action
+        view_menu.addSeparator()
+
+        # What the board shows, in one submenu -- the same menu the board's corner opens
+        # as Show (``_build_canvas_tools``), so the two cannot list different things.
+        shown_menu = view_menu.addMenu(t("Sho&w on the Board"))
+        shown_menu.setToolTipsVisible(True)
+        self.menu_show = shown_menu
+        self.act_ratsnest = shown_menu.addAction(t("Show &Missing Connections"))
+        self.act_ratsnest.setCheckable(True)
+        self.act_ratsnest.setChecked(True)
+        self.act_ratsnest.setShortcut(QKeySequence("Ctrl+E"))
+        self.act_ratsnest.toggled.connect(self.scene.set_show_ratsnest)
+        self.act_rulers = shown_menu.addAction(t("Show Hole &Addresses"))
+        self.act_rulers.setCheckable(True)
+        self.act_rulers.setChecked(True)
+        self.act_rulers.toggled.connect(self.scene.set_show_rulers)
+        # ON by default: which way of a terminal is 24V and which pin of a devkit is GPIO4
+        # is the thing the board is wired by. Off while placing or routing a crowded board,
+        # where the names are clutter.
+        self.act_pin_names = shown_menu.addAction(t("Sho&w Pin Names"))
+        self.act_pin_names.setCheckable(True)
+        self.act_pin_names.setChecked(True)
+        self.act_pin_names.setToolTip(
+            t(
+                "Print each part's pin names beside its pins, on the board and in 3D. Turn "
+                "it off while placing or wiring a crowded board."
+            )
+        )
+        self.act_pin_names.toggled.connect(self._on_toggle_pin_names)
+        # OFF by default: the reference is the name a part is found by, and on a crowded
+        # board the values are clutter. On to check the board against the build at a glance,
+        # and on the 1:1 print, which is read at the bench (#11).
+        self.act_values = shown_menu.addAction(t("Show Part Val&ues"))
+        self.act_values.setCheckable(True)
+        self.act_values.setToolTip(
+            t(
+                "Print each part's value after its reference — 4k7, 100n, 1N4148 — on the "
+                "board and on the 1:1 print, to check the board against the build at a glance."
+            )
+        )
+        self.act_values.toggled.connect(self.scene.set_show_values)
+        self.act_board_labels = shown_menu.addAction(t("Show Labels on &the Board"))
+        self.act_board_labels.setCheckable(True)
+        self.act_board_labels.setChecked(True)
+        self.act_board_labels.setToolTip(
+            t("Show the labels written on the board, on the board and in 3D.")
+        )
+        self.act_board_labels.toggled.connect(self._on_toggle_board_labels)
+        # ON by default, because the board is opaque: copper on the far face drawn solid
+        # reads as copper in front of you, and that is how a board gets soldered on the
+        # wrong side. A toggle rather than a fixed rule because someone tracing a dense
+        # solder side may simply want to see it plainly.
+        self.act_hatch = shown_menu.addAction(t("&Hatch Copper on the Far Side"))
+        self.act_hatch.setCheckable(True)
+        self.act_hatch.setChecked(True)
+        self.act_hatch.setToolTip(
+            t(
+                "Draw conductors on the face you are NOT looking at as hatched, the way a part "
+                "on the far side already is. Turn it off to see them solid."
+            )
+        )
+        self.act_hatch.toggled.connect(self.scene.set_hatch_far_side)
+
+        # Perfboard work is full of distances that have to be right before anything is
+        # soldered -- how far apart to bend a resistor's legs, whether a TO-220 clears
+        # the capacitor beside it -- and every one of them was countable off the ruler
+        # and none of them readable. The tool changes nothing on the board, which is why
+        # it is in View rather than Draw.
+        self.act_measure = view_menu.addAction(t("Measure &Distance"))
+        self.act_measure.setCheckable(True)
+        self.act_measure.setShortcut(QKeySequence("Ctrl+M"))
+        self.act_measure.setToolTip(
+            t(
+                "Click two holes. Says how many holes across they are, how far apart in mm, "
+                "and how many steps of solder trace it would take to join them — three "
+                "different numbers that answer three different questions."
+            )
+        )
+        self.act_measure.toggled.connect(self.on_measure_mode)
+
+        edit_menu.addSeparator()
+        act_go_to = edit_menu.addAction(t("&Go to Part…"))
+        act_go_to.setShortcut(QKeySequence("Ctrl+G"))
+        act_go_to.setToolTip(
+            t(
+                "Find a part by reference, value or package and centre the view on it. On "
+                "a dense board there is otherwise no way to answer “where is R37”."
+            )
+        )
+        act_go_to.triggered.connect(self.on_go_to_part)
+        view_menu.addSeparator()
+
         self.act_exploded = view_menu.addAction(t("&Exploded View"))
         self.act_exploded.setCheckable(True)
         self.act_exploded.setToolTip(
@@ -6818,7 +6839,7 @@ class MainWindow(QMainWindow):
         # The interface could be told to speak Turkish only by an environment variable or
         # a command-line flag -- which is to say, not by anybody running the application
         # the way applications are run. The catalogue has existed the whole time.
-        language_menu = view_menu.addMenu(t("&Language"))
+        language_menu = view_menu.addMenu(t("Lan&guage"))
         self.act_language: dict[str, QAction] = {}
         # Each language by its OWN name, not translated: somebody who cannot read the
         # language the window is in has to recognise the one they can.
@@ -6829,7 +6850,7 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked, c=code: self.on_language(c))
             self.act_language[code] = action
         # Beside the language and for its reason: applied at the next start.
-        theme_menu = view_menu.addMenu(t("Theme"))
+        theme_menu = view_menu.addMenu(t("&Theme"))
         self.act_theme: dict[str, QAction] = {}
         for name, label in (("dark", t("&Dark")), ("light", t("&Light"))):
             action = theme_menu.addAction(label)
@@ -6863,8 +6884,6 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _c, k=scheme.key: self.on_board_colour(k))
             self.act_colour[scheme.key] = action
 
-        help_menu = menu.addMenu(t("&Help"))
-        help_menu.setToolTipsVisible(True)
         # EVERY menu is kept referenced here, and it is not tidiness. QMenuBar.addMenu
         # returns a QMenu that PySide hands to Python to own; with only a local holding it,
         # the garbage collector is free to destroy the C++ menu the moment this method
@@ -6872,14 +6891,13 @@ class MainWindow(QMainWindow):
         # survived this long because nothing ever walked the menu bar afterwards -- the
         # shortcut card does, and found a destroyed QMenu on the first attempt.
         self._menus = [
-            file_menu, self.menu_recent, edit_menu, draw_menu, place_menu, net_menu,
-            schematic_menu, sheet_tools, route_menu, style_menu, view_menu, language_menu,
+            file_menu, self.menu_recent, export_menu, edit_menu, circuit_menu, sheet_tools,
+            board_menu, route_menu, style_menu, view_menu, shown_menu, language_menu,
             colour_menu, help_menu, wheel_menu,
         ]
         #: The menu bar's own menus, in its order: what ☰ holds (``_build_header``).
         self._top_menus = (
-            file_menu, edit_menu, draw_menu, place_menu, net_menu, schematic_menu,
-            route_menu, view_menu, help_menu,
+            file_menu, edit_menu, circuit_menu, board_menu, route_menu, view_menu, help_menu,
         )
         # F1 is help for what is under the pointer, as everywhere else; the shortcut card,
         # which F1 used to open, is Ctrl+/ (ui/helpcards.py).
@@ -7007,16 +7025,8 @@ class MainWindow(QMainWindow):
         tools.add_action(self.act_measure)
         self.board_tools = tools
 
-        shown = QMenu(self)
-        shown.setToolTipsVisible(True)
-        for toggle in (
-            self.act_ratsnest, self.act_rulers, self.act_pin_names, self.act_values,
-            self.act_board_labels, self.act_hatch,
-        ):
-            shown.addAction(toggle)
-        # Kept by the window, and NOT among ``_menus``: those are walked for shortcuts and
-        # accelerators, and every action here is the View menu's own.
-        self.menu_show = shown
+        # View ▸ Show on the Board itself: one menu, two ways in.
+        shown = self.menu_show
         view = FloatingBar(self.view, Qt.Corner.BottomRightCorner, vertical=False, name="boardView")
         view.add_menu(icons.icon("show"), shown, t("What the board shows: the connections still "
                                                   "missing, hole addresses, pin names, values."),
@@ -7721,7 +7731,7 @@ class MainWindow(QMainWindow):
         """The sheet and its one line of summary.
 
         NO TOOL ROW. The sheet's tools float on the sheet, as the board's float on the board
-        (``_build_canvas_tools``), and its commands are the Schematic menu's: a row of
+        (``_build_canvas_tools``), and its commands are the Circuit menu's: a row of
         fifteen buttons across the panel was a second toolbar in a window that had just
         lost its first, and it set the panel's minimum width. Its actions are still made
         here, because the page is built before the menus that list them.
@@ -7777,9 +7787,9 @@ class MainWindow(QMainWindow):
 
     def _build_sheet_actions(self) -> None:
         """Every command the sheet has, as actions: its tools for the tools floating on
-        the sheet, the rest for the Schematic menu and the bar over the selection."""
+        the sheet, the rest for the Circuit menu and the bar over the selection."""
 
-        self.act_sch_add = QAction(icons.icon("sch-add"), t("&Add Part…"), self)
+        self.act_sch_add = QAction(icons.icon("sch-add"), t("Add Pa&rt…"), self)
         self.act_sch_add.setToolTip(
             t("Put a part in the design without deciding where it goes on the board yet.")
         )
@@ -7874,13 +7884,13 @@ class MainWindow(QMainWindow):
         )
         self.act_sch_rotate.triggered.connect(lambda: self.on_schematic_rotate(1))
 
-        self.act_sch_mirror = QAction(icons.icon("mirror"), t("F&lip"), self)
+        self.act_sch_mirror = QAction(icons.icon("mirror"), t("Fl&ip"), self)
         self.act_sch_mirror.setToolTip(
             t("Flip the selected symbols about their own centre, so their pins swap sides.")
         )
         self.act_sch_mirror.triggered.connect(self.on_schematic_mirror)
 
-        self.act_sch_delete = QAction(icons.icon("delete"), t("&Remove from the Design"), self)
+        self.act_sch_delete = QAction(icons.icon("delete"), t("Remo&ve from the Design"), self)
         self.act_sch_delete.setToolTip(
             t(
                 "Take the selected part out of the design, along with its connections. A "
@@ -7899,7 +7909,7 @@ class MainWindow(QMainWindow):
         )
         self.act_sch_auto.triggered.connect(self.on_schematic_auto_layout)
 
-        self.act_sch_fit = QAction(icons.icon("fit"), t("&Fit the Sheet"), self)
+        self.act_sch_fit = QAction(icons.icon("fit"), t("Fit the S&heet"), self)
         self.act_sch_fit.setToolTip(
             t(
                 "Put the whole schematic back in the view. The sheet is not re-fitted "
@@ -7919,7 +7929,7 @@ class MainWindow(QMainWindow):
         )
         self.act_sch_place.triggered.connect(self.on_schematic_place_all)
 
-        self.act_sch_float = QAction(icons.icon("float"), t("Float the Pa&nel"), self)
+        self.act_sch_float = QAction(icons.icon("float"), t("Float the &Panel"), self)
         self.act_sch_float.setToolTip(
             t(
                 "Put the sheet in a window of its own, so it and the board can sit side by "
@@ -7953,7 +7963,7 @@ class MainWindow(QMainWindow):
             return
         floating = self.dock_schematic.isFloating()
         self.act_sch_float.setText(
-            t("Back to the &Window") if floating else t("Float the Pa&nel")
+            t("Back to the &Window") if floating else t("Float the &Panel")
         )
 
     def show_schematic(self) -> None:
@@ -9873,7 +9883,7 @@ class MainWindow(QMainWindow):
             )
         )
         arrange.triggered.connect(self.on_schematic_auto_layout)
-        fit = menu.addAction(t("&Fit the Sheet"))
+        fit = menu.addAction(t("Fit the S&heet"))
         fit.triggered.connect(view.fit)
         return menu
 
@@ -10332,7 +10342,7 @@ class MainWindow(QMainWindow):
             self.act_cut.setToolTip(
                 self.CUT_TOOLTIP
                 if strips
-                else t("Only stripboard has tracks to cut. File ▸ Board Setup ▸ Type.")
+                else t("Only stripboard has tracks to cut. Board ▸ Board Setup ▸ Type.")
             )
 
         # How the perfboard router chooses and lays its copper means nothing to the planner of

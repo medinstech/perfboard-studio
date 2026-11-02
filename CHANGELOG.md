@@ -116,6 +116,12 @@ closed without a bump.
   playback, with pictures of their own. The guide's row of push buttons is a cluster in its
   corner -- Next Step to Do, Clear Progress, and Export, which is File's Export Build Guide.
   A tool button holding several tools says so on hover: "(hold for more)".
+- **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
+  menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
+  setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's
+  exports are one Export submenu. View opens with the views, keeps what the board shows in
+  one Show on the Board submenu (the board corner's Show menu), and Go to Part moved to
+  Edit. No two entries of a menu share an Alt letter any more, in English or Turkish.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

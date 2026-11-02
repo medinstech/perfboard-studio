@@ -38,11 +38,18 @@ TURKISH: Mapping[str, str] = {
     # -- menus ---------------------------------------------------------------
     "&File": "&Dosya",
     "&Edit": "Dü&zen",
-    "&Draw": "&Çiz",
-    "&Place": "&Yerleştir",
     "&Wiring": "&Kablolama",
     "&View": "&Görünüm",
     "&Help": "Y&ardım",
+    "&Circuit": "D&evre",
+    "&Board": "Ka&rt",
+    "&Export": "Dışa Ak&tar",
+    "Sho&w on the Board": "Kartta &Göster",
+    "&Build Guide…": "Montaj &Rehberi…",
+    "&Schematic…": "Ş&ema…",
+    "1:1 &PDF (parts side + solder side)…": "1:1 &PDF (parça + lehim yüzü)…",
+    "3D S&napshot…": "3D &Görüntü…",
+    "3D &Model (STEP)…": "3D &Model (STEP)…",
     # -- file ----------------------------------------------------------------
     "&New Board…": "&Yeni Kart…",
     "New Board from This &Design…": "Bu Tasarımdan Yeni Kart &Oluştur…",
@@ -60,28 +67,23 @@ TURKISH: Mapping[str, str] = {
     "&Open…": "&Aç…",
     "&Save": "&Kaydet",
     "Save &As…": "&Farklı Kaydet…",
-    "Re&load from Disk": "Diskten Ye&niden Yükle",
+    "Reload from Dis&k": "Diskten Ye&niden Yükle",
     "Reload from disk?": "Diskten yeniden yüklensin mi?",
     # Ayar&ları, not &Ayarları: "&Aç…" already claims A in this menu, and two items with
     # the same accelerator means one of them cannot be reached from the keyboard at all.
     "&Board Setup…": "Kart Ayar&ları…",
     "Board &Features…": "Kart &Öğeleri…",
-    "Open &Recent": "&Son Kullanılanlar",
+    "Open Recen&t": "&Son Kullanılanlar",
     "(nothing yet)": "(henüz yok)",
     "&Clear List": "Listeyi &Temizle",
     "&Import from KiCad…": "KiCad'den &İçe Aktar…",
-    "Export &Build Guide…": "&Montaj Rehberini Dışa Aktar…",
     # Ş rather than S: "&Son Kullanılanlar" has S in this menu, and Turkish treats the two
     # as different letters -- which is exactly what makes it a free accelerator here.
-    "Export Sc&hematic…": "&Şemayı Dışa Aktar…",
     "Write the circuit as a sheet: SVG to embed or edit, PDF to print, PNG to "
     "paste into a message asking somebody what is wrong with it.": (
         "Devreyi bir sayfa olarak yazın: gömmek ya da düzenlemek için SVG, basmak için "
         "PDF, birine neyin yanlış olduğunu sormak üzere mesaja yapıştırmak için PNG."
     ),
-    "Export 1:1 PDF (parts side + solder side)…": "1:1 PDF Dışa Aktar (parça + lehim yüzü)…",
-    "Export 3D Snapshot PNG…": "3D Görüntü PNG Dışa Aktar…",
-    "Export 3D Model (STEP)…": "3D Modeli Dışa Aktar (STEP)…",
     "Write the board as solids for a mechanical CAD program: the board with its holes "
     "and every part as the room it takes, named by its reference — to draw the "
     "enclosure round.": (
@@ -136,12 +138,11 @@ TURKISH: Mapping[str, str] = {
         "Parça yüzünde, alttaki her şeyin üstünden atlayan izoleli tel. Parçaların "
         "kullanacağı yeri kaplar."
     ),
-    "&Cut Strip": "Şeridi &Kes",
-    "&Stop the Current Tool": "Aracı &Bırak",
+    "C&ut Strip": "Şeridi &Kes",
+    "Sto&p the Current Tool": "Aracı &Bırak",
     # -- nets ----------------------------------------------------------------
     # "&Net" becomes the plural "Netler": a menu named with the same word in both
     # languages would be an untranslated entry, which the catalogue tests refuse.
-    "&Net": "&Netler",
     "&Connect Two Pins": "&İki Pini Bağla",
     "&New Net…": "&Yeni Net…",
     "&Add Pins to Net": "Nete &Pin Ekle",
@@ -166,11 +167,11 @@ TURKISH: Mapping[str, str] = {
     "&Rearrange Parts": "Parçaları Yeniden &Diz",
     "&Try Another Arrangement": "&Başka Bir Yerleşim Dene",
     "&Auto-wire Everything": "Hepsini &Otomatik Kablola",
-    "Auto-wire the &Selection": "&Seçileni Otomatik Kablola",
+    "Auto-wire the S&election": "&Seçileni Otomatik Kablola",
     "Redo All &Wiring": "Bütün Kablolamayı &Yeniden Yap",
     "Redo Wiring of the Se&lection": "Seçilenin Kablolamasını Yeniden Y&ap",
     "Remove Ou&t-of-Date Wiring": "Eski&miş Kablolamayı Kaldır",
-    "Wiring &Style": "Kablolama &Tarzı",
+    "Wiring St&yle": "Kablolama Ta&rzı",
     "&Try each and keep the best": "&Hepsini dene, en iyisini tut",
     "&Solder trace where possible": "Mümkün olan her yerde &lehim yolu",
     "&Balanced": "&Dengeli",
@@ -211,7 +212,7 @@ TURKISH: Mapping[str, str] = {
     "Wiring style": "Kablolama tarzı",
     "applies the next time you auto-wire": "bir sonraki otomatik kablolamada geçerli olur",
     "Lay Wires Along the &Grid": "Telleri &Izgara Boyunca Döşe",
-    "When a Trace Must &Cross": "Lehim Yolu &Kesişirse",
+    "When a Trace Must &Cross": "Lehim Yolu Kesi&şirse",
     "When a trace must cross": "Lehim yolu kesişirse",
     "&Hop over it with a short jumper": "Kısa bir &atlama teliyle üstünden geç",
     "Make the whole connection one &wire": "Bağlantının tamamını tek bir &tel yap",
@@ -259,19 +260,19 @@ TURKISH: Mapping[str, str] = {
     "Show Hole &Addresses": "Delik &Adreslerini Göster",
     "&Hatch Copper on the Far Side": "Karşı Yüzdeki Bakırı &Taralı Göster",
     "Measure &Distance": "&Mesafe Ölç",
-    "&Go to Part…": "Parçaya &Git…",
+    "&Go to Part…": "Parçaya G&it…",
     "Go to Part": "Parçaya Git",
     "Filter parts…  (R37, 10k, TO-220, C7)": "Parçaları süz…  (R37, 10k, TO-220, C7)",
     "Show &3D View": "&3D Görünümü Göster",
     # Ca&mera, not &Camera: "Board &Colour" has C in the same menu.
-    "Reset 3D Ca&mera": "3D &Kamerayı Sıfırla",
+    "Reset 3D Ca&mera": "3D K&amerayı Sıfırla",
     # Par&çaları / Parça &Listesini / &Netleri / L&VS: ç, L, N and V are the free letters
     # in the Turkish View menu, where S, Y, U, B, D, T, M, G, K, R and Ş are all spoken
     # for and P went to "&Patlatılmış Görünüm". The library takes ç, the Part List L; the
     # English Part List has no letter at all, every one of its own being taken.
     "Show &Library": "Kütüp&haneyi Göster",
     "Show &Nets": "&Netleri Göster",
-    "Show Parts": "Par&çaları Göster",
+    "Show P&arts": "Par&çaları Göster",
     "Show Part Val&ues": "Parça De&ğerlerini Göster",
     "Print each part's value after its reference — 4k7, 100n, 1N4148 — on the board and on "
     "the 1:1 print, to check the board against the build at a glance.": (
@@ -279,7 +280,7 @@ TURKISH: Mapping[str, str] = {
         "baskıda; kartı bir bakışta montajla karşılaştırmak için."
     ),
     "Show &Problems": "Sorunlar&ı Göster",
-    "Board &Colour": "Kart &Rengi",
+    "Board &Colour": "Kart R&engi",
     "Follow the &material": "&Malzemeye göre",
     "Green (FR-4)": "Yeşil (FR-4)",
     "Blue": "Mavi",
@@ -1052,6 +1053,7 @@ TURKISH: Mapping[str, str] = {
         "Bağlantıları bozulmadan tasarıma geri döner."
     ),
     "&Remove from the Design": "Tasarımdan Çı&kar",
+    "Remo&ve from the Design": "Tasarımdan Çı&kar",
     "Out of the design, along with its connections.": (
         "Bağlantılarıyla birlikte tasarımın dışına."
     ),
@@ -1080,8 +1082,9 @@ TURKISH: Mapping[str, str] = {
         "{ref} bir netin adıyla anılıyor ama tasarımda değil."
     ),
     "&Add Part…": "Parça &Ekle…",
-    "Arran&ge the Sheet": "Sayfayı &Düzenle",
-    "&Fit the Sheet": "Sayfayı &Sığdır",
+    "Add Pa&rt…": "Parça &Ekle…",
+    "Arran&ge the Sheet": "Say&fayı Düzenle",
+    "Fit the S&heet": "Sayfayı &Sığdır",
     # -- board setup: the product first, the consequences behind Advanced ------
     "Advanced": "Gelişmiş",
     "Everything a stocked board already decides: its grid, what it is made of, "
@@ -1236,7 +1239,7 @@ TURKISH: Mapping[str, str] = {
     # -- the build guide, in the window ----------------------------------------
     "Build Guide": "Montaj Rehberi",
     # M&ontaj, not &Montaj: "&Mesafe Ölç" is in the same menu.
-    "Show &Build Guide": "M&ontaj Rehberini Göster",
+    "Show B&uild Guide": "M&ontaj Rehberini Göster",
     "The soldering order, in the window: shortest part first, jumpers before "
     "whatever stands on them, ICs last. Picking a step shows it on the board.": (
         "Lehimleme sırası, pencerenin içinde: önce en alçak parça, üzerinde bir şey duran "
@@ -1368,10 +1371,10 @@ TURKISH: Mapping[str, str] = {
     "Disc thickness (mm)": "Disk kalınlığı (mm)",
     "LED diameter (mm)": "LED çapı (mm)",
     # -- the language of the interface itself ----------------------------------
-    "&Language": "&Dil",
+    "Lan&guage": "&Dil",
     "Language changed": "Dil değişti",
     # -- the theme: dark or light, also from the next start ----------------------
-    "Theme": "Tema",
+    "&Theme": "&Tema",
     "&Dark": "&Koyu",
     "&Light": "&Açık",
     "Theme changed": "Tema değişti",
@@ -1522,8 +1525,8 @@ TURKISH: Mapping[str, str] = {
     "Column letters and row numbers along the edges of the view.": (
         "Görünümün kenarları boyunca sütun harfleri ve satır numaraları."
     ),
-    "Only stripboard has tracks to cut. File ▸ Board Setup ▸ Type.": (
-        "Yalnızca şeritli kartta kesilecek şerit vardır. Dosya ▸ Kart Ayarları ▸ Tip."
+    "Only stripboard has tracks to cut. Board ▸ Board Setup ▸ Type.": (
+        "Yalnızca şeritli kartta kesilecek şerit vardır. Kart ▸ Kart Ayarları ▸ Tip."
     ),
     # -- the status bar's fixed sentences --------------------------------------
     "Nothing to place: the board is empty.": "Yerleştirilecek bir şey yok: kart boş.",
@@ -2617,12 +2620,11 @@ TURKISH: Mapping[str, str] = {
         "Menüler: Dosya, Düzen, Görünüm ve diğerleri. Alt tuşu da açar."
     ),
     "Not saved": "Kaydedilmedi",
-    "&Schematic": "&Şema",
-    "&Drawing Tools": "Çizim &Araçları",
+    "Drawing &Tools": "Çi&zim Araçları",
     "R&otate": "Dö&ndür",
-    "F&lip": "&Çevir",
+    "Fl&ip": "&Çevir",
     "&Place on the Board": "Karta &Yerleştir",
-    "Float the Pa&nel": "&Paneli Ayır",
+    "Float the &Panel": "Paneli Ayı&r",
     "Back to the &Window": "Pencereye &Geri Al",
     "Zoom In": "Yakınlaştır",
     "Zoom Out": "Uzaklaştır",
