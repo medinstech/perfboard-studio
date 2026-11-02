@@ -9,7 +9,7 @@ import random
 
 import pytest
 
-from perfboard_studio.breadboard import breadboard, has_hole, parse_hole_name, rail_of
+from perfboard_studio.breadboard import breadboard, clip_of, has_hole, parse_hole_name, rail_of
 from perfboard_studio.breadroute import plan_breadboard, plan_joined_board, plan_joined_reroute
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import (
@@ -33,12 +33,14 @@ from perfboard_studio.model import (
 )
 from perfboard_studio.persist import deserialize_document
 from perfboard_studio.placer import (
+    PlacementOptions,
     PlacementWeights,
     _build_nets,
     _build_parts,
     _build_strips,
     _initial_state,
     _make_scorer,
+    arrange_design,
     place_design,
 )
 from perfboard_studio.striproute import describe_plan
@@ -280,14 +282,17 @@ def test_the_placer_counts_exactly_what_the_planner_refuses() -> None:
         assert _conflicts(doc) == refused, f"trial {trial}"
 
 
-@pytest.mark.parametrize("example", ["ne555-astable", "nano-relay"])
-def test_an_example_is_placed_and_wired_on_a_breadboard(example: str) -> None:
-    """The whole of it on two real circuits, one with a module wider than a DIP: Place on
-    the Board, then the planner, and the board that comes out is the circuit."""
+#: Every example in the repository, each of which has to go onto a breadboard.
+EXAMPLES = sorted(path.stem for path in (REPO / "examples").glob("*.perf"))
+
+
+def _on_a_breadboard(example: str) -> PerfDocument:
+    """An example taken back to its DESIGN, on a full breadboard: what Place on the Board
+    is asked when somebody builds the circuit on one."""
     loaded = deserialize_document((REPO / "examples" / f"{example}.perf").read_text(encoding="utf-8"))
     assert loaded.ok
     doc = loaded.document
-    design = dataclasses.replace(
+    return dataclasses.replace(
         doc,
         board=FULL,
         components=(),
@@ -301,6 +306,13 @@ def test_an_example_is_placed_and_wired_on_a_breadboard(example: str) -> None:
             for c in doc.components
         ),
     )
+
+
+@pytest.mark.parametrize("example", ["ne555-astable", "nano-relay"])
+def test_an_example_is_placed_and_wired_on_a_breadboard(example: str) -> None:
+    """The whole of it on two real circuits, one with a module wider than a DIP: Place on
+    the Board, then the planner, and the board that comes out is the circuit."""
+    design = _on_a_breadboard(example)
     placed = place_design(design, get_footprint)
     assert placed.unplaced == ()
     plan = plan_breadboard(placed.document, get_footprint)
@@ -312,3 +324,52 @@ def test_an_example_is_placed_and_wired_on_a_breadboard(example: str) -> None:
     # through the bridge already there, and that read as two rails reached.
     again = plan_breadboard(plan.document, get_footprint)
     assert again.conductors == () and again.problems == ()
+
+
+@pytest.mark.parametrize("example", EXAMPLES)
+def test_the_arrangement_lays_out_a_breadboard_as_one_is_built(example: str) -> None:
+    """The arrangement used to place NOTHING on a breadboard: the rails, the strips beside
+    them and the groove cut every lane, and the groove was a wall no chip could straddle.
+    Every part was crowded in and left to the annealer, which found the few places a relay
+    fits on some seeds and not others. It now places every part of every example itself,
+    every pin in a hole and off the rails, and no clip holds two nets: a chip straddles the
+    groove, a two-leg part lies across columns or shares a clip with a pin of its own net."""
+    design = _on_a_breadboard(example)
+    arranged = arrange_design(design, get_footprint)
+    assert arranged.unplaced == ()
+    assert len(arranged.placements) == len(design.parts)
+
+    by_id = {part.id: part for part in design.parts}
+    net_of = {
+        (node.component_ref, node.pin): net.id for net in design.nets for node in net.nodes
+    }
+    clips: dict[tuple[int, int], set[str]] = {}
+    for placed in arranged.placements:
+        part = by_id[placed.id]
+        footprint = get_footprint(part.footprint_id)
+        assert footprint is not None
+        component = ComponentInstance(
+            id=part.id, ref=part.ref, value="", footprint_id=part.footprint_id,
+            anchor=placed.anchor, rotation=placed.rotation,
+        )
+        for pin, hole in all_pin_holes(component, footprint):
+            assert has_hole(FULL, hole), f"{example}: {part.ref} pin {pin.number} has no hole"
+            assert rail_of(FULL, hole.row) is None, f"{example}: {part.ref} pin {pin.number} on a rail"
+            clip = clip_of(FULL, hole)
+            assert clip is not None
+            clips.setdefault(clip, set()).add(
+                net_of.get((part.ref, pin.number), f"(no net: {part.ref} {pin.number})")
+            )
+    shorted = {clip: nets for clip, nets in clips.items() if len(nets) > 1}
+    assert not shorted, f"{example}: clips holding two nets: {shorted}"
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3])
+@pytest.mark.parametrize("example", EXAMPLES)
+def test_every_example_places_fully_on_a_breadboard(example: str, seed: int) -> None:
+    """Place on the Board at four seeds, then the planner: every part on, nothing the
+    planner cannot wire. On the old arrangement nano-relay left its relay off at one seed and
+    atmega328-relay its connector at three, once a TO-220 stood where it really stands."""
+    placed = place_design(_on_a_breadboard(example), get_footprint, PlacementOptions(seed=seed))
+    assert placed.unplaced == ()
+    assert plan_breadboard(placed.document, get_footprint).problems == ()

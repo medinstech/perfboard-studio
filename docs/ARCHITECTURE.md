@@ -2011,6 +2011,20 @@ LVS, the router, the guide and its exports, the MCP server and the window all sa
 `format_hole(c, board)`, and `parse_hole` reads ONLY those names on a breadboard, in either
 case: a grid address accepted beside them would make `A1` two different holes.
 
+**`placer.arrange` lays a breadboard out as one is built** (`_arrange_on_breadboard`), not
+in the lanes it packs everywhere else. The lanes placed NOTHING on one: the rails, the
+strips beside them and the groove cut every lane, and the reserved positions made the
+groove a wall no chip could straddle, so every part was crowded in and annealed, and
+whether a relay found one of its few legal places depended on the seed. Every pin goes
+in a hole off the rails, two pins share a clip only when they are on one net -- so a chip
+straddles the groove and a two-leg part lies across columns or puts a leg in its net's
+clip -- and a body may stand over the groove. The parts with the fewest legal places go
+first (a relay, a module, a wide chip), each where it is nearest what it is wired to, a
+shared clip counting as a connection made (`BREADBOARD_SHARED_CLIP_HOLES`), with no gap
+between cells (`BREADBOARD_GAP`): the clips keep parts apart electrically. Every example
+places every part this way, and `test_every_example_places_fully_on_a_breadboard` holds
+Place on the Board and the planner to it at seeds 0-3.
+
 **`breadroute.py` wires one, and it is stripboard's planner with the scissors taken away.**
 Its plan is a `striproute.StripboardPlan` with no cuts, committed by the same
 `stripboard.apply` (which refuses a cut on a breadboard), so the window, the MCP server and

@@ -251,6 +251,13 @@ closed without a bump.
 
 ### Fixed
 
+- **A breadboard is laid out the way one is built.** Place on the Board placed nothing
+  itself on a breadboard -- the rails and the groove broke every row it packs -- and left
+  every part to the search, which found the few places a relay fits at some seeds and not
+  others: nano-relay could come back without its relay. Now every chip straddles the
+  groove, a resistor lies across columns or shares a clip with the pin it is wired to, no
+  clip ever holds two nets, and the relay and the modules go down first. Every example
+  goes onto an 830 breadboard whole and wires clean, at every seed tried.
 - **The 5-hole axial resistor was a different resistor in 3D.** `r-axial-5` is a 0207
   body, and the 3D view drew KiCad's 9 mm DIN0309 for it -- 2.7 mm longer than the body DRC
   measured, so two parts DRC passed stood into each other on screen. It now takes KiCad's

@@ -93,7 +93,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from .autoroute import AutoroutePlan, plan_autoroute
-from .breadboard import clip_of, has_breadboard_pattern, rail_of, rail_takes
+from .breadboard import clip_of, has_breadboard_pattern, has_hole, rail_of, rail_takes
 from .breadroute import plan_joined_board
 from .command import CommandContext
 from .commands import (
@@ -2594,11 +2594,16 @@ class _Floor:
     """
 
     def __init__(
-        self, cols: int, rows: int, reserved: frozenset[tuple[int, int]] = frozenset()
+        self,
+        cols: int,
+        rows: int,
+        reserved: frozenset[tuple[int, int]] = frozenset(),
+        gap: int = ARRANGEMENT_GAP,
     ) -> None:
         self.cols = cols
         self.rows = rows
         self.taken: set[tuple[int, int]] = set(reserved)
+        self.gap = gap
 
     def fits(self, shape: _Shape, col: int, row: int) -> bool:
         """Whether the part's cells are on the board and free, with a hole to spare.
@@ -2609,8 +2614,8 @@ class _Floor:
         """
         if col < 0 or row < 0 or col + shape.cols > self.cols or row + shape.rows > self.rows:
             return False
-        for c in range(col - ARRANGEMENT_GAP, col + shape.cols + ARRANGEMENT_GAP):
-            for r in range(row - ARRANGEMENT_GAP, row + shape.rows + ARRANGEMENT_GAP):
+        for c in range(col - self.gap, col + shape.cols + self.gap):
+            for r in range(row - self.gap, row + shape.rows + self.gap):
                 if (c, r) in self.taken:
                     return False
         return True
@@ -2658,7 +2663,12 @@ def arrange(
             ),
         )
 
-    order = _connectivity_order(sorted(items), _adjacency(nets, frozenset(items)))
+    bonds = _adjacency(nets, frozenset(items))
+    order = _connectivity_order(sorted(items), bonds)
+    if has_breadboard_pattern(board):
+        return _arrange_on_breadboard(
+            board, entries, items, order, bonds, nets, lookup, reserved, unplaced
+        )
     floor = _Floor(board.cols, board.rows, reserved)
     placements: list[ArrangedPart] = []
 
@@ -2712,6 +2722,204 @@ def arrange(
         cells_used=len(floor.taken) - len(reserved),
         cells_total=board.cols * board.rows,
     )
+
+
+#: What a pin sharing a clip with a pin of its own net is worth against distance, in
+#: holes of Manhattan distance to the parts it is wired to. A shared clip is a connection
+#: made by putting the part in, with no jumper -- how a breadboard is built -- so it is
+#: worth more than standing a column or two closer.
+BREADBOARD_SHARED_CLIP_HOLES = 12
+
+#: Holes kept clear between two parts' cells on a breadboard: none. The lanes keep one
+#: because they pack coarse boxes on a board where every hole is a pad; on a breadboard the
+#: clips already keep parts apart electrically, and cells that only meet are courtyards
+#: that only touch. With one, atmega328-relay's arrangement ran out of room for seven of
+#: its twenty-four parts on an 830 board; with none it places all of them.
+BREADBOARD_GAP = 0
+
+#: The most pins one clip is given by the arrangement. A clip is five holes, and a net that
+#: goes on from it needs one of them free for its jumper.
+BREADBOARD_PINS_PER_CLIP = 4
+
+
+@dataclass(frozen=True, slots=True)
+class _Spot:
+    """One place a part's pins can go on an empty breadboard."""
+
+    rotation: int
+    col: int  # the anchor's
+    row: int
+    #: Each pin's clip and its net (None for a pin no net reaches), in pin order.
+    clips: tuple[tuple[tuple[int, int], str | None], ...]
+    centre: tuple[float, float]
+
+
+def _arrange_on_breadboard(
+    board: Board,
+    entries: Sequence[ArrangeRequest],
+    items: dict[str, _Item],
+    order: Sequence[str],
+    bonds: dict[str, dict[str, int]],
+    nets: Sequence[Net],
+    lookup: FootprintLookup,
+    reserved: frozenset[tuple[int, int]],
+    unplaced: list[str],
+) -> Arrangement:
+    """A breadboard laid out the way one is built, not packed in lanes.
+
+    The lanes never worked here: the rails, the strips beside them with no hole and the
+    groove cut every lane, the reserved holes made the groove a wall no chip could straddle,
+    and on an 830 board the arrangement placed none of nano-relay's fourteen parts. Every
+    part was crowded in and left to the annealer, which found the few places a relay fits
+    on some seeds and not on others. Here every pin goes in a hole that is not on a rail;
+    two pins share a clip only when they are on one net, so a chip straddles the groove and
+    a two-leg part lies across columns or puts a leg in the clip of the pin it is wired to,
+    the way somebody pushing parts into a breadboard would; and a body may stand over the
+    groove, which has no hole but is not in the way of one.
+
+    The parts with the FEWEST places they fit go first -- a relay, a module, a wide chip --
+    because the rest fit almost anywhere and would otherwise take the few places those
+    have. Each goes where it is nearest the parts it is wired to, counting a pin in a clip
+    of its own net as a connection already made (``BREADBOARD_SHARED_CLIP_HOLES``); a part
+    wired to nothing placed yet takes the first place from the top left. Deterministic:
+    every tie goes to the earlier place in one fixed scan.
+    """
+    holeless = _holeless_cells(board)
+    floor = _Floor(board.cols, board.rows, frozenset(reserved - holeless), BREADBOARD_GAP)
+    net_of: dict[tuple[str, str], str] = {}
+    for declared in nets:
+        for node in declared.nodes:
+            net_of[(node.component_ref, node.pin)] = declared.id
+    # A clip something already on the board has a lead in is that thing's: the cells say
+    # where it stands, not which net its leads are on, so it is not shared.
+    owner: dict[tuple[int, int], str | None] = {}
+    count: dict[tuple[int, int], int] = {}
+    for col, row in reserved - holeless:
+        clip = clip_of(board, HoleCoord(col, row))
+        if clip is not None:
+            owner[clip] = "#taken"
+            count[clip] = BREADBOARD_PINS_PER_CLIP
+
+    requests = {request.ref: request for request in entries}
+    spots: dict[str, list[_Spot]] = {}
+    for ref in order:
+        request = requests[ref]
+        footprint = lookup(request.footprint_id)
+        assert footprint is not None  # an unknown footprint is in ``unplaced`` already
+        spots[ref] = _breadboard_spots(board, items[ref], footprint, request, net_of)
+    sequence = sorted(order, key=lambda ref: (len(spots[ref]), order.index(ref)))
+
+    placements: list[ArrangedPart] = []
+    centres: dict[str, tuple[float, float]] = {}
+    for ref in sequence:
+        item = items[ref]
+        best: tuple[float, int] | None = None
+        chosen: _Spot | None = None
+        neighbours = [(other, weight) for other, weight in bonds[ref].items() if other in centres]
+        for index, spot in enumerate(spots[ref]):
+            shape = item.shapes[spot.rotation]
+            box_col, box_row = spot.col + shape.lo_col, spot.row + shape.lo_row
+            if not floor.fits(shape, box_col, box_row):
+                continue
+            shared = 0
+            legal = True
+            for clip, net in spot.clips:
+                held = owner.get(clip)
+                if held is None:
+                    continue
+                if net is None or held != net or count.get(clip, 0) >= BREADBOARD_PINS_PER_CLIP:
+                    legal = False
+                    break
+                shared += 1
+            if not legal:
+                continue
+            distance = sum(
+                weight * (abs(spot.centre[0] - centres[other][0]) + abs(spot.centre[1] - centres[other][1]))
+                for other, weight in neighbours
+            )
+            score = (distance - BREADBOARD_SHARED_CLIP_HOLES * shared, index)
+            if best is None or score < best:
+                best, chosen = score, spot
+            if not neighbours and chosen is not None:
+                break  # wired to nothing placed yet: the first place will do
+        if chosen is None:
+            unplaced.append(ref)
+            continue
+        shape = item.shapes[chosen.rotation]
+        floor.occupy(shape, chosen.col + shape.lo_col, chosen.row + shape.lo_row)
+        for clip, net in chosen.clips:
+            owner[clip] = net if net is not None else f"#no-net:{ref}"
+            count[clip] = count.get(clip, 0) + 1
+        centres[ref] = chosen.centre
+        placements.append(
+            ArrangedPart(
+                id=item.component_id,
+                ref=ref,
+                anchor=HoleCoord(col=chosen.col, row=chosen.row),
+                rotation=VALID_ROTATIONS[chosen.rotation],
+            )
+        )
+
+    return Arrangement(
+        placements=tuple(sorted(placements, key=lambda p: p.ref)),
+        unplaced=tuple(sorted(unplaced)),
+        cells_used=len(floor.taken) - len(reserved - holeless),
+        cells_total=board.cols * board.rows,
+    )
+
+
+def _holeless_cells(board: Board) -> frozenset[tuple[int, int]]:
+    """The positions a breadboard has no hole at, in this module's (col, row) key."""
+    return frozenset(
+        (col, row)
+        for col in range(board.cols)
+        for row in range(board.rows)
+        if not has_hole(board, HoleCoord(col, row))
+    )
+
+
+def _breadboard_spots(
+    board: Board,
+    item: _Item,
+    footprint: Footprint,
+    request: ArrangeRequest,
+    net_of: dict[tuple[str, str], str],
+) -> list[_Spot]:
+    """Every anchor and rotation that puts each pin in a hole off the rails, with no two
+    pins of different nets -- or of no net -- in one clip, on an empty board. In one fixed
+    order: column by column from the left, then down, then by rotation."""
+    pins = [(pin, net_of.get((request.ref, pin.number))) for pin in footprint.pins]
+    found: list[_Spot] = []
+    for col in range(board.cols):
+        for row in range(board.rows):
+            for rotation, angle in enumerate(VALID_ROTATIONS):
+                shape = item.shapes[rotation]
+                if (
+                    col + shape.lo_col < 0
+                    or row + shape.lo_row < 0
+                    or col + shape.hi_col >= board.cols
+                    or row + shape.hi_row >= board.rows
+                ):
+                    continue
+                clips: list[tuple[tuple[int, int], str | None]] = []
+                seen: dict[tuple[int, int], str | None] = {}
+                xs = ys = 0.0
+                for pin, net in pins:
+                    d_col, d_row = transform_offset(pin.d_col, pin.d_row, angle, request.mirrored)
+                    hole = HoleCoord(col + int(d_col), row + int(d_row))
+                    clip = clip_of(board, hole)
+                    if clip is None or rail_of(board, hole.row) is not None:
+                        break
+                    if clip in seen and (net is None or seen[clip] != net):
+                        break
+                    seen[clip] = net
+                    clips.append((clip, net))
+                    xs += hole.col
+                    ys += hole.row
+                else:
+                    count = max(1, len(pins))
+                    found.append(_Spot(rotation, col, row, tuple(clips), (xs / count, ys / count)))
+    return found
 
 
 def _arranged(item: _Item, rotation: int, col: int, row: int) -> ArrangedPart:
