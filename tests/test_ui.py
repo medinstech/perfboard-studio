@@ -14251,3 +14251,17 @@ def test_the_inspector_is_put_in_and_handed_the_selection_and_the_document() -> 
         assert inspector.documents[-1] is window.bus.document
     finally:
         _close(window)
+
+
+def test_a_library_group_cut_short_says_its_name_in_full() -> None:
+    """At the sidebar's width the longer groups are cut -- "Regulators an…", in Turkish
+    "Regülatörler v…" -- so each says its name in full on hover, as its parts already did."""
+    window = _window_on(_load_dense())
+    try:
+        tree = window.library_tree
+        groups = [tree.topLevelItem(i) for i in range(tree.topLevelItemCount())]
+        assert groups
+        for group in groups:
+            assert group.toolTip(0) == group.text(0), group.text(0)
+    finally:
+        _close(window)

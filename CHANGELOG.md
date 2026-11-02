@@ -96,6 +96,8 @@ closed without a bump.
   when nothing is, so there is never an empty panel and nothing to close it for. This is
   the panel's frame; what it lets you edit arrives next, in place of the Part Properties
   dialog.
+- **A library group cut short says its name in full on hover**, as its parts already did:
+  at the sidebar's width "Regülatörler ve referanslar" read "Regülatörler v…".
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

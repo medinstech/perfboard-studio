@@ -916,6 +916,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     if custom:
         ordered = sorted(custom.values(), key=lambda f: _natural_key(f.name))
         group = QTreeWidgetItem([t("this board"), ""])
+        group.setToolTip(0, t("this board"))
         group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
         group.setIcon(0, icons.part_icon(ordered[0]))
         tree.addTopLevelItem(group)
@@ -954,6 +955,9 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
             continue
         group = QTreeWidgetItem([headings[category], ""])
         group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        # In full on hover: at the sidebar's width "Regülatörler ve referanslar" is
+        # "Regülatörler v…", and a group whose name is cut is a group nobody opens.
+        group.setToolTip(0, headings[category])
         first = get_footprint(parts[0].footprint_id)
         if first is not None:
             group.setIcon(0, icons.part_icon(first))
@@ -978,6 +982,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     for archetype in sorted(by_archetype, key=order.index):
         group = QTreeWidgetItem([families[archetype], ""])
         group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        group.setToolTip(0, families[archetype])
         # The group takes the picture of its first member, which is the archetype's
         # picture: every part under it is that shape in that colour.
         group.setIcon(0, icons.part_icon(by_archetype[archetype][0]))
