@@ -2639,6 +2639,10 @@ TURKISH: Mapping[str, str] = {
         "Menüler: Dosya, Düzen, Görünüm ve diğerleri. Alt tuşu da açar."
     ),
     "Not saved": "Kaydedilmedi",
+    "More": "Diğer",
+    "Everything a right-click on the selection offers.": (
+        "Seçimde sağ tıklamanın sunduğu her şey."
+    ),
     "Connect": "Bağla",
     "Rearrange": "Yeniden Diz",
     "3D": "3D",

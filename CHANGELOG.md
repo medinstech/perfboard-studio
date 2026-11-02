@@ -87,6 +87,10 @@ closed without a bump.
   yet. Every door is a command the window already had, taken once Home has gone; Escape
   leaves it, a recovered board leaves it, and the window comes back exactly as it was. A
   window closed while Home shows keeps the panel layout it covered.
+- **What a selected part can do floats over it.** Select parts on the board and a small
+  bar stands above them: Rotate, Mirror, Lock, Auto-wire the Selection and Delete, and
+  the dots for everything a right-click offers. It follows the parts as the view scrolls
+  and zooms, and goes while a drawing tool is armed.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

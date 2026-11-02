@@ -14098,3 +14098,70 @@ def test_the_header_says_the_boards_name_and_that_it_is_not_saved() -> None:
         assert not header.unsaved.isVisibleTo(header)
     finally:
         _close(window)
+
+
+def test_a_bar_stands_over_the_selected_parts(monkeypatch) -> None:
+    """Rotate, mirror and delete were buttons on a row a metre from the part, and lock and
+    "route these nets" two menus deep. Over the selection they are where the eye already
+    is: the bar comes with a selection, stands above it (below, at the top edge), follows
+    the view as it moves, and goes while a tool is armed -- a bar of part actions over a
+    board being drawn on is in the way."""
+    from PySide6.QtWidgets import QApplication
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        window.show_board()
+        _settle_events(QApplication)
+        bar = window.selection_bar
+        assert bar.parent() is window.view
+        assert not bar.isVisible()
+        actions = [button.defaultAction() for button in bar.buttons]
+        assert actions[:3] == [window.act_rotate_cw, window.act_mirror, window.act_lock]
+        assert window.act_route_selected in actions and window.act_delete in actions
+        assert actions[-1] is window.act_selection_more
+
+        part = window.bus.document.components[0]
+        window.scene.select_components([part.id])
+        _settle_events(QApplication)
+        assert bar.isVisible()
+        over = window._selection_rect()
+        assert over is not None
+        assert bar.geometry().bottom() < over.top() or bar.geometry().top() > over.bottom()
+
+        before = bar.pos()
+        window.on_zoom(1.25)
+        _settle_events(QApplication)
+        moved = window._selection_rect()
+        assert moved is not None and moved != over
+        assert bar.pos() != before, "the bar follows the part as the view changes"
+
+        window.act_draw["bare-wire"].trigger()
+        _settle_events(QApplication)
+        assert not bar.isVisible()
+        window.on_stop_tool()
+        window.scene.select_components([])
+        _settle_events(QApplication)
+        assert not bar.isVisible()
+    finally:
+        _close(window)
+
+
+def test_the_dots_on_the_selection_bar_offer_what_a_right_click_does(monkeypatch) -> None:
+    """The rest of what a part can be told to do is behind the dots: the same menu a
+    right-click on it builds, from the same actions."""
+    from PySide6.QtWidgets import QApplication, QMenu
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        window.show_board()
+        part = window.bus.document.components[0]
+        window.scene.select_components([part.id])
+        _settle_events(QApplication)
+        shown: list[QMenu] = []
+        monkeypatch.setattr(QMenu, "popup", lambda menu, *_args: shown.append(menu))
+        window.act_selection_more.trigger()
+        assert shown, "the dots open a menu"
+        offered = shown[0].actions()
+        assert window.act_properties in offered and window.act_change_part in offered
+    finally:
+        _close(window)

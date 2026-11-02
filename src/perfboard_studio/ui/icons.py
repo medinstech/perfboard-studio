@@ -482,6 +482,23 @@ def _cut_strip(p: QPainter) -> None:
     p.drawLine(QPointF(38, 30), QPointF(62, 70))
 
 
+def _lock(p: QPainter) -> None:
+    """A padlock: Toggle Lock."""
+    p.drawRoundedRect(QRectF(22, 46, 56, 40), 6, 6)
+    p.drawArc(QRectF(32, 16, 36, 56), 0, 180 * 16)
+    p.drawLine(QPointF(32, 44), QPointF(32, 46))
+    p.drawLine(QPointF(68, 44), QPointF(68, 46))
+
+
+def _more(p: QPainter) -> None:
+    """Three dots: the rest of what a right-click offers."""
+    p.save()
+    p.setBrush(p.pen().color())
+    for x in (24, 50, 76):
+        p.drawEllipse(QPointF(x, 50), 5, 5)
+    p.restore()
+
+
 def _menu(p: QPainter) -> None:
     """Three lines: the menus, all of them, behind one button in the header."""
     for y in (28, 50, 72):
@@ -524,6 +541,8 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "menu": _menu,
     "measure": _measure,
     "cut-strip": _cut_strip,
+    "lock": _lock,
+    "more": _more,
     "show": _show,
     "zoom-in": _zoom_in,
     "zoom-out": _zoom_out,

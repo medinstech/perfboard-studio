@@ -48,6 +48,7 @@ from PySide6.QtCore import (
     QObject,
     QPoint,
     QPointF,
+    QRect,
     QSettings,
     QSize,
     QStandardPaths,
@@ -6879,6 +6880,59 @@ class MainWindow(QMainWindow):
         view.add_action(self.act_fit)
         self.board_view_tools = view
 
+        # WHAT THE SELECTION CAN DO, OVER THE SELECTION. Rotate, mirror and delete were
+        # three buttons on a row across the window, a metre from the part, and lock and
+        # "route these nets" were two menus deep. Over the part they are where the eye
+        # already is; the rest of what a right-click offers is behind the dots.
+        self.act_lock.setIcon(icons.icon("lock"))
+        self.act_route_selected.setIcon(icons.icon("autoroute"))
+        self.act_selection_more = QAction(icons.icon("more"), t("More"), self)
+        self.act_selection_more.setToolTip(t("Everything a right-click on the selection offers."))
+        self.act_selection_more.triggered.connect(self._on_selection_more)
+        bar = FloatingBar(self.view, None, vertical=False, name="selectionBar")
+        bar.add_action(self.act_rotate_cw)
+        bar.add_action(self.act_mirror)
+        bar.add_action(self.act_lock)
+        bar.add_separator()
+        bar.add_action(self.act_route_selected)
+        bar.add_separator()
+        bar.add_action(self.act_delete)
+        bar.add_action(self.act_selection_more)
+        bar.hide()
+        self.selection_bar = bar
+        # It stands over the parts, so it moves whenever the view does.
+        bar.track(self._selection_bar_rect, self.view.viewport())
+
+    def _selection_rect(self) -> QRect | None:
+        """Where the selected parts are, in the board view's own coordinates."""
+        items = [
+            item for item in self.scene.component_items.values() if item.isSelected()
+        ]
+        if not items:
+            return None
+        area = items[0].sceneBoundingRect()
+        for item in items[1:]:
+            area = area.united(item.sceneBoundingRect())
+        return self.view.mapFromScene(area).boundingRect()
+
+    def _selection_bar_rect(self) -> QRect | None:
+        """Where the bar over the selection stands: over the selected parts while there are
+        some and no tool is armed; nowhere otherwise -- a bar of part actions over a board
+        being drawn on is in the way."""
+        return None if self.scene.in_a_mode else self._selection_rect()
+
+    def _place_selection_bar(self, *_args: object) -> None:
+        bar = getattr(self, "selection_bar", None)
+        if bar is not None:
+            bar.follow(self._selection_bar_rect())
+
+    def _on_selection_more(self) -> None:
+        rect = self._selection_rect()
+        if rect is None:
+            return
+        menu = self.board_menu(rect.center())
+        menu.popup(self.selection_bar.mapToGlobal(QPoint(0, self.selection_bar.height())))
+
     def _build_library_dock(self) -> None:
         """The footprint registry, with a filter box, arming placement on selection.
 
@@ -7106,6 +7160,7 @@ class MainWindow(QMainWindow):
         text = self._mode_text()
         self.view.show_mode(text)
         self._sync_select_tool()
+        self._place_selection_bar()
         # The cursor says it too. Only placing changed it, so drawing, connecting, cutting
         # and measuring all left the ordinary arrow over a board where a click no longer
         # selected anything.
@@ -10564,10 +10619,13 @@ class MainWindow(QMainWindow):
     def _refresh_selection_state(self) -> None:
         """Describe the selection, and enable the actions that need one.
 
+        And stand the bar over it (``_place_selection_bar``).
+
         Everything the selection says about a part was previously only in a tooltip: its
         address, orientation and whether it is locked. Those are exactly the values someone
         placing a part is trying to get right, so they belong on screen.
         """
+        self._place_selection_bar()
         components = self._selected_components()
         self._sync_schematic_highlight()
         if self._part_list_showing:

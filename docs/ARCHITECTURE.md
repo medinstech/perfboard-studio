@@ -1413,6 +1413,14 @@ a tab, floated, closed. The row they replaced was fifteen buttons wider than a l
 that shed its words to fit and came and went with the board panel (`_sync_toolbars_to_view`,
 `_fit_toolbar`, both gone).
 
+**What the selection can do stands over the selection** (`selection_bar`): Rotate, Mirror,
+Lock, Auto-wire the Selection, Delete, and the dots for `board_menu`, the right-click menu
+built from the same actions. It is a `FloatingBar` with no corner that `track`s a source --
+where the selected parts are, in the view's coordinates, or nothing while a tool is armed --
+and asks it again on every repaint of the view's viewport. A repaint is the one notice every
+way of changing the view sends (a scroll, the wheel, a pinch, Fit, a command moving the
+part), so the bar follows without a hook in each of them.
+
 **Tools that are one idea share a button** (`FloatingBar.add_group`): solder trace and
 reinforced trace; bare wire, insulated wire and a jumper over the parts. The button shows
 and arms the one picked last -- by the menu, its key or the button -- and offers the rest

@@ -25,9 +25,9 @@ keeps its own key (T, Shift+T, W, Shift+W, J).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QSize, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QSize, Qt
 from PySide6.QtGui import QAction, QColor, QContextMenuEvent, QIcon, QPainter, QPixmap, QPolygonF
 from PySide6.QtWidgets import (
     QBoxLayout,
@@ -112,7 +112,7 @@ class FloatingBar(QFrame):
     def __init__(
         self,
         host: QWidget,
-        corner: Qt.Corner,
+        corner: Qt.Corner | None,
         *,
         vertical: bool,
         name: str,
@@ -121,7 +121,13 @@ class FloatingBar(QFrame):
         self.setObjectName(name)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._host = host
+        #: The corner it keeps to, or None for a bar that follows a rectangle (``follow``).
         self._corner = corner
+        self._over: QRect | None = None
+        #: For a bar that follows something: where that something is now, asked again
+        #: whenever ``_watched`` repaints (``track``).
+        self._source: Callable[[], QRect | None] | None = None
+        self._watched: QWidget | None = None
         layout: QBoxLayout = QVBoxLayout(self) if vertical else QHBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(2)
@@ -208,10 +214,43 @@ class FloatingBar(QFrame):
         self._layout.addWidget(line, 0, Qt.AlignmentFlag.AlignCenter)
         self.adjustSize()
 
+    def track(self, source: Callable[[], QRect | None], watched: QWidget) -> None:
+        """Follow whatever ``source`` says, asked again every time ``watched`` repaints.
+
+        A repaint is the one notice every way of changing the view sends -- a scroll, the
+        wheel, a pinch, Fit, a part moved by a command -- so following it keeps the bar over
+        the selection without a hook in each of them."""
+        self._source = source
+        self._watched = watched
+        watched.installEventFilter(self)
+
+    def follow(self, rect: QRect | None) -> None:
+        """Stand over ``rect`` (in the canvas's coordinates), or go away for None."""
+        self._over = rect
+        if rect is None:
+            self.hide()
+            return
+        self.place()
+        self.show()
+
     def place(self) -> None:
-        """Into its corner of the canvas, above whatever the canvas draws."""
+        """Into its corner of the canvas, above whatever the canvas draws -- or, for a bar
+        that follows something, centred over it, and under it when there is no room above."""
         self.adjustSize()
         width, height = self._host.width(), self._host.height()
+        if self._corner is None:
+            if self._over is None:
+                return
+            gap = 8
+            x = self._over.center().x() - self.width() // 2
+            y = self._over.top() - self.height() - gap
+            if y < MARGIN:
+                y = self._over.bottom() + gap
+            x = max(MARGIN, min(x, width - self.width() - MARGIN))
+            y = max(MARGIN, min(y, height - self.height() - MARGIN))
+            self.move(QPoint(x, y))
+            self.raise_()
+            return
         left = self._corner in (Qt.Corner.TopLeftCorner, Qt.Corner.BottomLeftCorner)
         top = self._corner in (Qt.Corner.TopLeftCorner, Qt.Corner.TopRightCorner)
         x = MARGIN if left else max(MARGIN, width - self.width() - MARGIN)
@@ -222,4 +261,12 @@ class FloatingBar(QFrame):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self._host and event.type() in (QEvent.Type.Resize, QEvent.Type.Show):
             self.place()
+        elif (
+            watched is self._watched
+            and self._source is not None
+            and event.type() == QEvent.Type.Paint
+        ):
+            rect = self._source()
+            if rect != self._over or (rect is not None and self.isHidden()):
+                self.follow(rect)
         return False
