@@ -23,7 +23,7 @@ consistently everywhere, not a family of ad hoc sign flips that can drift apart.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import replace
 from typing import Any, cast
 
@@ -3137,6 +3137,9 @@ class ComponentItem(QGraphicsItem):
         self.pin_names = pin_names
         self.pending_anchor: HoleCoord = comp.anchor
         self.has_error = False
+        #: Dragged to where it cannot land (``BoardScene.report_drag``). Only ever true
+        #: during a drag: a rebuild makes a fresh item.
+        self.drag_blocked = False
         # Locked components stay draggable on purpose: the bus (not the item flags) is
         # what refuses the move ("component-locked"), and that refusal has to be
         # reachable and its message surfaced, rather than the UI silently pre-empting
@@ -3505,8 +3508,9 @@ class ComponentItem(QGraphicsItem):
         # The courtyard, faint and only when it matters. It is what DRC checks for overlap,
         # and it is padded well beyond the part -- drawing it as the body is what used to make
         # every component an oversized pale rectangle.
-        if self.isSelected() or self.has_error:
-            outline_pen = QPen(SELECTED if self.isSelected() else ERROR_OUTLINE, 0.22)
+        if self.isSelected() or self.has_error or self.drag_blocked:
+            ok = self.isSelected() and not self.drag_blocked
+            outline_pen = QPen(SELECTED if ok else ERROR_OUTLINE, 0.22)
             outline_pen.setDashPattern([2.0, 2.0])
             painter.setPen(outline_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -3595,6 +3599,11 @@ class ComponentItem(QGraphicsItem):
             painter.setPen(QPen(edge, 0.18 if solder_side else 0.14))
             painter.setBrush(QBrush(PIN_ONE if marked else PIN_MARKER))
             painter.drawEllipse(centre, radius, radius)
+
+    def set_drag_blocked(self, blocked: bool) -> None:
+        if blocked != self.drag_blocked:
+            self.drag_blocked = blocked
+            self.update()
 
     def reference_anchor(self) -> QPointF:
         """Where this part's reference is printed, in scene coordinates: just over the
@@ -5084,23 +5093,45 @@ class BoardScene(QGraphicsScene):
     ) -> bool:
         """``_placement_blocked``'s three questions, for a part that may be turned and may
         already be on the board."""
-        board = self.document.board
-        occupied = {
+        occupied = self._occupied_pins(() if moving is None else (moving,))
+        return any(self._landing_problems(footprint, anchor, rotation, mirrored, occupied))
+
+    def _occupied_pins(self, moving: Collection[str]) -> set[tuple[int, int]]:
+        """Every hole a pin of a part that is staying put is in."""
+        return {
             (hole.col, hole.row)
             for comp in self.document.components
-            if comp.id != moving
+            if comp.id not in moving
             for _pin, hole in _pin_holes_of(comp, self.lookup)
         }
+
+    def _landing_problems(
+        self,
+        footprint: Footprint,
+        anchor: HoleCoord,
+        rotation: int,
+        mirrored: bool,
+        occupied: set[tuple[int, int]],
+    ) -> tuple[int, int, int]:
+        """How many of a part's pins would land off the board, in a hole another part's pin
+        is in, and where no lead can be soldered -- the ONE question the placement ghost,
+        a part dragged from a list and a placed part dragged across the board all ask, so
+        the three gestures cannot disagree about where a part can go. The bus is still the
+        authority; this is the moment before it says so."""
+        board = self.document.board
+        off = used = unpadded = 0
         for pin in footprint.pins:
             d_col, d_row = transform_pin_offset(
                 pin.d_col, pin.d_row, cast(Rotation, rotation), mirrored
             )
             hole = HoleCoord(anchor.col + d_col, anchor.row + d_row)
             if not is_inside_board(hole, board):
-                return True
-            if (hole.col, hole.row) in occupied or hole_key(hole) in self._unusable_holes:
-                return True
-        return False
+                off += 1
+            elif (hole.col, hole.row) in occupied:
+                used += 1
+            elif hole_key(hole) in self._unusable_holes:
+                unpadded += 1
+        return off, used, unpadded
 
     def _placement_holes(self, anchor: HoleCoord) -> list[HoleCoord]:
         """Where the armed footprint's pins would land, anchored here."""
@@ -5142,24 +5173,17 @@ class BoardScene(QGraphicsScene):
         footprint = self._armed_footprint
         if footprint is None:
             return True
-        board = self.document.board
-        occupied = {
-            (hole.col, hole.row)
-            for comp in self.document.components
-            for _pin, hole in _pin_holes_of(comp, self.lookup)
-        }
-        for hole in self._placement_holes(anchor):
-            if not is_inside_board(hole, board):
-                return True
-            if (hole.col, hole.row) in occupied:
-                return True
-            if hole_key(hole) in self._unusable_holes:
-                return True
-        return False
+        return any(
+            self._landing_problems(
+                footprint, anchor, self._armed_rotation, self._armed_mirrored, self._occupied_pins(())
+            )
+        )
 
     def mouseMoveEvent(self, event: Any) -> None:
         self.hover_at(event.scenePos())
         super().mouseMoveEvent(event)
+        if isinstance(self.mouseGrabberItem(), ComponentItem):
+            self.report_drag()
 
     def hover_at(self, pos: QPointF) -> None:
         """Everything that follows the pointer, given where it is in scene coordinates.
@@ -5297,7 +5321,63 @@ class BoardScene(QGraphicsScene):
 
     def mouseReleaseEvent(self, event: Any) -> None:
         super().mouseReleaseEvent(event)
+        self._say_drag("")
         self.commit_pending_moves()
+
+    def report_drag(self) -> str:
+        """Whether the parts being dragged can land where they are, said while they are
+        dragged rather than after the release: each one's outline goes red where it cannot,
+        and the line returned -- and shown over every view of this board -- says where the
+        part held is going and what is in the way: "R1 → D11 · 1 pin(s) in a used hole".
+
+        A DRAG USED TO SAY NOTHING UNTIL IT WAS OVER. The placement ghost has always been red
+        where a part cannot go; a part already on the board, dragged, was the one gesture
+        that found out from a refusal in the status bar. It asks ``_landing_problems``, the
+        ghost's own question, with every part that moves taken off the board first -- a
+        group moves rigidly, so its members can only meet what stays.
+        """
+        grabbed = self.mouseGrabberItem()
+        moving = [
+            item for item in self.component_items.values() if item.pending_anchor != item.comp.anchor
+        ]
+        if not isinstance(grabbed, ComponentItem) or not moving:
+            self._clear_drag_marks()
+            self._say_drag("")
+            return ""
+        occupied = self._occupied_pins({item.comp.id for item in moving})
+        off = used = unpadded = 0
+        for item in moving:
+            problems = self._landing_problems(
+                item.fp, item.pending_anchor, item.comp.rotation, item.comp.mirrored, occupied
+            )
+            off, used, unpadded = off + problems[0], used + problems[1], unpadded + problems[2]
+            item.set_drag_blocked(any(problems))
+        board = self.document.board
+        where = format_hole(grabbed.pending_anchor, board)
+        who = grabbed.comp.ref
+        if len(moving) > 1:
+            who = f"{who} {t('and {count} more').format(count=len(moving) - 1)}"
+        line = f"{who} → {where}"
+        if off:
+            line += f" · {t('off the board')}"
+        elif used:
+            line += f" · {t('{count} pin(s) in a used hole').format(count=used)}"
+        elif unpadded:
+            line += f" · {t('{count} pin(s) where there is no pad').format(count=unpadded)}"
+        self._say_drag(line)
+        return line
+
+    def _say_drag(self, text: str) -> None:
+        """Over every view of this board that is still there. Asked of ``views()`` rather
+        than through a signal, because a scene outlives a view it was connected to and a
+        signal into a deleted view raises in the event loop of whatever runs next."""
+        for view in self.views():
+            if isinstance(view, BoardView):
+                view.show_drag(text)
+
+    def _clear_drag_marks(self) -> None:
+        for item in self.component_items.values():
+            item.set_drag_blocked(False)
 
     def component_at(self, pos: QPointF) -> ComponentItem | None:
         """The topmost part under a scene position, or None.
@@ -5490,6 +5570,7 @@ class BoardScene(QGraphicsScene):
         if not self.drag_in_flight():
             return False
         self._build()
+        self._say_drag("")
         return True
 
     def commit_pending_moves(self) -> list[DispatchResult]:
@@ -5656,6 +5737,9 @@ class BoardView(QGraphicsView):
         # not drift under a scrollbar when one appears.
         self.mode_banner = ViewOverlay(self.viewport(), "modeBanner")
         self.empty_hint = ViewOverlay(self.viewport(), "emptyHint")
+        #: Where a dragged part is going and what is in the way. Styled as the mode banner,
+        #: and under it when a mode is up too.
+        self.drag_banner = ViewOverlay(self.viewport(), "modeBanner")
         self.viewport().installEventFilter(self)
 
     # -- a part dropped from the sheet ---------------------------------------
@@ -5773,6 +5857,12 @@ class BoardView(QGraphicsView):
         self.mode_banner.show_text(text)
         self._place_overlays()
 
+    def show_drag(self, text: str) -> None:
+        """Where a dragged part is going and what is in the way (``BoardScene.report_drag``),
+        or nothing with an empty string."""
+        self.drag_banner.show_text(text)
+        self._place_overlays()
+
     def set_empty_hint(self, text: str) -> None:
         """Guidance for a board with nothing on it. Empty text takes it away."""
         self.empty_hint.show_text(text)
@@ -5805,6 +5895,14 @@ class BoardView(QGraphicsView):
                 area.center().x() - banner.width() // 2,
                 area.top() + self.BANNER_MARGIN_PX,
             )
+
+        drag = self.drag_banner
+        if not drag.isHidden():
+            drag.adjustSize()
+            top = area.top() + self.BANNER_MARGIN_PX
+            if not banner.isHidden():
+                top = banner.geometry().bottom() + self.BANNER_MARGIN_PX // 2
+            drag.move(area.center().x() - drag.width() // 2, top)
 
         hint = self.empty_hint
         if not hint.isHidden():

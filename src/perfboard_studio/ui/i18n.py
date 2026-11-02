@@ -661,6 +661,11 @@ TURKISH: Mapping[str, str] = {
     # -- what the findings panel calls each rule ---------------------------------
     "Parts overlap": "Parçalar çakışıyor",
     "Part off the board": "Parça kartın dışında",
+    # -- a part dragged across the board, while it is dragged ---------------------------
+    "and {count} more": "ve {count} parça daha",
+    "off the board": "kartın dışında",
+    "{count} pin(s) in a used hole": "{count} pin dolu bir delikte",
+    "{count} pin(s) where there is no pad": "{count} pin pedi olmayan bir yerde",
     "Part hangs past the edge": "Parça kenardan taşıyor",
     "Part too tall for the case": "Parça kutuya göre fazla yüksek",
     "Wires or traces cross": "Teller ya da yollar kesişiyor",

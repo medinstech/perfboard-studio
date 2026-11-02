@@ -56,6 +56,12 @@ closed without a bump.
 
 ### Changed
 
+- **A part dragged across the board says whether it can land, while it is dragged.** Its
+  outline turns red over a hole another part's pin is in, past the edge, or where there is
+  no pad -- the same test the ghost of a part being placed has always made -- and a line
+  over the board says where it is going and what is in the way: "R1 → D11 · 1 pin(s) in a
+  used hole". It used to find out from a refusal after it was let go.
+
 - **Turning, flipping, locking or deleting several parts is one step.** R over five parts
   was five commands: five presses of Ctrl+Z to put them back, and a locked one among them
   left the rest turned and itself not. Now the selection turns, flips, locks or goes as one

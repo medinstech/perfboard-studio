@@ -24,6 +24,7 @@ from PySide6.QtWidgets import QApplication, QGraphicsItem, QWidget
 
 from perfboard_studio import persist
 from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.model import HoleCoord
 from perfboard_studio.schematic import build_schematic
 from perfboard_studio.ui.canvasinput import NOTCH, WheelIntent, wheel_intent
 from perfboard_studio.ui.view2d import BoardScene, BoardView, hole_to_screen
@@ -942,3 +943,109 @@ def test_deleting_parts_and_their_copper_is_one_undo_step(monkeypatch) -> None: 
         assert window.bus.document == before
     finally:
         _close_window(window)
+
+
+# -- a dragged part says whether it can land, while it is dragged -----------------------------
+
+
+def _held_part_scene():  # type: ignore[no-untyped-def]
+    from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
+    from perfboard_studio.commands import create_standard_registry
+
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    bus = CommandBus(document, create_standard_registry(), CommandContext(next_id=create_id_generator()))
+    scene = BoardScene(document, footprint_lookup(), side="top", bus=bus)
+    view = BoardView(scene)
+    view.resize(900, 700)
+    view.show()
+    view.fit_board()
+    QApplication.processEvents()
+    selectable = QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
+    item = next(
+        i
+        for i in scene.component_items.values()
+        if len(i.fp.pins) == 2
+        and next((u for u in scene.items(i.sceneBoundingRect().center()) if u.flags() & selectable), None) is i
+    )
+    return bus, scene, view, item
+
+
+def _hold_at(view: BoardView, item, delta_cols: int, delta_rows: int) -> QPoint:  # type: ignore[no-untyped-def]
+    """Press on the part and move it by whole holes, without letting go."""
+    pitch = view.board_scene.document.board.pitch
+    start = view.mapFromScene(item.sceneBoundingRect().center())
+    end = view.mapFromScene(
+        item.sceneBoundingRect().center() + QPointF(delta_cols * pitch, delta_rows * pitch)
+    )
+    port = view.viewport()
+    _mouse(port, QEvent.Type.MouseButtonPress, start, LEFT)
+    for i in range(1, 6):
+        _mouse(port, QEvent.Type.MouseMove, start + (end - start) * i / 5, LEFT)
+    return end
+
+
+def test_a_part_dragged_onto_another_parts_pin_goes_red_and_says_so_before_the_release() -> None:
+    """The ghost of a part being placed has always been red where it cannot go; a part
+    already on the board, dragged, found out from a refusal after it was let go."""
+    _bus, scene, view, item = _held_part_scene()
+    try:
+        comp_id = item.comp.id
+        other = next(c for c in scene.document.components if c.id != comp_id and c.id in scene.component_items)
+        end = _hold_at(view, item, other.anchor.col - item.comp.anchor.col, other.anchor.row - item.comp.anchor.row)
+        held = scene.component_items[comp_id]
+        assert held.pending_anchor == other.anchor
+        assert held.drag_blocked
+        said = view.drag_banner.text()
+        assert said.startswith(f"{item.comp.ref} → ") and "pin(s) in a used hole" in said
+        assert not view.drag_banner.isHidden()
+
+        _mouse(view.viewport(), QEvent.Type.MouseButtonRelease, end, NONE)
+        assert view.drag_banner.isHidden()
+    finally:
+        view.close()
+
+
+def test_a_part_dragged_off_the_board_says_so_and_a_clear_spot_says_only_where() -> None:
+    bus, scene, view, item = _held_part_scene()
+    try:
+        comp_id = item.comp.id
+        board = scene.document.board
+        end = _hold_at(view, item, -(item.comp.anchor.col + 3), 0)
+        assert scene.component_items[comp_id].drag_blocked
+        assert view.drag_banner.text().endswith("· off the board")
+        _mouse(view.viewport(), QEvent.Type.MouseButtonRelease, end, NONE)
+        assert all(c.anchor == item.comp.anchor for c in bus.document.components if c.id == comp_id)
+    finally:
+        view.close()
+
+    # A spot the ghost would call clear: the drag says where, and nothing else.
+    _bus, scene, view, item = _held_part_scene()
+    try:
+        comp_id = item.comp.id
+        clear = next(
+            HoleCoord(col, row)
+            for row in range(board.rows)
+            for col in range(board.cols)
+            if not scene._drop_blocked(item.fp, HoleCoord(col, row), item.comp.rotation, item.comp.mirrored, comp_id)
+        )
+        end = _hold_at(view, item, clear.col - item.comp.anchor.col, clear.row - item.comp.anchor.row)
+        assert not scene.component_items[comp_id].drag_blocked
+        assert " · " not in view.drag_banner.text()
+        _mouse(view.viewport(), QEvent.Type.MouseButtonRelease, end, NONE)
+    finally:
+        view.close()
+
+
+def test_the_ghost_and_the_drag_ask_one_question() -> None:
+    """Every hole of the board, for a part armed and the same part dropped: one answer."""
+    from perfboard_studio.footprints import get_footprint
+
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    scene = BoardScene(document, footprint_lookup(), side="top")
+    footprint = get_footprint("r-axial-3")
+    assert footprint is not None
+    scene.arm_placement("r-axial-3")
+    for row in range(-1, document.board.rows + 1):
+        for col in range(-1, document.board.cols + 1):
+            at = HoleCoord(col, row)
+            assert scene._placement_blocked(at) == scene._drop_blocked(footprint, at, 0, False, None), at
