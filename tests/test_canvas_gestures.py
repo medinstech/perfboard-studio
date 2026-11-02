@@ -853,3 +853,92 @@ def test_a_double_click_finishes_the_trace() -> None:
         assert scene.armed_draw_kind is None
     finally:
         view.close()
+
+
+# -- a group gesture is one command -------------------------------------------------------------
+
+
+def _window_with_selected(count: int, *, lock_second: bool = False):  # type: ignore[no-untyped-def]
+    from perfboard_studio.commands import UpdateComponentPayload
+    from perfboard_studio.ui.main import MainWindow
+
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    window = MainWindow(document)
+    # Parts the board draws: a fixture's part on a footprint nobody has is not on it.
+    ids = [
+        c.id
+        for c in window.bus.document.components
+        if not c.locked and c.id in window.scene.component_items
+    ][:count]
+    if lock_second:
+        assert window.bus.dispatch("component.update", UpdateComponentPayload(id=ids[1], locked=True)).ok
+    for component_id in ids:
+        window.scene.component_items[component_id].setSelected(True)
+    return window, ids
+
+
+def _close_window(window) -> None:  # type: ignore[no-untyped-def]
+    window._mark_saved()
+    window.close()
+
+
+def test_rotating_a_selection_is_one_undo_step() -> None:
+    """R over three parts was three commands and three presses of Ctrl+Z."""
+    window, _ids = _window_with_selected(3)
+    try:
+        before = window.bus.document
+        steps = len(window.bus.history())
+        window.on_rotate_selection(90)
+        assert len(window.bus.history()) == steps + 1
+        assert window.bus.history()[-1] == "Rotate 3 component(s)"
+        window.on_undo()
+        assert window.bus.document == before
+    finally:
+        _close_window(window)
+
+
+def test_a_locked_part_in_the_selection_turns_none_of_it_and_says_which() -> None:
+    """It used to turn the others and refuse the one, leaving the group half turned."""
+    window, ids = _window_with_selected(3, lock_second=True)
+    try:
+        before = window.bus.document
+        window.on_rotate_selection(90)
+        window.on_mirror_selection()
+        assert window.bus.document == before
+        locked = next(c for c in before.components if c.id == ids[1])
+        assert locked.ref in window.statusBar().currentMessage()
+    finally:
+        _close_window(window)
+
+
+def test_locking_a_selection_is_one_step_to_one_state() -> None:
+    window, ids = _window_with_selected(3, lock_second=True)
+    try:
+        steps = len(window.bus.history())
+        window.on_toggle_lock_selection()  # The first part is unlocked, so: lock them all.
+        assert all(c.locked for c in window.bus.document.components if c.id in ids)
+        assert len(window.bus.history()) == steps + 1
+        assert window.bus.history()[-1] == "Lock 3 component(s)"
+    finally:
+        _close_window(window)
+
+
+def test_deleting_parts_and_their_copper_is_one_undo_step(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A rubber band over two parts and a trace was a Ctrl+Z per part and one for the trace."""
+    from perfboard_studio.ui.view2d import ConductorItem
+
+    window, ids = _window_with_selected(2)
+    try:
+        conductor = next(item for item in window.scene.items() if isinstance(item, ConductorItem))
+        conductor.setSelected(True)
+        monkeypatch.setattr(type(window), "_confirm", lambda self, *a, **k: True)
+        before = window.bus.document
+        steps = len(window.bus.history())
+        window.on_delete_selection()
+        assert not any(c.id in ids for c in window.bus.document.components)
+        assert all(c.id != conductor.conductor_id for c in window.bus.document.conductors)
+        assert len(window.bus.history()) == steps + 1
+        window.on_undo()
+        assert window.bus.document == before
+    finally:
+        _close_window(window)

@@ -41,17 +41,21 @@ from perfboard_studio.commands import (
     DisconnectPinsPayload,
     DrawSheetWirePayload,
     ImportNetlistPayload,
+    LockComponentsPayload,
     MirrorComponentPayload,
+    MirrorComponentsPayload,
     MoveComponentPayload,
     MoveSymbolsPayload,
     PartPlacement,
     PlacePartsPayload,
     RenameDocumentPayload,
     RotateComponentPayload,
+    RotateComponentsPayload,
     SetBoardPayload,
     SetHeightLimitPayload,
     UnplaceComponentPayload,
     UpdateComponentPayload,
+    UpdateComponentsPayload,
     UpdateNetPayload,
     UpdatePartPayload,
     create_document_id_generator,
@@ -197,6 +201,12 @@ def _session() -> list[str]:
     run("component.mirror", MirrorComponentPayload(id=r1.id, mirrored=True))
     run("component.mirror", MirrorComponentPayload(id=r1.id, mirrored=False))
     run("component.update", UpdateComponentPayload(id=r1.id, value="22k"))
+    # A group: one command each, and the labels the window gives a lock.
+    run("component.rotateMany", RotateComponentsPayload(rotations=(RotateComponentPayload(id=r1.id, rotation=0),)))
+    run("component.mirrorMany", MirrorComponentsPayload(mirrors=(MirrorComponentPayload(id=r1.id, mirrored=True),)))
+    run("component.updateMany", UpdateComponentsPayload(updates=(UpdateComponentPayload(id=r1.id, value="1k"),)))
+    for locked in (True, False):
+        run("component.lockMany", LockComponentsPayload(ids=(r1.id,), locked=locked))
     run("component.unplace", UnplaceComponentPayload(id=r1.id))
     run(
         "part.place",

@@ -50,6 +50,12 @@ closed without a bump.
 
 ### Changed
 
+- **Turning, flipping, locking or deleting several parts is one step.** R over five parts
+  was five commands: five presses of Ctrl+Z to put them back, and a locked one among them
+  left the rest turned and itself not. Now the selection turns, flips, locks or goes as one
+  command, as a drag always has: one Ctrl+Z, and a locked part refuses the whole group by
+  name. Deleting parts takes the copper selected with them in the same step.
+
 - **The board looks like a board with parts on it.** Pads nothing lands in step back --
   their copper mixed toward the substrate, with no catch of light -- so the pads a lead,
   a run or a wire's end uses draw the circuit, where 945 equally bright rings used to

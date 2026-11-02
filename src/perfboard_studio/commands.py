@@ -749,6 +749,62 @@ class MoveComponentsPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class RotateComponentsPayload:
+    """Several parts turned as ONE command: ``component.rotate`` for each, one undo step.
+
+    The rest of this family is the same shape, and for the reason ``MoveComponentsPayload``
+    gives: a group turned with one press of R is one decision, and as one command a time
+    each it took a Ctrl+Z per part to put back, and a locked part part-way through left
+    the group half turned. All-or-nothing: a locked part refuses the whole group, by name.
+    """
+
+    rotations: tuple[RotateComponentPayload, ...]
+    #: Undo-stack label; without it the entry reads as a bare count.
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MirrorComponentsPayload:
+    """Several parts flipped as ONE command. See ``RotateComponentsPayload``."""
+
+    mirrors: tuple[MirrorComponentPayload, ...]
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateComponentsPayload:
+    """Several ``component.update``s as ONE command: five resistors given one value, a
+    selection locked. See ``RotateComponentsPayload``."""
+
+    updates: tuple[UpdateComponentPayload, ...]
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LockComponentsPayload:
+    """Several parts locked, or unlocked, as ONE command: the whole selection to one state,
+    which is what "lock these" means, rather than each part toggled on its own. Its own
+    command rather than an ``updateMany`` with ``locked`` set, so the undo stack says "Lock"
+    or "Unlock" and an agent asking for it cannot change a value on the way."""
+
+    ids: tuple[ComponentId, ...]
+    locked: bool
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteComponentsPayload:
+    """Several parts taken off the board as ONE command, with the copper selected with
+    them. See ``RotateComponentsPayload``: a rubber band over two parts and the traces
+    between them is one decision, and was a Ctrl+Z per part plus one for the traces."""
+
+    ids: tuple[ComponentId, ...]
+    #: Conductors that go in the same command -- the ones selected with the parts.
+    conductor_ids: tuple[ConductorId, ...] = ()
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class PlaceBlockPayload:
     """Several parts AND the copper between them, placed as ONE command.
 
@@ -1568,6 +1624,112 @@ class _UpdateComponent:
         c = next((x for x in doc.components if x.id == p.id), None)
         ref = c.ref if c is not None else p.id
         return f"Update {ref}"
+
+
+def _each_component(
+    doc: PerfDocument,
+    members: Sequence[Any],
+    single: CommandDefinition[Any],
+    ctx: CommandContext,
+    command: str,
+) -> PerfDocument:
+    """Apply ``single`` to each member in turn, as ONE command, or to none of them.
+
+    All-or-nothing comes for free: a command is a function from one document to the next,
+    so the first member it refuses raises before the bus has kept anything, and the
+    refusal is that member's own -- "R3 is locked." names the part. An empty group and a
+    part named twice are refused the way ``component.moveMany`` refuses them.
+    """
+    if not members:
+        raise CommandError(
+            "nothing-to-do",
+            f"{command} needs at least one part; an empty group would put a no-op on the "
+            "undo stack.",
+        )
+    seen: set[ComponentId] = set()
+    for member in members:
+        existing = require_component(doc, member.id)
+        if member.id in seen:
+            raise CommandError(
+                "duplicate-component", f"{existing.ref} appears twice in one {command}."
+            )
+        seen.add(member.id)
+    for member in members:
+        doc = single.apply(doc, member, ctx)
+    return doc
+
+
+class _RotateComponents:
+    type = "component.rotateMany"
+
+    def apply(
+        self, doc: PerfDocument, p: RotateComponentsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        return _each_component(doc, p.rotations, rotate_component, ctx, self.type)
+
+    def describe(self, p: RotateComponentsPayload, doc: PerfDocument) -> str:
+        return p.label or f"Rotate {len(p.rotations)} component(s)"
+
+
+class _MirrorComponents:
+    type = "component.mirrorMany"
+
+    def apply(
+        self, doc: PerfDocument, p: MirrorComponentsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        return _each_component(doc, p.mirrors, mirror_component, ctx, self.type)
+
+    def describe(self, p: MirrorComponentsPayload, doc: PerfDocument) -> str:
+        return p.label or f"Mirror {len(p.mirrors)} component(s)"
+
+
+class _UpdateComponents:
+    type = "component.updateMany"
+
+    def apply(
+        self, doc: PerfDocument, p: UpdateComponentsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        return _each_component(doc, p.updates, update_component, ctx, self.type)
+
+    def describe(self, p: UpdateComponentsPayload, doc: PerfDocument) -> str:
+        return p.label or f"Update {len(p.updates)} component(s)"
+
+
+class _LockComponents:
+    type = "component.lockMany"
+
+    def apply(
+        self, doc: PerfDocument, p: LockComponentsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        members = tuple(UpdateComponentPayload(id=i, locked=p.locked) for i in p.ids)
+        return _each_component(doc, members, update_component, ctx, self.type)
+
+    def describe(self, p: LockComponentsPayload, doc: PerfDocument) -> str:
+        if p.label:
+            return p.label
+        if p.locked:
+            return f"Lock {len(p.ids)} component(s)"
+        return f"Unlock {len(p.ids)} component(s)"
+
+
+class _DeleteComponents:
+    type = "component.deleteMany"
+
+    def apply(
+        self, doc: PerfDocument, p: DeleteComponentsPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        members = tuple(DeleteComponentPayload(id=i) for i in p.ids)
+        doc = _each_component(doc, members, delete_component, ctx, self.type)
+        if p.conductor_ids:
+            doc = delete_conductors.apply(doc, DeleteConductorsPayload(ids=p.conductor_ids), ctx)
+        return doc
+
+    def describe(self, p: DeleteComponentsPayload, doc: PerfDocument) -> str:
+        if p.label:
+            return p.label
+        if p.conductor_ids:
+            return f"Delete {len(p.ids)} component(s) and {len(p.conductor_ids)} conductor(s)"
+        return f"Delete {len(p.ids)} component(s)"
 
 
 class _DeleteComponent:
@@ -3431,6 +3593,11 @@ rotate_component: CommandDefinition[RotateComponentPayload] = _RotateComponent()
 mirror_component: CommandDefinition[MirrorComponentPayload] = _MirrorComponent()
 update_component: CommandDefinition[UpdateComponentPayload] = _UpdateComponent()
 delete_component: CommandDefinition[DeleteComponentPayload] = _DeleteComponent()
+rotate_components: CommandDefinition[RotateComponentsPayload] = _RotateComponents()
+mirror_components: CommandDefinition[MirrorComponentsPayload] = _MirrorComponents()
+update_components: CommandDefinition[UpdateComponentsPayload] = _UpdateComponents()
+lock_components: CommandDefinition[LockComponentsPayload] = _LockComponents()
+delete_components: CommandDefinition[DeleteComponentsPayload] = _DeleteComponents()
 unplace_component: CommandDefinition[UnplaceComponentPayload] = _UnplaceComponent()
 add_part: CommandDefinition[AddPartPayload] = _AddPart()
 add_parts: CommandDefinition[AddPartsPayload] = _AddParts()
@@ -3485,6 +3652,11 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     mirror_component,
     update_component,
     delete_component,
+    rotate_components,
+    mirror_components,
+    update_components,
+    lock_components,
+    delete_components,
     unplace_component,
     add_part,
     add_parts,

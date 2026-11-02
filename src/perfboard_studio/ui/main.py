@@ -169,6 +169,7 @@ from perfboard_studio.commands import (
     ConnectPinsPayload,
     DeleteBoardNotesPayload,
     DeleteComponentPayload,
+    DeleteComponentsPayload,
     DeleteConductorsPayload,
     DeleteEdgeConnectorPayload,
     DeleteMountingHolePayload,
@@ -179,13 +180,16 @@ from perfboard_studio.commands import (
     DisconnectPinsPayload,
     DrawSheetWirePayload,
     ImportNetlistPayload,
+    LockComponentsPayload,
     MirrorComponentPayload,
+    MirrorComponentsPayload,
     MoveComponentPayload,
     MoveSymbolsPayload,
     PartPlacement,
     PlacePartsPayload,
     RenameDocumentPayload,
     RotateComponentPayload,
+    RotateComponentsPayload,
     SetBoardPayload,
     SetBodyClearancePayload,
     SetHeightLimitPayload,
@@ -11889,14 +11893,29 @@ class MainWindow(QMainWindow):
         components = self._require_selection(t("rotate it"))
         if not components:
             return
-        results = [
-            self.bus.dispatch(
-                "component.rotate",
-                RotateComponentPayload(id=c.id, rotation=_rotation_after(c.rotation, delta)),
-            )
+        turns = tuple(
+            RotateComponentPayload(id=c.id, rotation=_rotation_after(c.rotation, delta))
             for c in components
-        ]
-        self._report_refusals(results, t("Rotated {count} part(s)").format(count=len(results)))
+        )
+        result = (
+            self.bus.dispatch("component.rotate", turns[0])
+            if len(turns) == 1
+            else self.bus.dispatch("component.rotateMany", RotateComponentsPayload(rotations=turns))
+        )
+        self._report_group(result, t("Rotated {count} part(s)").format(count=len(turns)))
+
+    def _report_group(self, result: DispatchResult, done: str) -> None:
+        """Say what a group gesture did, or why it did nothing at all.
+
+        ONE COMMAND FOR THE GROUP, all or nothing, as a drag of several parts has always
+        been (``component.moveMany``): R over five parts turned four and refused the locked
+        one, and it took four Ctrl+Z presses to put them back. Now the lock refuses the
+        whole group by name, and Ctrl+Z undoes the group.
+        """
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self.statusBar().showMessage(done, 5000)
 
     def on_mirror_selection(self) -> None:
         if self.scene.armed_footprint_id is not None:
@@ -11906,11 +11925,13 @@ class MainWindow(QMainWindow):
         components = self._require_selection(t("mirror it"))
         if not components:
             return
-        results = [
-            self.bus.dispatch("component.mirror", MirrorComponentPayload(id=c.id, mirrored=not c.mirrored))
-            for c in components
-        ]
-        self._report_refusals(results, t("Mirrored {count} part(s)").format(count=len(results)))
+        flips = tuple(MirrorComponentPayload(id=c.id, mirrored=not c.mirrored) for c in components)
+        result = (
+            self.bus.dispatch("component.mirror", flips[0])
+            if len(flips) == 1
+            else self.bus.dispatch("component.mirrorMany", MirrorComponentsPayload(mirrors=flips))
+        )
+        self._report_group(result, t("Mirrored {count} part(s)").format(count=len(flips)))
 
     # -- copy, paste, duplicate ----------------------------------------------
     #
@@ -12234,20 +12255,19 @@ class MainWindow(QMainWindow):
             t("Delete"),
         ):
             return
-        results = [
-            self.bus.dispatch("component.delete", DeleteComponentPayload(id=c.id))
-            for c in components
-        ]
-        if conductor_ids:
-            results.append(
-                self.bus.dispatch(
-                    "conductor.deleteMany",
-                    DeleteConductorsPayload(
-                        ids=conductor_ids, label=f"Delete {len(conductor_ids)} conductor(s)"
-                    ),
-                )
+        # ONE command for the parts and the copper selected with them: it was a Ctrl+Z per
+        # part and one more for the traces.
+        result = (
+            self.bus.dispatch("component.delete", DeleteComponentPayload(id=components[0].id))
+            if len(components) == 1 and not conductor_ids
+            else self.bus.dispatch(
+                "component.deleteMany",
+                DeleteComponentsPayload(
+                    ids=tuple(c.id for c in components), conductor_ids=tuple(conductor_ids)
+                ),
             )
-        self._report_refusals(results, t("Deleted {count} part(s)").format(count=len(components)))
+        )
+        self._report_group(result, t("Deleted {count} part(s)").format(count=len(components)))
 
     def _confirm(self, title: str, body: str, verb: str) -> bool:
         """Ask before something destructive, with the SAFE answer under Enter.
@@ -12283,12 +12303,18 @@ class MainWindow(QMainWindow):
         # One shared target state, from the first part: toggling each independently would
         # scatter a mixed selection instead of doing what "lock these" plainly means.
         locking = not components[0].locked
-        results = [
-            self.bus.dispatch("component.update", UpdateComponentPayload(id=c.id, locked=locking))
-            for c in components
-        ]
+        result = (
+            self.bus.dispatch(
+                "component.update", UpdateComponentPayload(id=components[0].id, locked=locking)
+            )
+            if len(components) == 1
+            else self.bus.dispatch(
+                "component.lockMany",
+                LockComponentsPayload(ids=tuple(c.id for c in components), locked=locking),
+            )
+        )
         done = t("Locked {count} part(s)") if locking else t("Unlocked {count} part(s)")
-        self._report_refusals(results, done.format(count=len(results)))
+        self._report_group(result, done.format(count=len(components)))
 
     def on_component_properties(self, component_id: str = "") -> None:
         """Open one part's properties, from a double-click or from the selection.
