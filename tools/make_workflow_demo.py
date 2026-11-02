@@ -13,9 +13,9 @@ This one shows what the application is like to USE: one button at the end of the
 bar that names the next thing to do and does it, from a circuit on the sheet to the guide.
 That is a picture of the window or it is nothing.
 
-It is the real window running the real commands: the welcome screen's first example --
-the circuit that is drawn and not yet built -- then the step bar's button, pressed until
-the build guide is in front. Every dialog on the way is pictured over the window and
+It is the real window running the real commands: Home, as a first start shows it, and its
+first example card -- the circuit that is drawn and not yet built -- then the header's next
+button, pressed until the build guide is in front. Every dialog on the way is pictured over the window and
 answered as somebody new would answer it, with what it already has selected. A dialog the
 tour does not expect stops the script rather than being clicked through, because a tour
 that quietly answered a question differently from a user is a tour of something else.
@@ -107,7 +107,7 @@ def main(argv: list[str]) -> int:
     # translator Python collects takes its strings with it.
     qt_words = main_module._install_qt_translations(app)  # noqa: F841
 
-    from perfboard_studio.ui.main import BoardSizeDialog, MainWindow, WelcomeDialog, example_boards
+    from perfboard_studio.ui.main import BoardSizeDialog, MainWindow
 
     def settle(rounds: int = 20) -> None:
         for _ in range(rounds):
@@ -219,27 +219,27 @@ def main(argv: list[str]) -> int:
         None,
     )
     window.resize(*WINDOW_SIZE)
+    # Home, as main() puts it in front of a first start -- before the window is shown.
+    window.offer_home()
     window.show()
     settle(40)
 
-    # -- The welcome screen, and its first example: the circuit drawn and not yet built.
-    examples = example_boards()
-    if not examples:
-        print("no examples found -- run from a checkout", file=sys.stderr)
+    # -- Home, and its first example card: the circuit drawn and not yet built. Its pictures
+    # are painted one per turn of the event loop once Home is up, so they are waited for.
+    home = window._home_page
+    if home is None or not home.cards:
+        print("Home did not come up with examples -- run from a checkout", file=sys.stderr)
         return 1
-    first = examples[0][0]
-    welcome = WelcomeDialog([], window, examples=examples)
-    welcome.show()
-    settle()
-    welcome.examples.setCurrentRow(0)
-    settle()
-    item_rect = welcome.examples.visualItemRect(welcome.examples.item(0))
-    shoot(POINT_MS + 600, dialog=welcome, ring=item_rect, ring_in=welcome.examples.viewport())
-    welcome.close()
-    window.on_open_example(first)
+    for _ in range(20):
+        if all(not card.picture.pixmap().isNull() for card in home.cards):
+            break
+        settle()
+    first = home.cards[0]
+    shoot(POINT_MS + 600, ring=first)
+    first.click()
     settle(40)
-    if window.bus.document.components:
-        print(f"{first.name} is already built; the tour needs the drawn one", file=sys.stderr)
+    if window.home_is_showing() or window.bus.document.components:
+        print(f"{first.example.path.name} did not open as the drawn circuit", file=sys.stderr)
         return 1
     shoot(RESULT_MS)
 
