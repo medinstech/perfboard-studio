@@ -97,7 +97,6 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressDialog,
     QPushButton,
-    QSizePolicy,
     QSlider,
     QSpinBox,
     QStackedWidget,
@@ -5466,7 +5465,6 @@ class MainWindow(QMainWindow):
             self._vtk_style = style
             self.vtk_widget = widget
             self._3d_placeholder.hide()
-            self._3d_layout.insertWidget(0, self._build_3d_toolbar())
             self._3d_layout.addWidget(widget)
             self._3d_layout.addWidget(self._build_assembly_bar())
             self._3d_stale = False
@@ -5573,22 +5571,6 @@ class MainWindow(QMainWindow):
         if changed and self._3d_is_live():
             self.vtk_widget.GetRenderWindow().Render()
 
-    def _build_3d_toolbar(self) -> QToolBar:
-        """What the 3D view does, on the 3D view, as the schematic panel carries its own
-        tools: the exploded view and the camera lived in the View menu, three menus away
-        from the panel they work on and with nothing on the panel to say they existed. They
-        are still in the menu, where a keyboard looks for them."""
-        bar = QToolBar(t("3D View"), self)
-        bar.setObjectName("view3dToolbar")
-        bar.setMovable(False)
-        bar.setFloatable(False)
-        bar.setIconSize(QSize(icons.SIZE, icons.SIZE))
-        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.act_reset_3d.setIconText(t("Reset Camera"))
-        bar.addAction(self.act_exploded)
-        bar.addAction(self.act_reset_3d)
-        return bar
-
     # -- assembly playback (PLAN.md D7) --------------------------------------
     #
     # THERE IS NO "ANIMATION MODE". The slider's maximum is the finished board, which is
@@ -5649,6 +5631,19 @@ class MainWindow(QMainWindow):
         row.addWidget(self.act_step_next)
         row.addWidget(self.assembly_slider, 1)
         row.addWidget(self.assembly_label)
+        # WHAT THE 3D VIEW DOES, ON THE 3D VIEW, at its foot beside the playback. Not
+        # floating over it, as the board's and the sheet's tools do: the 3D view is a native
+        # OpenGL window, and Qt cannot paint a widget over one of those -- the bar would be
+        # under it. They are in the View menu too, where a keyboard looks for them.
+        row.addSpacing(theme.SPACE["lg"])
+        self.act_exploded.setIcon(icons.icon("exploded"))
+        self.act_reset_3d.setIcon(icons.icon("camera"))
+        for action in (self.act_exploded, self.act_reset_3d):
+            button = QToolButton()
+            button.setDefaultAction(action)
+            button.setIconSize(QSize(icons.SIZE, icons.SIZE))
+            button.setAutoRaise(True)
+            row.addWidget(button)
 
         self._assembly_timer = QTimer(self)
         self._assembly_timer.setInterval(self.ASSEMBLY_FRAME_MS)
@@ -7033,6 +7028,17 @@ class MainWindow(QMainWindow):
         view.add_action(self.act_fit)
         self.board_view_tools = view
         self._build_sheet_tools()
+
+        # The guide's corner: the next step to do, its ticks cleared, the guide exported.
+        guide = FloatingBar(
+            self.dock_guide.widget(), Qt.Corner.BottomRightCorner, vertical=False, name="guideTools"
+        )
+        next_button = guide.add_action(self.act_next_step)
+        next_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        guide.add_action(self.act_clear_progress)
+        guide.add_separator()
+        guide.add_action(self.act_guide, icons.icon("export"))
+        self.guide_tools = guide
 
         # WHAT THE SELECTION CAN DO, OVER THE SELECTION. Rotate, mirror and delete were
         # three buttons on a row across the window, a metre from the part, and lock and
@@ -9221,26 +9227,18 @@ class MainWindow(QMainWindow):
         # (``PROGRESS_GROUP``); Next Step to Do picks the first one without, which is the
         # step to show on the board and in 3D when somebody comes back to the bench.
         self.guide_tree.itemChanged.connect(self._on_guide_item_changed)
-        progress = QHBoxLayout()
-        self.act_next_step = QPushButton(t("Next Step to Do"))
+        # Actions, for the guide's corner (``_build_canvas_tools``), as every view's tools
+        # are: they were a row of push buttons under the list, the one panel left with one.
+        self.act_next_step = QAction(icons.icon("next-step"), t("Next Step to Do"), self)
         self.act_next_step.setToolTip(
             t("The first step not ticked off yet, shown on the board and in 3D.")
         )
-        self.act_next_step.clicked.connect(self.on_next_step_to_do)
-        self.act_clear_progress = QPushButton(t("Clear Progress"))
+        self.act_next_step.triggered.connect(self.on_next_step_to_do)
+        self.act_clear_progress = QAction(icons.icon("clear"), t("Clear Progress"), self)
         self.act_clear_progress.setToolTip(t("Untick every step of this board."))
-        self.act_clear_progress.clicked.connect(self.on_clear_progress)
-        # Free to narrow, both of them: a panel takes its minimum width from what is in it,
-        # and two buttons side by side at their words' width held the guide at 426 px.
-        for button in (self.act_next_step, self.act_clear_progress):
-            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-        progress.addWidget(self.act_next_step, 3)
-        progress.addWidget(self.act_clear_progress, 2)
-        layout.addLayout(progress)
-
-        export = QPushButton(t("Export the Guide…"))
-        export.clicked.connect(self.on_export_guide)
-        layout.addWidget(export)
+        self.act_clear_progress.triggered.connect(self.on_clear_progress)
+        # Room at the foot of the list for the corner, so it covers no step.
+        layout.addSpacing(theme.SPACE["2xl"] * 2)
 
         dock = QDockWidget(t("Build Guide"), self)
         dock.setObjectName("dockGuide")

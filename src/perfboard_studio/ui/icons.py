@@ -505,6 +505,41 @@ def _search(p: QPainter) -> None:
     p.drawLine(QPointF(63, 63), QPointF(86, 86))
 
 
+def _next_step(p: QPainter) -> None:
+    """A step forward to a bar: the next step not done yet."""
+    path = QPainterPath(QPointF(24, 20))
+    path.lineTo(QPointF(64, 50))
+    path.lineTo(QPointF(24, 80))
+    path.closeSubpath()
+    p.drawPath(path)
+    p.drawLine(QPointF(78, 20), QPointF(78, 80))
+
+
+def _clear(p: QPainter) -> None:
+    """A tick struck through: the ticks taken off."""
+    tick = QPainterPath(QPointF(18, 52))
+    tick.lineTo(QPointF(40, 74))
+    tick.lineTo(QPointF(82, 28))
+    p.drawPath(tick)
+    p.drawLine(QPointF(20, 20), QPointF(80, 80))
+
+
+def _exploded(p: QPainter) -> None:
+    """Two parts lifted off a board, with the line down to where they go."""
+    p.drawLine(QPointF(10, 84), QPointF(90, 84))
+    p.drawRect(QRectF(18, 20, 24, 18))
+    p.drawRect(QRectF(58, 34, 24, 18))
+    for x, top in ((30, 38), (70, 52)):
+        p.drawLine(QPointF(x, top + 6), QPointF(x, 78))
+
+
+def _camera(p: QPainter) -> None:
+    """A camera: put the 3D camera back where it starts."""
+    p.drawRoundedRect(QRectF(12, 32, 76, 50), 8, 8)
+    p.drawRect(QRectF(34, 20, 24, 12))
+    p.drawEllipse(QPointF(50, 57), 15, 15)
+
+
 def _menu(p: QPainter) -> None:
     """Three lines: the menus, all of them, behind one button in the header."""
     for y in (28, 50, 72):
@@ -545,6 +580,10 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "fit": _fit,
     "delete": _delete,
     "menu": _menu,
+    "next-step": _next_step,
+    "clear": _clear,
+    "exploded": _exploded,
+    "camera": _camera,
     "search": _search,
     "measure": _measure,
     "cut-strip": _cut_strip,

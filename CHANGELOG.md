@@ -111,6 +111,11 @@ closed without a bump.
   selected symbols offers Turn, Flip, Remove and the right-click menu. A new Schematic
   menu holds Add Part, the drawing tools, Turn, Flip, Remove, Arrange, Fit, Place on the
   Board and Float the Panel, so every one of them is behind ☰ and in Ctrl+K.
+- **The 3D view and the build guide keep their controls where the others do.** The 3D
+  view's own toolbar is gone: Exploded View and Reset Camera sit at its foot beside the
+  playback, with pictures of their own. The guide's row of push buttons is a cluster in its
+  corner -- Next Step to Do, Clear Progress, and Export, which is File's Export Build Guide.
+  A tool button holding several tools says so on hover: "(hold for more)".
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

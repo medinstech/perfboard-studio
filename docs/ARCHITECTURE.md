@@ -1484,6 +1484,14 @@ were a row on the sheet's panel and nowhere else, so none was behind ☰ or in C
 they went into the Schematic menu; the sheet's Export was File ▸ Export Schematic under
 another name, and is only that now.
 
+**The guide and the 3D view follow, each as far as it can.** The guide's Next Step to Do,
+Clear Progress and Export are actions in a cluster in its corner (`guide_tools`), as the
+views' are, over room kept at the foot of the list so it covers no step. The 3D view's
+Exploded View and Reset Camera are at its FOOT, in the playback row, and not floating over
+it: the 3D view is a native OpenGL window, and Qt cannot paint a widget over one -- a bar
+laid on it would be underneath. Its own toolbar over the view was a second row for two
+buttons.
+
 **Tools that are one idea share a button** (`FloatingBar.add_group`): solder trace and
 reinforced trace; bare wire, insulated wire and a jumper over the parts. The button shows
 and arms the one picked last -- by the menu, its key or the button -- and offers the rest

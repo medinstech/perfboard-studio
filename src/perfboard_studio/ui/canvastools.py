@@ -28,18 +28,29 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QSize, Qt
-from PySide6.QtGui import QAction, QColor, QContextMenuEvent, QIcon, QPainter, QPixmap, QPolygonF
+from PySide6.QtGui import (
+    QAction,
+    QColor,
+    QContextMenuEvent,
+    QHelpEvent,
+    QIcon,
+    QPainter,
+    QPixmap,
+    QPolygonF,
+)
 from PySide6.QtWidgets import (
     QBoxLayout,
     QFrame,
     QHBoxLayout,
     QMenu,
     QToolButton,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
 
 from . import icons, theme
+from .i18n import t
 
 #: How far a floating bar keeps from the canvas's edges, in logical pixels.
 MARGIN = 12
@@ -102,6 +113,18 @@ class _GroupButton(QToolButton):
 
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         self.group_menu.popup(event.globalPos())
+
+    def event(self, event: QEvent) -> bool:
+        """The tool's own tooltip, and that the button holds more: the corner triangle is
+        small, and nothing else says a press held down offers the rest. Said when the tip
+        is shown rather than set on the button, because a button with a default action
+        takes its tip back from the action whenever the action changes."""
+        if event.type() == QEvent.Type.ToolTip and isinstance(event, QHelpEvent):
+            shown = self.defaultAction()
+            if shown is not None:
+                QToolTip.showText(event.globalPos(), shown.toolTip() + t(" (hold for more)"), self)
+                return True
+        return super().event(event)
 
 
 class FloatingBar(QFrame):

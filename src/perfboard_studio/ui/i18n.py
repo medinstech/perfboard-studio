@@ -1242,13 +1242,13 @@ TURKISH: Mapping[str, str] = {
         "Lehimleme sırası, pencerenin içinde: önce en alçak parça, üzerinde bir şey duran "
         "jumperlar ondan önce, entegreler en sonda. Bir adımı seçmek onu kart üzerinde gösterir."
     ),
-    "Reset Camera": "Kamerayı Sıfırla",
     "Export the Guide…": "Rehberi Dışa Aktar…",
     "Next Step to Do": "Sıradaki Adım",
     "The first step not ticked off yet, shown on the board and in 3D.": (
         "Henüz işaretlenmemiş ilk adım; kartta ve 3D'de gösterilir."
     ),
     "Clear Progress": "İlerlemeyi Temizle",
+    " (hold for more)": " (diğerleri için basılı tutun)",
     "Clear": "Temizle",
     "Untick every step of this board.": "Bu kartın bütün adımlarının işaretini kaldırır.",
     "{done} of {total} steps done": "{total} adımın {done} tanesi yapıldı",

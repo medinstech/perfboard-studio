@@ -4643,7 +4643,7 @@ def test_next_step_to_do_picks_the_first_step_without_a_tick(tmp_path) -> None:
     _tick(window, 0)
     _tick(window, 1)
 
-    window.act_next_step.click()
+    window.act_next_step.trigger()
 
     rows = window.guide_tree.selectedItems()
     assert rows == [window._guide_leaves()[2]]
@@ -4662,11 +4662,11 @@ def test_clearing_the_progress_asks_first(tmp_path, monkeypatch) -> None:
     _tick(window, 3)
 
     monkeypatch.setattr(MainWindow, "_confirm", lambda self, *_args: False)
-    window.act_clear_progress.click()
+    window.act_clear_progress.trigger()
     assert len(window._done_steps()) == 2
 
     monkeypatch.setattr(MainWindow, "_confirm", lambda self, *_args: True)
-    window.act_clear_progress.click()
+    window.act_clear_progress.trigger()
     assert window._done_steps() == set()
     assert not window.act_clear_progress.isEnabled()
     _close(window)
@@ -14455,5 +14455,66 @@ def test_properties_describe_the_selection_where_it_was_last_made() -> None:
         window.scene.select_components([board_part.id])  # then on a part
         assert window.properties.selection.ids == (board_part.id,)
         assert window.properties.selection.source == "board"
+    finally:
+        _close(window)
+
+
+def test_the_guides_controls_are_in_its_corner() -> None:
+    """The guide was the one panel left with a row of push buttons under it -- Next Step to
+    Do, Clear Progress, Export -- while every view's tools had gone onto the view. They are
+    a cluster in its corner now, built on actions like the rest, Export being File's own."""
+    from PySide6.QtWidgets import QPushButton
+
+    from perfboard_studio.ui.i18n import t
+
+    window = _window_on(_load_dense())
+    try:
+        panel = window.dock_guide.widget()
+        # The empty guide's own button (Place on the Board) is the empty state's, and stays.
+        old_row = {t("Next Step to Do"), t("Clear Progress"), t("Export the Guide…")}
+        left = [b.text() for b in panel.findChildren(QPushButton) if b.text() in old_row]
+        assert not left, f"left on the guide: {left}"
+        assert window.guide_tools.parent() is panel
+        actions = [button.defaultAction() for button in window.guide_tools.buttons]
+        assert actions == [window.act_next_step, window.act_clear_progress, window.act_guide]
+    finally:
+        _close(window)
+
+
+def test_the_3d_views_controls_are_at_its_foot() -> None:
+    """The 3D view had a toolbar of its own over it for two buttons. They join the playback
+    along its foot: not floating over the view as the board's do, because the 3D view is a
+    native OpenGL window and Qt cannot paint a widget over one."""
+    from PySide6.QtWidgets import QToolBar, QToolButton
+
+    window = _window_on(_load_dense())
+    try:
+        bar = window._build_assembly_bar()
+        window._3d_layout.addWidget(bar)
+        on_bar = {button.defaultAction() for button in bar.findChildren(QToolButton)}
+        assert window.act_exploded in on_bar and window.act_reset_3d in on_bar
+        assert "view3dToolbar" not in {b.objectName() for b in window.findChildren(QToolBar)}
+    finally:
+        _close(window)
+
+
+def test_a_group_button_says_it_holds_more(monkeypatch) -> None:
+    """The corner triangle is small: the tip says a press held down offers the rest, and
+    still names the tool the button arms."""
+    from PySide6.QtCore import QEvent, QPoint
+    from PySide6.QtGui import QHelpEvent
+
+    from perfboard_studio.ui import canvastools
+    from perfboard_studio.ui.i18n import t
+
+    shown: list[str] = []
+    monkeypatch.setattr(
+        canvastools.QToolTip, "showText", lambda _at, text, *_rest: shown.append(text)
+    )
+    window = _window_on(_load_dense())
+    try:
+        button = window.wire_tools
+        button.event(QHelpEvent(QEvent.Type.ToolTip, QPoint(2, 2), QPoint(2, 2)))
+        assert shown == [button.defaultAction().toolTip() + t(" (hold for more)")]
     finally:
         _close(window)
