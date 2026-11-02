@@ -57,6 +57,9 @@ The meshes are not the KiCad models unaltered:
 Nothing about the source models' geometry was otherwise altered, and no colours or
 materials were taken from them into the application's own tables.
 
+`topviews.json` is derived from these meshes in turn: what each one looks like from straight
+above, traced into outlines by `tools/make_topviews.py`. It carries the same licence.
+
 ## Rebuilding them
 
 With KiCad installed and `cadquery-ocp` available:

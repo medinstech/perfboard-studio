@@ -22,6 +22,12 @@ closed without a bump.
 
 ### Added
 
+- **What each part looks like from straight above is measured.** The outline of every
+  package KiCad models -- its case, the notch in it, its metal legs and tabs, a screw's
+  slot -- traced off the same meshes the 3D view draws, for the 2D view to draw parts as
+  they look on the bench rather than as blocks. Rebuilt by `python tools/make_topviews.py`
+  whenever a mesh changes; the outlines carry the meshes' licence.
+
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light`
   picks it for one run. Both were chosen from candidates rendered on the real window.

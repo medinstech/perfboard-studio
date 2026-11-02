@@ -907,6 +907,32 @@ Three things about the mapping:
   drawn from the slices, so there are no whole models to hold them to; `test_module_art.py`
   holds their ends, their size and the length a footprint gives them instead.
 
+**The top view is measured off the same meshes** (`tools/make_topviews.py` →
+`ui/models/topviews.json`, read by `ui/topview.py`). The 2D view drew a part from its
+archetype, and a DIP came out as a black block as wide as its pin rows; from above, the real
+one is a body narrower than its rows with a metal shoulder running out to every hole. Each
+model is rasterised straight down at 0.02 mm with a z-buffer, so every cell belongs to the
+piece somebody looking down would see, and the height map sorts the case into its flat top,
+its sloped sides and what is cut into it (a pin-1 notch); metal lower than the metal round it
+is a screw's slot or a can's vent. The regions are traced in the FOOTPRINT's frame and named
+by role (`body`, `flank`, `recess`, `plastic`, `metal`, `metal-recess`, `marking`); how a
+role is inked is the painter's, not the data's. Three rules hold it:
+
+- **The drawing follows DRC's geometry, never the other way round.**
+  `tests/test_topview.py` holds every case inside `body_extent`, to the rasteriser's own
+  0.06 mm. The first run found a TO-220 whose case stands 0.8 mm behind the box DRC
+  measures: that is the BODY that is wrong, and it is the body that moves (an `offsetY`),
+  not the picture. It waits for breadboard placement to take it -- with it, nano-relay's
+  relay was left off a breadboard -- and until then that one case is a strict xfail,
+  `BODY_PENDING`, by name.
+- **The 2D view is what the part is soldered by**, so every pin is either visible as metal
+  or listed in `hidden_pins` for the painter to mark: a TO-220's legs are under its case.
+- **No data is still a board.** A header and a terminal block of any length are drawn from
+  their measured pieces, as the 3D view draws them; a package KiCad has no model of, and
+  every package when the file is missing, is drawn from parametric shapes inside its body.
+  The data names the KiCad package each entry was measured from, so a mesh re-imported from
+  another package fails the test until the tool is run again.
+
 **The meshes are the only part of this repository that is not Apache-2.0.** They are
 CC-BY-SA 4.0 with KiCad's design exception, and their `LICENSE` and `NOTICE.md` live in
 `src/perfboard_studio/ui/models/` and travel with them. The exception means a board designed

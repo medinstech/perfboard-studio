@@ -113,6 +113,7 @@ perfboard_studio = [
     # this distribution that is not Apache-2.0 -- see ui/models/LICENSE beside them.
     "ui/models/*.ply",
     "ui/models/index.json",
+    "ui/models/topviews.json",
     "ui/models/LICENSE",
     "ui/models/NOTICE.md",
 ]
