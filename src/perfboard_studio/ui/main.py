@@ -5636,8 +5636,6 @@ class MainWindow(QMainWindow):
         # OpenGL window, and Qt cannot paint a widget over one of those -- the bar would be
         # under it. They are in the View menu too, where a keyboard looks for them.
         row.addSpacing(theme.SPACE["lg"])
-        self.act_exploded.setIcon(icons.icon("exploded"))
-        self.act_reset_3d.setIcon(icons.icon("camera"))
         for action in (self.act_exploded, self.act_reset_3d):
             button = QToolButton()
             button.setDefaultAction(action)
@@ -6825,13 +6823,13 @@ class MainWindow(QMainWindow):
         act_go_to.triggered.connect(self.on_go_to_part)
         view_menu.addSeparator()
 
-        self.act_exploded = view_menu.addAction(t("&Exploded View"))
+        self.act_exploded = view_menu.addAction(icons.icon("exploded"), t("&Exploded View"))
         self.act_exploded.setCheckable(True)
         self.act_exploded.setToolTip(
             t("Lift every part off the board, with a line down to the holes it goes in.")
         )
         self.act_exploded.toggled.connect(self.on_toggle_exploded)
-        act_reset_3d = view_menu.addAction(t("Reset 3D Ca&mera"))
+        act_reset_3d = view_menu.addAction(icons.icon("camera"), t("Reset 3D Ca&mera"))
         act_reset_3d.triggered.connect(self.on_reset_3d_camera)
         self.act_reset_3d = act_reset_3d
 
