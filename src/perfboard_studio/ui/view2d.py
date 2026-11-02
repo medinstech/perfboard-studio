@@ -22,6 +22,7 @@ consistently everywhere, not a family of ad hoc sign flips that can drift apart.
 
 from __future__ import annotations
 
+import contextlib
 import math
 from collections.abc import Collection, Sequence
 from dataclasses import replace
@@ -4340,6 +4341,21 @@ class BoardScene(QGraphicsScene):
         selection of everything is for is moving, turning or locking the parts, and none of
         that carries a trace with it."""
         self.select_components(list(self.component_items))
+
+    def __del__(self) -> None:
+        """A scene going away says nothing on the way out.
+
+        Its own destructor clears its items, and clearing a SELECTED item emits
+        ``selectionChanged`` -- into ``_on_selection_changed``, on the very object Python is
+        half way through tearing down. That raised "Slot 'BoardScene::' not found" in the
+        event loop of whatever test happened to be running when the collector got round to
+        a scene an earlier one left behind: test_theme, after test_canvas_gestures and
+        test_i18n, three runs in four. Safe because a scene has no Qt parent (its
+        ``__init__`` passes none), so Python owns it and this runs only as it is destroyed.
+        """
+        # RuntimeError: the C++ side is already gone, and there is nothing left to emit.
+        with contextlib.suppress(RuntimeError):
+            self.blockSignals(True)
 
     def _on_selection_changed(self) -> None:
         """Selecting a part highlights every net it belongs to.

@@ -1049,3 +1049,15 @@ def test_the_ghost_and_the_drag_ask_one_question() -> None:
         for col in range(-1, document.board.cols + 1):
             at = HoleCoord(col, row)
             assert scene._placement_blocked(at) == scene._drop_blocked(footprint, at, 0, False, None), at
+def test_a_board_going_away_says_nothing_on_the_way_out() -> None:
+    """A scene's destructor clears its items, and a selected one emitted
+    ``selectionChanged`` into the half-destroyed scene's own slot: "Slot 'BoardScene::' not
+    found", raised in whatever test was running when the collector reached it."""
+    document = persist.deserialize_document(GOLDEN.read_text(encoding="utf-8")).document
+    scene = BoardScene(document, footprint_lookup(), side="top")
+    next(iter(scene.component_items.values())).setSelected(True)
+    heard: list[int] = []
+    scene.selectionChanged.connect(lambda: heard.append(1))
+    scene.__del__()
+    scene.clearSelection()
+    assert scene.signalsBlocked() and heard == []
