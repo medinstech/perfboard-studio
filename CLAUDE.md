@@ -113,9 +113,12 @@ payload of the wrong shape (`invalid-payload`) as well as `CommandError`, becaus
 raises; callers branch on `ok`" has to hold for an agent handing it a dict, and the undo
 stack is bounded (`UNDO_LIMIT`).
 
-**A group of parts moved together is ONE `component.moveMany`** (`view2d._dispatch_moves`),
-for drags and arrow-key nudges alike: one gesture, one undo step, all-or-nothing. A
-locked part in the selection refuses the whole move and names itself.
+**One gesture over a group of parts is ONE command**: `component.moveMany`
+(`view2d._dispatch_moves`, drags and arrow-key nudges alike), `rotateMany`, `mirrorMany`,
+`lockMany`, `updateMany` and `deleteMany`, the last taking the copper selected with the
+parts. One undo step, all-or-nothing; each member goes through its single command, so a
+group of one is that command, and a locked part refuses the whole group and names itself.
+The window dispatches the single command for one part, so its undo label still names it.
 
 **Commands enforce document integrity; DRC reports design quality.** Ids unique,
 references resolve, paths on the board, model invariants hold → hard error, mutation
