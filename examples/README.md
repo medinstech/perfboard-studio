@@ -11,8 +11,8 @@ perfboard-studio examples/lm317-supply.perf     # open the finished board
 ```
 
 ...or start from the netlist the way you would with your own circuit: **File → Import
-KiCad Netlist**, then follow the step bar -- **Choose a Board**, **Place on the Board**
-(`Ctrl+Shift+A` arranges it again from another seed), `Ctrl+R` to route,
+from KiCad**, then follow the header's steps -- **Choose a Board**, **Place on the Board**
+(`Ctrl+Shift+A` arranges it again from another seed), `Ctrl+R` to wire,
 `Ctrl+B` for the build guide.
 
 Every board below is one a supplier stocks, in the exact size on the packet, with the
@@ -72,7 +72,7 @@ The timestamps in the `.perf` files are fixed rather than current, so rebuilding
 example does not put a date change in the way of whatever the commit was about.
 
 `nano-relay` is the one that names nothing. It reads each part exactly as
-**File → Import KiCad Netlist** does -- `parsers.kicad_parts`, the catalog, the KiCad
+**File → Import from KiCad** does -- `parsers.kicad_parts`, the catalog, the KiCad
 footprint, the renumbering -- and puts them in the design, as the window does, so it is
 also the end-to-end check of that reading. Its
 terminals' pin names and its two labels are the only things the script adds, because a

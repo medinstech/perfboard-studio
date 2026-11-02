@@ -18,8 +18,8 @@
 
 <p align="center">
   <b>1.</b> Windows, macOS ya da Linux için kurulum dosyasını <a href="https://github.com/medinstech/perfboard-studio/releases/latest"><b>indirin</b></a> — ya da <a href="#çalıştırmak"><code>uv tool install perfboard-studio</code></a><br>
-  <b>2.</b> Şemada yeni bir devre çizin ya da başlangıç ekranındaki örneklerden birini açın<br>
-  <b>3.</b> Montaj rehberi açılana kadar adım çubuğunun sonundaki düğmeye basın — sıradakinin adını hep o söyler
+  <b>2.</b> Ana sayfada ilk devrenizi çizin, bir örnek açın ya da 1 dakikalık turu başlatın<br>
+  <b>3.</b> Montaj rehberi açılana kadar sağ üstteki mavi düğmeye basın — sıradakinin adını hep o söyler
 </p>
 
 <p align="center">
@@ -29,12 +29,12 @@
   &nbsp;·&nbsp; <a href="./README.md">English</a>
 </p>
 
-![Pencere, çizilmiş bir NE555 devresinden montaj rehberine: adım çubuğunun sonundaki düğme bir kart seçtiriyor, parçaları yerleştiriyor, bağlantıları çekiyor ve rehberi açıyor](./docs/images/workflow.tr.gif)
+![Pencere, çizilmiş bir NE555 devresinden montaj rehberine: sağ üstteki düğme bir kart seçtiriyor, parçaları yerleştiriyor, kabloluyor ve rehberi açıyor](./docs/images/workflow.tr.gif)
 
 <p align="center">
-  Çizilmiş ama henüz kurulmamış 555 flaşör örneği, adım çubuğunun sonundaki düğmeyle<br>
+  Çizilmiş ama henüz kurulmamış 555 flaşör örneği, sağ üstteki düğmeyle<br>
   montaj rehberine kadar: devrenin denendiği hazır kart boylarından biri seçiliyor,<br>
-  parçalar yerleşiyor, bağlantılar çekilip denetleniyor.
+  parçalar yerleşiyor, bağlantılar kablolanıp denetleniyor.
 </p>
 
 ---
@@ -143,8 +143,8 @@ yukarıdan bakınca çakışma gibi görünür; sığar, ama modül takılınca 
 
 ![Aynı kart 3D'de](./docs/images/board-3d.png)
 
-**Kartın yanında durur, ve tıklamaya cevap verir.** Kart, şema ve 3D yan yana açılır, her
-biri pencereden payını alır; araç çubuğundaki görünüm düğmeleri onları açıp kapatır. 3D'de
+**Kartın yanında durur, ve tıklamaya cevap verir.** Kart, şema, 3D ve montaj rehberi tek bir
+kanvasın üstünde sekmelerdir; yana sürüklenen bir sekme ötekilerin yanında durur. 3D'de
 tıklanan bir parça kartta ve şemada seçilir, montaj rehberi de onun adımına gider; orada
 tıklanan bir tel netini her yerde vurgular; ve nerede seçilmiş olursa olsun seçili olan 3D'de
 renklenir — üç görünüm tek bir seçimi gösterir.
@@ -162,7 +162,7 @@ gerekir, ve bir proje kaydı onu diğer çıktıların yanına koyar.
 ![Arduino Nano röle sürücü: katalogdan parçalar, pin başlıklarındaki Nano, kartta pin adları ve etiketler](./docs/images/catalog-and-pin-names.png)
 
 Bir kılıf bir parça değildir. Bir TO-92 bir BC547 de olabilir, bir 2N7000 ya da bir 78L05
-de; kartın dayandığı bilgi hangi bacağın beyz olduğudur. Parçalar paneli, delikli bir
+de; kartın dayandığı bilgi hangi bacağın beyz olduğudur. Kütüphane, delikli bir
 kartın gerçekten yapıldığı parçaların **kataloğuyla** başlar — transistörler ve MOSFET'ler,
 regülatörler ve gücün karta giriş yolları, diyotlar, sensörler ve ekranlar, entegreler,
 anahtarlar, röleler, buzzer'lar ve geliştirme kartları — ve birini seçmek onu değeri, veri
@@ -308,26 +308,26 @@ ek değil, uygulamanın dayandığı bir kontrol aracı.
 
 ### Sıfırdan bir kart
 
-Araç çubuğunun altındaki şerit bu yolu adım adım yürür — **Devre, Kart, Yerleşim,
-Kablolama, Kontrol, Montaj** —, kartın her adımda nerede durduğunu söyler ve **Sonraki**
-düğmesi sıradaki adımı yapar. Elle yapıldığında akış şöyle:
+Pencerenin başlığı bu yolu adım adım yürür — **Devre, Kart, Yerleşim,
+Kablolama, Kontrol, Montaj** —, kartın her adımda nerede durduğunu söyler ve sağındaki
+düğme sıradaki adımı yapar. Elle yapıldığında akış şöyle:
 
-Şema panelini açın (`Ctrl+2`) ve devreyi çizin: parçaları Parçalar panelinden sayfaya
+Şemayı açın (`Ctrl+2`) ve devreyi çizin: parçaları Kütüphaneden sayfaya
 sürükleyin ya da bir sonraki için açık kalan **Parça Ekle** ile art arda ekleyin;
 istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine ya da çizilmiş bir telin
 üstüne tel çekin (iki ucuna tıklayarak ya da sürükleyerek; bir besleme pininde birleşen
 net o pinin adını alır, VCC ya da GND) — ya da bir pini
 **Etiket** ile adına göre bir nete bağlayın, ya da sağ tıklayıp GND ve +5V'ye bağlayın —
 sonra **Karta Yerleştir**; önce hangi hazır kartın kullanılacağını sorar: devreniz
-geniş bir kartta ve ondan küçük her boyda yerleştirilir, tellenir ve denetlenir, ve öneri
+geniş bir kartta ve ondan küçük her boyda yerleştirilir, kablolanır ve denetlenir, ve öneri
 aynı iyilikte kurulduğu en küçük karttır.
 Oradan **Yerleştir →
 Parçaları Yeniden Diz** (`Ctrl+Shift+A`), otomatik kablolama için **`Ctrl+R`**, ardından **Dosya → Montaj
 Rehberini Dışa Aktar** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
 
-Devre zaten varsa ilk üç adım yerine `examples/ne555-astable.net` üzerinde **Dosya → KiCad
-Netlist İçe Aktar** ile başlayın: her parça, değerinin ve KiCad footprint'inin söylediği şey
-olarak tasarıma gelir; oradan sonrasını pencerenin üstündeki adım çubuğu götürür — **Kart
+Devre zaten varsa ilk üç adım yerine `examples/ne555-astable.net` üzerinde **Dosya → KiCad'den
+İçe Aktar** ile başlayın: her parça, değerinin ve KiCad footprint'inin söylediği şey
+olarak tasarıma gelir; oradan sonrasını başlıktaki adımlar götürür — **Kart
 Seç**, **Karta Yerleştir**, kablolama, kontrol, montaj. Yukarıdaki ekran görüntüleri
 bu sıradan çıkıyor — bkz. [`tools/screenshots.py`](./tools/screenshots.py).
 

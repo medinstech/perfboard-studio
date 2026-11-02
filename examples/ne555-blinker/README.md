@@ -65,7 +65,7 @@ A 555 astable flashing an LED, with the flash rate on a pot.
 | J2 | 3-pin header: OUT, +9V, GND |
 
 `netlist.net` is the KiCad export the design was built from, kept in the project the way
-`project.py` reserves a place for it. **File ▸ Import KiCad Netlist…** on it does the
+`project.py` reserves a place for it. **File ▸ Import from KiCad…** on it does the
 same thing from the other direction.
 
 ## Regenerating it

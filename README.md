@@ -18,8 +18,8 @@
 
 <p align="center">
   <b>1.</b> <a href="https://github.com/medinstech/perfboard-studio/releases/latest"><b>Download</b></a> the installer for Windows, macOS or Linux — or <a href="#running-it"><code>uv tool install perfboard-studio</code></a><br>
-  <b>2.</b> Draw a new circuit on the sheet, or open one of the examples the start screen lists<br>
-  <b>3.</b> Press the button at the end of the step bar until the build guide opens — it always names what comes next
+  <b>2.</b> On Home, draw your first circuit, open an example, or take the one-minute tour<br>
+  <b>3.</b> Press the blue button at the top right until the build guide opens — it always names what comes next
 </p>
 
 <p align="center">
@@ -29,12 +29,12 @@
   &nbsp;·&nbsp; <a href="https://github.com/medinstech/perfboard-studio/blob/main/README.tr.md">Türkçe</a>
 </p>
 
-![The window, from a drawn NE555 circuit to its build guide: the button at the end of the step bar chooses a board, places the parts, routes them and opens the guide](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/workflow.gif)
+![The window, from a drawn NE555 circuit to its build guide: the button at the top right chooses a board, places the parts, wires them and opens the guide](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/workflow.gif)
 
 <p align="center">
   The 555 blinker example, drawn and not yet built, taken to its build guide by the button<br>
-  at the end of the step bar: a board picked from every stock size the circuit was tried<br>
-  on, the parts placed, the connections routed and checked.
+  at the top right: a board picked from every stock size the circuit was tried<br>
+  on, the parts placed, the connections wired and checked.
 </p>
 
 ---
@@ -144,9 +144,8 @@ fits, but cannot be reached once the module is on.
 
 ![The same board in 3D](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/board-3d.png)
 
-**It stands beside the board, and it answers a click.** Board, schematic and 3D open side
-by side, each taking its share of the window, and the toolbar's view buttons switch them on
-and off. A part clicked in 3D is selected on the board and on the sheet, and the build guide
+**It stands beside the board, and it answers a click.** Board, schematic, 3D and the build
+guide are tabs over one canvas, and a tab dragged aside stands beside the others. A part clicked in 3D is selected on the board and on the sheet, and the build guide
 goes to its step; a wire clicked there lights its net everywhere; and whatever is selected
 anywhere is tinted in 3D, so the three views show one selection.
 
@@ -163,7 +162,7 @@ save puts one beside the other outputs.
 ![An Arduino Nano relay driver: the catalog's parts, the Nano on its header strips, pin names and labels on the board](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/catalog-and-pin-names.png)
 
 A package is not a part. A TO-92 is a BC547 or a 2N7000 or a 78L05, and which leg is the
-base is the fact the board depends on. The Parts panel starts with a **catalog** of the parts
+base is the fact the board depends on. The Library starts with a **catalog** of the parts
 a perfboard is actually built from — transistors and MOSFETs, regulators and the ways power
 comes in, diodes, sensors and displays, ICs, switches, relays, buzzers and dev boards — and
 picking one places it with its value, what its datasheet calls every lead and the symbol it
@@ -308,12 +307,12 @@ checking tool the application depends on rather than an optional extra.
 
 ### A board from nothing
 
-The bar under the toolbar walks through it — **Circuit, Board, Placement, Wiring, Checks,
-Build** — says where the board stands on each step, and its **Next** button does whichever
-comes next. By hand, it goes like this.
+The header walks through it — **Circuit, Board, Placement, Wiring, Checks,
+Build** — says where the board stands on each step, and the button at its right does
+whichever comes next. By hand, it goes like this.
 
-Open the schematic panel (`Ctrl+2`) and draw the circuit: drag parts onto the sheet out
-of the Parts panel, or add them one after another with **Add Part**, which stays open for
+Open the schematic (`Ctrl+2`) and draw the circuit: drag parts onto the sheet out
+of the Library, or add them one after another with **Add Part**, which stays open for
 the next; move and turn them where you want them, **Connect** from pin to pin or onto a wire
 already drawn (click both ends, or drag; a net joined at a supply pin takes its name, VCC
 or GND) — or **Label** a pin to join it to a net by name, or right-click it for GND and
@@ -323,9 +322,9 @@ and on each smaller one, and the suggestion is the smallest it builds as well on
 **Place → Rearrange Parts** (`Ctrl+Shift+A`), **`Ctrl+R`** to auto-wire, and
 **File → Export Build Guide** (`Ctrl+B`). No KiCad anywhere in that.
 
-With a circuit that already exists, start at **File → Import KiCad Netlist** on
+With a circuit that already exists, start at **File → Import from KiCad** on
 `examples/ne555-astable.net` instead: each part arrives in the design as what its value and
-its KiCad footprint say it is, and the step bar across the top of the window takes it from
+its KiCad footprint say it is, and the header's steps take it from
 there — **Choose a Board**, **Place on the Board**, wiring, checks, build. That is the
 sequence the screenshots above come out of — see
 [`tools/screenshots.py`](https://github.com/medinstech/perfboard-studio/blob/main/tools/screenshots.py).
