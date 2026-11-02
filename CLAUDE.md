@@ -175,11 +175,19 @@ disagree), and pinned by its own test:
   courtyard where the boxes meet and the shapes do not. 41 body-overlap findings across
   the fixtures become 40. Adding to this dict needs a test asserting the GEOMETRY, not
   just the absence.
-- `DIVERGES_FROM_TYPESCRIPT` in `test_footprints.py` — `xtal-hc49`, whose can the original
-  had as 4.65 × 3.5 mm (its thickness along the leads and a height across them) where it
-  is 11.05 × 4.65 mm on the board, so a crystal stood on U1's pin on atmega328-relay and DRC
-  saw nothing. Only the outline and `dims` are excused; every other field is still
-  compared, and `test_the_crystal_is_as_long_as_the_can` pins the geometry.
+- `DIVERGES_FROM_TYPESCRIPT` in `tests/differential.py` — footprints whose geometry was
+  corrected: `xtal-hc49`, whose can the original had as 4.65 × 3.5 mm where it is
+  11.05 × 4.65 mm on the board (a crystal stood on U1's pin on atmega328-relay and DRC saw
+  nothing), and nineteen packages made the real part's size — the datasheet maximum, or
+  KiCad's model where that is larger, a TO-92 and a screw terminal off their pin row by the
+  `offsetY` their meshes measure, a DIP's courtyard holding its body. Only the outline, `dims`
+  and the height are excused; every other field is still compared, and
+  `test_the_crystal_is_as_long_as_the_can` and `test_a_body_is_the_real_package` pin the
+  geometry. **Every test that compares with a fixture's expected output takes its footprints
+  from `differential_lookup()`**, which serves the original's footprint for exactly those ids:
+  the proof is about the code, run on the original's inputs, and on a body made larger a
+  comparison on the registry would read the correction as a regression in the rules.
+  `tests/test_differential.py` reads the test sources and fails if one reaches the registry.
 - `JOINED_BEYOND_TYPESCRIPT` in `test_connectivity.py` — a join the original did not make:
   a component-side conductor's end and the solder-side copper in one hole that has a pad
   and no pin (connectivity's pass 2b). A jumper's end passes through the hole and is
