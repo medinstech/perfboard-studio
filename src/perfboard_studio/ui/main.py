@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from PySide6.QtCore import (
+    QByteArray,
     QEvent,
     QEventLoop,
     QFileSystemWatcher,
@@ -96,6 +97,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSlider,
     QSpinBox,
+    QStackedWidget,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
@@ -349,6 +351,7 @@ from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .header import HeaderBar
+from .home import Home, HomeExample
 from .i18n import language as current_language
 from .i18n import set_language, t
 from .partlist import PartListPanel
@@ -367,12 +370,10 @@ from .view2d import (
 )
 from .viewsch import SchematicView, SheetTool
 from .workflow import (
-    STEP_ORDER,
     StepKey,
     WorkflowBar,
     WorkflowFacts,
     build_action,
-    step_title,
     workflow_steps,
 )
 
@@ -529,9 +530,6 @@ BACKUP_SUFFIX = ".bak"
 #: shorter than the update check, because this one is about work that already exists.
 RECOVERY_OFFER_DELAY_MS = 400
 
-#: How long after that the welcome dialog is offered. After the recovery question has been
-#: asked and answered, because a recovered board is already an answer to this one.
-WELCOME_OFFER_DELAY_MS = 500
 
 
 #: Which build-guide steps somebody has ticked off, per board file (``MainWindow._done_steps``).
@@ -3757,173 +3755,6 @@ def example_boards() -> list[tuple[Path, str]]:
     return [(path, line) for _key, path, line in sorted(listed)]
 
 
-class WelcomeDialog(QDialog):
-    """What to do first, offered over the window once it is up.
-
-    NOT A SPLASH SCREEN. It appears after the board is drawn, not instead of it, and it is
-    a list of things to press rather than a logo — so dismissing it leaves somebody
-    looking at the application rather than at nothing.
-
-    IT EXISTS BECAUSE THE RECENT LIST WAS INVISIBLE. A perfboard project is worked on
-    across evenings, and the way back to last night's board was two menus deep in a
-    submenu that had to be opened to be read. Everything here was already reachable; none
-    of it was reachable in the two seconds after a launch, which is when it is wanted.
-
-    AND BECAUSE A FIRST START HAD NOWHERE TO GO. It offered three ways to open something
-    and none to begin: no "draw a circuit", no example to look at, and nothing saying what
-    the steps of the work even are. Now the first button starts a circuit on the sheet, the
-    examples are listed with what each one is, and the six steps the bar across the window
-    walks through are named once, here, before they are needed.
-
-    The checkbox is honest about what it does and defaults to on. A first-run dialog that
-    cannot be turned off is a first-run dialog people learn to click through without
-    reading, which costs more than it ever saves.
-    """
-
-    def __init__(
-        self,
-        recent: Sequence[Path],
-        parent: QWidget | None = None,
-        examples: Sequence[tuple[Path, str]] = (),
-    ) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(t("Perfboard Studio"))
-        self.setMinimumWidth(720)
-        #: What the caller should do, set by whichever button was pressed. None means the
-        #: dialog was dismissed and the blank board it opened on is the answer.
-        self.choice: WelcomeChoice | None = None
-        self.chosen_path: Path | None = None
-
-        layout = QVBoxLayout(self)
-        heading = QLabel(
-            theme.heading(t("Perfboard Studio"))
-            + "&nbsp;&nbsp;"
-            + theme.ink(__version__, "secondary")
-        )
-        layout.addWidget(heading)
-        blurb = QLabel(
-            t(
-                "Draw the circuit, let the tool arrange it on a board a supplier stocks, "
-                "and build it from the guide it writes."
-            )
-        )
-        blurb.setWordWrap(True)
-        theme.tone(blurb, "secondary")
-        layout.addWidget(blurb)
-        steps = QLabel(
-            "  ›  ".join(
-                f"<b>{number}</b> {step_title(key)}"
-                for number, key in enumerate(STEP_ORDER, start=1)
-            )
-        )
-        steps.setToolTip(
-            t("The steps the bar across the top of the window walks through, in order.")
-        )
-        steps.setContentsMargins(0, theme.SPACE["sm"], 0, theme.SPACE["sm"])
-        layout.addWidget(steps)
-
-        columns = QHBoxLayout()
-        begin = QVBoxLayout()
-        begin_heading = QLabel(f"<b>{t('Start')}</b>")
-        begin.addWidget(begin_heading)
-        for label, tip, choice, primary in (
-            (
-                t("Draw a New Circuit"),
-                t("Start on the sheet: add parts and join their pins. The board comes after."),
-                "new-circuit",
-                True,
-            ),
-            (
-                t("New Project…"),
-                t("A folder for the board and everything generated from it."),
-                "new-project",
-                False,
-            ),
-            (t("Open a Board…"), t("A single .perf file."), "open", False),
-            (t("Open Project…"), t("A folder built around one board."), "open-project", False),
-        ):
-            button = QPushButton(label)
-            button.setToolTip(tip)
-            button.setMinimumHeight(34)
-            if primary:
-                button.setDefault(True)
-                theme.variant(button, "primary")
-            button.clicked.connect(lambda _checked=False, c=choice: self._pick(c))
-            begin.addWidget(button)
-        begin.addStretch(1)
-        # A side door, drawn as one: the circuit is drawn here, on the sheet, and a button
-        # the size of "Draw a New Circuit" said a KiCad netlist was the other way in. It is
-        # still a click away, under the doors that are, and in the File menu and a drop.
-        self.import_link = QPushButton(t("Import a KiCad Netlist…"))
-        self.import_link.setToolTip(
-            t("A circuit drawn in KiCad: its parts and connections come in as the design.")
-        )
-        self.import_link.setFlat(True)
-        self.import_link.setAutoDefault(False)
-        self.import_link.setCursor(Qt.CursorShape.PointingHandCursor)
-        theme.variant(self.import_link, "link")
-        self.import_link.clicked.connect(lambda _checked=False: self._pick("import"))
-        begin.addWidget(self.import_link)
-        columns.addLayout(begin, 2)
-
-        lists = QVBoxLayout()
-        self.examples = QListWidget()
-        self.examples.setAlternatingRowColors(True)
-        for path, line in examples:
-            item = QListWidgetItem(f"{path.stem}\n{line}")
-            item.setToolTip(
-                t("Opens as a new, untitled board: Save asks where your copy goes.")
-            )
-            item.setData(Qt.ItemDataRole.UserRole, str(path))
-            self.examples.addItem(item)
-        if examples:
-            lists.addWidget(QLabel(f"<b>{t('Examples')}</b>"))
-            lists.addWidget(self.examples, 1)
-            self.examples.itemActivated.connect(self._pick_example)
-            self.examples.itemDoubleClicked.connect(self._pick_example)
-        else:
-            self.examples.hide()
-
-        self.recent = QListWidget()
-        self.recent.setAlternatingRowColors(True)
-        for path in recent:
-            item = QListWidgetItem(f"{path.stem}    {path.parent}")
-            item.setToolTip(str(path))
-            item.setData(Qt.ItemDataRole.UserRole, str(path))
-            self.recent.addItem(item)
-        if recent:
-            lists.addWidget(QLabel(f"<b>{t('Where you left off')}</b>"))
-            lists.addWidget(self.recent, 1)
-            self.recent.itemActivated.connect(self._pick_recent)
-            self.recent.itemDoubleClicked.connect(self._pick_recent)
-        else:
-            self.recent.hide()
-        columns.addLayout(lists, 3)
-        layout.addLayout(columns, 1)
-
-        self.remember = QCheckBox(t("Show this when Perfboard Studio starts"))
-        self.remember.setChecked(True)
-        bottom = QHBoxLayout()
-        bottom.addWidget(self.remember)
-        bottom.addStretch(1)
-        close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        close.rejected.connect(self.reject)
-        bottom.addWidget(close)
-        layout.addLayout(bottom)
-
-    def _pick(self, choice: str) -> None:
-        self.choice = cast(WelcomeChoice, choice)
-        self.accept()
-
-    def _pick_recent(self, item: QListWidgetItem) -> None:
-        self.chosen_path = Path(str(item.data(Qt.ItemDataRole.UserRole)))
-        self._pick("recent")
-
-    def _pick_example(self, item: QListWidgetItem) -> None:
-        self.chosen_path = Path(str(item.data(Qt.ItemDataRole.UserRole)))
-        self._pick("example")
-
-
 class BoardSizeDialog(QDialog):
     """Which stock board this circuit should go on, asked once, on the way from the
     schematic to the board.
@@ -4963,7 +4794,115 @@ class MainWindow(QMainWindow):
             )
         )
         column.addWidget(self.central_hint)
-        return widget
+        # A STACK, so the middle of the window can be Home (``show_home``): the one page
+        # that is the whole window, with no panel, header or status bar around it.
+        stack = QStackedWidget(self)
+        stack.addWidget(widget)
+        self._central_stack = stack
+        #: The page in front instead of the hint while Home is showing, the layout to go
+        #: back to when it goes, and whether the opening proportions still wait for that.
+        self._home: QWidget | None = None
+        self._home_page: Home | None = None
+        self._layout_before_home: QByteArray | None = None
+        self._sizes_after_home = False
+        return stack
+
+    # -- Home -------------------------------------------------------------------
+    #
+    # HOME IS A PAGE OF THE WINDOW, NOT A DIALOG OVER IT. The welcome dialog asked "what
+    # first?" over an editor somebody had not chosen yet, and closing it left them in front
+    # of the very panels it was meant to spare them. Home is the whole window until they
+    # pick a door (``ui/home.py``); every door is an existing command, and the window comes
+    # back exactly as it was (``leave_home``).
+
+    def show_home(self, home: QWidget) -> None:
+        """Put ``home`` in front of the whole window: every panel, the header and the status
+        bar go, and the middle of the window is Home's.
+
+        The panels are PHOTOGRAPHED rather than remembered one by one -- ``saveState`` --
+        so ``leave_home`` puts back exactly what was there, sizes, tabs and all; and a window
+        closed while Home is showing saves that photograph, not a window of nothing.
+        """
+        stack = self._central_stack
+        if self._home is not None and self._home is not home:
+            stack.removeWidget(self._home)
+        if stack.indexOf(home) < 0:
+            stack.addWidget(home)
+        if not self.home_is_showing():
+            self._layout_before_home = self.saveState(WINDOW_STATE_VERSION)
+            for dock in self.findChildren(QDockWidget):
+                dock.hide()
+            self.header_strip.hide()
+            self.statusBar().hide()
+        self._home = home
+        stack.setCurrentWidget(home)
+        stack.setMaximumSize(self.UNCAPPED, self.UNCAPPED)
+
+    def leave_home(self) -> None:
+        """Back to the window as it was before Home (``show_home``). Nothing if Home is not
+        showing."""
+        if not self.home_is_showing():
+            return
+        self._central_stack.setCurrentIndex(0)
+        self.header_strip.show()
+        self.statusBar().show()
+        if self._layout_before_home is not None:
+            self.restoreState(self._layout_before_home, WINDOW_STATE_VERSION)
+            self._layout_before_home = None
+        # Not ``_keep_3d_behind``: that is for a start, where a 3D view left in front would
+        # build VTK for nobody. Here the view in front is the one somebody left there.
+        self._sync_dock_titlebars()
+        self._sync_central_hint()
+        if self._sizes_after_home:
+            # Home stood over the window's first showing, so the opening proportions were
+            # never pinned; a window with nothing to divide has nothing to pin.
+            self._sizes_after_home = False
+            self._apply_default_sizes()
+
+    def home_is_showing(self) -> bool:
+        return self._home is not None and self._central_stack.currentWidget() is self._home
+
+    def is_showing(self, dock: QDockWidget) -> bool:
+        """Whether ``dock`` is in front of the user: open, and the current tab of its group
+        -- the rule ``board_is_showing`` and ``schematic_is_showing`` ask about their own."""
+        return self._is_in_front(dock)
+
+    def _make_home(self) -> Home:
+        """Home, made once and connected: every door is a command the window already has,
+        taken after Home has gone, so a file dialog or a question opens over the window it
+        is about."""
+        if self._home_page is not None:
+            return self._home_page
+        home = Home(
+            [HomeExample(path, line) for path, line in example_boards()], self.lookup
+        )
+
+        def through(action: Callable[[], object]) -> Callable[..., None]:
+            def go(*_args: object) -> None:
+                self.leave_home()
+                action()
+
+            return go
+
+        home.newCircuit.connect(through(self._start_a_circuit))
+        home.openFile.connect(through(self.on_open))
+        home.importNetlist.connect(through(self.on_import_netlist))
+        home.startTour.connect(through(self.start_tour))
+        home.openExample.connect(
+            lambda path: through(lambda: self.on_open_example(Path(path)))()
+        )
+        home.openRecent.connect(lambda path: through(lambda: self.on_open_recent(Path(path)))())
+        home.showAtStartChanged.connect(
+            lambda on: app_settings().setValue(SHOW_WELCOME_KEY, bool(on))
+        )
+        self._home_page = home
+        return home
+
+    def _start_a_circuit(self) -> None:
+        """The first door: the window is already on an empty design, so drawing starts on the
+        sheet, with the library open on the first part."""
+        self.show_schematic()
+        self.on_schematic_add_part()
 
     def _sync_central_hint(self) -> None:
         """Give the middle of the window to the panels, or to the hint.
@@ -4974,6 +4913,10 @@ class MainWindow(QMainWindow):
         """
         hint = self.centralWidget()
         if hint is None:
+            return
+        if getattr(self, "_home", None) is not None and self.home_is_showing():
+            # Home is the whole window, and none of the panels are open behind it.
+            hint.setMaximumSize(self.UNCAPPED, self.UNCAPPED)
             return
         panels = (
             getattr(self, "dock_board", None),
@@ -5271,7 +5214,10 @@ class MainWindow(QMainWindow):
             return
         self._sized_layout = True
         if not self._restored_layout:
-            self._apply_default_sizes()
+            if self.home_is_showing():
+                self._sizes_after_home = True
+            else:
+                self._apply_default_sizes()
 
     #: The view panels, in the order the toolbar offers them. One tuple, so a rule about
     #: "the panels" cannot be applied to three of the four.
@@ -11819,6 +11765,9 @@ class MainWindow(QMainWindow):
         # whatever the bar was saying -- the routing summary, posted with no timeout so
         # it could be read -- when there was nothing to leave: leave_mode() disarms every
         # mode whether or not it was armed, and each disarm signal clears the bar.
+        if self.home_is_showing():
+            self.leave_home()
+            return
         left_something = False
         if self.scene.in_a_mode:
             self.scene.leave_mode()
@@ -13529,12 +13478,14 @@ class MainWindow(QMainWindow):
                 theme.ink(t("Could not write the recovery file — save your work yourself."), "warning")
             )
 
-    def offer_welcome(self) -> None:
-        """Offer the way back to last night's board, once, over a window that is already up.
+    def offer_home(self) -> None:
+        """Home in front of the window, on a start with nothing to show yet.
 
         Skipped on a document that has anything in it -- opened from the command line,
-        restored from a crash record, or already worked on. The dialog is about what to do
-        FIRST, and there is no first left once there is a board on the screen.
+        restored from a crash record, or already worked on: Home is about what to do FIRST,
+        and there is no first left once there is a board on the screen. Called before the
+        window is shown, so Home is the first thing anybody sees rather than a flash of
+        empty panels.
         """
         if not _stored_bool(app_settings(), SHOW_WELCOME_KEY, True):
             return
@@ -13547,29 +13498,12 @@ class MainWindow(QMainWindow):
             or document.nets
         ):
             return
-
-        recent = [Path(entry) for entry in self._recent_paths() if Path(entry).is_file()]
-        dialog = WelcomeDialog(recent[:8], self, examples=example_boards())
-        answer = dialog.exec()
-        app_settings().setValue(SHOW_WELCOME_KEY, dialog.remember.isChecked())
-        if answer != QDialog.DialogCode.Accepted:
-            return
-        if dialog.choice == "new-circuit":
-            # The window is already on an empty design; drawing starts on the sheet.
-            self.show_schematic()
-            self.on_schematic_add_part()
-        elif dialog.choice == "new-project":
-            self.on_new_project()
-        elif dialog.choice == "open-project":
-            self.on_open_project()
-        elif dialog.choice == "open":
-            self.on_open()
-        elif dialog.choice == "import":
-            self.on_import_netlist()
-        elif dialog.choice == "recent" and dialog.chosen_path is not None:
-            self.on_open_recent(dialog.chosen_path)
-        elif dialog.choice == "example" and dialog.chosen_path is not None:
-            self.on_open_example(dialog.chosen_path)
+        home = self._make_home()
+        recent = [entry for entry in self._recent_paths() if Path(entry).is_file()]
+        home.set_recent([str(entry) for entry in recent[:8]])
+        home.set_show_at_start(True)
+        self.show_home(home)
+        home.focus_first()
 
     def _autosave_to_the_file(self, text: str) -> bool:
         """Put the board back in its own file, if that is what the user asked for.
@@ -13683,6 +13617,7 @@ class MainWindow(QMainWindow):
 
             if box.clickedButton() is recover:
                 if self._load_recovered(record):
+                    self.leave_home()  # a recovered board is the answer to what to open
                     # Handed over. Keeping it would offer the same board again next time,
                     # on top of whatever the user does with it now.
                     with contextlib.suppress(OSError):
@@ -13748,7 +13683,14 @@ class MainWindow(QMainWindow):
     def _save_session(self) -> None:
         settings = app_settings()
         settings.setValue(GEOMETRY_KEY, self.saveGeometry())
-        settings.setValue(WINDOW_STATE_KEY, self.saveState(WINDOW_STATE_VERSION))
+        # The panels as they were before Home, if Home is showing: a window of nothing is
+        # not a layout anybody wants back.
+        layout = (
+            self._layout_before_home
+            if self.home_is_showing() and self._layout_before_home is not None
+            else self.saveState(WINDOW_STATE_VERSION)
+        )
+        settings.setValue(WINDOW_STATE_KEY, layout)
         settings.setValue(BOARD_COLOUR_KEY, chosen_board_colour() or "")
         settings.setValue(RATSNEST_KEY, self.act_ratsnest.isChecked())
         settings.setValue(RULERS_KEY, self.act_rulers.isChecked())
@@ -14741,6 +14683,8 @@ def main() -> int:
         )
 
     window = MainWindow(document, path)
+    # Before show(): Home, when it is offered, is the first thing on screen.
+    window.offer_home()
     window.show()
     # After show(), because a fit needs the viewport's real size. Opening a file through
     # the dialog fits it; opening one from the command line arrived at a fixed six pixels
@@ -14756,10 +14700,6 @@ def main() -> int:
     # question arrives over a board rather than instead of one.
     window.start_autosave()
     QTimer.singleShot(RECOVERY_OFFER_DELAY_MS, window.offer_recovery)
-    # After the recovery question, and it checks whether one was answered: a board handed
-    # back from a crashed session IS the answer to "what should I open", and asking again
-    # over the top of it would be the application talking past the user.
-    QTimer.singleShot(WELCOME_OFFER_DELAY_MS, window.offer_welcome)
     return app.exec()
 
 

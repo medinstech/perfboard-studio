@@ -1458,15 +1458,21 @@ other surface its words.
 - **Every translated string has its Turkish, or is named as the same in both.**
   `test_every_translated_string_has_a_turkish_entry` replaced a 0.97 coverage floor that
   could not see a single missing string at 1082 of 1085: the findings panel's ERC row was
-  English in every Turkish window. `SAME_IN_BOTH` names the exceptions (Net, Jumper, the
-  product's name).
+  English in every Turkish window. `SAME_IN_BOTH` names the exceptions (Net, Jumper).
 - **Home replaces the dialog, and imports nothing from the window** (`ui/home.py`). One
   primary door ("Draw Your First Circuit"), Open… second, KiCad as a link; recents first
   for somebody who has boards. The examples are cards with plain titles
   (`home.example_title`) and pictures drawn by `boardpreview.render_board` -- or the sheet,
   for the example with nothing placed -- one per turn of the event loop after Home is on
   screen, so seven boards never hold back the first frame. Home says what was asked through
-  signals; the window opens the file and leaves Home.
+  signals; the window opens the file and leaves Home. It is a PAGE of the window, not a window of its own: the
+  central widget is a stack (the every-view-closed hint, and Home), and `show_home` hides
+  every dock, the header and the status bar after photographing the layout with
+  `saveState`, which `leave_home` puts back -- and which a close while Home shows saves
+  instead of a window of nothing. `offer_home` runs before the first `show()`, so the
+  opening proportions wait for `leave_home` (`_sizes_after_home`); and `leave_home` keeps
+  whichever view was in front, where the start's `_keep_3d_behind` would have raised the
+  board over it.
 - **An empty panel says what will be there and how it gets there** (`ui/emptystate.py`):
   a title, at most two lines, at most one button, dim links for the other doors. The button
   is the step that fills the panel under the next button's own name. `EmptyOverlay.over_view`

@@ -207,7 +207,7 @@ def test_the_drawing_tool_labels_are_still_the_ones_the_catalogue_expects() -> N
 
 #: The strings that read the same in both languages, and so have no entry on purpose: a
 #: column heading and a tool Turkish borrows as they are, and the product's name.
-SAME_IN_BOTH = frozenset({"Net", "Perfboard Studio", "Jumper"})
+SAME_IN_BOTH = frozenset({"Net", "Jumper"})
 
 
 def test_every_translated_string_has_a_turkish_entry(capsys) -> None:

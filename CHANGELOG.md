@@ -81,6 +81,12 @@ closed without a bump.
   board at its right end. A click on the bar, or Ctrl+7, opens the list, and the Check
   step opens it. The status bar's six counts (ERC, DRC, LVS, to route, the side) are that
   bar now, and a pin not wired yet still counts as work left rather than a problem.
+- **Home is the first thing on screen, and the welcome dialog is gone.** On a start with
+  nothing open, Home is the whole window -- no panels, header or status bar around it --
+  before the window is even shown, rather than a dialog over an editor nobody had chosen
+  yet. Every door is a command the window already had, taken once Home has gone; Escape
+  leaves it, a recovered board leaves it, and the window comes back exactly as it was. A
+  window closed while Home shows keeps the panel layout it covered.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

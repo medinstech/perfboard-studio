@@ -12099,118 +12099,136 @@ def test_autosave_never_touches_a_board_that_has_no_file(tmp_path) -> None:
     _close(window)
 
 
-def test_the_welcome_dialog_is_not_offered_over_a_board(tmp_path) -> None:
-    """It is about what to do FIRST, and there is no first left once there is a board on
+def test_home_is_not_offered_over_a_board() -> None:
+    """Home is about what to do FIRST, and there is no first left once there is a board on
     the screen -- a document opened from the command line, or handed back by recovery."""
     window = _window_on(_load_dense())
-    shown: list[int] = []
-    monkeypatch_exec(window, shown)
-
-    window.offer_welcome()
-
-    assert shown == []
-    _close(window)
-
-
-def test_the_welcome_dialog_starts_a_circuit_or_opens_an_example(monkeypatch) -> None:
-    """A first start offered three ways to open something and none to begin. The first
-    button now starts a circuit on the sheet, and the examples are there by name with what
-    each one is -- the drawn-but-not-built one first, then the finished boards, simplest
-    first."""
-    import perfboard_studio.ui.main as main_module
-
-    examples = main_module.example_boards()
-    assert examples, "the examples folder is part of the repository"
-    names = [path.stem for path, _line in examples]
-    assert names[0] == "ne555-blinker", names
-    assert all(line for _path, line in examples)
-
-    window = _blank_window()
     try:
-        window.show_board()
-        added: list[bool] = []
-        monkeypatch.setattr(
-            main_module.MainWindow, "on_schematic_add_part", lambda self: added.append(True)
-        )
-
-        class _Chooses(main_module.WelcomeDialog):
-            choice_to_make = "new-circuit"
-            path_to_choose: object = None
-
-            def exec(self) -> int:
-                self.choice = self.choice_to_make  # type: ignore[assignment]
-                self.chosen_path = self.path_to_choose  # type: ignore[assignment]
-                return int(main_module.QDialog.DialogCode.Accepted)
-
-        monkeypatch.setattr(main_module, "WelcomeDialog", _Chooses)
-        window.offer_welcome()
-        assert window.schematic_is_showing()
-        assert added == [True]
-
-        opened: list[object] = []
-        monkeypatch.setattr(
-            main_module.MainWindow, "on_open_example", lambda self, path: opened.append(path)
-        )
-        _Chooses.choice_to_make = "example"
-        _Chooses.path_to_choose = examples[1][0]
-        window.offer_welcome()
-        assert opened == [examples[1][0]]
+        window.offer_home()
+        assert not window.home_is_showing()
     finally:
         _close(window)
 
 
-def test_the_welcome_window_gives_qt_a_stylesheet_it_can_read() -> None:
-    """The first button's stylesheet ended in "}}" -- a plain literal glued onto an
-    f-string keeps both braces -- and Qt refused the whole of it: the one button meant to
-    stand out did not, and every start printed "Could not parse stylesheet". Qt reads a
-    stylesheet when the widget is polished, so the dialog is shown to be asked."""
-    from PySide6.QtCore import qInstallMessageHandler
+def test_home_starts_a_circuit_or_opens_an_example(monkeypatch) -> None:
+    """Every door on Home is a command the window already had, taken once Home has gone:
+    the first starts a circuit on the sheet, an example opens as an untitled copy, the
+    tour starts the tour, and "show at start" is the setting it always was."""
+    import perfboard_studio.ui.main as main_module
+
+    examples = main_module.example_boards()
+    assert examples, "the examples folder is part of the repository"
+    assert examples[0][0].stem == "ne555-blinker"
+
+    window = _blank_window()
+    try:
+        added: list[bool] = []
+        opened: list[object] = []
+        toured: list[bool] = []
+        monkeypatch.setattr(
+            main_module.MainWindow, "on_schematic_add_part", lambda self: added.append(True)
+        )
+        monkeypatch.setattr(
+            main_module.MainWindow, "on_open_example", lambda self, path: opened.append(path)
+        )
+        monkeypatch.setattr(main_module.MainWindow, "start_tour", lambda self: toured.append(True))
+
+        window.offer_home()
+        assert window.home_is_showing()
+        home = window._home_page
+        assert home is not None
+        home.newCircuit.emit()
+        assert not window.home_is_showing()
+        assert window.schematic_is_showing() and added == [True]
+
+        window.offer_home()
+        home.openExample.emit(str(examples[1][0]))
+        assert not window.home_is_showing() and opened == [examples[1][0]]
+
+        window.offer_home()
+        home.startTour.emit()
+        assert not window.home_is_showing() and toured == [True]
+
+        window.offer_home()
+        home.showAtStartChanged.emit(False)
+        window.leave_home()
+        window.offer_home()
+        assert not window.home_is_showing(), "switched off, it is not offered"
+    finally:
+        _close(window)
+
+
+def test_escape_leaves_home() -> None:
+    """Escape leaves any mode the window is in, and Home is the first of them."""
+    window = _blank_window()
+    try:
+        window.offer_home()
+        assert window.home_is_showing()
+        window.on_stop_tool()
+        assert not window.home_is_showing()
+    finally:
+        _close(window)
+
+
+def test_home_stands_in_front_of_the_whole_window_and_leaves_it_as_it_was(monkeypatch) -> None:
+    """Home is the whole window: no panel, no header, no status bar around it. Leaving it
+    puts back exactly what was there, and a window closed while it shows saves the panels
+    it covered, not a window of nothing."""
+    from PySide6.QtWidgets import QApplication, QDockWidget, QLabel
+
+    from perfboard_studio.ui.main import WINDOW_STATE_KEY, app_settings
+
+    window = _shown_window_without_3d(monkeypatch)
+    try:
+        window.show_schematic()
+        _settle_events(QApplication)
+        open_before = {d.objectName() for d in window.findChildren(QDockWidget) if not d.isHidden()}
+        window.show_home(QLabel("home"))
+        _settle_events(QApplication)
+        assert window.home_is_showing()
+        assert window.centralWidget().maximumWidth() > 0
+        assert all(d.isHidden() for d in window.findChildren(QDockWidget))
+        assert window.header_strip.isHidden() and window.statusBar().isHidden()
+
+        covered = window._layout_before_home
+        window._save_session()  # what a close while Home shows would keep
+        assert app_settings().value(WINDOW_STATE_KEY) == covered
+
+        window.leave_home()
+        _settle_events(QApplication)
+        assert not window.home_is_showing()
+        assert not window.header_strip.isHidden() and not window.statusBar().isHidden()
+        open_after = {d.objectName() for d in window.findChildren(QDockWidget) if not d.isHidden()}
+        assert open_after == open_before
+        assert window.is_showing(window.dock_schematic)
+        assert window.centralWidget().maximumWidth() == 0
+        window.leave_home()  # again: nothing
+        assert not window.home_is_showing()
+    finally:
+        _close(window)
+
+
+def test_home_before_the_first_showing_still_gets_the_opening_proportions(monkeypatch) -> None:
+    """Home is put up before the window is first shown, so the opening proportions -- the
+    sidebar 300 px, the board the rest -- could not be pinned then: they are pinned when
+    Home goes. Without that the sidebar took 1318 px of a 1600 px window."""
     from PySide6.QtWidgets import QApplication
 
-    import perfboard_studio.ui.main as main_module
+    from perfboard_studio.ui.main import MainWindow
 
-    said: list[str] = []
-    previous = qInstallMessageHandler(lambda _kind, _context, message: said.append(message))
+    monkeypatch.setattr(MainWindow, "_create_3d_widget", lambda self: None)
+    window = _blank_window()
     try:
-        dialog = main_module.WelcomeDialog([], None, examples=main_module.example_boards())
-        dialog.show()
-        QApplication.processEvents()
-        dialog.close()
-        dialog.deleteLater()
+        window.offer_home()
+        window.resize(1600, 950)
+        window.show()
+        _settle_events(QApplication)
+        window.leave_home()
+        _settle_events(QApplication, rounds=60)
+        assert window.dock_library.width() < 600
+        assert window.dock_board.width() > 800
     finally:
-        qInstallMessageHandler(previous)
-    assert not [message for message in said if "stylesheet" in message.lower()], said
-
-
-def test_the_welcome_window_offers_netlist_import_as_a_side_door() -> None:
-    """The circuit is drawn on the sheet; a button the size of Draw a New Circuit said a
-    KiCad netlist was the other way in. It is a small link under the doors that are, and
-    still does what it did."""
-    from PySide6.QtWidgets import QPushButton
-
-    import perfboard_studio.ui.main as main_module
-
-    dialog = main_module.WelcomeDialog([], None, examples=main_module.example_boards())
-    try:
-        assert dialog.import_link.isFlat()
-        big = [b.text() for b in dialog.findChildren(QPushButton) if not b.isFlat()]
-        assert "Import a KiCad Netlist…" not in big
-        dialog.import_link.click()
-        assert dialog.choice == "import"
-    finally:
-        dialog.deleteLater()
-
-
-def monkeypatch_exec(window, shown: list[int]) -> None:
-    """Count the times a welcome dialog would have been shown, without showing one."""
-    import perfboard_studio.ui.main as main_module
-
-    class _Counted(main_module.WelcomeDialog):
-        def exec(self) -> int:
-            shown.append(1)
-            return 0
-
-    main_module.WelcomeDialog = _Counted  # type: ignore[misc]
+        _close(window)
 
 
 def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatch) -> None:

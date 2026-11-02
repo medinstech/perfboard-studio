@@ -1001,21 +1001,6 @@ TURKISH: Mapping[str, str] = {
     # -- the welcome dialog, and autosave that writes the file itself ----------
     # "Perfboard Studio" is deliberately absent: it is the product's name, and a name is
     # the one string that must read the same in every language.
-    "Draw the circuit, let the tool arrange it on a board a supplier stocks, "
-    "and build it from the guide it writes.": (
-        "Devreyi çizin, aracın onu satılan hazır bir kart üzerine yerleştirmesine izin "
-        "verin ve yazdığı rehbere bakarak kurun."
-    ),
-    "New Project…": "Yeni Proje…",
-    "A folder for the board and everything generated from it.": (
-        "Kart ve ondan üretilen her şey için bir klasör."
-    ),
-    "Open Project…": "Proje Aç…",
-    "A folder built around one board.": "Tek bir kartın etrafında kurulmuş klasör.",
-    "Open a Board…": "Kart Aç…",
-    "A single .perf file.": "Tek bir .perf dosyası.",
-    "Where you left off": "Kaldığınız yer",
-    "Show this when Perfboard Studio starts": "Perfboard Studio açılırken bunu göster",
     "Autosave to the &File": "&Dosyaya Otomatik Kaydet",
     "Write the board to its own file every half minute, keeping the last save "
     "you made yourself as a .bak beside it. Off, autosave still writes a "
@@ -3016,18 +3001,12 @@ TURKISH: Mapping[str, str] = {
     "Arduino Nano relay switch": "Arduino Nano röle anahtarı",
     "ATmega328 relay controller": "ATmega328 röle kontrolcüsü",
     # -- the welcome dialog --------------------------------------------------------
-    "Start": "Başla",
     "Examples": "Örnekler",
-    "Draw a New Circuit": "Yeni Devre Çiz",
     "Start on the sheet: add parts and join their pins. The board comes after.": (
         "Şemadan başlayın: parçaları ekleyin ve pinlerini bağlayın. Kart ondan sonra gelir."
     ),
-    "Import a KiCad Netlist…": "KiCad Netlist İçe Aktar…",
     "A circuit drawn in KiCad: its parts and connections come in as the design.": (
         "KiCad'de çizilmiş bir devre: parçaları ve bağlantıları tasarım olarak gelir."
-    ),
-    "The steps the bar across the top of the window walks through, in order.": (
-        "Pencerenin üstündeki adım çubuğunun sırayla yürüdüğü adımlar."
     ),
     "{parts} part(s) on a {size} board": "{size} kart üzerinde {parts} parça",
     "{parts} part(s), drawn and not yet placed": "{parts} parça, çizilmiş ama henüz yerleşmemiş",
