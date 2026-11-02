@@ -149,7 +149,7 @@ guide are tabs over one canvas, and a tab dragged aside stands beside the others
 goes to its step; a wire clicked there lights its net everywhere; and whatever is selected
 anywhere is tinted in 3D, so the three views show one selection.
 
-**And it leaves as STEP.** *File ▸ Export 3D Model (STEP)…* writes the board as solids a
+**And it leaves as STEP.** *File ▸ Export ▸ 3D Model (STEP)…* writes the board as solids a
 mechanical CAD program can measure and cut a box round: the board with every hole and
 mounting bore through it, each part as the room it takes — the very outline and height
 DRC's overhang and too-tall rules measure — every lead down through its hole, and every wire
@@ -223,7 +223,7 @@ It also cross-probes: click a symbol and that part is selected on the board, cli
 and its net lights up in both places. LVS saying *net VOUT is open* is a great deal more
 useful when you can look at VOUT.
 
-**And it leaves the window.** *File ▸ Export Schematic…* writes the sheet beside the
+**And it leaves the window.** *File ▸ Export ▸ Schematic…* writes the sheet beside the
 document three ways: SVG to embed or edit, PDF to print and keep next to the board, PNG to
 paste into the message that asks somebody why the circuit does not work. All three come out
 of the same SVG, so they cannot disagree about what the circuit is — and the exported sheet
@@ -319,8 +319,8 @@ or GND) — or **Label** a pin to join it to a net by name, or right-click it fo
 +5V — then **Place on the Board**, which first
 asks which stock board to use: your circuit is placed, wired and checked on a roomy board
 and on each smaller one, and the suggestion is the smallest it builds as well on. From there
-**Place → Rearrange Parts** (`Ctrl+Shift+A`), **`Ctrl+R`** to auto-wire, and
-**File → Export Build Guide** (`Ctrl+B`). No KiCad anywhere in that.
+**Board → Rearrange Parts** (`Ctrl+Shift+A`), **`Ctrl+R`** to auto-wire, and
+**File → Export → Build Guide** (`Ctrl+B`). No KiCad anywhere in that.
 
 With a circuit that already exists, start at **File → Import from KiCad** on
 `examples/ne555-astable.net` instead: each part arrives in the design as what its value and

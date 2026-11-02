@@ -149,7 +149,7 @@ tıklanan bir parça kartta ve şemada seçilir, montaj rehberi de onun adımın
 tıklanan bir tel netini her yerde vurgular; ve nerede seçilmiş olursa olsun seçili olan 3D'de
 renklenir — üç görünüm tek bir seçimi gösterir.
 
-**Ve STEP olarak çıkar.** *Dosya ▸ 3D Modeli Dışa Aktar (STEP)…* kartı, bir mekanik CAD
+**Ve STEP olarak çıkar.** *Dosya ▸ Dışa Aktar ▸ 3D Model (STEP)…* kartı, bir mekanik CAD
 programının ölçebileceği ve etrafına kutu kesebileceği katılar olarak yazar: bütün delikleri
 ve montaj delikleri içinden geçen kartın kendisi, her parça kapladığı yer olarak — DRC'nin
 taşma ve fazla-yükseklik kurallarının ölçtüğü dış hat ve yüksekliğin ta kendisi —, deliğinden
@@ -225,7 +225,7 @@ Ayrıca çapraz izleme yapar: bir sembole tıklayın, o parça kart üzerinde se
 tıklayın, ait olduğu net iki yerde birden vurgulansın. LVS'in *VOUT neti açık* demesi,
 VOUT'a bakabildiğinizde çok daha işe yarar.
 
-**Ve pencereden çıkar.** *Dosya ▸ Şemayı Dışa Aktar…* sayfayı belgenin yanına üç biçimde
+**Ve pencereden çıkar.** *Dosya ▸ Dışa Aktar ▸ Şema…* sayfayı belgenin yanına üç biçimde
 yazar: gömmek ya da düzenlemek için SVG, basıp kartın yanında tutmak için PDF, devrenin
 neden çalışmadığını sorduğunuz mesaja yapıştırmak için PNG. Üçü de aynı SVG'den üretilir,
 dolayısıyla devre konusunda birbirleriyle çelişemezler — ve dışa aktarılan sayfa panelin
@@ -321,9 +321,9 @@ net o pinin adını alır, VCC ya da GND) — ya da bir pini
 sonra **Karta Yerleştir**; önce hangi hazır kartın kullanılacağını sorar: devreniz
 geniş bir kartta ve ondan küçük her boyda yerleştirilir, kablolanır ve denetlenir, ve öneri
 aynı iyilikte kurulduğu en küçük karttır.
-Oradan **Yerleştir →
-Parçaları Yeniden Diz** (`Ctrl+Shift+A`), otomatik kablolama için **`Ctrl+R`**, ardından **Dosya → Montaj
-Rehberini Dışa Aktar** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
+Oradan **Kart →
+Parçaları Yeniden Diz** (`Ctrl+Shift+A`), otomatik kablolama için **`Ctrl+R`**, ardından **Dosya → Dışa Aktar →
+Montaj Rehberi** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
 
 Devre zaten varsa ilk üç adım yerine `examples/ne555-astable.net` üzerinde **Dosya → KiCad'den
 İçe Aktar** ile başlayın: her parça, değerinin ve KiCad footprint'inin söylediği şey
