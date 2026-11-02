@@ -555,6 +555,33 @@ QToolButton#headerUnsaved {{
     border: none;
     text-decoration: underline;
 }}
+/* The header's search: a quiet field that opens the command palette, not a button. */
+QPushButton#headerSearch {{
+    background: {k.bg_input};
+    color: {k.text_tertiary};
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_MD}px;
+    padding: {s["xs"]}px {s["md"]}px;
+    text-align: left;
+    min-width: 220px;
+}}
+QPushButton#headerSearch:hover {{
+    background: {k.bg_hover};
+    border-color: {k.border_strong};
+    color: {k.text_secondary};
+}}
+QFrame#commandPalette QLineEdit {{
+    background: transparent;
+    border: none;
+    font-size: {LEAD_PX}px;
+    padding: {s["sm"]}px {s["md"]}px;
+}}
+QFrame#commandPalette QListView {{ background: transparent; border: none; }}
+QFrame#commandPalette QListView::item {{
+    padding: {s["sm"]}px {s["md"]}px;
+    border-radius: {RADIUS_SM}px;
+}}
+QFrame#commandPalette QListView::item:selected {{ background: {k.accent_subtle}; color: {k.text}; }}
 QWidget#workflowBar QToolButton {{
     background: transparent;
     border: none;
