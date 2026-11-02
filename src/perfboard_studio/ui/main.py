@@ -4800,9 +4800,8 @@ class MainWindow(QMainWindow):
         theme.size(self.central_hint, theme.LEAD_PX)
         self.central_hint.setText(
             t(
-                "Every view is closed. Board (Ctrl+1) and Schematic (Ctrl+2) are on the "
-                "toolbar, beside 3D \u2014 and each of them can be dragged anywhere in "
-                "the window, or out of it."
+                "Every view is closed. Ctrl+1 brings the board back and Ctrl+2 the "
+                "schematic, and View \u25b8 Panels opens any of them."
             )
         )
         column.addWidget(self.central_hint)

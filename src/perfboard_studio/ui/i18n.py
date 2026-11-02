@@ -904,12 +904,10 @@ TURKISH: Mapping[str, str] = {
         "bir pencerenin başka dönüş yolu yoktur."
     ),
     "Panels put back where they started.": "Paneller başlangıç yerlerine kondu.",
-    "Every view is closed. Board (Ctrl+1) and Schematic (Ctrl+2) are on the "
-    "toolbar, beside 3D — and each of them can be dragged anywhere in "
-    "the window, or out of it.": (
-        "Bütün görünümler kapalı. Kart (Ctrl+1) ve Şema (Ctrl+2) araç çubuğunda, 3D'nin "
-        "yanında — ve her biri pencerenin herhangi bir yerine ya da dışına "
-        "sürüklenebilir."
+    "Every view is closed. Ctrl+1 brings the board back and Ctrl+2 the "
+    "schematic, and View \u25b8 Panels opens any of them.": (
+        "Bütün görünümler kapalı. Ctrl+1 kartı, Ctrl+2 şemayı geri getirir; "
+        "Görünüm \u25b8 Paneller hepsini açar."
     ),
     # The strip the update check puts across the top. Its title is never drawn -- the panel
     # has no title bar -- but it is what Qt calls the dock, so it is named like one.

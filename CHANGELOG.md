@@ -98,6 +98,8 @@ closed without a bump.
   dialog.
 - **A library group cut short says its name in full on hover**, as its parts already did:
   at the sidebar's width "Regülatörler ve referanslar" read "Regülatörler v…".
+- **The window with every view closed says how to get one back** with the keys and the
+  menu (Ctrl+1, Ctrl+2, View ▸ Panels); it still pointed at a toolbar that is gone.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the
