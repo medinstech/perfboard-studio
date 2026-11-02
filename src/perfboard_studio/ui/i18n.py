@@ -2771,6 +2771,13 @@ TURKISH: Mapping[str, str] = {
         "Şemanın ne kadar yakın olduğu ve pencereye sığdırılması. Buradaki hiçbir şey devreyi "
         "değiştirmez."
     ),
+    "The guide's tools": "Rehberin araçları",
+    "The first step not ticked off yet, shown on the board; every tick cleared; and the guide "
+    "written out to files to print or keep beside the bench. Nothing here changes the board.": (
+        "Henüz işaretlenmemiş ilk adım, kartta gösterilir; bütün işaretlerin kaldırılması; ve "
+        "yazdırmak ya da tezgâhın yanında tutmak için rehberin dosyalara yazılması. Buradaki "
+        "hiçbir şey kartı değiştirmez."
+    ),
     "What the selection can do": "Seçimle neler yapılabilir",
     "What can be done to the selected parts, right where they are. The last button holds "
     "everything a right-click offers.": (

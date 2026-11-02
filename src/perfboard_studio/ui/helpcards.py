@@ -125,6 +125,12 @@ def panel_help() -> dict[str, str]:
             t("What can be done to the selected parts, right where they are. The last button "
               "holds everything a right-click offers."),
         ),
+        "guideTools": card(
+            t("The guide's tools"),
+            t("The first step not ticked off yet, shown on the board; every tick cleared; and "
+              "the guide written out to files to print or keep beside the bench. Nothing here "
+              "changes the board."),
+        ),
         "workflowNext": card(
             t("The next step"),
             t("Always the one thing to do next, from drawing the circuit to opening the build "
