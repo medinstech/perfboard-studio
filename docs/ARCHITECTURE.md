@@ -1526,6 +1526,9 @@ other surface its words.
   `test_every_translated_string_has_a_turkish_entry` replaced a 0.97 coverage floor that
   could not see a single missing string at 1082 of 1085: the findings panel's ERC row was
   English in every Turkish window. `SAME_IN_BOTH` names the exceptions (Net, Jumper).
+  A count is said with `i18n.counted`, which picks one of two catalogued forms: "3 part(s)"
+  read like a machine, and Turkish's two entries are one wording, since it takes the
+  singular after a number.
 - **Home replaces the dialog, and imports nothing from the window** (`ui/home.py`). One
   primary door ("Draw Your First Circuit"), Open… second, KiCad as a link; recents first
   for somebody who has boards. The examples are cards with plain titles
@@ -1557,7 +1560,9 @@ other surface its words.
   (`tour.stop_for`), never by counting presses, so a step done from a menu or undone lands
   on the sentence that is true. Its overlay is transparent to the mouse -- the lit button is
   the real one and a part can still be dragged -- and it never presses anything itself.
-  Offered on Home and in Help, never automatic (Sinan's decision).
+  Offered on Home and in Help, never automatic (Sinan's decision). On the shell the Build Guide is a
+  tab and Problems a drawer folded to its bar, so the last stop is `is_showing(dock_guide)`
+  and the checks' stop opens the drawer it rings, through the tour's `on_stop`.
 
 ## The window is panels all the way down
 
