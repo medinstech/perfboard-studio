@@ -499,6 +499,12 @@ def _more(p: QPainter) -> None:
     p.restore()
 
 
+def _search(p: QPainter) -> None:
+    """A magnifier: find a command by its name."""
+    p.drawEllipse(QPointF(44, 44), 26, 26)
+    p.drawLine(QPointF(63, 63), QPointF(86, 86))
+
+
 def _menu(p: QPainter) -> None:
     """Three lines: the menus, all of them, behind one button in the header."""
     for y in (28, 50, 72):
@@ -539,6 +545,7 @@ DRAWINGS: dict[str, Callable[[QPainter], None]] = {
     "fit": _fit,
     "delete": _delete,
     "menu": _menu,
+    "search": _search,
     "measure": _measure,
     "cut-strip": _cut_strip,
     "lock": _lock,

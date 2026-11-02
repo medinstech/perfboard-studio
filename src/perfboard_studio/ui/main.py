@@ -34,6 +34,7 @@ import re
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
+from functools import partial
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -355,6 +356,7 @@ from .header import HeaderBar
 from .home import Home, HomeExample
 from .i18n import language as current_language
 from .i18n import set_language, t
+from .palette import CommandPalette, Entry
 from .partlist import PartListPanel
 from .partnames import footprint_label
 from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
@@ -4608,12 +4610,20 @@ class MainWindow(QMainWindow):
         Qt: Alt+F drops File from the top-left corner, which is where ☰ is, and Alt by itself
         opens ☰ (``_on_menu_bar_hovered``).
         """
+        # Every command by its name (``ui/palette.py``): Ctrl+K, or the header's field. On
+        # the window and in no menu -- it is the way INTO the menus.
+        self.command_palette = CommandPalette(self, self._palette_entries)
+        self.act_palette = QAction(t("Search Commands…"), self)
+        self.act_palette.setShortcut(QKeySequence("Ctrl+K"))
+        self.act_palette.triggered.connect(lambda _checked=False: self.command_palette.open())
+        self.addAction(self.act_palette)
         self.header = HeaderBar(
             self.workflow_bar,
             self._top_menus,
             undo=self.act_undo,
             redo=self.act_redo,
             save=self.act_save,
+            search=self.act_palette,
         )
         strip = QToolBar(self)
         strip.setObjectName("headerToolbar")
@@ -4630,6 +4640,93 @@ class MainWindow(QMainWindow):
         bar.setFixedHeight(0)
         bar.hovered.connect(self._on_menu_bar_hovered)
         self._refresh_title()
+
+    def _palette_entries(self) -> list[Entry]:
+        """What the palette offers: every enabled entry of every menu under ☰, by its own
+        words, with the menus it is in and its key -- then every part and net by name.
+
+        The menus are walked by matching each submenu's own action, never through
+        ``QAction.menu()``, which hands PySide an owning wrapper that deletes the submenu
+        when it is dropped.
+        """
+        import shiboken6
+
+        def plain(text: str) -> str:
+            return text.replace("&&", "\0").replace("&", "").replace("\0", "&")
+
+        submenus = {
+            shiboken6.getCppPointer(menu.menuAction())[0]: menu
+            for menu in self.findChildren(QMenu)
+        }
+        entries: list[Entry] = []
+
+        def walk(menu: QMenu, path: tuple[str, ...], seen: set[int]) -> None:
+            for action in menu.actions():
+                if action.isSeparator() or not action.isVisible() or not action.text():
+                    continue
+                sub = submenus.get(shiboken6.getCppPointer(action)[0])
+                if sub is not None:
+                    key = shiboken6.getCppPointer(sub)[0]
+                    if key not in seen:
+                        walk(sub, (*path, plain(sub.title())), seen | {key})
+                    continue
+                if not action.isEnabled():
+                    continue
+                label = plain(action.text())
+                if action.isCheckable():
+                    label = f"{label} ({t('on') if action.isChecked() else t('off')})"
+                entries.append(
+                    Entry(
+                        label=label,
+                        where=" \u25b8 ".join(path),
+                        keys=action.shortcut().toString(
+                            QKeySequence.SequenceFormat.NativeText
+                        ),
+                        run=action.trigger,
+                        icon=None if action.icon().isNull() else action.icon(),
+                    )
+                )
+
+        for top in self._top_menus:
+            walk(top, (plain(top.title()),), {shiboken6.getCppPointer(top)[0]})
+
+        document = self.bus.document
+        for component in document.components:
+            entries.append(
+                Entry(
+                    label=f"{component.ref}  {component.value}".strip(),
+                    where=t("Part on the board"),
+                    keys="",
+                    run=partial(self._palette_go_to_component, component.id),
+                )
+            )
+        for part in document.parts:
+            entries.append(
+                Entry(
+                    label=f"{part.ref}  {part.value}".strip(),
+                    where=t("Part in the design"),
+                    keys="",
+                    run=partial(self._on_part_list_design_part, part.id),
+                )
+            )
+        for net in document.nets:
+            entries.append(
+                Entry(
+                    label=net.name,
+                    where=t("Net"),
+                    keys="",
+                    run=partial(self._palette_go_to_net, net.id),
+                )
+            )
+        return entries
+
+    def _palette_go_to_component(self, component_id: str) -> None:
+        self.show_board()
+        self.go_to_component(component_id)
+
+    def _palette_go_to_net(self, net_id: NetId) -> None:
+        self.show_board()
+        self._select_net(net_id)
 
     def _on_menu_bar_hovered(self, _action: QAction) -> None:
         """Alt alone puts the (invisible) menu bar into its keyboard mode on its first
@@ -11902,6 +11999,9 @@ class MainWindow(QMainWindow):
         # mode whether or not it was armed, and each disarm signal clears the bar.
         if self.home_is_showing():
             self.leave_home()
+            return
+        if not self.command_palette.isHidden():
+            self.command_palette.close_palette()
             return
         left_something = False
         if self.scene.in_a_mode:

@@ -100,6 +100,11 @@ closed without a bump.
   at the sidebar's width "Regülatörler ve referanslar" read "Regülatörler v…".
 - **The window with every view closed says how to get one back** with the keys and the
   menu (Ctrl+1, Ctrl+2, View ▸ Panels); it still pointed at a toolbar that is gone.
+- **Ctrl+K finds any command by its name, and any part or net.** The header's search field
+  opens it too. It lists every enabled entry of every menu in its own words, with the menu
+  it lives in and its key, so "Lay Wires Along the Grid" is four letters away rather than
+  three menus deep; a part's reference selects it on the board, and a net's name selects
+  it in the Nets panel. Enter runs the one picked, Escape closes it.
 - **One selection grammar on the board and the sheet, and Select All.** Shift+click
   replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
   never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the

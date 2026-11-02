@@ -2637,6 +2637,14 @@ TURKISH: Mapping[str, str] = {
         "Menüler: Dosya, Düzen, Görünüm ve diğerleri. Alt tuşu da açar."
     ),
     "Not saved": "Kaydedilmedi",
+    "Search Commands…": "Komut Ara…",
+    "Search or run a command…": "Komut arayın ya da çalıştırın…",
+    "Every command by its name, and any part or net (Ctrl+K).": (
+        "Her komut adıyla; her parça ve net de (Ctrl+K)."
+    ),
+    "Type a command, a part or a net…": "Bir komut, parça ya da net yazın…",
+    "Part on the board": "Karttaki parça",
+    "Part in the design": "Tasarımdaki parça",
     "Properties": "Özellikler",
     "{count} selected": "{count} seçili",
     "{count} pins": "{count} pin",

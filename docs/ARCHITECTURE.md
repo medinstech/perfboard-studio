@@ -1434,6 +1434,14 @@ nothing on screen to say so, so `_on_menu_bar_hovered` opens ☰ instead, a turn
 only if no menu has opened (Alt+F passes through the same signal on its way to File).
 Shortcuts are unaffected: a menu bar at no height is still on screen to Qt.
 
+**Ctrl+K is every command by its name** (`ui/palette.py`, `act_palette`, and the header's
+search field). It keeps no list of its own: `_palette_entries` walks the menus under ☰ --
+by matching each submenu's own action, never through `QAction.menu()` -- and offers every
+enabled entry in its own words with its menu and key, then every part and net by name. A
+command the menus grey out is not offered, and one added to a menu is offered with no line
+in the palette. `rank` puts a name that starts with what was typed first, then one with a
+word that does, then one that only contains it.
+
 There is no tool row under it. **The board's tools float on the board** (`ui/canvastools.py`,
 `_build_canvas_tools`): the pointer, Connect, a Solder group and a Wire group, Cut Strip on a
 stripboard, and Measure down the left; Show, Flip, zoom and Fit in the bottom-right corner.

@@ -14267,3 +14267,82 @@ def test_a_library_group_cut_short_says_its_name_in_full() -> None:
             assert group.toolTip(0) == group.text(0), group.text(0)
     finally:
         _close(window)
+
+
+def test_the_palette_ranks_a_name_that_starts_with_what_was_typed_first() -> None:
+    """What is typed is nearly always the start of a word: a name that starts with it
+    first, then a name with a word that does, then one that only contains it."""
+    from perfboard_studio.ui.palette import Entry, rank
+
+    def entry(label: str) -> Entry:
+        return Entry(label=label, where="", keys="", run=lambda: None)
+
+    entries = [entry("Show Missing Connections"), entry("Auto-wire Everything"), entry("Draw")]
+    assert [e.label for e in rank(entries, "auto")] == ["Auto-wire Everything"]
+    assert [e.label for e in rank(entries, "miss")] == ["Show Missing Connections"]
+    assert [e.label for e in rank(entries, "ra")] == ["Draw"]
+    # A hyphen parts words: "wire" starts a word of "Auto-wire".
+    assert [e.label for e in rank(entries, "wire")] == ["Auto-wire Everything"]
+    assert rank(entries, "") == entries
+
+
+def test_the_palette_offers_every_menu_command_and_runs_it() -> None:
+    """Ctrl+K lists every enabled entry of every menu under the menu button by its own
+    words, with where it lives and its key, and Enter runs the one picked."""
+    window = _window_on(_load_dense())
+    try:
+        assert window.act_palette.shortcut().toString() == "Ctrl+K"
+        window.act_palette.trigger()
+        palette = window.command_palette
+        assert palette.isVisibleTo(window)
+        labels = [e.label for e in palette.shown()]
+        assert any(label.startswith("Auto-wire Everything") for label in labels)
+        assert any(label.startswith("Show Missing Connections") for label in labels)
+
+        before = window.act_ratsnest.isChecked()
+        palette.field.setText("show missing")
+        first = palette.shown()[0]
+        assert first.label.startswith("Show Missing Connections")
+        assert first.keys == window.act_ratsnest.shortcut().toString()
+        palette.run_current()
+        assert window.act_ratsnest.isChecked() is not before
+        assert not palette.isVisibleTo(window)
+    finally:
+        _close(window)
+
+
+def test_the_palette_finds_a_part_and_a_net_by_name() -> None:
+    """Go to Part, in the same field: a part's reference selects it on the board, and a
+    net's name selects it in the Nets panel."""
+    window = _window_on(_load_dense())
+    try:
+        part = window.bus.document.components[0]
+        window.command_palette.open()
+        window.command_palette.field.setText(part.ref)
+        shown = window.command_palette.shown()
+        assert shown[0].label.split()[0] == part.ref
+        window.command_palette.run_current()
+        assert list(window.scene.selected_component_ids()) == [part.id]
+
+        net = window.bus.document.nets[0]
+        window.command_palette.open()
+        window.command_palette.field.setText(net.name)
+        chosen = next(e for e in window.command_palette.shown() if e.label == net.name)
+        chosen.run()
+        selected = window.nets_tree.selectedItems()
+        assert selected and selected[0].text(0) == net.name
+    finally:
+        _close(window)
+
+
+def test_escape_closes_the_palette_and_the_header_opens_it() -> None:
+    """Escape leaves the palette before it leaves anything else, and the header's search
+    field is the palette's other door."""
+    window = _window_on(_load_dense())
+    try:
+        window.header.search.click()
+        assert window.command_palette.isVisibleTo(window)
+        window.on_stop_tool()
+        assert not window.command_palette.isVisibleTo(window)
+    finally:
+        _close(window)

@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QPushButton,
     QSizePolicy,
     QToolButton,
     QWidget,
@@ -48,6 +49,7 @@ class HeaderBar(QWidget):
         undo: QAction,
         redo: QAction,
         save: QAction,
+        search: QAction,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -92,6 +94,15 @@ class HeaderBar(QWidget):
 
         self.steps = steps
         layout.addWidget(steps, 1)
+
+        # The way to every command by its name (``ui/palette.py``), where a person looks
+        # for a search field: in the header, saying its key.
+        self.search = QPushButton(icons.icon("search"), t("Search or run a command…"))
+        self.search.setObjectName("headerSearch")
+        self.search.setToolTip(t("Every command by its name, and any part or net (Ctrl+K)."))
+        self.search.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.search.clicked.connect(search.trigger)
+        layout.addWidget(self.search)
 
         self.undo_button = self._action_button(undo, "undo")
         self.redo_button = self._action_button(redo, "redo")
