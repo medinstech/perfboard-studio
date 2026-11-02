@@ -366,6 +366,7 @@ from .project import write_project
 from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
 from .properties import PropertiesPanel
 from .selection import NOTHING, Selection
+from .tour import Stop as TourStop
 from .tour import Tour
 from .view2d import (
     FOOTPRINT_MIME,
@@ -4512,17 +4513,25 @@ class MainWindow(QMainWindow):
         self.on_open_example(walkthrough)
         if self.bus is before:
             return
-        # The tour reads "the guide is open" as its last stop; it starts with the guide shut.
-        self.dock_guide.hide()
+        # The tour's last stop is "the Build Guide is the view in front", so it starts on the
+        # sheet the circuit is drawn on, whichever tab the window had forward.
+        self.show_schematic()
         if self._tour is not None and self._tour.running:
             self._tour.stop()
         self._tour = Tour(
             self,
             self.workflow_bar.next_button,
             lambda: self.workflow_bar.next_key,
-            lambda: not self.dock_guide.isHidden(),
+            lambda: self.is_showing(self.dock_guide),
+            self._on_tour_stop,
         )
         self._tour.start()
+
+    def _on_tour_stop(self, stop: TourStop) -> None:
+        """What a tour stop needs in front: the checks' stop points at the Problems drawer,
+        which is folded to its bar until something opens it."""
+        if stop.region == "dockDrc":
+            self.set_problems_open(True)
 
     def _help_action(self, name: str) -> QAction | None:
         """The action a help text is for, by name: ``draw:<kind>`` for a drawing tool, else

@@ -163,7 +163,9 @@ class Tour(QObject):
     """The tour over ``window``: started by ``start``, gone at Skip, Finish or Esc.
 
     ``next_button`` is the header's next button and ``next_key`` reads what it would do; the
-    window's panels are found by their object names, so the tour imports no window."""
+    window's panels are found by their object names, so the tour imports no window.
+    ``on_stop`` hears each new stop, for the window to bring forward what the stop is about
+    -- the folded Problems drawer is a bar, and a ring round a bar points at nothing."""
 
     def __init__(
         self,
@@ -171,8 +173,10 @@ class Tour(QObject):
         next_button: QWidget,
         next_key: Callable[[], str],
         guide_open: Callable[[], bool],
+        on_stop: Callable[[Stop], None] | None = None,
     ) -> None:
         super().__init__(window)
+        self._on_stop = on_stop
         self._window = window
         self._next_button = next_button
         self._next_key = next_key
@@ -211,6 +215,8 @@ class Tour(QObject):
         if stop != self.stop_shown:
             self.stop_shown = stop
             self.bubble.show_stop(stop)
+            if self._on_stop is not None:
+                self._on_stop(stop)
         self.spotlight.setGeometry(self._window.rect())
         target = self._rect_of(self._next_button) if not stop.last else QRect()
         region = self._rect_of(self._window.findChild(QWidget, stop.region)) if stop.region else QRect()

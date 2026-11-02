@@ -107,3 +107,36 @@ def test_the_help_menu_starts_it_on_the_circuit_that_is_drawn_and_not_built(wind
     assert window._tour.running
     assert window._tour.stop_shown is not None and window._tour.stop_shown.number == 1
     window._tour.stop()
+
+
+def test_the_tour_brings_forward_what_a_stop_is_about(window) -> None:
+    """On the shell the guide is a tab and Problems a drawer folded to its bar: the last
+    stop is "the Build Guide is the view in front", and the checks' stop opens the drawer
+    it rings, since a ring round a 30 px bar points at nothing."""
+    from perfboard_studio.ui.tour import stop_for
+
+    window.start_tour()
+    QApplication.processEvents()
+    tour = window._tour
+    assert not window.is_showing(window.dock_guide)
+    window.set_problems_open(False)
+    window._on_tour_stop(stop_for("check", guide_open=False))
+    assert window.problems_bar.expanded
+    window._raise_view(window.dock_guide)
+    QApplication.processEvents()
+    tour.update()
+    assert tour.stop_shown is not None and tour.stop_shown.last
+    tour.stop()
+
+
+def test_a_new_stop_is_told_to_whoever_asked() -> None:
+    window, button, key, guide = _stage()
+    heard: list[int] = []
+    tour = Tour(window, button, lambda: key[0], lambda: guide[0], lambda s: heard.append(s.number))
+    tour.start()
+    tour.update()  # the same stop again is not news
+    key[0] = "place"
+    tour.update()
+    assert heard == [1, 2]
+    tour.stop()
+    window.close()
