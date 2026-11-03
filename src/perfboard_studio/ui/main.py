@@ -9689,6 +9689,13 @@ class MainWindow(QMainWindow):
         """
         failed = [r for r in results if not r.ok]
         if not failed:
+            if self.scene.last_move_on_a_dead_hole and results:
+                # As a placement there says it (``on_scene_clicked``): the board is legal,
+                # DRC calls it an error, and "Done" alone would be the last word on it.
+                self.statusBar().showMessage(
+                    f"{did(results[-1].description)}  ·  {t('a pin has no pad there — see Problems')}",
+                    8000,
+                )
             return
         self.scene.set_document(self.bus.document)
         message = "; ".join(t("Move refused: {reason}").format(reason=refused(r)) for r in failed)

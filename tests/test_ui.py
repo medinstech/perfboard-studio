@@ -14395,6 +14395,49 @@ def test_the_palette_finds_a_part_and_a_net_by_name() -> None:
         _close(window)
 
 
+def test_a_part_dragged_onto_a_hole_with_no_pad_says_so_when_it_lands() -> None:
+    """Moved so a pin lands on a finger, a part went red while it moved and then landed with
+    "Done" and nothing else -- the router was the next thing to mention it. It lands, as a
+    placement there does (the board is legal, DRC calls it an error), and it says so as a
+    placement there does, and stays marked."""
+    import dataclasses
+
+    from perfboard_studio.geometry import edge_connector_holes
+    from perfboard_studio.model import EdgeConnector
+
+    document = _load_dense()
+    board = document.board
+    strip = EdgeConnector(id="ec-bottom", edge="bottom", start=0, count=board.cols)
+    document = dataclasses.replace(document, edge_connectors=(strip,))
+    window = _window_on(document)
+    try:
+        finger = edge_connector_holes(strip, board)[0]
+        part = next(
+            c for c in window.bus.document.components
+            if window.scene.component_items.get(c.id) is not None
+        )
+        item = window.scene.component_items[part.id]
+        pin_offset = next(
+            (at.col - part.anchor.col, at.row - part.anchor.row)
+            for _pin, at in all_pin_holes_of(part, window.lookup)
+        )
+        item.pending_anchor = HoleCoord(finger.col - pin_offset[0], finger.row - pin_offset[1])
+        results = window.scene.commit_pending_moves()
+        assert results and all(r.ok for r in results)
+        assert window.scene.last_move_on_a_dead_hole
+        assert "no pad there" in window.statusBar().currentMessage()
+        assert window.scene.component_items[part.id].has_error
+    finally:
+        _close(window)
+
+
+def all_pin_holes_of(component, lookup):
+    from perfboard_studio.geometry import all_pin_holes
+
+    footprint = lookup(component.footprint_id)
+    return all_pin_holes(component, footprint) if footprint is not None else ()
+
+
 def test_a_reference_typed_whole_is_that_part_before_the_ones_it_starts() -> None:
     """Go to Part: "X1" is X1 even where the document lists X10..X16 before it -- the dense
     board keeps them in that order -- rather than whichever of them came first."""

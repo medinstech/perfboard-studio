@@ -351,6 +351,10 @@ closed without a bump.
 
 ### Fixed
 
+- **A part moved onto a hole with no pad says so when it lands.** It went red while it was
+  dragged and then landed with a plain "Done"; now the status line says a pin has no pad
+  there, as it does when a part is placed there, and the part stays marked in Problems.
+
 - **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
   first in the document, instead of to whichever of them is listed first.
 

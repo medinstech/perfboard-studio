@@ -4079,6 +4079,11 @@ class BoardScene(QGraphicsScene):
         #: the two need different sentences: one is a board you probably do not want, the
         #: other is a board that cannot be built.
         self.last_placement_on_a_dead_hole = False
+        #: Whether the last drag let a part go with a pin where no lead can be soldered: a
+        #: bore, a finger, a cut. Allowed, as a placement there is (the board is still
+        #: legal and DRC calls it an error), and said, as a placement there is -- a drag
+        #: went red while it moved and then landed with "Done" and nothing else.
+        self.last_move_on_a_dead_hole = False
         #: What every part placed from here is given as its value ("10k", "100nF"), set by
         #: the host from the parts panel. Held across placements rather than cleared with
         #: the armed footprint: five resistors of the same value is the case, and retyping
@@ -5868,6 +5873,15 @@ class BoardScene(QGraphicsScene):
             for comp_id, item in self.component_items.items()
             if item.pending_anchor != item.comp.anchor
         ]
+        # Asked before the dispatch rebuilds the items, of the landing the drag showed.
+        staying = self._occupied_pins({comp_id for comp_id, _at in pending})
+        self.last_move_on_a_dead_hole = any(
+            self._landing_problems(
+                item.fp, item.pending_anchor, item.comp.rotation, item.comp.mirrored, staying
+            )[2]
+            for comp_id, item in self.component_items.items()
+            if item.pending_anchor != item.comp.anchor
+        )
         moved_notes = [
             (note_id, item.placement())
             for note_id, item in self.board_note_items.items()
