@@ -1349,6 +1349,30 @@ class DeleteEdgeConnectorPayload:
     id: str
 
 
+@dataclass(frozen=True, slots=True)
+class UpdateMountingHolePayload:
+    """One mounting hole changed where it is: None keeps what it has. Checked as
+    ``mounting-hole.add`` checks a new hole, by that command's own code."""
+
+    id: str
+    at: HoleCoord | None = None
+    offset_x_mm: Mm | None = None
+    offset_y_mm: Mm | None = None
+    diameter: Mm | None = None
+    head_diameter: Mm | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateEdgeConnectorPayload:
+    """One edge connector moved or resized where it is: None keeps what it has. Checked as
+    ``edge-connector.add`` checks a new one, by that command's own code."""
+
+    id: str
+    edge: BoardEdge | None = None
+    start: int | None = None
+    count: int | None = None
+
+
 # ---------------------------------------------------------------------------
 # Component commands
 # ---------------------------------------------------------------------------
@@ -3571,6 +3595,95 @@ class _AddEdgeConnector:
         return f"Add {p.count}-finger edge connector on the {p.edge} edge"
 
 
+class _UpdateMountingHole:
+    """Change one mounting hole -- where it is, how far into the border, its bore and its
+    screw head -- as ONE undo step, where it was a delete and an add.
+
+    Refused for exactly what ``mounting-hole.add`` refuses, BY ITS CODE: the hole as it
+    would be is handed to that command with the old one out of the way, so the two cannot
+    drift into checking different things. It keeps its id and its place in the list."""
+
+    type = "mounting-hole.update"
+
+    def apply(
+        self, doc: PerfDocument, p: UpdateMountingHolePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        old = next((m for m in doc.mounting_holes if m.id == p.id), None)
+        if old is None:
+            raise CommandError("mounting-hole-not-found", f'No mounting hole with id "{p.id}".')
+        checked = _AddMountingHole().apply(
+            dataclasses.replace(
+                doc, mounting_holes=tuple(m for m in doc.mounting_holes if m.id != p.id)
+            ),
+            AddMountingHolePayload(
+                at=old.at if p.at is None else p.at,
+                offset_x_mm=old.offset_x_mm if p.offset_x_mm is None else p.offset_x_mm,
+                offset_y_mm=old.offset_y_mm if p.offset_y_mm is None else p.offset_y_mm,
+                diameter=old.diameter if p.diameter is None else p.diameter,
+                head_diameter=old.head_diameter if p.head_diameter is None else p.head_diameter,
+                id=old.id,
+            ),
+            ctx,
+        )
+        changed = checked.mounting_holes[-1]
+        return dataclasses.replace(
+            doc,
+            mounting_holes=tuple(changed if m.id == p.id else m for m in doc.mounting_holes),
+        )
+
+    def describe(self, p: UpdateMountingHolePayload, doc: PerfDocument) -> str:
+        old = next((m for m in doc.mounting_holes if m.id == p.id), None)
+        where = format_hole(old.at, doc.board) if old is not None else p.id
+        return f"Change the mounting hole at {where}"
+
+
+class _UpdateEdgeConnector:
+    """Move or resize one edge connector -- its edge, its first finger, how many -- as ONE
+    undo step. Refused for exactly what ``edge-connector.add`` refuses, by its code, with
+    the old one out of the way; everything else about it (shape, inset, face, which side
+    of the border) stays its own. A finger length set for one edge is not carried to
+    another, whose margins differ: there it is the length that edge implies."""
+
+    type = "edge-connector.update"
+
+    def apply(
+        self, doc: PerfDocument, p: UpdateEdgeConnectorPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        old = next((c for c in doc.edge_connectors if c.id == p.id), None)
+        if old is None:
+            raise CommandError("edge-connector-not-found", f'No edge connector with id "{p.id}".')
+        edge = old.edge if p.edge is None else p.edge
+        start = old.start if p.start is None else p.start
+        count = old.count if p.count is None else p.count
+        length = old.finger_length if edge == old.edge else None
+        _AddEdgeConnector().apply(
+            dataclasses.replace(
+                doc, edge_connectors=tuple(c for c in doc.edge_connectors if c.id != p.id)
+            ),
+            AddEdgeConnectorPayload(
+                edge=edge,
+                start=start,
+                count=count,
+                finger_width=old.finger_width,
+                finger_length=length,
+                face=old.face,
+                id=old.id,
+                outside=old.outside,
+            ),
+            ctx,
+        )
+        changed = dataclasses.replace(
+            old, edge=edge, start=start, count=count, finger_length=length
+        )
+        return dataclasses.replace(
+            doc,
+            edge_connectors=tuple(changed if c.id == p.id else c for c in doc.edge_connectors),
+        )
+
+    def describe(self, p: UpdateEdgeConnectorPayload, doc: PerfDocument) -> str:
+        return f"Change edge connector {p.id}"
+
+
 class _DeleteEdgeConnector:
     type = "edge-connector.delete"
 
@@ -3710,6 +3823,8 @@ add_mounting_holes: CommandDefinition[AddMountingHolesPayload] = _AddMountingHol
 delete_mounting_hole: CommandDefinition[DeleteMountingHolePayload] = _DeleteMountingHole()
 add_edge_connector: CommandDefinition[AddEdgeConnectorPayload] = _AddEdgeConnector()
 delete_edge_connector: CommandDefinition[DeleteEdgeConnectorPayload] = _DeleteEdgeConnector()
+update_mounting_hole: CommandDefinition[UpdateMountingHolePayload] = _UpdateMountingHole()
+update_edge_connector: CommandDefinition[UpdateEdgeConnectorPayload] = _UpdateEdgeConnector()
 set_height_limit: CommandDefinition[SetHeightLimitPayload] = _SetHeightLimit()
 set_body_clearance: CommandDefinition[SetBodyClearancePayload] = _SetBodyClearance()
 rename_document: CommandDefinition[RenameDocumentPayload] = _RenameDocument()
@@ -3769,6 +3884,8 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     delete_mounting_hole,
     add_edge_connector,
     delete_edge_connector,
+    update_mounting_hole,
+    update_edge_connector,
     set_height_limit,
     set_body_clearance,
     rename_document,

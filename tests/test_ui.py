@@ -16275,3 +16275,52 @@ def test_fit_leaves_the_floating_bars_their_room() -> None:
             assert not box.intersects(board), (bar.objectName(), box, board)
     finally:
         _close(window)
+
+
+def test_a_chosen_holes_fields_change_it_in_place() -> None:
+    """Its editor is fields now, not facts and a Remove: each one update, one undo step,
+    and a refusal said under them with the hole unchanged."""
+    from perfboard_studio.commands import AddMountingHolesPayload
+
+    window = _window_on(_load_dense())
+    try:
+        window.bus.dispatch("mounting-hole.addMany", AddMountingHolesPayload(ats=(HoleCoord(1, 1),)))
+        (mount,) = window.bus.document.mounting_holes
+        window.scene.mount_items[mount.id].setSelected(True)
+        window._selection_from = "board"
+        window._refresh_properties()
+        editor = window.inspector.feature_editor
+        steps = len(window.bus.history())
+        editor.diameter.setValue(2.5)
+        editor.diameter.editingFinished.emit()
+        assert window.bus.document.mounting_holes[0].diameter == 2.5
+        assert len(window.bus.history()) == steps + 1
+        editor.where.setText("D4")
+        editor.where.editingFinished.emit()
+        assert window.bus.document.mounting_holes[0].at == HoleCoord(3, 3)
+        head = window.bus.document.mounting_holes[0].head_diameter
+        editor.head.setValue(1.0)  # smaller than the bore: add refuses it, so update does
+        editor.head.editingFinished.emit()
+        assert window.bus.document.mounting_holes[0].head_diameter == head
+        assert editor.problem.text() and not editor.problem.isHidden()
+    finally:
+        _close(window)
+
+
+def test_a_chosen_connectors_fields_move_it_in_place() -> None:
+    window = _window_on(_featured_document())
+    try:
+        (connector,) = window.bus.document.edge_connectors
+        window.scene.connector_items[connector.id].setSelected(True)
+        window._selection_from = "board"
+        window._refresh_properties()
+        editor = window.inspector.feature_editor
+        assert editor.connector_fields.isVisibleTo(editor) and not editor.hole_fields.isVisibleTo(editor)
+        editor.first.setCurrentIndex(editor.first.findData(1))
+        editor.first.activated.emit(editor.first.currentIndex())
+        assert window.bus.document.edge_connectors[0].start == 1
+        editor.fingers.setValue(4)
+        editor.fingers.editingFinished.emit()
+        assert window.bus.document.edge_connectors[0].count == 4
+    finally:
+        _close(window)

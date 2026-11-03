@@ -1895,8 +1895,15 @@ connector (edge, first hole, fingers); the height limit and the body clearance w
 its fields. Each button is one command, dispatched as pressed, as the dialog's were -- one
 undo step each, the board redrawn beside it -- and what a board cannot take is not offered
 (no bore through a solderless breadboard, no fingers on either kind). A hole or a connector
-is chosen on the board too, and is then its own editor -- where, how big, Remove -- under
-the selection kinds `mounting-hole` and `edge-connector`. A connector is chosen by its
+is chosen on the board too, and is then its own editor under the selection kinds
+`mounting-hole` and `edge-connector`, whose fields change it in place: a hole's address,
+offset, bore and screw head, a connector's edge, first hole and fingers. Each is ONE
+`mounting-hole.update` / `edge-connector.update`, and those are checked by the add
+command's own `apply` on the feature as it would be, with the old one out of the way -- so
+an update is refused for exactly what an add would be, in the same words, and keeps its id
+and its place in the list. The MCP server's tools are bound one by one (`mcp/server.py`),
+not derived from the bus, so the commands reach an agent as `update_board_feature`,
+`remove_board_feature`'s pair. A connector is chosen by its
 FINGERS (`EdgeConnectorItem.shape`): its bounding rectangle is the whole board, and chosen
 by that, every click on the board would have chosen it. Board ▸ Board Features… stays, and
 shows the board's editor with its holes and connectors in view.

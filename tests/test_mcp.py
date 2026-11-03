@@ -995,7 +995,13 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # otherwise never set, so it would see a board judged by courtyards that a person had
     # chosen to judge by bodies. Not a parameter on set_board: it is not the board, and is
     # kept on the document so that choosing a board again does not lose it.
-    assert len(tools) <= 58, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 59, for update_board_feature: remove_board_feature's pair, one tool for a hole and
+    # a connector as that one is. A hole's bore or a connector's start could otherwise only
+    # be changed by removing and adding again -- two undo steps and a new id the agent was
+    # never told -- while the window changes them in place (mounting-hole.update,
+    # edge-connector.update). Not parameters on the add tools: those make a new feature.
+    assert len(tools) <= 59, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"
@@ -1533,3 +1539,23 @@ def test_place_parts_needs_a_ref_and_an_address_in_every_entry(
         session.place_parts([{"ref": "R1"}])
     with pytest.raises(SessionError, match="at least one"):
         session.place_parts([])
+
+
+def test_an_agent_changes_a_board_feature_in_place(session: BoardSession) -> None:
+    """update_board_feature is remove_board_feature's pair: one tool for both kinds, by the
+    id get_board_info gave, and only what is given changes."""
+    assert session.add_mounting_hole("B2")["ok"]
+    assert session.add_edge_connector("bottom", 2, 4)["ok"]
+    info = session.get_board_info()
+    hole_id = info["mounting_holes"][0]["id"]
+    connector_id = info["edge_connectors"][0]["id"]
+    assert session.update_board_feature(hole_id, hole="C3", diameter=2.5)["ok"]
+    hole = session.document.mounting_holes[0]
+    assert (hole.at.col, hole.at.row, hole.diameter) == (2, 2, 2.5)
+    assert session.update_board_feature(connector_id, count=6)["ok"]
+    assert session.document.edge_connectors[0].count == 6
+    refused = session.update_board_feature(hole_id, diameter=7.0, head_diameter=1.0)
+    assert refused["ok"] is False
+    with pytest.raises(SessionError):
+        session.update_board_feature(hole_id, edge="left")
+    assert session.update_board_feature("nope")["ok"] is False

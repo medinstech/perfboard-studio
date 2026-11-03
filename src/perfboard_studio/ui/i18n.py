@@ -42,6 +42,9 @@ TURKISH: Mapping[str, str] = {
     "&View": "&Görünüm",
     "&Help": "Y&ardım",
     "This board": "Bu kart",
+    "The hole it is drilled at, or beside when it is in the border.": "Delindiği delik; kenar payındaysa yanındaki delik.",
+    "How far the bore sits from its hole, across and down: into the border, for a corner hole clear of every pad.": "Montaj deliğinin, adres deliğinden yatay ve dikey uzaklığı: köşe deliğinin hiçbir pede değmemesi için kenar payına doğru.",
+    "Offset": "Kaydırma",
     "outside {hole}": "{hole} deliğinin dışında",
     "Inset from the edge (holes)": "Kenardan uzaklık (delik)",
     "Mounting holes and edge connectors": "Montaj delikleri ve kenar konnektörleri",
@@ -61,7 +64,6 @@ TURKISH: Mapping[str, str] = {
     "Auto-wire {count} Connection": "{count} Bağlantıyı Otomatik Kablola",
     "Auto-wire {count} Connections": "{count} Bağlantıyı Otomatik Kablola",
     "Nothing in the list to go to.": "Listede gidilecek bir şey yok.",
-    "This board": "Bu kart",
     "Solderless breadboard": "Lehimsiz breadboard",
     "Solderless breadboard, wide channel (ESP32 / modules)": "Lehimsiz breadboard, geniş oluklu (ESP32 / modüller)",
     "As the material is sold": "Malzemenin satıldığı gibi",
@@ -534,12 +536,6 @@ TURKISH: Mapping[str, str] = {
     "Material": "Malzeme",
     # -- board setup: which kind of board this is -----------------------------
     "Strips run": "Şeritler",
-    "Pad per hole — every hole is its own island": (
-        "Delik başına ped — her delik kendi adası"
-    ),
-    "Stripboard — whole rows joined; you cut the track to separate": (
-        "Şeritli kart — satırlar baştan bağlı; ayırmak için şerit kesilir"
-    ),
     # -- board setup: the sizes you can buy -----------------------------------
     "Board": "Kart",
     # -- board setup: pad shape and the printed legend ------------------------
@@ -552,10 +548,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "Down a column": "Sütun boyunca",
     "Along a row": "Satır boyunca",
-    "Addresses printed on the board": "Adresler kartın üzerine basılı",
-    "Boards carrying their own A-Z / 01-22 legend, printed on the board itself.": (
-        "Kendi A-Z / 01-22 numaralandırmasını üzerinde basılı taşıyan kartlar."
-    ),
     "Row digits": "Satır basamağı",
     "Columns printed as": "Sütunlarda basılı",
     "Rows printed as": "Satırlarda basılı",

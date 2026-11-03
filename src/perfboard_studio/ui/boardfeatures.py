@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSpinBox,
     QToolButton,
@@ -40,12 +41,15 @@ from perfboard_studio.commands import (
     AddMountingHolesPayload,
     DeleteEdgeConnectorPayload,
     DeleteMountingHolePayload,
+    UpdateEdgeConnectorPayload,
+    UpdateMountingHolePayload,
 )
 from perfboard_studio.geometry import (
     board_edge_margin_mm,
     edge_connector_holes,
     format_hole,
     pad_extent_mm,
+    parse_hole,
 )
 from perfboard_studio.model import (
     Board,
@@ -353,29 +357,92 @@ class FeaturesGroup(QWidget):
 
 
 class FeatureEditor(QWidget):
-    """One mounting hole or one edge connector, chosen on the board: what it is, where, how
-    big, and Remove -- so the list in the board's editor is not the only way to one."""
+    """One mounting hole or one edge connector, chosen on the board, edited in place -- so
+    the list in the board's editor is not the only way to one, and changing one is not a
+    Remove and an Add.
+
+    A hole: where it is (an address, as everything else in the window says one), how far
+    into the border, its bore and its screw head. A connector: its edge, the address of its
+    first finger, how many. Each field is ONE ``mounting-hole.update`` /
+    ``edge-connector.update`` as it is left, refused for what adding it that way would be
+    refused for -- by the add command's own code -- and said under the fields."""
 
     def __init__(self, dispatch: Dispatch) -> None:
         super().__init__()
         self._dispatch = dispatch
-        self._remove: tuple[str, object] | None = None
+        self._document: PerfDocument | None = None
+        self._mount: MountingHole | None = None
+        self._connector: EdgeConnector | None = None
+        self._loading = False
         column = QVBoxLayout(self)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(theme.SPACE["lg"])
         self.title = QLabel()
         self.title.setTextFormat(Qt.TextFormat.RichText)
         column.addWidget(self.title)
-        form = QFormLayout()
-        form.setContentsMargins(0, 0, 0, 0)
-        self.where = QLabel()
-        self.measure = QLabel()
-        for fact in (self.where, self.measure):
-            fact.setWordWrap(True)
-            fact.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        form.addRow(t("Where"), self.where)
-        form.addRow(t("Size"), self.measure)
-        column.addLayout(form)
+
+        # -- a hole
+        self.hole_fields = QWidget()
+        hole_form = QFormLayout(self.hole_fields)
+        hole_form.setContentsMargins(0, 0, 0, 0)
+        self.where = QLineEdit()
+        self.where.setToolTip(t("The hole it is drilled at, or beside when it is in the border."))
+        self.where.editingFinished.connect(self._commit_where)
+        hole_form.addRow(t("Where"), self.where)
+        self.outside = QLabel()
+        theme.tone(self.outside, "secondary")
+        hole_form.addRow("", self.outside)
+        offset = QWidget()
+        across = QHBoxLayout(offset)
+        across.setContentsMargins(0, 0, 0, 0)
+        self.offset_x, self.offset_y = _mm_box(-20.0, 20.0), _mm_box(-20.0, 20.0)
+        across.addWidget(self.offset_x, 1)
+        across.addWidget(QLabel("×"))
+        across.addWidget(self.offset_y, 1)
+        for box in (self.offset_x, self.offset_y):
+            box.setToolTip(
+                t("How far the bore sits from its hole, across and down: into the border, for a "
+                  "corner hole clear of every pad.")
+            )
+            box.editingFinished.connect(self._commit_offset)
+        hole_form.addRow(t("Offset"), offset)
+        self.diameter = _mm_box(0.5, 12.0)
+        self.diameter.editingFinished.connect(
+            lambda: self._commit_hole(diameter=self.diameter.value())
+        )
+        hole_form.addRow(t("Diameter"), self.diameter)
+        self.head = _mm_box(0.5, 24.0)
+        self.head.editingFinished.connect(
+            lambda: self._commit_hole(head_diameter=self.head.value())
+        )
+        hole_form.addRow(t("Screw head"), self.head)
+        column.addWidget(self.hole_fields)
+
+        # -- a connector
+        self.connector_fields = QWidget()
+        connector_form = QFormLayout(self.connector_fields)
+        connector_form.setContentsMargins(0, 0, 0, 0)
+        self.edge = QComboBox()
+        for edge in EDGES:
+            self.edge.addItem(edge_word(edge), edge)
+        self.edge.activated.connect(
+            lambda _i: self._commit_connector(edge=cast(BoardEdge, self.edge.currentData()))
+        )
+        connector_form.addRow(t("Edge"), self.edge)
+        self.first = QComboBox()
+        _narrow(self.first)
+        self.first.activated.connect(
+            lambda _i: self._commit_connector(start=int(self.first.currentData() or 0))
+        )
+        connector_form.addRow(t("First hole"), self.first)
+        self.fingers = QSpinBox()
+        self.fingers.setRange(1, 999)
+        self.fingers.editingFinished.connect(
+            lambda: self._commit_connector(count=self.fingers.value())
+        )
+        connector_form.addRow(t("Fingers"), self.fingers)
+        column.addWidget(self.connector_fields)
+
         self.remove = QPushButton(t("Remove"))
         self.remove.setAutoDefault(False)
         self.remove.clicked.connect(self._on_remove)
@@ -386,25 +453,113 @@ class FeatureEditor(QWidget):
         self.problem.hide()
         column.addWidget(self.problem)
 
+    # -- what it shows --
+
     def load_hole(self, document: PerfDocument, mount: MountingHole) -> None:
-        self.title.setText(theme.heading(t("Mounting hole")))
-        where, size = hole_said(mount, document.board)
-        self.where.setText(where)
-        self.measure.setText(size)
-        self._remove = ("mounting-hole.delete", DeleteMountingHolePayload(id=mount.id))
-        self.problem.hide()
+        self._document, self._mount, self._connector = document, mount, None
+        self._loading = True
+        try:
+            self.title.setText(theme.heading(t("Mounting hole")))
+            self.hole_fields.show()
+            self.connector_fields.hide()
+            hole = format_hole(mount.at, document.board)
+            if not self.where.hasFocus():
+                self.where.setText(hole)
+            where, _size = hole_said(mount, document.board)
+            self.outside.setText(where if where != hole else "")
+            self.outside.setVisible(where != hole)
+            for box, value in ((self.offset_x, mount.offset_x_mm),
+                               (self.offset_y, mount.offset_y_mm),
+                               (self.diameter, mount.diameter),
+                               (self.head, mount.head_diameter)):
+                if not box.hasFocus():
+                    box.setValue(value)
+        finally:
+            self._loading = False
 
     def load_connector(self, document: PerfDocument, connector: EdgeConnector) -> None:
-        self.title.setText(theme.heading(t("Edge connector")))
-        where, size = connector_said(connector, document.board)
-        self.where.setText(where)
-        self.measure.setText(size)
-        self._remove = ("edge-connector.delete", DeleteEdgeConnectorPayload(id=connector.id))
-        self.problem.hide()
+        self._document, self._mount, self._connector = document, None, connector
+        self._loading = True
+        try:
+            self.title.setText(theme.heading(t("Edge connector")))
+            self.hole_fields.hide()
+            self.connector_fields.show()
+            self.edge.setCurrentIndex(max(0, self.edge.findData(connector.edge)))
+            board = document.board
+            along = board.cols if connector.edge in ("top", "bottom") else board.rows
+            self.first.clear()
+            for start in range(along):
+                probe = EdgeConnector(id="probe", edge=connector.edge, start=start, count=1)
+                holes = edge_connector_holes(probe, board)
+                self.first.addItem(
+                    format_hole(holes[0], board) if holes else str(start + 1), start
+                )
+            self.first.setCurrentIndex(max(0, self.first.findData(connector.start)))
+            if not self.fingers.hasFocus():
+                self.fingers.setValue(connector.count)
+        finally:
+            self._loading = False
 
-    def _on_remove(self) -> None:
-        if self._remove is None:
-            return
-        refused = self._dispatch(*self._remove)
+    # -- what it does --
+
+    def _say(self, refused: str | None) -> None:
         self.problem.setText(refused or "")
         self.problem.setVisible(bool(refused))
+
+    def _commit_where(self) -> None:
+        if self._loading or self._mount is None or self._document is None:
+            return
+        typed = self.where.text().strip()
+        board = self._document.board
+        if typed == format_hole(self._mount.at, board):
+            return
+        try:
+            at = parse_hole(typed, board)
+        except ValueError as error:
+            self._say(str(error))
+            return
+        self._commit_hole(at=at)
+
+    def _commit_offset(self) -> None:
+        if self._mount is None:
+            return
+        self._commit_hole(offset_x_mm=self.offset_x.value(), offset_y_mm=self.offset_y.value())
+
+    def _commit_hole(self, **changes: object) -> None:
+        mount = self._mount
+        if self._loading or mount is None:
+            return
+        # The payload's names are the hole's own: nothing to say when nothing changed.
+        if all(getattr(mount, name) == value for name, value in changes.items()):
+            return
+        self._say(self._dispatch(
+            "mounting-hole.update", UpdateMountingHolePayload(id=mount.id, **changes)  # type: ignore[arg-type]
+        ))
+
+    def _commit_connector(self, **changes: object) -> None:
+        connector = self._connector
+        if self._loading or connector is None:
+            return
+        if all(getattr(connector, name) == value for name, value in changes.items()):
+            return
+        self._say(self._dispatch(
+            "edge-connector.update",
+            UpdateEdgeConnectorPayload(id=connector.id, **changes),  # type: ignore[arg-type]
+        ))
+
+    def _on_remove(self) -> None:
+        if self._mount is not None:
+            self._say(self._dispatch(
+                "mounting-hole.delete", DeleteMountingHolePayload(id=self._mount.id)))
+        elif self._connector is not None:
+            self._say(self._dispatch(
+                "edge-connector.delete", DeleteEdgeConnectorPayload(id=self._connector.id)))
+
+
+def _mm_box(low: float, high: float) -> QDoubleSpinBox:
+    box = QDoubleSpinBox()
+    box.setRange(low, high)
+    box.setDecimals(2)
+    box.setSingleStep(0.1)
+    box.setSuffix(" mm")
+    return box

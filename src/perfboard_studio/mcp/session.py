@@ -96,6 +96,8 @@ from perfboard_studio.commands import (
     SetHeightLimitPayload,
     UnplaceComponentPayload,
     UpdateComponentPayload,
+    UpdateEdgeConnectorPayload,
+    UpdateMountingHolePayload,
     UpdateNetPayload,
     UpdatePartPayload,
     create_document_id_generator,
@@ -1325,6 +1327,59 @@ class BoardSession:
                 rotation=_rotation(rotation),
                 side=cast(BoardSide, side),
             ),
+        )
+
+    def update_board_feature(
+        self,
+        id: str,
+        hole: str | None = None,
+        offset_x_mm: float | None = None,
+        offset_y_mm: float | None = None,
+        diameter: float | None = None,
+        head_diameter: float | None = None,
+        edge: str | None = None,
+        start: int | None = None,
+        count: int | None = None,
+    ) -> dict[str, Any]:
+        """Change a mounting hole or an edge connector in place, by its id: what is given
+        changes, what is not stays. One tool for both, as ``remove_board_feature`` is, and
+        refused for what adding it would be refused for."""
+        board = self.document.board
+        if any(mount.id == id for mount in self.document.mounting_holes):
+            if edge is not None or start is not None or count is not None:
+                raise SessionError("A mounting hole has no edge, start or count to change.")
+            return self._dispatch(
+                "mounting-hole.update",
+                UpdateMountingHolePayload(
+                    id=id,
+                    at=None if hole is None else _hole(hole, board),
+                    offset_x_mm=offset_x_mm,
+                    offset_y_mm=offset_y_mm,
+                    diameter=diameter,
+                    head_diameter=head_diameter,
+                ),
+            )
+        if any(connector.id == id for connector in self.document.edge_connectors):
+            if hole is not None or diameter is not None or head_diameter is not None:
+                raise SessionError("An edge connector has no hole, diameter or head to change.")
+            if edge is not None and edge not in get_args(BoardEdge):
+                raise SessionError(
+                    f"{edge!r} is not a board edge. Use one of: {', '.join(get_args(BoardEdge))}."
+                )
+            return self._dispatch(
+                "edge-connector.update",
+                UpdateEdgeConnectorPayload(
+                    id=id, edge=cast(BoardEdge | None, edge), start=start, count=count
+                ),
+            )
+        known = [
+            *(m.id for m in self.document.mounting_holes),
+            *(c.id for c in self.document.edge_connectors),
+        ]
+        return _refused(
+            "no-such-feature",
+            f"No mounting hole or edge connector with id {id!r}. "
+            f"This board has: {', '.join(known) if known else 'none'}.",
         )
 
     def remove_board_feature(self, id: str) -> dict[str, Any]:

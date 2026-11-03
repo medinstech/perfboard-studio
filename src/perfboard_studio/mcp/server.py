@@ -387,6 +387,27 @@ def add_board_label(
 
 
 @mcp.tool()
+def update_board_feature(
+    id: str,
+    hole: str | None = None,
+    offset_x_mm: float | None = None,
+    offset_y_mm: float | None = None,
+    diameter: float | None = None,
+    head_diameter: float | None = None,
+    edge: str | None = None,
+    start: int | None = None,
+    count: int | None = None,
+) -> dict[str, Any]:
+    """Change a mounting hole (hole address, offset into the border, diameter, screw head)
+    or an edge connector (edge, start index, finger count) in place, by the id
+    get_board_info gave you. Only what you give changes; one undo step; refused for
+    whatever adding it that way would be refused for."""
+    return session.update_board_feature(
+        id, hole, offset_x_mm, offset_y_mm, diameter, head_diameter, edge, start, count
+    )
+
+
+@mcp.tool()
 def remove_board_feature(id: str) -> dict[str, Any]:
     """Take back a mounting hole, an edge connector, a track cut or a label, by the id
     get_board_info gave you."""

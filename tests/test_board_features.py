@@ -594,3 +594,74 @@ def test_a_board_with_no_legend_keeps_its_ruler() -> None:
     scene = BoardScene(_doc(), LOOKUP, side="top", show_rulers=True)
     assert not scene.legend_is_readable()
     assert HoleRulerItem in {type(item) for item in scene.items()}
+
+
+# -- changed in place ------------------------------------------------------------------
+
+
+def test_a_mounting_hole_is_changed_in_place_as_one_undo_step() -> None:
+    from perfboard_studio.commands import AddMountingHolePayload, UpdateMountingHolePayload
+
+    bus = _bus(_doc())
+    assert bus.dispatch("mounting-hole.add", AddMountingHolePayload(at=HoleCoord(1, 1), id="a")).ok
+    assert bus.dispatch("mounting-hole.add", AddMountingHolePayload(at=HoleCoord(8, 7), id="b")).ok
+    before = bus.document
+    result = bus.dispatch(
+        "mounting-hole.update",
+        UpdateMountingHolePayload(id="a", at=HoleCoord(2, 2), diameter=2.5, head_diameter=5.0),
+    )
+    assert result.ok, result
+    first, second = bus.document.mounting_holes
+    # Its id and its place in the list are its own; only what was given changed.
+    assert (first.id, first.at, first.diameter, first.head_diameter) == ("a", HoleCoord(2, 2), 2.5, 5.0)
+    assert second == before.mounting_holes[1]
+    bus.undo()
+    assert bus.document == before
+
+
+@pytest.mark.parametrize(
+    ("changes", "code"),
+    [
+        ({"at": HoleCoord(40, 40)}, None),  # off the board: add's own refusal
+        ({"at": HoleCoord(8, 7)}, "duplicate-mounting-hole"),
+        ({"diameter": 0.0}, "invalid-mounting-hole"),
+        ({"head_diameter": 1.0}, "invalid-mounting-hole"),
+    ],
+)
+def test_a_mounting_hole_is_refused_what_adding_it_so_would_be_refused(changes, code) -> None:  # type: ignore[no-untyped-def]
+    """By add's own code, with the hole out of the way: the two cannot check different
+    things -- an add refused is the same update refused, in the same words."""
+    from perfboard_studio.commands import AddMountingHolePayload, UpdateMountingHolePayload
+
+    bus = _bus(_doc())
+    bus.dispatch("mounting-hole.add", AddMountingHolePayload(at=HoleCoord(1, 1), id="a"))
+    bus.dispatch("mounting-hole.add", AddMountingHolePayload(at=HoleCoord(8, 7), id="b"))
+    before = bus.document
+    updated = bus.dispatch("mounting-hole.update", UpdateMountingHolePayload(id="a", **changes))
+    assert not updated.ok and bus.document == before
+    merged = {"at": HoleCoord(1, 1), "diameter": 3.2, "head_diameter": 6.0, **changes}
+    alone = _bus(dataclasses.replace(before, mounting_holes=before.mounting_holes[1:]))
+    added = alone.dispatch("mounting-hole.add", AddMountingHolePayload(id="a", **merged))
+    assert not added.ok and (updated.code, updated.message) == (added.code, added.message)
+    if code is not None:
+        assert updated.code == code
+
+
+def test_an_edge_connector_is_moved_in_place_and_refused_as_add_refuses_it() -> None:
+    from perfboard_studio.commands import AddEdgeConnectorPayload, UpdateEdgeConnectorPayload
+
+    bus = _bus(_doc())
+    assert bus.dispatch(
+        "edge-connector.add", AddEdgeConnectorPayload(edge="bottom", start=1, count=4, id="ec")
+    ).ok
+    assert bus.dispatch("edge-connector.update", UpdateEdgeConnectorPayload(id="ec", start=3, count=5)).ok
+    (connector,) = bus.document.edge_connectors
+    assert (connector.id, connector.edge, connector.start, connector.count) == ("ec", "bottom", 3, 5)
+    assert bus.dispatch("edge-connector.update", UpdateEdgeConnectorPayload(id="ec", edge="left")).ok
+    assert bus.document.edge_connectors[0].edge == "left"
+    before = bus.document
+    too_long = bus.dispatch("edge-connector.update", UpdateEdgeConnectorPayload(id="ec", count=99))
+    assert not too_long.ok and too_long.code == "invalid-edge-connector"
+    assert bus.document == before
+    missing = bus.dispatch("edge-connector.update", UpdateEdgeConnectorPayload(id="nope", count=2))
+    assert not missing.ok and missing.code == "edge-connector-not-found"

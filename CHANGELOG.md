@@ -22,6 +22,11 @@ closed without a bump.
 
 ### Added
 
+- **A mounting hole and an edge connector are changed in place.** Chosen on the board,
+  a hole's address, offset, diameter and screw head, and a connector's edge, first hole
+  and number of fingers, are fields in Properties -- each change one undo step, refused for
+  what adding it that way would be. Agents get the same through `update_board_feature`.
+
 - **Design the board from one you can buy.** Board ▸ Design the Board… (and Change… on the
   board in Properties) starts from a real board family -- green double-sided with an edge
   connector and corner holes, brown phenolic -- and changes its size, grid and pads, edge connector,

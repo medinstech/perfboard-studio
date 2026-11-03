@@ -136,19 +136,23 @@ conductor at a time.
 | **Seeing** | `render_2d_view` · `render_3d_view` · `render_schematic` |
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
 | **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `update_net` · `delete_net` |
-| **The board** | `set_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `remove_board_feature` |
+| **The board** | `set_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `update_board_feature` · `remove_board_feature` |
 | **Editing** | `place_component` · `move_component` · `rotate_component` · `mirror_component` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` · `set_body_clearance` |
 | **Planning** | `autoroute` · `reroute` · `optimize_placement` |
 | **Verifying** | `run_erc` · `run_drc` · `run_lvs` · `check_heights` |
 | **Output** | `generate_guide` · `export_pdf` · `export_step` |
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 
-58 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+59 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
 names, and one `remove_board_feature` covers mounting holes, edge connectors and track
-cuts because the three differ only in which list the id is in.
+cuts because the three differ only in which list the id is in. `update_board_feature` is
+its pair for the two that can change in place -- a hole's address, offset, bore and head,
+a connector's edge, start and count -- each one command (`mounting-hole.update`,
+`edge-connector.update`) refused by the add command's own checks, as the window's
+Properties does it.
 
 **That table and this count are now read by a test**
 (`test_every_tool_is_named_in_the_documentation_and_nothing_else_is`), which is why the
