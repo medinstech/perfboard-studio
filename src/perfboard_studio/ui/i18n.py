@@ -2663,6 +2663,14 @@ TURKISH: Mapping[str, str] = {
     ),
     "Connect": "Bağla",
     "Rearrange": "Yeniden Diz",
+    # What an accepting button says, rather than OK.
+    "Use This Board": "Bu Kartı Kullan",
+    "Create Board": "Kartı Oluştur",
+    "Use This Part": "Bu Parçayı Kullan",
+    "Create Project": "Projeyi Oluştur",
+    "Move the Parts": "Parçaları Taşı",
+    "Redo Their Wiring…": "Kablolamalarını Yeniden Yap…",
+    "Wire Beside It": "Eskisinin Yanına Kablola",
     "3D": "3D",
     "Everything the three checks found, worst first (Ctrl+7).": (
         "Üç denetimin bulduğu her şey, en ciddisi önce (Ctrl+7)."

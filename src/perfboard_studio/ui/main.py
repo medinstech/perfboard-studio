@@ -1214,9 +1214,13 @@ class BoardSetupDialog(QDialog):
         title: str = "New Board",
         document: PerfDocument | None = None,
         lookup: FootprintLookup | None = None,
+        verb: str | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
+        #: What the accepting button says: Create Board for a new one, Use This Board when
+        #: the open board changes. "OK" said neither.
+        self._verb = verb if verb is not None else t("Use This Board")
         self.setMinimumWidth(420)
         #: What the preview draws the board under: the open document's own fingers and
         #: corner holes while the board is still that size, so Board Setup on a starter
@@ -1466,6 +1470,8 @@ class BoardSetupDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if self._ok_button is not None:
+            self._ok_button.setText(self._verb)
         self._check_legend()
 
         questions = QVBoxLayout()
@@ -2504,6 +2510,9 @@ class CustomPartDialog(QDialog):
         )
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
+        use = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if use is not None:
+            use.setText(t("Use This Part"))
 
         layout = QVBoxLayout()
         layout.addWidget(self.family)
@@ -3367,6 +3376,9 @@ class BoardSizeDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        use = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if use is not None:
+            use.setText(t("Use This Board"))
         # The kinds of board no list of stock sizes holds -- a breadboard to try it on first,
         # a stripboard, a piece cut to size -- one press away from the question about which
         # board, which is where somebody looks for them.
@@ -10741,6 +10753,9 @@ class MainWindow(QMainWindow):
         box.setInformativeText("\n".join(detail))
         box.setStandardButtons(QMessageBox.StandardButton.Apply | QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(QMessageBox.StandardButton.Apply)
+        move = box.button(QMessageBox.StandardButton.Apply)
+        if move is not None:
+            move.setText(t("Move the Parts"))
         return box.exec() == QMessageBox.StandardButton.Apply
 
     # -- routing ------------------------------------------------------------
@@ -10976,20 +10991,30 @@ class MainWindow(QMainWindow):
         }
         if stale_nets and only_net_ids is None:
             names = sorted(n.name for n in self.bus.document.nets if n.id in stale_nets)
-            answer = QMessageBox.question(
-                self,
-                t("Redo the wiring of the nets whose parts moved?"),
+            # Three answers, each named for what it does. It was Yes and No, and Esc meant
+            # No -- which wired, adding copper beside the old -- so there was no way to ask
+            # nothing of it at all.
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle(t("Redo the wiring of the nets whose parts moved?"))
+            box.setText(
                 t(
                     "<b>{names}</b> still carry the copper laid out before a part "
                     "moved.<p>Auto-wire only adds, so wiring now leaves that copper in "
                     "place and puts more beside it. Redoing their wiring removes it and "
                     "plans again.</p>"
-                ).format(names=", ".join(names)),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
+                ).format(names=", ".join(names))
             )
-            if answer == QMessageBox.StandardButton.Yes:
+            redo = box.addButton(t("Redo Their Wiring…"), QMessageBox.ButtonRole.AcceptRole)
+            beside = box.addButton(t("Wire Beside It"), QMessageBox.ButtonRole.ActionRole)
+            cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(redo)
+            box.setEscapeButton(cancel)
+            box.exec()
+            if box.clickedButton() is redo:
                 self.on_reroute(tuple(stale_nets))
+                return
+            if box.clickedButton() is not beside:
                 return
 
         # Cleared BEFORE planning, so the plan is made against the board as it will be rather
@@ -11956,7 +11981,12 @@ class MainWindow(QMainWindow):
             DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso())
         )
         dialog = BoardSetupDialog(
-            starter.board, self, title=t("New Board"), document=starter, lookup=self.lookup
+            starter.board,
+            self,
+            title=t("New Board"),
+            document=starter,
+            lookup=self.lookup,
+            verb=t("Create Board"),
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -12213,6 +12243,18 @@ class MainWindow(QMainWindow):
             10000,
         )
 
+    def _ask_name(self, title: str, label: str, text: str, verb: str) -> tuple[str, bool]:
+        """``QInputDialog.getText``, with the accepting button saying what it does: the
+        static one can only say OK."""
+        asker = QInputDialog(self)
+        asker.setWindowTitle(title)
+        asker.setLabelText(label)
+        asker.setTextValue(text)
+        asker.setOkButtonText(verb)
+        asker.setCancelButtonText(t("Cancel"))
+        accepted = asker.exec() == QDialog.DialogCode.Accepted
+        return asker.textValue(), accepted
+
     def on_new_project(self) -> None:
         """Name a project, give it a folder, and start in the schematic.
 
@@ -12229,8 +12271,8 @@ class MainWindow(QMainWindow):
         """
         if not self._offer_to_save():
             return
-        name, ok = QInputDialog.getText(
-            self, t("New Project"), t("What is this board called?"), text=t("My Board")
+        name, ok = self._ask_name(
+            t("New Project"), t("What is this board called?"), t("My Board"), t("Create Project")
         )
         if not ok or not name.strip():
             return

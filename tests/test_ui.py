@@ -12235,8 +12235,8 @@ def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatc
     It used to ask here too, and a breadboard chosen in New Project was chosen again."""
     window = _blank_window()
     monkeypatch.setattr(
-        "perfboard_studio.ui.main.QInputDialog.getText",
-        staticmethod(lambda *args, **kwargs: ("NE555 Astable", True)),
+        "perfboard_studio.ui.main.MainWindow._ask_name",
+        lambda self, *args, **kwargs: ("NE555 Astable", True),
     )
     monkeypatch.setattr(
         "perfboard_studio.ui.main.QFileDialog.getExistingDirectory",
@@ -12592,7 +12592,7 @@ def test_the_first_project_goes_in_the_documents_folder(
         main_module.QStandardPaths, "writableLocation", lambda _where: str(documents)
     )
     monkeypatch.setattr(
-        main_module.QInputDialog, "getText", staticmethod(lambda *args, **kwargs: ("Blinker", True))
+        main_module.MainWindow, "_ask_name", lambda self, *args, **kwargs: ("Blinker", True)
     )
     started: list[str] = []
     monkeypatch.setattr(
