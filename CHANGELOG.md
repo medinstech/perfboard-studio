@@ -351,6 +351,9 @@ closed without a bump.
 
 ### Fixed
 
+- **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
+  first in the document, instead of to whichever of them is listed first.
+
 - **A stock board's corner holes are where the real board has them.** In the corners of the
   border, outside the grid, with every pad kept -- they had taken the four corner pads and
   worn a dashed orange ring that read as copper. The ring, which is where the screw head

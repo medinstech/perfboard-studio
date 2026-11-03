@@ -14395,6 +14395,27 @@ def test_the_palette_finds_a_part_and_a_net_by_name() -> None:
         _close(window)
 
 
+def test_a_reference_typed_whole_is_that_part_before_the_ones_it_starts() -> None:
+    """Go to Part: "X1" is X1 even where the document lists X10..X16 before it -- the dense
+    board keeps them in that order -- rather than whichever of them came first."""
+    import dataclasses
+
+    document = _load_dense()
+    first = next(c for c in document.components if c.ref == "X1")
+    others = tuple(c for c in document.components if c.ref != "X1")
+    window = _window_on(dataclasses.replace(document, components=(*others, first)))
+    try:
+        window.on_go_to_part()
+        window.command_palette.field.setText("X1")
+        shown = window.command_palette.shown()
+        assert shown[0].label.split()[0] == "X1"
+        assert [e.label.split()[0] for e in shown[1:4]] == ["X10", "X11", "X12"]
+        window.command_palette.run_current()
+        assert list(window.scene.selected_component_ids()) == [first.id]
+    finally:
+        _close(window)
+
+
 def test_escape_closes_the_palette_and_the_header_opens_it() -> None:
     """Escape leaves the palette before it leaves anything else, and the header's search
     field is the palette's other door."""

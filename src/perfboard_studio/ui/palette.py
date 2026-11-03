@@ -59,19 +59,25 @@ def rank(entries: Sequence[Entry], typed: str) -> list[Entry]:
     needle = typed.strip().casefold()
     if not needle:
         return list(entries)
+    # A name whose first word IS what was typed comes before one that merely starts with
+    # it: "R1" is R1, not whichever of R10..R19 the document happens to list first.
+    exact: list[Entry] = []
     starts: list[Entry] = []
     words: list[Entry] = []
     inside: list[Entry] = []
     for entry in entries:
         name = entry.label.casefold()
-        if name.startswith(needle):
+        first_word = name.split(maxsplit=1)[0] if name.strip() else ""
+        if first_word == needle or name == needle:
+            exact.append(entry)
+        elif name.startswith(needle):
             starts.append(entry)
         # A hyphen parts words too: "wire" is the start of a word in "Auto-wire".
         elif any(word.startswith(needle) for word in name.replace("…", " ").replace("-", " ").split()):
             words.append(entry)
         elif needle in name or needle in entry.where.casefold():
             inside.append(entry)
-    return starts + words + inside
+    return exact + starts + words + inside
 
 
 #: The row's own data role for what is said after the name: its menu and its key.
