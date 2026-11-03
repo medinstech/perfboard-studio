@@ -15063,3 +15063,47 @@ def test_new_board_starts_a_blank_design_without_asking_about_a_board(monkeypatc
         assert window._is_in_front(window.dock_schematic)
     finally:
         _close(window)
+
+
+def test_redoing_the_wiring_of_moved_nets_is_asked_once(monkeypatch) -> None:
+    """Redo Their Wiring on the moved-nets question opened a second box asking to redo the
+    wiring, with the counts the first one lacked. One box now, with the count on it."""
+    from PySide6.QtWidgets import QMessageBox
+
+    window = _window_on(_load_dense())
+    try:
+        from perfboard_studio.commands import AddConductorPayload, NewWireConductor
+
+        net = window.bus.document.nets[0]
+        assert window.bus.dispatch(
+            "conductor.add",
+            AddConductorPayload(conductor=NewWireConductor(
+                path=(HoleCoord(1, 1), HoleCoord(1, 4)), kind="insulated-wire", net_id=net.id
+            )),
+        ).ok
+        document = window.bus.document
+        stale = {net.id}
+        window._nets_from_old_layout = set(stale)
+        shown: list[str] = []
+        confirmed: list[str] = []
+
+        def answer(self) -> int:
+            shown.append(self.text())
+            return 0
+
+        def redo_clicked(self):
+            return next(b for b in self.buttons() if b.text() == window_t("Redo Their Wiring…"))
+
+        from perfboard_studio.ui.i18n import t as window_t
+
+        monkeypatch.setattr(QMessageBox, "exec", answer)
+        monkeypatch.setattr(QMessageBox, "clickedButton", redo_clicked)
+        monkeypatch.setattr(
+            type(window), "_confirm", lambda self, *a, **k: confirmed.append("asked") or True
+        )
+        removed = sum(1 for c in document.conductors if c.net_id in stale)
+        window._route(None)
+        assert len(shown) == 1 and str(removed) in shown[0]
+        assert confirmed == [], "the second box is gone"
+    finally:
+        _close(window)

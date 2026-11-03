@@ -204,6 +204,9 @@ closed without a bump.
   try on any board, and the Board step then asked again; now the sheet is in front and the
   Board step chooses, as New Project does. Board ▸ Board Setup is there for anybody who
   knows the board already.
+- **Redoing the wiring of nets whose parts moved is asked once.** Redo Their Wiring opened
+  a second box asking to redo the wiring, with the count the first one lacked; the one
+  question now says how many conductors go.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

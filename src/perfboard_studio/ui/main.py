@@ -10619,13 +10619,19 @@ class MainWindow(QMainWindow):
             return
         self.on_reroute(net_ids)
 
-    def on_reroute(self, only_net_ids: tuple[NetId, ...] | None, why: str = "") -> None:
+    def on_reroute(
+        self, only_net_ids: tuple[NetId, ...] | None, why: str = "", *, asked: bool = False
+    ) -> None:
         """Rip up and route again, as one undoable command.
 
         Asked before it happens, because it DISCARDS routing -- which autoroute never
         does. The dialog says how much copper goes and what replaces it, since "14
         conductors become 12" is the only honest way to describe throwing away work.
         ``why`` opens it, for a caller that arrived here from something else.
+
+        Not asked again when the user was just asked (``asked``): the question about nets
+        whose parts moved says how much copper goes and has Redo Their Wiring on it, and a
+        second box with the same verb was the same answer twice.
 
         Not asked when the answer is the routing already there: planning is deterministic,
         so with the same settings it usually is, and ripping copper up to lay the same
@@ -10637,7 +10643,7 @@ class MainWindow(QMainWindow):
                                            "to wire."), 6000)
             return
         if board_joins_holes(self.bus.document.board):
-            self._reroute_joined(only_net_ids, why)
+            self._reroute_joined(only_net_ids, why, asked=asked)
             return
 
         document = self.bus.document
@@ -10670,9 +10676,8 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if plan.remove_ids:
-            # Through _confirm: it rips up copper, and Yes under Enter made that a reflex --
-            # twice over, since the stale-nets question below lands here on Yes as well.
+        if plan.remove_ids and not asked:
+            # Through _confirm: it rips up copper, and Yes under Enter made that a reflex.
             body = (
                 (f"<p>{why}</p>" if why else "")
                 + f"<b>{say(describe_reroute(plan))}</b><p>"
@@ -10760,6 +10765,11 @@ class MainWindow(QMainWindow):
             box = QMessageBox(self)
             box.setIcon(QMessageBox.Icon.Question)
             box.setWindowTitle(t("Redo the wiring of the nets whose parts moved?"))
+            # ONE question, with the count on it: Redo Their Wiring used to open a second
+            # box asking to redo the wiring, with the numbers this one lacked.
+            removed = sum(
+                1 for c in self.bus.document.conductors if c.net_id in stale_nets
+            )
             box.setText(
                 t(
                     "<b>{names}</b> still carry the copper laid out before a part "
@@ -10767,6 +10777,12 @@ class MainWindow(QMainWindow):
                     "place and puts more beside it. Redoing their wiring removes it and "
                     "plans again.</p>"
                 ).format(names=", ".join(names))
+                + "<p>"
+                + t(
+                    "{removed} conductor(s) on them go and are planned again; copper with "
+                    "no net assigned is left alone. One Ctrl+Z puts it all back."
+                ).format(removed=removed)
+                + "</p>"
             )
             redo = box.addButton(t("Redo Their Wiring…"), QMessageBox.ButtonRole.AcceptRole)
             beside = box.addButton(t("Wire Beside It"), QMessageBox.ButtonRole.ActionRole)
@@ -10775,7 +10791,7 @@ class MainWindow(QMainWindow):
             box.setEscapeButton(cancel)
             box.exec()
             if box.clickedButton() is redo:
-                self.on_reroute(tuple(stale_nets))
+                self.on_reroute(tuple(stale_nets), asked=True)
                 return
             if box.clickedButton() is not beside:
                 return
@@ -10915,7 +10931,9 @@ class MainWindow(QMainWindow):
         )
         self._report_strip_problems(plan)
 
-    def _reroute_joined(self, only_net_ids: tuple[NetId, ...] | None, why: str) -> None:
+    def _reroute_joined(
+        self, only_net_ids: tuple[NetId, ...] | None, why: str, *, asked: bool = False
+    ) -> None:
         """Re-route a stripboard or a breadboard with ITS planner (``plan_joined_reroute``).
 
         This went to the perfboard router, which ripped a breadboard's jumpers up and laid
@@ -10953,7 +10971,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if plan.remove_ids:
+        if plan.remove_ids and not asked:
             body = (
                 (f"<p>{why}</p>" if why else "")
                 + f"<b>{say(describe_strip_plan(plan))}</b><p>"

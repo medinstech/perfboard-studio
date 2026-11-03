@@ -805,6 +805,9 @@ TURKISH: Mapping[str, str] = {
     "A new design. Draw the circuit; the board it goes on is the next step, tried with the circuit on it.": (
         "Yeni bir tasarım. Devreyi çizin; gideceği kart bir sonraki adımda, devre üzerindeyken denenir."
     ),
+    "{removed} conductor(s) on them go and are planned again; copper with no net assigned is left alone. One Ctrl+Z puts it all back.": (
+        "Üzerlerindeki {removed} iletken kaldırılıp yeniden planlanır; neti olmayan bakıra dokunulmaz. Tek Ctrl+Z hepsini geri alır."
+    ),
     "Locked": "Kilitli",
     "Kind": "Tür",
     "Type what the part is; Enter puts it on the sheet.": (
