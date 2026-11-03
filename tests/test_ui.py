@@ -15402,3 +15402,114 @@ def test_a_check_ticked_on_the_bench_is_kept_with_the_steps() -> None:
         assert check_key(phase, phase.checkpoints[0]) in window._done_steps()
     finally:
         _close(window)
+
+
+def _moved_off_its_copper(stem: str, by: int):
+    """A routed example with its first part moved ``by`` holes to the right, and the window
+    on it with the board chosen -- the walkthrough's board after a drag."""
+    from perfboard_studio.commands import MoveComponentPayload
+    from perfboard_studio.model import HoleCoord
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    document = persist.parse_document_or_throw(
+        (root / "examples" / f"{stem}.perf").read_text(encoding="utf-8")
+    )
+    window = _window_on(document)
+    window._board_chosen = True
+    part = next(c for c in document.components if not c.locked)
+    moved = window.bus.dispatch(
+        "component.move",
+        MoveComponentPayload(id=part.id, anchor=HoleCoord(part.anchor.col + by, part.anchor.row)),
+    )
+    assert moved.ok
+    QApplication.processEvents()
+    window._refresh_workflow()
+    return window
+
+
+def test_next_after_a_move_wires_rather_than_loops_on_show_problems(monkeypatch) -> None:
+    """A part moved off its copper: a connection to wire and a short where its pin landed.
+    Next said Show Problems, opened a drawer that could not wire anything, and said it
+    again. The short is still red on the bar; Next is Auto-wire."""
+    from perfboard_studio.ui.workflow import workflow_steps
+
+    window = _moved_off_its_copper("ne555-astable", 2)
+    try:
+        steps = {step.key: step.status for step in workflow_steps(window.workflow_facts())}
+        assert steps["route"] == "current" and steps["check"] == "problem"
+        assert window.workflow_bar.next_key == "route"
+        assert "Auto-wire" in window.workflow_bar.next_button.text()
+        routed: list[object] = []
+        monkeypatch.setattr(type(window), "_route", lambda self, only_net_ids=None: routed.append(only_net_ids))
+        window.on_workflow_next(window.workflow_bar.next_key)
+        assert routed == [None]
+    finally:
+        _close(window)
+
+
+def test_once_the_drawer_is_open_next_goes_from_problem_to_problem() -> None:
+    """Everything wired and a part overlapping another: Next opens the drawer, and then goes
+    to each problem in it in turn rather than opening what is open."""
+    from perfboard_studio.ui.main import ROLE_COMPONENT_IDS, ROLE_HOLES
+
+    window = _moved_off_its_copper("lm317-supply", 2)
+    try:
+        assert window.workflow_bar.next_key == "check"
+        assert window.workflow_bar.next_button.text().endswith("Show Problems")
+        window.on_workflow_next("check")
+        assert window.problems_bar.expanded
+        assert window.workflow_bar.next_button.text().endswith("Next Problem")
+        window.on_workflow_next("check")
+        first = window.drc_tree.currentItem()
+        assert first is not None and first.childCount() == 0
+        assert first.data(0, ROLE_HOLES) or first.data(0, ROLE_COMPONENT_IDS)
+    finally:
+        _close(window)
+
+
+def test_the_drawer_offers_auto_wire_beside_what_is_left_to_wire(monkeypatch) -> None:
+    """"3 to wire" was a fact with nothing to press beside it."""
+    window = _moved_off_its_copper("ne555-astable", 2)
+    try:
+        window._refresh_problems_bar()
+        assert not window.problems_bar.wire.isHidden()
+        routed: list[object] = []
+        monkeypatch.setattr(type(window), "_route", lambda self, only_net_ids=None: routed.append(only_net_ids))
+        window.problems_bar.wire.click()
+        assert routed == [None]
+    finally:
+        _close(window)
+
+
+def test_the_wiring_step_offers_auto_wire_and_does_nothing_by_itself(monkeypatch) -> None:
+    """Pressing a step changes nothing; the Wiring step with connections left now offers
+    Auto-wire under it, where it used to show the board and stop."""
+    window = _moved_off_its_copper("ne555-astable", 2)
+    try:
+        routed: list[object] = []
+        monkeypatch.setattr(type(window), "_route", lambda self, only_net_ids=None: routed.append(only_net_ids))
+        window.on_workflow_step("route")
+        assert routed == []
+        offer = window._wire_offer
+        [wire] = offer.actions()
+        assert wire.text() == "Auto-wire 1 Connection"
+        wire.trigger()
+        assert routed == [None]
+        offer.close()
+    finally:
+        _close(window)
+
+
+def test_a_finding_can_be_gone_to_and_its_connections_wired(monkeypatch) -> None:
+    """A finding's own menu says what can be done about it before offering to copy it."""
+    window = _moved_off_its_copper("lm317-supply", 5)
+    try:
+        window.set_problems_open(True)
+        assert window._go_to_next_problem()
+        item = window.drc_tree.currentItem()
+        rect = window.drc_tree.visualItemRect(item)
+        labels = _menu_labels(window.drc_menu(rect.center()))
+        assert labels[0] == "Go to It"
+        assert "Copy This Problem" in labels
+    finally:
+        _close(window)

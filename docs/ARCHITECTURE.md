@@ -1554,7 +1554,18 @@ Build -- and the Next button at the header's right end (`ui/header.py`). `workfl
 statuses out) and tested in `tests/test_workflow.py`; the window builds the facts from what
 `on_bus_changed` already computed (`MainWindow.workflow_facts`). Every step's action is a
 command that already existed, reached from where it already was: the bar decides nothing
-about the document. Three things about it:
+about the document. Four things about it:
+
+- **Next goes in the order of the work** (`next_step`): the first step that is wrong or is
+  the one to do. A problem BEFORE the current step comes first -- a circuit error is put
+  right before a board is wired -- and one AFTER it waits, still red on the bar. It was
+  problem-first: a part dragged off its copper left a connection to wire and a short where
+  its pin landed, Next said Show Problems over Wiring, opened a drawer that could not wire
+  anything, and said it again. So nothing Next lands on is a dead end either: the drawer's
+  bar carries Auto-wire beside its "N to wire", a finding's menu goes to it and wires its
+  parts' nets, the Wiring step pressed with connections left offers Auto-wire under it
+  (offered, since pressing a step changes nothing), and with the drawer open Check's Next
+  is Next Problem (`WorkflowFacts.problems_showing`).
 
 - **A toolbar row, not a dock.** A top-area dock made the top area take a third of the
   window's height, empty, for the reason DRC is split under the board (see below): with the

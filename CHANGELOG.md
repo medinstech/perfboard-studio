@@ -380,6 +380,13 @@ closed without a bump.
 - **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
   first in the document, instead of to whichever of them is listed first.
 
+- **Next no longer loops on Show Problems.** After a part was moved off its copper, Next sent
+  you to a Problems drawer that could not wire anything, then did it again. It now goes in
+  the order of the work -- Auto-wire first, then the problems that are left, one at a time
+  with Next Problem -- and the drawer has Auto-wire beside the count left to wire, a
+  finding's menu has Go to It and Auto-wire Its Connections, and the Wiring step offers
+  Auto-wire when pressed.
+
 - **A stock board's corner holes are where the real board has them.** In the corners of the
   border, outside the grid, with every pad kept -- they had taken the four corner pads and
   worn a dashed orange ring that read as copper. The ring, which is where the screw head

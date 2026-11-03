@@ -92,6 +92,9 @@ class WorkflowFacts:
     untitled: bool = False
     #: A solderless breadboard, which is tried out before it is soldered on something else.
     solderless_breadboard: bool = False
+    #: Whether the Problems drawer is open to its list -- then Check's Next goes to the
+    #: next problem in it, rather than opening what is already open.
+    problems_showing: bool = False
 
 
 #: What the Next button does once everything before Build is done.
@@ -151,6 +154,8 @@ def step_action(key: StepKey, facts: WorkflowFacts | None = None) -> str:
         return t("Show Problems")
     if key == "circuit" and facts is not None and facts.parts_off_board + facts.parts_on_board:
         return t("Connect the Pins")
+    if key == "check" and facts is not None and facts.problems_showing:
+        return t("Next Problem")
     return {
         "circuit": t("Add a Part…"),
         "board": t("Choose a Board…"),
@@ -292,11 +297,19 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
 
 
 def next_step(steps: tuple[StepState, ...]) -> StepKey:
-    """The step the Next button does: a problem first, then the current one."""
-    problem = next((step.key for step in steps if step.status == "problem"), None)
-    if problem is not None:
-        return problem
-    return next((step.key for step in steps if step.status == "current"), "build")
+    """The step the Next button does: the first, in the order the work is done, that is
+    wrong or is the one to do.
+
+    A problem in a step BEFORE the current one comes first -- a circuit error is put right
+    before any board is wired. One in a step AFTER it waits: a part moved off its copper
+    left connections to wire and a short where its pin landed, and Next said "Show
+    Problems" over Wiring, opened a drawer that could not wire anything, and said it again
+    (reach's walkthrough, twice in one session). The copper is the wiring's to redo first;
+    what is still wrong once it is done is Check's.
+    """
+    return next(
+        (step.key for step in steps if step.status in ("problem", "current")), "build"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -4032,6 +4032,7 @@ class MainWindow(QMainWindow):
             guide_showing=self._is_in_front(getattr(self, "dock_guide", None)),
             untitled=self.current_path is None,
             solderless_breadboard=is_breadboard(board),
+            problems_showing=self.problems_bar.expanded if hasattr(self, "problems_bar") else False,
         )
 
     def _refresh_workflow(self) -> None:
@@ -4046,8 +4047,11 @@ class MainWindow(QMainWindow):
             self.show_schematic()
         elif step == "board":
             self.on_choose_board()
-        elif step in ("place", "route"):
+        elif step == "place":
             self.show_board()
+        elif step == "route":
+            self.show_board()
+            self._offer_to_wire()
         elif step == "check":
             self.show_board()
             self.set_problems_open(True)
@@ -4079,6 +4083,10 @@ class MainWindow(QMainWindow):
         elif step == "route":
             self.show_board()
             self.on_autoroute_all()
+        elif step == "check" and self.problems_bar.expanded:
+            # The drawer is open already: the next thing is the next problem in it.
+            self.show_board()
+            self._go_to_next_problem()
         elif after == "save":
             self.on_save()
         elif after == "to-perfboard":
@@ -8910,6 +8918,7 @@ class MainWindow(QMainWindow):
         # nor moved -- a drawer that can be put away is a count nobody sees.
         self.problems_bar = ProblemsBar(dock)
         self.problems_bar.toggled.connect(self.set_problems_open)
+        self.problems_bar.wire_requested.connect(self._wire_from_the_drawer)
         dock.setTitleBarWidget(self.problems_bar)
         dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.dock_drc = dock
@@ -8943,6 +8952,8 @@ class MainWindow(QMainWindow):
             dock.setMaximumHeight(PROBLEMS_BAR_HEIGHT)
         if hasattr(self, "act_drc_panel") and self.act_drc_panel.isChecked() != on:
             self.act_drc_panel.setChecked(on)
+        # Check's Next reads whether the drawer is open: Show Problems, then Next Problem.
+        self._refresh_workflow()
 
     def _build_properties_dock(self) -> None:
         """The Properties panel (``ui/properties.py``): always open, down the right.
@@ -9495,6 +9506,19 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         item = self.drc_tree.itemAt(pos)
         if item is not None:
+            # What to DO about it first, then copying it out: a finding that could only be
+            # read and copied was a dead end in a drawer Next kept sending people to.
+            go = menu.addAction(t("&Go to It"))
+            go.triggered.connect(lambda: self._on_drc_item_clicked(item, 0))
+            go.setEnabled(bool(
+                item.data(0, ROLE_HOLES) or item.data(0, ROLE_COMPONENT_IDS)
+                or item.data(0, ROLE_REFS) or item.data(0, ROLE_NET_ID)
+            ))
+            nets = self._nets_left_to_wire_for(item)
+            if nets:
+                wire = menu.addAction(t("Auto-wire Its &Connections"))
+                wire.triggered.connect(lambda: self._route(only_net_ids=nets))
+            menu.addSeparator()
             copy_one = menu.addAction(t("&Copy This Problem"))
             copy_one.triggered.connect(
                 lambda: QApplication.clipboard().setText(
@@ -9504,6 +9528,101 @@ class MainWindow(QMainWindow):
         copy_all = menu.addAction(t("Copy &All Problems"))
         copy_all.triggered.connect(self._copy_all_findings)
         return menu
+
+    def _nets_left_to_wire_for(self, item: QTreeWidgetItem) -> tuple[NetId, ...]:
+        """The nets a finding is about that still have connections to wire: its own net,
+        or the nets of the parts it names."""
+        left = {entry.net_id for entry in self._last_ratsnest if entry.links}
+        net_id = item.data(0, ROLE_NET_ID)
+        if net_id:
+            return (net_id,) if net_id in left else ()
+        ids = set(item.data(0, ROLE_COMPONENT_IDS) or ())
+        refs = {c.ref for c in self.bus.document.components if c.id in ids}
+        refs |= {str(ref) for ref in item.data(0, ROLE_REFS) or ()}
+        return tuple(
+            net.id
+            for net in self.bus.document.nets
+            if net.id in left and any(node.component_ref in refs for node in net.nodes)
+        )
+
+    def _wire_from_the_drawer(self) -> None:
+        """Auto-wire, pressed beside the drawer's count of connections left."""
+        self.show_board()
+        self.on_autoroute_all()
+
+    def _offer_to_wire(self) -> None:
+        """The Wiring step, pressed with connections left: Auto-wire offered under it.
+
+        Offered, not done -- pressing a step goes where the step is done and changes
+        nothing (``on_workflow_step``) -- and offered there because the step was the one
+        place on screen that named the work and could not start it.
+        """
+        left = summarize(self._last_ratsnest).links
+        if not left or not self.bus.document.components:
+            return
+        menu = QMenu(self)
+        wire = menu.addAction(
+            counted(left, t("Auto-wire {count} Connection"), t("Auto-wire {count} Connections"))
+        )
+        wire.triggered.connect(self.on_autoroute_all)
+        button = self.workflow_bar.buttons.get("route")
+        where = (
+            button.mapToGlobal(button.rect().bottomLeft()) if button is not None else QCursor.pos()
+        )
+        # Held, so the popup outlives this call; popup() rather than exec(), so nothing
+        # waits on it.
+        self._wire_offer = menu
+        menu.popup(where)
+
+    def _go_to_next_problem(self) -> bool:
+        """The next finding in the drawer after the one chosen -- what is wrong, never the
+        work left -- shown as a click on it shows it. False when there is none."""
+        tree = self.drc_tree
+        left = self._work_left()
+        waiting = {f"{group}:{name}" for name in left for group in ("drc", "lvs")}
+        leaves: list[QTreeWidgetItem] = []
+
+        def under_work_left(item: QTreeWidgetItem) -> bool:
+            parent: QTreeWidgetItem | None = item
+            while parent is not None:
+                key = str(parent.data(0, ROLE_FINDING_KEY) or "")
+                if ":".join(key.split(":")[:2]) in waiting:
+                    return True
+                parent = parent.parent()
+            return False
+
+        def walk(item: QTreeWidgetItem) -> None:
+            if item.childCount() == 0:
+                found = (
+                    item.data(0, ROLE_HOLES) or item.data(0, ROLE_COMPONENT_IDS)
+                    or item.data(0, ROLE_REFS)
+                )
+                if found and not under_work_left(item):
+                    leaves.append(item)
+                return
+            for index in range(item.childCount()):
+                child = item.child(index)
+                if child is not None:
+                    walk(child)
+
+        for index in range(tree.topLevelItemCount()):
+            top = tree.topLevelItem(index)
+            if top is not None:
+                walk(top)
+        if not leaves:
+            self.statusBar().showMessage(t("Nothing in the list to go to."), 4000)
+            return False
+        current = tree.currentItem()
+        after = leaves.index(current) + 1 if current in leaves else 0
+        leaf = leaves[after % len(leaves)]
+        parent = leaf.parent()
+        while parent is not None:
+            parent.setExpanded(True)
+            parent = parent.parent()
+        tree.setCurrentItem(leaf)
+        tree.scrollToItem(leaf)
+        self._on_drc_item_clicked(leaf, 0)
+        return True
 
     def _copy_all_findings(self) -> None:
         # The circuit's first, as in the panel: a forum post about a dead board that leaves

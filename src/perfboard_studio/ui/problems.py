@@ -32,6 +32,8 @@ class ProblemsBar(QWidget):
     """The drawer's handle: the badge and the counts, and a click to open or close it."""
 
     toggled = Signal(bool)
+    #: Auto-wire, pressed beside the count of connections left to wire.
+    wire_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -62,6 +64,15 @@ class ProblemsBar(QWidget):
         self.facts = QLabel()
         self.facts.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(self.facts)
+        # What to do about the count beside it: "3 to wire" was a fact with no way to act
+        # on it, in a drawer Next kept opening (reach's walkthrough).
+        self.wire = QToolButton()
+        self.wire.setText(t("Auto-wire"))
+        self.wire.setAutoRaise(True)
+        self.wire.setToolTip(t("Wire the connections that are left, as Next does on Wiring."))
+        self.wire.clicked.connect(self.wire_requested.emit)
+        self.wire.hide()
+        layout.addWidget(self.wire)
         layout.addStretch(1)
         self.where = QLabel()
         layout.addWidget(self.where)
@@ -118,6 +129,7 @@ class ProblemsBar(QWidget):
                 matched=matched, total=nets
             ))
         self.facts.setText("&nbsp;&nbsp;·&nbsp;&nbsp;".join(facts))
+        self.wire.setVisible(to_wire > 0)
 
     def set_where(self, text: str) -> None:
         """The side being looked at and the board, at the bar's right end."""

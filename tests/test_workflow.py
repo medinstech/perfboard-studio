@@ -14,6 +14,7 @@ from perfboard_studio.ui.workflow import (
     STEP_ORDER,
     WorkflowFacts,
     next_step,
+    step_action,
     workflow_steps,
 )
 
@@ -96,14 +97,19 @@ def test_a_clean_routed_board_is_ready_to_build() -> None:
     assert next_step(workflow_steps(facts)) == "build"
 
 
-def test_an_error_is_a_problem_and_the_next_button_goes_to_it_first() -> None:
-    """A DRC error or an open net is where the button goes, whatever else is left: the
-    board as drawn cannot be built, and the rest of the steps are built on it."""
+def test_an_error_is_a_problem_and_next_reaches_it_in_the_order_of_the_work() -> None:
+    """A DRC error or an open net is a problem, red on the bar whatever else is left. Next
+    reaches it in the order the work is done: with connections still to wire it goes to
+    Wiring first -- the copper is redone before it is checked -- and to Check once nothing
+    is left to wire. Problem-first sent Next to a drawer that could not wire anything, over
+    and over, after a part was moved off its copper (reach's walkthrough)."""
     facts = dataclasses.replace(EMPTY, parts_on_board=8, nets=7, unrouted=3, drc_errors=1)
     steps = statuses(facts)
     assert steps["check"] == "problem"
     assert steps["route"] == "current"
-    assert next_step(workflow_steps(facts)) == "check"
+    assert next_step(workflow_steps(facts)) == "route"
+    wired = dataclasses.replace(facts, unrouted=0)
+    assert next_step(workflow_steps(wired)) == "check"
 
     open_net = dataclasses.replace(EMPTY, parts_on_board=8, nets=7, lvs_problems=1)
     assert statuses(open_net)["check"] == "problem"
@@ -124,7 +130,27 @@ def test_a_net_left_open_by_wiring_not_yet_done_is_the_wiring_steps_news() -> No
 
     shorted = dataclasses.replace(placed, lvs_problems=8, lvs_shorts=1)
     assert statuses(shorted)["check"] == "problem"
-    assert next_step(workflow_steps(shorted)) == "check"
+    # Red on the bar, and still the wiring's to redo first: Next is Auto-wire.
+    assert next_step(workflow_steps(shorted)) == "route"
+
+
+def test_a_problem_in_an_earlier_step_still_comes_first() -> None:
+    """A circuit error is put right before any board is wired: it comes BEFORE the step to
+    do, so Next goes to it."""
+    facts = dataclasses.replace(
+        EMPTY, parts_on_board=8, nets=7, unrouted=3, erc_errors=1, board_chosen=True
+    )
+    assert statuses(facts)["circuit"] == "problem"
+    assert next_step(workflow_steps(facts)) == "circuit"
+
+
+def test_with_the_drawer_open_check_says_next_problem() -> None:
+    """Show Problems opens the drawer; pressed again it would open what is open. So once it
+    is open, Check's Next goes to the next problem in it."""
+    facts = dataclasses.replace(EMPTY, parts_on_board=8, nets=7, drc_errors=1)
+    assert step_action("check", facts) == "Show Problems"
+    shown = dataclasses.replace(facts, problems_showing=True)
+    assert step_action("check", shown) == "Next Problem"
 
 
 def test_a_stripboards_shorts_wait_for_its_cuts() -> None:
