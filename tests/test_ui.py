@@ -16341,3 +16341,23 @@ def test_the_boards_features_ask_no_more_room_than_the_board_editor() -> None:
             features.minimumSizeHint().width(), others)
     finally:
         _close(window)
+
+
+def test_the_librarys_own_group_is_said_in_turkish() -> None:
+    """Capitalised as every other group and as the designer says it: "Bu kart"."""
+    from PySide6.QtWidgets import QTreeWidget
+
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.i18n import set_language
+    from perfboard_studio.ui.main import populate_part_tree
+
+    dip = get_footprint("dip-8")
+    assert dip is not None
+    set_language("tr")
+    try:
+        tree = QTreeWidget()
+        tree.setColumnCount(2)
+        populate_part_tree(tree, "", {"custom-dip": dip})
+        assert tree.topLevelItem(0).text(0) == "Bu kart"
+    finally:
+        set_language("en")

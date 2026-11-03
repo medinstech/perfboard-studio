@@ -406,9 +406,10 @@ class FeatureEditor(QWidget):
         across = QHBoxLayout(offset)
         across.setContentsMargins(0, 0, 0, 0)
         self.offset_x, self.offset_y = _mm_box(-20.0, 20.0), _mm_box(-20.0, 20.0)
-        across.addWidget(self.offset_x, 1)
-        across.addWidget(QLabel("×"))
-        across.addWidget(self.offset_y, 1)
+        # Each value named by its axis: "-4.80 mm × -1.15 mm" read as a size (lead).
+        for axis, box in (("X", self.offset_x), ("Y", self.offset_y)):
+            across.addWidget(QLabel(axis))
+            across.addWidget(box, 1)
         for box in (self.offset_x, self.offset_y):
             box.setToolTip(
                 t("How far the bore sits from its hole, across and down: into the border, for a "
