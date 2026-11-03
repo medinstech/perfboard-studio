@@ -114,10 +114,16 @@ _TINNED = ("#d4d2cc", "#85837c", "#efeee9", (0.831, 0.824, 0.800))
 #: BARE copper, unmasked and unplated, which is what a phenolic board has: pale warm
 #: metal rather than yellow gold.
 #:
-#: MEASURED, not chosen. Sampled off product photographs of the boards themselves, which
-#: put the pads at hue 25-28 degrees and saturation around 0.35 -- warm, so copper and
-#: not tin, but much paler and less saturated than the pink-brown this first guessed at.
-_BARE_COPPER = ("#e2a877", "#a86a3c", "#f6d0aa", (0.886, 0.659, 0.467))
+#: MEASURED off the user's photograph of a phenolic 5 x 7 cm board's copper side
+#: (2026-11-03): k-means over the board puts its substrate at #ad7f69 and its copper at
+#: #f2ccb8 in the light (hue 21, saturation 0.24, value 0.95) and #d1a892 in shade. The
+#: copper drawn until then, #e2a877, was at the substrate's own value (0.89 against 0.68
+#: is close, at 28 degrees against 26), so the rings -- the most visible thing on that
+#: board -- all but vanished into it. Chosen from three rendered candidates beside the
+#: photograph: this copper on the substrate of 2026-10-16. The ring is drawn a shade below
+#: the measured shading (#c08e74 rather than #d1a892) so the pad keeps an edge on a screen,
+#: where the photograph's has the light.
+_BARE_COPPER = ("#f2ccb8", "#c08e74", "#fbe6da", (0.949, 0.8, 0.722))
 
 #: ENIG: gold over nickel, the finish of the better boards (a matte black one with gold
 #: pads is the usual). MEASURED, off a product photograph of such a board: the pads'

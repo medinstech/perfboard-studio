@@ -94,6 +94,10 @@ closed without a bump.
 
 ### Changed
 
+- **A phenolic board's copper shows.** Its rings, strip pads and etched letters are drawn in
+  the pale copper of the real board's copper side, measured off a photograph of one, rather
+  than a copper so close to the substrate that they all but disappeared.
+
 - **The stock boards are the boards in the photographs.** Every board in the chooser is now
   landscape, with its letters along the long edge; its edge strip stands outside the grid
   (stadium pads on the green boards, square ones on the phenolic), so no row is lost to it;
