@@ -31,15 +31,19 @@ from perfboard_studio.commands import (
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import board_outline_mm
-from perfboard_studio.model import Board, PerfDocument
+from perfboard_studio.model import Board, BoardSide, PerfDocument
 from perfboard_studio.placer import Arrangement
 
 from .view2d import BoardScene
 
 
-def render_board(document: PerfDocument, lookup: FootprintLookup, size: QSize) -> QPixmap:
-    """The component side of ``document``'s board, fitted into ``size``, as the editor draws
-    it -- without the ruler, the ratsnest or anything else that is about editing."""
+def render_board(
+    document: PerfDocument, lookup: FootprintLookup, size: QSize, side: BoardSide = "top"
+) -> QPixmap:
+    """One side of ``document``'s board -- the component side unless asked -- fitted into
+    ``size``, as the editor draws it, without the ruler, the ratsnest or anything else that
+    is about editing. A single-sided board is worth seeing from ``"bottom"``: its component
+    side has no copper at all, and its rings, edge pads and letters are on the other."""
     outline = board_outline_mm(document.board)
     scale = min(size.width() / outline.width, size.height() / outline.height)
     width, height = max(1, round(outline.width * scale)), max(1, round(outline.height * scale))
@@ -48,7 +52,7 @@ def render_board(document: PerfDocument, lookup: FootprintLookup, size: QSize) -
     scene = BoardScene(
         document,
         lookup,
-        side="top",
+        side=side,
         show_ratsnest=False,
         show_rulers=False,
         show_pin_names=False,

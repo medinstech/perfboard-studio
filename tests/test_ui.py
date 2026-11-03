@@ -15932,3 +15932,22 @@ def test_a_family_and_its_words_are_said_in_the_windows_language() -> None:
                 assert word and word != value, f"{value} is shown as its id"
     finally:
         set_language(before)
+
+
+def test_the_designers_settings_fit_their_column(monkeypatch) -> None:
+    """A material's whole sentence in a combo made the settings wider than their column, and
+    every field's right edge was cut off: the column asks for no more than it is given."""
+    window = _blank_window()
+    try:
+        def look(dialog) -> None:
+            scroller = dialog._scroller
+            settings = scroller.widget()
+            bar = scroller.verticalScrollBar().sizeHint().width()
+            for row in range(dialog.families.count()):
+                dialog.families.setCurrentRow(row)
+                need = settings.minimumSizeHint().width() + bar
+                assert scroller.minimumWidth() >= need, (row, need, scroller.minimumWidth())
+
+        _designer(window, monkeypatch, look)
+    finally:
+        _close(window)

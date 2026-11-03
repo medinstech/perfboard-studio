@@ -70,7 +70,7 @@ from perfboard_studio.boardfamily import (
 )
 from perfboard_studio.commands import create_empty_document
 from perfboard_studio.connectivity import FootprintLookup
-from perfboard_studio.model import Board, DocumentMeta, PerfDocument
+from perfboard_studio.model import Board, BoardSide, DocumentMeta, PerfDocument
 
 from . import theme
 from .boardpreview import render_board
@@ -160,6 +160,12 @@ def store_user_families(settings: QSettings, families: list[BoardFamily]) -> Non
         settings.remove(USER_FAMILIES_KEY)
 
 
+def _face(family: BoardFamily) -> BoardSide:
+    """The side a family is shown from: a single-sided board from its copper, which is where
+    its rings, edge pads and letters are -- its component side is bare phenolic."""
+    return "bottom" if family.single_sided else "top"
+
+
 def size_name(size: BoardSize, family: BoardFamily) -> str:
     """A size as the picker says it: its name and its grid, because a name repeats across
     the variants of one size -- 7 x 9 cm is sold as 31 x 26 and as 35 x 27. A size sold
@@ -169,9 +175,14 @@ def size_name(size: BoardSize, family: BoardFamily) -> str:
 
 
 def _combo(words: dict[str, str], ids: tuple[str, ...]) -> QComboBox:
+    """A choice in words, as wide as the column lets it be: a material's whole sentence made
+    the settings wider than their column, and the right edge of every field was cut off."""
     combo = QComboBox()
+    combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    combo.setMinimumContentsLength(10)
     for value in ids:
         combo.addItem(words.get(value, value), value)
+        combo.setItemData(combo.count() - 1, words.get(value, value), Qt.ItemDataRole.ToolTipRole)
     return combo
 
 
@@ -262,7 +273,11 @@ class BoardDesigner(QDialog):
         scroller = QScrollArea()
         scroller.setWidgetResizable(True)
         scroller.setWidget(settings)
-        scroller.setFixedWidth(380)
+        # As wide as the settings need, never narrower: a fixed 380 px cut every field's right
+        # edge off the moment a language or a font made one row wider.
+        bar = scroller.verticalScrollBar().sizeHint().width()
+        scroller.setMinimumWidth(max(380, settings.minimumSizeHint().width() + bar + 4))
+        self._scroller = scroller
         scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         columns.addWidget(scroller)
         root.addLayout(columns, 1)
@@ -330,6 +345,8 @@ class BoardDesigner(QDialog):
 
         size = self._section(t("Size"))
         self.stock = QComboBox()
+        self.stock.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.stock.setMinimumContentsLength(10)
         self.stock.activated.connect(self._on_stock_size)
         self._row(size, t("Stock size"), self.stock)
         grid = QWidget()
@@ -447,7 +464,10 @@ class BoardDesigner(QDialog):
 
     def _thumb(self, family: BoardFamily) -> QPixmap:
         size = family.sizes[0] if family.sizes else self._size
-        return render_board(self._document(board_for(family, size, self._base)), self._lookup, THUMB)
+        return render_board(
+            self._document(board_for(family, size, self._base)), self._lookup, THUMB,
+            _face(family),
+        )
 
     def _document(self, design: BoardDesign) -> PerfDocument:
         meta = DocumentMeta(name="preview", created="", modified="")
@@ -649,7 +669,9 @@ class BoardDesigner(QDialog):
         room = self.preview.contentsRect().size()
         if room.width() < 40 or room.height() < 40:
             room = PREVIEW
-        self.preview.setPixmap(render_board(self._document(self.design()), self._lookup, room))
+        self.preview.setPixmap(render_board(
+            self._document(self.design()), self._lookup, room, _face(self._current_family())
+        ))
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
