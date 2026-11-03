@@ -293,6 +293,18 @@ RULER_TEXT_MAJOR = QColor(THEME_TOKENS.canvas_ruler_major)
 #: board is turned over -- the same convention component bodies on the far side follow.
 LEGEND_INK = QColor("#eef2f8")
 LEGEND_INK_FAR = QColor(190, 200, 215, 70)
+
+
+def legend_ink(board: Board, near: bool) -> QColor:
+    """The legend's colour on this board: white silkscreen on a masked board, the pads'
+    copper on an unmasked one (``BoardScheme.etched``), and dim from the face it is not on."""
+    scheme = scheme_for(board)
+    if not scheme.etched:
+        return QColor(LEGEND_INK if near else LEGEND_INK_FAR)
+    ink = QColor(scheme.legend_ink())
+    if not near:
+        ink.setAlpha(LEGEND_INK_FAR.alpha())
+    return ink
 #: A mounting hole: the bore is a hole, so it is near black; the head ring is a keepout
 #: rather than a thing, so it is a dashed outline in the warning colour.
 MOUNT_BORE = QColor("#14151b")
@@ -778,7 +790,7 @@ class BoardLegendItem(QGraphicsItem):
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         board = self.board
-        color = QColor(LEGEND_INK if self.near_side else LEGEND_INK_FAR)
+        color = legend_ink(board, self.near_side)
         # WHERE AND HOW TALL is one answer for both views and the print
         # (`geometry.legend_layout`): the bare band along each edge a run is printed on, NOT
         # the whole margin -- the outer pads eat half their extent of it, and an edge strip
@@ -894,7 +906,7 @@ class BoardTextItem(QGraphicsItem):
             height = _width if turn else _height
             if height <= 0:
                 continue
-            painter.setPen(QPen(QColor(LEGEND_INK if line.face == self.side else LEGEND_INK_FAR)))
+            painter.setPen(QPen(legend_ink(self.board, line.face == self.side)))
             # Mirrored about the hole span on the solder side, like every other x here.
             x = centre.x if self.side == "top" else span_w - centre.x
             draw_physical_label(

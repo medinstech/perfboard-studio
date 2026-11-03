@@ -1576,7 +1576,7 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
         # Just clear of the substrate, on whichever face carries the print. Silkscreen is
         # ink: unlit and matte, so it does not catch highlights the way copper does.
         actor.SetPosition(0.0, 0.0, 0.02 if face == "top" else -board.thickness - 0.02)
-        actor.GetProperty().SetColor(*LEGEND_RGB)
+        actor.GetProperty().SetColor(*scheme_for(board).legend_rgb())
         _finish(actor.GetProperty(), INK)
         actors.append(actor)
     return actors
@@ -1625,7 +1625,7 @@ def build_board_text(doc: PerfDocument) -> list[vtk.vtkActor]:
         actor = vtk.vtkActor()
         actor.SetMapper(mapper)
         actor.SetPosition(0.0, 0.0, 0.02 if face == "top" else -board.thickness - 0.02)
-        actor.GetProperty().SetColor(*LEGEND_RGB)
+        actor.GetProperty().SetColor(*scheme_for(board).legend_rgb())
         _finish(actor.GetProperty(), INK)
         actors.append(actor)
     return actors

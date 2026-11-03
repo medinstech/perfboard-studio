@@ -79,6 +79,24 @@ class BoardScheme:
     pad_sheen: str
     #: The same copper for the 3D view.
     pad_rgb: tuple[float, float, float]
+    #: No mask: the substrate itself shows, and a board like that prints nothing in ink --
+    #: its legend is ETCHED in the copper, the pads' metal (the phenolic 5 x 7's letters,
+    #: photographed). Both views and the print draw its legend and printed lines in
+    #: ``pad`` rather than white.
+    etched: bool = False
+
+    def legend_ink(self) -> str:
+        """What the legend and the board's printed lines are drawn in, as hex."""
+        return self.pad if self.etched else LEGEND_WHITE
+
+    def legend_rgb(self) -> tuple[float, float, float]:
+        """The same, for the 3D view."""
+        return self.pad_rgb if self.etched else LEGEND_WHITE_RGB
+
+
+#: Silkscreen ink, on every masked board: the 2D legend's #eef2f8 and the 3D view's.
+LEGEND_WHITE = "#eef2f8"
+LEGEND_WHITE_RGB = (0.92, 0.93, 0.95)
 
 
 #: HASL: hot-air levelled SOLDER over copper, which is what the cheap masked prototyping
@@ -135,7 +153,7 @@ SCHEMES: tuple[BoardScheme, ...] = (
     # degrees at saturation 0.53 and value 0.68, which still reads as pertinaks.
     BoardScheme(
         "phenolic", "Orange (phenolic)", "#ad7a52", "#3a2410", (0.678, 0.478, 0.322), "#2c2115",
-        *_BARE_COPPER,
+        *_BARE_COPPER, etched=True,
     ),
 )
 
@@ -144,7 +162,8 @@ SCHEMES: tuple[BoardScheme, ...] = (
 #: offered in the View menu, where every entry is a board somebody sells; it is only what
 #: a board saying ``mask: "none"`` on FR-4 is drawn as.
 _BARE_FR4 = BoardScheme(
-    "bare-fr4", "Bare FR-4", "#c8c08e", "#6e6847", (0.784, 0.753, 0.557), "#2e2b1d", *_TINNED
+    "bare-fr4", "Bare FR-4", "#c8c08e", "#6e6847", (0.784, 0.753, 0.557), "#2e2b1d", *_TINNED,
+    etched=True,
 )
 
 BY_KEY = {scheme.key: scheme for scheme in SCHEMES}

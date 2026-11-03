@@ -22,6 +22,10 @@ closed without a bump.
 
 ### Added
 
+- **An unmasked board's legend is copper.** On a phenolic board, or any board with no
+  mask, the letters and printed lines are drawn in the pads' bare copper, as they are
+  etched on the real board, instead of white ink.
+
 - **Stock boards are described as the products they are.** A board family says what one kind
   of board is -- the green double-sided board or the phenolic one: its strip, corner holes,
   legend, mask and print -- and every size it is sold in, with the grid counts suppliers

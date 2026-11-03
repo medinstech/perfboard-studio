@@ -114,3 +114,26 @@ def test_an_agent_can_say_and_set_the_look() -> None:
     info = session.get_board_info()
     assert (info["mask"], info["finish"]) == ("black", "enig")
     assert session.document.board.cols == DEFAULT_BOARD.cols
+
+
+def test_an_unmasked_board_prints_its_legend_in_its_copper() -> None:
+    """The phenolic 5 x 7's letters are etched in the copper, photographed: no board with
+    no mask has white ink on it. The View menu's mask brings the white back."""
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.ui.view2d import legend_ink
+
+    QApplication.instance() or QApplication([])
+    phenolic = dataclasses.replace(DEFAULT_BOARD, material="FR2")
+    bare_fr4 = dataclasses.replace(DEFAULT_BOARD, mask="none")
+    try:
+        boardcolors.choose(None)
+        assert legend_ink(phenolic, True).name() == boardcolors.scheme_for(phenolic).pad
+        assert legend_ink(bare_fr4, True).name() == boardcolors.scheme_for(bare_fr4).pad
+        assert legend_ink(DEFAULT_BOARD, True).name() == boardcolors.LEGEND_WHITE
+        assert legend_ink(phenolic, False).alpha() < 255
+        assert boardcolors.scheme_for(phenolic).legend_rgb() == boardcolors.scheme_for(phenolic).pad_rgb
+        boardcolors.choose("green")
+        assert legend_ink(phenolic, True).name() == boardcolors.LEGEND_WHITE
+    finally:
+        boardcolors.choose(None)
