@@ -1970,12 +1970,15 @@ def test_a_two_pin_power_net_is_still_a_bond() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Measured on the real packages' bodies: seeded 504.4 against unseeded 471.5 in total "
-        "(ne555 184.4 / 154.1, dense 30.8 / 29.1, random-09 26.7 / 25.9 at seed 0; every other "
-        "pair ties). Seeded mode gives half its restarts to the arrangement, the arrangement packs "
-        "lanes by courtyard, and the DIP courtyards grew to hold their bodies. Whether the "
-        "arrangement still earns its restarts is the placer's follow-up; strict, so the day it "
-        "does, this turns red and asks to be unmarked."
+        "Seeded 504.4 against unseeded 471.5 at these two seeds (ne555 184.4 / 154.1, dense "
+        "30.8 / 29.1, random-09 26.7 / 25.9 at seed 0; every other pair ties). Over eight seeds "
+        "it is a wash with a wide spread: these fixtures 2019.5 / 2080.7, Auto-place on the six "
+        "examples 16279.9 / 16054.5 with the parts where they are and 16832.5 / 16725.7 with the "
+        "biggest shoved into a corner, and one run anywhere from 19% better to 37% worse for "
+        "the seed. Too close to drop the seeded restarts on, so they stay. Packing the lanes by "
+        "body instead of courtyard was tried and is worse on every path (docs/ARCHITECTURE.md, "
+        "'Placement is arranged first'). Strict, so the day these two seeds agree, this turns "
+        "red and asks to be unmarked."
     ),
 )
 def test_the_constructive_seed_reaches_boards_the_annealer_does_not() -> None:

@@ -537,6 +537,29 @@ already were. Three rules carry it:
   pitch: parts in touching hole cells have courtyards meeting *exactly*, and the overlap
   predicate compares floats.
 
+**Lanes pack by courtyard, and packing by body was measured and is worse.** Once the
+courtyards grew to hold the real packages, `_shapes_of` packing pins ∪ `body_extent` instead
+of pins ∪ courtyard looked like free room. Measured over the six examples at seeds 0-3, it
+costs more routed cost on every path: Place on the Board 8325.3 → 8580.9, Auto-place
+8115.9 → 8152.7 with the parts kept and 8394.5 → 8423.5 with the biggest shoved into a
+corner. It had measured better (8080.2 → 7910.8) before a TO-220 stood behind its pin row,
+which is why a packing verdict is re-measured on the commit it lands on, not quoted from an
+older one.
+
+**Whether the seeded restarts still pay is a wash, and they stay.** Over eight seeds,
+seeded against unseeded: the four fixtures of
+`test_the_constructive_seed_reaches_boards_the_annealer_does_not` 2019.5 / 2080.7, Auto-place
+on the six examples 16279.9 / 16054.5 with the parts kept and 16832.5 / 16725.7 with the
+biggest shoved into a corner, Place on the Board identical by construction (its document is
+already the arrangement). One run moves anywhere from 19% better to 37% worse with the
+seed, so the totals sit inside the noise. Turning seeding off was set against a rule fixed
+before the numbers came in -- unseeded ahead by more than 2% on both Auto-place totals and
+no run more than 10% worse -- and met neither half. The reason the seed was added,
+restarts that only ever sample basins round the user's own layout, does not show as a cost
+on these boards: the unseeded restarts, every one of them from the document, do as well in
+total, so the search is not trapped there. That test stays a strict xfail, because at its
+two seeds the unseeded restarts win.
+
 `ArrangeRequest.mirrored` is not decoration — a part on the solder side has reflected pins,
 and the first cut of this ignored it and laid a mirrored DIP-8 a column off the board.
 
