@@ -6630,6 +6630,7 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.library_tree.itemSelectionChanged.connect(self._on_library_selection_changed)
+        self.library_tree.itemActivated.connect(self._on_library_item_activated)
         layout.addWidget(self.library_tree)
 
         self.button_custom_part = QPushButton(t("Custom Part…"))
@@ -7962,38 +7963,38 @@ class MainWindow(QMainWindow):
     # -- drawing the circuit --------------------------------------------------
 
     def on_schematic_add_part(self) -> None:
-        """Put a part in the design. The first half of schematic-first capture.
+        """Put a part in the design: the Library, its search ready, the sheet in front.
 
-        Nothing else in the application could do this: every route a part had into a
-        document ended in ``component.place``, which needs a hole — so the circuit could
-        not be drawn before the layout was, which is the wrong way round and the opposite
-        of how every other EDA tool works.
+        THE LIBRARY AND NOT A DIALOG. Add Part was a modal copy of the Library -- the same
+        tree and filter -- with a reference, a value and a pinout under it that are fields
+        in Properties now. Here the search is typed into, Enter or a double-click puts the
+        part on the sheet (``_on_library_item_activated``), and Properties shows it to be
+        named. The schematic-first half of the work: nothing else could put a part in a
+        document without a hole on a board to put it in.
         """
-        def add(
-            chosen: tuple[str, str, str], pinout: tuple[PinNames, PartSymbol | None]
-        ) -> PerfDocument | str:
-            ref, value, footprint_id = chosen
-            pin_names, symbol = pinout
-            result = self.bus.dispatch(
-                "part.add",
-                AddPartPayload(
-                    ref=ref,
-                    footprint_id=footprint_id,
-                    value=value,
-                    pin_names=pin_names,
-                    symbol=symbol,
-                ),
-            )
-            if not result.ok:
-                return refused(result)
-            self._schematic_ref = ref
-            self._sync_schematic_highlight()
-            self.statusBar().showMessage(did(result.description), 6000)
-            return self.bus.document
+        self.show_schematic()
+        self.dock_library.show()
+        self.dock_library.raise_()
+        self.library_filter.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.library_filter.selectAll()
+        self.statusBar().showMessage(
+            t("Type what the part is; Enter puts it on the sheet."), 8000
+        )
 
-        # One dialog for the whole parts list: each Add lands on the sheet behind it as it
-        # is made, one undo step each, and Done closes it.
-        AddPartDialog(self.bus.document, self, add=add).exec()
+    def _on_library_item_activated(self, item: QTreeWidgetItem, _column: int = 0) -> None:
+        """Enter or a double-click on a Library part, with the sheet in front: the part in
+        the design, on the sheet, and in Properties. With the board in front, choosing a
+        part has already armed it to be placed, which is the board's own way in."""
+        footprint_id = item.data(0, ROLE_FOOTPRINT_ID)
+        if not isinstance(footprint_id, str) or not self._is_in_front(self.dock_schematic):
+            return
+        ref = self._add_part_to_design(footprint_id)
+        if ref is None:
+            return
+        # Not armed for the board any more: Properties shows the part just added.
+        self.scene.arm_placement(None)
+        self._refresh_schematic_panel()
+        self._show_symbol_in_properties(ref)
 
     def _show_symbol_in_properties(self, ref: str) -> None:
         """One symbol, selected on the sheet and shown in Properties."""
@@ -8093,12 +8094,24 @@ class MainWindow(QMainWindow):
         dropped rather than wherever the layout would have put it, which means the sheet is
         frozen if it was not already -- dropping a part somewhere is saying where it goes.
         """
+        ref = self._add_part_to_design(footprint_id)
+        if ref is None:
+            return
+        self._refresh_schematic_panel()
+        self._dispatch_sheet_layout(
+            {ref: Point2(x=x, y=y)}, f"Add {ref} to the sheet at ({x:.0f}, {y:.0f})"
+        )
+        self._sync_schematic_highlight()
+
+    def _add_part_to_design(self, footprint_id: str) -> str | None:
+        """``part.add`` for a Library row, with the next free reference and, when the row is
+        a catalog part, what it says about itself. The new reference, or None if refused."""
         footprint = get_footprint(footprint_id)
         if footprint is None:
             self.statusBar().showMessage(
                 t("No package called {id}.").format(id=footprint_id), 6000
             )
-            return
+            return None
         # The row dragged is the one selected, and its catalog part -- if it is one -- is
         # what the scene is armed with: the same names and symbol the board would give it.
         template = self.scene.armed_footprint_id == footprint_id
@@ -8117,14 +8130,10 @@ class MainWindow(QMainWindow):
         )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
-            return
+            return None
         self._schematic_ref = ref
-        self._refresh_schematic_panel()
-        self._dispatch_sheet_layout(
-            {ref: Point2(x=x, y=y)}, f"Add {ref} to the sheet at ({x:.0f}, {y:.0f})"
-        )
-        self._sync_schematic_highlight()
         self.statusBar().showMessage(did(result.description), 6000)
+        return ref
 
     def _on_schematic_pin_clicked(self, ref: str, pin: str) -> None:
         """Say what the half-made pair is waiting for, and nothing else.

@@ -10324,37 +10324,38 @@ def test_work_left_to_do_is_not_shown_as_wrong() -> None:
     _close(window)
 
 
-def test_add_a_part_stays_open_for_the_next_part(monkeypatch) -> None:
-    """A blinker is six parts, and it was six trips through a dialog that closed after each.
-    Add puts the part in the design and readies the next -- a fresh reference, an empty
-    value -- one undo step each; Done closes; a refusal is said in the dialog."""
-    from perfboard_studio.ui import main as main_module
+def test_add_a_part_is_the_library_and_enter_puts_it_on_the_sheet() -> None:
+    """Add Part was a modal copy of the Library. It is the Library: its search focused, the
+    sheet in front; Enter puts the part on the sheet as one undo step and Properties shows
+    it, and the search is still there for the next part."""
+    from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID
 
     window = _blank_window()
-    before = len(window.bus.history())
-    seen: list = []
+    try:
+        before = len(window.bus.history())
+        window.on_schematic_add_part()
+        assert window._is_in_front(window.dock_schematic)
+        window.library_filter.setText("resistor")
 
-    def work(dialog):
-        seen.append(dialog)
-        dialog.filter.setText("resistor")
-        dialog.value.setText("1k")
-        assert dialog.add_chosen()
-        assert dialog.ref.text() == "R2" and dialog.value.text() == ""
-        dialog.value.setText("10k")
-        dialog.accept()  # Enter, while adding parts, adds
-        dialog.filter.setText("555")
-        dialog.ref.setText("R1")  # taken: refused, in the dialog
-        assert not dialog.add_chosen()
-        assert "R1" in dialog.result_line.text()
-        return main_module.QDialog.DialogCode.Rejected  # Done
+        def first_part():
+            tree = window.library_tree
+            for index in range(tree.topLevelItemCount()):
+                group = tree.topLevelItem(index)
+                for row in range(group.childCount()):
+                    if group.child(row).data(0, ROLE_FOOTPRINT_ID):
+                        return group.child(row)
+            raise AssertionError("no part in the filtered library")
 
-    monkeypatch.setattr(main_module.AddPartDialog, "exec", work)
-    window.on_schematic_add_part()
-    assert [(p.ref, p.value) for p in window.bus.document.parts] == [("R1", "1k"), ("R2", "10k")]
-    assert len(window.bus.history()) == before + 2
-    assert seen[0].added == 2
-    _close(window)
-
+        window._on_library_item_activated(first_part())
+        window._on_library_item_activated(first_part())
+        refs = [p.ref for p in window.bus.document.parts]
+        assert len(refs) == 2 and len(set(refs)) == 2
+        assert len(window.bus.history()) == before + 2
+        assert window.inspector.shown is window.inspector.design_part_editor
+        assert window.inspector.design_part_editor.ref.text() == refs[-1]
+        assert window.scene.armed_footprint_id is None
+    finally:
+        _close(window)
 
 def test_the_findings_panel_names_copper_by_where_it_runs() -> None:
     """Fourteen findings on the dense fixture name a conductor by its id ("Solder trace

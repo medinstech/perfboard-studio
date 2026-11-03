@@ -173,6 +173,10 @@ closed without a bump.
   "2,28 mm" while the line under it said "0.64 mm", even in the English window; fields
   now use a decimal point too, as everything the board's checks and the guide write does,
   and a comma typed into one is taken as the point it means.
+- **Add Part is the Library.** Circuit ▸ Add Part and Home's first door bring the sheet
+  forward and put the keyboard in the Library's search; Enter or a double-click puts the
+  part on the sheet and shows it in Properties, ready for the next. The Add a Part dialog
+  that copied the Library is no longer opened for adding.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

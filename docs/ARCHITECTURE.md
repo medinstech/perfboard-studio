@@ -1568,6 +1568,14 @@ package, hole and turn in a line nobody could act on, beside a panel that now sh
 it editable; a conductor selected alone is its kind, its ends, its holes and its net in
 Properties (`_ConductorEditor`), which the line only ever counted.
 
+**Add Part is the Library** (`on_schematic_add_part`): the sheet in front, the Library's
+search focused, and Enter or a double-click on a part (`_on_library_item_activated`) puts it
+in the design as one `part.add` and shows it in Properties to be named -- the search still
+there for the next one. It was a modal copy of the Library with a reference, a value and a
+pinout under it, which are Properties' fields now. With the board in front, choosing a part
+arms it for the board, as it always did. `AddPartDialog` is left for Change…, a package for
+a part that exists, until Properties has a package picker of its own.
+
 **The panel is told the selection once per command.** The board empties its selection
 while it rebuilds and puts it back after, and the signals between would show the board's
 editor for an instant and take the keyboard out of the field Tab had just moved to. So
