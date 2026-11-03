@@ -20,6 +20,7 @@ data and the meshes disagree.
 
     python tools/make_topviews.py            # write src/perfboard_studio/ui/models/topviews.json
     python tools/make_topviews.py --check    # verify only
+    python tools/make_topviews.py --only <footprint id> ...   # re-measure these, keep the rest
 
 THE LICENCE. The outlines are derived from the meshes, which are derived from KiCad's
 CC-BY-SA library, so they live beside them under the same LICENSE and NOTICE.
@@ -220,7 +221,7 @@ def _douglas_peucker(points: list[tuple[float, float]], tolerance: float) -> lis
 
 def top_view(model: partmodels.PartModel) -> dict[str, Any]:
     meshes, label, zbuf, x0, y1 = rasterise(model)
-    shapes: list[tuple[float, str, list[list[float]]]] = []
+    shapes: list[tuple[float, str, list[list[float]], str | None]] = []
     recess_cells = max(1, round(RECESS_MM / CELL_MM / 2))
     groove_cells = max(1, round(GROOVE_MM / CELL_MM / 2))
     for index, (piece, _points, _faces) in enumerate(meshes):
@@ -233,33 +234,50 @@ def top_view(model: partmodels.PartModel) -> dict[str, Any]:
         if role == "body":
             below = mask & (zbuf < top - RELIEF_MM)
             recess = _dilate(_erode(below, recess_cells), recess_cells) & below
-            shapes.append((top, "body", _rings(mask & ~below, x0, y1)))
-            shapes.append((top - 0.001, "flank", _rings(below & ~recess, x0, y1)))
-            shapes.append((top + 0.001, "recess", _rings(recess, x0, y1)))
+            shapes.append((top, "body", _rings(mask & ~below, x0, y1), None))
+            shapes.append((top - 0.001, "flank", _rings(below & ~recess, x0, y1), None))
+            shapes.append((top + 0.001, "recess", _rings(recess, x0, y1), None))
         else:
-            shapes.append((top, role, _rings(mask, x0, y1)))
+            # A marking keeps the colour the 3D view draws its piece in: an LCD's bezel and
+            # its glass are two markings, and one ink for both made them one grey slab.
+            ink = piece.color if role == "marking" else None
+            shapes.append((top, role, _rings(mask, x0, y1), ink))
             if role == "metal":
                 height = np.where(label == index, zbuf, top)
                 groove = (_grey_close(height, groove_cells) - height > GROOVE_DEPTH_MM)
                 groove &= _erode(mask, 4) & (label == index)
                 if groove.sum() * CELL_MM * CELL_MM > 0.016:
-                    shapes.append((top + 0.001, "metal-recess", _rings(groove, x0, y1)))
+                    shapes.append((top + 0.001, "metal-recess", _rings(groove, x0, y1), None))
     shapes = [shape for shape in shapes if shape[2]]
     shapes.sort(key=lambda shape: shape[0])
     every = _erode(_dilate(label >= 0, 1), 1)
     return {
         "source": model.source,
-        "shapes": [{"role": role, "rings": rings} for _top, role, rings in shapes],
+        "shapes": [
+            {"role": role, **({"color": ink} if ink else {}), "rings": rings}
+            for _top, role, rings, ink in shapes
+        ],
         "silhouette": _rings(every, x0, y1),
     }
 
 
-def build() -> dict[str, Any]:
-    return {
-        footprint_id: top_view(model)
-        for footprint_id in sorted(partmodels.known_footprints())
-        if (model := partmodels.model_for(footprint_id)) is not None
-    }
+def build(only: frozenset[str] | None = None) -> dict[str, Any]:
+    """Every footprint with a model, or with ``only`` just those re-measured and the rest
+    kept from the file on disk -- for trying a part out in seconds rather than the minute
+    and more the whole library takes. ``--check`` always measures all of them."""
+    kept: dict[str, Any] = {}
+    if only is not None and OUT.is_file():
+        kept = json.loads(OUT.read_text(encoding="utf-8"))
+    views: dict[str, Any] = {}
+    for footprint_id in sorted(partmodels.known_footprints()):
+        model = partmodels.model_for(footprint_id)
+        if model is None:
+            continue
+        if only is None or footprint_id in only or footprint_id not in kept:
+            views[footprint_id] = top_view(model)
+        else:
+            views[footprint_id] = kept[footprint_id]
+    return views
 
 
 def _ring_lines(rings: list[list[float]], indent: str) -> str:
@@ -276,7 +294,8 @@ def dump(views: dict[str, Any]) -> str:
         for i, shape in enumerate(view["shapes"]):
             comma = "," if i < len(view["shapes"]) - 1 else ""
             rings = _ring_lines(shape["rings"], "     ")
-            lines.append(f'    {{"role": {json.dumps(shape["role"])}, "rings": [\n     {rings}]}}{comma}')
+            ink = f', "color": {json.dumps(shape["color"])}' if "color" in shape else ""
+            lines.append(f'    {{"role": {json.dumps(shape["role"])}{ink}, "rings": [\n     {rings}]}}{comma}')
         lines.append("   ],")
         lines.append(f'   "silhouette": [\n    {_ring_lines(view["silhouette"], "    ")}]')
         lines.append("  }" + ("," if n < len(views) - 1 else ""))
@@ -287,11 +306,14 @@ def dump(views: dict[str, Any]) -> str:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="verify only, write nothing")
+    parser.add_argument("--only", nargs="+", help="re-measure these footprint ids, keep the rest")
     args = parser.parse_args(argv)
+    if args.check and args.only:
+        parser.error("--check measures every part: drop --only")
     from PySide6.QtGui import QGuiApplication
 
     _app = QGuiApplication.instance() or QGuiApplication(["make_topviews"])
-    text = dump(build())
+    text = dump(build(frozenset(args.only) if args.only else None))
     if args.check:
         if not OUT.is_file() or OUT.read_text(encoding="utf-8") != text:
             print(f"{OUT.name} is out of date: run tools/make_topviews.py")

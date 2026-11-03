@@ -115,6 +115,13 @@ closed without a bump.
 
 ### Changed
 
+- **The 16 x 2 LCD and the 4-digit display look like themselves.** Both were a grey slab in
+  2D and 3D. They are now drawn from KiCad's models of the parts: the LCD's green board,
+  black bezel and yellow-green glass, standing on the 16-pin header it is soldered in by; the
+  CA56-12 and CC56-12 a black face with their four red digits. A printed or moulded part of
+  any borrowed package is now the same colour in 2D as in 3D, which also turns the collar of
+  the 12 mm push button dark grey, as it already was in 3D.
+
 - **A phenolic board's copper shows.** Its rings, strip pads and etched letters are drawn in
   the pale copper of the real board's copper side, measured off a photograph of one, rather
   than a copper so close to the substrate that they all but disappeared.

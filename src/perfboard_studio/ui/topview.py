@@ -9,13 +9,17 @@ MEASURED from the very meshes the 3D view draws (``tools/make_topviews.py`` writ
 not, the shapes are parametric and always inside ``footprints.body_extent``: the drawing
 follows the geometry DRC measures, never the other way round.
 
-WHAT A SHAPE IS. A role and a QPainterPath, in the footprint's own frame (pin 1 at the origin,
-x along the columns, y down the rows), painted in the order given:
+WHAT A SHAPE IS. A role, a QPainterPath and an ink, in the footprint's own frame (pin 1 at
+the origin, x along the columns, y down the rows), painted in the order given:
 
     body      the case's flat top           plastic        a second moulding
     flank     the case's sloped sides       metal          leads, tabs, a can top, a screw
     recess    a notch or vent in the case   metal-recess   a screw's slot, a can's vent
     marking   a band, a stripe
+
+The ink is a measured marking's own colour -- the one the 3D view draws its piece in, so an
+LCD's black bezel and its glass are two colours in both views -- and ``None`` for every
+other shape.
 
 WHAT IS NOT HERE. How a role is inked, the light and the contact shadow are the painter's
 (``view2d``), and the colours are ``bodies.BODY_STYLES`` as ever. A part's turn and mirror are
@@ -47,12 +51,15 @@ TOPVIEWS_PATH = partmodels.MODELS_DIR / "topviews.json"
 #: Every role a shape may have, in the order a painter needs no other than the data's.
 ROLES = ("body", "flank", "recess", "plastic", "metal", "metal-recess", "marking")
 
+#: A role, its outline, and the colour a measured marking was drawn in (else ``None``).
+Shape = tuple[str, QPainterPath, str | None]
+
 
 @dataclass
 class TopView:
     """One footprint seen from above."""
 
-    shapes: list[tuple[str, QPainterPath]] = field(default_factory=list)
+    shapes: list[Shape] = field(default_factory=list)
     #: Everything that stands on the board, for a contact shadow.
     silhouette: QPainterPath = field(default_factory=QPainterPath)
     #: The case alone, to clip light to.
@@ -99,9 +106,12 @@ def _measured(model_id: str) -> TopView | None:
     for shape in entry.get("shapes", ()):
         role = shape.get("role")
         if role in ROLES:
-            view.shapes.append((role, _path(shape.get("rings", ()))))
+            ink = shape.get("color")
+            view.shapes.append(
+                (role, _path(shape.get("rings", ())), ink if isinstance(ink, str) else None)
+            )
     view.silhouette = _path(entry.get("silhouette", ()))
-    for role, path in view.shapes:
+    for role, path, _ink in view.shapes:
         if role in ("body", "flank", "recess"):
             view.body = view.body.united(path)
     return view
@@ -112,7 +122,7 @@ def _repeated(pieces: Sequence[tuple[TopView, float, float]], source: str) -> To
     block's head, ways and tail -- the same repetition the 3D view draws."""
     view = TopView(source=source)
     for piece, x, y in pieces:
-        view.shapes.extend((role, path.translated(x, y)) for role, path in piece.shapes)
+        view.shapes.extend((role, path.translated(x, y), ink) for role, path, ink in piece.shapes)
         view.silhouette = view.silhouette.united(piece.silhouette.translated(x, y))
         view.body = view.body.united(piece.body.translated(x, y))
     return view
@@ -168,40 +178,45 @@ def _parametric(footprint: Footprint, pitch: Mm) -> TopView:
         outer = _rect(left, top, sx, sy, 0.4)
         cavity = _rect(left + wall, top + wall, sx - 2 * wall, sy - 2 * wall, 0.2)
         key = _rect(cx - slot / 2, top + sy - wall - 0.05, slot, wall + 0.1)
-        view.shapes = [("body", outer.subtracted(cavity).subtracted(key)), ("recess", cavity.united(key))]
-        view.shapes += [("metal", _rect(x - 0.32, y - 0.32, 0.64, 0.64)) for x, y in pins]
+        view.shapes = [
+            ("body", outer.subtracted(cavity).subtracted(key), None),
+            ("recess", cavity.united(key), None),
+        ]
+        view.shapes += [("metal", _rect(x - 0.32, y - 0.32, 0.64, 0.64), None) for x, y in pins]
         view.body = outer
     elif arch == "potentiometer":
         r = min(sx, sy) / 2
         view.shapes = [
-            ("body", _circle(cx, cy, r)),
-            ("metal", _circle(cx, cy, r * 0.59)),
-            ("plastic", _circle(cx, cy, r * 0.375)),
-            ("recess", _rect(cx - 0.5, cy - r * 0.375, 1.0, r * 0.75)),
+            ("body", _circle(cx, cy, r), None),
+            ("metal", _circle(cx, cy, r * 0.59), None),
+            ("plastic", _circle(cx, cy, r * 0.375), None),
+            ("recess", _rect(cx - 0.5, cy - r * 0.375, 1.0, r * 0.75), None),
         ]
         view.body = _circle(cx, cy, r)
     elif arch == "smd-adapter":
         adapter = _rect(left, top, sx, sy, 0.3)
-        view.shapes = [("body", adapter)]
-        view.shapes += [("metal", _circle(x, y, 0.85)) for x, y in pins]
+        view.shapes = [("body", adapter, None)]
+        view.shapes += [("metal", _circle(x, y, 0.85), None) for x, y in pins]
         chip_l, chip_w = float(dims["chipLength"]), float(dims["chipWidth"])
         span, chip_pitch = float(dims["chipSpan"]), float(dims["chipPitch"])
         count = len(footprint.pins) // 2
         for i in range(count):
             y = cy - (count - 1) * chip_pitch / 2 + i * chip_pitch
-            view.shapes.append(("metal", _rect(cx - span / 2, y - 0.2, span, 0.4)))
-        view.shapes.append(("plastic", _rect(cx - chip_w / 2, cy - chip_l / 2, chip_w, chip_l, 0.15)))
-        view.shapes.append(("recess", _circle(cx - chip_w / 2 + 0.6, cy - chip_l / 2 + 0.6, 0.3)))
+            view.shapes.append(("metal", _rect(cx - span / 2, y - 0.2, span, 0.4), None))
+        view.shapes.append(
+            ("plastic", _rect(cx - chip_w / 2, cy - chip_l / 2, chip_w, chip_l, 0.15), None)
+        )
+        view.shapes.append(("recess", _circle(cx - chip_w / 2 + 0.6, cy - chip_l / 2 + 0.6, 0.3), None))
         view.body = adapter
         view.marking = QRectF(cx - chip_w / 2 + 0.3, cy - chip_l / 2 + 0.3, chip_w - 0.6, chip_l - 0.6)
         view.marking_vertical = True
     else:
         outline = _rect(left, top, sx, sy, 0.3)
-        view.shapes = [("body", outline)]
+        view.shapes = [("body", outline, None)]
         view.body = outline
         if arch == "relay-box":
             view.marking = QRectF(left + 2, top + 2, sx - 4, sy - 4)
-    for _role, path in view.shapes:
+    for _role, path, _ink in view.shapes:
         view.silhouette = view.silhouette.united(path)
     return view
 
@@ -262,7 +277,7 @@ def _polarity(footprint: Footprint, view: TopView, pitch: Mm) -> QPainterPath:
     centre = box.center()
     reach = max(box.width(), box.height())
     marking = QPainterPath()
-    for role, path in view.shapes:
+    for role, path, _ink in view.shapes:
         if role == "marking":
             marking = marking.united(path)
     archetype = footprint.body.archetype
@@ -331,7 +346,7 @@ def _top_view(footprint: Footprint, pitch: Mm) -> TopView:
         view.marking = box.adjusted(1.2, 2.0, -1.2, -1.2)
         view.marking_vertical = True
     metal = QPainterPath()
-    for role, path in view.shapes:
+    for role, path, _ink in view.shapes:
         if role in ("metal", "metal-recess"):
             metal = metal.united(path)
     view.hidden_pins = tuple(

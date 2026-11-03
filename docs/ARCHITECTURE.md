@@ -962,6 +962,15 @@ What keeps everything D6 was protecting:
   DIODE'S BAND is the exception, because the table does have one: it is the style's accent,
   which the 2D view draws, so `view3d._pieces_for` paints the mesh's own band with it and
   prints no second band of its own (there were two, at different ends of the barrel).
+  A GENERIC BOX is the exception the other way round: its grey is what the table says about
+  a part it knows nothing of, and a model knows the part, so `bodies.style_for` gives a
+  `generic-box` with a model the model's body colour -- a character LCD's board is green
+  and a 7-segment display's case black, in all three places at once. The converter's
+  "biggest" is counted in triangles, and where that is not the case (a 7-segment display's
+  segments outnumber it) `Model.body` names the piece. Where KiCad painted the model as
+  another variant than the part builders hold, `Model.colours` swaps the colour at import,
+  chosen from rendered candidates: the LCD's glass is yellow-green rather than KiCad's
+  beige.
 - **Materials are ours**, so a borrowed mesh answers light by the same rules as a generated
   one. The index names one of `view3d.MODEL_MATERIALS`; a name the renderer does not have is
   caught by a test rather than shaded as plastic in silence.
@@ -986,7 +995,10 @@ Three things about the mapping:
   KiCad has the package only at another pitch, the model is centred and its legs splayed
   onto our holes (`splay`), as a builder bends them -- the radial cans, and `r-axial-5`, which
   took KiCad's 9 mm DIN0309 at its own pitch and so drew a part 2.7 mm longer than the body
-  DRC measures.
+  DRC measures. A model of a module WITHOUT the header it is soldered in by stands on
+  nothing too: Winstar's WC1602A is the display alone, 4.4 mm up with no leg to the board,
+  so `Model.header` merges KiCad's own straight header in under it, pin 1 on pin 1
+  (`tests/test_model_leads.py` found it, as it finds any model whose legs miss a hole).
 - **Position is not measured, because it is already right.** A KiCad through-hole model's
   origin is pin 1 and its axes run the way this world does — x with the column, y against
   the row. Both follow the footprint, and this project's convention is written down as "the
@@ -1027,7 +1039,9 @@ piece somebody looking down would see, and the height map sorts the case into it
 its sloped sides and what is cut into it (a pin-1 notch); metal lower than the metal round it
 is a screw's slot or a can's vent. The regions are traced in the FOOTPRINT's frame and named
 by role (`body`, `flank`, `recess`, `plastic`, `metal`, `metal-recess`, `marking`); how a
-role is inked is the painter's, not the data's. Three rules hold it:
+role is inked is the painter's, not the data's -- except a marking's colour, which is its
+piece's own, written beside it (`"color"`) because it is the colour the 3D view draws that
+piece in. Three rules hold it:
 
 - **The drawing follows DRC's geometry, never the other way round.**
   `tests/test_topview.py` holds every case inside `body_extent`, to the rasteriser's own
@@ -1046,7 +1060,9 @@ role is inked is the painter's, not the data's. Three rules hold it:
 **The 2D view draws a part from its top view wherever one was measured**
 (`view2d._paint_top_view`), and by archetype where not (modules, the SRD relay, the pot). Every
 role is inked from the part's own `BODY_STYLES` colours and the leads' metal, so no colour is
-added: the flank is the case darkened (`FLANK_SHADE`, chosen from rendered candidates), a
+added, and a marking in its piece's own colour, the one 3D gives it -- one accent for every
+marking drew an LCD's black bezel and its glass as one grey slab, and a 12 mm button's dark
+collar cream: the flank is the case darkened (`FLANK_SHADE`, chosen from rendered candidates), a
 recess contrasts with its case -- lighter on a dark one, darker on a light one, because a red
 LED's flange lightened came out pink. On screen the part keeps the board look (the contact
 shadow on the silhouette, the material's sheen, the light clipped to the case); on paper it is

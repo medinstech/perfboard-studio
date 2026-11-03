@@ -128,6 +128,33 @@ def test_every_lead_goes_in_a_hole_and_every_hole_gets_a_lead(footprint_id: str)
         )
 
 
+#: How far a display's lead may stand from its hole: a part made ON the grid, unbent.
+ON_THE_HOLE_MM = 0.05
+
+
+@pytest.mark.parametrize(
+    "footprint_id",
+    [
+        # Winstar's WC1602A on KiCad's 1 x 16 header, merged in under it at import.
+        "box-16x1-p1-r1-80x36x15-o12.95x15.5",
+        # Kingbright's CA56-12EWA, KiCad's model of the catalog's own part.
+        "box-2x6-p6-r1-19x50.3x8.1-ccw",
+    ],
+)
+def test_a_display_stands_exactly_on_its_own_footprint(footprint_id: str) -> None:
+    """A display is made on the 2.54 mm grid, so its model stands on our holes exactly, one
+    lead to a hole: a model that drifted from the footprint is caught here to the twentieth
+    of a millimetre, not at the drill's 0.4."""
+    model = partmodels.model_for(footprint_id)
+    assert model is not None
+    feet = _feet(model)
+    holes = _holes(footprint_id)
+    assert len(feet) == len(holes), (footprint_id, len(feet), len(holes))
+    for hx, hy in holes:
+        nearest = min(math.hypot(hx - fx, hy - fy) for fx, fy in feet)
+        assert nearest <= ON_THE_HOLE_MM, (footprint_id, hx, hy, nearest)
+
+
 def test_the_to92_is_the_model_with_its_legs_bent_to_the_grid() -> None:
     """The case this file was written for. KiCad has the TO-92 both ways -- as made (leads
     1.27 mm apart) and with its legs bent out to 2.54 mm -- and our footprint is the second."""

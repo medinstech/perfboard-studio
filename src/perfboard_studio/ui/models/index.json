@@ -787,6 +787,148 @@
   "rotate": 180.0,
   "source": "Resistor_THT/R_Axial_DIN0309_L9.0mm_D3.2mm_P5.08mm_Vertical, turned end for end"
  },
+ "box-16x1-p1-r1-80x36x15-o12.95x15.5": {
+  "parts": [
+   {
+    "bounds": [
+     -1.0,
+     -0.9972,
+     2.54,
+     39.1,
+     2.5,
+     8.54
+    ],
+    "color": "#b58136",
+    "material": "plated",
+    "mesh": "box-16x1-p1-r1-80x36x15-o12.95x15.5.0.ply"
+   },
+   {
+    "bounds": [
+     -8.0,
+     -33.5,
+     4.4,
+     72.0,
+     2.5,
+     6.0
+    ],
+    "color": "#186b2a",
+    "material": "gloss",
+    "mesh": "box-16x1-p1-r1-80x36x15-o12.95x15.5.1.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -4.0,
+     -28.0,
+     6.0,
+     68.0,
+     -2.87,
+     15.0
+    ],
+    "color": "#0f0f0f",
+    "material": "moulded",
+    "mesh": "box-16x1-p1-r1-80x36x15-o12.95x15.5.2.ply"
+   },
+   {
+    "bounds": [
+     -1.27,
+     -1.27,
+     0.0,
+     39.37,
+     1.27,
+     2.54
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "box-16x1-p1-r1-80x36x15-o12.95x15.5.3.ply"
+   },
+   {
+    "bounds": [
+     -0.32,
+     -0.32,
+     -0.05,
+     38.42,
+     0.32,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-16x1-p1-r1-80x36x15-o12.95x15.5.4.ply"
+   },
+   {
+    "bounds": [
+     -1.0,
+     -23.5,
+     15.0,
+     65.0,
+     -7.5,
+     15.0
+    ],
+    "color": "#b4c43a",
+    "material": "moulded",
+    "mesh": "box-16x1-p1-r1-80x36x15-o12.95x15.5.5.ply"
+   },
+   {
+    "bounds": [
+     -2.85,
+     -28.15,
+     0.0,
+     66.0,
+     -3.0,
+     4.4
+    ],
+    "color": "#0d0e10",
+    "material": "moulded",
+    "mesh": "box-16x1-p1-r1-80x36x15-o12.95x15.5.6.ply"
+   }
+  ],
+  "source": "Display/WC1602A"
+ },
+ "box-2x6-p6-r1-19x50.3x8.1-ccw": {
+  "parts": [
+   {
+    "bounds": [
+     0.9812,
+     -30.7479,
+     8.1,
+     15.4594,
+     17.3042,
+     8.2
+    ],
+    "color": "#720301",
+    "material": "gloss",
+    "mesh": "box-2x6-p6-r1-19x50.3x8.1-ccw.0.ply"
+   },
+   {
+    "bounds": [
+     -0.4,
+     -13.0989,
+     -0.05,
+     15.64,
+     0.3989,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-2x6-p6-r1-19x50.3x8.1-ccw.1.ply"
+   },
+   {
+    "bounds": [
+     -1.88,
+     -31.5,
+     0.0,
+     17.12,
+     18.8,
+     8.1
+    ],
+    "color": "#0d0e10",
+    "material": "moulded",
+    "mesh": "box-2x6-p6-r1-19x50.3x8.1-ccw.2.ply",
+    "role": "body"
+   }
+  ],
+  "source": "Display_7Segment/CA56-12EWA"
+ },
  "c-disc-p2": {
   "parts": [
    {

@@ -96,6 +96,17 @@ class Model:
     #: How far a facet may turn, in radians, where it is not ``ANGULAR``. See
     #: ``STANDING_ANGULAR``.
     angular: float | None = None
+    #: The colour of the piece that IS the body, for a model whose biggest non-metal piece is
+    #: something else: a 7-segment display's segments are more triangles than its case.
+    body: str | None = None
+    #: KiCad's straight pin header (``Connector_PinHeader_2.54mm``, e.g.
+    #: ``PinHeader_1x16_P2.54mm_Vertical``) for a module whose model leaves out the header it
+    #: stands on, merged in with its pin 1 on ours and its pins along our columns. Winstar's
+    #: WC1602A is the display alone, 4.4 mm up, and a character LCD is soldered in on one.
+    header: str | None = None
+    #: Colours swapped after the materials are read, for a part whose model was painted in
+    #: another variant than the one this application names: ``(KiCad's, ours)``.
+    colours: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -215,6 +226,16 @@ MODELS: tuple[Model, ...] = (
           "TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"),
     Model("screw-terminal-3", "TerminalBlock_Phoenix",
           "TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"),
+    # -- displays ----------------------------------------------------------
+    # A 16 x 2 on the male header it is soldered in by. KiCad paints the glass the beige of
+    # a DO-41; the module builders buy is the yellow-green one, chosen by looking.
+    Model("box-16x1-p1-r1-80x36x15-o12.95x15.5", "Display", "WC1602A", body="#186b2a",
+          header="PinHeader_1x16_P2.54mm_Vertical", colours=(("#c6c4a0", "#b4c43a"),)),
+    # The catalog's own CA56-12EWA (the pads are the CGKWA's to the micrometre), whose case
+    # is fewer triangles than its segments. Kept in KiCad's black face and red segments, not
+    # the "standard gray face, white segment" of Kingbright's datasheet: the black one is
+    # what most builders hold, and the colour was chosen by looking at both.
+    Model("box-2x6-p6-r1-19x50.3x8.1-ccw", "Display_7Segment", "CA56-12EWA", body="#0d0e10"),
     # -- a terminal block of any length, as three ways of the 3-way one -----
     #
     # A MKDS-1,5 block IS a repetition, like a header, and it was measured rather than
@@ -330,6 +351,8 @@ MATERIALS: dict[str, str] = {
     "#720301": "gloss",  # a film capacitor's case -- an LED's lens overrides this
     "#383838": "moulded",  # the collar round a 12 mm push button's plunger
     "#a4a392": "steel",  # the contacts in a Phoenix MSTB header, one shade off the metal grey
+    "#0f0f0f": "moulded",  # a character LCD's bezel
+    "#0d0e10": "moulded",  # a display's black case, and the backlight under an LCD's glass
 }
 
 
@@ -705,6 +728,16 @@ def main(argv: list[str] | None = None) -> int:
                     [(x + dx, y + dy, z) for x, y, z in kept_points],
                     kept_faces,
                 )
+        if model.header is not None:
+            header = kicad / "share" / "kicad" / "3dmodels" / "Connector_PinHeader_2.54mm.3dshapes"
+            # KiCad runs a header's pins down its rows; turned a quarter, they run along x.
+            for colour, (points, faces) in groups_of(header / f"{model.header}.step", 90.0, (0.0, 0.0)).items():
+                have_points, have_faces = groups.get(colour, ([], []))
+                start = len(have_points)
+                groups[colour] = (
+                    [*have_points, *points],
+                    [*have_faces, *((a + start, b + start, c + start) for a, b, c in faces)],
+                )
         overrides = dict(model.materials)
         ordered = [item for item in sorted(groups.items(), key=lambda item: -len(item[1][1])) if item[1][1]]
         # THE BODY IS THE BIGGEST PIECE THAT IS NOT METAL, and it is worth naming because the
@@ -721,11 +754,16 @@ def main(argv: list[str] | None = None) -> int:
                 # The LIBRARY's classification, not the override: a crystal's can is the
                 # body of the part and is also metal, and asking the overridden answer
                 # would take the body role away from the one piece anybody looks at.
-                if MATERIALS.get(hexed(colour), "moulded")
-                not in ("tinned", "steel", "plated")
+                if (
+                    hexed(colour) == model.body
+                    if model.body is not None
+                    else MATERIALS.get(hexed(colour), "moulded") not in ("tinned", "steel", "plated")
+                )
             ),
             None,
         )
+        if model.body is not None and body_index is None:
+            raise SystemExit(f"{model.footprint}: no piece is {model.body}")
         for order, (colour, (points, faces)) in enumerate(ordered):
             data = ply_bytes(points, faces)
             name = written.get(data)
@@ -737,7 +775,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  UNKNOWN COLOUR {hex_colour} in {model.footprint}", file=sys.stderr)
             part = {
                 "mesh": name,
-                "color": hex_colour,
+                "color": dict(model.colours).get(hex_colour, hex_colour),
                 "material": material_for(hex_colour, overrides),
                 # What the piece actually measures. The renderer needs it to print a
                 # resistor's colour code ON the borrowed barrel rather than at the size

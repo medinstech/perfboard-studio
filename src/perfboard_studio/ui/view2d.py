@@ -2662,13 +2662,18 @@ def _paint_top_marking(
 FLANK_SHADE = 106
 
 
-def _role_colour(role: str, style: BodyStyle) -> QColor:
+def _role_colour(role: str, style: BodyStyle, ink: str | None = None) -> QColor:
     """How a top view's role is inked: from the part's own colours and the leads' metal, so
     no colour is added that ``bodies.BODY_STYLES`` and the board look do not already have.
     The flank is the case turned away from the light, a recess the moulding cut into, and a
     groove in metal the metal in shadow. A recess reads by CONTRAST with its case: lighter on
     a dark one (a DIP's notch), darker on a light one -- lightened, a red LED's flange and a
-    ceramic disc's dimple came out pink and pale, a different part."""
+    ceramic disc's dimple came out pink and pale, a different part.
+
+    A measured marking is the colour its piece is in 3D (``ink``): one accent for an LCD's
+    bezel and its glass drew a grey slab, and a big button's dark collar came out cream."""
+    if role == "marking" and ink:
+        return QColor(ink)
     fill = QColor(style.fill)
     if role == "flank":
         return fill.darker(FLANK_SHADE)
@@ -2703,8 +2708,8 @@ def _paint_top_view(
     if on_screen:
         _paint_contact_shadow(painter, view.silhouette)
     painter.setPen(Qt.PenStyle.NoPen)
-    for role, path in view.shapes:
-        painter.setBrush(QBrush(_role_colour(role, style)))
+    for role, path, ink in view.shapes:
+        painter.setBrush(QBrush(_role_colour(role, style, ink)))
         painter.drawPath(path)
     case = view.body
     if not case.isEmpty():
@@ -2724,7 +2729,7 @@ def _paint_top_view(
         # Round the case AND what is printed on it: outlined alone, the case drew a dark line
         # along every edge it shares with a stripe or a band, splitting the mark in pieces.
         outline = case
-        for role, path in view.shapes:
+        for role, path, _ink in view.shapes:
             if role == "marking":
                 outline = outline.united(path)
         painter.setBrush(Qt.BrushStyle.NoBrush)

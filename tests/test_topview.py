@@ -35,7 +35,7 @@ def qapp() -> QApplication:
 
 def _case(view: topview.TopView) -> QRectF:
     case = QPainterPath()
-    for role, path in view.shapes:
+    for role, path, _ink in view.shapes:
         if role in CASE_ROLES:
             case = case.united(path)
     return case.boundingRect()
@@ -105,7 +105,7 @@ def test_every_pin_shows_as_metal_or_is_marked(footprint_id: str) -> None:
     assert footprint is not None
     view = topview.top_view(footprint, PITCH)
     metal = QPainterPath()
-    for role, path in view.shapes:
+    for role, path, _ink in view.shapes:
         if role in ("metal", "metal-recess"):
             metal = metal.united(path)
     for pin in footprint.pins:
@@ -266,3 +266,41 @@ def test_every_polarity_mark_reads_at_the_opening_zoom(footprint_id: str) -> Non
     near, far = (pins[number] for number in side)
     distance = lambda point: (point.x() - centre.x()) ** 2 + (point.y() - centre.y()) ** 2  # noqa: E731
     assert distance(near) < distance(far), (footprint_id, side)
+
+
+#: The 16 x 2 character LCD: a green board, a black bezel and its glass.
+LCD = "box-16x1-p1-r1-80x36x15-o12.95x15.5"
+
+
+@pytest.mark.parametrize("footprint_id", sorted(partmodels.known_footprints()))
+def test_every_marking_is_inked_in_a_colour_its_own_model_has(footprint_id: str) -> None:
+    """A marking's colour is its piece's, the one the 3D view draws it in -- never one the
+    data made up, and never missing on a measured marking."""
+    model = partmodels.model_for(footprint_id)
+    footprint = get_footprint(footprint_id)
+    if model is None or footprint is None:
+        return
+    colours = {piece.color for piece in model.pieces if not piece.is_body}
+    for role, _path, ink in topview.top_view(footprint, PITCH).shapes:
+        if role == "marking":
+            assert ink in colours, (footprint_id, ink)
+        else:
+            assert ink is None, (footprint_id, role)
+
+
+def test_an_lcds_bezel_and_glass_are_two_colours_in_2d_as_in_3d() -> None:
+    """One accent for every marking drew the bezel and the glass as one grey slab."""
+    from perfboard_studio.ui.bodies import style_for
+    from perfboard_studio.ui.view2d import _role_colour
+
+    footprint = get_footprint(LCD)
+    assert footprint is not None
+    view = topview.top_view(footprint, PITCH)
+    inks = {ink for role, _path, ink in view.shapes if role == "marking"}
+    # The black bezel and the yellow-green glass (and, through the board's holes round the
+    # pins, a glimpse of the header's black plastic under it).
+    assert {"#0f0f0f", "#b4c43a"} <= inks, inks
+    style = style_for(footprint)
+    assert _role_colour("marking", style, "#b4c43a") == QColor("#b4c43a")
+    # A marking with no colour of its own (a parametric shape) is still the style's accent.
+    assert _role_colour("marking", style, None) == QColor(style.accent)

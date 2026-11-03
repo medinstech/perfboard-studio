@@ -58,6 +58,8 @@ from perfboard_studio.model import (
     pin_name_of,
 )
 
+from . import partmodels
+
 #: Half a flying lead's jacket, the width a pin name must stay clear of one by: the 3D view's
 #: 0.55 mm radius, the wider of the two views' wires.
 FLYING_LEAD_HALF_WIDTH_MM = 0.55
@@ -204,6 +206,11 @@ def style_for(footprint: Footprint) -> BodyStyle:
     The override replaces the fill only. A caller setting a colour is saying "this part is
     green", not "work out a whole new palette" -- so the edge and accent, which exist to
     stay legible against the fill, are left to the archetype.
+
+    A GENERIC BOX WITH A MEASURED MODEL IS THE MODEL'S COLOUR. The box's grey is what this
+    table says about a part it knows nothing of, and a borrowed model knows the part: a
+    character LCD's board is green and a 7-segment display's case black, in the 2D view, in
+    3D and in the guide alike, because all three ask here.
     """
     archetype = footprint.body.archetype
     if archetype in AXIAL_ARCHETYPES and footprint.polarized:
@@ -211,6 +218,9 @@ def style_for(footprint: Footprint) -> BodyStyle:
     else:
         base = BODY_STYLES.get(archetype, _FALLBACK_STYLE)
     override = footprint.body.color
+    if not override and archetype == "generic-box":
+        model = partmodels.model_for(footprint.id)
+        override = model.body.color if model is not None and model.body is not None else None
     if override:
         return BodyStyle(
             fill=override,

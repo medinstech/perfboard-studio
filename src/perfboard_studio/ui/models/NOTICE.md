@@ -53,12 +53,21 @@ The meshes are not the KiCad models unaltered:
   (`axial-<n>h-<L>x<D>-v2`) is the same KiCad `R_Axial_..._Vertical` model as the one over
   its first, turned half round and shifted by the span: `index.json` says `like`, with the
   turn and the shift, and names no files of its own.
+- **One stands on another.** KiCad's `Display/WC1602A` is the 16 x 2 LCD module alone,
+  4.4 mm above the board with nothing under it, so the 1 x 16 header it is soldered in by,
+  `Connector_PinHeader_2.54mm/PinHeader_1x16_P2.54mm_Vertical`, is merged into its meshes,
+  turned a quarter so its pins run along the module's (the `header` field in
+  `tools/import_kicad_models.py`).
+- **Some were painted another colour**, where the model shows another variant of the part
+  than the one builders hold: the LCD's glass is yellow-green rather than beige. Which ones
+  is the `colours` field in `tools/import_kicad_models.py`.
 
 Nothing about the source models' geometry was otherwise altered, and no colours or
 materials were taken from them into the application's own tables.
 
 `topviews.json` is derived from these meshes in turn: what each one looks like from straight
-above, traced into outlines by `tools/make_topviews.py`. It carries the same licence.
+above, traced into outlines by `tools/make_topviews.py`, with each printed or moulded
+marking's colour beside it. It carries the same licence.
 
 ## Rebuilding them
 

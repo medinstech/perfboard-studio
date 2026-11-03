@@ -301,6 +301,29 @@ def test_a_diode_and_a_resistor_do_not_look_alike() -> None:
     assert style_for(resistor).fill != style_for(diode).fill
 
 
+@pytest.mark.parametrize(
+    ("footprint_id", "fill"),
+    [
+        ("box-16x1-p1-r1-80x36x15-o12.95x15.5", "#186b2a"),  # the 16 x 2 LCD's green board
+        ("box-2x6-p6-r1-19x50.3x8.1-ccw", "#0d0e10"),  # the CA56-12's black case
+    ],
+)
+def test_a_generic_box_with_a_model_is_the_models_colour(footprint_id: str, fill: str) -> None:
+    """The box's grey is the table saying it knows nothing of the part, and a measured model
+    knows it: one answer for 2D, 3D and the guide, which all ask ``style_for``."""
+    from perfboard_studio.ui import partmodels
+
+    footprint = get_footprint(footprint_id)
+    model = partmodels.model_for(footprint_id)
+    assert footprint is not None and model is not None and model.body is not None
+    assert footprint.body.archetype == "generic-box"
+    assert style_for(footprint).fill == model.body.color == fill
+    # A box nobody modelled is still the table's grey.
+    plain = get_footprint("box-3x2-p1-r1-9x6x5")
+    assert plain is not None and partmodels.model_for(plain.id) is None
+    assert style_for(plain).fill == BODY_STYLES["generic-box"].fill
+
+
 def test_a_material_is_shaded_from_its_own_flags() -> None:
     """``metallic`` and ``lens`` were documented as shading hints for both views and read by
     almost neither -- the HC-49 crystal hardcoded its own metal shading while carrying the
