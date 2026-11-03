@@ -2849,27 +2849,49 @@ def describe(guide: Guide) -> str:
     """One line for a status bar, in the guide's own language."""
     say = phrasebook(guide.language)
     phases = sum(1 for phase in guide.phases if not phase.is_empty)
-    parts = [
-        say(
-            "{steps} step(s) across {phases} phase(s)",
-            steps=guide.total_steps,
-            phases=phases,
-        ),
-    ]
+    # Each count said once, in the form its number takes: "(s)" read like a form to fill
+    # in. Every form is its own literal, because test_phrasebook reads what the guide can
+    # say out of the source.
+    steps = guide.total_steps
+    if steps == 1:
+        opening = say("{steps} step in {phases} phase", steps=steps, phases=phases)
+    elif phases == 1:
+        opening = say("{steps} steps in {phases} phase", steps=steps, phases=phases)
+    else:
+        opening = say("{steps} steps across {phases} phases", steps=steps, phases=phases)
+    parts = [opening]
     # Before the checks, as the cuts come before everything on the bench. A stripboard's
-    # summary said "15 wire(s) to cut" and nothing about the nine tracks, which the window's
+    # summary said "15 wires to cut" and nothing about the nine tracks, which the window's
     # guide did not list either.
-    if guide.track_cuts:
-        parts.append(say("{count} track(s) to cut", count=len(guide.track_cuts)))
-    parts.append(say("{count} check(s)", count=guide.checkpoint_count))
-    if guide.cut_list:
-        parts.append(say("{count} wire(s) to cut", count=len(guide.cut_list)))
-    if guide.lead_list:
+    cuts = len(guide.track_cuts)
+    if cuts:
         parts.append(
-            say("{count} wire(s) to parts off the board", count=len(guide.lead_list))
+            say("{count} track to cut", count=cuts) if cuts == 1
+            else say("{count} tracks to cut", count=cuts)
         )
-    if guide.warnings:
-        parts.append(say("{count} warning(s)", count=len(guide.warnings)))
+    checks = guide.checkpoint_count
+    parts.append(
+        say("{count} check", count=checks) if checks == 1
+        else say("{count} checks", count=checks)
+    )
+    wires = len(guide.cut_list)
+    if wires:
+        parts.append(
+            say("{count} wire to cut", count=wires) if wires == 1
+            else say("{count} wires to cut", count=wires)
+        )
+    leads = len(guide.lead_list)
+    if leads:
+        parts.append(
+            say("{count} wire to a part off the board", count=leads) if leads == 1
+            else say("{count} wires to parts off the board", count=leads)
+        )
+    warnings = len(guide.warnings)
+    if warnings:
+        parts.append(
+            say("{count} warning", count=warnings) if warnings == 1
+            else say("{count} warnings", count=warnings)
+        )
     return ", ".join(parts)
 
 

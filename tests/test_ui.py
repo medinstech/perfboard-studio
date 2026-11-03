@@ -13452,7 +13452,7 @@ def test_the_guide_panel_says_to_cut_the_tracks_first(monkeypatch, _settings_in_
         assert [row.text(0).split(" · ")[0] for row in cuts] == [
             format_hole(cut.at, window.bus.document.board) for cut in guide.track_cuts
         ]
-        assert "track(s) to cut" in window.guide_summary.text()
+        assert "to cut" in window.guide_summary.text() and "track" in window.guide_summary.text()
         # A cut's check says how to measure it, one hover away.
         check = next(row for row in _guide_rows(window) if "must be open" in row.text(0))
         assert "measure resistance" in check.toolTip(0)
