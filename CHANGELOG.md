@@ -147,6 +147,11 @@ closed without a bump.
   box shows all, none or some, and a click locks or unlocks the lot. With a library part
   armed, Properties shows the part about to be placed, and its Value is the value each
   part placed from it gets; the library's own "Value for parts placed now" box is gone.
+- **A net is edited in Properties.** Pick it in the Nets panel: its name, its class, the
+  current and voltage it carries, and its pins, with Add Pins and Delete Net. New Net makes
+  the net under its next free name with no form, selects it and puts the keyboard in its
+  name while the board picks its pins; Edit Net and Rename Net go to the same name field.
+  The net dialog is gone.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

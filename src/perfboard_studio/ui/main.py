@@ -202,6 +202,7 @@ from perfboard_studio.commands import (
     create_starter_document,
     design_on_a_new_board,
     layout_on_a_solderable_breadboard,
+    next_net_name,
     preset_payload,
 )
 from perfboard_studio.connectivity import FootprintLookup, extract_physical_nets
@@ -357,7 +358,7 @@ from .header import HeaderBar
 from .home import Home, HomeExample
 from .i18n import counted, set_language, t
 from .i18n import language as current_language
-from .inspector import Inspector, InspectorActions, InspectorHooks
+from .inspector import NET_CLASSES, Inspector, InspectorActions, InspectorHooks
 from .palette import CommandPalette, Entry
 from .partfields import PinoutEditor
 from .partfields import note_editor as _note_editor
@@ -2137,148 +2138,6 @@ class BoardFeaturesDialog(QDialog):
                     body_clearance_mm=self.body_clearance.value() if measured else None
                 ),
             )
-        )
-
-
-class NetDialog(QDialog):
-    """What a net is called, what kind it is, and what it carries.
-
-    The last part is not padding. ``current_a`` and ``voltage_v`` had no way into a
-    document at all -- the KiCad netlist format does not carry them -- and three things
-    read them: DRC's current-capacity rule, DRC's creepage rule, and the wire gauge the
-    build guide prints on its cut list. Without a number here all three stay silent, so
-    this dialog is the only place a board can be told it is carrying two amps.
-
-    Both are optional and blank means "not stated", which is a different thing from zero.
-    """
-
-    #: The classes a net can be, in the order they are offered: the value, the label
-    #: this dialog shows with the reason attached, and the accelerated label the sheet's
-    #: context menu uses. ONE TABLE, TWO CONSUMERS -- the menu is a fast path to this same
-    #: field, and a class only one of them offered would be one you could set from a dialog
-    #: and never see, or reach from a menu without ever being told what it costs.
-    NET_CLASSES: tuple[tuple[NetClass, str, str], ...] = (
-        ("signal", "Signal", "&Signal"),
-        ("ground", "Ground — wired first, and wants a rail", "&Ground"),
-        ("power", "Power — wired after ground, same reason", "&Power"),
-    )
-
-    def __init__(
-        self,
-        parent: QWidget | None = None,
-        title: str = "New Net",
-        name: str = "",
-        net_class: NetClass = "signal",
-        current_a: float | None = None,
-        voltage_v: float | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumWidth(380)
-
-        form = QFormLayout()
-        self.name = QLineEdit(name)
-        # Not translated, like every other example of the tool's own vocabulary: a net
-        # called GND is called GND in Turkish too, and a catalogue entry mapping the
-        # string to itself is one the tests correctly refuse.
-        self.name.setPlaceholderText("GND, +5V, OUT…")
-        form.addRow(t("Name"), self.name)
-
-        self.net_class = QComboBox()
-        for value, label, _accelerated in self.NET_CLASSES:
-            self.net_class.addItem(t(label), value)
-        index = self.net_class.findData(net_class)
-        if index >= 0:
-            self.net_class.setCurrentIndex(index)
-        form.addRow(t("Class"), self.net_class)
-        # THE NAME SAYS THE CLASS until somebody says otherwise. A net typed as GND and left
-        # a "signal" is drawn as wires to every part on the sheet instead of as ground
-        # symbols -- the one difference between a readable sheet and a hairball -- and
-        # nobody opening this dialog to type three letters is thinking about the combo
-        # under it. The rule is the KiCad import's (``infer_net_class``), so a net named
-        # here and one imported are classed alike. Only while the class still says what the
-        # previous name implied: a GND somebody deliberately made a signal stays one, and
-        # the first touch of the combo hands the decision over for good.
-        self._class_follows_name = net_class == infer_net_class(name)
-        self.net_class.activated.connect(self._on_class_chosen)
-        self.name.textEdited.connect(self._on_name_edited)
-
-        # Zero is the "not stated" position rather than a value, because a net carrying
-        # no current is exactly what saying nothing means.
-        self.current = QDoubleSpinBox()
-        self.current.setRange(0.0, 100.0)
-        self.current.setDecimals(2)
-        self.current.setSingleStep(0.1)
-        self.current.setSuffix(" A")
-        self.current.setSpecialValueText(t("not stated"))
-        self.current.setValue(current_a if current_a is not None else 0.0)
-        self.current.setToolTip(
-            t(
-                "Wakes DRC's current-capacity rule and picks the wire gauge on the build "
-                "guide's cut list. Nothing else in the application can set it."
-            )
-        )
-        form.addRow(t("Current"), self.current)
-
-        # Voltage needs a real "unset", and unlike current it may legitimately be
-        # negative, so the bottom of the range cannot double as the empty value.
-        self.voltage = QDoubleSpinBox()
-        self.voltage.setRange(-1000.0, 1000.0)
-        self.voltage.setDecimals(1)
-        self.voltage.setSuffix(" V")
-        self.voltage.setValue(voltage_v if voltage_v is not None else 0.0)
-        self.voltage_stated = QCheckBox(t("state a voltage"))
-        self.voltage_stated.setChecked(voltage_v is not None)
-        self.voltage.setEnabled(voltage_v is not None)
-        self.voltage_stated.toggled.connect(self.voltage.setEnabled)
-        self.voltage.setToolTip(
-            t(
-                "Wakes DRC's creepage rule above the mains threshold. A -12 V rail is an "
-                "ordinary value here, which is why it needs its own tick rather than a zero."
-            )
-        )
-        row = QHBoxLayout()
-        row.addWidget(self.voltage_stated)
-        row.addWidget(self.voltage)
-        form.addRow(t("Voltage"), row)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        # A net needs a name, and the command says so in English after the dialog has
-        # closed -- so OK waits for one, as it does in the label and part dialogs.
-        self.ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
-        self.name.textChanged.connect(self._refresh_ok)
-        self._refresh_ok()
-
-        layout = QVBoxLayout()
-        layout.addLayout(form)
-        layout.addWidget(buttons)
-        self.setLayout(layout)
-
-    def _refresh_ok(self) -> None:
-        if self.ok_button is not None:
-            self.ok_button.setEnabled(bool(self.name.text().strip()))
-
-    def _on_class_chosen(self, _index: int) -> None:
-        self._class_follows_name = False
-
-    def _on_name_edited(self, text: str) -> None:
-        if not self._class_follows_name:
-            return
-        index = self.net_class.findData(infer_net_class(text))
-        if index >= 0:
-            self.net_class.setCurrentIndex(index)
-
-    def values(self) -> tuple[str, NetClass, float | None, float | None]:
-        current = self.current.value()
-        return (
-            self.name.text().strip(),
-            cast(NetClass, self.net_class.currentData()),
-            current if current > 0 else None,
-            self.voltage.value() if self.voltage_stated.isChecked() else None,
         )
 
 
@@ -7928,7 +7787,7 @@ class MainWindow(QMainWindow):
         elif isinstance(refs, list) and not refs:
             self._schematic_ref = None
         self._refresh_schematic_actions()
-        self._selection_from: Literal["board", "sheet"] = "sheet"
+        self._selection_from: Literal["board", "sheet", "nets"] = "sheet"
         self._refresh_properties()
 
     def _on_sheet_wire_drawn(
@@ -8022,7 +7881,7 @@ class MainWindow(QMainWindow):
         node = NetNode(component_ref=ref, pin=pin)
         net = next((n for n in document.nets if n.name == name), None)
         if net is None:
-            # Classed by its name, as ``NetDialog`` does: a pin labelled GND is a ground
+            # Classed by its name, as a renamed net is: a pin labelled GND is a ground
             # symbol on the sheet, not the start of a wire to every other GND pin.
             result = self.bus.dispatch(
                 "net.add",
@@ -8563,31 +8422,8 @@ class MainWindow(QMainWindow):
         )
 
     def _rename_net(self, net_id: NetId) -> None:
-        """A net's name, without the dialog that also asks what it carries."""
-        net = next((n for n in self.bus.document.nets if n.id == net_id), None)
-        if net is None:
-            return
-        chosen, ok = QInputDialog.getText(self, t("Rename Net"), t("New name"), text=net.name)
-        chosen = chosen.strip()
-        if not ok or not chosen or chosen == net.name:
-            return
-        # N3 renamed GND becomes a ground net, by NetDialog's rule: only while the class
-        # still says what the old name implied, so a deliberate choice is never undone.
-        follows = net.net_class == infer_net_class(net.name)
-        implied = infer_net_class(chosen)
-        result = self.bus.dispatch(
-            "net.update",
-            UpdateNetPayload(
-                id=net_id,
-                name=chosen,
-                net_class=implied if follows and implied != net.net_class else None,
-            ),
-        )
-        if not result.ok:
-            self.statusBar().showMessage(refused(result), 8000)
-            return
-        self.statusBar().showMessage(did(result.description), 6000)
-
+        """A net's name: its Name in Properties (``_edit_net``)."""
+        self._edit_net(net_id)
     def _set_net_class(self, net_id: NetId, net_class: NetClass) -> None:
         """Signal, ground or power -- which is not a label on this sheet.
 
@@ -9319,6 +9155,8 @@ class MainWindow(QMainWindow):
                 delete=self.act_delete,
                 rotate=self.act_rotate_cw,
                 mirror=self.act_mirror,
+                add_pins=self.act_add_pins,
+                delete_net=self.act_delete_net,
             ),
         )
         # The value the parts placed next are given: typed in Properties while a library
@@ -9344,6 +9182,10 @@ class MainWindow(QMainWindow):
         sheet = self._selection_on_the_sheet()
         if self._selection_from == "sheet" and sheet is not None:
             return sheet
+        if self._selection_from == "nets":
+            nets = self._selected_net_ids()
+            if len(nets) == 1:
+                return Selection("net", nets, "nets")
         return board or sheet or NOTHING
 
     def _board_selection(self) -> Selection | None:
@@ -9775,7 +9617,7 @@ class MainWindow(QMainWindow):
         classes = QMenu(t("Net &Class"), menu)
         classes.setToolTipsVisible(True)
         menu.addMenu(classes)
-        for value, description, label in NetDialog.NET_CLASSES:
+        for value, description, label in NET_CLASSES:
             action = classes.addAction(t(label))
             action.setToolTip(t(description))
             action.setCheckable(True)
@@ -10561,6 +10403,10 @@ class MainWindow(QMainWindow):
 
     def _on_net_selection_changed(self) -> None:
         net_ids = self._selected_net_ids()
+        # Picked in the panel: Properties shows the net. The board's selection lighting
+        # its nets here is done with the panel's signals blocked, so it does not land here.
+        self._selection_from = "nets"
+        self._refresh_properties()
         self.scene.set_highlighted_nets(net_ids)
         self._sync_schematic_highlight()
         self._refresh_net_actions()
@@ -12873,48 +12719,25 @@ class MainWindow(QMainWindow):
     # board where the pins are already in front of you.
 
     def on_new_net(self) -> None:
-        """Name a net, then go straight into clicking its pins.
+        """A net under its next free name, selected, its Name in Properties ready to be
+        typed over, and the board straight into clicking its pins.
 
         Arming the pin mode is not a convenience: naming a net and then hunting for the
-        command that fills it would be two decisions where the user made one, and an
-        empty net is the one state that does nothing for anybody.
+        command that fills it would be two decisions where the user made one. There is no
+        form first -- the name it gets is a fine name until a better one is typed, and a
+        form that could be refused was a form that came back.
         """
-        typed: tuple[str, NetClass, float | None, float | None] | None = None
-        while True:
-            dialog = (
-                NetDialog(self, title=t("New Net"))
-                if typed is None
-                else NetDialog(
-                    self,
-                    title=t("New Net"),
-                    name=typed[0],
-                    net_class=typed[1],
-                    current_a=typed[2],
-                    voltage_v=typed[3],
-                )
-            )
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return
-            typed = dialog.values()
-            name, net_class, current_a, voltage_v = typed
-            result = self.bus.dispatch(
-                "net.add",
-                AddNetPayload(
-                    name=name, net_class=net_class, current_a=current_a, voltage_v=voltage_v
-                ),
-            )
-            if result.ok:
-                break
-            # A dialog and the same form again, filled in: a duplicate name refused into
-            # the status bar threw away everything typed, at the bottom of the window.
-            QMessageBox.warning(
-                self, t("Cannot create this net"), refused(result)
-            )
+        name = next_net_name(self.bus.document)
+        result = self.bus.dispatch("net.add", AddNetPayload(name=name))
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
         net = next((n for n in self.bus.document.nets if n.name == name), None)
         if net is None:  # pragma: no cover - the command just made it
             return
         self._select_net(net.id)
         self.scene.arm_net_pins(net.id)
+        self.inspector.focus_field("name")
 
     # -- the two-click connect tool -------------------------------------------
 
@@ -12960,39 +12783,12 @@ class MainWindow(QMainWindow):
             self._edit_net(net_id)
 
     def _edit_net(self, net_id: NetId) -> None:
-        """The body of the above, on a named net rather than on the dock's selection, so
-        a right-click on the wire itself opens the same dialog."""
-        net = next((n for n in self.bus.document.nets if n.id == net_id), None)
-        if net is None:
+        """A net's name, class and what it carries: the net in Properties, its Name ready to
+        type, for the panel's Edit Net and a right-click on the wire itself alike."""
+        if not any(n.id == net_id for n in self.bus.document.nets):
             return
-        dialog = NetDialog(
-            self,
-            title=t("Edit Net"),
-            name=net.name,
-            net_class=net.net_class,
-            current_a=net.current_a,
-            voltage_v=net.voltage_v,
-        )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        name, net_class, current_a, voltage_v = dialog.values()
-        # current/voltage are passed straight through, so clearing a field in the dialog
-        # clears it on the net. That is what the KEEP sentinel on the payload is for:
-        # this caller always knows both values, so it always states both.
-        result = self.bus.dispatch(
-            "net.update",
-            UpdateNetPayload(
-                id=net.id,
-                name=name,
-                net_class=net_class,
-                current_a=current_a,
-                voltage_v=voltage_v,
-            ),
-        )
-        if not result.ok:
-            QMessageBox.warning(
-                self, t("Cannot change this net"), refused(result)
-            )
+        self._select_net(net_id)
+        self.inspector.focus_field("name")
 
     def on_disconnect_pins(self) -> None:
         """Take the pins selected in the Nets panel off their nets.

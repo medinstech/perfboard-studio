@@ -4855,106 +4855,94 @@ def test_arming_an_unknown_net_collects_nothing() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _StubNetDialog:
-    """Stands in for NetDialog, which is modal and would wait forever headless."""
-
-    values_to_return: tuple = ("GND", "ground", None, None)
-    accepted = True
-    #: How many times exec() accepts before it rejects, or None for "always". A refused
-    #: net brings the form back, so a stub that always accepted would never let go.
-    accept_times: int | None = None
-    opened = 0
-
-    def __init__(self, *args, **kwargs) -> None:
-        type(self).opened += 1
-
-    def exec(self) -> int:
-        from PySide6.QtWidgets import QDialog
-
-        accepted = self.accepted
-        if self.accept_times is not None:
-            accepted = accepted and type(self).opened <= self.accept_times
-        return QDialog.DialogCode.Accepted if accepted else QDialog.DialogCode.Rejected
-
-    def values(self) -> tuple:
-        return self.values_to_return
+def _inspect_net(window, net_id: str):
+    window._select_net(net_id)
+    editor = window.inspector.net_editor
+    assert window.inspector.shown is editor
+    return editor
 
 
-def test_new_net_creates_it_and_goes_straight_into_picking_its_pins(monkeypatch) -> None:
+def test_new_net_creates_it_and_goes_straight_into_picking_its_pins() -> None:
     """Naming a net and then hunting for the command that fills it would be two decisions
-    where the user made one, and an empty net does nothing for anybody."""
-    from perfboard_studio.ui import main as main_module
-
+    where the user made one. No form first: the net under its next free name, shown in
+    Properties to be renamed, and the board picking its pins."""
     window = _window_on(_load_dense())
-    monkeypatch.setattr(main_module, "NetDialog", _StubNetDialog)
-    _StubNetDialog.values_to_return = ("HAND-WIRED", "signal", None, None)
-
+    before = {n.id for n in window.bus.document.nets}
     window.on_new_net()
-
-    net = next(n for n in window.bus.document.nets if n.name == "HAND-WIRED")
+    (net,) = [n for n in window.bus.document.nets if n.id not in before]
     assert window.scene.armed_net_id == net.id
+    assert window.inspector.shown is window.inspector.net_editor
+    assert window.inspector.net_editor.name.text() == net.name
+    _type_into(window.inspector.net_editor.name, "HAND-WIRED")
+    assert next(n for n in window.bus.document.nets if n.id == net.id).name == "HAND-WIRED"
     window.scene.arm_net_pins(None)
     _close(window)
 
 
-def test_a_refused_new_net_leaves_the_document_alone(monkeypatch) -> None:
+def test_a_net_name_already_taken_is_refused_under_the_field(monkeypatch) -> None:
+    """A duplicate name refused into the status bar threw away everything typed, and then a
+    dialog brought the form back; here the name stays typed, with the reason under it."""
     from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
-    existing = window.bus.document.nets[0].name
-    monkeypatch.setattr(main_module, "NetDialog", _StubNetDialog)
-    _StubNetDialog.values_to_return = (existing, "signal", None, None)
-    _StubNetDialog.accept_times = 1
-    _StubNetDialog.opened = 0
-    from PySide6.QtWidgets import QMessageBox
-
-    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+    first, second = window.bus.document.nets[:2]
+    boxes: list = []
+    monkeypatch.setattr(main_module.QMessageBox, "warning", lambda *a, **k: boxes.append(a))
+    editor = _inspect_net(window, first.id)
     before = window.bus.document
-
-    window.on_new_net()
-
+    _type_into(editor.name, second.name)
     assert window.bus.document is before
-    _StubNetDialog.accept_times = None
+    said = editor.name.problem.text()
+    assert second.name in said and "duplicate-net-name" not in said and boxes == []
+    assert editor.name.text() == second.name
     _close(window)
 
 
 def test_a_net_typed_as_gnd_is_a_ground_net_unless_somebody_says_otherwise() -> None:
     """A GND left a "signal" is drawn as wires to every part on the sheet instead of as
-    ground symbols, and nobody typing three letters into this dialog is looking at the
-    combo under them. The name picks the class until the combo is touched."""
-    from perfboard_studio.ui.main import NetDialog
+    ground symbols. The name picks the class while the class still says only what the old
+    name implied; once somebody picks a class, a rename leaves it alone."""
+    window = _window_on(_load_dense())
+    net = next(n for n in window.bus.document.nets if n.net_class == "signal")
+    editor = _inspect_net(window, net.id)
 
-    dialog = NetDialog()
-    dialog.name.textEdited.emit("GND")
-    assert dialog.values()[1] == "ground"
-    dialog.name.textEdited.emit("+5V")
-    assert dialog.values()[1] == "power"
-    dialog.name.textEdited.emit("OUT")
-    assert dialog.values()[1] == "signal"
+    def now():
+        return next(n for n in window.bus.document.nets if n.id == net.id)
 
-    # The first touch of the combo hands the decision over for good.
-    dialog.net_class.setCurrentIndex(dialog.net_class.findData("power"))
-    dialog.net_class.activated.emit(dialog.net_class.currentIndex())
-    dialog.name.textEdited.emit("GND")
-    assert dialog.values()[1] == "power"
+    # Names no other net on dense.perf has: a taken one is refused, which is another test.
+    _type_into(editor.name, "VCC_AUX")
+    assert now().net_class == "power"
+    _type_into(editor.name, "SIG_AUX")
+    assert now().net_class == "signal"
 
-    # A GND somebody deliberately made a signal stays one when it is renamed.
-    deliberate = NetDialog(name="GND", net_class="signal")
-    deliberate.name.textEdited.emit("AGND")
-    assert deliberate.values()[1] == "signal"
+    editor._class_buttons["ground"].click()  # a deliberate choice
+    assert now().net_class == "ground"
+    _type_into(editor.name, "VCC_AUX")
+    assert now().net_class == "ground"
+    _close(window)
 
 
-def test_a_net_cannot_be_made_without_a_name() -> None:
-    """OK used to take an empty name, and the refusal came back in English after the
-    dialog had closed -- then the dialog opened again."""
-    from perfboard_studio.ui.main import NetDialog
+def test_a_nets_current_and_voltage_are_set_in_properties() -> None:
+    """The only place a board can be told what a net carries: blank is "not stated",
+    which is a different thing from zero, and a -12 V rail is an ordinary value."""
+    window = _window_on(_load_dense())
+    net = window.bus.document.nets[0]
+    editor = _inspect_net(window, net.id)
 
-    dialog = NetDialog()
-    assert dialog.ok_button is not None and not dialog.ok_button.isEnabled()
-    dialog.name.setText("  ")
-    assert not dialog.ok_button.isEnabled()
-    dialog.name.setText("VCC")
-    assert dialog.ok_button.isEnabled()
+    def now():
+        return next(n for n in window.bus.document.nets if n.id == net.id)
+
+    editor.current.setValue(2.0)
+    editor.current.editingFinished.emit()
+    assert now().current_a == 2.0
+    editor.voltage.setValue(-12.0)
+    editor.voltage_stated.setChecked(True)
+    assert now().voltage_v == -12.0
+    editor.current.setValue(0.0)
+    editor.current.editingFinished.emit()
+    editor.voltage_stated.setChecked(False)
+    assert (now().current_a, now().voltage_v) == (None, None)
+    _close(window)
 
 
 def test_board_setup_with_nothing_changed_is_the_board_it_was() -> None:
@@ -4995,21 +4983,19 @@ def test_the_box_button_arms_the_shape_it_shows() -> None:
         _close(window)
 
 
-def test_renaming_a_net_to_gnd_makes_it_a_ground_net(monkeypatch) -> None:
+def test_renaming_a_net_to_gnd_makes_it_a_ground_net() -> None:
     """The sheet's auto-named N3, renamed GND from its wire's menu, was a signal called GND:
     drawn as wires, routed last. Renamed by the dialog's rule -- only while the class still
     says what the old name implied."""
-    from PySide6.QtWidgets import QInputDialog
-
     window = _window_on(_load_dense())
     net = next(n for n in window.bus.document.nets if n.net_class == "signal")
-    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("GND2", True))
     window._rename_net(net.id)
+    name = window.inspector.net_editor.name
+    _type_into(name, "GND2")
     renamed = next(n for n in window.bus.document.nets if n.id == net.id)
     assert (renamed.name, renamed.net_class) == ("GND2", "signal")  # GND2 names no class
 
-    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("VCC_AUX", True))
-    window._rename_net(net.id)
+    _type_into(name, "VCC_AUX")
     renamed = next(n for n in window.bus.document.nets if n.id == net.id)
     assert (renamed.name, renamed.net_class) == ("VCC_AUX", "power")
     _close(window)
@@ -9757,12 +9743,12 @@ def test_a_right_click_on_a_wire_offers_the_net() -> None:
 
 
 def test_the_class_submenu_offers_exactly_what_the_net_dialog_does() -> None:
-    """One table, two consumers (``NetDialog.NET_CLASSES``). A class only the dialog knew
+    """One table, two consumers (``inspector.NET_CLASSES``). A class only the editor knew
     about would be one you could set and never see; one only the menu knew about would be
     one you could reach without being told what it costs."""
     from PySide6.QtWidgets import QMenu
 
-    from perfboard_studio.ui.main import NetDialog
+    from perfboard_studio.ui.inspector import NET_CLASSES
 
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
@@ -9773,7 +9759,7 @@ def test_the_class_submenu_offers_exactly_what_the_net_dialog_does() -> None:
 
     submenu = _entry(menu, "Class").menu()
     assert [a.text() for a in submenu.actions()] == [
-        row[2] for row in NetDialog.NET_CLASSES
+        row[2] for row in NET_CLASSES
     ]
     # The one it already is, ticked -- otherwise the menu is a list of three things to do
     # rather than a statement of what this net is.
@@ -9804,17 +9790,19 @@ def test_making_a_net_a_ground_draws_it_as_a_rail() -> None:
     _close(window)
 
 
-def test_renaming_a_net_from_the_sheet_keeps_its_pins(monkeypatch) -> None:
-    from PySide6.QtWidgets import QInputDialog, QMenu
+def test_renaming_a_net_from_the_sheet_keeps_its_pins() -> None:
+    """Rename Net on the wire's menu is the net's Name in Properties."""
+    from PySide6.QtWidgets import QMenu
 
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
     net_id = _wire(window, "OUT", ("R1", "1"))
-    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("VOUT", True))
     menu = QMenu()
     window._add_net_entries(menu, net_id)
 
     _entry(menu, "name Net").trigger()
+    assert window.inspector.shown is window.inspector.net_editor
+    _type_into(window.inspector.net_editor.name, "VOUT")
 
     net = window.bus.document.nets[0]
     assert net.name == "VOUT"
@@ -11342,32 +11330,6 @@ def test_right_clicking_a_conductor_offers_to_delete_it() -> None:
         _close(window)
 
 
-def test_a_refused_new_net_is_said_in_a_dialog_and_the_form_comes_back(monkeypatch) -> None:
-    """A duplicate name refused into the status bar threw away everything typed."""
-    from PySide6.QtWidgets import QMessageBox
-
-    from perfboard_studio.ui import main as main_module
-
-    window = _window_on(_load_dense())
-    existing = window.bus.document.nets[0].name
-    monkeypatch.setattr(main_module, "NetDialog", _StubNetDialog)
-    _StubNetDialog.values_to_return = (existing, "signal", None, None)
-    _StubNetDialog.accept_times = 1
-    _StubNetDialog.opened = 0
-    warned: list[str] = []
-    monkeypatch.setattr(
-        QMessageBox, "warning", staticmethod(lambda parent, title, text, *a, **k: warned.append(text))
-    )
-    before = window.bus.document
-    try:
-        window.on_new_net()
-
-        assert window.bus.document is before
-        assert warned and existing in warned[0] and "duplicate-net-name" not in warned[0]
-        assert _StubNetDialog.opened == 2, "the form is offered again, filled in"
-    finally:
-        _StubNetDialog.accept_times = None
-        _close(window)
 
 
 # ---------------------------------------------------------------------------

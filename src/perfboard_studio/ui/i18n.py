@@ -150,8 +150,6 @@ TURKISH: Mapping[str, str] = {
     "&Edit Net…": "Neti &Düzenle…",
     "&Disconnect Selected Pins": "Seçili Pinleri &Ayır",
     "De&lete Net": "Neti Si&l",
-    "New Net": "Yeni Net",
-    "Edit Net": "Neti Düzenle",
     "Delete net": "Neti sil",
     "Name": "Ad",
     "Class": "Sınıf",
@@ -1080,8 +1078,6 @@ TURKISH: Mapping[str, str] = {
     "A new name. The pins on it, and any copper laid for it, stay.": (
         "Yeni bir ad. Üzerindeki pinler ve onun için döşenmiş bakır yerinde kalır."
     ),
-    "Rename Net": "Neti Yeniden Adlandır",
-    "New name": "Yeni ad",
     "Net &Class": "Net &Sınıfı",
     "&Signal": "&Sinyal",
     "&Ground": "&Toprak",
@@ -1749,8 +1745,6 @@ TURKISH: Mapping[str, str] = {
     "Reloaded {name}: it changed on disk, and the undo history went with it": (
         "{name} yeniden yüklendi: diskte değişmişti, geri alma geçmişi de onunla gitti"
     ),
-    "Cannot create this net": "Bu net oluşturulamıyor",
-    "Cannot change this net": "Bu net değiştirilemiyor",
     # -- the board's own prose: measuring, picking pins, joining them -----------------
     "{hole} — the same hole.": "{hole} — aynı delik.",
     "holes": "delik",

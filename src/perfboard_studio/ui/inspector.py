@@ -57,10 +57,12 @@ from perfboard_studio.commands import (
     SetHeightLimitPayload,
     UpdateComponentPayload,
     UpdateComponentsPayload,
+    UpdateNetPayload,
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import format_hole, parse_hole
-from perfboard_studio.model import ComponentInstance, PerfDocument, Rotation
+from perfboard_studio.model import ComponentInstance, Net, NetClass, PerfDocument, Rotation
+from perfboard_studio.parsers.kicad import infer_net_class
 
 from . import theme
 from .engine_text import say
@@ -94,6 +96,19 @@ class InspectorActions:
     delete: QAction
     rotate: QAction
     mirror: QAction
+    add_pins: QAction
+    delete_net: QAction
+
+
+#: A net's classes: the value, the label a form shows with the reason attached, and the
+#: accelerated one a menu shows. ONE table for the net editor and the sheet's Net Class
+#: menu: a class only one of them knew would be one you could set and never see, or reach
+#: without being told what it costs.
+NET_CLASSES: tuple[tuple[NetClass, str, str], ...] = (
+    ("signal", "Signal", "&Signal"),
+    ("ground", "Ground — wired first, and wants a rail", "&Ground"),
+    ("power", "Power — wired after ground, same reason", "&Power"),
+)
 
 
 # -- fields ---------------------------------------------------------------------------------
@@ -803,6 +818,179 @@ class _PlacingEditor(QWidget):
         self.title.setText(theme.heading(name))
 
 
+# -- a net ---------------------------------------------------------------------------------------
+
+
+class _NetEditor(QWidget):
+    """One net: its name, its class, and what it carries -- the only place a board can be
+    told it is carrying two amps, which wakes DRC's current-capacity rule and picks the
+    wire gauge on the build guide's cut list. Replaces NetDialog and Rename Net."""
+
+    def __init__(self, inspector: Inspector, actions: InspectorActions) -> None:
+        super().__init__()
+        self._inspector = inspector
+        self._net: Net | None = None
+        self._loading = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+
+        form = _form()
+        self.name = CommitLine(self._commit_name)
+        self.name.setPlaceholderText("GND, +5V, OUT…")
+        _add_field(form, t("Name"), self.name, self.name.problem)
+
+        classes = QWidget()
+        class_row = QHBoxLayout(classes)
+        class_row.setContentsMargins(0, 0, 0, 0)
+        class_row.setSpacing(2)
+        self.net_class = QButtonGroup(self)
+        self.net_class.setExclusive(True)
+        self._class_buttons: dict[NetClass, QToolButton] = {}
+        for value, description, label in NET_CLASSES:
+            button = QToolButton()
+            button.setText(t(label).replace("&", ""))
+            button.setToolTip(t(description))
+            button.setCheckable(True)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda _checked=False, v=value: self._commit_class(v))
+            self.net_class.addButton(button)
+            self._class_buttons[value] = button
+            class_row.addWidget(button)
+        self.class_problem = _Problem()
+        _add_field(form, t("Class"), classes, self.class_problem)
+
+        # Blank is "not stated", which is a different thing from zero.
+        self.current = QDoubleSpinBox()
+        self.current.setRange(0.0, 100.0)
+        self.current.setDecimals(2)
+        self.current.setSingleStep(0.1)
+        self.current.setSuffix(" A")
+        self.current.setSpecialValueText(t("not stated"))
+        self.current.setToolTip(
+            t(
+                "Wakes DRC's current-capacity rule and picks the wire gauge on the build "
+                "guide's cut list. Nothing else in the application can set it."
+            )
+        )
+        self.current.editingFinished.connect(self._commit_current)
+        self.current_problem = _Problem()
+        _add_field(form, t("Current"), self.current, self.current_problem)
+
+        # A -12 V rail is an ordinary value, which is why a voltage needs its own tick.
+        voltage = QWidget()
+        voltage_row = QHBoxLayout(voltage)
+        voltage_row.setContentsMargins(0, 0, 0, 0)
+        self.voltage_stated = QCheckBox(t("state a voltage"))
+        self.voltage = QDoubleSpinBox()
+        self.voltage.setRange(-1000.0, 1000.0)
+        self.voltage.setDecimals(1)
+        self.voltage.setSuffix(" V")
+        self.voltage.setToolTip(
+            t(
+                "Wakes DRC's creepage rule above the mains threshold. A -12 V rail is an "
+                "ordinary value here, which is why it needs its own tick rather than a zero."
+            )
+        )
+        self.voltage_stated.toggled.connect(self._commit_voltage)
+        self.voltage.editingFinished.connect(self._commit_voltage)
+        voltage_row.addWidget(self.voltage_stated)
+        voltage_row.addWidget(self.voltage, 1)
+        self.voltage_problem = _Problem()
+        _add_field(form, t("Voltage"), voltage, self.voltage_problem)
+
+        self.pins = _fact()
+        form.addRow(t("Pins"), self.pins)
+        layout.addLayout(form)
+
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addWidget(_action_button(actions.add_pins))
+        buttons.addStretch(1)
+        buttons.addWidget(_action_button(actions.delete_net))
+        layout.addLayout(buttons)
+
+    def load(self, document: PerfDocument, net: Net) -> None:
+        another = self._net is None or self._net.id != net.id
+        self._net = net
+        self._loading = True
+        try:
+            self.title.setText(theme.heading(net.name))
+            self.name.show_value(net.name)
+            self._class_buttons[net.net_class].setChecked(True)
+            if not self.current.hasFocus():
+                self.current.setValue(net.current_a if net.current_a is not None else 0.0)
+            self.voltage_stated.setChecked(net.voltage_v is not None)
+            self.voltage.setEnabled(net.voltage_v is not None)
+            if net.voltage_v is not None and not self.voltage.hasFocus():
+                self.voltage.setValue(net.voltage_v)
+            self.pins.setText(
+                ", ".join(f"{node.component_ref}.{node.pin}" for node in net.nodes) or "—"
+            )
+            if another:
+                for problem in (self.class_problem, self.current_problem,
+                                self.voltage_problem):
+                    problem.show_problem("")
+        finally:
+            self._loading = False
+
+    def _update(self, payload: UpdateNetPayload) -> str | None:
+        return self._inspector.dispatch("net.update", payload)
+
+    def _commit_name(self, typed: str) -> str | None:
+        """The name, and the class with it while the class still says only what the old
+        name implied: N3 renamed GND becomes a ground net, and a GND somebody deliberately
+        made a signal stays one when it is renamed AGND."""
+        net = self._net
+        if net is None:
+            return None
+        follows = net.net_class == infer_net_class(net.name)
+        implied = infer_net_class(typed)
+        return self._update(
+            UpdateNetPayload(
+                id=net.id,
+                name=typed,
+                net_class=implied if follows and implied != net.net_class else None,
+            )
+        )
+
+    def _commit_class(self, value: NetClass) -> None:
+        net = self._net
+        if self._loading or net is None or value == net.net_class:
+            return
+        self.class_problem.show_problem(
+            self._update(UpdateNetPayload(id=net.id, net_class=value)) or ""
+        )
+
+    def _commit_current(self) -> None:
+        net = self._net
+        if self._loading or net is None:
+            return
+        value = self.current.value()
+        wanted = value if value > 0 else None
+        if wanted == net.current_a:
+            return
+        self.current_problem.show_problem(
+            self._update(UpdateNetPayload(id=net.id, current_a=wanted)) or ""
+        )
+
+    def _commit_voltage(self, *_args: object) -> None:
+        net = self._net
+        if self._loading or net is None:
+            return
+        stated = self.voltage_stated.isChecked()
+        self.voltage.setEnabled(stated)
+        wanted = self.voltage.value() if stated else None
+        if wanted == net.voltage_v:
+            return
+        self.voltage_problem.show_problem(
+            self._update(UpdateNetPayload(id=net.id, voltage_v=wanted)) or ""
+        )
+
+
 # -- everything else, said in one line until it has an editor ----------------------------
 
 
@@ -847,6 +1035,7 @@ class Inspector(QWidget):
         self.part_editor = _PartEditor(self, actions)
         self.parts_editor = _PartsEditor(self, actions)
         self.placing_editor = _PlacingEditor(self)
+        self.net_editor = _NetEditor(self, actions)
         self.summary = _Summary()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -855,7 +1044,7 @@ class Inspector(QWidget):
         # page: the board's three fields would sit over the part editor's empty height.
         self._pages: tuple[QWidget, ...] = (
             self.board_editor, self.part_editor, self.parts_editor, self.placing_editor,
-            self.summary,
+            self.net_editor, self.summary,
         )
         for page in self._pages:
             layout.addWidget(page)
@@ -896,6 +1085,11 @@ class Inspector(QWidget):
             if len(components) > 1:
                 self.parts_editor.load(document, components)
                 page = self.parts_editor
+        elif selection.kind == "net" and selection.ids:
+            net = next((n for n in document.nets if n.id == selection.ids[0]), None)
+            if net is not None:
+                self.net_editor.load(document, net)
+                page = self.net_editor
         elif selection.kind == "placing" and selection.ids:
             self.placing_editor.load(selection.ids[0])
             page = self.placing_editor
@@ -917,6 +1111,8 @@ class Inspector(QWidget):
             fields = {"value": self.parts_editor.value}
         elif self.shown is self.placing_editor:
             fields = {"value": self.placing_editor.value}
+        elif self.shown is self.net_editor:
+            fields = {"name": self.net_editor.name}
         elif self.shown is self.board_editor:
             fields = {"name": self.board_editor.name}
         field = fields.get(name)

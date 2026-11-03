@@ -66,7 +66,10 @@ def loop_built_labels() -> set[str]:
     """
     from perfboard_studio.ui.boardcolors import SCHEMES
 
-    source = (UI_DIR / "main.py").read_text(encoding="utf-8")
+    # The window, and the inspector, whose net classes are the menu's too.
+    source = "\n".join(
+        (UI_DIR / name).read_text(encoding="utf-8") for name in ("main.py", "inspector.py")
+    )
     tools = set(re.findall(r'\(\s*"[a-z-]+",\s*"((?:[^"\\]|\\.)+)",\s*"(?:[^"\\]|\\.)*",\s*$',
                            source, re.MULTILINE))
     # The (value, label) tables the dialogs build their combo boxes from -- pad shape,
@@ -84,7 +87,7 @@ def loop_built_labels() -> set[str]:
                               source, re.MULTILINE)
     }
     # Three-element rows of the same shape: the value, the label a dialog shows with the
-    # reason attached, and the accelerated one a menu shows. NetDialog.NET_CLASSES is the
+    # reason attached, and the accelerated one a menu shows. inspector.NET_CLASSES is the
     # only one, and it is one table rather than two on purpose -- see its own comment.
     pairs |= {
         ast.literal_eval(f'"{raw}"')

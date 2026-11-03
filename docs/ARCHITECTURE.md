@@ -1533,6 +1533,16 @@ the part about to be placed, and the value each part placed from it gets is type
 (`placing_value`), where every other value is: it was a box of its own under the library's
 filter, and it read as a second search field.
 
+A net picked in the Nets panel is the third place a selection is made (`_selection_from ==
+"nets"`; the board lighting its nets there does it with the panel's signals blocked, so it
+is not one). The net is its name, its class as three segments, its current and its
+voltage -- the only place a board is told what a net carries -- and its pins, with Add Pins
+and Delete Net. A rename takes the class with it only while the class says just what the
+old name implied, as the dialog's rule was. `NET_CLASSES` is one table for this editor and
+the sheet's Net Class menu. New Net has no form: the net is made under its next free name,
+selected, its Name ready to type over and the board picking its pins -- a form that could
+be refused was a form that came back. Edit Net and Rename Net are the net's Name.
+
 **The panel is told the selection once per command.** The board empties its selection
 while it rebuilds and puts it back after, and the signals between would show the board's
 editor for an instant and take the keyboard out of the field Tab had just moved to. So
