@@ -67,11 +67,13 @@ from perfboard_studio.footprints import (
 )
 from perfboard_studio.geometry import (
     FLYING_LEAD_MARKER_MM,
+    RectMm,
     all_pin_holes,
     board_note_centre_mm,
     board_size_mm,
     board_text_placement,
     edge_finger_rect,
+    finger_corner_radius_mm,
     flying_lead_routes,
     hole_key,
     holeless_positions,
@@ -99,6 +101,7 @@ from perfboard_studio.model import (
     Conductor,
     Footprint,
     HoleCoord,
+    Mm,
     NetClass,
     PerfDocument,
     Point2,
@@ -1426,8 +1429,59 @@ def build_mounting_holes(doc: PerfDocument) -> list[vtk.vtkActor]:
     return actors
 
 
+#: Segments in each rounded corner of a finger: enough that a stadium's end reads round at
+#: the closest zoom, few enough that a 9 x 15 board's hundred fingers stay one cheap actor.
+FINGER_CORNER_STEPS = 6
+#: A finger's copper, as thin as the plate it replaced.
+FINGER_THICKNESS_MM = 0.05
+
+
+def finger_outline(rect: RectMm, radius: Mm) -> list[tuple[float, float]]:
+    """One finger's copper as a closed ring in world x/y, counter-clockwise from above.
+
+    ``rect`` is ``geometry.edge_finger_rect``'s, in board millimetres with y growing DOWN,
+    so its y is negated on the way in -- the flip ``_xy`` applies to every hole -- and its
+    corners are rounded to ``radius``, which is ``geometry.finger_corner_radius_mm``: the
+    one answer view2d draws a rounded, stadium or square finger from. The fingers were
+    cubes here, and the green board's stadium strip came out as grey bricks beside the
+    round-ended pads the 2D view had shown a moment before.
+    """
+    cx = rect.x + rect.width / 2
+    cy = -(rect.y + rect.height / 2)
+    half_w, half_h = rect.width / 2, rect.height / 2
+    r = max(0.0, min(radius, half_w, half_h))
+    ring: list[tuple[float, float]] = []
+    for ox, oy, start in (
+        (half_w - r, half_h - r, 0.0),
+        (-half_w + r, half_h - r, 90.0),
+        (-half_w + r, -half_h + r, 180.0),
+        (half_w - r, -half_h + r, 270.0),
+    ):
+        for step in range(FINGER_CORNER_STEPS + 1):
+            angle = math.radians(start + 90.0 * step / FINGER_CORNER_STEPS)
+            point = (cx + ox + r * math.cos(angle), cy + oy + r * math.sin(angle))
+            # A stadium's two arcs meet in one point where its straight side has no length.
+            if not ring or math.dist(ring[-1], point) > 1e-9:
+                ring.append(point)
+    if math.dist(ring[0], ring[-1]) <= 1e-9:
+        ring.pop()
+    return ring
+
+
+def _finger_plate(ring: list[tuple[float, float]], z: float) -> vtk.vtkPolyData:
+    """``ring`` as a thin plate centred on ``z``: its two faces and its edge."""
+    top, bottom = z + FINGER_THICKNESS_MM / 2, z - FINGER_THICKNESS_MM / 2
+    mesh = _Mesh()
+    mesh.polygon([(x, y, top) for x, y in ring])
+    mesh.polygon([(x, y, bottom) for x, y in reversed(ring)])
+    for (ax, ay), (bx, by) in pairwise([*ring, ring[0]]):
+        mesh.polygon([(ax, ay, bottom), (bx, by, bottom), (bx, by, top), (ax, ay, top)])
+    return mesh.data()
+
+
 def build_edge_connectors(doc: PerfDocument) -> list[vtk.vtkActor]:
-    """Connector fingers, as thin copper plates lying on the board's faces."""
+    """Connector fingers, as thin copper plates lying on the board's faces, each the shape
+    view2d draws it (:func:`finger_outline`)."""
     board = doc.board
     actors: list[vtk.vtkActor] = []
     for connector in doc.edge_connectors:
@@ -1442,19 +1496,8 @@ def build_edge_connectors(doc: PerfDocument) -> list[vtk.vtkActor]:
             # geometry.surviving_finger_holes, which view2d asks the same question of.
             for hole in surviving_finger_holes(doc, connector):
                 rect = edge_finger_rect(connector, hole, board)
-                plate = vtk.vtkCubeSource()
-                plate.SetXLength(rect.width)
-                plate.SetYLength(rect.height)
-                plate.SetZLength(0.05)
-                # Board y runs downward while 3D y runs up, so the rect's y interval is
-                # negated -- the same flip `_xy` applies to every hole in this file.
-                plate.SetCenter(
-                    rect.x + rect.width / 2,
-                    -(rect.y + rect.height / 2),
-                    pad_z(board, face),
-                )
-                plate.Update()
-                append.AddInputData(plate.GetOutput())
+                ring = finger_outline(rect, finger_corner_radius_mm(connector, rect))
+                append.AddInputData(_finger_plate(ring, pad_z(board, face)))
             if append.GetNumberOfInputConnections(0) == 0:
                 continue
             append.Update()

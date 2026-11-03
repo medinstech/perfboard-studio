@@ -432,6 +432,10 @@ closed without a bump.
   finding's menu has Go to It and Auto-wire Its Connections, and the Wiring step offers
   Auto-wire when pressed.
 
+- **Edge pads in 3D are the shape they are in 2D.** A green board's stadium strip, a rounded
+  one or the phenolic board's squares, where the 3D view drew every edge pad as a grey
+  rectangle.
+
 - **A stock board's corner holes are where the real board has them.** In the corners of the
   border, outside the grid, with every pad kept -- they had taken the four corner pads and
   worn a dashed orange ring that read as copper. The ring, which is where the screw head
