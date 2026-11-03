@@ -1506,6 +1506,30 @@ the sheet as one remembered reference -- and C1 picked on the sheet showed whate
 left selected on the board behind it. The window hands over the document after every
 command and the selection on every change.
 
+**The inspector is the content, one editor per kind, and it has no OK** (`ui/inspector.py`).
+Every field is the fact itself: a `CommitLine` commits ONE command on Enter or on being
+left, and only if it changed; Esc puts the document's value back; Undo is the cancel. A
+refusal is said under its field in the bus's words, never in a message box, and the field
+keeps what was typed -- a refresh does not overwrite a field holding a refused edit. It
+holds no state: every editor is re-read from the document the panel hands over after each
+command. It never holds the bus, which the window replaces when a file is opened, only a
+`dispatch` through whichever bus is current, the footprint lookup, and `InspectorHooks`
+for what is still a dialog (another package; the board's setup). Its buttons are the
+window's own actions (`InspectorActions`). Nothing selected is the board: its name, what
+it is, Change… for Board Setup, the height limit and the body clearance. One placed part
+is its reference, value, package, pin 1's hole, rotation, mirroring, lock, pin names and
+note -- a value that names a catalog part brings that part's pinout in the same command,
+as Part Properties did (`ui/partfields.py`, shared with the sheet's part dialog). It
+retired Part Properties and Rename Board's dialog: F2 puts the keyboard in Reference, a
+double-click on a part in Value, Rename Board in the board's Name.
+
+**The panel is told the selection once per command.** The board empties its selection
+while it rebuilds and puts it back after, and the signals between would show the board's
+editor for an instant and take the keyboard out of the field Tab had just moved to. So
+`on_bus_changed` redraws with `_bus_changing` set, `_refresh_properties` stands down while
+it is, and the panel is told the document and then the selection once the views agree
+(`test_tabbing_through_properties_keeps_the_part_in_the_panel`).
+
 **What the selection can do stands over the selection** (`selection_bar`): Rotate, Mirror,
 Lock, Auto-wire the Selection, Delete, and the dots for `board_menu`, the right-click menu
 built from the same actions. It is a `FloatingBar` with no corner that `track`s a source --

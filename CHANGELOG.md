@@ -134,6 +134,14 @@ closed without a bump.
   playback, with pictures of their own. The guide's row of push buttons is a cluster in its
   corner -- Next Step to Do, Clear Progress, and Export, which is File's Export Build Guide.
   A tool button holding several tools says so on hover: "(hold for more)".
+- **Properties edit the board and a part in place, with no OK.** With nothing selected
+  the panel is the board: its name, what it is (Change… opens Board Setup), the height
+  limit and the body clearance. With one part selected it is the part: reference, value,
+  package (Change…), pin 1's hole, rotation, mirrored, locked, pin names and note. Each
+  field is one undo step when Enter is pressed or the field is left, Esc puts it back, and
+  a refusal is said under the field instead of in a message box. Part Properties and the
+  Rename Board dialog are gone: F2 puts the keyboard in the part's Reference, a
+  double-click on a part in its Value, and Board ▸ Rename Board in the board's Name.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

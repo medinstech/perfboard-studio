@@ -785,7 +785,6 @@ TURKISH: Mapping[str, str] = {
     "mirrored": "aynalanmış",
     # -- a part's own properties ----------------------------------------------
     "Proper&ties…": "Ö&zellikler…",
-    "Part Properties": "Parça Özellikleri",
     "Note": "Not",
     "Why this part is here, for whoever builds or mends it later": (
         "Bu parça neden burada: sonra onu kuracak ya da onaracak kişi için"
@@ -800,6 +799,13 @@ TURKISH: Mapping[str, str] = {
     "Position": "Konum",
     "State": "Durum",
     "Pin 1 at": "1. pin",
+    "Change…": "Değiştir…",
+    "Rotation": "Dönüş",
+    "Mirrored": "Aynalanmış",
+    "{hole} is not a hole on this board.": "{hole} bu kartta bir delik değil.",
+    "The hole pin 1 is in. Type another to move the part there.": (
+        "1. pinin girdiği delik. Parçayı oraya taşımak için başka bir delik yazın."
+    ),
     "Height": "Yükseklik",
     "locked — Rearrange leaves it where it is": (
         "kilitli — Yeniden Diz onu yerinde bırakır"
@@ -811,7 +817,6 @@ TURKISH: Mapping[str, str] = {
     "Cannot change this part": "Bu parça değiştirilemedi",
     # -- changing a placed part's package ---------------------------------------------
     "C&hange Part…": "&Farklı Parça Seç…",
-    "Change Part…": "Parçayı Değiştir…",
     "Change {ref}": "{ref} parçasını değiştir",
     "Another package or another part from the library, on the same holes and the same "
     "nets.": "Kütüphaneden başka bir gövde ya da parça; aynı deliklerde, aynı netlerde.",
@@ -1812,8 +1817,6 @@ TURKISH: Mapping[str, str] = {
         "Kartın başlığı: montaj rehberine, şemaya ve proje klasörüne basılır. Kart ilk "
         "kaydedildiğinde dosyasının adını alır."
     ),
-    "Rename Board": "Kartı Yeniden Adlandır",
-    "Board name:": "Kartın adı:",
     "Screw terminal, wires from above (vertical)": "Klemens, tel yukarıdan (dik)",
     # -- parts off the board -------------------------------------------------
     "Wires to a part off the board (panel pot, jack, switch)": (

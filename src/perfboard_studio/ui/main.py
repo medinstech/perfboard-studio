@@ -33,7 +33,7 @@ import os
 import re
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from functools import partial
 from html import escape
 from pathlib import Path
@@ -101,8 +101,6 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QStackedWidget,
     QStatusBar,
-    QTableWidget,
-    QTableWidgetItem,
     QTabWidget,
     QToolBar,
     QToolButton,
@@ -300,7 +298,6 @@ from perfboard_studio.model import (
     SheetNoteKind,
     SheetWire,
     SymbolPlacement,
-    normalized_pin_names,
 )
 from perfboard_studio.parsers.kicad import infer_net_class, parse_kicad_netlist
 from perfboard_studio.parsers.kicad_parts import (  # noqa: F401 - guess_footprint_id re-exported
@@ -360,7 +357,10 @@ from .header import HeaderBar
 from .home import Home, HomeExample
 from .i18n import counted, set_language, t
 from .i18n import language as current_language
+from .inspector import Inspector, InspectorActions, InspectorHooks
 from .palette import CommandPalette, Entry
+from .partfields import PinoutEditor
+from .partfields import note_editor as _note_editor
 from .partlist import PartListPanel
 from .partnames import footprint_label
 from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
@@ -2282,177 +2282,6 @@ class NetDialog(QDialog):
         )
 
 
-def pinout_for_retyped_value(
-    footprint_id: str | None, before: str, after: str, names: Mapping[str, str]
-) -> CatalogPart | None:
-    """The catalog part whose pinout a value typed in place of ``before`` brings, or None.
-
-    A value that names a catalog part in the package the part already has brings that part's
-    pin names when there are none yet -- "NE555" typed onto a DIP-8 -- and ALSO when the
-    names there are exactly the catalog's pinout for the value being typed over. Those names
-    were never anybody's declaration: they came with the old value, and they are wrong for
-    the new one. BC547 to 2N3904 on one TO-92 was the case that found it: C-B-E stayed under
-    a part that is E-B-C, and nothing downstream could tell, because a pinout is the one fact
-    about a transistor that only the part knows.
-
-    Names that differ from the old value's pinout were typed by somebody, and a value is not
-    allowed to overwrite a declaration (``PinoutEditor.follow_value`` says so instead).
-    """
-    part = catalog_part_for(after)
-    if part is None or footprint_id is None or part.footprint_id != footprint_id:
-        return None
-    if not names:
-        return part
-    previous = catalog_part_for(before)
-    if previous is None or previous.footprint_id != footprint_id or previous.id == part.id:
-        return None
-    return part if dict(names) == dict(previous.pin_names) else None
-
-
-class PinoutEditor(QWidget):
-    """What a part is and what it calls its leads -- the two things its package cannot say.
-
-    One widget in two dialogs (a placed part's properties, and adding or editing a part on
-    the sheet), because they are the same question about the same part and answering it
-    two ways would be two chances to answer it differently.
-
-    The table has a row per footprint pin, the number fixed and the name editable. A pin
-    the registry already names (an LED's A and K) shows that name greyed as a hint: typing
-    over it declares a name, leaving it declares nothing. Only what was typed is stored.
-    """
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.symbol = QComboBox()
-        # In the order a person looks for them. ``None`` is "whatever the package draws",
-        # which every part is until somebody says otherwise. Each label is its own t()
-        # call rather than a table read through one, because the catalogue test finds a
-        # translatable string by seeing it inside t() in the source.
-        choices: tuple[tuple[PartSymbol | None, str], ...] = (
-            (None, t("From the package")),
-            ("npn", t("NPN transistor (names B, C, E)")),
-            ("pnp", t("PNP transistor (names B, C, E)")),
-            ("nmos", t("N-channel MOSFET (names G, D, S)")),
-            ("pmos", t("P-channel MOSFET (names G, D, S)")),
-            ("zener", t("Zener diode")),
-            ("fuse", t("Fuse or PTC")),
-            ("potentiometer", t("Potentiometer (three leads, the middle one the wiper)")),
-            ("led", t("LED (names A, K)")),
-        )
-        for value, label in choices:
-            self.symbol.addItem(label, value)
-        self.symbol.setToolTip(
-            t(
-                "What this part is, when its package cannot say. A transistor symbol is "
-                "drawn only once its leads are named below, because which leg is the gate "
-                "is a fact about the part, not the package."
-            )
-        )
-        self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels([t("Pin"), t("Name")])
-        self.table.verticalHeader().setVisible(False)
-        # As wide as its heading: at Qt's default width the Turkish "Pin no" was cut to "Pin nc".
-        self.table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.table.setToolTip(
-            t(
-                "What the datasheet calls each lead. Printed on the schematic and in the "
-                "soldering guide, so a module's pin reads as GPIO21 rather than 21."
-            )
-        )
-        # What a value typed in the dialog did to the names below, said where the names are:
-        # a pinout that changes under somebody's eyes without a word is one they may not
-        # notice changed (``pinout_for_retyped_value``).
-        self.note = QLabel()
-        self.note.setWordWrap(True)
-        theme.tone(self.note, "warning")
-        form = QFormLayout()
-        form.setContentsMargins(0, 0, 0, 0)
-        form.addRow(t("Symbol"), self.symbol)
-        form.addRow(t("Pin names"), self.table)
-        form.addRow("", self.note)
-        form.setRowVisible(self.note, False)
-        self._form = form
-        self.setLayout(form)
-        self._hints: dict[str, str] = {}
-
-    def set_part(self, footprint: Footprint | None, names: PinNames, symbol: PartSymbol | None) -> None:
-        """Show one part's declaration against the pins its footprint has."""
-        index = self.symbol.findData(symbol)
-        self.symbol.setCurrentIndex(max(index, 0))
-        self.set_footprint(footprint, dict(names))
-
-    def say(self, text: str) -> None:
-        """One line under the names about where they came from, or nothing."""
-        self.note.setText(text)
-        self._form.setRowVisible(self.note, bool(text))
-
-    def follow_value(self, footprint: Footprint | None, before: str, after: str) -> None:
-        """Bring the catalog's pinout for a value typed over ``before``, where that is safe.
-
-        See ``pinout_for_retyped_value`` for when it is. When it is not because somebody
-        typed the names, and the catalog pins the new value differently, the names stay and
-        the difference is said out loud: a BC547's C-B-E kept under "2N3904", which is E-B-C,
-        is a transistor soldered in backwards.
-        """
-        footprint_id = footprint.id if footprint is not None else None
-        names = self.names_dict()
-        part = pinout_for_retyped_value(footprint_id, before, after, names)
-        if part is not None and names != dict(part.pin_names):
-            self.set_part(footprint, part.pin_names, part.symbol)
-            self.say(t("Pin names from the catalog's {part}.").format(part=part.name))
-            return
-        named = catalog_part_for(after)
-        if (
-            named is not None
-            and named.footprint_id == footprint_id
-            and names
-            and names != dict(named.pin_names)
-        ):
-            self.say(
-                t("These names were typed here and are kept. The catalog's {part} is {pins}.")
-                .format(part=named.name, pins=" ".join(f"{n}={name}" for n, name in named.pin_names))
-            )
-        else:
-            self.say("")
-
-    def set_footprint(self, footprint: Footprint | None, names: dict[str, str] | None = None) -> None:
-        """Rebuild the rows for a (possibly different) footprint, keeping typed names.
-
-        A name typed for pin 3 survives the footprint changing to one that still has a pin
-        3; one for a pin the new footprint lacks is dropped rather than kept invisibly.
-        """
-        kept = self.names_dict() if names is None else names
-        self._hints = {}
-        pins = footprint.pins if footprint is not None else ()
-        self.table.setRowCount(len(pins))
-        for row, pin in enumerate(pins):
-            number = QTableWidgetItem(pin.number)
-            number.setFlags(number.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 0, number)
-            name = QTableWidgetItem(kept.get(pin.number, ""))
-            if pin.name and pin.number not in kept:
-                name.setToolTip(t("The package calls this pin {name}.").format(name=pin.name))
-                self._hints[pin.number] = pin.name
-            self.table.setItem(row, 1, name)
-        self.table.resizeColumnToContents(0)
-
-    def names_dict(self) -> dict[str, str]:
-        found: dict[str, str] = {}
-        for row in range(self.table.rowCount()):
-            number = self.table.item(row, 0)
-            name = self.table.item(row, 1)
-            if number is not None and name is not None and name.text().strip():
-                found[number.text()] = name.text().strip()
-        return found
-
-    def values(self) -> tuple[PinNames, PartSymbol | None]:
-        """``(pin names, symbol)`` as the commands take them."""
-        return normalized_pin_names(self.names_dict()), self.symbol.currentData()
-
-
 class BoardLabelDialog(QDialog):
     """What a label on the board says, how big, which way and on which face.
 
@@ -2518,176 +2347,6 @@ class BoardLabelDialog(QDialog):
             cast(Rotation, self.rotation_box.currentData()),
             cast(BoardSide, self.side_box.currentData()),
         )
-
-
-def _note_editor(text: str) -> QPlainTextEdit:
-    """A part's note: the builder's own words, a few lines tall so the dialog does not grow
-    with it. Tab leaves it rather than typing a tab, as every other field in the dialog."""
-    editor = QPlainTextEdit(text)
-    editor.setPlaceholderText(t("Why this part is here, for whoever builds or mends it later"))
-    editor.setToolTip(
-        t(
-            "Saved with the board, shown when the pointer rests on the part, and printed at "
-            "its step in the build guide."
-        )
-    )
-    editor.setTabChangesFocus(True)
-    editor.setMaximumHeight(editor.fontMetrics().lineSpacing() * 3 + 12)
-    return editor
-
-
-class ComponentDialog(QDialog):
-    """What a placed part is called and what it IS.
-
-    The value was the one field on the document no human could reach. Every part the
-    window placed was given ``value=""`` and nothing could change it afterwards, while
-    an agent on the MCP server has been able to pass one to ``place_component`` since
-    that server existed -- so the tool's own build guide printed "Resistor x 4" where it
-    meant "10k x 4", because ``guide._bom`` groups on exactly this field.
-
-    ONLY what ``component.update`` carries: reference, value, lock, and what the part says
-    about itself (``PinoutEditor``). Rotation is a
-    command of its own and putting it here would turn one press of OK into two entries
-    on the undo stack for what the user experienced as one edit -- so it stays on R and
-    Shift+R, which is where it can be seen happening anyway.
-
-    Everything else on the part is shown and not editable here: an anchor is chosen by
-    dragging, and a different package by Change Part (``CHANGE_PART``), which is a dialog
-    of its own because it is the sheet's Edit a Part -- the whole library to choose from.
-    """
-
-    #: What ``exec`` returns when Change Part was pressed: the window carries what was
-    #: typed here into that dialog, so nothing typed is lost on the way.
-    CHANGE_PART = 2
-
-    def __init__(
-        self,
-        component: ComponentInstance,
-        footprint: Footprint | None,
-        parent: QWidget | None = None,
-        board: Board | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(t("Part Properties"))
-        self.setMinimumWidth(380)
-
-        form = QFormLayout()
-        self.ref = QLineEdit(component.ref)
-        self.ref.setPlaceholderText("R1, C3, U2…")
-        self.ref.setToolTip(
-            t(
-                "The designator the schematic uses. Every net this part is wired into "
-                "follows the new name, so a rename is safe at any point."
-            )
-        )
-        form.addRow(t("Reference"), self.ref)
-
-        self.value = QLineEdit(component.value)
-        self.value.setPlaceholderText("10k, 100nF, NE555…")
-        self.value.setToolTip(
-            t(
-                "What the part actually is. This is the column the build guide's bill of "
-                "materials groups on, so a blank one becomes a line you cannot order."
-            )
-        )
-        form.addRow(t("Value"), self.value)
-
-        self.locked = QCheckBox(t("locked — Rearrange leaves it where it is"))
-        self.locked.setChecked(component.locked)
-        form.addRow("", self.locked)
-
-        # The facts, so the dialog answers "which part is this" as well as renaming it.
-        # A connector is placed by its pin 1 and named after nothing in particular, and at
-        # this point the user has usually double-clicked to find out which one they hit.
-        name = (
-            footprint_label(footprint.name) if footprint is not None else component.footprint_id
-        )
-        pins = f"{len(footprint.pins)}" if footprint is not None else "?"
-        height = f"{footprint.body_height:.1f} mm" if footprint is not None else "?"
-
-        def fact_label(fact: str) -> QLabel:
-            shown = QLabel(fact)
-            shown.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            theme.tone(shown, "secondary")
-            shown.setWordWrap(True)
-            return shown
-
-        # Change Part beside the package it changes. A 5 mm LED that should have been 3 mm
-        # used to mean delete it, add another and wire it again, while ``component.update``
-        # already took a footprint.
-        self.change_part = QPushButton(t("Change Part…"))
-        self.change_part.setAutoDefault(False)
-        self.change_part.clicked.connect(lambda: self.done(self.CHANGE_PART))
-        self.change_part.setToolTip(
-            t("Another package or another part from the library, on the same holes and the "
-              "same nets.")
-        )
-        package = QVBoxLayout()
-        package_row = QHBoxLayout()
-        package_row.addWidget(fact_label(f"{name}  ({component.footprint_id})"), 1)
-        package_row.addWidget(self.change_part)
-        package.addLayout(package_row)
-        #: Why Change Part is greyed, said where it is greyed: the command refuses a locked
-        #: part a new package, which moves its pins -- what a lock is there to prevent.
-        self.locked_note = QLabel(
-            t("Locked: a new package would move its pins. Unlock it first.")
-        )
-        self.locked_note.setWordWrap(True)
-        theme.tone(self.locked_note, "warning")
-        package.addWidget(self.locked_note)
-        self.change_part.setEnabled(not component.locked)
-        self.locked_note.setVisible(component.locked)
-        form.addRow(t("Package"), package)
-        for label, fact in (
-            (t("Pins"), pins),
-            (t("Pin 1 at"), f"{format_hole(component.anchor, board)}  ·  {component.rotation}°"),
-            (t("Height"), height),
-        ):
-            form.addRow(label, fact_label(fact))
-        # Why the part is here (#10). Left editable on a locked part: a lock is about where
-        # a part is, and the note is about why it is there.
-        self.note = _note_editor(component.note)
-        form.addRow(t("Note"), self.note)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-
-        self.pinout_editor = PinoutEditor()
-        self.pinout_editor.set_part(footprint, component.pin_names, component.symbol)
-        # A value that names another catalog part in this package brings its pinout, as
-        # it does when the part is added: the names a BC547 came with are wrong under a
-        # 2N3904. Followed from the value the part HAD, and then from each one typed.
-        self._footprint = footprint
-        self._value_seen = component.value
-        self.value.editingFinished.connect(self._on_value_typed)
-
-        layout = QVBoxLayout()
-        layout.addLayout(form)
-        layout.addWidget(self.pinout_editor)
-        layout.addWidget(buttons)
-        self.setLayout(layout)
-        # The value is what this was opened for in nearly every case -- the reference is
-        # already right, because the application generated it.
-        self.value.setFocus()
-        self.value.selectAll()
-
-    def _on_value_typed(self) -> None:
-        typed = self.value.text().strip()
-        self.pinout_editor.follow_value(self._footprint, self._value_seen, typed)
-        self._value_seen = typed
-
-    def values(self) -> tuple[str, str, bool]:
-        return self.ref.text().strip(), self.value.text().strip(), self.locked.isChecked()
-
-    def note_text(self) -> str:
-        return self.note.toPlainText().strip()
-
-    def pinout(self) -> tuple[PinNames, PartSymbol | None]:
-        """What the part says about itself: its pin names and its symbol."""
-        return self.pinout_editor.values()
 
 
 class GoToPartDialog(QDialog):
@@ -4486,6 +4145,7 @@ class MainWindow(QMainWindow):
             dock.topLevelChanged.connect(lambda _floating: self._sync_dock_titlebars())
         self._build_menu()
         self._build_canvas_tools()
+        self._build_inspector()
         self._build_header()
         self._build_status_bar()
         # What F1 and What's This say about each panel and tool (ui/helpcards.py).
@@ -9658,6 +9318,23 @@ class MainWindow(QMainWindow):
         #: Which view the selection was last made in: the one Properties describes.
         self._selection_from = "board"
 
+    def _build_inspector(self) -> None:
+        """The Properties panel's content (``ui/inspector.py``): one editor per kind of
+        selection, every field one command. It is handed a dispatch that goes through
+        whichever bus the window has NOW -- opening a file replaces the bus -- and the two
+        things that are still dialogs."""
+        self.inspector = Inspector(
+            lambda name, payload: self.bus.dispatch(name, payload),
+            self.lookup,
+            InspectorHooks(
+                change_part=lambda component_id: self.on_change_part(component_id),
+                board_setup=lambda: self.on_board_setup(),
+            ),
+            InspectorActions(route_selected=self.act_route_selected, delete=self.act_delete),
+        )
+        self.properties.refresh(self.bus.document)
+        self.properties.set_content(self.inspector)
+
     def _current_selection(self) -> Selection:
         """What is selected, said once for the Properties panel: a part armed for placing
         first; then the selection of the view it was last MADE in, the board or the sheet;
@@ -9710,6 +9387,13 @@ class MainWindow(QMainWindow):
         return None
 
     def _refresh_properties(self) -> None:
+        # NOT WHILE A COMMAND IS BEING DRAWN. The board empties its selection while it
+        # rebuilds and puts it back after, and the selection signals that fire in between
+        # would show the board's editor for an instant -- taking the keyboard out of the
+        # field somebody had just pressed Tab in. ``on_bus_changed`` says the selection
+        # once, when the views agree again.
+        if getattr(self, "_bus_changing", False):
+            return
         panel = getattr(self, "properties", None)
         if panel is not None and hasattr(self, "scene"):
             panel.set_selection(self._current_selection())
@@ -10204,6 +9888,16 @@ class MainWindow(QMainWindow):
     # -- the one repaint path: every successful command, undo and redo funnels here --
 
     def on_bus_changed(self, document: PerfDocument, entry: HistoryEntry | None) -> None:
+        self._bus_changing = True
+        try:
+            self._redraw_for(document, entry)
+        finally:
+            self._bus_changing = False
+        if hasattr(self, "properties"):
+            self.properties.refresh(document)
+            self._refresh_properties()
+
+    def _redraw_for(self, document: PerfDocument, entry: HistoryEntry | None) -> None:
         self._track_moved_nets(document, entry)
         self.scene.set_document(document)
 
@@ -10238,11 +9932,9 @@ class MainWindow(QMainWindow):
 
         self._refresh_title()
         self._refresh_undo_actions()
-        # The document first, then what is selected in it: a part deleted by this command
+        # The Properties panel is told after this returns (``on_bus_changed``): the
+        # document first, then what is selected in it, since a part deleted by this command
         # is no longer the selection.
-        if hasattr(self, "properties"):
-            self.properties.refresh(document)
-            self._refresh_properties()
         self._refresh_empty_hint()
         # The banner names the part about to be placed, and next_reference reads the
         # document to work that out -- so placing R4 has to move the banner on to R5.
@@ -12317,82 +12009,26 @@ class MainWindow(QMainWindow):
         self._report_group(result, done.format(count=len(components)))
 
     def on_component_properties(self, component_id: str = "") -> None:
-        """Open one part's properties, from a double-click or from the selection.
-
-        Dispatched as a single ``component.update`` even when all three fields changed,
-        so OK is one undo step -- and skipped entirely when nothing changed, because an
-        undo entry for a dialog somebody opened and closed is an undo entry that lies.
-        """
+        """Part Properties is the Properties panel. F2 puts the keyboard in the selected
+        part's Reference; a double-click on a part (``component_id``) selects it and puts
+        the keyboard in its Value, which is what somebody double-clicking a resistor came
+        to change. It was a dialog with OK, and every field there is a field here."""
         if component_id:
-            component = next(
-                (c for c in self.bus.document.components if c.id == component_id), None
-            )
-        else:
-            selected = self._require_selection(t("edit its properties"))
-            component = selected[0] if len(selected) == 1 else None
-            if selected and component is None:
+            if tuple(self.scene.selected_component_ids()) != (component_id,):
+                self.scene.select_components([component_id])
+            self._selection_from = "board"
+            self._refresh_properties()
+            self.inspector.focus_field("value")
+            return
+        selected = self._require_selection(t("edit its properties"))
+        if len(selected) != 1:
+            if selected:
                 self.statusBar().showMessage(
                     t("Properties edits one part at a time — select a single part."), 6000
                 )
-        if component is None:
             return
-
-        dialog = ComponentDialog(
-            component, self.lookup(component.footprint_id), self, board=self.bus.document.board
-        )
-        answer = dialog.exec()
-        if answer == ComponentDialog.CHANGE_PART:
-            ref, value, _locked = dialog.values()
-            pin_names, symbol = dialog.pinout()
-            self.on_change_part(
-                component.id,
-                ref=ref,
-                value=value,
-                pinout=(pin_names, symbol),
-                note=dialog.note_text(),
-            )
-            return
-        if answer != QDialog.DialogCode.Accepted:
-            return
-        ref, value, locked = dialog.values()
-        pin_names, symbol = dialog.pinout()
-        note = dialog.note_text()
-        if not ref:
-            QMessageBox.warning(
-                self,
-                t("A part needs a reference"),
-                t("Every part is identified by its reference, so it cannot be blank."),
-            )
-            return
-        if (ref, value, locked, pin_names, symbol, note) == (
-            component.ref,
-            component.value,
-            component.locked,
-            component.pin_names,
-            component.symbol,
-            component.note,
-        ):
-            return
-        result = self.bus.dispatch(
-            "component.update",
-            UpdateComponentPayload(
-                id=component.id,
-                ref=ref,
-                value=value,
-                locked=locked,
-                pin_names=pin_names,
-                symbol=symbol,
-                note=note,
-            ),
-        )
-        if not result.ok:
-            # A duplicate reference is the refusal this actually meets, and it is worth a
-            # dialog rather than a status line: the edit the user typed is gone otherwise.
-            QMessageBox.warning(self, t("Cannot change this part"), refused(result))
-            return
-        # Re-selected because the rebuild dropped the selection with the old item, and the
-        # part somebody just named is the one they are still working on.
-        self.scene.select_components([component.id])
+        self._refresh_properties()
+        self.inspector.focus_field("ref")
 
     def on_change_part(
         self,
@@ -12717,24 +12353,16 @@ class MainWindow(QMainWindow):
         return True
 
     def on_rename_board(self) -> None:
-        """Name the board -- the title its guide, its schematic and its project carry.
-
-        Through ``document.rename`` like any other edit, so it undoes. A board that was
-        never named is named after its file on the first save (``_save_to``); this is for
-        choosing something better than a file name.
-        """
-        current = self.bus.document.meta.name
-        name, accepted = QInputDialog.getText(
-            self, t("Rename Board"), t("Board name:"), text=current
-        )
-        name = name.strip()
-        if not accepted or not name or name == current:
-            return
-        result = self.bus.dispatch("document.rename", RenameDocumentPayload(name=name))
-        if not result.ok:
-            self.statusBar().showMessage(refused(result), 8000)
-            return
-        self.statusBar().showMessage(did(result.description), 6000)
+        """Name the board -- the title its guide, its schematic and its project carry --
+        in Properties, where the board is shown when nothing is selected: the selection is
+        let go and the keyboard put in the board's Name. Through ``document.rename`` like
+        any other edit, so it undoes. A board never named is named after its file on the
+        first save (``_save_to``)."""
+        self.scene.clearSelection()
+        self.schematic_view.set_selection([])
+        self._selection_from = "board"
+        self._refresh_properties()
+        self.inspector.focus_field("name")
 
     def on_board_features(self) -> None:
         """Mounting holes and edge connectors.

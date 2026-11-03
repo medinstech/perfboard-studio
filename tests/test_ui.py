@@ -1509,67 +1509,85 @@ def _double_click_at(pos: QPointF):
     return event
 
 
-def test_properties_edits_ref_value_and_lock_in_one_undo_step(monkeypatch) -> None:
-    """One press of OK is one edit, however many fields it changed."""
-    from perfboard_studio.ui import main as main_module
-
+def test_each_field_in_properties_is_one_undo_step() -> None:
+    """No OK: every field is the fact, committed as one command when it is left."""
     window = _window_on(_load_dense())
     component = window.bus.document.components[0]
     before = len(window.bus.history())
+    editor = _inspect(window, component.id)
 
-    monkeypatch.setattr(
-        main_module.ComponentDialog, "exec", lambda self: main_module.QDialog.DialogCode.Accepted
-    )
-    monkeypatch.setattr(main_module.ComponentDialog, "values", lambda self: ("RENAMED", "4k7", True))
-    window.on_component_properties(component.id)
+    _type_into(editor.ref, "RENAMED")
+    _type_into(editor.value, "4k7")
+    editor.locked.setChecked(True)
 
     edited = next(c for c in window.bus.document.components if c.id == component.id)
     assert (edited.ref, edited.value, edited.locked) == ("RENAMED", "4k7", True)
-    assert len(window.bus.history()) == before + 1
+    assert len(window.bus.history()) == before + 3
+    # Read back from the document, and still the same part's editor.
+    assert window.inspector.shown is editor and editor.ref.text() == "RENAMED"
     _close(window)
 
 
-def test_properties_that_changed_nothing_writes_no_history(monkeypatch) -> None:
-    """An undo entry for a dialog somebody opened and closed is an undo entry that lies."""
-    from perfboard_studio.ui import main as main_module
+def _inspect(window, component_id: str):
+    """Select one part on the board and hand back the inspector's part editor."""
+    window.scene.select_components([component_id])
+    window._refresh_properties()
+    editor = window.inspector.part_editor
+    assert window.inspector.shown is editor
+    return editor
 
+
+def _type_into(field, text: str) -> None:
+    """What typing ``text`` and pressing Enter does to a CommitLine."""
+    field.setText(text)
+    field.setModified(True)
+    field.editingFinished.emit()
+
+
+def test_properties_that_changed_nothing_writes_no_history() -> None:
+    """An undo entry for a field somebody entered and left is an undo entry that lies."""
     window = _window_on(_load_dense())
     component = window.bus.document.components[0]
     before = len(window.bus.history())
+    editor = _inspect(window, component.id)
 
-    monkeypatch.setattr(
-        main_module.ComponentDialog, "exec", lambda self: main_module.QDialog.DialogCode.Accepted
-    )
-    monkeypatch.setattr(
-        main_module.ComponentDialog,
-        "values",
-        lambda self: (component.ref, component.value, component.locked),
-    )
-    window.on_component_properties(component.id)
+    _type_into(editor.ref, component.ref)
+    _type_into(editor.value, f"  {component.value} ")
+    editor.note.setFocus()
+    editor._commit_note()
 
     assert len(window.bus.history()) == before
     _close(window)
 
 
 def test_a_duplicate_reference_is_refused_and_said_out_loud(monkeypatch) -> None:
+    """Under the field, in words, naming the reference -- never a message box, and the
+    typed reference stays in the field to be put right; Esc puts the part's own back."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
     from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     first, second = window.bus.document.components[0], window.bus.document.components[1]
-    warned: list[str] = []
+    boxes: list = []
+    monkeypatch.setattr(main_module.QMessageBox, "warning", lambda *a, **k: boxes.append(a))
+    editor = _inspect(window, first.id)
 
-    monkeypatch.setattr(
-        main_module.ComponentDialog, "exec", lambda self: main_module.QDialog.DialogCode.Accepted
-    )
-    monkeypatch.setattr(main_module.ComponentDialog, "values", lambda self: (second.ref, "", False))
-    monkeypatch.setattr(
-        main_module.QMessageBox, "warning", lambda *args, **kwargs: warned.append(args[2])
-    )
-    window.on_component_properties(first.id)
+    _type_into(editor.ref, second.ref)
 
     assert [c.ref for c in window.bus.document.components][:2] == [first.ref, second.ref]
-    # Said in words, naming the reference -- not the engine's code for the refusal.
-    assert warned and second.ref in warned[0] and "duplicate-ref" not in warned[0]
+    said = editor.ref.problem.text()
+    assert not editor.ref.problem.isHidden() and second.ref in said
+    assert "duplicate-ref" not in said and boxes == []
+    assert editor.ref.text() == second.ref
+    window.properties.refresh(window.bus.document)  # an unrelated redraw keeps the typing
+    assert editor.ref.text() == second.ref
+
+    editor.ref.keyPressEvent(
+        QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
+    )
+    assert editor.ref.text() == first.ref and editor.ref.problem.isHidden()
     _close(window)
 
 
@@ -12338,28 +12356,24 @@ def test_a_registry_pin_name_is_a_hint_not_a_declaration() -> None:
     editor.deleteLater()
 
 
-def test_properties_writes_a_declaration_in_the_same_undo_step(monkeypatch) -> None:
-    from perfboard_studio.ui import main as main_module
+def test_properties_writes_a_declaration_in_the_same_undo_step() -> None:
+    """A value that names a catalog part in the part's package brings its pinout, in the
+    same step as the value: BC547 typed onto a TO-92 is C-B-E and an NPN at once."""
+    from perfboard_studio.commands import UpdateComponentPayload
 
     window = _window_on(_load_dense())
     component = window.bus.document.components[0]
+    assert window.bus.dispatch(
+        "component.update", UpdateComponentPayload(id=component.id, footprint_id="to92")
+    ).ok
     before = len(window.bus.history())
-    monkeypatch.setattr(
-        main_module.ComponentDialog, "exec", lambda self: main_module.QDialog.DialogCode.Accepted
-    )
-    monkeypatch.setattr(
-        main_module.ComponentDialog, "values", lambda self: (component.ref, "BC547", False)
-    )
-    monkeypatch.setattr(
-        main_module.ComponentDialog,
-        "pinout",
-        lambda self: ((("1", "C"), ("2", "B"), ("3", "E")), "npn"),
-    )
-    window.on_component_properties(component.id)
+    editor = _inspect(window, component.id)
+
+    _type_into(editor.value, "BC547")
 
     edited = next(c for c in window.bus.document.components if c.id == component.id)
     assert edited.value == "BC547"
-    assert (edited.pin_names, edited.symbol) == ((("1", "C"), ("2", "B"), ("3", "E")), "npn")
+    assert (edited.pin_names, edited.symbol) == (BC547_PINS, "npn")
     assert len(window.bus.history()) == before + 1
     _close(window)
 
@@ -12372,7 +12386,7 @@ def test_a_value_typed_over_a_catalog_part_takes_the_pinout_that_came_with_it() 
     """BC547 to 2N3904 on one TO-92: the C-B-E the BC547 brought is wrong under a part
     that is E-B-C, so the new value's pinout replaces it. Names somebody TYPED are a
     declaration, and stay; so does everything when the package or the part does not change."""
-    from perfboard_studio.ui.main import pinout_for_retyped_value
+    from perfboard_studio.ui.partfields import pinout_for_retyped_value
 
     def follows(before: str, after: str, names: dict[str, str], footprint: str = "to92"):
         part = pinout_for_retyped_value(footprint, before, after, names)
@@ -12391,32 +12405,35 @@ def test_a_value_typed_over_a_catalog_part_takes_the_pinout_that_came_with_it() 
 
 
 def test_part_properties_follows_a_retyped_value_and_says_so() -> None:
-    from perfboard_studio.footprints import get_footprint
-    from perfboard_studio.ui.main import ComponentDialog
+    from perfboard_studio.commands import UpdateComponentPayload
 
-    component = dataclasses.replace(
-        _load_dense().components[0],
-        footprint_id="to92",
-        value="BC547",
-        pin_names=BC547_PINS,
-        symbol="npn",
-    )
-    dialog = ComponentDialog(component, get_footprint("to92"))
-    assert dialog.pinout_editor.note.text() == ""
-    dialog.value.setText("2N3904")
-    dialog.value.editingFinished.emit()
-    assert dialog.pinout() == (N2N3904_PINS, "npn")
-    assert "2N3904" in dialog.pinout_editor.note.text()
+    window = _window_on(_load_dense())
+    component = window.bus.document.components[0]
+    assert window.bus.dispatch(
+        "component.update",
+        UpdateComponentPayload(
+            id=component.id, footprint_id="to92", value="BC547", pin_names=BC547_PINS,
+            symbol="npn",
+        ),
+    ).ok
+    editor = _inspect(window, component.id)
+    assert editor.pinout.note.text() == ""
+    _type_into(editor.value, "2N3904")
+    edited = next(c for c in window.bus.document.components if c.id == component.id)
+    assert (edited.pin_names, edited.symbol) == (N2N3904_PINS, "npn")
+    assert "2N3904" in editor.pinout.note.text()
 
     # A pinout somebody typed is kept, and the catalog's other answer is said beside it.
-    typed = dataclasses.replace(component, pin_names=(("1", "C"), ("2", "B"), ("3", "EMIT")))
-    kept = ComponentDialog(typed, get_footprint("to92"))
-    kept.value.setText("2N3904")
-    kept.value.editingFinished.emit()
-    assert kept.pinout() == ((("1", "C"), ("2", "B"), ("3", "EMIT")), "npn")
-    assert "1=E 2=B 3=C" in kept.pinout_editor.note.text()
-    dialog.deleteLater()
-    kept.deleteLater()
+    typed = (("1", "C"), ("2", "B"), ("3", "EMIT"))
+    assert window.bus.dispatch(
+        "component.update", UpdateComponentPayload(id=component.id, pin_names=typed)
+    ).ok
+    _type_into(editor.value, "BC547")
+    _type_into(editor.value, "2N3904")
+    kept = next(c for c in window.bus.document.components if c.id == component.id)
+    assert kept.pin_names == typed
+    assert "1=E 2=B 3=C" in editor.pinout.note.text()
+    _close(window)
 
 
 def test_editing_a_design_part_follows_a_retyped_value_too() -> None:
@@ -12481,8 +12498,6 @@ def test_a_locked_part_says_why_it_cannot_change(monkeypatch) -> None:
     """The command refuses a locked part a new package; the window says so where the
     choice is offered rather than after a dialog the user filled in."""
     from perfboard_studio.commands import UpdateComponentPayload
-    from perfboard_studio.footprints import get_footprint
-    from perfboard_studio.ui.main import ComponentDialog
 
     window = _window_on(_load_dense())
     component = window.bus.document.components[0]
@@ -12491,12 +12506,10 @@ def test_a_locked_part_says_why_it_cannot_change(monkeypatch) -> None:
     ).ok
     locked = next(c for c in window.bus.document.components if c.id == component.id)
 
-    dialog = ComponentDialog(locked, get_footprint(locked.footprint_id))
-    assert not dialog.change_part.isEnabled()
-    assert not dialog.locked_note.isHidden()
-    dialog.deleteLater()
+    editor = _inspect(window, locked.id)
+    assert not editor.change_part.isEnabled()
+    assert not editor.locked_note.isHidden()
 
-    window.scene.select_components([locked.id])
     assert not window.act_change_part.isEnabled()
     assert locked.ref in window.act_change_part.toolTip()
     asked: list = []
@@ -12507,23 +12520,15 @@ def test_a_locked_part_says_why_it_cannot_change(monkeypatch) -> None:
     _close(window)
 
 
-def test_change_part_from_properties_keeps_what_was_typed(monkeypatch) -> None:
-    """Part Properties hands its fields to Change Part, so a value typed there and then
-    "Change Part…" pressed is not lost on the way."""
-    from perfboard_studio.ui import main as main_module
-
+def test_change_in_properties_puts_another_package_on_the_part(monkeypatch) -> None:
+    """Change… beside the package is Change Part, for this part: the same holes and nets."""
     window = _window_on(_load_dense())
     component = next(c for c in window.bus.document.components if c.footprint_id == "r-axial-4")
-
-    def press_change(dialog):
-        dialog.value.setText("4k7")
-        return main_module.ComponentDialog.CHANGE_PART
-
-    monkeypatch.setattr(main_module.ComponentDialog, "exec", press_change)
+    editor = _inspect(window, component.id)
     _choose_in_change_part(monkeypatch, "r-axial-5")
-    window.on_component_properties(component.id)
+    editor.change_part.click()
     changed = next(c for c in window.bus.document.components if c.id == component.id)
-    assert (changed.footprint_id, changed.value) == ("r-axial-5", "4k7")
+    assert (changed.footprint_id, changed.anchor) == ("r-axial-5", component.anchor)
     _close(window)
 
 
@@ -12639,22 +12644,19 @@ def test_a_named_board_is_not_renamed_by_saving(tmp_path) -> None:
     _close(window)
 
 
-def test_rename_board_asks_and_renames_in_one_undo_step(monkeypatch) -> None:
-    from perfboard_studio.ui import main as main_module
-
+def test_rename_board_is_the_boards_name_in_properties() -> None:
+    """Rename Board lets the selection go and puts the keyboard in the board's Name;
+    a name is one undo step, and the same name again is none."""
     window = _window_on(_load_dense())
+    window.scene.select_components([window.bus.document.components[0].id])
     before = len(window.bus.history())
-    monkeypatch.setattr(
-        main_module.QInputDialog, "getText", lambda *args, **kwargs: ("Plaket v1", True)
-    )
     window.on_rename_board()
+    editor = window.inspector.board_editor
+    assert window.inspector.shown is editor
+    _type_into(editor.name, "Plaket v1")
     assert window.bus.document.meta.name == "Plaket v1"
     assert len(window.bus.history()) == before + 1
-    # Cancelled, or unchanged: nothing on the undo stack.
-    monkeypatch.setattr(
-        main_module.QInputDialog, "getText", lambda *args, **kwargs: ("Plaket v1", True)
-    )
-    window.on_rename_board()
+    _type_into(editor.name, "Plaket v1")
     assert len(window.bus.history()) == before + 1
     _close(window)
 
@@ -13716,33 +13718,23 @@ def test_a_stacked_side_panel_says_its_name_once() -> None:
         _close(window)
 
 
-def test_a_parts_note_goes_through_part_properties_even_on_a_locked_part(monkeypatch) -> None:
-    """#10: Part Properties shows the note, OK saves what was typed, and the field stays
-    editable on a locked part while Change Part is greyed -- a lock is about where a part
-    is, and the note is about why it is there."""
+def test_a_parts_note_goes_through_part_properties_even_on_a_locked_part() -> None:
+    """A lock is about where a part is, and the note is about why it is there: the note
+    stays editable on a locked part, and is committed when the field is left."""
     from perfboard_studio.commands import UpdateComponentPayload
-    from perfboard_studio.footprints import get_footprint
-    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     component = window.bus.document.components[0]
     assert window.bus.dispatch(
         "component.update", UpdateComponentPayload(id=component.id, locked=True, note="old")
     ).ok
-    locked = next(c for c in window.bus.document.components if c.id == component.id)
+    editor = _inspect(window, component.id)
+    assert editor.note.toPlainText() == "old"
+    assert editor.note.isEnabled() and not editor.note.isReadOnly()
+    assert not editor.change_part.isEnabled()
 
-    dialog = main_module.ComponentDialog(locked, get_footprint(locked.footprint_id))
-    assert dialog.note.toPlainText() == "old"
-    assert dialog.note.isEnabled() and not dialog.note.isReadOnly()
-    assert not dialog.change_part.isEnabled()
-    dialog.deleteLater()
-
-    def typed(self) -> object:
-        self.note.setPlainText("  10R keeps the speaker under 190 mA \n")
-        return main_module.QDialog.DialogCode.Accepted
-
-    monkeypatch.setattr(main_module.ComponentDialog, "exec", typed)
-    window.on_component_properties(locked.id)
+    editor.note.setPlainText("  10R keeps the speaker under 190 mA \n")
+    editor._commit_note()
     edited = next(c for c in window.bus.document.components if c.id == component.id)
     assert edited.note == "10R keeps the speaker under 190 mA"
     assert edited.locked
@@ -13767,25 +13759,19 @@ def test_a_parts_note_is_on_its_tooltip_after_a_blank_line_and_cut_when_long() -
 
 
 def test_the_note_field_is_called_not_in_turkish() -> None:
-    from PySide6.QtWidgets import QFormLayout
+    from PySide6.QtWidgets import QFormLayout, QLabel
 
-    from perfboard_studio.footprints import get_footprint
     from perfboard_studio.ui.i18n import language, set_language
-    from perfboard_studio.ui.main import ComponentDialog
 
-    component = _load_dense().components[0]
     before = language()
     set_language("tr")
     try:
-        dialog = ComponentDialog(component, get_footprint(component.footprint_id))
-        form = next(
-            item.layout()
-            for item in (dialog.layout().itemAt(i) for i in range(dialog.layout().count()))
-            if isinstance(item.layout(), QFormLayout)
-        )
-        label = form.labelForField(dialog.note)
-        assert label is not None and label.text() == "Not"
-        dialog.deleteLater()
+        window = _window_on(_load_dense())
+        editor = _inspect(window, window.bus.document.components[0].id)
+        labels = {label.text() for label in editor.findChildren(QLabel)}
+        assert "Not" in labels and "Note" not in labels
+        assert any(isinstance(item, QFormLayout) for item in editor.findChildren(QFormLayout))
+        _close(window)
     finally:
         set_language(before)
 
@@ -14591,3 +14577,75 @@ def test_no_two_entries_of_a_menu_share_a_letter_in_either_language() -> None:
                 _close(window)
     finally:
         set_language(before)
+
+
+def test_f2_and_a_double_click_put_the_keyboard_in_the_part_in_properties() -> None:
+    """Part Properties is the panel: F2 is the selected part's Reference, a double-click on
+    a part its Value -- the field somebody double-clicking a resistor came to change."""
+    window = _window_on(_load_dense())
+    first, second = window.bus.document.components[:2]
+    window.scene.select_components([first.id])
+    focused: list[str] = []
+    window.inspector.focus_field = lambda name: focused.append(name) or True
+    window.act_properties.trigger()
+    assert focused == ["ref"]
+    window.scene.componentActivated.emit(second.id)
+    assert focused == ["ref", "value"]
+    assert window.properties.selection.ids == (second.id,)
+    _close(window)
+
+
+def test_a_part_turns_flips_and_moves_from_properties() -> None:
+    from perfboard_studio.geometry import format_hole
+
+    window = _window_on(_load_dense())
+    component = next(c for c in window.bus.document.components if not c.locked)
+    editor = _inspect(window, component.id)
+    turn = 90 if component.rotation != 90 else 180
+    editor.rotation.button(turn).click()
+    editor.mirrored.click()
+    moved = next(c for c in window.bus.document.components if c.id == component.id)
+    assert (moved.rotation, moved.mirrored) == (turn, not component.mirrored)
+    assert editor.rotation.checkedId() == turn
+
+    _type_into(editor.pin1, "nowhere")
+    assert "nowhere" in editor.pin1.problem.text()
+    _type_into(editor.pin1, "A1")
+    after = next(c for c in window.bus.document.components if c.id == component.id)
+    if after.anchor != moved.anchor:  # placed: pin 1 is where it was asked to be
+        assert format_hole(after.anchor, window.bus.document.board) == "A1"
+    else:  # refused: said under the field, in the bus's words
+        assert editor.pin1.problem.text()
+    _close(window)
+
+
+def test_the_board_is_what_properties_shows_with_nothing_selected() -> None:
+    window = _window_on(_load_dense())
+    window.scene.clearSelection()
+    window._refresh_properties()
+    editor = window.inspector.board_editor
+    assert window.inspector.shown is editor
+    board = window.bus.document.board
+    assert f"{board.cols} × {board.rows}" in editor.summary.text()
+    editor.height_limit.setValue(12.5)
+    editor.height_limit.editingFinished.emit()
+    assert window.bus.document.height_limit_mm == 12.5
+    editor.body_measure.setChecked(True)
+    assert window.bus.document.body_clearance_mm is not None
+    _close(window)
+
+
+def test_tabbing_through_properties_keeps_the_part_in_the_panel() -> None:
+    """The board empties its selection while it redraws after a command; the panel is told
+    the selection once the redraw is done, so it never shows the board in between -- which
+    would take the keyboard out of the field Tab had just moved to."""
+    window = _window_on(_load_dense())
+    component = window.bus.document.components[0]
+    editor = _inspect(window, component.id)
+    shown: list = []
+    real = window.inspector.set_selection
+    window.inspector.set_selection = lambda sel: (shown.append(sel.kind), real(sel))[1]
+    window.properties.selection = None  # so the panel passes every selection on
+    _type_into(editor.value, "4k7")
+    assert "board" not in shown and window.inspector.shown is editor
+    _close(window)
