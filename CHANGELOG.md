@@ -441,6 +441,11 @@ closed without a bump.
   one or the phenolic board's squares, where the 3D view drew every edge pad as a grey
   rectangle.
 
+- **Which way round a polarised part goes reads from above in 3D, as in 2D.** An
+  electrolytic's minus stripe is on its top as well as down its side, and an LED's cathode
+  flat shows on its flange, in the same place and colour the 2D view marks them. Seen from
+  above, the stripe could face away and the can said nothing.
+
 - **A stock board's corner holes are where the real board has them.** In the corners of the
   border, outside the grid, with every pad kept -- they had taken the four corner pads and
   worn a dashed orange ring that read as copper. The ring, which is where the screw head

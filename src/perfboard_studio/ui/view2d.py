@@ -169,6 +169,7 @@ from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
     AXIAL_ARCHETYPES,
     BODY_STYLES,
+    ELECTROLYTIC_STRIPE_SHARE,
     FLAT_FACE_LOCAL,
     PIN_NAME_HEIGHT_MM,
     PIN_NAME_TAG_HEIGHT_MM,
@@ -2823,13 +2824,13 @@ def _paint_body(
         painter.setClipPath(path)
         stripe = QRectF(rect)
         if placement.axis == "x":
-            stripe.setWidth(rect.width() * 0.22)
+            stripe.setWidth(rect.width() * ELECTROLYTIC_STRIPE_SHARE)
             if _keyed_direction(placement, keyed) > 0:
                 stripe.moveLeft(rect.left())
             else:
                 stripe.moveRight(rect.right())
         else:
-            stripe.setHeight(rect.height() * 0.22)
+            stripe.setHeight(rect.height() * ELECTROLYTIC_STRIPE_SHARE)
             if _keyed_direction(placement, keyed) > 0:
                 stripe.moveTop(rect.top())
             else:

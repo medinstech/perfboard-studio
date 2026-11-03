@@ -179,3 +179,110 @@ def test_whatever_qt_has_the_legend_is_printed(qt) -> None:  # type: ignore[no-u
     from perfboard_studio.ui import view3d
 
     assert view3d._glyphs("A01").GetNumberOfPolys() > 0
+
+
+# ---------------------------------------------------------------------------
+# Polarity, from above
+# ---------------------------------------------------------------------------
+
+
+def _painted_cells(footprint_id: str, mirrored: bool = False):
+    """Every painted cell of a borrowed package, as (centre x, centre y, z, normal z), in the
+    model's frame (x with the column, y up, from pin 1)."""
+    import vtk
+
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui import partmodels, view3d
+
+    footprint = get_footprint(footprint_id)
+    model = partmodels.model_for(footprint_id)
+    assert footprint is not None and model is not None
+    cells = []
+    for piece in model.pieces:
+        if piece.material in ("tinned", "steel", "plated"):
+            continue
+        painted, _rest = view3d._painted_from_above(
+            str(piece.path), mirrored, model.turn_deg, model.offset, footprint, 2.54
+        )
+        if painted is None:
+            continue
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputData(painted)
+        normals.ComputeCellNormalsOn()
+        normals.ComputePointNormalsOff()
+        normals.SplittingOff()
+        normals.ConsistencyOff()
+        normals.Update()
+        mesh = normals.GetOutput()
+        centres = vtk.vtkCellCenters()
+        centres.SetInputData(mesh)
+        centres.Update()
+        for index in range(mesh.GetNumberOfCells()):
+            x, y, z = centres.GetOutput().GetPoint(index)
+            cells.append((x, y, z, mesh.GetCellData().GetNormals().GetTuple3(index)[2]))
+    return footprint, model, cells
+
+
+@pytest.mark.parametrize(
+    ("footprint_id", "marked_pin"),
+    [("c-elec-d5-p2", "-"), ("led-5mm", "K")],
+)
+def test_the_2d_polarity_mark_is_painted_where_it_shows_from_above(footprint_id: str, marked_pin: str) -> None:
+    """Seen from above a modelled can is mostly its aluminium top, its stripe down a side the
+    camera may not face, and an LED's flat is a sliver of its flange; the 2D inks the
+    sector it marks over the measured top view (``topview``). The same region is painted
+    onto the case where it lands: level faces only, at the top of what they belong to, all
+    on the side of the pin the mark is for, and inside the 2D's mark."""
+    from PySide6.QtCore import QPointF
+
+    from perfboard_studio.ui.topview import top_view
+
+    footprint, _model, cells = _painted_cells(footprint_id)
+    assert cells, "something is painted"
+    marked = next(p for p in footprint.pins if p.name == marked_pin)
+    other = next(p for p in footprint.pins if p.name != marked_pin)
+    region = top_view(footprint, 2.54).polarity
+    heights = [z for _x, _y, z, _nz in cells]
+    for x, y, _z, nz in cells:
+        assert nz > 0.85, "a level face, not the slope of a dome"
+        assert region.contains(QPointF(x, -y)), "inside the 2D's own mark"
+        to_marked = math.dist((x, y), (marked.d_col * 2.54, -marked.d_row * 2.54))
+        to_other = math.dist((x, y), (other.d_col * 2.54, -other.d_row * 2.54))
+        assert to_marked < to_other, f"on the {marked_pin} side"
+    assert max(heights) - min(heights) < 0.1, "one level: the shoulder, or the flange"
+
+
+def test_a_part_on_the_solder_side_is_painted_on_its_mirrored_side() -> None:
+    """A mirrored mesh is reflected in x about pin 1 (``_mesh``), so its paint is too."""
+    _fp, _model, plain = _painted_cells("c-elec-d5-p2")
+    _fp, _model, mirrored = _painted_cells("c-elec-d5-p2", mirrored=True)
+    assert sorted(round(-x, 6) for x, *_ in plain) == sorted(round(x, 6) for x, *_ in mirrored)
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_a_generated_can_carries_the_2d_stripe_on_its_top(rotation: int) -> None:
+    """A can with no borrowed model is drawn here, and the 2D inks
+    ``ELECTROLYTIC_STRIPE_SHARE`` of its diameter on the minus side: the same band is
+    on its top, away from pin 1 whichever way it is turned."""
+    from perfboard_studio.commands import DEFAULT_BOARD
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.model import ComponentInstance, HoleCoord
+    from perfboard_studio.ui import view3d
+
+    comp = ComponentInstance(
+        id="c1", ref="C1", value="", footprint_id="c-elec-d6.3-p1-h11",
+        anchor=HoleCoord(8, 8), rotation=rotation,
+    )
+    body = view3d._world_body(footprint_lookup(), comp, DEFAULT_BOARD)
+    assert body is not None and body.polarity is not None
+    accent = view3d._rgb(body.style.accent)
+    tops = [
+        piece for piece in view3d._can_pieces(body)
+        if piece.rgb == accent and piece.material == view3d.SLEEVE
+    ]
+    assert len(tops) == 1
+    x0, x1, y0, y1, z0, _z1 = tops[0].source.GetBounds()
+    assert z0 >= body.height, "on the top"
+    centre = ((x0 + x1) / 2 + body.x, (y0 + y1) / 2 + body.y)
+    away = math.dist(centre, body.polarity) > math.dist((body.x, body.y), body.polarity)
+    assert away, "on the minus side, away from pin 1"

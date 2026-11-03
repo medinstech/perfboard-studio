@@ -131,6 +131,11 @@ BODY_STYLES: dict[BodyArchetype, BodyStyle] = {
 #: the letter -- asks this rather than one archetype's name.
 AXIAL_ARCHETYPES: frozenset[BodyArchetype] = frozenset({"axial-cylinder", "axial-upright"})
 
+#: How much of a drawn electrolytic's diameter its minus stripe takes, seen from above, on
+#: the side away from pin 1: the band view2d inks across a can it has no measured top view
+#: for, and the segment view3d paints on the top of the same generated can.
+ELECTROLYTIC_STRIPE_SHARE = 0.22
+
 #: A polarized axial part is a diode, not a resistor. Same archetype, different object.
 _DIODE_STYLE = BodyStyle(fill="#1d1f24", edge=_PLASTIC_EDGE, accent="#e8ecf2")
 

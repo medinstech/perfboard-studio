@@ -1065,7 +1065,14 @@ def test_an_electrolytics_stripe_is_printed_in_the_colour_2d_draws_it_and_not_as
     pieces = view3d._pieces_for(body, footprint, component, DEFAULT_BOARD)
 
     colours = [piece.rgb for piece in pieces]
-    assert colours.count(view3d._rgb(body.style.accent)) == 1
+    accent = view3d._rgb(body.style.accent)
+    # The level faces the 2D's mark lands on are painted in the accent too, from above
+    # (``_painted_from_above``): the sleeve's shoulder and the stripe's own top. Of the
+    # pieces that are whole parts of the model, the stripe is the one in the accent.
+    from_above = {id(painted) for painted, _rest in view3d._FROM_ABOVE.values() if painted is not None}
+    whole = [piece for piece in pieces if id(piece.source) not in from_above]
+    assert [piece.rgb for piece in whole].count(accent) == 1
+    assert all(piece.material == view3d.SLEEVE for piece in pieces if piece.rgb == accent)
     signs = [p for p in model.pieces if view3d._is_marking(p) and p is not stripe]
     assert signs and all(view3d._rgb(p.color) in colours for p in signs)
 

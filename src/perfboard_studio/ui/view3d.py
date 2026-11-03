@@ -114,6 +114,7 @@ from perfboard_studio.stripboard import cut_holes, segments
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
     BODY_STYLES,
+    ELECTROLYTIC_STRIPE_SHARE,
     FLAT_FACE_LOCAL,
     PIN_NAME_HEIGHT_MM,
     PIN_NAME_TAG_HEIGHT_MM,
@@ -1469,8 +1470,13 @@ def finger_outline(rect: RectMm, radius: Mm) -> list[tuple[float, float]]:
 
 
 def _finger_plate(ring: list[tuple[float, float]], z: float) -> vtk.vtkPolyData:
-    """``ring`` as a thin plate centred on ``z``: its two faces and its edge."""
-    top, bottom = z + FINGER_THICKNESS_MM / 2, z - FINGER_THICKNESS_MM / 2
+    """``ring`` as a thin plate centred on ``z``."""
+    return _slab(ring, z - FINGER_THICKNESS_MM / 2, z + FINGER_THICKNESS_MM / 2)
+
+
+def _slab(ring: list[tuple[float, float]], bottom: float, top: float) -> vtk.vtkPolyData:
+    """A convex ``ring`` (counter-clockwise from above) stood from ``bottom`` to ``top``: its
+    two faces and its edge."""
     mesh = _Mesh()
     mesh.polygon([(x, y, top) for x, y in ring])
     mesh.polygon([(x, y, bottom) for x, y in reversed(ring)])
@@ -2616,9 +2622,46 @@ def _can_pieces(body: _WorldBody) -> list[_Piece]:
                 material=INK,
             )
         )
+        # And across the top, which is what shows from above: the band view2d inks across
+        # the same can, ``ELECTROLYTIC_STRIPE_SHARE`` of its diameter in from the minus side,
+        # on the sleeve's top inside the crimped rim. Down the side alone, the stripe faced
+        # away from the camera on half the boards and the can said nothing.
+        if body.axis == "x":
+            heading = 0.0 if direction > 0 else 180.0
+        else:
+            heading = 90.0 if direction > 0 else 270.0
+        top = body.height + _LIFT + 0.02
+        pieces.append(
+            _Piece(
+                source=_slab(
+                    _circle_segment(
+                        radius * 0.93, radius * (1.0 - 2 * ELECTROLYTIC_STRIPE_SHARE), heading
+                    ),
+                    top,
+                    top + 0.02,
+                ),
+                rgb=_rgb(body.style.accent),
+                position=(body.x, body.y, 0.0),
+                material=SLEEVE,
+            )
+        )
     # Under the can, so only the hole and the solder side ever show them -- which is
     # exactly where a radial capacitor's legs are.
     return pieces + _through_hole_pieces(body, _LIFT + 0.15)
+
+
+def _circle_segment(radius: float, chord: float, heading_deg: float) -> list[tuple[float, float]]:
+    """The part of a circle of ``radius`` round the origin beyond a chord ``chord`` from its
+    centre, towards ``heading_deg``, as a counter-clockwise ring."""
+    half = math.acos(max(-1.0, min(1.0, chord / radius)))
+    steps = 16
+    return [
+        (
+            radius * math.cos(math.radians(heading_deg) - half + 2 * half * step / steps),
+            radius * math.sin(math.radians(heading_deg) - half + 2 * half * step / steps),
+        )
+        for step in range(steps + 1)
+    ]
 
 
 def _disc_pieces(body: _WorldBody) -> list[_Piece]:
@@ -3798,12 +3841,103 @@ def _reflected_x(data: vtk.vtkPolyData) -> vtk.vtkPolyData:
 _MESH_FEATURE_ANGLE_DEG = 40.0
 
 
+#: Where a borrowed package's polarity does not show from above, and the 2D's own mark is
+#: painted onto the case where it does (:func:`_painted_from_above`): a can's minus stripe
+#: is down its side, and an LED's cathode flat is a sliver of its flange.
+PAINTED_FROM_ABOVE: frozenset[str] = frozenset({"radial-electrolytic", "led-round"})
+#: How near level a face must be to take that paint: a can's shoulder and an LED's flange,
+#: never the slope of a dome -- at 0.3 the paint ran up an LED's lens in white teeth.
+FLAT_TOP_NZ = 0.85
+
+_FROM_ABOVE: dict[tuple[str, bool, float, tuple[float, float], str, float], tuple[Any, Any]] = {}
+
+
+def _painted_from_above(
+    path: str,
+    mirrored: bool,
+    turn_deg: float,
+    offset: tuple[float, float],
+    footprint: Footprint,
+    pitch: float,
+) -> tuple[vtk.vtkPolyData | None, vtk.vtkPolyData]:
+    """One piece of a borrowed package, cut in two: the level faces looking up whose centre
+    lies in the 2D's polarity mark (``topview.TopView.polarity``), and the rest.
+
+    ONE ANSWER, TWO ASKERS. The 2D view inks the mark over the measured top view so it
+    reads at the opening zoom -- a reversed electrolytic can burst -- and from above the 3D
+    can is mostly its aluminium top too, with the stripe down a side the camera may not
+    see. So the same region is painted where it lands on the case: the sleeve's shoulder
+    over the minus sector, the flange on the cathode side. Cached per mesh and placement,
+    since the view is rebuilt after every command.
+    """
+    key = (path, mirrored, turn_deg, offset, footprint.id, pitch)
+    cached = _FROM_ABOVE.get(key)
+    if cached is not None:
+        return cached
+    from PySide6.QtCore import QPointF
+
+    from .topview import top_view
+
+    region = top_view(footprint, pitch).polarity
+    source = _mesh(path, mirrored, turn_deg, offset)
+    result: tuple[Any, Any] = (None, source)
+    if not region.isEmpty():
+        # The mesh is in the footprint's frame with y up, and reflected in x on the solder
+        # side (``_mesh``); the region is the footprint's own, y down and unreflected.
+        sign = -1.0 if mirrored else 1.0
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputData(source)
+        normals.ComputeCellNormalsOn()
+        normals.ComputePointNormalsOff()
+        normals.SplittingOff()
+        normals.ConsistencyOff()
+        normals.Update()
+        mesh = normals.GetOutput()
+        cell_normals = mesh.GetCellData().GetNormals()
+        centres = vtk.vtkCellCenters()
+        centres.SetInputData(mesh)
+        centres.Update()
+        painted, kept = vtk.vtkIdList(), vtk.vtkIdList()
+        for index in range(mesh.GetNumberOfCells()):
+            x, y, _z = centres.GetOutput().GetPoint(index)
+            level = cell_normals.GetTuple3(index)[2] > FLAT_TOP_NZ
+            inside = level and region.contains(QPointF(sign * x, -y))
+            (painted if inside else kept).InsertNextId(index)
+        if painted.GetNumberOfIds():
+            result = (_cells_of(mesh, painted), _cells_of(mesh, kept))
+    _FROM_ABOVE[key] = result
+    return result
+
+
+def _cells_of(mesh: vtk.vtkPolyData, ids: Any) -> vtk.vtkPolyData:
+    """The cells ``ids`` of ``mesh``, as polydata of their own -- their points copied once
+    each, normals left to the mapper, as every borrowed mesh's are."""
+    points = vtk.vtkPoints()
+    polys = vtk.vtkCellArray()
+    index_of: dict[int, int] = {}
+    for n in range(ids.GetNumberOfIds()):
+        corners = mesh.GetCell(ids.GetId(n)).GetPointIds()
+        polys.InsertNextCell(corners.GetNumberOfIds())
+        for k in range(corners.GetNumberOfIds()):
+            old = corners.GetId(k)
+            new = index_of.get(old)
+            if new is None:
+                new = points.InsertNextPoint(mesh.GetPoint(old))
+                index_of[old] = new
+            polys.InsertCellPoint(new)
+    out = vtk.vtkPolyData()
+    out.SetPoints(points)
+    out.SetPolys(polys)
+    return out
+
+
 def _model_pieces(
     body: _WorldBody,
     model: PartModel,
     comp: Any,
     board: Board,
     polarity_mark: tuple[ModelPiece, str] | None = None,
+    from_above: Footprint | None = None,
 ) -> list[_Piece]:
     """A borrowed package, placed on its holes.
 
@@ -3822,6 +3956,8 @@ def _model_pieces(
     module's own materials. ``polarity_mark``, when given, is the one piece printed on the
     case that our table has an opinion about -- a diode's band, an electrolytic's minus
     stripe -- and the colour the 2D view draws it in (see ``_polarity_mark``).
+    ``from_above``, when given, is the footprint whose 2D polarity mark is painted onto the
+    case's level faces in that same colour (:func:`_painted_from_above`).
     """
     x, y = _xy(board, comp.anchor)
     turn = (0.0, 0.0, -float(comp.rotation))
@@ -3837,13 +3973,29 @@ def _model_pieces(
             colour = polarity_mark[1]
         else:
             colour = piece.color
+        material = MODEL_MATERIALS.get(piece.material, MOULDED)
+        source = _mesh(str(piece.path), comp.mirrored, model.turn_deg, model.offset)
+        if from_above is not None and piece.material not in _LEAD_MATERIALS:
+            painted, source = _painted_from_above(
+                str(piece.path), comp.mirrored, model.turn_deg, model.offset, from_above, board.pitch
+            )
+            if painted is not None:
+                pieces.append(
+                    _Piece(
+                        source=painted,
+                        rgb=_rgb(body.style.accent),
+                        position=(x, y, 0.0),
+                        orientation=turn,
+                        material=material,
+                    )
+                )
         pieces.append(
             _Piece(
-                source=_mesh(str(piece.path), comp.mirrored, model.turn_deg, model.offset),
+                source=source,
                 rgb=_rgb(colour),
                 position=(x, y, 0.0),
                 orientation=turn,
-                material=MODEL_MATERIALS.get(piece.material, MOULDED),
+                material=material,
             )
         )
     return pieces
@@ -4204,6 +4356,11 @@ def _pieces_for(
                 comp,
                 board,
                 polarity_mark=(mark, body.style.accent) if mark is not None else None,
+                from_above=(
+                    footprint
+                    if body.polarity is not None and archetype in PAINTED_FROM_ABOVE
+                    else None
+                ),
             ),
             *markings,
             *_through_hole_pieces(body, 0.0),
