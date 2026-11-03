@@ -1161,6 +1161,18 @@ def surviving_finger_holes(doc: PerfDocument, connector: EdgeConnector) -> list[
 LEGEND_BORE_CLEARANCE_MM: Mm = 0.25
 
 
+#: A printed character's advance as a share of its height, for the legend's capitals and
+#: figures: generous (a W runs about 0.9, a 1 about 0.5). What a bore has to clear is the
+#: INK, not the slot a label may grow to -- asked with the 0.9-pitch slot, the A beside a
+#: corner screw in the border was left off a board that prints it there.
+LEGEND_GLYPH_ADVANCE = 0.72
+
+
+def legend_ink_width_mm(text: str, height: Mm, slot: Mm) -> Mm:
+    """How wide a printed legend label's ink is, at most its ``slot``."""
+    return min(slot, len(text) * height * LEGEND_GLYPH_ADVANCE)
+
+
 def printed_label_is_clear(
     doc: PerfDocument, centre: Point2, width: Mm, height: Mm
 ) -> bool:
@@ -1458,7 +1470,13 @@ def board_from_preset(preset: BoardPreset, base: Board) -> Board:
         # Without it the editor falls back to its own ruler, drawn OUTSIDE the board in
         # screen pixels; the addresses then exist on the screen and not on the board in
         # your hand, and they are missing from the 3D view and the 1:1 printout entirely.
-        labels=BoardLabels(row_digits=2),
+        #
+        # ON ONE EDGE EACH: letters along the top, numbers down the left. Every photograph of
+        # these boards prints its letters along one edge and its numbers along one other
+        # (the green 5 x 7 and 2 x 8, both phenolic 5 x 7s); a legend on all four edges is a
+        # different board (a black ENIG one), and drawing it here put two of everything on a
+        # board that has one.
+        labels=BoardLabels(row_digits=2, all_edges=False),
         # The oblong pads on these boards are the EDGE STRIP, never the whole grid --
         # every interior pad is round. They come from `preset_edge_connectors`, not from
         # a board-wide pad shape.
@@ -1580,10 +1598,43 @@ def corner_hole_inset(margin: Mm, pitch: Mm, radius: Mm) -> int:
     return steps
 
 
-def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHole, ...]:
-    """A screw hole AT each corner position, which is where these boards have one.
+def _border_corner_bores(board: Board, radius: Mm) -> tuple[tuple[HoleCoord, Mm, Mm], ...] | None:
+    """(the corner hole, offset x, offset y) for a bore in each corner of the BORDER, or None
+    where the border cannot hold one clear of the corner pad.
 
-    IT IS THE CORNER POSITION, not a bore squeezed diagonally past it. The hole used to be
+    The bore's centre is ``CORNER_HOLE_WEB_MM`` plus its radius in from BOTH edges -- the web
+    the screw needs on each side, which is what the first try at this ignored, pushing the
+    hole into the border by one offset on both axes and leaving 0.20 mm of board on one of
+    them. It has to clear the corner pad by ``FINGER_BORE_CLEARANCE_MM``, the smallest gap
+    these boards are made with; the pads farther in are farther away.
+    """
+    reach = CORNER_HOLE_WEB_MM + radius
+    margin_x = board_edge_margin_mm(board, "horizontal")
+    margin_y = board_edge_margin_mm(board, "vertical")
+    pad_radius = max(pad_extent_mm(board)) / 2
+    bores: list[tuple[HoleCoord, Mm, Mm]] = []
+    for row, sy in ((0, -1), (board.rows - 1, 1)):
+        for col, sx in ((0, -1), (board.cols - 1, 1)):
+            dx = sx * (margin_x - reach)
+            dy = sy * (margin_y - reach)
+            if math.hypot(dx, dy) - pad_radius - radius < FINGER_BORE_CLEARANCE_MM:
+                return None
+            bores.append((HoleCoord(col, row), round(dx, 4), round(dy, 4)))
+    return tuple(bores)
+
+
+def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHole, ...]:
+    """A screw hole in each corner of the BORDER, where the photographed boards have one,
+    or AT the corner position on a board whose border cannot hold it.
+
+    IN THE BORDER FIRST, because that is the board in the hand. Every photograph of these
+    boards (the green double-sided 5 x 7 and 2 x 8, the phenolic 5 x 7, a branded LF-HASL
+    board) shows bare holes in the corners of the border, outside the grid and its edge
+    pads, eating no pad at all. The bore sits ``CORNER_HOLE_WEB_MM`` plus its radius in from
+    both edges (``_border_corner_bores``), and the corner pad stays.
+
+    AT THE CORNER POSITION where the border is too thin for that, which is the rule this
+    used to apply everywhere: not a bore squeezed diagonally past the corner pad. The hole used to be
     pushed as far into the border as it would go, and the same offset was used on both
     axes -- so on a 5 x 7, whose two borders are 3.41 and 5.79 mm, the screw ended up
     0.20 mm from one edge of the board and floating a clear 2.6 mm from the other, with the
@@ -1602,6 +1653,19 @@ def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHo
     if preset.single_sided:
         return ()
     radius = CORNER_HOLE_MM / 2
+    in_border = _border_corner_bores(board, radius)
+    if in_border is not None:
+        return tuple(
+            MountingHole(
+                id=f"mh-{index + 1}",
+                at=at,
+                offset_x_mm=dx,
+                offset_y_mm=dy,
+                diameter=CORNER_HOLE_MM,
+                head_diameter=CORNER_HOLE_MM * 2,
+            )
+            for index, (at, dx, dy) in enumerate(in_border)
+        )
     inset_x = corner_hole_inset(board_edge_margin_mm(board, "horizontal"), board.pitch, radius)
     inset_y = corner_hole_inset(board_edge_margin_mm(board, "vertical"), board.pitch, radius)
     near_x, far_x = inset_x, board.cols - 1 - inset_x

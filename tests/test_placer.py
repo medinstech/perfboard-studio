@@ -839,6 +839,17 @@ def test_the_placer_counts_the_heat_pairs_drc_names() -> None:
     assert total > 0
 
 
+def _screws_on_the_corners(preset, board):
+    """The preset's corner screws, on the corner positions themselves rather than in the
+    border: where they are on a board whose border is too thin to hold them, and the only
+    place a screw head reaches over the grid. A 5 x 7's own screws sit in its border, clear
+    of every pad, which is right and leaves these terms nothing to price."""
+    return tuple(
+        dataclasses.replace(mount, offset_x_mm=0.0, offset_y_mm=0.0)
+        for mount in preset_mounting_holes(preset, board)
+    )
+
+
 def test_local_delta_matches_a_full_recompute_under_the_screw_heads() -> None:
     """The load-bearing delta test, on a stock board whose four corner screws are LIVE:
     parts start under two of them and every proposal can move one in or out."""
@@ -856,7 +867,7 @@ def test_local_delta_matches_a_full_recompute_under_the_screw_heads() -> None:
             nets=(net("n1", "N1", "signal", (("U1", "1"), ("C1", "1"), ("Q1", "2"), ("R1", "1"))),),
             board=board,
         ),
-        mounting_holes=preset_mounting_holes(preset, board),
+        mounting_holes=_screws_on_the_corners(preset, board),
     )
     state, scorer = _scorer_for(doc, REGISTRY, weights)
     assert scorer.full(state).mount_covered >= 2  # the term starts out live
@@ -906,7 +917,7 @@ def test_the_placer_moves_parts_out_from_under_the_screws_and_hot_parts_apart() 
             ),
             board=board,
         ),
-        mounting_holes=preset_mounting_holes(preset, board),
+        mounting_holes=_screws_on_the_corners(preset, board),
         edge_connectors=preset_edge_connectors(preset, board),
     )
     plan = plan_placement(doc, REGISTRY, PlacementOptions(seed=0, restarts=2))

@@ -76,6 +76,7 @@ from perfboard_studio.geometry import (
     hole_key,
     holeless_positions,
     holes_without_grid_pad,
+    legend_ink_width_mm,
     legend_strip_mm,
     mounting_hole_centre_mm,
     pad_extent_mm,
@@ -1533,7 +1534,8 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
             # Not printed where a bore was drilled -- the same question view2d asks, in
             # the same units: board millimetres with y growing DOWN, so 3D's y is negated
             # on the way in. A turned number's box is turned with it.
-            box = (height, max_width) if rotate else (max_width, height)
+            ink = legend_ink_width_mm(text, height, max_width)
+            box = (height, ink) if rotate else (ink, height)
             if not printed_label_is_clear(doc, Point2(x, -y), box[0], box[1]):
                 continue
             vector = vtk.vtkVectorText()

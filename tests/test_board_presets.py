@@ -379,15 +379,14 @@ def test_the_finger_strips_go_across_the_short_edges() -> None:
         assert preset_strip_edges(board) == expected, preset.name
 
 
-def test_a_corner_hole_takes_its_own_position_and_nothing_else() -> None:
-    """The screw hole IS the corner position: the board is made with a hole there instead
-    of a pad, and one pad per corner is the whole cost of it.
-
-    It used to be pushed as far diagonally into the border as it would go, to keep that
-    pad -- which on a 5 x 7 left the bore 0.20 mm from the board's edge and jammed against
-    the pad it was avoiding, because one offset was used for two borders that are 3.41 and
-    5.79 mm wide. Four pads is the price of four screws that are actually in the corners.
-    """
+def test_a_corner_hole_sits_in_the_border_where_the_border_holds_it() -> None:
+    """Every photograph of these boards shows bare holes in the corners of the BORDER,
+    outside the grid, eating no pad: there the bore stands its web in from both edges and
+    every pad is kept. Where the border is too thin for that -- today's 6 x 8 and larger,
+    whose grids run almost to the edge -- it takes the corner position instead, one pad per
+    screw, which is what a bore pushed into the border by one offset on both axes, 0.20 mm
+    from an edge, was replaced with."""
+    in_border: set[str] = set()
     for preset in STANDARD_PRESETS:
         if preset.single_sided:
             continue
@@ -397,8 +396,12 @@ def test_a_corner_hole_takes_its_own_position_and_nothing_else() -> None:
 
         assert len(holes) == 4, f"{preset.name} has a screw hole in each corner"
         consumed = consumed_holes(doc)
-        assert len(consumed) == 4, f"{preset.name} loses one pad per screw and no more"
-        assert consumed == {hole_key(hole.at) for hole in holes}
+        if all(hole.offset_x_mm or hole.offset_y_mm for hole in holes):
+            assert consumed == set(), f"{preset.name}: a screw in the border took a pad"
+            in_border.add(preset.name)
+        else:
+            assert consumed == {hole_key(hole.at) for hole in holes}, preset.name
+    assert {"2 x 8 cm", "3 x 7 cm", "4 x 6 cm", "5 x 7 cm"} <= in_border
 
 
 def test_a_corner_hole_stands_clear_of_both_edges_of_the_board() -> None:

@@ -166,9 +166,9 @@ class BoardLabels:
     #: The addresses themselves never change — this is how the *board* renders one.
     row_digits: int = 1
     #: Print the legend on all four edges — letters along the top AND bottom, numbers
-    #: down the left AND right — which is what the boards being modelled do. With one
-    #: edge each, half the board is nearer the edge that does not carry its address,
-    #: which is exactly where counting starts again.
+    #: down the left AND right — as some boards do (a black ENIG one in the photographs).
+    #: False prints letters along the top and numbers down the left only, which is what
+    #: the stock green and phenolic boards print and what their presets ask for.
     all_edges: bool = True
     #: What the board prints along its columns when that is not this tool's own A..Z,
     #: AA..: None prints the column letters, which is what every board modelled before

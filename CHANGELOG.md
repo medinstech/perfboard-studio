@@ -293,6 +293,13 @@ closed without a bump.
 
 ### Fixed
 
+- **A stock board's corner holes are where the real board has them.** In the corners of the
+  border, outside the grid, with every pad kept -- they had taken the four corner pads and
+  worn a dashed orange ring that read as copper. The ring, which is where the screw head
+  will sit, now shows while the pointer is on the hole or a part is too close to it. The
+  boards' printed letters and numbers are on one edge each, as on the boards sold, not on
+  all four.
+
 - **A module's board has square corners.** An Arduino Nano or an ESP32 board was drawn as a
   soft block with corners rounded 2 mm, as a moulded case is; a board is cut from a panel
   with square ones. A chip's SMD adapter likewise.

@@ -696,6 +696,16 @@ they are easy to get wrong the same way again:
   reason.
 - **Corner mounting holes sit in the border** via `offset_x_mm` / `offset_y_mm`, eating
   no pads. Always go through `mounting_hole_centre_mm`, never `hole_to_mm(mount.at)`.
+  This was got wrong TWICE: first by pushing the bore into the border by one offset on
+  both axes (0.20 mm from one edge of a 5 × 7), then by moving every bore onto the grid's
+  corner position, which cost four pads and was not the board in any photograph. A
+  preset's bore stands `CORNER_HOLE_WEB_MM` plus its radius in from BOTH edges, clear of
+  the corner pad by `FINGER_BORE_CLEARANCE_MM` (`geometry._border_corner_bores`), and
+  falls back to the corner position only where the border cannot hold it. Its screw-head
+  keep-out is drawn while the pointer is on the hole or DRC has a part in it, never
+  otherwise: a dashed orange ring on every hole read as copper the board does not have.
+  A printed letter is left off only where the bore takes its INK (`legend_ink_width_mm`),
+  not the whole slot a label may grow to.
 
 `board.single_sided` is the cheap phenolic board: copper on the solder side only. Both
 renderers still draw the holes on the bare face — a face with neither holes nor pads is a

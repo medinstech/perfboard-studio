@@ -109,6 +109,7 @@ from perfboard_studio.geometry import (
     holeless_positions,
     holes_without_grid_pad,
     is_inside_board,
+    legend_ink_width_mm,
     legend_strip_mm,
     manhattan,
     mounting_hole_centre_mm,
@@ -849,9 +850,10 @@ class BoardLegendItem(QGraphicsItem):
             if column_text is None:
                 continue
             x = hole_to_screen(HoleCoord(col, 0), board, self.side).x()
+            ink = legend_ink_width_mm(column_text, height, wide)
             for y in column_ys:
                 if not printed_label_is_clear(
-                    self.document, Point2(col * board.pitch, y), wide, height
+                    self.document, Point2(col * board.pitch, y), ink, height
                 ):
                     continue
                 draw_physical_label(
@@ -868,7 +870,7 @@ class BoardLegendItem(QGraphicsItem):
                     self.document,
                     Point2(x if self.side == "top" else _span_w_for(board) - x, row * board.pitch),
                     height,
-                    wide,
+                    legend_ink_width_mm(text, height, wide),
                 ):
                     continue
                 draw_physical_label(
@@ -981,11 +983,14 @@ class BoardNoteItem(QGraphicsItem):
 
 
 class MountingHoleItem(QGraphicsItem):
-    """A screw hole: the bore, and the ring the screw head will cover.
+    """A screw hole: the bore, and -- while it matters -- the ring the screw head will cover.
 
-    The head ring is drawn because it is a keepout nobody can see otherwise -- the bore
-    looks small and harmless, and the reason you cannot put a capacitor next to it is the
-    washer, which is not on the board yet.
+    The head ring is a keep-out nobody can see otherwise: the bore looks small and harmless,
+    and the reason you cannot put a capacitor next to it is the washer, which is not on the
+    board yet. But drawn on every hole all the time, a dashed orange ring read as COPPER, a
+    ring round the hole the real board does not have. So it is drawn while the pointer is
+    over the hole, or while DRC says a part is inside it (``set_flagged``), and not
+    otherwise.
     """
 
     def __init__(self, mount: MountingHole, board: Board, side: BoardSide) -> None:
@@ -993,7 +998,25 @@ class MountingHoleItem(QGraphicsItem):
         self.mount = mount
         self.board = board
         self.side = side
+        self.flagged = False
+        self.hovered = False
+        self.setAcceptHoverEvents(True)
         self.setZValue(-85)  # Over the pads it removed, under the parts.
+
+    def set_flagged(self, flagged: bool) -> None:
+        if flagged != self.flagged:
+            self.flagged = flagged
+            self.update()
+
+    def hoverEnterEvent(self, event: Any) -> None:
+        self.hovered = True
+        self.update()
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event: Any) -> None:
+        self.hovered = False
+        self.update()
+        super().hoverLeaveEvent(event)
 
     def _centre(self) -> QPointF:
         """Where the bore actually is.
@@ -1013,12 +1036,13 @@ class MountingHoleItem(QGraphicsItem):
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         centre = self._centre()
-        head_r = self.mount.head_diameter / 2
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        pen = QPen(MOUNT_KEEPOUT, 0.12)
-        pen.setStyle(Qt.PenStyle.DashLine)
-        painter.setPen(pen)
-        painter.drawEllipse(centre, head_r, head_r)
+        if (self.flagged or self.hovered) and not _on_paper(painter):
+            head_r = self.mount.head_diameter / 2
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            pen = QPen(MOUNT_KEEPOUT, 0.12)
+            pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.drawEllipse(centre, head_r, head_r)
 
         bore_r = self.mount.diameter / 2
         painter.setPen(QPen(MOUNT_EDGE, 0.15))
@@ -3870,6 +3894,7 @@ class BoardScene(QGraphicsScene):
         self.document = document
         self.violations: tuple[DrcViolation, ...] = ()
         self.component_items: dict[str, ComponentItem] = {}
+        self.mount_items: dict[str, MountingHoleItem] = {}
         #: Every part's reference, over every part -- see ``ReferenceLayerItem``.
         self.reference_layer: ReferenceLayerItem | None = None
         #: The solder side's lead ends, over the copper; None on the component side.
@@ -4223,8 +4248,10 @@ class BoardScene(QGraphicsScene):
 
         for connector in self.document.edge_connectors:
             self.addItem(EdgeConnectorItem(connector, self.document, self.side))
+        self.mount_items = {}
         for mount in self.document.mounting_holes:
-            self.addItem(MountingHoleItem(mount, board, self.side))
+            self.mount_items[mount.id] = MountingHoleItem(mount, board, self.side)
+            self.addItem(self.mount_items[mount.id])
 
         # THE RULER STANDS DOWN WHEN THE BOARD SPEAKS FOR ITSELF. The ruler exists to name
         # a hole on a board that carries no addresses of its own; drawing it alongside a
@@ -4401,6 +4428,16 @@ class BoardScene(QGraphicsScene):
 
         for comp_id, item in self.component_items.items():
             item.set_error(comp_id in error_component_ids)
+
+        # A screw hole shows the ring its head will cover while DRC says something is in it.
+        crowded = {
+            (hole.col, hole.row)
+            for v in self.violations
+            if v.rule in ("mounting-hole-clearance", "mounting-hole-conflict")
+            for hole in v.holes
+        }
+        for mount_item in self.mount_items.values():
+            mount_item.set_flagged((mount_item.mount.at.col, mount_item.mount.at.row) in crowded)
 
     # -- selection helpers, used by the DRC/LVS dock -------------------------
 

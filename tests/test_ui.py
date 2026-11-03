@@ -4318,8 +4318,15 @@ def test_a_legend_on_a_finger_edge_is_printed_outside_the_fingers(monkeypatch) -
     board edge, and the middle of a finger is inside that band.
     """
     from perfboard_studio.commands import create_starter_document
-    from perfboard_studio.geometry import board_edge_margin_mm, hole_span_mm, legend_strip_mm
-    from perfboard_studio.model import DocumentMeta
+    from perfboard_studio.geometry import (
+        board_edge_margin_mm,
+        column_label,
+        hole_span_mm,
+        legend_ink_width_mm,
+        legend_strip_mm,
+        printed_label_is_clear,
+    )
+    from perfboard_studio.model import DocumentMeta, Point2
 
     doc = create_starter_document(DocumentMeta(name="t", created="", modified=""))
     assert doc.board.labels is not None, "the board this opens on prints its own addresses"
@@ -4334,7 +4341,23 @@ def test_a_legend_on_a_finger_edge_is_printed_outside_the_fingers(monkeypatch) -
         for text, centre, height, _w in _legend_labels_drawn(doc, monkeypatch)
         if text.isalpha()
     ]
-    assert len(letters) == doc.board.cols * 2, "the letters are not being laid down at all"
+    # Every letter the board can print: one edge or two, less any a corner screw's bore has
+    # taken the substrate from (``printed_label_is_clear``).
+    edges = 2 if doc.board.labels.all_edges else 1
+    under_bores = {
+        col
+        for col in range(doc.board.cols)
+        if not printed_label_is_clear(
+            doc,
+            Point2(col * doc.board.pitch, -(margin_y - inset / 2)),
+            legend_ink_width_mm(column_label(col), 0.9, doc.board.pitch * 0.9),
+            0.9,
+        )
+    }
+    assert len(under_bores) <= 2, "a corner screw takes at most the letter beside it"
+    assert len(letters) == (doc.board.cols - len(under_bores)) * edges, (
+        "the letters are not being laid down at all"
+    )
 
     for text, centre, height in letters:
         near = -margin_y < centre.y() - height / 2 and centre.y() + height / 2 < -margin_y + inset
