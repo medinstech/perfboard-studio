@@ -113,6 +113,18 @@ BoardMask: TypeAlias = Literal[  # noqa: UP040
 #: at all; or gold over nickel (ENIG). ``TypeAlias`` for ``get_args``, as above.
 BoardFinish: TypeAlias = Literal["hasl", "lf-hasl", "bare-copper", "enig"]  # noqa: UP040
 
+#: Which edges a legend's letters are printed along, and its numbers down. ``TypeAlias``
+#: for ``get_args``, as above: the board designer offers the members.
+#: "none" is a board that prints the one run and not the other (the phenolic 5 x 7 letters
+#: its long edge and numbers nothing).
+LetterEdges: TypeAlias = Literal["top", "bottom", "both", "none"]  # noqa: UP040
+NumberEdges: TypeAlias = Literal["left", "right", "both", "none"]  # noqa: UP040
+
+#: An edge finger's outline: a rectangle with softened corners (what every finger was
+#: drawn as), a stadium with fully rounded ends (the green boards' strips), or square
+#: (the phenolic boards'). ``TypeAlias`` for ``get_args``.
+FingerShape: TypeAlias = Literal["rounded", "stadium", "square"]  # noqa: UP040
+
 #: One face, or both. Distinct from ``BoardSide``, which is always exactly one — a
 #: silkscreen legend or a set of connector fingers is routinely printed on both.
 type BoardFace = Literal["top", "bottom", "both"]
@@ -187,6 +199,13 @@ class BoardLabels:
     columns: AxisLegend | None = None
     #: The same down the rows, where None prints the row number padded to ``row_digits``.
     rows: AxisLegend | None = None
+    #: Which edges the letters are printed along, None for what ``all_edges`` says (both,
+    #: or the top). Per run, because the boards differ per run: the green 5 x 7 prints its
+    #: letters along the top only and its numbers down BOTH short edges. Left out of the
+    #: file when None. ``geometry.legend_edges`` is the one answer.
+    letter_edges: LetterEdges | None = None
+    #: Which edges the numbers are printed down, None for what ``all_edges`` says.
+    number_edges: NumberEdges | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -365,6 +384,9 @@ class EdgeConnector:
     #: stands beyond it. The grid's pad and hole beside it stay as they are, and nothing is
     #: soldered INTO an outside finger, because it has no hole.
     outside: bool = False
+    #: The finger's outline -- see ``FingerShape``. "rounded", the default, is what every
+    #: finger was drawn as and is left out of the file.
+    shape: FingerShape = "rounded"
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,11 @@ closed without a bump.
 
 ### Added
 
+- **A board's legend is printed where the board prints it.** Letters and numbers can each
+  be on one edge or both, and beside an edge strip the numbers go between the strip and
+  the grid when that is where there is room, as on the green boards. Edge pads can be
+  stadiums or squares, like the green and phenolic boards' strips.
+
 - **A board can carry the words it is printed with.** Its size ("5cmX7cm"), a batch code or
   a maker's name, in the border along any edge, drawn in 2D, in 3D and on the 1:1 print; a
   legend letter it covers is left off, as on the real board.

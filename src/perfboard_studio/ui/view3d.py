@@ -68,7 +68,6 @@ from perfboard_studio.footprints import (
 from perfboard_studio.geometry import (
     FLYING_LEAD_MARKER_MM,
     all_pin_holes,
-    board_edge_margin_mm,
     board_note_centre_mm,
     board_size_mm,
     board_text_placement,
@@ -78,7 +77,7 @@ from perfboard_studio.geometry import (
     holeless_positions,
     holes_without_grid_pad,
     legend_ink_width_mm,
-    legend_strip_mm,
+    legend_layout,
     mounting_hole_centre_mm,
     pad_extent_mm,
     printed_label,
@@ -1484,11 +1483,8 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
     # legend in the same place or the 3D board stops matching the one being edited.
     # Asked of the DOCUMENT, not the board: an edge carrying connector fingers has only
     # whatever inset those fingers left, and the 2D legend measures it the same way.
-    strip_x = legend_strip_mm(doc, "horizontal")
-    strip_y = legend_strip_mm(doc, "vertical")
-    margin_x = board_edge_margin_mm(board, "horizontal")
-    margin_y = board_edge_margin_mm(board, "vertical")
-    height = min(1.15, min(strip_x, strip_y) * 0.6)
+    layout = legend_layout(doc, labels)
+    height = layout.height
     faces: tuple[BoardSide, ...] = (
         ("top", "bottom") if labels.face == "both" else (labels.face,)
     )
@@ -1503,13 +1499,8 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
         # Measured IN FROM THE BOARD EDGE, exactly as view2d does and for the same reason:
         # out from the pad puts the column letters on top of the connector fingers, which
         # reach most of the way to the edge on the board this application opens on.
-        span_w = (board.cols - 1) * board.pitch
-        span_h = (board.rows - 1) * board.pitch
-        column_ys = [margin_y - strip_y / 2]
-        row_xs = [-(margin_x - strip_x / 2)]
-        if labels.all_edges:
-            column_ys.append(-span_h - margin_y + strip_y / 2)
-            row_xs.append(span_w + margin_x - strip_x / 2)
+        column_ys = [-y for y in layout.column_ys]
+        row_xs = list(layout.row_xs)
         # Row numbers are turned on their side, as they are on the real boards and in the
         # 2D view: the strip beside a row is narrow across and a whole pitch deep, so a
         # turned number fits where an upright one has to shrink.

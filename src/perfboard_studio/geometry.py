@@ -159,6 +159,22 @@ def _run_problem(first: str, last: str) -> str | None:
     return None
 
 
+def legend_edges(labels: BoardLabels) -> tuple[tuple[BoardEdge, ...], tuple[BoardEdge, ...]]:
+    """(the edges the letters are printed along, the edges the numbers are printed down).
+
+    ``letter_edges`` / ``number_edges`` when the board says, or else ``all_edges``: both of
+    each, or the top and the left -- which is all a board could say before."""
+    letters = labels.letter_edges or ("both" if labels.all_edges else "top")
+    numbers = labels.number_edges or ("both" if labels.all_edges else "left")
+    letter_runs: tuple[BoardEdge, ...] = (
+        ("top", "bottom") if letters == "both" else () if letters == "none" else (letters,)
+    )
+    number_runs: tuple[BoardEdge, ...] = (
+        ("left", "right") if numbers == "both" else () if numbers == "none" else (numbers,)
+    )
+    return letter_runs, number_runs
+
+
 def legend_problem(labels: BoardLabels) -> str | None:
     """Why ``labels`` cannot be a board's legend, or None.
 
@@ -1244,12 +1260,12 @@ def board_text_placement(doc: PerfDocument, line: BoardText) -> tuple[Point2, Mm
     with y growing DOWN like every position here, its box already turned.
 
     In the strip of bare substrate along its edge -- the strip the legend is printed in,
-    asked of the DOCUMENT for the same reason (``legend_strip_mm``: an edge strip of fingers
-    leaves only its inset) -- and centred across it, measured in from the board edge.
+    asked of the DOCUMENT for the same reason (``legend_band_mm``: an edge strip of fingers
+    leaves only what it leaves) -- and centred across it, measured in from the board edge.
     """
     board = doc.board
     axis = edge_axis(line.edge)
-    strip = legend_strip_mm(doc, axis)
+    centre, strip = legend_band_mm(doc, line.edge)
     margin = board_edge_margin_mm(board, axis)
     height = max(0.0, min(line.height_mm, strip * BOARD_TEXT_STRIP_SHARE))
     width = len(line.text) * height * LEGEND_GLYPH_ADVANCE
@@ -1257,12 +1273,12 @@ def board_text_placement(doc: PerfDocument, line: BoardText) -> tuple[Point2, Mm
     outline = board_outline_mm(board)
     if line.edge in ("top", "bottom"):
         x = outline.x + outline.width * line.along
-        y = -(margin - strip / 2) if line.edge == "top" else span_h + margin - strip / 2
+        y = -(margin - centre) if line.edge == "top" else span_h + margin - centre
         return Point2(x, y), width, height, 0.0
     y = outline.y + outline.height * line.along
     if line.edge == "left":
-        return Point2(-(margin - strip / 2), y), height, width, -90.0
-    return Point2(span_w + margin - strip / 2, y), height, width, 90.0
+        return Point2(-(margin - centre), y), height, width, -90.0
+    return Point2(span_w + margin - centre, y), height, width, 90.0
 
 
 def _boxes_meet(a: Point2, aw: Mm, ah: Mm, b: Point2, bw: Mm, bh: Mm) -> bool:
@@ -1409,6 +1425,84 @@ def legend_strip_mm(doc: PerfDocument, axis: PadAxis) -> Mm:
             continue
         free = min(free, max(0.0, connector.inset_mm))
     return max(0.0, free)
+
+
+def legend_band_mm(doc: PerfDocument, edge: BoardEdge) -> tuple[Mm, Mm]:
+    """(centre, width) of the bare band along one edge that print goes in, its centre
+    measured in from the board edge.
+
+    The strip between the outermost pads and the edge -- less what an edge strip takes of
+    it. A strip ON the holes leaves only its inset (``legend_strip_mm``). A strip OUTSIDE the
+    grid leaves two bands, its inset outside it and the gap between it and the pads, and the
+    print goes in the WIDER: that is where the green boards print their row numbers, small,
+    between the grid and the strip. Per EDGE, where ``legend_strip_mm`` is per axis, because
+    a strip along one edge says nothing about the room along the other.
+    """
+    board = doc.board
+    axis = edge_axis(edge)
+    extent_x, extent_y = pad_extent_mm(board)
+    free = max(
+        0.0,
+        board_edge_margin_mm(board, axis) - (extent_x if axis == "horizontal" else extent_y) / 2,
+    )
+    band = (free / 2, free)
+    for connector in doc.edge_connectors:
+        if connector.edge != edge:
+            continue
+        inset = max(0.0, connector.inset_mm)
+        outer = min(free, inset)
+        here = (outer / 2, outer)
+        if connector.outside:
+            room = max(0.0, outside_finger_room_mm(board, edge, inset))
+            length = room if connector.finger_length is None else min(room, max(0.0, connector.finger_length))
+            inner = free - inset - length
+            if inner > outer:
+                here = (inset + length + inner / 2, inner)
+        if here[1] < band[1]:
+            band = here
+    return band
+
+
+@dataclass(frozen=True, slots=True)
+class LegendLayout:
+    """Where a board's printed legend goes: one answer for the 2D board, the 3D board and
+    the 1:1 print, which used to work it out each for itself.
+
+    In board millimetres with y growing DOWN: the y of the letters' centres on each edge
+    they are printed along, the x of the numbers' on each edge they are printed down, and
+    one cap height for the lot -- the narrowest of those bands allows it.
+    """
+
+    height: Mm
+    column_ys: tuple[Mm, ...]
+    row_xs: tuple[Mm, ...]
+
+
+#: The tallest a legend is printed (a real board prints it around 1.2 mm), and the share of
+#: its band a character may take.
+LEGEND_MAX_HEIGHT_MM: Mm = 1.15
+LEGEND_BAND_SHARE = 0.6
+
+
+def legend_layout(doc: PerfDocument, labels: BoardLabels) -> LegendLayout:
+    board = doc.board
+    span_w, span_h = hole_span_mm(board)
+    margin_x = board_edge_margin_mm(board, "horizontal")
+    margin_y = board_edge_margin_mm(board, "vertical")
+    letter_edges, number_edges = legend_edges(labels)
+    widths: list[Mm] = []
+    column_ys: list[Mm] = []
+    for edge in letter_edges:
+        centre, width = legend_band_mm(doc, edge)
+        widths.append(width)
+        column_ys.append(-(margin_y - centre) if edge == "top" else span_h + margin_y - centre)
+    row_xs: list[Mm] = []
+    for edge in number_edges:
+        centre, width = legend_band_mm(doc, edge)
+        widths.append(width)
+        row_xs.append(-(margin_x - centre) if edge == "left" else span_w + margin_x - centre)
+    height = min(LEGEND_MAX_HEIGHT_MM, min(widths, default=0.0) * LEGEND_BAND_SHARE)
+    return LegendLayout(height, tuple(column_ys), tuple(row_xs))
 
 
 def edge_axis(edge: BoardEdge) -> PadAxis:

@@ -61,12 +61,15 @@ from .model import (
     Conductor,
     DocumentMeta,
     EdgeConnector,
+    FingerShape,
     HoleCoord,
     LeadBendConductor,
+    LetterEdges,
     MountingHole,
     Net,
     NetClass,
     NetNode,
+    NumberEdges,
     PadAxis,
     PadShape,
     PartSymbol,
@@ -258,7 +261,9 @@ BOARD_KEY_ORDER: tuple[str, ...] = (
     "printed",
 )
 BOARD_TEXT_KEY_ORDER: tuple[str, ...] = ("text", "edge", "along", "heightMm", "face")
-BOARD_LABELS_KEY_ORDER: tuple[str, ...] = ("face", "rowDigits", "allEdges", "columns", "rows")
+BOARD_LABELS_KEY_ORDER: tuple[str, ...] = (
+    "face", "rowDigits", "allEdges", "columns", "rows", "letterEdges", "numberEdges"
+)
 AXIS_LEGEND_KEY_ORDER: tuple[str, ...] = ("runs", "every", "digits")
 MOUNTING_HOLE_KEY_ORDER: tuple[str, ...] = (
     "id",
@@ -278,6 +283,7 @@ EDGE_CONNECTOR_KEY_ORDER: tuple[str, ...] = (
     "insetMm",
     "face",
     "outside",
+    "shape",
 )
 HOLE_KEY_ORDER: tuple[str, ...] = ("col", "row")
 COMPONENT_KEY_ORDER: tuple[str, ...] = (
@@ -378,6 +384,8 @@ def _ordered_board(b: Board) -> JsonObj:
                     for key, legend in (("columns", b.labels.columns), ("rows", b.labels.rows))
                     if legend is not None
                 },
+                **({"letterEdges": b.labels.letter_edges} if b.labels.letter_edges else {}),
+                **({"numberEdges": b.labels.number_edges} if b.labels.number_edges else {}),
             },
         )
     if b.narrow_channel_cols:
@@ -455,6 +463,8 @@ def _ordered_edge_connector(e: EdgeConnector, index: int) -> JsonObj:
         values["insetMm"] = _num(_field_path(path, "insetMm"), e.inset_mm)
     if e.outside:
         values["outside"] = True
+    if e.shape != "rounded":
+        values["shape"] = e.shape
     return _build_ordered(EDGE_CONNECTOR_KEY_ORDER, values)
 
 
@@ -1035,6 +1045,9 @@ BOARD_TYPES: tuple[BoardType, ...] = get_args(BoardType)
 BOARD_MATERIALS: tuple[BoardMaterial, ...] = get_args(BoardMaterial)
 BOARD_MASKS: tuple[BoardMask, ...] = get_args(BoardMask)
 BOARD_FINISHES: tuple[BoardFinish, ...] = get_args(BoardFinish)
+FINGER_SHAPES: tuple[FingerShape, ...] = get_args(FingerShape)
+LETTER_EDGES: tuple[LetterEdges, ...] = get_args(LetterEdges)
+NUMBER_EDGES: tuple[NumberEdges, ...] = get_args(NumberEdges)
 STRIP_AXES: tuple[str, ...] = ("horizontal", "vertical")
 PAD_SHAPES: tuple[PadShape, ...] = ("round", "oblong")
 PAD_AXES: tuple[PadAxis, ...] = ("horizontal", "vertical")
@@ -1169,6 +1182,14 @@ def _parse_board_labels(raw: object, path: str, warnings: list[str]) -> BoardLab
             else _parse_axis_legend(columns_raw, _field_path(path, "columns"), warnings)
         ),
         rows=None if rows_raw is None else _parse_axis_legend(rows_raw, _field_path(path, "rows"), warnings),
+        letter_edges=(
+            None if obj.get("letterEdges") is None
+            else _expect_enum(obj["letterEdges"], _field_path(path, "letterEdges"), LETTER_EDGES)  # type: ignore[arg-type]
+        ),
+        number_edges=(
+            None if obj.get("numberEdges") is None
+            else _expect_enum(obj["numberEdges"], _field_path(path, "numberEdges"), NUMBER_EDGES)  # type: ignore[arg-type]
+        ),
     )
     # What board.set refuses, in its words: a legend no board can print does not load.
     if (problem := legend_problem(labels)) is not None:
@@ -1395,6 +1416,10 @@ def _parse_edge_connector(raw: object, path: str, warnings: list[str]) -> EdgeCo
         outside=(
             False if obj.get("outside") is None
             else _expect_boolean(obj["outside"], _field_path(path, "outside"))
+        ),
+        shape=(
+            "rounded" if obj.get("shape") is None
+            else _expect_enum(obj["shape"], _field_path(path, "shape"), FINGER_SHAPES)  # type: ignore[arg-type]
         ),
     )
 

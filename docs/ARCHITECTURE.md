@@ -740,7 +740,18 @@ they are easy to get wrong the same way again:
   trials choose, which is its own measured change.
 - **Fingers stop short of the edge** (`inset_mm`); the strip outside them is where the
   row numbers are printed. `legend_strip_mm` asks the *document*, not the board, for that
-  reason.
+  reason. An OUTSIDE strip leaves two bands, its inset and the gap between it and the
+  pads, and `legend_band_mm` puts the print in the wider: the green 5 × 7 prints its row
+  numbers small between the grid and the strip. It is per EDGE, where `legend_strip_mm` is
+  per axis, because a strip along one edge says nothing about the other.
+- **The legend is laid out once** (`geometry.legend_layout`): which edges each run is
+  printed on (`legend_edges` -- `BoardLabels.letter_edges` / `number_edges` when the board
+  says, `all_edges` otherwise, because the green board prints letters along the top and
+  numbers down both short edges), the band on each, and one cap height. The 2D legend, the
+  3D one and the print all take it; they used to each work it out.
+- **A finger has a shape** (`EdgeConnector.shape`): rounded, a stadium (the green boards'
+  strips) or square (the phenolic ones'). Rounded, what every finger was drawn as, is left
+  out of the file.
 - **Corner mounting holes sit in the border** via `offset_x_mm` / `offset_y_mm`, eating
   no pads. Always go through `mounting_hole_centre_mm`, never `hole_to_mm(mount.at)`.
   This was got wrong TWICE: first by pushing the bore into the border by one offset on

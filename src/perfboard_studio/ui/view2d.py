@@ -95,7 +95,6 @@ from perfboard_studio.footprints import wire_entry
 from perfboard_studio.geometry import (
     FLYING_LEAD_MARKER_MM,
     all_pin_holes,
-    board_edge_margin_mm,
     board_note_anchor,
     board_note_centre_mm,
     board_outline_mm,
@@ -111,7 +110,7 @@ from perfboard_studio.geometry import (
     holes_without_grid_pad,
     is_inside_board,
     legend_ink_width_mm,
-    legend_strip_mm,
+    legend_layout,
     manhattan,
     mounting_hole_centre_mm,
     pad_extent_mm,
@@ -145,6 +144,7 @@ from perfboard_studio.model import (
     Conductor,
     ConductorKind,
     EdgeConnector,
+    FingerShape,
     Footprint,
     HoleCoord,
     MountingHole,
@@ -776,32 +776,15 @@ class BoardLegendItem(QGraphicsItem):
     def boundingRect(self) -> QRectF:
         return _outline_rect(self.board)
 
-    def _free_strip_mm(self) -> tuple[float, float]:
-        """Bare substrate between the outermost pads and the board edge, (across, down).
-
-        NOT the whole margin. The outer pads eat into it -- half a pad's extent of it --
-        and ink printed there would sit under copper, which on a 2.54 mm board is most of
-        the margin gone. This is the strip a legend actually has, and both the size of the
-        characters and where they are centred come from it.
-        """
-        return (
-            legend_strip_mm(self.document, "horizontal"),
-            legend_strip_mm(self.document, "vertical"),
-        )
-
-    def _text_height_mm(self) -> float:
-        """Cap height. A real board prints this around 1.2 mm, and it is capped to
-        whatever the free strip can hold when there is less room than that."""
-        strip_x, strip_y = self._free_strip_mm()
-        return min(1.15, min(strip_x, strip_y) * 0.6)
-
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         board = self.board
         color = QColor(LEGEND_INK if self.near_side else LEGEND_INK_FAR)
-        strip_x, strip_y = self._free_strip_mm()
-        margin_x = board_edge_margin_mm(board, "horizontal")
-        margin_y = board_edge_margin_mm(board, "vertical")
-        height = self._text_height_mm()
+        # WHERE AND HOW TALL is one answer for both views and the print
+        # (`geometry.legend_layout`): the bare band along each edge a run is printed on, NOT
+        # the whole margin -- the outer pads eat half their extent of it, and an edge strip
+        # takes what it takes -- with the cap height the narrowest of those bands allows.
+        layout = legend_layout(self.document, self.labels)
+        height = layout.height
 
         painter.save()
         painter.setPen(QPen(color))
@@ -825,16 +808,13 @@ class BoardLegendItem(QGraphicsItem):
         # reason rather than as decoration: the strip beside a row is narrow across and a
         # whole pitch deep, so an upright "07" has to shrink to fit while a turned one
         # does not.
-        span_w, span_h = hole_span_mm(board)
-        column_ys = [-(margin_y - strip_y / 2)]
-        row_xs = [-(margin_x - strip_x / 2)]
-        if self.labels.all_edges:
-            column_ys.append(span_h + margin_y - strip_y / 2)
-            row_xs.append(span_w + margin_x - strip_x / 2)
-        elif self.side == "bottom":
-            # A one-edge legend is on a PHYSICAL edge, and turning the board over moves
-            # that edge to the other side of the screen. Reflected about the hole span
-            # like every other x here, never about the substrate -- see the module note.
+        span_w, _span_h = hole_span_mm(board)
+        column_ys = list(layout.column_ys)
+        row_xs = list(layout.row_xs)
+        if self.side == "bottom":
+            # A run is on a PHYSICAL edge, and turning the board over moves that edge to the
+            # other side of the screen. Reflected about the hole span like every other x
+            # here, never about the substrate -- see the module note.
             row_xs = [span_w - x for x in row_xs]
 
         # A LABEL IS NOT PRINTED WHERE A BORE HAS BEEN DRILLED. Ink goes on the substrate
@@ -1421,6 +1401,11 @@ class TrackCutItem(QGraphicsItem):
         )
 
 
+#: How round a finger's corners are, as a share of its short side: a softened rectangle,
+#: a stadium (half the short side, so the ends are semicircles), or nearly square.
+FINGER_CORNER: dict[FingerShape, float] = {"rounded": 0.25, "stadium": 0.5, "square": 0.06}
+
+
 class EdgeConnectorItem(QGraphicsItem):
     """The finger pads of one edge connector.
 
@@ -1457,7 +1442,7 @@ class EdgeConnectorItem(QGraphicsItem):
             if self.side == "bottom":
                 span_w, _ = hole_span_mm(self.board)
                 left = span_w - (rect.x + rect.width)
-            radius = min(rect.width, rect.height) * 0.25
+            radius = min(rect.width, rect.height) * FINGER_CORNER[self.connector.shape]
             scheme = scheme_for(self.board)
             painter.setPen(QPen(QColor(scheme.pad_ring), 0.08))
             painter.setBrush(QBrush(QColor(scheme.pad) if self.near_side else FINGER_FAR))

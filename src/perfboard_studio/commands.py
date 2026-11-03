@@ -83,6 +83,7 @@ from .model import (
     ConductorKind,
     DocumentMeta,
     EdgeConnector,
+    FingerShape,
     HoleCoord,
     LeadBendConductor,
     Mm,
@@ -2368,6 +2369,12 @@ class _ApplyBoardPreset:
             if connector.id in seen:
                 raise CommandError("duplicate-id", f'Duplicate edge connector id "{connector.id}".')
             seen.add(connector.id)
+            if connector.shape not in get_args(FingerShape):
+                raise CommandError(
+                    "invalid-edge-connector",
+                    f"{connector.shape!r} is not a finger shape. Use one of: "
+                    f"{', '.join(get_args(FingerShape))}.",
+                )
         seen.clear()
         for mount in p.mounting_holes:
             if mount.id in seen:
