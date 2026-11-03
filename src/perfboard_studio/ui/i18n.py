@@ -1024,10 +1024,10 @@ TURKISH: Mapping[str, str] = {
     "Net for {pin}:": "{pin} için net:",
     "No package called {id}.": "{id} adında bir kılıf yok.",
     "Keep the symbols where they are": "Sembolleri yerlerinde tut",
-    "Double-click a part to put it on the sheet. On the board: pick one"
-    ", then click a hole. Esc cancels.": (
-        "Şemaya koymak için parçaya çift tıklayın. Kartta ise birini seçin, sonra bir "
-        "deliğe tıklayın. Esc iptal eder."
+    "Double-click a part, or press Enter, to put it on the sheet. On the board: pick one, "
+    "then click a hole. Esc cancels.": (
+        "Şemaya koymak için parçaya çift tıklayın ya da Enter'a basın. Kartta ise birini "
+        "seçin, sonra bir deliğe tıklayın. Esc iptal eder."
     ),
     # -- the welcome dialog, and autosave that writes the file itself ----------
     # "Perfboard Studio" is deliberately absent: it is the product's name, and a name is

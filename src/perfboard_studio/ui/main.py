@@ -6511,8 +6511,8 @@ class MainWindow(QMainWindow):
 
         self.label_place_hint = QLabel(
             t(
-                "Double-click a part to put it on the sheet. On the board: pick one, then "
-                "click a hole. Esc cancels."
+                "Double-click a part, or press Enter, to put it on the sheet. On the board: "
+                "pick one, then click a hole. Esc cancels."
             )
         )
         self.label_place_hint.setWordWrap(True)
@@ -6646,8 +6646,8 @@ class MainWindow(QMainWindow):
         if not footprint_id:
             self.label_place_hint.setText(
                 t(
-                    "Double-click a part to put it on the sheet. On the board: pick one, then "
-                    "click a hole. Esc cancels."
+                    "Double-click a part, or press Enter, to put it on the sheet. On the "
+                    "board: pick one, then click a hole. Esc cancels."
                 )
             )
             self.view.viewport().unsetCursor()
