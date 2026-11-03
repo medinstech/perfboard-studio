@@ -44,7 +44,7 @@ TURKISH: Mapping[str, str] = {
     "This board": "Bu kart",
     "outside {hole}": "{hole} deliğinin dışında",
     "Inset from the edge (holes)": "Kenardan uzaklık (delik)",
-    "Holes and edge connectors": "Delikler ve kenar konnektörleri",
+    "Mounting holes and edge connectors": "Montaj delikleri ve kenar konnektörleri",
     "None yet.": "Henüz yok.",
     "FR-4 (glass epoxy)": "FR-4 (cam epoksi)",
     "FR-2 (phenolic paper)": "FR-2 (pertinaks)",

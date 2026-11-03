@@ -135,7 +135,7 @@ class FeaturesGroup(QWidget):
         column = QVBoxLayout(self)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(theme.SPACE["sm"])
-        heading = QLabel(theme.heading(t("Holes and edge connectors")))
+        heading = QLabel(theme.heading(t("Mounting holes and edge connectors")))
         heading.setTextFormat(Qt.TextFormat.RichText)
         column.addWidget(heading)
         self.heading = heading
