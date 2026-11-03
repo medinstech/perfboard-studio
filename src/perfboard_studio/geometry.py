@@ -1894,7 +1894,16 @@ def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHo
     """
     if preset.single_sided:
         return ()
-    radius = CORNER_HOLE_MM / 2
+    return corner_mounting_holes(board, CORNER_HOLE_MM, CORNER_HOLE_MM * 2)
+
+
+def corner_mounting_holes(
+    board: Board, diameter: Mm, head_diameter: Mm
+) -> tuple[MountingHole, ...]:
+    """A screw hole of this size in each corner of ``board``: in the border where it holds
+    one, else at the corner position -- the rule ``preset_mounting_holes`` states, for any
+    bore, which is what a board family asks it of."""
+    radius = diameter / 2
     in_border = _border_corner_bores(board, radius)
     if in_border is not None:
         return tuple(
@@ -1903,8 +1912,8 @@ def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHo
                 at=at,
                 offset_x_mm=dx,
                 offset_y_mm=dy,
-                diameter=CORNER_HOLE_MM,
-                head_diameter=CORNER_HOLE_MM * 2,
+                diameter=diameter,
+                head_diameter=head_diameter,
             )
             for index, (at, dx, dy) in enumerate(in_border)
         )
@@ -1922,8 +1931,8 @@ def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHo
         MountingHole(
             id=f"mh-{index + 1}",
             at=at,
-            diameter=CORNER_HOLE_MM,
-            head_diameter=CORNER_HOLE_MM * 2,
+            diameter=diameter,
+            head_diameter=head_diameter,
         )
         for index, at in enumerate(corners)
     )

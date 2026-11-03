@@ -613,6 +613,19 @@ applied through the real `part.place`, so what a trial judged is what the bus wi
 
 ## Which board to buy is tried, not estimated
 
+**A stock board is a product, and a product comes in sizes** (`boardfamily.py`). A
+`BoardFamily` says once what one kind of board is -- material, mask and finish, pads, the
+strip down its short edges (always outside the grid), its corner holes, its legend, what
+it is printed with -- and `BoardSize`s say which boards of it are sold, landscape, so the
+letters run along the long edge as on every photographed board. `board_for` makes one,
+and `board.applyPreset` puts it on the document in one undo step; the board designer edits
+a family and a user's own is saved through `family_to_json`, which carries a format number
+from the first version. A grid count two sources disagree on is two sizes of one name, and
+a count this application shipped whose grid runs so close to the edge that no strip fits
+is a size sold without one (`BoardSize.strip`). `family_problem` is the one refusal and
+names the field it is about. `test_every_board_of_every_family_is_accepted_and_clean` holds
+the catalogue to the command and to DRC.
+
 `placer.suggest_boards` lays the circuit out on every stock board with `arrange` — as the
 PRODUCT, fingers and corner bores reserved (`commands.preset_payload`) — and
 `recommended_board` takes the first it fills to `ARRANGEMENT_FILL_LIMIT` or less. That used

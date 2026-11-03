@@ -22,6 +22,11 @@ closed without a bump.
 
 ### Added
 
+- **Stock boards are described as the products they are.** A board family says what one kind
+  of board is -- the green double-sided board or the phenolic one: its strip, corner holes,
+  legend, mask and print -- and every size it is sold in, with the grid counts suppliers
+  list. It is what the coming board designer edits and saves.
+
 - **A board's legend is printed where the board prints it.** Letters and numbers can each
   be on one edge or both, and beside an edge strip the numbers go between the strip and
   the grid when that is where there is room, as on the green boards. Edge pads can be

@@ -294,6 +294,10 @@ on a candidate board and then compared; nothing in the engine imports it.
 `breadboard.py` hangs off `model` alone too, and `geometry` imports it: see "A breadboard is
 stripboard nobody can cut" in `docs/ARCHITECTURE.md`.
 
+`boardfamily.py` (a stock board as a product in the sizes it is sold) sits on `geometry` and
+`persist` and below `commands`: it makes the board, strips and screw holes that
+`board.applyPreset` puts on the document, so a family adds nothing to the bus.
+
 `wiregauge.py` hangs off `model` alone — it is arithmetic on a gauge number — and is read
 by `drc`, `router`, `striproute` and `guide`, which is how three siblings and their
 downstream share one fact without importing one another.

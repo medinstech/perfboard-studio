@@ -2375,6 +2375,17 @@ class _ApplyBoardPreset:
                     f"{connector.shape!r} is not a finger shape. Use one of: "
                     f"{', '.join(get_args(FingerShape))}.",
                 )
+            # What edge-connector.add and board.set refuse: a strip in a border with no
+            # room for it.
+            if connector.outside and (
+                outside_finger_room_mm(p.board, connector.edge, connector.inset_mm)
+                < OUTSIDE_FINGER_MIN_MM
+            ):
+                raise CommandError(
+                    "invalid-edge-connector",
+                    f"Edge connector {connector.id} stands in the {connector.edge} border, "
+                    f"which on this board leaves no room for it beside the outermost pads.",
+                )
         seen.clear()
         for mount in p.mounting_holes:
             if mount.id in seen:
