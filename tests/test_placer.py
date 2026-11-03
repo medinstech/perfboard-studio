@@ -646,7 +646,7 @@ def test_a_to220_is_not_left_hanging_over_the_edge() -> None:
     assert plan.after.overhanging_parts == 0
     assert plan.after.overhang_mm == 0.0
     assert _overhang_findings(plan.document) == []
-    assert "1 part(s) brought back over the board" in describe(plan)
+    assert "1 part brought back over the board" in describe(plan)
 
 
 @pytest.mark.parametrize("mirrored", (False, True))
@@ -926,7 +926,7 @@ def test_the_placer_moves_parts_out_from_under_the_screws_and_hot_parts_apart() 
     assert not findings & {"mounting-hole-clearance", "heat-proximity"}
     summary = describe(plan)
     assert "moved out from under a screw head" in summary
-    assert "hot pair(s) moved apart" in summary
+    assert "moved apart" in summary and "hot pair" in summary
 
 
 def test_physical_warnings_are_the_warnings_drc_gives_a_placement() -> None:
@@ -1276,7 +1276,7 @@ def test_describe_leads_with_what_the_user_gets() -> None:
 
     line = describe(plan_placement(doc, registry, PlacementOptions(iterations=800, restarts=1)))
 
-    assert "part(s) placed" in line
+    assert " placed" in line
     assert "mm less connection length" in line
 
 

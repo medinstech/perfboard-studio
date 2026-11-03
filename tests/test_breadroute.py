@@ -103,7 +103,7 @@ def _apply(doc: PerfDocument, payload: ApplyStripboardPlanPayload) -> PerfDocume
 def test_a_planned_breadboard_is_wired_as_drawn_and_breaks_no_rule() -> None:
     plan = plan_joined_board(TIMER, get_footprint)
     assert plan.cuts == () and plan.problems == ()
-    assert describe_plan(plan) == f"{len(plan.links)} jumper(s)"
+    assert describe_plan(plan) == f"{len(plan.links)} jumpers"
     wired = _apply(TIMER, plan.payload())
     assert run_lvs(wired, get_footprint).ok
     assert not [v for v in run_drc(wired, get_footprint) if v.severity == "error"]
@@ -190,7 +190,7 @@ def test_a_reroute_lays_jumpers_again_and_nothing_else() -> None:
     )
     plan = plan_joined_reroute(moved, get_footprint)
     assert set(plan.remove_ids) == {c.id for c in moved.conductors}
-    assert describe_plan(plan).startswith(f"{len(plan.remove_ids)} old conductor(s) ripped up")
+    assert describe_plan(plan).startswith(f"{len(plan.remove_ids)} old conductor")
     again = _apply(moved, plan.payload())
     assert {(c.kind, c.side) for c in again.conductors} == {("top-jumper", "top")}
     assert run_lvs(again, get_footprint).ok

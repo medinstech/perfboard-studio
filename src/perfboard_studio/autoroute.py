@@ -567,16 +567,22 @@ def plan_reroute(
     )
 
 
+def _count(count: int, one: str, many: str) -> str:
+    """``count`` and its noun said once: "1 connection", "3 connections". The engine has
+    no language of its own, and "(s)" read like a form to fill in."""
+    return f"{count} {one if count == 1 else many}"
+
+
 def describe_reroute(plan: ReroutePlan) -> str:
     """One line for a status bar, leading with what was thrown away."""
     if plan.is_empty:
         return "Nothing to re-route"
-    parts = [f"{len(plan.remove_ids)} old conductor(s) ripped up"]
-    parts.append(f"{plan.summary.links_routed} connection(s) re-routed")
+    parts = [_count(len(plan.remove_ids), "old conductor", "old conductors") + " removed"]
+    parts.append(_count(plan.summary.links_routed, "connection", "connections") + " wired again")
     if plan.summary.links_unrouted:
-        parts.append(f"{plan.summary.links_unrouted} could NOT be routed")
+        parts.append(f"{plan.summary.links_unrouted} could not be wired")
     net_count = len(plan.conductors)
-    parts.append(f"{net_count} conductor(s) now")
+    parts.append(_count(net_count, "conductor", "conductors") + " now")
     # ", ", not " · ": these lines go to the headless CLI, and a console on a Windows
     # code page raises UnicodeEncodeError on a character it cannot map rather than
     # dropping it -- which turns a report into a crash. Same rule as describe_best above.
@@ -1163,16 +1169,17 @@ def describe(plan: AutoroutePlan) -> str:
     if s.nets_considered == 0:
         return plan.label
     parts = [
-        f"{s.links_routed} connection(s) routed across {s.nets_closed}/{s.nets_considered} nets"
+        _count(s.links_routed, "connection", "connections")
+        + f" wired across {s.nets_closed}/{s.nets_considered} nets"
     ]
     if s.links_unrouted:
-        parts.append(f"{s.links_unrouted} could NOT be routed")
+        parts.append(f"{s.links_unrouted} could not be wired")
     if s.fallback_links:
         parts.append(f"{s.fallback_links} needed an insulated wire or jumper")
     if s.risk_holes:
-        parts.append(f"{s.risk_holes} pad(s) to measure for isolation")
+        parts.append(_count(s.risk_holes, "pad", "pads") + " to measure for isolation")
     if s.passes > 1:
-        parts.append(f"{s.passes} ordering passes")
+        parts.append(f"{s.passes} wiring orders tried")
     # ", ", not " · ": these lines go to the headless CLI, and a console on a Windows
     # code page raises UnicodeEncodeError on a character it cannot map rather than
     # dropping it -- which turns a report into a crash. Same rule as describe_best above.

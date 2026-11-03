@@ -324,7 +324,7 @@ def test_the_placer_moves_a_part_out_from_under_a_module() -> None:
     assert plan.before.under_module == 1 and plan.before.overlap_pairs == 0
     assert plan.after.under_module == 0 and plan.after.is_legal
     assert _rules(plan.document) == []
-    assert "1 part(s) moved out from under a module" in describe(plan)
+    assert "1 part moved out from under a module" in describe(plan)
 
 
 @pytest.mark.parametrize(

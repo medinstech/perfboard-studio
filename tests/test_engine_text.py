@@ -125,7 +125,7 @@ def test_a_sentence_starts_with_a_capital_whatever_field_it_starts_with(turkish:
     """"sol kenara ..." opened a sentence in the undo menu. A clause inside a summary is
     left as it is: it follows a comma."""
     assert say("Add 4-finger edge connector on the left edge").startswith("Sol kenara")
-    assert say("3 part(s) placed, about the same connection length").endswith(
+    assert say("3 parts placed, about the same connection length").endswith(
         ", bağlantı uzunluğu hemen hemen aynı"
     )
 
@@ -140,10 +140,10 @@ def test_a_conductor_is_named_in_the_guides_own_words(turkish: None) -> None:
 
 
 def test_a_summary_is_translated_clause_by_clause(turkish: None) -> None:
-    said = say("14 connection(s) routed across 7/7 nets, 2 needed an insulated wire or jumper")
+    said = say("14 connections wired across 7/7 nets, 2 needed an insulated wire or jumper")
     assert said == "7/7 nette 14 bağlantı kablolandı, 2 tanesi izoleli tel ya da jumper istedi"
     # ...and a clause nobody has a template for stays as it came, beside the ones that do.
-    assert say("3 part(s) placed, something new") == "3 parça yerleşti, something new"
+    assert say("3 parts placed, something new") == "3 parça yerleşti, something new"
 
 
 # ---------------------------------------------------------------------------

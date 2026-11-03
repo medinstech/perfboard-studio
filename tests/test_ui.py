@@ -6676,7 +6676,7 @@ def test_a_catalog_parts_holding_note_is_said_in_the_windows_language() -> None:
 def test_a_status_message_cut_short_is_whole_on_hover() -> None:
     window = _window_on(_load_dense())
     try:
-        message = "55 connection(s) routed, 13 needed an insulated wire, 1 pad(s) to measure"
+        message = "55 connections wired, 13 needed an insulated wire, 1 pad to measure"
         window.statusBar().showMessage(message)
         assert window.statusBar().toolTip() == message
     finally:

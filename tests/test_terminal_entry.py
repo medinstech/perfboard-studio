@@ -370,7 +370,7 @@ def test_the_placer_turns_a_terminal_to_face_out_and_clears_its_mouth() -> None:
     # And facing out: the wire crosses little or no board to leave it.
     assert plan.after.entry_mm < plan.before.entry_mm
     assert plan.after.entry_mm <= 2.54
-    assert "blocked wire entr(ies) cleared" in describe(plan)
+    assert "cleared" in describe(plan) and "blocked wire entr" in describe(plan)
 
 
 def test_a_board_with_no_terminal_prices_nothing_new() -> None:

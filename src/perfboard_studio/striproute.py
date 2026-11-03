@@ -130,18 +130,24 @@ class StripboardPlan:
         )
 
 
+def _count(count: int, one: str, many: str) -> str:
+    """``count`` and its noun said once: "1 connection", "3 connections". The engine has
+    no language of its own, and "(s)" read like a form to fill in."""
+    return f"{count} {one if count == 1 else many}"
+
+
 def describe_plan(plan: StripboardPlan) -> str:
     """One line, for a status bar or a confirmation dialog."""
     if plan.is_empty and not plan.problems:
         return "Nothing to do: every net is already right on this board."
     if has_breadboard_pattern(plan.document.board):
-        bits = [f"{len(plan.links)} jumper(s)"]
+        bits = [_count(len(plan.links), "jumper", "jumpers")]
     else:
-        bits = [f"{len(plan.cuts)} cut(s)", f"{len(plan.links)} link(s)"]
+        bits = [_count(len(plan.cuts), "cut", "cuts"), _count(len(plan.links), "link", "links")]
     if plan.remove_ids:
-        bits.insert(0, f"{len(plan.remove_ids)} old conductor(s) ripped up")
+        bits.insert(0, _count(len(plan.remove_ids), "old conductor", "old conductors") + " removed")
     if plan.problems:
-        bits.append(f"{len(plan.problems)} problem(s)")
+        bits.append(_count(len(plan.problems), "problem", "problems"))
     return ", ".join(bits)
 
 

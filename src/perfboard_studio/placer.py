@@ -661,31 +661,50 @@ def describe(plan: PlacementPlan) -> str:
                 f"({plan.route_cost:.0f} against {plan.route_runner_up:.0f})"
             )
         return (
-            f"Placement unchanged ({plan.movable} movable part(s), "
+            f"Placement unchanged ({_count(plan.movable, 'movable part', 'movable parts')}, "
             f"{plan.iterations} moves tried){because}"
         )
     turned = sum(1 for c in plan.changes if c.rotated)
-    parts = [f"{len(plan.changes)} part(s) placed"]
+    parts = [_count(len(plan.changes), "part", "parts") + " placed"]
     if turned:
         parts.append(f"{turned} turned")
     parts.append(_connection_length_change(plan.wire_saved_mm))
     if plan.before.overlap_pairs > 0 and plan.after.overlap_pairs == 0:
-        parts.append(f"{plan.before.overlap_pairs} overlap(s) cleared")
+        parts.append(_count(plan.before.overlap_pairs, "overlap", "overlaps") + " cleared")
     if plan.before.overhanging_parts > 0 and plan.after.overhanging_parts == 0:
-        parts.append(f"{plan.before.overhanging_parts} part(s) brought back over the board")
+        parts.append(
+            _count(plan.before.overhanging_parts, "part", "parts") + " brought back over the board"
+        )
     if plan.before.entry_blocked > 0 and plan.after.entry_blocked == 0:
-        parts.append(f"{plan.before.entry_blocked} blocked wire entr(ies) cleared")
+        parts.append(
+            _count(plan.before.entry_blocked, "blocked wire entry", "blocked wire entries")
+            + " cleared"
+        )
     if plan.before.entry_facing_in > 0 and plan.after.entry_facing_in == 0:
-        parts.append(f"{plan.before.entry_facing_in} terminal(s) turned to face their edge")
+        parts.append(
+            _count(plan.before.entry_facing_in, "terminal", "terminals")
+            + " turned to face their edge"
+        )
     if plan.before.heat_pairs > 0 and plan.after.heat_pairs == 0:
-        parts.append(f"{plan.before.heat_pairs} hot pair(s) moved apart")
+        parts.append(_count(plan.before.heat_pairs, "hot pair", "hot pairs") + " moved apart")
     if plan.before.mount_covered > 0 and plan.after.mount_covered == 0:
-        parts.append(f"{plan.before.mount_covered} part(s) moved out from under a screw head")
+        parts.append(
+            _count(plan.before.mount_covered, "part", "parts")
+            + " moved out from under a screw head"
+        )
     if plan.before.under_module > 0 and plan.after.under_module == 0:
-        parts.append(f"{plan.before.under_module} part(s) moved out from under a module")
+        parts.append(
+            _count(plan.before.under_module, "part", "parts") + " moved out from under a module"
+        )
     if plan.route_cost is not None:
-        parts.append(f"routing cost {plan.route_cost:.0f}")
+        parts.append(f"wiring cost {plan.route_cost:.0f}")
     return ", ".join(parts)
+
+
+def _count(count: int, one: str, many: str) -> str:
+    """``count`` and its noun said once: "1 connection", "3 connections". The engine has
+    no language of its own, and "(s)" read like a form to fill in."""
+    return f"{count} {one if count == 1 else many}"
 
 
 def _connection_length_change(saved_mm: float) -> str:

@@ -440,7 +440,7 @@ def test_describe_names_the_failures() -> None:
 
     text = describe(plan_autoroute(make_doc(components=components, nets=nets), LOOKUP))
 
-    assert "1 connection(s) routed across 1/1 nets" in text
+    assert "1 connection wired across 1/1 nets" in text
 
 
 def test_every_line_this_module_prints_survives_a_windows_code_page() -> None:
@@ -872,7 +872,7 @@ def test_reroute_on_an_unrouted_board_removes_nothing() -> None:
 
     assert plan.remove_ids == ()
     assert plan.conductors
-    assert "ripped up" in describe_reroute(plan)
+    assert "removed" in describe_reroute(plan)
 
 
 def _commit_replace(doc: PerfDocument, payload: object) -> PerfDocument:
