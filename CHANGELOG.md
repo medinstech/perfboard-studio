@@ -361,6 +361,11 @@ closed without a bump.
   resistor before the photoresistor and the inductor, and "power" the power inputs before
   a power transistor, in English and in Turkish.
 
+- **A wire drawn on the schematic goes round the parts.** Joined pin to pin, it was two
+  straight lines whatever was in the way, so it could run straight through the part it
+  came from and the sheet looked shorted; it now finds its way round every symbol, with as
+  few corners as it can.
+
 - **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
   first in the document, instead of to whichever of them is listed first.
 

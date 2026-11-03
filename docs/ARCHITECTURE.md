@@ -1537,6 +1537,16 @@ Three things there are load-bearing:
 `--headless` writes the sheet too. It is the only place the writer, Qt's SVG renderer and a
 real board meet on all three operating systems, and the only export that needs no GL.
 
+**A wire drawn pin to pin goes round the symbols** (`schematic.route_sheet_wire`). The tool
+drew two segments turning once, horizontal first, whatever was in the way -- so a circuit
+wired pin to pin had lines across the very parts they joined, and a line through a body
+reads as a short. It searches the sheet grid instead: out of each pin the way its lead
+points, round every symbol's box edges included (no line runs along another pin's leads),
+fewest corners first, off other nets' wires where it can; the preview shows the same route
+while the pointer is on the target pin. Where there is no way round -- a pin off the sheet,
+a sheet walled shut -- the elbow is still what is drawn. The search is deterministic, so a
+route does not flip while the pointer moves.
+
 ## The window walks through six steps
 
 `ui/workflow.py` is the stepper in the header -- Circuit, Board, Placement, Wiring, Checks,

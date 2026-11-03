@@ -8577,9 +8577,14 @@ def test_clicking_two_pins_wires_them_and_leaves_a_line_saying_so() -> None:
     _close(window)
 
 
-def test_a_drawn_wire_turns_once_and_always_the_same_way() -> None:
-    """A wire tool that picked its corner by whichever leg was longer would flip the route
-    while the pointer moved, which makes it impossible to aim."""
+def test_a_drawn_wire_goes_round_the_parts_and_always_the_same_way() -> None:
+    """A drawn wire turned once, horizontal first, whatever was in the way: from R1's
+    right-hand pin to R2's left-hand one below it, that ran straight back through R1. It is
+    routed round the symbols now (``schematic.route_sheet_wire``), still orthogonal, and the
+    same route every time -- a tool whose route flipped as the pointer moved could not be
+    aimed."""
+    from perfboard_studio.schematic import route_sheet_wire
+
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
     _add(window, "R2", "r-axial-3")
@@ -8590,10 +8595,18 @@ def test_a_drawn_wire_turns_once_and_always_the_same_way() -> None:
     view._wire_click(("R2", "1"))
 
     wire = window.bus.document.sheet_wires[0]
-    assert 2 <= len(wire.path) <= 3
     # Every segment is orthogonal, which is what "a schematic" means.
-    for start, end in zip(wire.path, wire.path[1:], strict=False):
+    for start, end in itertools.pairwise(wire.path):
         assert start.x == end.x or start.y == end.y
+    drawing = view.item.drawing
+    for symbol in drawing.symbols:
+        x0, y0 = symbol.at.x, symbol.at.y
+        x1, y1 = x0 + symbol.width, y0 + symbol.height
+        for start, end in itertools.pairwise(wire.path[1:-1]):
+            mid = ((start.x + end.x) / 2, (start.y + end.y) / 2)
+            assert not (x0 < mid[0] < x1 and y0 < mid[1] < y1), f"through {symbol.ref}"
+    routed = route_sheet_wire(drawing, ("R1", "2"), ("R2", "1"))
+    assert routed is not None and route_sheet_wire(drawing, ("R1", "2"), ("R2", "1")) == routed
     _close(window)
 
 

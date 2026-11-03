@@ -93,6 +93,7 @@ from perfboard_studio.schematic import (
     Wire,
     no_connect_arms,
     rail_glyph_bars,
+    route_sheet_wire,
     snap_to_grid,
 )
 
@@ -901,6 +902,12 @@ class SchematicView(QGraphicsView):
         #: A pin pressed in Select: a drag from it is a wire (``mouseMoveEvent``), a click
         #: on it is a click on its symbol.
         self._pin_press: tuple[str, str] | None = None
+        #: The last route ``_pin_to_pin`` found: the drawing itself (held, so a new one is
+        #: never mistaken for it), the two pins, the route.
+        self._route_memo: (
+            tuple[SchematicDrawing, tuple[tuple[str, str], tuple[str, str]], tuple[Point2, ...] | None]
+            | None
+        ) = None
         #: Middle-button panning, which every tool leaves alone. See set_tool.
         self._panning = False
         self._pan_origin = QPointF()
@@ -1479,8 +1486,29 @@ class SchematicView(QGraphicsView):
         self._clear_ghosts()
         if start is None or end is None:
             return
-        path = [(point.x(), point.y()) for point in _elbow(start, end)]
+        path = [(point.x(), point.y()) for point in self._pin_to_pin(pending, pin, start, end)]
         self.wireDrawn.emit(pending[0], pending[1], pin[0], pin[1], path)
+
+    def _pin_to_pin(
+        self, a: tuple[str, str], b: tuple[str, str], start: QPointF, end: QPointF
+    ) -> tuple[QPointF, ...]:
+        """The wire from pin to pin: round the symbols (``schematic.route_sheet_wire``), or
+        the elbow it always was where there is no way round.
+
+        The last answer is kept with the drawing it was found on: the preview asks on
+        every move of the pointer, and the route only changes when the pin under it does.
+        """
+        if self.item is None:
+            return _elbow(start, end)
+        drawing = self.item.drawing
+        memo = self._route_memo
+        if memo is None or memo[0] is not drawing or memo[1] != (a, b):
+            memo = (drawing, (a, b), route_sheet_wire(drawing, a, b))
+            self._route_memo = memo
+        routed = memo[2]
+        if routed is None:
+            return _elbow(start, end)
+        return tuple(QPointF(point.x, point.y) for point in routed)
 
     def _tee_click(self, tee: Tee) -> None:
         """The wire tool clicked on a wire: finish a T from the pin taken first, or take
@@ -1556,10 +1584,15 @@ class SchematicView(QGraphicsView):
             start = pin_anchor(self.item.drawing, *self.pending_pin)
             if start is not None:
                 # Over a wire, the preview is the T it would draw: square onto the wire.
-                tee = self.tee_at(where) if self.pin_at(where) is None else None
+                # Over another pin, the route the wire will take round the symbols.
+                aimed = self.pin_at(where)
+                tee = self.tee_at(where) if aimed is None else None
+                aimed_at = pin_anchor(self.item.drawing, *aimed) if aimed is not None else None
                 self.item.ghost_path = (
                     _tee_path(start, tee.at, tee.horizontal)
                     if tee is not None
+                    else self._pin_to_pin(self.pending_pin, aimed, start, aimed_at)
+                    if aimed is not None and aimed_at is not None and aimed != self.pending_pin
                     else _elbow(start, _snapped(where))
                 )
                 self.item.update()
