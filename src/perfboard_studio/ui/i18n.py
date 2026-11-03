@@ -42,6 +42,8 @@ TURKISH: Mapping[str, str] = {
     "&View": "&Görünüm",
     "&Help": "Y&ardım",
     "This board": "Bu kart",
+    "outside {hole}": "{hole} deliğinin dışında",
+    "Inset from the edge (holes)": "Kenardan uzaklık (delik)",
     "Holes and edge connectors": "Delikler ve kenar konnektörleri",
     "None yet.": "Henüz yok.",
     "FR-4 (glass epoxy)": "FR-4 (cam epoksi)",
@@ -592,7 +594,6 @@ TURKISH: Mapping[str, str] = {
     "Mounting hole": "Montaj deliği",
     "Edge connector": "Kenar konnektörü",
     "Hole diameter": "Delik çapı",
-    "Inset (holes)": "İçeri kaçıklık (delik)",
     "How many holes in from each corner; 0 uses the corner hole itself.": (
         "Her köşeden kaç delik içeride; 0, köşe deliğinin kendisini kullanır."
     ),

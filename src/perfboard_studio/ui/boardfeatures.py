@@ -93,8 +93,13 @@ def corner_offset_mm(board: Board, diameter: float) -> float:
 
 
 def hole_said(mount: MountingHole, board: Board) -> tuple[str, str]:
-    """(where, how big) for a mounting hole."""
-    return format_hole(mount.at, board), t("⌀{drill} mm, {head} mm head").format(
+    """(where, how big) for a mounting hole. One in the border is OUTSIDE the hole it is
+    addressed by -- "the hole outside A1", as ``MountingHole`` says -- and "A1" alone read
+    as drilled through A1, where the stock boards' corner holes never are."""
+    hole = format_hole(mount.at, board)
+    outside = mount.offset_x_mm or mount.offset_y_mm
+    where = t("outside {hole}").format(hole=hole) if outside else hole
+    return where, t("⌀{drill} mm, {head} mm head").format(
         drill=f"{mount.diameter:g}", head=f"{mount.head_diameter:g}"
     )
 
@@ -106,6 +111,11 @@ def connector_said(connector: EdgeConnector, board: Board) -> tuple[str, str]:
     if holes:
         where += f", {format_hole(holes[0], board)}–{format_hole(holes[-1], board)}"
     return where, f"{connector.count} × {connector.finger_width:g} mm"
+
+
+def _narrow(combo: QComboBox) -> None:
+    combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    combo.setMinimumContentsLength(6)
 
 
 def _remove_button() -> QToolButton:
@@ -155,15 +165,18 @@ class FeaturesGroup(QWidget):
         self.add_corners = QPushButton(t("Add Corner Holes"))
         self.add_corners.clicked.connect(self._on_add_corners)
         form.addRow(t("Hole diameter"), self.mount_diameter)
-        form.addRow(t("Inset (holes)"), self.mount_inset)
+        form.addRow(t("Inset from the edge (holes)"), self.mount_inset)
         form.addRow("", self.add_corners)
 
         self.edge = QComboBox()
         for edge in EDGES:
             self.edge.addItem(edge_word(edge), edge)
         self.edge.setCurrentIndex(1)
-        self.finger_start = QSpinBox()
-        self.finger_start.setRange(0, 999)
+        # By the address it starts at, read off the board -- a column letter along the top
+        # or bottom, a row number down a side, as the list says "Left, A2–A25". It was a
+        # spin box from 0: the engine's index, which no other field in the window shows.
+        self.finger_start = QComboBox()
+        _narrow(self.finger_start)
         self.finger_count = QSpinBox()
         self.finger_count.setRange(1, 999)
         self.finger_count.setValue(8)
@@ -175,8 +188,8 @@ class FeaturesGroup(QWidget):
         form.addRow("", self.add_connector)
         # As many fingers as the chosen edge has holes, so the default of eight on a board
         # five holes wide is not a refusal waiting to happen.
-        self.edge.currentIndexChanged.connect(self._fit_fingers)
-        self.finger_start.valueChanged.connect(self._fit_fingers)
+        self.edge.currentIndexChanged.connect(self._list_starts)
+        self.finger_start.currentIndexChanged.connect(self._fit_fingers)
         column.addLayout(form)
         # None is a default: a push button in a form is pressed by clicking it, and Enter in
         # the diameter box once deleted the selected hole in the dialog this replaced.
@@ -225,7 +238,7 @@ class FeaturesGroup(QWidget):
         self.add_connector.setToolTip(
             "" if fingers else t("A breadboard's edges are its rails, not fingers.")
         )
-        self._fit_fingers()
+        self._list_starts()
 
     def rows(self) -> list[QWidget]:
         """The lines listed now, one per hole and connector, holes first."""
@@ -251,13 +264,34 @@ class FeaturesGroup(QWidget):
         row.remove = button  # type: ignore[attr-defined]
         self._rows.addWidget(row)
 
-    def _fit_fingers(self, *_args: object) -> None:
+    def _along(self) -> int:
+        board = self._document.board if self._document is not None else None
+        if board is None:
+            return 0
+        return board.cols if self.edge.currentData() in ("top", "bottom") else board.rows
+
+    def _list_starts(self, *_args: object) -> None:
+        """Where a connector on the chosen edge can start, by the address of its first
+        finger's hole -- the engine's own (``edge_connector_holes``), so the field and the
+        list below cannot disagree about which hole that is."""
         if self._document is None:
             return
         board = self._document.board
-        along = board.cols if self.edge.currentData() in ("top", "bottom") else board.rows
-        self.finger_start.setMaximum(max(0, along - 1))
-        self.finger_count.setMaximum(max(1, along - self.finger_start.value()))
+        edge = cast(BoardEdge, self.edge.currentData())
+        kept = max(0, self.finger_start.currentData() or 0)
+        self.finger_start.blockSignals(True)
+        self.finger_start.clear()
+        for start in range(self._along()):
+            probe = EdgeConnector(id="probe", edge=edge, start=start, count=1)
+            holes = edge_connector_holes(probe, board)
+            self.finger_start.addItem(format_hole(holes[0], board) if holes else str(start + 1), start)
+        self.finger_start.setCurrentIndex(min(kept, self.finger_start.count() - 1))
+        self.finger_start.blockSignals(False)
+        self._fit_fingers()
+
+    def _fit_fingers(self, *_args: object) -> None:
+        start = self.finger_start.currentData() or 0
+        self.finger_count.setMaximum(max(1, self._along() - start))
 
     # -- what is done to it --
 
@@ -312,7 +346,7 @@ class FeaturesGroup(QWidget):
             "edge-connector.add",
             AddEdgeConnectorPayload(
                 edge=cast(BoardEdge, self.edge.currentData()),
-                start=self.finger_start.value(),
+                start=int(self.finger_start.currentData() or 0),
                 count=self.finger_count.value(),
             ),
         )

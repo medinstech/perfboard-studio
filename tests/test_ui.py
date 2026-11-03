@@ -4407,7 +4407,7 @@ def test_the_boards_features_say_a_refusal_instead_of_swallowing_it() -> None:
     window = _window_on(_blank_document())
     try:
         features = _board_features(window)
-        features.mount_inset.setValue(999)
+        features.mount_inset.setValue(20)
         features.add_corners.click()
         assert window.bus.document.mounting_holes == ()
         assert features.problem.text() and not features.problem.isHidden()
@@ -16209,3 +16209,44 @@ def test_the_boards_kind_in_properties_is_said_in_the_windows_language() -> None
             _close(window)
     finally:
         set_language("en")
+
+
+def test_a_border_hole_is_said_to_be_outside_its_hole() -> None:
+    """The stock boards' corner holes sit in the border, and "A1" read as drilled through A1:
+    one with an offset is outside the hole it is addressed by."""
+    from perfboard_studio.model import MountingHole
+    from perfboard_studio.ui.boardfeatures import hole_said
+    from perfboard_studio.ui.i18n import set_language
+
+    board = _blank_document().board
+    on_grid = MountingHole(id="mh-1", at=HoleCoord(0, 0))
+    in_border = MountingHole(id="mh-2", at=HoleCoord(0, 0), offset_x_mm=-1.2, offset_y_mm=-1.2)
+    assert hole_said(on_grid, board)[0] == "A1"
+    assert hole_said(in_border, board)[0] == "outside A1"
+    set_language("tr")
+    try:
+        # No suffix on the address: the word beside it carries it.
+        assert hole_said(in_border, board)[0] == "A1 deliğinin dışında"
+    finally:
+        set_language("en")
+
+
+def test_the_first_finger_is_chosen_by_its_address() -> None:
+    """A spin box from 0 was the engine's index; the field lists the holes the edge has, by
+    the address the list beside it says them in."""
+    window = _window_on(_blank_document())
+    try:
+        features = _board_features(window)
+        features.edge.setCurrentIndex(features.edge.findData("bottom"))
+        board = window.bus.document.board
+        assert features.finger_start.count() == board.cols
+        assert features.finger_start.itemText(0).startswith("A")
+        features.finger_start.setCurrentIndex(2)
+        features.finger_count.setValue(3)
+        features.add_connector.click()
+        (connector,) = window.bus.document.edge_connectors
+        assert (connector.start, connector.count) == (2, 3)
+        features.edge.setCurrentIndex(features.edge.findData("left"))
+        assert features.finger_start.count() == board.rows
+    finally:
+        _close(window)
