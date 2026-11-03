@@ -666,8 +666,11 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("ultrasonic", "sonar", "distance")),
     # The MPU-6050 board everybody sells: its eight names are printed on it and the same on
-    # every one; nobody publishes a drawing of the board, so its size is the sellers'.
-    CatalogPart("gy-521", "GY-521 MPU-6050", "sensor", "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x6.7",
+    # every one; nobody publishes a drawing of the board, so its size is the sellers'. VCC is
+    # pin 1 at the anchor and the board stands ABOVE the row (``o0x-6.7``): seen from above,
+    # a GY-521 with its header along the bottom edge reads VCC to INT left to right. Below
+    # the row was its mirror image, and ``footprints.SUPERSEDED_FOOTPRINTS`` says so.
+    CatalogPart("gy-521", "GY-521 MPU-6050", "sensor", "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x-6.7",
                 "Accelerometer and gyroscope, three axes each, on I2C",
                 _legs("VCC", "GND", "SCL", "SDA", "XDA", "XCL", "AD0", "INT"), ref_prefix="U",
                 source=(

@@ -702,6 +702,7 @@ TURKISH: Mapping[str, str] = {
     "Screw terminal's wire entry blocked": "Klemensin kablo girişi kapalı",
     "Screw terminal faces inward": "Klemens kartın içine bakıyor",
     "Part under a module": "Modülün altında parça",
+    "Older package": "Eski kılıf",
     "Measure between bodies": "Gövdeler arasını ölç",
     "Body clearance": "Gövde aralığı",
     "Set Body Clearance": "Gövde Aralığını Ayarla",

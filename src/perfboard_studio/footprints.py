@@ -2348,6 +2348,21 @@ def get_footprint(id: str) -> Footprint | None:
     return standard if standard is not None else generated_footprint(id)
 
 
+#: Footprint ids the catalog has stopped placing, each with the id that replaced it and what
+#: was wrong with it, said as the end of a sentence about the part -- for DRC's
+#: ``superseded-footprint``. A document saved with one still opens and draws exactly as it
+#: did: a generated id builds the same footprint for good, and moving a builder's part to
+#: another one behind their back would move its pins. So the fix is SAID, in the Problems
+#: drawer, where it stays until the part is chosen again.
+SUPERSEDED_FOOTPRINTS: dict[str, tuple[str, str]] = {
+    "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x6.7": (
+        "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x-6.7",
+        "draws a GY-521's board on the wrong side of its header, the mirror image of the "
+        "real one: a module laid over it puts each pin in its mirror's hole, VCC in INT's",
+    ),
+}
+
+
 def footprint_lookup() -> Callable[[str], Footprint | None]:
     """A lookup function over the standard registry, in the shape connectivity.py
     and the DRC/LVS modules expect (`(footprint_id) -> Footprint | None`).

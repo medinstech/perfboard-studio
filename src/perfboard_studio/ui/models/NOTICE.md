@@ -81,3 +81,13 @@ python tools/import_kicad_models.py
 Neither is a dependency of the application. The meshes are checked in, and a build without
 them still draws every board — the generated parametric bodies are the fallback for
 everything.
+
+## Measured on photographs
+
+What stands on a module (`ui/moduleart.py`) is drawn by this application, and no image is
+shipped with it. Where no maker publishes a drawing of the parts on a module, their positions
+were measured on a photograph of one, scaled by its header; each is credited here and in its
+layout's `source`:
+
+- **GY-521 (MPU-6050)** — photograph by Nevit Dilmen, Wikimedia Commons, CC BY-SA 3.0:
+  <https://commons.wikimedia.org/wiki/File:GY-521_MPU-6050_Module_3_Axis_Gyroscope_%2B_Accelerometer_0487.jpg>

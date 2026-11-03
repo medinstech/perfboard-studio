@@ -63,10 +63,16 @@ DRAWN_AS_THE_BLOCK: dict[str, str] = {
     ),
 }
 
+def _on_a_module(part) -> bool:  # type: ignore[no-untyped-def]
+    """A catalog part on a module's own board, whatever shelf it is on: the GY-521 is a sensor."""
+    footprint = get_footprint(part.footprint_id)
+    return footprint is not None and footprint.body.archetype == "module-board"
+
+
 #: The catalog's modules that are drawn as themselves, as choosing one places it: its
 #: footprint, value and pin names.
 CATALOG_MODULES = tuple(
-    part for part in CATALOG if part.category == "module" and part.id not in DRAWN_AS_THE_BLOCK
+    part for part in CATALOG if _on_a_module(part) and part.id not in DRAWN_AS_THE_BLOCK
 )
 
 PITCH = 2.54
@@ -122,6 +128,8 @@ def _footprint(footprint_id: str):
         ("Pololu DRV8833", "pololu-drv8833"),
         ("Seeed XIAO ESP32C3", "seeed-xiao-esp32c3"),
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
+        ("GY-521 MPU-6050", "gy-521"),
+        ("GY521", "gy-521"),
     ],
 )
 def test_a_module_is_recognised_by_its_value(value: str, key: str) -> None:
@@ -151,6 +159,9 @@ def test_a_module_is_recognised_by_its_value(value: str, key: str) -> None:
         # The other XIAO boards share the footprint and not the parts.
         "XIAO ESP32S3",
         "XIAO RP2040",
+        # A chip names no board: the MPU-6050 is on the GY-521 and on others.
+        "MPU-6050",
+        "GY-87",
     ],
 )
 def test_a_value_nobody_wrote_a_layout_for_is_not_guessed(value: str) -> None:
@@ -174,7 +185,7 @@ def test_a_module_drawn_as_the_block_is_one_on_purpose() -> None:
     a layout written for one later means the exception has to go, and says so here."""
     from perfboard_studio.ui import view3d
 
-    modules = {part.id: part for part in CATALOG if part.category == "module"}
+    modules = {part.id: part for part in CATALOG if _on_a_module(part)}
     assert set(DRAWN_AS_THE_BLOCK) <= set(modules), "an exception the catalog no longer has"
     for part_id, why in DRAWN_AS_THE_BLOCK.items():
         part = modules[part_id]
@@ -409,8 +420,10 @@ def test_a_name_over_the_parts_is_only_ever_on_a_module() -> None:
 
 
 def test_the_regulator_is_at_the_end_the_input_pins_are() -> None:
-    """Oriented by the pins' NAMES: a buck module described with IN on the right is drawn
-    with its input can and regulator on the right."""
+    """Oriented by the pins' NAMES: a buck module described from its other end -- IN on the
+    right and + along the bottom, the board turned half round -- is drawn with its input can
+    and regulator on the right. IN on the right with + still along the top is the board's
+    MIRROR image, which nobody makes, and that is the block."""
     footprint = _footprint(BUCK)
     centre = placement_for(footprint, PITCH).centre_x
 
@@ -420,20 +433,97 @@ def test_the_regulator_is_at_the_end_the_input_pins_are() -> None:
         return next(part.x for part in placed if part.kind == "to263")
 
     assert regulator_x(BUCK_NAMES) < centre
-    swapped = (("1", "OUT+"), ("2", "IN+"), ("3", "OUT-"), ("4", "IN-"))
-    assert regulator_x(swapped) > centre
+    turned = (("1", "OUT-"), ("2", "IN-"), ("3", "OUT+"), ("4", "IN+"))
+    assert regulator_x(turned) > centre
+    mirrored = (("1", "OUT+"), ("2", "IN+"), ("3", "OUT-"), ("4", "IN-"))
+    assert fit_module_art(footprint, _part(BUCK, "LM2596", mirrored), PITCH) is None
 
 
 def test_a_breakout_lies_away_from_its_header() -> None:
-    """The chip sits on the board's side of the header, whichever side that is."""
-    for footprint_id in (CAN, "mod-6x1-p1-r1-16x14.5x3-s8.5-o0x-6"):
-        footprint = _footprint(footprint_id)
-        placed = fit_module_art(footprint, _part(footprint_id, "SN65HVD230", CAN_NAMES), PITCH)
-        assert placed is not None
-        chip = next(part for part in placed if part.kind == "soic8")
-        row_y = 0.0  # the header is the anchor's row
-        centre_y = placement_for(footprint, PITCH).centre_y
-        assert (chip.y - row_y) * (centre_y - row_y) > 0
+    """The chip sits on the board's side of the header. The same row of pins numbered the
+    same way with the board on its OTHER side is the layout's mirror image -- the GY-521's
+    footprint was one -- and is drawn as the block, which claims nothing."""
+    footprint = _footprint(CAN)
+    placed = fit_module_art(footprint, _part(CAN, "SN65HVD230", CAN_NAMES), PITCH)
+    assert placed is not None
+    chip = next(part for part in placed if part.kind == "soic8")
+    assert chip.y * placement_for(footprint, PITCH).centre_y > 0  # the header is row 0
+    other = "mod-6x1-p1-r1-16x14.5x3-s8.5-o0x-6"
+    assert fit_module_art(_footprint(other), _part(other, "SN65HVD230", CAN_NAMES), PITCH) is None
+
+
+def _cross(a: tuple[float, float], b: tuple[float, float]) -> float:
+    return a[0] * b[1] - a[1] * b[0]
+
+
+@pytest.mark.parametrize(("art", "footprint_id", "names"), list(_layouts()), ids=_case_id)
+def test_every_layout_is_drawn_turned_and_never_mirrored(art, footprint_id: str, names) -> None:
+    """Two directions of a layout -- the way a part faces, or from one part to another --
+    laid on its footprint keep the winding they have in the layout as it is written down
+    (``moduleart.DRAWN_HANDEDNESS``); a mirrored drawing winds them the other way. Measured
+    on what ``fit_module_art`` placed rather than read off ``_frame``, so the whole of it is
+    held to it -- and it is what would have caught the GY-521's footprint, whose board was
+    on the wrong side of its header."""
+    from perfboard_studio.ui.moduleart import DRAWN_HANDEDNESS
+
+    placed = fit_module_art(_footprint(footprint_id), _part(footprint_id, art.names[0], names), PITCH)
+    assert placed is not None, art.key
+    pairs = []
+    for part, laid in zip(art.parts, placed, strict=True):
+        drawn_axis = (0.0, 1.0) if part.along_v else (1.0, 0.0)
+        laid_axis = (1.0, 0.0) if laid.axis == "x" else (0.0, 1.0)
+        pairs.append(
+            ((drawn_axis[0] * part.facing, drawn_axis[1] * part.facing),
+             (laid_axis[0] * laid.facing, laid_axis[1] * laid.facing))
+        )
+    first, first_laid = art.parts[0], placed[0]
+    for part, laid in zip(art.parts[1:], placed[1:], strict=True):
+        pairs.append(
+            ((part.u - first.u, part.v - first.v), (laid.x - first_laid.x, laid.y - first_laid.y))
+        )
+    for i, (drawn_a, laid_a) in enumerate(pairs):
+        for drawn_b, laid_b in pairs[i + 1 :]:
+            if abs(_cross(drawn_a, drawn_b)) > 0.5:
+                kept = (_cross(laid_a, laid_b) > 0) == (_cross(drawn_a, drawn_b) > 0)
+                assert kept == (DRAWN_HANDEDNESS[art.frame] > 0), art.key
+                return
+    raise AssertionError(f"{art.key}: nothing on it says which way round it is")
+
+
+def test_a_gy521_is_drawn_as_the_photograph_has_it() -> None:
+    """The regulator by VCC with its three legs towards the header, the chip's pin-1 dot
+    towards VCC too, the tantalum's + band towards INT, and the two mounting holes along the
+    edge away from the header -- whichever way the header runs."""
+    gy521 = next(part for part in CATALOG_MODULES if part.id == "gy-521")
+    footprint = _footprint(gy521.footprint_id)
+    placed = fit_module_art(footprint, _part(gy521.footprint_id, gy521.placed_value, gy521.pin_names), PITCH)
+    assert placed is not None
+    pins = {pin.number: (pin.d_col * PITCH, pin.d_row * PITCH) for pin in footprint.pins}
+    vcc, int_ = pins["1"], pins["8"]
+    assert gy521.pin_names[0] == ("1", "VCC") and gy521.pin_names[-1] == ("8", "INT")
+
+    def nearer_vcc(part) -> bool:  # type: ignore[no-untyped-def]
+        return math.dist((part.x, part.y), vcc) < math.dist((part.x, part.y), int_)
+
+    regulator = next(part for part in placed if part.kind == "sot23-5")
+    chip = next(part for part in placed if part.kind == "qfn")
+    tantalum = next(part for part in placed if part.kind == "sma")
+    holes = [part for part in placed if part.kind == "hole"]
+    assert nearer_vcc(regulator)
+    # The board stands above its header (y < 0), as a GY-521 read upright does.
+    side = placement_for(footprint, PITCH).centre_y
+    assert side < 0
+    # Three legs towards the header: its front, the two legs, faces away from the row.
+    assert regulator.axis == "y" and regulator.facing * side > 0
+    # Mirrored along its axis, a QFN's dot is at its -x end: towards VCC at x = 0.
+    assert chip.axis == "x" and chip.facing == -1
+    assert tantalum.axis == "x" and tantalum.facing == 1  # + band towards INT
+    assert tantalum.colour and len(holes) == 2
+    assert all(abs(hole.y) > abs(chip.y) for hole in holes)  # along the far edge
+    # On the board as it was before, below its header, the layout would be its mirror image,
+    # and that is the block.
+    old = "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x6.7"
+    assert fit_module_art(_footprint(old), _part(old, gy521.placed_value, gy521.pin_names), PITCH) is None
 
 
 NANO = next(part for part in CATALOG_MODULES if part.id == "arduino-nano")
@@ -457,15 +547,25 @@ def test_a_devkit_described_from_its_other_end_is_turned_by_its_names() -> None:
     assert unnamed > centre_y  # as the catalog has it: USB at the bottom, by D12 and D13
     assert _nano_usb_y(NANO.pin_names) == pytest.approx(unnamed)
 
-    # The same names numbered from the other end: pin 1 is now in D12's hole.
+    # The same Nano turned half round on its footprint: pin 1 is now in D12's hole, the far
+    # column in the near one's.
     rows = len(NANO.pin_names) // 2
     names = dict(NANO.pin_names)
     from_the_other_end = tuple(
-        (str(2 * row + column + 1), names[str(2 * (rows - 1 - row) + column + 1)])
+        (str(2 * row + column + 1), names[str(2 * (rows - 1 - row) + (1 - column) + 1)])
         for row in range(rows)
         for column in (0, 1)
     )
     assert _nano_usb_y(from_the_other_end) < centre_y
+    # Numbered from the other end down the SAME columns, it would be a Nano's mirror image,
+    # and that is the block.
+    mirrored = tuple(
+        (str(2 * row + column + 1), names[str(2 * (rows - 1 - row) + column + 1)])
+        for row in range(rows)
+        for column in (0, 1)
+    )
+    footprint = _footprint(NANO.footprint_id)
+    assert fit_module_art(footprint, _part(NANO.footprint_id, NANO.placed_value, mirrored), PITCH) is None
 
 
 def test_a_nanos_chip_stands_on_its_corner() -> None:
@@ -586,6 +686,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "lm2596-module": None,  # the blue every seller's board is
         "sparkfun-tb6612fng": SPARKFUN_RED,
         "pololu-drv8833": PICO_MODULE.board_colour,
+        "gy-521": None,  # the photograph's blue is the module style's, within the lighting
     }
     # A Pico named on a board the layout was not drawn for is not coloured as one.
     square = "mod-2x20-p7-r1-30x30x3.5-s8.5"

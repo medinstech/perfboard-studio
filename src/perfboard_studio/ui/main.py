@@ -3355,6 +3355,7 @@ def _rule_title(rule: str) -> str:
         "terminal-entry-blocked": t("Screw terminal's wire entry blocked"),
         "terminal-entry-faces-in": t("Screw terminal faces inward"),
         "under-module": t("Part under a module"),
+        "superseded-footprint": t("Older package"),
         "unknown-footprint": t("Unknown package"),
         "wire-over-joint": t("Bare wire on a joint"),
         "wire-too-thick-for-hole": t("Wire too thick for the hole"),

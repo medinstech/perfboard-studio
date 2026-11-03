@@ -465,6 +465,19 @@ Three things hold it together:
   KiCad's `R_Axial_*_Vertical` and `D_*_Vertical_AnodeUp` / `_CathodeUp` (`_KathodeUp`
   before KiCad 7) import as one: anode up is the cathode, pad 1, under the body.
 
+**A footprint the catalog has replaced is said so, and never moved.** A generated id builds
+the same footprint for good, so a document saved on an id the catalog no longer places
+opens exactly as it was: its pins are where the builder soldered them, and migrating it
+behind their back would move them. `footprints.SUPERSEDED_FOOTPRINTS` names each old id, the
+one that replaced it and what was wrong, and DRC's `superseded-footprint` (a warning, one of
+`PYTHON_ONLY_RULES`) says it with the one step that fixes it -- choosing the part again under
+Properties' Change... -- where it stays until that step is taken; a notice at load is gone
+after one look. The first was the GY-521's, whose board stood below its header with VCC on
+the left: the mirror image of the real module. `tests/test_superseded_footprints.py` holds
+that the old id still opens with the same pins, that nothing the catalog places is
+superseded, and that no golden fixture or example names one -- the day one does, that is a
+recorded divergence, not a quiet one.
+
 ## Four rules only the third dimension can see
 
 `component-too-tall`, `jumper-under-body` and `heat-proximity` are why the 3D view is a
@@ -1126,13 +1139,27 @@ ids. Five rules hold it, each pinned in
   holds both halves: every name backed on such a layout, none on any other.
 - **Oriented by pin NAMES, not by pin numbers.** A `"power"` layout puts the pins called
   IN at `-u` and the `+` ones at `-v`; a `"header"` layout lies on the board's side of its
-  row; a `"columns"` layout is turned end for end or side for side until its `landmark` pin
-  (D13 on a Nano) is where it says. An LM2596 described with IN on the right is drawn with its
+  row, pin 1 at the end its `pin_one` says; a `"columns"` layout is turned end for end or
+  side for side until its `landmark` pin (D13 on a Nano) is where it says. An LM2596
+  described from its other end -- IN on the right, + along the bottom -- is drawn with its
   regulator on the right.
+- **Turned, never mirrored.** Flipping one axis alone draws the board's mirror image, which
+  nobody makes, so `_frame` refuses it (`DRAWN_HANDEDNESS` says how each frame's layouts are
+  written down) and the block stands: IN on the right with + still along the top, a header
+  numbered the same way with its board on the other side. This is the guard that would have
+  caught the GY-521, whose footprint had its board below the header with VCC on the left --
+  the real module's mirror image, so a builder laying the module over the outline put VCC in
+  INT's hole. `test_every_layout_is_drawn_turned_and_never_mirrored` measures it on what is
+  placed; the footprint is corrected and its old id said by DRC (see "Footprints are
+  generated, not shipped"). One thing does not turn yet: a chip's pin-1 dot sits on a fixed
+  side ACROSS its part, so a layout turned half round has its dot at the right end and the
+  wrong side.
 - **Measured, not eyeballed.** Every layout's `source` names the drawing or model its
   positions come from — Espressif's and Arduino's dimension drawings, KiCad's models of the
   Pico, the D1 mini and the radio modules, Pololu's own top-view photographs of its two
-  carriers, and Seeed's own KiCad board for the XIAO ESP32C3.
+  carriers, Seeed's own KiCad board for the XIAO ESP32C3, and for the GY-521, which no maker
+  draws, a straight-down photograph of one (Wikimedia Commons, CC BY-SA 3.0) calibrated on its
+  header at 106.5 px/mm, its scale and its error written in the layout.
 - **A layout is one maker's board, and named so.** The A4988 and DRV8825 layouts answer only
   to "Pololu A4988" and "Pololu DRV8825": the StepStick clones sold under the chip's name
   have the pins and not the parts, and stay the block. The XIAO ESP32C3's answers only to its

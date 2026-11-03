@@ -192,6 +192,9 @@ from .i18n import t
 from .moduleart import (
     ART_COLOURS,
     GULL_WING_LEGS,
+    HOLE_EDGE_MM,
+    SOT23_LEGS,
+    TANTALUM_BAND_SHADE,
     TQFP32_BODY_MM,
     TQFP32_LEG_MM,
     TQFP32_LEGS_PER_SIDE,
@@ -3058,10 +3061,11 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         _art_legs(painter, body / 2, half_l, [-2.3, 0.0, 2.3], 0.7)
         _art_legs(painter, -half_l, -body / 2, [0.0], width * 0.47)
         _art_box(painter, -body / 2, body / 2, half_w, _art_colour("epoxy"))
-    elif kind == "sot23":
+    elif kind in SOT23_LEGS:
         body = length * 0.55
-        _art_legs(painter, -half_l, -body / 2, [-width * 0.33, width * 0.33], 0.4)
-        _art_legs(painter, body / 2, half_l, [0.0], 0.4)
+        back, front = SOT23_LEGS[kind]
+        _art_legs(painter, -half_l, -body / 2, [width * at for at in back], 0.4)
+        _art_legs(painter, body / 2, half_l, [width * at for at in front], 0.4)
         _art_box(painter, -body / 2, body / 2, half_w, _art_colour("epoxy"))
     elif kind == "trimpot":
         screw = min(1.1, width * 0.25)
@@ -3184,8 +3188,17 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         _art_box(painter, -half_l, half_l, half_w, _art_colour("ceramic"))
         _art_box(painter, -half_l + 0.15, half_l - 0.15, half_w - 0.15, _art_colour("shield"))
     elif kind == "sma":
-        _art_box(painter, -half_l, half_l, half_w, _art_colour("epoxy"))
-        _art_box(painter, half_l - 1.1, half_l - 0.4, half_w, _art_colour("band"))
+        # A tantalum is the colour it is moulded in, its band a darker shade of it.
+        moulding = QColor(part.colour) if part.colour else _art_colour("epoxy")
+        _art_box(painter, -half_l, half_l, half_w, moulding)
+        band = moulding.darker(TANTALUM_BAND_SHADE) if part.colour else _art_colour("band")
+        _art_box(painter, half_l - 1.1, half_l - 0.4, half_w, band)
+    elif kind == "hole":
+        radius = min(length, width) / 2
+        painter.setBrush(QBrush(_art_colour("hole-edge")))
+        painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
+        painter.setBrush(QBrush(_art_colour("hole")))
+        painter.drawEllipse(QPointF(0.0, 0.0), radius - HOLE_EDGE_MM, radius - HOLE_EDGE_MM)
     elif kind == "trimmer":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("trimmer-base"))
         radius = min(length, width) * 0.4

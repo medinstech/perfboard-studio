@@ -131,6 +131,9 @@ from .bodies import (
 from .moduleart import (
     ART_COLOURS,
     GULL_WING_LEGS,
+    HOLE_EDGE_MM,
+    SOT23_LEGS,
+    TANTALUM_BAND_SHADE,
     TQFP32_BODY_MM,
     TQFP32_LEG_MM,
     TQFP32_LEGS_PER_SIDE,
@@ -4797,17 +4800,21 @@ def _art_soic8(s: _ArtSolid) -> list[_Piece]:
 
 
 def _art_sma(s: _ArtSolid) -> list[_Piece]:
-    """A moulded SMD diode: the black body, the grey cathode band, the tinned tabs."""
+    """A moulded SMD diode: the black body, the grey cathode band, the tinned tabs -- or,
+    given a colour, a tantalum moulded in it, its + band a darker shade (as 2D has it)."""
+    body = _hex_rgb(s.colour, _ART_EPOXY_RGB) if s.colour else _ART_EPOXY_RGB
+    shade = 100 / TANTALUM_BAND_SHADE
+    band = (body[0] * shade, body[1] * shade, body[2] * shade) if s.colour else _ART_BAND_RGB
     pieces = [
         _Piece(
             source=s.box(s.length, s.width, s.height, moulded=True),
-            rgb=_ART_EPOXY_RGB,
+            rgb=body,
             position=s.at(0.0, 0.0, s.height / 2),
             material=MOULDED,
         ),
         _Piece(
             source=s.box(0.7, s.width + 0.04, s.height + 0.04),
-            rgb=_ART_BAND_RGB,
+            rgb=band,
             position=s.at(s.facing * (s.length / 2 - 0.75), 0.0, s.height / 2),
             material=INK,
         ),
@@ -5287,8 +5294,10 @@ def _art_sot223(s: _ArtSolid) -> list[_Piece]:
 
 
 def _art_sot23(s: _ArtSolid) -> list[_Piece]:
-    """A SOT-23: the small body, two legs out of one long side and one out of the other."""
+    """A SOT-23: the small body, two legs out of one long side and one out of the other --
+    or a SOT-23-5's three and two (``moduleart.SOT23_LEGS``)."""
     f = s.facing
+    back, front = SOT23_LEGS[s.kind]
     body = s.length * 0.55
     standoff = 0.08
     body_h = s.height - standoff
@@ -5302,7 +5311,8 @@ def _art_sot23(s: _ArtSolid) -> list[_Piece]:
         )
     ]
     shoulder = standoff + body_h * 0.4
-    for side, across in ((-f, -s.width * 0.33), (-f, s.width * 0.33), (f, 0.0)):
+    legs = [(-f, s.width * at) for at in back] + [(f, s.width * at) for at in front]
+    for side, across in legs:
         for along, length, z, height in (
             (body / 2 + reach * 0.25, reach * 0.5, shoulder, 0.12),
             (body / 2 + reach * 0.55, 0.12, shoulder / 2, shoulder),
@@ -5371,12 +5381,33 @@ def _art_pads(s: _ArtSolid) -> list[_Piece]:
     ]
 
 
+def _art_hole(s: _ArtSolid) -> list[_Piece]:
+    """A mounting hole through the module's board: its bare cut edge, and the dark of the
+    hole, a hair proud of the board so it is not lost in it."""
+    radius = min(s.length, s.width) / 2
+    return [
+        _Piece(
+            source=_upright_cylinder(radius, 0.03, resolution=32),
+            rgb=_hex_rgb(ART_COLOURS["hole-edge"], BODY_RGB),
+            position=s.at(0.0, 0.0, 0.015),
+            material=LAMINATE,
+        ),
+        _Piece(
+            source=_upright_cylinder(radius - HOLE_EDGE_MM, 0.04, resolution=32),
+            rgb=_hex_rgb(ART_COLOURS["hole"], DRILL_RGB),
+            position=s.at(0.0, 0.0, 0.02),
+            material=LAMINATE,
+        ),
+    ]
+
+
 _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "can": _art_can,
     "inductor": _art_inductor,
     "to263": _art_to263,
     "sot223": _art_sot223,
     "sot23": _art_sot23,
+    "sot23-5": _art_sot23,
     "trimpot": _art_trimpot,
     "trimmer": _art_trimmer,
     "soic8": _art_soic8,
@@ -5397,6 +5428,7 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "chip-c": lambda s: _art_chip(s, _ART_MLCC_RGB, CERAMIC),
     "pads": _art_pads,
     "silk": _art_silk,
+    "hole": _art_hole,
 }
 
 

@@ -374,6 +374,16 @@ closed without a bump.
   and the light sensor, "power" the power inputs first, and Turkish "LED" the LEDs -- in the
   Library and in the package picker alike. The board's own parts are "This board".
 
+- **The GY-521 was drawn as its own mirror image, and is now drawn as itself.** Its board
+  stood below the header with VCC on the left, which no GY-521 does: a module laid over the
+  outline put each pin in its mirror's hole, VCC in INT's. The board now stands above the
+  header, the same pins in the same holes, and it is drawn as the real one is -- the
+  MPU-6050, its regulator, the yellow tantalum, the small parts and the two mounting holes,
+  measured on a photograph. A board saved with the old package opens as it was, and the
+  Problems drawer says so ("Older package") until the GY-521 is chosen again under
+  Properties' Change…. A module drawing is now turned to fit its board and never mirrored:
+  pins named in a mirrored order keep the plain block.
+
 - **The Library's names have the room.** Its Pins column took half the panel and cut "AA
   battery holder" to "AA battery h…"; the count is as wide as it needs and right-aligned. The
   package picker, the Nets panel and the shortcut list had the same split.

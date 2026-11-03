@@ -317,6 +317,7 @@ PYTHON_ONLY_RULES = frozenset(
         "not-on-breadboard",
         "wrong-rail",
         "under-module",
+        "superseded-footprint",
     }
 )
 

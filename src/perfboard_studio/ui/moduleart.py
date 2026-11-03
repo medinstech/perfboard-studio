@@ -62,6 +62,8 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:                       the ``facing`` side. ``length`` runs tab to leg tips.
 #:  * ``sot23``       -- a SOT-23 transistor: two legs out of one long side and one out of the
 #:                       ``facing`` side. ``length`` runs leg tip to leg tip.
+#:  * ``sot23-5``     -- a SOT-23-5 regulator: three legs out of one long side and two out of
+#:                       the ``facing`` side, 0.95 mm apart.
 #:  * ``trimpot``     -- a multi-turn 3296W trimmer, its brass screw at the ``facing`` end.
 #:  * ``soic8``       -- an SO-8 chip, gull-wing legs down both long sides, pin 1 at ``facing``.
 #:  * ``qfn``         -- a leadless chip (QFN, DFN, USON): a flat black square on its pads,
@@ -75,17 +77,22 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:  * ``side-button`` -- a tactile switch pressed from the side, its cap out of the ``facing`` end.
 #:  * ``led``         -- a chip LED; ``colour`` is its lens, and a square one is an RGB LED.
 #:  * ``crystal``     -- a crystal in a metal-lidded ceramic SMD package.
-#:  * ``sma``         -- a moulded SMD diode (SMA, SOD-123), the cathode band at ``facing``.
+#:  * ``sma``         -- a moulded SMD diode (SMA, SOD-123), the cathode band at ``facing``;
+#:                       with a ``colour``, a tantalum capacitor of that colour, its band
+#:                       (the + end) a darker shade of it.
 #:  * ``chip-r``      -- a 0805 resistor; ``chip-c`` the same size of ceramic capacitor.
 #:  * ``pads``        -- an unfitted header: tinned rings round empty holes, 2.54 mm apart,
 #:                       as many as fit the part's length and width.
 #:  * ``silk``        -- printing on the module's own board, ``text`` and nothing else.
+#:  * ``hole``        -- a mounting hole through the module's board, ``length`` across, no
+#:                       copper round it: what a GY-521 is screwed down by.
 ArtKind = Literal[
     "can",
     "inductor",
     "to263",
     "sot223",
     "sot23",
+    "sot23-5",
     "trimpot",
     # A single-turn SMD trimmer: a square plastic base and the round metal rotor on it, slot
     # and all -- not the blue multi-turn block a buck module has.
@@ -114,6 +121,7 @@ ArtKind = Literal[
     "chip-c",
     "pads",
     "silk",
+    "hole",
 ]
 
 #: What the parts on a module are made of, as the colours both views paint them in -- one
@@ -134,6 +142,21 @@ GULL_WING_LEGS: dict[str, tuple[int, float, float]] = {
     "tssop28": (TSSOP28_LEGS_PER_SIDE, TSSOP28_PITCH_MM, TSSOP28_REACH_MM),
     "ssop24": (12, 0.65, 1.0),
 }
+
+#: A SOT-23's legs, by kind: where each leaves the body's two long sides, as a share of the
+#: body's length, ``(back, front)`` -- the front being the ``facing`` side. One table, so the
+#: 2D view and the 3D builder draw the same legs; 0.33 of a 2.9 mm body is the 0.95 mm pitch.
+SOT23_LEGS: dict[str, tuple[tuple[float, ...], tuple[float, ...]]] = {
+    "sot23": ((-0.33, 0.33), (0.0,)),
+    "sot23-5": ((-0.33, 0.0, 0.33), (-0.33, 0.33)),
+}
+
+#: How much darker a tantalum's band is than its body, as ``QColor.darker`` takes it (190:
+#: the colour divided by 1.9), which the 3D view divides its colour by too.
+TANTALUM_BAND_SHADE = 190
+
+#: The bare cut edge round a mounting hole, in millimetres.
+HOLE_EDGE_MM = 0.12
 
 ART_COLOURS: dict[str, str] = {
     "ferrite": "#2a2b2f",
@@ -160,6 +183,11 @@ ART_COLOURS: dict[str, str] = {
     "ceramic": "#d8cfb8",
     "trimmer-base": "#ece8dc",
     "rotor": "#b9bcc0",
+    # A moulded tantalum's yellow, and the bare board's cut edge round a mounting hole and
+    # the dark of the hole itself, as the GY-521 photograph has them.
+    "tantalum": "#d8b45c",
+    "hole-edge": "#d6d2c2",
+    "hole": "#101114",
 }
 
 #: How far a module's board may be from the reference a layout was drawn on, either way, as a
@@ -256,6 +284,10 @@ class ModuleArt:
     #: until the names fit would draw a board nobody makes, so its names are printed OVER
     #: the parts instead, each on its own tag (``bodies.PinLabel.backed``), at full length.
     names_over_parts: bool = False
+    #: For ``"header"``: the end of ``u`` pin 1 is at, -1 or +1, the layout drawn as the real
+    #: board is seen from above with its header along the top (``-v``). A GY-521 seen so has
+    #: VCC, its pin 1, at the right.
+    pin_one: int = -1
 
 
 @dataclass(frozen=True, slots=True)
@@ -674,6 +706,51 @@ POLOLU_DRV8833_MODULE = ModuleArt(
     ),
 )
 
+#: The GY-521 MPU-6050 breakout everybody sells, as it is seen from above with its header
+#: along the top -- INT at the left, VCC at the right (``pin_one``): the 3.3 V regulator (a
+#: SOT-23-5, its three legs towards the header) by VCC, the MPU-6050 in the middle with its
+#: pin-1 dot towards VCC,
+#: the yellow tantalum beside it with its + end towards INT, a column of 0603 parts each side
+#: of the chip, the power LED by AD0 and the two 3 mm mounting holes on the far edge. Measured
+#: on Nevit Dilmen's straight-down photograph of one (Wikimedia Commons, CC BY-SA 3.0), scaled
+#: by its header -- seven pitches between VCC and INT, 106.5 px/mm -- so a position is good
+#: to about 0.1 mm; that board is 20.7 x 15.5 mm, within the sellers' 20 to 21.2 by 15.5 to
+#: 16.4. The sizes are the packages' own: InvenSense's 4 x 4 x 0.9 mm QFN-24, a SOT-23-5, an
+#: EIA 3216 (A case) tantalum, 0603 resistors, capacitors and LED.
+GY521_MODULE = ModuleArt(
+    key="gy-521",
+    names=("gy-521", "gy521", "gy 521"),
+    board=(20.7, 15.5),
+    pins=8,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("sot23-5", 8.88, -0.10, 2.8, 2.9, 1.1, along_v=True, facing=1),
+        ArtPart("chip-c", 8.71, 2.32, 1.6, 0.8, 0.8),
+        ArtPart("chip-c", 6.68, -1.22, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", 5.30, -1.22, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("chip-c", 5.35, 2.29, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", 4.00, -1.22, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("chip-c", 4.05, 2.29, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("qfn", 0.40, 0.58, 4.0, 4.0, 0.9, facing=1, text="MPU-6050"),
+        ArtPart("sma", 0.43, 4.79, 3.2, 1.6, 1.6, facing=-1, colour=ART_COLOURS["tantalum"]),
+        ArtPart("chip-c", -3.55, -1.25, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -3.55, 2.31, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", -4.99, -1.22, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("chip-r", -4.99, 2.31, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("led", -6.37, -1.21, 1.6, 0.8, 0.6, along_v=True),
+        ArtPart("hole", 8.00, 5.08, 3.0, 3.0, 0.0),
+        ArtPart("hole", -7.45, 5.08, 3.0, 3.0, 0.0),
+        ArtPart("silk", 0.38, 6.70, 6.0, 1.1, 0.0, text="ITG/MPU"),
+    ),
+    source=(
+        "Nevit Dilmen's photograph of a GY-521, Wikimedia Commons, CC BY-SA 3.0 "
+        "(https://commons.wikimedia.org/wiki/File:GY-521_MPU-6050_Module_3_Axis_Gyroscope_"
+        "%2B_Accelerometer_0487.jpg), calibrated on its header at 106.5 px/mm, positions to "
+        "about 0.1 mm; InvenSense MPU-6050 QFN-24 (the chip), SOT-23-5, EIA 3216, 0603"
+    ),
+)
+
 MODULE_ARTS: tuple[ModuleArt, ...] = (
     LM2596_MODULE,
     SN65HVD230_MODULE,
@@ -687,6 +764,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     XIAO_ESP32C3_MODULE,
     SPARKFUN_TB6612_MODULE,
     POLOLU_DRV8833_MODULE,
+    GY521_MODULE,
 )
 
 
@@ -722,6 +800,13 @@ def _is_output(name: str) -> bool:
 def _is_positive(name: str) -> bool:
     return name.endswith("+") or name in ("VIN", "VOUT", "IN", "OUT")
 
+
+#: How each frame's layouts are written down, as the sign of the map from the art's
+#: ``(u, v)`` to the footprint's ``(x, y)`` (y down the rows) that lays the drawing over its
+#: footprint as the real board lies: a buck module's and a header breakout's ``u`` runs to
+#: the right and ``v`` down the page (+1), a devkit's ``u`` down its length and ``v`` across
+#: it to the right (-1). ``_frame`` turns a layout and never mirrors it.
+DRAWN_HANDEDNESS: dict[str, float] = {"power": 1.0, "header": 1.0, "columns": -1.0}
 
 #: Which local axis the art's ``u`` lies along, and which way ``u`` and ``v`` point there.
 type _Frame = tuple[bool, float, float]
@@ -768,6 +853,8 @@ def _frame(
         if positive and sum(positive) / len(positive) > 0:
             sign_v = -1.0
     elif art.frame == "header":
+        # Pin 1 is at the footprint's -x (or -y) end of its row, wherever the layout has it.
+        sign_u = -float(art.pin_one)
         row_v = sum(along(point)[1] for point in pins.values()) / len(pins)
         if row_v > 0:
             sign_v = -1.0
@@ -778,6 +865,11 @@ def _frame(
             u, v = found[0]
             sign_u = -1.0 if u * end_u < 0 else 1.0
             sign_v = -1.0 if v * end_v < 0 else 1.0
+    # A turn, never a mirror: flipping one axis alone draws the board's mirror image, which
+    # is no board anybody makes -- and a footprint that asks for one has its board on the
+    # wrong side of its pins, which is what the GY-521's had. The block claims nothing.
+    if sign_u * sign_v * (1.0 if u_along_x else -1.0) != DRAWN_HANDEDNESS[art.frame]:
+        return None
     return u_along_x, sign_u, sign_v
 
 

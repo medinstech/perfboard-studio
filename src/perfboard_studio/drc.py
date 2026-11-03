@@ -50,6 +50,7 @@ from .breadboard import (
 )
 from .connectivity import FootprintLookup, PhysicalNet, PhysicalPinRef, extract_physical_nets
 from .footprints import (
+    SUPERSEDED_FOOTPRINTS,
     WIRE_ENTRY_CLEARANCE_MM,
     RaisedBoard,
     body_extent,
@@ -848,6 +849,37 @@ def _check_unknown_footprints(doc: PerfDocument, lookup: FootprintLookup) -> lis
         for component in doc.components
         if lookup(component.footprint_id) is None
     ]
+
+
+def _check_superseded_footprints(doc: PerfDocument) -> list[DrcViolation]:
+    """A part on a footprint the catalog has replaced (``footprints.SUPERSEDED_FOOTPRINTS``),
+    with what is wrong with it and the one step that fixes it.
+
+    A warning rather than a refusal or a quiet migration: the document is still a
+    document, and its pins are where the builder put them. Said here, it stays in the
+    Problems drawer until the part is chosen again, where a notice at load is gone after one
+    look.
+    """
+    found = []
+    for component in doc.components:
+        entry = SUPERSEDED_FOOTPRINTS.get(component.footprint_id)
+        if entry is None:
+            continue
+        replacement, why = entry
+        found.append(
+            DrcViolation(
+                rule="superseded-footprint",
+                severity="warning",
+                message=(
+                    f"{component.ref}'s package \"{component.footprint_id}\" {why}. Choose "
+                    f"the part again under Properties' Change… -- one step, its pins stay "
+                    f"where they are -- or from the Library: it is \"{replacement}\" now."
+                ),
+                holes=(component.anchor,),
+                component_ids=(component.id,),
+            )
+        )
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -2558,6 +2590,7 @@ def run_drc(
         *_check_components_off_board(doc, lookup),
         *_check_conductors_off_board(doc),
         *_check_unknown_footprints(doc, lookup),
+        *_check_superseded_footprints(doc),
         *_check_body_overhang(doc, lookup),
         *_check_wire_entries(doc, lookup),
         *_check_duplicate_pin_holes(doc, lookup),
