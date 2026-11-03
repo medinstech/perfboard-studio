@@ -1888,6 +1888,19 @@ tests pin it on every example and golden board, and Board Setup's own tests move
 the legend's, the breadboards' and the window's -- with one that names, for each of Board
 Setup's fields, the designer's row it became and a board that row is shown on.
 
+**Board Features retired into Properties: the designer is which board, Properties is what
+this board has** (`ui/boardfeatures.py`). The board's editor lists its mounting holes and
+edge connectors, each with Remove, and adds corner holes (diameter, inset) and an edge
+connector (edge, first hole, fingers); the height limit and the body clearance were already
+its fields. Each button is one command, dispatched as pressed, as the dialog's were -- one
+undo step each, the board redrawn beside it -- and what a board cannot take is not offered
+(no bore through a solderless breadboard, no fingers on either kind). A hole or a connector
+is chosen on the board too, and is then its own editor -- where, how big, Remove -- under
+the selection kinds `mounting-hole` and `edge-connector`. A connector is chosen by its
+FINGERS (`EdgeConnectorItem.shape`): its bounding rectangle is the whole board, and chosen
+by that, every click on the board would have chosen it. Board ▸ Board Features… stays, and
+shows the board's editor with its holes and connectors in view.
+
 ## The words, the first start and help tell one story
 
 A newcomer met the window's jargon before anything else -- Trace, Spine, Bare, Ratsnest,

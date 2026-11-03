@@ -161,8 +161,6 @@ from perfboard_studio.catalog import (
 from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
     AddBoardNotePayload,
-    AddEdgeConnectorPayload,
-    AddMountingHolesPayload,
     AddNetPayload,
     AddPartPayload,
     AddPartsPayload,
@@ -174,8 +172,6 @@ from perfboard_studio.commands import (
     DeleteComponentPayload,
     DeleteComponentsPayload,
     DeleteConductorsPayload,
-    DeleteEdgeConnectorPayload,
-    DeleteMountingHolePayload,
     DeleteNetPayload,
     DeletePartPayload,
     DeleteSheetNotesPayload,
@@ -193,8 +189,6 @@ from perfboard_studio.commands import (
     RenameDocumentPayload,
     RotateComponentPayload,
     RotateComponentsPayload,
-    SetBodyClearancePayload,
-    SetHeightLimitPayload,
     UnplaceComponentPayload,
     UpdateComponentPayload,
     UpdateNetPayload,
@@ -235,12 +229,9 @@ from perfboard_studio.footprints import (
     vertical_screw_terminal_footprint,
 )
 from perfboard_studio.geometry import (
-    board_edge_margin_mm,
-    edge_connector_holes,
     format_hole,
     hole_span_mm,
     legend_label,
-    pad_extent_mm,
     pin_hole,
 )
 from perfboard_studio.guide import (
@@ -262,7 +253,6 @@ from perfboard_studio.model import (
     UNTITLED_NAME,
     VALID_ROTATIONS,
     Board,
-    BoardEdge,
     BoardSide,
     BodyArchetype,
     ComponentInstance,
@@ -1123,339 +1113,6 @@ class PartTree(QTreeWidget):
             drag.setPixmap(picture_beside_the_pointer(picture))
             drag.setHotSpot(QPoint(0, 0))
         drag.exec(Qt.DropAction.CopyAction)
-
-
-def _corner_offset_mm(board: Board, diameter: float) -> float:
-    """How far diagonally OUT of the grid a corner mounting hole should sit.
-
-    Real boards put their corner holes in the border, clear of every pad — look at any
-    of them and the copper grid is untouched. That is only possible if the border is wide
-    enough to take the bore; on a flush-cut board there is nowhere to go, and the hole
-    has to land on the grid and eat the pads around it, which is what DRC then reports.
-
-    Returns 0 when it will not fit, so the caller gets the old on-grid behaviour rather
-    than a hole hanging off the edge of the board.
-    """
-    extent_x, extent_y = pad_extent_mm(board)
-    # Far enough out that the bore misses the corner pad, measured on the diagonal.
-    clears_pad = (max(extent_x, extent_y) / 2 + diameter / 2) / math.sqrt(2)
-    # Near enough in that the bore stays on the substrate, on the tighter axis.
-    stays_on_board = min(
-        board_edge_margin_mm(board, "horizontal"), board_edge_margin_mm(board, "vertical")
-    ) - diameter / 2 - 0.2
-    if stays_on_board < clears_pad:
-        return 0.0
-    return round(stays_on_board, 3)
-
-
-class BoardFeaturesDialog(QDialog):
-    """Mounting holes and edge-connector fingers: what the board has, and how to change it.
-
-    Every button here dispatches straight onto the bus rather than collecting an edit to
-    apply on OK. Two reasons. Each change is then its own undo step, which is what a
-    person means by "undo that" when they have added a connector and then four holes; and
-    the board redraws underneath the dialog as they work, which is the only way to see
-    that a corner hole has landed where a part already is.
-
-    The corner holes go in as ONE command (``mounting-hole.addMany``) because putting a
-    hole in each corner is one decision -- see the payload's own note.
-    """
-
-    EDGES: tuple[tuple[BoardEdge, str], ...] = (
-        ("top", "Top"),
-        ("bottom", "Bottom"),
-        ("left", "Left"),
-        ("right", "Right"),
-    )
-
-    def __init__(self, bus: CommandBus, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.bus = bus
-        self.setWindowTitle(t("Board Features"))
-        self.setMinimumWidth(560)
-
-        self.tree = QTreeWidget()
-        self.tree.setColumnCount(3)
-        self.tree.setHeaderLabels([t("Feature"), t("Where"), t("Size")])
-        self.tree.setRootIsDecorated(False)
-
-        self.act_remove = QPushButton(t("Remove"))
-        self.act_remove.clicked.connect(self._on_remove)
-        self.tree.itemSelectionChanged.connect(self._refresh_remove_button)
-
-        self.mount_diameter = QDoubleSpinBox()
-        self.mount_diameter.setRange(0.5, 12.0)
-        self.mount_diameter.setSingleStep(0.1)
-        self.mount_diameter.setDecimals(1)
-        self.mount_diameter.setSuffix(" mm")
-        self.mount_diameter.setValue(3.2)
-
-        self.mount_inset = QSpinBox()
-        self.mount_inset.setRange(0, 20)
-        self.mount_inset.setValue(1)
-        self.mount_inset.setToolTip(
-            t("How many holes in from each corner; 0 uses the corner hole itself.")
-        )
-
-        add_corners = QPushButton(t("Add Corner Holes"))
-        add_corners.clicked.connect(self._on_add_corners)
-
-        self.edge = QComboBox()
-        for value, label in self.EDGES:
-            self.edge.addItem(t(label), value)
-        self.edge.setCurrentIndex(1)
-
-        self.finger_start = QSpinBox()
-        self.finger_start.setRange(0, 999)
-        self.finger_count = QSpinBox()
-        self.finger_count.setRange(1, 999)
-        self.finger_count.setValue(8)
-
-        add_connector = QPushButton(t("Add Edge Connector"))
-        add_connector.clicked.connect(self._on_add_connector)
-
-        # 0 means "no limit", which is why the range starts there rather than at a
-        # buildable height: with no case chosen there is no height to be too tall for,
-        # and a spin box cannot be empty. The suffix says so, so it does not read as a
-        # limit of zero.
-        self.height_limit = QDoubleSpinBox()
-        self.height_limit.setRange(0.0, 200.0)
-        self.height_limit.setSingleStep(1.0)
-        self.height_limit.setDecimals(1)
-        self.height_limit.setSpecialValueText(t("No limit"))
-        self.height_limit.setSuffix(" mm")
-        self.height_limit.setToolTip(
-            t("Clear height inside the case, above the board. Taller parts are reported by DRC.")
-        )
-
-        apply_height = QPushButton(t("Set Height Limit"))
-        apply_height.clicked.connect(self._on_set_height_limit)
-
-        height = QFormLayout()
-        height.addRow(t("Height limit"), self.height_limit)
-        height.addRow("", apply_height)
-
-        # Off is the courtyard rule every board has always been judged by; on, the bodies
-        # themselves, that far apart (#12). A box and a spin box rather than a spin box with
-        # a special value, as the height limit has: 0 mm is a real clearance here.
-        self.body_measure = QCheckBox(t("Measure between bodies"))
-        self.body_measure.setToolTip(
-            t(
-                "Off, parts are kept apart by their courtyards (a half-pitch margin round "
-                "each). On, by their real bodies plus this clearance — tighter, for a board "
-                "where every hole counts."
-            )
-        )
-        self.body_clearance = QDoubleSpinBox()
-        self.body_clearance.setRange(0.0, 2.5)
-        self.body_clearance.setSingleStep(0.1)
-        self.body_clearance.setDecimals(2)
-        self.body_clearance.setSuffix(" mm")
-        self.body_clearance.setToolTip(
-            t(
-                "How far apart two parts' bodies must stand. A pin under another part's "
-                "body is still in its way."
-            )
-        )
-        self.body_measure.toggled.connect(self.body_clearance.setEnabled)
-        apply_clearance = QPushButton(t("Set Body Clearance"))
-        apply_clearance.clicked.connect(self._on_set_body_clearance)
-        height.addRow("", self.body_measure)
-        height.addRow(t("Body clearance"), self.body_clearance)
-        height.addRow("", apply_clearance)
-
-        mounting = QFormLayout()
-        mounting.addRow(t("Hole diameter"), self.mount_diameter)
-        mounting.addRow(t("Inset (holes)"), self.mount_inset)
-        mounting.addRow("", add_corners)
-
-        connector = QFormLayout()
-        connector.addRow(t("Edge"), self.edge)
-        connector.addRow(t("First hole"), self.finger_start)
-        connector.addRow(t("Fingers"), self.finger_count)
-        connector.addRow("", add_connector)
-
-        self.note = QLabel()
-        self.note.setWordWrap(True)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        buttons.rejected.connect(self.reject)
-        buttons.accepted.connect(self.accept)
-
-        # None of them is the dialog's default. Qt makes the first push button it finds
-        # the default, which was Remove -- so Enter in the hole-diameter box deleted the
-        # selected mounting hole. Each of these is done by clicking it.
-        for button in (self.act_remove, add_corners, add_connector, apply_height, apply_clearance):
-            button.setAutoDefault(False)
-
-        # What this board cannot take is not offered, rather than answered in English with
-        # a refusal: no bore through a solderless breadboard, no fingers on either kind.
-        board = self.bus.document.board
-        if is_breadboard(board):
-            add_corners.setEnabled(False)
-            add_corners.setToolTip(t("Nothing is drilled into a solderless breadboard."))
-        if has_breadboard_pattern(board):
-            add_connector.setEnabled(False)
-            add_connector.setToolTip(t("A breadboard's edges are its rails, not fingers."))
-        # As many fingers as the chosen edge has holes, so the default of eight on a
-        # board five holes wide is not a refusal waiting to happen.
-        self.edge.currentIndexChanged.connect(self._fit_fingers)
-        self.finger_start.valueChanged.connect(self._fit_fingers)
-        self._fit_fingers()
-
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.tree)
-        layout.addWidget(self.act_remove)
-        layout.addLayout(mounting)
-        layout.addLayout(connector)
-        layout.addLayout(height)
-        layout.addWidget(self.note)
-        layout.addWidget(buttons)
-        self._reload()
-
-    def _reload(self) -> None:
-        doc = self.bus.document
-        self.tree.clear()
-        for mount in doc.mounting_holes:
-            item = QTreeWidgetItem(
-                [
-                    t("Mounting hole"),
-                    format_hole(mount.at, doc.board),
-                    t("⌀{drill} mm, {head} mm head").format(
-                        drill=f"{mount.diameter:g}", head=f"{mount.head_diameter:g}"
-                    ),
-                ]
-            )
-            item.setData(0, Qt.ItemDataRole.UserRole, ("mounting-hole.delete", mount.id))
-            self.tree.addTopLevelItem(item)
-        for conn in doc.edge_connectors:
-            holes = edge_connector_holes(conn, doc.board)
-            where = (
-                f"{format_hole(holes[0], doc.board)}–{format_hole(holes[-1], doc.board)}" if holes else conn.edge
-            )
-            item = QTreeWidgetItem(
-                [
-                    t("Edge connector"),
-                    f"{t(dict(self.EDGES)[conn.edge])}, {where}",
-                    f"{conn.count} × {conn.finger_width:g} mm",
-                ]
-            )
-            item.setData(0, Qt.ItemDataRole.UserRole, ("edge-connector.delete", conn.id))
-            self.tree.addTopLevelItem(item)
-        for column in range(3):
-            self.tree.resizeColumnToContents(column)
-        self._refresh_remove_button()
-        # Read back rather than left as typed, so the box shows what the document says
-        # after an undo -- the dialog stays open while the board changes underneath it.
-        self.height_limit.setValue(doc.height_limit_mm if doc.height_limit_mm else 0.0)
-        clearance = doc.body_clearance_mm
-        self.body_measure.setChecked(clearance is not None)
-        self.body_clearance.setEnabled(clearance is not None)
-        self.body_clearance.setValue(0.5 if clearance is None else clearance)
-
-    def _fit_fingers(self, *_args: object) -> None:
-        board = self.bus.document.board
-        along = board.cols if self.edge.currentData() in ("top", "bottom") else board.rows
-        self.finger_start.setMaximum(max(0, along - 1))
-        self.finger_count.setMaximum(max(1, along - self.finger_start.value()))
-
-    def _refresh_remove_button(self) -> None:
-        # Enabled by what is CHOSEN, not by what exists: with nothing picked the button
-        # used to delete the first row in the list, chosen for the user.
-        self.act_remove.setEnabled(self.tree.currentItem() is not None)
-
-    def _say(self, result: DispatchResult) -> None:
-        """Report a refusal in place. The bus refuses for reasons a user can act on --
-        a hole off the board, two connectors claiming one pad -- so the message is worth
-        showing verbatim rather than replacing with "could not add"."""
-        if result.ok:
-            self.note.setText("")
-            self._reload()
-        else:
-            self.note.setText(theme.ink(result.message, "warning"))
-
-    def _on_remove(self) -> None:
-        item = self.tree.currentItem()
-        if item is None:
-            return
-        command, id_ = item.data(0, Qt.ItemDataRole.UserRole)
-        payload: Any = (
-            DeleteMountingHolePayload(id=id_)
-            if command == "mounting-hole.delete"
-            else DeleteEdgeConnectorPayload(id=id_)
-        )
-        self._say(self.bus.dispatch(command, payload))
-
-    def _on_add_corners(self) -> None:
-        board = self.bus.document.board
-        inset = self.mount_inset.value()
-        far_col, far_row = board.cols - 1 - inset, board.rows - 1 - inset
-        if far_col <= inset or far_row <= inset:
-            self.note.setText(theme.ink(t("That inset does not fit on this board."), "warning"))
-            return
-        corners = (
-            HoleCoord(inset, inset),
-            HoleCoord(far_col, inset),
-            HoleCoord(inset, far_row),
-            HoleCoord(far_col, far_row),
-        )
-        diameter = self.mount_diameter.value()
-        offset = _corner_offset_mm(board, diameter)
-        self._say(
-            self.bus.dispatch(
-                "mounting-hole.addMany",
-                AddMountingHolesPayload(
-                    ats=corners,
-                    # Signs put each hole outside its own corner rather than all four in
-                    # the same direction.
-                    offsets=tuple(
-                        (
-                            -offset if hole.col <= inset else offset,
-                            -offset if hole.row <= inset else offset,
-                        )
-                        for hole in corners
-                    ),
-                    diameter=diameter,
-                    # A washer is roughly twice the bolt's clearance hole, which is the
-                    # keepout DRC warns about. Guessed here rather than asked for: a
-                    # person fitting an M3 screw does not want to be quizzed about it.
-                    head_diameter=round(diameter * 2, 2),
-                    label=f"Drill 4 corner mounting holes ({diameter:g} mm)",
-                ),
-            )
-        )
-
-    def _on_add_connector(self) -> None:
-        self._say(
-            self.bus.dispatch(
-                "edge-connector.add",
-                AddEdgeConnectorPayload(
-                    edge=cast(BoardEdge, self.edge.currentData()),
-                    start=self.finger_start.value(),
-                    count=self.finger_count.value(),
-                ),
-            )
-        )
-
-    def _on_set_height_limit(self) -> None:
-        value = self.height_limit.value()
-        self._say(
-            self.bus.dispatch(
-                "height-limit.set",
-                SetHeightLimitPayload(height_limit_mm=None if value <= 0 else value),
-            )
-        )
-
-    def _on_set_body_clearance(self) -> None:
-        measured = self.body_measure.isChecked()
-        self._say(
-            self.bus.dispatch(
-                "body-clearance.set",
-                SetBodyClearancePayload(
-                    body_clearance_mm=self.body_clearance.value() if measured else None
-                ),
-            )
-        )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -8374,6 +8031,18 @@ class MainWindow(QMainWindow):
         components = tuple(self.scene.selected_component_ids())
         conductors = tuple(self.scene.selected_conductor_ids())
         notes = tuple(self.scene.selected_board_note_ids())
+        mounts = tuple(self.scene.selected_mount_ids())
+        connectors = tuple(self.scene.selected_connector_ids())
+        # A hole or a connector alone is its own editor; with anything else it is part of
+        # a mixed selection, as a label is.
+        if not (components or conductors or notes):
+            if len(mounts) == 1 and not connectors:
+                return Selection("mounting-hole", mounts)
+            if len(connectors) == 1 and not mounts:
+                return Selection("edge-connector", connectors)
+            if mounts or connectors:
+                return Selection("mixed", (*mounts, *connectors))
+        notes = (*notes, *mounts, *connectors) if (components or conductors) else notes
         if components and not conductors and not notes:
             return Selection("part" if len(components) == 1 else "parts", components)
         if conductors and not components and not notes:
@@ -11542,13 +11211,19 @@ class MainWindow(QMainWindow):
         self.inspector.focus_field("name")
 
     def on_board_features(self) -> None:
-        """Mounting holes and edge connectors.
-
-        No result handling here: the dialog dispatches its own commands as they are made,
-        so by the time it closes the board is already whatever the user left it as, and
-        the usual bus subscription has redrawn it.
-        """
-        BoardFeaturesDialog(self.bus, self).exec()
+        """Mounting holes and edge connectors, in Properties on the board, where Board
+        Features was a dialog (``ui/boardfeatures.py``): the selection let go, the board
+        shown, and its holes and connectors scrolled into view. Each change there is a
+        command of its own, and the board redraws beside it."""
+        self.scene.clearSelection()
+        self.schematic_view.set_selection([])
+        self._selection_from = "board"
+        self._refresh_properties()
+        self.dock_properties.show()
+        self.dock_properties.raise_()
+        features = self.inspector.board_editor.features
+        self.properties.scroller.ensureWidgetVisible(features.heading, 0, 0)
+        features.mount_diameter.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
     # -- the files you were last working on -----------------------------------
 

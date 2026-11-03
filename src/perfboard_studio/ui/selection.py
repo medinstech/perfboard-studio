@@ -29,6 +29,8 @@ type SelectionKind = Literal[
     "conductors",
     "net",
     "board-note",
+    "mounting-hole",
+    "edge-connector",
     "sheet-note",
     "cut",
     "mixed",

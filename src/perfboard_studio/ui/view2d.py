@@ -1046,6 +1046,8 @@ class MountingHoleItem(QGraphicsItem):
         self.hovered = False
         self.setAcceptHoverEvents(True)
         self.setZValue(-85)  # Over the pads it removed, under the parts.
+        # Chosen by a click, so Properties shows it -- where it is, its size, Remove.
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
 
     def set_flagged(self, flagged: bool) -> None:
         if flagged != self.flagged:
@@ -1080,7 +1082,12 @@ class MountingHoleItem(QGraphicsItem):
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         centre = self._centre()
-        if (self.flagged or self.hovered) and not _on_paper(painter):
+        if self.isSelected() and not _on_paper(painter):
+            head_r = self.mount.head_diameter / 2
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(SELECTED, 0.2))
+            painter.drawEllipse(centre, head_r, head_r)
+        elif (self.flagged or self.hovered) and not _on_paper(painter):
             head_r = self.mount.head_diameter / 2
             painter.setBrush(Qt.BrushStyle.NoBrush)
             pen = QPen(MOUNT_KEEPOUT, 0.12)
@@ -1450,10 +1457,9 @@ class EdgeConnectorItem(QGraphicsItem):
     def boundingRect(self) -> QRectF:
         return _outline_rect(self.board)
 
-    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
-        # The fingers a bore has NOT drilled through: a mounting hole takes the copper
-        # wherever it is drilled, and a finger is copper -- this used to draw one intact
-        # under a 3.2 mm hole.
+    def _fingers(self) -> list[tuple[QRectF, float]]:
+        """Each surviving finger's rectangle on screen, with its corner radius."""
+        found: list[tuple[QRectF, float]] = []
         for hole in surviving_finger_holes(self.document, self.connector):
             rect = edge_finger_rect(self.connector, hole, self.board)
             # The rect is in board mm; only x needs the solder-side reflection, and it
@@ -1462,11 +1468,37 @@ class EdgeConnectorItem(QGraphicsItem):
             if self.side == "bottom":
                 span_w, _ = hole_span_mm(self.board)
                 left = span_w - (rect.x + rect.width)
-            radius = finger_corner_radius_mm(self.connector, rect)
-            scheme = scheme_for(self.board)
+            found.append((
+                QRectF(left, rect.y, rect.width, rect.height),
+                finger_corner_radius_mm(self.connector, rect),
+            ))
+        return found
+
+    def shape(self) -> QPainterPath:
+        """The fingers, and nothing else: chosen by a click on one, where the bounding
+        rectangle -- the whole board -- would have made every click on the board this."""
+        path = QPainterPath()
+        for rect, _radius in self._fingers():
+            path.addRect(rect)
+        return path
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        # The fingers a bore has NOT drilled through: a mounting hole takes the copper
+        # wherever it is drilled, and a finger is copper -- this used to draw one intact
+        # under a 3.2 mm hole.
+        scheme = scheme_for(self.board)
+        fingers = self._fingers()
+        for rect, radius in fingers:
             painter.setPen(QPen(QColor(scheme.pad_ring), 0.08))
             painter.setBrush(QBrush(QColor(scheme.pad) if self.near_side else FINGER_FAR))
-            painter.drawRoundedRect(QRectF(left, rect.y, rect.width, rect.height), radius, radius)
+            painter.drawRoundedRect(rect, radius, radius)
+        if fingers and self.isSelected() and not _on_paper(painter):
+            around = fingers[0][0]
+            for rect, _radius in fingers[1:]:
+                around = around.united(rect)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(SELECTED, 0.2))
+            painter.drawRect(around.adjusted(-0.3, -0.3, 0.3, 0.3))
 
             # NO HOLE. A finger is a solid contact, soldered to from the surface -- there
             # is nothing to put a lead through, and that is the whole difference between a
@@ -4075,6 +4107,7 @@ class BoardScene(QGraphicsScene):
         self.violations: tuple[DrcViolation, ...] = ()
         self.component_items: dict[str, ComponentItem] = {}
         self.mount_items: dict[str, MountingHoleItem] = {}
+        self.connector_items: dict[str, EdgeConnectorItem] = {}
         #: Every part's reference, over every part -- see ``ReferenceLayerItem``.
         self.reference_layer: ReferenceLayerItem | None = None
         #: The solder side's lead ends, over the copper; None on the component side.
@@ -4194,6 +4227,15 @@ class BoardScene(QGraphicsScene):
         if show != self.show_board_notes:
             self.show_board_notes = show
             self._build()
+
+    def selected_mount_ids(self) -> tuple[str, ...]:
+        return tuple(mount_id for mount_id, item in self.mount_items.items() if item.isSelected())
+
+    def selected_connector_ids(self) -> tuple[str, ...]:
+        return tuple(
+            connector_id for connector_id, item in self.connector_items.items()
+            if item.isSelected()
+        )
 
     def selected_board_note_ids(self) -> tuple[str, ...]:
         return tuple(
@@ -4438,8 +4480,15 @@ class BoardScene(QGraphicsScene):
             if is_stripboard(board):
                 self.addItem(TrackCutItem(cut, board, self.side))
 
+        self.connector_items = {}
         for connector in self.document.edge_connectors:
-            self.addItem(EdgeConnectorItem(connector, self.document, self.side))
+            self.connector_items[connector.id] = EdgeConnectorItem(
+                connector, self.document, self.side
+            )
+            self.connector_items[connector.id].setFlag(
+                QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True
+            )
+            self.addItem(self.connector_items[connector.id])
         self.mount_items = {}
         for mount in self.document.mounting_holes:
             self.mount_items[mount.id] = MountingHoleItem(mount, board, self.side)

@@ -146,6 +146,11 @@ closed without a bump.
   one digit, from Lite-On's LTS-6760, the same package pad for pad. A printed or moulded
   part of any borrowed package is now the same colour in 2D as in 3D, which also turns the
   collar of the 12 mm push button dark grey, as it already was in 3D.
+- **Board Features is part of Properties.** The board's mounting holes and edge connectors
+  are listed on the board in Properties, each with Remove, beside Add Corner Holes and Add
+  Edge Connector. A hole or a connector clicked on the board shows where it is, its size and
+  Remove. Board ▸ Board Features… takes you there.
+
 - **Board Setup is part of Design the Board.** One place to choose a board: the Board menu, the
   board's right-click, Other Board and Change… in Properties all open the designer, which
   opens on the board you have -- as the stock board it is, or as "This board" with its own

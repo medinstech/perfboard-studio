@@ -4380,65 +4380,69 @@ def test_the_designer_cannot_produce_an_oblong_pad_the_bus_would_refuse() -> Non
             not dialog.refusal.isHidden())
 
 
-def test_board_features_dialog_adds_four_corner_holes_as_one_undo_step() -> None:
-    from perfboard_studio.ui.main import BoardFeaturesDialog
-
-    bus = _new_bus(_blank_document())
-    dialog = BoardFeaturesDialog(bus)
-    dialog.mount_inset.setValue(1)
-    dialog._on_add_corners()
-
-    assert len(bus.document.mounting_holes) == 4
-    assert dialog.tree.topLevelItemCount() == 4
-    bus.undo()
-    assert bus.document.mounting_holes == ()
+def _board_features(window):
+    """The board's holes and connectors in Properties, where Board Features was a dialog."""
+    window.scene.clearSelection()
+    window._selection_from = "board"
+    window._refresh_properties()
+    assert window.inspector.shown is window.inspector.board_editor
+    return window.inspector.board_editor.features
 
 
-def test_board_features_dialog_reports_a_refusal_instead_of_swallowing_it() -> None:
-    from perfboard_studio.ui.main import BoardFeaturesDialog
-
-    bus = _new_bus(_blank_document())
-    dialog = BoardFeaturesDialog(bus)
-    dialog.mount_inset.setValue(999)
-    dialog._on_add_corners()
-
-    assert bus.document.mounting_holes == ()
-    assert dialog.note.text() != ""
-
-
-def test_board_features_dialog_removes_the_selected_feature() -> None:
-    from perfboard_studio.ui.main import BoardFeaturesDialog
-
-    bus = _new_bus(_featured_document())
-    dialog = BoardFeaturesDialog(bus)
-    assert dialog.tree.topLevelItemCount() == 2
-
-    dialog.tree.setCurrentItem(dialog.tree.topLevelItem(0))
-    dialog._on_remove()
-
-    assert bus.document.mounting_holes == ()
-    assert len(bus.document.edge_connectors) == 1
-    assert dialog.tree.topLevelItemCount() == 1
+def test_the_boards_features_add_four_corner_holes_as_one_undo_step() -> None:
+    window = _window_on(_blank_document())
+    try:
+        features = _board_features(window)
+        features.mount_inset.setValue(1)
+        features.add_corners.click()
+        assert len(window.bus.document.mounting_holes) == 4
+        assert len(_board_features(window).rows()) == 4
+        window.on_undo()
+        assert window.bus.document.mounting_holes == ()
+    finally:
+        _close(window)
 
 
-def test_enter_in_board_features_removes_nothing() -> None:
-    """Qt makes the first push button it finds a dialog's default, and that was Remove:
-    Enter typed into the hole-diameter box deleted whichever feature was selected."""
+def test_the_boards_features_say_a_refusal_instead_of_swallowing_it() -> None:
+    window = _window_on(_blank_document())
+    try:
+        features = _board_features(window)
+        features.mount_inset.setValue(999)
+        features.add_corners.click()
+        assert window.bus.document.mounting_holes == ()
+        assert features.problem.text() and not features.problem.isHidden()
+    finally:
+        _close(window)
+
+
+def test_each_feature_in_the_list_removes_itself() -> None:
+    window = _window_on(_featured_document())
+    try:
+        features = _board_features(window)
+        assert len(features.rows()) == 2
+        features.rows()[0].remove.click()  # the hole: holes are listed first
+        assert window.bus.document.mounting_holes == ()
+        assert len(window.bus.document.edge_connectors) == 1
+        assert len(_board_features(window).rows()) == 1
+    finally:
+        _close(window)
+
+
+def test_enter_in_the_boards_features_removes_nothing() -> None:
+    """Qt made the first push button Board Features' default, and that was Remove: Enter
+    typed into the hole-diameter box deleted whichever feature was selected."""
     from PySide6.QtTest import QTest
 
-    from perfboard_studio.ui.main import BoardFeaturesDialog
-
-    bus = _new_bus(_featured_document())
-    dialog = BoardFeaturesDialog(bus)
-    dialog.show()
+    window = _window_on(_featured_document())
+    window.show()
     try:
-        dialog.tree.setCurrentItem(dialog.tree.topLevelItem(0))
-        dialog.mount_diameter.setFocus()
-        QTest.keyClick(dialog.mount_diameter, Qt.Key.Key_Return)
-        assert len(bus.document.mounting_holes) == 1
-        assert len(bus.document.edge_connectors) == 1
+        features = _board_features(window)
+        features.mount_diameter.setFocus()
+        QTest.keyClick(features.mount_diameter, Qt.Key.Key_Return)
+        assert len(window.bus.document.mounting_holes) == 1
+        assert len(window.bus.document.edge_connectors) == 1
     finally:
-        dialog.close()
+        _close(window)
 
 
 # ---------------------------------------------------------------------------
@@ -6706,20 +6710,25 @@ def test_next_step_on_a_guide_with_no_steps_does_not_say_every_step_is_done() ->
         _close(window)
 
 
-def test_board_features_offers_only_what_the_board_can_take() -> None:
+def test_the_boards_features_offer_only_what_the_board_can_take() -> None:
     from perfboard_studio.breadboard import breadboard
-    from perfboard_studio.ui.main import BoardFeaturesDialog
 
-    bus = _new_bus(dataclasses.replace(_blank_document(), board=breadboard("400")))
-    dialog = BoardFeaturesDialog(bus)
-    buttons = {b.text(): b for b in dialog.findChildren(type(dialog.act_remove))}
-    assert not buttons["Add Corner Holes"].isEnabled()
-    assert not buttons["Add Edge Connector"].isEnabled()
+    window = _window_on(dataclasses.replace(_blank_document(), board=breadboard("400")))
+    try:
+        features = _board_features(window)
+        assert not features.add_corners.isEnabled()
+        assert not features.add_connector.isEnabled()
+    finally:
+        _close(window)
 
     narrow = dataclasses.replace(_blank_document().board, cols=5)
-    dialog = BoardFeaturesDialog(_new_bus(dataclasses.replace(_blank_document(), board=narrow)))
-    dialog.edge.setCurrentIndex(dialog.edge.findData("bottom"))
-    assert dialog.finger_count.value() <= 5
+    window = _window_on(dataclasses.replace(_blank_document(), board=narrow))
+    try:
+        features = _board_features(window)
+        features.edge.setCurrentIndex(features.edge.findData("bottom"))
+        assert features.finger_count.maximum() <= 5
+    finally:
+        _close(window)
 
 
 def test_a_catalog_parts_holding_note_is_said_in_the_windows_language() -> None:
@@ -11308,19 +11317,58 @@ def test_escape_leaves_the_status_bar_alone_when_there_is_nothing_to_leave() -> 
         _close(window)
 
 
-def test_board_features_remove_needs_a_chosen_row() -> None:
-    """With nothing picked the button used to delete the first row, chosen for the user."""
+def test_a_hole_chosen_on_the_board_is_its_own_editor_with_remove() -> None:
+    """The list is not the only way to a hole: clicked on the board, it is what Properties
+    shows -- where it is, its size -- and Remove takes it off, one undo step."""
     from perfboard_studio.commands import AddMountingHolesPayload
-    from perfboard_studio.ui.main import BoardFeaturesDialog
 
     window = _window_on(_load_dense())
     try:
         window.bus.dispatch("mounting-hole.addMany", AddMountingHolesPayload(ats=(HoleCoord(1, 1),)))
-        dialog = BoardFeaturesDialog(window.bus, window)
-        assert dialog.tree.topLevelItemCount() >= 1
-        assert not dialog.act_remove.isEnabled()
-        dialog.tree.setCurrentItem(dialog.tree.topLevelItem(0))
-        assert dialog.act_remove.isEnabled()
+        (mount,) = window.bus.document.mounting_holes
+        window.scene.mount_items[mount.id].setSelected(True)
+        window._selection_from = "board"
+        window._refresh_properties()
+        editor = window.inspector.feature_editor
+        assert window.inspector.shown is editor
+        assert editor.where.text() == "B2"
+        editor.remove.click()
+        assert window.bus.document.mounting_holes == ()
+    finally:
+        _close(window)
+
+
+def test_a_connector_is_chosen_by_its_fingers_and_nowhere_else() -> None:
+    """Its bounding rectangle is the whole board: chosen by that, every click on the board
+    would have chosen the connector."""
+    from perfboard_studio.ui.selection import Selection
+
+    window = _window_on(_featured_document())
+    try:
+        (connector,) = window.bus.document.edge_connectors
+        item = window.scene.connector_items[connector.id]
+        middle = item.boundingRect().center()
+        assert not item.shape().contains(middle)
+        finger = item._fingers()[0][0].center()
+        assert item.shape().contains(finger)
+        item.setSelected(True)
+        assert window._board_selection() == Selection("edge-connector", (connector.id,))
+        window._selection_from = "board"
+        window._refresh_properties()
+        assert window.inspector.shown is window.inspector.feature_editor
+    finally:
+        _close(window)
+
+
+def test_board_features_in_the_menu_shows_them_in_properties() -> None:
+    from perfboard_studio.ui import main as main_module
+
+    assert not hasattr(main_module, "BoardFeaturesDialog")
+    window = _window_on(_featured_document())
+    try:
+        window.on_board_features()
+        assert window.inspector.shown is window.inspector.board_editor
+        assert len(window.inspector.board_editor.features.rows()) == 2
     finally:
         _close(window)
 
@@ -14053,53 +14101,46 @@ def test_a_cancelled_board_trial_says_so_on_the_status_bar(monkeypatch) -> None:
         _close(window)
 
 
-def test_board_features_sets_and_clears_the_body_clearance() -> None:
-    """#12: off is the courtyard rule, on is the bodies that far apart. The dialog opens on
-    what the document says, and its button sets it or, with the box clear, takes it off."""
-    from perfboard_studio.ui.main import BoardFeaturesDialog
+def test_the_board_editor_sets_and_clears_the_body_clearance() -> None:
+    """#12: off is the courtyard rule, on is the bodies that far apart. The board's editor
+    shows what the document says; the box sets it and, cleared, takes it off -- as Board
+    Features did before it retired into Properties."""
+    window = _window_on(_blank_document())
+    try:
+        _board_features(window)
+        editor = window.inspector.board_editor
+        assert not editor.body_measure.isChecked() and not editor.body_clearance.isEnabled()
 
-    bus = _new_bus(_blank_document())
-    dialog = BoardFeaturesDialog(bus)
-    assert not dialog.body_measure.isChecked() and not dialog.body_clearance.isEnabled()
-    assert dialog.body_clearance.value() == 0.5
+        editor.body_clearance.setValue(0.8)
+        editor.body_measure.setChecked(True)
+        assert window.bus.document.body_clearance_mm == 0.8
+        assert editor.body_clearance.isEnabled()
 
-    dialog.body_measure.setChecked(True)
-    assert dialog.body_clearance.isEnabled()
-    dialog.body_clearance.setValue(0.8)
-    dialog._on_set_body_clearance()
-    assert bus.document.body_clearance_mm == 0.8
-    dialog.deleteLater()
-
-    reopened = BoardFeaturesDialog(bus)
-    assert reopened.body_measure.isChecked() and reopened.body_clearance.value() == 0.8
-    reopened.body_measure.setChecked(False)
-    reopened._on_set_body_clearance()
-    assert bus.document.body_clearance_mm is None
-    assert not reopened.body_clearance.isEnabled()
-    reopened.deleteLater()
+        editor.body_measure.setChecked(False)
+        assert window.bus.document.body_clearance_mm is None
+        assert not editor.body_clearance.isEnabled()
+    finally:
+        _close(window)
 
 
 def test_the_body_clearance_row_is_in_turkish() -> None:
-    from PySide6.QtWidgets import QFormLayout
+    from PySide6.QtWidgets import QLabel
 
     from perfboard_studio.ui.i18n import language, set_language
-    from perfboard_studio.ui.main import BoardFeaturesDialog
 
     before = language()
     set_language("tr")
     try:
-        dialog = BoardFeaturesDialog(_new_bus(_blank_document()))
-        assert dialog.body_measure.text() == "Gövdeler arasını ölç"
-        form = next(
-            layout
-            for layout in dialog.findChildren(QFormLayout)
-            if layout.labelForField(dialog.body_clearance) is not None
-        )
-        assert form.labelForField(dialog.body_clearance).text() == "Gövde aralığı"
-        dialog.deleteLater()
+        window = _window_on(_blank_document())
+        try:
+            _board_features(window)
+            editor = window.inspector.board_editor
+            assert editor.body_measure.text() == "Gövdeler arasını ölç"
+            assert "Gövde aralığı" in {label.text() for label in editor.findChildren(QLabel)}
+        finally:
+            _close(window)
     finally:
         set_language(before)
-
 
 
 def _reachable_from(window, root) -> set:

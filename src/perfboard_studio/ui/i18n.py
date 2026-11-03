@@ -42,6 +42,8 @@ TURKISH: Mapping[str, str] = {
     "&View": "&Görünüm",
     "&Help": "Y&ardım",
     "This board": "Bu kart",
+    "Holes and edge connectors": "Delikler ve kenar konnektörleri",
+    "None yet.": "Henüz yok.",
     "FR-4 (glass epoxy)": "FR-4 (cam epoksi)",
     "FR-2 (phenolic paper)": "FR-2 (pertinaks)",
     "FR-1 (phenolic paper)": "FR-1 (fenolik kâğıt)",
@@ -584,8 +586,6 @@ TURKISH: Mapping[str, str] = {
         '2, 7. satırı "07" olarak basar; bu kartların çoğu böyle yapar.'
     ),
     # -- board features: mounting holes and edge connectors -------------------
-    "Board Features": "Kart Öğeleri",
-    "Feature": "Öğe",
     "Where": "Yer",
     "Size": "Ölçü",
     "Remove": "Kaldır",
@@ -628,7 +628,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "Height limit": "Yükseklik sınırı",
     "No limit": "Sınırsız",
-    "Set Height Limit": "Yükseklik Sınırını Uygula",
     "Clear height inside the case, above the board. Taller parts are reported by DRC.": (
         "Kutunun içinde, kartın üstünde kalan net yükseklik. "
         "Daha yüksek parçaları DRC bildirir."
@@ -760,7 +759,6 @@ TURKISH: Mapping[str, str] = {
     "Older package": "Eski kılıf",
     "Measure between bodies": "Gövdeler arasını ölç",
     "Body clearance": "Gövde aralığı",
-    "Set Body Clearance": "Gövde Aralığını Ayarla",
     "Off, parts are kept apart by their courtyards (a half-pitch margin round each). On, by "
     "their real bodies plus this clearance — tighter, for a board where every hole counts.": (
         "Kapalıyken parçalar çevrelerindeki yarım adımlık güvenlik paylarıyla ayrı tutulur. "

@@ -85,6 +85,7 @@ from perfboard_studio.model import (
 from perfboard_studio.parsers.kicad import infer_net_class
 
 from . import theme
+from .boardfeatures import FeatureEditor, FeaturesGroup
 from .engine_text import say
 from .i18n import t
 from .partfields import PinoutEditor, note_editor, pinout_for_retyped_value
@@ -337,7 +338,14 @@ class _BoardEditor(QWidget):
         form.addRow(self.body_measure)  # the whole row: in the field column it was too wide
         _add_field(form, t("Body clearance"), self.body_clearance, self.clearance_problem)
 
-        self.setLayout(form)
+        # What the board has besides its grid, where Board Features was a dialog
+        # (``ui/boardfeatures.py``): its holes and connectors, Remove, and adding them.
+        column = QVBoxLayout(self)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(theme.SPACE["xl"])
+        column.addLayout(form)
+        self.features = FeaturesGroup(inspector.dispatch)
+        column.addWidget(self.features)
 
     def load(self, document: PerfDocument) -> None:
         self._document = document
@@ -356,6 +364,7 @@ class _BoardEditor(QWidget):
             self.body_clearance.setEnabled(clearance is not None)
             if clearance is not None and not self.body_clearance.hasFocus():
                 self.body_clearance.setValue(clearance)
+            self.features.load(document)
         finally:
             self._loading = False
 
@@ -1599,6 +1608,7 @@ class Inspector(QWidget):
         self.board_note_editor = _BoardNoteEditor(self, actions)
         self.sheet_note_editor = _SheetNoteEditor(self)
         self.conductor_editor = _ConductorEditor(self, actions)
+        self.feature_editor = FeatureEditor(self.dispatch)
         self.summary = _Summary()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1609,7 +1619,7 @@ class Inspector(QWidget):
             self.board_editor, self.part_editor, self.design_part_editor,
             self.parts_editor, self.placing_editor,
             self.net_editor, self.board_note_editor, self.sheet_note_editor,
-            self.conductor_editor, self.summary,
+            self.conductor_editor, self.feature_editor, self.summary,
         )
         for page in self._pages:
             layout.addWidget(page)
@@ -1675,6 +1685,18 @@ class Inspector(QWidget):
             if conductor is not None:
                 self.conductor_editor.load(document, conductor)
                 page = self.conductor_editor
+        elif selection.kind == "mounting-hole" and selection.ids:
+            mount = next((m for m in document.mounting_holes if m.id == selection.ids[0]), None)
+            if mount is not None:
+                self.feature_editor.load_hole(document, mount)
+                page = self.feature_editor
+        elif selection.kind == "edge-connector" and selection.ids:
+            connector = next(
+                (c for c in document.edge_connectors if c.id == selection.ids[0]), None
+            )
+            if connector is not None:
+                self.feature_editor.load_connector(document, connector)
+                page = self.feature_editor
         elif selection.kind == "placing" and selection.ids:
             self.placing_editor.load(selection.ids[0])
             page = self.placing_editor
