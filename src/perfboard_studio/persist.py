@@ -270,6 +270,7 @@ EDGE_CONNECTOR_KEY_ORDER: tuple[str, ...] = (
     "fingerLength",
     "insetMm",
     "face",
+    "outside",
 )
 HOLE_KEY_ORDER: tuple[str, ...] = ("col", "row")
 COMPONENT_KEY_ORDER: tuple[str, ...] = (
@@ -418,6 +419,8 @@ def _ordered_edge_connector(e: EdgeConnector, index: int) -> JsonObj:
         values["fingerLength"] = _num(_field_path(path, "fingerLength"), e.finger_length)
     if e.inset_mm != 0.0:
         values["insetMm"] = _num(_field_path(path, "insetMm"), e.inset_mm)
+    if e.outside:
+        values["outside"] = True
     return _build_ordered(EDGE_CONNECTOR_KEY_ORDER, values)
 
 
@@ -1311,6 +1314,10 @@ def _parse_edge_connector(raw: object, path: str, warnings: list[str]) -> EdgeCo
             else _expect_number(obj["insetMm"], _field_path(path, "insetMm"))
         ),
         face="both" if face_raw is None else _expect_enum(face_raw, _field_path(path, "face"), BOARD_FACES),  # type: ignore[arg-type]
+        outside=(
+            False if obj.get("outside") is None
+            else _expect_boolean(obj["outside"], _field_path(path, "outside"))
+        ),
     )
 
 

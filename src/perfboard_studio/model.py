@@ -310,6 +310,14 @@ class EdgeConnector:
     #: the board, just a different shape, so copper on one side only would be the odd
     #: case rather than the normal one.
     face: BoardFace = "both"
+    #: WHERE the finger stands. False, the default and left out of the file: ON its hole,
+    #: the outermost row's pad stretched out to the edge, so that hole is not drilled and
+    #: has no round pad. True: OUTSIDE the grid, in the border beside the outermost row, a
+    #: solid pad of its own -- which is what the stock boards' edge strips are, in every
+    #: photograph of them: the lettered grid runs to its last row untouched and the strip
+    #: stands beyond it. The grid's pad and hole beside it stay as they are, and nothing is
+    #: soldered INTO an outside finger, because it has no hole.
+    outside: bool = False
 
 
 # ---------------------------------------------------------------------------

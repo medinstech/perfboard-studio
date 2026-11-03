@@ -456,6 +456,8 @@ class BoardSession:
                         for hole in edge_connector_holes(connector, board)
                     ],
                     "face": connector.face,
+                    # The holes are the run it stands BESIDE, not ones it replaced.
+                    **({"outside": True} if connector.outside else {}),
                 }
                 for connector in self.document.edge_connectors
             ]
@@ -1252,8 +1254,10 @@ class BoardSession:
         count: int,
         finger_width: float = 2.0,
         face: str = "bottom",
+        outside: bool = False,
     ) -> dict[str, Any]:
-        """Replace a run of grid pads along one edge with connector fingers."""
+        """Replace a run of grid pads along one edge with connector fingers -- or, with
+        ``outside``, stand them in the border beside that run, as the stock boards do."""
         if edge not in get_args(BoardEdge):
             raise SessionError(
                 f"{edge!r} is not a board edge. Use one of: {', '.join(get_args(BoardEdge))}."
@@ -1268,6 +1272,7 @@ class BoardSession:
                 count=count,
                 finger_width=finger_width,
                 face=cast(BoardFace, face),
+                outside=outside,
             ),
         )
 

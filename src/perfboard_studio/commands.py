@@ -44,16 +44,19 @@ from .command import (
     create_id_generator,
 )
 from .geometry import (
+    OUTSIDE_FINGER_MIN_MM,
     STANDARD_PRESETS,
     BoardPreset,
     board_edge_margin_mm,
     board_from_preset,
     default_finger_length_mm,
+    edge_axis,
     edge_connector_holes,
     format_hole,
     hole_to_mm,
     is_inside_board,
     legend_problem,
+    outside_finger_room_mm,
     preset_edge_connectors,
     preset_mounting_holes,
     substrate_edges_mm,
@@ -1330,6 +1333,9 @@ class AddEdgeConnectorPayload:
     finger_length: Mm | None = None
     face: BoardFace = "bottom"
     id: str | None = None
+    #: In the border beside the outermost row, as the stock boards' strips are, rather than
+    #: on that row's holes -- see ``EdgeConnector.outside``.
+    outside: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -2296,6 +2302,18 @@ class _SetBoard:
                     "would-merge-edge-connector",
                     f"Edge connector {connector.id} has {connector.finger_width} mm fingers, "
                     f"which at a {b.pitch} mm pitch would touch each other.",
+                )
+            # An outside strip lives in the border, so a border taken away -- a thinner
+            # one, or a bigger pad -- takes the strip with it. Refused here rather than
+            # drawn as a finger no longer than nothing.
+            if connector.outside and (
+                outside_finger_room_mm(b, connector.edge, connector.inset_mm)
+                < OUTSIDE_FINGER_MIN_MM
+            ):
+                raise CommandError(
+                    "would-strand-edge-connector",
+                    f"Edge connector {connector.id} stands in the {connector.edge} border, "
+                    f"which on this board leaves no room for it beside the outermost pads.",
                 )
 
         return dataclasses.replace(doc, board=b)
@@ -3452,10 +3470,26 @@ class _AddEdgeConnector:
         # actually sits: a finger shorter than the margin never reaches its own hole, and
         # one longer than half a pitch past it starts eating the next row's pad. On a
         # flush-cut board those work out to "more than half a pitch, at most a pitch".
+        if p.outside is not True and p.outside is not False:
+            raise CommandError("invalid-edge-connector", "outside is true or false.")
+        room = outside_finger_room_mm(board, p.edge)
+        if p.outside and room < OUTSIDE_FINGER_MIN_MM:
+            raise CommandError(
+                "invalid-edge-connector",
+                f"The {p.edge} border has no room for a finger outside the grid: the board's "
+                f"edge is {board_edge_margin_mm(board, edge_axis(p.edge)):g} mm from the "
+                "outermost holes. Put the strip on the holes instead, or give the board a border.",
+            )
+        if p.outside and p.finger_length is not None and not (0 < p.finger_length <= room):
+            raise CommandError(
+                "invalid-edge-connector",
+                f"An outside finger reaches in from the board edge and must be over 0 mm and at "
+                f"most {room:g} mm, short of the outermost pads; got {p.finger_length:g} mm.",
+            )
         margin = board_edge_margin_mm(board)
         longest = default_finger_length_mm(board)
         length = p.finger_length if p.finger_length is not None else longest
-        if not (margin < length <= longest):
+        if not p.outside and not (margin < length <= longest):
             raise CommandError(
                 "invalid-edge-connector",
                 f"Finger length is measured in from the board edge and must be over "
@@ -3475,6 +3509,7 @@ class _AddEdgeConnector:
             finger_width=p.finger_width,
             finger_length=p.finger_length,
             face=p.face,
+            outside=p.outside,
         )
         # Two fingers on one hole is one pad claimed twice, and everything downstream --
         # the renderer, the gap maths -- would silently use whichever came first.

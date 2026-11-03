@@ -994,7 +994,8 @@ def holes_without_grid_pad(doc: PerfDocument, side: BoardSide) -> frozenset[str]
     """
     without = set(consumed_holes(doc))
     for connector in doc.edge_connectors:
-        if connector.face not in ("both", side):
+        # A finger outside the grid replaces no pad: the grid's stays as it is beside it.
+        if connector.face not in ("both", side) or connector.outside:
             continue
         for hole in edge_connector_holes(connector, doc.board):
             without.add(hole_key(hole))
@@ -1018,6 +1019,8 @@ def undrilled_holes(doc: PerfDocument) -> frozenset[str]:
     return frozenset(
         hole_key(hole)
         for connector in doc.edge_connectors
+        # An outside finger is drilled nowhere, and leaves the grid's hole beside it drilled.
+        if not connector.outside
         for hole in edge_connector_holes(connector, doc.board)
     )
 
@@ -1148,6 +1151,17 @@ def surviving_finger_holes(doc: PerfDocument, connector: EdgeConnector) -> list[
     One answer for both renderers, and the same one ``consumed_holes`` gives for a round
     pad: a bore does not distinguish between the two shapes of copper it destroys.
     """
+    if connector.outside:
+        # Not on a grid hole, so asked of the bores' geometry: a finger the corner screw's
+        # bore cuts into is a finger the board does not have.
+        return [
+            hole
+            for hole in edge_connector_holes(connector, doc.board)
+            if not any(
+                _bore_touches_rect(mount, edge_finger_rect(connector, hole, doc.board), doc.board)
+                for mount in doc.mounting_holes
+            )
+        ]
     gone = consumed_holes(doc)
     return [
         hole
@@ -1279,8 +1293,11 @@ def edge_connector_holes(connector: EdgeConnector, board: Board) -> list[HoleCoo
 
 
 def edge_connector_at(doc: PerfDocument, hole: HoleCoord) -> EdgeConnector | None:
-    """The connector whose finger covers this hole, if any."""
+    """The connector whose finger covers this hole, if any. Never an outside one: it stands
+    beside the hole, which keeps its own pad."""
     for connector in doc.edge_connectors:
+        if connector.outside:
+            continue
         if any(h == hole for h in edge_connector_holes(connector, doc.board)):
             return connector
     return None
@@ -1333,6 +1350,8 @@ def edge_finger_rect(connector: EdgeConnector, hole: HoleCoord, board: Board) ->
     outline = board_outline_mm(board)
     centre = hole_to_mm(hole, board)
     inset = max(0.0, connector.inset_mm)
+    if connector.outside:
+        return _outside_finger_rect(connector, centre, outline, inset, board)
     length = max(
         0.0,
         (
@@ -1342,6 +1361,43 @@ def edge_finger_rect(connector: EdgeConnector, hole: HoleCoord, board: Board) ->
         )
         - inset,
     )
+    half_width = max(0.0, connector.finger_width) / 2
+    if connector.edge == "top":
+        return RectMm(centre.x - half_width, outline.y + inset, 2 * half_width, length)
+    if connector.edge == "bottom":
+        bottom = outline.y + outline.height - inset
+        return RectMm(centre.x - half_width, bottom - length, 2 * half_width, length)
+    if connector.edge == "left":
+        return RectMm(outline.x + inset, centre.y - half_width, length, 2 * half_width)
+    right = outline.x + outline.width - inset
+    return RectMm(right - length, centre.y - half_width, length, 2 * half_width)
+
+
+#: Bare substrate between an outside finger and the outermost row's pad beside it: the
+#: smallest gap these boards are made with, the one a corner bore keeps from a finger.
+OUTSIDE_FINGER_GAP_MM: Mm = 0.3
+#: The shortest outside finger worth the name: under this a flush-cut board's sliver of
+#: border (0.02 mm on a 1.9 mm pad at 2.54 pitch) would pass for room.
+OUTSIDE_FINGER_MIN_MM: Mm = 0.5
+
+
+def outside_finger_room_mm(board: Board, edge: BoardEdge, inset: Mm = 0.0) -> Mm:
+    """How long an outside finger on this edge can be: from the board edge, less its inset,
+    to ``OUTSIDE_FINGER_GAP_MM`` short of the outermost row's pad. Zero or less on a board
+    whose border has no room for one."""
+    extent_x, extent_y = pad_extent_mm(board)
+    half = (extent_x if edge in ("left", "right") else extent_y) / 2
+    return board_edge_margin_mm(board, edge_axis(edge)) - half - OUTSIDE_FINGER_GAP_MM - inset
+
+
+def _outside_finger_rect(
+    connector: EdgeConnector, centre: Point2, outline: RectMm, inset: Mm, board: Board
+) -> RectMm:
+    """An outside finger: in the border beside its hole, from the board edge (less its inset)
+    inward, stopping ``OUTSIDE_FINGER_GAP_MM`` short of the hole's pad -- or as long as it was
+    asked to be, if shorter."""
+    room = max(0.0, outside_finger_room_mm(board, connector.edge, inset))
+    length = room if connector.finger_length is None else min(room, max(0.0, connector.finger_length))
     half_width = max(0.0, connector.finger_width) / 2
     if connector.edge == "top":
         return RectMm(centre.x - half_width, outline.y + inset, 2 * half_width, length)

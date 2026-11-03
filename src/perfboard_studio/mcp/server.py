@@ -341,12 +341,19 @@ def add_mounting_hole(
 
 @mcp.tool()
 def add_edge_connector(
-    edge: str, start: int, count: int, finger_width: float = 2.0, face: str = "bottom"
+    edge: str,
+    start: int,
+    count: int,
+    finger_width: float = 2.0,
+    face: str = "bottom",
+    outside: bool = False,
 ) -> dict[str, Any]:
     """Replace a run of grid pads along one edge ("top", "bottom", "left", "right") with
     connector fingers, starting at index `start` and `count` wide. A finger IS the pad
-    there, rather than something over it."""
-    return session.add_edge_connector(edge, start, count, finger_width, face)
+    there, rather than something over it. With `outside`, the fingers stand in the border
+    beside that run instead and every grid pad stays -- which is where the stock boards'
+    edge strips are; refused on a board whose border has no room for them."""
+    return session.add_edge_connector(edge, start, count, finger_width, face, outside)
 
 
 @mcp.tool()

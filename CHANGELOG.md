@@ -22,6 +22,11 @@ closed without a bump.
 
 ### Added
 
+- **An edge strip can stand outside the grid, as it does on the boards you buy.** An edge
+  connector can now be laid in the border beside the outermost row instead of on it, so
+  every hole of the grid stays a hole; the agent's `add_edge_connector` takes `outside`
+  too. A board with no border for one says so instead of drawing a sliver.
+
 - **Parts on the board look like the parts in your hand.** Every part KiCad has a model of
   is drawn from that model seen from above: a DIP narrower than its rows with its notch,
   a terminal block's screws, each pin of a header, a tactile switch's frame and button, an

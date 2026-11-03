@@ -689,8 +689,22 @@ they are easy to get wrong the same way again:
 
 - **Oblong pads on a real board are only the edge strip**, not the whole grid. The
   interior is round. "Oblong pad" and "edge-connector pad" are the same physical thing,
-  which is why a finger replaces the grid pad rather than covering it —
+  which is why a finger ON the holes replaces the grid pad rather than covering it —
   `geometry.holes_without_grid_pad` answers that for both faces.
+- **On the stock boards the strip stands OUTSIDE the grid** (`EdgeConnector.outside`).
+  Every photograph of one with a strip (the green double-sided 5 × 7 and 2 × 8, the
+  phenolic 5 × 7) has its lettered grid run to its last row untouched and the strip in
+  the border beyond it; a finger on the holes, the only kind there was, cost a 5 × 7 two
+  of its rows. An outside finger replaces no pad and drills nothing, so it is in neither
+  `holes_without_grid_pad` nor `undrilled_holes`, and `edge_connector_at` never answers
+  with one. It runs from the edge (less its inset) to `OUTSIDE_FINGER_GAP_MM` short of
+  the outermost pads, or shorter if asked; `edge_finger_rect` is still the one rectangle
+  both renderers draw and the bores cut (`surviving_finger_holes` asks the bore's
+  geometry, since there is no hole for it to consume). `edge-connector.add` and
+  `board.set` refuse one where the border leaves less than `OUTSIDE_FINGER_MIN_MM`. The
+  field is left out of the file when false, so every older file is a strip on the holes.
+  The presets still lay theirs on the holes: moving them changes which board the board
+  trials choose, which is its own measured change.
 - **Fingers stop short of the edge** (`inset_mm`); the strip outside them is where the
   row numbers are printed. `legend_strip_mm` asks the *document*, not the board, for that
   reason.
