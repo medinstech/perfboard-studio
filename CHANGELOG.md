@@ -362,6 +362,10 @@ closed without a bump.
 
 ### Fixed
 
+- **What a search finds best comes first.** "resistor" lists the resistor before the inductor
+  and the light sensor, "power" the power inputs first, and Turkish "LED" the LEDs -- in the
+  Library and in the package picker alike. The board's own parts are "This board".
+
 - **The Library's names have the room.** Its Pins column took half the panel and cut "AA
   battery holder" to "AA battery h…"; the count is as wide as it needs and right-aligned. The
   package picker, the Nets panel and the shortcut list had the same split.

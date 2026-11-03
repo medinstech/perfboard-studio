@@ -15630,10 +15630,10 @@ def test_the_boards_own_parts_are_searched_like_every_other() -> None:
         populate_part_tree(tree, text, custom)
         return [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]
 
-    assert groups("")[0] == "this board"
-    assert "this board" not in groups("resistor")
-    assert groups("dip")[0] == "this board"
-    assert groups("this board") == ["this board"]
+    assert groups("")[0] == "This board"
+    assert "This board" not in groups("resistor")
+    assert "This board" in groups("dip")
+    assert groups("this board") == ["This board"]
 
 
 @pytest.mark.parametrize(
@@ -15742,3 +15742,60 @@ def test_the_librarys_names_have_the_room_at_the_default_sidebar_width(language:
             _close(window)
     finally:
         set_language(before)
+
+
+def _first_found(text: str) -> tuple[str, str]:
+    """(the first group, its first part) the Library lists for ``text``."""
+    from PySide6.QtWidgets import QTreeWidget
+
+    from perfboard_studio.ui.main import populate_part_tree
+
+    tree = QTreeWidget()
+    tree.setColumnCount(2)
+    populate_part_tree(tree, text, {})
+    group = tree.topLevelItem(0)
+    assert group is not None, text
+    return group.text(0), group.child(0).text(0)
+
+
+@pytest.mark.parametrize(
+    ("language", "typed", "group", "first"),
+    [
+        ("en", "resistor", None, "Resistor"),
+        ("en", "power", "Power in", None),
+        ("tr", "direnç", None, "Direnç"),
+        ("tr", "LED", "LED'ler", None),
+    ],
+)
+def test_what_a_search_finds_best_comes_first(language, typed, group, first) -> None:
+    """reach's walkthrough: "resistor" listed the inductor and the LDR before the resistor,
+    "power" the TIP31C before the power-in terminal, and Turkish "LED" the AA battery
+    holder first. One ranking, parts' (``catalog.search_rank``), for the Library and the
+    package picker: the leaves of a group best first, and the groups by their best."""
+    from perfboard_studio.ui.i18n import set_language
+
+    set_language(language)
+    try:
+        found_group, found_first = _first_found(typed)
+        if group is not None:
+            assert found_group == group, (typed, found_group, found_first)
+        if first is not None:
+            assert found_first.startswith(first), (typed, found_group, found_first)
+    finally:
+        set_language("en")
+
+
+def test_with_nothing_typed_the_library_is_in_its_own_order() -> None:
+    """Every rank is the same with nothing typed: the catalog's order, packages after."""
+    from PySide6.QtWidgets import QTreeWidget
+
+    from perfboard_studio.catalog import CATEGORY_ORDER
+    from perfboard_studio.ui.main import _catalog_headings, populate_part_tree
+
+    tree = QTreeWidget()
+    tree.setColumnCount(2)
+    populate_part_tree(tree, "", {})
+    headings = _catalog_headings()
+    listed = [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]
+    catalog = [headings[c] for c in CATEGORY_ORDER if headings[c] in listed]
+    assert listed[: len(catalog)] == catalog

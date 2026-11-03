@@ -162,7 +162,8 @@ from perfboard_studio.catalog import (
     CatalogPart,
     catalog_part,
     names_part,
-    part_matches,
+    part_rank,
+    search_rank,
 )
 from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
@@ -955,92 +956,86 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
 
     Every leaf carries its footprint in ``ROLE_FOOTPRINT_ID``, and a catalog part its id in
     ``ROLE_CATALOG_ID`` as well; group headings carry neither and cannot be selected.
+
+    WHAT IS FOUND BEST COMES FIRST, by parts' one ranking (``catalog.search_rank``, and
+    ``part_rank`` for a catalog part): a name that starts with what was typed, then one
+    with every word at the start of a word of its names, then anywhere in them, then in
+    what it says about itself. The leaves of a group in that order, and the groups by
+    their best leaf -- "resistor" listed the Bourns inductor and the LDR before the
+    resistor, and Turkish "LED" opened on the battery holder (reach's walkthrough). With
+    nothing typed every rank is the same and the order is the catalog's.
     """
     needle = _folded(text.strip())
     tree.clear()
     titles = tree.headerItem()
     if titles is not None:
         titles.setTextAlignment(1, PINS_ALIGNMENT)
-    by_archetype: dict[BodyArchetype, list[Footprint]] = {}
-    for footprint in sorted(standard_footprints().values(), key=lambda f: _natural_key(f.name)):
+    #: (its place with nothing typed, the group, its leaves as (rank, place, leaf), open)
+    groups: list[tuple[int, QTreeWidgetItem, list[tuple[int, int, QTreeWidgetItem]], bool]] = []
+
+    def group_item(title: str) -> QTreeWidgetItem:
+        group = QTreeWidgetItem([title, ""])
+        group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+        # In full on hover: at the sidebar's width "Regülatörler ve referanslar" is
+        # "Regülatörler v…", and a group whose name is cut is a group nobody opens.
+        group.setToolTip(0, title)
+        return group
+
+    def package_leaf(footprint: Footprint) -> QTreeWidgetItem:
+        leaf = QTreeWidgetItem([footprint_label(footprint.name), str(len(footprint.pins))])
+        leaf.setData(0, ROLE_FOOTPRINT_ID, footprint.id)
+        leaf.setTextAlignment(1, PINS_ALIGNMENT)
+        # In the colours the board draws it in, so finding the part you picked is
+        # recognition rather than reading -- see the note in icons.py.
+        leaf.setIcon(0, icons.part_icon(footprint))
+        # The NAME first, because the column it sits in is the one that gets elided:
+        # "Film capa…" in a 300 px dock is the string a tooltip has to finish, and the id
+        # alone was no help at all with that.
+        leaf.setToolTip(
+            0,
+            f"{footprint_label(footprint.name)}\n{footprint.id} — "
+            + t("{count} pin(s)").format(count=len(footprint.pins)),
+        )
+        return leaf
+
+    def package_rank(footprint: Footprint, *said: str) -> int | None:
         # In either language, as the catalog rows are: "direnç" finds a resistor as
         # "resistor" does.
-        haystack = (
-            f"{footprint.id} {footprint.name} {footprint_label(footprint.name)} "
-            f"{footprint.body.archetype}"
+        return search_rank(
+            text,
+            names=(footprint_label(footprint.name), footprint.name, footprint.id),
+            said=(footprint.body.archetype, *said),
+            fold=_folded,
         )
-        haystack = _folded(haystack)
-        if needle and needle not in haystack:
-            continue
-        by_archetype.setdefault(footprint.body.archetype, []).append(footprint)
 
-    # In a group of their own rather than filed under their archetype, and first. A
-    # custom DIP-22 among the library's DIPs is the one part in the dock that cannot be
-    # found by knowing what it is, because the only thing that distinguishes it is that
-    # the library does not have it.
-    # Searched like the packages are -- they listed above every search whatever was
-    # typed, so after one custom part its box topped "resistor" (reach's walkthrough).
-    # The group's own name finds them all.
-    heading = t("this board")
-    ordered = [
-        footprint
-        for footprint in sorted(custom.values(), key=lambda f: _natural_key(f.name))
-        if not needle
-        or needle in _folded(
-            f"{footprint.id} {footprint.name} {footprint_label(footprint.name)} "
-            f"{footprint.body.archetype} {heading}"
-        )
+    # The board's own parts, in a group of their own rather than filed under their
+    # archetype. A custom DIP-22 among the library's DIPs is the one part in the dock that
+    # cannot be found by knowing what it is, because the only thing that distinguishes it is
+    # that the library does not have it. Searched like the packages -- they once listed
+    # above every search, whatever was typed -- and the group's own name finds them all.
+    heading = t("This board")
+    mine = [
+        (rank, index, package_leaf(footprint))
+        for index, footprint in enumerate(sorted(custom.values(), key=lambda f: _natural_key(f.name)))
+        if (rank := package_rank(footprint, heading)) is not None
     ]
-    if ordered:
-        group = QTreeWidgetItem([t("this board"), ""])
-        group.setToolTip(0, t("this board"))
-        group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-        group.setIcon(0, icons.part_icon(ordered[0]))
-        tree.addTopLevelItem(group)
-        for footprint in ordered:
-            leaf = QTreeWidgetItem(
-                [footprint_label(footprint.name), str(len(footprint.pins))]
-            )
-            leaf.setData(0, ROLE_FOOTPRINT_ID, footprint.id)
-            leaf.setTextAlignment(1, PINS_ALIGNMENT)
-            leaf.setIcon(0, icons.part_icon(footprint))
-            leaf.setToolTip(
-                0,
-                f"{footprint_label(footprint.name)}\n{footprint.id} — "
-                + t("{count} pin(s)").format(count=len(footprint.pins)),
-            )
-            group.addChild(leaf)
-        group.setExpanded(True)
+    if mine:
+        groups.append((0, group_item(heading), mine, True))
 
     # REAL PARTS, before the packages: what somebody holding a BC547 looks for is
     # "BC547", not "to92". Each row places a part with its value, pin names and symbol
     # already given -- see ``perfboard_studio.catalog``.
     headings = _catalog_headings()
-    for category in CATEGORY_ORDER:
-        parts = [
-            part
-            for part in CATALOG
-            if part.category == category
-            # In either language: "regülatör" finds a 7805 as "regulator" does.
-            and part_matches(
-                part,
-                text,
-                also=f"{t(part.name)} {t(part.summary)} {headings[category]}",
-                fold=_folded,
+    for place, category in enumerate(CATEGORY_ORDER, start=1):
+        found: list[tuple[int, int, QTreeWidgetItem]] = []
+        for index, part in enumerate(p for p in CATALOG if p.category == category):
+            # Named in the window's language FIRST, so "direnç" starts "Direnç ...".
+            rank = part_rank(
+                part, text, names=(t(part.name),),
+                said=(t(part.summary), headings[category]), fold=_folded,
             )
-        ]
-        if not parts:
-            continue
-        group = QTreeWidgetItem([headings[category], ""])
-        group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-        # In full on hover: at the sidebar's width "Regülatörler ve referanslar" is
-        # "Regülatörler v…", and a group whose name is cut is a group nobody opens.
-        group.setToolTip(0, headings[category])
-        first = get_footprint(parts[0].footprint_id)
-        if first is not None:
-            group.setIcon(0, icons.part_icon(first))
-        tree.addTopLevelItem(group)
-        for part in parts:
+            if rank is None:
+                continue
             packaged = get_footprint(part.footprint_id)
             # A part NUMBER is the same in every language and has no entry; a name that
             # describes the part -- "Tactile switch 6x6 mm" -- is said in the window's.
@@ -1053,40 +1048,39 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
             if packaged is not None:
                 leaf.setIcon(0, icons.part_icon(packaged))
             leaf.setToolTip(0, _catalog_tooltip(part))
-            group.addChild(leaf)
-        group.setExpanded(bool(needle))
+            found.append((rank, index, leaf))
+        if found:
+            groups.append((place, group_item(headings[category]), found, bool(needle)))
 
     families = _archetype_headings()
     order = list(families)
-    for archetype in sorted(by_archetype, key=order.index):
-        group = QTreeWidgetItem([families[archetype], ""])
-        group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-        group.setToolTip(0, families[archetype])
-        # The group takes the picture of its first member, which is the archetype's
-        # picture: every part under it is that shape in that colour.
-        group.setIcon(0, icons.part_icon(by_archetype[archetype][0]))
-        tree.addTopLevelItem(group)
-        for footprint in by_archetype[archetype]:
-            leaf = QTreeWidgetItem(
-                [footprint_label(footprint.name), str(len(footprint.pins))]
-            )
-            leaf.setData(0, ROLE_FOOTPRINT_ID, footprint.id)
-            leaf.setTextAlignment(1, PINS_ALIGNMENT)
-            # In the colours the board draws it in, so finding the part you picked is
-            # recognition rather than reading -- see the note in icons.py.
-            leaf.setIcon(0, icons.part_icon(footprint))
-            # The NAME first, because the column it sits in is the one that gets
-            # elided: "Film capa…" in a 300 px dock is the string a tooltip has to
-            # finish, and the id alone was no help at all with that.
-            leaf.setToolTip(
-                0,
-                f"{footprint_label(footprint.name)}\n{footprint.id} — "
-                + t("{count} pin(s)").format(count=len(footprint.pins)),
-            )
-            group.addChild(leaf)
-        # Expanded only when the filter has narrowed things down, otherwise the twenty-eight
+    by_archetype: dict[BodyArchetype, list[tuple[int, int, QTreeWidgetItem]]] = {}
+    for index, footprint in enumerate(
+        sorted(standard_footprints().values(), key=lambda f: _natural_key(f.name))
+    ):
+        archetype = footprint.body.archetype
+        rank = package_rank(footprint, families.get(archetype, ""))
+        if rank is not None:
+            by_archetype.setdefault(archetype, []).append((rank, index, package_leaf(footprint)))
+    after = 1 + len(CATEGORY_ORDER)
+    for archetype, found in by_archetype.items():
+        # Open only when the filter has narrowed things down, otherwise the twenty-eight
         # pin headers bury everything else.
-        group.setExpanded(bool(needle) or len(by_archetype[archetype]) <= 4)
+        groups.append((
+            after + order.index(archetype), group_item(families[archetype]), found,
+            bool(needle) or len(found) <= 4,
+        ))
+
+    for _place, group, found, opened in sorted(
+        groups, key=lambda entry: (min(rank for rank, _i, _leaf in entry[2]), entry[0])
+    ):
+        found.sort(key=lambda entry: (entry[0], entry[1]))
+        # The group takes the picture of its first member: an archetype's are all its shape.
+        group.setIcon(0, found[0][2].icon(0))
+        tree.addTopLevelItem(group)
+        for _rank, _index, leaf in found:
+            group.addChild(leaf)
+        group.setExpanded(opened)
 
 
 class PartTree(QTreeWidget):

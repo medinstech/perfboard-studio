@@ -41,6 +41,7 @@ TURKISH: Mapping[str, str] = {
     "&Wiring": "&Kablolama",
     "&View": "&Görünüm",
     "&Help": "Y&ardım",
+    "This board": "Bu kart",
     "Could not be wired": "Kablolanamadı",
     "{count} connection could not be wired: why is in Problems.": "{count} bağlantı kablolanamadı: nedeni Sorunlar'da.",
     "{count} connections could not be wired: why is in Problems.": "{count} bağlantı kablolanamadı: nedenleri Sorunlar'da.",
@@ -1341,7 +1342,6 @@ TURKISH: Mapping[str, str] = {
     "{name} — {pins} pin(s), {height} mm tall": (
         "{name} — {pins} pin, {height} mm yükseklik"
     ),
-    "this board": "bu kart",
     "{count} pin(s)": "{count} pin",
     # -- the Parts panel's package families (main._archetype_headings) -------------------
     "Axial resistors and diodes": "Eksenel dirençler ve diyotlar",
