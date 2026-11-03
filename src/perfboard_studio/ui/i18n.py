@@ -41,6 +41,9 @@ TURKISH: Mapping[str, str] = {
     "&Wiring": "&Kablolama",
     "&View": "&Görünüm",
     "&Help": "Y&ardım",
+    "Could not be wired": "Kablolanamadı",
+    "{count} connection could not be wired: why is in Problems.": "{count} bağlantı kablolanamadı: nedeni Sorunlar'da.",
+    "{count} connections could not be wired: why is in Problems.": "{count} bağlantı kablolanamadı: nedenleri Sorunlar'da.",
     "perfboard, stripboard, move to, take to, transfer": "perfboard, delikli kart, şerit kart, taşı, aktar, geçir",
     "No part in the Library matches that.": "Kütüphanede buna uyan bir parça yok.",
     "Next Problem": "Sonraki Sorun",
@@ -655,8 +658,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "Overlapping bodies: {before} → {after}.": "Çakışan gövdeler: {before} → {after}.",
     "Pins sharing a hole: {before} → {after}.": "Aynı deliği paylaşan pinler: {before} → {after}.",
-    "{count} problem(s):": "{count} sorun:",
-    "{count} connection(s) were left unwired:": "{count} bağlantı kablolanamadı:",
     "{ref} is in the design, not on the board yet.": "{ref} tasarımda var, ama henüz kartta değil.",
     "In the design, not on the board yet.": "Tasarımda var, ama henüz kartta değil.",
     "{ref} is in the design, not on the board yet. Place on the Board puts it there.": (
@@ -1621,8 +1622,6 @@ TURKISH: Mapping[str, str] = {
         "Kablola yalnızca ekler; şimdi kablolamak o bakırı yerinde bırakıp yanına yenisini "
         "koyar. Kablolamayı yeniden yapmak onu söküp yeniden planlar.</p>"
     ),
-    "Some connections could not be made": "Bazı bağlantılar yapılamadı",
-    "Some connections could not be wired": "Bazı bağlantılar kablolanamadı",
     "Imported with warnings": "Uyarılarla içe aktarıldı",
     "Imported {count} net(s) from {name}": "{name} dosyasından {count} net içe aktarıldı",
     "with warnings:": "uyarılar:",

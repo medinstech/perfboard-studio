@@ -15671,3 +15671,36 @@ def test_a_word_in_what_a_command_does_ranks_below_its_name() -> None:
     described = entry("New Board from This Design…", also="goes on to perfboard")
     assert [e.label for e in rank([described, named], "perfboard")] == [
         "Perfboard Settings", "New Board from This Design…"]
+
+
+def test_what_auto_wire_could_not_do_is_in_problems_not_a_box(monkeypatch) -> None:
+    """A box listed twelve connections and had to be closed before any could be looked at.
+    They are a group in the Problems drawer now, each a click from where it is, until the
+    board changes."""
+    from perfboard_studio.autoroute import UnroutedLink
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY, ROLE_HOLES
+
+    window = _moved_off_its_copper("ne555-astable", 2)
+    try:
+        boxes: list[object] = []
+        monkeypatch.setattr(
+            main_module.QMessageBox, "information", lambda *args, **kwargs: boxes.append(args)
+        )
+        link = next(link for entry in window._last_ratsnest for link in entry.links)
+        window._report_unrouted_items([UnroutedLink(link=link, reason="no room")])
+        assert boxes == []
+        assert window.problems_bar.expanded
+        tops = [window.drc_tree.topLevelItem(i) for i in range(window.drc_tree.topLevelItemCount())]
+        assert tops[0].data(0, ROLE_FINDING_KEY) == "ERC", "the circuit's first, still"
+        [group] = [top for top in tops if top.data(0, ROLE_FINDING_KEY) == "WIRING"]
+        assert group.childCount() == 1
+        assert group.child(0).data(0, ROLE_HOLES) == (link.from_, link.to)
+        assert "could not be wired" in window.statusBar().currentMessage()
+        window.on_undo()
+        QApplication.processEvents()
+        tops = [window.drc_tree.topLevelItem(i).data(0, ROLE_FINDING_KEY)
+                for i in range(window.drc_tree.topLevelItemCount())]
+        assert "WIRING" not in tops, "said of a board that is not there any more"
+    finally:
+        _close(window)

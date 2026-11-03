@@ -380,6 +380,10 @@ closed without a bump.
 - **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
   first in the document, instead of to whichever of them is listed first.
 
+- **What Auto-wire could not do is in Problems, not a box.** Each connection it left, with
+  its reason and a click to where it is, until the board changes; the box listed twelve
+  and had to be closed before any could be looked at.
+
 - **The way from a breadboard to perfboard is found.** The command palette searches what a
   command does, not only its name: "perfboard", "move to", "delikli" and "taşı" find New Board
   from This Design. A checked breadboard's Next is Take It to Perfboard…, which offers to

@@ -3538,6 +3538,12 @@ class MainWindow(QMainWindow):
         #: Nets whose copper was laid out for a position a part has since left. See
         #: _track_moved_nets for why this is remembered rather than detected.
         self._nets_from_old_layout: set[NetId] = set()
+        #: What the last Auto-wire could not do, and the document it was said of: a group
+        #: in the Problems drawer until the board changes (``_add_not_wired``). Each row is
+        #: (what, where, its net).
+        self._not_wired: tuple[
+            PerfDocument | None, tuple[tuple[str, tuple[HoleCoord, ...], NetId | None], ...]
+        ] = (None, ())
         #: Which primitive the router should reach for first. See router.RoutingStyle, and
         #: StylePreference for the extra "best" value that measures rather than assumes.
         self._routing_style: StylePreference = "balanced"
@@ -10037,6 +10043,7 @@ class MainWindow(QMainWindow):
         tree.clear()
 
         self._add_erc_findings(needle, expanded)
+        self._add_not_wired(needle)
 
         # The pins nothing is wired to yet, while there are connections left to route, are
         # the next step rather than anything wrong: the status bar and the step bar leave
@@ -11311,39 +11318,79 @@ class MainWindow(QMainWindow):
     def _report_strip_problems(self, plan: StripboardPlan) -> None:
         """What it could not do, named. PLAN.md §13's trap is the planner that leaves a
         handful of connections undone and does not say which."""
-        if not plan.problems:
-            return
-        lines = [say(problem.message) for problem in plan.problems[:12]]
-        if len(plan.problems) > 12:
-            lines.append(t("… and {count} more").format(count=len(plan.problems) - 12))
-        QMessageBox.information(
-            self,
-            t("Some connections could not be made"),
-            t("{count} problem(s):").format(count=len(plan.problems))
-            + "\n\n"
-            + "\n\n".join(lines),
+        self._say_not_wired(
+            tuple((say(problem.message), problem.holes, None) for problem in plan.problems)
         )
 
     def _report_unrouted(self, plan: AutoroutePlan) -> None:
         self._report_unrouted_items([item for outcome in plan.nets for item in outcome.unrouted])
 
     def _report_unrouted_items(self, failures: list[UnroutedLink]) -> None:
-        if not failures:
+        board = self.bus.document.board
+        self._say_not_wired(tuple(
+            (
+                f"{item.link.net_name}: {format_hole(item.link.from_, board)} → "
+                f"{format_hole(item.link.to, board)} — {say(item.reason)}",
+                (item.link.from_, item.link.to),
+                item.link.net_id,
+            )
+            for item in failures
+        ))
+
+    def _say_not_wired(
+        self, rows: tuple[tuple[str, tuple[HoleCoord, ...], NetId | None], ...]
+    ) -> None:
+        """What Auto-wire could not do, in the Problems drawer, each with its reason and a
+        click to where it is -- where it was a box listing twelve, that had to be closed
+        before any of them could be looked at, and was gone when it was (reach's
+        walkthrough). Kept until the board changes; the drawer's "to wire" stays after."""
+        if not rows:
+            self._not_wired = (None, ())
             return
-        lines = [
-            f"{item.link.net_name}: {format_hole(item.link.from_, self.bus.document.board)} → "
-            f"{format_hole(item.link.to, self.bus.document.board)}\n    {say(item.reason)}"
-            for item in failures[:12]
-        ]
-        if len(failures) > 12:
-            lines.append(t("… and {count} more").format(count=len(failures) - 12))
-        QMessageBox.information(
-            self,
-            t("Some connections could not be wired"),
-            t("{count} connection(s) were left unwired:").format(count=len(failures))
-            + "\n\n"
-            + "\n".join(lines),
+        self._not_wired = (self.bus.document, rows)
+        if self._last_lvs is not None:
+            self._refresh_drc_panel(self._last_violations, self._last_lvs)
+        self.set_problems_open(True)
+        group = next(
+            (
+                item for index in range(self.drc_tree.topLevelItemCount())
+                if (item := self.drc_tree.topLevelItem(index)) is not None
+                and item.data(0, ROLE_FINDING_KEY) == "WIRING"
+            ),
+            None,
         )
+        if group is not None:
+            self.drc_tree.scrollToItem(group)
+        self.statusBar().showMessage(
+            counted(
+                len(rows),
+                t("{count} connection could not be wired: why is in Problems."),
+                t("{count} connections could not be wired: why is in Problems."),
+            ),
+            0,
+        )
+
+    def _add_not_wired(self, needle: str) -> None:
+        """The group ``_say_not_wired`` fills, after the circuit's -- the circuit comes
+        before the board, and ``show_circuit_findings`` looks for it first."""
+        said_of, rows = self._not_wired
+        if said_of is not self.bus.document or not rows:
+            return
+        root = QTreeWidgetItem([t("Could not be wired"), str(len(rows))])
+        root.setData(0, ROLE_FINDING_KEY, "WIRING")
+        root.setForeground(0, QColor(theme.colour("warning")))
+        self.drc_tree.addTopLevelItem(root)
+        for text, holes, net_id in rows:
+            if needle and needle not in _folded(text):
+                continue
+            leaf = QTreeWidgetItem(["", text])
+            leaf.setToolTip(1, text)
+            if holes:
+                leaf.setData(0, ROLE_HOLES, holes)
+            if net_id:
+                leaf.setData(0, ROLE_NET_ID, net_id)
+            root.addChild(leaf)
+        root.setExpanded(True)
 
     # -- edit --------------------------------------------------------------
 
