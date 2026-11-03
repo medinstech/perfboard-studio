@@ -141,10 +141,10 @@ def test_a_dip_says_its_value_on_its_top(monkeypatch) -> None:  # type: ignore[n
     marked: list[str] = []
     real = view2d._paint_top_marking
 
-    def record(painter, footprint, placement, comp):  # type: ignore[no-untyped-def]
+    def record(painter, footprint, placement, comp, rect=None):  # type: ignore[no-untyped-def]
         if footprint.body.archetype == "dip":
             marked.append(comp.ref)
-        real(painter, footprint, placement, comp)
+        real(painter, footprint, placement, comp, rect)
 
     monkeypatch.setattr(view2d, "_paint_top_marking", record)
     doc = _example("atmega328-relay")

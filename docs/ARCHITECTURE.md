@@ -932,6 +932,21 @@ role is inked is the painter's, not the data's. Three rules hold it:
   The data names the KiCad package each entry was measured from, so a mesh re-imported from
   another package fails the test until the tool is run again.
 
+**The 2D view draws a part from its top view wherever one was measured**
+(`view2d._paint_top_view`), and by archetype where not (modules, the SRD relay, the pot). Every
+role is inked from the part's own `BODY_STYLES` colours and the leads' metal, so no colour is
+added: the flank is the case darkened (`FLANK_SHADE`, chosen from rendered candidates), a
+recess contrasts with its case -- lighter on a dark one, darker on a light one, because a red
+LED's flange lightened came out pink. On screen the part keeps the board look (the contact
+shadow on the silhouette, the material's sheen, the light clipped to the case); on paper it is
+flat ink. **Every polarity mark reads at the opening zoom** (`TopView.polarity`): an
+electrolytic's ring is inked over the sector towards its negative lead, an LED's flange rim on
+its cathode's side, a diode's band as the model has it, a standing diode's cap ringed when its
+cathode is up -- because seen from above a can is mostly its aluminium top, and a reversed
+electrolytic can burst. `test_every_polarity_mark_reads_at_the_opening_zoom` holds each to
+forty pixels at the window's opening scale, 3:1 contrast against its case, inside the case and
+on the side it marks.
+
 **The meshes are the only part of this repository that is not Apache-2.0.** They are
 CC-BY-SA 4.0 with KiCad's design exception, and their `LICENSE` and `NOTICE.md` live in
 `src/perfboard_studio/ui/models/` and travel with them. The exception means a board designed

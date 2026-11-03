@@ -28,6 +28,7 @@ draws every part from the parametric shapes, as a missing mesh draws the generat
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -36,7 +37,7 @@ from typing import Any
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QPainterPath, QPolygonF
 
-from perfboard_studio.footprints import body_extent
+from perfboard_studio.footprints import body_extent, standing_pin
 from perfboard_studio.model import Footprint, Mm
 
 from . import partmodels
@@ -62,6 +63,10 @@ class TopView:
     #: Pin centres the top view hides (under a TO-220, a can, a relay). The 2D view is what
     #: the part is soldered by, so a hidden pin is still marked.
     hidden_pins: tuple[tuple[float, float], ...] = ()
+    #: The part of the case that says which way round the part goes, for the painter to ink:
+    #: an electrolytic's stripe, an LED's flat side, a diode's band (``_polarity``). Empty
+    #: for a part that is the same either way round.
+    polarity: QPainterPath = field(default_factory=QPainterPath)
     #: Where the shapes came from: a KiCad package, or "parametric".
     source: str = "parametric"
 
@@ -201,6 +206,124 @@ def _parametric(footprint: Footprint, pitch: Mm) -> TopView:
     return view
 
 
+#: Half the angle of the stripe sector an electrolytic's ring is inked over, at least: a
+#: printed stripe is a broad band down the sleeve, and seen from above it has to be more
+#: than the sliver of it KiCad's model shows past the can's top.
+STRIPE_HALF_ANGLE_DEG = 40.0
+#: The same for the LED's flat side, on the outer rim of its flange: the flat is a chord,
+#: and the eye reads the side it is on. Inked over the whole flange it made half the LED
+#: pink; the rim reads as the edge it is.
+FLAT_HALF_ANGLE_DEG = 45.0
+#: Where the rim starts, as a share of the case's radius -- and never narrower than
+#: ``FLAT_RIM_MIN_MM``, or a 3 mm LED's rim was a hairline at the opening zoom.
+FLAT_RIM_SHARE = 0.8
+FLAT_RIM_MIN_MM = 0.5
+#: Where the ring round a standing diode's cap starts, as a share of its radius.
+BAND_RING_SHARE = 0.7
+
+
+def _wedge(centre: QPointF, towards: tuple[float, float], half_angle: float, reach: float) -> QPainterPath:
+    """A pie slice from ``centre`` round the direction ``towards`` (local mm, y down)."""
+    angle = math.degrees(math.atan2(-towards[1], towards[0]))  # Qt's arcs turn with y up.
+    wedge = QPainterPath()
+    wedge.moveTo(centre)
+    wedge.arcTo(
+        QRectF(centre.x() - reach, centre.y() - reach, 2 * reach, 2 * reach),
+        angle - half_angle,
+        2 * half_angle,
+    )
+    wedge.closeSubpath()
+    return wedge
+
+
+def _pin_mm(footprint: Footprint, pitch: Mm, *, name: str | None = None, number: str | None = None) -> tuple[float, float] | None:
+    for pin in footprint.pins:
+        if (name is not None and pin.name == name) or (number is not None and pin.number == number):
+            return (pin.d_col * pitch, pin.d_row * pitch)
+    return None
+
+
+def _polarity(footprint: Footprint, view: TopView, pitch: Mm) -> QPainterPath:
+    """Where a polarized part says which way round it goes, as a region of its measured case.
+
+    A REVERSED ELECTROLYTIC CAN BURST, and seen from above the measured can is mostly its
+    aluminium top: the stripe on its sleeve showed as a thin wedge in the ring round it. So
+    the ring is inked over the sector towards the negative lead, at least
+    ``STRIPE_HALF_ANGLE_DEG`` either side and wider where the model's own stripe is. An
+    LED's flat side is the flange on its cathode's side; a diode's band is the band the
+    model has, or one at the cathode end. Inside the case, so it is ink and not geometry.
+    """
+    # Simplified: the measured paths are odd-even rings, and a union of overlapping ones
+    # leaves holes where two of them cover the same ground.
+    case = view.body.simplified()
+    if case.isEmpty() or not footprint.polarized:
+        return QPainterPath()
+    box = case.boundingRect()
+    centre = box.center()
+    reach = max(box.width(), box.height())
+    marking = QPainterPath()
+    for role, path in view.shapes:
+        if role == "marking":
+            marking = marking.united(path)
+    archetype = footprint.body.archetype
+    if archetype == "radial-electrolytic":
+        negative = _pin_mm(footprint, pitch, name="-") or _pin_mm(footprint, pitch, number="2")
+        if negative is None:
+            return marking
+        towards = (negative[0] - centre.x(), negative[1] - centre.y())
+        half = STRIPE_HALF_ANGLE_DEG
+        heading = math.atan2(towards[1], towards[0])
+        for index in range(marking.elementCount()):
+            point = marking.elementAt(index)
+            off = math.atan2(point.y - centre.y(), point.x - centre.x()) - heading
+            off = math.degrees((off + math.pi) % (2 * math.pi) - math.pi)
+            if abs(off) < 90.0:
+                half = max(half, abs(off))
+        return case.united(marking).simplified().intersected(_wedge(centre, towards, half, reach))
+    if archetype == "led-round":
+        cathode = _pin_mm(footprint, pitch, name="K") or _pin_mm(footprint, pitch, number="2")
+        if cathode is None:
+            return QPainterPath()
+        inner = QPainterPath()
+        radius = max(box.width(), box.height()) / 2
+        start = min(radius * FLAT_RIM_SHARE, radius - FLAT_RIM_MIN_MM)
+        inner.addEllipse(centre, start, start)
+        rim = case.subtracted(inner)
+        towards = (cathode[0] - centre.x(), cathode[1] - centre.y())
+        return rim.intersected(_wedge(centre, towards, FLAT_HALF_ANGLE_DEG, reach))
+    if archetype == "axial-upright":
+        # From above a diode stood on end is its end cap, and its band shows only when the
+        # banded end -- the cathode, pin 1 -- is the one at the top: a ring round the cap.
+        # Standing on pin 1, the band is down by the board, and nothing is drawn the part
+        # does not show.
+        stands = standing_pin(footprint)
+        if stands is None or stands.number == "1":
+            return QPainterPath()
+        inner = QPainterPath()
+        radius = max(box.width(), box.height()) / 2
+        inner.addEllipse(centre, radius * BAND_RING_SHARE, radius * BAND_RING_SHARE)
+        return case.subtracted(inner)
+    if archetype == "axial-cylinder":
+        if not marking.isEmpty():
+            return marking
+        cathode = _pin_mm(footprint, pitch, number="1")
+        if cathode is None:
+            return QPainterPath()
+        band = QRectF(box)
+        if box.width() >= box.height():
+            band.setWidth(box.width() * 0.17)
+            if cathode[0] > centre.x():
+                band.moveRight(box.right())
+        else:
+            band.setHeight(box.height() * 0.17)
+            if cathode[1] > centre.y():
+                band.moveBottom(box.bottom())
+        strip = QPainterPath()
+        strip.addRect(band)
+        return case.intersected(strip)
+    return QPainterPath()
+
+
 def _top_view(footprint: Footprint, pitch: Mm) -> TopView:
     view = _from_models(footprint, pitch) or _parametric(footprint, pitch)
     if footprint.body.archetype == "dip" and view.marking is None:
@@ -214,6 +337,8 @@ def _top_view(footprint: Footprint, pitch: Mm) -> TopView:
     view.hidden_pins = tuple(
         (x, y) for x, y in _pins_mm(footprint, pitch) if not metal.contains(QPointF(x, y))
     )
+    if view.source != "parametric":
+        view.polarity = _polarity(footprint, view, pitch)
     return view
 
 

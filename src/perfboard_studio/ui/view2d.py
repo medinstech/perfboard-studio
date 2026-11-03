@@ -216,6 +216,7 @@ from .scenetext import (
 # why the two are apart.
 from .theme import ACTIVE as THEME_TOKENS
 from .theme import CANVAS_ERROR, CANVAS_SELECTED, NET_COLOURS
+from .topview import TopView, top_view
 
 # --------------------------------------------------------------------------- theme
 
@@ -2543,13 +2544,20 @@ def _paint_body_light(painter: QPainter, path: QPainterPath) -> None:
 
 
 def _paint_top_marking(
-    painter: QPainter, footprint: Footprint, placement: BodyPlacement, comp: ComponentInstance
+    painter: QPainter,
+    footprint: Footprint,
+    placement: BodyPlacement,
+    comp: ComponentInstance,
+    rect: QRectF | None = None,
 ) -> None:
     """What a DIP says on its top: its value, along the package, as the chip carries it.
-    Physical ink, so it scales with the board and prints on the 1:1 sheet too."""
+    Physical ink, so it scales with the board and prints on the 1:1 sheet too. ``rect`` is
+    where the print goes when the measured top view says (``TopView.marking``): on the
+    case's flat top, inside the shoulders, rather than across the whole body DRC measures."""
     if footprint.body.archetype != "dip" or not comp.value.strip():
         return
-    rect = _body_rect(placement)
+    if rect is None:
+        rect = _body_rect(placement)
     along_x = rect.width() >= rect.height()
     long_side, short_side = (rect.width(), rect.height()) if along_x else (rect.height(), rect.width())
     rotation = 0.0 if along_x else 90.0
@@ -2571,6 +2579,82 @@ def _paint_top_marking(
         rotation_deg=rotation,
     )
     painter.restore()
+
+
+#: How much darker a case's sloped side is drawn than its flat top, as ``QColor.darker``
+#: takes it. Most of a cylinder seen from above is its side, so this is what a resistor's
+#: colour mostly IS: at 118 a beige 0207 read khaki. Chosen from rendered candidates.
+FLANK_SHADE = 106
+
+
+def _role_colour(role: str, style: BodyStyle) -> QColor:
+    """How a top view's role is inked: from the part's own colours and the leads' metal, so
+    no colour is added that ``bodies.BODY_STYLES`` and the board look do not already have.
+    The flank is the case turned away from the light, a recess the moulding cut into, and a
+    groove in metal the metal in shadow. A recess reads by CONTRAST with its case: lighter on
+    a dark one (a DIP's notch), darker on a light one -- lightened, a red LED's flange and a
+    ceramic disc's dimple came out pink and pale, a different part."""
+    fill = QColor(style.fill)
+    if role == "flank":
+        return fill.darker(FLANK_SHADE)
+    if role == "recess":
+        return fill.lighter(165) if fill.lightness() < 90 else fill.darker(130)
+    if role == "plastic":
+        return QColor(style.edge)
+    if role == "metal":
+        return QColor(LEAD)
+    if role == "metal-recess":
+        return QColor(LEAD).darker(150)
+    if role == "marking":
+        return QColor(style.accent)
+    return fill
+
+
+def _paint_top_view(
+    painter: QPainter,
+    view: TopView,
+    style: BodyStyle,
+    selected: bool,
+    placement: BodyPlacement,
+    bands: tuple[str, ...] | None,
+) -> None:
+    """A part as it is seen from straight above, from the measured outlines of the very mesh
+    the 3D view draws (``topview``): a DIP narrower than its rows with a metal shoulder out
+    to every hole, a TO-220's tab, a terminal block's screws. On screen it stands on the
+    board as every body does -- the contact shadow on the whole silhouette, the light
+    clipped to the case -- and on the 1:1 sheet it is flat ink, as the rest of the print is.
+    """
+    on_screen = not _on_paper(painter)
+    if on_screen:
+        _paint_contact_shadow(painter, view.silhouette)
+    painter.setPen(Qt.PenStyle.NoPen)
+    for role, path in view.shapes:
+        painter.setBrush(QBrush(_role_colour(role, style)))
+        painter.drawPath(path)
+    case = view.body
+    if not case.isEmpty():
+        # The material's own sheen first, as every drawn body has it: without it a beige
+        # resistor and a blue trimmer, lit only by the light below, went dull.
+        _paint_body_sheen(painter, case, case.boundingRect(), placement, style)
+    if on_screen and not case.isEmpty():
+        _paint_body_light(painter, case)
+    # After the light, so the mark is flat and reads at a glance on screen and on paper alike.
+    if not view.polarity.isEmpty():
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(style.accent)))
+        painter.drawPath(view.polarity)
+    if bands and not case.isEmpty():
+        _paint_resistor_bands(painter, case, case.boundingRect(), placement, bands)
+    if not case.isEmpty():
+        # Round the case AND what is printed on it: outlined alone, the case drew a dark line
+        # along every edge it shares with a stripe or a band, splitting the mark in pieces.
+        outline = case
+        for role, path in view.shapes:
+            if role == "marking":
+                outline = outline.united(path)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(SELECTED if selected else style.edge), 0.2 if selected else 0.1))
+        painter.drawPath(outline.simplified())
 
 
 #: A chip's top marking: laser-etched grey on black, about a millimetre tall.
@@ -3535,10 +3619,15 @@ class ComponentItem(QGraphicsItem):
             _paint_body_shadow(painter, self.fp, placement, self.isSelected())
             painter.restore()
 
+        # From above as KiCad's mesh of it is, where there is one; drawn by archetype where
+        # not (``topview``'s parametric shapes stay a fallback for the data, not for this).
+        view = top_view(self.fp, self.board.pitch)
+        measured = view.source != "parametric"
         if self.side == "top":
             # Leads, in item coordinates: a line does not care which way its frame is turned,
-            # and the endpoints already come from the shared transform.
-            leads = leads_for(self.fp, placement, self.board.pitch)
+            # and the endpoints already come from the shared transform. A measured view has
+            # its leads in it, as metal, where the mesh has them.
+            leads = [] if measured else leads_for(self.fp, placement, self.board.pitch)
             if leads:
                 lead_pen = QPen(LEAD, self.fp.lead_diameter or 0.5)
                 lead_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -3553,7 +3642,13 @@ class ComponentItem(QGraphicsItem):
                 self._paint_flying_leads(painter)
             painter.save()
             self._apply_local_transform(painter)
-            if not off_board:
+            # From the document's own value, so the bands cannot disagree with the
+            # netlist. None for anything that is not a resistor with a readable value.
+            bands = resistor_bands(self.fp, self.comp.value)
+            if not off_board and measured:
+                _paint_top_view(painter, view, style, self.isSelected(), placement, bands)
+                _paint_top_marking(painter, self.fp, placement, self.comp, view.marking)
+            elif not off_board:
                 _paint_body(
                     painter,
                     self.fp,
@@ -3562,9 +3657,7 @@ class ComponentItem(QGraphicsItem):
                     keyed,
                     self.isSelected(),
                     self.board.pitch,
-                    # From the document's own value, so the bands cannot disagree with the
-                    # netlist. None for anything that is not a resistor with a readable value.
-                    bands=resistor_bands(self.fp, self.comp.value),
+                    bands=bands,
                     art=self.art,
                 )
                 _paint_top_marking(painter, self.fp, placement, self.comp)

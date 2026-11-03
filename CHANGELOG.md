@@ -22,6 +22,13 @@ closed without a bump.
 
 ### Added
 
+- **Parts on the board look like the parts in your hand.** Every part KiCad has a model of
+  is drawn from that model seen from above: a DIP narrower than its rows with its notch,
+  a terminal block's screws, each pin of a header, a tactile switch's frame and button, an
+  electrolytic's can. Polarity reads at a glance at the zoom the window opens at: an
+  electrolytic's negative side, an LED's flat side and a diode's band are inked in a
+  colour that stands off the part. The 1:1 print draws the same outlines, flat.
+
 - **What each part looks like from straight above is measured.** The outline of every
   package KiCad models -- its case, the notch in it, its metal legs and tabs, a screw's
   slot -- traced off the same meshes the 3D view draws, for the 2D view to draw parts as

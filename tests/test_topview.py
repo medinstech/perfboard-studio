@@ -16,7 +16,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import QPointF, QRectF
-from PySide6.QtGui import QPainterPath
+from PySide6.QtGui import QColor, QPainterPath
 from PySide6.QtWidgets import QApplication
 
 from perfboard_studio.footprints import body_extent, get_footprint, standard_footprints
@@ -164,3 +164,105 @@ def test_the_data_is_what_the_tool_would_write_for_a_small_part() -> None:
     model = partmodels.model_for("to92")
     assert model is not None
     assert module.top_view(model) == topview._data()["to92"]
+
+
+# -- every polarity mark reads at the window's opening zoom ---------------------------------
+
+#: The window opens a board at about six pixels to the millimetre (``BoardView``'s starting
+#: scale), and a mark has to be seen there without zooming in: forty pixels of it at least.
+OPENING_PX_PER_MM = 6.0
+MIN_MARK_PX = 40
+#: Contrast of the mark's ink against the case it is printed on, as WCAG measures it for
+#: anything that is not text: 3:1. A reversed electrolytic can burst.
+MIN_MARK_CONTRAST = 3.0
+
+
+def _luminance(colour: QColor) -> float:
+    def linear(channel: float) -> float:
+        return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * linear(colour.redF()) + 0.7152 * linear(colour.greenF()) + 0.0722 * linear(colour.blueF())
+
+
+def _contrast(a: QColor, b: QColor) -> float:
+    light, dark = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def _area(path: QPainterPath) -> float:
+    total = 0.0
+    for polygon in path.toFillPolygons():
+        points = [polygon.at(i) for i in range(polygon.count())]
+        total += abs(sum(p.x() * q.y() - q.x() * p.y() for p, q in zip(points, points[1:] + points[:1], strict=True))) / 2
+    return total
+
+
+def _marked_side(footprint_id: str) -> tuple[str, str] | None:
+    """(the pin the mark is by, the other one), by pin number, or None where the part
+    shows no mark from above."""
+    footprint = get_footprint(footprint_id)
+    assert footprint is not None
+    archetype = footprint.body.archetype
+    names = {pin.name: pin.number for pin in footprint.pins}
+    if archetype == "radial-electrolytic":
+        return names.get("-", "2"), names.get("+", "1")
+    if archetype == "led-round":
+        return names.get("K", "2"), names.get("A", "1")
+    if archetype == "axial-cylinder":
+        return "1", "2"
+    if archetype == "axial-upright":
+        # The band is round the cap at the top, which is over the pin the body stands on;
+        # the cathode's lead comes down from there to pin 1.
+        standing = footprint.body.dims.get("standsOnPin", 1.0)
+        return None if standing == 1.0 else ("2", "1")
+    return None
+
+
+def _polarized_views() -> list[str]:
+    return [
+        footprint_id
+        for footprint_id in _footprints_with_views()
+        if (fp := get_footprint(footprint_id)) is not None
+        and fp.polarized
+        and len(fp.pins) == 2
+        and topview.top_view(fp, PITCH).source != "parametric"
+    ]
+
+
+def test_the_polarized_parts_with_views_are_the_ones_expected() -> None:
+    archetypes = {get_footprint(f).body.archetype for f in _polarized_views()}  # type: ignore[union-attr]
+    assert {"radial-electrolytic", "led-round", "axial-cylinder", "axial-upright"} <= archetypes
+
+
+@pytest.mark.parametrize("footprint_id", _polarized_views())
+def test_every_polarity_mark_reads_at_the_opening_zoom(footprint_id: str) -> None:
+    """Big enough to see at the opening zoom, inked in a colour that stands off the case,
+    inside the case, and on the side it marks: the negative lead of an electrolytic, an
+    LED's cathode, a diode's cathode end. A standing diode on its cathode shows nothing,
+    because its band is down by the board."""
+    from perfboard_studio.ui.bodies import style_for
+    from perfboard_studio.ui.view2d import _role_colour
+
+    footprint = get_footprint(footprint_id)
+    assert footprint is not None
+    view = topview.top_view(footprint, PITCH)
+    side = _marked_side(footprint_id)
+    if side is None:
+        assert view.polarity.isEmpty(), footprint_id
+        return
+    mark = view.polarity
+    assert _area(mark) * OPENING_PX_PER_MM**2 >= MIN_MARK_PX, (footprint_id, _area(mark))
+
+    style = style_for(footprint)
+    ink = QColor(style.accent)
+    for role in ("body", "flank"):
+        assert _contrast(ink, _role_colour(role, style)) >= MIN_MARK_CONTRAST, (footprint_id, role)
+
+    allowed = view.silhouette.boundingRect().adjusted(-EDGE_MM, -EDGE_MM, EDGE_MM, EDGE_MM)
+    assert allowed.contains(mark.boundingRect()), footprint_id
+
+    pins = {pin.number: QPointF(pin.d_col * PITCH, pin.d_row * PITCH) for pin in footprint.pins}
+    centre = mark.boundingRect().center()
+    near, far = (pins[number] for number in side)
+    distance = lambda point: (point.x() - centre.x()) ** 2 + (point.y() - centre.y()) ** 2  # noqa: E731
+    assert distance(near) < distance(far), (footprint_id, side)
