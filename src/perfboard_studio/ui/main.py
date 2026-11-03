@@ -5438,7 +5438,7 @@ class MainWindow(QMainWindow):
         # A board from the boards people buy (``ui/designer.py``), tweaked and seen.
         self.act_design_board = board_menu.addAction(t("&Design the Board…"))
         self.act_design_board.setToolTip(
-            t("Start from a board you can buy -- green with edge pads, brown phenolic -- and "
+            t("Start from a board you can buy -- green with an edge connector, brown phenolic -- and "
               "change its size, pads, holes, printing and colour, seen as you go.")
         )
         self.act_design_board.triggered.connect(self.on_design_board)

@@ -23,8 +23,8 @@ closed without a bump.
 ### Added
 
 - **Design the board from one you can buy.** Board ▸ Design the Board… (and Change… on the
-  board in Properties) starts from a real board family -- green double-sided with edge pads
-  and corner holes, brown phenolic -- and changes its size, grid and pads, edge pads,
+  board in Properties) starts from a real board family -- green double-sided with an edge
+  connector and corner holes, brown phenolic -- and changes its size, grid and pads, edge connector,
   mounting holes, printing and colour, with the board drawn as you go. Save it as your own
   board to start from next time. Use This Board puts it on as one undo step.
 - **Breadboards in the board designer.** Solderless ones by size and channel (with a flex

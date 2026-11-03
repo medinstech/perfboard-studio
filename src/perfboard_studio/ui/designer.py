@@ -213,7 +213,7 @@ def size_name(size: BoardSize, family: BoardFamily) -> str:
     is said by its points, as it is sold."""
     if is_pattern(family):
         return _words()["pattern_size"].get(size.name, size.name)
-    extra = "" if size.strip or family.strip is None else f", {t('no edge pads')}"
+    extra = "" if size.strip or family.strip is None else f", {t('no edge connector')}"
     return f"{size.name}  ({size.cols} × {size.rows}{extra})"
 
 
@@ -498,8 +498,8 @@ class BoardDesigner(QDialog):
         self.pad_axis.activated.connect(changed)
         self._row(pads, t("Long axis"), self.pad_axis, "pad_axis")
 
-        edge = self._section(t("Edge pads"), "edge")
-        self.strip_on = QCheckBox(t("Edge pads along two edges"))
+        edge = self._section(t("Edge connector"), "edge")
+        self.strip_on = QCheckBox(t("Edge connector along two edges"))
         self.strip_on.toggled.connect(changed)
         edge.addRow(self.strip_on)
         self.strip_edges = _combo(w["edges"], STRIP_EDGES)
@@ -550,7 +550,7 @@ class BoardDesigner(QDialog):
         for combo in (self.mask_kind, self.finish):
             combo.activated.connect(changed)
         self._row(colour, t("Mask"), self.mask_kind, "mask")
-        self._row(colour, t("Finish"), self.finish, "finish")
+        self._row(colour, t("Pad finish"), self.finish, "finish")
 
     def _fill_families(self) -> None:
         self.families.clear()
