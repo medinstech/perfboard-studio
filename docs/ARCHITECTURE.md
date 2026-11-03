@@ -640,6 +640,15 @@ board chooser see the change. It also showed a finger-length check that measured
 margin across one axis and the longest finger across the other, which only the portrait
 boards had let pass.
 
+**Breadboards are families too**, so the designer is the one place a board is chosen. A
+family of type `breadboard` or `solderable-breadboard` carries a `BreadboardSpec` -- the
+channel in mils, the -flex narrow columns, a solderable board's border -- and its sizes are
+named by tie-point count ("830"), their grid and outline worked out by `pattern_sizes` for
+that channel. `board_for` builds through `breadboard.pattern_board`, so thickness, drill and
+pads follow the kind exactly as they always did, and `family_problem` checks the result
+against `breadboard.board_problem`'s own words. A breadboard is never in `STANDARD_PRESETS`:
+its sizes are its pattern, and the board trials offer none for one.
+
 `placer.suggest_boards` lays the circuit out on every stock board with `arrange` — as the
 PRODUCT, fingers and corner bores reserved (`commands.preset_payload`) — and
 `recommended_board` takes the first it fills to `ARRANGEMENT_FILL_LIMIT` or less. That used

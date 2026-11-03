@@ -173,3 +173,121 @@ def test_every_vocabulary_the_designer_offers_is_readable_at_run_time() -> None:
         (BoardFinish, boardfamily.FINISHES),
     ):
         assert get_args(alias) == values and values, alias
+
+
+# ---------------------------------------------------------------------------
+# Breadboards, so the designer is the one place a board is chosen
+# ---------------------------------------------------------------------------
+
+
+def test_a_breadboard_family_makes_the_board_board_setup_made() -> None:
+    """``board_for`` builds a pattern board through ``breadboard``'s own constructors, so a
+    breadboard chosen in the designer is the board the window always made of one."""
+    from perfboard_studio import breadboard
+    from perfboard_studio.boardfamily import (
+        SOLDERABLE_BREADBOARD,
+        SOLDERLESS_BREADBOARD,
+        WIDE_CHANNEL_BREADBOARD,
+    )
+
+    for size in SOLDERLESS_BREADBOARD.sizes:
+        design = board_for(SOLDERLESS_BREADBOARD, size, DEFAULT_BOARD)
+        assert design.board == breadboard.breadboard(size.name)
+        assert design.edge_connectors == () and design.mounting_holes == ()
+    for size in SOLDERABLE_BREADBOARD.sizes:
+        assert board_for(SOLDERABLE_BREADBOARD, size, DEFAULT_BOARD).board == (
+            breadboard.solderable_breadboard(size.name)
+        )
+    wide = board_for(WIDE_CHANNEL_BREADBOARD, WIDE_CHANNEL_BREADBOARD.sizes[0], DEFAULT_BOARD).board
+    assert wide == breadboard.breadboard("830", 10)
+    assert (WIDE_CHANNEL_BREADBOARD.sizes[0].cols, WIDE_CHANNEL_BREADBOARD.sizes[0].rows) == (
+        wide.cols, wide.rows
+    )
+
+
+def test_a_breadboard_is_never_a_stock_board_the_trials_try() -> None:
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.breadboard import PATTERN_TYPES
+
+    assert STANDARD_PRESETS
+    assert all(preset.product.type not in PATTERN_TYPES for preset in STANDARD_PRESETS)
+
+
+def test_a_breadboard_comes_in_its_sizes_and_is_not_cut_to_measure() -> None:
+    from perfboard_studio.boardfamily import SOLDERLESS_BREADBOARD
+
+    with pytest.raises(ValueError, match="830"):
+        size_for_grid(SOLDERLESS_BREADBOARD, 40, 20)
+    with pytest.raises(ValueError):
+        size_for_mm(SOLDERLESS_BREADBOARD, 100.0, 60.0)
+
+
+@pytest.mark.parametrize(
+    ("change", "field"),
+    [
+        ({"breadboard": None}, "breadboard"),
+        ({"breadboard": boardfamily.BreadboardSpec(channel_mils=500)}, "breadboard.channel_mils"),
+        ({"breadboard": boardfamily.BreadboardSpec(border_x_mm=2.0)}, "breadboard.border_x_mm"),
+        ({"breadboard": boardfamily.BreadboardSpec(narrow_channel_cols=10)}, "breadboard.narrow_channel_cols"),
+        ({"strip": EdgeStrip()}, "strip"),
+        ({"legend": boardfamily.Legend()}, "legend"),
+        ({"corner_holes": boardfamily.CornerHoles()}, "corner_holes"),
+        ({"sizes": (boardfamily.BoardSize("999", 1.0, 1.0, 1, 1),)}, "sizes[0]"),
+    ],
+)
+def test_a_breadboard_nobody_makes_is_refused_under_its_field(change: dict, field: str) -> None:
+    from perfboard_studio.boardfamily import SOLDERLESS_BREADBOARD
+
+    problem = family_problem(dataclasses.replace(SOLDERLESS_BREADBOARD, **change))
+    assert problem is not None and problem[0] == field, problem
+
+
+def test_a_channel_belongs_to_the_breadboards_pattern_only() -> None:
+    problem = family_problem(
+        dataclasses.replace(GREEN_DOUBLE_SIDED, breadboard=boardfamily.BreadboardSpec())
+    )
+    assert problem is not None and problem[0] == "breadboard"
+
+
+def test_a_solderable_breadboard_keeps_a_border_it_is_given() -> None:
+    from perfboard_studio.boardfamily import SOLDERABLE_BREADBOARD
+
+    bordered = dataclasses.replace(
+        SOLDERABLE_BREADBOARD, breadboard=boardfamily.BreadboardSpec(border_x_mm=3.0, border_y_mm=2.0)
+    )
+    assert family_problem(bordered) is None
+    board = board_for(bordered, bordered.sizes[-1], DEFAULT_BOARD).board
+    assert (board.border_x_mm, board.border_y_mm) == (3.0, 2.0)
+
+
+def test_a_boards_own_numbering_travels_with_its_family() -> None:
+    from perfboard_studio.model import AxisLegend
+
+    numbering = AxisLegend(runs=(("1", "10"), ("12", "26")), every=1, digits=2)
+    family = dataclasses.replace(
+        GREEN_DOUBLE_SIDED,
+        legend=dataclasses.replace(GREEN_DOUBLE_SIDED.legend or boardfamily.Legend(), rows=numbering),
+    )
+    assert family_problem(family) is None
+    board = board_for(family, family.sizes[0], DEFAULT_BOARD).board
+    assert board.labels is not None and board.labels.rows == numbering
+    assert family_from_json(family_to_json(family)) == family
+    broken = dataclasses.replace(
+        family, legend=dataclasses.replace(family.legend, rows=AxisLegend(runs=())),  # type: ignore[arg-type]
+    )
+    problem = family_problem(broken)
+    assert problem is not None and problem[0] == "legend.rows"
+
+
+def test_a_saved_breadboard_family_comes_back_as_it_went() -> None:
+    from perfboard_studio.boardfamily import WIDE_CHANNEL_BREADBOARD
+
+    mine = dataclasses.replace(
+        WIDE_CHANNEL_BREADBOARD,
+        id="user-flex",
+        name="Flex",
+        user=True,
+        breadboard=boardfamily.BreadboardSpec(channel_mils=1000, narrow_channel_cols=39),
+    )
+    assert family_problem(mine) is None, family_problem(mine)
+    assert family_from_json(family_to_json(mine)) == mine

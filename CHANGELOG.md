@@ -22,6 +22,10 @@ closed without a bump.
 
 ### Added
 
+- **Breadboards are board families.** The solderless breadboard in its 830, 400 and 170
+  sizes, a wide-channel one for an ESP32 or another module, and the solderable breadboard
+  are described like every other board, ready for the board designer to choose from.
+
 - **An unmasked board's legend is copper.** On a phenolic board, or any board with no
   mask, the letters and printed lines are drawn in the pads' bare copper, as they are
   etched on the real board, instead of white ink.

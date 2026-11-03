@@ -27,14 +27,30 @@ import math
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, get_args
 
+from .breadboard import (
+    MAX_CHANNEL,
+    PATTERN_TYPES,
+    ROWS_WITH_RAILS,
+    SIZES,
+    SOLDERABLE_BORDER_X_MM,
+    SOLDERABLE_BORDER_Y_MM,
+    STANDARD_CHANNEL,
+    WIDE_CHANNEL_MILS,
+    board_problem,
+    pattern_board,
+    rows_for,
+)
 from .geometry import (
     MAX_LEGEND_DIGITS,
     OUTSIDE_FINGER_MIN_MM,
+    board_size_mm,
     board_text_problem,
     corner_mounting_holes,
+    legend_problem,
     outside_finger_room_mm,
 )
 from .model import (
+    AxisLegend,
     Board,
     BoardEdge,
     BoardFace,
@@ -58,10 +74,10 @@ from .persist import PAD_SHAPES
 # Vocabularies -- ``TypeAlias`` so that ``get_args`` reads them at run time (model.py)
 # ---------------------------------------------------------------------------
 
-#: The board types a family can be. A solderless breadboard is not: it is one product in
-#: one pattern, chosen as a board type of its own.
+#: The board types a family can be: every board this application builds on, the
+#: breadboard's pattern included, so the designer is the one place a board is chosen.
 FamilyBoardType: TypeAlias = Literal[  # noqa: UP040
-    "pad-per-hole", "stripboard", "solderable-breadboard"
+    "pad-per-hole", "stripboard", "breadboard", "solderable-breadboard"
 ]
 #: Which pair of edges carries the strip: the short ones (every photographed board) or
 #: the long ones.
@@ -136,6 +152,27 @@ class Legend:
     number_edges: NumberEdges = "left"
     row_digits: int = 2
     face: BoardFace = "both"
+    #: The board's own numbering, where it prints one instead of the addresses
+    #: (``BoardLabels.columns`` / ``rows``): None prints the addresses.
+    columns: AxisLegend | None = None
+    rows: AxisLegend | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BreadboardSpec:
+    """What a family in the breadboard's pattern says beyond its size.
+
+    A size is one of ``breadboard.SIZES`` -- the tie-point count it is sold by -- and the
+    rest is here: how wide the channel between rows e and f is (300 mil, or one of the wide
+    ones a module straddles), how many columns from column 1 keep the ordinary channel (a
+    -flex board), and a solderable breadboard's border, None for the kind's own. The
+    thickness, the drill and the pads follow the KIND (``breadboard.pattern_board``) and are
+    not a family's to say."""
+
+    channel_mils: int = STANDARD_CHANNEL * 100
+    narrow_channel_cols: int = 0
+    border_x_mm: Mm | None = None
+    border_y_mm: Mm | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +203,8 @@ class BoardFamily:
     sizes: tuple[BoardSize, ...] = ()
     #: A board somebody made in the designer, not one of the catalogue's.
     user: bool = False
+    #: For the breadboard's pattern, and refused on every other type: see ``BreadboardSpec``.
+    breadboard: BreadboardSpec | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,7 +246,11 @@ def board_for(family: BoardFamily, size: BoardSize, base: Board) -> BoardDesign:
 
 def family_board(family: BoardFamily, size: BoardSize, base: Board) -> Board:
     """The board alone. The border is solved from the size and the grid, so the outline is
-    exactly the advertised size, and clamped at zero for a grid wider than the size."""
+    exactly the advertised size, and clamped at zero for a grid wider than the size. A
+    family in the breadboard's pattern is built by ``breadboard.pattern_board`` instead:
+    there the size is what the board is called, and the kind decides the rest."""
+    if family.type in PATTERN_TYPES:
+        return _pattern_board(family, size)
     border_x = max(0.0, (size.width_mm - size.cols * family.pitch_mm) / 2)
     border_y = max(0.0, (size.height_mm - size.rows * family.pitch_mm) / 2)
     legend = family.legend
@@ -235,6 +278,8 @@ def family_board(family: BoardFamily, size: BoardSize, base: Board) -> Board:
                 face=legend.face,
                 row_digits=legend.row_digits,
                 all_edges=False,
+                columns=legend.columns,
+                rows=legend.rows,
                 letter_edges=legend.letter_edges,
                 number_edges=legend.number_edges,
             )
@@ -252,6 +297,37 @@ def family_board(family: BoardFamily, size: BoardSize, base: Board) -> Board:
     return board
 
 
+def _pattern_board(family: BoardFamily, size: BoardSize) -> Board:
+    spec = family.breadboard or BreadboardSpec()
+    cols, rows = SIZES[size.name]
+    if family.type == "breadboard":
+        rows = rows_for(spec.channel_mils // 100, rows == ROWS_WITH_RAILS)
+    board = pattern_board(family.type, cols, rows, spec.narrow_channel_cols)
+    if family.type == "solderable-breadboard":
+        board = dataclasses.replace(
+            board,
+            border_x_mm=SOLDERABLE_BORDER_X_MM if spec.border_x_mm is None else spec.border_x_mm,
+            border_y_mm=SOLDERABLE_BORDER_Y_MM if spec.border_y_mm is None else spec.border_y_mm,
+            mask=family.mask,
+            finish=family.finish,
+        )
+    return board
+
+
+def pattern_sizes(kind: FamilyBoardType, spec: BreadboardSpec | None = None) -> tuple[BoardSize, ...]:
+    """Every size a board in the breadboard's pattern is sold in, as ``BoardSize`` rows: the
+    name is the tie-point count, and the grid and the outline are the board ``board_for``
+    makes of it with ``spec``'s channel -- which is what a designer that lets the channel be
+    changed asks again when it is."""
+    probe = BoardFamily(id="probe", name="probe", type=kind, breadboard=spec)
+    sizes: list[BoardSize] = []
+    for name in SIZES:
+        board = _pattern_board(probe, BoardSize(name, 0.0, 0.0, 0, 0))
+        width, height = board_size_mm(board)
+        sizes.append(BoardSize(name, round(width, 2), round(height, 2), board.cols, board.rows))
+    return tuple(sizes)
+
+
 def family_features(
     family: BoardFamily, size: BoardSize, board: Board
 ) -> tuple[tuple[EdgeConnector, ...], tuple[MountingHole, ...]]:
@@ -264,6 +340,9 @@ def family_features(
         () if holes is None else corner_mounting_holes(board, holes.diameter_mm, holes.head_mm)
     )
     connectors: tuple[EdgeConnector, ...] = ()
+    if family.type in PATTERN_TYPES:
+        # The pattern runs to the edges: no strip, ever.
+        return connectors, mounts
     if family.strip is not None and size.strip:
         strip = family.strip
         connectors = tuple(
@@ -284,10 +363,18 @@ def family_features(
     return connectors, mounts
 
 
+def _not_made_to_measure(family: BoardFamily) -> None:
+    if family.type in PATTERN_TYPES:
+        raise ValueError(
+            f"A breadboard comes in its sizes -- {', '.join(SIZES)} -- and is not cut to measure."
+        )
+
+
 def family_border_mm(family: BoardFamily) -> tuple[Mm, Mm]:
     """The border a custom size of this family keeps, (across, down): its first size's, so a
     board made to measure is the same product cut to another length. 1 mm, a board cut
-    flush, for a family that lists no size."""
+    flush, for a family that lists no size. Raises ``ValueError`` for a breadboard."""
+    _not_made_to_measure(family)
     if not family.sizes:
         return (1.0, 1.0)
     first = family.sizes[0]
@@ -298,7 +385,8 @@ def family_border_mm(family: BoardFamily) -> tuple[Mm, Mm]:
 
 
 def size_for_grid(family: BoardFamily, cols: int, rows: int) -> BoardSize:
-    """A board of this family with this grid, its border the family's."""
+    """A board of this family with this grid, its border the family's. Raises
+    ``ValueError`` for a breadboard, which comes in its own sizes."""
     border_x, border_y = family_border_mm(family)
     width = round(cols * family.pitch_mm + 2 * border_x, 2)
     height = round(rows * family.pitch_mm + 2 * border_y, 2)
@@ -307,7 +395,8 @@ def size_for_grid(family: BoardFamily, cols: int, rows: int) -> BoardSize:
 
 def size_for_mm(family: BoardFamily, width_mm: Mm, height_mm: Mm) -> BoardSize:
     """A board of this family cut to this size: the largest grid that keeps the family's
-    border, the border then solved from what is left."""
+    border, the border then solved from what is left. Raises ``ValueError`` for a
+    breadboard, which comes in its own sizes."""
     border_x, border_y = family_border_mm(family)
     cols = max(1, math.floor((width_mm - 2 * border_x) / family.pitch_mm + 1e-9))
     rows = max(1, math.floor((height_mm - 2 * border_y) / family.pitch_mm + 1e-9))
@@ -342,6 +431,10 @@ def family_problem(family: BoardFamily) -> tuple[str, str] | None:
             return (attr, f"{value!r} is not one of: {', '.join(str(a) for a in allowed if a)}.")
     if family.type == "stripboard" and family.strip_axis not in ("horizontal", "vertical"):
         return ("strip_axis", "A stripboard's strips run horizontally or vertically.")
+    if family.type in PATTERN_TYPES:
+        return _pattern_problem(family)
+    if family.breadboard is not None:
+        return ("breadboard", "Only a board in the breadboard's pattern has a channel to say.")
     if not family.pitch_mm > 0:
         return ("pitch_mm", "The pitch must be more than 0 mm.")
     if not 0 < family.drill_mm < family.pad_diameter_mm:
@@ -354,8 +447,6 @@ def family_problem(family: BoardFamily) -> tuple[str, str] | None:
         return ("pad_length_mm", "An oblong pad is longer than it is wide.")
     if family.strip is not None:
         strip = family.strip
-        if family.type == "solderable-breadboard":
-            return ("strip", "A breadboard's pattern runs to its edges; it has no edge strip.")
         if strip.edges not in STRIP_EDGES:
             return ("strip.edges", f"{strip.edges!r} is not one of: {', '.join(STRIP_EDGES)}.")
         if strip.shape not in STRIP_SHAPES:
@@ -385,6 +476,10 @@ def family_problem(family: BoardFamily) -> tuple[str, str] | None:
                 "legend.row_digits",
                 f"A printed row number is padded to between 1 and {MAX_LEGEND_DIGITS} digits.",
             )
+        for axis, numbering in (("columns", legend.columns), ("rows", legend.rows)):
+            probe = BoardLabels(**{axis: numbering})  # type: ignore[arg-type]
+            if numbering is not None and (problem := legend_problem(probe)) is not None:
+                return (f"legend.{axis}", problem)
     if not family.sizes:
         return ("sizes", "A board family is sold in at least one size.")
     for index, size in enumerate(family.sizes):
@@ -407,6 +502,52 @@ def family_problem(family: BoardFamily) -> tuple[str, str] | None:
                     )
         if (problem := board_text_problem(design.board)) is not None:
             return ("printed", problem)
+    return None
+
+
+def _pattern_problem(family: BoardFamily) -> tuple[str, str] | None:
+    """``family_problem`` for the breadboard's pattern, which says less and is checked
+    against the board ``breadboard.board_problem`` judges."""
+    spec = family.breadboard
+    solderless = family.type == "breadboard"
+    if spec is None:
+        if solderless:
+            return ("breadboard", "A breadboard says how wide its channel is.")
+        spec = BreadboardSpec()
+    wide = (STANDARD_CHANNEL * 100, *WIDE_CHANNEL_MILS)
+    if spec.channel_mils not in (wide if solderless else wide[:1]):
+        allowed = ", ".join(f"{mils}" for mils in (wide if solderless else wide[:1]))
+        return ("breadboard.channel_mils", f"The channel is one of {allowed} mil, not {spec.channel_mils}.")
+    if spec.channel_mils // 100 > MAX_CHANNEL:
+        return ("breadboard.channel_mils", f"The widest channel is {MAX_CHANNEL * 100} mil.")
+    if spec.narrow_channel_cols < 0:
+        return ("breadboard.narrow_channel_cols", "No fewer than no columns keep the narrow channel.")
+    if solderless and (spec.border_x_mm is not None or spec.border_y_mm is not None):
+        return ("breadboard.border_x_mm", "A solderless breadboard's border is its plastic's.")
+    for attr, value in (("breadboard.border_x_mm", spec.border_x_mm), ("breadboard.border_y_mm", spec.border_y_mm)):
+        if value is not None and value < 0:
+            return (attr, "A board border cannot be negative.")
+    if family.strip is not None:
+        return ("strip", "A breadboard's pattern runs to its edges; it has no edge strip.")
+    if family.legend is not None:
+        return ("legend", "A breadboard prints its own pattern, not an address legend.")
+    if family.printed:
+        return ("printed", "Nothing is printed in a breadboard's border here.")
+    if solderless:
+        if family.corner_holes is not None:
+            return ("corner_holes", "A solderless breadboard has no mounting holes.")
+        if family.mask is not None or family.finish is not None:
+            return ("mask", "A solderless breadboard is plastic: no mask, no copper.")
+    if not family.sizes:
+        return ("sizes", "A breadboard family is sold in at least one size.")
+    for index, size in enumerate(family.sizes):
+        where = f"sizes[{index}]"
+        if size.name not in SIZES:
+            return (where, f"{size.name!r} is not a breadboard size; they are {', '.join(SIZES)}.")
+        board = _pattern_board(family, size)
+        if (problem := board_problem(board)) is not None:
+            field = "breadboard.narrow_channel_cols" if spec.narrow_channel_cols else "breadboard.channel_mils"
+            return (field, problem)
     return None
 
 
@@ -497,8 +638,43 @@ PHENOLIC_SINGLE_SIDED = BoardFamily(
     ),
 )
 
+#: A solderless breadboard, at the 0.3 inch channel a DIP straddles, in the three sizes
+#: sold: 830, 400 and the railless 170.
+SOLDERLESS_BREADBOARD = BoardFamily(
+    id="breadboard",
+    name="Solderless breadboard",
+    type="breadboard",
+    breadboard=BreadboardSpec(),
+    sizes=pattern_sizes("breadboard"),
+)
+
+#: The same, with the channel a module's two pin rows straddle: an ESP32 devkit's 1000 mil.
+#: The 830 only -- the length a devkit and the parts beside it take. A narrower module, or a
+#: -flex board keeping a DIP's channel at one end, is the designer's tweak of this one.
+WIDE_CHANNEL_BREADBOARD = BoardFamily(
+    id="breadboard-wide",
+    name="Solderless breadboard, wide channel (ESP32 / modules)",
+    type="breadboard",
+    breadboard=BreadboardSpec(channel_mils=1000),
+    sizes=tuple(size for size in pattern_sizes("breadboard", BreadboardSpec(channel_mils=1000)) if size.name == "830"),
+)
+
+#: The solderable breadboard: the same pattern in copper on FR-4, in the same three sizes.
+SOLDERABLE_BREADBOARD = BoardFamily(
+    id="solderable-breadboard",
+    name="Solderable breadboard",
+    type="solderable-breadboard",
+    sizes=pattern_sizes("solderable-breadboard"),
+)
+
 #: Every family the designer offers before somebody makes their own.
-FAMILIES: tuple[BoardFamily, ...] = (GREEN_DOUBLE_SIDED, PHENOLIC_SINGLE_SIDED)
+FAMILIES: tuple[BoardFamily, ...] = (
+    GREEN_DOUBLE_SIDED,
+    PHENOLIC_SINGLE_SIDED,
+    SOLDERLESS_BREADBOARD,
+    WIDE_CHANNEL_BREADBOARD,
+    SOLDERABLE_BREADBOARD,
+)
 
 _BY_ID = {family.id: family for family in FAMILIES}
 
@@ -581,10 +757,15 @@ def stock_sizes(family: BoardFamily) -> tuple[BoardSize, ...]:
     return tuple(sizes)
 
 
-#: The boards every prototyping supplier stocks, in both families: the catalogue's stock
-#: sizes. What changes a board here is a family's entry, not this line.
+#: The perfboards every prototyping supplier stocks: the catalogue's stock sizes, of the
+#: families that are perfboard. What the board trials try and the chooser lists; a
+#: breadboard is chosen in the designer and never tried as a stock board (its sizes are its
+#: pattern, and ``placer.suggest_boards`` offers none for one).
 STANDARD_PRESETS: tuple[BoardPreset, ...] = tuple(
-    BoardPreset(family.id, size) for family in FAMILIES for size in stock_sizes(family)
+    BoardPreset(family.id, size)
+    for family in FAMILIES
+    if family.type not in PATTERN_TYPES
+    for size in stock_sizes(family)
 )
 
 
@@ -662,7 +843,10 @@ def family_from_json(text: str) -> BoardFamily:
                 "corner_holes": (
                     None if raw.get("corner_holes") is None else CornerHoles(**raw["corner_holes"])
                 ),
-                "legend": None if raw.get("legend") is None else Legend(**raw["legend"]),
+                "legend": None if raw.get("legend") is None else _legend_from(raw["legend"]),
+                "breadboard": (
+                    None if raw.get("breadboard") is None else BreadboardSpec(**raw["breadboard"])
+                ),
                 "printed": tuple(BoardText(**line) for line in raw.get("printed", ())),
                 "sizes": tuple(BoardSize(**size) for size in raw.get("sizes", ())),
             }
@@ -674,7 +858,24 @@ def family_from_json(text: str) -> BoardFamily:
     return family
 
 
-_NESTED = frozenset({"strip", "corner_holes", "legend", "printed", "sizes"})
+def _legend_from(raw: dict[str, Any]) -> Legend:
+    def numbering(value: Any) -> AxisLegend | None:
+        if value is None:
+            return None
+        return AxisLegend(
+            runs=tuple((str(a), str(b)) for a, b in value["runs"]),
+            every=int(value.get("every", 1)),
+            digits=int(value.get("digits", 1)),
+        )
+
+    return Legend(
+        **{key: value for key, value in raw.items() if key not in ("columns", "rows")},
+        columns=numbering(raw.get("columns")),
+        rows=numbering(raw.get("rows")),
+    )
+
+
+_NESTED = frozenset({"strip", "corner_holes", "legend", "printed", "sizes", "breadboard"})
 
 
 __all__ = [
@@ -687,13 +888,17 @@ __all__ = [
     "MASKS",
     "NUMBER_EDGES",
     "PHENOLIC_SINGLE_SIDED",
+    "SOLDERABLE_BREADBOARD",
+    "SOLDERLESS_BREADBOARD",
     "STANDARD_PRESETS",
     "STRIP_EDGES",
     "STRIP_SHAPES",
+    "WIDE_CHANNEL_BREADBOARD",
     "BoardDesign",
     "BoardFamily",
     "BoardPreset",
     "BoardSize",
+    "BreadboardSpec",
     "CornerHoles",
     "EdgeStrip",
     "FamilyBoardType",
@@ -708,6 +913,7 @@ __all__ = [
     "family_from_json",
     "family_problem",
     "family_to_json",
+    "pattern_sizes",
     "preset_edge_connectors",
     "preset_mounting_holes",
     "size_for_grid",
