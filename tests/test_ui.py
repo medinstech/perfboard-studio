@@ -2624,21 +2624,31 @@ def test_saving_does_not_make_the_window_reload_itself(tmp_path) -> None:
 
 def test_a_part_can_be_found_by_reference_value_or_footprint() -> None:
     """Which of the three somebody remembers depends on why they are looking: "R37" from
-    a DRC message, "10k" from the schematic, "TO-220" from the pile on the bench."""
-    from perfboard_studio.ui.main import GoToPartDialog
+    a DRC message, "10k" from the schematic, "TO-220" from the pile on the bench. Go to
+    Part is the command palette on the parts alone."""
+    from perfboard_studio.ui.partnames import footprint_label
 
-    doc = _load_dense()
-    dialog = GoToPartDialog(doc.components, footprint_lookup())
-    everything = dialog.list.count()
+    window = _window_on(_load_dense())
+    try:
+        window.on_go_to_part()
+        palette = window.command_palette
+        everything = palette.list.count()
+        assert everything == len(window.bus.document.components) + len(window.bus.document.parts)
 
-    first = doc.components[0]
-    dialog.filter.setText(first.ref)
-    assert 0 < dialog.list.count() < everything
-    assert dialog.chosen_id() is not None
+        first = window.bus.document.components[0]
+        palette.field.setText(first.ref)
+        assert 0 < palette.list.count() < everything
+        palette.field.setText(first.value)
+        assert palette.list.count() > 0
+        footprint = window.lookup(first.footprint_id)
+        palette.field.setText(footprint_label(footprint.name))
+        assert palette.list.count() > 0
 
-    dialog.filter.setText("no such part anywhere")
-    assert dialog.list.count() == 0
-    assert dialog.chosen_id() is None
+        palette.field.setText("no such part anywhere")
+        assert palette.list.count() == 0
+        palette.close_palette()
+    finally:
+        _close(window)
 
 
 def test_going_to_a_part_selects_it_and_moves_the_view() -> None:

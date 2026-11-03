@@ -163,6 +163,9 @@ closed without a bump.
   double-click on its symbol puts the keyboard in its value, and Rename on a symbol's menu
   in its reference. The Edit a Part and Rename Part dialogs are gone; Change… opens the
   library for another package.
+- **Go to Part (Ctrl+G) is the command palette on the parts.** Type a reference, a value
+  or a package; the part is selected and the view put on it. The separate Go to Part
+  dialog is gone.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

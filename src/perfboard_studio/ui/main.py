@@ -2140,85 +2140,6 @@ class BoardFeaturesDialog(QDialog):
         )
 
 
-class GoToPartDialog(QDialog):
-    """Find a part by name on a board too big to scan by eye.
-
-    A board of any size has no way to answer "where is R37" other than reading the screen
-    until it turns up -- and the parts that need finding are the ones on a dense board,
-    which is exactly where reading the screen does not work.
-
-    Filters on reference, value and footprint together, because which of the three someone
-    remembers depends on why they are looking: "R37" from a DRC message, "10k" from the
-    schematic, "TO-220" from the pile of parts on the bench.
-    """
-
-    def __init__(
-        self,
-        components: Sequence[ComponentInstance],
-        lookup: FootprintLookup,
-        parent: QWidget | None = None,
-        board: Board | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(t("Go to Part"))
-        self.resize(460, 480)
-        self._components = tuple(components)
-        self._lookup = lookup
-        self._board = board
-
-        self.filter = QLineEdit()
-        self.filter.setPlaceholderText(t("Filter parts…  (R37, 10k, TO-220, C7)"))
-        self.filter.textChanged.connect(self._refilter)
-        self.list = QListWidget()
-        self.list.itemDoubleClicked.connect(lambda _item: self.accept())
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.filter)
-        layout.addWidget(self.list)
-        layout.addWidget(buttons)
-        self.setLayout(layout)
-        self._refilter("")
-        # Focus in the filter box, because typing is what somebody opening this came to
-        # do: the list is how they confirm it, not how they search it.
-        self.filter.setFocus()
-
-    def _describe(self, component: ComponentInstance) -> str:
-        footprint = self._lookup(component.footprint_id)
-        name = (
-            footprint_label(footprint.name) if footprint is not None else component.footprint_id
-        )
-        value = f"  {component.value}" if component.value else ""
-        return f"{component.ref}{value}  ·  {name}  ·  {format_hole(component.anchor, self._board)}"
-
-    def _refilter(self, text: str) -> None:
-        needle = _folded(text.strip())
-        self.list.clear()
-        for component in self._components:
-            row = self._describe(component)
-            if needle and needle not in _folded(row):
-                continue
-            item = QListWidgetItem(row)
-            item.setData(Qt.ItemDataRole.UserRole, component.id)
-            self.list.addItem(item)
-        # Pre-selected, so Enter goes straight to the obvious answer once a filter has
-        # narrowed it to one. Without this the dialog asks to be clicked as well as typed.
-        if self.list.count():
-            self.list.setCurrentRow(0)
-
-    def chosen_id(self) -> str | None:
-        item = self.list.currentItem()
-        if item is None:
-            return None
-        chosen = item.data(Qt.ItemDataRole.UserRole)
-        return str(chosen) if chosen is not None else None
-
-
 @dataclasses.dataclass(frozen=True, slots=True)
 class _CustomField:
     """One number the user sets. ``kind`` picks the widget and the units."""
@@ -4165,22 +4086,30 @@ class MainWindow(QMainWindow):
             walk(top, (plain(top.title()),), {shiboken6.getCppPointer(top)[0]})
 
         document = self.bus.document
+        # A part by what somebody remembers of it: "R37" from a finding, "10k" from the
+        # schematic, "TO-220" from the pile on the bench -- the package is where it lives.
+        def package(footprint_id: str) -> str:
+            footprint = self.lookup(footprint_id)
+            return footprint_label(footprint.name) if footprint is not None else footprint_id
+
         for component in document.components:
             entries.append(
                 Entry(
                     label=f"{component.ref}  {component.value}".strip(),
-                    where=t("Part on the board"),
+                    where=f"{t('Part on the board')}  ·  {package(component.footprint_id)}",
                     keys="",
                     run=partial(self._palette_go_to_component, component.id),
+                    kind="part",
                 )
             )
         for part in document.parts:
             entries.append(
                 Entry(
                     label=f"{part.ref}  {part.value}".strip(),
-                    where=t("Part in the design"),
+                    where=f"{t('Part in the design')}  ·  {package(part.footprint_id)}",
                     keys="",
                     run=partial(self._on_part_list_design_part, part.id),
+                    kind="part",
                 )
             )
         for net in document.nets:
@@ -4190,6 +4119,7 @@ class MainWindow(QMainWindow):
                     where=t("Net"),
                     keys="",
                     run=partial(self._palette_go_to_net, net.id),
+                    kind="net",
                 )
             )
         return entries
@@ -11502,18 +11432,14 @@ class MainWindow(QMainWindow):
         return 0 <= at.col < board.cols and 0 <= at.row < board.rows
 
     def on_go_to_part(self) -> None:
-        """Find a part by name, select it, and put the view on it."""
-        components = self.bus.document.components
-        if not components:
+        """Find a part by its reference, value or package, select it, and put the view on
+        it: the command palette on the parts alone (Ctrl+K is everything). It was a dialog
+        of its own, a second search that found the same parts a different way."""
+        document = self.bus.document
+        if not document.components and not document.parts:
             self.statusBar().showMessage(t("There are no parts on this board yet."), 6000)
             return
-        dialog = GoToPartDialog(components, self.lookup, self, board=self.bus.document.board)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        chosen = dialog.chosen_id()
-        if chosen is None:
-            return
-        self.go_to_component(chosen)
+        self.command_palette.open(frozenset({"part"}))
 
     def go_to_component(self, component_id: str) -> None:
         """Select a part and centre the view on it. Also what the DRC dock wants."""

@@ -50,6 +50,8 @@ class Entry:
     keys: str
     run: Callable[[], None]
     icon: QIcon | None = None
+    #: "command", "part" or "net": what Ctrl+G narrows the palette to (``open``).
+    kind: str = "command"
 
 
 def rank(entries: Sequence[Entry], typed: str) -> list[Entry]:
@@ -141,10 +143,13 @@ class CommandPalette(QFrame):
 
     # -- opening and closing ---------------------------------------------------
 
-    def open(self) -> None:
+    def open(self, kinds: frozenset[str] | None = None) -> None:
         """Ask for the entries afresh -- the document and what is enabled have moved on since
-        last time -- and stand at the top of the window with the field ready."""
-        self._entries = self._entries_now()
+        last time -- and stand at the top of the window with the field ready. ``kinds``
+        narrows it: Go to Part is the palette on the parts alone."""
+        self._entries = [
+            entry for entry in self._entries_now() if kinds is None or entry.kind in kinds
+        ]
         self.field.clear()
         self._refilter("")
         parent = self.parentWidget()

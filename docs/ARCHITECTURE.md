@@ -1477,7 +1477,9 @@ search field). It keeps no list of its own: `_palette_entries` walks the menus u
 by matching each submenu's own action, never through `QAction.menu()` -- and offers every
 enabled entry in its own words with its menu and key, then every part and net by name. A
 command the menus grey out is not offered, and one added to a menu is offered with no line
-in the palette. `rank` puts a name that starts with what was typed first, then one with a
+in the palette. Go to Part (Ctrl+G) is the palette on the parts alone (`Entry.kind`), a
+part found by reference, value or package; it was a dialog of its own, a second search over
+the same parts. `rank` puts a name that starts with what was typed first, then one with a
 word that does, then one that only contains it.
 
 There is no tool row under it. **The board's tools float on the board** (`ui/canvastools.py`,

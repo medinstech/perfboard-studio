@@ -259,7 +259,6 @@ TURKISH: Mapping[str, str] = {
     "&Hatch Copper on the Far Side": "Karşı Yüzdeki Bakırı &Taralı Göster",
     "Measure &Distance": "&Mesafe Ölç",
     "&Go to Part…": "Parçaya G&it…",
-    "Go to Part": "Parçaya Git",
     "Filter parts…  (R37, 10k, TO-220, C7)": "Parçaları süz…  (R37, 10k, TO-220, C7)",
     "Show &3D View": "&3D Görünümü Göster",
     # Ca&mera, not &Camera: "Board &Colour" has C in the same menu.
