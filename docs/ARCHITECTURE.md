@@ -338,7 +338,7 @@ drawn round, held so by a test. The courtyard margin was not made configurable i
 lives inside the frozen footprints, every courtyard reader would have to re-derive it per
 board, and shrinking it shrinks the room round every pin as well. The clearance is a document
 field beside the height limit, not on `board`, because choosing a board again would lose it
-(Board Setup, and every boardfit trial). Under it the placer cannot skip pairs by courtyard
+(the board designer, and every boardfit trial). Under it the placer cannot skip pairs by courtyard
 boxes: a pin header's courtyard IS its moulding, so two headers within the clearance have
 courtyards that never meet. So `_Part.rel_gate` is the courtyard box when the clearance is
 unset, and the box round body and pins grown by half the clearance and a hair when it is set.
@@ -1637,8 +1637,8 @@ about the document. Four things about it:
   window's.
 - **Choosing the board is a step**, because a perfboard is bought before it is populated.
   `on_choose_board` asks the stock-board question when the design has parts and the board
-  has none (`_offer_a_board_size`, `always=True` so it is never silent), Board Setup
-  otherwise; `_board_chosen` then stops Place on the Board asking again. It is session
+  has none (`_offer_a_board_size`, `always=True` so it is never silent), the board
+  designer otherwise; `_board_chosen` then stops Place on the Board asking again. It is session
   state, reset by `_forget_the_previous_document`: a board with parts on it counts as chosen.
   The question is three methods so a test can stand in for one without touching Qt:
   `_board_choice` TRIES the boards (`boardfit.choose_board` through `_run_planner`, whose
@@ -1726,7 +1726,7 @@ command. It never holds the bus, which the window replaces when a file is opened
 `dispatch` through whichever bus is current, the footprint lookup, and `InspectorHooks`
 for what is still a dialog (another package; the board's setup). Its buttons are the
 window's own actions (`InspectorActions`). Nothing selected is the board: its name, what
-it is, Change… for Board Setup, the height limit and the body clearance. One placed part
+it is, Change… for the board designer, the height limit and the body clearance. One placed part
 is its reference, value, package, pin 1's hole, rotation, mirroring, lock, pin names and
 note -- a value that names a catalog part brings that part's pinout in the same command,
 as Part Properties did (`ui/partfields.py`, shared with the sheet's part dialog). It
@@ -1872,6 +1872,21 @@ corner holes and its colour. Its grid, pads and drill are the kind's, so those s
 not on show at all -- a greyed row still has to be read past. A channel too wide for the
 mini leaves the mini out of the sizes rather than refusing the full size on screen; when no
 size can be made, all are kept, so `family_problem` says why under the field that did it.
+
+**Board Setup retired into the designer: one place a board is chosen.** Every door that
+opened it -- the Board menu, the board's right-click, the Board step's Other Board, Change…
+on the board in Properties -- opens the designer, which OPENS ON THE BOARD THAT IS OPEN:
+the catalogue family and size that make it exactly (`board_for` equal to the board, its
+edge connector and its holes), or else the board itself, first in the list as "This board"
+(`designer.this_board`). That family says the board's grid, pads, material, legend --
+the board's own numbering included, as Board Setup's Advanced asked it -- and its strips and
+corner holes when they are exactly a family's; what no family says (a connector or a hole
+added by hand, a legend round all four edges, the original's "plain" type) is kept as it is
+beside whatever it is changed to (`_design_of`). So Use This Board on it unchanged changes
+nothing, and `on_design_board` dispatches nothing then: no undo step, no dirty title. The
+tests pin it on every example and golden board, and Board Setup's own tests moved over --
+the legend's, the breadboards' and the window's -- with one that names, for each of Board
+Setup's fields, the designer's row it became and a board that row is shown on.
 
 ## The words, the first start and help tell one story
 
@@ -2322,8 +2337,8 @@ hole (`PadGridItem`'s rule, for its reason), the groove a DIP straddles, a line 
 rail in the ink of the class it is for, and the board's own print -- column numbers every
 five and the row letters at both ends, in millimetres, as silkscreen is. Because the board
 names its own holes, `legend_is_readable` is true on its face and the grid ruler stands
-down. Board Setup asks a breadboard only its size (`BREADBOARD_SIZES`); `suggest_boards`
-offers no stock perfboard for one, so the Board step goes to Board Setup. Solder, spine and
+down. The board designer asks a breadboard only its size and channel; `suggest_boards`
+offers no stock perfboard for one, so the Board step goes to the designer. Solder, spine and
 bare-wire tools are greyed out on it (`drc.BREADBOARD_CONDUCTOR_KINDS`), and a wire drawn by
 hand goes on its top side -- the default bottom is `not-on-breadboard`.
 
@@ -2380,7 +2395,7 @@ format did not move. Five things carry it, each with a test in
   everywhere else the soldered board it is, so it gets the soldering guide, an iron, trimmed
   leads and mounting holes without a line of its own.
 - **Its board follows its kind** (`breadboard.pattern_board`): 1.6 mm FR-4 drilled 0.042 in
-  where the plastic is 8.5 mm with 0.8 mm openings. Board Setup, the MCP server's `set_board`
+  where the plastic is 8.5 mm with 0.8 mm openings. The designer, the MCP server's `set_board`
   and the move below all build through it, because a board changed from one kind to the other
   that kept the other kind's numbers is drawn and exported as the wrong slab.
 - **Its border is the one thing asked beside its size**, because it is where makers differ.

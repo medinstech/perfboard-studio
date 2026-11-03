@@ -314,39 +314,40 @@ def _app() -> None:
     QApplication.instance() or QApplication(["perfboard-studio-tests"])
 
 
-def test_board_setup_asks_a_breadboard_its_channel_and_where_it_narrows() -> None:
+def test_the_designer_asks_a_breadboard_its_channel_and_where_it_narrows() -> None:
     _app()
-    from perfboard_studio.ui.main import BoardSetupDialog
+    from tests.designer_support import choose_channel, designer_on, shown
 
-    dialog = BoardSetupDialog(FULL)
-    form = dialog._chosen
-    assert form.isRowVisible(dialog.breadboard_channel) and not form.isRowVisible(dialog.narrow_channel)
-    dialog.breadboard_channel.setCurrentIndex(dialog.breadboard_channel.findData("1000"))
-    assert dialog.board() == WIDE_1000
-    assert form.isRowVisible(dialog.narrow_channel)
+    dialog = designer_on(FULL)
+    assert shown(dialog, "breadboard.channel_mils")
+    assert not shown(dialog, "breadboard.narrow_channel_cols")
+    choose_channel(dialog, "1000")
+    assert dialog.design().board == WIDE_1000
+    assert shown(dialog, "breadboard.narrow_channel_cols")
     # A flex body is found by name in the list, which sets its narrow part.
     for key, board in (("900-flex", FLEX_900), ("1000-flex", FLEX_1000)):
-        dialog.breadboard_channel.setCurrentIndex(dialog.breadboard_channel.findData(key))
-        assert dialog.narrow_channel.value() == 39 and dialog.board() == board
-        reopened = BoardSetupDialog(board)
-        assert reopened.breadboard_channel.currentData() == key and reopened.board() == board
+        choose_channel(dialog, key)
+        assert dialog.narrow.value() == 39 and dialog.design().board == board
+        reopened = designer_on(board)
+        assert reopened.channel.currentData() == key and reopened.design().board == board
     # ...and a plain choice after it is wide all the way again; the box still takes any count.
-    dialog.breadboard_channel.setCurrentIndex(dialog.breadboard_channel.findData("900"))
-    assert dialog.board() == breadboard("830", channel=9)
-    dialog.narrow_channel.setValue(20)
-    assert dialog.board() == breadboard("830", channel=9, narrow_channel_cols=20)
+    choose_channel(dialog, "900")
+    assert dialog.design().board == breadboard("830", channel=9)
+    dialog.narrow.setValue(20)
+    assert dialog.design().board == breadboard("830", channel=9, narrow_channel_cols=20)
 
 
 @pytest.mark.parametrize("kind", ["pad-per-hole", "stripboard"])
-def test_board_setup_turns_a_flex_breadboard_into_a_board_with_no_channel(kind: str) -> None:
+def test_the_designer_turns_a_flex_breadboard_into_a_board_with_no_channel(kind: str) -> None:
     """The narrow part goes with the breadboard: carried onto a perfboard it is a board
-    board.set refuses, and the dialog had no row left to clear it in."""
+    board.set refuses, and Board Setup had no row left to clear it in."""
     _app()
-    from perfboard_studio.ui.main import BoardSetupDialog
+    from tests.designer_support import choose_family, choose_kind, designer_on
 
-    dialog = BoardSetupDialog(FLEX_900)
-    dialog.board_type.setCurrentIndex(dialog.board_type.findData(kind))
-    board = dialog.board()
+    dialog = designer_on(FLEX_900)
+    choose_family(dialog, "double-sided-fr4")
+    choose_kind(dialog, kind)
+    board = dialog.design().board
     assert board.type == kind and board.narrow_channel_cols == 0
     bus = CommandBus(_doc(FLEX_900), create_standard_registry(), CommandContext(next_id=create_document_id_generator(_doc(FLEX_900))))
     assert bus.dispatch("board.set", SetBoardPayload(board=board)).ok

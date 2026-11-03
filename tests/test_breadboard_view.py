@@ -63,54 +63,51 @@ def test_the_board_names_its_own_holes_so_no_ruler_is_drawn_over_them() -> None:
     assert not _scene("830", side="bottom").legend_is_readable()
 
 
-def test_board_setup_asks_a_breadboard_only_its_size() -> None:
+def test_the_designer_asks_a_breadboard_only_its_size() -> None:
     _app()
-    from perfboard_studio.ui.main import BoardSetupDialog
+    from tests.designer_support import choose_family, choose_size, designer_on, shown
 
-    dialog = BoardSetupDialog(DEFAULT_BOARD)
-    dialog.board_type.setCurrentIndex(dialog.board_type.findData("breadboard"))
-    dialog.breadboard_size.setCurrentIndex(dialog.breadboard_size.findData("400"))
-    assert dialog.board() == breadboard("400")
+    dialog = designer_on(DEFAULT_BOARD)
+    choose_family(dialog, "breadboard")
+    choose_size(dialog, "400")
+    design = dialog.design()
+    assert design.board == breadboard("400")
     # A different product: the perfboard's fingers and bores go with it.
-    assert dialog.preset_features() == ((), ())
-    form = dialog._chosen
-    assert form.isRowVisible(dialog.breadboard_size)
-    assert not form.isRowVisible(dialog.preset)
-    assert not dialog.advanced_toggle.isVisibleTo(dialog)
+    assert design.edge_connectors == () and design.mounting_holes == ()
+    assert shown(dialog, "breadboard.channel_mils") and not shown(dialog, "grid")
 
-    dialog.board_type.setCurrentIndex(dialog.board_type.findData("pad-per-hole"))
-    assert not form.isRowVisible(dialog.breadboard_size)
-    assert form.isRowVisible(dialog.preset)
+    choose_family(dialog, "double-sided-fr4")
+    assert shown(dialog, "grid") and not shown(dialog, "breadboard.channel_mils")
 
 
-def test_board_setup_opens_on_the_breadboard_it_was_given() -> None:
+def test_the_designer_opens_on_the_breadboard_it_was_given() -> None:
     _app()
-    from perfboard_studio.ui.main import BoardSetupDialog
+    from tests.designer_support import choose_size, designer_on
 
-    dialog = BoardSetupDialog(breadboard("170"))
-    assert dialog.board_type.currentData() == "breadboard"
-    assert dialog.breadboard_size.currentData() == "170"
-    assert dialog.board() == breadboard("170")
+    dialog = designer_on(breadboard("170"))
+    assert (dialog._family.id, dialog._size.name) == ("breadboard", "170")
+    assert dialog.design().board == breadboard("170")
     # Another size of the same board is only a size.
-    dialog.breadboard_size.setCurrentIndex(dialog.breadboard_size.findData("830"))
-    assert dialog.preset_features() is None
+    choose_size(dialog, "830")
+    assert dialog.design().board == breadboard("830")
 
 
-def test_a_new_document_can_be_made_a_breadboard_in_board_setup(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_a_new_document_can_be_made_a_breadboard_in_the_designer(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """The starter board comes with corner bores and finger strips, which neither kind of
     breadboard takes -- so choosing one was refused with "remove them first", about
     features nobody had added. They go with the board they belonged to, in one undo step."""
     _app()
     from PySide6.QtCore import QSettings
-    from PySide6.QtWidgets import QDialog
 
     from perfboard_studio.breadboard import solderable_breadboard
     from perfboard_studio.commands import create_starter_document
+    from perfboard_studio.ui import designer as designer_module
     from perfboard_studio.ui import main as main_module
+    from tests.designer_support import choose_family, choose_size
 
     store = QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
     monkeypatch.setattr(main_module, "app_settings", lambda: store)
-    for kind, expected in (
+    for family, expected in (
         ("breadboard", breadboard("400")),
         ("solderable-breadboard", solderable_breadboard("400")),
     ):
@@ -118,14 +115,15 @@ def test_a_new_document_can_be_made_a_breadboard_in_board_setup(tmp_path, monkey
         assert starter.mounting_holes and starter.edge_connectors
         window = main_module.MainWindow(starter)
 
-        def choose(dialog, _kind=kind) -> QDialog.DialogCode:  # type: ignore[no-untyped-def]
-            dialog.board_type.setCurrentIndex(dialog.board_type.findData(_kind))
-            dialog.breadboard_size.setCurrentIndex(dialog.breadboard_size.findData("400"))
-            return QDialog.DialogCode.Accepted
+        def choose(dialog, _family=family) -> int:  # type: ignore[no-untyped-def]
+            choose_family(dialog, _family)
+            choose_size(dialog, "400")
+            dialog._use()
+            return int(dialog.result())
 
-        monkeypatch.setattr(main_module.BoardSetupDialog, "exec", choose)
+        monkeypatch.setattr(designer_module.BoardDesigner, "exec", choose)
         try:
-            assert window.on_board_setup()
+            assert window.on_design_board()
             document = window.bus.document
             assert document.board == expected
             assert document.mounting_holes == () and document.edge_connectors == ()
@@ -136,7 +134,6 @@ def test_a_new_document_can_be_made_a_breadboard_in_board_setup(tmp_path, monkey
         finally:
             window._saved_document = window.bus.document
             window.close()
-
 
 
 @pytest.fixture
@@ -277,7 +274,7 @@ def test_an_agents_1_to_1_pdf_has_a_solder_side_only_where_there_is_one(board, s
 
 def test_no_stock_perfboard_is_offered_for_a_breadboard() -> None:
     """A perfboard's size applied to a breadboard is a board board.set refuses, so the
-    window's Board step goes to Board Setup -- the breadboard's sizes -- instead."""
+    window's Board step goes to the board designer -- the breadboard's sizes -- instead."""
     from perfboard_studio.placer import suggest_boards
 
     assert suggest_boards(breadboard("830"), (), (), LOOKUP) == ()

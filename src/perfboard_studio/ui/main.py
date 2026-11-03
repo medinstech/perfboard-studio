@@ -134,7 +134,6 @@ from perfboard_studio.boardfamily import (
     STANDARD_PRESETS,
     BoardDesign,
     BoardPreset,
-    board_from_preset,
     preset_edge_connectors,
     preset_mounting_holes,
 )
@@ -144,16 +143,9 @@ from perfboard_studio.boardfit import (
     BoardVerdict,
     choose_board,
 )
-from perfboard_studio.breadboard import SIZES as BREADBOARD_SIZES
 from perfboard_studio.breadboard import (
-    SOLDERABLE_BORDER_X_MM,
-    SOLDERABLE_BORDER_Y_MM,
-    STANDARD_CHANNEL,
-    channel_of,
     has_breadboard_pattern,
     is_breadboard,
-    is_solderable_breadboard,
-    pattern_board,
     size_of,
 )
 from perfboard_studio.breadroute import plan_joined_board, plan_joined_reroute
@@ -201,7 +193,6 @@ from perfboard_studio.commands import (
     RenameDocumentPayload,
     RotateComponentPayload,
     RotateComponentsPayload,
-    SetBoardPayload,
     SetBodyClearancePayload,
     SetHeightLimitPayload,
     UnplaceComponentPayload,
@@ -244,18 +235,12 @@ from perfboard_studio.footprints import (
     vertical_screw_terminal_footprint,
 )
 from perfboard_studio.geometry import (
-    MAX_LEGEND_DIGITS,
     board_edge_margin_mm,
-    board_size_mm,
     edge_connector_holes,
     format_hole,
     hole_span_mm,
     legend_label,
-    legend_problem,
-    legend_runs_text,
-    pad_edge_gap_mm,
     pad_extent_mm,
-    parse_legend_runs,
     pin_hole,
 )
 from perfboard_studio.guide import (
@@ -276,13 +261,9 @@ from perfboard_studio.lvs import LvsIssue, LvsResult, run_lvs, stale_conductor_i
 from perfboard_studio.model import (
     UNTITLED_NAME,
     VALID_ROTATIONS,
-    AxisLegend,
     Board,
     BoardEdge,
-    BoardLabels,
-    BoardMaterial,
     BoardSide,
-    BoardType,
     BodyArchetype,
     ComponentInstance,
     ConductorKind,
@@ -294,8 +275,6 @@ from perfboard_studio.model import (
     NetClass,
     NetId,
     NetNode,
-    PadAxis,
-    PadShape,
     PartSymbol,
     PerfDocument,
     PinNames,
@@ -1144,767 +1123,6 @@ class PartTree(QTreeWidget):
             drag.setPixmap(picture_beside_the_pointer(picture))
             drag.setHotSpot(QPoint(0, 0))
         drag.exec(Qt.DropAction.CopyAction)
-
-
-@dataclasses.dataclass(frozen=True)
-class _LegendAxisFields:
-    """The row of Board Setup that says how one axis of a legend is printed."""
-
-    row: QWidget
-    runs: QLineEdit
-    every: QSpinBox
-    digits: QSpinBox
-
-
-class BoardSetupDialog(QDialog):
-    """Which board this is, and -- behind Advanced -- everything a product already decides.
-
-    A PERFBOARD IS BOUGHT, NOT SPECIFIED. The question is which of the dozen things a
-    supplier stocks you have in your hand, and the answer settles the grid, the substrate,
-    whether it is single-sided, the border and the printed legend all at once. Asking those
-    five as separate questions on the way in is asking somebody to describe a product they
-    are holding -- and every wrong answer is a board the tool then reasons about
-    incorrectly, silently.
-
-    So the list of products and the KIND of board are the dialog, and the rest is folded
-    into Advanced. It opens expanded exactly when the board is not one of the products,
-    which is when those fields are the only thing describing it: a custom size typed in
-    now, or a document already on a grid nobody sells.
-
-    THE MATERIAL IS NOT A COSMETIC CHOICE, which is why it stays in the dialog at all
-    rather than being dropped. FR-2 phenolic -- the cheap brown board most perfboard is
-    actually sold as -- lifts its pads under sustained heat, so DRC's pad-lifting rule only
-    fires on it and the build guide drops the iron 30 degrees and cuts the dwell from three
-    seconds to two. Choosing the wrong one means the tool's most useful safety advice never
-    appears; picking the right PRODUCT means never having to choose it.
-    """
-
-    MATERIALS: tuple[tuple[BoardMaterial, str], ...] = (
-        ("FR4", "FR-4 — glass epoxy, the green kind. Tolerates heat well."),
-        ("FR2", "FR-2 — phenolic paper (\"pertinaks\"), the brown kind. Pads lift easily."),
-        ("FR1", "FR-1 — phenolic paper, as FR-2."),
-    )
-
-    PAD_SHAPES: tuple[tuple[PadShape, str], ...] = (
-        ("round", "Round"),
-        ("oblong", "Oblong — solder bridges easily along the long axis"),
-    )
-
-    PAD_AXES: tuple[tuple[PadAxis, str], ...] = (
-        ("vertical", "Down a column"),
-        ("horizontal", "Along a row"),
-    )
-
-    # The kind of board, which is not a display option: on stripboard whole rows of holes
-    # arrive already joined, so connectivity, DRC, the router and the build guide all
-    # answer differently. The description says what it means rather than naming a product,
-    # because "Veroboard" is a brand and "stripboard" is what the rest of the world calls
-    # the same thing.
-    BOARD_TYPES: tuple[tuple[BoardType, str], ...] = (
-        ("pad-per-hole", "Pad per hole — every hole is its own island"),
-        ("stripboard", "Stripboard — whole rows joined; you cut the track to separate"),
-        ("breadboard", "Breadboard — solderless; five holes to a clip, power on the rails"),
-        ("solderable-breadboard", "Solderable breadboard — the same holes and strips, in copper, soldered"),
-    )
-
-    #: The breadboards sold, by what they are called: their tie-point count. The pattern
-    #: is the size (``breadboard.SIZES``), so this is the whole of the question.
-    BREADBOARD_SIZES: tuple[tuple[str, str], ...] = (
-        ("830", "Full size · 830 points · 63 columns"),
-        ("400", "Half size · 400 points · 30 columns"),
-        ("170", "Mini · 170 points · 17 columns, no rails"),
-    )
-
-    #: How wide a breadboard's channel is, in mil: the ordinary 0.3 inch and the wide
-    #: bodies printed for modules (``breadboard.WIDE_CHANNEL_MILS``). The channel is part of
-    #: the pattern -- one row of grid per pitch -- so this is the second half of the question.
-    #: A "-flex" choice is the same channel with the ordinary one kept for the first
-    #: :data:`FLEX_NARROW_COLS` columns, as lhm0's flex bodies have it -- offered by name,
-    #: because a board somebody built is found in a list and not in a spin box.
-    BREADBOARD_CHANNELS: tuple[tuple[str, str], ...] = (
-        ("300", "300 mil · standard, a DIP straddles it"),
-        ("600", "600 mil · Arduino Nano"),
-        ("700", "700 mil · Raspberry Pi Pico"),
-        ("900", "900 mil · narrow ESP32 devkit"),
-        ("900-flex", "900 mil flex · 300 mil for columns 1–39"),
-        ("1000", "1000 mil · ESP32 devkit"),
-        ("1000-flex", "1000 mil flex · 300 mil for columns 1–39"),
-    )
-    #: How many columns of a flex body keep the ordinary channel: 39 of the 63, measured.
-    FLEX_NARROW_COLS = 39
-
-    STRIP_AXES: tuple[tuple[Literal["horizontal", "vertical"], str], ...] = (
-        ("horizontal", "Along a row"),
-        ("vertical", "Down a column"),
-    )
-
-    #: The picture beside the questions. Tall rather than square: most stocked boards are
-    #: portrait, and the picture is what tells a 5 x 7 from a 7 x 9 before the numbers do.
-    PREVIEW = QSize(260, 320)
-
-    #: The narrowest the questions are laid out: room for the longest Type and Material
-    #: answer and for a legend row's three fields with their labels, in either language.
-    QUESTIONS_WIDTH = 460
-
-    def __init__(
-        self,
-        board: Board,
-        parent: QWidget | None = None,
-        title: str = "New Board",
-        document: PerfDocument | None = None,
-        lookup: FootprintLookup | None = None,
-        verb: str | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        #: What the accepting button says: Create Board for a new one, Use This Board when
-        #: the open board changes. "OK" said neither.
-        self._verb = verb if verb is not None else t("Use This Board")
-        # The questions get QUESTIONS_WIDTH of their own, and the picture its width beside
-        # them. 420 for the whole dialog left the questions 260 px once the picture was
-        # in, and every long answer was cut off mid-word -- "Pad per hole — every hole is
-        # its o", "Columns p" -- in Turkish worse.
-        self.setMinimumWidth(
-            self.QUESTIONS_WIDTH
-            + (self.PREVIEW.width() + theme.SPACE["2xl"] if lookup is not None else 0)
-        )
-        #: What the preview draws the board under: the open document's own fingers and
-        #: corner holes while the board is still that size, so Board Setup on a starter
-        #: board shows the board as it is rather than a bare grid.
-        self._document = document
-        self._lookup = lookup
-        # Assigned before any widget signal can fire: `_update_note` asks `board()` for
-        # the pad gaps it prints, and `board()` builds its result from this.
-        self._board = board
-        #: The product chosen from the list, if one was. What makes the difference between
-        #: "resize this board" and "this is a different board, with the fingers and corner
-        #: holes that come with it".
-        self._preset: BoardPreset | None = None
-
-        # Perfboard is bought as "a 5 by 7", never as a hole count, so the sizes actually
-        # stocked come first and the spin boxes below are the escape hatch. Picking one
-        # also settles the things that travel with a board family -- a phenolic board is
-        # single-sided with no printed legend, an FR-4 one is neither.
-        self.preset = QComboBox()
-        self.preset.addItem(t("Custom size"), "")
-        for family, heading in (
-            ("double-sided-fr4", t("Double-sided green, plated holes")),
-            ("single-sided-phenolic", t("Single-sided orange phenolic")),
-        ):
-            # A separator per family rather than one flat list: the two are different
-            # products, not two settings of one, and the list is what makes that visible
-            # before anything is chosen.
-            self.preset.insertSeparator(self.preset.count())
-            heading_index = self.preset.count()
-            self.preset.addItem(heading, "")
-            # Disabled through the item's flags rather than QStandardItemModel.item(),
-            # which QComboBox.model() is not typed as returning.
-            self.preset.setItemData(
-                heading_index, QColor(theme.colour("secondary")), Qt.ItemDataRole.ForegroundRole
-            )
-            self.preset.setItemData(heading_index, 0, Qt.ItemDataRole.UserRole - 1)
-            for entry in STANDARD_PRESETS:
-                if entry.family != family:
-                    continue
-                self.preset.addItem(f"    {entry.name}  ·  {entry.cols} × {entry.rows}", entry.key)
-        self.preset.currentIndexChanged.connect(self._on_preset)
-
-        self.board_type = QComboBox()
-        for type_value, type_label in self.BOARD_TYPES:
-            self.board_type.addItem(t(type_label), type_value)
-        self.board_type.setCurrentIndex(max(0, self.board_type.findData(board.type)))
-        self.strip_axis = QComboBox()
-        for strip_value, strip_label in self.STRIP_AXES:
-            self.strip_axis.addItem(t(strip_label), strip_value)
-        self.strip_axis.setCurrentIndex(
-            max(0, self.strip_axis.findData(board.strip_axis or "horizontal"))
-        )
-        self.breadboard_size = QComboBox()
-        for size_value, size_label in self.BREADBOARD_SIZES:
-            self.breadboard_size.addItem(t(size_label), size_value)
-        self.breadboard_size.setCurrentIndex(
-            max(0, self.breadboard_size.findData(size_of(board) or "830"))
-        )
-        self.breadboard_channel = QComboBox()
-        for channel_value, channel_label in self.BREADBOARD_CHANNELS:
-            self.breadboard_channel.addItem(t(channel_label), channel_value)
-        channel = channel_of(board) if has_breadboard_pattern(board) else STANDARD_CHANNEL
-        key = str(channel * 100)
-        if board.narrow_channel_cols == self.FLEX_NARROW_COLS and self.breadboard_channel.findData(f"{key}-flex") >= 0:
-            key = f"{key}-flex"
-        if self.breadboard_channel.findData(key) < 0:
-            self.breadboard_channel.addItem(f"{channel * 100} mil", key)
-        self.breadboard_channel.setCurrentIndex(self.breadboard_channel.findData(key))
-        # A wide body that keeps the ordinary channel for part of its length (lhm0's
-        # "flex"): how many columns from column 1. Zero is a channel wide all the way.
-        self.narrow_channel = QSpinBox()
-        self.narrow_channel.setRange(0, 400)
-        self.narrow_channel.setSpecialValueText(t("Wide all the way"))
-        self.narrow_channel.setSuffix(t(" columns"))
-        self.narrow_channel.setValue(board.narrow_channel_cols)
-        self.narrow_channel.setToolTip(
-            t(
-                "How many columns, from column 1, keep the ordinary 0.3 inch channel with "
-                "their strips moved in to it, so a DIP still fits beside the module."
-            )
-        )
-        # A solderable breadboard's border is the one thing about it that differs between
-        # makers (breadboard.py), so it is the one thing asked beside its size.
-        solderable = is_solderable_breadboard(board)
-        self.border_x = QDoubleSpinBox()
-        self.border_y = QDoubleSpinBox()
-        for spin, start in (
-            (self.border_x, board.border_x_mm if solderable else SOLDERABLE_BORDER_X_MM),
-            (self.border_y, board.border_y_mm if solderable else SOLDERABLE_BORDER_Y_MM),
-        ):
-            spin.setRange(0.0, 30.0)
-            spin.setDecimals(1)
-            spin.setSingleStep(0.1)
-            spin.setSuffix(" mm")
-            spin.setValue(start)
-
-        self.cols = QSpinBox()
-        self.cols.setRange(2, 400)
-        self.cols.setValue(board.cols)
-        self.rows = QSpinBox()
-        self.rows.setRange(2, 400)
-        self.rows.setValue(board.rows)
-        self.material = QComboBox()
-        for value, label in self.MATERIALS:
-            self.material.addItem(t(label), value)
-        index = self.material.findData(board.material)
-        self.material.setCurrentIndex(max(0, index))
-
-        # Pad shape is here rather than buried somewhere, because on a board whose pads
-        # are oblong it changes which way a solder trace is easy to make -- the gap to the
-        # next pad along the long axis can be half what it is across. DRC and the build
-        # guide both say so, and neither can if this is not set to match the board in the
-        # user's hand.
-        self.pad_shape = QComboBox()
-        for shape, shape_label in self.PAD_SHAPES:
-            self.pad_shape.addItem(t(shape_label), shape)
-        self.pad_shape.setCurrentIndex(max(0, self.pad_shape.findData(board.pad_shape)))
-
-        self.pad_length = QDoubleSpinBox()
-        self.pad_length.setRange(0.1, 20.0)
-        self.pad_length.setSingleStep(0.05)
-        self.pad_length.setDecimals(2)
-        self.pad_length.setSuffix(" mm")
-        self.pad_length.setValue(board.pad_length or round(board.pad_diameter * 1.2, 2))
-
-        self.pad_axis = QComboBox()
-        for axis, axis_label in self.PAD_AXES:
-            self.pad_axis.addItem(t(axis_label), axis)
-        self.pad_axis.setCurrentIndex(max(0, self.pad_axis.findData(board.pad_axis)))
-
-        self.legend = QCheckBox(t("Addresses printed on the board"))
-        self.legend.setToolTip(
-            # One literal, not two concatenated: tests/test_i18n.py scans for translated
-            # strings and an implicit concatenation inside t() is invisible to it, so the
-            # translation would silently never be used.
-            t("Boards carrying their own A-Z / 01-22 legend, printed on the board itself.")
-        )
-        self.legend.setChecked(board.labels is not None)
-
-        self.row_digits = QSpinBox()
-        self.row_digits.setRange(1, 4)
-        self.row_digits.setValue(board.labels.row_digits if board.labels else 2)
-        self.row_digits.setToolTip(t('2 prints row 7 as "07", the way most such boards do.'))
-
-        # A BOARD THAT COUNTS ITS OWN WAY (#13): A..Z and then A..P again, letters down the
-        # side, numbers with every fifth marked. Empty is the addresses, which is what
-        # every board this dialog knew before prints. What is typed is read by the engine
-        # (`parse_legend_runs`) and refused in the engine's words (`legend_problem`), so the
-        # dialog, a .perf file and an agent are told the same thing.
-        self.legend_columns = self._legend_axis(
-            "A-Z, A-P",
-            t(
-                "What the board prints along its columns when that is not the addresses: "
-                "runs of letters or of numbers from the first hole on. A-Z, A-P is A to Z "
-                "and then A to P again. Left empty, the board prints the addresses."
-            ),
-        )
-        self.legend_rows = self._legend_axis(
-            "A-Z, 1-4",
-            t(
-                "What the board prints down its rows when that is not the addresses: runs "
-                "of letters or of numbers from the first hole on. A-Z, 1-4 is A to Z and "
-                "then 1 to 4. Left empty, the board prints the row numbers."
-            ),
-        )
-        self.legend_error = QLabel()
-        self.legend_error.setWordWrap(True)
-        theme.tone(self.legend_error, "danger")
-        self._fill_legend(board.labels)
-
-        self._size_note = QLabel()
-        # Wrapped: beside the preview the line ran past the dialog's edge, "0.64 mm" cut to "0.64 m".
-        self._size_note.setWordWrap(True)
-        self.cols.valueChanged.connect(self._update_note)
-        self.rows.valueChanged.connect(self._update_note)
-        self.board_type.currentIndexChanged.connect(self._update_enabled)
-        self.breadboard_size.currentIndexChanged.connect(self._update_note)
-        self.breadboard_channel.currentIndexChanged.connect(self._on_channel)
-        self.narrow_channel.valueChanged.connect(self._update_note)
-        self.pad_shape.currentIndexChanged.connect(self._update_enabled)
-        self.legend.toggled.connect(self._update_enabled)
-        for fields in (self.legend_columns, self.legend_rows):
-            fields.runs.textChanged.connect(self._check_legend)
-            fields.every.valueChanged.connect(self._check_legend)
-            fields.digits.valueChanged.connect(self._check_legend)
-        self._pitch = board.pitch
-        self._pad_diameter = board.pad_diameter
-        self._update_note()
-
-        # The two questions a person can answer about a board they are holding: which one
-        # is it, and what kind. Everything else is a consequence of those, and lives below.
-        self._chosen = QFormLayout()
-        self._chosen.addRow(t("Board"), self.preset)
-        self._chosen.addRow(t("Type"), self.board_type)
-        self._chosen.addRow(t("Strips run"), self.strip_axis)
-        self._chosen.addRow(t("Size"), self.breadboard_size)
-        self._chosen.addRow(t("Channel"), self.breadboard_channel)
-        self._chosen.addRow(t("Narrow part"), self.narrow_channel)
-        self._chosen.addRow(t("Border, left and right"), self.border_x)
-        self._chosen.addRow(t("Border, top and bottom"), self.border_y)
-
-        # Shown rather than merely enabled, and the difference matters on a dialog this
-        # short: a greyed-out row still costs a line and still has to be read past to find
-        # out it does not apply. Which way the strips run is a question only stripboard
-        # has an answer to.
-        self.advanced_toggle = QToolButton()
-        self.advanced_toggle.setCheckable(True)
-        self.advanced_toggle.setAutoRaise(True)
-        self.advanced_toggle.setText(t("Advanced"))
-        self.advanced_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.advanced_toggle.setToolTip(
-            t(
-                "Everything a stocked board already decides: its grid, what it is made of, "
-                "its pads and whether it prints its own addresses. Worth opening for a "
-                "board you cut yourself."
-            )
-        )
-        self.advanced_toggle.toggled.connect(self._on_advanced)
-
-        self._advanced = QWidget()
-        advanced = QFormLayout(self._advanced)
-        advanced.setContentsMargins(0, 0, 0, 0)
-        advanced.addRow(t("Columns"), self.cols)
-        advanced.addRow(t("Rows"), self.rows)
-        advanced.addRow(t("Material"), self.material)
-        advanced.addRow(t("Pad shape"), self.pad_shape)
-        advanced.addRow(t("Pad length"), self.pad_length)
-        advanced.addRow(t("Long axis"), self.pad_axis)
-        advanced.addRow("", self.legend)
-        advanced.addRow(t("Row digits"), self.row_digits)
-        advanced.addRow(t("Columns printed as"), self.legend_columns.row)
-        advanced.addRow(t("Rows printed as"), self.legend_rows.row)
-        advanced.addRow("", self.legend_error)
-        self._advanced_form = advanced
-
-        # Open on a board that is NOT one of the products, because then these fields are
-        # the only thing describing it -- Board Setup on a document already laid out on a
-        # grid nobody sells would otherwise hide the whole board behind a disclosure arrow.
-        self._select_matching_preset(board)
-        self.advanced_toggle.setChecked(_matching_preset(board) is None)
-        self._on_advanced(self.advanced_toggle.isChecked())
-        self._update_enabled()
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
-        if self._ok_button is not None:
-            self._ok_button.setText(self._verb)
-        self._check_legend()
-
-        questions = QVBoxLayout()
-        questions.addLayout(self._chosen)
-        questions.addWidget(self.advanced_toggle)
-        questions.addWidget(self._advanced)
-        # Outside Advanced on purpose: it is what the dialog has just decided, in
-        # millimetres and holes, and it is the one line worth reading whichever way the
-        # board was chosen.
-        questions.addWidget(self._size_note)
-        questions.addStretch(1)
-
-        # THE BOARD, beside the questions about it: a product is recognised by looking at
-        # it, and "5 x 7 cm · 18 × 24" is a row in a list until it is a picture with its
-        # finger strips and corner holes where the one in the drawer has them. Drawn by
-        # the board view itself (``boardpreview``), so it is the board OK will give.
-        self.preview = QLabel()
-        self.preview.setFixedSize(self.PREVIEW)
-        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview.setToolTip(t("The board as it will be drawn, parts side up."))
-        self._preview_timer = QTimer(self)
-        self._preview_timer.setSingleShot(True)
-        self._preview_timer.setInterval(60)
-        self._preview_timer.timeout.connect(self._draw_preview)
-        for signal in (
-            self.preset.currentIndexChanged,
-            self.board_type.currentIndexChanged,
-            self.breadboard_size.currentIndexChanged,
-            self.breadboard_channel.currentIndexChanged,
-            self.narrow_channel.valueChanged,
-            self.pad_shape.currentIndexChanged,
-            self.pad_axis.currentIndexChanged,
-            self.material.currentIndexChanged,
-            self.cols.valueChanged,
-            self.rows.valueChanged,
-            self.legend.toggled,
-            self.legend_columns.runs.textChanged,
-            self.legend_rows.runs.textChanged,
-            self.legend_columns.every.valueChanged,
-            self.legend_rows.every.valueChanged,
-            self.legend_columns.digits.valueChanged,
-            self.legend_rows.digits.valueChanged,
-        ):
-            signal.connect(lambda *_args: self._preview_timer.start())
-
-        body = QHBoxLayout()
-        body.addLayout(questions, 1)
-        if lookup is not None:
-            body.addWidget(self.preview, 0, Qt.AlignmentFlag.AlignTop)
-            self._draw_preview()
-
-        layout = QVBoxLayout(self)
-        layout.addLayout(body)
-        layout.addWidget(buttons)
-
-    def preview_document(self) -> PerfDocument:
-        """What the preview draws: the dialog's board, with the fingers and corner holes a
-        chosen product brings -- or, still the open board's size, the ones it has."""
-        board = self.board()
-        base = self._document or PerfDocument(
-            meta=DocumentMeta(name="", created="", modified=""), board=board
-        )
-        base = dataclasses.replace(base, components=(), conductors=(), cuts=(), board_notes=())
-        features = self.preset_features()
-        if features is not None:
-            connectors, holes = features
-            return dataclasses.replace(
-                base, board=board, edge_connectors=connectors, mounting_holes=holes
-            )
-        if (
-            self._document is not None
-            and (board.cols, board.rows) == (self._document.board.cols, self._document.board.rows)
-        ):
-            return dataclasses.replace(base, board=board)
-        return dataclasses.replace(base, board=board, edge_connectors=(), mounting_holes=())
-
-    def _draw_preview(self) -> None:
-        if self._lookup is None:
-            return
-        self.preview.setPixmap(render_board(self.preview_document(), self._lookup, self.PREVIEW))
-
-    def _on_advanced(self, shown: bool) -> None:
-        """Fold the consequences away, and let the dialog shrink back to the question.
-
-        ``adjustSize`` rather than a fixed size constraint: the dialog has to be able to
-        give the space back when it is closed again, and a user who has widened it should
-        keep the width they chose.
-        """
-        self.advanced_toggle.setArrowType(
-            Qt.ArrowType.DownArrow if shown else Qt.ArrowType.RightArrow
-        )
-        self._advanced.setVisible(shown)
-        self.adjustSize()
-
-    def _select_matching_preset(self, board: Board) -> None:
-        """Show the product this board already is, WITHOUT claiming the user chose it.
-
-        The signal is blocked and ``_preset`` is left alone deliberately. ``_preset`` means
-        "a product was picked from the list", which is what tells the caller to rebuild the
-        finger strips and corner holes that come with it -- and re-opening Board Setup on a
-        board that happens to be 14 x 20 is not a request to have its connectors rebuilt.
-        """
-        entry = _matching_preset(board)
-        if entry is None:
-            return
-        index = self.preset.findData(entry.key)
-        if index < 0:
-            return
-        blocked = self.preset.blockSignals(True)
-        self.preset.setCurrentIndex(index)
-        self.preset.blockSignals(blocked)
-
-    def _on_preset(self) -> None:
-        """Apply a stocked size. Silent when the user picks "Custom size" back again --
-        the numbers they have already typed are the point of that entry."""
-        key = self.preset.currentData()
-        entry = next((p for p in STANDARD_PRESETS if p.key == key), None)
-        if entry is None:
-            # "Custom size": the numbers ARE the choice now, so they had better be visible.
-            self.advanced_toggle.setChecked(True)
-            return
-        board = board_from_preset(entry, self._board)
-        self._board = board
-        self._preset = entry
-        self.cols.setValue(board.cols)
-        self.rows.setValue(board.rows)
-        self.material.setCurrentIndex(max(0, self.material.findData(board.material)))
-        self.pad_shape.setCurrentIndex(max(0, self.pad_shape.findData(board.pad_shape)))
-        self.legend.setChecked(board.labels is not None)
-        if board.labels is not None:
-            self.row_digits.setValue(board.labels.row_digits)
-        self._fill_legend(board.labels)
-        self._update_enabled()
-
-    def _channel_extra(self) -> int:
-        """Pitches the chosen channel is wider than 0.3 inch."""
-        return int(str(self.breadboard_channel.currentData()).split("-")[0]) // 100 - STANDARD_CHANNEL
-
-    def _on_channel(self) -> None:
-        """A flex choice sets the narrow part to the body's; a plain one sets it wide all the
-        way. Either can still be changed by hand, for a body of somebody's own."""
-        flex = str(self.breadboard_channel.currentData()).endswith("-flex")
-        self.narrow_channel.setValue(self.FLEX_NARROW_COLS if flex else 0)
-        self._update_enabled()
-
-    def _update_enabled(self) -> None:
-        oblong = self.pad_shape.currentData() == "oblong"
-        self.pad_length.setEnabled(oblong)
-        self.pad_axis.setEnabled(oblong)
-        self.row_digits.setEnabled(self.legend.isChecked())
-        # Shown with the legend and hidden without it, as every other row here that only
-        # means something for one kind of board.
-        if hasattr(self, "_advanced_form"):
-            for row in (self.legend_columns.row, self.legend_rows.row):
-                self._advanced_form.setRowVisible(row, self.legend.isChecked())
-        self._check_legend()
-        self._chosen.setRowVisible(self.strip_axis, self.board_type.currentData() == "stripboard")
-        # A breadboard is chosen by its size and nothing else: the pattern decides its
-        # grid, and it has no material, pads or legend of its own to be asked about. A
-        # solderable one is asked its border too, which is where its makers differ.
-        pattern = self.board_type.currentData() in ("breadboard", "solderable-breadboard")
-        solderable = self.board_type.currentData() == "solderable-breadboard"
-        self._chosen.setRowVisible(self.breadboard_size, pattern)
-        self._chosen.setRowVisible(self.breadboard_channel, pattern)
-        # Only a channel that can narrow onto the grid is offered a narrow part: each strip
-        # moves in by half of what the channel loses (breadboard.board_problem).
-        self._chosen.setRowVisible(self.narrow_channel, pattern and self._channel_extra() > 0)
-        self._chosen.setRowVisible(self.border_x, solderable)
-        self._chosen.setRowVisible(self.border_y, solderable)
-        self._chosen.setRowVisible(self.preset, not pattern)
-        self.advanced_toggle.setVisible(not pattern)
-        self._advanced.setVisible(not pattern and self.advanced_toggle.isChecked())
-        self._update_note()
-
-    def _update_note(self) -> None:
-        if self.board_type.currentData() in ("breadboard", "solderable-breadboard"):
-            width, height = board_size_mm(self.board())
-            note = t("{width} × {height} mm ({holes} holes)").format(
-                width=f"{width:.1f}", height=f"{height:.1f}", holes=self.breadboard_size.currentData()
-            )
-            self._size_note.setText(theme.ink(note, "secondary"))
-            return
-        # The physical size, because that is what someone holds against a piece of board
-        # they already own -- "80 columns" means nothing at the shop.
-        width = self.cols.value() * self._pitch
-        height = self.rows.value() * self._pitch
-        note = t("{width} × {height} mm ({holes} holes)").format(
-            width=f"{width:.1f}", height=f"{height:.1f}", holes=self.cols.value() * self.rows.value()
-        )
-        # The gap the R5' rule is about, quoted while the shape is being chosen rather
-        # than only once DRC runs. On a round board the two numbers are the same and one
-        # is enough; on an oblong one the difference between them IS the choice.
-        board = self.board()
-        gaps = pad_edge_gap_mm(board, "horizontal"), pad_edge_gap_mm(board, "vertical")
-        if abs(gaps[0] - gaps[1]) < 1e-9:
-            note += " — " + t("{gap} mm between pads").format(gap=f"{gaps[0]:.2f}")
-        else:
-            note += " — " + t(
-                "{along} mm between pads along a row, {down} mm down a column"
-            ).format(along=f"{gaps[0]:.2f}", down=f"{gaps[1]:.2f}")
-        self._size_note.setText(theme.ink(note, "secondary"))
-
-    def preset_features(
-        self,
-    ) -> tuple[tuple[EdgeConnector, ...], tuple[MountingHole, ...]] | None:
-        """What the caller needs to apply a whole product rather than just a size."""
-        kind = self.board_type.currentData()
-        if kind in ("breadboard", "solderable-breadboard"):
-            if kind == self._board.type:
-                # Another size of the same board: a solderable one keeps the mounting holes
-                # somebody drilled in it, and a solderless one never had any.
-                return None
-            # A different PRODUCT, so the fingers and corner bores go with the board they
-            # belonged to, as they do when one stock size replaces another. Neither kind
-            # takes fingers and a solderless one takes no bore, so keeping them was a
-            # refusal -- on every new document, whose starter board comes with both.
-            return (), ()
-        return _preset_features(self._preset, self.board())
-
-    def board(self) -> Board:
-        # A legend needs somewhere to be printed. Half a pitch past the outer holes leaves
-        # 0.32 mm of bare substrate at 2.54 mm pitch, which is not room for a character --
-        # the boards that carry a legend are physically wider at the edge, so turning the
-        # legend on gives the board that border rather than drawing text under the pads.
-        # Each axis keeps its own border: a preset solves them separately so the outline
-        # is the advertised size to the tenth of a millimetre, and averaging them here
-        # would throw that away. Only a legend with nowhere to go raises either of them.
-        # Only when THIS dialog turns the legend on: a board that already prints one -- every
-        # stock size does -- has the border its maker cut, and OK with nothing changed
-        # rewrote it to 2 mm on five of the six examples, an undo step and a bigger board.
-        border_x, border_y = self._board.border_x_mm, self._board.border_y_mm
-        if self.legend.isChecked() and self._board.labels is None:
-            border_x = max(border_x, LEGEND_BORDER_MM)
-            border_y = max(border_y, LEGEND_BORDER_MM)
-
-        shape = cast(PadShape, self.pad_shape.currentData())
-        # The length is carried only when it means something. Writing it out on a round
-        # board would put a field in the .perf file that describes nothing, and the format
-        # omits anything at its default precisely so an unused feature leaves no trace.
-        length = round(self.pad_length.value(), 3) if shape == "oblong" else None
-        if length is not None and length <= self._pad_diameter:
-            # The dialog's own floor: board.set refuses this, and a dialog that can only
-            # be dismissed by an error message is a worse dialog than one that cannot
-            # produce the error.
-            length = round(self._pad_diameter + 0.05, 3)
-        # strip_axis is written only on a board that has strips, for the reason pad_length
-        # is written only on an oblong one: a field describing nothing does not belong in
-        # the file, and the format omits its defaults precisely so an unused feature
-        # leaves no trace.
-        board_type = cast(BoardType, self.board_type.currentData())
-        if board_type in ("breadboard", "solderable-breadboard"):
-            # Through pattern_board, so a kind's thickness and drill come with the kind.
-            cols, rows = BREADBOARD_SIZES[str(self.breadboard_size.currentData())]
-            extra = self._channel_extra()
-            narrow = min(self.narrow_channel.value(), cols - 1) if extra > 0 else 0
-            pattern = pattern_board(board_type, cols, rows + extra, narrow)
-            if board_type == "solderable-breadboard":
-                pattern = dataclasses.replace(
-                    pattern,
-                    border_x_mm=round(self.border_x.value(), 2),
-                    border_y_mm=round(self.border_y.value(), 2),
-                )
-            return pattern
-        return dataclasses.replace(
-            self._board,
-            type=board_type,
-            # Only a breadboard has a channel to narrow, and the board this dialog opened on
-            # may have been a flex one.
-            narrow_channel_cols=0,
-            strip_axis=(
-                cast(Literal["horizontal", "vertical"], self.strip_axis.currentData())
-                if board_type == "stripboard"
-                else None
-            ),
-            cols=self.cols.value(),
-            rows=self.rows.value(),
-            material=cast(BoardMaterial, self.material.currentData()),
-            pad_shape=shape,
-            pad_length=length,
-            pad_axis=cast(PadAxis, self.pad_axis.currentData()),
-            border_x_mm=border_x,
-            border_y_mm=border_y,
-            labels=self._labels(),
-        )
-
-    # -- the board's own numbering (#13) ------------------------------------------------
-
-    def _legend_axis(self, example: str, tooltip: str) -> _LegendAxisFields:
-        """The three fields that say how one axis is printed, in one row of the form."""
-        runs = QLineEdit()
-        # The tool's own vocabulary, like "R1, C3, U2…": the same in every language.
-        runs.setPlaceholderText(example)
-        runs.setToolTip(tooltip)
-        every = QSpinBox()
-        every.setRange(1, 20)
-        every.setToolTip(
-            t("Only every Nth hole carries a label: 5 is a board numbered 05, 10, 15 and so on.")
-        )
-        digits = QSpinBox()
-        digits.setRange(1, MAX_LEGEND_DIGITS)
-        digits.setToolTip(
-            t("Numbers are padded to this many digits: 2 prints 5 as 05. Letters never are.")
-        )
-        row = QWidget()
-        line = QHBoxLayout(row)
-        line.setContentsMargins(0, 0, 0, 0)
-        line.addWidget(runs, 1)
-        line.addWidget(QLabel(t("marked every")))
-        line.addWidget(every)
-        line.addWidget(QLabel(t("digits")))
-        line.addWidget(digits)
-        return _LegendAxisFields(row, runs, every, digits)
-
-    def _fill_legend(self, labels: BoardLabels | None) -> None:
-        for fields, legend in (
-            (self.legend_columns, labels.columns if labels else None),
-            (self.legend_rows, labels.rows if labels else None),
-        ):
-            fields.runs.setText(legend_runs_text(legend.runs) if legend else "")
-            fields.every.setValue(legend.every if legend else 1)
-            fields.digits.setValue(legend.digits if legend else 1)
-
-    def _axis_legend(self, fields: _LegendAxisFields) -> AxisLegend | None:
-        """What one axis prints, or None for the addresses -- and for text that does not
-        read, which :meth:`_check_legend` is already saying, with OK held off."""
-        text = fields.runs.text().strip()
-        if not text:
-            return None
-        try:
-            runs = parse_legend_runs(text)
-        except ValueError:
-            return None
-        return AxisLegend(runs=runs, every=fields.every.value(), digits=fields.digits.value())
-
-    def _labels(self) -> BoardLabels | None:
-        """The legend OK gives: the board's own, with what this dialog asks about replaced.
-
-        Built on the legend the board already had rather than from nothing, because the
-        face it is printed on and whether it runs round all four edges are not asked here
-        -- and building a fresh one put them back to their defaults on every OK.
-        """
-        if not self.legend.isChecked():
-            return None
-        return dataclasses.replace(
-            self._board.labels or BoardLabels(),
-            row_digits=self.row_digits.value(),
-            columns=self._axis_legend(self.legend_columns),
-            rows=self._axis_legend(self.legend_rows),
-        )
-
-    def legend_problem_text(self) -> str | None:
-        """Why OK is held off over the legend, or None: the engine's own sentence."""
-        if not self.legend.isChecked():
-            return None
-        for fields in (self.legend_columns, self.legend_rows):
-            text = fields.runs.text().strip()
-            if text:
-                try:
-                    parse_legend_runs(text)
-                except ValueError as error:
-                    return str(error)
-        labels = self._labels()
-        return legend_problem(labels) if labels is not None else None
-
-    def _check_legend(self) -> None:
-        """Say what is wrong under the fields, and hold OK off until it is put right.
-
-        Also what the fields beside a run mean: nothing while it is empty, so they are
-        greyed then; and "Row digits" pads the row NUMBERS, so it is asked only while the
-        rows print them -- two "digits" for one axis left which one won to guesswork.
-        """
-        if not hasattr(self, "legend_error") or not hasattr(self, "_advanced_form"):
-            return
-        for fields in (self.legend_columns, self.legend_rows):
-            typed = bool(fields.runs.text().strip())
-            fields.every.setEnabled(typed)
-            fields.digits.setEnabled(typed)
-        self._advanced_form.setRowVisible(
-            self.row_digits, not self.legend_rows.runs.text().strip()
-        )
-        problem = self.legend_problem_text()
-        # The engine's sentence, in the window's language (`engine_text.say`).
-        self.legend_error.setText(say(problem) if problem is not None else "")
-        # The ROW, not the label: a hidden label in a visible row still leaves its spacing.
-        self._advanced_form.setRowVisible(self.legend_error, problem is not None)
-        if hasattr(self, "_ok_button") and self._ok_button is not None:
-            self._ok_button.setEnabled(problem is None)
 
 
 def _corner_offset_mm(board: Board, diameter: float) -> float:
@@ -3203,7 +2421,7 @@ class BoardSizeDialog(QDialog):
             t("Other Board…"), QDialogButtonBox.ButtonRole.ActionRole
         )
         self.other_board.setToolTip(
-            t("A breadboard, a stripboard, or a board of any size: Board Setup.")
+            t("A breadboard, a stripboard, or a board of any size: Design the Board.")
         )
         self.other_board.clicked.connect(lambda: self.done(self.OTHER_BOARD))
         layout.addWidget(buttons)
@@ -3262,11 +2480,22 @@ def _verdict_note(verdict: BoardVerdict) -> str:
     )
 
 
+def _board_label(board: Board) -> str:
+    """The undo step's name for a board put on, by what it is called -- as Board Setup
+    named it, so Undo says which board it takes back."""
+    points = size_of(board)
+    if points is not None and board.type == "breadboard":
+        return f"Use a {points}-point breadboard"
+    if points is not None:
+        return f"Use a {points}-point solderable breadboard"
+    return f"Use a {board.cols}x{board.rows} {board.material} board"
+
+
 def _matching_preset(board: Board) -> BoardPreset | None:
     """The stocked product this board IS, if it is one.
 
     Keyed on the grid and the family and not on the border, because a board that has been
-    given a legend has had its border raised to fit one (see ``BoardSetupDialog.board``)
+    given a legend may have had its border raised to fit one
     and is still the same product.
     """
     for preset in STANDARD_PRESETS:
@@ -4165,7 +3394,7 @@ class MainWindow(QMainWindow):
         if document.parts and not document.components:
             if self._offer_a_board_size(document, always=True):
                 self._board_chosen = True
-        elif self.on_board_setup():
+        elif self.on_design_board():
             self._board_chosen = True
         self._refresh_workflow()
 
@@ -5407,17 +4636,17 @@ class MainWindow(QMainWindow):
         )
         act_reload.triggered.connect(self.on_reload)
         file_menu.addSeparator()
+        # THE ONE PLACE A BOARD IS CHOSEN (``ui/designer.py``): a board people buy, or the
+        # board that is open, tweaked and seen -- Board Setup and its Advanced are in it.
         # Held on the window because the board's own context menu offers it: right-clicking
         # bare board and being told how to change that board is the obvious thing for a
         # right-click there to do.
-        act_board = self.act_board_setup = board_menu.addAction(t("&Board Setup…"))
-        act_board.setToolTip(
-            t(
-                "Grid size and substrate. The material is not cosmetic: it decides the iron "
-                "temperature the build guide gives and whether the pad-lifting rule applies."
-            )
+        self.act_design_board = board_menu.addAction(t("&Design the Board…"))
+        self.act_design_board.setToolTip(
+            t("Start from a board you can buy -- green with an edge connector, brown phenolic -- and "
+              "change its size, pads, holes, printing and colour, seen as you go.")
         )
-        act_board.triggered.connect(self.on_board_setup)
+        self.act_design_board.triggered.connect(self.on_design_board)
         act_features = board_menu.addAction(t("Board &Features…"))
         act_features.setToolTip(
             t(
@@ -5435,13 +4664,6 @@ class MainWindow(QMainWindow):
             )
         )
         act_rename.triggered.connect(self.on_rename_board)
-        # A board from the boards people buy (``ui/designer.py``), tweaked and seen.
-        self.act_design_board = board_menu.addAction(t("&Design the Board…"))
-        self.act_design_board.setToolTip(
-            t("Start from a board you can buy -- green with an edge connector, brown phenolic -- and "
-              "change its size, pads, holes, printing and colour, seen as you go.")
-        )
-        self.act_design_board.triggered.connect(self.on_design_board)
         act_import = file_menu.addAction(t("&Import from KiCad…"))
         self.act_import = act_import
         act_import.setShortcut(QKeySequence("Ctrl+I"))
@@ -8373,13 +7595,13 @@ class MainWindow(QMainWindow):
             document.board, design_entries(document), document.nets, self.lookup
         )
         if not suggestions:
-            return self.on_board_setup() if always else True
+            return self.on_design_board() if always else True
         self._planner_took_aside = False
         choice = self._board_choice(document, suggestions)
         if self._planner_took_aside:
             # Other Board, pressed while the stock perfboards were being tried: the answer
             # is a breadboard or a stripboard, and no perfboard verdict is wanted.
-            return self.on_board_setup()
+            return self.on_design_board()
         accepted, chosen = self._ask_which_board(choice, document)
         if not accepted:
             return False
@@ -8460,7 +7682,7 @@ class MainWindow(QMainWindow):
         )
         answer = dialog.exec()
         if answer == BoardSizeDialog.OTHER_BOARD:
-            return self.on_board_setup(), None
+            return self.on_design_board(), None
         if answer != QDialog.DialogCode.Accepted:
             return False, None
         return True, dialog.chosen()
@@ -9104,7 +8326,7 @@ class MainWindow(QMainWindow):
             self.lookup,
             InspectorHooks(
                 change_part=lambda component_id: self.on_change_part(component_id),
-                board_setup=lambda: self.on_design_board(),
+                design_board=lambda: self.on_design_board(),
                 change_design_part=lambda part_id: self.on_schematic_part_properties(part_id),
             ),
             InspectorActions(
@@ -9306,7 +8528,7 @@ class MainWindow(QMainWindow):
             menu.addAction(self.act_fit)
             menu.addAction(self.act_flip)
             menu.addSeparator()
-            menu.addAction(self.act_board_setup)
+            menu.addAction(self.act_design_board)
         return menu
 
     def _on_sheet_context_menu(self, pos: QPoint) -> None:
@@ -9941,7 +9163,7 @@ class MainWindow(QMainWindow):
             self.act_cut.setToolTip(
                 self.CUT_TOOLTIP
                 if strips
-                else t("Only stripboard has tracks to cut. Board ▸ Board Setup ▸ Type.")
+                else t("Only stripboard has tracks to cut. Board ▸ Design the Board ▸ Kind.")
             )
 
         # How the perfboard router chooses and lays its copper means nothing to the planner of
@@ -12168,7 +11390,7 @@ class MainWindow(QMainWindow):
         before there was a circuit to try on any board, and then the Board step asked again
         -- a size picked blind where step 2 tries every stock size with the circuit laid out
         on it. The design starts on the board a blank window starts on, the sheet in front,
-        and the Board step chooses; Board ▸ Board Setup is there for anybody who knows.
+        and the Board step chooses; Board ▸ Design the Board is there for anybody who knows.
         """
         if not self._offer_to_save():
             return
@@ -12256,90 +11478,56 @@ class MainWindow(QMainWindow):
             8000,
         )
 
-    def on_board_setup(self) -> bool:
-        """Change the grid or the substrate of the board already open. True when the
-        dialog was accepted and the board it describes is the board now open.
+    def on_design_board(self) -> bool:
+        """The board designer (``ui/designer.py``), the one place a board is chosen: a
+        family to start from, or the board that is open, tweaked and applied as ONE
+        ``board.applyPreset`` -- the grid, its edge connector and its corner holes together,
+        one undo step -- and refused in words when a part already down would be stranded.
 
-        Through ``board.set`` like everything else, so shrinking a board that still has a
-        part hanging off the new edge comes back as a refusal naming the part, rather
-        than silently stranding it.
+        True when it was used, which makes the board a board somebody chose, from the menu
+        as much as from the Board step: Place on the Board asked "Which board is this going
+        on?" straight after a stripboard had been set up by hand. Used unchanged it changes
+        nothing -- no undo step, no dirty title. The families the user saves are kept in the
+        settings, as the board colour is.
         """
-        dialog = BoardSetupDialog(
-            self.bus.document.board,
-            self,
-            title=t("Board Setup"),
-            document=self.bus.document,
-            lookup=self.lookup,
-        )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return False
-        # A board set up and accepted here is a board somebody chose, from the File menu as
-        # much as from the Board step: Place on the Board asked "Which board is this going
-        # on?" straight after a stripboard had been set up by hand.
-        board = dialog.board()
-        features = dialog.preset_features()
-        if board == self.bus.document.board and features is None:
-            self._board_chosen = True
-            return True
-        if features is None:
-            result = self.bus.dispatch("board.set", SetBoardPayload(board=board))
-        else:
-            connectors, holes = features
-            points = size_of(board)
-            if points is not None and board.type == "breadboard":
-                label = f"Use a {points}-point breadboard"
-            elif points is not None:
-                label = f"Use a {points}-point solderable breadboard"
-            else:
-                label = f"Use a {board.cols}x{board.rows} {board.material} board"
-            result = self.bus.dispatch(
-                "board.applyPreset",
-                ApplyBoardPresetPayload(
-                    board=board, edge_connectors=connectors, mounting_holes=holes, label=label
-                ),
-            )
-        if not result.ok:
-            QMessageBox.warning(
-                self,
-                t("Board not changed"),
-                f"{refused(result)}\n\n"
-                + t("Move or delete whatever is in the way and try again."),
-            )
-            return False
-        self._board_chosen = True
-        self.view.fit_board()
-        return True
-
-    def on_design_board(self) -> None:
-        """The board designer: a family to start from, tweaked, applied as ONE
-        ``board.applyPreset`` -- the grid, its edge pads and its corner holes together, one
-        undo step -- and refused in words when a part already down would be stranded. The
-        families the user saves are kept in the settings, as the board colour is."""
         settings = app_settings()
+        document = self.bus.document
+        current = (document.board, document.edge_connectors, document.mounting_holes)
 
         def apply(design: BoardDesign) -> str | None:
+            if (design.board, design.edge_connectors, design.mounting_holes) == current:
+                return None
             result = self.bus.dispatch(
                 "board.applyPreset",
                 ApplyBoardPresetPayload(
                     board=design.board,
                     edge_connectors=design.edge_connectors,
                     mounting_holes=design.mounting_holes,
+                    label=_board_label(design.board),
                 ),
             )
             if not result.ok:
-                return refused(result)
+                return (
+                    f"{refused(result)} "
+                    + t("Move or delete whatever is in the way and try again.")
+                )
             self.view.fit_board()
             return None
 
         dialog = BoardDesigner(
             self,
-            base=self.bus.document.board,
+            base=document.board,
             lookup=self.lookup,
             saved=load_user_families(settings),
             apply=apply,
+            features=(document.edge_connectors, document.mounting_holes),
         )
-        dialog.exec()
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
         store_user_families(settings, dialog.saved)
+        if accepted:
+            self._board_chosen = True
+            self._refresh_workflow()
+        return accepted
 
     def on_rename_board(self) -> None:
         """Name the board -- the title its guide, its schematic and its project carry --

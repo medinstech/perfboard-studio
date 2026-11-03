@@ -146,6 +146,10 @@ closed without a bump.
   one digit, from Lite-On's LTS-6760, the same package pad for pad. A printed or moulded
   part of any borrowed package is now the same colour in 2D as in 3D, which also turns the
   collar of the 12 mm push button dark grey, as it already was in 3D.
+- **Board Setup is part of Design the Board.** One place to choose a board: the Board menu, the
+  board's right-click, Other Board and Change… in Properties all open the designer, which
+  opens on the board you have -- as the stock board it is, or as "This board" with its own
+  grid, pads, material and printed numbering. Using it unchanged changes nothing.
 
 - **A phenolic board's copper shows.** Its rings, strip pads and etched letters are drawn in
   the pale copper of the real board's copper side, measured off a photograph of one, rather

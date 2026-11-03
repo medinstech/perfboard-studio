@@ -386,7 +386,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                     "De&lete Net", "Drawing &Tools", "R&otate", "Fl&ip",
                     "Remo&ve from the Design", "Arran&ge the Sheet", "Fit the S&heet",
                     "Float the &Panel"],
-        "board": ["&Board Setup…", "Board &Features…", "Rena&me Board…", "&Place on the Board",
+        "board": ["&Design the Board…", "Board &Features…", "Rena&me Board…", "&Place on the Board",
                   "&Rearrange Parts", "&Try Another Arrangement"],
         # Drawing a connection by hand and having it drawn, in one menu.
         "wiring": ["&Solder Trace", "&Reinforced Solder Trace", "&Bare Wire",
@@ -467,7 +467,7 @@ def test_the_turkish_interface_has_one_word_for_each_thing() -> None:
 def test_turkish_translates() -> None:
     set_language("tr")
     assert t("&File") == "&Dosya"
-    assert t("Columns") == "Sütun"
+    assert t("Mounting holes") == "Montaj delikleri"
 
 
 def test_an_untranslated_string_falls_through_to_english() -> None:

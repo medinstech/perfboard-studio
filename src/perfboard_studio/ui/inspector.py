@@ -104,7 +104,7 @@ class InspectorHooks:
     change_part: Callable[[str], object]
     #: The board's grid, type and material: its own dialog, because a new size can strand
     #: the parts on it.
-    board_setup: Callable[[], object]
+    design_board: Callable[[], object]
     #: Another package for a part still only in the design: the library, in a dialog.
     change_design_part: Callable[[str], object]
 
@@ -249,7 +249,7 @@ def _action_button(action: QAction) -> QToolButton:
 class _BoardEditor(QWidget):
     """The board itself: its name, what it is, and the two limits a case puts on it."""
 
-    #: What each kind of board is called, in the words Board Setup offers it by: the part
+    #: What each kind of board is called, in the words the board designer offers it by: the part
     #: of its line before the dash.
     KINDS: ClassVar[dict[str, str]] = {
         "pad-per-hole": "Pad per hole — every hole is its own island",
@@ -287,7 +287,7 @@ class _BoardEditor(QWidget):
                 "temperature the build guide gives and whether the pad-lifting rule applies."
             )
         )
-        self.change.clicked.connect(lambda: inspector.hooks.board_setup())
+        self.change.clicked.connect(lambda: inspector.hooks.design_board())
         row.addWidget(self.summary, 1)
         row.addWidget(self.change, 0, Qt.AlignmentFlag.AlignTop)
         form.addRow(t("Board"), board)

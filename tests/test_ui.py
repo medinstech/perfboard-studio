@@ -2922,92 +2922,68 @@ def test_saving_clears_the_modified_marker(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_board_setup_dialog_round_trips_a_board() -> None:
-    from perfboard_studio.ui.main import BoardSetupDialog
+def test_the_designer_round_trips_a_board() -> None:
+    """Opened on a board nobody sells, the designer makes exactly that board -- and changes
+    what it is told to, and nothing else."""
+    from tests.designer_support import designer_on
 
     doc = _load_dense()
-    dialog = BoardSetupDialog(doc.board)
-    assert dialog.board() == doc.board
+    dialog = designer_on(doc.board)
+    assert dialog.design().board == doc.board
 
     dialog.cols.setValue(40)
     dialog.material.setCurrentIndex(dialog.material.findData("FR2"))
-    changed = dialog.board()
+    changed = dialog.design().board
     assert changed.cols == 40
     assert changed.material == "FR2"
-    # Pitch and pad geometry are not the dialog's business and must survive untouched.
     assert changed.pitch == doc.board.pitch
     assert changed.pad_diameter == doc.board.pad_diameter
 
 
-def test_board_setup_asks_which_product_and_folds_the_rest_away() -> None:
-    """A perfboard is bought, not specified: the dialog is the list of things a supplier
-    stocks, and the five fields a product already decides are behind Advanced."""
-    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
-    from perfboard_studio.ui.main import BoardSetupDialog
+def test_the_designer_opens_on_the_product_a_board_is() -> None:
+    """A perfboard is bought, not specified: a stock 4 x 6 opens as that product, in its
+    family at its size -- and showing it is not choosing it, so Use rebuilds nothing."""
+    from perfboard_studio.boardfamily import (
+        STANDARD_PRESETS,
+        board_from_preset,
+        preset_edge_connectors,
+        preset_mounting_holes,
+    )
+    from tests.designer_support import designer_on
 
     stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
     board = board_from_preset(stock, _load_dense().board)
-    dialog = BoardSetupDialog(board)
+    features = (preset_edge_connectors(stock, board), preset_mounting_holes(stock, board))
+    dialog = designer_on(board, features)
+    assert dialog._this is None and dialog._family.id == "double-sided-fr4"
+    assert dialog.stock.currentText().startswith("4 x 6")
+    design = dialog.design()
+    assert (design.board, design.edge_connectors, design.mounting_holes) == (board, *features)
 
-    # ...and it opens showing which product this already is, rather than "Custom size".
-    assert dialog.preset.currentData() == stock.key
-    assert not dialog.advanced_toggle.isChecked()
-    dialog.deleteLater()
 
-
-def test_board_setup_opens_expanded_on_a_board_nobody_sells() -> None:
-    """Then those fields are the only thing describing the board, and hiding them behind a
-    disclosure arrow would hide the board."""
-    from perfboard_studio.ui.main import BoardSetupDialog
+def test_the_designer_opens_on_this_board_when_nobody_sells_it() -> None:
+    """Then its own fields are the only thing describing it: it is first in the list as
+    "This board", with its grid and its size in millimetres to change."""
+    from tests.designer_support import designer_on, shown
 
     doc = _load_dense()  # 40 x 28 is not a size anybody stocks
-    dialog = BoardSetupDialog(doc.board)
-
-    assert dialog.advanced_toggle.isChecked()
-    dialog.deleteLater()
-
-
-def test_choosing_a_custom_size_opens_the_fields_it_is_asking_for() -> None:
-    """Picking "Custom size" and being shown no numbers is the dialog asking a question
-    and hiding the answer."""
-    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
-    from perfboard_studio.ui.main import BoardSetupDialog
-
-    stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
-    dialog = BoardSetupDialog(board_from_preset(stock, _load_dense().board))
-    assert not dialog.advanced_toggle.isChecked()
-
-    dialog.preset.setCurrentIndex(dialog.preset.findData(""))
-
-    assert dialog.advanced_toggle.isChecked()
-    dialog.deleteLater()
-
-
-def test_showing_a_board_that_is_already_a_product_is_not_choosing_one() -> None:
-    """``_preset`` means "a product was picked from the list", which is what tells the
-    caller to rebuild the finger strips and corner holes that come with it. Re-opening
-    Board Setup on a 14 x 20 board is not a request to have its connectors rebuilt."""
-    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
-    from perfboard_studio.ui.main import BoardSetupDialog
-
-    stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
-    dialog = BoardSetupDialog(board_from_preset(stock, _load_dense().board))
-
-    assert dialog.preset_features() is None
-    dialog.deleteLater()
+    dialog = designer_on(doc.board)
+    assert dialog._this is not None and dialog.families.currentRow() == 0
+    assert dialog.families.item(0).text() == "This board"
+    assert shown(dialog, "grid") and shown(dialog, "sizes")
+    assert (dialog.cols.value(), dialog.rows.value()) == (doc.board.cols, doc.board.rows)
 
 
 def test_which_way_the_strips_run_is_only_asked_of_a_stripboard() -> None:
     """Hidden rather than greyed out: a disabled row still costs a line and still has to
     be read past to find out it does not apply."""
-    from perfboard_studio.ui.main import BoardSetupDialog
+    from tests.designer_support import choose_kind, designer_on, shown
 
-    dialog = BoardSetupDialog(_load_dense().board)
-    assert dialog.strip_axis.isHidden()
-
-    dialog.board_type.setCurrentIndex(dialog.board_type.findData("stripboard"))
-    assert not dialog.strip_axis.isHidden()
-    dialog.deleteLater()
+    dialog = designer_on(_load_dense().board)
+    assert not shown(dialog, "strip_axis")
+    choose_kind(dialog, "stripboard")
+    assert shown(dialog, "strip_axis")
+    assert dialog.design().board.strip_axis in ("horizontal", "vertical")
 
 
 def test_every_board_material_is_offered() -> None:
@@ -3016,9 +2992,10 @@ def test_every_board_material_is_offered() -> None:
     from typing import get_args
 
     from perfboard_studio.model import BoardMaterial
-    from perfboard_studio.ui.main import BoardSetupDialog
+    from tests.designer_support import designer_on
 
-    offered = {value for value, _label in BoardSetupDialog.MATERIALS}
+    dialog = designer_on(_load_dense().board)
+    offered = {dialog.material.itemData(i) for i in range(dialog.material.count())}
     assert offered == set(get_args(BoardMaterial))
 
 
@@ -4357,40 +4334,50 @@ def test_a_legend_on_a_finger_edge_is_printed_outside_the_fingers(monkeypatch) -
             ), f"{text} is printed under a connector finger"
 
 
-def test_board_setup_dialog_round_trips_the_new_board_fields() -> None:
-    from perfboard_studio.model import BoardLabels
-    from perfboard_studio.ui.main import BoardSetupDialog
+def test_the_designer_round_trips_the_new_board_fields() -> None:
+    from tests.designer_support import designer_on
 
-    board = _featured_document().board
-    dialog = BoardSetupDialog(board)
-    assert dialog.board() == board
+    document = _featured_document()
+    board = document.board
+    dialog = designer_on(board, (document.edge_connectors, document.mounting_holes))
+    assert dialog.design().board == board
 
     dialog.pad_shape.setCurrentIndex(dialog.pad_shape.findData("round"))
-    dialog.legend.setChecked(False)
-    plain = dialog.board()
+    for combo in (dialog.letters, dialog.numbers):
+        combo.setCurrentIndex(combo.findData("none"))
+    dialog._on_kind()
+    plain = dialog.design().board
     assert plain.pad_shape == "round"
     # The length is dropped with the shape: a round board carrying a pad length would put
     # a field in the file describing nothing.
     assert plain.pad_length is None
     assert plain.labels is None
 
-    dialog.legend.setChecked(True)
+    dialog.letters.setCurrentIndex(dialog.letters.findData("top"))
+    dialog._on_kind()
     dialog.row_digits.setValue(3)
-    assert dialog.board().labels == BoardLabels(row_digits=3)
+    labels = dialog.design().board.labels
+    assert labels is not None and labels.row_digits == 3
 
 
-def test_the_dialog_cannot_produce_an_oblong_pad_the_bus_would_refuse() -> None:
+def test_the_designer_cannot_produce_an_oblong_pad_the_bus_would_refuse() -> None:
     """A dialog whose only exit is an error message is a worse dialog than one that
-    cannot produce the error."""
+    cannot produce the error: either it holds Use This Board and says why, or the board it
+    gives is one the bus takes."""
     from perfboard_studio.commands import DEFAULT_BOARD, SetBoardPayload
-    from perfboard_studio.ui.main import BoardSetupDialog
+    from tests.designer_support import designer_on
 
-    dialog = BoardSetupDialog(DEFAULT_BOARD)
+    dialog = designer_on(DEFAULT_BOARD)
     dialog.pad_shape.setCurrentIndex(dialog.pad_shape.findData("oblong"))
+    dialog._on_kind()
     dialog.pad_length.setValue(0.5)  # narrower than the 1.9 mm pad width
-
-    bus = _new_bus(_blank_document())
-    assert bus.dispatch("board.set", SetBoardPayload(board=dialog.board())).ok
+    dialog._show()
+    if dialog.use.isEnabled():
+        bus = _new_bus(_blank_document())
+        assert bus.dispatch("board.set", SetBoardPayload(board=dialog.design().board)).ok
+    else:
+        assert any(not label.isHidden() for label in dialog._problems.values()) or (
+            not dialog.refusal.isHidden())
 
 
 def test_board_features_dialog_adds_four_corner_holes_as_one_undo_step() -> None:
@@ -4967,21 +4954,94 @@ def test_a_nets_current_and_voltage_are_set_in_properties() -> None:
     _close(window)
 
 
-def test_board_setup_with_nothing_changed_is_the_board_it_was() -> None:
-    """OK with nothing touched rewrote the border to the 2 mm a legend gets when it is
-    turned ON -- on five of the six examples, every one a stock size that prints its own --
-    and so put an undo step, a dirty title and a bigger board behind a dialog nobody used."""
-    from perfboard_studio.ui.main import BoardSetupDialog, example_boards
+def test_the_designer_with_nothing_changed_is_the_board_it_was() -> None:
+    """Board Setup's OK with nothing touched once rewrote the border on five of the six
+    examples, and put an undo step, a dirty title and a bigger board behind a dialog nobody
+    used. The designer opened on any board in the repository -- the examples, the goldens
+    -- makes that board and its edge connector and holes, exactly."""
+    from perfboard_studio.ui.main import example_boards
+    from tests.designer_support import designer_on
 
-    examples = example_boards()
-    assert examples
-    for path, _title in examples:
-        loaded = persist.deserialize_document(path.read_text(encoding="utf-8"))
-        assert loaded.ok, path
-        doc = loaded.document
-        dialog = BoardSetupDialog(doc.board, document=doc)
-        assert dialog.board() == doc.board, path.name
-        assert dialog.preset_features() is None or doc.board.labels is None, path.name
+    root = pathlib.Path(__file__).resolve().parents[1]
+    paths = [path for path, _title in example_boards()]
+    paths += sorted((root / "tools" / "diffcheck" / "golden").glob("*.perf"))
+    assert len(paths) > 15
+    for path in paths:
+        doc = persist.parse_document_or_throw(path.read_text(encoding="utf-8"))
+        dialog = designer_on(doc.board, (doc.edge_connectors, doc.mounting_holes))
+        design = dialog.design()
+        assert design.board == doc.board, path.name
+        assert design.edge_connectors == doc.edge_connectors, path.name
+        assert design.mounting_holes == doc.mounting_holes, path.name
+        dialog.deleteLater()
+
+
+def test_use_this_board_unchanged_changes_nothing(monkeypatch) -> None:
+    """Opened from the window and used as it opened: no undo step, the same document, and
+    the board counts as chosen."""
+    from perfboard_studio.ui import designer as designer_module
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    document = persist.parse_document_or_throw(
+        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
+    )
+    window = _window_on(document)
+    try:
+        before = (window.bus.document, len(window.bus.history()))
+
+        def use(dialog) -> int:
+            dialog._use()
+            return int(dialog.result())
+
+        monkeypatch.setattr(designer_module.BoardDesigner, "exec", use)
+        assert window.on_design_board()
+        assert (window.bus.document, len(window.bus.history())) == before
+        assert not window.is_modified and window._board_chosen
+    finally:
+        _close(window)
+
+
+def test_every_board_setup_field_has_a_home_in_the_designer() -> None:
+    """Board Setup retired into the designer. Each of its questions is asked there, of the
+    board it means something for -- the field named, and shown on that board."""
+    from perfboard_studio.breadboard import breadboard, solderable_breadboard
+    from perfboard_studio.commands import DEFAULT_BOARD
+    from perfboard_studio.model import BoardLabels
+    from tests.designer_support import designer_on, shown
+
+    stripboard = dataclasses.replace(DEFAULT_BOARD, type="stripboard", strip_axis="horizontal")
+    oblong = dataclasses.replace(DEFAULT_BOARD, pad_shape="oblong", pad_length=2.4)
+    homes = {
+        # Board Setup's field: (the designer's row, a board it is asked of)
+        "preset": ("stock", None),
+        "board_type": ("type", DEFAULT_BOARD),
+        "strip_axis": ("strip_axis", stripboard),
+        "breadboard_size": ("stock", None),
+        "breadboard_channel": ("breadboard.channel_mils", breadboard("830")),
+        "narrow_channel": ("breadboard.narrow_channel_cols", breadboard("830", channel=9)),
+        "border_x": ("breadboard.border_x_mm", solderable_breadboard("830")),
+        "border_y": ("breadboard.border_y_mm", solderable_breadboard("830")),
+        "cols": ("grid", DEFAULT_BOARD),
+        "rows": ("grid", DEFAULT_BOARD),
+        "material": ("material", DEFAULT_BOARD),
+        "pad_shape": ("pad_shape", DEFAULT_BOARD),
+        "pad_length": ("pad_length_mm", oblong),
+        "pad_axis": ("pad_axis", oblong),
+        "legend": ("legend.letter_edges", _load_dense().board),
+        "row_digits": ("legend.row_digits", dataclasses.replace(
+            DEFAULT_BOARD, labels=BoardLabels(row_digits=2))),
+        "legend_columns": ("legend.columns", dataclasses.replace(
+            DEFAULT_BOARD, labels=BoardLabels(row_digits=2))),
+        "legend_rows": ("legend.rows", dataclasses.replace(
+            DEFAULT_BOARD, labels=BoardLabels(row_digits=2))),
+    }
+    for field, (row, board) in homes.items():
+        if board is None:
+            continue  # the stock list: a combo above the rows, on every family
+        dialog = designer_on(board)
+        assert row in dialog._rows, field
+        assert shown(dialog, row), (field, row)
+        dialog.deleteLater()
 
 
 def test_the_box_button_arms_the_shape_it_shows() -> None:
@@ -5791,7 +5851,7 @@ def test_right_clicking_bare_board_offers_what_can_be_done_to_the_board() -> Non
 
     labels = _menu_labels(window.board_menu(QPoint(2, 2)))
 
-    assert "Paste" in labels and "Board Setup…" in labels
+    assert "Paste" in labels and "Design the Board…" in labels
     assert "Rotate Clockwise" not in labels
     _close(window)
 
@@ -9184,24 +9244,25 @@ def test_an_edit_after_the_trial_throws_the_tried_placement_away(monkeypatch) ->
         _close(window)
 
 
-def test_the_board_dialog_draws_the_board_it_describes() -> None:
+def test_the_designer_draws_the_board_it_describes() -> None:
     """A product is recognised by looking at it. Picking a size redraws the picture beside
-    the questions, finger strips and corner holes included."""
-    from perfboard_studio.boardfamily import STANDARD_PRESETS
-    from perfboard_studio.ui.main import BoardSetupDialog
+    the settings, edge connector and corner holes included."""
+    from tests.designer_support import choose_family, designer_on
 
     window = _blank_window()
     try:
-        dialog = BoardSetupDialog(
-            window.bus.document.board, window, document=window.bus.document, lookup=window.lookup
-        )
+        dialog = designer_on(window.bus.document.board)
+        dialog._show()
         first = dialog.preview.pixmap().toImage()
         assert not first.isNull()
-        bigger = max(STANDARD_PRESETS, key=lambda p: p.cols * p.rows)
-        dialog.preset.setCurrentIndex(dialog.preset.findData(bigger.key))
-        dialog._draw_preview()
-        assert dialog.preview_document().board.cols == bigger.cols
-        assert dialog.preview_document().edge_connectors == dialog.preset_features()[0]
+        choose_family(dialog, "double-sided-fr4")
+        # The biggest sold with its edge connector: some sizes come without one.
+        sizes = dialog._current_family().sizes
+        biggest = max((i for i, size in enumerate(sizes) if size.strip),
+                      key=lambda i: sizes[i].cols * sizes[i].rows)
+        dialog._on_stock_size(biggest)
+        dialog._show()
+        assert dialog.design().edge_connectors
         assert dialog.preview.pixmap().toImage() != first
         dialog.deleteLater()
     finally:
@@ -12343,8 +12404,10 @@ def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatc
     import perfboard_studio.ui.main as main_module
 
     asked: list[str] = []
+    from perfboard_studio.ui import designer as designer_module
+
     monkeypatch.setattr(
-        main_module.BoardSetupDialog,
+        designer_module.BoardDesigner,
         "exec",
         lambda self: asked.append("board") or int(main_module.QDialog.DialogCode.Accepted),
     )
@@ -12363,7 +12426,7 @@ def test_a_project_name_becomes_the_folder_and_the_document(tmp_path, monkeypatc
 
 def test_the_board_question_has_a_way_to_the_other_kinds_of_board(monkeypatch) -> None:
     """A breadboard or a stripboard is not a stock perfboard size, and New Project no longer
-    asks which kind: Other Board, beside the stock sizes, goes to Board Setup, and what it
+    asks which kind: Other Board, beside the stock sizes, goes to the board designer, and what it
     set up is the board kept."""
     import perfboard_studio.ui.main as main_module
     from perfboard_studio.boardfit import BoardChoice
@@ -12378,7 +12441,7 @@ def test_the_board_question_has_a_way_to_the_other_kinds_of_board(monkeypatch) -
     reference = recommended_board(suggestions) if suggestions else None
     choice = BoardChoice(tuple(suggestions), reference, (), reference, False)
     set_up: list[bool] = []
-    monkeypatch.setattr(main_module.MainWindow, "on_board_setup", lambda self: set_up.append(True) or True)
+    monkeypatch.setattr(main_module.MainWindow, "on_design_board", lambda self: set_up.append(True) or True)
     monkeypatch.setattr(BoardSizeDialog, "exec", lambda self: BoardSizeDialog.OTHER_BOARD)
     assert window._ask_which_board(choice, document) == (True, None)
     assert set_up == [True]
@@ -13643,7 +13706,7 @@ def _take_the_dialogs_link(window, taken: list[str], tries: int = 200) -> None:
 def test_other_board_is_offered_while_the_boards_are_tried(monkeypatch) -> None:
     """Somebody holding a stripboard sat through every perfboard trial -- 8.6 s on the
     blinker -- before the dialog with Other Board came up, and then threw its verdicts away.
-    The trial's own dialog offers it now: taken, the trial stops, Board Setup opens, no
+    The trial's own dialog offers it now: taken, the trial stops, the designer opens, no
     perfboard question is asked and nothing is remembered as judged."""
     import time
 
@@ -13669,7 +13732,7 @@ def test_other_board_is_offered_while_the_boards_are_tried(monkeypatch) -> None:
         monkeypatch.setattr(
             type(window), "_ask_which_board", lambda self, choice, doc: asked.append(1) or (True, None)
         )
-        monkeypatch.setattr(type(window), "on_board_setup", lambda self: setup.append(1) or True)
+        monkeypatch.setattr(type(window), "on_design_board", lambda self: setup.append(1) or True)
 
         taken: list[str] = []
         QTimer.singleShot(25, lambda: _take_the_dialogs_link(window, taken))
@@ -13677,7 +13740,7 @@ def test_other_board_is_offered_while_the_boards_are_tried(monkeypatch) -> None:
 
         assert taken and "Other Board…" in taken[0], "the link is on the trial's dialog"
         assert stopped == [True], "taking it stops the trial"
-        assert setup == [1] and asked == [], "Board Setup, and no perfboard question"
+        assert setup == [1] and asked == [], "the designer, and no perfboard question"
         assert window._judged is None
         assert not window._planner_took_aside or setup, "only ever read straight after"
     finally:
@@ -13894,29 +13957,32 @@ def test_the_sheets_edit_a_part_edits_a_design_parts_note() -> None:
     _close(window)
 
 
-def test_a_board_set_up_from_the_file_menu_is_a_board_chosen(monkeypatch) -> None:
-    """A stripboard set up by hand through File > Board Setup, and Place on the Board then
-    asked "Which board is this going on?" as if nobody had chosen one: only the Board step
-    marked the board chosen. A board set up and accepted is chosen, from either door."""
+def test_a_board_designed_from_the_menu_is_a_board_chosen(monkeypatch) -> None:
+    """A stripboard set up by hand from the Board menu, and Place on the Board then asked
+    "Which board is this going on?" as if nobody had chosen one: only the Board step marked
+    the board chosen. A board designed and used is chosen, from either door."""
+    from perfboard_studio.ui import designer as designer_module
     from perfboard_studio.ui import main as main_module
+    from tests.designer_support import choose_kind
 
     window = _blank_window()
     try:
         _add(window, "R1", "r-axial-3")
         _add(window, "R2", "r-axial-3")
 
-        def to_stripboard(dialog):
-            dialog.board_type.setCurrentIndex(dialog.board_type.findData("stripboard"))
-            return int(main_module.QDialog.DialogCode.Accepted)
+        def to_stripboard(dialog) -> int:
+            choose_kind(dialog, "stripboard")
+            dialog._use()
+            return int(dialog.result())
 
-        monkeypatch.setattr(main_module.BoardSetupDialog, "exec", to_stripboard)
+        monkeypatch.setattr(designer_module.BoardDesigner, "exec", to_stripboard)
         asked: list[bool] = []
         monkeypatch.setattr(
             main_module.MainWindow,
             "_offer_a_board_size",
             lambda self, document, always=False: asked.append(always) or True,
         )
-        assert window.on_board_setup()
+        assert window.on_design_board()
         assert window.bus.document.board.type == "stripboard"
         assert window._board_chosen
         window.on_schematic_place_all()
@@ -14680,7 +14746,7 @@ def test_the_menus_follow_the_steps() -> None:
         ]
         circuit = window.menu_circuit.actions()
         assert circuit[0] is window.act_sch_add and window.act_connect in circuit
-        assert window.act_board_setup in window.menu_board.actions()
+        assert window.act_design_board in window.menu_board.actions()
         wiring = _reachable_from(window, window._top_menus[4])
         assert window.act_cut in wiring and window.act_autoroute in wiring
         assert window.act_guide in window.menu_export.actions()
@@ -15305,13 +15371,13 @@ def test_every_editor_fits_a_1440_by_900_window_with_nothing_under_it(language: 
 def test_new_board_starts_a_blank_design_without_asking_about_a_board(monkeypatch) -> None:
     """Board Setup came first, before there was a circuit to try on any board, and the
     Board step asked again. New Board is a blank design with the sheet in front."""
-    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui import designer as designer_module
 
     window = _window_on(_load_dense())
     try:
         asked: list[str] = []
         monkeypatch.setattr(
-            main_module.BoardSetupDialog, "exec", lambda self: asked.append("board") or 0
+            designer_module.BoardDesigner, "exec", lambda self: asked.append("board") or 0
         )
         monkeypatch.setattr(type(window), "_offer_to_save", lambda self: True)
         window.on_new()
@@ -15845,7 +15911,7 @@ def _designer(window, monkeypatch, act):
     def run(dialog) -> int:
         seen.append(dialog)
         act(dialog)
-        return 0
+        return int(dialog.result())
 
     monkeypatch.setattr(designer_module.BoardDesigner, "exec", run)
     window.on_design_board()
@@ -15860,6 +15926,7 @@ def test_the_designer_puts_a_stock_board_on_in_one_step(monkeypatch) -> None:
         before = len(window.bus.history())
 
         def choose(dialog) -> None:
+            _choose_family(dialog, "double-sided-fr4")
             index = next(i for i in range(dialog.stock.count())
                          if dialog.stock.itemText(i).startswith("5 x 7"))
             dialog._on_stock_size(index)
@@ -15909,7 +15976,8 @@ def test_a_board_saved_as_mine_is_offered_next_time(monkeypatch) -> None:
         assert mine[-1].user and family_name(mine[-1]) == "Bench 6x8"
 
         def look(dialog) -> None:
-            assert dialog.families.count() == len(FAMILIES) + len(mine)
+            this = 1 if dialog._this is not None else 0
+            assert dialog.families.count() == this + len(FAMILIES) + len(mine)
 
         _designer(window, monkeypatch, look)
     finally:
@@ -15960,9 +16028,9 @@ def _shown(dialog, path: str) -> bool:
 
 
 def _choose_family(dialog, family_id: str) -> None:
-    from perfboard_studio.boardfamily import FAMILIES
-
-    dialog.families.setCurrentRow([f.id for f in FAMILIES].index(family_id))
+    """By id, among what the dialog lists: "This board" comes first when no catalogue
+    family makes the board that is open."""
+    dialog.families.setCurrentRow([f.id for f in dialog._everything()].index(family_id))
 
 
 def test_a_breadboard_is_chosen_by_its_size_and_its_channel(monkeypatch) -> None:

@@ -61,6 +61,7 @@ from perfboard_studio.boardfamily import (
     BreadboardSpec,
     CornerHoles,
     EdgeStrip,
+    FamilyBoardType,
     Legend,
     board_for,
     family_from_json,
@@ -74,10 +75,26 @@ from perfboard_studio.breadboard import (
     SOLDERABLE_BORDER_X_MM,
     SOLDERABLE_BORDER_Y_MM,
     STANDARD_CHANNEL,
+    channel_of,
+    size_of,
 )
 from perfboard_studio.commands import create_empty_document
 from perfboard_studio.connectivity import FootprintLookup
-from perfboard_studio.model import Board, BoardSide, DocumentMeta, PerfDocument
+from perfboard_studio.geometry import (
+    MAX_LEGEND_DIGITS,
+    corner_mounting_holes,
+    legend_runs_text,
+    parse_legend_runs,
+)
+from perfboard_studio.model import (
+    AxisLegend,
+    Board,
+    BoardSide,
+    DocumentMeta,
+    EdgeConnector,
+    MountingHole,
+    PerfDocument,
+)
 
 from . import theme
 from .boardpreview import render_board
@@ -101,12 +118,19 @@ PATTERN_KINDS = frozenset({"breadboard", "solderable-breadboard"})
 FLEX_NARROW_COLS = 39
 
 
+#: The id of the board that is open, offered first when no catalogue family makes it.
+THIS_BOARD = "this-board"
+
+Features = tuple[tuple[EdgeConnector, ...], tuple[MountingHole, ...]]
+
+
 def family_name(family: BoardFamily) -> str:
     """A family in the window's language: a catalogue family by its id, a user's own by the
     name they gave it."""
     if family.user:
         return family.name
     return {
+        THIS_BOARD: t("This board"),
         "double-sided-fr4": t("Green double-sided (FR-4, tinned)"),
         "single-sided-phenolic": t("Phenolic single-sided (bare copper)"),
         "breadboard": t("Solderless breadboard"),
@@ -206,6 +230,122 @@ def is_pattern(family: BoardFamily) -> bool:
     return family.type in PATTERN_KINDS
 
 
+def _corner_holes_of(board: Board, holes: tuple[MountingHole, ...]) -> CornerHoles | None:
+    """The corner holes ``holes`` are, when they are exactly a family's: one in each corner,
+    where ``corner_mounting_holes`` puts them."""
+    if not holes:
+        return None
+    first = holes[0]
+    if corner_mounting_holes(board, first.diameter, first.head_diameter) != holes:
+        return None
+    return CornerHoles(diameter_mm=first.diameter, head_mm=first.head_diameter)
+
+
+def _strips_of(connectors: tuple[EdgeConnector, ...]) -> tuple[EdgeStrip, ...]:
+    """The finger strips ``connectors`` could be, to be tried: two alike, outside the grid.
+    Which edges they run down is tried both ways rather than worked out."""
+    if len(connectors) != 2:
+        return ()
+    first, second = connectors
+    alike = ("start", "finger_width", "finger_length", "inset_mm", "face", "shape")
+    if not (first.outside and second.outside) or any(
+        getattr(first, name) != getattr(second, name) for name in alike
+    ):
+        return ()
+    return tuple(
+        EdgeStrip(
+            edges=edges,
+            shape=first.shape,
+            width_mm=first.finger_width,
+            length_mm=first.finger_length,
+            inset_mm=first.inset_mm,
+            skip_ends=first.start,
+            face=first.face,
+        )
+        for edges in STRIP_EDGES
+    )
+
+
+def this_board(board: Board, features: Features) -> tuple[BoardFamily, BoardSize | None, Features]:
+    """The board that is open as a family of one: (the family, its size, what it has that no
+    family says).
+
+    Board Setup opened on the board it was given; the designer does too, and "Use This
+    Board" on it unchanged must change nothing. So its strips and corner holes are said as
+    the family's when they are exactly what a family would make -- and when they are not
+    (a connector or a hole added by hand), the family says none and they are kept as they
+    are, beside whatever the family is changed to (``BoardDesigner._design_of``).
+    """
+    connectors, holes = features
+    corner = _corner_holes_of(board, holes)
+    # A type no family says -- "plain", which the original engine had -- is said as pad
+    # per hole here and put back by ``_design_of``.
+    kind: FamilyBoardType = board.type if board.type in FAMILY_BOARD_TYPES else "pad-per-hole"
+    if kind in PATTERN_KINDS:
+        spec = (
+            BreadboardSpec(
+                channel_mils=channel_of(board) * 100,
+                narrow_channel_cols=board.narrow_channel_cols,
+            )
+            if kind == "breadboard"
+            else BreadboardSpec(
+                border_x_mm=None if board.border_x_mm == SOLDERABLE_BORDER_X_MM else board.border_x_mm,
+                border_y_mm=None if board.border_y_mm == SOLDERABLE_BORDER_Y_MM else board.border_y_mm,
+            )
+        )
+        name = size_of(board)
+        # In no size it is sold in, it is offered none: kept as it is (``_design_of``).
+        sizes = pattern_sizes(kind, spec) if name is not None else ()
+        family = BoardFamily(
+            id=THIS_BOARD, name="This board", type=kind, breadboard=spec,
+            mask=board.mask, finish=board.finish, corner_holes=corner, sizes=sizes,
+        )
+        size = next((each for each in sizes if each.name == name), None)
+    else:
+        width = board.cols * board.pitch + 2 * board.border_x_mm
+        height = board.rows * board.pitch + 2 * board.border_y_mm
+        size = BoardSize(
+            f"{round(width / 10, 1):g} x {round(height / 10, 1):g} cm",
+            width, height, board.cols, board.rows,
+        )
+        labels = board.labels
+        legend = None if labels is None else Legend(
+            letter_edges=labels.letter_edges or ("both" if labels.all_edges else "top"),
+            number_edges=labels.number_edges or ("both" if labels.all_edges else "left"),
+            row_digits=labels.row_digits,
+            face=labels.face,
+            columns=labels.columns,
+            rows=labels.rows,
+        )
+        family = BoardFamily(
+            id=THIS_BOARD, name="This board", material=board.material,
+            single_sided=board.single_sided, type=kind, strip_axis=board.strip_axis,
+            mask=board.mask, finish=board.finish, pitch_mm=board.pitch,
+            thickness_mm=board.thickness, pad_diameter_mm=board.pad_diameter,
+            drill_mm=board.drill_diameter, pad_shape=board.pad_shape,
+            pad_length_mm=board.pad_length, pad_axis=board.pad_axis, corner_holes=corner,
+            legend=legend, sizes=(size,),
+            # Said as it reads: a brace in it would be taken for the size's.
+            printed=tuple(
+                dataclasses.replace(line, text=line.text.replace("{", "{{").replace("}", "}}"))
+                for line in board.printed
+            ),
+        )
+        for strip in _strips_of(connectors):
+            with_strip = dataclasses.replace(family, strip=strip)
+            if board_for(with_strip, size, board).edge_connectors == connectors:
+                family = with_strip
+                break
+    if size is not None and _made(family, size, board) == (connectors, holes):
+        return family, size, ((), ())
+    return dataclasses.replace(family, strip=None, corner_holes=None), size, features
+
+
+def _made(family: BoardFamily, size: BoardSize, board: Board) -> Features:
+    design = board_for(family, size, board)
+    return design.edge_connectors, design.mounting_holes
+
+
 def size_name(size: BoardSize, family: BoardFamily) -> str:
     """A size as the picker says it: its name and its grid, because a name repeats across
     the variants of one size -- 7 x 9 cm is sold as 31 x 26 and as 35 x 27. A size sold
@@ -257,6 +397,16 @@ def _mm(value: float, top: float = 500.0, decimals: int = 2) -> QDoubleSpinBox:
     return box
 
 
+@dataclasses.dataclass(frozen=True)
+class LegendAxisFields:
+    """The fields that say how one axis of a legend is printed."""
+
+    row: QWidget
+    runs: QLineEdit
+    every: QSpinBox
+    digits: QSpinBox
+
+
 class BoardDesigner(QDialog):
     """Families | the board | every setting. ``apply`` commits a design and answers why it
     was refused, or None; ``saved`` holds the user's families, kept by the window."""
@@ -269,6 +419,7 @@ class BoardDesigner(QDialog):
         lookup: FootprintLookup,
         saved: list[BoardFamily],
         apply: Callable[[BoardDesign], str | None],
+        features: Features = ((), ()),
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(t("Design the Board"))
@@ -367,8 +518,37 @@ class BoardDesigner(QDialog):
         buttons.addWidget(self.use)
         root.addLayout(buttons)
 
+        # Open on the board that is open: the catalogue family and size that make it
+        # exactly, or else the board itself, first in the list as "This board".
+        self._this: BoardFamily | None = None
+        self._kept: Features = ((), ())
+        row, size = self._opening(base, features)
         self._fill_families()
-        self.families.setCurrentRow(0)
+        self.families.setCurrentRow(row)
+        if size is not None:
+            listed = _listed(self._current_family())
+            index = next(
+                (i for i, each in enumerate(listed)
+                 if each == size or (is_pattern(self._family) and each.name == size.name)),
+                None,
+            )
+            if index is not None:
+                self._on_stock_size(index)
+
+    def _opening(self, board: Board, features: Features) -> tuple[int, BoardSize | None]:
+        current = BoardDesign(board=board, edge_connectors=features[0], mounting_holes=features[1])
+        for row, family in enumerate((*FAMILIES, *self.saved)):
+            for each in family.sizes:
+                if board_for(family, each, board) == current:
+                    return row, each
+        this, size, kept = this_board(board, features)
+        self._this, self._kept = this, kept
+        return 0, size
+
+    def _everything(self) -> tuple[BoardFamily, ...]:
+        """The families in the order they are listed: the board that is open first, when no
+        catalogue family makes it, then the catalogue, then the user's own."""
+        return (*((self._this,) if self._this is not None else ()), *FAMILIES, *self.saved)
 
     # -- building --
 
@@ -527,7 +707,7 @@ class BoardDesigner(QDialog):
         self.letters = _combo(w["letters"], LETTER_EDGES)
         self.numbers = _combo(w["numbers"], NUMBER_EDGES)
         for combo in (self.letters, self.numbers):
-            combo.activated.connect(changed)
+            combo.activated.connect(self._on_kind)
         self._row(legend, t("Letters"), self.letters, "legend.letter_edges")
         self._row(legend, t("Numbers"), self.numbers, "legend.number_edges")
         self.row_digits = QSpinBox()
@@ -535,6 +715,27 @@ class BoardDesigner(QDialog):
         self.row_digits.setToolTip(t('2 prints row 7 as "07", the way most such boards do.'))
         self.row_digits.valueChanged.connect(changed)
         self._row(legend, t("Row digits"), self.row_digits, "legend.row_digits")
+        # A BOARD THAT COUNTS ITS OWN WAY (#13): A..Z and then A..P again, letters down the
+        # side, numbers with every fifth marked. Empty prints the addresses. What is typed
+        # is read by the engine (``parse_legend_runs``) and refused in its words.
+        self.legend_columns = self._legend_axis(
+            "A-Z, A-P",
+            t(
+                "What the board prints along its columns when that is not the addresses: "
+                "runs of letters or of numbers from the first hole on. A-Z, A-P is A to Z "
+                "and then A to P again. Left empty, the board prints the addresses."
+            ),
+        )
+        self._row(legend, t("Columns printed as"), self.legend_columns.row, "legend.columns")
+        self.legend_rows = self._legend_axis(
+            "A-Z, 1-4",
+            t(
+                "What the board prints down its rows when that is not the addresses: runs "
+                "of letters or of numbers from the first hole on. A-Z, 1-4 is A to Z and "
+                "then 1 to 4. Left empty, the board prints the row numbers."
+            ),
+        )
+        self._row(legend, t("Rows printed as"), self.legend_rows.row, "legend.rows")
         self.printed = QLineEdit()
         self.printed.editingFinished.connect(changed)
         self._row(legend, t("Printed on it"), self.printed, "printed")
@@ -552,9 +753,83 @@ class BoardDesigner(QDialog):
         self._row(colour, t("Mask"), self.mask_kind, "mask")
         self._row(colour, t("Pad finish"), self.finish, "finish")
 
+    def _legend_axis(self, example: str, tooltip: str) -> LegendAxisFields:
+        """How one axis is printed: its runs on one line, how often and how padded under."""
+        runs = QLineEdit()
+        # The tool's own vocabulary, like "R1, C3, U2…": the same in every language.
+        runs.setPlaceholderText(example)
+        runs.setToolTip(tooltip)
+        runs.editingFinished.connect(self._changed)
+        runs.textChanged.connect(self._on_runs)
+        every = QSpinBox()
+        every.setRange(1, 20)
+        every.setToolTip(
+            t("Only every Nth hole carries a label: 5 is a board numbered 05, 10, 15 and so on.")
+        )
+        digits = QSpinBox()
+        digits.setRange(1, MAX_LEGEND_DIGITS)
+        digits.setToolTip(
+            t("Numbers are padded to this many digits: 2 prints 5 as 05. Letters never are.")
+        )
+        for spin in (every, digits):
+            spin.valueChanged.connect(self._changed)
+        row = QWidget()
+        column = QVBoxLayout(row)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(2)
+        column.addWidget(runs)
+        line = QHBoxLayout()
+        line.addWidget(QLabel(t("marked every")))
+        line.addWidget(every)
+        line.addWidget(QLabel(t("digits")))
+        line.addWidget(digits)
+        line.addStretch(1)
+        column.addLayout(line)
+        return LegendAxisFields(row, runs, every, digits)
+
+    @staticmethod
+    def _axis(fields: LegendAxisFields) -> AxisLegend | None:
+        """What one axis prints, or None for the addresses -- and for text that does not
+        read, which ``_show`` says under the field."""
+        text = fields.runs.text().strip()
+        if not text:
+            return None
+        try:
+            runs = parse_legend_runs(text)
+        except ValueError:
+            return None
+        return AxisLegend(runs=runs, every=fields.every.value(), digits=fields.digits.value())
+
+    def _unreadable_runs(self) -> tuple[str, str] | None:
+        """(path, why) for a run typed that does not read, while a legend is printed."""
+        if is_pattern(self._family) or self._legend_off():
+            return None
+        for path, fields in (("legend.columns", self.legend_columns), ("legend.rows", self.legend_rows)):
+            text = fields.runs.text().strip()
+            if text:
+                try:
+                    parse_legend_runs(text)
+                except ValueError as error:
+                    return path, str(error)
+        return None
+
+    def _on_runs(self, *_args: object) -> None:
+        """What the fields beside a run mean: nothing while it is empty, so they are greyed
+        then; and Row digits pads the row NUMBERS, so it is asked only while the rows print
+        them -- two "digits" for one axis left which one won to guesswork."""
+        for fields in (self.legend_columns, self.legend_rows):
+            typed = bool(fields.runs.text().strip())
+            fields.every.setEnabled(typed)
+            fields.digits.setEnabled(typed)
+        self._only_what_means_something()
+        self._changed()
+
+    def _legend_off(self) -> bool:
+        return (self.letters.currentData(), self.numbers.currentData()) == ("none", "none")
+
     def _fill_families(self) -> None:
         self.families.clear()
-        for family in (*FAMILIES, *self.saved):
+        for family in self._everything():
             item = QListWidgetItem(family_name(family))
             item.setToolTip(family_name(family))
             item.setIcon(self._thumb(family))
@@ -566,8 +841,7 @@ class BoardDesigner(QDialog):
         its own shape, a breadboard sat at the top of its slot with its name far below."""
         size = _first_size(family) or self._size
         board = render_board(
-            self._document(board_for(family, size, self._base)), self._lookup, THUMB,
-            _face(family),
+            self._document(self._design_of(family, size)), self._lookup, THUMB, _face(family)
         )
         slot = QPixmap(THUMB)
         slot.fill(QColor(0, 0, 0, 0))
@@ -589,7 +863,7 @@ class BoardDesigner(QDialog):
     # -- reading and writing the fields --
 
     def _on_family_chosen(self, row: int) -> None:
-        everything = (*FAMILIES, *self.saved)
+        everything = self._everything()
         if not 0 <= row < len(everything):
             return
         family = everything[row]
@@ -657,6 +931,11 @@ class BoardDesigner(QDialog):
             self.numbers.setCurrentIndex(
                 max(0, self.numbers.findData(legend.number_edges if legend else "none")))
             self.row_digits.setValue(legend.row_digits if legend else 2)
+            for fields, axis in ((self.legend_columns, legend.columns if legend else None),
+                                 (self.legend_rows, legend.rows if legend else None)):
+                fields.runs.setText(legend_runs_text(axis.runs) if axis else "")
+                fields.every.setValue(axis.every if axis else 1)
+                fields.digits.setValue(axis.digits if axis else 1)
             self._show_printed(family, size)
             self.mask_kind.setCurrentIndex(
                 0 if family.mask is None else max(0, self.mask_kind.findData(family.mask)))
@@ -702,6 +981,10 @@ class BoardDesigner(QDialog):
             "breadboard.narrow_channel_cols": solderless and self._channel_mils() > STANDARD_CHANNEL * 100,
             "breadboard.border_x_mm": kind == "solderable-breadboard",
             "breadboard.border_y_mm": kind == "solderable-breadboard",
+            "legend.row_digits": not pattern and not self._legend_off()
+            and not self.legend_rows.runs.text().strip(),
+            "legend.columns": not pattern and not self._legend_off(),
+            "legend.rows": not pattern and not self._legend_off(),
         }
         for path, shown in rows.items():
             form, holder = self._rows[path]
@@ -808,7 +1091,14 @@ class BoardDesigner(QDialog):
         if printed and text and text != self._resolved:
             printed = (dataclasses.replace(printed[0], text=text), *printed[1:])
         legend = (
-            dataclasses.replace(legend, row_digits=self.row_digits.value()) if legend else None
+            dataclasses.replace(
+                legend,
+                row_digits=self.row_digits.value(),
+                columns=self._axis(self.legend_columns),
+                rows=self._axis(self.legend_rows),
+            )
+            if legend
+            else None
         )
         oblong = self.pad_shape.currentData() == "oblong"
         stripboard = self.type.currentData() == "stripboard"
@@ -879,7 +1169,7 @@ class BoardDesigner(QDialog):
         family = self._current_family()
         for label in self._problems.values():
             label.hide()
-        problem = family_problem(family)
+        problem = self._unreadable_runs() or family_problem(family)
         self.use.setEnabled(problem is None)
         self.save.setEnabled(problem is None)
         if problem is not None:
@@ -904,7 +1194,33 @@ class BoardDesigner(QDialog):
         self._redraw.start()
 
     def design(self) -> BoardDesign:
-        return board_for(self._current_family(), self._size, self._base)
+        return self._design_of(self._current_family(), self._size)
+
+    def _design_of(self, family: BoardFamily, size: BoardSize) -> BoardDesign:
+        """``board_for``, and on the board that is open, what no family says kept as it is:
+        the connectors and holes added by hand, and a legend's run round all four edges."""
+        if family.id != THIS_BOARD:
+            return board_for(family, size, self._base)
+        if is_pattern(family) and size.name not in {each.name for each in family.sizes}:
+            # A breadboard in no size it is sold in -- made by hand or by an agent: kept
+            # exactly as it is, since no family can say it.
+            return BoardDesign(self._base, *self._kept)
+        design = board_for(family, size, self._base)
+        board = design.board
+        if self._base.type not in FAMILY_BOARD_TYPES and family.type == "pad-per-hole":
+            board = dataclasses.replace(board, type=self._base.type)
+        before, after = self._base.labels, board.labels
+        if before is not None and after is not None and self._this is not None:
+            said = self._this.legend
+            if said is not None and (said.letter_edges, said.number_edges) == (
+                after.letter_edges, after.number_edges):
+                board = dataclasses.replace(board, labels=dataclasses.replace(
+                    after, all_edges=before.all_edges, letter_edges=before.letter_edges,
+                    number_edges=before.number_edges))
+        connectors, holes = self._kept
+        return BoardDesign(
+            board, design.edge_connectors + connectors, design.mounting_holes + holes
+        )
 
     # -- what to do with it --
 
@@ -929,5 +1245,5 @@ class BoardDesigner(QDialog):
         )
         self.saved = [f for f in self.saved if f.name != name] + [family]
         self._fill_families()
-        self.families.setCurrentRow(len(FAMILIES) + len(self.saved) - 1)
+        self.families.setCurrentRow(len(self._everything()) - 1)
 

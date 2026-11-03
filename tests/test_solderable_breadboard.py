@@ -235,21 +235,20 @@ def _app() -> None:
     QApplication.instance() or QApplication(["perfboard-studio-tests"])
 
 
-def test_board_setup_asks_its_size_and_its_border() -> None:
+def test_the_designer_asks_its_size_and_its_border() -> None:
     _app()
     from perfboard_studio.commands import DEFAULT_BOARD
-    from perfboard_studio.ui.main import BoardSetupDialog
+    from tests.designer_support import choose_family, choose_size, designer_on, shown
 
-    dialog = BoardSetupDialog(DEFAULT_BOARD)
-    dialog.board_type.setCurrentIndex(dialog.board_type.findData("solderable-breadboard"))
-    dialog.breadboard_size.setCurrentIndex(dialog.breadboard_size.findData("400"))
-    assert dialog.board() == solderable_breadboard("400")
+    dialog = designer_on(DEFAULT_BOARD)
+    choose_family(dialog, "solderable-breadboard")
+    choose_size(dialog, "400")
+    assert dialog.design().board == solderable_breadboard("400")
     dialog.border_x.setValue(6.0)
-    assert dialog.board().border_x_mm == 6.0
-    form = dialog._chosen
-    assert form.isRowVisible(dialog.breadboard_size) and form.isRowVisible(dialog.border_x)
-    dialog.board_type.setCurrentIndex(dialog.board_type.findData("breadboard"))
-    assert not form.isRowVisible(dialog.border_x)
+    assert dialog.design().board.border_x_mm == 6.0
+    assert shown(dialog, "breadboard.border_x_mm") and not shown(dialog, "grid")
+    choose_family(dialog, "breadboard")
+    assert not shown(dialog, "breadboard.border_x_mm")
 
 
 def test_in_2d_it_is_copper_where_the_pattern_has_holes_with_the_print_beside_it() -> None:

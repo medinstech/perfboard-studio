@@ -54,6 +54,7 @@ TURKISH: Mapping[str, str] = {
     "Auto-wire {count} Connection": "{count} Bağlantıyı Otomatik Kablola",
     "Auto-wire {count} Connections": "{count} Bağlantıyı Otomatik Kablola",
     "Nothing in the list to go to.": "Listede gidilecek bir şey yok.",
+    "This board": "Bu kart",
     "Solderless breadboard": "Lehimsiz breadboard",
     "Solderless breadboard, wide channel (ESP32 / modules)": "Lehimsiz breadboard, geniş oluklu (ESP32 / modüller)",
     "As the material is sold": "Malzemenin satıldığı gibi",
@@ -83,7 +84,6 @@ TURKISH: Mapping[str, str] = {
     "Letters": "Harfler",
     "Numbers": "Sayılar",
     "Printed on it": "Üzerinde yazan",
-    "Colour": "Renk",
     "Mask": "Maske",
     "Pad finish": "Ped kaplaması",
     "Your own size": "Kendi ölçünüz",
@@ -143,7 +143,6 @@ TURKISH: Mapping[str, str] = {
     "Reload from disk?": "Diskten yeniden yüklensin mi?",
     # Ayar&ları, not &Ayarları: "&Aç…" already claims A in this menu, and two items with
     # the same accelerator means one of them cannot be reached from the keyboard at all.
-    "&Board Setup…": "Kart Ayar&ları…",
     "Board &Features…": "Kart &Öğeleri…",
     "Open Recen&t": "&Son Kullanılanlar",
     "(nothing yet)": "(henüz yok)",
@@ -524,12 +523,9 @@ TURKISH: Mapping[str, str] = {
     "3D View": "3D Görünüm",
     "Problems": "Sorunlar",
     # -- dialogs -------------------------------------------------------------
-    "Board Setup": "Kart Ayarları",
-    "Columns": "Sütun",
     "Rows": "Satır",
     "Material": "Malzeme",
     # -- board setup: which kind of board this is -----------------------------
-    "Type": "Tip",
     "Strips run": "Şeritler",
     "Pad per hole — every hole is its own island": (
         "Delik başına ped — her delik kendi adası"
@@ -539,9 +535,6 @@ TURKISH: Mapping[str, str] = {
     ),
     # -- board setup: the sizes you can buy -----------------------------------
     "Board": "Kart",
-    "Custom size": "Özel ölçü",
-    "Double-sided green, plated holes": "Çift yüz yeşil, metalize delikli",
-    "Single-sided orange phenolic": "Tek yüz turuncu pertinaks",
     # -- board setup: pad shape and the printed legend ------------------------
     "Pad shape": "Ped şekli",
     "Pad length": "Ped uzunluğu",
@@ -845,7 +838,6 @@ TURKISH: Mapping[str, str] = {
     "Placement refused": "Yerleşim reddedildi",
     "Wiring refused": "Kablolama reddedildi",
     "Redoing the wiring was refused": "Kablolamayı yeniden yapma reddedildi",
-    "Board not changed": "Kart değiştirilmedi",
     "The guide has gaps": "Rehberde eksikler var",
     "About Perfboard Studio": "Perfboard Studio Hakkında",
     # -- status bar ----------------------------------------------------------
@@ -1184,15 +1176,6 @@ TURKISH: Mapping[str, str] = {
     "Add Pa&rt…": "Parça &Ekle…",
     "Arran&ge the Sheet": "Say&fayı Düzenle",
     "Fit the S&heet": "Sayfayı &Sığdır",
-    # -- board setup: the product first, the consequences behind Advanced ------
-    "Advanced": "Gelişmiş",
-    "Everything a stocked board already decides: its grid, what it is made of, "
-    "its pads and whether it prints its own addresses. Worth opening for a "
-    "board you cut yourself.": (
-        "Hazır satılan bir kartın zaten belirlediği her şey: ızgarası, neyden yapıldığı, "
-        "pedleri ve kendi adreslerini basıp basmadığı. Kendi kestiğiniz bir kart için "
-        "açmaya değer."
-    ),
     # -- projects: the folder a board and everything made from it live in ------
     "New &Project…": "Yeni &Proje…",
     "Name the board and start in the schematic; which board it goes on is the "
@@ -1229,8 +1212,8 @@ TURKISH: Mapping[str, str] = {
     ),
     "Other Board…": "Başka Kart…",
     "Stopping…": "Durduruluyor…",
-    "A breadboard, a stripboard, or a board of any size: Board Setup.": (
-        "Breadboard, şeritli kart ya da istenen boyutta bir kart: Kart Ayarları."
+    "A breadboard, a stripboard, or a board of any size: Design the Board.": (
+        "Breadboard, şeritli kart ya da istenen boyutta bir kart: Kartı Tasarla."
     ),
     "Open a project": "Bir proje aç",
     "Could not open the project": "Proje açılamadı",
@@ -1618,8 +1601,8 @@ TURKISH: Mapping[str, str] = {
     "Column letters and row numbers along the edges of the view.": (
         "Görünümün kenarları boyunca sütun harfleri ve satır numaraları."
     ),
-    "Only stripboard has tracks to cut. Board ▸ Board Setup ▸ Type.": (
-        "Yalnızca şeritli kartta kesilecek şerit vardır. Kart ▸ Kart Ayarları ▸ Tip."
+    "Only stripboard has tracks to cut. Board ▸ Design the Board ▸ Kind.": (
+        "Yalnızca şeritli kartta kesilecek şerit vardır. Kart ▸ Kartı Tasarla ▸ Tür."
     ),
     # -- the status bar's fixed sentences --------------------------------------
     "Nothing to place: the board is empty.": "Yerleştirilecek bir şey yok: kart boş.",
@@ -1781,8 +1764,6 @@ TURKISH: Mapping[str, str] = {
     "Wiring…": "Kablolanıyor…",
     "Planning cuts and links…": "Kesikler ve bağlantılar planlanıyor…",
     "Planning jumpers…": "Jumper'lar planlanıyor…",
-    "Breadboard — solderless; five holes to a clip, power on the rails": "Breadboard — lehimsiz; bir klipte beş delik, güç raylarda",
-    "Solderable breadboard — the same holes and strips, in copper, soldered": "Lehimlenebilir breadboard — aynı delikler ve şeritler, bakırda, lehimli",
     "Border, left and right": "Kenar payı, sağ ve sol",
     "Border, top and bottom": "Kenar payı, üst ve alt",
     "Full size · 830 points · 63 columns": "Tam boy · 830 nokta · 63 sütun",
@@ -3148,14 +3129,6 @@ TURKISH: Mapping[str, str] = {
         "KiCad'de çizilmiş bir devre: parçaları ve bağlantıları tasarım olarak gelir."
     ),
     # -- the board dialogs' pictures and their one line of numbers -----------------
-    "The board as it will be drawn, parts side up.": (
-        "Kart, çizileceği hâliyle, parça yüzü üstte."
-    ),
-    "{width} × {height} mm ({holes} holes)": "{width} × {height} mm ({holes} delik)",
-    "{gap} mm between pads": "pedler arası {gap} mm",
-    "{along} mm between pads along a row, {down} mm down a column": (
-        "pedler arası sıra boyunca {along} mm, sütun boyunca {down} mm"
-    ),
     "Show Problems": "Sorunları Göster",
     "Open the Build Guide": "Montaj Rehberini Aç",
     "Save the Board…": "Kartı Kaydet…",
