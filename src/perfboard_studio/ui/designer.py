@@ -483,6 +483,7 @@ class BoardDesigner(QDialog):
         self._rows: dict[str, tuple[QFormLayout, QWidget]] = {}
         self._sections: dict[str, tuple[QLabel, QFormLayout]] = {}
         self._build_settings()
+        self._align_labels()
         self._settings.addStretch(1)
         scroller = QScrollArea()
         scroller.setWidgetResizable(True)
@@ -580,11 +581,33 @@ class BoardDesigner(QDialog):
             self._problems[path] = problem
         form.addRow(label, holder)
 
+    def _align_labels(self) -> None:
+        """One label column for every section. Each form sized its own to its longest
+        label, so the fields' left edge moved from group to group -- 840 to 883 px in the
+        Turkish render -- and their right edges zig-zagged down the column."""
+        labels: list[QLabel] = []
+        shown: list[QLabel] = []
+        for _heading, form in self._sections.values():
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                widget = item.widget() if item is not None else None
+                if isinstance(widget, QLabel):
+                    labels.append(widget)
+                    if form.isRowVisible(row):
+                        shown.append(widget)
+        # Measured on the rows on show: a breadboard's "Border, left and right" widened
+        # every perfboard's labels it is never shown beside.
+        width = max((label.sizeHint().width() for label in shown), default=0)
+        for label in labels:
+            label.setMinimumWidth(width)
+
     def _section(self, title: str, key: str) -> QFormLayout:
         heading = self._heading(title)
         self._settings.addWidget(heading)
         form = QFormLayout()
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        # Never wrapped under its label: a wrapped row starts at the label's edge, and the
+        # column is as wide as its rows ask (``__init__``).
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         self._settings.addLayout(form)
         self._sections[key] = (heading, form)
         return form
@@ -606,9 +629,11 @@ class BoardDesigner(QDialog):
         for count in (self.cols, self.rows):
             count.setRange(2, 300)
             count.valueChanged.connect(self._on_grid)
-        grid_row.addWidget(self.cols)
+        # Each half as wide as the other, as the size in millimetres below: the columns
+        # kept their own width and the rows took the rest, with a gap after the "×".
+        grid_row.addWidget(self.cols, 1)
         grid_row.addWidget(QLabel("×"))
-        grid_row.addWidget(self.rows)
+        grid_row.addWidget(self.rows, 1)
         self._row(size, t("Holes"), grid, key="grid")
         outline = QWidget()
         outline_row = QHBoxLayout(outline)
@@ -616,9 +641,9 @@ class BoardDesigner(QDialog):
         self.width_mm, self.height_mm = _mm(70.0, 1000.0, 1), _mm(50.0, 1000.0, 1)
         for box in (self.width_mm, self.height_mm):
             box.editingFinished.connect(self._on_outline)
-        outline_row.addWidget(self.width_mm)
+        outline_row.addWidget(self.width_mm, 1)
         outline_row.addWidget(QLabel("×"))
-        outline_row.addWidget(self.height_mm)
+        outline_row.addWidget(self.height_mm, 1)
         self._row(size, t("Size in mm"), outline, "sizes")
         # A breadboard's channel, and a wide one's narrow part (lhm0's "flex" bodies keep
         # the ordinary channel for their first columns, so a DIP still fits beside the
@@ -989,6 +1014,8 @@ class BoardDesigner(QDialog):
         for path, shown in rows.items():
             form, holder = self._rows[path]
             form.setRowVisible(holder, shown)
+        if self._sections:
+            self._align_labels()
 
     def _channel_mils(self) -> int:
         return int(str(self.channel.currentData() or "300").split("-")[0])

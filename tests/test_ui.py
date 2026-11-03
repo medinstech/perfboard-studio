@@ -16106,3 +16106,34 @@ def test_leaving_a_breadboard_brings_its_settings_back(monkeypatch) -> None:
         _designer(window, monkeypatch, look)
     finally:
         _close(window)
+
+
+def test_the_designers_fields_start_at_one_edge_in_every_section() -> None:
+    """Each section's form sized its own label column, so the fields' left edge zig-zagged
+    from group to group. One column for all; and the grid's two counts share their row as
+    the size in millimetres does."""
+    from PySide6.QtWidgets import QFormLayout, QLabel
+
+    from perfboard_studio.ui.i18n import set_language
+    from tests.designer_support import designer_on
+
+    set_language("tr")
+    try:
+        dialog = designer_on(_load_dense().board)
+        dialog.resize(1180, 820)
+        dialog.show()
+        QApplication.processEvents()
+        lefts = set()
+        for _heading, form in dialog._sections.values():
+            for row in range(form.rowCount()):
+                label = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                field = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+                if label is None or field is None or not isinstance(label.widget(), QLabel):
+                    continue
+                if field.widget() is not None and field.widget().isVisible():
+                    lefts.add(field.widget().mapTo(dialog, field.widget().rect().topLeft()).x())
+        assert len(lefts) == 1, sorted(lefts)
+        assert abs(dialog.cols.width() - dialog.rows.width()) <= 2
+        dialog.close()
+    finally:
+        set_language("en")
