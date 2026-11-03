@@ -35,6 +35,12 @@ import pytest
 
 from perfboard_studio import persist
 from perfboard_studio.autoroute import plan_autoroute
+from perfboard_studio.boardfamily import (
+    STANDARD_PRESETS,
+    board_from_preset,
+    preset_edge_connectors,
+    preset_mounting_holes,
+)
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import (
     ComponentPlacement,
@@ -51,14 +57,7 @@ from perfboard_studio.drc import (
     run_drc,
 )
 from perfboard_studio.footprints import footprint_lookup, standard_footprints
-from perfboard_studio.geometry import (
-    STANDARD_PRESETS,
-    all_pin_holes,
-    board_from_preset,
-    is_inside_board,
-    preset_edge_connectors,
-    preset_mounting_holes,
-)
+from perfboard_studio.geometry import all_pin_holes, is_inside_board
 from perfboard_studio.model import (
     HEAT_SOURCE_ARCHETYPES,
     Board,
@@ -2241,8 +2240,13 @@ def test_a_recommendation_leaves_room_to_wire_the_board() -> None:
 
 
 def stock_document(preset_name: str = "6 x 8 cm") -> PerfDocument:
-    """A real product: the grid, the finger strips and the corner screws it is sold with."""
-    from perfboard_studio.geometry import (
+    """A real product's grid and corner screws, with its strips laid ON the outermost holes.
+
+    The stock boards' strips stand outside the grid and replace no hole, so the holes
+    nothing can be soldered into are put back on purpose: they are what these tests are
+    about, and any board with a strip on its holes has them. Taken from the preset as it
+    is, every test here would pass with nothing to keep off."""
+    from perfboard_studio.boardfamily import (
         STANDARD_PRESETS,
         board_from_preset,
         preset_edge_connectors,
@@ -2251,11 +2255,16 @@ def stock_document(preset_name: str = "6 x 8 cm") -> PerfDocument:
 
     preset = next(p for p in STANDARD_PRESETS if p.name == preset_name and not p.single_sided)
     board = board_from_preset(preset, BOARD)
-    return dataclasses.replace(
+    document = dataclasses.replace(
         make_doc(board=board),
-        edge_connectors=preset_edge_connectors(preset, board),
+        edge_connectors=tuple(
+            dataclasses.replace(c, outside=False, finger_length=None, shape="rounded")
+            for c in preset_edge_connectors(preset, board)
+        ),
         mounting_holes=preset_mounting_holes(preset, board),
     )
+    assert dead_keys(document), "these tests need holes nothing can be soldered into"
+    return document
 
 
 def dead_keys(document: PerfDocument) -> frozenset[str]:

@@ -134,7 +134,11 @@ _FINISH: dict[BoardFinish, tuple[str, str, str, tuple[float, float, float]]] = {
 }
 
 SCHEMES: tuple[BoardScheme, ...] = (
-    BoardScheme("green", "Green (FR-4)", "#2e6b3f", "#0d1a12", (0.16, 0.36, 0.21), "#e8f0ea", *_TINNED),
+    # #257845, chosen on 2026-11-03 from three candidates rendered with a circuit on the
+    # 5 x 7 board beside a photograph of it: the photograph's mask measures #19844e, the
+    # green drawn until then was #2e6b3f, and this is halfway between them in HSV -- the
+    # board in the hand, without its brightness drowning the parts on it.
+    BoardScheme("green", "Green (FR-4)", "#257845", "#09170e", (0.13, 0.42, 0.24), "#e8f0ea", *_TINNED),
     BoardScheme("blue", "Blue", "#1f4e8c", "#0b1a2e", (0.10, 0.26, 0.50), "#e6edf7", *_TINNED),
     BoardScheme("black", "Black", "#232529", "#0a0b0d", (0.11, 0.12, 0.14), "#d8dbe0", *_TINNED),
     BoardScheme("red", "Red", "#8c2a26", "#2e0b0a", (0.50, 0.13, 0.12), "#f6e6e5", *_TINNED),

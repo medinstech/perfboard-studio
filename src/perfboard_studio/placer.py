@@ -93,6 +93,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from .autoroute import AutoroutePlan, plan_autoroute
+from .boardfamily import STANDARD_PRESETS, BoardPreset, board_from_preset
 from .breadboard import clip_of, has_breadboard_pattern, has_hole, rail_of, rail_takes
 from .breadroute import plan_joined_board
 from .command import CommandContext
@@ -109,10 +110,7 @@ from .commands import (
 from .connectivity import FootprintLookup
 from .footprints import body_extent, body_is_round, entry_corridor, raised_board, wire_entry
 from .geometry import (
-    STANDARD_PRESETS,
-    BoardPreset,
     SubstrateEdges,
-    board_from_preset,
     bodies_clash,
     box_centre_distance_mm,
     convex_polygons_overlap,

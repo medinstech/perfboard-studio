@@ -27,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from perfboard_studio import persist  # noqa: E402
+from perfboard_studio.boardfamily import BoardPreset  # noqa: E402
 from perfboard_studio.boardfit import (  # noqa: E402
     PLACEMENT_WARNING_RULES,
     TRIAL_PLACEMENT_OPTIONS,
@@ -40,7 +41,6 @@ from perfboard_studio.commands import (  # noqa: E402
     unplace_component,
 )
 from perfboard_studio.footprints import footprint_lookup  # noqa: E402
-from perfboard_studio.geometry import BoardPreset  # noqa: E402
 from perfboard_studio.model import PerfDocument  # noqa: E402
 
 

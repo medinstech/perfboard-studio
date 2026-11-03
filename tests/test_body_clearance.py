@@ -210,8 +210,8 @@ def test_it_goes_with_the_design_to_a_new_board() -> None:
 def test_choosing_a_board_again_keeps_it() -> None:
     """Why it is on the document and not the board: Board Setup's products and every
     boardfit trial go through ``board.applyPreset``, which would have dropped a board field."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
     from perfboard_studio.commands import document_on_preset
-    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
 
     session = _to92s()
     assert session.set_body_clearance(0.5)["ok"]

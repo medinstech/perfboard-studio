@@ -1070,8 +1070,11 @@ def test_this_module_keys_its_own_sets_on_coordinates_not_strings() -> None:
 
 
 def _stock_document():
-    """A 6 x 8 cm double-sided board as it is actually sold: fingers and corner screws."""
-    from perfboard_studio.geometry import (
+    """A 6 x 8 cm double-sided board with its corner screws and its strips laid ON the
+    outermost holes. The stock boards' strips stand outside the grid and replace no hole,
+    so the holes nothing can be soldered into are put back here on purpose: they are what
+    these tests are about, and any board with a strip on its holes has them."""
+    from perfboard_studio.boardfamily import (
         STANDARD_PRESETS,
         board_from_preset,
         preset_edge_connectors,
@@ -1083,7 +1086,10 @@ def _stock_document():
     base = create_empty_document(_META, board)
     return dataclasses.replace(
         base,
-        edge_connectors=preset_edge_connectors(preset, board),
+        edge_connectors=tuple(
+            dataclasses.replace(c, outside=False, finger_length=None, shape="rounded")
+            for c in preset_edge_connectors(preset, board)
+        ),
         mounting_holes=preset_mounting_holes(preset, board),
     )
 
@@ -1119,12 +1125,12 @@ def test_a_trace_is_not_run_through_a_finger() -> None:
     because a solder trace is soldered down at every pad it crosses."""
     document = _stock_document()
     dead = _dead_keys(document)
-    strip_rows = sorted({int(key.split(",")[1]) for key in dead})
-    # Two holes either side of the finger strip, so the straight path crosses it.
-    top_row = strip_rows[0]
+    # The strips run down the short edges, the left and right of a landscape board; the
+    # path runs beside the left one, where a detour along the strip would be shortest.
+    strip_col = min(int(key.split(",")[0]) for key in dead)
 
     result = route_connection(
-        document, _lookup, RouteRequest(from_=h(6, top_row + 1), to=h(6, top_row + 3))
+        document, _lookup, RouteRequest(from_=h(strip_col + 1, 6), to=h(strip_col + 3, 6))
     )
     assert result.ok, result.reason
 

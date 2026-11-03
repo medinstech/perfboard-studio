@@ -15,7 +15,6 @@ physical board comes back wrong.
 
 from __future__ import annotations
 
-import dataclasses
 import math
 import re
 from collections.abc import Iterable, Sequence
@@ -1593,79 +1592,14 @@ def _outside_finger_rect(
 
 
 # ---------------------------------------------------------------------------
-# The boards you can actually buy
+# Corner holes, and the clearance round them
+#
+# What a stock board IS -- its grid, strips, holes and legend -- is ``boardfamily.py``'s;
+# what is here is the geometry it asks: where a bore of a size goes in a corner, and how
+# much board a strip and a bore keep between them.
 # ---------------------------------------------------------------------------
 
 
-#: Which family of board a preset is. Not decoration: it decides copper on one face or
-#: two, whether the board carries a printed legend, and whether its outer rows are the
-#: oblong finger pads. Those three travel together on the shelf, and setting them
-#: separately is three chances to describe a board nobody sells.
-type BoardFamily = Literal["double-sided-fr4", "single-sided-phenolic"]
-
-
-@dataclass(frozen=True, slots=True)
-class BoardPreset:
-    """One perfboard as it is sold: a size, and which of the two families it belongs to.
-
-    Perfboard is not bought by hole count -- it is bought as "a 5 by 7", and the listing
-    quotes the centimetres. So the presets are keyed on that, and the hole count is what
-    falls out of it: the grid is what fits once the printed border is taken off, which is
-    why a 4 x 6 cm board is 20 x 14 and not the 15 x 23 that dividing by the pitch
-    suggests.
-
-    The border is then DERIVED rather than quoted, so the outline is exactly the
-    advertised size to the tenth of a millimetre. That matters more here than anywhere
-    else: the 1:1 PDF export gets taped onto the physical board.
-    """
-
-    #: What the listing calls it, e.g. "5 x 7 cm".
-    name: str
-    width_mm: Mm
-    height_mm: Mm
-    cols: int
-    rows: int
-    family: BoardFamily = "double-sided-fr4"
-
-    @property
-    def single_sided(self) -> bool:
-        return self.family == "single-sided-phenolic"
-
-    @property
-    def material(self) -> BoardMaterial:
-        return "FR2" if self.single_sided else "FR4"
-
-    @property
-    def key(self) -> str:
-        return f"{self.width_mm:g}x{self.height_mm:g}-{self.family}"
-
-
-#: The sizes every prototyping supplier stocks, in both families.
-#:
-#: THE GREEN DOUBLE-SIDED BOARD carries a printed A..Z / 01..NN legend, plated holes on
-#: both faces, oblong finger pads down two of its edges and a screw hole in each corner.
-#: THE ORANGE-BROWN PHENOLIC BOARD carries none of that: copper on the solder side only,
-#: round pads everywhere, no legend, no fingers. They are different products, and a
-#: preset that produced a bare grid for both would be describing neither.
-STANDARD_PRESETS: tuple[BoardPreset, ...] = (
-    BoardPreset("2 x 8 cm", 20.0, 80.0, 5, 30),
-    BoardPreset("3 x 7 cm", 30.0, 70.0, 10, 24),
-    BoardPreset("4 x 6 cm", 40.0, 60.0, 14, 20),
-    BoardPreset("5 x 7 cm", 50.0, 70.0, 18, 24),
-    BoardPreset("6 x 8 cm", 60.0, 80.0, 22, 30),
-    BoardPreset("7 x 9 cm", 70.0, 90.0, 27, 35),
-    BoardPreset("9 x 15 cm", 90.0, 150.0, 34, 58),
-    BoardPreset("12 x 18 cm", 120.0, 180.0, 46, 70),
-    BoardPreset("15 x 20 cm", 150.0, 200.0, 58, 78),
-    BoardPreset("20 x 30 cm", 200.0, 300.0, 78, 118),
-    BoardPreset("5 x 7 cm", 50.0, 70.0, 18, 26, family="single-sided-phenolic"),
-    BoardPreset("7 x 9 cm", 70.0, 90.0, 27, 35, family="single-sided-phenolic"),
-    BoardPreset("9 x 15 cm", 90.0, 150.0, 34, 58, family="single-sided-phenolic"),
-    BoardPreset("15 x 20 cm", 150.0, 200.0, 58, 78, family="single-sided-phenolic"),
-)
-
-#: Bare substrate left outside a finger, for the legend printed there.
-FINGER_INSET_MM: Mm = 1.5
 #: An M2 clearance hole, which is what fits in these boards' corners.
 CORNER_HOLE_MM: Mm = 2.2
 #: Substrate a finger strip leaves between itself and a corner bore.
@@ -1677,107 +1611,6 @@ CORNER_HOLE_MM: Mm = 2.2
 FINGER_BORE_CLEARANCE_MM: Mm = 0.3
 
 
-def board_from_preset(preset: BoardPreset, base: Board) -> Board:
-    """``base`` resized to a preset, with the border solved so the outline is exact.
-
-    The border is whatever is left of the advertised size once the grid is taken out,
-    halved. A negative result would mean the grid does not fit the board at all, so it is
-    clamped -- a preset with a bad hole count then draws a flush-cut board rather than a
-    board smaller than its own holes.
-    """
-    border_x = max(0.0, (preset.width_mm - preset.cols * base.pitch) / 2)
-    border_y = max(0.0, (preset.height_mm - preset.rows * base.pitch) / 2)
-    return dataclasses.replace(
-        base,
-        cols=preset.cols,
-        rows=preset.rows,
-        material=preset.material,
-        single_sided=preset.single_sided,
-        # The product's own look, which is its material's: a blue mask chosen for the
-        # board being replaced is not on the board being bought.
-        mask=None,
-        finish=None,
-        border_x_mm=round(border_x, 4),
-        border_y_mm=round(border_y, 4),
-        # BOTH families print their addresses on the substrate, and this one has now been
-        # settled by photographs twice -- in both directions.
-        #
-        # It was taken off the green double-sided board on the strength of a 400-pixel
-        # product shot in which no printing could be made out. A photograph of the same
-        # product at a usable size shows the legend plainly: the column letters run along
-        # the border under the bottom row, beside the part number and "5X7CM". A washed-out
-        # thumbnail is evidence that a print cannot be SEEN, not that it is absent, and
-        # this line is the cost of confusing the two.
-        #
-        # Without it the editor falls back to its own ruler, drawn OUTSIDE the board in
-        # screen pixels; the addresses then exist on the screen and not on the board in
-        # your hand, and they are missing from the 3D view and the 1:1 printout entirely.
-        #
-        # ON ONE EDGE EACH: letters along the top, numbers down the left. Every photograph of
-        # these boards prints its letters along one edge and its numbers along one other
-        # (the green 5 x 7 and 2 x 8, both phenolic 5 x 7s); a legend on all four edges is a
-        # different board (a black ENIG one), and drawing it here put two of everything on a
-        # board that has one.
-        labels=BoardLabels(row_digits=2, all_edges=False),
-        # The oblong pads on these boards are the EDGE STRIP, never the whole grid --
-        # every interior pad is round. They come from `preset_edge_connectors`, not from
-        # a board-wide pad shape.
-        pad_shape="round",
-        pad_length=None,
-    )
-
-
-def preset_strip_edges(board: Board) -> tuple[BoardEdge, ...]:
-    """The two edges a preset board's oblong finger pads run along.
-
-    THE SHORT EDGES OF THE BOARD, which is where they are on the real thing: a strip of
-    contacts belongs across the narrow end, not down the length. On a 5 x 7 board that is
-    the two 5 cm edges, so a portrait board gets them top and bottom.
-
-    This used to pick the pair with the wider BORDER, on the reasoning that the border is
-    where the room is. That happens to give the same answer on the green boards and the
-    wrong one on the phenolic, whose borders are near enough equal (2.14 mm against
-    1.98 mm) that a tenth of a millimetre decided which way the strips ran. A physical
-    fact about the board should not turn on a rounding difference.
-    """
-    width, height = board_size_mm(board)
-    return ("top", "bottom") if width <= height else ("left", "right")
-
-
-def _finger_run_clear_of_bores(
-    board: Board, edge: BoardEdge, mounts: tuple[MountingHole, ...]
-) -> tuple[int, int]:
-    """(start, count) for a finger strip that stops short of the corner screw holes.
-
-    A bore removes copper. Run the strip the full width of the board and the corner holes
-    are drilled through the end contacts of it -- measured at 0.21 mm of overlap on the
-    2 x 8 and 6 x 8 presets, and clear on the 5 x 7 only by luck of the arithmetic. On
-    the real boards the strip stops and the screw goes outside it.
-
-    Trimmed rather than shifted: the strip is where it is, and what changes is how far
-    along it runs.
-    """
-    span = board.rows if edge in ("left", "right") else board.cols
-    probe = EdgeConnector(id="probe", edge=edge, start=0, count=span, inset_mm=FINGER_INSET_MM)
-    clear: list[int] = []
-    for index, hole in enumerate(edge_connector_holes(probe, board)):
-        rect = edge_finger_rect(probe, hole, board)
-        if not any(_bore_touches_rect(mount, rect, board) for mount in mounts):
-            clear.append(index)
-    if not clear:
-        return 0, 0
-    # THE LONGEST CONTIGUOUS RUN, not first..last. That shortcut assumed the only
-    # obstructions are corner holes and therefore that what is left is the middle -- true
-    # while every screw sat outside the grid, and false as soon as one steps inward on a
-    # board whose border is too thin to hold it. The obstructed finger is then in the
-    # middle of the run, and first..last quietly puts it back.
-    runs: list[list[int]] = [[clear[0]]]
-    for index in clear[1:]:
-        (runs[-1].append(index) if index == runs[-1][-1] + 1 else runs.append([index]))
-    longest = max(runs, key=len)
-    return longest[0], len(longest)
-
-
 def _bore_touches_rect(mount: MountingHole, rect: RectMm, board: Board) -> bool:
     centre = mounting_hole_centre_mm(mount, board)
     near_x = min(max(centre.x, rect.x), rect.x + rect.width)
@@ -1785,36 +1618,6 @@ def _bore_touches_rect(mount: MountingHole, rect: RectMm, board: Board) -> bool:
     return (
         math.hypot(centre.x - near_x, centre.y - near_y)
         < mount.diameter / 2 + FINGER_BORE_CLEARANCE_MM
-    )
-
-
-def preset_edge_connectors(preset: BoardPreset, board: Board) -> tuple[EdgeConnector, ...]:
-    """The finger strips a preset's board is sold with.
-
-    BOTH families have them, on their two short edges. The phenolic board was given none
-    at all at first, on the reasoning that it is the stripped-down product -- and it is,
-    but not of these.
-
-    The run stops clear of the board's own corner screw holes, which is why this asks
-    :func:`preset_mounting_holes` rather than leaving the two to be combined by a caller
-    who has no way to know they interfere.
-    """
-    mounts = preset_mounting_holes(preset, board)
-    runs = {edge: _finger_run_clear_of_bores(board, edge, mounts) for edge in preset_strip_edges(board)}
-    return tuple(
-        EdgeConnector(
-            id=f"ec-{edge}",
-            edge=edge,
-            start=runs[edge][0],
-            count=runs[edge][1],
-            finger_width=round(min(2.0, board.pitch * 0.8), 3),
-            inset_mm=FINGER_INSET_MM,
-            # A single-sided board has copper on ONE face, and its fingers are no
-            # exception: "both" put a strip of contacts on the bare phenolic side, where
-            # the board has nothing but substrate.
-            face="bottom" if board.single_sided else "both",
-        )
-        for edge in preset_strip_edges(board)
     )
 
 
@@ -1863,38 +1666,6 @@ def _border_corner_bores(board: Board, radius: Mm) -> tuple[tuple[HoleCoord, Mm,
                 return None
             bores.append((HoleCoord(col, row), round(dx, 4), round(dy, 4)))
     return tuple(bores)
-
-
-def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHole, ...]:
-    """A screw hole in each corner of the BORDER, where the photographed boards have one,
-    or AT the corner position on a board whose border cannot hold it.
-
-    IN THE BORDER FIRST, because that is the board in the hand. Every photograph of these
-    boards (the green double-sided 5 x 7 and 2 x 8, the phenolic 5 x 7, a branded LF-HASL
-    board) shows bare holes in the corners of the border, outside the grid and its edge
-    pads, eating no pad at all. The bore sits ``CORNER_HOLE_WEB_MM`` plus its radius in from
-    both edges (``_border_corner_bores``), and the corner pad stays.
-
-    AT THE CORNER POSITION where the border is too thin for that, which is the rule this
-    used to apply everywhere: not a bore squeezed diagonally past the corner pad. The hole used to be
-    pushed as far into the border as it would go, and the same offset was used on both
-    axes -- so on a 5 x 7, whose two borders are 3.41 and 5.79 mm, the screw ended up
-    0.20 mm from one edge of the board and floating a clear 2.6 mm from the other, with the
-    corner pad jammed against it. Both numbers are off the render, and both are wrong in
-    the same way: nothing was centred in anything.
-
-    The corner pad goes with the hole, and that is not a loss. The board is manufactured
-    with a screw hole at that position INSTEAD of a pad, which is exactly what
-    ``consumed_holes`` reports -- so DRC, both renderers and the build guide learn it
-    through the one route they already use, with no special case for corners.
-
-    On a board whose border is too thin to hold a screw the hole steps one position inward
-    instead -- see ``CORNER_HOLE_WEB_MM``, which is what the outermost position leaves on
-    the two largest boards.
-    """
-    if preset.single_sided:
-        return ()
-    return corner_mounting_holes(board, CORNER_HOLE_MM, CORNER_HOLE_MM * 2)
 
 
 def corner_mounting_holes(

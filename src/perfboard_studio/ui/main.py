@@ -128,6 +128,13 @@ from perfboard_studio.autoroute import (
 from perfboard_studio.autoroute import (
     describe as describe_plan,
 )
+from perfboard_studio.boardfamily import (
+    STANDARD_PRESETS,
+    BoardPreset,
+    board_from_preset,
+    preset_edge_connectors,
+    preset_mounting_holes,
+)
 from perfboard_studio.boardfit import (
     ROUTE_COST_TOLERANCE,
     BoardChoice,
@@ -234,10 +241,7 @@ from perfboard_studio.footprints import (
 )
 from perfboard_studio.geometry import (
     MAX_LEGEND_DIGITS,
-    STANDARD_PRESETS,
-    BoardPreset,
     board_edge_margin_mm,
-    board_from_preset,
     board_size_mm,
     edge_connector_holes,
     format_hole,
@@ -249,8 +253,6 @@ from perfboard_studio.geometry import (
     pad_extent_mm,
     parse_legend_runs,
     pin_hole,
-    preset_edge_connectors,
-    preset_mounting_holes,
 )
 from perfboard_studio.guide import (
     Checkpoint,

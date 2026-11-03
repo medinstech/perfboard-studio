@@ -20,6 +20,7 @@ import pytest
 
 from perfboard_studio import boardfit
 from perfboard_studio.autoroute import DEFAULT_AUTOROUTE_OPTIONS
+from perfboard_studio.boardfamily import STANDARD_PRESETS, BoardPreset, board_from_preset
 from perfboard_studio.boardfit import (
     MAX_SMALLER_BOARDS_TRIED,
     PLACEMENT_WARNING_RULES,
@@ -41,7 +42,6 @@ from perfboard_studio.commands import (
     preset_payload,
 )
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.geometry import STANDARD_PRESETS, BoardPreset, board_from_preset
 from perfboard_studio.model import (
     BoardNote,
     ComponentInstance,

@@ -626,6 +626,20 @@ is a size sold without one (`BoardSize.strip`). `family_problem` is the one refu
 names the field it is about. `test_every_board_of_every_family_is_accepted_and_clean` holds
 the catalogue to the command and to DRC.
 
+**The stock boards ARE the families' stock sizes** (`boardfamily.STANDARD_PRESETS`: the first
+size of each name, so a variant is offered where a board is designed and not where one is
+chosen). `board_from_preset` makes the family's board and then gives it back what a stock
+board never decided -- the board type and the pads, drill and thickness of the board it
+replaces -- and `preset_edge_connectors` / `preset_mounting_holes` ask the family of the
+board as it is. The switch to them, on 2026-11-03, turned every stock board landscape
+(letters along the long edge), moved its strips outside the grid and its corner holes into
+the border, gave the phenolic boards the corner holes they have, and took the grid counts
+from the suppliers' listings; the examples were rebuilt and the board trials re-measured
+in the same change. A document keeps the board it was saved on: only a new board and the
+board chooser see the change. It also showed a finger-length check that measured the
+margin across one axis and the longest finger across the other, which only the portrait
+boards had let pass.
+
 `placer.suggest_boards` lays the circuit out on every stock board with `arrange` — as the
 PRODUCT, fingers and corner bores reserved (`commands.preset_payload`) — and
 `recommended_board` takes the first it fills to `ARRANGEMENT_FILL_LIMIT` or less. That used
@@ -660,6 +674,13 @@ Four things about it are load-bearing:
   design, and says so as `too-small`.
 - **Nothing is tried on a stripboard**, whose boards are judged by `striproute` and on which no
   tolerance here was measured; the reference is the answer, as it always was.
+- **Open observation: the descent stops at the first dearer board.** Measured at seeds 0-3 on
+  the stock boards of 2026-11-03, nano-relay's 7 x 9 cm (now 31 x 26) routes at 1.17 times its
+  9 x 15 reference at seed 0 and 1.23 at seeds 1 and 2, so at those seeds the question stops
+  there and recommends the reference, where it used to go on to 6 x 8 (the 35 x 27 7 x 9 routed
+  at 1.03). ne555-astable's 4 x 6 at seed 1 is the same, at 1.23. Seed 0, which the window
+  asks, is unaffected: 6 x 8 and 2 x 8. Going on past one dearer board would settle it and is a
+  change to the question, to be measured on its own -- not done.
 
 `placer.placement_inputs(doc)` is the key a placement worked out earlier is reused by — blind to
 the sheet and to what a save changes, and to nothing else, so a field added later counts until
@@ -2358,8 +2379,8 @@ build warns about the unknown key and draws the material's look.
 without asking what it says it is. The View menu's choice survives as an override, "draw
 every board as …", and `choose(None)` means what each board says. Each scheme still carries
 the 2D and 3D colours *together*, so a board cannot be green in the editor and blue in the
-3D view. A preset brings its product's look (`board_from_preset` clears both), because a
-blue mask chosen for the board being replaced is not on the board being bought.
+3D view. A preset brings its product's look (`board_from_preset` takes its family's), because
+a blue mask chosen for the board being replaced is not on the board being bought.
 
 **Everything else that is only appearance is still a view setting.** Ask of a new visual
 option whether it describes the object being built or how the window shows it: the theme,

@@ -273,9 +273,9 @@ routing use `hole_span_mm`; substrate, printing and 3D use `board_size_mm` /
 
 The border is **per axis** because real boards are not square about it (a 5 × 7 cm board
 has ~2.1 mm at the sides, ~4.5 mm top and bottom), and the 1:1 PDF gets taped to the
-physical board. `geometry.STANDARD_PRESETS` carries the sizes suppliers stock, keyed on
-the advertised centimetres; `board_from_preset` *solves* the border from the size and the
-hole count rather than quoting it.
+physical board. `boardfamily.STANDARD_PRESETS` carries the boards suppliers stock (each a
+board family in one of its sizes), keyed on the advertised centimetres; `board_from_preset`
+*solves* the border from the size and the hole count rather than quoting it.
 
 ### Layering
 

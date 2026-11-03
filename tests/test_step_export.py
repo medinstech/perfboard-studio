@@ -213,7 +213,9 @@ def test_the_board_is_the_substrate_drilled_where_it_has_holes() -> None:
 def test_a_bore_on_the_grid_takes_the_hole_under_it_and_spares_its_neighbours() -> None:
     doc = _example("ne555-astable")
     board = doc.board
-    at = HoleCoord(2, 10)
+    # Mid-board, so all four neighbours are on it (the example is 28 x 6 since the stock
+    # boards turned landscape).
+    at = HoleCoord(board.cols // 2, board.rows // 2)
     doc = replace(doc, mounting_holes=(MountingHole(id="m-test", at=at),))
     plate = board_model(doc, footprint_lookup())[0].solids[0].shape
     assert isinstance(plate, Plate)
@@ -234,7 +236,16 @@ def test_a_bore_on_the_grid_takes_the_hole_under_it_and_spares_its_neighbours() 
 
 
 def test_a_finger_is_not_drilled() -> None:
-    doc = _example("lpb1-booster")
+    # Its strips laid ON the outermost holes: the stock boards' stand outside the grid and
+    # replace no hole, so the case is made here on purpose.
+    example = _example("lpb1-booster")
+    doc = replace(
+        example,
+        edge_connectors=tuple(
+            replace(c, outside=False, finger_length=None, shape="rounded")
+            for c in example.edge_connectors
+        ),
+    )
     undrilled = undrilled_holes(doc)
     assert undrilled
     plate = board_model(doc, footprint_lookup())[0].solids[0].shape

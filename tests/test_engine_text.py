@@ -18,6 +18,7 @@ import pytest
 from perfboard_studio import persist
 from perfboard_studio.autoroute import describe as describe_route
 from perfboard_studio.autoroute import describe_reroute, plan_autoroute, plan_reroute
+from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import (
     AddBoardNotePayload,
@@ -62,7 +63,6 @@ from perfboard_studio.commands import (
     create_standard_registry,
 )
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
 from perfboard_studio.model import HoleCoord, NetNode, Point2, SheetWire, SymbolPlacement
 from perfboard_studio.placer import PlacementOptions, plan_placement
 from perfboard_studio.placer import describe as describe_placement
@@ -194,9 +194,9 @@ def _session() -> list[str]:
     placed = plan_placement(bus.document, LOOKUP, PlacementOptions(seed=0, iterations=200, restarts=1))
     said.append(describe_placement(placed))
 
-    # Parts on the board.
+    # Parts on the board. T6 on the right of the example's landscape 3 x 7 cm board is free.
     r1 = component("R1")
-    run("component.move", MoveComponentPayload(id=r1.id, anchor=HoleCoord(1, 15)))
+    run("component.move", MoveComponentPayload(id=r1.id, anchor=HoleCoord(19, 5)))
     run("component.rotate", RotateComponentPayload(id=r1.id, rotation=90))
     run("component.mirror", MirrorComponentPayload(id=r1.id, mirrored=True))
     run("component.mirror", MirrorComponentPayload(id=r1.id, mirrored=False))
@@ -210,7 +210,7 @@ def _session() -> list[str]:
     run("component.unplace", UnplaceComponentPayload(id=r1.id))
     run(
         "part.place",
-        PlacePartsPayload(placements=(PartPlacement(id=r1.id, anchor=HoleCoord(1, 15), rotation=0),)),
+        PlacePartsPayload(placements=(PartPlacement(id=r1.id, anchor=HoleCoord(19, 5), rotation=0),)),
     )
 
     # The design.

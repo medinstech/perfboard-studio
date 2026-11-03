@@ -2935,7 +2935,7 @@ def test_board_setup_dialog_round_trips_a_board() -> None:
 def test_board_setup_asks_which_product_and_folds_the_rest_away() -> None:
     """A perfboard is bought, not specified: the dialog is the list of things a supplier
     stocks, and the five fields a product already decides are behind Advanced."""
-    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
     from perfboard_studio.ui.main import BoardSetupDialog
 
     stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
@@ -2963,7 +2963,7 @@ def test_board_setup_opens_expanded_on_a_board_nobody_sells() -> None:
 def test_choosing_a_custom_size_opens_the_fields_it_is_asking_for() -> None:
     """Picking "Custom size" and being shown no numbers is the dialog asking a question
     and hiding the answer."""
-    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
     from perfboard_studio.ui.main import BoardSetupDialog
 
     stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
@@ -2980,7 +2980,7 @@ def test_showing_a_board_that_is_already_a_product_is_not_choosing_one() -> None
     """``_preset`` means "a product was picked from the list", which is what tells the
     caller to rebuild the finger strips and corner holes that come with it. Re-opening
     Board Setup on a 14 x 20 board is not a request to have its connectors rebuilt."""
-    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
     from perfboard_studio.ui.main import BoardSetupDialog
 
     stock = next(p for p in STANDARD_PRESETS if p.name == "4 x 6 cm" and not p.single_sided)
@@ -4304,64 +4304,50 @@ def test_the_legend_is_printed_in_the_border_and_not_over_the_pads(monkeypatch) 
 
 def test_a_legend_on_a_finger_edge_is_printed_outside_the_fingers(monkeypatch) -> None:
     """Ink goes on the substrate and copper goes on top of it, so a label printed where a
-    finger is does not come out faint — it does not come out at all.
+    finger is does not come out faint -- it does not come out at all.
 
     The position used to be measured OUT FROM THE PAD, which is right until the copper on
-    that edge is an elongated finger reaching most of the way to the board edge. The board
-    this application now opens on has fingers along two entire edges, so every column
-    letter was being printed underneath one and the board came up with numbers and no
-    letters. The test above does not catch it: its band runs from the grid pad to the
-    board edge, and the middle of a finger is inside that band.
+    that edge is a finger reaching most of the way to the board edge: every column letter
+    of the board this opens on was printed under one, and it came up with numbers and no
+    letters. The board it opens on now carries its strips OUTSIDE the grid down its short
+    edges, with the row numbers printed small between the grid and the strip, as the
+    photographed board does -- so the claim is the general one: no label the legend lays
+    down is under any finger, letters or numbers.
     """
     from perfboard_studio.commands import create_starter_document
     from perfboard_studio.geometry import (
-        board_edge_margin_mm,
-        column_label,
-        hole_span_mm,
+        edge_connector_holes,
+        edge_finger_rect,
         legend_ink_width_mm,
-        legend_strip_mm,
-        printed_label_is_clear,
     )
-    from perfboard_studio.model import DocumentMeta, Point2
+    from perfboard_studio.model import DocumentMeta
 
     doc = create_starter_document(DocumentMeta(name="t", created="", modified=""))
-    assert doc.board.labels is not None, "the board this opens on prints its own addresses"
-    assert {c.edge for c in doc.edge_connectors} == {"top", "bottom"}, "wrong board for this test"
-
-    margin_y = board_edge_margin_mm(doc.board, "vertical")
-    inset = legend_strip_mm(doc, "vertical")
-    _span_w, span_h = hole_span_mm(doc.board)
-
-    letters = [
-        (text, centre, height)
-        for text, centre, height, _w in _legend_labels_drawn(doc, monkeypatch)
-        if text.isalpha()
-    ]
-    # Every letter the board can print: one edge or two, less any a corner screw's bore has
-    # taken the substrate from (``printed_label_is_clear``).
-    edges = 2 if doc.board.labels.all_edges else 1
-    under_bores = {
-        col
-        for col in range(doc.board.cols)
-        if not printed_label_is_clear(
-            doc,
-            Point2(col * doc.board.pitch, -(margin_y - inset / 2)),
-            legend_ink_width_mm(column_label(col), 0.9, doc.board.pitch * 0.9),
-            0.9,
-        )
-    }
-    assert len(under_bores) <= 2, "a corner screw takes at most the letter beside it"
-    assert len(letters) == (doc.board.cols - len(under_bores)) * edges, (
-        "the letters are not being laid down at all"
+    board = doc.board
+    assert board.labels is not None, "the board this opens on prints its own addresses"
+    assert doc.edge_connectors and all(c.outside for c in doc.edge_connectors), (
+        "wrong board for this test"
     )
 
-    for text, centre, height in letters:
-        near = -margin_y < centre.y() - height / 2 and centre.y() + height / 2 < -margin_y + inset
-        far = (
-            span_h + margin_y - inset < centre.y() - height / 2
-            and centre.y() + height / 2 < span_h + margin_y
-        )
-        assert near or far, f"column letter {text} is printed under a connector finger"
+    drawn = _legend_labels_drawn(doc, monkeypatch)
+    letters = [d for d in drawn if d[0].isalpha()]
+    numbers = [d for d in drawn if d[0].isdigit()]
+    assert letters and numbers, "the letters or the numbers are not being laid down at all"
+
+    fingers = [
+        edge_finger_rect(connector, hole, board)
+        for connector in doc.edge_connectors
+        for hole in edge_connector_holes(connector, board)
+    ]
+    for text, centre, height, max_width in drawn:
+        ink = legend_ink_width_mm(text, height, max_width or board.pitch * 0.9)
+        # A number is turned on its side, so its box is too.
+        width, tall = (ink, height) if text.isalpha() else (height, ink)
+        for rect in fingers:
+            assert not (
+                abs(centre.x() - (rect.x + rect.width / 2)) * 2 < width + rect.width
+                and abs(centre.y() - (rect.y + rect.height / 2)) * 2 < tall + rect.height
+            ), f"{text} is printed under a connector finger"
 
 
 def test_board_setup_dialog_round_trips_the_new_board_fields() -> None:
@@ -8850,7 +8836,7 @@ def test_a_connector_in_the_design_is_placed_on_the_edge_of_the_board(monkeypatc
 def test_the_board_size_dialog_offers_the_stock_sizes_and_the_board_you_have() -> None:
     """Built and read without exec(): the question is which board, and the answer is a
     row in a list, so neither needs an event loop to be tested."""
-    from perfboard_studio.geometry import STANDARD_PRESETS
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
     from perfboard_studio.model import SchematicPart
     from perfboard_studio.placer import design_entries, recommended_board, suggest_boards
     from perfboard_studio.ui.main import BoardSizeDialog
@@ -8919,8 +8905,8 @@ def test_the_board_size_dialog_shows_each_board_with_the_circuit_on_it() -> None
 
 def _verdict(document, name, kind, *, ratio=1.0, unplaced=(), new_warnings=(), unrouted=0, errors=0):
     """A board trial's verdict without running one: the dialog is about what a verdict SAYS."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
     from perfboard_studio.boardfit import PLACEMENT_WARNING_RULES, BoardTrial, BoardVerdict
-    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
     from perfboard_studio.placer import Arrangement, BoardSuggestion, DesignPlacement
 
     preset = next(p for p in STANDARD_PRESETS if p.name == name and not p.single_sided)
@@ -9181,7 +9167,7 @@ def test_an_edit_after_the_trial_throws_the_tried_placement_away(monkeypatch) ->
 def test_the_board_dialog_draws_the_board_it_describes() -> None:
     """A product is recognised by looking at it. Picking a size redraws the picture beside
     the questions, finger strips and corner holes included."""
-    from perfboard_studio.geometry import STANDARD_PRESETS
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
     from perfboard_studio.ui.main import BoardSetupDialog
 
     window = _blank_window()
@@ -11488,7 +11474,7 @@ def test_a_tile_covers_exactly_one_pitch_so_the_surface_is_watertight() -> None:
 
 
 def test_a_flush_cut_board_has_no_border_and_a_bordered_one_does() -> None:
-    from perfboard_studio.geometry import STANDARD_PRESETS, board_from_preset
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
     from perfboard_studio.ui import view3d
 
     flush = _load_dense().board
@@ -11813,21 +11799,21 @@ def test_the_board_s_copper_is_never_blown_out(tmp_path) -> None:
 
 
 def _board_with_a_bore_through_a_finger():
-    """A board whose corner bore is drilled through an edge-connector finger."""
+    """A board whose corner bore is drilled through an edge-connector finger: a 9 x 15 cm
+    board with a strip laid ON its bottom row. (The stock boards' strips stand outside the
+    grid and clear of their corner holes, so the case is made here on purpose.)"""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
     from perfboard_studio.commands import DEFAULT_BOARD, create_empty_document
-    from perfboard_studio.geometry import (
-        STANDARD_PRESETS,
-        board_from_preset,
-        preset_edge_connectors,
-    )
-    from perfboard_studio.model import DocumentMeta, MountingHole
+    from perfboard_studio.model import DocumentMeta, EdgeConnector, MountingHole
 
-    preset = next(p for p in STANDARD_PRESETS if p.cols == 34 and p.rows == 58 and not p.single_sided)
+    preset = next(p for p in STANDARD_PRESETS if p.name == "9 x 15 cm" and not p.single_sided)
     board = board_from_preset(preset, DEFAULT_BOARD)
     document = create_empty_document(DocumentMeta(name="b", created="", modified=""), board)
     return dataclasses.replace(
         document,
-        edge_connectors=preset_edge_connectors(preset, board),
+        edge_connectors=(
+            EdgeConnector(id="ec-bottom", edge="bottom", start=0, count=board.cols, inset_mm=1.5),
+        ),
         # One hole in from the corner, which is what Board Features offers by default, and
         # a 3.2 mm bore reaches the finger row from there.
         mounting_holes=(

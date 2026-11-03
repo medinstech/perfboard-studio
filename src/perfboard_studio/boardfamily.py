@@ -199,8 +199,15 @@ def strip_edges_of(size: BoardSize, strip: EdgeStrip) -> tuple[BoardEdge, BoardE
 
 def board_for(family: BoardFamily, size: BoardSize, base: Board) -> BoardDesign:
     """One board of ``family`` in ``size``: ``base`` made into it, with its strips and its
-    corner holes. The border is solved from the size and the grid, as ``board_from_preset``
-    solves it, and clamped at zero for a grid wider than the size."""
+    corner holes."""
+    board = family_board(family, size, base)
+    connectors, mounts = family_features(family, size, board)
+    return BoardDesign(board=board, edge_connectors=connectors, mounting_holes=mounts)
+
+
+def family_board(family: BoardFamily, size: BoardSize, base: Board) -> Board:
+    """The board alone. The border is solved from the size and the grid, so the outline is
+    exactly the advertised size, and clamped at zero for a grid wider than the size."""
     border_x = max(0.0, (size.width_mm - size.cols * family.pitch_mm) / 2)
     border_y = max(0.0, (size.height_mm - size.rows * family.pitch_mm) / 2)
     legend = family.legend
@@ -242,6 +249,16 @@ def board_for(family: BoardFamily, size: BoardSize, base: Board) -> BoardDesign:
             for line in family.printed
         ),
     )
+    return board
+
+
+def family_features(
+    family: BoardFamily, size: BoardSize, board: Board
+) -> tuple[tuple[EdgeConnector, ...], tuple[MountingHole, ...]]:
+    """(the strips, the corner holes) ``family`` is sold with in ``size``, on ``board``.
+
+    Asked of the board as it IS rather than rebuilt, so a stock board laid over somebody's
+    own pads (``board_from_preset``) gets its strips measured against those pads."""
     holes = family.corner_holes
     mounts = (
         () if holes is None else corner_mounting_holes(board, holes.diameter_mm, holes.head_mm)
@@ -264,7 +281,7 @@ def board_for(family: BoardFamily, size: BoardSize, base: Board) -> BoardDesign:
             )
             for edge in strip_edges_of(size, strip)
         )
-    return BoardDesign(board=board, edge_connectors=connectors, mounting_holes=mounts)
+    return connectors, mounts
 
 
 def family_border_mm(family: BoardFamily) -> tuple[Mm, Mm]:
@@ -448,6 +465,11 @@ GREEN_DOUBLE_SIDED = BoardFamily(
         ("7 x 9 cm", 90.0, 70.0, 35, 27, False),
         ("9 x 15 cm", 150.0, 90.0, 52, 34),
         ("9 x 15 cm", 150.0, 90.0, 58, 34, False),
+        # The large boards, at the grids this application shipped: none of them leaves a
+        # border a strip fits in, and no listing gave another count.
+        ("12 x 18 cm", 180.0, 120.0, 70, 46, False),
+        ("15 x 20 cm", 200.0, 150.0, 78, 58, False),
+        ("20 x 30 cm", 300.0, 200.0, 118, 78, False),
     ),
 )
 
@@ -471,11 +493,132 @@ PHENOLIC_SINGLE_SIDED = BoardFamily(
         ("5 x 7 cm", 70.0, 50.0, 26, 18, False),
         ("7 x 9 cm", 90.0, 70.0, 35, 27, False),
         ("9 x 15 cm", 150.0, 90.0, 58, 34, False),
+        ("15 x 20 cm", 200.0, 150.0, 78, 58, False),
     ),
 )
 
 #: Every family the designer offers before somebody makes their own.
 FAMILIES: tuple[BoardFamily, ...] = (GREEN_DOUBLE_SIDED, PHENOLIC_SINGLE_SIDED)
+
+_BY_ID = {family.id: family for family in FAMILIES}
+
+
+def family_by_id(family_id: str) -> BoardFamily:
+    """The catalogue family with this id. Raises ``KeyError`` naming the ids there are."""
+    try:
+        return _BY_ID[family_id]
+    except KeyError:
+        raise KeyError(f"No board family {family_id!r}; there are {', '.join(_BY_ID)}.") from None
+
+
+# ---------------------------------------------------------------------------
+# The stock boards: a catalogue family in one of its sizes
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class BoardPreset:
+    """One stock board: a catalogue family in a size it is sold. What the board chooser
+    lists, what the board trials try (``placer.suggest_boards``, ``boardfit``) and what
+    ``commands.preset_payload`` puts on the document.
+
+    Perfboard is bought as "a 5 by 7", and the listing quotes the centimetres; the grid is
+    what fits once the border is taken off, and the border is DERIVED, so the outline is
+    the advertised size to the tenth of a millimetre -- which matters because the 1:1 print
+    gets taped onto the physical board.
+    """
+
+    family: str
+    size: BoardSize
+
+    @property
+    def product(self) -> BoardFamily:
+        return family_by_id(self.family)
+
+    @property
+    def name(self) -> str:
+        return self.size.name
+
+    @property
+    def width_mm(self) -> Mm:
+        return self.size.width_mm
+
+    @property
+    def height_mm(self) -> Mm:
+        return self.size.height_mm
+
+    @property
+    def cols(self) -> int:
+        return self.size.cols
+
+    @property
+    def rows(self) -> int:
+        return self.size.rows
+
+    @property
+    def single_sided(self) -> bool:
+        return self.product.single_sided
+
+    @property
+    def material(self) -> BoardMaterial:
+        return self.product.material
+
+    @property
+    def key(self) -> str:
+        """Unique among the presets: two variants of one size differ in their grid."""
+        return f"{self.width_mm:g}x{self.height_mm:g}-{self.cols}x{self.rows}-{self.family}"
+
+
+def stock_sizes(family: BoardFamily) -> tuple[BoardSize, ...]:
+    """The size a supplier means by each name: the first listed. The others are variants,
+    offered where a board is designed rather than where one is chosen."""
+    seen: set[str] = set()
+    sizes: list[BoardSize] = []
+    for size in family.sizes:
+        if size.name not in seen:
+            seen.add(size.name)
+            sizes.append(size)
+    return tuple(sizes)
+
+
+#: The boards every prototyping supplier stocks, in both families: the catalogue's stock
+#: sizes. What changes a board here is a family's entry, not this line.
+STANDARD_PRESETS: tuple[BoardPreset, ...] = tuple(
+    BoardPreset(family.id, size) for family in FAMILIES for size in stock_sizes(family)
+)
+
+
+def board_from_preset(preset: BoardPreset, base: Board) -> Board:
+    """``base`` made into a stock board: the product's grid, border, legend, look and
+    print, over what a stock board has never decided -- the board TYPE (a stripboard
+    stays one) and the pads, drill and thickness of the board it replaces. A family's own
+    pads are the designer's to apply (``board_for``)."""
+    made = family_board(preset.product, preset.size, base)
+    return dataclasses.replace(
+        made,
+        type=base.type,
+        strip_axis=base.strip_axis,
+        thickness=base.thickness,
+        pad_diameter=base.pad_diameter,
+        drill_diameter=base.drill_diameter,
+        # The pads on these boards are round; the strip is the edge connectors, never a
+        # board-wide pad shape.
+        pad_shape="round",
+        pad_length=None,
+    )
+
+
+def preset_edge_connectors(preset: BoardPreset, board: Board) -> tuple[EdgeConnector, ...]:
+    """The strips a stock board is sold with, on ``board`` (``family_features``)."""
+    return family_features(preset.product, preset.size, board)[0]
+
+
+def preset_mounting_holes(preset: BoardPreset, board: Board) -> tuple[MountingHole, ...]:
+    """The corner holes a stock board is sold with, on ``board``: in the border where it
+    holds one, as every photograph of these boards has them -- the phenolic one included,
+    which this application used to give none -- else at the corner position
+    (``geometry.corner_mounting_holes``)."""
+    return family_features(preset.product, preset.size, board)[1]
 
 
 # ---------------------------------------------------------------------------
@@ -544,10 +687,12 @@ __all__ = [
     "MASKS",
     "NUMBER_EDGES",
     "PHENOLIC_SINGLE_SIDED",
+    "STANDARD_PRESETS",
     "STRIP_EDGES",
     "STRIP_SHAPES",
     "BoardDesign",
     "BoardFamily",
+    "BoardPreset",
     "BoardSize",
     "CornerHoles",
     "EdgeStrip",
@@ -555,11 +700,18 @@ __all__ = [
     "Legend",
     "StripEdges",
     "board_for",
+    "board_from_preset",
+    "family_board",
     "family_border_mm",
+    "family_by_id",
+    "family_features",
     "family_from_json",
     "family_problem",
     "family_to_json",
+    "preset_edge_connectors",
+    "preset_mounting_holes",
     "size_for_grid",
     "size_for_mm",
+    "stock_sizes",
     "strip_edges_of",
 ]

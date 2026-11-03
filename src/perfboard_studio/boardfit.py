@@ -34,11 +34,11 @@ from dataclasses import dataclass, replace
 from typing import Literal, TypeAlias
 
 from .autoroute import DEFAULT_AUTOROUTE_OPTIONS, AutorouteOptions, AutoroutePlan, plan_autoroute
+from .boardfamily import BoardPreset
 from .command import CommandError
 from .commands import document_on_preset
 from .connectivity import FootprintLookup
 from .drc import run_drc
-from .geometry import BoardPreset
 from .model import PerfDocument
 from .placer import (
     PHYSICAL_WARNING_RULES,
@@ -61,15 +61,17 @@ PLACEMENT_WARNING_RULES: tuple[str, ...] = tuple(rule for _, rule in PHYSICAL_WA
 #: How much dearer to route a smaller board may be than the reference and still count as
 #: building as well -- the "balanced" setting, chosen over 1.05 and over no limit at all.
 #:
-#: What ``tools/measure_board_choice.py --seeds 0 1 2 3`` found, every example taken back to
-#: its design and tried from the reference down: every smaller board that built with no new
-#: warning cost between 0.80 and 1.17 times its reference, and every one rejected on cost
-#: alone came out at 1.22 or more --
+#: What ``tools/measure_board_choice.py --seeds 0 1 2 3`` found on the stock boards as they
+#: have been since 2026-11-03 (landscape, the suppliers' grids, strips outside the grid),
+#: every example taken back to its design and tried from the reference down: every smaller
+#: board that built with no new warning cost between 0.85 and 1.18 times its reference, and
+#: every one rejected on cost alone came out at 1.23 or more --
 #:
-#:     accepted, highest    nano-relay 7 x 9 1.17 · atmega328-relay 6 x 8 1.16 · 1.15, 1.14
-#:     dearer, lowest       ne555-blinker 2 x 8 1.22 · lm317-supply 3 x 7 1.23 · nano 6 x 8 1.27
+#:     accepted, highest    atmega328-relay 6 x 8 1.18 · nano-relay 7 x 9 1.17 · ne555 2 x 8 1.17
+#:     dearer, lowest       nano-relay 7 x 9 1.23 · ne555-astable 4 x 6 1.23 · nano 6 x 8 1.24
 #:
-#: -- so 1.20 falls in the gap between them rather than on either side of one. The ratio is a
+#: -- so 1.20 still falls in the gap between them rather than on either side of one, as it
+#: did on the boards before (accepted up to 1.19, dearer from 1.22). The ratio is a
 #: proxy: routed solder-first, the atmega on 6 x 8 cm needed 57 wires where 9 x 15 needed 26,
 #: and that is the kind of board it is there to catch.
 ROUTE_COST_TOLERANCE = 1.20
@@ -88,24 +90,25 @@ ROUTE_COST_TOLERANCE = 1.20
 #:
 #: What the defaults recommend at seeds 0, 1, 2, 3, and the whole question's time at seed 0:
 #:
-#:     arduino-io-shield   5 x 7 ->  2 x 8   2 x 8   2 x 8   2 x 8      5 s
-#:     atmega328-relay     9 x 15 -> 7 x 9   7 x 9   6 x 8   6 x 8     25 s
-#:     lm317-supply        6 x 8 ->  4 x 6   4 x 6   4 x 6   2 x 8      8 s
-#:     lpb1-booster        7 x 9 ->  5 x 7   5 x 7   5 x 7   5 x 7      4 s
-#:     nano-relay          9 x 15 -> 7 x 9   6 x 8   6 x 8   6 x 8     10 s
-#:     ne555-astable       4 x 6 ->  2 x 8   2 x 8   2 x 8   2 x 8      3 s
-#:     ne555-blinker       6 x 8 ->  2 x 8   2 x 8   3 x 7   3 x 7     10 s
+#:     arduino-io-shield   6 x 8 ->   2 x 8   2 x 8   2 x 8   2 x 8      9 s
+#:     atmega328-relay     12 x 18 -> 7 x 9   7 x 9   6 x 8   6 x 8     39 s
+#:     lm317-supply        7 x 9 ->   3 x 7   3 x 7   3 x 7   3 x 7     12 s
+#:     lpb1-booster        7 x 9 ->   5 x 7   5 x 7   5 x 7   5 x 7      4 s
+#:     nano-relay          9 x 15 ->  6 x 8   9 x 15  9 x 15  7 x 9     14 s
+#:     ne555-astable       5 x 7 ->   2 x 8   5 x 7   2 x 8   2 x 8      5 s
+#:     ne555-blinker       7 x 9 ->   3 x 7   3 x 7   3 x 7   3 x 7      9 s
 #:
-#: A seed can still move an answer by a size, and only ever between boards that both built
-#: as well as the reference: which of two acceptable boards is the smallest acceptable one
-#: is the part a single anneal cannot settle. The window asks at seed 0, so the same design
-#: always gets the same answer.
+#: A seed can still move an answer, and only ever between boards that all built cleanly:
+#: which is the smallest acceptable one is the part a single anneal cannot settle.
+#: nano-relay's 7 x 9 cm routes at 1.17 times its reference at seed 0 and 1.23 at seeds 1
+#: and 2, either side of the tolerance, and the question stops at the first board that is
+#: dearer. The window asks at seed 0, so the same design always gets the same answer.
 TRIAL_PLACEMENT_OPTIONS = PlacementOptions(seed=0)
 
 #: The most boards below the reference one question will try. The longest descent measured
-#: is four (lm317-supply and ne555-blinker, 6 x 8 cm down to 2 x 8), and a trial is up to ten
-#: seconds on a 24-part design; a reference several sizes too big would otherwise try every
-#: board in the list.
+#: is four (arduino-io-shield, 6 x 8 cm down to 2 x 8; lm317-supply and ne555-blinker, 7 x 9
+#: down to 3 x 7), and a trial is up to ten seconds on a 24-part design; a reference several
+#: sizes too big would otherwise try every board in the list.
 MAX_SMALLER_BOARDS_TRIED = 4
 
 #: What a trial found. ``reference`` is the roomy board itself, built cleanly; the rest are

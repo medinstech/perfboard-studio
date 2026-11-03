@@ -19,6 +19,7 @@ import dataclasses
 from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 
+from perfboard_studio.boardfamily import BoardPreset
 from perfboard_studio.command import CommandContext, CommandError
 from perfboard_studio.commands import (
     PartPlacement,
@@ -29,7 +30,7 @@ from perfboard_studio.commands import (
     preset_payload,
 )
 from perfboard_studio.connectivity import FootprintLookup
-from perfboard_studio.geometry import BoardPreset, board_outline_mm
+from perfboard_studio.geometry import board_outline_mm
 from perfboard_studio.model import Board, PerfDocument
 from perfboard_studio.placer import Arrangement
 

@@ -20,12 +20,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 
 from perfboard_studio import persist
+from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
 from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
 from perfboard_studio.commands import DEFAULT_BOARD, SetBoardPayload, create_standard_registry
 from perfboard_studio.geometry import (
-    STANDARD_PRESETS,
     board_edge_margin_mm,
-    board_from_preset,
     board_outline_mm,
     board_text_placement,
     hole_span_mm,

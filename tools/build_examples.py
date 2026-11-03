@@ -45,7 +45,6 @@ from perfboard_studio.commands import (  # noqa: E402
 from perfboard_studio.drc import placed_body_box, placed_entry, run_drc  # noqa: E402
 from perfboard_studio.footprints import body_extent, footprint_lookup  # noqa: E402
 from perfboard_studio.geometry import (  # noqa: E402
-    BoardFamily,
     board_note_anchor,
     hole_to_mm,
     mounting_hole_centre_mm,
@@ -106,7 +105,7 @@ class Example:
         stem: str,
         title: str,
         footprints: dict[str, str],
-        family: BoardFamily = "double-sided-fr4",
+        family: str = "double-sided-fr4",
         pin_names: dict[str, dict[str, str]] | None = None,
         labels: tuple[tuple[str, str], ...] = (),
         values: dict[str, str] | None = None,

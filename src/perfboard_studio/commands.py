@@ -34,6 +34,13 @@ from dataclasses import dataclass
 from itertools import pairwise
 from typing import Any, Literal, cast, get_args
 
+from .boardfamily import (
+    STANDARD_PRESETS,
+    BoardPreset,
+    board_from_preset,
+    preset_edge_connectors,
+    preset_mounting_holes,
+)
 from .breadboard import board_problem, has_breadboard_pattern, is_breadboard, pattern_board
 from .command import (
     CommandContext,
@@ -45,10 +52,7 @@ from .command import (
 )
 from .geometry import (
     OUTSIDE_FINGER_MIN_MM,
-    STANDARD_PRESETS,
-    BoardPreset,
     board_edge_margin_mm,
-    board_from_preset,
     board_text_problem,
     default_finger_length_mm,
     edge_axis,
@@ -58,8 +62,6 @@ from .geometry import (
     is_inside_board,
     legend_problem,
     outside_finger_room_mm,
-    preset_edge_connectors,
-    preset_mounting_holes,
     substrate_edges_mm,
     validate_orthogonal_chain,
 )
@@ -3520,8 +3522,11 @@ class _AddEdgeConnector:
                 f"An outside finger reaches in from the board edge and must be over 0 mm and at "
                 f"most {room:g} mm, short of the outermost pads; got {p.finger_length:g} mm.",
             )
-        margin = board_edge_margin_mm(board)
-        longest = default_finger_length_mm(board)
+        # Both measured across THIS edge: the margin was the horizontal one and the longest
+        # the bottom edge's, which agreed on the portrait boards and refused every finger on
+        # the left of a landscape one.
+        margin = board_edge_margin_mm(board, edge_axis(p.edge))
+        longest = default_finger_length_mm(board, p.edge)
         length = p.finger_length if p.finger_length is not None else longest
         if not p.outside and not (margin < length <= longest):
             raise CommandError(

@@ -94,6 +94,16 @@ closed without a bump.
 
 ### Changed
 
+- **The stock boards are the boards in the photographs.** Every board in the chooser is now
+  landscape, with its letters along the long edge; its edge strip stands outside the grid
+  (stadium pads on the green boards, square ones on the phenolic), so no row is lost to it;
+  its corner holes sit bare in the border; the row numbers are printed between the grid and
+  the strip; and the green board says "5cmX7cm". Grid counts follow the suppliers' listings
+  (2 x 8 is 28 x 6, 6 x 8 is 27 x 22, 7 x 9 is 31 x 26, 9 x 15 is 52 x 34, the phenolic 5 x 7
+  24 x 18), the phenolic boards now have their corner holes, and the green mask is brighter,
+  as the board is. Documents you already have keep the board they were saved on: only a new
+  board, and the board chooser, change. The examples were rebuilt on the new boards.
+
 - **A dialog's button says what it does.** OK, Apply and Yes are gone from the dialogs
   that remain: New Board's button is Create Board, Board Setup's and the board chooser's
   Use This Board, Custom Part's Use This Part, New Project's Create Project, and Apply

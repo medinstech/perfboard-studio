@@ -89,7 +89,8 @@ def test_example_is_on_a_board_somebody_sells(path: pathlib.Path) -> None:
     that the finger strips and corner screw holes a real board arrives with are somebody
     else's problem. They are not; a finger is solid copper with no bore, and the placer and
     the router had to learn that before these boards could carry one."""
-    from perfboard_studio.geometry import STANDARD_PRESETS, board_size_mm
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.geometry import board_size_mm
 
     document = persist.deserialize_document(path.read_text(encoding="utf-8")).document
     board = document.board
@@ -119,13 +120,18 @@ def test_nothing_is_soldered_where_there_is_no_pad(path: pathlib.Path) -> None:
 
     Asserted separately from ``test_example_has_no_drc_errors`` even though DRC covers it,
     because that test would report a change here as one of a list and this one names it.
+    The stock boards' strips stand outside the grid and their corner holes in the border, so
+    most of them lose no hole at all; on a board whose border cannot hold a screw it is on
+    the corner position, and the set is not empty.
     """
     from perfboard_studio.geometry import all_pin_holes, hole_key, unusable_holes
 
     document = persist.deserialize_document(path.read_text(encoding="utf-8")).document
     lookup = footprint_lookup()
     dead = unusable_holes(document)
-    assert dead, "a stocked board has fingers, so there is something to keep off"
+    assert document.edge_connectors or document.mounting_holes, (
+        "a stocked board arrives with its strips and its corner holes"
+    )
 
     for component in document.components:
         footprint = lookup(component.footprint_id)

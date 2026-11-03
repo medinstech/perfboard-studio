@@ -29,6 +29,12 @@ import os
 import pytest
 
 from perfboard_studio import persist
+from perfboard_studio.boardfamily import (
+    STANDARD_PRESETS,
+    board_from_preset,
+    preset_edge_connectors,
+    preset_mounting_holes,
+)
 from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
 from perfboard_studio.commands import (
     DEFAULT_BOARD,
@@ -41,9 +47,7 @@ from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.geometry import (
     CORNER_HOLE_WEB_MM,
     FINGER_BORE_CLEARANCE_MM,
-    STANDARD_PRESETS,
     board_edge_margin_mm,
-    board_from_preset,
     board_outline_mm,
     board_size_mm,
     consumed_holes,
@@ -54,9 +58,6 @@ from perfboard_studio.geometry import (
     holes_without_grid_pad,
     legend_strip_mm,
     mounting_hole_centre_mm,
-    preset_edge_connectors,
-    preset_mounting_holes,
-    preset_strip_edges,
     undrilled_holes,
 )
 from perfboard_studio.model import (
@@ -331,34 +332,40 @@ def test_an_inset_survives_the_file_format() -> None:
 
 def test_a_green_board_arrives_with_its_finger_strips_and_corner_holes() -> None:
     """Choosing "5 x 7 cm, double-sided" has to produce the board that comes in the
-    envelope: oblong pads down two edges, a screw hole in each corner, a printed legend.
-    A bare grid would be describing a board nobody sells."""
+    envelope, as photographed: landscape, a stadium pad beside each row down both short
+    edges OUTSIDE the grid, a bare screw hole in each corner of the border, letters along
+    the top and the row numbers on both sides. A bare grid would be describing a board
+    nobody sells."""
     preset = next(p for p in STANDARD_PRESETS if not p.single_sided and p.name == "5 x 7 cm")
     board = board_from_preset(preset, DEFAULT_BOARD)
     connectors = preset_edge_connectors(preset, board)
     holes = preset_mounting_holes(preset, board)
 
+    assert (board.cols, board.rows) == (24, 18)
     assert len(connectors) == 2
-    assert {c.edge for c in connectors} == set(preset_strip_edges(board))
-    assert all(c.inset_mm > 0 for c in connectors), "the legend needs the strip outside them"
+    assert {c.edge for c in connectors} == {"left", "right"}
+    assert all(c.outside and c.shape == "stadium" and c.inset_mm > 0 for c in connectors)
     assert len(holes) == 4
     assert board.labels is not None
+    assert (board.labels.letter_edges, board.labels.number_edges) == ("top", "both")
+    assert [line.text for line in board.printed] == ["5cmX7cm"]
 
 
 def test_an_orange_phenolic_board_arrives_with_what_it_actually_has() -> None:
-    """Copper on one face, round pads through the grid, no corner holes — and the two
-    things it was wrongly denied: its printed addresses, and the finger strips across its
-    short edges. What separates the families is the copper and the screws, not those."""
+    """Copper on one face, round pads through the grid, square pads across its short edges,
+    its letters etched along one edge, and -- photographed, and denied it until then --
+    bare screw holes in the corners of its border."""
     preset = next(p for p in STANDARD_PRESETS if p.single_sided)
     board = board_from_preset(preset, DEFAULT_BOARD)
     connectors = preset_edge_connectors(preset, board)
 
     assert board.single_sided
-    assert board.labels is not None
+    assert board.labels is not None and board.labels.number_edges == "none"
     assert board.pad_shape == "round"
-    assert preset_mounting_holes(preset, board) == ()
+    assert len(preset_mounting_holes(preset, board)) == 4
 
     assert len(connectors) == 2
+    assert all(c.outside and c.shape == "square" for c in connectors)
     # One face, and the fingers are no exception: "both" would put a strip of contacts on
     # the bare phenolic side, where the board has nothing but substrate.
     assert {c.face for c in connectors} == {"bottom"}
@@ -372,24 +379,28 @@ def test_the_finger_strips_go_across_the_short_edges() -> None:
     2.14 mm and 1.98 mm, so a tenth of a millimetre decided which way the strips ran. A
     physical fact about a board should not turn on a rounding difference.
     """
+    stripped = 0
     for preset in STANDARD_PRESETS:
         board = board_from_preset(preset, DEFAULT_BOARD)
         width, height = board_size_mm(board)
-        expected = ("top", "bottom") if width <= height else ("left", "right")
-        assert preset_strip_edges(board) == expected, preset.name
+        connectors = preset_edge_connectors(preset, board)
+        if not connectors:
+            continue
+        stripped += 1
+        expected = {"top", "bottom"} if width <= height else {"left", "right"}
+        assert {c.edge for c in connectors} == expected, preset.name
+    assert stripped >= 6
 
 
 def test_a_corner_hole_sits_in_the_border_where_the_border_holds_it() -> None:
     """Every photograph of these boards shows bare holes in the corners of the BORDER,
     outside the grid, eating no pad: there the bore stands its web in from both edges and
-    every pad is kept. Where the border is too thin for that -- today's 6 x 8 and larger,
-    whose grids run almost to the edge -- it takes the corner position instead, one pad per
+    every pad is kept. Where the border is too thin for that -- the large boards, whose
+    grids run almost to the edge -- it takes the corner position instead, one pad per
     screw, which is what a bore pushed into the border by one offset on both axes, 0.20 mm
     from an edge, was replaced with."""
     in_border: set[str] = set()
     for preset in STANDARD_PRESETS:
-        if preset.single_sided:
-            continue
         board = board_from_preset(preset, DEFAULT_BOARD)
         holes = preset_mounting_holes(preset, board)
         doc = _doc(board, mounting_holes=holes)
@@ -401,15 +412,13 @@ def test_a_corner_hole_sits_in_the_border_where_the_border_holds_it() -> None:
             in_border.add(preset.name)
         else:
             assert consumed == {hole_key(hole.at) for hole in holes}, preset.name
-    assert {"2 x 8 cm", "3 x 7 cm", "4 x 6 cm", "5 x 7 cm"} <= in_border
+    assert {"2 x 8 cm", "3 x 7 cm", "4 x 6 cm", "5 x 7 cm", "6 x 8 cm", "7 x 9 cm"} <= in_border
 
 
 def test_a_corner_hole_stands_clear_of_both_edges_of_the_board() -> None:
     """The failure this replaces was visible and unmeasured: a bore 0.2 mm from the edge
     reads as a hole about to break out of the board, and its keepout ring hung off it."""
     for preset in STANDARD_PRESETS:
-        if preset.single_sided:
-            continue
         board = board_from_preset(preset, DEFAULT_BOARD)
         for hole in preset_mounting_holes(preset, board):
             centre = mounting_hole_centre_mm(hole, board)
@@ -532,9 +541,13 @@ def test_a_connector_finger_has_no_hole_through_it() -> None:
     position it has and 2D then punched the bore back through the finger on top — so the
     strip came out looking like an ordinary row of pads that happened to be long.
     """
-    preset = next(p for p in STANDARD_PRESETS if p.single_sided)
-    board = board_from_preset(preset, DEFAULT_BOARD)
-    connectors = preset_edge_connectors(preset, board)
+    # On the holes, as a strip laid on the outermost row is: the stock boards' strips stand
+    # outside the grid and replace no hole at all (test_outside_fingers.py).
+    board = dataclasses.replace(BOARD, single_sided=True, material="FR2")
+    connectors = (
+        EdgeConnector(id="ec-left", edge="left", start=1, count=board.rows - 2, face="bottom"),
+        EdgeConnector(id="ec-right", edge="right", start=1, count=board.rows - 2, face="bottom"),
+    )
     doc = _doc(board, edge_connectors=connectors)
 
     undrilled = undrilled_holes(doc)
