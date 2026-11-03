@@ -27,7 +27,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QAction, QKeyEvent
@@ -51,7 +51,11 @@ from perfboard_studio.commands import (
     LockComponentsPayload,
     MirrorComponentPayload,
     MoveComponentPayload,
+    NewConductor,
+    NewSolderTraceConductor,
+    NewWireConductor,
     RenameDocumentPayload,
+    ReplaceConductorsPayload,
     RotateComponentPayload,
     SetBodyClearancePayload,
     SetHeightLimitPayload,
@@ -61,6 +65,7 @@ from perfboard_studio.commands import (
     UpdateNetPayload,
     UpdatePartPayload,
     UpdateSheetNotePayload,
+    wire_side,
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import format_hole, parse_hole
@@ -1384,10 +1389,24 @@ class _SheetNoteEditor(QWidget):
 class _ConductorEditor(QWidget):
     """One run of copper or wire: what it is, from where to where, over how many holes, and
     on which net. What the status bar said about a selected conductor, and more of it --
-    it said only that one was selected, and Delete looked as if it acted on nothing."""
+    it said only that one was selected, and Delete looked as if it acted on nothing.
 
-    def __init__(self, actions: InspectorActions) -> None:
+    WHAT IT IS CAN CHANGE, among the kinds legal on its path: a solder trace and a
+    reinforced one are the same run of pads, and a bare wire, an insulated one and a jumper
+    over the parts the same two holes. One ``conductor.replace`` keeping the id, the path
+    and the net -- so it stays selected and undoes in one step -- where it took deleting the
+    run and drawing it again with another tool."""
+
+    #: The kinds one run can be made into, by family.
+    SOLDER: tuple[str, ...] = ("solder-trace", "solder-trace-wired")
+    WIRE: tuple[str, ...] = ("bare-wire", "insulated-wire", "top-jumper")
+
+    def __init__(self, inspector: Inspector, actions: InspectorActions) -> None:
         super().__init__()
+        self._inspector = inspector
+        self._document: PerfDocument | None = None
+        self._conductor: Conductor | None = None
+        self._loading = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(theme.SPACE["lg"])
@@ -1395,6 +1414,32 @@ class _ConductorEditor(QWidget):
         self.title.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(self.title)
         form = _form()
+        kinds = QWidget()
+        kind_row = QHBoxLayout(kinds)
+        kind_row.setContentsMargins(0, 0, 0, 0)
+        kind_row.setSpacing(2)
+        self.kind = QButtonGroup(self)
+        self.kind.setExclusive(True)
+        self._kind_buttons: dict[str, QToolButton] = {}
+        words = {
+            "solder-trace": t("&Solder Trace"),
+            "solder-trace-wired": t("&Reinforced Solder Trace"),
+            "bare-wire": t("&Bare Wire"),
+            "insulated-wire": t("&Insulated Wire"),
+            "top-jumper": t("&Jumper Over the Parts"),
+        }
+        for kind in (*self.SOLDER, *self.WIRE):
+            button = QToolButton()
+            button.setText(words[kind].replace("&", ""))
+            button.setCheckable(True)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda _checked=False, k=kind: self._commit_kind(k))
+            self.kind.addButton(button)
+            self._kind_buttons[kind] = button
+            kind_row.addWidget(button)
+        self.kind_problem = _Problem()
+        _add_field(form, t("Kind"), kinds, self.kind_problem)
+        self._kind_row = kinds
         self.ends = _fact()
         form.addRow(t("Holes"), self.ends)
         self.net = _fact()
@@ -1407,10 +1452,29 @@ class _ConductorEditor(QWidget):
         buttons.addWidget(_action_button(actions.delete))
         layout.addLayout(buttons)
 
-    def load(self, document: PerfDocument, conductor: Conductor) -> None:
+    @staticmethod
+    def kind_of(conductor: Conductor) -> str:
         kind = str(getattr(conductor, "kind", "solder-trace"))
         if kind == "solder-trace" and getattr(conductor, "spine", None) is not None:
-            kind = "solder-trace-wired"
+            return "solder-trace-wired"
+        return kind
+
+    def load(self, document: PerfDocument, conductor: Conductor) -> None:
+        another = self._conductor is None or self._conductor.id != conductor.id
+        self._document = document
+        self._conductor = conductor
+        kind = self.kind_of(conductor)
+        family = self.SOLDER if kind in self.SOLDER else self.WIRE if kind in self.WIRE else ()
+        self._loading = True
+        try:
+            self._kind_row.setVisible(bool(family))
+            for each, button in self._kind_buttons.items():
+                button.setVisible(each in family)
+                button.setChecked(each == kind)
+            if another:
+                self.kind_problem.show_problem("")
+        finally:
+            self._loading = False
         # Each kind in the words its drawing tool has; asked here, in the window's language.
         words = {
             "solder-trace": t("&Solder Trace"),
@@ -1434,6 +1498,44 @@ class _ConductorEditor(QWidget):
         )
         net = next((n for n in document.nets if n.id == conductor.net_id), None)
         self.net.setText(net.name if net is not None else "—")
+
+    def _commit_kind(self, kind: str) -> None:
+        conductor, document = self._conductor, self._document
+        if self._loading or conductor is None or document is None:
+            return
+        if kind == self.kind_of(conductor):
+            return
+        spec: NewConductor
+        if kind in self.SOLDER:
+            spec = NewSolderTraceConductor(
+                path=conductor.path,
+                kind="solder-trace-wired" if kind == "solder-trace-wired" else "solder-trace",
+                net_id=conductor.net_id,
+                layer_z=conductor.layer_z,
+            )
+        else:
+            wire_kind: Literal["bare-wire", "insulated-wire", "top-jumper"] = (
+                "insulated-wire" if kind == "insulated-wire"
+                else "top-jumper" if kind == "top-jumper" else "bare-wire"
+            )
+            spec = NewWireConductor(
+                path=conductor.path,
+                kind=wire_kind,
+                side=wire_side(wire_kind, document.board),
+                gauge_awg=getattr(conductor, "gauge_awg", None),
+                color=getattr(conductor, "color", None),
+                net_id=conductor.net_id,
+                layer_z=conductor.layer_z,
+            )
+        problem = self._inspector.dispatch(
+            "conductor.replace",
+            ReplaceConductorsPayload(
+                remove_ids=(conductor.id,), conductors=(spec,), ids=(conductor.id,)
+            ),
+        )
+        self.kind_problem.show_problem(problem or "")
+        if problem:
+            self.load(document, conductor)
 
 
 # -- everything else, said in one line until it has an editor ----------------------------
@@ -1484,7 +1586,7 @@ class Inspector(QWidget):
         self.net_editor = _NetEditor(self, actions)
         self.board_note_editor = _BoardNoteEditor(self, actions)
         self.sheet_note_editor = _SheetNoteEditor(self)
-        self.conductor_editor = _ConductorEditor(actions)
+        self.conductor_editor = _ConductorEditor(self, actions)
         self.summary = _Summary()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

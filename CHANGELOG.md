@@ -191,6 +191,9 @@ closed without a bump.
   opens the Library in a popup: type, and Enter takes the part the text names; as you
   move through it, it says where pin 1 and the last pin land and which lead bends go. A
   catalog part brings its value and pin names with it. The Add a Part dialog is gone.
+- **A wire or a trace changes kind in Properties.** A bare wire becomes insulated, or a
+  jumper over the parts, and a solder trace reinforced, in one undo step on the same holes
+  and net; it took deleting it and drawing it again.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

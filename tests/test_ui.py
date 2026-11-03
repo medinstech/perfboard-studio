@@ -14863,3 +14863,39 @@ def test_a_comma_typed_into_a_number_field_is_a_decimal_point() -> None:
         box.deleteLater()
     finally:
         _close(window)
+
+
+def test_a_wire_becomes_another_kind_of_wire_in_one_step() -> None:
+    """A bare wire that should have been insulated took deleting it and drawing it again.
+    It is one ``conductor.replace`` from Properties, keeping its id, path and net -- so it
+    stays selected -- and a wire is offered only the wire kinds, a trace only the traces."""
+    from perfboard_studio.model import WireConductor
+
+    window = _window_on(_load_dense())
+    try:
+        wire = next(c for c in window.bus.document.conductors if isinstance(c, WireConductor))
+        window.scene.clearSelection()
+        _select_conductor(window, wire.id)
+        window._refresh_properties()
+        editor = window.inspector.conductor_editor
+        assert window.inspector.shown is editor
+        assert editor._kind_buttons["solder-trace"].isHidden()
+        other = "insulated-wire" if wire.kind != "insulated-wire" else "bare-wire"
+        steps = len(window.bus.history())
+        editor._kind_buttons[other].click()
+        now = next(c for c in window.bus.document.conductors if c.id == wire.id)
+        assert (now.kind, now.path, now.net_id) == (other, wire.path, wire.net_id)
+        assert len(window.bus.history()) == steps + 1
+        assert wire.id in set(window.scene.selected_conductor_ids())
+    finally:
+        _close(window)
+
+
+def _select_conductor(window, conductor_id: str) -> None:
+    from perfboard_studio.ui.view2d import ConductorItem
+
+    for item in window.scene.items():
+        if isinstance(item, ConductorItem) and item.conductor_id == conductor_id:
+            item.setSelected(True)
+            return
+    raise AssertionError(f"no item for {conductor_id}")

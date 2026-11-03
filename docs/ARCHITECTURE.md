@@ -1566,6 +1566,11 @@ package, hole and turn in a line nobody could act on, beside a panel that now sh
 it editable; a conductor selected alone is its kind, its ends, its holes and its net in
 Properties (`_ConductorEditor`), which the line only ever counted.
 
+A conductor's kind changes there too, among the kinds legal on its path -- solder trace and
+reinforced; bare wire, insulated wire and a jumper over the parts -- as ONE
+`conductor.replace` that keeps its id (`ids`), path and net, so it stays selected and undoes
+in one step. It took deleting the run and drawing it again with another tool.
+
 **Add Part is the Library** (`on_schematic_add_part`): the sheet in front, the Library's
 search focused, and Enter or a double-click on a part (`_on_library_item_activated`) puts it
 in the design as one `part.add` and shows it in Properties to be named -- the search still

@@ -803,6 +803,7 @@ TURKISH: Mapping[str, str] = {
     "Rotation": "Dönüş",
     "Mirrored": "Aynalanmış",
     "Face": "Yüz",
+    "Kind": "Tür",
     "Type what the part is; Enter puts it on the sheet.": (
         "Parçanın ne olduğunu yazın; Enter onu şemaya koyar."
     ),
