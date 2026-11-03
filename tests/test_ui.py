@@ -14820,3 +14820,44 @@ def test_the_status_bar_no_longer_repeats_the_selection() -> None:
     assert not hasattr(window, "label_selection")
     assert window.inspector.part_editor.ref.text() == component.ref
     _close(window)
+
+
+def test_every_number_in_the_window_has_a_decimal_point() -> None:
+    """A spin box wrote "2,28 mm" on a Turkish Windows while the sentence under it, the
+    engine's, said "0.64 mm". The window writes numbers the engine's way, whatever the
+    machine's locale and in either language."""
+    from PySide6.QtCore import QLocale
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    before = QLocale()
+    QLocale.setDefault(QLocale(QLocale.Language.Turkish, QLocale.Country.Turkey))
+    try:
+        window = _window_on(_load_dense())
+        box = QDoubleSpinBox()
+        box.setDecimals(2)
+        box.setValue(2.28)
+        assert box.text() == "2.28"
+        box.deleteLater()
+        _close(window)
+    finally:
+        QLocale.setDefault(before)
+
+
+def test_a_comma_typed_into_a_number_field_is_a_decimal_point() -> None:
+    """The fields write "2.28", and a Turkish hand types "2,28" anyway: the comma is taken
+    as the point it means, rather than swallowed into 228."""
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    window = _window_on(_load_dense())
+    try:
+        box = QDoubleSpinBox()
+        box.setDecimals(2)
+        box.setRange(0.0, 100.0)
+        box.lineEdit().selectAll()
+        QTest.keyClicks(box, "2,28")
+        box.interpretText()
+        assert box.value() == 2.28
+        box.deleteLater()
+    finally:
+        _close(window)

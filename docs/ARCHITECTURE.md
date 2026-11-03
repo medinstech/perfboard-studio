@@ -1617,6 +1617,12 @@ dialog's step line, the step bar, the empty board's paragraph), and F1 opened a 
 shortcuts. The redesign of 2026-10-28 made the step bar the one narrator and gave every
 other surface its words.
 
+**One number format, the engine's** (`use_one_number_format`, the first thing a window
+does). A spin box writes numbers the way the machine's locale does, and the rest of the
+window is the engine's text -- DRC, the guide, a measured distance -- which the goldens hold
+byte for byte with a decimal point. On a Turkish Windows they met in one dialog as "2,28 mm"
+over "0.64 mm", in either language. The engine's text cannot change, so the boxes follow it.
+
 - **One word for each thing, said the way a beginner reads it.** Autoroute is Auto-wire,
   Auto-place Rearrange, Spine a reinforced solder trace, Ratsnest Missing Connections, the
   findings panel Problems with three groups -- Circuit check (ERC), Board check (DRC),

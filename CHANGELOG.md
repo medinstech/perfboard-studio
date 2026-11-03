@@ -169,6 +169,10 @@ closed without a bump.
 - **What is selected is said in Properties, not in the status bar.** The status bar's
   selection line is gone; a conductor selected on its own shows its kind, its two ends,
   its holes and its net in Properties.
+- **Every number in the window is written one way.** On a Turkish Windows a field said
+  "2,28 mm" while the line under it said "0.64 mm", even in the English window; fields
+  now use a decimal point too, as everything the board's checks and the guide write does,
+  and a comma typed into one is taken as the point it means.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

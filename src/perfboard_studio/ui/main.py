@@ -45,6 +45,7 @@ from PySide6.QtCore import (
     QEventLoop,
     QFileSystemWatcher,
     QLibraryInfo,
+    QLocale,
     QMimeData,
     QObject,
     QPoint,
@@ -69,6 +70,7 @@ from PySide6.QtGui import (
     QDesktopServices,
     QDrag,
     QIcon,
+    QKeyEvent,
     QKeySequence,
     QShortcut,
     QShowEvent,
@@ -456,6 +458,52 @@ def undone(description: str) -> str:
 def redone(description: str) -> str:
     """What Redo put back, for the status bar. See ``undone``."""
     return t("Redone: {what}").format(what=say(description))
+
+
+class _CommaIsAPoint(QObject):
+    """A comma typed into a number field is a decimal point.
+
+    The fields write "2.28" (``use_one_number_format``), and somebody who writes 2,28 by
+    hand types the comma anyway -- which the field's validator would swallow without a word,
+    leaving 228. The key is handed on as the point it means."""
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if (
+            event.type() == QEvent.Type.KeyPress
+            and isinstance(event, QKeyEvent)
+            and event.text() == ","
+            and isinstance(watched, QWidget)
+        ):
+            box = watched if isinstance(watched, QDoubleSpinBox) else watched.parentWidget()
+            if isinstance(box, QDoubleSpinBox):
+                point = QKeyEvent(
+                    QEvent.Type.KeyPress, Qt.Key.Key_Period, event.modifiers(), "."
+                )
+                QApplication.sendEvent(watched, point)
+                return True
+        return super().eventFilter(watched, event)
+
+
+#: The one comma filter, kept alive here and installed once per application.
+_COMMA_IS_A_POINT: _CommaIsAPoint | None = None
+
+
+def use_one_number_format() -> None:
+    """Every number in the window written one way: the engine's, with a decimal point.
+
+    A spin box writes a number in the locale's format and everything else in the window is
+    text the engine wrote -- DRC, the build guide, a hole's distance -- which the goldens
+    hold byte for byte. On a Turkish Windows the two met in one dialog as "2,28 mm" in the
+    box and "0.64 mm" in the sentence under it, even with the window in English. The
+    engine's text cannot change, so the boxes follow it, in both languages -- and still
+    take the comma a Turkish hand types (``_CommaIsAPoint``).
+    """
+    global _COMMA_IS_A_POINT
+    QLocale.setDefault(QLocale.c())
+    app = QApplication.instance()
+    if app is not None and _COMMA_IS_A_POINT is None:
+        _COMMA_IS_A_POINT = _CommaIsAPoint()
+        app.installEventFilter(_COMMA_IS_A_POINT)
 
 
 def refused(result: DispatchResult) -> str:
@@ -3602,6 +3650,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self, document: PerfDocument, path: Path | None = None) -> None:
         super().__init__()
+        # Before any field is made: a widget takes its locale when it is created.
+        use_one_number_format()
         self.lookup = footprint_lookup()
         self.side: BoardSide = "top"
         self.current_path = path
