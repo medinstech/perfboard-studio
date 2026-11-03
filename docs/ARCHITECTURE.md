@@ -1851,6 +1851,20 @@ order and the checks are the guide's. THE TICKS ARE ONE STORE (`_done_steps`, pe
 the settings): Done-next ticks the list's row, a row ticked in the list is done on the
 bench, and a check ticked on the bench is kept beside the steps (`check_key`).
 
+**A board is designed from a board somebody can buy** (`ui/designer.py`, Board ▸ Design the
+Board…, and Properties' Change… on the board). Three columns, chosen from two rendered
+candidates: the families on the left -- parts' catalogue (`boardfamily.FAMILIES`) and the
+user's own, kept in the settings under `boardFamilies/user` as the board colour is -- the
+board in the middle, drawn by the board view itself as each field changes and at the size
+the preview has (a picture wider than its label is cut at both sides, and the border went
+with it), and every setting on the right at once. A catalogue family is said by its id
+through the UI catalogue, a user's by the name they gave it; every vocabulary is in words,
+and a mask or finish the family does not say is "as the material is sold", never green.
+The printed words show as they read on the size shown, the template on hover.
+`family_problem` is the one refusal, said under the field it names, and it holds Use This
+Board, which is one `board.applyPreset`: the grid, its edge pads and its corner holes, one
+undo step, refused in words when a part already down would be stranded.
+
 ## The words, the first start and help tell one story
 
 A newcomer met the window's jargon before anything else -- Trace, Spine, Bare, Ratsnest,

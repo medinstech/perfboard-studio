@@ -132,6 +132,7 @@ from perfboard_studio.autoroute import (
 )
 from perfboard_studio.boardfamily import (
     STANDARD_PRESETS,
+    BoardDesign,
     BoardPreset,
     board_from_preset,
     preset_edge_connectors,
@@ -355,6 +356,7 @@ from .boardcolors import chosen_key as chosen_board_colour
 from .boardpreview import render_board, with_arrangement, with_board
 from .canvastools import FloatingBar
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
+from .designer import BoardDesigner, load_user_families, store_user_families
 from .emptystate import EmptyOverlay, EmptyState
 from .engine_text import finding_text, names_in, net_class_word, say
 from .export_pdf import export_pdf
@@ -5433,6 +5435,13 @@ class MainWindow(QMainWindow):
             )
         )
         act_rename.triggered.connect(self.on_rename_board)
+        # A board from the boards people buy (``ui/designer.py``), tweaked and seen.
+        self.act_design_board = board_menu.addAction(t("&Design the Board…"))
+        self.act_design_board.setToolTip(
+            t("Start from a board you can buy -- green with edge pads, brown phenolic -- and "
+              "change its size, pads, holes, printing and colour, seen as you go.")
+        )
+        self.act_design_board.triggered.connect(self.on_design_board)
         act_import = file_menu.addAction(t("&Import from KiCad…"))
         self.act_import = act_import
         act_import.setShortcut(QKeySequence("Ctrl+I"))
@@ -9095,7 +9104,7 @@ class MainWindow(QMainWindow):
             self.lookup,
             InspectorHooks(
                 change_part=lambda component_id: self.on_change_part(component_id),
-                board_setup=lambda: self.on_board_setup(),
+                board_setup=lambda: self.on_design_board(),
                 change_design_part=lambda part_id: self.on_schematic_part_properties(part_id),
             ),
             InspectorActions(
@@ -12300,6 +12309,37 @@ class MainWindow(QMainWindow):
         self._board_chosen = True
         self.view.fit_board()
         return True
+
+    def on_design_board(self) -> None:
+        """The board designer: a family to start from, tweaked, applied as ONE
+        ``board.applyPreset`` -- the grid, its edge pads and its corner holes together, one
+        undo step -- and refused in words when a part already down would be stranded. The
+        families the user saves are kept in the settings, as the board colour is."""
+        settings = app_settings()
+
+        def apply(design: BoardDesign) -> str | None:
+            result = self.bus.dispatch(
+                "board.applyPreset",
+                ApplyBoardPresetPayload(
+                    board=design.board,
+                    edge_connectors=design.edge_connectors,
+                    mounting_holes=design.mounting_holes,
+                ),
+            )
+            if not result.ok:
+                return refused(result)
+            self.view.fit_board()
+            return None
+
+        dialog = BoardDesigner(
+            self,
+            base=self.bus.document.board,
+            lookup=self.lookup,
+            saved=load_user_families(settings),
+            apply=apply,
+        )
+        dialog.exec()
+        store_user_families(settings, dialog.saved)
 
     def on_rename_board(self) -> None:
         """Name the board -- the title its guide, its schematic and its project carry --

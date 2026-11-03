@@ -15834,3 +15834,101 @@ def test_with_nothing_typed_the_library_is_in_its_own_order() -> None:
     listed = [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]
     catalog = [headings[c] for c in CATEGORY_ORDER if headings[c] in listed]
     assert listed[: len(catalog)] == catalog
+
+
+def _designer(window, monkeypatch, act):
+    """Open the board designer and do ``act`` to it in place of a person."""
+    from perfboard_studio.ui import designer as designer_module
+
+    seen: list = []
+
+    def run(dialog) -> int:
+        seen.append(dialog)
+        act(dialog)
+        return 0
+
+    monkeypatch.setattr(designer_module.BoardDesigner, "exec", run)
+    window.on_design_board()
+    return seen[0]
+
+
+def test_the_designer_puts_a_stock_board_on_in_one_step(monkeypatch) -> None:
+    """A green 5 x 7 cm board from the catalogue: its grid, its edge pads and its corner
+    holes, as ONE board.applyPreset -- one undo step."""
+    window = _blank_window()
+    try:
+        before = len(window.bus.history())
+
+        def choose(dialog) -> None:
+            index = next(i for i in range(dialog.stock.count())
+                         if dialog.stock.itemText(i).startswith("5 x 7"))
+            dialog._on_stock_size(index)
+            dialog._use()
+
+        _designer(window, monkeypatch, choose)
+        document = window.bus.document
+        assert (document.board.cols, document.board.rows) == (24, 18)
+        assert document.edge_connectors and document.mounting_holes
+        assert len(window.bus.history()) == before + 1
+    finally:
+        _close(window)
+
+
+def test_the_designer_says_a_problem_under_its_field_and_holds_use(monkeypatch) -> None:
+    """The engine's one refusal, said where it applies: a drill wider than its pad."""
+    window = _blank_window()
+    try:
+        def wrong(dialog) -> None:
+            dialog.drill.setValue(dialog.pad.value() + 1.0)
+            dialog._show()
+
+        dialog = _designer(window, monkeypatch, wrong)
+        shown = [path for path, label in dialog._problems.items() if not label.isHidden()]
+        assert shown, "the refusal is under a field"
+        assert not dialog.use.isEnabled()
+    finally:
+        _close(window)
+
+
+def test_a_board_saved_as_mine_is_offered_next_time(monkeypatch) -> None:
+    """Saved in the settings, as the board colour is: the next designer lists it after the
+    catalogue, by the name it was given, and says it in that name in any language."""
+    from perfboard_studio.boardfamily import FAMILIES
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui.designer import family_name, load_user_families
+
+    window = _blank_window()
+    try:
+        def save(dialog) -> None:
+            dialog.name.setText("Bench 6x8")
+            dialog._save_as_mine()
+
+        _designer(window, monkeypatch, save)
+        mine = load_user_families(main_module.app_settings())
+        assert [f.name for f in mine][-1:] == ["Bench 6x8"]
+        assert mine[-1].user and family_name(mine[-1]) == "Bench 6x8"
+
+        def look(dialog) -> None:
+            assert dialog.families.count() == len(FAMILIES) + len(mine)
+
+        _designer(window, monkeypatch, look)
+    finally:
+        _close(window)
+
+
+def test_a_family_and_its_words_are_said_in_the_windows_language() -> None:
+    """A catalogue family by its id through the catalogue; every vocabulary in words."""
+    from perfboard_studio.boardfamily import FAMILIES
+    from perfboard_studio.ui.designer import _words, family_name
+    from perfboard_studio.ui.i18n import language, set_language
+
+    before = language()
+    set_language("tr")
+    try:
+        names = [family_name(f) for f in FAMILIES]
+        assert all(name != f.name for name, f in zip(names, FAMILIES, strict=True))
+        for vocabulary in _words().values():
+            for word in vocabulary.values():
+                assert word and "-" not in word.split()[0], word
+    finally:
+        set_language(before)
