@@ -6515,7 +6515,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.button_custom_part)
 
         self.label_place_hint = QLabel(
-            t("Drag a part onto the board or the sheet — or pick one and click. Esc cancels.")
+            t(
+                "Double-click a part to put it on the sheet. On the board: pick one, then "
+                "click a hole. Esc cancels."
+            )
         )
         self.label_place_hint.setWordWrap(True)
         theme.tone(self.label_place_hint, "secondary")
@@ -6646,7 +6649,12 @@ class MainWindow(QMainWindow):
         # R and M turn an armed part, so they come on and go off with the arming.
         self._refresh_selection_state()
         if not footprint_id:
-            self.label_place_hint.setText(t("Pick a part, then click the board. Esc cancels."))
+            self.label_place_hint.setText(
+                t(
+                    "Double-click a part to put it on the sheet. On the board: pick one, then "
+                    "click a hole. Esc cancels."
+                )
+            )
             self.view.viewport().unsetCursor()
             self.library_tree.clearSelection()
             self._refresh_mode_banner()
@@ -7589,7 +7597,7 @@ class MainWindow(QMainWindow):
         if not isinstance(path, list) or len(path) < 2:
             return
         if not self.bus.document.sheet:
-            self._dispatch_sheet_layout({}, t("Fix the sheet layout"))
+            self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
         wire = SheetWire(
             a=NetNode(component_ref=ref_a, pin=pin_a),
             b=NetNode(component_ref=ref_b, pin=pin_b),

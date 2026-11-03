@@ -472,7 +472,7 @@ TURKISH: Mapping[str, str] = {
     "Type": "Tip",
     "Strips run": "Şeritler",
     "Pad per hole — every hole is its own island": (
-        "Delik başına ada — her delik kendi adası"
+        "Delik başına ped — her delik kendi adası"
     ),
     "Stripboard — whole rows joined; you cut the track to separate": (
         "Şeritli kart — satırlar baştan bağlı; ayırmak için şerit kesilir"
@@ -494,7 +494,7 @@ TURKISH: Mapping[str, str] = {
     "Along a row": "Satır boyunca",
     "Addresses printed on the board": "Adresler kartın üzerine basılı",
     "Boards carrying their own A-Z / 01-22 legend, printed on the board itself.": (
-        "Kendi A-Z / 01-22 cetvelini taşıyan, cetveli kartın üzerine basılı kartlar."
+        "Kendi A-Z / 01-22 numaralandırmasını üzerinde basılı taşıyan kartlar."
     ),
     "Row digits": "Satır basamağı",
     "Columns printed as": "Sütunlarda basılı",
@@ -909,9 +909,6 @@ TURKISH: Mapping[str, str] = {
     ),
     "Click a hole to place": "Yerleştirmek için bir deliğe tıkla:",
     "Esc cancels.": "Esc iptal eder.",
-    "Pick a part, then click the board. Esc cancels.": (
-        "Bir parça seçin, sonra karta tıklayın. Esc iptal eder."
-    ),
     # -- panel headings --------------------------------------------------------
     "Part": "Parça",
     "Pins": "Pin",
@@ -1024,10 +1021,11 @@ TURKISH: Mapping[str, str] = {
     "Connect by Name": "Ada Göre Bağla",
     "Net for {pin}:": "{pin} için net:",
     "No package called {id}.": "{id} adında bir kılıf yok.",
-    "Fix the sheet layout": "Sayfa düzenini sabitle",
-    "Drag a part onto the board or the sheet — or pick one and click. Esc cancels.": (
-        "Bir parçayı kartın ya da sayfanın üzerine sürükleyin — ya da birini seçip "
-        "tıklayın. Esc iptal eder."
+    "Keep the symbols where they are": "Sembolleri yerlerinde tut",
+    "Double-click a part to put it on the sheet. On the board: pick one"
+    ", then click a hole. Esc cancels.": (
+        "Şemaya koymak için parçaya çift tıklayın. Kartta ise birini seçin, sonra bir "
+        "deliğe tıklayın. Esc iptal eder."
     ),
     # -- the welcome dialog, and autosave that writes the file itself ----------
     # "Perfboard Studio" is deliberately absent: it is the product's name, and a name is
@@ -3244,20 +3242,20 @@ TURKISH: Mapping[str, str] = {
     '{ref}: {hole} -> {to}, turned to {degrees} deg': '{ref}: {hole} → {to}, {degrees}° konumuna döndürüldü',
     '{ref}: {hole} -> {to}': '{ref}: {hole} → {to}',
     '... and {count} more': '... ve {count} tane daha',
-    '{pin} ({net}) and {pin_b} ({net_b}) share the strip through {hole} and there is no free hole between them to cut. Move one of the parts.': '{pin} ({net}) ile {pin_b} ({net_b}), {hole} deliğinden geçen şeridi paylaşıyor ve aralarında kesilecek boş delik yok. Parçalardan birini taşı.',
-    '{pin} ({net}) and {pin_b} ({net_b}) are in one clip, {hole} and {hole_b}: the breadboard joins them and nothing can be cut. Move one of the parts.': '{pin} ({net}) ile {pin_b} ({net_b}) aynı klipste, {hole} ve {hole_b}: breadboard onları birleştiriyor ve hiçbir şey kesilemez. Parçalardan birini taşı.',
+    '{pin} ({net}) and {pin_b} ({net_b}) share the strip through {hole} and there is no free hole between them to cut. Move one of the parts.': '{pin} ({net}) ile {pin_b} ({net_b}), {hole} deliğinden geçen şeridi paylaşıyor ve aralarında kesilecek boş delik yok. Parçalardan birini taşıyın.',
+    '{pin} ({net}) and {pin_b} ({net_b}) are in one clip, {hole} and {hole_b}: the breadboard joins them and nothing can be cut. Move one of the parts.': '{pin} ({net}) ile {pin_b} ({net_b}) aynı klipste, {hole} ve {hole_b}: breadboard onları birleştiriyor ve hiçbir şey kesilemez. Parçalardan birini taşıyın.',
     '{count} pin(s) of {net} could not be found on the board: the part is not placed, its footprint is not in the library, or the netlist names a pin the footprint does not have. Nothing was linked to them.': "{net} netinin {count} pini kartta "
                                                                                                                                                                                                                  "bulunamadı: parça yerleştirilmemiş, "
                                                                                                                                                                                                                  "kılıf kütüphanede yok ya da netlist "
                                                                                                                                                                                                                  "kılıfında olmayan bir pin adlandırıyor. "
                                                                                                                                                                                                                  "Onlara hiçbir şey bağlanmadı.",
-    '{count} part(s) of {net} stand where the breadboard has no hole, so nothing was linked to them. Move them onto the holes.': "{net} netinin {count} parçası breadboard'un deliği olmayan bir yerinde duruyor, bu yüzden onlara hiçbir şey bağlanmadı. Onları deliklerin üzerine taşı.",
-    '{pin} is in the {edge} {sign} rail at {hole}, which is for {netclass}, and this is a pin no net declares. Move the part off the rail.': '{pin}, {hole} deliğinde, {edge} {sign} rayında; bu ray {netclass} içindir, bu pin ise hiçbir netin bildirmediği bir pin. Parçayı raydan çıkar.',
-    '{pin} is in the {edge} {sign} rail at {hole}, which is for {netclass}, and this is a {netclass_b} net. Move the part off the rail.': '{pin}, {hole} deliğinde, {edge} {sign} rayında; bu ray {netclass} içindir, bu ise bir {netclass_b} neti. Parçayı raydan çıkar.',
-    'Part of {net} (at {holes}) cannot be reached: every hole of its clip already has a lead in it. Move a part so its clip has a hole free for a jumper.': '{net} netinin bir bölümüne ({holes}) ulaşılamıyor: klipsinin her deliğinde zaten bir bacak var. Klipste jumper için bir delik boşalsın diye bir parçayı taşı.',
+    '{count} part(s) of {net} stand where the breadboard has no hole, so nothing was linked to them. Move them onto the holes.': "{net} netinin {count} parçası breadboard'un deliği olmayan bir yerinde duruyor, bu yüzden onlara hiçbir şey bağlanmadı. Onları deliklerin üzerine taşıyın.",
+    '{pin} is in the {edge} {sign} rail at {hole}, which is for {netclass}, and this is a pin no net declares. Move the part off the rail.': '{pin}, {hole} deliğinde, {edge} {sign} rayında; bu ray {netclass} içindir, bu pin ise hiçbir netin bildirmediği bir pin. Parçayı raydan çıkarın.',
+    '{pin} is in the {edge} {sign} rail at {hole}, which is for {netclass}, and this is a {netclass_b} net. Move the part off the rail.': '{pin}, {hole} deliğinde, {edge} {sign} rayında; bu ray {netclass} içindir, bu ise bir {netclass_b} neti. Parçayı raydan çıkarın.',
+    'Part of {net} (at {holes}) cannot be reached: every hole of its clip already has a lead in it. Move a part so its clip has a hole free for a jumper.': '{net} netinin bir bölümüne ({holes}) ulaşılamıyor: klipsinin her deliğinde zaten bir bacak var. Klipste jumper için bir delik boşalsın diye bir parçayı taşıyın.',
     'No route found from {hole} to {to}. No wire is allowed by the current crossing policy, so only a solder trace was tried.': '{hole} ile {to} arasında yol bulunamadı. Geçerli kesişme ayarı tele izin vermiyor, bu yüzden yalnızca lehim yolu denendi.',
-    'No route found from {hole} to {to}. Every strategy was blocked — try moving a part, or allow a top jumper.': "{hole} ile {to} arasında yol bulunamadı. Her yol tıkalıydı — bir parçayı taşımayı ya da üst yüz jumper'a izin vermeyi dene.",
-    '{hole} has no pad to solder to — a mounting bore or an edge-connector finger is there. Move the part.': '{hole} deliğinde lehimlenecek ped yok — orada bir montaj deliği ya da kenar konnektörü parmağı var. Parçayı taşı.',
+    'No route found from {hole} to {to}. Every strategy was blocked — try moving a part, or allow a top jumper.': "{hole} ile {to} arasında yol bulunamadı. Her yol tıkalıydı — bir parçayı taşımayı ya da üst yüz jumper'a izin vermeyi deneyin.",
+    '{hole} has no pad to solder to — a mounting bore or an edge-connector finger is there. Move the part.': '{hole} deliğinde lehimlenecek ped yok — orada bir montaj deliği ya da kenar konnektörü parmağı var. Parçayı taşıyın.',
     'Endpoint is outside the board.': 'Uç kartın dışında.',
     'Start and end are the same hole.': 'Başlangıç ve bitiş aynı delik.',
     'The router found no route.': "Kablolama aracı bir yol bulamadı.",
@@ -3499,7 +3497,7 @@ TURKISH: Mapping[str, str] = {
     'would be cut in AWG {awg}, the heaviest gauge this tool names,': 'bu aracın bildiği en kalın kalınlık olan AWG {awg} ile kesilirdi,',
     '{ref} is locked.': '{ref} kilitli.',
     'A component with ref "{ref}" is on the board.': '"{ref}" referanslı bir parça zaten kartta.',
-    'A schematic part with ref "{ref}" is already in the design. Place that one instead, or give this a different reference.': '"{ref}" referanslı bir parça tasarımda zaten var. Onu yerleştir ya da buna başka bir referans ver.',
+    'A schematic part with ref "{ref}" is already in the design. Place that one instead, or give this a different reference.': '"{ref}" referanslı bir parça tasarımda zaten var. Onu yerleştirin ya da buna başka bir referans verin.',
     'A component with ref "{ref}" already exists.': '"{ref}" referanslı bir parça zaten var.',
     'Anchor for {ref} {hole} is outside the {cols}x{rows} board.': '{ref} için {hole} deliği {cols}x{rows} kartın dışında.',
     'Renaming to "{ref}" would put {pins} on two nets at once, because something already wired those pins under that reference.': '"{ref}" olarak adlandırmak {pins} pinlerini aynı anda iki nete koyar; o referansla bu pinlere zaten bağlantı yapılmış.',
