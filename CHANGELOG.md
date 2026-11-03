@@ -22,6 +22,10 @@ closed without a bump.
 
 ### Added
 
+- **A part on an older package is one press from the current one.** Its Properties say so,
+  with Use the Current Package beside it, and the Problems finding offers the same: the
+  same pins on the same holes, one undo step.
+
 - **A mounting hole and an edge connector are changed in place.** Chosen on the board,
   a hole's address, offset, diameter and screw head, and a connector's edge, first hole
   and number of fingers, are fields in Properties -- each change one undo step, refused for

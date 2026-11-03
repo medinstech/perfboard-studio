@@ -69,6 +69,7 @@ from perfboard_studio.commands import (
     wire_side,
 )
 from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.footprints import SUPERSEDED_FOOTPRINTS
 from perfboard_studio.geometry import format_hole, parse_hole
 from perfboard_studio.model import (
     BoardNote,
@@ -470,6 +471,23 @@ class _PartEditor(QWidget):
         self.locked_note.setWordWrap(True)
         theme.tone(self.locked_note, "warning")
         package_column.addWidget(self.locked_note)
+        # A package the catalog has replaced (``footprints.SUPERSEDED_FOOTPRINTS``): said
+        # here, and one press from the current one -- the same pins on the same holes, the
+        # body where the real part's is. DRC says it too (``superseded-footprint``).
+        self.older = QWidget()
+        older_row = QHBoxLayout(self.older)
+        older_row.setContentsMargins(0, 0, 0, 0)
+        self.older_note = QLabel(t("An older package of this part."))
+        self.older_note.setWordWrap(True)
+        theme.tone(self.older_note, "warning")
+        self.use_current = QPushButton(t("Use the Current Package"))
+        self.use_current.setAutoDefault(False)
+        self.use_current.clicked.connect(self._on_use_current)
+        older_row.addWidget(self.older_note, 1)
+        older_row.addWidget(self.use_current, 0, Qt.AlignmentFlag.AlignTop)
+        package_column.addWidget(self.older)
+        self.older_problem = _Problem()
+        package_column.addWidget(self.older_problem)
         form.addRow(t("Package"), package)
 
         self.pin1 = CommitLine(self._commit_pin1)
@@ -538,6 +556,19 @@ class _PartEditor(QWidget):
 
     # -- reading the document --
 
+    def _on_use_current(self) -> None:
+        component = self._component
+        superseded = SUPERSEDED_FOOTPRINTS.get(component.footprint_id) if component else None
+        if component is None or superseded is None:
+            return
+        self.older_problem.show_problem(
+            self._inspector.dispatch(
+                "component.update",
+                UpdateComponentPayload(id=component.id, footprint_id=superseded[0]),
+            )
+            or ""
+        )
+
     def load(self, document: PerfDocument, component: ComponentInstance) -> None:
         another = self._component is None or self._component.id != component.id
         self._document = document
@@ -552,6 +583,14 @@ class _PartEditor(QWidget):
             self.package.setText(f"{name}  ({component.footprint_id})")
             self.change_part.setEnabled(not component.locked)
             self.locked_note.setVisible(component.locked)
+            superseded = SUPERSEDED_FOOTPRINTS.get(component.footprint_id)
+            self.older.setVisible(superseded is not None)
+            self.use_current.setEnabled(not component.locked)
+            if superseded is not None:
+                # Why, in the engine's words: what was wrong with the package it is on.
+                self.older_note.setToolTip(say(superseded[1]))
+            if another:
+                self.older_problem.show_problem("")
             self.pin1.show_value(format_hole(component.anchor, document.board))
             button = self.rotation.button(component.rotation)
             if button is not None:

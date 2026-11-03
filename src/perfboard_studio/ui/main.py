@@ -191,6 +191,7 @@ from perfboard_studio.commands import (
     RotateComponentsPayload,
     UnplaceComponentPayload,
     UpdateComponentPayload,
+    UpdateComponentsPayload,
     UpdateNetPayload,
     UpdatePartPayload,
     create_document_id_generator,
@@ -209,6 +210,7 @@ from perfboard_studio.footprints import (
     MODULE_SEAT_SOCKETED_MM,
     MODULE_SEAT_SOLDERED_MM,
     SMD_PACKAGES,
+    SUPERSEDED_FOOTPRINTS,
     axial_footprint,
     box_film_capacitor_footprint,
     box_header_footprint,
@@ -8528,6 +8530,10 @@ class MainWindow(QMainWindow):
             if nets:
                 wire = menu.addAction(t("Auto-wire Its &Connections"))
                 wire.triggered.connect(lambda: self._route(only_net_ids=nets))
+            older = self._superseded_for(item)
+            if older:
+                current = menu.addAction(t("Use the C&urrent Package"))
+                current.triggered.connect(lambda: self._use_current_packages(older))
             menu.addSeparator()
             copy_one = menu.addAction(t("&Copy This Problem"))
             copy_one.triggered.connect(
@@ -8553,6 +8559,53 @@ class MainWindow(QMainWindow):
             net.id
             for net in self.bus.document.nets
             if net.id in left and any(node.component_ref in refs for node in net.nodes)
+        )
+
+    def _superseded_for(self, item: QTreeWidgetItem) -> tuple[str, ...]:
+        """The parts a finding names that are on a package the catalog has replaced -- or,
+        on the rule's own row, every one on the board."""
+        key = str(item.data(0, ROLE_FINDING_KEY) or "")
+        components = self.bus.document.components
+        if key.startswith("drc:superseded-footprint"):
+            wanted = {c.id for c in components}
+        else:
+            wanted = set(item.data(0, ROLE_COMPONENT_IDS) or ())
+        return tuple(
+            c.id for c in components if c.id in wanted and c.footprint_id in SUPERSEDED_FOOTPRINTS
+        )
+
+    def _use_current_packages(self, component_ids: Sequence[str]) -> None:
+        """Each part on the package that replaced its own: the same pins on the same holes
+        (``SUPERSEDED_FOOTPRINTS``' promise, tested by parts), one undo step for them all."""
+        by_id = {c.id: c for c in self.bus.document.components}
+        updates = tuple(
+            UpdateComponentPayload(
+                id=i, footprint_id=SUPERSEDED_FOOTPRINTS[by_id[i].footprint_id][0]
+            )
+            for i in component_ids
+            if i in by_id and by_id[i].footprint_id in SUPERSEDED_FOOTPRINTS
+        )
+        if not updates:
+            return
+        result = (
+            self.bus.dispatch("component.update", updates[0])
+            if len(updates) == 1
+            else self.bus.dispatch(
+                "component.updateMany",
+                UpdateComponentsPayload(
+                    updates=updates, label=f"Use the current package on {len(updates)} parts"
+                ),
+            )
+        )
+        self.statusBar().showMessage(
+            refused(result)
+            if not result.ok
+            else counted(
+                len(updates),
+                t("{count} part is on the current package now."),
+                t("{count} parts are on the current package now."),
+            ),
+            8000,
         )
 
     def _wire_from_the_drawer(self) -> None:

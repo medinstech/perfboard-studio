@@ -16361,3 +16361,63 @@ def test_the_librarys_own_group_is_said_in_turkish() -> None:
         assert tree.topLevelItem(0).text(0) == "Bu kart"
     finally:
         set_language("en")
+
+
+def _on_the_old_gy521():
+    from perfboard_studio.catalog import catalog_part
+    from perfboard_studio.model import ComponentInstance
+
+    part = catalog_part("gy-521")
+    assert part is not None
+    component = ComponentInstance(
+        id="imu", ref="U4", value=part.placed_value,
+        footprint_id="mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x6.7",
+        anchor=HoleCoord(col=4, row=12), pin_names=part.pin_names,
+    )
+    return _window_on(dataclasses.replace(_blank_document(), components=(component,)))
+
+
+def test_a_part_on_a_replaced_package_is_one_press_from_the_current_one() -> None:
+    """parts' superseded-footprint finding told the builder to choose the part again under
+    Change...; its Properties say so and do it, the same pins on the same holes, one step."""
+    from perfboard_studio.footprints import SUPERSEDED_FOOTPRINTS
+
+    window = _on_the_old_gy521()
+    try:
+        window.scene.select_components(["imu"])
+        window._refresh_properties()
+        editor = window.inspector.part_editor
+        assert not editor.older.isHidden()
+        before = window.bus.document.components[0]
+        steps = len(window.bus.history())
+        editor.use_current.click()
+        after = window.bus.document.components[0]
+        assert after.footprint_id == SUPERSEDED_FOOTPRINTS[before.footprint_id][0]
+        assert (after.anchor, after.pin_names) == (before.anchor, before.pin_names)
+        assert len(window.bus.history()) == steps + 1
+        window._refresh_properties()
+        assert editor.older.isHidden()
+    finally:
+        _close(window)
+
+
+def test_the_older_package_finding_offers_the_current_one() -> None:
+    from perfboard_studio.footprints import SUPERSEDED_FOOTPRINTS
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY
+
+    window = _on_the_old_gy521()
+    try:
+        tree = window.drc_tree
+        found = None
+        for i in range(tree.topLevelItemCount()):
+            top = tree.topLevelItem(i)
+            for j in range(top.childCount()):
+                if str(top.child(j).data(0, ROLE_FINDING_KEY)).startswith("drc:superseded-footprint"):
+                    found = top.child(j)
+        assert found is not None, "the rule's row"
+        assert window._superseded_for(found) == ("imu",)
+        window._use_current_packages(window._superseded_for(found))
+        (component,) = window.bus.document.components
+        assert component.footprint_id not in SUPERSEDED_FOOTPRINTS
+    finally:
+        _close(window)
