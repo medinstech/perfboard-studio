@@ -1159,7 +1159,16 @@ ids. Five rules hold it, each pinned in
   Pico, the D1 mini and the radio modules, Pololu's own top-view photographs of its two
   carriers, Seeed's own KiCad board for the XIAO ESP32C3, and for the GY-521 and the SSD1306
   OLED, which no maker draws, a straight-down photograph of one (Wikimedia Commons) calibrated
-  on its header, its scale and its error written in the layout. The OLED's photograph also
+  on its header, its scale and its error written in the layout. The ESP-01's and the
+  nRF24L01+'s only free photographs are oblique, so each was RECTIFIED: a homography from the
+  four corners of its board onto the board its maker or KiCad draws, which puts the header
+  where the drawing has it -- to 0.1 mm on the ESP-01 -- and leaves only the parallax of a
+  part's own height. That is the rule, pinned by
+  `test_every_layout_says_what_it_was_measured_on`: measured from a drawing, or from a
+  calibrated photograph of the board everybody sells, cited with its scale and its error --
+  never invented, and a module there is nothing to measure it on stays the block
+  (`DRAWN_AS_THE_BLOCK`, empty since these two). A header of two rows, as both have, is a
+  `"header"` layout with `rows=2`, never laid over one row nor one over two. The OLED's photograph also
   put its header 1.45 mm in from the board's edge, where the footprint had guessed 2 mm, and
   the measurement won: the module footprint that replaced its box (`superseded-footprint`)
   stands where the photograph has it.

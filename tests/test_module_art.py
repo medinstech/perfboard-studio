@@ -48,20 +48,13 @@ CAN = "mod-6x1-p1-r1-16x14.5x3-s8.5-o0x6"
 CAN_NAMES = (("1", "3V3"), ("2", "GND"), ("3", "CTX"), ("4", "CRX"), ("5", "CANH"), ("6", "CANL"))
 
 #: Catalog modules drawn as the plain block ON PURPOSE, each with the reason. A layout is
-#: measured from a drawing of what is on the board, and a layout guessed from a seller's
-#: photograph would be a picture of parts that may not be there; the block claims nothing.
+#: MEASURED -- from a maker's drawing, or from a calibrated photograph of the de-facto
+#: standard board, cited with its scale and its error written in the layout -- and never
+#: invented: a module there is nothing to measure it on is the block, which claims nothing.
 #: ``test_a_module_drawn_as_the_block_is_one_on_purpose`` fails if one of these gains a
-#: layout, so the reason cannot outlive the fact, or leaves the catalog.
-DRAWN_AS_THE_BLOCK: dict[str, str] = {
-    "nrf24l01": (
-        "no maker drawing exists; drawn as the envelope block, which claims nothing about the "
-        "parts on it"
-    ),
-    "esp-01": (
-        "no drawing of the parts on it exists, only Ai-Thinker's of its pins and board; drawn "
-        "as the envelope block, which claims nothing about the parts on it"
-    ),
-}
+#: layout, so the reason cannot outlive the fact, or leaves the catalog. The ESP-01 and the
+#: nRF24L01+ were here until their photographs were rectified onto their drawn boards.
+DRAWN_AS_THE_BLOCK: dict[str, str] = {}
 
 def _on_a_module(part) -> bool:  # type: ignore[no-untyped-def]
     """A catalog part on a module's own board, whatever shelf it is on: the GY-521 is a sensor."""
@@ -131,6 +124,8 @@ def _footprint(footprint_id: str):
         ("GY-521 MPU-6050", "gy-521"),
         ("GY521", "gy-521"),
         ("SSD1306 OLED", "ssd1306-oled"),
+        ("ESP-01", "esp-01"),
+        ("nRF24L01+", "nrf24l01"),
     ],
 )
 def test_a_module_is_recognised_by_its_value(value: str, key: str) -> None:
@@ -163,6 +158,9 @@ def test_a_module_is_recognised_by_its_value(value: str, key: str) -> None:
         # A chip names no board: the MPU-6050 is on the GY-521 and on others.
         "MPU-6050",
         "GY-87",
+        # The same pins on other boards.
+        "ESP-01S",
+        "nRF24L01+PA+LNA",
     ],
 )
 def test_a_value_nobody_wrote_a_layout_for_is_not_guessed(value: str) -> None:
@@ -532,6 +530,44 @@ def test_a_gy521_is_drawn_as_the_photograph_has_it() -> None:
     assert fit_module_art(_footprint(old), _part(old, gy521.placed_value, gy521.pin_names), PITCH) is None
 
 
+@pytest.mark.parametrize("art", MODULE_ARTS, ids=lambda art: art.key)
+def test_every_layout_says_what_it_was_measured_on(art) -> None:
+    """Measured, never invented: every layout names the drawing, the model, the board or the
+    photograph its positions come from -- and one measured on a photograph of a board no
+    maker draws says how it was scaled and how far off a position may be."""
+    source = art.source.lower()
+    words = ("drawing", "dimension", "datasheet", "model", "board", "photograph", "picture")
+    assert any(word in source for word in words), art.key
+    if "wikimedia commons" in source:
+        assert "px/mm" in source and "to about" in source and "https://" in source, art.key
+
+
+def test_the_radios_stand_their_header_where_their_drawings_have_it() -> None:
+    """The ESP-01's antenna is at the end away from its header and its flash beside its chip;
+    the nRF24's antenna at the end away from its header, its crystal along the edge away from
+    pin 1 -- each on the black board it is sold on."""
+    parts = {part.id: part for part in CATALOG_MODULES}
+    for part_id in ("esp-01", "nrf24l01"):
+        part = parts[part_id]
+        footprint = _footprint(part.footprint_id)
+        placed = fit_module_art(footprint, _part(part.footprint_id, part.placed_value, part.pin_names), PITCH)
+        assert placed is not None, part_id
+        antenna = next(p for p in placed if p.kind == "pcb-antenna")
+        centre = placement_for(footprint, PITCH)
+        header = (sum(p.d_col for p in footprint.pins) / 8 * PITCH, sum(p.d_row for p in footprint.pins) / 8 * PITCH)
+        away = (centre.centre_x - header[0], centre.centre_y - header[1])
+        # The antenna lies beyond the board's centre, seen from the header.
+        reach = (antenna.x - centre.centre_x) * away[0] + (antenna.y - centre.centre_y) * away[1]
+        assert reach > 0, part_id
+    nrf = parts["nrf24l01"]
+    footprint = _footprint(nrf.footprint_id)
+    placed = fit_module_art(footprint, _part(nrf.footprint_id, nrf.placed_value, nrf.pin_names), PITCH)
+    assert placed is not None
+    crystal = next(p for p in placed if p.kind == "hc49")
+    assert crystal.y > placement_for(footprint, PITCH).centre_y  # the edge away from pin 1
+    assert crystal.height == 3.6 and float(footprint.body.dims["top"]) == 3.8
+
+
 @pytest.mark.parametrize("part_id", ["ssd1306-i2c-gnd-vcc", "ssd1306-i2c-vcc-gnd"])
 def test_an_oled_is_its_glass_between_its_header_and_its_flex(part_id: str) -> None:
     """Either order of names is the same board: the header along the top, the panel's glass
@@ -714,6 +750,8 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "gy-521": None,  # the photograph's blue is the module style's, within the lighting
         "ssd1306-i2c-gnd-vcc": None,
         "ssd1306-i2c-vcc-gnd": None,
+        "esp-01": ESPRESSIF_BLACK,
+        "nrf24l01": ESPRESSIF_BLACK,
     }
     # A Pico named on a board the layout was not drawn for is not coloured as one.
     square = "mod-2x20-p7-r1-30x30x3.5-s8.5"

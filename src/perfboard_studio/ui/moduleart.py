@@ -91,6 +91,9 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:                       it and the ledge its driver is bonded to at the ``facing`` end.
 #:  * ``flex``        -- the flexible printed circuit a panel's glass is wired out by, folded
 #:                       round the module's edge: copper-coloured, its stiffener dark.
+#:  * ``pcb-antenna`` -- an antenna printed on the module's own board: a meander of bare
+#:                       copper, each stroke across ``width`` and ``pitch`` from the next.
+#:  * ``hc49``        -- an HC-49/US crystal: a steel can with round ends, standing on the board.
 ArtKind = Literal[
     "can",
     "inductor",
@@ -129,6 +132,8 @@ ArtKind = Literal[
     "hole",
     "oled",
     "flex",
+    "pcb-antenna",
+    "hc49",
 ]
 
 #: What the parts on a module are made of, as the colours both views paint them in -- one
@@ -171,6 +176,10 @@ HOLE_EDGE_MM = 0.12
 #: 4.4 mm the calibrated photograph has between the area's border and the glass's edge.
 OLED_VIEW_MM = (23.74, 12.86)
 OLED_LEDGE_MM = 4.4
+
+#: How wide a printed antenna's copper is: the ESP-01's and the nRF24's, measured on their
+#: rectified photographs. How far apart its strokes are is the part's own ``pitch``.
+PCB_ANTENNA_TRACE_MM = 0.45
 
 ART_COLOURS: dict[str, str] = {
     "ferrite": "#2a2b2f",
@@ -267,6 +276,8 @@ class ArtPart:
     #: The colour a part is seen as where that varies between parts of one kind -- an LED's
     #: lens, a button's cap -- as ``#rrggbb``. Empty for the kind's own.
     colour: str = ""
+    #: For a ``pcb-antenna``: how far one stroke of its meander is from the next.
+    pitch: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +316,9 @@ class ModuleArt:
     #: until the names fit would draw a board nobody makes, so its names are printed OVER
     #: the parts instead, each on its own tag (``bodies.PinLabel.backed``), at full length.
     names_over_parts: bool = False
+    #: For ``"header"``: how many rows the header has, along the board's edge -- an ESP-01's
+    #: two rows of four. A layout for one row is never laid over two, nor two over one.
+    rows: int = 1
     #: For ``"header"``: the end of ``u`` pin 1 is at, -1 or +1, the layout drawn as the real
     #: board is seen from above with its header along the top (``-v``). A GY-521 seen so has
     #: VCC, its pin 1, at the right.
@@ -335,6 +349,7 @@ class PlacedArt:
     antenna: float = 0.0
     inset: float = 0.0
     colour: str = ""
+    pitch: float = 0.0
 
 
 # -- the layouts -------------------------------------------------------------------------
@@ -802,6 +817,102 @@ SSD1306_MODULE = ModuleArt(
     ),
 )
 
+#: Ai-Thinker's ESP-01, the black board: the ESP8266EX in the middle, its SPI flash in an
+#: SOP-8 beside it, the 26 MHz crystal between the chip and the antenna printed across the
+#: far end, and a scatter of small parts. Ai-Thinker draws the board, the antenna's 6.7 mm
+#: and the pins (ESP-01/07/12 manual V1.3, figure 2.1) and not the parts, so they were measured
+#: on SparkFun's photograph of one (Wikimedia Commons, CC BY 2.0), oblique and RECTIFIED: a
+#: homography from the four corners of its board onto the drawn 14.4 x 24.7 mm, which puts
+#: the header where figure 2.1 has it to 0.1 mm. A part's top stands up to 1.75 mm off that
+#: plane, so a position is good to about 0.3 mm. Drawn with its header along the top, the
+#: way the header frame is written: pin 1, GND, at the right of the row nearer the chip.
+ESP01_MODULE = ModuleArt(
+    key="esp-01",
+    # Black, as both are sold: the black of Espressif's devkits, which reads the same.
+    board_colour=ESPRESSIF_BLACK,
+    names=("esp-01", "esp01", "esp 01"),
+    excludes=("esp-01s", "esp-01m", "esp-01f"),
+    board=(14.4, 24.7),
+    pins=8,
+    frame="header",
+    rows=2,
+    pin_one=1,
+    parts=(
+        ArtPart("qfn", 1.95, -1.45, 5.0, 5.0, 0.85, text="ESP8266EX"),
+        ArtPart("soic8", -4.6, -1.6, 5.0, 7.9, 1.75, text="25Q80"),
+        ArtPart("crystal", -0.35, 3.8, 2.5, 2.0, 0.6),
+        ArtPart("pcb-antenna", 2.0, 9.1, 8.8, 5.9, 0.0, pitch=1.05),
+        ArtPart("chip-c", 6.5, -2.6, 2.0, 1.25, 0.85, along_v=True),
+        ArtPart("chip-c", 2.6, 3.9, 1.6, 0.8, 0.8),
+        ArtPart("chip-r", 2.7, 2.95, 1.6, 0.8, 0.45),
+        ArtPart("chip-c", 5.05, 1.9, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", 6.15, 3.9, 1.0, 0.5, 0.5, along_v=True),
+        ArtPart("chip-r", 5.2, 4.05, 1.0, 0.5, 0.35, along_v=True),
+        ArtPart("chip-c", 4.1, 4.0, 1.0, 0.5, 0.5, along_v=True),
+        ArtPart("chip-r", -3.0, 4.05, 1.6, 0.8, 0.45),
+        ArtPart("chip-c", -3.5, 5.4, 1.0, 0.5, 0.5, along_v=True),
+        ArtPart("chip-c", -4.9, 5.45, 1.0, 0.5, 0.5, along_v=True),
+        ArtPart("chip-r", -6.3, 5.45, 1.0, 0.5, 0.35, along_v=True),
+        ArtPart("chip-c", 6.2, -10.05, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("silk", 0.6, 6.35, 8.0, 0.9, 0.0, text="AI-Cloud inside"),
+    ),
+    source=(
+        "Ai-Thinker ESP-01/07/12 Series Modules User's Manual V1.3, figure 2.1 (the board, "
+        "the antenna's zone, the pins); SparkFun's photograph of one, Wikimedia Commons, CC BY "
+        "2.0 (https://commons.wikimedia.org/wiki/File:ESP-01.jpg), rectified onto the drawn "
+        "board at 40 px/mm, positions to about 0.3 mm; Espressif ESP8266EX QFN-32 (the chip)"
+    ),
+)
+
+#: The nRF24L01+ board everybody sells, black, with its antenna printed on the far end: the
+#: chip in the middle, the 16 MHz crystal in an HC-49/US can along the edge away from pin 1,
+#: its 1 Mohm resistor between them, a column of capacitors along the header's edge and a
+#: cluster of the radio's matching parts by the antenna's feed. KiCad's
+#: RF_Module:nRF24L01_Breakout draws the board and the header and not the parts, so they were
+#: measured on Dmcole's photograph of one (Wikimedia Commons, CC BY-SA 3.0), oblique and
+#: RECTIFIED onto that board by a homography from its four corners -- pin 1's square pad lands
+#: on KiCad's -- so a part on the board is good to about 0.5 mm and the crystal, which stands
+#: 3.6 mm and leans in the photograph, to about 1 mm. Its height is YXC's HC-49US drawing:
+#: 11.5 x 4.5 x 3.6 +- 0.2 mm, the most of which the id's top now says.
+NRF24_MODULE = ModuleArt(
+    key="nrf24l01",
+    # Black, as both are sold: the black of Espressif's devkits, which reads the same.
+    board_colour=ESPRESSIF_BLACK,
+    names=("nrf24l01", "nrf24"),
+    excludes=("pa+lna", "pa-lna", "pa lna", "lna"),
+    board=(15.25, 29.0),
+    pins=8,
+    frame="header",
+    rows=2,
+    pin_one=1,
+    parts=(
+        ArtPart("qfn", 1.42, -2.9, 4.0, 4.0, 0.85, text="24L01+"),
+        ArtPart("hc49", -5.22, -3.25, 11.5, 4.5, 3.6, along_v=True),
+        ArtPart("chip-r", -1.97, -2.2, 2.0, 1.25, 0.6, along_v=True),
+        ArtPart("chip-c", 6.03, -7.2, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 6.03, -5.2, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 6.03, -3.2, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 6.03, -1.2, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 1.42, 0.9, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 3.33, 2.6, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 0.03, 2.6, 2.0, 1.25, 0.85),
+        ArtPart("chip-c", 3.62, 4.5, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", 1.62, 4.5, 1.6, 0.8, 0.45, along_v=True),
+        ArtPart("chip-c", -0.38, 4.5, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -2.38, 4.5, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", 6.22, 5.1, 1.6, 0.8, 0.8),
+        ArtPart("chip-c", -5.28, 4.3, 2.0, 1.25, 0.85, along_v=True),
+        ArtPart("chip-c", -5.28, -10.7, 2.0, 1.25, 0.85, along_v=True),
+        ArtPart("pcb-antenna", 0.22, 10.1, 7.8, 8.2, 0.0, pitch=1.7),
+    ),
+    source=(
+        "KiCad RF_Module:nRF24L01_Breakout (the board, the header); Dmcole's photograph of "
+        "one, Wikimedia Commons, CC BY-SA 3.0 (https://commons.wikimedia.org/wiki/File:"
+        "NRF24l01_Nordic_Semiconductor_radio.JPG), rectified onto that board at 32 px/mm, "
+        "positions to about 0.5 mm; YXC HC-49US (the crystal); Nordic nRF24L01+ QFN-20 (the chip)"
+    ),
+)
+
 MODULE_ARTS: tuple[ModuleArt, ...] = (
     LM2596_MODULE,
     SN65HVD230_MODULE,
@@ -817,6 +928,8 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     POLOLU_DRV8833_MODULE,
     GY521_MODULE,
     SSD1306_MODULE,
+    ESP01_MODULE,
+    NRF24_MODULE,
 )
 
 
@@ -878,9 +991,9 @@ def _frame(
     if art.frame == "power":
         u_along_x = long_side_x
     elif art.frame == "header":
-        if len(xs) > 1 and len(ys) > 1:
-            return None  # a header layout is for ONE row of pins
         u_along_x = max(xs) - min(xs) >= max(ys) - min(ys)
+        if len(ys if u_along_x else xs) != art.rows:
+            return None  # a layout for one row of pins is not one for two, nor two for one
     else:
         # Two columns of pins, one down each long edge.
         if len(xs) == 2 and len(ys) != 2:
@@ -982,6 +1095,7 @@ def fit_module_art(
                 antenna=part.antenna,
                 inset=part.inset,
                 colour=part.colour,
+                pitch=part.pitch,
             )
         )
     return tuple(placed)

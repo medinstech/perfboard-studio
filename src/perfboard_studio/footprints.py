@@ -2366,6 +2366,12 @@ SUPERSEDED_FOOTPRINTS: dict[str, tuple[str, str]] = {
         "header: it is drawn as a grey slab, and a short part beside the header cannot go "
         "under it",
     ),
+    "mod-2x4-p1-r1-29x15.25x2-s8.5-o11.73x1.82": (
+        "mod-2x4-p1-r1-29x15.25x3.8-s8.5-o11.73x1.82",
+        "says the tallest thing on an nRF24L01+ module stands 2 mm, where its crystal, an "
+        "HC-49/US can, stands up to 3.8 mm (YXC's drawing): a part that fits under 2 mm of "
+        "room may not fit under the module",
+    ),
 }
 
 

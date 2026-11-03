@@ -1230,7 +1230,7 @@ CATALOG: tuple[CatalogPart, ...] = (
     # block (tests/test_module_art.py names them): the pins and the board are measured, what
     # stands on the board is not claimed.
     CatalogPart("nrf24l01", "nRF24L01+ module", "module",
-                "mod-2x4-p1-r1-29x15.25x2-s8.5-o11.73x1.82",
+                "mod-2x4-p1-r1-29x15.25x3.8-s8.5-o11.73x1.82",
                 "2.4 GHz radio on SPI, 1.9 to 3.6 V, the board with its antenna printed on it",
                 _two_columns(("GND", "CE", "SCK", "MISO"), ("VCC", "CSN", "MOSI", "IRQ")),
                 value="nRF24L01+", ref_prefix="U",
@@ -1241,8 +1241,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 check=(
                     "VCC is 3.3 V at most -- 5 V kills it -- though its inputs take 5 V logic. The "
                     "version with an amplifier and an antenna socket has these pins on a longer "
-                    "board. Drawn as a plain block: what stands on its board is not drawn, only "
-                    "the room it takes."
+                    "board. Its crystal stands 3.6 mm, the tallest thing on it."
                 ),
                 aliases=("radio", "wireless", "2.4 GHz")),
     CatalogPart("esp-01", "ESP-01 (ESP8266 module)", "module",
@@ -1258,8 +1257,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 check=(
                     "3.3 V only. EN (CH_PD) must be high for it to run, and IO0 low as it starts "
                     "puts it in download mode (Ai-Thinker's table 2.3). The ESP-01S is pinned "
-                    "the same. Drawn as a plain block: what stands on its board is not drawn, "
-                    "only the room it takes."
+                    "the same, on another board: it is drawn as the block."
                 ),
                 aliases=("ESP-01S", "ESP8266", "wifi")),
     # Pads, not header pins, at the four corners: IN on one end and OUT on the other, + on

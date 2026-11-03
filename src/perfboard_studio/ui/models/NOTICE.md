@@ -95,3 +95,9 @@ layout's `source`:
 - **SSD1306 0.96 inch I2C OLED** — photograph by Turbospok, Wikimedia Commons, CC BY-SA 4.0:
   <https://commons.wikimedia.org/wiki/File:MicroSD_card_connected_to_Arduino_nano_with_OLED_display.jpg>
   (22.95 px/mm on its header)
+- **ESP-01** — photograph by SparkFun Electronics, Wikimedia Commons, CC BY 2.0:
+  <https://commons.wikimedia.org/wiki/File:ESP-01.jpg> (oblique, rectified onto the board
+  Ai-Thinker draws)
+- **nRF24L01+ module** — photograph by Dmcole, Wikimedia Commons, CC BY-SA 3.0:
+  <https://commons.wikimedia.org/wiki/File:NRF24l01_Nordic_Semiconductor_radio.JPG>
+  (oblique, rectified onto the board KiCad's `nRF24L01_Breakout` draws)

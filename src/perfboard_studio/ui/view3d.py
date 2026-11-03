@@ -138,6 +138,7 @@ from .moduleart import (
     HOLE_EDGE_MM,
     OLED_LEDGE_MM,
     OLED_VIEW_MM,
+    PCB_ANTENNA_TRACE_MM,
     SOT23_LEGS,
     TANTALUM_BAND_SHADE,
     TQFP32_BODY_MM,
@@ -4672,6 +4673,7 @@ class _ArtSolid:
     antenna: float = 0.0
     inset: float = 0.0
     colour: str = ""
+    pitch: float = 0.0
 
     def at(self, along: float, across: float, z: float) -> tuple[float, float, float]:
         """A point ``along`` the part's own axis and ``across`` it from its centre, ``z``
@@ -4722,6 +4724,7 @@ def _art_solid(placed: PlacedArt, comp: Any, board: Board, base: float) -> _ArtS
         antenna=placed.antenna,
         inset=placed.inset,
         colour=placed.colour,
+        pitch=placed.pitch,
     )
 
 
@@ -5720,6 +5723,64 @@ def _art_oled(s: _ArtSolid) -> list[_Piece]:
     ]
 
 
+def _art_pcb_antenna(s: _ArtSolid) -> list[_Piece]:
+    """An antenna printed on the module's board: the meander 2D draws, in bare copper laid
+    a hair proud of the board."""
+    pitch = s.pitch or 1.0
+    turns = max(int(s.length // pitch), 1)
+    start = -s.length / 2 + (s.length - turns * pitch) / 2
+    edge = s.width / 2 - PCB_ANTENNA_TRACE_MM
+    rgb = _hex_rgb(ART_COLOURS["antenna"], PAD_RGB)
+    pieces = []
+    for index in range(turns + 1):
+        at = start + index * pitch
+        pieces.append(
+            _Piece(
+                source=s.box(PCB_ANTENNA_TRACE_MM, 2 * edge + PCB_ANTENNA_TRACE_MM, 0.04),
+                rgb=rgb,
+                position=s.at(at, 0.0, 0.02),
+                material=PLATED,
+            )
+        )
+        if index < turns:
+            end = edge if index % 2 == 0 else -edge
+            pieces.append(
+                _Piece(
+                    source=s.box(pitch, PCB_ANTENNA_TRACE_MM, 0.04),
+                    rgb=rgb,
+                    position=s.at(at + pitch / 2, end, 0.02),
+                    material=PLATED,
+                )
+            )
+    return pieces
+
+
+def _art_hc49(s: _ArtSolid) -> list[_Piece]:
+    """An HC-49/US crystal standing on the module: a steel can with round ends -- two
+    cylinders and the box between them -- as tall as it stands."""
+    radius = s.width / 2
+    straight = max(s.length - s.width, 0.0)
+    steel = _ART_SHIELD_RGB
+    pieces = [
+        _Piece(
+            source=s.box(straight, s.width, s.height),
+            rgb=steel,
+            position=s.at(0.0, 0.0, s.height / 2),
+            material=STEEL,
+        )
+    ]
+    for end in (-1.0, 1.0):
+        pieces.append(
+            _Piece(
+                source=_upright_cylinder(radius, s.height, resolution=28),
+                rgb=steel,
+                position=s.at(end * straight / 2, 0.0, s.height / 2),
+                material=STEEL,
+            )
+        )
+    return pieces
+
+
 def _art_flex(s: _ArtSolid) -> list[_Piece]:
     """A panel's flex circuit lying on the module: the polyimide, its stiffener on it."""
     return [
@@ -5768,6 +5829,8 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "hole": _art_hole,
     "oled": _art_oled,
     "flex": _art_flex,
+    "pcb-antenna": _art_pcb_antenna,
+    "hc49": _art_hc49,
 }
 
 

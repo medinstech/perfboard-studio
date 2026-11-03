@@ -196,6 +196,7 @@ from .moduleart import (
     HOLE_EDGE_MM,
     OLED_LEDGE_MM,
     OLED_VIEW_MM,
+    PCB_ANTENNA_TRACE_MM,
     SOT23_LEGS,
     TANTALUM_BAND_SHADE,
     TQFP32_BODY_MM,
@@ -3211,6 +3212,33 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         _art_box(
             painter, middle - view_along / 2, middle + view_along / 2, view_across / 2,
             _art_colour("oled-view"),
+        )
+    elif kind == "pcb-antenna":
+        # A meander across the part, its own axis along x: strokes ``pitch`` apart, each
+        # running the width of the part and joined at alternate ends.
+        trace = QPen(_art_colour("antenna"), PCB_ANTENNA_TRACE_MM)
+        trace.setCapStyle(Qt.PenCapStyle.SquareCap)
+        painter.setPen(trace)
+        pitch = part.pitch or 1.0
+        turns = max(int(length // pitch), 1)
+        start = -half_l + (length - turns * pitch) / 2
+        edge = half_w - PCB_ANTENNA_TRACE_MM
+        for index in range(turns + 1):
+            at = start + index * pitch
+            painter.drawLine(QPointF(at, -edge), QPointF(at, edge))
+            if index < turns:
+                end = edge if index % 2 == 0 else -edge
+                painter.drawLine(QPointF(at, end), QPointF(at + pitch, end))
+        painter.setPen(QPen(QColor("#0c0d10"), 0.05))
+    elif kind == "hc49":
+        # From above, the can's top: round-ended, its crimped rim a shade darker round it.
+        painter.setBrush(QBrush(_art_colour("shield").darker(118)))
+        painter.drawRoundedRect(QRectF(-half_l, -half_w, length, width), half_w, half_w)
+        rim = min(0.35, half_w * 0.2)
+        painter.setBrush(QBrush(_art_colour("shield")))
+        painter.drawRoundedRect(
+            QRectF(-half_l + rim, -half_w + rim, length - 2 * rim, width - 2 * rim),
+            half_w - rim, half_w - rim,
         )
     elif kind == "flex":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("flex"))

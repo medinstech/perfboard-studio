@@ -115,6 +115,14 @@ closed without a bump.
 
 ### Changed
 
+- **The ESP-01 and the nRF24L01+ are drawn as themselves.** They were a plain block on
+  purpose, because nobody publishes a drawing of what is on them. Each is now measured on a
+  photograph rectified onto the board its maker or KiCad draws: the ESP-01's ESP8266, flash,
+  crystal and printed antenna on its black board; the nRF24's chip, its crystal in a metal
+  can, the small parts and the antenna. The nRF24's crystal stands up to 3.8 mm, where its
+  package said 2 mm, so it is measured that tall now; a board saved with the old package
+  opens as it was and the Problems drawer says so ("Older package").
+
 - **The 0.96 inch SSD1306 OLED is a module on its header, drawn as itself.** It was a grey
   block from the board up. It is now a board standing in its header with the glass, its
   black viewing area, the flex folded round the bottom edge and a plated hole in each
