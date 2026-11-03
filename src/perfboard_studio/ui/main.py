@@ -3456,8 +3456,12 @@ class MainWindow(QMainWindow):
 
     def __init__(self, document: PerfDocument, path: Path | None = None) -> None:
         super().__init__()
-        # Before any field is made: a widget takes its locale when it is created.
+        # Before any field is made: a widget takes its locale when it is created. And the
+        # window's OWN locale too: it was made, under the machine's, before this line ran,
+        # and every field in it inherits the window's -- so on a Turkish Windows every
+        # field still wrote "0,00 mm" while a box made anywhere else wrote "0.00".
         use_one_number_format()
+        self.setLocale(QLocale())
         self.lookup = footprint_lookup()
         self.side: BoardSide = "top"
         self.current_path = path

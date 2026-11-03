@@ -14990,6 +14990,11 @@ def test_every_number_in_the_window_has_a_decimal_point() -> None:
         box.setValue(2.28)
         assert box.text() == "2.28"
         box.deleteLater()
+        # A field IN the window, which takes the window's locale: the window was made under
+        # the machine's before the format was set, and every field in it wrote "0,00".
+        field = window.inspector.board_editor.body_clearance
+        assert field.locale().decimalPoint() == "."
+        assert "," not in field.text()
         _close(window)
     finally:
         QLocale.setDefault(before)
