@@ -263,12 +263,10 @@ REF_PLATE = QColor(14, 16, 22, 185)
 #: 2026-10-28 from three rendered looks: the plates were a dark pill beside every part.
 REF_HALO = QColor(10, 12, 16, 210)
 
-#: A pad nothing lands in, ON SCREEN, is its copper mixed this far toward the substrate,
-#: with no catch of light. Every hole drawn at full weight -- 945 bright rings on a 7 x 9
-#: cm board -- left the parts as small things lost in a grid, and the pads that ARE used
-#: are the circuit. A deliberate departure from the photograph, where every pad is
-#: alike, and so screen-only: the 1:1 print shows every pad as the board has it.
-UNUSED_PAD_MIX = 0.62
+#: EVERY PAD IS TIN, used or not, on screen as on the board and the 1:1 print. Pads nothing
+#: landed in were drawn quieter for a while (2026-10-28), mixed toward the substrate so the
+#: used ones drew the circuit; the user chose the board as it is in the hand (2026-11-03),
+#: and a board that does not look like a real perfboard was the complaint it answered.
 #: A body's contact shadow (the nearer of its two layers; the farther is half) and the
 #: light across it from the top left, as alpha out of 255. Screen-only, like the pads:
 #: paper gets the flat part.
@@ -530,14 +528,10 @@ class PadGridItem(QGraphicsItem):
         side: BoardSide,
         consumed: frozenset[str] = frozenset(),
         copper: bool = True,
-        used: frozenset[str] | None = None,
     ) -> None:
         super().__init__()
         self.board = board
         self.side = side
-        #: Hole keys something lands in -- a lead, a run, a wire's end. The rest are drawn
-        #: quieter on screen (``UNUSED_PAD_MIX``). None draws every pad alike.
-        self.used = used
         #: False draws the drilled holes with no copper round them -- the component side
         #: of a single-sided board, which still has every hole and none of the pads.
         #: Without this that face renders as a blank slab, which is the same mistake the
@@ -549,14 +543,14 @@ class PadGridItem(QGraphicsItem):
         #: must not walk the mounting holes once per hole.
         self.consumed = consumed
         self.drawn = 0
-        #: (quiet, long side in px) -> the pad rasterised that way.
-        self._pads: dict[tuple[bool, int], QPixmap] = {}
+        #: Long side in px -> the pad rasterised that way.
+        self._pads: dict[int, QPixmap] = {}
         self.setZValue(-90)
 
     def boundingRect(self) -> QRectF:
         return _outline_rect(self.board)
 
-    def _pad_for(self, long_px: float, quiet: bool = False) -> QPixmap:
+    def _pad_for(self, long_px: float) -> QPixmap:
         """A pad rasterised for roughly this on-screen size, cached between frames.
 
         Not necessarily square. An oblong pad is a stadium -- a rectangle capped with a
@@ -571,7 +565,7 @@ class PadGridItem(QGraphicsItem):
         # Rendered at twice the on-screen size so the downscale stays crisp when the zoom
         # sits between two buckets, and capped so a deep zoom cannot ask for a huge one.
         long_side = min(256, max(6, bucket * 2))
-        cached = self._pads.get((quiet, long_side))
+        cached = self._pads.get(long_side)
         if cached is not None:
             return cached
 
@@ -594,16 +588,13 @@ class PadGridItem(QGraphicsItem):
                 )
             )
             painter.end()
-            self._pads[(quiet, long_side)] = pixmap
+            self._pads[long_side] = pixmap
             return pixmap
         inset = long_side * 0.03
         ring = QRectF(inset, inset, width - 2 * inset, height - 2 * inset)
         scheme = scheme_for(self.board.material)
-        mix = UNUSED_PAD_MIX if quiet else 0.0
-        painter.setPen(
-            QPen(_mixed(scheme.pad_ring, scheme.fill, mix * 0.7), max(1.0, long_side * 0.05))
-        )
-        painter.setBrush(QBrush(_mixed(scheme.pad, scheme.fill, mix)))
+        painter.setPen(QPen(QColor(scheme.pad_ring), max(1.0, long_side * 0.05)))
+        painter.setBrush(QBrush(QColor(scheme.pad)))
         # Radius = half the short side, which turns the rounded rect into a true stadium
         # and, on a square pad, into the circle this used to draw.
         radius = min(ring.width(), ring.height()) / 2
@@ -612,7 +603,7 @@ class PadGridItem(QGraphicsItem):
         # The sheen reads as tinned copper catching the light rather than a flat yellow
         # disc, and it is what makes the board look like a board. Skipped only when the
         # pad is too small on screen for the arc to be more than a smudge.
-        if long_side >= 20 and not quiet:
+        if long_side >= 20:
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(QColor(scheme.pad_sheen), max(1.0, long_side * 0.055)))
             sheen_w, sheen_h = width * 0.68, height * 0.68
@@ -630,7 +621,7 @@ class PadGridItem(QGraphicsItem):
         )
         painter.end()
 
-        self._pads[(quiet, long_side)] = pixmap
+        self._pads[long_side] = pixmap
         return pixmap
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
@@ -647,9 +638,6 @@ class PadGridItem(QGraphicsItem):
         px_per_mm = painter.transform().m11() or 1.0
         long_px = max(extent_x, extent_y) * abs(px_per_mm)
         pixmap = self._pad_for(long_px)
-        # Paper shows every pad as the board has it; only the screen quiets the unused.
-        used = None if _on_paper(painter) else self.used
-        quiet = pixmap if used is None else self._pad_for(long_px, quiet=True)
         source = QRectF(0, 0, pixmap.width(), pixmap.height())
 
         count = 0
@@ -661,9 +649,8 @@ class PadGridItem(QGraphicsItem):
                 if self.consumed and hole_key(HoleCoord(col, row)) in self.consumed:
                     continue
                 p = hole_to_screen(HoleCoord(col, row), b, self.side)
-                drawn = pixmap if used is None or hole_key(HoleCoord(col, row)) in used else quiet
                 painter.drawPixmap(
-                    QRectF(p.x() - half_x, p.y() - half_y, extent_x, extent_y), drawn, source
+                    QRectF(p.x() - half_x, p.y() - half_y, extent_x, extent_y), pixmap, source
                 )
                 count += 1
         self.drawn = count
@@ -2471,8 +2458,8 @@ def _paint_pin_names(
 
 
 def _on_paper(painter: QPainter) -> bool:
-    """Whether this is the 1:1 print: what is drawn for the eye on screen -- quiet pads, a
-    shadow, a light -- stays off the sheet that gets taped to the board."""
+    """Whether this is the 1:1 print: what is drawn for the eye on screen -- a shadow, a
+    light -- stays off the sheet that gets taped to the board."""
     return isinstance(painter.device(), QPagedPaintDevice)
 
 
@@ -2484,26 +2471,6 @@ def _mixed(a: str, b: str, k: float) -> QColor:
         round(ca.green() + (cb.green() - ca.green()) * k),
         round(ca.blue() + (cb.blue() - ca.blue()) * k),
     )
-
-
-def used_holes(document: PerfDocument, lookup: FootprintLookup) -> frozenset[str]:
-    """The holes something lands in: every placed lead, every pad a run is soldered to
-    (``contacts_every_path_hole``), and the two ends of every wire."""
-    used: set[str] = set()
-    for comp in document.components:
-        footprint = lookup(comp.footprint_id)
-        if footprint is None:
-            continue
-        used.update(hole_key(hole) for _pin, hole in all_pin_holes(comp, footprint))
-    for conductor in document.conductors:
-        path = conductor.path
-        if not path:
-            continue
-        if contacts_every_path_hole(conductor):
-            used.update(hole_key(hole) for hole in path)
-        else:
-            used.update((hole_key(path[0]), hole_key(path[-1])))
-    return frozenset(used)
 
 
 def _screen_offset(painter: QPainter, dx_mm: float, dy_mm: float) -> QPointF:
@@ -4248,7 +4215,6 @@ class BoardScene(QGraphicsScene):
                 | cut_holes(self.document)
                 | holeless_positions(board),
                 copper=not (board.single_sided and self.side == "top"),
-                used=used_holes(self.document, self.lookup),
             )
             self.addItem(self.pad_grid)
         for cut in self.document.cuts:

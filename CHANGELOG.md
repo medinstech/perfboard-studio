@@ -73,6 +73,11 @@ closed without a bump.
   delete asks without naming DRC and LVS. A destructive answer -- Delete, Don't Save,
   Discard It -- is outlined in red, and Enter stays on the safe answer, which keeps the
   blue.
+
+- **Every pad is tin, as on the board in your hand.** Pads nothing was soldered to were
+  drawn faded on screen so that the circuit stood out; a real perfboard's pads are all
+  alike, and the board now looks like one, on screen as in the 1:1 print.
+
 - **A part dragged across the board says whether it can land, while it is dragged.** Its
   outline turns red over a hole another part's pin is in, past the edge, or where there is
   no pad -- the same test the ghost of a part being placed has always made -- and a line

@@ -2185,14 +2185,15 @@ holes the obvious way took 124 ms/frame; a single even-odd `QPainterPath` took 5
 and `ui/scenetext.py` sizes annotation labels in **screen pixels** so they hold their size
 as the board zooms — physical silkscreen scales with the board, annotations do not.
 
-**What is drawn for the eye stays off the paper.** On screen, pads nothing lands in are
-drawn quieter (`UNUSED_PAD_MIX`, from `used_holes`: every lead, every pad a run is
-soldered to, a wire's two ends), bodies get a contact shadow and a light from the
-top left, references are outlined rather than plated, and far-face copper is drawn at
-`FAR_SIDE_OPACITY`. All of it is gated on `_on_paper(painter)` -- a `QPagedPaintDevice`
--- because the 1:1 PDF is taped to the board in someone's hand, where every pad is alike
-and no part casts a shadow. The pad blit survives it: two cached pixmaps, used and
-quiet, instead of one. `tests/test_board_look.py` holds the screen and the paper apart.
+**What is drawn for the eye stays off the paper.** On screen, bodies get a contact shadow
+and a light from the top left, references are outlined rather than plated, and far-face
+copper is drawn at `FAR_SIDE_OPACITY`. All of it is gated on `_on_paper(painter)` -- a
+`QPagedPaintDevice` -- because the 1:1 PDF is taped to the board in someone's hand, where
+no part casts a shadow. **Every pad is tin on both**, used or not: pads nothing landed in
+were drawn quieter on screen for a while, so the used ones drew the circuit, until the user
+chose the board as it is in the hand -- a board that did not look like a real perfboard was
+the complaint. `tests/test_board_look.py` holds the screen and the paper apart where they
+differ, and to one pad image where they agree.
 The shadow and the light are overlays on the body's outline, so `bodies.BODY_STYLES`
 stays the one colour table the 3D view and the guide share.
 

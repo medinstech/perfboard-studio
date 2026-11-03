@@ -1,11 +1,11 @@
 """The board's look on screen, and the 1:1 print that must not take it.
 
-Chosen on 2026-10-28 from rendered looks: pads nothing lands in drawn quieter, bodies standing
-on the board with a contact shadow and lit from the top left, a DIP's value on its top,
-references outlined instead of plated, far-face copper quieter. The quiet pads, the shadow
-and the light are for the eye on a screen. The 1:1 PDF is taped to the board in someone's
-hand, so it shows every pad as the board has it and every part flat -- which is what most of
-these hold.
+Chosen on 2026-10-28 from rendered looks: bodies standing on the board with a contact shadow
+and lit from the top left, a DIP's value on its top, references outlined instead of plated,
+far-face copper quieter. The shadow and the light are for the eye on a screen. The 1:1 PDF
+is taped to the board in someone's hand, so it shows every part flat -- which is what most
+of these hold. Pads nothing landed in were drawn quieter on screen too, until the user chose
+the board as it is in the hand (2026-11-03): every pad is tin on both.
 """
 
 from __future__ import annotations
@@ -22,8 +22,7 @@ from PySide6.QtWidgets import QApplication
 
 from perfboard_studio import persist
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.geometry import all_pin_holes, hole_key
-from perfboard_studio.model import PerfDocument, contacts_every_path_hole
+from perfboard_studio.model import PerfDocument
 from perfboard_studio.ui import view2d
 from perfboard_studio.ui.export_pdf import export_pdf
 
@@ -52,53 +51,40 @@ def _on_paper(doc: PerfDocument, scene: view2d.BoardScene, tmp_path: Path) -> No
     export_pdf(doc.board, scene, tmp_path / "board.pdf")
 
 
-def test_a_pad_is_used_when_a_lead_a_run_or_a_wire_end_lands_in_it() -> None:
-    doc = _example("atmega328-relay")
-    used = view2d.used_holes(doc, LOOKUP)
-    for comp in doc.components:
-        footprint = LOOKUP(comp.footprint_id)
-        assert footprint is not None
-        for _pin, hole in all_pin_holes(comp, footprint):
-            assert hole_key(hole) in used, comp.ref
-    runs = [c for c in doc.conductors if contacts_every_path_hole(c) and len(c.path) > 2]
-    wires = [c for c in doc.conductors if not contacts_every_path_hole(c) and len(c.path) > 2]
-    assert runs and wires, "the example should have both, or this proves nothing"
-    for run in runs:
-        assert all(hole_key(hole) in used for hole in run.path)
-    # A wire touches its two ends and only lies over the holes between them; a hole under
-    # its middle that nothing else lands in stays quiet.
-    pinned = {
-        hole_key(hole)
-        for comp in doc.components
-        for _pin, hole in all_pin_holes(comp, LOOKUP(comp.footprint_id))  # type: ignore[arg-type]
-    }
-    soldered = {hole_key(h) for c in doc.conductors if contacts_every_path_hole(c) for h in c.path}
-    ends = {hole_key(h) for c in doc.conductors for h in (c.path[0], c.path[-1]) if c.path}
-    passed_over = {
-        hole_key(h) for wire in wires for h in wire.path[1:-1]
-    } - pinned - soldered - ends
-    assert passed_over, "no wire passes over a hole nothing else uses"
-    assert not passed_over & used
+def _counting(paint, drawn: list[int]):  # type: ignore[no-untyped-def]
+    """``PadGridItem.paint`` that records which pad image each hole was drawn with."""
+
+    def wrapped(item, painter, option, widget=None):  # type: ignore[no-untyped-def]
+        real = painter.drawPixmap
+
+        class Recording:
+            def __getattr__(self, name):  # type: ignore[no-untyped-def]
+                return getattr(painter, name)
+
+            def drawPixmap(self, target, pixmap, source):  # type: ignore[no-untyped-def]
+                drawn.append(pixmap.cacheKey())
+                return real(target, pixmap, source)
+
+        return paint(item, Recording(), option, widget)
+
+    return wrapped
 
 
-def test_the_screen_quiets_unused_pads_and_paper_does_not(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    asked: list[bool] = []
-    real = view2d.PadGridItem._pad_for
-
-    def record(item, long_px, quiet=False):  # type: ignore[no-untyped-def]
-        asked.append(quiet)
-        return real(item, long_px, quiet)
-
-    monkeypatch.setattr(view2d.PadGridItem, "_pad_for", record)
+def test_every_pad_is_drawn_alike_on_screen_and_on_paper(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A real board's pads are all tin, used or not, and so are these: one pad image for every
+    hole, on screen as on the 1:1 print."""
+    drawn: list[int] = []
     doc = _example("ne555-astable")
-
-    _on_screen(view2d.BoardScene(doc, LOOKUP, side="top"))
-    assert True in asked and False in asked
-
-    asked.clear()
-    _on_paper(doc, view2d.BoardScene(doc, LOOKUP, side="top"), tmp_path)
-    assert asked, "the print drew no pads"
-    assert True not in asked, "the 1:1 print quieted a pad"
+    for render in (
+        lambda: _on_screen(view2d.BoardScene(doc, LOOKUP, side="top")),
+        lambda: _on_paper(doc, view2d.BoardScene(doc, LOOKUP, side="top"), tmp_path),
+    ):
+        drawn.clear()
+        monkeypatch.setattr(view2d.PadGridItem, "paint", _counting(view2d.PadGridItem.paint, drawn))
+        render()
+        monkeypatch.undo()
+        assert drawn, "no pads were drawn"
+        assert len(set(drawn)) == 1, "two kinds of pad on one board"
 
 
 def test_shadows_and_light_are_for_the_screen_only(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
