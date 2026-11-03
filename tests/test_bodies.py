@@ -306,6 +306,7 @@ def test_a_diode_and_a_resistor_do_not_look_alike() -> None:
     [
         ("box-16x1-p1-r1-80x36x15-o12.95x15.5", "#186b2a"),  # the 16 x 2 LCD's green board
         ("box-2x6-p6-r1-19x50.3x8.1-ccw", "#0d0e10"),  # the CA56-12's black case
+        ("box-2x5-p6-r1-19.05x12.7x8-ccw", "#0d0e10"),  # the single digit, painted to match
     ],
 )
 def test_a_generic_box_with_a_model_is_the_models_colour(footprint_id: str, fill: str) -> None:

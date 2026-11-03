@@ -748,7 +748,8 @@ CATALOG: tuple[CatalogPart, ...] = (
                 source=(
                     "Kingbright SA56-11EWA and SA56-11GWA datasheets: 1 e, 2 d, 3 and 8 the "
                     "common anode, 4 c, 5 DP, 6 b, 7 a, 9 f, 10 g; 12.7 x 19.05 x 8 mm, the "
-                    "rows 15.24 mm apart"
+                    "rows 15.24 mm apart. Drawn from KiCad's model of Lite-On's LTS-6760, the "
+                    "same package pad for pad"
                 ),
                 check=_DIGIT_CHECK,
                 aliases=(*_DIGIT_ALIASES, "SA56-11EWA", "SA56-11GWA")),
@@ -760,7 +761,8 @@ CATALOG: tuple[CatalogPart, ...] = (
                 source=(
                     "Kingbright SC56-11EWA and SC56-11GWA datasheets: 1 e, 2 d, 3 and 8 the "
                     "common cathode, 4 c, 5 DP, 6 b, 7 a, 9 f, 10 g; 12.7 x 19.05 x 8 mm, the "
-                    "rows 15.24 mm apart"
+                    "rows 15.24 mm apart. Drawn from KiCad's model of Lite-On's LTS-6760, the "
+                    "same package pad for pad"
                 ),
                 check=_DIGIT_CHECK,
                 aliases=(*_DIGIT_ALIASES, "SC56-11EWA", "SC56-11GWA")),

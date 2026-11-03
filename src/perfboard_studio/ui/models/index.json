@@ -884,6 +884,51 @@
   ],
   "source": "Display/WC1602A"
  },
+ "box-2x5-p6-r1-19.05x12.7x8-ccw": {
+  "parts": [
+   {
+    "bounds": [
+     -0.25,
+     -10.4097,
+     -0.05,
+     15.49,
+     0.2497,
+     1.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-2x5-p6-r1-19.05x12.7x8-ccw.0.ply"
+   },
+   {
+    "bounds": [
+     -1.905,
+     -11.38,
+     0.0,
+     17.145,
+     1.22,
+     8.0
+    ],
+    "color": "#0d0e10",
+    "material": "moulded",
+    "mesh": "box-2x5-p6-r1-19.05x12.7x8-ccw.1.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     0.9812,
+     -10.7479,
+     8.0,
+     15.4594,
+     0.3042,
+     8.2
+    ],
+    "color": "#720301",
+    "material": "gloss",
+    "mesh": "box-2x5-p6-r1-19.05x12.7x8-ccw.2.ply"
+   }
+  ],
+  "source": "Display_7Segment/7SegmentLED_LTS6760_LTS6780"
+ },
  "box-2x6-p6-r1-19x50.3x8.1-ccw": {
   "parts": [
    {

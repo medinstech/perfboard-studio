@@ -59,8 +59,9 @@ The meshes are not the KiCad models unaltered:
   turned a quarter so its pins run along the module's (the `header` field in
   `tools/import_kicad_models.py`).
 - **Some were painted another colour**, where the model shows another variant of the part
-  than the one builders hold: the LCD's glass is yellow-green rather than beige. Which ones
-  is the `colours` field in `tools/import_kicad_models.py`.
+  than the one builders hold: the LCD's glass is yellow-green rather than beige, and
+  Lite-On's LTS-6760 digit has the black face of the four-digit display beside it rather
+  than a beige one. Which ones is the `colours` field in `tools/import_kicad_models.py`.
 
 Nothing about the source models' geometry was otherwise altered, and no colours or
 materials were taken from them into the application's own tables.

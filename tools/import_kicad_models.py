@@ -236,6 +236,12 @@ MODELS: tuple[Model, ...] = (
     # the "standard gray face, white segment" of Kingbright's datasheet: the black one is
     # what most builders hold, and the colour was chosen by looking at both.
     Model("box-2x6-p6-r1-19x50.3x8.1-ccw", "Display_7Segment", "CA56-12EWA", body="#0d0e10"),
+    # One 0.56 inch digit, the SA56-11 and SC56-11. KiCad has no Kingbright single digit;
+    # Lite-On's LTS-6760/6780 is the same package -- 19.05 x 12.7 x 8 mm, five pins a side in
+    # rows 15.24 mm apart, its KiCad footprint the SA56-11's pad for pad, the decimal point
+    # beside pin 5 as on Kingbright's drawing -- painted with the CA56-12's black face.
+    Model("box-2x5-p6-r1-19.05x12.7x8-ccw", "Display_7Segment", "7SegmentLED_LTS6760_LTS6780",
+          colours=(("#c6c4a0", "#0d0e10"),)),
     # -- a terminal block of any length, as three ways of the 3-way one -----
     #
     # A MKDS-1,5 block IS a repetition, like a header, and it was measured rather than

@@ -139,6 +139,10 @@ ON_THE_HOLE_MM = 0.05
         "box-16x1-p1-r1-80x36x15-o12.95x15.5",
         # Kingbright's CA56-12EWA, KiCad's model of the catalog's own part.
         "box-2x6-p6-r1-19x50.3x8.1-ccw",
+        # The SA56-11 and SC56-11, drawn from Lite-On's LTS-6760: borrowed from ANOTHER
+        # maker's part on the strength of its being the same package, so this is what holds
+        # it to our footprint pad for pad.
+        "box-2x5-p6-r1-19.05x12.7x8-ccw",
     ],
 )
 def test_a_display_stands_exactly_on_its_own_footprint(footprint_id: str) -> None:
