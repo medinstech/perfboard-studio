@@ -22,6 +22,10 @@ closed without a bump.
 
 ### Added
 
+- **A board can carry the words it is printed with.** Its size ("5cmX7cm"), a batch code or
+  a maker's name, in the border along any edge, drawn in 2D, in 3D and on the 1:1 print; a
+  legend letter it covers is left off, as on the real board.
+
 - **A board says what it looks like, and is drawn so.** Its solder mask (green, blue,
   black, red, purple, white or none) and its pads' finish (HASL, lead-free HASL, bare
   copper or ENIG gold) are saved with the board, so a matte black gold board looks like one

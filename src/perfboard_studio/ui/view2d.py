@@ -99,6 +99,7 @@ from perfboard_studio.geometry import (
     board_note_anchor,
     board_note_centre_mm,
     board_outline_mm,
+    board_text_placement,
     column_label,
     consumed_holes,
     edge_finger_rect,
@@ -881,6 +882,44 @@ class BoardLegendItem(QGraphicsItem):
                     max_width_mm=wide,
                     rotation_deg=-90.0,
                 )
+        painter.restore()
+
+
+class BoardTextItem(QGraphicsItem):
+    """What the board is printed with besides its legend -- its size, a batch code, a
+    maker's name (``model.BoardText``). Silkscreen like the legend: it scales with the
+    board, is drawn under the pads, comes out on the 1:1 print, and is dim and unmirrored
+    from the face it is not printed on, for the legend's reasons.
+
+    Placed by ``geometry.board_text_placement``, the one answer the 3D board and the
+    legend's own clear-check also ask, so a letter the line covers is left off in both
+    views and the line is in the same place in both.
+    """
+
+    def __init__(self, document: PerfDocument, side: BoardSide) -> None:
+        super().__init__()
+        self.document = document
+        self.board = document.board
+        self.side = side
+        self.setZValue(-95)  # The legend's: ink on the substrate, under the pads.
+
+    def boundingRect(self) -> QRectF:
+        return _outline_rect(self.board)
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        span_w = _span_w_for(self.board)
+        painter.save()
+        for line in self.board.printed:
+            centre, _width, _height, turn = board_text_placement(self.document, line)
+            height = _width if turn else _height
+            if height <= 0:
+                continue
+            painter.setPen(QPen(QColor(LEGEND_INK if line.face == self.side else LEGEND_INK_FAR)))
+            # Mirrored about the hole span on the solder side, like every other x here.
+            x = centre.x if self.side == "top" else span_w - centre.x
+            draw_physical_label(
+                painter, QPointF(x, centre.y), line.text, height, rotation_deg=turn
+            )
         painter.restore()
 
 
@@ -4207,6 +4246,8 @@ class BoardScene(QGraphicsScene):
         # where it passes close to the outer row of pads.
         if board.labels is not None and not breadboard:
             self.addItem(BoardLegendItem(self.document, board.labels, self.side))
+        if board.printed and not breadboard:
+            self.addItem(BoardTextItem(self.document, self.side))
 
         # A single-sided board has copper on the solder side ONLY. From the component
         # side you are looking at bare phenolic with holes drilled through it -- the holes

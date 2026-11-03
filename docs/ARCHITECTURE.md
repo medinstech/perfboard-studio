@@ -667,6 +667,16 @@ opposite of the rulers and reference labels, which hold a screen size (`draw_lab
 Both exist because a millimetre-sized font is a fraction of a point, which some engines
 draw as nothing while reporting no error.
 
+**`board.printed` is the rest of the silkscreen** (`model.BoardText`): the size and batch
+code a stock board carries in a border ("5cmX7cm"), a maker's name along an edge. It is
+placed by EDGE and a share along it, never by millimetres, because that is how a board
+prints it, and `geometry.board_text_placement` centres it in the same bare strip the legend
+uses (`legend_strip_mm`), turned on its side on the left and right. That one function is
+what the 2D item, the 3D actors and `printed_label_is_clear` ask, so a legend letter under a
+printed line is left off in both views: two inks are not printed over each other, and the
+address is what a board leaves off. `geometry.board_text_problem` is the one refusal,
+asked by `board.set` and by `persist`. Empty, it is left out of the file.
+
 `mounting_holes` and `edge_connectors` sit on the *document* (like `cuts`), so each is its
 own command and its own undo step. A mounting bore removes copper from pads it was not
 drilled on — `geometry.consumed_holes` is the single answer to which — and a pin left on

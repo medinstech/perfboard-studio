@@ -71,6 +71,7 @@ from perfboard_studio.geometry import (
     board_edge_margin_mm,
     board_note_centre_mm,
     board_size_mm,
+    board_text_placement,
     edge_finger_rect,
     flying_lead_routes,
     hole_key,
@@ -1583,6 +1584,55 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
         actor.SetMapper(mapper)
         # Just clear of the substrate, on whichever face carries the print. Silkscreen is
         # ink: unlit and matte, so it does not catch highlights the way copper does.
+        actor.SetPosition(0.0, 0.0, 0.02 if face == "top" else -board.thickness - 0.02)
+        actor.GetProperty().SetColor(*LEGEND_RGB)
+        _finish(actor.GetProperty(), INK)
+        actors.append(actor)
+    return actors
+
+
+def build_board_text(doc: PerfDocument) -> list[vtk.vtkActor]:
+    """What the board is printed with besides its legend, as flat text on its face -- one
+    actor per face, placed by ``geometry.board_text_placement`` like the 2D line.
+
+    3D y runs up where board rows run down, so the placement's y is negated; ink on the
+    underside is reflected about its own centre, exactly as the legend's is.
+    """
+    board = doc.board
+    actors: list[vtk.vtkActor] = []
+    for face in ("top", "bottom"):
+        lines = [line for line in board.printed if line.face == face]
+        if not lines:
+            continue
+        append = vtk.vtkAppendPolyData()
+        for line in lines:
+            centre, width, height, turn = board_text_placement(doc, line)
+            cap = width if turn else height
+            if cap <= 0:
+                continue
+            vector = vtk.vtkVectorText()
+            vector.SetText(line.text)
+            vector.Update()
+            bounds = vector.GetOutput().GetBounds()
+            transform = vtk.vtkTransform()
+            transform.Translate(centre.x, -centre.y, 0.0)
+            if face == "bottom":
+                transform.Scale(-1.0, 1.0, 1.0)
+            if turn:
+                # The placement turns clockwise on the screen, y down; here y is up.
+                transform.RotateZ(-turn)
+            transform.Scale(cap, cap, cap)
+            transform.Translate(-(bounds[0] + bounds[1]) / 2, -(bounds[2] + bounds[3]) / 2, 0.0)
+            placed = vtk.vtkTransformPolyDataFilter()
+            placed.SetTransform(transform)
+            placed.SetInputData(vector.GetOutput())
+            placed.Update()
+            append.AddInputData(placed.GetOutput())
+        append.Update()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(append.GetOutputPort())
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
         actor.SetPosition(0.0, 0.0, 0.02 if face == "top" else -board.thickness - 0.02)
         actor.GetProperty().SetColor(*LEGEND_RGB)
         _finish(actor.GetProperty(), INK)
@@ -6390,7 +6440,7 @@ def populate_renderer(
                 board, patched_holes(doc) | undrilled_holes(doc) | holeless_positions(board)
             )
         )
-    for actor in () if breadboard else build_legend(doc):
+    for actor in () if breadboard else (*build_legend(doc), *build_board_text(doc)):
         ren.AddActor(actor)
     if is_solderable_breadboard(board):
         # The breadboard's print in silkscreen, where a perfboard carries its legend.

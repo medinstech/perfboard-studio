@@ -190,6 +190,30 @@ class BoardLabels:
 
 
 @dataclass(frozen=True, slots=True)
+class BoardText:
+    """A line the board is printed with when it is made: its size ("5cmX7cm"), a batch
+    code, a maker's name. Not a ``BoardNote``, which is the builder's own label in paint
+    marker; this is silkscreen, part of the board that was bought, which is why it lives on
+    ``Board`` and a preset (or a board family) brings it.
+
+    Placed by EDGE rather than by millimetres, because that is how the boards place it: in
+    the border, along one edge, centred where ``along`` says. It reads along the edge, turned
+    on its side on the left and right as the stock boards print it, and sizes itself to the
+    strip of bare substrate it is printed in (``geometry.board_text_placement``).
+    """
+
+    text: str
+    edge: BoardEdge = "bottom"
+    #: Where along the edge its centre is, as a share of the board's length that way: 0.5
+    #: is the middle, 0 the left (or top) end.
+    along: float = 0.5
+    #: Cap height. Shrunk to the strip it is printed in when the strip is narrower.
+    height_mm: Mm = 1.2
+    #: The component side, where the stock boards print it.
+    face: BoardSide = "top"
+
+
+@dataclass(frozen=True, slots=True)
 class Board:
     type: BoardType
     cols: int
@@ -247,6 +271,9 @@ class Board:
     #: The pads' finish, or None for the material's (tinned on FR-4, bare copper on
     #: phenolic: ``geometry.board_finish``). Left out of the file when None, like ``mask``.
     finish: BoardFinish | None = None
+    #: What the board is printed with besides its legend -- see ``BoardText``. Empty, and
+    #: then left out of the file, on every board that prints nothing else.
+    printed: tuple[BoardText, ...] = ()
 
 
 # ---------------------------------------------------------------------------

@@ -38,7 +38,7 @@ from decimal import Decimal
 from typing import Literal, cast, get_args
 
 from .breadboard import board_problem, has_breadboard_pattern, is_breadboard
-from .geometry import legend_problem, validate_orthogonal_chain
+from .geometry import board_text_problem, legend_problem, validate_orthogonal_chain
 from .model import (
     DEFAULT_BOARD_NOTE_SIZE_MM,
     DEFAULT_NOTE_SIZE_MM,
@@ -55,6 +55,7 @@ from .model import (
     BoardMaterial,
     BoardNote,
     BoardSide,
+    BoardText,
     BoardType,
     ComponentInstance,
     Conductor,
@@ -254,7 +255,9 @@ BOARD_KEY_ORDER: tuple[str, ...] = (
     "narrowChannelCols",
     "mask",
     "finish",
+    "printed",
 )
+BOARD_TEXT_KEY_ORDER: tuple[str, ...] = ("text", "edge", "along", "heightMm", "face")
 BOARD_LABELS_KEY_ORDER: tuple[str, ...] = ("face", "rowDigits", "allEdges", "columns", "rows")
 AXIS_LEGEND_KEY_ORDER: tuple[str, ...] = ("runs", "every", "digits")
 MOUNTING_HOLE_KEY_ORDER: tuple[str, ...] = (
@@ -383,6 +386,29 @@ def _ordered_board(b: Board) -> JsonObj:
         values["mask"] = b.mask
     if b.finish is not None:
         values["finish"] = b.finish
+    if b.printed:
+        printed_path = _field_path(path, "printed")
+        values["printed"] = [
+            _build_ordered(
+                BOARD_TEXT_KEY_ORDER,
+                {
+                    "text": line.text,
+                    "edge": line.edge,
+                    **(
+                        {"along": _num(f"{printed_path}[{index}].along", line.along)}
+                        if line.along != 0.5
+                        else {}
+                    ),
+                    **(
+                        {"heightMm": _num(f"{printed_path}[{index}].heightMm", line.height_mm)}
+                        if line.height_mm != 1.2
+                        else {}
+                    ),
+                    **({"face": line.face} if line.face != "top" else {}),
+                },
+            )
+            for index, line in enumerate(b.printed)
+        ]
     return _build_ordered(BOARD_KEY_ORDER, values)
 
 
@@ -1096,6 +1122,24 @@ def _parse_meta(raw: object, warnings: list[str]) -> DocumentMeta:
     )
 
 
+def _parse_board_text(raw: object, path: str, warnings: list[str]) -> BoardText:
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, BOARD_TEXT_KEY_ORDER, path, warnings)
+    along_raw = obj.get("along")
+    height_raw = obj.get("heightMm")
+    face_raw = obj.get("face")
+    return BoardText(
+        text=_expect_string(_require_field(obj, "text", path), _field_path(path, "text")),
+        edge=_expect_enum(_require_field(obj, "edge", path), _field_path(path, "edge"), BOARD_EDGES),  # type: ignore[arg-type]
+        along=0.5 if along_raw is None else float(_expect_number(along_raw, _field_path(path, "along"))),
+        height_mm=(
+            1.2 if height_raw is None
+            else float(_expect_number(height_raw, _field_path(path, "heightMm")))
+        ),
+        face="top" if face_raw is None else _expect_enum(face_raw, _field_path(path, "face"), ("top", "bottom")),  # type: ignore[arg-type]
+    )
+
+
 def _parse_board_labels(raw: object, path: str, warnings: list[str]) -> BoardLabels:
     obj = _expect_object(raw, path)
     _check_unknown_keys(obj, BOARD_LABELS_KEY_ORDER, path, warnings)
@@ -1210,6 +1254,17 @@ def _parse_board(raw: object, warnings: list[str]) -> Board:
     narrow_channel_cols = (
         0 if narrow_raw is None else _expect_integer(narrow_raw, _field_path(path, "narrowChannelCols"))
     )
+    printed_raw = obj.get("printed")
+    printed = (
+        ()
+        if printed_raw is None
+        else tuple(
+            _parse_board_text(item, f"{_field_path(path, 'printed')}[{index}]", warnings)
+            for index, item in enumerate(
+                _expect_array(printed_raw, _field_path(path, "printed"))
+            )
+        )
+    )
     mask_raw = obj.get("mask")
     mask = None if mask_raw is None else _expect_enum(mask_raw, _field_path(path, "mask"), BOARD_MASKS)
     finish_raw = obj.get("finish")
@@ -1280,9 +1335,13 @@ def _parse_board(raw: object, warnings: list[str]) -> Board:
         narrow_channel_cols=narrow_channel_cols,
         mask=mask,  # type: ignore[arg-type]
         finish=finish,  # type: ignore[arg-type]
+        printed=printed,
     )
     if (problem := board_problem(board)) is not None:
         raise ValidationError("invalid-board", problem, path)
+    # What board.set refuses, in its words.
+    if (problem := board_text_problem(board)) is not None:
+        raise ValidationError("invalid-board", problem, _field_path(path, "printed"))
     return board
 
 

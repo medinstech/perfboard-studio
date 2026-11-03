@@ -34,6 +34,7 @@ from .model import (
     BoardMaterial,
     BoardNote,
     BoardSide,
+    BoardText,
     ComponentInstance,
     EdgeConnector,
     Footprint,
@@ -1212,6 +1213,62 @@ def legend_ink_width_mm(text: str, height: Mm, slot: Mm) -> Mm:
     return min(slot, len(text) * height * LEGEND_GLYPH_ADVANCE)
 
 
+#: The longest line a board is printed with. A maker's name and a web address fit; a
+#: paragraph is not silkscreen.
+BOARD_TEXT_MAX_CHARS = 40
+#: How much of the bare strip a printed line may stand in: the rest is the gap to the pads
+#: on one side and to the edge on the other.
+BOARD_TEXT_STRIP_SHARE = 0.8
+
+
+def board_text_problem(board: Board) -> str | None:
+    """Why ``board.printed`` cannot be printed, or None. One sentence for both places that
+    ask -- ``board.set`` refuses the board and a file carrying it does not load."""
+    for line in board.printed:
+        if not line.text.strip():
+            return "A printed line needs some text."
+        if len(line.text) > BOARD_TEXT_MAX_CHARS:
+            return (
+                f"A printed line is at most {BOARD_TEXT_MAX_CHARS} characters; "
+                f"{line.text[:20]!r}... has {len(line.text)}."
+            )
+        if not 0.0 <= line.along <= 1.0:
+            return f"{line.text!r} is placed {line.along:g} along its edge, outside 0 to 1."
+        if not 0.0 < line.height_mm <= 5.0:
+            return f"{line.text!r} is {line.height_mm:g} mm tall; a printed line is over 0 and at most 5 mm."
+    return None
+
+
+def board_text_placement(doc: PerfDocument, line: BoardText) -> tuple[Point2, Mm, Mm, float]:
+    """(centre, width, height, turn in degrees) of one printed line, in board millimetres
+    with y growing DOWN like every position here, its box already turned.
+
+    In the strip of bare substrate along its edge -- the strip the legend is printed in,
+    asked of the DOCUMENT for the same reason (``legend_strip_mm``: an edge strip of fingers
+    leaves only its inset) -- and centred across it, measured in from the board edge.
+    """
+    board = doc.board
+    axis = edge_axis(line.edge)
+    strip = legend_strip_mm(doc, axis)
+    margin = board_edge_margin_mm(board, axis)
+    height = max(0.0, min(line.height_mm, strip * BOARD_TEXT_STRIP_SHARE))
+    width = len(line.text) * height * LEGEND_GLYPH_ADVANCE
+    span_w, span_h = hole_span_mm(board)
+    outline = board_outline_mm(board)
+    if line.edge in ("top", "bottom"):
+        x = outline.x + outline.width * line.along
+        y = -(margin - strip / 2) if line.edge == "top" else span_h + margin - strip / 2
+        return Point2(x, y), width, height, 0.0
+    y = outline.y + outline.height * line.along
+    if line.edge == "left":
+        return Point2(-(margin - strip / 2), y), height, width, -90.0
+    return Point2(span_w + margin - strip / 2, y), height, width, 90.0
+
+
+def _boxes_meet(a: Point2, aw: Mm, ah: Mm, b: Point2, bw: Mm, bh: Mm) -> bool:
+    return abs(a.x - b.x) * 2 < aw + bw and abs(a.y - b.y) * 2 < ah + bh
+
+
 def printed_label_is_clear(
     doc: PerfDocument, centre: Point2, width: Mm, height: Mm
 ) -> bool:
@@ -1233,6 +1290,12 @@ def printed_label_is_clear(
         near_y = min(max(bore.y, centre.y - height / 2), centre.y + height / 2)
         reach = mount.diameter / 2 + LEGEND_BORE_CLEARANCE_MM
         if math.hypot(near_x - bore.x, near_y - bore.y) < reach:
+            return False
+    # Nor where the board's own printed line is: two inks are not printed over each other,
+    # and of the two it is the address that a board leaves off.
+    for line in doc.board.printed:
+        at, line_w, line_h, _turn = board_text_placement(doc, line)
+        if _boxes_meet(centre, width, height, at, line_w, line_h):
             return False
     return True
 

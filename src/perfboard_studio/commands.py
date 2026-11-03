@@ -49,6 +49,7 @@ from .geometry import (
     BoardPreset,
     board_edge_margin_mm,
     board_from_preset,
+    board_text_problem,
     default_finger_length_mm,
     edge_axis,
     edge_connector_holes,
@@ -2241,6 +2242,8 @@ class _SetBoard:
                 "invalid-board", "A printed row label cannot be narrower than one digit."
             )
         if b.labels is not None and (problem := legend_problem(b.labels)) is not None:
+            raise CommandError("invalid-board", problem)
+        if (problem := board_text_problem(b)) is not None:
             raise CommandError("invalid-board", problem)
         if (problem := board_problem(b)) is not None:
             raise CommandError("invalid-board", problem)
