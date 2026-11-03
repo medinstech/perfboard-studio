@@ -114,6 +114,8 @@ from perfboard_studio.footprints import (
 )
 from perfboard_studio.geometry import (
     all_pin_holes,
+    board_finish,
+    board_mask,
     consumed_holes,
     edge_connector_holes,
     format_hole,
@@ -131,6 +133,8 @@ from perfboard_studio.model import (
     Board,
     BoardEdge,
     BoardFace,
+    BoardFinish,
+    BoardMask,
     BoardMaterial,
     BoardSide,
     BoardType,
@@ -370,6 +374,10 @@ class BoardSession:
             "pitch_mm": board.pitch,
             "thickness_mm": board.thickness,
             "material": board.material,
+            # What the board looks like, which it says or its material implies -- the
+            # answer either way, so an agent never has to know the defaults.
+            "mask": board_mask(board),
+            "finish": board_finish(board),
             "pad_shape": board.pad_shape,
             "pad_diameter_mm": board.pad_diameter,
             "drill_diameter_mm": board.drill_diameter,
@@ -1154,6 +1162,8 @@ class BoardSession:
         single_sided: bool | None = None,
         channel_mil: int | None = None,
         narrow_channel_cols: int | None = None,
+        mask: str | None = None,
+        finish: str | None = None,
     ) -> dict[str, Any]:
         """Change the board under the design. Anything left out is left alone.
 
@@ -1181,6 +1191,15 @@ class BoardSession:
         if strip_axis is not None and strip_axis not in ("horizontal", "vertical"):
             raise SessionError(
                 f"{strip_axis!r} is not a strip axis. Use 'horizontal' or 'vertical'."
+            )
+        if mask is not None and mask not in get_args(BoardMask):
+            raise SessionError(
+                f"{mask!r} is not a solder mask. Use one of: {', '.join(get_args(BoardMask))}."
+            )
+        if finish is not None and finish not in get_args(BoardFinish):
+            raise SessionError(
+                f"{finish!r} is not a pad finish. Use one of: "
+                f"{', '.join(get_args(BoardFinish))}."
             )
         wanted_type = cast(BoardType, board_type) if board_type is not None else board.type
         if channel_mil is not None:
@@ -1226,6 +1245,8 @@ class BoardSession:
             pitch=pitch if pitch is not None else board.pitch,
             single_sided=single_sided if single_sided is not None else board.single_sided,
             narrow_channel_cols=narrow,
+            mask=cast(BoardMask, mask) if mask is not None else board.mask,
+            finish=cast(BoardFinish, finish) if finish is not None else board.finish,
             # Only a stripboard has an axis, the way only an oblong pad has a length: a
             # field describing nothing does not belong in the file.
             strip_axis=(

@@ -71,6 +71,8 @@ from .model import (
     Board,
     BoardEdge,
     BoardFace,
+    BoardFinish,
+    BoardMask,
     BoardNote,
     BoardSide,
     ComponentId,
@@ -2223,6 +2225,17 @@ class _SetBoard:
             )
         if b.border_x_mm < 0 or b.border_y_mm < 0:
             raise CommandError("invalid-board", "A board border cannot be negative.")
+        if b.mask is not None and b.mask not in get_args(BoardMask):
+            raise CommandError(
+                "invalid-board",
+                f"{b.mask!r} is not a solder mask. Use one of: {', '.join(get_args(BoardMask))}.",
+            )
+        if b.finish is not None and b.finish not in get_args(BoardFinish):
+            raise CommandError(
+                "invalid-board",
+                f"{b.finish!r} is not a pad finish. Use one of: "
+                f"{', '.join(get_args(BoardFinish))}.",
+            )
         if b.labels is not None and b.labels.row_digits < 1:
             raise CommandError(
                 "invalid-board", "A printed row label cannot be narrower than one digit."

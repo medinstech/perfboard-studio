@@ -22,6 +22,14 @@ closed without a bump.
 
 ### Added
 
+- **A board says what it looks like, and is drawn so.** Its solder mask (green, blue,
+  black, red, purple, white or none) and its pads' finish (HASL, lead-free HASL, bare
+  copper or ENIG gold) are saved with the board, so a matte black gold board looks like one
+  in 2D, in 3D and in the STEP model. A board that says nothing looks as its material is
+  sold, exactly as before; the agent's `set_board` takes `mask` and `finish`. View ▸ Board
+  Colour still draws every board in one colour when you want it to, and its first entry is
+  now As the Board Says.
+
 - **An edge strip can stand outside the grid, as it does on the boards you buy.** An edge
   connector can now be laid in the border beside the outermost row instead of on it, so
   every hole of the grid stays a hole; the agent's `add_edge_connector` takes `outside`

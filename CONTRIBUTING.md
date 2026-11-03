@@ -91,9 +91,11 @@ in `packages/`, and the tests assert against its frozen output exactly. In parti
 order comes from explicit `*_KEY_ORDER` tuples rather than dict insertion order. Changing
 `DEFAULT_ROUTER_COSTS` is a deliberate act with fixture regeneration attached.
 
-**Appearance is a view setting, not a document field.** Solder-mask colour changes nothing
-about the circuit, and adding it to `Board` would reopen the byte-for-byte `.perf` format
-for a cosmetic preference. `ui/boardcolors.py` owns that sort of thing.
+**The board's look is saved with it; the window's is a view setting.** A board's mask and
+finish are what was bought, so they are `Board` fields, left out of the file at the look
+its material is sold with. Everything else that is only appearance (the theme, net colours,
+values on parts) is chosen in the window and never saved; `ui/boardcolors.py` and
+`ui/theme.py` own those.
 
 **Adding a menu item means adding its Turkish.** `ui/i18n.py` is a dict whose keys are the
 English strings. `tests/test_i18n.py` fails if the catalogue names a string the interface

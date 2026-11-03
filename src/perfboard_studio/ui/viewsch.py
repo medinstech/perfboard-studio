@@ -117,7 +117,7 @@ type SheetTool = Literal["select", "wire", "label", "text", "line", "rectangle",
 # ---------------------------------------------------------------------------
 #
 # A third colour table, and the reason there are three is set out in docs/ARCHITECTURE.md
-# ("Appearance is a view setting"): `theme` colours the application, `view2d`'s block
+# ("The board's look is saved with it"): `theme` colours the application, `view2d`'s block
 # colours the physical object, and this colours a DRAWING -- which is neither. A schematic
 # is ink on paper, so it is drawn as ink on paper: one line weight for everything, colour
 # used only to separate the three net classes and to say what is selected.

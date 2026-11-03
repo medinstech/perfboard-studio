@@ -2283,14 +2283,31 @@ things here were got wrong first:
   thousand actors for one is what the debounce on an edit exists to avoid. Not while the
   slider is on a step, which is picked out in the same colour already.
 
-## Appearance is a view setting, not a document field
+## The board's look is saved with it; the window's is a view setting
 
-**Appearance is a view setting, not a document field.** Solder-mask colour changes
-nothing about the circuit, and adding it to `Board` would reopen the byte-for-byte `.perf`
-format for a cosmetic preference — so `ui/boardcolors.py` owns it, it is chosen from the
-View menu, and it is not saved. Each scheme carries the 2D and 3D colours *together*, so
-a board cannot be green in the editor and blue in the 3D view. Reach for this test on any
-new visual option before adding a model field.
+**What the board looks like is the board's** (`Board.mask`, `Board.finish`). It was a view
+setting, on two grounds: solder-mask colour changes nothing about the circuit, and a field
+would reopen the byte-for-byte `.perf` format for a cosmetic preference. Neither held. The
+board is designed for the one in your hand, and a matte black ENIG board drawn green and
+tin is a different board on the screen from the one on the bench — the same reason parts
+are drawn as their models and corner holes where the board has them. And an optional field
+left out at its default reopens nothing: `geometry.board_mask` / `board_finish` give the
+look a material is sold with (FR-4 green and HASL, phenolic unmasked and bare copper),
+which are exactly the looks the window drew per material before, so every fixture, example
+and older file keeps its bytes and its render. The format version does not move: an older
+build warns about the unknown key and draws the material's look.
+
+`boardcolors.scheme_for` takes the BOARD, not its material, so nothing can draw a board
+without asking what it says it is. The View menu's choice survives as an override, "draw
+every board as …", and `choose(None)` means what each board says. Each scheme still carries
+the 2D and 3D colours *together*, so a board cannot be green in the editor and blue in the
+3D view. A preset brings its product's look (`board_from_preset` clears both), because a
+blue mask chosen for the board being replaced is not on the board being bought.
+
+**Everything else that is only appearance is still a view setting.** Ask of a new visual
+option whether it describes the object being built or how the window shows it: the theme,
+the net colours, values printed on parts, hatching are the window's; the mask and the
+finish are the board's. Ask that before adding a model field.
 
 Three colour tables exist and answer different questions: `ui/theme.py` colours the
 **application** (deliberately dim, so the eye lands on the board), `view2d`'s theme block

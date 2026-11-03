@@ -484,9 +484,9 @@ growing past 40 000 characters.
 - Before touching picking in 3D or the selection tint → [A click in 3D is a third door to
   the same
   selection](docs/ARCHITECTURE.md#a-click-in-3d-is-a-third-door-to-the-same-selection)
-- Before adding a visual option, or a colour to one of the three colour tables → [Appearance
-  is a view setting, not a document
-  field](docs/ARCHITECTURE.md#appearance-is-a-view-setting-not-a-document-field)
+- Before adding a visual option, or a colour to one of the three colour tables, or touching
+  `Board.mask` / `Board.finish` → [The board's look is saved with it; the window's is a view
+  setting](docs/ARCHITECTURE.md#the-boards-look-is-saved-with-it-the-windows-is-a-view-setting)
 - Before touching `parsers/`, `ui/headless.py` or `ui/clipboard.py` → [Parsers, the headless
   run and the clipboard](docs/ARCHITECTURE.md#parsers-the-headless-run-and-the-clipboard)
 - Before touching the file watcher, crash recovery or autosave → [The open file is watched,

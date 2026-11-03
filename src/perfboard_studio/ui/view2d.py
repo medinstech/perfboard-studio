@@ -593,7 +593,7 @@ class PadGridItem(QGraphicsItem):
             return pixmap
         inset = long_side * 0.03
         ring = QRectF(inset, inset, width - 2 * inset, height - 2 * inset)
-        scheme = scheme_for(self.board.material)
+        scheme = scheme_for(self.board)
         painter.setPen(QPen(QColor(scheme.pad_ring), max(1.0, long_side * 0.05)))
         painter.setBrush(QBrush(QColor(scheme.pad)))
         # Radius = half the short side, which turns the rounded rect into a true stadium
@@ -1083,7 +1083,7 @@ class StripGridItem(QGraphicsItem):
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         if not self.segments:
             return
-        scheme = scheme_for(self.board.material)
+        scheme = scheme_for(self.board)
         colour = QColor(scheme.pad)
         if self.far_side:
             colour.setAlpha(70)
@@ -1419,7 +1419,7 @@ class EdgeConnectorItem(QGraphicsItem):
                 span_w, _ = hole_span_mm(self.board)
                 left = span_w - (rect.x + rect.width)
             radius = min(rect.width, rect.height) * 0.25
-            scheme = scheme_for(self.board.material)
+            scheme = scheme_for(self.board)
             painter.setPen(QPen(QColor(scheme.pad_ring), 0.08))
             painter.setBrush(QBrush(QColor(scheme.pad) if self.near_side else FINGER_FAR))
             painter.drawRoundedRect(QRectF(left, rect.y, rect.width, rect.height), radius, radius)
@@ -4184,7 +4184,7 @@ class BoardScene(QGraphicsScene):
         )
         self.setBackgroundBrush(QBrush(BACKGROUND))
 
-        scheme = scheme_for(board.material)
+        scheme = scheme_for(board)
         breadboard = is_breadboard(board)
         substrate = self.addRect(
             outline,

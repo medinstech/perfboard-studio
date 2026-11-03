@@ -6094,19 +6094,19 @@ class MainWindow(QMainWindow):
             self.act_theme[name] = action
 
         view_menu.addSeparator()
-        # Solder mask colour changes nothing about the circuit, so it is a view setting
-        # rather than a document field -- see ui/boardcolors.py. Offered because someone
-        # matching what is on screen to the board in their hand should be able to.
+        # The board says its own mask and finish (Board.mask / Board.finish); this is the
+        # override, "draw every board as ...", for someone matching a screenshot to a board
+        # in another colour -- see ui/boardcolors.py.
         colour_menu = view_menu.addMenu(t("Board &Colour"))
         colour_menu.setToolTipsVisible(True)
         self.act_colour: dict[str, QAction] = {}
-        follow = colour_menu.addAction(t("Follow the &material"))
+        follow = colour_menu.addAction(t("As the &Board Says"))
         follow.setCheckable(True)
         follow.setChecked(True)
         follow.setToolTip(
             t(
-                "Green for FR-4 and brown for phenolic, which is what those substrates "
-                "actually look like."
+                "The mask and finish the board says it has. One that says nothing is drawn "
+                "as its material is sold: green and tinned for FR-4, bare copper on phenolic."
             )
         )
         follow.triggered.connect(lambda: self.on_board_colour(None))

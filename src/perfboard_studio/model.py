@@ -102,6 +102,17 @@ BoardType: TypeAlias = Literal[  # noqa: UP040
 #: empty set equals an empty set and pass while checking nothing.
 BoardMaterial: TypeAlias = Literal["FR4", "FR2", "FR1"]  # noqa: UP040
 
+#: The solder mask a board is sold under, or ``"none"`` for a board with no mask at all --
+#: the phenolic boards, whose substrate is what you see. ``TypeAlias`` for ``get_args``, as
+#: above: persist and the MCP server read its members at run time.
+BoardMask: TypeAlias = Literal[  # noqa: UP040
+    "green", "blue", "black", "red", "purple", "white", "none"
+]
+
+#: What the copper is finished with: hot-air levelled solder, leaded or lead-free; nothing
+#: at all; or gold over nickel (ENIG). ``TypeAlias`` for ``get_args``, as above.
+BoardFinish: TypeAlias = Literal["hasl", "lf-hasl", "bare-copper", "enig"]  # noqa: UP040
+
 #: One face, or both. Distinct from ``BoardSide``, which is always exactly one — a
 #: silkscreen legend or a set of connector fingers is routinely printed on both.
 type BoardFace = Literal["top", "bottom", "both"]
@@ -227,6 +238,15 @@ class Board:
     #: DIP still straddles it beside a wide module: how many columns, from column 1, do.
     #: Zero everywhere else, and then left out of the file (``breadboard.board_problem``).
     narrow_channel_cols: int = 0
+    #: The solder mask, or None for the one the material is sold under (green on FR-4,
+    #: none on phenolic: ``geometry.board_mask``). A DOCUMENT field, not a view setting,
+    #: because it is the board you bought: a board drawn green on the screen while the one
+    #: on the bench is black is not the board being designed for. None is left out of the
+    #: file, so every older file is the board it always was.
+    mask: BoardMask | None = None
+    #: The pads' finish, or None for the material's (tinned on FR-4, bare copper on
+    #: phenolic: ``geometry.board_finish``). Left out of the file when None, like ``mask``.
+    finish: BoardFinish | None = None
 
 
 # ---------------------------------------------------------------------------

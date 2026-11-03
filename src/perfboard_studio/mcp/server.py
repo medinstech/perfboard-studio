@@ -305,6 +305,8 @@ def set_board(
     single_sided: bool | None = None,
     channel_mil: int | None = None,
     narrow_channel_cols: int | None = None,
+    mask: str | None = None,
+    finish: str | None = None,
 ) -> dict[str, Any]:
     """Change the board under the design, keeping everything on it. Anything left out is
     left alone. board_type is "pad-per-hole" (every hole its own island), "stripboard"
@@ -322,10 +324,13 @@ def set_board(
     1, its strips moved in to meet it, so a DIP still fits beside the module -- 39 on the
     flex bodies of 63 columns. Where the strips cannot move in by the same whole number of
     rows (1000 against 300) the narrow part is drawn half a pitch high; every connection
-    and hole name is exact."""
+    and hole name is exact. mask is the solder mask the board is sold under ("green",
+    "blue", "black", "red", "purple", "white", or "none" for a bare phenolic board) and
+    finish is its pads' ("hasl", "lf-hasl", "bare-copper", "enig"): they change how the
+    board is drawn and nothing about the circuit."""
     return session.set_board(
         cols, rows, material, board_type, strip_axis, pitch, single_sided, channel_mil,
-        narrow_channel_cols,
+        narrow_channel_cols, mask, finish,
     )
 
 

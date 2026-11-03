@@ -1,11 +1,15 @@
 """Board colour schemes, shared by the 2D editor and the 3D view.
 
-WHY THIS IS A VIEW SETTING AND NOT A DOCUMENT FIELD. Solder mask colour changes nothing
-about the circuit: the same board in green and in blue is the same board, connects the
-same pins and solders the same way. Putting it in ``Board`` would also add a field to the
-``.perf`` format, which is compared byte for byte against output frozen from the reference
-implementation -- a cosmetic preference is not worth reopening that. So it lives here, is
-chosen from the View menu, and is not saved with the document.
+THE BOARD SAYS WHAT IT LOOKS LIKE. Its mask and its pads' finish are document fields
+(``Board.mask``, ``Board.finish``), because they are the board you bought: designing for
+the board in your hand means seeing that board, and a black ENIG board drawn green and tin
+is not it. Each is left out of the file at its default -- the look its material is sold
+with, ``geometry.board_mask`` / ``board_finish`` -- so every older file draws exactly as
+it did.
+
+THE VIEW MENU STILL OVERRIDES IT. It was the only way to say this once, and it stays as
+"draw every board as ...": someone matching a screenshot to a board in another colour can,
+without changing the document. ``choose(None)`` goes back to what the board says.
 
 WHAT THE SCHEMES ARE. The colours perfboard is actually sold in. Green FR-4 and brown
 phenolic are what the substrate genuinely looks like for those materials, so they are the
@@ -20,9 +24,11 @@ letting someone check that what they are about to solder is what they meant.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 
-from perfboard_studio.model import BoardMaterial
+from perfboard_studio.geometry import board_finish, board_mask
+from perfboard_studio.model import Board, BoardFinish, BoardMask
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +101,20 @@ _TINNED = ("#d4d2cc", "#85837c", "#efeee9", (0.831, 0.824, 0.800))
 #: not tin, but much paler and less saturated than the pink-brown this first guessed at.
 _BARE_COPPER = ("#e2a877", "#a86a3c", "#f6d0aa", (0.886, 0.659, 0.467))
 
+#: ENIG: gold over nickel, the finish of the better boards (a matte black one with gold
+#: pads is the usual). MEASURED, off a product photograph of such a board: the pads'
+#: gold pixels at hue 46 degrees, saturation 0.6, the quartiles of their value giving the
+#: pad, its shaded ring and the catch of light.
+_GOLD = ("#af943f", "#8b7938", "#c2a759", (0.686, 0.580, 0.247))
+
+#: The copper of each finish. Lead-free HASL is the same tin to the eye.
+_FINISH: dict[BoardFinish, tuple[str, str, str, tuple[float, float, float]]] = {
+    "hasl": _TINNED,
+    "lf-hasl": _TINNED,
+    "bare-copper": _BARE_COPPER,
+    "enig": _GOLD,
+}
+
 SCHEMES: tuple[BoardScheme, ...] = (
     BoardScheme("green", "Green (FR-4)", "#2e6b3f", "#0d1a12", (0.16, 0.36, 0.21), "#e8f0ea", *_TINNED),
     BoardScheme("blue", "Blue", "#1f4e8c", "#0b1a2e", (0.10, 0.26, 0.50), "#e6edf7", *_TINNED),
@@ -119,42 +139,65 @@ SCHEMES: tuple[BoardScheme, ...] = (
     ),
 )
 
+#: FR-4 with no mask: the glass-epoxy laminate itself, a pale translucent straw. NOT
+#: measured -- no photograph of such a board has been held against it yet -- and not
+#: offered in the View menu, where every entry is a board somebody sells; it is only what
+#: a board saying ``mask: "none"`` on FR-4 is drawn as.
+_BARE_FR4 = BoardScheme(
+    "bare-fr4", "Bare FR-4", "#c8c08e", "#6e6847", (0.784, 0.753, 0.557), "#2e2b1d", *_TINNED
+)
+
 BY_KEY = {scheme.key: scheme for scheme in SCHEMES}
 
-#: What each substrate material actually looks like, used until someone chooses otherwise.
-#: FR-2 and FR-1 are the brown phenolic board, and looking like it is the point -- the
-#: build guide derates the iron for exactly that material, so the two should agree on
-#: sight.
-DEFAULT_FOR_MATERIAL: dict[BoardMaterial, str] = {
-    "FR4": "green",
-    "FR2": "phenolic",
-    "FR1": "phenolic",
+#: The scheme each mask is drawn with. A board with no mask shows its substrate, which
+#: is the material's: phenolic's orange, or FR-4's own straw.
+_MASK_SCHEME: dict[BoardMask, str] = {
+    "green": "green",
+    "blue": "blue",
+    "black": "black",
+    "red": "red",
+    "purple": "purple",
+    "white": "white",
 }
 
 _chosen: str | None = None
 
 
 def choose(key: str | None) -> None:
-    """Pick a scheme, or ``None`` to go back to following the board's material."""
+    """Pick a scheme for every board, or ``None`` to go back to what each board says."""
     global _chosen
     _chosen = key if key in BY_KEY else None
 
 
 def chosen_key() -> str | None:
-    """The explicit choice, or None when the material decides."""
+    """The explicit choice, or None when each board decides."""
     return _chosen
 
 
-def scheme_for(material: BoardMaterial) -> BoardScheme:
-    """The scheme in force for a board of this material."""
+def scheme_for(board: Board) -> BoardScheme:
+    """The scheme in force for this board: the View menu's, if one is chosen, or else the
+    board's own mask over its own finish.
+
+    Takes the BOARD, not its material, so that nothing can draw a board without asking
+    what it says it is.
+    """
     if _chosen is not None:
         return BY_KEY[_chosen]
-    return BY_KEY[DEFAULT_FOR_MATERIAL.get(material, "green")]
+    mask = board_mask(board)
+    if mask == "none":
+        substrate = BY_KEY["phenolic"] if board.material in ("FR2", "FR1") else _BARE_FR4
+    else:
+        substrate = BY_KEY[_MASK_SCHEME[mask]]
+    pad, ring, sheen, rgb = _FINISH[board_finish(board)]
+    if (pad, ring, sheen, rgb) == (
+        substrate.pad, substrate.pad_ring, substrate.pad_sheen, substrate.pad_rgb
+    ):
+        return substrate
+    return dataclasses.replace(substrate, pad=pad, pad_ring=ring, pad_sheen=sheen, pad_rgb=rgb)
 
 
 __all__ = [
     "BY_KEY",
-    "DEFAULT_FOR_MATERIAL",
     "SCHEMES",
     "BoardScheme",
     "choose",

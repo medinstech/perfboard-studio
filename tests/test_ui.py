@@ -4101,11 +4101,12 @@ def test_the_two_views_agree_about_which_wire_passes_over_which() -> None:
 
 def test_both_views_take_their_board_colour_from_one_scheme() -> None:
     """Green in the editor and blue in 3D would undermine the one job the 3D view has."""
+    from perfboard_studio.commands import DEFAULT_BOARD
     from perfboard_studio.ui import boardcolors
 
     try:
         boardcolors.choose("blue")
-        blue = boardcolors.scheme_for("FR4")
+        blue = boardcolors.scheme_for(DEFAULT_BOARD)
         assert blue.key == "blue"
         # The 2D hex and the 3D linear RGB describe the same colour.
         expected = (int(blue.fill[1:3], 16) / 255, int(blue.fill[3:5], 16) / 255,
@@ -4115,34 +4116,29 @@ def test_both_views_take_their_board_colour_from_one_scheme() -> None:
         boardcolors.choose(None)
 
 
-def test_the_material_decides_until_someone_chooses() -> None:
+def test_the_board_decides_until_someone_chooses() -> None:
     """FR-2 is the brown phenolic board, and the build guide derates the iron for exactly
-    that material -- the two should agree on sight."""
+    that material -- the two should agree on sight. A board that says nothing about its
+    mask is drawn as its material is sold."""
+    import dataclasses
+
+    from perfboard_studio.commands import DEFAULT_BOARD
     from perfboard_studio.ui import boardcolors
 
     boardcolors.choose(None)
-    assert boardcolors.scheme_for("FR4").key == "green"
-    assert boardcolors.scheme_for("FR2").key == "phenolic"
+    assert boardcolors.scheme_for(DEFAULT_BOARD).key == "green"
+    phenolic = dataclasses.replace(DEFAULT_BOARD, material="FR2")
+    assert boardcolors.scheme_for(phenolic).key == "phenolic"
 
 
-def test_every_material_has_a_default_scheme() -> None:
-    from typing import get_args
-
-    from perfboard_studio.model import BoardMaterial
-    from perfboard_studio.ui import boardcolors
-
-    for material in get_args(BoardMaterial):
-        assert material in boardcolors.DEFAULT_FOR_MATERIAL
-        assert boardcolors.DEFAULT_FOR_MATERIAL[material] in boardcolors.BY_KEY
-
-
-def test_an_unknown_colour_falls_back_to_the_material() -> None:
+def test_an_unknown_colour_falls_back_to_the_board() -> None:
+    from perfboard_studio.commands import DEFAULT_BOARD
     from perfboard_studio.ui import boardcolors
 
     try:
         boardcolors.choose("chartreuse")
         assert boardcolors.chosen_key() is None
-        assert boardcolors.scheme_for("FR4").key == "green"
+        assert boardcolors.scheme_for(DEFAULT_BOARD).key == "green"
     finally:
         boardcolors.choose(None)
 

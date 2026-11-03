@@ -28,7 +28,9 @@ from .model import (
     AxisLegend,
     Board,
     BoardEdge,
+    BoardFinish,
     BoardLabels,
+    BoardMask,
     BoardMaterial,
     BoardNote,
     BoardSide,
@@ -380,6 +382,29 @@ class RectMm:
     y: Mm
     width: Mm
     height: Mm
+
+
+#: What a board is sold under when nobody has said: FR-4 under a green mask with its pads
+#: tinned, which is every cheap double-sided board; phenolic with no mask and its copper
+#: bare, which is every cheap single-sided one. These are the looks the window drew for
+#: each material before a board could say otherwise, so a board that says nothing still
+#: looks exactly as it did.
+DEFAULT_MASK: dict[BoardMaterial, BoardMask] = {"FR4": "green", "FR2": "none", "FR1": "none"}
+DEFAULT_FINISH: dict[BoardMaterial, BoardFinish] = {
+    "FR4": "hasl",
+    "FR2": "bare-copper",
+    "FR1": "bare-copper",
+}
+
+
+def board_mask(board: Board) -> BoardMask:
+    """The board's solder mask: the one it says, or the one its material is sold under."""
+    return board.mask if board.mask is not None else DEFAULT_MASK[board.material]
+
+
+def board_finish(board: Board) -> BoardFinish:
+    """The pads' finish: the one the board says, or its material's."""
+    return board.finish if board.finish is not None else DEFAULT_FINISH[board.material]
 
 
 def board_size_mm(board: Board) -> tuple[Mm, Mm]:
@@ -1511,6 +1536,10 @@ def board_from_preset(preset: BoardPreset, base: Board) -> Board:
         rows=preset.rows,
         material=preset.material,
         single_sided=preset.single_sided,
+        # The product's own look, which is its material's: a blue mask chosen for the
+        # board being replaced is not on the board being bought.
+        mask=None,
+        finish=None,
         border_x_mm=round(border_x, 4),
         border_y_mm=round(border_y, 4),
         # BOTH families print their addresses on the substrate, and this one has now been

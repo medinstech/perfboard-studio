@@ -593,7 +593,7 @@ def build_substrate(doc: PerfDocument) -> list[vtk.vtkActor]:
     ):
         mesh.polygon([(ax, ay, top), (bx, by, top), (bx, by, bottom), (ax, ay, bottom)])
 
-    rgb = scheme_for(board.material).rgb
+    rgb = scheme_for(board).rgb
     actors: list[vtk.vtkActor] = []
     for points, source in (
         (drilled_at, _tile_with_hole(board)),
@@ -1250,7 +1250,7 @@ def build_drills(board: Board, consumed: frozenset[str] = frozenset()) -> vtk.vt
     prop = actor.GetProperty()
     # The cut edge of the laminate, in shadow: darker than the face, and the same hue --
     # a hole in a brown phenolic board is not the same colour as one in green FR-4.
-    prop.SetColor(*(channel * 0.55 for channel in scheme_for(board.material).rgb))
+    prop.SetColor(*(channel * 0.55 for channel in scheme_for(board).rgb))
     _finish(prop, LAMINATE)
     return actor
 
@@ -1286,7 +1286,7 @@ def build_pads(
 
     actor = vtk.vtkActor()
     actor.SetMapper(glyph)
-    actor.GetProperty().SetColor(*scheme_for(board.material).pad_rgb)
+    actor.GetProperty().SetColor(*scheme_for(board).pad_rgb)
     _finish(actor.GetProperty(), TINNED)
     return actor
 
@@ -1388,7 +1388,7 @@ def build_strips(doc: PerfDocument) -> list[vtk.vtkActor]:
         bridge.SetMapper(mapper)
         actors.append(bridge)
     for actor in actors:
-        actor.GetProperty().SetColor(*scheme_for(board.material).pad_rgb)
+        actor.GetProperty().SetColor(*scheme_for(board).pad_rgb)
         _finish(actor.GetProperty(), TINNED)
     return actors
 
@@ -1417,7 +1417,7 @@ def build_mounting_holes(doc: PerfDocument) -> list[vtk.vtkActor]:
         points.InsertNextPoint(bore.x, bore.y, -board.thickness / 2)
         actor = _glyphed(points, _hole_wall(board, bore.radius))
         prop = actor.GetProperty()
-        prop.SetColor(*(channel * 0.55 for channel in scheme_for(board.material).rgb))
+        prop.SetColor(*(channel * 0.55 for channel in scheme_for(board).rgb))
         _finish(prop, LAMINATE)
         actors.append(actor)
     return actors
@@ -1459,7 +1459,7 @@ def build_edge_connectors(doc: PerfDocument) -> list[vtk.vtkActor]:
             mapper.SetInputConnection(append.GetOutputPort())
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
-            actor.GetProperty().SetColor(*scheme_for(board.material).pad_rgb)
+            actor.GetProperty().SetColor(*scheme_for(board).pad_rgb)
             _finish(actor.GetProperty(), TINNED)
             actors.append(actor)
     return actors

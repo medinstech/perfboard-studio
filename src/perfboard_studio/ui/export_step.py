@@ -58,7 +58,7 @@ def step_palette(doc: PerfDocument) -> Palette:
         return wire_rgb(conductor, net_class.get(net), signal_index.get(net, 0))
 
     return Palette(
-        board=_rgb(BREADBOARD.body) if is_breadboard(doc.board) else scheme_for(doc.board.material).rgb,
+        board=_rgb(BREADBOARD.body) if is_breadboard(doc.board) else scheme_for(doc.board).rgb,
         lead=LEAD_RGB,
         body=_body_rgb,
         component_body=_component_rgb(doc.board.pitch),

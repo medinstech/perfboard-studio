@@ -278,7 +278,7 @@ TURKISH: Mapping[str, str] = {
     ),
     "Show &Problems": "Sorunlar&ı Göster",
     "Board &Colour": "Kart R&engi",
-    "Follow the &material": "&Malzemeye göre",
+    "As the &Board Says": "&Kartın Kendi Rengi",
     "Green (FR-4)": "Yeşil (FR-4)",
     "Blue": "Mavi",
     "Black": "Siyah",
@@ -1506,9 +1506,10 @@ TURKISH: Mapping[str, str] = {
         "Kart 3D olarak (Ctrl+3). Yalnızca sekmesi öndeyken çizilir: pencerede güncel "
         "tutulması en pahalı görünüm odur."
     ),
-    "Green for FR-4 and brown for phenolic, which is what those substrates "
-    "actually look like.": (
-        "FR-4 için yeşil, pertinaks için kahverengi; bu tabanlar gerçekten böyle görünür."
+    "The mask and finish the board says it has. One that says nothing is drawn "
+    "as its material is sold: green and tinned for FR-4, bare copper on phenolic.": (
+        "Kartın söylediği maske ve kaplama. Bir şey söylemeyen kart, malzemesinin satıldığı "
+        "gibi çizilir: FR-4 yeşil ve kalaylı, pertinaks çıplak bakır."
     ),
     "Every binding, read off this menu bar — plus the board gestures, which are "
     "on no menu and were previously only in the source.": (

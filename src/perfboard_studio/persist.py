@@ -49,7 +49,9 @@ from .model import (
     Board,
     BoardEdge,
     BoardFace,
+    BoardFinish,
     BoardLabels,
+    BoardMask,
     BoardMaterial,
     BoardNote,
     BoardSide,
@@ -250,6 +252,8 @@ BOARD_KEY_ORDER: tuple[str, ...] = (
     "singleSided",
     "labels",
     "narrowChannelCols",
+    "mask",
+    "finish",
 )
 BOARD_LABELS_KEY_ORDER: tuple[str, ...] = ("face", "rowDigits", "allEdges", "columns", "rows")
 AXIS_LEGEND_KEY_ORDER: tuple[str, ...] = ("runs", "every", "digits")
@@ -375,6 +379,10 @@ def _ordered_board(b: Board) -> JsonObj:
         )
     if b.narrow_channel_cols:
         values["narrowChannelCols"] = b.narrow_channel_cols
+    if b.mask is not None:
+        values["mask"] = b.mask
+    if b.finish is not None:
+        values["finish"] = b.finish
     return _build_ordered(BOARD_KEY_ORDER, values)
 
 
@@ -999,6 +1007,8 @@ def _check_unknown_keys(obj: dict[str, object], known: tuple[str, ...], path: st
 #: refused to open. ``get_args`` works on these because they are ``TypeAlias``es (model.py).
 BOARD_TYPES: tuple[BoardType, ...] = get_args(BoardType)
 BOARD_MATERIALS: tuple[BoardMaterial, ...] = get_args(BoardMaterial)
+BOARD_MASKS: tuple[BoardMask, ...] = get_args(BoardMask)
+BOARD_FINISHES: tuple[BoardFinish, ...] = get_args(BoardFinish)
 STRIP_AXES: tuple[str, ...] = ("horizontal", "vertical")
 PAD_SHAPES: tuple[PadShape, ...] = ("round", "oblong")
 PAD_AXES: tuple[PadAxis, ...] = ("horizontal", "vertical")
@@ -1200,6 +1210,13 @@ def _parse_board(raw: object, warnings: list[str]) -> Board:
     narrow_channel_cols = (
         0 if narrow_raw is None else _expect_integer(narrow_raw, _field_path(path, "narrowChannelCols"))
     )
+    mask_raw = obj.get("mask")
+    mask = None if mask_raw is None else _expect_enum(mask_raw, _field_path(path, "mask"), BOARD_MASKS)
+    finish_raw = obj.get("finish")
+    finish = (
+        None if finish_raw is None
+        else _expect_enum(finish_raw, _field_path(path, "finish"), BOARD_FINISHES)
+    )
 
     pad_diameter = _expect_number(_require_field(obj, "padDiameter", path), _field_path(path, "padDiameter"))
     # A warning, not an error, for the same reason a diagonal solder-trace step is one:
@@ -1261,6 +1278,8 @@ def _parse_board(raw: object, warnings: list[str]) -> Board:
         single_sided=single_sided,
         labels=labels,
         narrow_channel_cols=narrow_channel_cols,
+        mask=mask,  # type: ignore[arg-type]
+        finish=finish,  # type: ignore[arg-type]
     )
     if (problem := board_problem(board)) is not None:
         raise ValidationError("invalid-board", problem, path)
