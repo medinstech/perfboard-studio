@@ -27,6 +27,8 @@ from perfboard_studio.geometry import (
 from perfboard_studio.model import DocumentMeta, PerfDocument
 
 META = DocumentMeta(name="t", created="", modified="")
+#: The Nano on nano-relay: a generated module footprint, 2 x 15 at 0.6 in.
+NANO = "mod-2x15-p6-r1-17.78x45.72x4-s8.5-o0x1.27"
 
 
 def _family_doc(family, size_name: str) -> PerfDocument:
@@ -286,3 +288,63 @@ def test_a_generated_can_carries_the_2d_stripe_on_its_top(rotation: int) -> None
     centre = ((x0 + x1) / 2 + body.x, (y0 + y1) / 2 + body.y)
     away = math.dist(centre, body.polarity) > math.dist((body.x, body.y), body.polarity)
     assert away, "on the minus side, away from pin 1"
+
+
+# ---------------------------------------------------------------------------
+# An instanced piece is turned as an actor is
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("orientation", "scale"),
+    [((90.0, 0.0, 0.0), (1.0, 1.0, 1.0)), ((0.0, 0.0, 90.0), (1.0, 2.0, 0.5)), ((30.0, 45.0, 60.0), (1.5, 1.0, 1.0))],
+)
+def test_an_instanced_piece_is_scaled_and_turned_as_an_actor_would_be(orientation, scale) -> None:  # type: ignore[no-untyped-def]
+    """A glyph mapper only places its copies, so an instanced piece's orientation and scale
+    were dropped. Each copy is now exactly the solid the same piece makes as an actor."""
+    from perfboard_studio.ui import view3d
+
+    source = view3d._box(1.0, 2.0, 3.0)
+    alone = view3d._actor_for(
+        view3d._Piece(source=source, rgb=(1.0, 1.0, 1.0), position=(0.0, 0.0, 0.0), orientation=orientation, scale=scale)
+    )
+    instanced = view3d._instanced_source(
+        view3d._Piece(
+            source=source, rgb=(1.0, 1.0, 1.0), position=(0.0, 0.0, 0.0), orientation=orientation,
+            scale=scale, instances=((0.0, 0.0, 0.0),),
+        )
+    )
+    instanced.Update()
+    # The filter's points are single precision; the actor's bounds are worked out in double.
+    assert instanced.GetOutput().GetBounds() == pytest.approx(alone.GetBounds(), abs=1e-6)
+
+
+def test_a_modules_pads_lie_on_its_board() -> None:
+    """The tinned pad under each of a module's pins, a cylinder turned ``_ALONG_Z``, stood
+    on its edge -- a coin half buried in the module's board, a white mushroom round every
+    pin of a Nano. It lies flat on the board now, as the 2D view draws it."""
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.model import ComponentInstance, HoleCoord
+    from perfboard_studio.ui import view3d
+
+    lookup = footprint_lookup()
+    comp = ComponentInstance(
+        id="a1", ref="A1", value="", footprint_id=NANO, anchor=HoleCoord(4, 4)
+    )
+    from perfboard_studio.commands import DEFAULT_BOARD
+
+    board = dataclasses.replace(DEFAULT_BOARD, cols=40, rows=30)
+    body = view3d._world_body(lookup, comp, board)
+    footprint = lookup(NANO)
+    assert body is not None and footprint is not None
+    pads = [
+        piece for piece in view3d._module_pieces(body, footprint, comp, board)
+        if piece.instances and piece.orientation == view3d._ALONG_Z
+    ]
+    assert pads, "the module's pads are instanced cylinders"
+    for piece in pads:
+        source = view3d._instanced_source(piece)
+        source.Update()
+        x0, x1, y0, y1, z0, z1 = source.GetOutput().GetBounds()
+        assert z1 - z0 < 0.1, "lying flat"
+        assert x1 - x0 == pytest.approx(y1 - y0, rel=0.05), "round from above"

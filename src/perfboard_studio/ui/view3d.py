@@ -1709,8 +1709,9 @@ class _Piece:
     material: tuple[float, float] = MOULDED
     opacity: float = 1.0
     #: When set, the source is glyphed at each of these world positions in ONE actor and
-    #: ``position`` is ignored. For repeated identical solids -- a header's pins -- where an
-    #: actor each would cost more than the whole instanced pad grid.
+    #: ``position`` is ignored; ``scale`` and ``orientation`` still hold (``_instanced_source``).
+    #: For repeated identical solids -- a header's pins -- where an actor each would cost
+    #: more than the whole instanced pad grid.
     instances: tuple[tuple[float, float, float], ...] = ()
 
 
@@ -6091,6 +6092,34 @@ def _attach(mapper: Any, source: Any, *, glyph: bool = False) -> None:
         mapper.SetInputData(source)
 
 
+def _instanced_source(piece: _Piece) -> Any:
+    """What an instanced piece glyphs at each of its positions: its source, scaled and
+    turned exactly as an actor would scale and turn it.
+
+    A glyph mapper places its copies and does nothing else, so the piece's ``scale`` and
+    ``orientation`` were silently dropped -- and the tinned pad under every pin of a module
+    and an SMD adapter, a cylinder turned ``_ALONG_Z``, stood on its edge instead: a coin
+    half buried in the module's board, which read as a white mushroom round each pin with
+    nothing in the 2D view to match it. The matrix is taken from an actor given the same
+    scale and orientation, so a piece means the same solid instanced or not, in VTK's own
+    order of rotations rather than a restatement of it.
+    """
+    if piece.scale == (1.0, 1.0, 1.0) and piece.orientation == (0.0, 0.0, 0.0):
+        return piece.source
+    turned = vtk.vtkActor()
+    turned.SetScale(*piece.scale)
+    turned.SetOrientation(*piece.orientation)
+    transform = vtk.vtkTransform()
+    transform.SetMatrix(turned.GetMatrix())
+    placed = vtk.vtkTransformPolyDataFilter()
+    placed.SetTransform(transform)
+    if hasattr(piece.source, "GetOutputPort"):
+        placed.SetInputConnection(piece.source.GetOutputPort())
+    else:
+        placed.SetInputData(piece.source)
+    return placed
+
+
 def _actor_for(piece: _Piece) -> vtk.vtkActor:
     actor = vtk.vtkActor()
     if piece.instances:
@@ -6101,7 +6130,7 @@ def _actor_for(piece: _Piece) -> vtk.vtkActor:
         data.SetPoints(points)
         glyph = vtk.vtkGlyph3DMapper()
         glyph.SetInputData(data)
-        _attach(glyph, piece.source, glyph=True)
+        _attach(glyph, _instanced_source(piece), glyph=True)
         glyph.SetOrient(False)
         glyph.SetScaling(False)
         actor.SetMapper(glyph)

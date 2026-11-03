@@ -432,6 +432,10 @@ closed without a bump.
   finding's menu has Go to It and Auto-wire Its Connections, and the Wiring step offers
   Auto-wire when pressed.
 
+- **A module's pads lie flat on its board in 3D.** Each pad round a Nano's or an SMD
+  adapter's pins stood on its edge, half sunk into the board, so every pin wore a white
+  mushroom that the 2D view does not have.
+
 - **The board's print in 3D is in the 2D's letters.** The hole addresses, the words a board
   is printed with and a part's own print are the bold lettering the 2D view and the 1:1
   print use, instead of thin strokes, and Turkish letters are printed: "ALT YÜZ" lost its Ü,
