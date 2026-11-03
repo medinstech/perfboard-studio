@@ -10017,6 +10017,74 @@ def test_a_wire_can_be_dragged_from_pin_to_pin_or_clicked() -> None:
         _close(window)
 
 
+def test_a_drag_from_a_pin_in_select_draws_a_wire_and_leaves_the_part_where_it_is() -> None:
+    """In Select a press on a pin and a drag moved the PART, where what a pointer on a pin
+    means is nearly always a wire. It draws the wire now, as the wire tool's drag does, and
+    Select stays Select; a click on the pin still selects its symbol, and a drag from it to
+    nothing draws nothing."""
+    from PySide6.QtCore import QPoint
+
+    window, view = _wire_view()
+    drawn: list[tuple] = []
+    moved: list[list] = []
+    view.wireDrawn.connect(lambda *args: drawn.append(args[:4]))
+    view.symbolsMoved.connect(moved.append)
+    try:
+        view.set_tool("select")
+        start = _pin_on_screen(view, "R1", "2")
+        end = _pin_on_screen(view, "R2", "1")
+
+        _send_mouse(view, "press", start)
+        _send_mouse(view, "move", start + QPoint(20, 0), pressed=True)
+        _send_mouse(view, "move", end, pressed=True)
+        _send_mouse(view, "release", end)
+        assert drawn == [("R1", "2", "R2", "1")]
+        assert moved == [], "the part did not move"
+        assert view.tool == "select" and view.pending_pin is None
+
+        _send_mouse(view, "press", start)
+        _send_mouse(view, "release", start)
+        assert view.selected_refs == ["R1"] and len(drawn) == 1
+
+        nowhere = start + QPoint(0, 120)
+        _send_mouse(view, "press", start)
+        _send_mouse(view, "move", nowhere, pressed=True)
+        _send_mouse(view, "release", nowhere)
+        assert len(drawn) == 1 and moved == [] and view.pending_pin is None
+    finally:
+        view.close()
+        view.deleteLater()
+        _close(window)
+
+
+def test_c_arms_connect_on_whichever_canvas_has_the_keyboard() -> None:
+    """The board's Connect had C and the sheet's had no key at all; one key cannot be two
+    actions (Qt answers an ambiguous shortcut by doing nothing), so C is Connect on the
+    canvas with the keyboard, as Select All and Fit are."""
+    from PySide6.QtWidgets import QApplication
+
+    window = _window_on(_load_dense())
+    try:
+        window.show()
+        window.show_schematic()
+        window.schematic_view.setFocus()
+        QApplication.processEvents()
+        if not window.schematic_view.hasFocus():
+            pytest.skip("the platform gives no widget the keyboard here")
+        window.act_connect.trigger()
+        assert window.schematic_view.tool == "wire"
+        assert not window.scene.connect_armed and not window.act_connect.isChecked()
+        window.act_connect.trigger()
+        assert window.schematic_view.tool == "select"
+
+        window.view.setFocus()
+        QApplication.processEvents()
+        window.act_connect.trigger()
+        assert window.scene.connect_armed and window.schematic_view.tool == "select"
+    finally:
+        _close(window)
+
+
 def test_a_pin_on_a_net_can_be_taken_off_it_from_the_sheet() -> None:
     """The one entry with no other door on this sheet, and the one you ask for while
     looking at the pin that is wired to the wrong thing."""

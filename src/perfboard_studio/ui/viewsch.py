@@ -898,6 +898,9 @@ class SchematicView(QGraphicsView):
         self._press_note: int | None = None
         self._press_scene: QPointF | None = None
         self._dragging = False
+        #: A pin pressed in Select: a drag from it is a wire (``mouseMoveEvent``), a click
+        #: on it is a click on its symbol.
+        self._pin_press: tuple[str, str] | None = None
         #: Middle-button panning, which every tool leaves alone. See set_tool.
         self._panning = False
         self._pan_origin = QPointF()
@@ -1086,6 +1089,7 @@ class SchematicView(QGraphicsView):
         self._press_ref = None
         self._press_note = None
         self._press_scene = None
+        self._pin_press = None
         if self.item is not None:
             self.item.drag_offset = None
             self.item.ghost_path = ()
@@ -1392,7 +1396,15 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
         if symbol is not None:
-            self._press_ref = symbol.ref
+            # A PRESS ON A PIN IS WHERE A WIRE STARTS, in Select as in Connect: dragged, it
+            # draws the wire (``mouseMoveEvent``) instead of moving the part, which is what
+            # a pointer on a pin means far more often. Clicked, it is still a click on the
+            # symbol, which is selected either way; the body is what moves it.
+            pin = None if additive else self.pin_at(where)
+            if pin is None:
+                self._press_ref = symbol.ref
+            else:
+                self._pin_press = pin
             if symbol.ref not in self.selected_refs:
                 refs = [*self.selected_refs, symbol.ref] if additive else [symbol.ref]
                 self.set_selection(refs)
@@ -1519,13 +1531,28 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
 
-        if self.item is not None and self.tool == "wire":
+        if (
+            self._pin_press is not None
+            and self.pending_pin is None
+            and event.buttons() & Qt.MouseButton.LeftButton
+            and self._press_at is not None
+            and (event.position().toPoint() - self._press_at).manhattanLength() > DRAG_WIRE_PX
+        ):
+            # Far enough from the pin pressed for this to be a drag: the wire starts there.
+            self.set_pending_pin(self._pin_press)
+        wiring_from_select = self._pin_press is not None and self.pending_pin is not None
+
+        if self.item is not None and (self.tool == "wire" or wiring_from_select):
             hovered = self.pin_at(where)
             if hovered != self.item.hover_pin:
                 self.item.hover_pin = hovered
                 self.item.update()
 
-        if self.item is not None and self.tool == "wire" and self.pending_pin is not None:
+        if (
+            self.item is not None
+            and (self.tool == "wire" or wiring_from_select)
+            and self.pending_pin is not None
+        ):
             start = pin_anchor(self.item.drawing, *self.pending_pin)
             if start is not None:
                 # Over a wire, the preview is the T it would draw: square onto the wire.
@@ -1544,6 +1571,10 @@ class SchematicView(QGraphicsView):
                 target if target is not None else _snapped(where), tee.at, tee.horizontal
             )
             self.item.update()
+
+        if self._pin_press is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            event.accept()
+            return
 
         if self._press_ref is not None and event.buttons() & Qt.MouseButton.LeftButton:
             self._drag_symbols(event, where)
@@ -1612,6 +1643,26 @@ class SchematicView(QGraphicsView):
                     tee = self.tee_at(where)
                     if tee is not None:
                         self._tee_click(tee)
+            event.accept()
+            return
+
+        if self._pin_press is not None:
+            # A drag from a pin in Select ends as the wire tool's drag does: on another pin
+            # it draws the wire, on a drawn wire it tees into it, and anywhere else nothing
+            # is drawn. Select stays Select either way.
+            self._pin_press = None
+            if self.pending_pin is not None:
+                pin = self.pin_at(where)
+                tee = self.tee_at(where) if pin is None else None
+                if pin is not None and pin != self.pending_pin:
+                    self._wire_click(pin)
+                elif tee is not None:
+                    self._tee_click(tee)
+                self.set_pending_pin(None)
+                if self.item is not None and self.item.hover_pin is not None:
+                    self.item.hover_pin = None
+                    self.item.update()
+            self._clear_ghosts()
             event.accept()
             return
 

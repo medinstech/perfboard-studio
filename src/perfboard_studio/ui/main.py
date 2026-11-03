@@ -12467,6 +12467,15 @@ class MainWindow(QMainWindow):
     # -- the two-click connect tool -------------------------------------------
 
     def on_connect_tool(self, checked: bool) -> None:
+        """Connect, on whichever canvas has the keyboard: the sheet's when it does, the
+        board's otherwise -- one key, C, for the one gesture the two canvases share, as
+        Select All and Fit are. Two actions on one key would be an ambiguous shortcut,
+        which Qt answers by doing nothing."""
+        if hasattr(self, "schematic_view") and self.schematic_view.hasFocus():
+            # The board's tool is left as it was; the toggle the key made goes back.
+            self.act_connect.setChecked(self.scene.connect_armed)
+            self.on_sheet_tool("select" if self.schematic_view.tool == "wire" else "wire")
+            return
         self.scene.arm_connect(checked)
 
     def _on_connect_armed(self, on: bool) -> None:

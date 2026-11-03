@@ -26,6 +26,11 @@ closed without a bump.
   sizes, a wide-channel one for an ESP32 or another module, and the solderable breadboard
   are described like every other board, ready for the board designer to choose from.
 
+- **A wire starts from a pin in Select too, and C is Connect on the sheet as well.**
+  Dragging from a pin on the schematic draws a wire to the pin it is let go on instead of
+  moving the part (a click still selects it), and C arms Connect on whichever of the
+  schematic and the board has the keyboard.
+
 - **The board says what is under the pointer.** A part under the pointer is outlined and
   shows the move cursor when it can be moved (a locked one does not), and the Connect and
   drawing tools ring the pin they would take, as the sheet's wire tool does.
