@@ -187,6 +187,10 @@ closed without a bump.
   forward and put the keyboard in the Library's search; Enter or a double-click puts the
   part on the sheet and shows it in Properties, ready for the next. The Add a Part dialog
   that copied the Library is no longer opened for adding.
+- **Another package is picked in place.** Change… beside a part's package in Properties
+  opens the Library in a popup: type, and Enter takes the part the text names; as you
+  move through it, it says where pin 1 and the last pin land and which lead bends go. A
+  catalog part brings its value and pin names with it. The Add a Part dialog is gone.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

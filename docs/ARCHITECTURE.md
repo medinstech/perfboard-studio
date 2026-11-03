@@ -1559,8 +1559,7 @@ A part only in the design is the placed part's fields through `part.update` -- r
 value with the pinout it brings, package, pin names, note -- and, where a placed part has
 its hole, "not on the board yet" and Place on the Board. A double-click on its symbol puts
 the keyboard in its Value; Rename on the symbol's menu is its Reference, for a placed part
-or not. The sheet's Edit a Part is the package's Change… now, the library in a dialog, as
-a placed part's is.
+or not. The sheet's Edit a Part is the package's Change… now, as a placed part's is.
 
 **The status bar no longer says what is selected.** It said the part's reference, value,
 package, hole and turn in a line nobody could act on, beside a panel that now shows all of
@@ -1572,8 +1571,16 @@ search focused, and Enter or a double-click on a part (`_on_library_item_activat
 in the design as one `part.add` and shows it in Properties to be named -- the search still
 there for the next one. It was a modal copy of the Library with a reference, a value and a
 pinout under it, which are Properties' fields now. With the board in front, choosing a part
-arms it for the board, as it always did. `AddPartDialog` is left for Change…, a package for
-a part that exists, until Properties has a package picker of its own.
+arms it for the board, as it always did.
+
+**Another package is picked in a popup under Change…** (`PackagePicker`, `_pick_package`):
+the Library's tree and search, Enter taking the row the text names (`named_choice`), and
+under it, as the rows are walked, where the package highlighted puts pin 1 and the last pin
+and which lead bends go. A catalog part brings its value and pinout with its package; a bare
+package keeps the value and the names of the pins it still has (`_what_a_package_brings`).
+One `component.update` or `part.update`. It replaced Add a Part in its change mode, the last
+use of a dialog that also asked for a reference, a value and pin names -- Properties'
+fields -- and that dialog is gone.
 
 **The panel is told the selection once per command.** The board empties its selection
 while it rebuilds and puts it back after, and the signals between would show the board's

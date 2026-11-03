@@ -822,14 +822,11 @@ TURKISH: Mapping[str, str] = {
     "locked — Rearrange leaves it where it is": (
         "kilitli — Yeniden Diz onu yerinde bırakır"
     ),
-    "A part needs a reference": "Parçanın bir referansı olmalı",
     "Every part is identified by its reference, so it cannot be blank.": (
         "Her parça referansıyla tanınır, dolayısıyla boş bırakılamaz."
     ),
-    "Cannot change this part": "Bu parça değiştirilemedi",
     # -- changing a placed part's package ---------------------------------------------
     "C&hange Part…": "&Farklı Parça Seç…",
-    "Change {ref}": "{ref} parçasını değiştir",
     "Another package or another part from the library, on the same holes and the same "
     "nets.": "Kütüphaneden başka bir gövde ya da parça; aynı deliklerde, aynı netlerde.",
     "Another package or another part from the library on the same holes: a 3 mm LED for "
@@ -1229,26 +1226,7 @@ TURKISH: Mapping[str, str] = {
         "{wire} teli üzerinde — ondan dallanacak pine tıklayın."
     ),
     "Cancelled.": "İptal edildi.",
-    "Add a Part": "Parça Ekle",
-    "Add": "Ekle",
-    "Done": "Bitti",
-    "Put this part in the design and pick the next. Enter does the same.": (
-        "Bu parçayı tasarıma koyar ve sıradakini seçmeye hazırlar. Enter da aynısını yapar."
-    ),
-    "Added {part}. Choose the next part, or Done.": (
-        "{part} eklendi. Sıradaki parçayı seçin ya da Bitti'ye basın."
-    ),
     "Filter parts…  (555, BC547, resistor, dip-8)": "Parçaları süz…  (555, BC547, direnç, dip-8)",
-    "The designator this part is known by, on the schematic and on the board. "
-    "It has to be free on both — the two are one namespace.": (
-        "Bu parçanın hem şemada hem kartta bilindiği ad. İkisinde de boş olmalı — "
-        "ikisi tek bir ad uzayı."
-    ),
-    "What is printed on the part. It reaches the bill of materials, the guide's "
-    "step text and a resistor's colour bands in 3D, so it is worth filling in.": (
-        "Parçanın üzerinde yazan değer. Malzeme listesine, rehberin adım metnine ve 3D'de "
-        "bir direncin renk bantlarına kadar gider; doldurmaya değer."
-    ),
     "Put the whole schematic back in the view. The sheet is not re-fitted "
     "when the board changes, so an edit cannot move what you were looking at.": (
         "Şemanın tamamını panele geri sığdırır. Kart değiştiğinde sayfa yeniden "

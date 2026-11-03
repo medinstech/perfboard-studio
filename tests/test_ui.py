@@ -10242,36 +10242,27 @@ def test_a_custom_part_can_be_placed_and_shows_up_on_the_board() -> None:
 
 def test_adding_a_555_from_the_dialog_brings_its_pin_names() -> None:
     """The dialog offered the sixty-one PACKAGES, a crystal first and Y1 in the reference,
-    while the Parts panel beside it had the catalog -- so a 555 added from it was a numbered
-    box on the sheet. The catalog comes first now, and choosing a part in it fills in its
-    value, its pin names and its reference letter; a package and a typed value that names a
-    catalog part in THAT package does the same."""
-    from perfboard_studio.ui.main import ROLE_CATALOG_ID, AddPartDialog
+    while the Parts panel beside it had the catalog. The catalog comes first in the package
+    picker, and a catalog part chosen there brings its value and pin names with its
+    package; a bare package keeps the part's value and the names of the pins it still has."""
+    from perfboard_studio.ui.main import ROLE_CATALOG_ID, MainWindow, PackagePicker
 
-    document = _load_dense()
-    dialog = AddPartDialog(document)
-    # Unfiltered, nothing is chosen for the user, and OK waits for a choice.
-    assert dialog.chosen_footprint_id() is None
-    assert dialog.values() is None
-
-    dialog.filter.setText("555")
-    item = dialog.tree.currentItem()
+    picker = PackagePicker(_load_dense())
+    # Unfiltered, nothing is chosen for the user.
+    assert picker.chosen_footprint_id() is None
+    picker.filter.setText("555")
+    item = picker.tree.currentItem()
     assert item is not None and item.data(0, ROLE_CATALOG_ID) == "ne555"
-    ref, value, footprint_id = dialog.values() or ("", "", "")
-    assert (ref[0], value, footprint_id) == ("U", "NE555", "dip-8")
-    names, _symbol = dialog.pinout()
-    assert dict(names)["3"] == "OUT"
-
-    # A bare package takes the catalog's value back, and its names with it.
-    dialog.select_footprint("dip-8")
-    assert dialog.value.text() == ""
-    assert dialog.pinout()[0] == ()
-
-    # ... and typing the part's name onto that package brings them back.
-    dialog.value.setText("NE555")
-    dialog.value.editingFinished.emit()
-    assert dict(dialog.pinout()[0])["3"] == "OUT"
-    dialog.deleteLater()
+    assert picker.chosen_footprint_id() == "dip-8"
+    part = picker.chosen_catalog_part()
+    value, names, _symbol = MainWindow._what_a_package_brings("dip-8", part, "", (), None)
+    assert value == "NE555" and dict(names)["3"] == "OUT"
+    # A bare package: the value stays, and only the names of pins it still has.
+    kept = MainWindow._what_a_package_brings(
+        "r-axial-4", None, "10k", (("1", "A"), ("2", "B"), ("3", "C")), None
+    )
+    assert kept == ("10k", (("1", "A"), ("2", "B")), None)
+    picker.deleteLater()
 
 
 def test_editing_a_custom_part_does_not_turn_it_into_a_resistor() -> None:
@@ -10280,10 +10271,10 @@ def test_editing_a_custom_part_does_not_turn_it_into_a_resistor() -> None:
     Without that the properties dialog opens on whatever happens to be first and pressing
     OK changes the part -- silently, into something with two pins where there were eight.
     """
-    from perfboard_studio.ui.main import AddPartDialog
+    from perfboard_studio.ui.main import PackagePicker
 
     document = _custom_document()
-    dialog = AddPartDialog(document)
+    dialog = PackagePicker(document)
     dialog.select_footprint("box-4x2-p1-r3-15x10x8")
     assert dialog.chosen_footprint_id() == "box-4x2-p1-r3-15x10x8"
     dialog.deleteLater()
@@ -10381,9 +10372,9 @@ def test_enter_takes_the_part_the_filter_names() -> None:
     """The catalog comes first in the list and is searched by what a part does as well as
     by its name, so "LED" put the MAX7219 -- an LED display driver -- ahead of every LED,
     and Enter added a 24-pin chip to somebody's blinker."""
-    from perfboard_studio.ui.main import AddPartDialog
+    from perfboard_studio.ui.main import PackagePicker
 
-    dialog = AddPartDialog(_load_dense())
+    dialog = PackagePicker(_load_dense())
     dialog.filter.setText("LED")
     chosen = dialog.chosen_footprint_id()
     assert chosen is not None and chosen.startswith("led-"), chosen
@@ -10396,9 +10387,9 @@ def test_enter_takes_the_part_the_filter_names() -> None:
 def test_enter_takes_the_row_the_text_names_earliest() -> None:
     """"header" names the pin header four letters in, and "Power in, 2-pin header" sixteen:
     the one somebody typing it wants is the pin header."""
-    from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID, AddPartDialog, named_choice
+    from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID, PackagePicker, named_choice
 
-    dialog = AddPartDialog(_load_dense())
+    dialog = PackagePicker(_load_dense())
     dialog.filter.setText("header")
     item = dialog.tree.currentItem()
     assert item is not None and str(item.data(0, ROLE_FOOTPRINT_ID)).startswith("hdr-1x"), item.text(0)
@@ -10439,9 +10430,9 @@ def test_a_name_is_named_by_a_word_or_the_start_of_one() -> None:
 def test_the_part_list_counts_sizes_as_numbers() -> None:
     """By string order "LED, 10 mm" came first, so "LED" and Enter gave a 10 mm LED, and a
     1x10 header stood between the 1x1 and the 1x2."""
-    from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID, AddPartDialog
+    from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID, PackagePicker
 
-    dialog = AddPartDialog(_load_dense())
+    dialog = PackagePicker(_load_dense())
     dialog.filter.setText("LED")
     assert dialog.chosen_footprint_id() == "led-3mm"
     dialog.filter.setText("header, 1x")
@@ -12303,7 +12294,7 @@ def test_the_board_question_has_a_way_to_the_other_kinds_of_board(monkeypatch) -
 def test_the_pinout_editor_shows_and_returns_a_declaration() -> None:
     """A row per footprint pin, the declared names in them, and back out in normal form."""
     from perfboard_studio.footprints import get_footprint
-    from perfboard_studio.ui.main import PinoutEditor
+    from perfboard_studio.ui.partfields import PinoutEditor
 
     editor = PinoutEditor()
     editor.set_part(get_footprint("to220"), (("1", "G"), ("2", "D"), ("3", "S")), "pmos")
@@ -12316,7 +12307,7 @@ def test_the_pinout_editor_keeps_typed_names_across_a_footprint_change() -> None
     """Pin 3 survives a footprint that still has a pin 3; pin 5 does not survive one that
     has three pins, rather than being kept where nothing shows it."""
     from perfboard_studio.footprints import get_footprint
-    from perfboard_studio.ui.main import PinoutEditor
+    from perfboard_studio.ui.partfields import PinoutEditor
 
     editor = PinoutEditor()
     editor.set_part(get_footprint("dip-8"), (("3", "VCC"), ("5", "Vref")), None)
@@ -12329,7 +12320,7 @@ def test_a_registry_pin_name_is_a_hint_not_a_declaration() -> None:
     """An LED's A and K are the footprint's; leaving them untouched declares nothing, so
     nothing is written to the part and nothing changes in the file."""
     from perfboard_studio.footprints import get_footprint
-    from perfboard_studio.ui.main import PinoutEditor
+    from perfboard_studio.ui.partfields import PinoutEditor
 
     editor = PinoutEditor()
     editor.set_part(get_footprint("led-5mm"), (), None)
@@ -12418,21 +12409,29 @@ def test_part_properties_follows_a_retyped_value_and_says_so() -> None:
 
 
 def test_editing_a_design_part_follows_a_retyped_value_too() -> None:
-    """The sheet's Edit a Part is the same dialog as Add a Part, and the same rule."""
-    from perfboard_studio.ui.main import AddPartDialog
+    """BC547 to 2N3904 on a TO-92 still only in the design: its pinout follows, in
+    Properties as on a placed part."""
+    from perfboard_studio.commands import AddPartPayload
 
-    dialog = AddPartDialog(_load_dense())
-    dialog.select_footprint("to92")
-    dialog.value.setText("BC547")
-    dialog.set_pinout(BC547_PINS, "npn")
-    dialog.value.setText("2N3904")
-    dialog.value.editingFinished.emit()
-    assert dialog.pinout() == (N2N3904_PINS, "npn")
-    dialog.deleteLater()
+    window = _blank_window()
+    try:
+        assert window.bus.dispatch(
+            "part.add",
+            AddPartPayload(
+                ref="Q1", footprint_id="to92", value="BC547", pin_names=BC547_PINS, symbol="npn"
+            ),
+        ).ok
+        window._show_symbol_in_properties("Q1")
+        editor = window.inspector.design_part_editor
+        _type_into(editor.value, "2N3904")
+        part = window.bus.document.parts[0]
+        assert (part.pin_names, part.symbol) == (N2N3904_PINS, "npn")
+    finally:
+        _close(window)
 
 
 def _choose_in_change_part(monkeypatch, footprint_id: str, seen: list | None = None) -> None:
-    """Stand in for a person picking ``footprint_id`` in the Change Part dialog."""
+    """Stand in for a person picking ``footprint_id`` in the package picker."""
     from perfboard_studio.ui import main as main_module
 
     def pick(dialog):
@@ -12441,7 +12440,7 @@ def _choose_in_change_part(monkeypatch, footprint_id: str, seen: list | None = N
         dialog.select_footprint(footprint_id)
         return main_module.QDialog.DialogCode.Accepted
 
-    monkeypatch.setattr(main_module.AddPartDialog, "exec", pick)
+    monkeypatch.setattr(main_module.PackagePicker, "exec", pick)
 
 
 def test_change_part_puts_another_package_on_the_same_holes(monkeypatch) -> None:
@@ -13757,27 +13756,21 @@ def test_the_note_field_is_called_not_in_turkish() -> None:
         set_language(before)
 
 
-def test_the_sheets_edit_a_part_edits_a_design_parts_note(monkeypatch) -> None:
-    """A part drawn and not yet placed has its note too, edited where it is edited: the
-    sheet's Edit a Part, which shows the field only when a part that exists is edited."""
+def test_the_sheets_edit_a_part_edits_a_design_parts_note() -> None:
+    """A part drawn and not yet placed has its note too, edited where every field of it is:
+    Properties."""
     from perfboard_studio.commands import AddPartPayload
-    from perfboard_studio.ui import main as main_module
 
     window = _window_on(_load_dense())
     assert window.bus.dispatch(
         "part.add", AddPartPayload(ref="R99", footprint_id="r-axial-3", value="1k", note="old")
     ).ok
     part = next(p for p in window.bus.document.parts if p.ref == "R99")
-    seen: list = []
-
-    def typed(self) -> object:
-        seen.append((self.note_box.isHidden(), self.note.toPlainText()))
-        self.note.setPlainText("new reason")
-        return main_module.QDialog.DialogCode.Accepted
-
-    monkeypatch.setattr(main_module.AddPartDialog, "exec", typed)
-    window.on_schematic_part_properties(part.id)
-    assert seen == [(False, "old")]
+    window._show_symbol_in_properties("R99")
+    editor = window.inspector.design_part_editor
+    assert editor.note.toPlainText() == "old"
+    editor.note.setPlainText("new reason")
+    editor._commit_note()
     assert next(p for p in window.bus.document.parts if p.id == part.id).note == "new reason"
     _close(window)
 
@@ -13834,7 +13827,7 @@ def test_change_part_says_where_the_last_pin_lands_for_the_package_picked(monkey
             said.append(dialog.notice.text())
             return int(main_module.QDialog.DialogCode.Rejected)
 
-        monkeypatch.setattr(main_module.AddPartDialog, "exec", look)
+        monkeypatch.setattr(main_module.PackagePicker, "exec", look)
         window.on_change_part(resistor.id)
         longer = get_footprint("r-axial-4")
         lands = format_hole(pin_hole(resistor, longer, longer.pins[-1].number), board)

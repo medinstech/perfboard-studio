@@ -361,8 +361,6 @@ from .i18n import counted, set_language, t
 from .i18n import language as current_language
 from .inspector import NET_CLASSES, Inspector, InspectorActions, InspectorHooks
 from .palette import CommandPalette, Entry
-from .partfields import PinoutEditor
-from .partfields import note_editor as _note_editor
 from .partlist import PartListPanel
 from .partnames import footprint_label
 from .problems import BAR_HEIGHT as PROBLEMS_BAR_HEIGHT
@@ -2657,59 +2655,23 @@ type AddPart = Callable[
 ]
 
 
-class AddPartDialog(QDialog):
-    """Pick a part for the schematic: what it is, what it is called, what it is worth.
+class PackagePicker(QDialog):
+    """Another package for a part that exists: the Library's tree and search in a popup
+    under Change…, Enter or a double-click taking the row.
 
-    THE CATALOG FIRST, THE PACKAGES AFTER, from the same tree the Parts panel shows
-    (``populate_part_tree``). What somebody adding a 555 looks for is "555", not "DIP-8";
-    choosing the catalog's NE555 gives the part its value, its pin names (TRIG, OUT, RESET...)
-    and its reference letter at once, so it is drawn with named pins rather than as a box.
-    A bare package is still there for everything the catalog does not have -- a resistor
-    is a package and a value -- and a value typed onto one that names a catalog part in that
-    same package ("NE555" on a DIP-8) brings the catalog's pin names with it.
-
-    The footprint is still what is chosen underneath, which looks like the wrong question
-    on a schematic and is the right one here: this tool generates the symbol FROM the
-    footprint (``schematic.symbol_kind_for``), and the footprint is what the board, the
-    guide, the 3D view and the BOM all need anyway.
-
-    IT STAYS OPEN WHILE PARTS ARE ADDED, when it is given ``add`` (``AddPart``). A 555
-    blinker is six parts, and it was six round trips through a dialog that closed after
-    each -- with the Next button no longer offering it, because one part is a circuit that
-    wants connecting. Add puts the part in the design and readies the next one; Done
-    closes. Editing a part (the sheet's Edit a Part, the board's Change Part) is one part,
-    and keeps OK and Cancel.
+    It was Add a Part, a dialog that also asked for the reference, the value and the pin
+    names -- which are Properties' fields now. A catalog part chosen here brings its value
+    and pinout with the package; a bare package keeps them. Under the tree, said as the
+    rows are walked, where the package now highlighted puts the part's last pin
+    (``notice_for``).
     """
 
-    def __init__(
-        self,
-        document: PerfDocument,
-        parent: QWidget | None = None,
-        add: AddPart | None = None,
-    ) -> None:
+    def __init__(self, document: PerfDocument, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(t("Add a Part"))
-        self.resize(520, 640)
-        self._document = document
-        self._add = add
-        #: How many parts this dialog has added, for the line that says so.
-        self.added = 0
-        #: Every reference this dialog has proposed, so it can tell its own suggestion
-        #: from something the user typed. A set rather than one value: scrolling the list
-        #: proposes several before anything is chosen. Per instance, not per class -- a
-        #: shared one would remember the last dialog's suggestions and overwrite a typed
-        #: reference that happened to match.
-        self._suggestions: set[str] = set()
-        #: The value the chosen catalog part filled in, so choosing a different part can
-        #: take it back -- a TO-92 picked after a BC547 is not a BC547 -- while a value the
-        #: user typed stays. The same rule the Parts panel follows.
-        self._catalog_value = ""
-        #: The value as it stood before the last one typed: the pinout a value brought is
-        #: the pinout a value typed over it may take back (``pinout_for_retyped_value``).
-        self._value_seen = ""
-        #: Parts described in this dialog, plus any the document already uses that the
-        #: library does not have. Not saved anywhere: the id is the definition, so the
-        #: document is already carrying everything there is to keep.
+        self.setWindowFlags(Qt.WindowType.Popup)
+        self.setMinimumSize(360, 420)
+        #: Parts the document already uses that the library does not have, and any
+        #: described here: not saved anywhere, the id is the definition.
         self._custom: dict[str, Footprint] = {
             footprint.id: footprint
             for footprint in (
@@ -2721,12 +2683,14 @@ class AddPartDialog(QDialog):
             )
             if footprint is not None and footprint.id not in standard_footprints()
         }
-
+        #: What to say under the tree for the package highlighted, or nothing.
+        self.notice_for: Callable[[str], str] | None = None
         self.filter = QLineEdit()
         self.filter.setPlaceholderText(t("Filter parts…  (555, BC547, resistor, dip-8)"))
         self.filter.setClearButtonEnabled(True)
         self.filter.textChanged.connect(self._refilter)
-        self.tree = QTreeWidget()
+        self.filter.returnPressed.connect(self._take)
+        self.tree = PartTree()
         self.tree.setHeaderLabels([t("Part"), t("Pins")])
         self.tree.setRootIsDecorated(True)
         self.tree.setIconSize(QSize(icons.PART_SIZE, icons.PART_SIZE))
@@ -2734,158 +2698,30 @@ class AddPartDialog(QDialog):
         header = self.tree.header()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.tree.currentItemChanged.connect(lambda _now, _then: self._on_choice())
-        self.tree.itemDoubleClicked.connect(self._on_double_click)
-
-        self.ref = QLineEdit()
-        self.ref.setToolTip(
-            t(
-                "The designator this part is known by, on the schematic and on the board. "
-                "It has to be free on both — the two are one namespace."
-            )
-        )
-        self.value = QLineEdit()
-        self.value.setPlaceholderText("10k, 100nF, NE555…")
-        self.value.setToolTip(
-            t(
-                "What is printed on the part. It reaches the bill of materials, the guide's "
-                "step text and a resistor's colour bands in 3D, so it is worth filling in."
-            )
-        )
-        self.value.editingFinished.connect(self._on_value_typed)
-
-        form = QFormLayout()
-        form.addRow(t("Reference"), self.ref)
-        form.addRow(t("Value"), self.value)
-
-        # What the part is and what it calls its leads. Rebuilt whenever the choice in the
-        # tree changes, because the rows ARE the footprint's pins.
-        self.pinout_editor = PinoutEditor()
-
-        if add is None:
-            self.buttons = QDialogButtonBox(
-                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-            )
-            self.buttons.accepted.connect(self.accept)
-            self.buttons.rejected.connect(self.reject)
-            ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
-            assert ok is not None
-            #: The button a choice in the tree enables: OK here, Add below.
-            self.confirm: QPushButton = ok
-        else:
-            self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-            done = self.buttons.button(QDialogButtonBox.StandardButton.Close)
-            assert done is not None
-            done.setText(t("Done"))
-            done.setAutoDefault(False)
-            self.buttons.rejected.connect(self.reject)
-            # The accepting role, so the box makes it the default and Enter adds; its
-            # ``accepted`` is not connected, so it never closes the dialog.
-            self.confirm = self.buttons.addButton(
-                t("Add"), QDialogButtonBox.ButtonRole.AcceptRole
-            )
-            self.confirm.setDefault(True)
-            self.confirm.setToolTip(
-                t("Put this part in the design and pick the next. Enter does the same.")
-            )
-            self.confirm.clicked.connect(self.add_chosen)
-
-        #: What the last Add did, or why it could not -- in the dialog, because the status
-        #: bar it used to go to is behind it.
-        self.result_line = QLabel()
-        self.result_line.setWordWrap(True)
-        self.result_line.hide()
-
-        self.custom = QPushButton(t("Custom Part…"))
-        self.custom.setToolTip(
-            t(
-                "Describe a part the library does not have. It is stored as an identifier "
-                "that carries its own dimensions, so it travels with the board."
-            )
-        )
-        self.custom.clicked.connect(self.on_custom_part)
-        # Never the button Enter presses: that is OK, or Add.
-        self.custom.setAutoDefault(False)
-
-        #: What the caller needs said before OK -- Change Part's "pin 1 stays where it is,
-        #: the lead bends go". Hidden until there is something to say.
+        self.tree.currentItemChanged.connect(lambda _now, _then: self._say())
+        self.tree.itemDoubleClicked.connect(lambda item, _column: self._take())
         self.notice = QLabel()
         self.notice.setWordWrap(True)
         theme.tone(self.notice, "secondary")
         self.notice.hide()
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.notice)
+        custom = QPushButton(t("Custom Part…"))
+        custom.setAutoDefault(False)
+        custom.clicked.connect(self.on_custom_part)
+        layout = QVBoxLayout(self)
         layout.addWidget(self.filter)
         layout.addWidget(self.tree, 1)
-        layout.addWidget(self.custom)
-        layout.addLayout(form)
-        layout.addWidget(self.pinout_editor)
-        # A part's note, shown only when an existing part is edited (``edit_note``):
-        # adding one from the library is choosing what it is, and its reason comes after.
-        self.note_box = QWidget()
-        note_form = QFormLayout(self.note_box)
-        note_form.setContentsMargins(0, 0, 0, 0)
-        self.note = _note_editor("")
-        note_form.addRow(t("Note"), self.note)
-        self.note_box.setVisible(False)
-        layout.addWidget(self.note_box)
-        layout.addWidget(self.result_line)
-        layout.addWidget(self.buttons)
-        self.setLayout(layout)
+        layout.addWidget(self.notice)
+        layout.addWidget(custom, 0, Qt.AlignmentFlag.AlignLeft)
         self._refilter("")
-        self.filter.setFocus()
-
-    def add_chosen(self) -> bool:
-        """Add the part as chosen, and ready the dialog for the next one. True if added.
-
-        The tree keeps its filter and its row -- the next part is often another of the same
-        (a second resistor) -- with the filter selected so typing starts a new search. The
-        value is cleared and a fresh reference suggested from the design as it now is.
-        """
-        if self._add is None:
-            return False
-        chosen = self.values()
-        if chosen is None:
-            return False
-        outcome = self._add(chosen, self.pinout())
-        if isinstance(outcome, str):
-            self.result_line.setText(theme.ink(outcome, "warning"))
-            self.result_line.show()
-            return False
-        self._document = outcome
-        self.added += 1
-        ref, value, _footprint_id = chosen
-        self.result_line.setText(
-            theme.ink(
-                t("Added {part}. Choose the next part, or Done.").format(
-                    part=f"{ref} {value}".strip()
-                ),
-                "secondary",
-            )
-        )
-        self.result_line.show()
-        self.ref.clear()
-        self._suggestions = set()
-        self.value.clear()
-        self._catalog_value = ""
-        self._value_seen = ""
-        self._on_choice()
-        self.filter.setFocus()
-        self.filter.selectAll()
-        return True
-
-    def accept(self) -> None:
-        """Enter, or a double-click on a part: adds it while adding parts, and closes only
-        when editing one."""
-        if self._add is not None:
-            self.add_chosen()
-            return
-        super().accept()
 
     def set_notice(self, text: str) -> None:
         self.notice.setText(text)
         self.notice.setVisible(bool(text))
+
+    def _say(self) -> None:
+        footprint_id = self.chosen_footprint_id()
+        if self.notice_for is not None and footprint_id is not None:
+            self.set_notice(self.notice_for(footprint_id))
 
     def on_custom_part(self) -> None:
         dialog = CustomPartDialog(self)
@@ -2913,23 +2749,16 @@ class AddPartDialog(QDialog):
 
     def _refilter(self, text: str) -> None:
         populate_part_tree(self.tree, text, self._custom)
-        # Narrowed down, the first match is the answer more often than not, so Enter takes
-        # it. Unfiltered, nothing is chosen for the user: the first row of the whole
-        # library is not a suggestion, and it used to be a crystal.
-        #
-        # The first row the text NAMES, though, not the first row it matched: the catalog
-        # comes first and is searched by what a part does as well as what it is called, so
-        # "LED" found the MAX7219 (an LED display driver) ahead of every LED, and Enter
-        # added a 24-pin chip. And named by a WORD, or the start of one, not anywhere in a
-        # word: "LED" is in "SSD1306 OLED" too. "ATtiny" still names the ATtiny85.
+        # Narrowed down, the first row the text NAMES is the answer (``named_choice``):
+        # "LED" found an LED display driver ahead of every LED by what it does.
         leaves = self._leaves()
         if text.strip() and leaves:
             rows = [(leaf.text(0), self._catalog_part_of(leaf)) for leaf in leaves]
             self.tree.setCurrentItem(leaves[named_choice(text, rows)])
-        self._on_choice()
+        self._say()
 
-    def _on_double_click(self, item: QTreeWidgetItem, _column: int) -> None:
-        if item.data(0, ROLE_FOOTPRINT_ID):
+    def _take(self) -> None:
+        if self.chosen_footprint_id() is not None:
             self.accept()
 
     @staticmethod
@@ -2939,75 +2768,12 @@ class AddPartDialog(QDialog):
 
     def chosen_catalog_part(self) -> CatalogPart | None:
         item = self.tree.currentItem()
-        chosen = item.data(0, ROLE_CATALOG_ID) if item is not None else None
-        return catalog_part(chosen) if isinstance(chosen, str) else None
-
-    def _on_choice(self) -> None:
-        footprint_id = self.chosen_footprint_id()
-        self.confirm.setEnabled(footprint_id is not None)
-        if footprint_id is None:
-            return
-        footprint = get_footprint(footprint_id)
-        part = self.chosen_catalog_part()
-        typed = self.value.text().strip()
-        if part is not None:
-            if not typed or typed == self._catalog_value:
-                self.value.setText(part.placed_value)
-            self._catalog_value = part.placed_value
-            self.pinout_editor.set_part(footprint, part.pin_names, part.symbol)
-        else:
-            if self._catalog_value and typed == self._catalog_value:
-                self.value.clear()
-            self._catalog_value = ""
-            self.pinout_editor.set_part(footprint, (), None)
-        self._suggest_reference()
-
-    def _on_value_typed(self) -> None:
-        """A value that names a catalog part in the package already chosen brings its pinout.
-
-        "NE555" typed onto a DIP-8 is the NE555 as surely as picking it from the catalog --
-        but only in the SAME package, and only onto a part whose pins nobody has named, or
-        whose names came with the value being typed over: a value is not allowed to
-        overwrite a declaration somebody typed (``pinout_for_retyped_value``).
-        """
-        typed = self.value.text().strip()
-        before, self._value_seen = self._value_seen, typed
-        if self.chosen_catalog_part() is not None:
-            return
-        footprint_id = self.chosen_footprint_id()
-        if footprint_id is None:
-            return
-        self.pinout_editor.follow_value(get_footprint(footprint_id), before, typed)
-        part = catalog_part_for(typed)
-        if part is not None and part.footprint_id == footprint_id:
-            self._suggest_reference()
-
-    def _suggest_reference(self) -> None:
-        """Refill the reference whenever the kind of part changes.
-
-        Only while the field still holds a suggestion this dialog made — a reference the
-        user has typed over is a decision, and overwriting it because they scrolled the
-        list would throw that decision away.
-        """
-        footprint_id = self.chosen_footprint_id()
-        if footprint_id is None:
-            return
-        part = self.chosen_catalog_part() or catalog_part_for(self.value.text())
-        prefix = part.reference_prefix if part is not None else None
-        suggested = next_reference(self._document, footprint_id, prefix)
-        if self.ref.text().strip() in ("", *self._suggestions):
-            self.ref.setText(suggested)
-        self._suggestions.add(suggested)
+        return self._catalog_part_of(item) if item is not None else None
 
     def select_footprint(self, footprint_id: str) -> None:
-        """Start on this footprint, for editing a part that already has one.
-
-        A part whose footprint is a custom one is not in the library list, so it is put
-        there first. Without that, opening the properties of a part the library does not
-        have would silently land on whatever happened to be first -- and pressing OK would
-        change the part into a resistor. The PACKAGE's row is the one chosen, never a catalog
-        part in that package: a DIP-8 being edited is not thereby an NE555.
-        """
+        """Start on this package. Its own row, never a catalog part in it: a DIP-8 being
+        changed is not thereby an NE555. A package the library does not have is put in
+        first, or the row highlighted would be whatever came first -- a resistor."""
         if footprint_id not in self._custom and footprint_id not in standard_footprints():
             found = get_footprint(footprint_id)
             if found is not None:
@@ -3033,30 +2799,6 @@ class AddPartDialog(QDialog):
             return None
         chosen = item.data(0, ROLE_FOOTPRINT_ID)
         return str(chosen) if isinstance(chosen, str) and chosen else None
-
-    def values(self) -> tuple[str, str, str] | None:
-        """``(reference, value, footprint id)``, or None if nothing was chosen."""
-        footprint_id = self.chosen_footprint_id()
-        if footprint_id is None:
-            return None
-        return self.ref.text().strip(), self.value.text().strip(), footprint_id
-
-    def set_pinout(self, names: PinNames, symbol: PartSymbol | None) -> None:
-        """Show an existing part's declaration, for editing it -- after its value, which is
-        what a value typed over it is measured from."""
-        self.pinout_editor.set_part(get_footprint(self.chosen_footprint_id() or ""), names, symbol)
-        self._value_seen = self.value.text().strip()
-
-    def pinout(self) -> tuple[PinNames, PartSymbol | None]:
-        return self.pinout_editor.values()
-
-    def edit_note(self, text: str) -> None:
-        """Show an existing part's note, for editing it."""
-        self.note.setPlainText(text)
-        self.note_box.setVisible(True)
-
-    def note_text(self) -> str:
-        return self.note.toPlainText().strip()
 
 
 class ShortcutsDialog(QDialog):
@@ -8047,42 +7789,28 @@ class MainWindow(QMainWindow):
         self._refresh_properties()
 
     def on_schematic_part_properties(self, part_id: str) -> None:
-        """Another package for a part still only in the design: the library, with the
-        fields ``AddPartDialog`` asks for, on a part that exists. Properties' Change... --
-        everything else about the part is a field there."""
+        """Another package for a part still only in the design: the package picker, as a
+        placed part's Change… is -- one ``part.update``."""
         part = next((p for p in self.bus.document.parts if p.id == part_id), None)
         if part is None:
             return
-        dialog = AddPartDialog(self.bus.document, self)
-        dialog.setWindowTitle(t("Change {ref}").format(ref=part.ref))
-        dialog.select_footprint(part.footprint_id)
-        dialog.ref.setText(part.ref)
-        dialog.value.setText(part.value)
-        dialog.set_pinout(part.pin_names, part.symbol)
-        dialog.edit_note(part.note)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        chosen = dialog.values()
+        chosen = self._pick_package(part.footprint_id)
         if chosen is None:
             return
-        ref, value, footprint_id = chosen
-        pin_names, symbol = dialog.pinout()
+        footprint_id, catalog = chosen
+        value, names, symbol = self._what_a_package_brings(
+            footprint_id, catalog, part.value, part.pin_names, part.symbol
+        )
         result = self.bus.dispatch(
             "part.update",
             UpdatePartPayload(
-                id=part_id,
-                ref=ref,
-                value=value,
-                footprint_id=footprint_id,
-                pin_names=pin_names,
+                id=part_id, value=value, footprint_id=footprint_id, pin_names=names,
                 symbol=symbol,
-                note=dialog.note_text(),
             ),
         )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return
-        self._schematic_ref = ref
         self._sync_schematic_highlight()
 
     def on_sheet_tool(self, tool: str) -> None:
@@ -11831,29 +11559,47 @@ class MainWindow(QMainWindow):
         self._refresh_properties()
         self.inspector.focus_field("ref")
 
-    def on_change_part(
-        self,
-        component_id: str = "",
-        *,
-        ref: str | None = None,
-        value: str | None = None,
-        pinout: tuple[PinNames, PartSymbol | None] | None = None,
-        note: str | None = None,
-    ) -> bool:
+    def _pick_package(
+        self, current: str, notice_for: Callable[[str], str] | None = None
+    ) -> tuple[str, CatalogPart | None] | None:
+        """Another package, picked in the popup under Properties' Change… (``PackagePicker``):
+        the package chosen and the catalog part it is, if it is one -- or None."""
+        picker = PackagePicker(self.bus.document, self)
+        picker.notice_for = notice_for
+        picker.select_footprint(current)
+        panel = self.properties
+        corner = panel.mapToGlobal(QPoint(0, panel.caption.height()))
+        picker.move(corner.x() - picker.minimumWidth() - 8, corner.y())
+        picker.filter.setFocus()
+        if picker.exec() != QDialog.DialogCode.Accepted:
+            return None
+        chosen = picker.chosen_footprint_id()
+        return (chosen, picker.chosen_catalog_part()) if chosen is not None else None
+
+    @staticmethod
+    def _what_a_package_brings(
+        footprint_id: str,
+        part: CatalogPart | None,
+        value: str,
+        names: PinNames,
+        symbol: PartSymbol | None,
+    ) -> tuple[str, PinNames, PartSymbol | None]:
+        """The value and pinout a part has after its package changes: a catalog part's own,
+        or, for a bare package, the names of the pins the new package still has."""
+        if part is not None:
+            return (part.placed_value or value), part.pin_names, part.symbol
+        footprint = get_footprint(footprint_id)
+        numbers = {pin.number for pin in footprint.pins} if footprint is not None else set()
+        return value, tuple((n, name) for n, name in names if n in numbers), symbol
+
+    def on_change_part(self, component_id: str = "") -> bool:
         """Put another package, or another part, on a placed part's holes. True if it did.
 
-        THE SHEET'S EDIT A PART, on the board. The same dialog, the same library and the
-        same rules about what a value brings, so a part changed on the board and one changed
-        on the sheet cannot come out differently -- and ONE ``component.update``, so it is
-        one undo step, keeping the part's id, its reference, its nets and pin 1's hole.
-
-        What the new package cannot keep is said before OK rather than discovered after it:
-        a lead bend was bent to the old pins and goes with them, which is what the command
-        does; wires and traces stay where they are for DRC to judge. A locked part is
-        refused here, in words, rather than by the command after the choice was made.
-
-        ``ref``, ``value``, ``pinout`` and ``note`` carry what was typed in Part Properties
-        when this was reached from there.
+        ONE ``component.update``, so it is one undo step, keeping the part's id, its
+        reference, its nets and pin 1's hole. What the new package cannot keep is said as
+        the rows are walked rather than discovered after: a lead bend was bent to the old
+        pins and goes with them, which is what the command does. A locked part is refused
+        here, in words, rather than by the command after the choice was made.
         """
         if component_id:
             component = next(
@@ -11871,14 +11617,6 @@ class MainWindow(QMainWindow):
                 8000,
             )
             return False
-
-        dialog = AddPartDialog(self.bus.document, self)
-        dialog.setWindowTitle(t("Change {ref}").format(ref=component.ref))
-        dialog.select_footprint(component.footprint_id)
-        dialog.ref.setText(component.ref if ref is None else ref)
-        dialog.value.setText(component.value if value is None else value)
-        names, symbol = (component.pin_names, component.symbol) if pinout is None else pinout
-        dialog.set_pinout(names, symbol)
         bends = sum(
             1
             for c in self.bus.document.conductors
@@ -11886,15 +11624,13 @@ class MainWindow(QMainWindow):
         )
         board = self.bus.document.board
 
-        def say_where() -> None:
-            """Where the package chosen NOW puts its pins: pin 1 stays, and the last pin is
-            the one that moves -- said for whichever package is picked, as it is picked. It
-            said only "Pin 1 stays", and a longer resistor's other leg landed on a joint or
-            another part's hole with nothing in the dialog to say so."""
+        def say_where(footprint_id: str) -> str:
+            """Where the package highlighted NOW puts its pins: pin 1 stays, and the last
+            pin is the one that moves -- or lands off the board, or on a joint."""
             notice = t("Pin 1 stays in {hole}, and every net it is on stays.").format(
                 hole=format_hole(component.anchor, board)
             )
-            footprint = self.lookup(dialog.chosen_footprint_id() or component.footprint_id)
+            footprint = self.lookup(footprint_id)
             if footprint is not None and len(footprint.pins) > 1:
                 last = footprint.pins[-1]
                 hole = pin_hole(component, footprint, last.number)
@@ -11909,43 +11645,32 @@ class MainWindow(QMainWindow):
                 notice += " " + t(
                     "Its {count} lead bend(s) were bent to this package's pins and go with it."
                 ).format(count=bends)
-            dialog.set_notice(notice)
+            return notice
 
-        say_where()
-        dialog.tree.currentItemChanged.connect(lambda _now, _then: say_where())
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return False
-        chosen = dialog.values()
+        chosen = self._pick_package(component.footprint_id, say_where)
         if chosen is None:
             return False
-        new_ref, new_value, footprint_id = chosen
-        pin_names, new_symbol = dialog.pinout()
-        if not new_ref:
-            QMessageBox.warning(
-                self,
-                t("A part needs a reference"),
-                t("Every part is identified by its reference, so it cannot be blank."),
-            )
-            return False
+        footprint_id, part = chosen
+        value, names, symbol = self._what_a_package_brings(
+            footprint_id, part, component.value, component.pin_names, component.symbol
+        )
         result = self.bus.dispatch(
             "component.update",
             UpdateComponentPayload(
                 id=component.id,
-                ref=new_ref,
-                value=new_value,
-                pin_names=pin_names,
-                symbol=new_symbol,
-                note=note,
+                value=value,
+                pin_names=names,
+                symbol=symbol,
                 footprint_id=footprint_id,
             ),
         )
         if not result.ok:
-            QMessageBox.warning(self, t("Cannot change this part"), refused(result))
+            self.statusBar().showMessage(refused(result), 8000)
             return False
         footprint = get_footprint(footprint_id)
         self.statusBar().showMessage(
             t("{ref} is a {part} now.").format(
-                ref=new_ref,
+                ref=component.ref,
                 part=footprint_label(footprint.name) if footprint is not None else footprint_id,
             ),
             8000,
