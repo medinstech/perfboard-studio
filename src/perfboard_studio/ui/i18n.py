@@ -630,6 +630,9 @@ TURKISH: Mapping[str, str] = {
     "Perfboard layout design, verification and a soldering guide.": (
         "Perfboard yerleşim tasarımı, doğrulama ve bir lehimleme rehberi."
     ),
+    "Code: Apache-2.0 · 3D part models: CC-BY-SA 4.0, from KiCad": (
+        "Kod: Apache-2.0 · 3D parça modelleri: CC-BY-SA 4.0, KiCad'den"
+    ),
     "Parts that move: {moved} of {movable}": (
         "Yer değiştiren parçalar: {movable} taneden {moved}"
     ),

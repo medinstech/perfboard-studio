@@ -14058,11 +14058,16 @@ class MainWindow(QMainWindow):
         """
         box = QMessageBox(self)
         box.setWindowTitle(t("About Perfboard Studio"))
-        box.setText(f"<b>Perfboard Studio {__version__}</b>")
+        # The version once, in the line that is copied into a bug report; the title is the
+        # name. And both licences: the meshes are KiCad's and CC-BY-SA, which "Apache-2.0"
+        # alone said they were not.
+        box.setText("<b>Perfboard Studio</b>")
         box.setInformativeText(
             f"{describe_version()}\n\n"
             + t("Perfboard layout design, verification and a soldering guide.")
-            + "\nApache-2.0 · github.com/medinstech/perfboard-studio"
+            + "\n"
+            + t("Code: Apache-2.0 · 3D part models: CC-BY-SA 4.0, from KiCad")
+            + "\ngithub.com/medinstech/perfboard-studio"
         )
         box.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         box.exec()
