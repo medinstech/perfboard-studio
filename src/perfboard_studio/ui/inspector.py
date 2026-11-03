@@ -34,6 +34,7 @@ from PySide6.QtGui import QAction, QKeyEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
@@ -227,6 +228,13 @@ def _fact(text: str = "") -> QLabel:
     return shown
 
 
+def _narrow(combo: QComboBox) -> None:
+    """A combo as wide as the panel lets it be, not as wide as its longest entry: "Potentiometer
+    (three leads, the middle one the wiper)" made every part's editor wider than the panel."""
+    combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    combo.setMinimumContentsLength(8)
+
+
 def _action_button(action: QAction) -> QToolButton:
     button = QToolButton()
     button.setDefaultAction(action)
@@ -322,7 +330,7 @@ class _BoardEditor(QWidget):
         self.clearance_problem = _Problem()
         self.body_measure.toggled.connect(self._commit_clearance)
         self.body_clearance.editingFinished.connect(self._commit_clearance)
-        form.addRow("", self.body_measure)
+        form.addRow(self.body_measure)  # the whole row: in the field column it was too wide
         _add_field(form, t("Body clearance"), self.body_clearance, self.clearance_problem)
 
         self.setLayout(form)
@@ -474,7 +482,8 @@ class _PartEditor(QWidget):
 
         self.mirrored = QCheckBox(t("Mirrored"))
         self.mirrored.toggled.connect(self._commit_mirrored)
-        self.locked = QCheckBox(t("locked — Rearrange leaves it where it is"))
+        self.locked = QCheckBox(t("Locked"))
+        self.locked.setToolTip(t("locked — Rearrange leaves it where it is"))
         self.locked.toggled.connect(self._commit_locked)
         self.flags_problem = _Problem()
         flags = QWidget()
@@ -493,6 +502,7 @@ class _PartEditor(QWidget):
         # What its leads are called and what it is, when its package cannot say: committed
         # as they are changed, each change one step.
         self.pinout = PinoutEditor()
+        _narrow(self.pinout.symbol)
         self.pinout.symbol.currentIndexChanged.connect(self._commit_pinout)
         self.pinout.table.itemChanged.connect(self._commit_pinout)
         self.pinout_problem = _Problem()
@@ -718,6 +728,7 @@ class _DesignPartEditor(QWidget):
         layout.addLayout(form)
 
         self.pinout = PinoutEditor()
+        _narrow(self.pinout.symbol)
         self.pinout.symbol.currentIndexChanged.connect(self._commit_pinout)
         self.pinout.table.itemChanged.connect(self._commit_pinout)
         self.pinout_problem = _Problem()
@@ -863,7 +874,8 @@ class _PartsEditor(QWidget):
         self._form = form
         # Three states: all locked, none, or some -- and a click locks them all, or, when
         # they all are, unlocks them all, which is what "lock these" means.
-        self.locked = QCheckBox(t("locked — Rearrange leaves it where it is"))
+        self.locked = QCheckBox(t("Locked"))
+        self.locked.setToolTip(t("locked — Rearrange leaves it where it is"))
         self.locked.setTristate(True)
         self.locked.clicked.connect(self._commit_locked)
         self.locked_problem = _Problem()
@@ -1414,32 +1426,22 @@ class _ConductorEditor(QWidget):
         self.title.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(self.title)
         form = _form()
-        kinds = QWidget()
-        kind_row = QHBoxLayout(kinds)
-        kind_row.setContentsMargins(0, 0, 0, 0)
-        kind_row.setSpacing(2)
-        self.kind = QButtonGroup(self)
-        self.kind.setExclusive(True)
-        self._kind_buttons: dict[str, QToolButton] = {}
-        words = {
+        # A combo, not a row of buttons: "Jumper Over the Parts" beside two more wire kinds
+        # was wider than the panel.
+        self.kind = QComboBox()
+        self.kind.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.kind.setMinimumContentsLength(8)
+        self._kind_words = {
             "solder-trace": t("&Solder Trace"),
             "solder-trace-wired": t("&Reinforced Solder Trace"),
             "bare-wire": t("&Bare Wire"),
             "insulated-wire": t("&Insulated Wire"),
             "top-jumper": t("&Jumper Over the Parts"),
         }
-        for kind in (*self.SOLDER, *self.WIRE):
-            button = QToolButton()
-            button.setText(words[kind].replace("&", ""))
-            button.setCheckable(True)
-            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            button.clicked.connect(lambda _checked=False, k=kind: self._commit_kind(k))
-            self.kind.addButton(button)
-            self._kind_buttons[kind] = button
-            kind_row.addWidget(button)
+        self.kind.activated.connect(self._on_kind_chosen)
         self.kind_problem = _Problem()
-        _add_field(form, t("Kind"), kinds, self.kind_problem)
-        self._kind_row = kinds
+        _add_field(form, t("Kind"), self.kind, self.kind_problem)
+        self._kind_row = self.kind
         self.ends = _fact()
         form.addRow(t("Holes"), self.ends)
         self.net = _fact()
@@ -1468,9 +1470,10 @@ class _ConductorEditor(QWidget):
         self._loading = True
         try:
             self._kind_row.setVisible(bool(family))
-            for each, button in self._kind_buttons.items():
-                button.setVisible(each in family)
-                button.setChecked(each == kind)
+            self.kind.clear()
+            for each in family:
+                self.kind.addItem(self._kind_words[each].replace("&", ""), each)
+            self.kind.setCurrentIndex(max(0, self.kind.findData(kind)))
             if another:
                 self.kind_problem.show_problem("")
         finally:
@@ -1498,6 +1501,11 @@ class _ConductorEditor(QWidget):
         )
         net = next((n for n in document.nets if n.id == conductor.net_id), None)
         self.net.setText(net.name if net is not None else "—")
+
+    def _on_kind_chosen(self, index: int) -> None:
+        chosen = self.kind.itemData(index)
+        if isinstance(chosen, str):
+            self._commit_kind(chosen)
 
     def _commit_kind(self, kind: str) -> None:
         conductor, document = self._conductor, self._document

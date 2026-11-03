@@ -2655,6 +2655,23 @@ type AddPart = Callable[
 ]
 
 
+def picker_position(beside: QRect, size: QSize, screen: QRect) -> QPoint:
+    """Where the package picker opens: to the left of the Properties panel it was opened
+    from, its top level with the panel's, so it covers neither the field nor the panel --
+    and inside the screen whatever the window's size, sliding over the canvas rather than
+    off the edge. Global coordinates throughout."""
+    gap = theme.SPACE["md"]
+    x = beside.left() - size.width() - gap
+    if x < screen.left():
+        # No room on the left: the other side of the panel, if there is room there.
+        right = beside.right() + gap
+        x = right if right + size.width() <= screen.right() else screen.left()
+    y = beside.top() + theme.SPACE["2xl"]
+    x = max(screen.left(), min(x, screen.right() - size.width()))
+    y = max(screen.top(), min(y, screen.bottom() - size.height()))
+    return QPoint(x, y)
+
+
 class PackagePicker(QDialog):
     """Another package for a part that exists: the Library's tree and search in a popup
     under Change…, Enter or a double-click taking the row.
@@ -2669,7 +2686,8 @@ class PackagePicker(QDialog):
     def __init__(self, document: PerfDocument, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Popup)
-        self.setMinimumSize(360, 420)
+        # Wide enough that three resistors differing only by their span read apart.
+        self.setMinimumSize(460, 440)
         #: Parts the document already uses that the library does not have, and any
         #: described here: not saved anywhere, the id is the definition.
         self._custom: dict[str, Footprint] = {
@@ -11568,8 +11586,9 @@ class MainWindow(QMainWindow):
         picker.notice_for = notice_for
         picker.select_footprint(current)
         panel = self.properties
-        corner = panel.mapToGlobal(QPoint(0, panel.caption.height()))
-        picker.move(corner.x() - picker.minimumWidth() - 8, corner.y())
+        beside = QRect(panel.mapToGlobal(QPoint(0, 0)), panel.size())
+        screen = self.screen().availableGeometry()
+        picker.move(picker_position(beside, picker.minimumSize(), screen))
         picker.filter.setFocus()
         if picker.exec() != QDialog.DialogCode.Accepted:
             return None

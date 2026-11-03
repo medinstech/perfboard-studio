@@ -14879,10 +14879,10 @@ def test_a_wire_becomes_another_kind_of_wire_in_one_step() -> None:
         window._refresh_properties()
         editor = window.inspector.conductor_editor
         assert window.inspector.shown is editor
-        assert editor._kind_buttons["solder-trace"].isHidden()
+        assert editor.kind.findData("solder-trace") < 0
         other = "insulated-wire" if wire.kind != "insulated-wire" else "bare-wire"
         steps = len(window.bus.history())
-        editor._kind_buttons[other].click()
+        editor._commit_kind(other)
         now = next(c for c in window.bus.document.conductors if c.id == wire.id)
         assert (now.kind, now.path, now.net_id) == (other, wire.path, wire.net_id)
         assert len(window.bus.history()) == steps + 1
@@ -14899,3 +14899,146 @@ def _select_conductor(window, conductor_id: str) -> None:
             item.setSelected(True)
             return
     raise AssertionError(f"no item for {conductor_id}")
+
+
+@pytest.mark.parametrize("width", [1600, 1280, 900])
+def test_the_package_picker_opens_beside_properties_and_on_the_screen(width: int) -> None:
+    """To the left of Properties, never over it -- the field it came from is in it -- and
+    never off the screen, however narrow the window."""
+    from PySide6.QtCore import QRect, QSize
+
+    from perfboard_studio.ui.main import picker_position
+
+    screen = QRect(0, 0, width, 800)
+    panel = QRect(width - 300, 60, 300, 700)
+    size = QSize(360, 420)
+    at = picker_position(panel, size, screen)
+    opened = QRect(at, size)
+    assert screen.contains(opened), (width, opened)
+    if width >= 900:
+        assert not opened.intersects(panel), (width, opened)
+
+
+def _add_wire(window, path, kind):
+    from perfboard_studio.commands import AddConductorPayload, NewWireConductor, wire_side
+
+    result = window.bus.dispatch(
+        "conductor.add",
+        AddConductorPayload(
+            conductor=NewWireConductor(
+                path=path, kind=kind, side=wire_side(kind, window.bus.document.board)
+            )
+        ),
+    )
+    assert result.ok, result.message
+    return window.bus.document.conductors[-1]
+
+
+def _rules(window) -> set[str]:
+    return {v.rule for v in window._last_violations}
+
+
+def test_a_wire_made_bare_where_it_crosses_bare_copper_is_found_at_once() -> None:
+    """Insulated wire may cross; bare may not. Made bare in Properties, the crossing is a
+    finding the moment the switch is made, not at the next edit."""
+    window = _blank_window()
+    try:
+        _add_wire(window, (HoleCoord(2, 5), HoleCoord(8, 5)), "bare-wire")
+        crossing = _add_wire(window, (HoleCoord(5, 2), HoleCoord(5, 8)), "insulated-wire")
+        assert "conductor-crossing" not in _rules(window)
+        _select_conductor(window, crossing.id)
+        window._refresh_properties()
+        window.inspector.conductor_editor._commit_kind("bare-wire")
+        assert next(c for c in window.bus.document.conductors if c.id == crossing.id).kind == (
+            "bare-wire"
+        )
+        assert "conductor-crossing" in _rules(window)
+    finally:
+        _close(window)
+
+
+def test_a_wire_made_a_top_jumper_under_a_body_is_found_at_once() -> None:
+    """Under a DIP's body a wire on the solder side is fine; a jumper over the parts runs
+    into the body. Made a jumper in Properties, DRC says so straight away."""
+    from perfboard_studio.commands import PlaceComponentPayload
+
+    window = _blank_window()
+    try:
+        assert window.bus.dispatch(
+            "component.place",
+            PlaceComponentPayload(ref="U1", value="NE555", footprint_id="dip-8",
+                                  anchor=HoleCoord(10, 10)),
+        ).ok
+        under = _add_wire(window, (HoleCoord(11, 8), HoleCoord(11, 15)), "bare-wire")
+        assert "jumper-under-body" not in _rules(window)
+        _select_conductor(window, under.id)
+        window._refresh_properties()
+        window.inspector.conductor_editor._commit_kind("top-jumper")
+        assert "jumper-under-body" in _rules(window)
+    finally:
+        _close(window)
+
+
+def test_a_kind_switch_never_drops_the_run() -> None:
+    """Through every kind of wire and back, the run is there with its id, path and net
+    after each switch; and a switch the bus refuses leaves it as it was, with the reason
+    under the field."""
+    from perfboard_studio.commands import ReplaceConductorsPayload
+
+    window = _blank_window()
+    try:
+        run = _add_wire(window, (HoleCoord(2, 2), HoleCoord(9, 2)), "bare-wire")
+        _select_conductor(window, run.id)
+        window._refresh_properties()
+        editor = window.inspector.conductor_editor
+        for kind in ("insulated-wire", "top-jumper", "bare-wire"):
+            editor._commit_kind(kind)
+            now = next(c for c in window.bus.document.conductors if c.id == run.id)
+            assert (now.kind, now.path) == (kind, run.path)
+
+        def refuse(name, payload):
+            return window.bus.dispatch(
+                "conductor.replace",
+                ReplaceConductorsPayload(remove_ids=("no-such-run",), conductors=()),
+            )
+
+        window.inspector._dispatch = refuse
+        editor._commit_kind("insulated-wire")
+        now = next(c for c in window.bus.document.conductors if c.id == run.id)
+        assert now.kind == "bare-wire"
+        assert editor.kind_problem.text() and not editor.kind_problem.isHidden()
+        assert editor.kind.currentData() == "bare-wire"
+    finally:
+        _close(window)
+
+
+@pytest.mark.parametrize("language", ["en", "tr"])
+def test_every_editor_in_properties_fits_its_panel(language: str) -> None:
+    """At 1280 and 1600 alike Change…, the 270° button and Delete were cut off the panel's
+    right edge. The panel asks for the width the editor showing needs, so nothing is cut
+    off whatever the language or the font -- measured against the editor itself, because
+    the offscreen test font is not the one on screen."""
+    from perfboard_studio.ui.i18n import language as current
+    from perfboard_studio.ui.i18n import set_language
+
+    before = current()
+    set_language(language)
+    try:
+        window = _window_on(_load_dense())
+        component = next(c for c in window.bus.document.components
+                         if c.id in window.scene.component_items)
+        net = window.bus.document.nets[0]
+        panel = window.properties
+        for show in (
+            lambda: window.scene.clearSelection(),
+            lambda: window.scene.select_components([component.id]),
+            lambda: window._select_net(net.id),
+        ):
+            show()
+            window._refresh_properties()
+            editor = window.inspector.shown
+            need = editor.minimumSizeHint().width()
+            assert panel.scroller.minimumWidth() >= need, (type(editor).__name__, need)
+        _close(window)
+    finally:
+        set_language(before)

@@ -142,6 +142,7 @@ class PropertiesPanel(QWidget):
         if self._document is not None:
             content.refresh(self._document)
         content.set_selection(self.selection)
+        self._fit()
 
     def set_selection(self, selection: Selection) -> None:
         if selection == self.selection:
@@ -149,8 +150,25 @@ class PropertiesPanel(QWidget):
         self.selection = selection
         content: PropertiesContent = self.content  # type: ignore[assignment]
         content.set_selection(selection)
+        self._fit()
 
     def refresh(self, document: PerfDocument) -> None:
         self._document = document
         content: PropertiesContent = self.content  # type: ignore[assignment]
         content.refresh(document)
+        self._fit()
+
+    def _fit(self) -> None:
+        """As wide as the editor showing needs, never narrower: a field cut off at the
+        panel's right edge -- Change…, the 270° button and Delete were, at every window size
+        -- is worse than a panel a few pixels wider. The editors are made to fit the width
+        the panel opens at (``PANEL_WIDTH``); this is what holds when a language or a font
+        makes one wider anyway."""
+        margins = self._holder.contentsMargins()
+        need = (
+            self.content.minimumSizeHint().width()
+            + margins.left()
+            + margins.right()
+            + 2 * self.scroller.frameWidth()
+        )
+        self.scroller.setMinimumWidth(max(0, need))

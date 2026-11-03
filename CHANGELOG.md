@@ -194,6 +194,12 @@ closed without a bump.
 - **A wire or a trace changes kind in Properties.** A bare wire becomes insulated, or a
   jumper over the parts, and a solder trace reinforced, in one undo step on the same holes
   and net; it took deleting it and drawing it again.
+- **Nothing in Properties is cut off at its right edge.** Change…, the 270° button and Delete
+  were, at every window size: a check box with a sentence on it, a combo as wide as its
+  longest entry and three wire kinds in a row each made an editor wider than the panel. The
+  lock is "Locked" with the reason on hover, the wire kinds are one list, and the panel
+  takes the width the editor showing needs. The package picker opens beside the panel,
+  never over it or off the screen, wide enough to tell a 3-hole resistor from a 4-hole one.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's
