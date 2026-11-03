@@ -42,3 +42,9 @@ vitest.config.ts linguist-vendored
 tests/guide_golden/** linguist-vendored
 tests/schematic_golden/** linguist-vendored
 tools/diffcheck/golden/** linguist-vendored
+
+# Every change adds its entry at the same spot in CHANGELOG.md's Unreleased lists, so two
+# branches landing one after the other always conflict there, and the resolution is always
+# "keep both". union keeps both. It can drop the blank line between the two entries, which
+# Markdown renders as the same list.
+CHANGELOG.md merge=union
