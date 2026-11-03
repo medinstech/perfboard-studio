@@ -152,6 +152,9 @@ closed without a bump.
   the net under its next free name with no form, selects it and puts the keyboard in its
   name while the board picks its pins; Edit Net and Rename Net go to the same name field.
   The net dialog is gone.
+- **A board label is edited in Properties.** Add Label writes one at once and puts the
+  keyboard in its text; its height, rotation and face are beside it, each one undo step. A
+  double-click on a label selects it there. The Board Label dialog is gone.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

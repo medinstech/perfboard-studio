@@ -14701,3 +14701,51 @@ def test_the_value_for_the_parts_placed_next_is_typed_in_properties() -> None:
     window.placing_value.setText("10k")
     assert window.scene.placement_value == "10k"
     _close(window)
+
+
+def test_add_label_writes_one_and_puts_the_keyboard_in_its_text() -> None:
+    """No form first: the label is written, selected, and its own fields are in Properties
+    -- text, height, rotation and face -- each change one step."""
+    from perfboard_studio.ui.i18n import t
+
+    window = _window_on(_load_dense())
+    before = {n.id for n in window.bus.document.board_notes}
+    focused: list[str] = []
+    real = window.inspector.focus_field
+    window.inspector.focus_field = lambda name: (focused.append(name), real(name))[1]
+    window.on_add_board_label()
+    (note,) = [n for n in window.bus.document.board_notes if n.id not in before]
+    assert note.text == t("Label")
+    editor = window.inspector.board_note_editor
+    assert window.inspector.shown is editor and focused == ["text"]
+
+    def now():
+        return next(n for n in window.bus.document.board_notes if n.id == note.id)
+
+    steps = len(window.bus.history())
+    _type_into(editor.text, "MOTOR 24V")
+    editor.rotation.button(90).click()
+    editor._face_buttons["bottom"].click()
+    editor.text_height.setValue(3.0)
+    editor.text_height.editingFinished.emit()
+    assert (now().text, now().rotation, now().side, now().size_mm) == (
+        "MOTOR 24V", 90, "bottom", 3.0
+    )
+    assert len(window.bus.history()) == steps + 4
+    _close(window)
+
+
+def test_editing_a_label_selects_it_in_properties() -> None:
+    """A double-click on a label, or Edit Label on its right-click, is the label in
+    Properties -- the dialog it used to open is gone."""
+    from PySide6.QtCore import QPointF
+
+    window = _window_on(_load_dense())
+    assert window.add_board_label("CAN", QPointF(0, 0)).ok
+    note = window.bus.document.board_notes[-1]
+    window.scene.clearSelection()
+    window.scene.boardNoteActivated.emit(note.id)
+    assert window.scene.selected_board_note_ids() == (note.id,)
+    assert window.inspector.shown is window.inspector.board_note_editor
+    assert window.inspector.board_note_editor.text.text() == "CAN"
+    _close(window)

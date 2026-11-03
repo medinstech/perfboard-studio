@@ -55,13 +55,22 @@ from perfboard_studio.commands import (
     RotateComponentPayload,
     SetBodyClearancePayload,
     SetHeightLimitPayload,
+    UpdateBoardNotePayload,
     UpdateComponentPayload,
     UpdateComponentsPayload,
     UpdateNetPayload,
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import format_hole, parse_hole
-from perfboard_studio.model import ComponentInstance, Net, NetClass, PerfDocument, Rotation
+from perfboard_studio.model import (
+    BoardNote,
+    BoardSide,
+    ComponentInstance,
+    Net,
+    NetClass,
+    PerfDocument,
+    Rotation,
+)
 from perfboard_studio.parsers.kicad import infer_net_class
 
 from . import theme
@@ -579,9 +588,9 @@ class _PartEditor(QWidget):
         component = self._component
         if self._loading or component is None or degrees == component.rotation:
             return
-        rotation: Rotation = 90 if degrees == 90 else 180 if degrees == 180 else 270 if degrees == 270 else 0
         problem = self._inspector.dispatch(
-            "component.rotate", RotateComponentPayload(id=component.id, rotation=rotation)
+            "component.rotate",
+            RotateComponentPayload(id=component.id, rotation=_rotation(degrees)),
         )
         self.rotation_problem.show_problem(problem or "")
         if problem:
@@ -991,6 +1000,144 @@ class _NetEditor(QWidget):
         )
 
 
+# -- a label written on the board -----------------------------------------------------------
+
+
+def _rotation(degrees: int) -> Rotation:
+    return 90 if degrees == 90 else 180 if degrees == 180 else 270 if degrees == 270 else 0
+
+
+class _BoardNoteEditor(QWidget):
+    """A label written on the board: what it says, how tall, which way and on which face.
+    Replaces the Board Label dialog, and Add Label Here writes one and puts the keyboard in
+    its text."""
+
+    FACES: tuple[tuple[BoardSide, str], ...] = (
+        ("top", "Component side (top)"),
+        ("bottom", "Solder side (bottom)"),
+    )
+
+    def __init__(self, inspector: Inspector, actions: InspectorActions) -> None:
+        super().__init__()
+        self._inspector = inspector
+        self._note: BoardNote | None = None
+        self._loading = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel(theme.heading(t("Board Label")))
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+
+        form = _form()
+        self.text = CommitLine(self._commit_text)
+        self.text.setPlaceholderText(t("What to write on the board: MOTOR 24V, CAN →…"))
+        _add_field(form, t("Text"), self.text, self.text.problem)
+        self.text_height = QDoubleSpinBox()
+        self.text_height.setRange(0.5, 10.0)
+        self.text_height.setSingleStep(0.25)
+        self.text_height.setDecimals(2)
+        self.text_height.setSuffix(" mm")
+        self.text_height.editingFinished.connect(self._commit_size)
+        self.size_problem = _Problem()
+        _add_field(form, t("Height"), self.text_height, self.size_problem)
+
+        turns = QWidget()
+        turn_row = QHBoxLayout(turns)
+        turn_row.setContentsMargins(0, 0, 0, 0)
+        turn_row.setSpacing(2)
+        self.rotation = QButtonGroup(self)
+        self.rotation.setExclusive(True)
+        for degrees in (0, 90, 180, 270):
+            button = QToolButton()
+            button.setText(f"{degrees}°")
+            button.setCheckable(True)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            self.rotation.addButton(button, degrees)
+            turn_row.addWidget(button)
+        self.rotation.idClicked.connect(self._commit_rotation)
+        self.rotation_problem = _Problem()
+        _add_field(form, t("Rotation"), turns, self.rotation_problem)
+
+        faces = QWidget()
+        face_column = QVBoxLayout(faces)
+        face_column.setContentsMargins(0, 0, 0, 0)
+        face_column.setSpacing(2)
+        self.face = QButtonGroup(self)
+        self.face.setExclusive(True)
+        self._face_buttons: dict[BoardSide, QCheckBox] = {}
+        for value, label in self.FACES:
+            face_button = QCheckBox(t(label))
+            self.face.addButton(face_button)
+            self._face_buttons[value] = face_button
+            face_button.clicked.connect(lambda _checked=False, v=value: self._commit_face(v))
+            face_column.addWidget(face_button)
+        faces.setToolTip(
+            t("A label on the solder side is written where the wiring is checked, and reads "
+              "the right way round from underneath.")
+        )
+        self.face_problem = _Problem()
+        _add_field(form, t("Face"), faces, self.face_problem)
+        layout.addLayout(form)
+
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addStretch(1)
+        buttons.addWidget(_action_button(actions.delete))
+        layout.addLayout(buttons)
+
+    def load(self, note: BoardNote) -> None:
+        another = self._note is None or self._note.id != note.id
+        self._note = note
+        self._loading = True
+        try:
+            self.text.show_value(note.text)
+            if not self.text_height.hasFocus():
+                self.text_height.setValue(note.size_mm)
+            button = self.rotation.button(note.rotation)
+            if button is not None:
+                button.setChecked(True)
+            self._face_buttons[note.side].setChecked(True)
+            if another:
+                for problem in (self.size_problem, self.rotation_problem, self.face_problem):
+                    problem.show_problem("")
+        finally:
+            self._loading = False
+
+    def _update(self, payload: UpdateBoardNotePayload) -> str | None:
+        return self._inspector.dispatch("board.note.update", payload)
+
+    def _commit_text(self, typed: str) -> str | None:
+        note = self._note
+        if note is None:
+            return None
+        return self._update(UpdateBoardNotePayload(id=note.id, text=typed))
+
+    def _commit_size(self) -> None:
+        note = self._note
+        if self._loading or note is None or self.text_height.value() == note.size_mm:
+            return
+        self.size_problem.show_problem(
+            self._update(UpdateBoardNotePayload(id=note.id, size_mm=self.text_height.value())) or ""
+        )
+
+    def _commit_rotation(self, degrees: int) -> None:
+        note = self._note
+        if self._loading or note is None or degrees == note.rotation:
+            return
+        self.rotation_problem.show_problem(
+            self._update(UpdateBoardNotePayload(id=note.id, rotation=_rotation(degrees))) or ""
+        )
+
+    def _commit_face(self, side: BoardSide) -> None:
+        note = self._note
+        if self._loading or note is None or side == note.side:
+            return
+        self.face_problem.show_problem(
+            self._update(UpdateBoardNotePayload(id=note.id, side=side)) or ""
+        )
+
+
 # -- everything else, said in one line until it has an editor ----------------------------
 
 
@@ -1036,6 +1183,7 @@ class Inspector(QWidget):
         self.parts_editor = _PartsEditor(self, actions)
         self.placing_editor = _PlacingEditor(self)
         self.net_editor = _NetEditor(self, actions)
+        self.board_note_editor = _BoardNoteEditor(self, actions)
         self.summary = _Summary()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1044,7 +1192,7 @@ class Inspector(QWidget):
         # page: the board's three fields would sit over the part editor's empty height.
         self._pages: tuple[QWidget, ...] = (
             self.board_editor, self.part_editor, self.parts_editor, self.placing_editor,
-            self.net_editor, self.summary,
+            self.net_editor, self.board_note_editor, self.summary,
         )
         for page in self._pages:
             layout.addWidget(page)
@@ -1090,6 +1238,11 @@ class Inspector(QWidget):
             if net is not None:
                 self.net_editor.load(document, net)
                 page = self.net_editor
+        elif selection.kind == "board-note" and len(selection.ids) == 1:
+            note = next((n for n in document.board_notes if n.id == selection.ids[0]), None)
+            if note is not None:
+                self.board_note_editor.load(note)
+                page = self.board_note_editor
         elif selection.kind == "placing" and selection.ids:
             self.placing_editor.load(selection.ids[0])
             page = self.placing_editor
@@ -1113,6 +1266,8 @@ class Inspector(QWidget):
             fields = {"value": self.placing_editor.value}
         elif self.shown is self.net_editor:
             fields = {"name": self.net_editor.name}
+        elif self.shown is self.board_note_editor:
+            fields = {"text": self.board_note_editor.text}
         elif self.shown is self.board_editor:
             fields = {"name": self.board_editor.name}
         field = fields.get(name)

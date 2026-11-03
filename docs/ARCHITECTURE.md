@@ -1543,6 +1543,11 @@ the sheet's Net Class menu. New Net has no form: the net is made under its next 
 selected, its Name ready to type over and the board picking its pins -- a form that could
 be refused was a form that came back. Edit Net and Rename Net are the net's Name.
 
+A label written on the board is its text, height, rotation and face. Add Label writes one
+saying "Label" where the view is looking (or where the right-click was), selects it and
+puts the keyboard in its text; a double-click on a label, or Edit Label, selects it. The
+Board Label dialog is gone.
+
 **The panel is told the selection once per command.** The board empties its selection
 while it rebuilds and puts it back after, and the signals between would show the board's
 editor for an instant and take the keyboard out of the field Tab had just moved to. So

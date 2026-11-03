@@ -800,6 +800,8 @@ TURKISH: Mapping[str, str] = {
     "Change…": "Değiştir…",
     "Rotation": "Dönüş",
     "Mirrored": "Aynalanmış",
+    "Face": "Yüz",
+    "Text:": "Metin:",
     "Mixed": "Karışık",
     "Typed once, given to every part selected, as one step to undo.": (
         "Bir kez yazılır, seçili her parçaya verilir; tek adımda geri alınır."
@@ -987,7 +989,6 @@ TURKISH: Mapping[str, str] = {
     "Connect by Name": "Ada Göre Bağla",
     "Net for {pin}:": "{pin} için net:",
     "Write on the Sheet": "Sayfaya Yaz",
-    "Text:": "Metin:",
     "No package called {id}.": "{id} adında bir kılıf yok.",
     "Fix the sheet layout": "Sayfa düzenini sabitle",
     "Drag a part onto the board or the sheet — or pick one and click. Esc cancels.": (
@@ -1894,9 +1895,6 @@ TURKISH: Mapping[str, str] = {
         "Lehim yüzündeki etiket, bağlantıların kontrol edildiği yere yazılır ve alttan "
         "bakınca düz okunur."
     ),
-    "Height:": "Yükseklik:",
-    "Rotation:": "Dönüş:",
-    "Face:": "Yüz:",
     "Edit Label…": "Etiketi Düzenle…",
     "Add Label Here…": "Buraya Etiket Ekle…",
     "Print each part's pin names beside its pins, on the board and in 3D. Turn it off "

@@ -192,7 +192,6 @@ from perfboard_studio.commands import (
     SetBodyClearancePayload,
     SetHeightLimitPayload,
     UnplaceComponentPayload,
-    UpdateBoardNotePayload,
     UpdateComponentPayload,
     UpdateNetPayload,
     UpdatePartPayload,
@@ -2141,73 +2140,6 @@ class BoardFeaturesDialog(QDialog):
         )
 
 
-class BoardLabelDialog(QDialog):
-    """What a label on the board says, how big, which way and on which face.
-
-    The same dialog adds one and edits one: they are the same four questions, and asking
-    them two ways would be two chances to ask them differently.
-    """
-
-    def __init__(
-        self,
-        text: str = "",
-        size_mm: float = 1.5,
-        rotation: int = 0,
-        side: BoardSide = "top",
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(t("Board Label"))
-        self.text_edit = QLineEdit(text)
-        self.text_edit.setPlaceholderText(t("What to write on the board: MOTOR 24V, CAN →…"))
-        self.size_box = QDoubleSpinBox()
-        self.size_box.setRange(0.5, 10.0)
-        self.size_box.setSingleStep(0.25)
-        self.size_box.setDecimals(2)
-        self.size_box.setSuffix(" mm")
-        self.size_box.setValue(size_mm)
-        self.rotation_box = QComboBox()
-        for angle in (0, 90, 180, 270):
-            self.rotation_box.addItem(f"{angle}°", angle)
-        self.rotation_box.setCurrentIndex(max(0, (0, 90, 180, 270).index(rotation)))
-        self.side_box = QComboBox()
-        self.side_box.addItem(t("Component side (top)"), "top")
-        self.side_box.addItem(t("Solder side (bottom)"), "bottom")
-        self.side_box.setCurrentIndex(0 if side == "top" else 1)
-        self.side_box.setToolTip(
-            t("A label on the solder side is written where the wiring is checked, and reads "
-              "the right way round from underneath.")
-        )
-        form = QFormLayout()
-        form.addRow(t("Text:"), self.text_edit)
-        form.addRow(t("Height:"), self.size_box)
-        form.addRow(t("Rotation:"), self.rotation_box)
-        form.addRow(t("Face:"), self.side_box)
-        self.buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
-        self.text_edit.textChanged.connect(self._refresh)
-        layout = QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(self.buttons)
-        self._refresh()
-
-    def _refresh(self) -> None:
-        ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
-        if ok is not None:
-            ok.setEnabled(bool(self.text_edit.text().strip()))
-
-    def values(self) -> tuple[str, float, Rotation, BoardSide]:
-        return (
-            self.text_edit.text().strip(),
-            self.size_box.value(),
-            cast(Rotation, self.rotation_box.currentData()),
-            cast(BoardSide, self.side_box.currentData()),
-        )
-
-
 class GoToPartDialog(QDialog):
     """Find a part by name on a board too big to scan by eye.
 
@@ -3743,6 +3675,10 @@ class _FrameOnFirstSize(QObject):
 
 
 class MainWindow(QMainWindow):
+    #: Where the selection was last made, so Properties describes that one
+    #: (``_current_selection``).
+    _selection_from: Literal["board", "sheet", "nets"]
+
     def __init__(self, document: PerfDocument, path: Path | None = None) -> None:
         super().__init__()
         self.lookup = footprint_lookup()
@@ -5405,18 +5341,21 @@ class MainWindow(QMainWindow):
         self._refresh_3d()
 
     def on_add_board_label(self, scene_pos: QPointF | None = None) -> None:
-        """Ask what to write, then write it where the view is looking -- or, from the
-        right-click menu, exactly where the click was."""
-        dialog = BoardLabelDialog(side=self.side, parent=self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        text, size_mm, rotation, side = dialog.values()
+        """A label written where the view is looking -- or, from the right-click menu,
+        exactly where the click was -- selected, with the keyboard in its text in
+        Properties to type over "Label". There is no form first: what it says, how tall
+        and which face are the label's own fields."""
         where = (
             scene_pos
             if scene_pos is not None
             else self.view.mapToScene(self.view.viewport().rect().center())
         )
-        self.add_board_label(text, where, size_mm, rotation, side)
+        before = {note.id for note in self.bus.document.board_notes}
+        if not self.add_board_label(t("Label"), where, side=self.side).ok:
+            return
+        new = [n.id for n in self.bus.document.board_notes if n.id not in before]
+        if new:
+            self.on_edit_board_label(new[0])
 
     def add_board_label(
         self,
@@ -5445,22 +5384,15 @@ class MainWindow(QMainWindow):
         return result
 
     def on_edit_board_label(self, note_id: str) -> None:
-        note = next((n for n in self.bus.document.board_notes if n.id == note_id), None)
-        if note is None:
+        """The label, selected and in Properties, the keyboard in its text."""
+        item = self.scene.board_note_items.get(note_id)
+        if item is None:
             return
-        dialog = BoardLabelDialog(note.text, note.size_mm, note.rotation, note.side, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        text, size_mm, rotation, side = dialog.values()
-        result = self.bus.dispatch(
-            "board.note.update",
-            UpdateBoardNotePayload(
-                id=note_id, text=text, size_mm=size_mm, rotation=rotation, side=side
-            ),
-        )
-        if not result.ok and result.code != "nothing-to-do":
-            self.statusBar().showMessage(refused(result), 8000)
-
+        self.scene.clearSelection()
+        item.setSelected(True)
+        self._selection_from = "board"
+        self._refresh_properties()
+        self.inspector.focus_field("text")
     def _pin_names_shown(self) -> bool:
         action = getattr(self, "act_pin_names", None)
         return action is None or action.isChecked()
@@ -7787,7 +7719,7 @@ class MainWindow(QMainWindow):
         elif isinstance(refs, list) and not refs:
             self._schematic_ref = None
         self._refresh_schematic_actions()
-        self._selection_from: Literal["board", "sheet", "nets"] = "sheet"
+        self._selection_from = "sheet"
         self._refresh_properties()
 
     def _on_sheet_wire_drawn(
