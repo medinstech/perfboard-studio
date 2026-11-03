@@ -881,6 +881,11 @@ def _archetype_headings() -> dict[BodyArchetype, str]:
     semiconductors, then what plugs in and what is handled. Every archetype has a heading,
     including the ones only a generated part can have, and a test reads them off
     ``BodyArchetype``. A function because the words go through ``t()``.
+
+    NEVER A CATALOG GROUP'S NAME. "LEDs" was two headings side by side -- the catalog's
+    LED 3 mm and RGB LED, and the LED package -- and so was "Relays", with "Modules" beside
+    "Module boards". A family named like a category says it is the package, as "TO-92
+    packages" always did; ``test_no_package_group_is_named_like_a_catalog_group`` holds it.
     """
     return {
         "axial-cylinder": t("Axial resistors and diodes"),
@@ -888,7 +893,7 @@ def _archetype_headings() -> dict[BodyArchetype, str]:
         "disc-ceramic": t("Ceramic disc capacitors"),
         "box-film": t("Film capacitors"),
         "radial-electrolytic": t("Electrolytic capacitors"),
-        "led-round": t("LEDs"),
+        "led-round": t("LED packages"),
         "crystal-hc49": t("Crystals"),
         "to92": t("TO-92 packages"),
         "to220": t("TO-220 packages"),
@@ -900,8 +905,8 @@ def _archetype_headings() -> dict[BodyArchetype, str]:
         "screw-terminal-vertical": t("Screw terminals, wires from above"),
         "potentiometer": t("Potentiometers"),
         "tactile-switch": t("Tactile switches"),
-        "relay-box": t("Relays"),
-        "module-board": t("Module boards"),
+        "relay-box": t("Relay packages"),
+        "module-board": t("Module packages"),
         "generic-box": t("Boxes of any size"),
         "flying-leads": t("Parts off the board"),
     }
@@ -1066,9 +1071,18 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     for archetype, found in by_archetype.items():
         # Open only when the filter has narrowed things down, otherwise the twenty-eight
         # pin headers bury everything else.
+        group = group_item(families[archetype])
+        # What a package IS, which a beginner holding the list cannot know: not a part
+        # with a value and named pins, as a catalog row is, but the shape any part of it
+        # takes -- the value and the pin names are theirs to give.
+        group.setToolTip(
+            0,
+            families[archetype]
+            + "\n"
+            + t("Packages: any part of this shape; you give it its value and pin names."),
+        )
         groups.append((
-            after + order.index(archetype), group_item(families[archetype]), found,
-            bool(needle) or len(found) <= 4,
+            after + order.index(archetype), group, found, bool(needle) or len(found) <= 4,
         ))
 
     for _place, group, found, opened in sorted(

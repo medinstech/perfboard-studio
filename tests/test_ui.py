@@ -12847,6 +12847,26 @@ def test_every_package_family_has_a_heading_in_the_parts_panel() -> None:
     assert set(_archetype_headings()) == set(get_args(BodyArchetype))
 
 
+def test_no_package_group_is_named_like_a_catalog_group() -> None:
+    """"LEDs" was two headings side by side in the Library, the catalog's and the package
+    family's, and so was "Relays" -- in both languages. A family named like a category
+    says it is the package ("LED packages", "LED kılıfları")."""
+    from perfboard_studio.ui.i18n import language, set_language
+    from perfboard_studio.ui.main import _archetype_headings, _catalog_headings
+
+    before = language()
+    try:
+        for code in ("en", "tr"):
+            set_language(code)
+            catalog = {name.casefold() for name in _catalog_headings().values()}
+            clashes = sorted(
+                name for name in _archetype_headings().values() if name.casefold() in catalog
+            )
+            assert clashes == [], f"{code}: {clashes}"
+    finally:
+        set_language(before)
+
+
 def test_the_parts_panel_names_its_packages_in_turkish() -> None:
     from perfboard_studio.ui.i18n import language, set_language
 
@@ -14337,7 +14357,9 @@ def test_a_library_group_cut_short_says_its_name_in_full() -> None:
         groups = [tree.topLevelItem(i) for i in range(tree.topLevelItemCount())]
         assert groups
         for group in groups:
-            assert group.toolTip(0) == group.text(0), group.text(0)
+            # The name in full on its first line; a package family says what a package
+            # is on the next.
+            assert group.toolTip(0).splitlines()[0] == group.text(0), group.text(0)
     finally:
         _close(window)
 
