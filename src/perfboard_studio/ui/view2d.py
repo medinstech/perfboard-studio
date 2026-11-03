@@ -217,7 +217,13 @@ from .scenetext import (
 # it that belong to the application rather than to the object -- see theme.py's note on
 # why the two are apart.
 from .theme import ACTIVE as THEME_TOKENS
-from .theme import CANVAS_ERROR, CANVAS_SELECTED, NET_COLOURS
+from .theme import (
+    CANVAS_ERROR,
+    CANVAS_HOVER,
+    CANVAS_HOVER_WIDTH_PX,
+    CANVAS_SELECTED,
+    NET_COLOURS,
+)
 from .topview import TopView, top_view
 
 # --------------------------------------------------------------------------- theme
@@ -1825,6 +1831,42 @@ class PickedPinsItem(QGraphicsItem):
             painter.drawEllipse(hole_to_screen(hole, self.board, self.side), r, r)
 
 
+class PinHoverItem(QGraphicsItem):
+    """The ring on the pin under the pointer while the connect or the draw tool is armed.
+
+    The sheet's wire tool has always ringed the pin it would take; the board's tools did
+    not, so a click was a guess at whether the hole under the pointer was the pin or the
+    pad beside it. Thinner than a picked pin's ring and unfilled: it says "this one, if you
+    click", where the picked ring says "this one, already". In the canvas hover colour
+    (``theme.CANVAS_HOVER``), cosmetic, so it is the same hairline at every zoom.
+    """
+
+    def __init__(self, board: Board, side: BoardSide) -> None:
+        super().__init__()
+        self.board = board
+        self.side = side
+        self.hole: HoleCoord | None = None
+        self.setZValue(62)  # Over a picked pin's ring, which it never sits on.
+
+    def set_hole(self, hole: HoleCoord | None) -> None:
+        if hole != self.hole:
+            self.hole = hole
+            self.update()
+
+    def boundingRect(self) -> QRectF:
+        return _outline_rect(self.board).adjusted(-1, -1, 1, 1)
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        if self.hole is None:
+            return
+        pen = QPen(QColor(CANVAS_HOVER), CANVAS_HOVER_WIDTH_PX * 1.5)
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        r = self.board.pad_diameter / 2 + 0.3
+        painter.drawEllipse(hole_to_screen(self.hole, self.board, self.side), r, r)
+
+
 # ------------------------------------------------------------------ conductor item
 
 
@@ -3272,6 +3314,11 @@ class ComponentItem(QGraphicsItem):
         )
         self.setFlags(flags)
         self.setZValue(10)
+        #: Under the pointer, with no tool armed: outlined, and the move cursor if it can
+        #: move (``_follow_the_pointer``). Nothing said a part could be picked up until it
+        #: was, which is how the board read as a picture rather than a thing to arrange.
+        self.hovered = False
+        self.setAcceptHoverEvents(True)
         lock_note = f"  [{t('locked')}]" if comp.locked else ""
         where = format_hole(comp.anchor, board)
         if comp.rotation:
@@ -3617,6 +3664,38 @@ class ComponentItem(QGraphicsItem):
         if self.comp.mirrored:
             painter.scale(-1.0, 1.0)
 
+    def _in_a_mode(self) -> bool:
+        scene = self.scene()
+        return bool(getattr(scene, "in_a_mode", False))
+
+    def _follow_the_pointer(self) -> None:
+        """The move cursor over a part that can move and while no tool is armed; none
+        otherwise, so a mode's cross shows through. A locked part gets no promise it cannot
+        keep: the bus refuses its move with a message, which is the answer to the drag."""
+        if self.comp.locked or self._in_a_mode():
+            if self.hasCursor():
+                self.unsetCursor()
+        elif not self.hasCursor():
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
+
+    def hoverEnterEvent(self, event: Any) -> None:
+        self.hovered = True
+        self._follow_the_pointer()
+        self.update()
+        super().hoverEnterEvent(event)
+
+    def hoverMoveEvent(self, event: Any) -> None:
+        # A tool armed or put down with the pointer still on the part.
+        self._follow_the_pointer()
+        super().hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event: Any) -> None:
+        self.hovered = False
+        if self.hasCursor():
+            self.unsetCursor()
+        self.update()
+        super().hoverLeaveEvent(event)
+
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         placement = placement_for(self.fp, self.board.pitch)
         style = style_for(self.fp)
@@ -3634,6 +3713,14 @@ class ComponentItem(QGraphicsItem):
             outline_pen = QPen(SELECTED if ok else ERROR_OUTLINE, 0.22)
             outline_pen.setDashPattern([2.0, 2.0])
             painter.setPen(outline_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPolygon(self._local_outline())
+        elif self.hovered and not self._in_a_mode() and not _on_paper(painter):
+            # A hairline in the hover colour, solid where the selection is dashed: "this
+            # one, if you press", not "this one".
+            hover_pen = QPen(QColor(CANVAS_HOVER), CANVAS_HOVER_WIDTH_PX)
+            hover_pen.setCosmetic(True)
+            painter.setPen(hover_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPolygon(self._local_outline())
 
@@ -3966,6 +4053,9 @@ class BoardScene(QGraphicsScene):
         self._connect_first: tuple[str, str] | None = None
         self._connect_hole: HoleCoord | None = None
         self._connect_item: PickedPinsItem | None = None
+        #: The ring on the pin under the pointer in the connect and draw tools, made on
+        #: the first hover and destroyed with the rest by a rebuild (``_build``).
+        self._pin_hover: PinHoverItem | None = None
         self._measure_armed = False
         self._measure_from: HoleCoord | None = None
         self._measure_item: PickedPinsItem | None = None
@@ -4197,6 +4287,8 @@ class BoardScene(QGraphicsScene):
         # picks vanished off the board reads as the clicks having been lost.
         self._net_pin_item = None
         self._connect_item = None
+        # Destroyed with the rest; the next hover makes it again where the pointer is.
+        self._pin_hover = None
         # The measurement marker is an item like the rest, so clear() has just destroyed
         # it. Forgetting to forget it here left a wrapper whose C++ object was gone, and
         # the next Escape -- or the next arming of ANY tool, all of which disarm
@@ -4584,6 +4676,8 @@ class BoardScene(QGraphicsScene):
         if self._draw_preview is not None:
             self.removeItem(self._draw_preview)
             self._draw_preview = None
+        if self._pin_hover is not None:
+            self._pin_hover.set_hole(None)
         self._draw_path = []
         self._draw_kind = None
         self._draw_column_first = False
@@ -5046,6 +5140,7 @@ class BoardScene(QGraphicsScene):
     def _clear_connect(self) -> None:
         self._connect_first = None
         self._connect_hole = None
+        self._ring_the_pin(None)
         if self._connect_item is not None:
             self.removeItem(self._connect_item)
             self._connect_item = None
@@ -5354,6 +5449,7 @@ class BoardScene(QGraphicsScene):
         """
         at = screen_to_hole(pos, self.document.board, self.side)
         self._last_hole = at
+        self._ring_the_pin(at)
         if self._ghost is not None:
             self._ghost.set_anchor(at, self._placement_blocked(at))
         if self._draw_preview is not None:
@@ -5373,7 +5469,30 @@ class BoardScene(QGraphicsScene):
         pasted at the hole the pointer happened to leave the board over.
         """
         self._last_hole = None
+        self._ring_the_pin(None)
         self.hoveredHole.emit(-1, -1)
+
+    def _ring_the_pin(self, at: HoleCoord | None) -> None:
+        """Ring the pin at ``at`` if the connect or the draw tool is armed and there is one,
+        and take the ring away otherwise."""
+        armed = self._connect_armed or self._draw_kind is not None
+        pin_hole = (
+            at
+            if armed and at is not None and is_inside_board(at, self.document.board)
+            and self._pin_at(at) is not None
+            else None
+        )
+        if pin_hole is None and self._pin_hover is None:
+            return
+        if self._pin_hover is None:
+            self._pin_hover = PinHoverItem(self.document.board, self.side)
+            self.addItem(self._pin_hover)
+        self._pin_hover.set_hole(pin_hole)
+
+    def pin_hover_hole(self) -> HoleCoord | None:
+        """The pin the connect or draw tool would take under the pointer, ringed. For the
+        seam tests."""
+        return self._pin_hover.hole if self._pin_hover is not None else None
 
     def take_consumed_right_click(self) -> bool:
         """Whether the last right press was a MODE's, and clear the record of it.
