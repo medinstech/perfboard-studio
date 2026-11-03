@@ -354,8 +354,12 @@ def test_the_layout_leaves_the_pin_names_clear(
     placed = fit_module_art(footprint, component, PITCH)
     assert placed is not None
     labels = pin_labels(footprint, component, PITCH)
-    assert labels and all(label.on_module for label in labels)
+    # A header of two rows at one end prints its outer row's names on THIS board, outward,
+    # laid out with the rest of the board's; the names on the module are what this holds.
+    assert labels and any(label.on_module for label in labels)
     for label in labels:
+        if not label.on_module:
+            continue
         if label.backed:
             # Printed over the parts on its own tag, by the layout's own say-so: the next
             # test holds that to the layouts that ask for it.
@@ -1123,3 +1127,48 @@ def test_only_a_vertical_terminal_has_a_screw_face() -> None:
     for footprint_id in ("screw-terminal-3", "dip-8", BUCK):
         body = view3d._world_body(lookup, _part(footprint_id, ""), board)
         assert body is not None and body.screws is None
+
+
+def _name_box(label) -> tuple[float, float, float, float]:  # type: ignore[no-untyped-def]
+    """The tag a name is printed on, as ``(x0, x1, y0, y1)`` in the footprint's frame: from
+    its start along its run, as long as its letters or its room, a tag high."""
+    length = min(LETTER_MM * len(label.name), label.room)
+    a, b = label.start - 0.25, label.start + length + 0.25
+    half = 0.9 * 1.7 / 2
+    if label.dx:
+        xs = (label.x + label.dx * a, label.x + label.dx * b)
+        return min(xs), max(xs), label.y - half, label.y + half
+    ys = (label.y + label.dy * a, label.y + label.dy * b)
+    return label.x - half, label.x + half, min(ys), max(ys)
+
+
+def _boxes_meet(a, b) -> bool:  # type: ignore[no-untyped-def]
+    return a[0] < b[1] and b[0] < a[1] and a[2] < b[3] and b[2] < a[3]
+
+
+#: A pin's pad ring, as a square this far either side of its centre.
+PAD_HALF_MM = 0.8
+
+
+@pytest.mark.parametrize(
+    "part",
+    [part for part in CATALOG if len({p.d_row for p in _footprint(part.footprint_id).pins}) > 1
+     and len({p.d_col for p in _footprint(part.footprint_id).pins}) > 1],
+    ids=lambda part: part.id,
+)
+def test_no_pin_name_runs_over_another_name_or_another_pins_pad(part) -> None:
+    """A header of two rows at one end of a module printed the outer row's names across the
+    inner row's pads and over its names -- "TXD" on "GND" on the ESP-01. Each row's names
+    keep to their own side of the header now, on every catalog part with two rows or more."""
+    footprint = _footprint(part.footprint_id)
+    labels = pin_labels(footprint, _part(part.footprint_id, part.placed_value, part.pin_names), PITCH)
+    boxes = [(label, _name_box(label)) for label in labels]
+    for i, (label, box) in enumerate(boxes):
+        for other, other_box in boxes[i + 1 :]:
+            assert not _boxes_meet(box, other_box), (part.id, label.name, other.name)
+        for pin in footprint.pins:
+            if pin.number == label.number:
+                continue
+            x, y = pin.d_col * PITCH, pin.d_row * PITCH
+            pad = (x - PAD_HALF_MM, x + PAD_HALF_MM, y - PAD_HALF_MM, y + PAD_HALF_MM)
+            assert not _boxes_meet(box, pad), (part.id, label.name, pin.number)

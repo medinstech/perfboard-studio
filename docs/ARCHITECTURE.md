@@ -1129,6 +1129,13 @@ ids. Five rules hold it, each pinned in
   `NAME_ROOM_ENOUGH_MM`; where the real board crowds its pins closer, the part is drawn moved
   in and the layout's comment says by how much. The LM2596 and SN65HVD230 layouts were drawn
   round the old strip and print every name exactly as the block does, which is pinned.
+  A HEADER OF TWO ROWS AT ONE END -- an ESP-01's, an nRF24's -- had both rows' names running
+  the same way, so the outer row's ran across the inner row's pads and over its names: "TXD"
+  printed on "GND". The row nearest the middle keeps its names on the module; every other row
+  prints outward, on this board past the module's edge, laid out by `lay_out_pin_names` with
+  the rest of the board's names and left on this board when 3D explodes the module up.
+  `test_no_pin_name_runs_over_another_name_or_another_pins_pad` holds every catalog part
+  with two rows or more to it; on the code before it, it fails on exactly those two.
 - **Unless the real board's parts ARE where the names go.** A shield can over most of a
   XIAO, a DRV8825 across both rows of a Pololu carrier: moving those in would draw a board
   nobody makes, and their makers print the names on the back. Such a layout says

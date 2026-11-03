@@ -390,6 +390,11 @@ closed without a bump.
   and the light sensor, "power" the power inputs first, and Turkish "LED" the LEDs -- in the
   Library and in the package picker alike. The board's own parts are "This board".
 
+- **A module with a header of two rows prints each row's names on its own side.** On the
+  ESP-01 and the nRF24L01+ the outer row's names ran across the inner row's pins and over
+  their names ("TXD" on "GND"). The inner row's names stay on the module; the outer row's
+  are printed on the board just past the module's edge, in 2D and in 3D.
+
 - **The GY-521 was drawn as its own mirror image, and is now drawn as itself.** Its board
   stood below the header with VCC on the left, which no GY-521 does: a module laid over the
   outline put each pin in its mirror's hole, VCC in INT's. The board now stands above the

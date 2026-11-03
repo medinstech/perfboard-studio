@@ -706,6 +706,25 @@ def pin_labels(
 
         art = fit_module_art(footprint, component, pitch)
         over_parts = art is not None and prints_names_over_parts(component)
+    # A HEADER OF SEVERAL ROWS AT ONE END of a module -- an ESP-01's two rows of four, an
+    # nRF24's -- has every name running the same way, so the outer row's ran across the inner
+    # row's pads and over its names: "TXD" printed on "GND". The row nearest the middle keeps
+    # its names on the module, running in; every other row prints its names OUTWARD, on
+    # this board past the module's edge, as a part that is not a module does.
+    outer_rows: set[float] = set()
+    if module:
+        towards = {
+            round((pin.d_row if across_y else pin.d_col) * pitch, 6): (
+                (placement.centre_y - pin.d_row * pitch)
+                if across_y
+                else (placement.centre_x - pin.d_col * pitch)
+            )
+            for pin in footprint.pins
+        }
+        one_side = all(t > 0 for t in towards.values()) or all(t < 0 for t in towards.values())
+        if one_side and len(towards) > 1:
+            inner = min(towards, key=lambda row: abs(towards[row]))
+            outer_rows = set(towards) - {inner}
     labels: list[PinLabel] = []
     for pin in footprint.pins:
         name = (
@@ -716,6 +735,15 @@ def pin_labels(
         x, y = pin.d_col * pitch, pin.d_row * pitch
         toward = (placement.centre_y - y) if across_y else (placement.centre_x - x)
         either_side = False
+        if round(y if across_y else x, 6) in outer_rows:
+            # Outward, on this board, from just past the module's edge on that side.
+            sign = -1.0 if toward > 0 else 1.0
+            start = max(max(half + sign * toward, 0.0) + PIN_NAME_CLEAR_MM, PIN_NAME_NEAREST_MM)
+            dx, dy = (0.0, sign) if across_y else (sign, 0.0)
+            labels.append(
+                PinLabel(pin.number, name, x, y, dx, dy, start, PIN_NAME_MAX_MM, False, False, False)
+            )
+            continue
         if module:
             sign = 1.0 if toward >= 0 else -1.0
             start = PIN_NAME_GAP_MM
@@ -841,9 +869,12 @@ def lay_out_pin_names(
         wanted = pin_labels(footprint, comp, board.pitch)
         if not wanted:
             continue
-        if wanted[0].on_module:
-            # On the module's own board, which nothing else stands on.
-            labels[comp.id] = wanted
+        # On the module's own board, which nothing else stands on, a name is printed as it
+        # is; one on THIS board -- a module's outer header row's -- is laid out as any other.
+        on_module = tuple(label for label in wanted if label.on_module)
+        wanted = tuple(label for label in wanted if not label.on_module)
+        if not wanted:
+            labels[comp.id] = on_module
             continue
         others = [box for owner, box in standing if owner != comp.id]
         needs = [min(measure(label.name), label.room) for label in wanted]
@@ -884,8 +915,8 @@ def lay_out_pin_names(
                 else replace(label, dx=label.dx * turn, dy=label.dy * turn, room=room)
             )
             printed.append(_tag_box(run, label.start, min(need, room)))
-        if kept:
-            labels[comp.id] = tuple(kept)
+        if on_module or kept:
+            labels[comp.id] = on_module + tuple(kept)
         if dropped:
             left_off[comp.id] = tuple(dropped)
     return PrintedPinNames(labels, left_off)

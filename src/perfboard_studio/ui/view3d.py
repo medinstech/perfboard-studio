@@ -6038,6 +6038,16 @@ def build_pin_names(
     body = _world_body(lookup, comp, board)
     if body is None:
         return []
+    if len({label.on_module for label in labels}) > 1:
+        # A module's outer header row prints on this board, the rest on the module: each
+        # group at its own height and in its own ink.
+        return [
+            actor
+            for group in (True, False)
+            for actor in build_pin_names(
+                lookup, comp, board, tuple(label for label in labels if label.on_module is group)
+            )
+        ]
     where = {pin.number: xy for pin, xy in zip(footprint.pins, body.pins, strict=False)}
     on_module = labels[0].on_module
     backed = labels[0].backed
@@ -6937,17 +6947,19 @@ def populate_renderer(
             ren.AddActor(actor)
         if printed is not None:
             # A module's names are on its own board and rise with it; a part's names on
-            # this board stay on this board.
-            footprint = lookup(comp.footprint_id)
-            on_module = footprint is not None and footprint.body.archetype == "module-board"
+            # this board stay on this board -- and so do a module's outer header row's.
             names = printed.labels.get(comp.id, ())
-            for actor in build_pin_names(lookup, comp, board, names):
-                _lift(actor, exploded_mm if on_module else 0.0)
-                if highlight is not None:
-                    (_pick_out if subject else _dim)(actor)
-                if owners is not None:
-                    owners[actor] = ("component", comp.id)
-                ren.AddActor(actor)
+            for on_module in (True, False):
+                group = tuple(label for label in names if label.on_module is on_module)
+                if not group:
+                    continue
+                for actor in build_pin_names(lookup, comp, board, group):
+                    _lift(actor, exploded_mm if on_module else 0.0)
+                    if highlight is not None:
+                        (_pick_out if subject else _dim)(actor)
+                    if owners is not None:
+                        owners[actor] = ("component", comp.id)
+                    ren.AddActor(actor)
     net_class_by_id, signal_index = net_colouring(doc)
     # How high each conductor has to sit to clear what it crosses -- from the engine, so
     # 2D and 3D cannot disagree about which wire passes over which. Not a running index:
