@@ -91,3 +91,7 @@ layout's `source`:
 
 - **GY-521 (MPU-6050)** — photograph by Nevit Dilmen, Wikimedia Commons, CC BY-SA 3.0:
   <https://commons.wikimedia.org/wiki/File:GY-521_MPU-6050_Module_3_Axis_Gyroscope_%2B_Accelerometer_0487.jpg>
+  (106.5 px/mm on its header)
+- **SSD1306 0.96 inch I2C OLED** — photograph by Turbospok, Wikimedia Commons, CC BY-SA 4.0:
+  <https://commons.wikimedia.org/wiki/File:MicroSD_card_connected_to_Arduino_nano_with_OLED_display.jpg>
+  (22.95 px/mm on its header)

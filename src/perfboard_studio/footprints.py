@@ -2360,6 +2360,12 @@ SUPERSEDED_FOOTPRINTS: dict[str, tuple[str, str]] = {
         "draws a GY-521's board on the wrong side of its header, the mirror image of the "
         "real one: a module laid over it puts each pin in its mirror's hole, VCC in INT's",
     ),
+    "box-4x1-p1-r1-27.3x27.8x12.2-o0x11.9": (
+        "mod-4x1-p1-r1-27.3x27.8x2.1-s8.5-o0x12.45",
+        "is a solid block where the SSD1306 module is a board standing 8.5 mm up on its "
+        "header: it is drawn as a grey slab, and a short part beside the header cannot go "
+        "under it",
+    ),
 }
 
 

@@ -2292,11 +2292,13 @@ TURKISH: Mapping[str, str] = {
         "I2C ile bağlanan 128 × 64 OLED, pinlerinde VCC, GND, SCL, SDA yazar"
     ),
     "Read the four names printed on yours: this board is sold with VCC and GND either way "
-    "round, and the wrong way round kills it. Choose the entry with your order. Where the "
-    "pins sit on the board and how tall it stands in its header are estimates.": (
+    "round, and the wrong way round kills it. Choose the entry with your order. The header "
+    "is 1.45 mm in from the board's edge, measured on a photograph of one; how tall it "
+    "stands in its socket is an estimate.": (
         "Sizinkinin üzerinde yazan dört adı okuyun: bu kart VCC ve GND iki sırayla da "
-        "satılır ve ters bağlanırsa yanar. Sizinkiyle aynı sıradaki girişi seçin. Pinlerin "
-        "kartın neresinde durduğu ve header'ında ne kadar yükseldiği tahmindir."
+        "satılır ve ters bağlanırsa yanar. Sizinkiyle aynı sıradaki girişi seçin. Header "
+        "kartın kenarından 1,45 mm içeridedir, bir kartın fotoğrafından ölçüldü; soketinde ne "
+        "kadar yükseldiği tahmindir."
     ),
     "Pololu DRV8833 carrier": "Pololu DRV8833 taşıyıcı kartı",
     "Two DC motors or one stepper, 2.7 to 10.8 V, 1.2 A per channel (2 A peak), rows "

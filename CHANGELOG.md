@@ -115,6 +115,14 @@ closed without a bump.
 
 ### Changed
 
+- **The 0.96 inch SSD1306 OLED is a module on its header, drawn as itself.** It was a grey
+  block from the board up. It is now a board standing in its header with the glass, its
+  black viewing area, the flex folded round the bottom edge and a plated hole in each
+  corner, measured on a photograph -- in either order of names -- and a short part can go
+  under it. Its header is 1.45 mm in from the board's edge, as measured, where 2 mm was
+  guessed. A board saved with the old block opens as it was, and the Problems drawer says so
+  ("Older package") until it is chosen again.
+
 - **The 16 x 2 LCD and the 7-segment displays look like themselves.** They were a grey slab
   in 2D and 3D. They are now drawn from KiCad's models of the parts: the LCD's green board,
   black bezel and yellow-green glass, standing on the 16-pin header it is soldered in by; the

@@ -287,18 +287,21 @@ _MODULE_TOP = (
 
 #: The 0.96 inch 128 x 64 OLED on its four-pin I2C board, which is sold with its supply pins
 #: in either order -- and swapped supply pins kill it. Two entries named by the order printed
-#: on the board, so the one chosen is the one in hand. A box, not a module: nobody publishes
-#: a drawing of the board, so nothing is drawn on it but the room it takes, seated in a
-#: female header: the four pins along one edge, 2 mm in from it.
-_OLED_FOOTPRINT = "box-4x1-p1-r1-27.3x27.8x12.2-o0x11.9"
+#: on the board, so the one chosen is the one in hand. A module on its header, seated in a
+#: female one 8.5 mm up, the four pins along one edge 2 mm in from it, as tall in all as the
+#: box it replaced (``footprints.SUPERSEDED_FOOTPRINTS``); what is on it is measured on a
+#: photograph of one (``ui/moduleart.py``).
+_OLED_FOOTPRINT = "mod-4x1-p1-r1-27.3x27.8x2.1-s8.5-o0x12.45"
 _OLED_SOURCE = (
     "The four names as the board prints them; the 27.3 x 27.8 mm board as sellers list it; "
-    "the controller, Solomon Systech's SSD1306"
+    "the controller, Solomon Systech's SSD1306; on its header as a module, the 12.2 mm it "
+    "stands an estimate"
 )
 _OLED_CHECK = (
     "Read the four names printed on yours: this board is sold with VCC and GND either way "
-    "round, and the wrong way round kills it. Choose the entry with your order. Where the "
-    "pins sit on the board and how tall it stands in its header are estimates."
+    "round, and the wrong way round kills it. Choose the entry with your order. The header "
+    "is 1.45 mm in from the board's edge, measured on a photograph of one; how tall it "
+    "stands in its socket is an estimate."
 )
 
 #: Kingbright's 0.56 inch 7-segment displays: a block over two rows of pins 0.6 inch apart,

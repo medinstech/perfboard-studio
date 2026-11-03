@@ -130,6 +130,7 @@ def _footprint(footprint_id: str):
         ("XIAO-ESP32C3", "seeed-xiao-esp32c3"),
         ("GY-521 MPU-6050", "gy-521"),
         ("GY521", "gy-521"),
+        ("SSD1306 OLED", "ssd1306-oled"),
     ],
 )
 def test_a_module_is_recognised_by_its_value(value: str, key: str) -> None:
@@ -168,12 +169,17 @@ def test_a_value_nobody_wrote_a_layout_for_is_not_guessed(value: str) -> None:
     assert recognise_module(value) is None
 
 
+#: Catalog entries that are one board under two names, and the layout they share: the
+#: SSD1306 module is sold with its supply pins printed in either order.
+SHARED_LAYOUTS = {"ssd1306-i2c-gnd-vcc": "ssd1306-oled", "ssd1306-i2c-vcc-gnd": "ssd1306-oled"}
+
+
 @pytest.mark.parametrize("part", CATALOG_MODULES, ids=lambda part: part.id)
 def test_every_catalog_module_is_drawn_as_what_is_on_it(part) -> None:
     """Chosen from the catalog, a module is drawn as itself and not as the block: the one
     place a person picks a module by name is the one place it must be recognised."""
     art = recognise_module(part.placed_value)
-    assert art is not None and art.key == part.id
+    assert art is not None and art.key == SHARED_LAYOUTS.get(part.id, part.id)
     placed = fit_module_art(
         _footprint(part.footprint_id), _part(part.footprint_id, part.placed_value, part.pin_names), PITCH
     )
@@ -526,6 +532,25 @@ def test_a_gy521_is_drawn_as_the_photograph_has_it() -> None:
     assert fit_module_art(_footprint(old), _part(old, gy521.placed_value, gy521.pin_names), PITCH) is None
 
 
+@pytest.mark.parametrize("part_id", ["ssd1306-i2c-gnd-vcc", "ssd1306-i2c-vcc-gnd"])
+def test_an_oled_is_its_glass_between_its_header_and_its_flex(part_id: str) -> None:
+    """Either order of names is the same board: the header along the top, the panel's glass
+    over nearly all of it with its ledge away from the header, the flex folded round the far
+    edge, and a plated hole in each corner."""
+    part = next(part for part in CATALOG_MODULES if part.id == part_id)
+    footprint = _footprint(part.footprint_id)
+    placed = fit_module_art(footprint, _part(part.footprint_id, part.placed_value, part.pin_names), PITCH)
+    assert placed is not None
+    glass = next(p for p in placed if p.kind == "oled")
+    flex = next(p for p in placed if p.kind == "flex")
+    holes = [p for p in placed if p.kind == "hole"]
+    placement = placement_for(footprint, PITCH)
+    assert glass.size_x * glass.size_y > 0.6 * placement.size_x * placement.size_y
+    assert 0.0 < glass.y < flex.y  # the header is row 0, the board below it
+    assert glass.axis == "y" and glass.facing == 1  # the ledge towards the flex
+    assert len(holes) == 4 and all(hole.colour for hole in holes)
+
+
 NANO = next(part for part in CATALOG_MODULES if part.id == "arduino-nano")
 
 
@@ -687,6 +712,8 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "sparkfun-tb6612fng": SPARKFUN_RED,
         "pololu-drv8833": PICO_MODULE.board_colour,
         "gy-521": None,  # the photograph's blue is the module style's, within the lighting
+        "ssd1306-i2c-gnd-vcc": None,
+        "ssd1306-i2c-vcc-gnd": None,
     }
     # A Pico named on a board the layout was not drawn for is not coloured as one.
     square = "mod-2x20-p7-r1-30x30x3.5-s8.5"

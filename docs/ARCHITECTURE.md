@@ -1157,9 +1157,12 @@ ids. Five rules hold it, each pinned in
 - **Measured, not eyeballed.** Every layout's `source` names the drawing or model its
   positions come from — Espressif's and Arduino's dimension drawings, KiCad's models of the
   Pico, the D1 mini and the radio modules, Pololu's own top-view photographs of its two
-  carriers, Seeed's own KiCad board for the XIAO ESP32C3, and for the GY-521, which no maker
-  draws, a straight-down photograph of one (Wikimedia Commons, CC BY-SA 3.0) calibrated on its
-  header at 106.5 px/mm, its scale and its error written in the layout.
+  carriers, Seeed's own KiCad board for the XIAO ESP32C3, and for the GY-521 and the SSD1306
+  OLED, which no maker draws, a straight-down photograph of one (Wikimedia Commons) calibrated
+  on its header, its scale and its error written in the layout. The OLED's photograph also
+  put its header 1.45 mm in from the board's edge, where the footprint had guessed 2 mm, and
+  the measurement won: the module footprint that replaced its box (`superseded-footprint`)
+  stands where the photograph has it.
 - **A layout is one maker's board, and named so.** The A4988 and DRV8825 layouts answer only
   to "Pololu A4988" and "Pololu DRV8825": the StepStick clones sold under the chip's name
   have the pins and not the parts, and stay the block. The XIAO ESP32C3's answers only to its

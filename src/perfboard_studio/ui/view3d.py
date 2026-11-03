@@ -136,6 +136,8 @@ from .moduleart import (
     ART_COLOURS,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
+    OLED_LEDGE_MM,
+    OLED_VIEW_MM,
     SOT23_LEGS,
     TANTALUM_BAND_SHADE,
     TQFP32_BODY_MM,
@@ -5681,18 +5683,57 @@ def _art_hole(s: _ArtSolid) -> list[_Piece]:
     """A mounting hole through the module's board: its bare cut edge, and the dark of the
     hole, a hair proud of the board so it is not lost in it."""
     radius = min(s.length, s.width) / 2
+    ring = s.inset or HOLE_EDGE_MM
     return [
         _Piece(
             source=_upright_cylinder(radius, 0.03, resolution=32),
-            rgb=_hex_rgb(ART_COLOURS["hole-edge"], BODY_RGB),
+            rgb=_hex_rgb(s.colour or ART_COLOURS["hole-edge"], BODY_RGB),
             position=s.at(0.0, 0.0, 0.015),
-            material=LAMINATE,
+            material=TINNED if s.colour else LAMINATE,
         ),
         _Piece(
-            source=_upright_cylinder(radius - HOLE_EDGE_MM, 0.04, resolution=32),
+            source=_upright_cylinder(radius - ring, 0.04, resolution=32),
             rgb=_hex_rgb(ART_COLOURS["hole"], DRILL_RGB),
             position=s.at(0.0, 0.0, 0.02),
             material=LAMINATE,
+        ),
+    ]
+
+
+def _art_oled(s: _ArtSolid) -> list[_Piece]:
+    """An OLED panel: its glass, and the viewing area black on it short of the ledge at the
+    ``facing`` end (``moduleart.OLED_VIEW_MM``)."""
+    view_across, view_along = OLED_VIEW_MM
+    return [
+        _Piece(
+            source=s.box(s.length, s.width, s.height),
+            rgb=_hex_rgb(ART_COLOURS["glass"], BODY_RGB),
+            position=s.at(0.0, 0.0, s.height / 2),
+            material=LENS,
+        ),
+        _Piece(
+            source=s.box(view_along, view_across, 0.02),
+            rgb=_hex_rgb(ART_COLOURS["oled-view"], BODY_RGB),
+            position=s.at(-s.facing * OLED_LEDGE_MM / 2, 0.0, s.height + 0.01),
+            material=LENS,
+        ),
+    ]
+
+
+def _art_flex(s: _ArtSolid) -> list[_Piece]:
+    """A panel's flex circuit lying on the module: the polyimide, its stiffener on it."""
+    return [
+        _Piece(
+            source=s.box(s.length, s.width, s.height * 0.5),
+            rgb=_hex_rgb(ART_COLOURS["flex"], BODY_RGB),
+            position=s.at(0.0, 0.0, s.height * 0.25),
+            material=GLOSS,
+        ),
+        _Piece(
+            source=s.box(s.length, s.width * 0.8, s.height * 0.5),
+            rgb=_hex_rgb(ART_COLOURS["flex-stiffener"], BODY_RGB),
+            position=s.at(0.0, 0.0, s.height * 0.75),
+            material=MOULDED,
         ),
     ]
 
@@ -5725,6 +5766,8 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "pads": _art_pads,
     "silk": _art_silk,
     "hole": _art_hole,
+    "oled": _art_oled,
+    "flex": _art_flex,
 }
 
 

@@ -80,6 +80,11 @@ def test_every_superseded_id_has_a_footprint_that_replaces_it(old_id: str) -> No
     assert get_footprint(new_id) is not None and new_id != old_id
     assert new_id not in SUPERSEDED_FOOTPRINTS, "a replacement that is replaced itself"
     assert why and not why.endswith(".")  # the end of a sentence the rule finishes
+    # The swap is the footprint id and nothing else: the same pins, numbered the same, in
+    # the same holes, so the anchor and the pin names stay as the builder left them.
+    old, new = get_footprint(old_id), get_footprint(new_id)
+    assert old is not None and new is not None
+    assert [(p.number, p.d_col, p.d_row) for p in old.pins] == [(p.number, p.d_col, p.d_row) for p in new.pins]
 
 
 def test_nothing_the_catalog_places_is_superseded() -> None:

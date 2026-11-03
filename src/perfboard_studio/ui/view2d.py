@@ -194,6 +194,8 @@ from .moduleart import (
     ART_COLOURS,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
+    OLED_LEDGE_MM,
+    OLED_VIEW_MM,
     SOT23_LEGS,
     TANTALUM_BAND_SHADE,
     TQFP32_BODY_MM,
@@ -3196,10 +3198,23 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         _art_box(painter, half_l - 1.1, half_l - 0.4, half_w, band)
     elif kind == "hole":
         radius = min(length, width) / 2
-        painter.setBrush(QBrush(_art_colour("hole-edge")))
+        ring = part.inset or HOLE_EDGE_MM
+        painter.setBrush(QBrush(QColor(part.colour) if part.colour else _art_colour("hole-edge")))
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
         painter.setBrush(QBrush(_art_colour("hole")))
-        painter.drawEllipse(QPointF(0.0, 0.0), radius - HOLE_EDGE_MM, radius - HOLE_EDGE_MM)
+        painter.drawEllipse(QPointF(0.0, 0.0), radius - ring, radius - ring)
+    elif kind == "oled":
+        _art_box(painter, -half_l, half_l, half_w, _art_colour("glass"))
+        view_across, view_along = OLED_VIEW_MM
+        # The viewing area sits in the glass short of its ledge, at +x.
+        middle = -OLED_LEDGE_MM / 2
+        _art_box(
+            painter, middle - view_along / 2, middle + view_along / 2, view_across / 2,
+            _art_colour("oled-view"),
+        )
+    elif kind == "flex":
+        _art_box(painter, -half_l, half_l, half_w, _art_colour("flex"))
+        _art_box(painter, -half_l, half_l, half_w * 0.8, _art_colour("flex-stiffener"))
     elif kind == "trimmer":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("trimmer-base"))
         radius = min(length, width) * 0.4

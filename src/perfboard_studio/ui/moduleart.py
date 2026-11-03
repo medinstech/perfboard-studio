@@ -84,8 +84,13 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:  * ``pads``        -- an unfitted header: tinned rings round empty holes, 2.54 mm apart,
 #:                       as many as fit the part's length and width.
 #:  * ``silk``        -- printing on the module's own board, ``text`` and nothing else.
-#:  * ``hole``        -- a mounting hole through the module's board, ``length`` across, no
-#:                       copper round it: what a GY-521 is screwed down by.
+#:  * ``hole``        -- a mounting hole through the module's board, ``length`` across its
+#:                       ring: bare board ``HOLE_EDGE_MM`` wide round it (a GY-521's), or a
+#:                       plated ring ``inset`` wide in ``colour`` (an OLED module's).
+#:  * ``oled``        -- an OLED panel's glass, its viewing area (``OLED_VIEW_MM``) black on
+#:                       it and the ledge its driver is bonded to at the ``facing`` end.
+#:  * ``flex``        -- the flexible printed circuit a panel's glass is wired out by, folded
+#:                       round the module's edge: copper-coloured, its stiffener dark.
 ArtKind = Literal[
     "can",
     "inductor",
@@ -122,6 +127,8 @@ ArtKind = Literal[
     "pads",
     "silk",
     "hole",
+    "oled",
+    "flex",
 ]
 
 #: What the parts on a module are made of, as the colours both views paint them in -- one
@@ -158,6 +165,13 @@ TANTALUM_BAND_SHADE = 190
 #: The bare cut edge round a mounting hole, in millimetres.
 HOLE_EDGE_MM = 0.12
 
+#: A 0.96 inch 128 x 64 OLED panel's viewing area, across x along its own axis, and the
+#: ledge at its ``facing`` end its driver chip is bonded to: Univision's UG-2864HSWEG01
+#: drawing (a 26.70 x 19.26 x 1.45 mm panel, the area 23.74 x 12.86 mm). The ledge is the
+#: 4.4 mm the calibrated photograph has between the area's border and the glass's edge.
+OLED_VIEW_MM = (23.74, 12.86)
+OLED_LEDGE_MM = 4.4
+
 ART_COLOURS: dict[str, str] = {
     "ferrite": "#2a2b2f",
     "ferrite-top": "#3a3b40",
@@ -188,6 +202,13 @@ ART_COLOURS: dict[str, str] = {
     "tantalum": "#d8b45c",
     "hole-edge": "#d6d2c2",
     "hole": "#101114",
+    # An OLED panel's glass and the black of its viewing area, the tinned ring round a
+    # plated hole, and the flex circuit's polyimide and its stiffener.
+    "glass": "#23262c",
+    "oled-view": "#060709",
+    "tin": "#c3c6ca",
+    "flex": "#c98b2e",
+    "flex-stiffener": "#17181b",
 }
 
 #: How far a module's board may be from the reference a layout was drawn on, either way, as a
@@ -751,6 +772,36 @@ GY521_MODULE = ModuleArt(
     ),
 )
 
+#: The 0.96 inch 128 x 64 SSD1306 OLED on its four-pin I2C header, sold everywhere and the
+#: same board under either order of names: the header centred along the top edge, the panel's
+#: glass over nearly the whole of the board with its ledge towards the bottom, the flex circuit
+#: folded round the bottom edge in the middle and a plated 2 mm hole in each corner. Measured
+#: on Turbospok's photograph of one (Wikimedia Commons, CC BY-SA 4.0), all but straight down
+#: and scaled by its header -- three pitches between its first and last pin, 22.95 px/mm --
+#: so a position is good to about 0.2 mm; that board is 27.15 mm square, within the 27.3 x
+#: 27.8 sellers give. The panel is Univision's UG-2864HSWEG01 drawing (``OLED_VIEW_MM``).
+SSD1306_MODULE = ModuleArt(
+    key="ssd1306-oled",
+    names=("ssd1306",),
+    board=(27.15, 27.15),
+    pins=4,
+    frame="header",
+    parts=(
+        ArtPart("hole", -11.6, -11.7, 3.5, 3.5, 0.0, inset=0.75, colour=ART_COLOURS["tin"]),
+        ArtPart("hole", 11.6, -11.7, 3.5, 3.5, 0.0, inset=0.75, colour=ART_COLOURS["tin"]),
+        ArtPart("hole", -11.6, 11.8, 3.5, 3.5, 0.0, inset=0.75, colour=ART_COLOURS["tin"]),
+        ArtPart("hole", 11.6, 11.8, 3.5, 3.5, 0.0, inset=0.75, colour=ART_COLOURS["tin"]),
+        ArtPart("oled", 0.0, 0.1, 19.26, 26.7, 1.45, along_v=True, facing=1),
+        ArtPart("flex", 0.0, 11.6, 3.6, 13.5, 0.2, along_v=True),
+    ),
+    source=(
+        "Turbospok's photograph of an SSD1306 module, Wikimedia Commons, CC BY-SA 4.0 "
+        "(https://commons.wikimedia.org/wiki/File:MicroSD_card_connected_to_Arduino_nano_with_"
+        "OLED_display.jpg), calibrated on its header at 22.95 px/mm, positions to about 0.2 mm; "
+        "Univision UG-2864HSWEG01 (the panel)"
+    ),
+)
+
 MODULE_ARTS: tuple[ModuleArt, ...] = (
     LM2596_MODULE,
     SN65HVD230_MODULE,
@@ -765,6 +816,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SPARKFUN_TB6612_MODULE,
     POLOLU_DRV8833_MODULE,
     GY521_MODULE,
+    SSD1306_MODULE,
 )
 
 
