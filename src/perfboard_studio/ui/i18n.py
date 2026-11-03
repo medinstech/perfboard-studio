@@ -1191,7 +1191,7 @@ TURKISH: Mapping[str, str] = {
         "küçük kartların kıyaslandığı geniş kart"
     ),
     "builds as well, wiring at {percent}% of the roomy board's cost": (
-        "aynı iyilikte kuruluyor, kablolama maliyeti geniş karta göre %{percent}"
+        "aynı iyilikte kuruluyor, kablolaması geniş karta göre %{percent}"
     ),
     "wires dearer: {percent}% of the roomy board's cost": (
         "kablolaması pahalı: geniş karta göre %{percent}"
