@@ -1,0 +1,463 @@
+"""The build guide at the bench: one step at a time, large enough to read from across it.
+
+ONE STEP FILLS THE PANEL. The guide was a dense tree -- every phase, step and check of the
+build in one list a few hundred pixels wide -- which is the right shape for seeing the whole
+build and the wrong one for doing it: at the bench, with an iron in one hand, what is wanted
+is the step in front of you, where it goes, which way round, what to measure, and a button
+big enough to hit that says "done". The tree is still there, one click away (Overview).
+
+The card is the board as it stands at that step (``guide.document_at_step``), zoomed onto
+the step's holes with the part selected -- seen from the solder side for a step done on the
+solder side -- then the step in the guide's own words, its polarity, its holes, and the
+phase's checks as Ω items to tick. Back and "Done, next" walk the build. A stripboard's
+track cuts are steps here too, first, each with its own picture: they are the first thing
+done and the one most often forgotten.
+
+PRESENTATION ONLY. Every word of a step, its order and its checks are the guide's (the
+engine's, in the guide's language); the window adds the frame. The ticks are the window's
+one store of them (``MainWindow._done_steps``), so ticking here and in the overview cannot
+disagree.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPixmap, QResizeEvent
+from PySide6.QtWidgets import (
+    QBoxLayout,
+    QCheckBox,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from perfboard_studio.geometry import format_hole
+from perfboard_studio.guide import (
+    Checkpoint,
+    ConductorStep,
+    Guide,
+    GuidePhase,
+    GuideStep,
+    PartStep,
+    step_focus,
+)
+from perfboard_studio.model import Board, HoleCoord
+from perfboard_studio.phrasebook import phrasebook
+
+from . import theme
+from .i18n import t
+
+#: Read from across a bench: the step's title and its polarity. The two buttons' size
+#: is the theme's (``theme.BENCH_PX``), because a size set on a button is lost to its rule.
+TITLE_PX = 26
+POLARITY_PX = 17
+
+
+@dataclass(frozen=True, slots=True)
+class BenchItem:
+    """One thing done at the bench: a step of the guide, or a stripboard's track cut."""
+
+    #: What the tick is kept under: the step's ``step_focus``, or ``cut:col,row``.
+    key: str
+    phase: GuidePhase
+    title: str
+    #: The step's index in the guide's flat list -- what the 3D slider and
+    #: ``document_at_step`` count in -- or None for a cut, which comes before any part.
+    step_index: int | None
+    holes: tuple[HoleCoord, ...]
+    #: Done from the solder side: a trace, a wire below, a cut. The picture is from there.
+    solder_side: bool
+    polarity: str | None
+    #: What to read off the card besides the title: (what, value).
+    facts: tuple[tuple[str, str], ...]
+    notes: tuple[str, ...]
+    #: The component to select in the picture, if the step is a part.
+    component_id: str | None = None
+
+
+def check_key(phase: GuidePhase, check: Checkpoint) -> str:
+    """What a check's tick is kept under, beside the steps' in the same store."""
+    return f"check:{phase.number}:{check.title}"
+
+
+def bench_items(guide: Guide, steps: list[GuideStep]) -> list[BenchItem]:
+    """Everything done at the bench, in the guide's order: a stripboard's track cuts first,
+    then every step of every phase."""
+    say = phrasebook(guide.language)
+    board = guide.board
+    items: list[BenchItem] = []
+    index = {id(step): number for number, step in enumerate(steps)}
+    for number, phase in enumerate(guide.phases):
+        if number == 0:
+            for cut in guide.track_cuts:
+                items.append(
+                    BenchItem(
+                        key=f"cut:{cut.at.col},{cut.at.row}",
+                        phase=phase,
+                        title=f"{format_hole(cut.at, board)} · {cut.strip}",
+                        step_index=None,
+                        holes=(cut.at, *(cut.separates or ())),
+                        solder_side=True,
+                        polarity=None,
+                        facts=(),
+                        notes=(say("Cut these tracks first"),),
+                    )
+                )
+        for step in phase.steps:
+            items.append(_step_item(step, phase, index.get(id(step)), board))
+    return items
+
+
+def _step_item(step: GuideStep, phase: GuidePhase, index: int | None, board: Board) -> BenchItem:
+    if isinstance(step, PartStep):
+        holes = tuple(hole for _pin, hole in step.pin_holes)
+        facts: tuple[tuple[str, str], ...] = (
+            (t("Holes"), "  ".join(f"{pin}: {format_hole(hole, board)}" for pin, hole in step.pin_holes)),
+            (t("Height"), f"{step.height_mm:.1f} mm"),
+        )
+        return BenchItem(
+            key=step_focus(step), phase=phase, title=step.title, step_index=index,
+            holes=holes, solder_side=False, polarity=step.polarity, facts=facts,
+            notes=step.notes, component_id=step.component_id,
+        )
+    assert isinstance(step, ConductorStep)
+    facts = ((t("Holes"), step.span),)
+    if step.cut is not None:
+        facts = (*facts, (t("Wire to cut"), f"{step.cut.cut_mm:.0f} mm · AWG {step.cut.awg}"))
+    return BenchItem(
+        key=step_focus(step), phase=phase, title=step.title, step_index=index,
+        holes=step.path, solder_side=step.side == "bottom", polarity=None, facts=facts,
+        notes=step.notes,
+    )
+
+
+# -- the phases, along the top ----------------------------------------------------------------
+
+
+class PhaseBar(QWidget):
+    """The build's phases as segments, as wide as each phase is long: the current one named
+    in full, the others a coloured bar with their name on hover. Names in every segment
+    wrapped to three lines in a narrow panel ("Uzun ve mekanik parçalar")."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setMinimumHeight(30)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMouseTracking(True)
+        self._phases: list[tuple[str, int]] = []
+        self._current = -1
+
+    def set_phases(self, phases: list[tuple[str, int]], current: int) -> None:
+        self._phases, self._current = phases, current
+        self.update()
+
+    def _segments(self) -> list[QRectF]:
+        if not self._phases:
+            return []
+        gap = 4.0
+        name = self.fontMetrics().horizontalAdvance(self._phases[self._current][0]) + 24 if (
+            0 <= self._current < len(self._phases)) else 0
+        rest = sum(max(1, n) for i, (_t, n) in enumerate(self._phases) if i != self._current)
+        free = max(0.0, self.width() - name - gap * (len(self._phases) - 1))
+        x, out = 0.0, []
+        for i, (_title, count) in enumerate(self._phases):
+            width = float(name) if i == self._current else free * max(1, count) / max(1, rest)
+            out.append(QRectF(x, 0, width, self.height()))
+            x += width + gap
+        return out
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        done = QColor(theme.colour("success"))
+        here = QColor(theme.colour("accent"))
+        ahead = QColor(theme.colour("tertiary"))
+        for i, box in enumerate(self._segments()):
+            colour = here if i == self._current else done if i < self._current else ahead
+            if i == self._current:
+                painter.setPen(Qt.PenStyle.NoPen)
+                fill = QColor(colour)
+                fill.setAlpha(46)
+                painter.setBrush(fill)
+                painter.drawRoundedRect(box, 6, 6)
+                painter.setPen(colour)
+                painter.drawText(box, Qt.AlignmentFlag.AlignCenter, self._phases[i][0])
+            else:
+                bar = QRectF(box.x(), box.center().y() - 3, box.width(), 6)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(colour)
+                painter.drawRoundedRect(bar, 3, 3)
+        painter.end()
+
+    def phase_at(self, x: float) -> int:
+        for i, box in enumerate(self._segments()):
+            if box.left() <= x <= box.right():
+                return i
+        return -1
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        i = self.phase_at(event.position().x())
+        self.setToolTip(self._phases[i][0] if 0 <= i < len(self._phases) else "")
+        super().mouseMoveEvent(event)
+
+
+# -- the card ------------------------------------------------------------------------------------
+
+
+class BenchView(QWidget):
+    """One step, large, with Back and "Done, next" under it.
+
+    The window hands it the items (``set_items``), the ticks (``set_done``), and a
+    ``picture`` callback for a step's picture; it says when the step shown changes
+    (``moved``), when a tick changes (``ticked``), and when a chip is pressed."""
+
+    moved = Signal(int)
+    ticked = Signal(str, bool)
+    overview_wanted = Signal()
+    cut_list_wanted = Signal()
+    track_cuts_wanted = Signal()
+
+    PICTURE = QSize(560, 400)
+
+    def __init__(self, picture: Callable[[BenchItem, QSize], QPixmap]) -> None:
+        super().__init__()
+        self._picture = picture
+        self.items: list[BenchItem] = []
+        self.done: set[str] = set()
+        self.current = 0
+        self._phases: list[GuidePhase] = []
+        root = QVBoxLayout(self)
+        root.setContentsMargins(theme.SPACE["xl"], theme.SPACE["lg"], theme.SPACE["xl"], theme.SPACE["lg"])
+        root.setSpacing(theme.SPACE["lg"])
+
+        self.phase_bar = PhaseBar()
+        root.addWidget(self.phase_bar)
+        # The counter and the chips in a box that turns into two rows in a narrow panel.
+        top = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self._top = top
+        self.counter = QLabel()
+        theme.tone(self.counter, "secondary")
+        top.addWidget(self.counter)
+        chips = QHBoxLayout()
+        chips.addStretch(1)
+        top.addLayout(chips)
+        self.chips: dict[str, QToolButton] = {}
+        for name, wanted, label in (
+            ("cuts", self.cut_list_wanted, t("Cut list")),
+            ("tracks", self.track_cuts_wanted, t("Track cuts")),
+            ("overview", self.overview_wanted, t("Overview")),
+        ):
+            chip = QToolButton()
+            chip.setText(label)
+            chip.setAutoRaise(True)
+            chip.clicked.connect(wanted.emit)
+            chips.addWidget(chip)
+            self.chips[name] = chip
+        root.addLayout(top)
+
+        self.title = QLabel()
+        self.title.setWordWrap(True)
+        # Sizes in pixels, as the type scale is: the window's font is set in pixels, so a
+        # point size reads -1 and scaling it did nothing.
+        theme.size(self.title, TITLE_PX)
+        font = self.title.font()
+        font.setBold(True)
+        self.title.setFont(font)
+        root.addWidget(self.title)
+
+        # Picture beside the facts in a wide panel, above them in a narrow one
+        # (``resizeEvent``): side by side, the bench held the guide's panel at 496 px.
+        body = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self._body = body
+        body.setSpacing(theme.SPACE["xl"])
+        self.picture = QLabel()
+        self.picture.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.picture.setMinimumSize(QSize(160, 120))
+        self.picture.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        body.addWidget(self.picture, 3)
+        side = QVBoxLayout()
+        side.setSpacing(theme.SPACE["md"])
+        self.polarity = QLabel()
+        self.polarity.setWordWrap(True)
+        theme.size(self.polarity, POLARITY_PX)
+        bold = self.polarity.font()
+        bold.setBold(True)
+        self.polarity.setFont(bold)
+        theme.tone(self.polarity, "warning")
+        side.addWidget(self.polarity)
+        self.facts = QGridLayout()
+        self.facts.setHorizontalSpacing(theme.SPACE["md"])
+        self.facts.setColumnStretch(1, 1)
+        side.addLayout(self.facts)
+        self.notes = QLabel()
+        self.notes.setWordWrap(True)
+        side.addWidget(self.notes)
+        side.addStretch(1)
+        self.checks_title = QLabel(t("Checks for this phase"))
+        cfont = self.checks_title.font()
+        cfont.setBold(True)
+        self.checks_title.setFont(cfont)
+        side.addWidget(self.checks_title)
+        self.checks = QVBoxLayout()
+        self.checks.setSpacing(4)
+        side.addLayout(self.checks)
+        body.addLayout(side, 2)
+        root.addLayout(body, 1)
+
+        buttons = QHBoxLayout()
+        self.back = QPushButton(t("◀  Back"))
+        self.next = QPushButton(t("Done, next  ▶"))
+        theme.variant(self.next, "primary")
+        for button in (self.back, self.next):
+            button.setMinimumHeight(64)
+            button.setProperty("bench", True)
+            theme.restyle(button)
+            button.setAutoDefault(False)
+        self.back.clicked.connect(self.go_back)
+        self.next.clicked.connect(self.done_and_next)
+        buttons.addWidget(self.back, 1)
+        buttons.addWidget(self.next, 2)
+        root.addLayout(buttons)
+
+    #: Below this width the picture goes above the facts and the chips under the counter.
+    NARROW = 640
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        narrow = event.size().width() < self.NARROW
+        self._body.setDirection(
+            QBoxLayout.Direction.TopToBottom if narrow else QBoxLayout.Direction.LeftToRight
+        )
+        self._top.setDirection(
+            QBoxLayout.Direction.TopToBottom if narrow else QBoxLayout.Direction.LeftToRight
+        )
+        super().resizeEvent(event)
+
+    def minimumSizeHint(self) -> QSize:
+        """As narrow as the stacked arrangement needs, which is what it turns into when it
+        is narrow: the side-by-side one would hold the panel wide (``resizeEvent``)."""
+        return QSize(280, 360)
+
+    # -- what it shows --
+
+    def set_items(self, items: list[BenchItem], phases: list[GuidePhase], done: set[str],
+                  cut_count: int, track_count: int) -> None:
+        """A new build: start on the first item not ticked off -- where somebody coming back
+        to the bench left off."""
+        self.items, self._phases, self.done = items, phases, set(done)
+        self.chips["cuts"].setVisible(cut_count > 0)
+        self.chips["cuts"].setText(f"{t('Cut list')}  {cut_count}")
+        self.chips["tracks"].setVisible(track_count > 0)
+        self.chips["tracks"].setText(f"{t('Track cuts')}  {track_count}")
+        first = next((i for i, item in enumerate(items) if item.key not in self.done), 0)
+        self.show_item(first)
+
+    def set_done(self, done: set[str]) -> None:
+        self.done = set(done)
+        self._fill_checks()
+
+    def show_item(self, index: int) -> None:
+        if not self.items:
+            self.title.setText("")
+            self.picture.clear()
+            self.back.setEnabled(False)
+            self.next.setEnabled(False)
+            return
+        index = max(0, min(index, len(self.items) - 1))
+        self.current = index
+        item = self.items[index]
+        self.counter.setText(t("Step {n} of {total}").format(n=index + 1, total=len(self.items)))
+        shown = [p for p in self._phases if any(i.phase is p for i in self.items)]
+        self.phase_bar.set_phases(
+            [(f"{p.number}. {p.title}", sum(1 for i in self.items if i.phase is p)) for p in shown],
+            next((n for n, p in enumerate(shown) if p is item.phase), -1),
+        )
+        self.title.setText(item.title)
+        self.polarity.setText(f"⚠  {t('Polarity')}: {item.polarity}" if item.polarity else "")
+        self.polarity.setVisible(bool(item.polarity))
+        while self.facts.count():
+            taken = self.facts.takeAt(0)
+            if taken is not None and taken.widget() is not None:
+                taken.widget().deleteLater()  # type: ignore[union-attr]
+        for row, (what, value) in enumerate(item.facts):
+            name = QLabel(what)
+            theme.tone(name, "secondary")
+            shown_value = QLabel(value)
+            shown_value.setWordWrap(True)
+            self.facts.addWidget(name, row, 0, Qt.AlignmentFlag.AlignTop)
+            self.facts.addWidget(shown_value, row, 1)
+        self.notes.setText("\n".join(f"•  {note}" for note in item.notes))
+        self.notes.setVisible(bool(item.notes))
+        self.picture.setPixmap(self._picture(item, self.PICTURE))
+        self._fill_checks()
+        self.back.setEnabled(index > 0)
+        self.next.setEnabled(True)
+        self.moved.emit(index)
+
+    def _fill_checks(self) -> None:
+        while self.checks.count():
+            taken = self.checks.takeAt(0)
+            if taken is not None and taken.widget() is not None:
+                taken.widget().deleteLater()  # type: ignore[union-attr]
+        if not self.items:
+            return
+        phase = self.items[self.current].phase
+        self.checks_title.setVisible(bool(phase.checkpoints))
+        for check in phase.checkpoints:
+            key = check_key(phase, check)
+            box = QCheckBox(f"Ω  {check.title}")
+            box.setToolTip(f"{check.instruction}\n{check.expected}")
+            box.setChecked(key in self.done)
+            box.toggled.connect(lambda on, k=key: self._tick(k, on))
+            self.checks.addWidget(box)
+
+    # -- walking the build --
+
+    def _tick(self, key: str, on: bool) -> None:
+        if on:
+            self.done.add(key)
+        else:
+            self.done.discard(key)
+        self.ticked.emit(key, on)
+
+    def done_and_next(self) -> None:
+        """The step in front of you is done: ticked, and the next one shown."""
+        if not self.items:
+            return
+        item = self.items[self.current]
+        if item.key not in self.done:
+            self._tick(item.key, True)
+        if self.current + 1 < len(self.items):
+            self.show_item(self.current + 1)
+
+    def go_back(self) -> None:
+        if self.current > 0:
+            self.show_item(self.current - 1)
+
+
+def crop_around(
+    holes: tuple[HoleCoord, ...], board: Board, side: str, size: QSize, to_scene: Callable[[HoleCoord], QPointF]
+) -> QRectF:
+    """The part of the board to show for a step: its holes with a margin, in the picture's
+    proportions."""
+    points = [to_scene(hole) for hole in holes] or [QPointF(0, 0)]
+    xs, ys = [p.x() for p in points], [p.y() for p in points]
+    margin = board.pitch * 3.5
+    area = QRectF(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)).adjusted(
+        -margin, -margin, margin, margin
+    )
+    aspect = size.width() / max(1, size.height())
+    if area.width() / max(1e-6, area.height()) < aspect:
+        grow = area.height() * aspect - area.width()
+        area.adjust(-grow / 2, 0, grow / 2, 0)
+    else:
+        grow = area.width() / aspect - area.height()
+        area.adjust(0, -grow / 2, 0, grow / 2)
+    return area

@@ -1763,6 +1763,21 @@ when held or right-clicked, with a small triangle in its corner to say so.
 dialogs' previews and the stock-size grid -- so a picture cannot disagree with the board OK
 gives. References and pin names are off there (`show_references`, `show_pin_names`).
 
+**The build guide is worked at the bench, one step at a time** (`ui/benchguide.py`), and
+the list is its Overview. Chosen from three rendered candidates: one step fills the panel --
+the board AS IT STANDS at that step (`document_at_step`), zoomed onto the step's holes with
+the part selected and seen from the side the step is done on, the step in the guide's own
+words, its polarity in amber, its holes, and the phase's checks as Ω items to tick -- with
+Back and "Done, next" big enough to hit from across a bench (their size is the theme's,
+`QPushButton[bench="true"]`, because a size set on a button is lost to its variant's
+rule). A stripboard's track cuts are steps of their own, first, each pictured from the
+copper side. The phases run across the top as segments, the current one named and the
+others named on hover: every name in its own segment wrapped to three lines. The cut list
+and the track cuts open as sheets from their chips. Presentation only: every word, the
+order and the checks are the guide's. THE TICKS ARE ONE STORE (`_done_steps`, per board in
+the settings): Done-next ticks the list's row, a row ticked in the list is done on the
+bench, and a check ticked on the bench is kept beside the steps (`check_key`).
+
 ## The words, the first start and help tell one story
 
 A newcomer met the window's jargon before anything else -- Trace, Spine, Bare, Ratsnest,

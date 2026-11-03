@@ -49,6 +49,14 @@ closed without a bump.
   the grid when that is where there is room, as on the green boards. Edge pads can be
   stadiums or squares, like the green and phenolic boards' strips.
 
+- **The build guide is worked at the bench, one step at a time.** The Build Guide panel
+  shows the step in front of you large: the board as it stands at that step, zoomed onto
+  the step's holes and seen from the side it is done on, what goes in and which way round,
+  and the phase's checks to tick, with big Back and "Done, next" buttons. On a stripboard
+  each track cut is a step of its own, first. The list is still there as Overview, and the
+  cut list and the track cuts are a click away. Ticks are kept once: the bench and the list
+  always agree.
+
 - **A board can carry the words it is printed with.** Its size ("5cmX7cm"), a batch code or
   a maker's name, in the border along any edge, drawn in 2D, in 3D and on the 1:1 print; a
   legend letter it covers is left off, as on the real board.

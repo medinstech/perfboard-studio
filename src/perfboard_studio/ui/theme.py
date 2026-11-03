@@ -260,6 +260,8 @@ FONT_PX = 12
 CAPTION_PX = 11
 #: A paragraph that leads: the empty window's guidance.
 LEAD_PX = 13
+#: The build guide's two buttons at the bench (``ui/benchguide.py``).
+BENCH_PX = 20
 TITLE_PX = 18
 SEMIBOLD = 600
 
@@ -551,6 +553,9 @@ QPushButton:default, QPushButton[variant="primary"] {{
    end -- "pen the Guide", "ecide Later". A property is applied when the button is
    polished, before it is measured. */
 QPushButton[variant="primary"] {{ font-weight: {SEMIBOLD}; }}
+/* The build guide's Back and "Done, next", read from across a bench. A size set on the
+   button itself is lost to the rule above, which sets the font. */
+QPushButton[bench="true"] {{ font-size: {BENCH_PX}px; }}
 QPushButton:default:hover, QPushButton[variant="primary"]:hover {{
     background: {k.accent_hover};
     border-color: {k.accent_hover};

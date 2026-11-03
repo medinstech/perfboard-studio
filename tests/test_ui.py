@@ -14579,7 +14579,7 @@ def test_the_guides_controls_are_in_its_corner() -> None:
 
     window = _window_on(_load_dense())
     try:
-        panel = window.dock_guide.widget()
+        panel = window.guide_overview  # the list's corner; the bench has its own buttons
         # The empty guide's own button (Place on the Board) is the empty state's, and stays.
         old_row = {t("Next Step to Do"), t("Clear Progress"), t("Export the Guide…")}
         left = [b.text() for b in panel.findChildren(QPushButton) if b.text() in old_row]
@@ -15255,5 +15255,145 @@ def test_redoing_the_wiring_of_moved_nets_is_asked_once(monkeypatch) -> None:
         window._route(None)
         assert len(shown) == 1 and str(removed) in shown[0]
         assert confirmed == [], "the second box is gone"
+    finally:
+        _close(window)
+
+
+def _bench(window):
+    window._raise_view(window.dock_guide)
+    window._refresh_guide_panel()
+    return window.bench
+
+
+def test_the_guide_opens_on_the_bench_at_the_first_step_not_done() -> None:
+    """One step at a time, large: the guide opens on the bench, at the step somebody coming
+    back to it left off -- the first one not ticked."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        assert window.guide_pages.currentWidget() is bench
+        first = bench.items[0]
+        window._on_bench_ticked(first.key, True)
+        bench.set_items(bench.items, bench._phases, window._done_steps(), 0, 0)
+        assert bench.current == 1
+        assert bench.title.text() == bench.items[1].title
+        assert not bench.picture.pixmap().isNull()
+    finally:
+        _close(window)
+
+
+def test_done_next_ticks_the_step_and_the_list_agrees() -> None:
+    """One store of ticks: Done-next on the bench ticks the list's row, and a row ticked in
+    the list is done on the bench."""
+    from PySide6.QtCore import Qt
+
+    from perfboard_studio.ui.main import ROLE_STEP_FOCUS
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        item = bench.items[bench.current]
+        bench.next.click()
+        assert item.key in window._done_steps()
+        assert bench.current == bench.items.index(item) + 1
+        row = next(leaf for leaf in window._guide_leaves()
+                   if leaf.data(0, ROLE_STEP_FOCUS) == item.key)
+        assert row.checkState(0) == Qt.CheckState.Checked
+        other = next(leaf for leaf in window._guide_leaves()
+                     if leaf.checkState(0) != Qt.CheckState.Checked)
+        other.setCheckState(0, Qt.CheckState.Checked)
+        assert other.data(0, ROLE_STEP_FOCUS) in bench.done
+        bench.back.click()
+        assert bench.items[bench.current] is item
+    finally:
+        _close(window)
+
+
+def test_a_stripboards_track_cuts_are_the_first_bench_steps() -> None:
+    """The cuts come before any part and are the most often forgotten: on the bench each is
+    a step of its own, first, pictured from the copper side."""
+    from perfboard_studio.striproute import plan_stripboard
+
+    example = _example_document("ne555-astable")
+    strips = dataclasses.replace(
+        example,
+        board=dataclasses.replace(example.board, type="stripboard", strip_axis="horizontal"),
+        conductors=(),
+    )
+    window = _window_on(strips)
+    try:
+        plan = plan_stripboard(window.bus.document, window.lookup)
+        assert window.bus.dispatch("stripboard.apply", plan.payload()).ok
+        bench = _bench(window)
+        cuts = window.current_guide().track_cuts
+        assert cuts
+        firsts = bench.items[: len(cuts)]
+        assert all(item.key.startswith("cut:") and item.solder_side for item in firsts)
+        assert all(item.step_index is None for item in firsts)
+        assert bench.items[0].title.split(" ·")[0]
+        assert bench.chips["tracks"].isVisibleTo(bench)
+    finally:
+        _close(window)
+
+
+def test_a_solder_side_step_is_pictured_from_the_solder_side(monkeypatch) -> None:
+    """The picture is the board as it stands at the step, from the side the step is done on:
+    a trace or a bare wire below the board is drawn from below."""
+    from perfboard_studio.ui import main as main_module
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        seen: list[str] = []
+        real = main_module.BoardScene
+
+        def scene(document, lookup, *, side, **kwargs):
+            seen.append(side)
+            return real(document, lookup, side=side, **kwargs)
+
+        monkeypatch.setattr(main_module, "BoardScene", scene)
+        below = next(i for i, item in enumerate(bench.items) if item.solder_side)
+        above = next(i for i, item in enumerate(bench.items) if not item.solder_side)
+        bench.show_item(below)
+        bench.show_item(above)
+        assert seen == ["bottom", "top"]
+    finally:
+        _close(window)
+
+
+def test_the_phase_bar_names_the_current_phase_in_full_and_the_others_on_hover() -> None:
+    """Every phase's name in its own segment wrapped to three lines in a narrow panel. The
+    current one is named; the others are a bar with their name on hover."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        bar = bench.phase_bar
+        names = [name for name, _count in bar._phases]
+        assert 0 <= bar._current < len(names)
+        assert bench.items[bench.current].phase.title in names[bar._current]
+        bar.resize(900, 30)
+        other = next(i for i in range(len(names)) if i != bar._current)
+        middle = bar._segments()[other].center().x()
+        assert bar.phase_at(middle) == other
+    finally:
+        _close(window)
+
+
+def test_a_check_ticked_on_the_bench_is_kept_with_the_steps() -> None:
+    """The phase's checks are Ω items to tick on the bench, kept in the one store."""
+    from PySide6.QtWidgets import QCheckBox
+
+    from perfboard_studio.ui.benchguide import check_key
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        with_checks = next(i for i, item in enumerate(bench.items) if item.phase.checkpoints)
+        bench.show_item(with_checks)
+        phase = bench.items[with_checks].phase
+        boxes = [b for b in bench.findChildren(QCheckBox) if b.text().startswith("Ω")]
+        assert boxes
+        boxes[0].setChecked(True)
+        assert check_key(phase, phase.checkpoints[0]) in window._done_steps()
     finally:
         _close(window)

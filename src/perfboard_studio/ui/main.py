@@ -72,6 +72,8 @@ from PySide6.QtGui import (
     QIcon,
     QKeyEvent,
     QKeySequence,
+    QPainter,
+    QPixmap,
     QShortcut,
     QShowEvent,
 )
@@ -345,6 +347,7 @@ from perfboard_studio.version import describe as describe_version
 from . import helpcards, icons, planner_pool, theme, updater
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
+from .benchguide import BenchItem, BenchView, bench_items, crop_around
 from .boardcolors import SCHEMES as BOARD_SCHEMES
 from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
@@ -6277,7 +6280,7 @@ class MainWindow(QMainWindow):
 
         # The guide's corner: the next step to do, its ticks cleared, the guide exported.
         guide = FloatingBar(
-            self.dock_guide.widget(), Qt.Corner.BottomRightCorner, vertical=False, name="guideTools"
+            self.guide_overview, Qt.Corner.BottomRightCorner, vertical=False, name="guideTools"
         )
         next_button = guide.add_action(self.act_next_step)
         next_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -8438,9 +8441,28 @@ class MainWindow(QMainWindow):
         # Room at the foot of the list for the corner, so it covers no step.
         layout.addSpacing(theme.SPACE["2xl"] * 2)
 
+        # THE BENCH IN FRONT, THE LIST BEHIND IT (``ui/benchguide.py``): one step at a
+        # time, large, with Back and "Done, next" -- the list above is its Overview.
+        self.guide_overview: QWidget = panel
+        self.bench: BenchView = BenchView(self._bench_picture)
+        self.guide_pages: QStackedWidget = QStackedWidget()
+        back = QToolButton()
+        back.setText(t("◀  Step by step"))
+        back.setAutoRaise(True)
+        back.clicked.connect(self._show_bench)
+        layout.insertWidget(0, back, 0, Qt.AlignmentFlag.AlignLeft)
+        self.bench.moved.connect(self._on_bench_moved)
+        self.bench.ticked.connect(self._on_bench_ticked)
+        self.bench.overview_wanted.connect(self._show_guide_overview)
+        self.bench.cut_list_wanted.connect(lambda: self._show_guide_sheet("cuts"))
+        self.bench.track_cuts_wanted.connect(lambda: self._show_guide_sheet("tracks"))
+        self.guide_pages.addWidget(self.bench)
+        self.guide_pages.addWidget(panel)
+        self.guide_pages.setCurrentWidget(self.bench)
+
         dock = QDockWidget(t("Build Guide"), self)
         dock.setObjectName("dockGuide")
-        dock.setWidget(panel)
+        dock.setWidget(self.guide_pages)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         self.dock_guide = dock
         dock.hide()
@@ -8494,6 +8516,8 @@ class MainWindow(QMainWindow):
             self.guide_tree.clear()
             self.guide_summary.setText("")
             self.act_clear_progress.setEnabled(False)
+            self.bench.set_items([], [], done, 0, 0)
+            self._show_guide_overview()
             return
         tree = self.guide_tree
         blocked = tree.blockSignals(True)
@@ -8537,6 +8561,10 @@ class MainWindow(QMainWindow):
         # Every step accounted for, or the panel and the slider are counting different
         # things and one of them is wrong.
         assert index == len(steps), f"{index} steps in phases, {len(steps)} in the flat list"
+        self.bench.set_items(
+            bench_items(guide, list(steps)), list(guide.phases), done,
+            len(guide.cut_list), len(guide.track_cuts),
+        )
 
     def _track_cut_rows(self, guide: Guide, done: set[str]) -> QTreeWidgetItem:
         """The tracks to cut on stripboard, one tickable row each, first in Preparation.
@@ -8678,7 +8706,93 @@ class MainWindow(QMainWindow):
             done.discard(str(focus))
         self._store_done(done)
         self._show_guide_progress()
+        self.bench.set_done(done)
 
+    def _show_bench(self) -> None:
+        self.guide_pages.setCurrentWidget(self.bench)
+
+    def _show_guide_overview(self) -> None:
+        self.guide_pages.setCurrentWidget(self.guide_overview)
+
+    def _on_bench_ticked(self, key: str, on: bool) -> None:
+        """A step, a cut or a check ticked on the bench: the same store the list keeps,
+        and the list's own tick put right, so the two cannot disagree."""
+        done = self._done_steps()
+        if on:
+            done.add(key)
+        else:
+            done.discard(key)
+        self._store_done(done)
+        tree = self.guide_tree
+        blocked = tree.blockSignals(True)
+        for leaf in self._guide_leaves():
+            if leaf.data(0, ROLE_STEP_FOCUS) == key:
+                leaf.setCheckState(0, Qt.CheckState.Checked if on else Qt.CheckState.Unchecked)
+        tree.blockSignals(blocked)
+        self._show_guide_progress()
+
+    def _on_bench_moved(self, index: int) -> None:
+        """The step on the bench, on the board and in 3D, as picking it in the list does."""
+        if not 0 <= index < len(self.bench.items):
+            return
+        item = self.bench.items[index]
+        self._show_build_step(item.step_index, item.holes, item.key)
+
+    def _bench_picture(self, item: BenchItem, size: QSize) -> QPixmap:
+        """The board AS IT STANDS at this step (``document_at_step``) -- a cut on the bare
+        board -- zoomed onto the step's holes, the part selected, seen from the side the
+        step is done on."""
+        document = self.bus.document
+        guide = self.current_guide()
+        at = document_at_step(document, guide, -1 if item.step_index is None else item.step_index)
+        side: BoardSide = "bottom" if item.solder_side else "top"
+        scene = BoardScene(at, self.lookup, side=side, show_ratsnest=False)
+        if item.component_id is not None:
+            scene.select_components([item.component_id])
+        board = at.board
+        area = crop_around(item.holes, board, side, size,
+                           lambda hole: hole_to_screen(hole, board, side))
+        pixmap = QPixmap(size)
+        pixmap.fill(QColor(theme.ACTIVE.bg_app))
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        scene.render(painter, QRectF(0, 0, size.width(), size.height()), area)
+        painter.end()
+        return pixmap
+
+    def _show_guide_sheet(self, kind: str) -> None:
+        """The wire cut list, or the tracks to cut, over the bench: what is wanted in a
+        hurry, without leaving the step."""
+        guide = self.current_guide()
+        board = guide.board
+        sheet = QDialog(self)
+        sheet.setWindowFlags(Qt.WindowType.Popup)
+        layout = QVBoxLayout(sheet)
+        table = QTreeWidget()
+        table.setRootIsDecorated(False)
+        if kind == "cuts":
+            sheet.setWindowTitle(t("Cut list"))
+            table.setHeaderLabels([t("Net"), t("Holes"), t("Cut"), "AWG", t("Colour")])
+            for cut in guide.cut_list:
+                table.addTopLevelItem(QTreeWidgetItem([
+                    cut.net_name,
+                    f"{format_hole(cut.from_hole, board)} → {format_hole(cut.to_hole, board)}",
+                    f"{cut.cut_mm:.0f} mm", str(cut.awg), cut.colour,
+                ]))
+        else:
+            sheet.setWindowTitle(t("Track cuts"))
+            table.setHeaderLabels([t("Holes"), t("Strip")])
+            for track in guide.track_cuts:
+                table.addTopLevelItem(QTreeWidgetItem([format_hole(track.at, board), track.strip]))
+        for column in range(table.columnCount()):
+            table.resizeColumnToContents(column)
+        layout.addWidget(QLabel(theme.heading(sheet.windowTitle())))
+        layout.addWidget(table)
+        sheet.resize(520, 420)
+        panel = self.guide_pages
+        sheet.move(panel.mapToGlobal(QPoint(panel.width() - 540, 60)))
+        self._guide_sheet = sheet
+        sheet.show()
     def on_next_step_to_do(self) -> None:
         """The first step without a tick, picked: shown on the board, and in 3D when the
         3D view is open -- where somebody coming back to the bench left off."""
@@ -8723,16 +8837,20 @@ class MainWindow(QMainWindow):
         items = self.guide_tree.selectedItems()
         if not items:
             return
-        index = items[0].data(0, ROLE_STEP_INDEX)
-        if index is None:
+        holes = items[0].data(0, ROLE_HOLES)
+        self._show_build_step(
+            items[0].data(0, ROLE_STEP_INDEX), tuple(holes or ()), items[0].data(0, ROLE_STEP_FOCUS)
+        )
+
+    def _show_build_step(self, index: object, holes: tuple[HoleCoord, ...], focus: object) -> None:
+        """One step of the build on the board and in 3D -- from the list or the bench."""
+        if index is None or not isinstance(index, int):
             # A track to cut, or a check: the holes it is about -- the cut and the two it
             # separates, or where the probes go. A cut comes before any part, so the 3D
             # view shows the bare board for it.
-            holes = items[0].data(0, ROLE_HOLES)
             if holes:
                 self.scene.clearSelection()
                 self.view.reveal_holes(list(holes), self.bus.document.board, self.side)
-            focus = items[0].data(0, ROLE_STEP_FOCUS)
             cut = isinstance(focus, str) and focus.startswith("cut:")
             if cut and self.assembly_slider is not None and self.assembly_slider.isEnabled():
                 self.assembly_slider.setValue(0)
