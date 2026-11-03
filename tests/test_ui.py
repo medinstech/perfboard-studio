@@ -15199,6 +15199,74 @@ def test_every_editor_in_properties_fits_its_panel(language: str) -> None:
         set_language(before)
 
 
+def _every_editor(window):
+    """Each editor Properties has, shown in turn: (its name, how to show it)."""
+    document = window.bus.document
+    drawn = [c for c in document.components if c.id in window.scene.component_items]
+    yield "board", lambda: window.scene.clearSelection()
+    yield "part", lambda: window.scene.select_components([drawn[0].id])
+    yield "parts", lambda: window.scene.select_components([drawn[0].id, drawn[1].id])
+    yield "net", lambda: window._select_net(document.nets[0].id)
+
+    def conductor() -> None:
+        window.scene.clearSelection()
+        _first_conductor_item(window).setSelected(True)
+        window._refresh_selection_state()
+
+    yield "conductor", conductor
+    yield "placing", lambda: window.scene.arm_placement("dip-8")
+
+    def design_part() -> None:
+        window.scene.arm_placement(None)
+        window._show_symbol_in_properties(window._add_part_to_design("dip-8"))
+
+    yield "design part", design_part
+    yield "board note", lambda: window.on_add_board_label()
+    yield "sheet note", lambda: window.on_sheet_note_drawn("text", 10.0, 10.0, 10.0, 10.0)
+
+
+@pytest.mark.parametrize("language", ["en", "tr"])
+def test_every_editor_fits_a_1440_by_900_window_with_nothing_under_it(language: str) -> None:
+    """The walkthrough, at 1440 x 900: the first summary drawn under every editor after it
+    -- "untitled · 18 × 24 holes" -- and right edges cut off. Shown, at that size, every
+    editor in turn: nothing in it reaches past the panel's visible width, and it is the
+    only thing in the panel."""
+    from PySide6.QtWidgets import QWidget
+
+    from perfboard_studio.ui.i18n import language as current
+    from perfboard_studio.ui.i18n import set_language
+
+    before = current()
+    set_language(language)
+    try:
+        window = _window_on(_load_dense())
+        window.resize(1440, 900)
+        window.show()
+        QApplication.processEvents()
+        panel = window.properties
+        holder = panel.scroller.widget()
+        for name, show in _every_editor(window):
+            show()
+            window._refresh_properties()
+            QApplication.processEvents()
+            editor = window.inspector.shown
+            shown = [
+                child for child in holder.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly)
+                if not child.isHidden()
+            ]
+            assert shown == [window.inspector], (name, [type(c).__name__ for c in shown])
+            viewport = panel.scroller.viewport()
+            right = viewport.width() + 1
+            for child in editor.findChildren(QWidget):
+                if not child.isVisible() or child.width() <= 0:
+                    continue
+                edge = child.mapTo(viewport, child.rect().topRight()).x()
+                assert edge <= right, (name, type(child).__name__, edge, right)
+        _close(window)
+    finally:
+        set_language(before)
+
+
 def test_new_board_starts_a_blank_design_without_asking_about_a_board(monkeypatch) -> None:
     """Board Setup came first, before there was a circuit to try on any board, and the
     Board step asked again. New Board is a blank design with the sheet in front."""

@@ -380,6 +380,10 @@ closed without a bump.
 - **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
   first in the document, instead of to whichever of them is listed first.
 
+- **Properties shows only the editor in front.** The first summary -- the board's name and
+  size -- could stay drawn under every editor after it, and push their right edges out of
+  the panel.
+
 - **Enter in the Library's search adds the part**, as the status line always said it would:
   the one chosen in the list, or else the first the search lists.
 

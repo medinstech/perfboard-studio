@@ -135,6 +135,11 @@ class PropertiesPanel(QWidget):
         """Put the inspector in, in place of whatever was there. ``widget`` implements
         ``PropertiesContent``; it is handed the selection and the document at once."""
         self._holder.removeWidget(self.content)
+        # Hidden NOW, deleted later: taken out of the layout it stays where it was drawn
+        # until the event loop deletes it, and a loop that never gets round to it -- the
+        # walkthrough's -- drew the first summary's "untitled · 18 × 24 holes" under every
+        # editor after it, and pushed their right edges out of the panel.
+        self.content.hide()
         self.content.deleteLater()
         self.content = widget
         self._holder.addWidget(widget)
