@@ -1373,7 +1373,7 @@ def _prepare_component(
     # wiring can never reach -- and a non-string one breaks the serializer on the way out.
     if not isinstance(p.ref, str) or not p.ref.strip():
         raise CommandError("invalid-ref", "A component needs a non-empty reference.")
-    assert_hole_on_board(p.anchor, doc.board, f"Anchor for {p.ref}")
+    assert_hole_on_board(p.anchor, doc.board, f"Pin 1 of {p.ref} at")
     rotation: Rotation = p.rotation if p.rotation is not None else 0
     assert_rotation(rotation)
 
@@ -1476,7 +1476,7 @@ class _MoveComponent:
         existing = require_component(doc, p.id)
         if existing.locked:
             raise CommandError("component-locked", f"{existing.ref} is locked.")
-        assert_hole_on_board(p.anchor, doc.board, f"Anchor for {existing.ref}")
+        assert_hole_on_board(p.anchor, doc.board, f"Pin 1 of {existing.ref} at")
         components = tuple(
             dataclasses.replace(c, anchor=p.anchor) if c.id == p.id else c for c in doc.components
         )
@@ -1515,7 +1515,7 @@ class _MoveComponents:
             seen.add(placement.id)
             if existing.locked:
                 raise CommandError("component-locked", f"{existing.ref} is locked.")
-            assert_hole_on_board(placement.anchor, doc.board, f"Anchor for {existing.ref}")
+            assert_hole_on_board(placement.anchor, doc.board, f"Pin 1 of {existing.ref} at")
             if placement.rotation is not None:
                 assert_rotation(placement.rotation)
             updates[placement.id] = placement
@@ -1921,7 +1921,7 @@ class _DeletePart:
 
 
 def _placed_from(part: SchematicPart, spec: PartPlacement, doc: PerfDocument) -> ComponentInstance:
-    assert_hole_on_board(spec.anchor, doc.board, f"Anchor for {part.ref}")
+    assert_hole_on_board(spec.anchor, doc.board, f"Pin 1 of {part.ref} at")
     rotation: Rotation = spec.rotation if spec.rotation is not None else 0
     assert_rotation(rotation)
     # The SAME id, deliberately. Nothing outside this document refers to it, but the

@@ -3499,7 +3499,7 @@ TURKISH: Mapping[str, str] = {
     'A component with ref "{ref}" is on the board.': '"{ref}" referanslı bir parça zaten kartta.',
     'A schematic part with ref "{ref}" is already in the design. Place that one instead, or give this a different reference.': '"{ref}" referanslı bir parça tasarımda zaten var. Onu yerleştirin ya da buna başka bir referans verin.',
     'A component with ref "{ref}" already exists.': '"{ref}" referanslı bir parça zaten var.',
-    'Anchor for {ref} {hole} is outside the {cols}x{rows} board.': '{ref} için {hole} deliği {cols}x{rows} kartın dışında.',
+    'Pin 1 of {ref} at {hole} is outside the {cols}x{rows} board.': '{ref} parçasının 1. pini {hole} deliğine düşüyor; bu delik {cols}x{rows} kartın dışında.',
     'Renaming to "{ref}" would put {pins} on two nets at once, because something already wired those pins under that reference.': '"{ref}" olarak adlandırmak {pins} pinlerini aynı anda iki nete koyar; o referansla bu pinlere zaten bağlantı yapılmış.',
     '{pin} already belongs to net "{net}". Disconnect it from there first -- a pin can only be on one net.': '{pin} zaten "{net}" netinde. Önce oradan ayır — bir pin yalnızca bir nette olabilir.',
     '{pin} is already on net "{net}".': '{pin} zaten "{net}" netinde.',

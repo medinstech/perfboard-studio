@@ -208,7 +208,7 @@ TEMPLATES: tuple[str, ...] = (
     'A component with ref "{ref}" is on the board.',
     'A schematic part with ref "{ref}" is already in the design. Place that one instead, or give this a different reference.',
     'A component with ref "{ref}" already exists.',
-    "Anchor for {ref} {hole} is outside the {cols}x{rows} board.",
+    "Pin 1 of {ref} at {hole} is outside the {cols}x{rows} board.",
     'Renaming to "{ref}" would put {pins} on two nets at once, because something already wired those pins under that reference.',
     '{pin} already belongs to net "{net}". Disconnect it from there first -- a pin can only be on one net.',
     '{pin} is already on net "{net}".',
