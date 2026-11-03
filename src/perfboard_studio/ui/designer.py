@@ -104,6 +104,16 @@ def _words() -> dict[str, dict[str, str]]:
             "stripboard": t("Stripboard"),
             "solderable-breadboard": t("Solderable breadboard"),
         },
+        "material": {
+            "FR4": t("FR-4 — glass epoxy, the green kind. Tolerates heat well."),
+            "FR2": t("FR-2 — phenolic paper (\"pertinaks\"), the brown kind. Pads lift easily."),
+            "FR1": t("FR-1 — phenolic paper, as FR-2."),
+        },
+        "pad_shape": {
+            "round": t("Round"),
+            "oblong": t("Oblong — solder bridges easily along the long axis"),
+        },
+        "axis": {"vertical": t("Down a column"), "horizontal": t("Along a row")},
         "edges": {"short": t("The short edges"), "long": t("The long edges")},
         "shape": {"rounded": t("Rounded"), "stadium": t("Stadium"), "square": t("Square")},
         "letters": {
@@ -246,6 +256,7 @@ class BoardDesigner(QDialog):
         self._settings = QVBoxLayout(settings)
         self._settings.setContentsMargins(0, 0, theme.SPACE["md"], 0)
         self._problems: dict[str, QLabel] = {}
+        self._rows: dict[str, tuple[QFormLayout, QWidget]] = {}
         self._build_settings()
         self._settings.addStretch(1)
         scroller = QScrollArea()
@@ -297,6 +308,7 @@ class BoardDesigner(QDialog):
         column.setSpacing(2)
         column.addWidget(field)
         if path:
+            self._rows[path] = (form, holder)
             problem = QLabel()
             problem.setWordWrap(True)
             theme.tone(problem, "danger")
@@ -344,8 +356,14 @@ class BoardDesigner(QDialog):
 
         pads = self._section(t("Grid and pads"))
         self.type = _combo(w["type"], FAMILY_BOARD_TYPES)
-        self.type.activated.connect(changed)
+        self.type.activated.connect(self._on_kind)
         self._row(pads, t("Kind"), self.type, "type")
+        self.strip_axis = _combo(w["axis"], ("horizontal", "vertical"))
+        self.strip_axis.activated.connect(changed)
+        self._row(pads, t("Strips run"), self.strip_axis, "strip_axis")
+        self.material = _combo(w["material"], ("FR4", "FR2", "FR1"))
+        self.material.activated.connect(changed)
+        self._row(pads, t("Material"), self.material, "material")
         self.pitch = _mm(2.54, 10.0)
         self.pad = _mm(1.8, 10.0)
         self.drill = _mm(1.0, 10.0)
@@ -354,6 +372,15 @@ class BoardDesigner(QDialog):
                                  (self.drill, t("Drill"), "drill_mm")):
             box.editingFinished.connect(changed)
             self._row(pads, label, box, path)
+        self.pad_shape = _combo(w["pad_shape"], ("round", "oblong"))
+        self.pad_shape.activated.connect(self._on_kind)
+        self._row(pads, t("Pad shape"), self.pad_shape, "pad_shape")
+        self.pad_length = _mm(2.4, 10.0)
+        self.pad_length.editingFinished.connect(changed)
+        self._row(pads, t("Pad length"), self.pad_length, "pad_length_mm")
+        self.pad_axis = _combo(w["axis"], ("vertical", "horizontal"))
+        self.pad_axis.activated.connect(changed)
+        self._row(pads, t("Long axis"), self.pad_axis, "pad_axis")
 
         edge = self._section(t("Edge pads"))
         self.strip_on = QCheckBox(t("Edge pads along two edges"))
@@ -387,6 +414,11 @@ class BoardDesigner(QDialog):
             combo.activated.connect(changed)
         self._row(legend, t("Letters"), self.letters, "legend.letter_edges")
         self._row(legend, t("Numbers"), self.numbers, "legend.number_edges")
+        self.row_digits = QSpinBox()
+        self.row_digits.setRange(1, 4)
+        self.row_digits.setToolTip(t('2 prints row 7 as "07", the way most such boards do.'))
+        self.row_digits.valueChanged.connect(changed)
+        self._row(legend, t("Row digits"), self.row_digits, "legend.row_digits")
         self.printed = QLineEdit()
         self.printed.editingFinished.connect(changed)
         self._row(legend, t("Printed on it"), self.printed, "printed")
@@ -452,6 +484,13 @@ class BoardDesigner(QDialog):
             self.width_mm.setValue(size.width_mm)
             self.height_mm.setValue(size.height_mm)
             self.type.setCurrentIndex(max(0, self.type.findData(family.type)))
+            self.strip_axis.setCurrentIndex(
+                max(0, self.strip_axis.findData(family.strip_axis or "horizontal")))
+            self.material.setCurrentIndex(max(0, self.material.findData(family.material)))
+            self.pad_shape.setCurrentIndex(max(0, self.pad_shape.findData(family.pad_shape)))
+            if family.pad_length_mm is not None:
+                self.pad_length.setValue(family.pad_length_mm)
+            self.pad_axis.setCurrentIndex(max(0, self.pad_axis.findData(family.pad_axis)))
             self.pitch.setValue(family.pitch_mm)
             self.pad.setValue(family.pad_diameter_mm)
             self.drill.setValue(family.drill_mm)
@@ -471,6 +510,7 @@ class BoardDesigner(QDialog):
                 max(0, self.letters.findData(legend.letter_edges if legend else "none")))
             self.numbers.setCurrentIndex(
                 max(0, self.numbers.findData(legend.number_edges if legend else "none")))
+            self.row_digits.setValue(legend.row_digits if legend else 2)
             self._show_printed(family, size)
             self.mask_kind.setCurrentIndex(
                 0 if family.mask is None else max(0, self.mask_kind.findData(family.mask)))
@@ -478,6 +518,21 @@ class BoardDesigner(QDialog):
                 0 if family.finish is None else max(0, self.finish.findData(family.finish)))
         finally:
             self._loading = False
+        self._only_what_means_something()
+
+    def _on_kind(self, *_args: object) -> None:
+        self._only_what_means_something()
+        self._changed()
+
+    def _only_what_means_something(self) -> None:
+        """Each setting shown only where it means something: which way the strips run on a
+        stripboard alone, an oblong pad's length and axis on an oblong pad alone."""
+        stripboard = self.type.currentData() == "stripboard"
+        oblong = self.pad_shape.currentData() == "oblong"
+        for path, shown in (("strip_axis", stripboard), ("pad_length_mm", oblong),
+                            ("pad_axis", oblong)):
+            form, holder = self._rows[path]
+            form.setRowVisible(holder, shown)
 
     def _show_printed(self, family: BoardFamily, size: BoardSize) -> None:
         """The words printed on the board as they read on THIS size, the template they come
@@ -548,9 +603,19 @@ class BoardDesigner(QDialog):
         text = self.printed.text().strip()
         if printed and text and text != self._resolved:
             printed = (dataclasses.replace(printed[0], text=text), *printed[1:])
+        legend = (
+            dataclasses.replace(legend, row_digits=self.row_digits.value()) if legend else None
+        )
+        oblong = self.pad_shape.currentData() == "oblong"
+        stripboard = self.type.currentData() == "stripboard"
         return dataclasses.replace(
             base,
             type=self.type.currentData(),
+            strip_axis=self.strip_axis.currentData() if stripboard else None,
+            material=self.material.currentData(),
+            pad_shape=self.pad_shape.currentData(),
+            pad_length_mm=self.pad_length.value() if oblong else None,
+            pad_axis=self.pad_axis.currentData(),
             pitch_mm=self.pitch.value(),
             pad_diameter_mm=self.pad.value(),
             drill_mm=self.drill.value(),

@@ -15928,7 +15928,7 @@ def test_a_family_and_its_words_are_said_in_the_windows_language() -> None:
         names = [family_name(f) for f in FAMILIES]
         assert all(name != f.name for name, f in zip(names, FAMILIES, strict=True))
         for vocabulary in _words().values():
-            for word in vocabulary.values():
-                assert word and "-" not in word.split()[0], word
+            for value, word in vocabulary.items():
+                assert word and word != value, f"{value} is shown as its id"
     finally:
         set_language(before)
