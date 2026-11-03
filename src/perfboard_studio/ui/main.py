@@ -6435,6 +6435,9 @@ class MainWindow(QMainWindow):
         self.library_filter.setPlaceholderText(t("Filter parts…  (resistor, dip, 5mm)"))
         self.library_filter.setClearButtonEnabled(True)
         self.library_filter.textChanged.connect(self._refresh_library)
+        # What Add a Part's status line promises -- "Enter puts it on the sheet" -- and
+        # what the package picker's search already did: Enter in the search did nothing.
+        self.library_filter.returnPressed.connect(self._on_library_return)
         layout.addWidget(self.library_filter)
 
         self.library_tree = PartTree()
@@ -7798,6 +7801,43 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             t("Type what the part is; Enter puts it on the sheet."), 8000
         )
+
+    def _on_library_return(self) -> None:
+        """Enter in the Library's search: the part chosen in the list, else the first it
+        lists. With the sheet in front it goes on the sheet; with the board, choosing it
+        arms it to be placed, as a click in the list does."""
+        tree = self.library_tree
+        item: QTreeWidgetItem | None = tree.currentItem()
+        if item is None or not isinstance(item.data(0, ROLE_FOOTPRINT_ID), str):
+            item = self._first_library_part()
+        if item is None:
+            self.statusBar().showMessage(t("No part in the Library matches that."), 5000)
+            return
+        tree.setCurrentItem(item)
+        item.setSelected(True)
+        tree.scrollToItem(item)
+        self._on_library_item_activated(item)
+
+    def _first_library_part(self) -> QTreeWidgetItem | None:
+        """The first part the Library lists, in the order it lists them."""
+        tree = self.library_tree
+
+        def first(item: QTreeWidgetItem) -> QTreeWidgetItem | None:
+            if isinstance(item.data(0, ROLE_FOOTPRINT_ID), str) and not item.isHidden():
+                return item
+            for index in range(item.childCount()):
+                child = item.child(index)
+                found = first(child) if child is not None else None
+                if found is not None:
+                    return found
+            return None
+
+        for index in range(tree.topLevelItemCount()):
+            top = tree.topLevelItem(index)
+            found = first(top) if top is not None and not top.isHidden() else None
+            if found is not None:
+                return found
+        return None
 
     def _on_library_item_activated(self, item: QTreeWidgetItem, _column: int = 0) -> None:
         """Enter or a double-click on a Library part, with the sheet in front: the part in

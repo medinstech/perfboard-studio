@@ -15513,3 +15513,34 @@ def test_a_finding_can_be_gone_to_and_its_connections_wired(monkeypatch) -> None
         assert "Copy This Problem" in labels
     finally:
         _close(window)
+
+
+def test_enter_in_the_library_search_puts_the_first_part_on_the_sheet() -> None:
+    """The status line said "Enter puts it on the sheet" and Enter in the search did
+    nothing: it puts the first part the search lists there, as the package picker does."""
+    from perfboard_studio.ui.main import ROLE_FOOTPRINT_ID
+
+    window = _blank_window()
+    try:
+        window.on_schematic_add_part()
+        window.library_filter.setText("resistor")
+        before = len(window.bus.document.parts)
+        window.library_filter.returnPressed.emit()
+        assert len(window.bus.document.parts) == before + 1
+        chosen = window.library_tree.currentItem()
+        assert chosen is not None and chosen.data(0, ROLE_FOOTPRINT_ID)
+    finally:
+        _close(window)
+
+
+def test_enter_with_nothing_found_says_so() -> None:
+    window = _blank_window()
+    try:
+        window.on_schematic_add_part()
+        window.library_filter.setText("zzzz-no-such-part")
+        before = len(window.bus.document.parts)
+        window.library_filter.returnPressed.emit()
+        assert len(window.bus.document.parts) == before
+        assert window.statusBar().currentMessage() == "No part in the Library matches that."
+    finally:
+        _close(window)

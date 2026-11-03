@@ -41,6 +41,7 @@ TURKISH: Mapping[str, str] = {
     "&Wiring": "&Kablolama",
     "&View": "&Görünüm",
     "&Help": "Y&ardım",
+    "No part in the Library matches that.": "Kütüphanede buna uyan bir parça yok.",
     "Next Problem": "Sonraki Sorun",
     "Wire the connections that are left, as Next does on Wiring.": "Kalan bağlantıları kablolar; Kablolama adımında Sonraki düğmesinin yaptığı gibi.",
     "&Go to It": "&Oraya Git",
