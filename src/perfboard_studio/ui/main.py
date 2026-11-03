@@ -198,7 +198,6 @@ from perfboard_studio.commands import (
     UpdateNetPayload,
     UpdatePartPayload,
     create_document_id_generator,
-    create_empty_document,
     create_standard_registry,
     create_starter_document,
     design_on_a_new_board,
@@ -5238,7 +5237,7 @@ class MainWindow(QMainWindow):
             )
         )
         act_new_project.triggered.connect(self.on_new_project)
-        act_new = file_menu.addAction(t("&New Board…"))
+        act_new = file_menu.addAction(t("&New Board"))
         act_new.setShortcut(QKeySequence.StandardKey.New)
         act_new.setToolTip(t("A blank board with no home on disk yet."))
         act_new.triggered.connect(self.on_new)
@@ -11737,35 +11736,19 @@ class MainWindow(QMainWindow):
     # -- file ----------------------------------------------------------------
 
     def on_new(self) -> None:
-        """Start a blank board, after asking about anything unsaved."""
+        """Start a blank design, after asking about anything unsaved.
+
+        THE BOARD IS NOT ASKED HERE, as it is not in New Project: Board Setup came first,
+        before there was a circuit to try on any board, and then the Board step asked again
+        -- a size picked blind where step 2 tries every stock size with the circuit laid out
+        on it. The design starts on the board a blank window starts on, the sheet in front,
+        and the Board step chooses; Board ▸ Board Setup is there for anybody who knows.
+        """
         if not self._offer_to_save():
             return
-        starter = create_starter_document(
+        document = create_starter_document(
             DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso())
         )
-        dialog = BoardSetupDialog(
-            starter.board,
-            self,
-            title=t("New Board"),
-            document=starter,
-            lookup=self.lookup,
-            verb=t("Create Board"),
-        )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        # The fingers and corner holes come with the board, as they do in Board Setup.
-        # Without this a preset chosen here produced the grid and none of the product,
-        # which is the state `board.applyPreset` exists to make unreachable.
-        features = dialog.preset_features()
-        document = create_empty_document(
-            DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso()),
-            dialog.board(),
-        )
-        if features is not None:
-            connectors, holes = features
-            document = dataclasses.replace(
-                document, edge_connectors=connectors, mounting_holes=holes
-            )
         self.current_path = None
         self._disk_text = None
         self._watch_current_path()
@@ -11778,10 +11761,9 @@ class MainWindow(QMainWindow):
         self.view.fit_board()
         self._open_the_schematic_on_an_empty_design()
         self.statusBar().showMessage(
-            t("New {cols} × {rows} {material} board").format(
-                cols=document.board.cols, rows=document.board.rows, material=document.board.material
-            ),
-            8000,
+            t("A new design. Draw the circuit; the board it goes on is the next step, tried "
+              "with the circuit on it."),
+            12000,
         )
 
     def on_board_from_design(self) -> None:

@@ -51,7 +51,7 @@ TURKISH: Mapping[str, str] = {
     "3D S&napshot…": "3D &Görüntü…",
     "3D &Model (STEP)…": "3D &Model (STEP)…",
     # -- file ----------------------------------------------------------------
-    "&New Board…": "&Yeni Kart…",
+    "&New Board": "&Yeni Kart",
     "New Board from This &Design…": "Bu Tasarımdan Yeni Kart &Oluştur…",
     "The same circuit on a board with nothing on it yet — how a design tried on a breadboard goes on to perfboard. The board it is on now, and its file, stay exactly as they are.":
         "Aynı devre, üzerinde henüz hiçbir şey olmayan bir kartta — breadboard'da denenen bir tasarım perfboard'a böyle geçer. Şimdiki kart ve dosyası olduğu gibi kalır.",
@@ -452,7 +452,6 @@ TURKISH: Mapping[str, str] = {
     "3D View": "3D Görünüm",
     "Problems": "Sorunlar",
     # -- dialogs -------------------------------------------------------------
-    "New Board": "Yeni Kart",
     "Board Setup": "Kart Ayarları",
     "Columns": "Sütun",
     "Rows": "Satır",
@@ -803,6 +802,9 @@ TURKISH: Mapping[str, str] = {
     "Rotation": "Dönüş",
     "Mirrored": "Aynalanmış",
     "Face": "Yüz",
+    "A new design. Draw the circuit; the board it goes on is the next step, tried with the circuit on it.": (
+        "Yeni bir tasarım. Devreyi çizin; gideceği kart bir sonraki adımda, devre üzerindeyken denenir."
+    ),
     "Locked": "Kilitli",
     "Kind": "Tür",
     "Type what the part is; Enter puts it on the sheet.": (
@@ -1671,7 +1673,6 @@ TURKISH: Mapping[str, str] = {
     "({count} warning(s))": "({count} uyarı)",
     "Opened with warnings": "Uyarılarla açıldı",
     "{name} loaded, but not all of it was understood:": "{name} yüklendi, ama tamamı anlaşılamadı:",
-    "New {cols} × {rows} {material} board": "Yeni {cols} × {rows} {material} kart",
     "Save failed": "Kaydedilemedi",
     "Could not write {path}: {reason}": "{path} yazılamadı: {reason}",
     "Saved {path}": "Kaydedildi: {path}",
@@ -2645,7 +2646,6 @@ TURKISH: Mapping[str, str] = {
     "Rearrange": "Yeniden Diz",
     # What an accepting button says, rather than OK.
     "Use This Board": "Bu Kartı Kullan",
-    "Create Board": "Kartı Oluştur",
     "Use This Part": "Bu Parçayı Kullan",
     "Create Project": "Projeyi Oluştur",
     "Move the Parts": "Parçaları Taşı",

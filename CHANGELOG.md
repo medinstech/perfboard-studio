@@ -200,6 +200,10 @@ closed without a bump.
   lock is "Locked" with the reason on hover, the wire kinds are one list, and the panel
   takes the width the editor showing needs. The package picker opens beside the panel,
   never over it or off the screen, wide enough to tell a 3-hole resistor from a 4-hole one.
+- **New Board starts a blank design.** It opened Board Setup before there was a circuit to
+  try on any board, and the Board step then asked again; now the sheet is in front and the
+  Board step chooses, as New Project does. Board ▸ Board Setup is there for anybody who
+  knows the board already.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

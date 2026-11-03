@@ -15042,3 +15042,24 @@ def test_every_editor_in_properties_fits_its_panel(language: str) -> None:
         _close(window)
     finally:
         set_language(before)
+
+
+def test_new_board_starts_a_blank_design_without_asking_about_a_board(monkeypatch) -> None:
+    """Board Setup came first, before there was a circuit to try on any board, and the
+    Board step asked again. New Board is a blank design with the sheet in front."""
+    from perfboard_studio.ui import main as main_module
+
+    window = _window_on(_load_dense())
+    try:
+        asked: list[str] = []
+        monkeypatch.setattr(
+            main_module.BoardSetupDialog, "exec", lambda self: asked.append("board") or 0
+        )
+        monkeypatch.setattr(type(window), "_offer_to_save", lambda self: True)
+        window.on_new()
+        document = window.bus.document
+        assert asked == []
+        assert not document.components and not document.parts
+        assert window._is_in_front(window.dock_schematic)
+    finally:
+        _close(window)

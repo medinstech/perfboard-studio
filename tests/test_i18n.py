@@ -364,7 +364,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
         # The menu bar itself. Turkish had three menus on Y (Yerleştir, Yol, Yardım) and
         # two on Z (Düzen, Çiz), so Alt+Y reached one of three at random.
         "menu bar": ["&File", "&Edit", "&Circuit", "&Board", "&Wiring", "&View", "&Help"],
-        "file": ["New &Project…", "&New Board…", "New Board from This &Design…",
+        "file": ["New &Project…", "&New Board", "New Board from This &Design…",
                  "Same &Layout on a Solderable Breadboard…", "&Open…", "Open P&roject…",
                  "Open Recen&t", "Open E&xample", "&Save", "Save &As…", "Save Pro&ject",
                  "Autosave to the &File", "Reload from Dis&k", "&Import from KiCad…",
