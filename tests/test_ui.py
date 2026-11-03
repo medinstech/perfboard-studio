@@ -11011,7 +11011,11 @@ def test_a_confirmation_puts_cancel_under_enter(monkeypatch) -> None:
 
     def fake_exec(self):
         seen["default"] = self.defaultButton().text()
+        seen["default variant"] = str(self.defaultButton().property("variant") or "")
         seen["buttons"] = "|".join(b.text() for b in self.buttons())
+        seen["danger"] = "|".join(
+            b.text() for b in self.buttons() if b.property("variant") == "danger"
+        )
         return 0
 
     monkeypatch.setattr(QMessageBox, "exec", fake_exec)
@@ -11020,6 +11024,10 @@ def test_a_confirmation_puts_cancel_under_enter(monkeypatch) -> None:
         assert window._confirm("Delete parts", "Delete R1?", "Delete") is False
         assert seen["default"] == "Cancel"
         assert "Delete" in seen["buttons"]
+        # The verb is drawn as destructive, and only the verb: Enter's Cancel keeps the
+        # accent it has as the default (picked 2026-11-03, candidate D).
+        assert seen["danger"] == "Delete"
+        assert seen["default variant"] == ""
     finally:
         _close(window)
 

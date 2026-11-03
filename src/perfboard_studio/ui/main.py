@@ -11776,6 +11776,7 @@ class MainWindow(QMainWindow):
         cancel = box.addButton(QMessageBox.StandardButton.Cancel)
         box.setDefaultButton(cancel)
         box.setEscapeButton(cancel)
+        theme.mark_destructive(box)
         box.exec()
         return box.clickedButton() is go
 
@@ -13124,6 +13125,7 @@ class MainWindow(QMainWindow):
         if discard is not None:
             discard.setText(t("Don't Save"))
         box.setDefaultButton(QMessageBox.StandardButton.Save)
+        theme.mark_destructive(box)
         answer = box.exec()
         if answer == QMessageBox.StandardButton.Save:
             return self.on_save()
@@ -13385,6 +13387,7 @@ class MainWindow(QMainWindow):
             discard = box.addButton(t("Discard It"), QMessageBox.ButtonRole.DestructiveRole)
             later = box.addButton(t("Decide Later"), QMessageBox.ButtonRole.RejectRole)
             box.setDefaultButton(later)
+            theme.mark_destructive(box)
             box.exec()
 
             if box.clickedButton() is recover:

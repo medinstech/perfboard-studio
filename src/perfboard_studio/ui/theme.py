@@ -59,6 +59,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QMenuBar,
+    QMessageBox,
     QProxyStyle,
     QStyle,
     QStyleHintReturn,
@@ -335,7 +336,7 @@ def tone(widget: QWidget, role: Role | None) -> None:
     restyle(widget)
 
 
-Variant = Literal["primary", "link", "card"]
+Variant = Literal["primary", "link", "card", "danger"]
 
 
 def elevate(widget: QWidget) -> None:
@@ -352,10 +353,26 @@ def elevate(widget: QWidget) -> None:
 
 
 def variant(widget: QWidget, name: Variant | None) -> None:
-    """A button's kind -- the one accent-filled action on a surface, or a link -- or a
-    card: a raised surface with a hairline edge, for a frame that groups."""
+    """A button's kind -- the one accent-filled action on a surface, a destructive answer,
+    or a link -- or a card: a raised surface with a hairline edge, for a frame that groups."""
     widget.setProperty("variant", name or "")
     restyle(widget)
+
+
+def mark_destructive(box: QMessageBox) -> None:
+    """Draw a message box's destructive answers -- Delete, Don't Save, Discard It -- as
+    such: outlined in the danger colour. Enter stays on the safe answer, which keeps the
+    accent as the box's default.
+
+    The safe default used to be the only button that looked like anything, so "Delete"
+    sat beside a blue Cancel looking like the lesser choice. Chosen 2026-11-03 from four
+    candidates rendered on the real boxes (a red fill, a red outline with the default only
+    ringed, and this). Every box that offers a DestructiveRole button calls this once,
+    before it is shown; ``test_theme`` reads the sources for one that does not.
+    """
+    for button in box.buttons():
+        if box.buttonRole(button) == QMessageBox.ButtonRole.DestructiveRole:
+            variant(button, "danger")
 
 
 def size(widget: QWidget, px: int) -> None:
@@ -541,6 +558,16 @@ QPushButton:default:hover, QPushButton[variant="primary"]:hover {{
 QPushButton:default:pressed, QPushButton[variant="primary"]:pressed {{
     background: {k.accent_pressed};
 }}
+/* A destructive answer (mark_destructive): outlined in the danger colour, never filled,
+   so the safe default beside it keeps the one accent. */
+QPushButton[variant="danger"] {{
+    background: {k.bg_surface};
+    color: {k.danger};
+    border: 1px solid {k.danger};
+    font-weight: {SEMIBOLD};
+}}
+QPushButton[variant="danger"]:hover {{ background: {k.danger_subtle}; }}
+QPushButton[variant="danger"]:focus {{ border-color: {k.accent}; }}
 QPushButton:flat, QPushButton[variant="link"] {{ background: transparent; border: none; }}
 QPushButton[variant="link"] {{
     color: {k.text_secondary};

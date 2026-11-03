@@ -144,6 +144,43 @@ def test_the_stylesheet_says_nothing_the_tokens_do_not() -> None:
         assert sheet.count("{") == sheet.count("}")
 
 
+def test_every_destructive_answer_is_drawn_as_one() -> None:
+    """A message box's Delete, Don't Save or Discard It is outlined in the danger colour by
+    ``theme.mark_destructive``, called once by the box. Asking each new box to remember is
+    how "Delete" came to look like the lesser choice beside a blue Cancel, so the sources
+    are read: a function that offers a destructive button marks it."""
+    import ast
+
+    ui = Path(__file__).resolve().parents[1] / "src" / "perfboard_studio" / "ui"
+    offering = 0
+    for source in sorted(ui.glob("*.py")):
+        text = source.read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            body = ast.get_source_segment(text, node) or ""
+            if "ButtonRole.DestructiveRole" in body or "StandardButton.Discard" in body:
+                offering += 1
+                assert "mark_destructive(" in body, f"{source.name}: {node.name}"
+    assert offering >= 3, "the scan found fewer boxes than _confirm, unsaved and recovery"
+
+
+def test_a_destructive_answer_is_outlined_and_the_default_keeps_the_accent() -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    box = QMessageBox()
+    delete = box.addButton("Delete", QMessageBox.ButtonRole.DestructiveRole)
+    cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+    box.setDefaultButton(cancel)
+    theme.mark_destructive(box)
+    assert delete.property("variant") == "danger"
+    assert not cancel.property("variant")
+    sheet = theme.stylesheet(DARK)
+    rule = re.search(r'QPushButton\[variant="danger"\] \{([^}]*)\}', sheet)
+    assert rule is not None and DARK.danger in rule.group(1)
+    box.deleteLater()
+
+
 def test_a_default_button_is_not_drawn_wider_than_it_was_measured() -> None:
     """Qt measures a button with its font as no pseudo-state has it. A ``:default`` drawn
     semibold was measured regular, and the dialogs' default buttons lost a letter at each
