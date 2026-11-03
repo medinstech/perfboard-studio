@@ -7842,12 +7842,9 @@ class MainWindow(QMainWindow):
         and no command refuses one for overlapping anything. A drawing tool that argued
         with what was written on it would be worse than one with no notes at all.
         """
-        text = ""
-        if kind == "text":
-            text, ok = QInputDialog.getText(self, t("Write on the Sheet"), t("Text:"))
-            if not ok or not text.strip():
-                return
-            text = text.strip()
+        # A caption is written saying "Text", selected, and typed over in Properties --
+        # no dialog first: what it says is the note's own field.
+        text = t("Text") if kind == "text" else ""
         result = self.bus.dispatch(
             "sheet.note.add",
             AddSheetNotePayload(
@@ -7864,6 +7861,11 @@ class MainWindow(QMainWindow):
         self.schematic_view.set_tool("select")
         if hasattr(self, "act_sheet_tool"):
             self.act_sheet_tool["select"].setChecked(True)
+        if kind == "text":
+            self.schematic_view.set_selection([], [len(self.bus.document.sheet_notes) - 1])
+            self._selection_from = "sheet"
+            self._refresh_properties()
+            self.inspector.focus_field("text")
 
     def on_sheet_delete(self) -> None:
         """Delete key on the sheet: whichever of the two things is selected.
@@ -9139,9 +9141,14 @@ class MainWindow(QMainWindow):
         """What is selected on the sheet, as the parts it names, or None: parts on the board
         by their component ids, parts still only in the design by their part ids."""
         refs = set(self.schematic_view.selected_refs)
-        if not refs:
-            return None
         document = self.bus.document
+        if not refs:
+            # A note picked on the sheet: its index is its place in ``sheet_notes``, which
+            # is the order the sheet draws them in.
+            notes = list(self.schematic_view.selected_notes)
+            if len(notes) == 1 and 0 <= notes[0] < len(document.sheet_notes):
+                return Selection("sheet-note", (document.sheet_notes[notes[0]].id,), "sheet")
+            return None
         placed = tuple(c.id for c in document.components if c.ref in refs)
         design = tuple(p.id for p in document.parts if p.ref in refs)
         if placed and not design:

@@ -155,6 +155,9 @@ closed without a bump.
 - **A board label is edited in Properties.** Add Label writes one at once and puts the
   keyboard in its text; its height, rotation and face are beside it, each one undo step. A
   double-click on a label selects it there. The Board Label dialog is gone.
+- **Text on the schematic is written in place.** The Text tool writes a caption where it
+  is clicked and puts the keyboard in its words in Properties, beside its size; it used to
+  ask in a dialog first. A note picked on the sheet is shown there too.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

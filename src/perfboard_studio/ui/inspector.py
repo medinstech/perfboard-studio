@@ -59,6 +59,7 @@ from perfboard_studio.commands import (
     UpdateComponentPayload,
     UpdateComponentsPayload,
     UpdateNetPayload,
+    UpdateSheetNotePayload,
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import format_hole, parse_hole
@@ -70,6 +71,7 @@ from perfboard_studio.model import (
     NetClass,
     PerfDocument,
     Rotation,
+    SheetNote,
 )
 from perfboard_studio.parsers.kicad import infer_net_class
 
@@ -1138,6 +1140,80 @@ class _BoardNoteEditor(QWidget):
         )
 
 
+# -- something written or drawn on the sheet -------------------------------------------------
+
+
+class _SheetNoteEditor(QWidget):
+    """A note on the sheet: what a caption says and how tall it is written; a box, a line or
+    a circle is said by name. The Text tool writes one saying "Text" and puts the keyboard
+    here, in place of the dialog that asked first."""
+
+    def __init__(self, inspector: Inspector) -> None:
+        super().__init__()
+        self._inspector = inspector
+        self._note: SheetNote | None = None
+        self._loading = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+        form = _form()
+        self.text = CommitLine(self._commit_text)
+        _add_field(form, t("Text"), self.text, self.text.problem)
+        self.text_height = QDoubleSpinBox()
+        self.text_height.setRange(0.5, 20.0)
+        self.text_height.setSingleStep(0.5)
+        self.text_height.setDecimals(1)
+        self.text_height.setSuffix(" mm")
+        self.text_height.editingFinished.connect(self._commit_size)
+        self.size_problem = _Problem()
+        _add_field(form, t("Size"), self.text_height, self.size_problem)
+        self._form = form
+        layout.addLayout(form)
+
+    def load(self, note: SheetNote) -> None:
+        another = self._note is None or self._note.id != note.id
+        self._note = note
+        self._loading = True
+        try:
+            # Each said in the tool's own word, as the sheet's tools name them.
+            kinds = {"text": t("Text"), "rectangle": t("Box"), "line": t("Line"),
+                     "circle": t("Circle")}
+            self.title.setText(theme.heading(kinds.get(note.kind, note.kind)))
+            writing = note.kind == "text"
+            for row in (0, 1):  # the text and its size: a box has neither
+                self._form.setRowVisible(row, writing)
+            self.text.show_value(note.text)
+            if not self.text_height.hasFocus():
+                self.text_height.setValue(note.size_mm)
+            if another:
+                self.size_problem.show_problem("")
+        finally:
+            self._loading = False
+
+    def _commit_text(self, typed: str) -> str | None:
+        note = self._note
+        if note is None:
+            return None
+        return self._inspector.dispatch(
+            "sheet.note.update", UpdateSheetNotePayload(id=note.id, text=typed)
+        )
+
+    def _commit_size(self) -> None:
+        note = self._note
+        if self._loading or note is None or self.text_height.value() == note.size_mm:
+            return
+        self.size_problem.show_problem(
+            self._inspector.dispatch(
+                "sheet.note.update",
+                UpdateSheetNotePayload(id=note.id, size_mm=self.text_height.value()),
+            )
+            or ""
+        )
+
+
 # -- everything else, said in one line until it has an editor ----------------------------
 
 
@@ -1184,6 +1260,7 @@ class Inspector(QWidget):
         self.placing_editor = _PlacingEditor(self)
         self.net_editor = _NetEditor(self, actions)
         self.board_note_editor = _BoardNoteEditor(self, actions)
+        self.sheet_note_editor = _SheetNoteEditor(self)
         self.summary = _Summary()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1192,7 +1269,7 @@ class Inspector(QWidget):
         # page: the board's three fields would sit over the part editor's empty height.
         self._pages: tuple[QWidget, ...] = (
             self.board_editor, self.part_editor, self.parts_editor, self.placing_editor,
-            self.net_editor, self.board_note_editor, self.summary,
+            self.net_editor, self.board_note_editor, self.sheet_note_editor, self.summary,
         )
         for page in self._pages:
             layout.addWidget(page)
@@ -1243,6 +1320,11 @@ class Inspector(QWidget):
             if note is not None:
                 self.board_note_editor.load(note)
                 page = self.board_note_editor
+        elif selection.kind == "sheet-note" and len(selection.ids) == 1:
+            written = next((n for n in document.sheet_notes if n.id == selection.ids[0]), None)
+            if written is not None:
+                self.sheet_note_editor.load(written)
+                page = self.sheet_note_editor
         elif selection.kind == "placing" and selection.ids:
             self.placing_editor.load(selection.ids[0])
             page = self.placing_editor
@@ -1268,6 +1350,8 @@ class Inspector(QWidget):
             fields = {"name": self.net_editor.name}
         elif self.shown is self.board_note_editor:
             fields = {"text": self.board_note_editor.text}
+        elif self.shown is self.sheet_note_editor:
+            fields = {"text": self.sheet_note_editor.text}
         elif self.shown is self.board_editor:
             fields = {"name": self.board_editor.name}
         field = fields.get(name)

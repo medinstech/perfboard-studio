@@ -1548,6 +1548,12 @@ saying "Label" where the view is looking (or where the right-click was), selects
 puts the keyboard in its text; a double-click on a label, or Edit Label, selects it. The
 Board Label dialog is gone.
 
+A note on the sheet is what it says and how tall, or a box, a line or a circle said by name.
+The sheet picks a note by its index in the drawing, which is its place in `sheet_notes`, so
+`_selection_on_the_sheet` turns one picked note into a `sheet-note` selection by that id.
+The Text tool writes "Text" where it was clicked, selects it and puts the keyboard in its
+words: it asked in a dialog first.
+
 **The panel is told the selection once per command.** The board empties its selection
 while it rebuilds and puts it back after, and the signals between would show the board's
 editor for an instant and take the keyboard out of the field Tab had just moved to. So

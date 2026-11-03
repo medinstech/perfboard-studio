@@ -801,7 +801,6 @@ TURKISH: Mapping[str, str] = {
     "Rotation": "Dönüş",
     "Mirrored": "Aynalanmış",
     "Face": "Yüz",
-    "Text:": "Metin:",
     "Mixed": "Karışık",
     "Typed once, given to every part selected, as one step to undo.": (
         "Bir kez yazılır, seçili her parçaya verilir; tek adımda geri alınır."
@@ -988,7 +987,6 @@ TURKISH: Mapping[str, str] = {
     "Drag out the shape. Esc cancels.": "Şekli sürükleyerek çizin. Esc iptal eder.",
     "Connect by Name": "Ada Göre Bağla",
     "Net for {pin}:": "{pin} için net:",
-    "Write on the Sheet": "Sayfaya Yaz",
     "No package called {id}.": "{id} adında bir kılıf yok.",
     "Fix the sheet layout": "Sayfa düzenini sabitle",
     "Drag a part onto the board or the sheet — or pick one and click. Esc cancels.": (

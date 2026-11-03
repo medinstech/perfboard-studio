@@ -14749,3 +14749,22 @@ def test_editing_a_label_selects_it_in_properties() -> None:
     assert window.inspector.shown is window.inspector.board_note_editor
     assert window.inspector.board_note_editor.text.text() == "CAN"
     _close(window)
+
+
+def test_the_text_tool_writes_and_puts_the_keyboard_in_properties() -> None:
+    """The Text tool asked what to write in a dialog first. It writes "Text" where it was
+    clicked, selects it, and its words and size are the note's own fields in Properties."""
+    from perfboard_studio.ui.i18n import t
+
+    window = _window_on(_load_dense())
+    before = len(window.bus.document.sheet_notes)
+    window.on_sheet_note_drawn("text", 10.0, 10.0, 10.0, 10.0)
+    assert len(window.bus.document.sheet_notes) == before + 1
+    note = window.bus.document.sheet_notes[-1]
+    assert note.text == t("Text")
+    editor = window.inspector.sheet_note_editor
+    assert window.inspector.shown is editor
+    _type_into(editor.text, "POWER STAGE")
+    edited = next(n for n in window.bus.document.sheet_notes if n.id == note.id)
+    assert edited.text == "POWER STAGE"
+    _close(window)
