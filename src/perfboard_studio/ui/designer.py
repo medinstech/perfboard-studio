@@ -164,7 +164,14 @@ def _words() -> dict[str, dict[str, str]]:
             "1000": t("1000 mil · ESP32 devkit"),
             "1000-flex": t("1000 mil flex · 300 mil for columns 1–39"),
         },
+        # Short in the field, the sentence in the list and on hover: the sentence in the
+        # closed box was cut to "... Tolerates heat we" at the column's width.
         "material": {
+            "FR4": t("FR-4 (glass epoxy)"),
+            "FR2": t("FR-2 (phenolic paper)"),
+            "FR1": t("FR-1 (phenolic paper)"),
+        },
+        "material_said": {
             "FR4": t("FR-4 — glass epoxy, the green kind. Tolerates heat well."),
             "FR2": t("FR-2 — phenolic paper (\"pertinaks\"), the brown kind. Pads lift easily."),
             "FR1": t("FR-1 — phenolic paper, as FR-2."),
@@ -376,15 +383,25 @@ def _listed(family: BoardFamily) -> tuple[BoardSize, ...]:
     return family.sizes
 
 
-def _combo(words: dict[str, str], ids: tuple[str, ...]) -> QComboBox:
+def _combo(
+    words: dict[str, str], ids: tuple[str, ...], said: dict[str, str] | None = None
+) -> QComboBox:
     """A choice in words, as wide as the column lets it be: a material's whole sentence made
-    the settings wider than their column, and the right edge of every field was cut off."""
+    the settings wider than their column, and the right edge of every field was cut off.
+    ``said`` is a longer word for each, shown in the list and on hover, never in the field."""
     combo = QComboBox()
     combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
     combo.setMinimumContentsLength(10)
     for value in ids:
+        tip = (said or words).get(value, words.get(value, value))
         combo.addItem(words.get(value, value), value)
-        combo.setItemData(combo.count() - 1, words.get(value, value), Qt.ItemDataRole.ToolTipRole)
+        combo.setItemData(combo.count() - 1, tip, Qt.ItemDataRole.ToolTipRole)
+
+    def say_the_chosen(index: int) -> None:
+        combo.setToolTip(str(combo.itemData(index, Qt.ItemDataRole.ToolTipRole) or ""))
+
+    combo.currentIndexChanged.connect(say_the_chosen)
+    say_the_chosen(combo.currentIndex())
     return combo
 
 
@@ -682,7 +699,7 @@ class BoardDesigner(QDialog):
         self.strip_axis = _combo(w["axis"], ("horizontal", "vertical"))
         self.strip_axis.activated.connect(changed)
         self._row(pads, t("Strips run"), self.strip_axis, "strip_axis")
-        self.material = _combo(w["material"], ("FR4", "FR2", "FR1"))
+        self.material = _combo(w["material"], ("FR4", "FR2", "FR1"), w["material_said"])
         self.material.activated.connect(changed)
         self._row(pads, t("Material"), self.material, "material")
         self.pitch = _mm(2.54, 10.0)

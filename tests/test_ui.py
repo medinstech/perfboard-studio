@@ -16137,3 +16137,16 @@ def test_the_designers_fields_start_at_one_edge_in_every_section() -> None:
         dialog.close()
     finally:
         set_language("en")
+
+
+def test_the_material_is_short_in_its_field_and_said_in_full_on_hover() -> None:
+    """The sentence in the closed box was cut off at the column's width."""
+    from PySide6.QtCore import Qt
+
+    from tests.designer_support import designer_on
+
+    dialog = designer_on(_load_dense().board)
+    dialog.material.setCurrentIndex(dialog.material.findData("FR4"))
+    assert dialog.material.currentText() == "FR-4 (glass epoxy)"
+    said = dialog.material.itemData(dialog.material.currentIndex(), Qt.ItemDataRole.ToolTipRole)
+    assert said.startswith("FR-4 — glass epoxy") and dialog.material.toolTip() == said
