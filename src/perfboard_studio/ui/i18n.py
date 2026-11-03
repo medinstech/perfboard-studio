@@ -630,10 +630,10 @@ TURKISH: Mapping[str, str] = {
     "Perfboard layout design, verification and a soldering guide.": (
         "Perfboard yerleşim tasarımı, doğrulama ve bir lehimleme rehberi."
     ),
-    "{moved} of {movable} movable part(s) move": (
-        "Taşınabilir {movable} parçadan {moved} tanesi yer değiştiriyor"
+    "Parts that move: {moved} of {movable}": (
+        "Yer değiştiren parçalar: {movable} taneden {moved}"
     ),
-    "{locked} locked part(s) stay put.": "kilitli {locked} parça yerinde kalıyor.",
+    "locked, and left where they are: {locked}.": "kilitli olduğu için yerinde kalan: {locked}.",
     "Estimated connection length: {before} mm → {after} mm.": (
         "Tahmini bağlantı uzunluğu: {before} mm → {after} mm."
     ),
@@ -763,10 +763,10 @@ TURKISH: Mapping[str, str] = {
     "Apply this placement?": "Bu yerleşim uygulansın mı?",
     "Redo the wiring?": "Kablolama yeniden yapılsın mı?",
     "Redo Wiring": "Kablolamayı Yeniden Yap",
-    "{removed} existing conductor(s) will be removed and {planned} planned "
-    "in their place. Copper with no net assigned is left alone.": (
-        "Mevcut {removed} iletken kaldırılacak ve yerlerine {planned} iletken "
-        "planlanacak. Neti atanmamış bakıra dokunulmaz."
+    "Conductors to remove: {removed}; to plan in their place: {planned}. Copper with no net "
+    "assigned is left alone.": (
+        "Kaldırılacak iletken: {removed}; yerlerine planlanacak: {planned}. Neti atanmamış "
+        "bakıra dokunulmaz."
     ),
     "One Ctrl+Z puts it all back.": "Tek bir Ctrl+Z hepsini geri getirir.",
     "Placement refused": "Yerleşim reddedildi",
@@ -1174,9 +1174,9 @@ TURKISH: Mapping[str, str] = {
     "sizes below it. The suggested one is the smallest that builds as well: every "
     "part placed, every connection made, no warning the roomy board does not have, "
     "and at most {percent}% dearer to wire.": (
-        "Devreniz geniş kartta ve ondan küçük boylarda yerleştirildi, tellendi ve "
+        "Devreniz geniş kartta ve ondan küçük boylarda yerleştirildi, kablolandı ve "
         "denetlendi. Önerilen, aynı iyilikte kurulan en küçük boy: her parça yerinde, "
-        "her bağlantı yapılmış, geniş kartta olmayan hiçbir uyarı yok, ve tellemesi en "
+        "her bağlantı yapılmış, geniş kartta olmayan hiçbir uyarı yok, ve kablolaması en "
         "fazla %{percent} daha pahalı."
     ),
     "Stopped before every board was tried; the suggestion is the smallest tried.": (
@@ -1187,21 +1187,27 @@ TURKISH: Mapping[str, str] = {
     "the roomy board the smaller ones are measured against": (
         "küçük kartların kıyaslandığı geniş kart"
     ),
-    "builds as well, at {percent}% of its wiring cost": (
-        "aynı iyilikte kuruluyor, telleme maliyeti geniş karta göre %{percent}"
+    "builds as well, wiring at {percent}% of the roomy board's cost": (
+        "aynı iyilikte kuruluyor, kablolama maliyeti geniş karta göre %{percent}"
     ),
     "wires dearer: {percent}% of the roomy board's cost": (
-        "tellemesi pahalı: geniş karta göre %{percent}"
+        "kablolaması pahalı: geniş karta göre %{percent}"
     ),
     "warns: {rules}": "uyarı veriyor: {rules}",
-    "{count} connection(s) would not wire": "{count} bağlantı kablolanamıyor",
-    "{count} board-check error(s) once wired": "kablolanınca {count} kart denetimi hatası",
-    "not tried · a quick layout had no room for {count} part(s)": (
+    "{count} connection would not wire": "{count} bağlantı kablolanamıyor",
+    "{count} connections would not wire": "{count} bağlantı kablolanamıyor",
+    "{count} board-check error once wired": "kablolanınca {count} kart denetimi hatası",
+    "{count} board-check errors once wired": "kablolanınca {count} kart denetimi hatası",
+    "not tried · a quick layout had no room for {count} part": (
+        "denenmedi · hızlı yerleşimde {count} parçaya yer çıkmadı"
+    ),
+    "not tried · a quick layout had no room for {count} parts": (
         "denenmedi · hızlı yerleşimde {count} parçaya yer çıkmadı"
     ),
     "Keep the board I have  ·  {cols} × {rows}": "Mevcut kartım kalsın  ·  {cols} × {rows}",
     "fits, {percent}% full": "sığıyor, %{percent} dolu",
-    "too small — {count} part(s) will not fit": "çok küçük — {count} parça sığmıyor",
+    "too small — {count} part will not fit": "çok küçük — {count} parça sığmıyor",
+    "too small — {count} parts will not fit": "çok küçük — {count} parça sığmıyor",
     "Suggested:  ": "Önerilen:  ",
     "Arranging the circuit on the board…": "Devre kart üzerine yerleştiriliyor…",
     "Board refused": "Kart reddedildi",
@@ -1269,8 +1275,11 @@ TURKISH: Mapping[str, str] = {
         "Bu kartta yapılmış {count} adımın işareti kaldırılsın mı?"
     ),
     "Build guide written": "Montaj rehberi yazıldı",
+    "Written to {folder}, with one other file.": (
+        "Bir başka dosyayla birlikte {folder} klasörüne yazıldı."
+    ),
     "Written to {folder}, with {count} other files.": (
-        "{folder} içine yazıldı, {count} dosya daha."
+        "{count} başka dosyayla birlikte {folder} klasörüne yazıldı."
     ),
     "Open the Guide": "Rehberi Aç",
     "Schematic written": "Şema yazıldı",
@@ -1293,7 +1302,7 @@ TURKISH: Mapping[str, str] = {
         "karar verirsiniz."
     ),
     "Open the Recovered Board": "Kurtarılan Kartı Aç",
-    "Discard It": "At",
+    "Discard It": "Kopyayı At",
     "Decide Later": "Sonra Karar Ver",
     "Recovered {name}. It has not been saved yet.": (
         "{name} kurtarıldı. Henüz kaydedilmedi."
@@ -1637,14 +1646,16 @@ TURKISH: Mapping[str, str] = {
     "Deleted {count} part(s)": "{count} parça silindi",
     "Disconnected {count} pin(s)": "{count} pin ayrıldı",
     # -- confirmations, with the verb on the button ------------------------------------
-    "Delete {count} conductor(s)?": "{count} iletken silinsin mi?",
+    "Delete {count} conductor?": "{count} iletken silinsin mi?",
+    "Delete {count} conductors?": "{count} iletken silinsin mi?",
     "Delete {refs}?": "{refs} silinsin mi?",
-    "The {count} selected conductor(s) go with them.": (
+    "The selected conductor goes with them.": "Seçili iletken de onlarla birlikte silinir.",
+    "The {count} selected conductors go with them.": (
         "Seçili {count} iletken de onlarla birlikte silinir."
     ),
-    "Other wires and traces are left in place — DRC and LVS will point at "
-    "anything left dangling.": (
-        "Diğer teller ve lehim yolları yerinde kalır — boşta kalan ne varsa DRC ve LVS gösterir."
+    "Other wires and traces are left in place — the checks will point at anything left "
+    "dangling.": (
+        "Diğer teller ve lehim yolları yerinde kalır — boşta kalan ne varsa denetimler gösterir."
     ),
     "Delete net {name}?": "{name} neti silinsin mi?",
     "{count} conductor(s) already laid for it stay on the board, and Redo Wiring and "
@@ -1656,7 +1667,7 @@ TURKISH: Mapping[str, str] = {
     "This board has changes that are not saved.": "Bu kartta kaydedilmemiş değişiklikler var.",
     "Don't Save": "Kaydetme",
     "Saving keeps them; discarding loses them for good.": (
-        "Kaydet onları korur; Kaydetme temelli kaybettirir."
+        "Kaydederseniz korunurlar; kaydetmezseniz temelli kaybolurlar."
     ),
     "Discard the unsaved changes in this window and load {name} as it is "
     "on disk?": "Bu penceredeki kaydedilmemiş değişiklikler atılıp {name} diskteki haliyle yüklensin mi?",

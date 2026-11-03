@@ -3307,16 +3307,20 @@ class BoardSizeDialog(QDialog):
                 # Below the board the search stopped at. "Too small" would be the quick
                 # layout's claim, and the trials have just shown how much tighter the
                 # placer packs than that -- so it says what is actually known.
-                note = t("not tried · a quick layout had no room for {count} part(s)").format(
-                    count=len(suggestion.arrangement.unplaced)
+                note = counted(
+                    len(suggestion.arrangement.unplaced),
+                    t("not tried · a quick layout had no room for {count} part"),
+                    t("not tried · a quick layout had no room for {count} parts"),
                 )
             elif suggestion.fits:
                 note = t("fits, {percent}% full").format(
                     percent=round(suggestion.fill * 100)
                 )
             else:
-                note = t("too small — {count} part(s) will not fit").format(
-                    count=len(suggestion.arrangement.unplaced)
+                note = counted(
+                    len(suggestion.arrangement.unplaced),
+                    t("too small — {count} part will not fit"),
+                    t("too small — {count} parts will not fit"),
                 )
             suggested = recommended is not None and suggestion.preset is recommended.preset
             if pictures:
@@ -3401,7 +3405,9 @@ def _verdict_note(verdict: BoardVerdict) -> str:
     if verdict.kind == "reference":
         return t("the roomy board the smaller ones are measured against")
     if verdict.kind == "accepted":
-        return t("builds as well, at {percent}% of its wiring cost").format(percent=percent)
+        return t("builds as well, wiring at {percent}% of the roomy board's cost").format(
+            percent=percent
+        )
     if verdict.kind == "dearer":
         return t("wires dearer: {percent}% of the roomy board's cost").format(percent=percent)
     if verdict.kind == "new-warnings":
@@ -3409,10 +3415,22 @@ def _verdict_note(verdict: BoardVerdict) -> str:
             rules=", ".join(_rule_title(rule) for rule in verdict.new_warnings)
         )
     if verdict.kind == "unrouted":
-        return t("{count} connection(s) would not wire").format(count=trial.unrouted)
+        return counted(
+            trial.unrouted,
+            t("{count} connection would not wire"),
+            t("{count} connections would not wire"),
+        )
     if verdict.kind == "drc-errors":
-        return t("{count} board-check error(s) once wired").format(count=trial.drc_errors)
-    return t("too small — {count} part(s) will not fit").format(count=len(trial.unplaced))
+        return counted(
+            trial.drc_errors,
+            t("{count} board-check error once wired"),
+            t("{count} board-check errors once wired"),
+        )
+    return counted(
+        len(trial.unplaced),
+        t("too small — {count} part will not fit"),
+        t("too small — {count} parts will not fit"),
+    )
 
 
 def _matching_preset(board: Board) -> BoardPreset | None:
@@ -10675,11 +10693,13 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{say(describe_placement(plan))}{note}", 0)
 
     def _confirm_placement(self, plan: PlacementPlan) -> bool:
-        moving = t("{moved} of {movable} movable part(s) move").format(
+        moving = t("Parts that move: {moved} of {movable}").format(
             moved=len(plan.changes), movable=plan.movable
         )
         if plan.locked:
-            moving += ", " + t("{locked} locked part(s) stay put.").format(locked=plan.locked)
+            moving += "; " + t("locked, and left where they are: {locked}.").format(
+                locked=plan.locked
+            )
         else:
             moving += "."
         detail = [
@@ -10879,8 +10899,8 @@ class MainWindow(QMainWindow):
                 (f"<p>{why}</p>" if why else "")
                 + f"<b>{say(describe_reroute(plan))}</b><p>"
                 + t(
-                    "{removed} existing conductor(s) will be removed and {planned} planned "
-                    "in their place. Copper with no net assigned is left alone."
+                    "Conductors to remove: {removed}; to plan in their place: {planned}. "
+                    "Copper with no net assigned is left alone."
                 ).format(removed=len(plan.remove_ids), planned=len(plan.conductors))
                 + "</p><p>"
                 + t("One Ctrl+Z puts it all back.")
@@ -11150,8 +11170,8 @@ class MainWindow(QMainWindow):
                 (f"<p>{why}</p>" if why else "")
                 + f"<b>{say(describe_strip_plan(plan))}</b><p>"
                 + t(
-                    "{removed} existing conductor(s) will be removed and {planned} planned "
-                    "in their place. Copper with no net assigned is left alone."
+                    "Conductors to remove: {removed}; to plan in their place: {planned}. "
+                    "Copper with no net assigned is left alone."
                 ).format(removed=len(plan.remove_ids), planned=len(plan.conductors))
                 + "</p><p>"
                 + t("One Ctrl+Z puts it all back.")
@@ -11639,7 +11659,11 @@ class MainWindow(QMainWindow):
             label = f"Delete {len(conductor_ids)} conductor(s)"
             if not self._confirm(
                 t("Delete conductors"),
-                t("Delete {count} conductor(s)?").format(count=len(conductor_ids)),
+                counted(
+                    len(conductor_ids),
+                    t("Delete {count} conductor?"),
+                    t("Delete {count} conductors?"),
+                ),
                 t("Delete"),
             ):
                 return
@@ -11659,7 +11683,12 @@ class MainWindow(QMainWindow):
         # and keep the traces without a word. Everything selected goes, and the question
         # says so.
         copper_note = (
-            "\n\n" + t("The {count} selected conductor(s) go with them.").format(count=len(conductor_ids))
+            "\n\n"
+            + counted(
+                len(conductor_ids),
+                t("The selected conductor goes with them."),
+                t("The {count} selected conductors go with them."),
+            )
             if conductor_ids
             else ""
         )
@@ -11669,7 +11698,7 @@ class MainWindow(QMainWindow):
             + copper_note
             + "\n\n"
             + t(
-                "Other wires and traces are left in place — DRC and LVS will point at "
+                "Other wires and traces are left in place — the checks will point at "
                 "anything left dangling."
             ),
             t("Delete"),
@@ -13997,10 +14026,12 @@ class MainWindow(QMainWindow):
         box = QMessageBox(self)
         box.setWindowTitle(title or t("Build guide written"))
         box.setText(f"<b>{written[0].name}</b>")
+        others = len(written) - 1
         box.setInformativeText(
-            t("Written to {folder}, with {count} other files.").format(
-                folder=written[0].parent, count=len(written) - 1
-            )
+            (
+                t("Written to {folder}, with one other file.") if others == 1
+                else t("Written to {folder}, with {count} other files.")
+            ).format(folder=written[0].parent, count=others)
         )
         open_it = box.addButton(
             open_label or t("Open the Guide"), QMessageBox.ButtonRole.AcceptRole
