@@ -846,11 +846,11 @@ TURKISH: dict[str, str] = {
         "{steps} adım, {checks} kontrol · Perfboard Studio {version}"
     ),
     "Phase {number}": "Aşama {number}",
-    "Check before moving on": "Devam etmeden önce kontrol et",
+    "Check before moving on": "Devam etmeden önce kontrol edin",
     " of ": " / ",
     " done": " tamam",
     "Reset progress": "İlerlemeyi sıfırla",
-    "Cut these tracks first": "Önce bu şeritleri kes",
+    "Cut these tracks first": "Önce bu şeritleri kesin",
     "{count} cut(s), made from the copper side with a spot-face cutter or a 3 mm drill "
     "turned by hand. Each one takes the pad with it, so the hole it is made in has nothing "
     "to solder to afterwards. Do them all before the first part goes in — once a part is "
@@ -911,7 +911,7 @@ TURKISH: dict[str, str] = {
     "reinforcing wire": "takviye teli",
     "wire off the board": "kart dışı tel",
     "{count} wire(s) to parts off the board": "kart dışı parçalara {count} tel",
-    "cut to fit": "ölçüye göre kes",
+    "cut to fit": "ölçüye göre kesin",
     "bare wire": "çıplak tel",
     "insulated wire": "izoleli tel",
     "{gauge:g} mm, laid along {pads} pads": "{gauge:g} mm, {pads} ped boyunca",
