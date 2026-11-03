@@ -56,6 +56,14 @@ closed without a bump.
 
 ### Changed
 
+- **A dialog's button says what it does.** OK, Apply and Yes are gone from the dialogs
+  that remain: New Board's button is Create Board, Board Setup's and the board chooser's
+  Use This Board, Custom Part's Use This Part, New Project's Create Project, and Apply
+  this placement? moves the parts under Move the Parts. The question about nets whose
+  parts moved was Yes and No, and Esc meant wiring anyway; it is now Redo Their Wiring…,
+  Wire Beside It and Cancel. Counts in the dialogs are said in real plurals ("1 part",
+  "3 parts"), the board chooser says what its percentages are measured against, and a
+  delete asks without naming DRC and LVS.
 - **A part dragged across the board says whether it can land, while it is dragged.** Its
   outline turns red over a hole another part's pin is in, past the edge, or where there is
   no pad -- the same test the ghost of a part being placed has always made -- and a line
@@ -258,6 +266,16 @@ closed without a bump.
   groove, a resistor lies across columns or shares a clip with the pin it is wired to, no
   clip ever holds two nets, and the relay and the modules go down first. Every example
   goes onto an 830 breadboard whole and wires clean, at every seed tried.
+- **A dialog's default button lost a letter at each end** -- "pen the Guide", "ecide
+  Later", "heck for Update", every confirmation's Cancel. It was measured in the regular
+  weight and drawn semibold; the weight now belongs to the primary variant alone.
+- **Board Setup cut its answers off mid-word** ("Pad per hole — every hole is its o"),
+  worse in Turkish: its questions now have a column of their own beside the picture. The
+  keyboard shortcuts list had the same trouble with its longest actions.
+- **About named one licence.** It said Apache-2.0, and the 3D part models are KiCad's,
+  under CC-BY-SA 4.0; it now names both, and prints the version once.
+- **A planner's Cancel looked like the thing to press.** The progress dialog drew its
+  only button in the accent and put Enter on it; it is a plain button under Esc.
 - **The 5-hole axial resistor was a different resistor in 3D.** `r-axial-5` is a 0207
   body, and the 3D view drew KiCad's 9 mm DIN0309 for it -- 2.7 mm longer than the body DRC
   measured, so two parts DRC passed stood into each other on screen. It now takes KiCad's
