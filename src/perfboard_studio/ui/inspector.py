@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
 
 from perfboard_studio.command import DispatchResult
 from perfboard_studio.commands import (
+    LockComponentsPayload,
     MirrorComponentPayload,
     MoveComponentPayload,
     RenameDocumentPayload,
@@ -55,6 +56,7 @@ from perfboard_studio.commands import (
     SetBodyClearancePayload,
     SetHeightLimitPayload,
     UpdateComponentPayload,
+    UpdateComponentsPayload,
 )
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import format_hole, parse_hole
@@ -63,7 +65,7 @@ from perfboard_studio.model import ComponentInstance, PerfDocument, Rotation
 from . import theme
 from .engine_text import say
 from .i18n import t
-from .partfields import PinoutEditor, note_editor
+from .partfields import PinoutEditor, note_editor, pinout_for_retyped_value
 from .partnames import footprint_label
 from .properties import describe
 from .selection import NOTHING, Selection
@@ -90,6 +92,8 @@ class InspectorActions:
 
     route_selected: QAction
     delete: QAction
+    rotate: QAction
+    mirror: QAction
 
 
 # -- fields ---------------------------------------------------------------------------------
@@ -627,6 +631,178 @@ class _PartEditor(QWidget):
         return super().eventFilter(watched, event)
 
 
+# -- several parts on the board --------------------------------------------------------------
+
+
+class _PartsEditor(QWidget):
+    """Several placed parts: one value typed once for all of them -- five resistors placed,
+    then "10k" -- their lock, and what turns or removes them together. Each is ONE command
+    (``component.updateMany``, ``component.lockMany`` and the window's own group Rotate,
+    Mirror and Delete), so one undo step puts the whole edit back."""
+
+    def __init__(self, inspector: Inspector, actions: InspectorActions) -> None:
+        super().__init__()
+        self._inspector = inspector
+        self._components: tuple[ComponentInstance, ...] = ()
+        self._loading = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        self.refs = _fact()
+        heading = QVBoxLayout()
+        heading.setSpacing(2)
+        heading.addWidget(self.title)
+        heading.addWidget(self.refs)
+        layout.addLayout(heading)
+
+        form = _form()
+        self.value = CommitLine(self._commit_value)
+        self.value.setToolTip(
+            t("Typed once, given to every part selected, as one step to undo.")
+        )
+        _add_field(form, t("Value"), self.value, self.value.problem)
+        self.package = _fact()
+        form.addRow(t("Package"), self.package)
+        self._form = form
+        # Three states: all locked, none, or some -- and a click locks them all, or, when
+        # they all are, unlocks them all, which is what "lock these" means.
+        self.locked = QCheckBox(t("locked — Rearrange leaves it where it is"))
+        self.locked.setTristate(True)
+        self.locked.clicked.connect(self._commit_locked)
+        self.locked_problem = _Problem()
+        flags = QWidget()
+        flag_column = QVBoxLayout(flags)
+        flag_column.setContentsMargins(0, 0, 0, 0)
+        flag_column.setSpacing(2)
+        flag_column.addWidget(self.locked)
+        flag_column.addWidget(self.locked_problem)
+        form.addRow("", flags)
+        layout.addLayout(form)
+
+        turns = QHBoxLayout()
+        turns.setContentsMargins(0, 0, 0, 0)
+        turns.addWidget(_action_button(actions.rotate))
+        turns.addWidget(_action_button(actions.mirror))
+        turns.addStretch(1)
+        layout.addLayout(turns)
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addWidget(_action_button(actions.route_selected))
+        buttons.addStretch(1)
+        buttons.addWidget(_action_button(actions.delete))
+        layout.addLayout(buttons)
+
+    def load(self, document: PerfDocument, components: tuple[ComponentInstance, ...]) -> None:
+        another = {c.id for c in components} != {c.id for c in self._components}
+        self._components = components
+        self._loading = True
+        try:
+            self.title.setText(theme.heading(t("{count} selected").format(count=len(components))))
+            self.refs.setText(", ".join(c.ref for c in components))
+            values = {c.value for c in components}
+            # "Mixed" where the values differ: typing sets all of them.
+            self.value.setPlaceholderText(t("Mixed") if len(values) > 1 else "")
+            self.value.show_value(next(iter(values)) if len(values) == 1 else "")
+            if another and not self.value.isModified():
+                self.value.problem.show_problem("")
+            footprints = {c.footprint_id for c in components}
+            footprint = (
+                self._inspector.lookup(next(iter(footprints))) if len(footprints) == 1 else None
+            )
+            self.package.setText(
+                f"{footprint_label(footprint.name)}  ({footprint.id})" if footprint else ""
+            )
+            self._form.setRowVisible(self.package, footprint is not None)
+            locked = [c.locked for c in components]
+            self.locked.setCheckState(
+                Qt.CheckState.Checked
+                if all(locked)
+                else Qt.CheckState.Unchecked
+                if not any(locked)
+                else Qt.CheckState.PartiallyChecked
+            )
+            if another:
+                self.locked_problem.show_problem("")
+        finally:
+            self._loading = False
+
+    def _commit_value(self, typed: str) -> str | None:
+        """One value for every part, and each part the pinout that value brings to ITS
+        package, as typing it on that part alone would."""
+        if not self._components or not typed:
+            return None
+        updates = []
+        for component in self._components:
+            update = UpdateComponentPayload(id=component.id, value=typed)
+            part = pinout_for_retyped_value(
+                component.footprint_id, component.value, typed, dict(component.pin_names)
+            )
+            if part is not None:
+                if part.pin_names != component.pin_names:
+                    update = dataclasses.replace(update, pin_names=part.pin_names)
+                if part.symbol != component.symbol:
+                    update = dataclasses.replace(update, symbol=part.symbol)
+            updates.append(update)
+        return self._inspector.dispatch(
+            "component.updateMany", UpdateComponentsPayload(updates=tuple(updates))
+        )
+
+    def _commit_locked(self) -> None:
+        if self._loading or not self._components:
+            return
+        locking = not all(c.locked for c in self._components)
+        problem = self._inspector.dispatch(
+            "component.lockMany",
+            LockComponentsPayload(ids=tuple(c.id for c in self._components), locked=locking),
+        )
+        self.locked_problem.show_problem(problem or "")
+
+
+# -- the part about to be placed --------------------------------------------------------------
+
+
+class _PlacingEditor(QWidget):
+    """A library part armed for placing: what it is, and the value each part placed from it
+    gets. Typed once and kept, because a board is placed in runs -- five 10k resistors, then
+    three 100nF -- and it is typed where every other value is. It was a field of its own
+    under the library's filter, the most misread control in the window: it looked like a
+    second search box. Not a command: it is the value the NEXT part is placed with."""
+
+    def __init__(self, inspector: Inspector) -> None:
+        super().__init__()
+        self._inspector = inspector
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        self.line = _fact(t("Click the board where pin 1 goes. Esc cancels."))
+        heading = QVBoxLayout()
+        heading.setSpacing(2)
+        heading.addWidget(self.title)
+        heading.addWidget(self.line)
+        layout.addLayout(heading)
+        form = _form()
+        self.value = QLineEdit()
+        self.value.setPlaceholderText("10k, 100nF, NE555…")
+        self.value.setClearButtonEnabled(True)
+        self.value.setToolTip(
+            t(
+                "Given to each part as it is placed. Leave it blank and the part is placed "
+                "without one; F2 sets it afterwards either way."
+            )
+        )
+        form.addRow(t("Value"), self.value)
+        layout.addLayout(form)
+
+    def load(self, footprint_id: str) -> None:
+        footprint = self._inspector.lookup(footprint_id)
+        name = footprint_label(footprint.name) if footprint is not None else footprint_id
+        self.title.setText(theme.heading(name))
+
+
 # -- everything else, said in one line until it has an editor ----------------------------
 
 
@@ -669,13 +845,18 @@ class Inspector(QWidget):
         self.selection = NOTHING
         self.board_editor = _BoardEditor(self)
         self.part_editor = _PartEditor(self, actions)
+        self.parts_editor = _PartsEditor(self, actions)
+        self.placing_editor = _PlacingEditor(self)
         self.summary = _Summary()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         # Stacked by hand rather than in a QStackedWidget, which is as tall as its tallest
         # page: the board's three fields would sit over the part editor's empty height.
-        self._pages: tuple[QWidget, ...] = (self.board_editor, self.part_editor, self.summary)
+        self._pages: tuple[QWidget, ...] = (
+            self.board_editor, self.part_editor, self.parts_editor, self.placing_editor,
+            self.summary,
+        )
         for page in self._pages:
             layout.addWidget(page)
             page.hide()
@@ -709,6 +890,15 @@ class Inspector(QWidget):
             if component is not None:
                 self.part_editor.load(document, component)
                 page = self.part_editor
+        elif selection.kind == "parts":
+            chosen = set(selection.ids)
+            components = tuple(c for c in document.components if c.id in chosen)
+            if len(components) > 1:
+                self.parts_editor.load(document, components)
+                page = self.parts_editor
+        elif selection.kind == "placing" and selection.ids:
+            self.placing_editor.load(selection.ids[0])
+            page = self.placing_editor
         if page is self.summary:
             self.summary.load(selection, document)
         if page is not self.shown:
@@ -723,6 +913,10 @@ class Inspector(QWidget):
         fields: dict[str, QLineEdit] = {}
         if self.shown is self.part_editor:
             fields = {"ref": self.part_editor.ref, "value": self.part_editor.value}
+        elif self.shown is self.parts_editor:
+            fields = {"value": self.parts_editor.value}
+        elif self.shown is self.placing_editor:
+            fields = {"value": self.placing_editor.value}
         elif self.shown is self.board_editor:
             fields = {"name": self.board_editor.name}
         field = fields.get(name)

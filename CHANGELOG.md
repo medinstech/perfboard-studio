@@ -142,6 +142,11 @@ closed without a bump.
   a refusal is said under the field instead of in a message box. Part Properties and the
   Rename Board dialog are gone: F2 puts the keyboard in the part's Reference, a
   double-click on a part in its Value, and Board ▸ Rename Board in the board's Name.
+- **Several parts take one value typed once, as one undo step.** Select five resistors and
+  type 10k in Properties: one step, and a locked part among them takes it too. The lock
+  box shows all, none or some, and a click locks or unlocks the lot. With a library part
+  armed, Properties shows the part about to be placed, and its Value is the value each
+  part placed from it gets; the library's own "Value for parts placed now" box is gone.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

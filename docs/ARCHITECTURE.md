@@ -1523,6 +1523,16 @@ as Part Properties did (`ui/partfields.py`, shared with the sheet's part dialog)
 retired Part Properties and Rename Board's dialog: F2 puts the keyboard in Reference, a
 double-click on a part in Value, Rename Board in the board's Name.
 
+Several parts are one value typed once -- five resistors placed, then "10k" -- as ONE
+`component.updateMany`, each part given the pinout that value brings to ITS package, a lock
+that shows all, none or some and sets them all with one `component.lockMany`, and the
+window's own Rotate, Mirror, Auto-wire and Delete, which dispatch the group commands. A
+locked part takes a value with the rest: a lock is about where a part is, and only a new
+package, a turn, a flip, a move or a delete refuses it. A library part armed for placing is
+the part about to be placed, and the value each part placed from it gets is typed there
+(`placing_value`), where every other value is: it was a box of its own under the library's
+filter, and it read as a second search field.
+
 **The panel is told the selection once per command.** The board empties its selection
 while it rebuilds and puts it back after, and the signals between would show the board's
 editor for an instant and take the keyboard out of the field Tab had just moved to. So

@@ -6848,22 +6848,6 @@ class MainWindow(QMainWindow):
         self.library_filter.textChanged.connect(self._refresh_library)
         layout.addWidget(self.library_filter)
 
-        # Typed once and kept, because a board is placed in runs: five 10k resistors, then
-        # three 100nF. Naming each part afterwards through its own dialog is the same work
-        # done once per part instead of once per run -- and a value nobody types is a bill
-        # of materials nobody can order from.
-        self.library_value = QLineEdit()
-        self.library_value.setPlaceholderText(t("Value for parts placed now…  (10k, 100nF)"))
-        self.library_value.setClearButtonEnabled(True)
-        self.library_value.setToolTip(
-            t(
-                "Given to each part as it is placed. Leave it blank and the part is placed "
-                "without one; F2 sets it afterwards either way."
-            )
-        )
-        self.library_value.textChanged.connect(self._on_placement_value_changed)
-        layout.addWidget(self.library_value)
-
         self.library_tree = PartTree()
         self.library_tree.setHeaderLabels([t("Part"), t("Pins")])
         self.library_tree.setRootIsDecorated(True)
@@ -7001,7 +6985,7 @@ class MainWindow(QMainWindow):
             scene.placement_symbol = part.symbol
             scene.placement_prefix = part.reference_prefix
             self._catalog_value = part.placed_value
-            self.library_value.setText(part.placed_value)
+            self.placing_value.setText(part.placed_value)
             return
         scene.placement_pin_names = (
             self._described_names.get(footprint_id, ()) if isinstance(footprint_id, str) else ()
@@ -7010,8 +6994,8 @@ class MainWindow(QMainWindow):
         scene.placement_prefix = None
         # A value the catalog filled in belongs to the catalog part: a TO-92 picked after a
         # BC547 is not a BC547. A value the user typed stays, as it always has.
-        if self._catalog_value and self.library_value.text().strip() == self._catalog_value:
-            self.library_value.clear()
+        if self._catalog_value and self.placing_value.text().strip() == self._catalog_value:
+            self.placing_value.clear()
         self._catalog_value = ""
 
     def _on_placement_armed(self, footprint_id: str) -> None:
@@ -8341,7 +8325,7 @@ class MainWindow(QMainWindow):
             AddPartPayload(
                 ref=ref,
                 footprint_id=footprint_id,
-                value=self.library_value.text().strip(),
+                value=self.placing_value.text().strip(),
                 pin_names=self.scene.placement_pin_names if template else (),
                 symbol=self.scene.placement_symbol if template else None,
             ),
@@ -9330,8 +9314,17 @@ class MainWindow(QMainWindow):
                 change_part=lambda component_id: self.on_change_part(component_id),
                 board_setup=lambda: self.on_board_setup(),
             ),
-            InspectorActions(route_selected=self.act_route_selected, delete=self.act_delete),
+            InspectorActions(
+                route_selected=self.act_route_selected,
+                delete=self.act_delete,
+                rotate=self.act_rotate_cw,
+                mirror=self.act_mirror,
+            ),
         )
+        # The value the parts placed next are given: typed in Properties while a library
+        # part is armed, where every other value is typed (``_PlacingEditor``).
+        self.placing_value = self.inspector.placing_editor.value
+        self.placing_value.textChanged.connect(self._on_placement_value_changed)
         self.properties.refresh(self.bus.document)
         self.properties.set_content(self.inspector)
 

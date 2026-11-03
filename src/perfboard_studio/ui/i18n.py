@@ -802,6 +802,10 @@ TURKISH: Mapping[str, str] = {
     "Change…": "Değiştir…",
     "Rotation": "Dönüş",
     "Mirrored": "Aynalanmış",
+    "Mixed": "Karışık",
+    "Typed once, given to every part selected, as one step to undo.": (
+        "Bir kez yazılır, seçili her parçaya verilir; tek adımda geri alınır."
+    ),
     "{hole} is not a hole on this board.": "{hole} bu kartta bir delik değil.",
     "The hole pin 1 is in. Type another to move the part there.": (
         "1. pinin girdiği delik. Parçayı oraya taşımak için başka bir delik yazın."
@@ -862,9 +866,6 @@ TURKISH: Mapping[str, str] = {
     "materials groups on, so a blank one becomes a line you cannot order.": (
         "Parçanın gerçekte ne olduğu. Montaj rehberinin malzeme listesi bu sütuna göre "
         "gruplanır; boş bırakılırsa sipariş edilemeyecek bir satır olur."
-    ),
-    "Value for parts placed now…  (10k, 100nF)": (
-        "Şimdi yerleştirilecek parçaların değeri…  (10k, 100nF)"
     ),
     "Given to each part as it is placed. Leave it blank and the part is placed "
     "without one; F2 sets it afterwards either way.": (

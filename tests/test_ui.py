@@ -7618,7 +7618,7 @@ def test_a_footprint_dropped_on_the_board_places_that_part() -> None:
     from perfboard_studio.model import HoleCoord
 
     window = _blank_window()
-    window.library_value.setText("10k")
+    window.placing_value.setText("10k")
 
     window._on_footprint_dropped("r-axial-3", HoleCoord(6, 4))
 
@@ -12826,7 +12826,7 @@ def test_the_parts_panel_lists_real_parts_and_places_them_described() -> None:
         leaf = _catalog_leaf(window, "bc547")
         assert leaf is not None
         window.library_tree.setCurrentItem(leaf)
-        assert window.library_value.text() == "BC547"
+        assert window.placing_value.text() == "BC547"
         result = window.scene.place_armed(HoleCoord(4, 4))
         assert result is not None and result.ok
         (part,) = window.bus.document.components
@@ -12861,19 +12861,19 @@ def test_a_bare_package_picked_after_a_catalog_part_is_a_bare_package() -> None:
                     bare = leaf
         assert bare is not None
         tree.setCurrentItem(bare)
-        assert window.library_value.text() == ""
+        assert window.placing_value.text() == ""
         assert window.scene.placement_pin_names == () and window.scene.placement_symbol is None
         window.scene.place_armed(HoleCoord(4, 4))
         (part,) = window.bus.document.components
         assert (part.value, part.pin_names, part.symbol) == ("", (), None)
 
-        window.library_value.setText("2N3904")
+        window.placing_value.setText("2N3904")
         tree.setCurrentItem(_catalog_leaf(window, "bc557"))
         tree.setCurrentItem(bare)
-        assert window.library_value.text() == ""  # the catalog's BC557 went back out
-        window.library_value.setText("mine")
+        assert window.placing_value.text() == ""  # the catalog's BC557 went back out
+        window.placing_value.setText("mine")
         tree.setCurrentItem(bare)
-        assert window.library_value.text() == "mine"
+        assert window.placing_value.text() == "mine"
     finally:
         _close(window)
 
@@ -14648,4 +14648,94 @@ def test_tabbing_through_properties_keeps_the_part_in_the_panel() -> None:
     window.properties.selection = None  # so the panel passes every selection on
     _type_into(editor.value, "4k7")
     assert "board" not in shown and window.inspector.shown is editor
+    _close(window)
+
+
+def _drawn(window, count: int) -> list:
+    """The first ``count`` parts the board draws: dense.perf has one whose package does not
+    exist (c-disc-1), which is on no canvas and so in no selection."""
+    return [c for c in window.bus.document.components if c.id in window.scene.component_items][:count]
+
+
+def _inspect_several(window, ids):
+    window.scene.select_components(list(ids))
+    window._refresh_properties()
+    editor = window.inspector.parts_editor
+    assert window.inspector.shown is editor
+    return editor
+
+
+def test_one_value_for_several_parts_is_one_step_even_with_one_locked() -> None:
+    """Five resistors placed, then "10k" typed once: one command, one undo step. A lock is
+    about where a part is, so a locked one among them takes the value too."""
+    from perfboard_studio.commands import UpdateComponentPayload
+
+    window = _window_on(_load_dense())
+    chosen = [c.id for c in _drawn(window, 3)]
+    assert window.bus.dispatch(
+        "component.update", UpdateComponentPayload(id=chosen[1], locked=True)
+    ).ok
+    before = len(window.bus.history())
+    editor = _inspect_several(window, chosen)
+    _type_into(editor.value, "10k")
+    values = {c.value for c in window.bus.document.components if c.id in chosen}
+    assert values == {"10k"}
+    assert len(window.bus.history()) == before + 1
+    assert editor.value.text() == "10k" and window.inspector.shown is editor
+    window.bus.undo()
+    assert {c.value for c in window.bus.document.components if c.id in chosen} != {"10k"}
+    _close(window)
+
+
+def test_several_parts_with_different_values_say_mixed() -> None:
+    from perfboard_studio.ui.i18n import t
+
+    window = _window_on(_load_dense())
+    components = _drawn(window, 99)
+    first = components[0]
+    other = next(c for c in components if c.value != first.value)
+    editor = _inspect_several(window, [first.id, other.id])
+    assert editor.value.text() == "" and editor.value.placeholderText() == t("Mixed")
+    assert first.ref in editor.refs.text() and other.ref in editor.refs.text()
+    _close(window)
+
+
+def test_locking_several_parts_from_properties_is_one_step() -> None:
+    """Some locked: the box shows both; a click locks them all, and with all locked a click
+    unlocks them all -- each one step."""
+    from PySide6.QtCore import Qt
+
+    from perfboard_studio.commands import UpdateComponentPayload
+
+    window = _window_on(_load_dense())
+    chosen = [c.id for c in _drawn(window, 3)]
+    assert window.bus.dispatch(
+        "component.update", UpdateComponentPayload(id=chosen[0], locked=True)
+    ).ok
+    editor = _inspect_several(window, chosen)
+    assert editor.locked.checkState() == Qt.CheckState.PartiallyChecked
+    before = len(window.bus.history())
+    editor.locked.click()
+    assert all(c.locked for c in window.bus.document.components if c.id in chosen)
+    assert editor.locked.checkState() == Qt.CheckState.Checked
+    editor.locked.click()
+    assert not any(c.locked for c in window.bus.document.components if c.id in chosen)
+    assert len(window.bus.history()) == before + 2
+    _close(window)
+
+
+def test_the_value_for_the_parts_placed_next_is_typed_in_properties() -> None:
+    """The library's own value box was the most misread control in the window -- it read
+    as a second search field. A part armed for placing is what Properties shows, and its
+    Value is the value each part placed from it gets."""
+    from PySide6.QtWidgets import QLineEdit
+
+    window = _window_on(_load_dense())
+    library = window.dock_library.widget()
+    assert window.placing_value not in library.findChildren(QLineEdit)
+    window.scene.arm_placement("r-axial-4")
+    window._refresh_properties()
+    assert window.inspector.shown is window.inspector.placing_editor
+    window.placing_value.setText("10k")
+    assert window.scene.placement_value == "10k"
     _close(window)
