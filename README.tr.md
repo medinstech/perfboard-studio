@@ -167,8 +167,8 @@ kartın gerçekten yapıldığı parçaların **kataloğuyla** başlar — trans
 regülatörler ve gücün karta giriş yolları, diyotlar, sensörler ve ekranlar, entegreler,
 anahtarlar, röleler, buzzer'lar ve geliştirme kartları — ve birini seçmek onu değeri, veri
 sayfasının her bacağa verdiği ad ve çizildiği sembolle yerleştirir; her birinin hangi veri
-sayfasından geldiği de yazılıdır. Kartta duran bir parça, özelliklerindeki **Parçayı
-Değiştir…** ile başka bir parça olur: aynı yerde, aynı referans ve aynı netlerle, tek bir
+sayfasından geldiği de yazılıdır. Kartta duran bir parça, Özellikler panelinde kılıfının
+yanındaki **Değiştir…** ile başka bir parça olur: aynı yerde, aynı referans ve aynı netlerle, tek bir
 geri alma adımında.
 
 **Bu adlar pinlerin yanına basılır**, kartta ve 3D'de; bir klemens ya da bir geliştirme

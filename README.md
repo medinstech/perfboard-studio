@@ -167,7 +167,7 @@ a perfboard is actually built from — transistors and MOSFETs, regulators and t
 comes in, diodes, sensors and displays, ICs, switches, relays, buzzers and dev boards — and
 picking one places it with its value, what its datasheet calls every lead and the symbol it
 is drawn as, each with the datasheet it came from. A part already on the board becomes
-another with **Change Part…** in its properties: the same place, the same reference and the
+another with **Change…** beside its package in Properties: the same place, the same reference and the
 same nets, in one undo step.
 
 **Those names are printed beside the pins**, on the board and in 3D, because a terminal or a
