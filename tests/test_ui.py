@@ -15612,3 +15612,25 @@ def test_enter_with_nothing_found_says_so() -> None:
         assert window.statusBar().currentMessage() == "No part in the Library matches that."
     finally:
         _close(window)
+
+
+def test_the_boards_own_parts_are_searched_like_every_other() -> None:
+    """A custom part's group listed above every search, whatever was typed."""
+    from PySide6.QtWidgets import QTreeWidget
+
+    from perfboard_studio.footprints import get_footprint
+    from perfboard_studio.ui.main import populate_part_tree
+
+    dip = get_footprint("dip-8")
+    assert dip is not None
+    custom = {"custom-dip": dip}
+    tree = QTreeWidget()
+
+    def groups(text: str) -> list[str]:
+        populate_part_tree(tree, text, custom)
+        return [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]
+
+    assert groups("")[0] == "this board"
+    assert "this board" not in groups("resistor")
+    assert groups("dip")[0] == "this board"
+    assert groups("this board") == ["this board"]

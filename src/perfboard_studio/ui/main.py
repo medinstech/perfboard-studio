@@ -970,8 +970,20 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     # custom DIP-22 among the library's DIPs is the one part in the dock that cannot be
     # found by knowing what it is, because the only thing that distinguishes it is that
     # the library does not have it.
-    if custom:
-        ordered = sorted(custom.values(), key=lambda f: _natural_key(f.name))
+    # Searched like the packages are -- they listed above every search whatever was
+    # typed, so after one custom part its box topped "resistor" (reach's walkthrough).
+    # The group's own name finds them all.
+    heading = t("this board")
+    ordered = [
+        footprint
+        for footprint in sorted(custom.values(), key=lambda f: _natural_key(f.name))
+        if not needle
+        or needle in _folded(
+            f"{footprint.id} {footprint.name} {footprint_label(footprint.name)} "
+            f"{footprint.body.archetype} {heading}"
+        )
+    ]
+    if ordered:
         group = QTreeWidgetItem([t("this board"), ""])
         group.setToolTip(0, t("this board"))
         group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
