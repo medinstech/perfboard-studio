@@ -144,6 +144,18 @@ def test_the_stylesheet_says_nothing_the_tokens_do_not() -> None:
         assert sheet.count("{") == sheet.count("}")
 
 
+def test_a_default_button_is_not_drawn_wider_than_it_was_measured() -> None:
+    """Qt measures a button with its font as no pseudo-state has it. A ``:default`` drawn
+    semibold was measured regular, and the dialogs' default buttons lost a letter at each
+    end: "pen the Guide", "heck for Update", "ecide Later". Weight belongs on a property
+    (``[variant="primary"]``), which is applied before the button is measured."""
+    for tokens in (DARK, LIGHT):
+        sheet = re.sub(r"/\*.*?\*/", "", theme.stylesheet(tokens), flags=re.DOTALL)
+        for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", sheet):
+            if ":default" in selector:
+                assert "font" not in body, f"{tokens.name}: {selector.strip()}"
+
+
 # -- the canvases and the nets -----------------------------------------------------------
 
 

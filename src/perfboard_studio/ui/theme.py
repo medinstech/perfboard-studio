@@ -528,8 +528,12 @@ QPushButton:default, QPushButton[variant="primary"] {{
     background: {k.accent};
     color: {k.text_on_accent};
     border: 1px solid {k.accent};
-    font-weight: {SEMIBOLD};
 }}
+/* Semibold for the variant only. Qt measures a button with its font as no pseudo-state
+   has it, so a :default drawn semibold was measured regular and lost a letter at each
+   end -- "pen the Guide", "ecide Later". A property is applied when the button is
+   polished, before it is measured. */
+QPushButton[variant="primary"] {{ font-weight: {SEMIBOLD}; }}
 QPushButton:default:hover, QPushButton[variant="primary"]:hover {{
     background: {k.accent_hover};
     border-color: {k.accent_hover};
