@@ -362,6 +362,10 @@ closed without a bump.
 
 ### Fixed
 
+- **The Library's names have the room.** Its Pins column took half the panel and cut "AA
+  battery holder" to "AA battery h…"; the count is as wide as it needs and right-aligned. The
+  package picker, the Nets panel and the shortcut list had the same split.
+
 - **A part moved onto a hole with no pad says so when it lands.** It went red while it was
   dragged and then landed with a plain "Done"; now the status line says a pin has no pad
   there, as it does when a part is placed there, and the part stays marked in Problems.

@@ -15704,3 +15704,41 @@ def test_what_auto_wire_could_not_do_is_in_problems_not_a_box(monkeypatch) -> No
         assert "WIRING" not in tops, "said of a board that is not there any more"
     finally:
         _close(window)
+
+
+@pytest.mark.parametrize("language", ["en", "tr"])
+def test_the_librarys_names_have_the_room_at_the_default_sidebar_width(language: str) -> None:
+    """The Pins column took half the Library -- the stretched name column and the last
+    section split the width -- and "AA battery holder" was "AA battery h…". The count is
+    as wide as it needs, and every name says itself in full on hover."""
+    from perfboard_studio.ui.i18n import language as current
+    from perfboard_studio.ui.i18n import set_language
+
+    before = current()
+    set_language(language)
+    try:
+        window = _blank_window()
+        try:
+            window.resize(1440, 900)
+            window.show()
+            window.on_schematic_add_part()
+            window.library_filter.setText("power" if language == "en" else "güç")
+            QApplication.processEvents()
+            tree = window.library_tree
+            metrics = tree.fontMetrics()
+            pins = tree.headerItem().text(1)
+            need = max(metrics.horizontalAdvance(pins), metrics.horizontalAdvance("888")) + 32
+            assert tree.columnWidth(1) <= need, (tree.columnWidth(1), need)
+            assert tree.columnWidth(0) >= tree.viewport().width() - tree.columnWidth(1) - 2
+            leaves = [
+                tree.topLevelItem(i).child(j)
+                for i in range(tree.topLevelItemCount())
+                for j in range(tree.topLevelItem(i).childCount())
+            ]
+            assert leaves
+            for leaf in leaves:
+                assert leaf.text(0) in leaf.toolTip(0), leaf.text(0)
+        finally:
+            _close(window)
+    finally:
+        set_language(before)

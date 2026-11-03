@@ -940,6 +940,10 @@ def _source_said(source: str) -> str:
     return source
 
 
+#: Where a part tree's pin count sits: right, under its heading, beside the name's room.
+PINS_ALIGNMENT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+
+
 def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint]) -> None:
     """Fill a two-column part tree: this board's own parts, the catalog, then the packages.
 
@@ -954,6 +958,9 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
     """
     needle = _folded(text.strip())
     tree.clear()
+    titles = tree.headerItem()
+    if titles is not None:
+        titles.setTextAlignment(1, PINS_ALIGNMENT)
     by_archetype: dict[BodyArchetype, list[Footprint]] = {}
     for footprint in sorted(standard_footprints().values(), key=lambda f: _natural_key(f.name)):
         # In either language, as the catalog rows are: "direnç" finds a resistor as
@@ -995,6 +1002,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
                 [footprint_label(footprint.name), str(len(footprint.pins))]
             )
             leaf.setData(0, ROLE_FOOTPRINT_ID, footprint.id)
+            leaf.setTextAlignment(1, PINS_ALIGNMENT)
             leaf.setIcon(0, icons.part_icon(footprint))
             leaf.setToolTip(
                 0,
@@ -1041,6 +1049,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
             )
             leaf.setData(0, ROLE_FOOTPRINT_ID, part.footprint_id)
             leaf.setData(0, ROLE_CATALOG_ID, part.id)
+            leaf.setTextAlignment(1, PINS_ALIGNMENT)
             if packaged is not None:
                 leaf.setIcon(0, icons.part_icon(packaged))
             leaf.setToolTip(0, _catalog_tooltip(part))
@@ -1062,6 +1071,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
                 [footprint_label(footprint.name), str(len(footprint.pins))]
             )
             leaf.setData(0, ROLE_FOOTPRINT_ID, footprint.id)
+            leaf.setTextAlignment(1, PINS_ALIGNMENT)
             # In the colours the board draws it in, so finding the part you picked is
             # recognition rather than reading -- see the note in icons.py.
             leaf.setIcon(0, icons.part_icon(footprint))
@@ -2733,6 +2743,10 @@ class PackagePicker(QDialog):
         header = self.tree.header()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        # Not the last section too: Qt stretches it by default, and the two split the
+        # width -- "Pins" took half the Library and cut "AA battery holder" to "AA battery
+        # h…" (reach's walkthrough).
+        header.setStretchLastSection(False)
         self.tree.currentItemChanged.connect(lambda _now, _then: self._say())
         self.tree.itemDoubleClicked.connect(lambda item, _column: self._take())
         self.notice = QLabel()
@@ -2885,6 +2899,10 @@ class ShortcutsDialog(QDialog):
         header = tree.header()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        # Not the last section too: Qt stretches it by default, and the two split the
+        # width -- "Pins" took half the Library and cut "AA battery holder" to "AA battery
+        # h…" (reach's walkthrough).
+        header.setStretchLastSection(False)
 
         gestures = QTreeWidgetItem([t("On the board"), ""])
         tree.addTopLevelItem(gestures)
@@ -6478,6 +6496,10 @@ class MainWindow(QMainWindow):
         header = self.library_tree.header()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        # Not the last section too: Qt stretches it by default, and the two split the
+        # width -- "Pins" took half the Library and cut "AA battery holder" to "AA battery
+        # h…" (reach's walkthrough).
+        header.setStretchLastSection(False)
         self.library_tree.itemSelectionChanged.connect(self._on_library_selection_changed)
         self.library_tree.itemActivated.connect(self._on_library_item_activated)
         layout.addWidget(self.library_tree)
@@ -6878,6 +6900,7 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in (1, 2, 3):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        header.setStretchLastSection(False)
         self.nets_tree.itemSelectionChanged.connect(self._on_net_selection_changed)
         self.nets_tree.itemDoubleClicked.connect(self._on_net_double_clicked)
         # Empty, this was four column headings over grey (ui/emptystate.py).
