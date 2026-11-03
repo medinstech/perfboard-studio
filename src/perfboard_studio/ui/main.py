@@ -9563,19 +9563,17 @@ class MainWindow(QMainWindow):
         #: A condition, not an event: shown while the recovery file cannot be written and
         #: cleared when it can again. See _on_autosave_tick.
         self.label_warning = QLabel()
-        self.label_selection = QLabel()
         self.label_hole = QLabel()
         # The ERC, DRC and LVS counts, the connections left and the side were six more
         # fields here; they are the Problems drawer's bar now, one answer instead of six
         # vocabularies (``ui/problems.py``).
-        # All permanent, including the selection. QStatusBar.showMessage HIDES ordinary
-        # widgets for as long as a message is up -- so a selection label added the obvious
-        # way vanished at precisely the wrong moment, since acting on a part is exactly what
-        # puts a message there. Permanent widgets are laid out left to right in the order
-        # they are added, so the selection still comes first.
+        # NO SELECTION LINE. What is selected is the Properties panel's to say, all of it
+        # and editable: a line here repeated the part's reference, value, package, hole and
+        # turn in a sentence nobody could act on, beside the panel that now shows them.
+        # Permanent, both: QStatusBar.showMessage HIDES ordinary widgets while a message is
+        # up, and acting on something is exactly what puts a message there.
         for label in (
             self.label_warning,
-            self.label_selection,
             self.label_hole,
         ):
             # Allowed to be narrower than their text. A label's minimum is otherwise all of
@@ -10355,36 +10353,6 @@ class MainWindow(QMainWindow):
                 "3 mm LED for a 5 mm one, a resistor on a wider span. Its nets stay."
             )
         )
-
-        if not components:
-            # Copper on its own is still a selection, and the actions above are live for
-            # it -- so the bar has to say so, or Delete appears to act on nothing.
-            if conductors:
-                self.label_selection.setText(f"<b>{conductors}</b> {t('conductor(s) selected')}")
-            else:
-                self.label_selection.clear()
-            return
-        if len(components) == 1:
-            c = components[0]
-            footprint = self.lookup(c.footprint_id)
-            bits = [f"<b>{c.ref}</b>"]
-            if c.value:
-                bits.append(c.value)
-            bits.append(
-                footprint_label(footprint.name) if footprint is not None else f"?{c.footprint_id}"
-            )
-            bits.append(format_hole(c.anchor, self.bus.document.board))
-            if c.rotation:
-                bits.append(f"{c.rotation}°")
-            if c.mirrored:
-                bits.append(t("mirrored"))
-            if c.locked:
-                bits.append(t("locked"))
-            self.label_selection.setText(" · ".join(bits))
-            return
-        locked = sum(1 for c in components if c.locked)
-        note = f", {locked} {t('locked')}" if locked else ""
-        self.label_selection.setText(f"<b>{len(components)} {t('parts')}</b> {t('selected')}{note}")
 
     # -- running a planner without freezing the window ----------------------
 

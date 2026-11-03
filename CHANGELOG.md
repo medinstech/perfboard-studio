@@ -166,6 +166,9 @@ closed without a bump.
 - **Go to Part (Ctrl+G) is the command palette on the parts.** Type a reference, a value
   or a package; the part is selected and the view put on it. The separate Go to Part
   dialog is gone.
+- **What is selected is said in Properties, not in the status bar.** The status bar's
+  selection line is gone; a conductor selected on its own shows its kind, its two ends,
+  its holes and its net in Properties.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

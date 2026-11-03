@@ -1563,6 +1563,11 @@ the keyboard in its Value; Rename on the symbol's menu is its Reference, for a p
 or not. The sheet's Edit a Part is the package's Change… now, the library in a dialog, as
 a placed part's is.
 
+**The status bar no longer says what is selected.** It said the part's reference, value,
+package, hole and turn in a line nobody could act on, beside a panel that now shows all of
+it editable; a conductor selected alone is its kind, its ends, its holes and its net in
+Properties (`_ConductorEditor`), which the line only ever counted.
+
 **The panel is told the selection once per command.** The board empties its selection
 while it rebuilds and puts it back after, and the signals between would show the board's
 editor for an instant and take the keyboard out of the field Tab had just moved to. So

@@ -800,6 +800,10 @@ TURKISH: Mapping[str, str] = {
     "Rotation": "Dönüş",
     "Mirrored": "Aynalanmış",
     "Face": "Yüz",
+    "Holes": "Delikler",
+    "Bent lead": "Bükülmüş bacak",
+    "Copper strip": "Bakır şerit",
+    "{start} → {end}, {count} holes": "{start} → {end}, {count} delik",
     "Mixed": "Karışık",
     "Typed once, given to every part selected, as one step to undo.": (
         "Bir kez yazılır, seçili her parçaya verilir; tek adımda geri alınır."
@@ -1612,10 +1616,7 @@ TURKISH: Mapping[str, str] = {
     "{count} not on the board yet": "{count} tanesi henüz kartta değil",
     "…and {count} more": "…ve {count} tane daha",
     "3D view unavailable:": "3D görünüm kullanılamıyor:",
-    "conductor(s) selected": "iletken seçili",
     "locked": "kilitli",
-    "parts": "parça",
-    "selected": "seçili",
     # -- the selection verbs, spliced into one sentence -----------------------------
     "Select a part on the board first, then {what}.": "Önce kartta bir parça seçin, sonra "
                                                       "{what}.",

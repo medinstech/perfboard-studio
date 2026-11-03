@@ -68,6 +68,7 @@ from perfboard_studio.model import (
     BoardNote,
     BoardSide,
     ComponentInstance,
+    Conductor,
     Net,
     NetClass,
     PerfDocument,
@@ -1377,6 +1378,64 @@ class _SheetNoteEditor(QWidget):
         )
 
 
+# -- one conductor ---------------------------------------------------------------------------
+
+
+class _ConductorEditor(QWidget):
+    """One run of copper or wire: what it is, from where to where, over how many holes, and
+    on which net. What the status bar said about a selected conductor, and more of it --
+    it said only that one was selected, and Delete looked as if it acted on nothing."""
+
+    def __init__(self, actions: InspectorActions) -> None:
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+        form = _form()
+        self.ends = _fact()
+        form.addRow(t("Holes"), self.ends)
+        self.net = _fact()
+        form.addRow(t("Net"), self.net)
+        layout.addLayout(form)
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addWidget(_action_button(actions.route_selected))
+        buttons.addStretch(1)
+        buttons.addWidget(_action_button(actions.delete))
+        layout.addLayout(buttons)
+
+    def load(self, document: PerfDocument, conductor: Conductor) -> None:
+        kind = str(getattr(conductor, "kind", "solder-trace"))
+        if kind == "solder-trace" and getattr(conductor, "spine", None) is not None:
+            kind = "solder-trace-wired"
+        # Each kind in the words its drawing tool has; asked here, in the window's language.
+        words = {
+            "solder-trace": t("&Solder Trace"),
+            "solder-trace-wired": t("&Reinforced Solder Trace"),
+            "bare-wire": t("&Bare Wire"),
+            "insulated-wire": t("&Insulated Wire"),
+            "top-jumper": t("&Jumper Over the Parts"),
+            "lead-bend": t("Bent lead"),
+            "strip": t("Copper strip"),
+        }.get(kind, kind)
+        self.title.setText(theme.heading(words.replace("&", "")))
+        board = document.board
+        path = conductor.path
+        self.ends.setText(
+            t("{start} → {end}, {count} holes").format(
+                start=format_hole(path[0], board), end=format_hole(path[-1], board),
+                count=len(path),
+            )
+            if path
+            else "—"
+        )
+        net = next((n for n in document.nets if n.id == conductor.net_id), None)
+        self.net.setText(net.name if net is not None else "—")
+
+
 # -- everything else, said in one line until it has an editor ----------------------------
 
 
@@ -1425,6 +1484,7 @@ class Inspector(QWidget):
         self.net_editor = _NetEditor(self, actions)
         self.board_note_editor = _BoardNoteEditor(self, actions)
         self.sheet_note_editor = _SheetNoteEditor(self)
+        self.conductor_editor = _ConductorEditor(actions)
         self.summary = _Summary()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1434,7 +1494,8 @@ class Inspector(QWidget):
         self._pages: tuple[QWidget, ...] = (
             self.board_editor, self.part_editor, self.design_part_editor,
             self.parts_editor, self.placing_editor,
-            self.net_editor, self.board_note_editor, self.sheet_note_editor, self.summary,
+            self.net_editor, self.board_note_editor, self.sheet_note_editor,
+            self.conductor_editor, self.summary,
         )
         for page in self._pages:
             layout.addWidget(page)
@@ -1495,6 +1556,11 @@ class Inspector(QWidget):
             if written is not None:
                 self.sheet_note_editor.load(written)
                 page = self.sheet_note_editor
+        elif selection.kind == "conductor" and selection.ids:
+            conductor = next((c for c in document.conductors if c.id == selection.ids[0]), None)
+            if conductor is not None:
+                self.conductor_editor.load(document, conductor)
+                page = self.conductor_editor
         elif selection.kind == "placing" and selection.ids:
             self.placing_editor.load(selection.ids[0])
             page = self.placing_editor

@@ -10967,7 +10967,10 @@ def test_delete_is_live_for_a_conductor_on_its_own(monkeypatch) -> None:
         window._refresh_selection_state()
 
         assert window.act_delete.isEnabled()
-        assert "1" in window.label_selection.text()
+        # Said in Properties, which is where a selection is said now.
+        window._refresh_properties()
+        assert window.inspector.shown is window.inspector.conductor_editor
+        assert "→" in window.inspector.conductor_editor.ends.text()
 
         monkeypatch.setattr(type(window), "_confirm", lambda self, *a, **k: True)
         wanted = conductor.conductor_id
@@ -14799,4 +14802,21 @@ def test_a_part_only_in_the_design_is_edited_in_properties() -> None:
     edited = next(p for p in window.bus.document.parts if p.id == part.id)
     assert (edited.value, edited.ref, edited.note) == ("4k7", "R5", "pull-down")
     assert len(window.bus.history()) == steps + 3
+    _close(window)
+
+
+
+def test_the_status_bar_no_longer_repeats_the_selection() -> None:
+    """(c) The bar said the selected part's reference, value, package, hole and turn in a
+    line nobody could act on; Properties shows all of it, editable."""
+    from PySide6.QtWidgets import QLabel
+
+    window = _window_on(_load_dense())
+    component = window.bus.document.components[0]
+    window.scene.select_components([component.id])
+    window._refresh_selection_state()
+    bar_text = " ".join(label.text() for label in window.statusBar().findChildren(QLabel))
+    assert component.ref not in bar_text
+    assert not hasattr(window, "label_selection")
+    assert window.inspector.part_editor.ref.text() == component.ref
     _close(window)
