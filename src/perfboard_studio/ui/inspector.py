@@ -59,6 +59,7 @@ from perfboard_studio.commands import (
     UpdateComponentPayload,
     UpdateComponentsPayload,
     UpdateNetPayload,
+    UpdatePartPayload,
     UpdateSheetNotePayload,
 )
 from perfboard_studio.connectivity import FootprintLookup
@@ -71,6 +72,7 @@ from perfboard_studio.model import (
     NetClass,
     PerfDocument,
     Rotation,
+    SchematicPart,
     SheetNote,
 )
 from perfboard_studio.parsers.kicad import infer_net_class
@@ -96,6 +98,8 @@ class InspectorHooks:
     #: The board's grid, type and material: its own dialog, because a new size can strand
     #: the parts on it.
     board_setup: Callable[[], object]
+    #: Another package for a part still only in the design: the library, in a dialog.
+    change_design_part: Callable[[str], object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +113,8 @@ class InspectorActions:
     mirror: QAction
     add_pins: QAction
     delete_net: QAction
+    place_design: QAction
+    remove_design: QAction
 
 
 #: A net's classes: the value, the label a form shows with the reason attached, and the
@@ -650,6 +656,163 @@ class _PartEditor(QWidget):
     def _on_change_part(self) -> None:
         if self._component is not None:
             self._inspector.hooks.change_part(self._component.id)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.note and event.type() == QEvent.Type.FocusOut:
+            self._commit_note()
+        return super().eventFilter(watched, event)
+
+
+# -- one part still only in the design ------------------------------------------------------
+
+
+class _DesignPartEditor(QWidget):
+    """A part drawn on the sheet and not on the board yet: the same reference, value,
+    package, pin names and note as a placed part, through ``part.update``, and where a
+    placed part has its hole, "not on the board yet" and Place on the Board. Replaces the
+    sheet's Edit a Part and Rename; Change... beside the package is the library still."""
+
+    def __init__(self, inspector: Inspector, actions: InspectorActions) -> None:
+        super().__init__()
+        self._inspector = inspector
+        self._part: SchematicPart | None = None
+        self._loading = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        self.where = _fact(t("In the design, not on the board yet."))
+        heading = QVBoxLayout()
+        heading.setSpacing(2)
+        heading.addWidget(self.title)
+        heading.addWidget(self.where)
+        layout.addLayout(heading)
+
+        form = _form()
+        self.ref = CommitLine(self._commit_ref)
+        self.ref.setPlaceholderText("R1, C3, U2…")
+        _add_field(form, t("Reference"), self.ref, self.ref.problem)
+        self.value = CommitLine(self._commit_value)
+        self.value.setPlaceholderText("10k, 100nF, NE555…")
+        _add_field(form, t("Value"), self.value, self.value.problem)
+        package = QWidget()
+        package_row = QHBoxLayout(package)
+        package_row.setContentsMargins(0, 0, 0, 0)
+        self.package = _fact()
+        self.change_part = QPushButton(t("Change…"))
+        self.change_part.setToolTip(
+            t("Another package or another part from the library, on the same holes and the "
+              "same nets.")
+        )
+        self.change_part.clicked.connect(self._on_change_part)
+        package_row.addWidget(self.package, 1)
+        package_row.addWidget(self.change_part, 0, Qt.AlignmentFlag.AlignTop)
+        form.addRow(t("Package"), package)
+        layout.addLayout(form)
+
+        self.pinout = PinoutEditor()
+        self.pinout.symbol.currentIndexChanged.connect(self._commit_pinout)
+        self.pinout.table.itemChanged.connect(self._commit_pinout)
+        self.pinout_problem = _Problem()
+        layout.addWidget(self.pinout)
+        layout.addWidget(self.pinout_problem)
+
+        notes = _form()
+        self.note = note_editor("")
+        self.note.installEventFilter(self)
+        self.note_problem = _Problem()
+        _add_field(notes, t("Note"), self.note, self.note_problem)
+        layout.addLayout(notes)
+
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addWidget(_action_button(actions.place_design))
+        buttons.addStretch(1)
+        buttons.addWidget(_action_button(actions.remove_design))
+        layout.addLayout(buttons)
+
+    def load(self, part: SchematicPart) -> None:
+        another = self._part is None or self._part.id != part.id
+        self._part = part
+        footprint = self._inspector.lookup(part.footprint_id)
+        self._loading = True
+        try:
+            self.title.setText(theme.heading(part.ref))
+            self.ref.show_value(part.ref)
+            self.value.show_value(part.value)
+            name = footprint_label(footprint.name) if footprint is not None else part.footprint_id
+            self.package.setText(f"{name}  ({part.footprint_id})")
+            if another:
+                self.pinout.say("")
+                for problem in (self.pinout_problem, self.note_problem):
+                    problem.show_problem("")
+            editing_names = self.pinout.table.hasFocus() or self.pinout.symbol.hasFocus()
+            if another or not editing_names:
+                self.pinout.set_part(footprint, part.pin_names, part.symbol)
+            if another or not self.note.hasFocus():
+                self.note.setPlainText(part.note)
+        finally:
+            self._loading = False
+
+    def _update(self, payload: UpdatePartPayload) -> str | None:
+        return self._inspector.dispatch("part.update", payload)
+
+    def _commit_ref(self, typed: str) -> str | None:
+        part = self._part
+        if part is None:
+            return None
+        if not typed:
+            return t("Every part is identified by its reference, so it cannot be blank.")
+        return self._update(UpdatePartPayload(id=part.id, ref=typed))
+
+    def _commit_value(self, typed: str) -> str | None:
+        """The value and the pinout it brings, in one step, as on a placed part."""
+        part = self._part
+        if part is None:
+            return None
+        footprint = self._inspector.lookup(part.footprint_id)
+        self._loading = True
+        try:
+            self.pinout.follow_value(footprint, part.value, typed)
+        finally:
+            self._loading = False
+        names, symbol = self.pinout.values()
+        payload = UpdatePartPayload(id=part.id, value=typed)
+        if names != part.pin_names:
+            payload = dataclasses.replace(payload, pin_names=names)
+        if symbol != part.symbol:
+            payload = dataclasses.replace(payload, symbol=symbol)
+        return self._update(payload)
+
+    def _commit_pinout(self, *_args: object) -> None:
+        part = self._part
+        if self._loading or part is None:
+            return
+        names, symbol = self.pinout.values()
+        if (names, symbol) == (part.pin_names, part.symbol):
+            return
+        payload = UpdatePartPayload(id=part.id)
+        if names != part.pin_names:
+            payload = dataclasses.replace(payload, pin_names=names)
+        if symbol != part.symbol:
+            payload = dataclasses.replace(payload, symbol=symbol)
+        self.pinout_problem.show_problem(self._update(payload) or "")
+
+    def _commit_note(self) -> None:
+        part = self._part
+        if self._loading or part is None:
+            return
+        typed = self.note.toPlainText().strip()
+        if typed == part.note:
+            return
+        self.note_problem.show_problem(
+            self._update(UpdatePartPayload(id=part.id, note=typed)) or ""
+        )
+
+    def _on_change_part(self) -> None:
+        if self._part is not None:
+            self._inspector.hooks.change_design_part(self._part.id)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self.note and event.type() == QEvent.Type.FocusOut:
@@ -1256,6 +1419,7 @@ class Inspector(QWidget):
         self.selection = NOTHING
         self.board_editor = _BoardEditor(self)
         self.part_editor = _PartEditor(self, actions)
+        self.design_part_editor = _DesignPartEditor(self, actions)
         self.parts_editor = _PartsEditor(self, actions)
         self.placing_editor = _PlacingEditor(self)
         self.net_editor = _NetEditor(self, actions)
@@ -1268,7 +1432,8 @@ class Inspector(QWidget):
         # Stacked by hand rather than in a QStackedWidget, which is as tall as its tallest
         # page: the board's three fields would sit over the part editor's empty height.
         self._pages: tuple[QWidget, ...] = (
-            self.board_editor, self.part_editor, self.parts_editor, self.placing_editor,
+            self.board_editor, self.part_editor, self.design_part_editor,
+            self.parts_editor, self.placing_editor,
             self.net_editor, self.board_note_editor, self.sheet_note_editor, self.summary,
         )
         for page in self._pages:
@@ -1304,6 +1469,11 @@ class Inspector(QWidget):
             if component is not None:
                 self.part_editor.load(document, component)
                 page = self.part_editor
+        elif selection.kind == "design-part" and selection.ids:
+            design = next((p for p in document.parts if p.id == selection.ids[0]), None)
+            if design is not None:
+                self.design_part_editor.load(design)
+                page = self.design_part_editor
         elif selection.kind == "parts":
             chosen = set(selection.ids)
             components = tuple(c for c in document.components if c.id in chosen)
@@ -1342,6 +1512,8 @@ class Inspector(QWidget):
         fields: dict[str, QLineEdit] = {}
         if self.shown is self.part_editor:
             fields = {"ref": self.part_editor.ref, "value": self.part_editor.value}
+        elif self.shown is self.design_part_editor:
+            fields = {"ref": self.design_part_editor.ref, "value": self.design_part_editor.value}
         elif self.shown is self.parts_editor:
             fields = {"value": self.parts_editor.value}
         elif self.shown is self.placing_editor:

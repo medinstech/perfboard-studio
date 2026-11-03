@@ -158,6 +158,11 @@ closed without a bump.
 - **Text on the schematic is written in place.** The Text tool writes a caption where it
   is clicked and puts the keyboard in its words in Properties, beside its size; it used to
   ask in a dialog first. A note picked on the sheet is shown there too.
+- **A part drawn on the schematic and not placed yet is edited in Properties** as a placed
+  one is: reference, value, package, pin names and note, with Place on the Board. A
+  double-click on its symbol puts the keyboard in its value, and Rename on a symbol's menu
+  in its reference. The Edit a Part and Rename Part dialogs are gone; Change… opens the
+  library for another package.
 - **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
   menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
   setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's

@@ -1066,8 +1066,6 @@ TURKISH: Mapping[str, str] = {
         "Bağlantılarıyla birlikte tasarımın dışına."
     ),
     "&Disconnect {pin} from {net}": "{pin} pinini {net} netinden A&yır",
-    "Rename Part": "Parçayı Yeniden Adlandır",
-    "New designator": "Yeni etiket",
     "&Rub Out This Wire": "Bu Teli &Sil",
     "Take the line off the sheet. The pins stay connected — the net says so by "
     "name instead.": (
@@ -1225,7 +1223,6 @@ TURKISH: Mapping[str, str] = {
     "Added {part}. Choose the next part, or Done.": (
         "{part} eklendi. Sıradaki parçayı seçin ya da Bitti'ye basın."
     ),
-    "Edit a Part": "Parçayı Düzenle",
     "Filter parts…  (555, BC547, resistor, dip-8)": "Parçaları süz…  (555, BC547, direnç, dip-8)",
     "The designator this part is known by, on the schematic and on the board. "
     "It has to be free on both — the two are one namespace.": (

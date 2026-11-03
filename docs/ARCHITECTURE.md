@@ -1554,6 +1554,13 @@ The sheet picks a note by its index in the drawing, which is its place in `sheet
 The Text tool writes "Text" where it was clicked, selects it and puts the keyboard in its
 words: it asked in a dialog first.
 
+A part only in the design is the placed part's fields through `part.update` -- reference,
+value with the pinout it brings, package, pin names, note -- and, where a placed part has
+its hole, "not on the board yet" and Place on the Board. A double-click on its symbol puts
+the keyboard in its Value; Rename on the symbol's menu is its Reference, for a placed part
+or not. The sheet's Edit a Part is the package's Change… now, the library in a dialog, as
+a placed part's is.
+
 **The panel is told the selection once per command.** The board empties its selection
 while it rebuilds and puts it back after, and the signals between would show the board's
 editor for an instant and take the keyboard out of the field Tab had just moved to. So

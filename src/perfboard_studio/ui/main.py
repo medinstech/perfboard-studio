@@ -7973,9 +7973,11 @@ class MainWindow(QMainWindow):
         if component is not None:
             self.on_component_properties(component.id)
             return
-        part = next((p for p in self.bus.document.parts if p.ref == ref), None)
-        if part is not None:
-            self.on_schematic_part_properties(part.id)
+        if any(p.ref == ref for p in self.bus.document.parts):
+            # A part only in the design: it in Properties, the keyboard in its Value, which
+            # is what a double-click on a resistor came to change.
+            self._show_symbol_in_properties(ref)
+            self.inspector.focus_field("value")
 
     # -- drawing the circuit --------------------------------------------------
 
@@ -8013,13 +8015,23 @@ class MainWindow(QMainWindow):
         # is made, one undo step each, and Done closes it.
         AddPartDialog(self.bus.document, self, add=add).exec()
 
+    def _show_symbol_in_properties(self, ref: str) -> None:
+        """One symbol, selected on the sheet and shown in Properties."""
+        self.schematic_view.set_selection([ref])
+        self._schematic_ref = ref
+        self._selection_from = "sheet"
+        self._sync_schematic_highlight()
+        self._refresh_properties()
+
     def on_schematic_part_properties(self, part_id: str) -> None:
-        """The same fields ``AddPartDialog`` asks for, on a part that exists."""
+        """Another package for a part still only in the design: the library, with the
+        fields ``AddPartDialog`` asks for, on a part that exists. Properties' Change... --
+        everything else about the part is a field there."""
         part = next((p for p in self.bus.document.parts if p.id == part_id), None)
         if part is None:
             return
         dialog = AddPartDialog(self.bus.document, self)
-        dialog.setWindowTitle(t("Edit a Part"))
+        dialog.setWindowTitle(t("Change {ref}").format(ref=part.ref))
         dialog.select_footprint(part.footprint_id)
         dialog.ref.setText(part.ref)
         dialog.value.setText(part.value)
@@ -8263,37 +8275,19 @@ class MainWindow(QMainWindow):
     # it is exactly the operation you ask for while looking at the pin.
 
     def _rename_symbol(self, ref: str) -> None:
-        """A new designator, without opening the properties dialog for one field.
+        """A new designator: the part's Reference in Properties.
 
         THE WIRING COMES WITH IT (``commands.rename_in_nets``), which is the only reason
-        this is safe to offer from a menu: a rename that dropped the connections would be
-        something to do carefully, not something to do in two clicks. R1 wired into six
-        nets and relabelled R7 used to come out connected to nothing.
+        this is safe to offer from a menu: R1 wired into six nets and relabelled R7 used to
+        come out connected to nothing.
         """
         document = self.bus.document
-        component = next((c for c in document.components if c.ref == ref), None)
-        part = next((p for p in document.parts if p.ref == ref), None)
-        if component is None and part is None:
+        if not any(c.ref == ref for c in document.components) and not any(
+            p.ref == ref for p in document.parts
+        ):
             return
-        chosen, ok = QInputDialog.getText(
-            self, t("Rename Part"), t("New designator"), text=ref
-        )
-        chosen = chosen.strip()
-        if not ok or not chosen or chosen == ref:
-            return
-        if component is not None:
-            result = self.bus.dispatch(
-                "component.update", UpdateComponentPayload(id=component.id, ref=chosen)
-            )
-        else:
-            assert part is not None
-            result = self.bus.dispatch("part.update", UpdatePartPayload(id=part.id, ref=chosen))
-        if not result.ok:
-            self.statusBar().showMessage(refused(result), 8000)
-            return
-        self._schematic_ref = chosen
-        self._sync_schematic_highlight()
-        self.statusBar().showMessage(did(result.description), 6000)
+        self._show_symbol_in_properties(ref)
+        self.inspector.focus_field("ref")
 
     def _duplicate_symbol(self, ref: str) -> None:
         """Another part of the same kind and value, with the next free designator.
@@ -9083,6 +9077,7 @@ class MainWindow(QMainWindow):
             InspectorHooks(
                 change_part=lambda component_id: self.on_change_part(component_id),
                 board_setup=lambda: self.on_board_setup(),
+                change_design_part=lambda part_id: self.on_schematic_part_properties(part_id),
             ),
             InspectorActions(
                 route_selected=self.act_route_selected,
@@ -9091,6 +9086,8 @@ class MainWindow(QMainWindow):
                 mirror=self.act_mirror,
                 add_pins=self.act_add_pins,
                 delete_net=self.act_delete_net,
+                place_design=self.act_sch_place,
+                remove_design=self.act_sch_delete,
             ),
         )
         # The value the parts placed next are given: typed in Properties while a library

@@ -9404,33 +9404,30 @@ def test_a_reference_only_a_net_names_offers_nothing_to_do() -> None:
     _close(window)
 
 
-def test_renaming_a_symbol_from_the_sheet_carries_its_nets(monkeypatch) -> None:
+def test_renaming_a_symbol_from_the_sheet_carries_its_nets() -> None:
     """The only reason a rename is safe to offer in two clicks. R1 wired into six nets and
-    relabelled R7 used to come out connected to nothing."""
-    from PySide6.QtWidgets import QInputDialog
-
+    relabelled R7 used to come out connected to nothing. Rename is the Reference field."""
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
     _wire(window, "OUT", ("R1", "1"))
-    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("R7", True))
 
     _entry(window.sheet_menu(_over(window, "R1")), "name…").trigger()
+    _type_into(window.inspector.design_part_editor.ref, "R7")
 
     assert [part.ref for part in window.bus.document.parts] == ["R7"]
     assert [node.component_ref for node in window.bus.document.nets[0].nodes] == ["R7"]
     _close(window)
 
 
-def test_a_rename_nobody_finished_changes_nothing(monkeypatch) -> None:
-    from PySide6.QtWidgets import QInputDialog
-
+def test_a_rename_nobody_finished_changes_nothing() -> None:
+    """Rename puts the keyboard in the Reference; leaving it as it was writes nothing."""
     window = _blank_window()
     _add(window, "R1", "r-axial-3")
     before = window.bus.document
-    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("R7", False))
-
     window._rename_symbol("R1")
-
+    editor = window.inspector.design_part_editor
+    assert window.inspector.shown is editor
+    _type_into(editor.ref, "R1")
     assert window.bus.document is before
     _close(window)
 
@@ -14767,4 +14764,29 @@ def test_the_text_tool_writes_and_puts_the_keyboard_in_properties() -> None:
     _type_into(editor.text, "POWER STAGE")
     edited = next(n for n in window.bus.document.sheet_notes if n.id == note.id)
     assert edited.text == "POWER STAGE"
+    _close(window)
+
+
+
+def test_a_part_only_in_the_design_is_edited_in_properties() -> None:
+    """Drawn on the sheet and not placed: its reference, value, pin names and note in
+    Properties through ``part.update``, and "not on the board yet" where a placed part has
+    its hole. A double-click on it puts the keyboard in its Value."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    part = window.bus.document.parts[0]
+    focused: list[str] = []
+    real = window.inspector.focus_field
+    window.inspector.focus_field = lambda name: (focused.append(name), real(name))[1]
+    window._on_schematic_part_activated("R1")
+    editor = window.inspector.design_part_editor
+    assert window.inspector.shown is editor and focused == ["value"]
+    steps = len(window.bus.history())
+    _type_into(editor.value, "4k7")
+    _type_into(editor.ref, "R5")
+    editor.note.setPlainText("pull-down")
+    editor._commit_note()
+    edited = next(p for p in window.bus.document.parts if p.id == part.id)
+    assert (edited.value, edited.ref, edited.note) == ("4k7", "R5", "pull-down")
+    assert len(window.bus.history()) == steps + 3
     _close(window)
