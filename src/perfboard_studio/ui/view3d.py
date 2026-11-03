@@ -1576,12 +1576,10 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
             box = (height, ink) if rotate else (ink, height)
             if not printed_label_is_clear(doc, Point2(x, -y), box[0], box[1]):
                 continue
-            vector = vtk.vtkVectorText()
-            vector.SetText(text)
-            vector.Update()
-            bounds = vector.GetOutput().GetBounds()
-            # vtkVectorText is roughly one unit tall and starts at the origin, so it is
-            # scaled to the wanted cap height and then centred on its own bounds.
+            glyphs = _glyphs(text)
+            bounds = glyphs.GetBounds()
+            # A capital is one unit tall from the origin (``_glyphs``), so it is scaled to
+            # the wanted cap height and then centred on its own bounds.
             scale = height
             text_width = max(bounds[1] - bounds[0], 1e-6)
             if text_width * scale > max_width:
@@ -1610,7 +1608,7 @@ def build_legend(doc: PerfDocument) -> list[vtk.vtkActor]:
             )
             placed = vtk.vtkTransformPolyDataFilter()
             placed.SetTransform(transform)
-            placed.SetInputData(vector.GetOutput())
+            placed.SetInputData(glyphs)
             placed.Update()
             append.AddInputData(placed.GetOutput())
         append.Update()
@@ -1647,10 +1645,8 @@ def build_board_text(doc: PerfDocument) -> list[vtk.vtkActor]:
             cap = width if turn else height
             if cap <= 0:
                 continue
-            vector = vtk.vtkVectorText()
-            vector.SetText(line.text)
-            vector.Update()
-            bounds = vector.GetOutput().GetBounds()
+            glyphs = _glyphs(line.text)
+            bounds = glyphs.GetBounds()
             transform = vtk.vtkTransform()
             transform.Translate(centre.x, -centre.y, 0.0)
             if face == "bottom":
@@ -1662,7 +1658,7 @@ def build_board_text(doc: PerfDocument) -> list[vtk.vtkActor]:
             transform.Translate(-(bounds[0] + bounds[1]) / 2, -(bounds[2] + bounds[3]) / 2, 0.0)
             placed = vtk.vtkTransformPolyDataFilter()
             placed.SetTransform(transform)
-            placed.SetInputData(vector.GetOutput())
+            placed.SetInputData(glyphs)
             placed.Update()
             append.AddInputData(placed.GetOutput())
         append.Update()
@@ -1975,23 +1971,121 @@ def _knurled_prism(radius: float, height: float, teeth: int = 18) -> vtk.vtkPoly
     return mesh.data()
 
 
+def _qt_available() -> bool:
+    """Whether Qt can draw letters here: an application, and a font database behind it.
+    Qt's offscreen plugin on Windows has none, and its glyphs come out empty -- a legend
+    that vanished rather than one in the stand-in's strokes."""
+    from PySide6.QtGui import QGuiApplication
+
+    app = QGuiApplication.instance()
+    return app is not None and _has_fonts(id(app))
+
+
+@lru_cache(maxsize=4)
+def _has_fonts(_application: int) -> bool:
+    """Asked once per application: the font database does not change while one runs."""
+    from PySide6.QtGui import QFontDatabase
+
+    return bool(QFontDatabase.families())
+
+
+def _glyphs(text: str, bold: bool = True) -> vtk.vtkPolyData:
+    """``text`` as flat filled glyphs, one unit per cap height with the baseline at y = 0, in
+    the letters the 2D view and the 1:1 print draw it in (``scenetext.draw_physical_label``'s
+    font, bold as it is there for the legend and the board's own lines).
+
+    ``vtkVectorText`` was the letters here, and it is a stroke font: the bold "01" beside a
+    row in 2D came out in hairlines in 3D, and it knows ASCII and nothing else. A glyph is
+    now the font's own outline, off a ``QPainterPath``, filled with its counters left open.
+    Without a Qt application -- a bare engine test -- ``vtkVectorText`` stands in, the rule
+    the board-note tags already follow (``_label_decal``). Both put a capital about one unit
+    tall from the origin, which is what every caller scales by.
+    """
+    if not _qt_available():
+        vector = vtk.vtkVectorText()
+        vector.SetText(text)
+        vector.Update()
+        fallback: vtk.vtkPolyData = vector.GetOutput()
+        return fallback
+    return _font_glyphs(text, bold)
+
+
+def can_print(text: str) -> bool:
+    """Whether :func:`_glyphs` prints ``text`` whole: any text the font has with Qt to draw
+    it, and ASCII alone without, where ``vtkVectorText`` drops every other letter."""
+    return _qt_available() or all(" " <= char <= "~" for char in text)
+
+
+@lru_cache(maxsize=2048)
+def _font_glyphs(text: str, bold: bool) -> vtk.vtkPolyData:
+    """:func:`_glyphs` drawn by Qt. Cached per string, because the view is rebuilt after every
+    command and a board prints the same addresses each time; the polydata is only ever read,
+    by the transform filters that place it."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QFontMetricsF, QPainterPath
+
+    from .scenetext import _PHYSICAL_FONT_PX, label_font
+
+    font = label_font(_PHYSICAL_FONT_PX, bold)
+    cap = QFontMetricsF(font).capHeight() or _PHYSICAL_FONT_PX * 0.7
+    path = QPainterPath()
+    path.addText(QPointF(0.0, 0.0), font, text)
+    rings = [ring for ring in path.toSubpathPolygons() if ring.size() >= 3]
+    points = vtk.vtkPoints()
+    lines = vtk.vtkCellArray()
+    for ring in rings:
+        # Qt's y runs down and the world's up.
+        loop = [(ring.at(i).x() / cap, -ring.at(i).y() / cap) for i in range(ring.size())]
+        if loop[0] == loop[-1]:
+            loop.pop()
+        if len(loop) < 3:
+            continue
+        # A ring inside an odd number of others is a counter -- the hole in an O or an A --
+        # and the triangulator takes a hole as a ring wound the other way round.
+        probe = ring.at(0)
+        depth = sum(
+            1
+            for other in rings
+            if other is not ring and other.containsPoint(probe, Qt.FillRule.OddEvenFill)
+        )
+        area = sum(ax * by - bx * ay for (ax, ay), (bx, by) in pairwise([*loop, loop[0]]))
+        if (area > 0) != (depth % 2 == 0):
+            loop.reverse()
+        line = vtk.vtkPolyLine()
+        ids = line.GetPointIds()
+        ids.SetNumberOfIds(len(loop) + 1)
+        first = points.GetNumberOfPoints()
+        for index, (x, y) in enumerate(loop):
+            points.InsertNextPoint(x, y, 0.0)
+            ids.SetId(index, first + index)
+        ids.SetId(len(loop), first)
+        lines.InsertNextCell(line)
+    contours = vtk.vtkPolyData()
+    contours.SetPoints(points)
+    contours.SetLines(lines)
+    fill = vtk.vtkContourTriangulator()
+    fill.SetInputData(contours)
+    fill.Update()
+    result: vtk.vtkPolyData = fill.GetOutput()
+    return result
+
+
 def _printed(text: str, height_mm: float, max_width_mm: float) -> vtk.vtkPolyData | None:
     """``text`` as flat glyphs ``height_mm`` tall, centred on the origin and narrowed to fit
-    ``max_width_mm``: the ink printed on a part. ``None`` when nothing would be printed."""
-    vector = vtk.vtkVectorText()
-    vector.SetText(text)
-    vector.Update()
-    x0, x1, y0, y1, _z0, _z1 = vector.GetOutput().GetBounds()
+    ``max_width_mm``: the ink printed on a part, in the 2D's regular weight for it
+    (``view2d._paint_top_marking``). ``None`` when nothing would be printed."""
+    glyphs = _glyphs(text, bold=False)
+    x0, x1, y0, y1, _z0, _z1 = glyphs.GetBounds()
     if x1 <= x0:
         return None
-    # vtkVectorText is about one unit tall, as the legend already relies on.
+    # A capital is about one unit tall, as the legend relies on too.
     scale = min(height_mm, max_width_mm / (x1 - x0))
     transform = vtk.vtkTransform()
     transform.Scale(scale, scale, 1.0)
     transform.Translate(-(x0 + x1) / 2, -(y0 + y1) / 2, 0.0)
     placed = vtk.vtkTransformPolyDataFilter()
     placed.SetTransform(transform)
-    placed.SetInputData(vector.GetOutput())
+    placed.SetInputData(glyphs)
     placed.Update()
     result: vtk.vtkPolyData = placed.GetOutput()
     return result
@@ -2140,14 +2234,15 @@ PRINTED_ARCHETYPES = frozenset({"relay-box", "potentiometer"})
 def _marking(fp: Footprint, value: str) -> str:
     """The print on a part: its value, from the document, as a real one carries it.
 
-    Only a value ``vtkVectorText`` can print whole. It has ASCII and nothing else, so
-    "Röle 12V" would come out "Rle 12V" -- a wrong label, which is worse than none, and the
-    board and the parts list still say what it is.
+    Only a value the glyphs print whole (:func:`can_print`): any text with Qt to draw it,
+    and ASCII alone without, where ``vtkVectorText`` would print "Röle 12V" as "Rle 12V" -- a
+    wrong label, which is worse than none, and the board and the parts list still say what
+    it is.
     """
     text = value.strip()
     if fp.body.archetype not in PRINTED_ARCHETYPES or not text:
         return ""
-    return text if all(" " <= char <= "~" for char in text) else ""
+    return text if can_print(text) else ""
 
 
 def _through_hole_pieces(

@@ -317,14 +317,13 @@ def test_the_3d_board_prints_what_the_board_in_hand_prints(monkeypatch) -> None:
     from perfboard_studio.ui import view3d
 
     said: list[str] = []
-    real = view3d.vtk.vtkVectorText
+    real = view3d._glyphs
 
-    class Recording(real):  # type: ignore[misc, valid-type]
-        def SetText(self, text: str) -> None:
-            said.append(text)
-            super().SetText(text)
+    def recording(text: str, bold: bool = True):  # type: ignore[no-untyped-def]
+        said.append(text)
+        return real(text, bold)
 
-    monkeypatch.setattr(view3d.vtk, "vtkVectorText", Recording)
+    monkeypatch.setattr(view3d, "_glyphs", recording)
     # One face and one edge each, so every label is said once: the columns, then the rows.
     labels = dataclasses.replace(EIGHT_BY_TWELVE, face="top", all_edges=False)
     view3d.build_legend(_doc(labels))

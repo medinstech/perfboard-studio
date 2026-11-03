@@ -11657,16 +11657,22 @@ def _piece_bounds(piece) -> tuple[float, ...]:
     [
         ("relay-spdt", "SRD-12VDC-SL-C", "SRD-12VDC-SL-C"),
         ("pot-3", " 10k ", "10k"),
-        # vtkVectorText has ASCII and nothing else: this would print "Rle 12V".
-        ("relay-spdt", "R\u00f6le 12V", ""),
+        # Whole in the 2D's font, which has the letter. Where Qt draws no letters -- its
+        # offscreen plugin on Windows has no fonts -- the stand-in vtkVectorText has ASCII
+        # alone and would print "Rle 12V", so it is left off (view3d.can_print).
+        ("relay-spdt", "R\u00f6le 12V", None),
         ("pot-3", "", ""),
         # A DIP's print is its manufacturer's, and nothing the document knows.
         ("dip-8", "NE555", ""),
     ],
 )
 def test_a_relay_and_a_potentiometer_carry_their_value_in_print(
-    footprint_id: str, value: str, printed: str
+    footprint_id: str, value: str, printed: str | None
 ) -> None:
+    from perfboard_studio.ui import view3d
+
+    if printed is None:
+        printed = value if view3d.can_print(value) else ""
     assert _generated_body(footprint_id, value).marking == printed
 
 

@@ -432,6 +432,11 @@ closed without a bump.
   finding's menu has Go to It and Auto-wire Its Connections, and the Wiring step offers
   Auto-wire when pressed.
 
+- **The board's print in 3D is in the 2D's letters.** The hole addresses, the words a board
+  is printed with and a part's own print are the bold lettering the 2D view and the 1:1
+  print use, instead of thin strokes, and Turkish letters are printed: "ALT YÜZ" lost its Ü,
+  and a relay valued "Röle 12V" was left blank.
+
 - **Edge pads in 3D are the shape they are in 2D.** A green board's stadium strip, a rounded
   one or the phenolic board's squares, where the 3D view drew every edge pad as a grey
   rectangle.

@@ -90,3 +90,92 @@ def test_every_finger_on_a_stock_board_is_drawn_from_its_outline(family) -> None
     assert actors
     drawn = sum(actor.GetMapper().GetInput().GetNumberOfPoints() for actor in actors)
     assert drawn == expected
+
+
+# ---------------------------------------------------------------------------
+# The print, in the 2D's letters
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def qt() -> None:
+    from PySide6.QtWidgets import QApplication
+
+    QApplication.instance() or QApplication([])
+
+
+@pytest.fixture
+def fonts(qt) -> None:  # type: ignore[no-untyped-def]
+    """Skip where Qt has no fonts -- its offscreen plugin on Windows -- which is not a
+    failure of anything being tested; the stand-in is tested on its own below."""
+    from PySide6.QtGui import QFontDatabase
+
+    if not QFontDatabase.families():
+        pytest.skip("this Qt platform has no font database, so Qt draws no letters")
+
+
+def _covers(glyphs, x: float, y: float) -> bool:
+    """Whether any triangle of ``glyphs`` covers the point."""
+    points = glyphs.GetPoints()
+    for index in range(glyphs.GetNumberOfCells()):
+        ids = glyphs.GetCell(index).GetPointIds()
+        if ids.GetNumberOfIds() != 3:
+            continue
+        (ax, ay, _), (bx, by, _), (cx, cy, _) = (points.GetPoint(ids.GetId(i)) for i in range(3))
+        d1 = (x - bx) * (ay - by) - (ax - bx) * (y - by)
+        d2 = (x - cx) * (by - cy) - (bx - cx) * (y - cy)
+        d3 = (x - ax) * (cy - ay) - (cx - ax) * (y - ay)
+        if not ((d1 < 0 or d2 < 0 or d3 < 0) and (d1 > 0 or d2 > 0 or d3 > 0)):
+            return True
+    return False
+
+
+def test_the_print_is_the_2d_font_one_unit_to_a_capital(fonts) -> None:  # type: ignore[no-untyped-def]
+    """The legend, the board's lines and a part's ink were vtkVectorText, a stroke font: the
+    bold "01" beside a row in 2D was hairlines in 3D. They are the 2D's own glyphs now,
+    filled, a capital one unit tall from the baseline -- the size every caller scales by --
+    with an O's counter left open."""
+    from perfboard_studio.ui import view3d
+
+    h = view3d._glyphs("H")
+    _x0, _x1, y0, y1, _z0, _z1 = h.GetBounds()
+    assert y0 == pytest.approx(0.0, abs=0.02)
+    assert y1 == pytest.approx(1.0, abs=0.02)
+    assert h.GetNumberOfPolys() > 0
+
+    ring = view3d._glyphs("O")
+    x0, x1, y0, y1, _z0, _z1 = ring.GetBounds()
+    assert not _covers(ring, (x0 + x1) / 2, (y0 + y1) / 2), "an O is a ring, not a disc"
+    assert _covers(ring, x0 + (x1 - x0) * 0.06, (y0 + y1) / 2), "and its stroke is filled"
+
+
+def test_a_board_prints_turkish_with_the_font(fonts) -> None:  # type: ignore[no-untyped-def]
+    """vtkVectorText knows ASCII and nothing else, so "ALT YÜZ" lost its Ü."""
+    from perfboard_studio.ui import view3d
+
+    assert view3d._glyphs("Ü").GetNumberOfPolys() > 0
+    assert view3d.can_print("Röle 12V")
+
+
+def test_with_no_letters_from_qt_the_stand_in_prints_and_says_what_it_cannot(qt, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """No Qt application, or one with no font database (Qt's offscreen plugin on Windows,
+    where the glyphs came out EMPTY and the legend vanished): vtkVectorText stands in, the
+    legend is still printed, and ``can_print`` says the stand-in has ASCII alone, so a
+    part's value is left off rather than misspelt."""
+    from perfboard_studio.ui import view3d
+
+    monkeypatch.setattr(view3d, "_qt_available", lambda: False)
+    assert view3d._glyphs("A01").GetNumberOfPolys() > 0
+    assert not view3d.can_print("Röle 12V")
+    assert view3d.can_print("SRD-12VDC")
+    doc = _family_doc(GREEN_DOUBLE_SIDED, "5 x 7 cm")
+    legend = view3d.build_legend(doc)
+    assert legend and all(actor.GetMapper().GetInput().GetNumberOfPolys() > 0 for actor in legend)
+
+
+def test_whatever_qt_has_the_legend_is_printed(qt) -> None:  # type: ignore[no-untyped-def]
+    """The same promise in whatever this platform gives: fonts or none, the letters are
+    there."""
+    from perfboard_studio.ui import view3d
+
+    assert view3d._glyphs("A01").GetNumberOfPolys() > 0
