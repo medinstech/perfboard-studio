@@ -421,6 +421,8 @@ closed without a bump.
   Problems drawer says so ("Older package") until the GY-521 is chosen again under
   Properties' Change…. A module drawing is now turned to fit its board and never mirrored:
   pins named in a mirrored order keep the plain block.
+- **Fit leaves the floating bars their room.** The board's corner sat under the tool rail,
+  and a corner hole chosen there was half hidden by it.
 
 - **The Library's names have the room.** Its Pins column took half the panel and cut "AA
   battery holder" to "AA battery h…"; the count is as wide as it needs and right-aligned. The

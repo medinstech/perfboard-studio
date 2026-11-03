@@ -28,7 +28,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import replace
 from typing import Any, cast
 
-from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -56,6 +56,7 @@ from PySide6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
     QLabel,
+    QWidget,
 )
 
 from perfboard_studio.breadboard import (
@@ -6427,9 +6428,49 @@ class BoardView(QGraphicsView):
         self.setTransformationAnchor(anchor)
         self._refresh_hover()
 
+    #: Widgets laid over the view's edges -- the tool rail at the left, the view bar at the
+    #: bottom right (``FloatingBar``) -- that a fit leaves room for (``fit_board``).
+    overlays: tuple[QWidget, ...] = ()
+
     def fit_board(self) -> None:
-        self.fitInView(self.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+        """The whole board in view, clear of the bars laid over the view.
+
+        Fitted to the viewport, the board's top-left corner was under the tool rail and a
+        corner hole chosen there half hidden by it (lead's R2 review). Each bar keeps its
+        side's room AND the opposite side's, so the board, centred as the view centres
+        anything smaller than itself, clears it -- a fit that leaned the board to one side
+        would be undone the moment the view re-centred it.
+        """
+        rect = self.sceneRect()
+        viewport = self.viewport().rect()
+        across, down = self._overlay_room(viewport)
+        room = viewport.adjusted(across, down, -across, -down)
+        if rect.isEmpty() or room.width() < 80 or room.height() < 80:
+            self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+        else:
+            scale = min((room.width() - 4) / rect.width(), (room.height() - 4) / rect.height())
+            self.resetTransform()
+            self.scale(scale, scale)
+            self.centerOn(rect.center())
         self._clamp_scale()
+
+    def _overlay_room(self, viewport: QRect) -> tuple[int, int]:
+        """(across, down): the room the visible bars take from the viewport's sides --
+        a bar along a side edge takes its width, one along the top or bottom its height."""
+        across = down = 0
+        gap = 8
+        for bar in self.overlays:
+            if not bar.isVisible():
+                continue
+            corner = self.viewport().mapFromGlobal(bar.mapToGlobal(QPoint(0, 0)))
+            box = QRect(corner, bar.size())
+            if box.height() > box.width():
+                side = box.right() if box.center().x() < viewport.center().x() else viewport.right() - box.left()
+                across = max(across, side + gap)
+            else:
+                side = viewport.bottom() - box.top() if box.center().y() > viewport.center().y() else box.bottom()
+                down = max(down, side + gap)
+        return across, down
 
     def _refresh_hover(self) -> None:
         """Re-read what is under a pointer that has not moved.

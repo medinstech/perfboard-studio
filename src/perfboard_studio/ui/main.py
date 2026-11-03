@@ -5231,6 +5231,8 @@ class MainWindow(QMainWindow):
         view.add_action(self.act_zoom_in)
         view.add_action(self.act_fit)
         self.board_view_tools = view
+        # A fit leaves their room, so neither bar sits over a corner of the board.
+        self.view.overlays = (tools, view)
         self._build_sheet_tools()
 
         # The guide's corner: the next step to do, its ticks cleared, the guide exported.

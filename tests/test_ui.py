@@ -16250,3 +16250,28 @@ def test_the_first_finger_is_chosen_by_its_address() -> None:
         assert features.finger_start.count() == board.rows
     finally:
         _close(window)
+
+
+def test_fit_leaves_the_floating_bars_their_room() -> None:
+    """Fitted to the viewport, the board's top-left corner was under the tool rail and a
+    corner hole chosen there half hidden by it (lead's R2 review). A fit keeps the board
+    clear of the rail and of the view bar."""
+    from PySide6.QtCore import QRect
+
+    window = _window_on(_load_dense())
+    try:
+        window.resize(1440, 900)
+        window.show()
+        window.show_board()
+        QApplication.processEvents()
+        view = window.view
+        view.fit_board()
+        QApplication.processEvents()
+        board = view.mapFromScene(view.sceneRect()).boundingRect()
+        for bar in view.overlays:
+            assert bar.isVisible()
+            corner = view.viewport().mapFromGlobal(bar.mapToGlobal(QPoint(0, 0)))
+            box = QRect(corner, bar.size())
+            assert not box.intersects(board), (bar.objectName(), box, board)
+    finally:
+        _close(window)
