@@ -27,7 +27,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import ClassVar, Literal
+from typing import Literal
 
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QAction, QKeyEvent
@@ -249,16 +249,20 @@ def _action_button(action: QAction) -> QToolButton:
 class _BoardEditor(QWidget):
     """The board itself: its name, what it is, and the two limits a case puts on it."""
 
-    #: What each kind of board is called, in the words the board designer offers it by: the part
-    #: of its line before the dash.
-    KINDS: ClassVar[dict[str, str]] = {
-        "pad-per-hole": "Pad per hole — every hole is its own island",
-        "stripboard": "Stripboard — whole rows joined; you cut the track to separate",
-        "breadboard": "Breadboard — solderless; five holes to a clip, power on the rails",
-        "solderable-breadboard": (
-            "Solderable breadboard — the same holes and strips, in copper, soldered"
-        ),
-    }
+    @staticmethod
+    def kind_name(kind: str) -> str | None:
+        """What a kind of board is called, in the words the board designer says it in.
+
+        Literals in ``t()``, where Board Setup's table of whole lines used to be read: that
+        table retired with it, and the catalogue scan took the four lines for unused --
+        and the Turkish window said the board's kind in English.
+        """
+        return {
+            "pad-per-hole": t("Pad per hole"),
+            "stripboard": t("Stripboard"),
+            "breadboard": t("Solderless breadboard"),
+            "solderable-breadboard": t("Solderable breadboard"),
+        }.get(kind)
 
     def __init__(self, inspector: Inspector) -> None:
         super().__init__()
@@ -341,8 +345,8 @@ class _BoardEditor(QWidget):
         try:
             self.name.show_value(document.meta.name)
             board = document.board
-            kind = self.KINDS.get(board.type)
-            words = [t(kind).split(" — ")[0]] if kind is not None else []
+            kind = self.kind_name(board.type)
+            words = [kind] if kind is not None else []
             words.append(t("{cols} × {rows} holes").format(cols=board.cols, rows=board.rows))
             self.summary.setText(",  ".join(words))
             if not self.height_limit.hasFocus():

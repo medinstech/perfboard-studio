@@ -16150,3 +16150,21 @@ def test_the_material_is_short_in_its_field_and_said_in_full_on_hover() -> None:
     assert dialog.material.currentText() == "FR-4 (glass epoxy)"
     said = dialog.material.itemData(dialog.material.currentIndex(), Qt.ItemDataRole.ToolTipRole)
     assert said.startswith("FR-4 — glass epoxy") and dialog.material.toolTip() == said
+
+
+def test_the_boards_kind_in_properties_is_said_in_the_windows_language() -> None:
+    """Board Setup's table of whole lines was where these were read from; it retired, the
+    catalogue scan took the lines for unused, and a Turkish window said "Pad per hole"."""
+    from perfboard_studio.ui.i18n import set_language
+
+    set_language("tr")
+    try:
+        window = _window_on(_load_dense())
+        try:
+            window.scene.clearSelection()
+            window._refresh_properties()
+            assert window.inspector.board_editor.summary.text().startswith("Delik başına ped")
+        finally:
+            _close(window)
+    finally:
+        set_language("en")
