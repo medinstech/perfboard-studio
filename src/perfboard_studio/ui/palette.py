@@ -40,6 +40,10 @@ from .i18n import t
 VISIBLE_ROWS = 10
 WIDTH = 620
 
+#: The QAction property holding more words a command is found by, comma-separated, in the
+#: window's language: what people call it that its name does not say.
+ALSO = "paletteAlso"
+
 
 @dataclass(frozen=True, slots=True)
 class Entry:
@@ -52,6 +56,10 @@ class Entry:
     icon: QIcon | None = None
     #: "command", "part" or "net": what Ctrl+G narrows the palette to (``open``).
     kind: str = "command"
+    #: More words it is found by, after its own name and place: its tooltip and its
+    #: synonyms (``ALSO``). "perfboard" did not find New Board from This Design, whose
+    #: tooltip says "goes on to perfboard" (reach's walkthrough).
+    also: str = ""
 
 
 def rank(entries: Sequence[Entry], typed: str) -> list[Entry]:
@@ -65,6 +73,7 @@ def rank(entries: Sequence[Entry], typed: str) -> list[Entry]:
     starts: list[Entry] = []
     words: list[Entry] = []
     inside: list[Entry] = []
+    described: list[Entry] = []
     for entry in entries:
         name = entry.label.casefold()
         first_word = name.split(maxsplit=1)[0] if name.strip() else ""
@@ -77,7 +86,10 @@ def rank(entries: Sequence[Entry], typed: str) -> list[Entry]:
             words.append(entry)
         elif needle in name or needle in entry.where.casefold():
             inside.append(entry)
-    return exact + starts + words + inside
+        # Last: a word in what it DOES finds it, below everything its name finds.
+        elif needle in entry.also.casefold():
+            described.append(entry)
+    return exact + starts + words + inside + described
 
 
 #: The row's own data role for what is said after the name: its menu and its key.

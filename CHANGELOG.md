@@ -380,6 +380,11 @@ closed without a bump.
 - **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
   first in the document, instead of to whichever of them is listed first.
 
+- **The way from a breadboard to perfboard is found.** The command palette searches what a
+  command does, not only its name: "perfboard", "move to", "delikli" and "taşı" find New Board
+  from This Design. A checked breadboard's Next is Take It to Perfboard…, which offers to
+  save the breadboard on the way, where it offered only Save.
+
 - **The board's own parts are searched like the rest.** A custom part's group listed above
   every Library search, whatever was typed.
 

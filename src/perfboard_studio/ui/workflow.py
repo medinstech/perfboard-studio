@@ -113,10 +113,13 @@ def build_action(facts: WorkflowFacts) -> BuildAction:
     """
     if not facts.guide_showing:
         return "open-guide"
-    if facts.untitled:
-        return "save"
+    # Before Save: a built breadboard offered only Save, and the way on was found by nobody
+    # in the walkthrough. Taking it on asks to save the breadboard on the way out
+    # (``on_board_from_design`` -> ``_offer_to_save``), so nothing is lost by it.
     if facts.solderless_breadboard:
         return "to-perfboard"
+    if facts.untitled:
+        return "save"
     return "export-guide"
 
 

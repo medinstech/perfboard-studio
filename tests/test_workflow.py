@@ -213,7 +213,8 @@ def test_after_the_guide_the_button_saves_the_board_then_moves_it_on() -> None:
     assert build_action(ready) == "open-guide"
     showing = dataclasses.replace(ready, guide_showing=True)
     assert build_action(dataclasses.replace(showing, untitled=True)) == "save"
-    assert build_action(dataclasses.replace(showing, untitled=True, solderless_breadboard=True)) == "save"
+    # The way on first: going on offers to save the breadboard on the way out.
+    assert build_action(dataclasses.replace(showing, untitled=True, solderless_breadboard=True)) == "to-perfboard"
     assert build_action(dataclasses.replace(showing, solderless_breadboard=True)) == "to-perfboard"
     assert build_action(showing) == "export-guide"
 

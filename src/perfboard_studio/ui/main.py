@@ -364,6 +364,7 @@ from .home import Home, HomeExample
 from .i18n import counted, set_language, t
 from .i18n import language as current_language
 from .inspector import NET_CLASSES, Inspector, InspectorActions, InspectorHooks
+from .palette import ALSO as PALETTE_ALSO
 from .palette import CommandPalette, Entry
 from .partlist import PartListPanel
 from .partnames import footprint_label
@@ -3940,6 +3941,10 @@ class MainWindow(QMainWindow):
                 if not action.isEnabled():
                     continue
                 label = plain(action.text())
+                also = " ".join(
+                    part for part in (action.toolTip(), str(action.property(PALETTE_ALSO) or ""))
+                    if part and part != label
+                )
                 if action.isCheckable():
                     label = f"{label} ({t('on') if action.isChecked() else t('off')})"
                 entries.append(
@@ -3951,6 +3956,7 @@ class MainWindow(QMainWindow):
                         ),
                         run=action.trigger,
                         icon=None if action.icon().isNull() else action.icon(),
+                        also=also,
                     )
                 )
 
@@ -5279,6 +5285,10 @@ class MainWindow(QMainWindow):
                 "a breadboard goes on to perfboard. The board it is on now, and its file, "
                 "stay exactly as they are."
             )
+        )
+        # What somebody types who wants it: its name says neither "perfboard" nor "move".
+        act_from_design.setProperty(
+            PALETTE_ALSO, t("perfboard, stripboard, move to, take to, transfer")
         )
         act_from_design.triggered.connect(self.on_board_from_design)
         act_to_solderable = self.act_layout_to_solderable = file_menu.addAction(

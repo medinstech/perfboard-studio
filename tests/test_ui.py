@@ -15634,3 +15634,40 @@ def test_the_boards_own_parts_are_searched_like_every_other() -> None:
     assert "this board" not in groups("resistor")
     assert groups("dip")[0] == "this board"
     assert groups("this board") == ["this board"]
+
+
+@pytest.mark.parametrize(
+    ("language", "typed"),
+    [("en", "perfboard"), ("en", "move to"), ("tr", "delikli"), ("tr", "taşı")],
+)
+def test_the_palette_finds_the_way_from_a_breadboard_to_perfboard(language: str, typed: str) -> None:
+    """New Board from This Design was found only by "new board": its tooltip says it is how
+    a breadboard goes on to perfboard, and that is what people type."""
+    from perfboard_studio.ui.i18n import language as current
+    from perfboard_studio.ui.i18n import set_language, t
+    from perfboard_studio.ui.palette import rank
+
+    before = current()
+    set_language(language)
+    try:
+        window = _window_on(_load_dense())
+        try:
+            wanted = t("New Board from This &Design…").replace("&", "")
+            found = [entry.label for entry in rank(window._palette_entries(), typed)]
+            assert wanted in found, (typed, found[:8])
+        finally:
+            _close(window)
+    finally:
+        set_language(before)
+
+
+def test_a_word_in_what_a_command_does_ranks_below_its_name() -> None:
+    from perfboard_studio.ui.palette import Entry, rank
+
+    def entry(label: str, also: str = "") -> Entry:
+        return Entry(label=label, where="", keys="", run=lambda: None, also=also)
+
+    named = entry("Perfboard Settings")
+    described = entry("New Board from This Design…", also="goes on to perfboard")
+    assert [e.label for e in rank([described, named], "perfboard")] == [
+        "Perfboard Settings", "New Board from This Design…"]
