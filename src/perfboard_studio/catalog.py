@@ -34,7 +34,7 @@ or is in once per pinout with the order in its name: the two OLEDs, the RGB LEDs
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -1428,12 +1428,101 @@ def _word_finds(
     return False
 
 
+# ---------------------------------------------------------------------------
+# How well a search finds something
+# ---------------------------------------------------------------------------
+
+#: Best first. A search ranks what it finds by WHERE it found it, because what somebody
+#: typing "resistor" wants is the resistor, not the inductor whose summary says it lies
+#: "flat like a resistor" nor the photoresistor whose name has the word inside another:
+#:
+#: * the name STARTS with what was typed -- "Resistor (axial, 4-hole span)", "LED, 5 mm";
+#: * every word starts a word of its name, its kind or one of its aliases ("power" names
+#:   "Power in, 2-pin header" and the power category, "switch" the tact switch);
+#: * every word is somewhere in those, inside a word ("resistor" in "photoresistor");
+#: * every word is only in what it SAYS about itself, its summary ("power" in a
+#:   TIP31C's "NPN power, 100 V, 3 A", "led" inside a word of a Turkish summary).
+RANK_NAME_STARTS = 0
+RANK_NAMED = 1
+RANK_IN_NAME = 2
+RANK_SAID = 3
+
+
+def search_rank(
+    text: str,
+    *,
+    names: Sequence[str],
+    said: Sequence[str] = (),
+    numbers: Iterable[str] = (),
+    fold: Callable[[str], str] = str.lower,
+) -> int | None:
+    """How well ``text`` finds a thing called ``names`` (its name first, then any other
+    name, kind or alias it answers to, in either language) that says ``said`` about itself
+    and carries ``numbers`` (a part number "LM358N" finds), as one of the ``RANK_*``, best
+    lowest -- or None when some word of it finds nothing.
+
+    THE ONE RANKING, for a catalog part (``part_rank``) and for a bare package alike, so the
+    Parts tree, the package picker and the MCP server's ``list_catalog`` put the same thing
+    first for the same words. An empty search finds everything, equally.
+    """
+    words = fold(text).split()
+    if not words:
+        return RANK_NAME_STARTS
+    numbered = {_squeezed(fold(number)) for number in numbers}
+    numbered = {number for number in numbered if len(number) >= 4}
+    if names and fold(names[0]).startswith(" ".join(words)):
+        return RANK_NAME_STARTS
+    called = fold(" ".join(names))
+    if _all_found(words, called, numbered, starts=True):
+        return RANK_NAMED
+    if _all_found(words, called, numbered, starts=False):
+        return RANK_IN_NAME
+    if _all_found(words, fold(" ".join((*names, *said))), numbered, starts=False):
+        return RANK_SAID
+    return None
+
+
+def _all_found(words: Sequence[str], haystack: str, numbers: set[str], *, starts: bool) -> bool:
+    squeezed = _squeezed(haystack)
+    begins: set[int] = set()
+    at = 0
+    for token in haystack.split():
+        begins.add(at)
+        at += len(_squeezed(token))
+    return all(
+        _word_finds(word, haystack, squeezed, numbers, begins if starts else None) for word in words
+    )
+
+
+def part_rank(
+    part: CatalogPart,
+    text: str,
+    *,
+    names: Sequence[str] = (),
+    said: Sequence[str] = (),
+    fold: Callable[[str], str] = str.lower,
+) -> int | None:
+    """``search_rank`` for a catalog part: its name first, then its id, its kind and the
+    words for it (``_CATEGORY_WORDS``), its aliases and any ``names`` the caller adds -- the
+    window adds the name in its own language FIRST, so "direnç" starts "Direnç ..." -- and
+    as what it says, its summary and any ``said`` (the summary in the window's language)."""
+    kind = (part.category, *_CATEGORY_WORDS.get(part.category, ()))
+    return search_rank(
+        text,
+        names=(*names, part.name, part.id, *kind, *part.aliases),
+        said=(part.summary, *said),
+        numbers=(part.id, part.placed_value),
+        fold=fold,
+    )
+
+
 def search_catalog(text: str = "", category: CatalogCategory | None = None) -> list[CatalogPart]:
-    """Parts every word of ``text`` finds (``part_matches``): those it NAMES first
-    (``names_part``), then the rest, each in catalog order."""
-    found = [
-        part
-        for part in CATALOG
-        if (category is None or part.category == category) and part_matches(part, text)
+    """Parts every word of ``text`` finds, best first by ``part_rank``, each rank in catalog
+    order."""
+    ranked = [
+        (rank, index, part)
+        for index, part in enumerate(CATALOG)
+        if (category is None or part.category == category)
+        and (rank := part_rank(part, text)) is not None
     ]
-    return sorted(found, key=lambda part: not names_part(part, text))
+    return [part for _rank, _index, part in sorted(ranked, key=lambda found: found[:2])]

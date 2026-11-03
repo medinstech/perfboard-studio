@@ -355,6 +355,12 @@ closed without a bump.
   dragged and then landed with a plain "Done"; now the status line says a pin has no pad
   there, as it does when a part is placed there, and the part stays marked in Problems.
 
+- **A search puts what you typed first.** Parts are ranked by where the words were found
+  -- a name that starts with them, then names they match word by word, then a name with
+  them inside a word, then a summary that merely mentions them -- so "resistor" finds the
+  resistor before the photoresistor and the inductor, and "power" the power inputs before
+  a power transistor, in English and in Turkish.
+
 - **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
   first in the document, instead of to whichever of them is listed first.
 
