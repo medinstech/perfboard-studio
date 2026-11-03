@@ -2285,9 +2285,20 @@ def _body_path(
     if placement.silhouette == "dcut":
         path.addEllipse(rect)
         return path
+    if footprint.body.archetype in BOARD_ARCHETYPES:
+        # A module's board is a routed PCB, and its corners are square: drawn with the 12%
+        # radius of a moulded case, a Nano came out a soft blue block with 2 mm corners, a
+        # thing no board house makes. The 3D view already draws it as the box it is.
+        path.addRect(rect)
+        return path
     radius = min(rect.width(), rect.height()) * 0.12
     path.addRoundedRect(rect, radius, radius)
     return path
+
+
+#: The archetypes whose body IS a printed circuit board -- a module, a chip's adapter -- and is
+#: therefore cut with square corners, not moulded with round ones.
+BOARD_ARCHETYPES = frozenset({"module-board", "smd-adapter"})
 
 
 def _paint_body_shadow(
@@ -2687,8 +2698,11 @@ def _paint_body(
     archetype = footprint.body.archetype
 
     # Before the marks, so a cathode band or a pin-1 dot stays flat and readable on top of
-    # it rather than being washed out by a highlight painted over it.
-    _paint_body_sheen(painter, path, rect, placement, style)
+    # it rather than being washed out by a highlight painted over it. Not on a board: a
+    # sheen is moulded plastic catching the light, and a PCB is flat solder mask -- on a
+    # Nano it was a soft oval that made the board read as a block.
+    if archetype not in BOARD_ARCHETYPES:
+        _paint_body_sheen(painter, path, rect, placement, style)
     if on_screen:
         _paint_body_light(painter, path)
 

@@ -288,6 +288,10 @@ closed without a bump.
 
 ### Fixed
 
+- **A module's board has square corners.** An Arduino Nano or an ESP32 board was drawn as a
+  soft block with corners rounded 2 mm, as a moulded case is; a board is cut from a panel
+  with square ones. A chip's SMD adapter likewise.
+
 - **A breadboard is laid out the way one is built.** Place on the Board placed nothing
   itself on a breadboard -- the rails and the groove broke every row it packs -- and left
   every part to the search, which found the few places a relay fits at some seeds and not
