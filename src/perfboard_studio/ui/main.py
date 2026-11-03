@@ -1207,6 +1207,10 @@ class BoardSetupDialog(QDialog):
     #: portrait, and the picture is what tells a 5 x 7 from a 7 x 9 before the numbers do.
     PREVIEW = QSize(260, 320)
 
+    #: The narrowest the questions are laid out: room for the longest Type and Material
+    #: answer and for a legend row's three fields with their labels, in either language.
+    QUESTIONS_WIDTH = 460
+
     def __init__(
         self,
         board: Board,
@@ -1221,7 +1225,14 @@ class BoardSetupDialog(QDialog):
         #: What the accepting button says: Create Board for a new one, Use This Board when
         #: the open board changes. "OK" said neither.
         self._verb = verb if verb is not None else t("Use This Board")
-        self.setMinimumWidth(420)
+        # The questions get QUESTIONS_WIDTH of their own, and the picture its width beside
+        # them. 420 for the whole dialog left the questions 260 px once the picture was
+        # in, and every long answer was cut off mid-word -- "Pad per hole — every hole is
+        # its o", "Columns p" -- in Turkish worse.
+        self.setMinimumWidth(
+            self.QUESTIONS_WIDTH
+            + (self.PREVIEW.width() + theme.SPACE["2xl"] if lookup is not None else 0)
+        )
         #: What the preview draws the board under: the open document's own fingers and
         #: corner holes while the board is still that size, so Board Setup on a starter
         #: board shows the board as it is rather than a bare grid.
@@ -3086,7 +3097,8 @@ class ShortcutsDialog(QDialog):
     def __init__(self, menus: Any, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(t("Keyboard Shortcuts"))
-        self.resize(560, 640)
+        # Wide enough that the longest action is read whole beside its keys.
+        self.resize(760, 640)
 
         tree = QTreeWidget()
         tree.setHeaderLabels([t("Action"), t("Shortcut")])
@@ -10562,6 +10574,12 @@ class MainWindow(QMainWindow):
                     progress.setMinimumDuration(0)
                     progress.setAutoClose(False)
                     progress.setAutoReset(False)
+                    # Cancel is the only button, and a dialog's focused button is its default:
+                    # drawn in the accent a primary action gets, and pressed by Enter. Esc
+                    # still cancels; Enter, pressed to dismiss something else, no longer does.
+                    for button in progress.findChildren(QPushButton):
+                        button.setAutoDefault(False)
+                        button.setDefault(False)
                     if aside is not None:
                         # A link rather than a second button: the dialog lays out its one
                         # button itself, and a link sits in the label it already has.
