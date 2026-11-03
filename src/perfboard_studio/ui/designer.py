@@ -151,7 +151,7 @@ def _words() -> dict[str, dict[str, str]]:
         },
         "axis": {"vertical": t("Down a column"), "horizontal": t("Along a row")},
         "edges": {"short": t("The short edges"), "long": t("The long edges")},
-        "shape": {"rounded": t("Rounded"), "stadium": t("Stadium"), "square": t("Square")},
+        "shape": {"rounded": t("Rounded"), "stadium": t("Oblong"), "square": t("Square")},
         "letters": {
             "top": t("Along the top"), "bottom": t("Along the bottom"),
             "both": t("Top and bottom"), "none": t("Not printed"),
