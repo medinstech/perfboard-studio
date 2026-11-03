@@ -151,7 +151,7 @@ def test_both_views_take_the_one_layout(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_a_finger_is_drawn_by_its_shape() -> None:
-    from perfboard_studio.ui.view2d import FINGER_CORNER
+    from perfboard_studio.geometry import FINGER_CORNER
 
     assert set(FINGER_CORNER) == set(get_args(FingerShape))
     assert FINGER_CORNER["stadium"] == 0.5  # semicircular ends

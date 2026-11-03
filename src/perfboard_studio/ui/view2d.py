@@ -102,6 +102,7 @@ from perfboard_studio.geometry import (
     column_label,
     consumed_holes,
     edge_finger_rect,
+    finger_corner_radius_mm,
     flying_lead_routes,
     format_hole,
     hole_key,
@@ -144,7 +145,6 @@ from perfboard_studio.model import (
     Conductor,
     ConductorKind,
     EdgeConnector,
-    FingerShape,
     Footprint,
     HoleCoord,
     MountingHole,
@@ -1413,11 +1413,6 @@ class TrackCutItem(QGraphicsItem):
         )
 
 
-#: How round a finger's corners are, as a share of its short side: a softened rectangle,
-#: a stadium (half the short side, so the ends are semicircles), or nearly square.
-FINGER_CORNER: dict[FingerShape, float] = {"rounded": 0.25, "stadium": 0.5, "square": 0.06}
-
-
 class EdgeConnectorItem(QGraphicsItem):
     """The finger pads of one edge connector.
 
@@ -1454,7 +1449,7 @@ class EdgeConnectorItem(QGraphicsItem):
             if self.side == "bottom":
                 span_w, _ = hole_span_mm(self.board)
                 left = span_w - (rect.x + rect.width)
-            radius = min(rect.width, rect.height) * FINGER_CORNER[self.connector.shape]
+            radius = finger_corner_radius_mm(self.connector, rect)
             scheme = scheme_for(self.board)
             painter.setPen(QPen(QColor(scheme.pad_ring), 0.08))
             painter.setBrush(QBrush(QColor(scheme.pad) if self.near_side else FINGER_FAR))

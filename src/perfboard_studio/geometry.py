@@ -36,6 +36,7 @@ from .model import (
     BoardText,
     ComponentInstance,
     EdgeConnector,
+    FingerShape,
     Footprint,
     FootprintPin,
     HoleCoord,
@@ -1518,6 +1519,17 @@ def default_finger_length_mm(board: Board, edge: BoardEdge = "bottom") -> Mm:
     border, and using the flush figure there would leave the finger short of its own hole.
     """
     return board_edge_margin_mm(board, edge_axis(edge)) + board.pitch / 2
+
+
+#: How round a finger's corners are, as a share of its short side (``EdgeConnector.shape``):
+#: a softened rectangle, a stadium (half the short side, so the ends are semicircles), or
+#: nearly square. One table, so the 2D board and the 3D one round a finger alike.
+FINGER_CORNER: dict[FingerShape, float] = {"rounded": 0.25, "stadium": 0.5, "square": 0.06}
+
+
+def finger_corner_radius_mm(connector: EdgeConnector, rect: RectMm) -> Mm:
+    """The corner radius of one finger whose copper is ``rect`` (``edge_finger_rect``)."""
+    return min(rect.width, rect.height) * FINGER_CORNER[connector.shape]
 
 
 def edge_finger_rect(connector: EdgeConnector, hole: HoleCoord, board: Board) -> RectMm:
