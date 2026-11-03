@@ -26,7 +26,7 @@ import dataclasses
 from collections.abc import Callable
 
 from PySide6.QtCore import QSettings, QSize, Qt, QTimer
-from PySide6.QtGui import QPixmap, QResizeEvent
+from PySide6.QtGui import QColor, QPainter, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -58,6 +58,7 @@ from perfboard_studio.boardfamily import (
     BoardDesign,
     BoardFamily,
     BoardSize,
+    BreadboardSpec,
     CornerHoles,
     EdgeStrip,
     Legend,
@@ -65,8 +66,14 @@ from perfboard_studio.boardfamily import (
     family_from_json,
     family_problem,
     family_to_json,
+    pattern_sizes,
     size_for_grid,
     size_for_mm,
+)
+from perfboard_studio.breadboard import (
+    SOLDERABLE_BORDER_X_MM,
+    SOLDERABLE_BORDER_Y_MM,
+    STANDARD_CHANNEL,
 )
 from perfboard_studio.commands import create_empty_document
 from perfboard_studio.connectivity import FootprintLookup
@@ -84,6 +91,15 @@ USER_FAMILIES_KEY = "boardFamilies/user"
 PREVIEW = QSize(560, 520)
 THUMB = QSize(180, 120)
 
+#: The kinds whose pattern is their size: a breadboard is sold as 830, 400 or 170 points
+#: and never cut to measure, so its grid, pads and drill are the kind's, not a setting.
+PATTERN_KINDS = frozenset({"breadboard", "solderable-breadboard"})
+
+#: How many columns of a "-flex" body keep the ordinary channel: 39 of the 63, measured on
+#: the bodies Board Setup offered by name -- a board somebody built is found in a list, not
+#: in a spin box, and the spin box beside it is for a body of somebody's own.
+FLEX_NARROW_COLS = 39
+
 
 def family_name(family: BoardFamily) -> str:
     """A family in the window's language: a catalogue family by its id, a user's own by the
@@ -93,6 +109,9 @@ def family_name(family: BoardFamily) -> str:
     return {
         "double-sided-fr4": t("Green double-sided (FR-4, tinned)"),
         "single-sided-phenolic": t("Phenolic single-sided (bare copper)"),
+        "breadboard": t("Solderless breadboard"),
+        "breadboard-wide": t("Solderless breadboard, wide channel (ESP32 / modules)"),
+        "solderable-breadboard": t("Solderable breadboard"),
     }.get(family.id, family.name)
 
 
@@ -102,7 +121,24 @@ def _words() -> dict[str, dict[str, str]]:
         "type": {
             "pad-per-hole": t("Pad per hole"),
             "stripboard": t("Stripboard"),
+            "breadboard": t("Solderless breadboard"),
             "solderable-breadboard": t("Solderable breadboard"),
+        },
+        # A breadboard's size by what it is called, and its channel by what straddles it:
+        # Board Setup's own words, so a board chosen there is found here by the same name.
+        "pattern_size": {
+            "830": t("Full size · 830 points · 63 columns"),
+            "400": t("Half size · 400 points · 30 columns"),
+            "170": t("Mini · 170 points · 17 columns, no rails"),
+        },
+        "channel": {
+            "300": t("300 mil · standard, a DIP straddles it"),
+            "600": t("600 mil · Arduino Nano"),
+            "700": t("700 mil · Raspberry Pi Pico"),
+            "900": t("900 mil · narrow ESP32 devkit"),
+            "900-flex": t("900 mil flex · 300 mil for columns 1–39"),
+            "1000": t("1000 mil · ESP32 devkit"),
+            "1000-flex": t("1000 mil flex · 300 mil for columns 1–39"),
         },
         "material": {
             "FR4": t("FR-4 — glass epoxy, the green kind. Tolerates heat well."),
@@ -166,12 +202,38 @@ def _face(family: BoardFamily) -> BoardSide:
     return "bottom" if family.single_sided else "top"
 
 
+def is_pattern(family: BoardFamily) -> bool:
+    return family.type in PATTERN_KINDS
+
+
 def size_name(size: BoardSize, family: BoardFamily) -> str:
     """A size as the picker says it: its name and its grid, because a name repeats across
     the variants of one size -- 7 x 9 cm is sold as 31 x 26 and as 35 x 27. A size sold
-    without the family's edge pads says so; a family with none says nothing."""
+    without the family's edge pads says so; a family with none says nothing. A breadboard
+    is said by its points, as it is sold."""
+    if is_pattern(family):
+        return _words()["pattern_size"].get(size.name, size.name)
     extra = "" if size.strip or family.strip is None else f", {t('no edge pads')}"
     return f"{size.name}  ({size.cols} × {size.rows}{extra})"
+
+
+def _first_size(family: BoardFamily) -> BoardSize | None:
+    """The size a family opens on: its first, and a breadboard's biggest -- the full-size
+    830 is the one on most benches, and the catalogue lists them smallest first."""
+    if not family.sizes:
+        return None
+    if is_pattern(family):
+        return max(family.sizes, key=lambda size: int(size.name) if size.name.isdigit() else 0)
+    return family.sizes[0]
+
+
+def _listed(family: BoardFamily) -> tuple[BoardSize, ...]:
+    """A family's sizes in the order the picker lists them: a breadboard's biggest first, as
+    Board Setup listed them."""
+    if is_pattern(family):
+        return tuple(sorted(
+            family.sizes, key=lambda size: -int(size.name) if size.name.isdigit() else 0))
+    return family.sizes
 
 
 def _combo(words: dict[str, str], ids: tuple[str, ...]) -> QComboBox:
@@ -268,6 +330,7 @@ class BoardDesigner(QDialog):
         self._settings.setContentsMargins(0, 0, theme.SPACE["md"], 0)
         self._problems: dict[str, QLabel] = {}
         self._rows: dict[str, tuple[QFormLayout, QWidget]] = {}
+        self._sections: dict[str, tuple[QLabel, QFormLayout]] = {}
         self._build_settings()
         self._settings.addStretch(1)
         scroller = QScrollArea()
@@ -315,15 +378,20 @@ class BoardDesigner(QDialog):
         shown.setTextFormat(Qt.TextFormat.RichText)
         return shown
 
-    def _row(self, form: QFormLayout, label: str, field: QWidget, path: str = "") -> None:
-        """A field, and under it the line that says why the family was refused there."""
+    def _row(
+        self, form: QFormLayout, label: str, field: QWidget, path: str = "", key: str = ""
+    ) -> None:
+        """A field, and under it the line that says why the family was refused there. The
+        row is kept by ``path`` (or ``key`` when nothing is refused there) so it can be
+        shown only where it means something."""
         holder = QWidget()
         column = QVBoxLayout(holder)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(2)
         column.addWidget(field)
+        if path or key:
+            self._rows[path or key] = (form, holder)
         if path:
-            self._rows[path] = (form, holder)
             problem = QLabel()
             problem.setWordWrap(True)
             theme.tone(problem, "danger")
@@ -332,18 +400,20 @@ class BoardDesigner(QDialog):
             self._problems[path] = problem
         form.addRow(label, holder)
 
-    def _section(self, title: str) -> QFormLayout:
-        self._settings.addWidget(self._heading(title))
+    def _section(self, title: str, key: str) -> QFormLayout:
+        heading = self._heading(title)
+        self._settings.addWidget(heading)
         form = QFormLayout()
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self._settings.addLayout(form)
+        self._sections[key] = (heading, form)
         return form
 
     def _build_settings(self) -> None:
         w = self._words
         changed = self._changed
 
-        size = self._section(t("Size"))
+        size = self._section(t("Size"), "size")
         self.stock = QComboBox()
         self.stock.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.stock.setMinimumContentsLength(10)
@@ -359,7 +429,7 @@ class BoardDesigner(QDialog):
         grid_row.addWidget(self.cols)
         grid_row.addWidget(QLabel("×"))
         grid_row.addWidget(self.rows)
-        self._row(size, t("Holes"), grid)
+        self._row(size, t("Holes"), grid, key="grid")
         outline = QWidget()
         outline_row = QHBoxLayout(outline)
         outline_row.setContentsMargins(0, 0, 0, 0)
@@ -370,9 +440,38 @@ class BoardDesigner(QDialog):
         outline_row.addWidget(QLabel("×"))
         outline_row.addWidget(self.height_mm)
         self._row(size, t("Size in mm"), outline, "sizes")
+        # A breadboard's channel, and a wide one's narrow part (lhm0's "flex" bodies keep
+        # the ordinary channel for their first columns, so a DIP still fits beside the
+        # module); a solderable one's border, the one thing its makers differ in.
+        self.channel = _combo(w["channel"], tuple(w["channel"]))
+        self.channel.activated.connect(self._on_channel)
+        self._row(size, t("Channel"), self.channel, "breadboard.channel_mils")
+        self.narrow = QSpinBox()
+        self.narrow.setRange(0, 400)
+        self.narrow.setSpecialValueText(t("Wide all the way"))
+        self.narrow.setSuffix(t(" columns"))
+        self.narrow.setToolTip(
+            t(
+                "How many columns, from column 1, keep the ordinary 0.3 inch channel with "
+                "their strips moved in to it, so a DIP still fits beside the module."
+            )
+        )
+        self.narrow.valueChanged.connect(self._on_pattern)
+        self._row(size, t("Narrow part"), self.narrow, "breadboard.narrow_channel_cols")
+        self.border_x = _mm(SOLDERABLE_BORDER_X_MM, 30.0, 1)
+        self.border_y = _mm(SOLDERABLE_BORDER_Y_MM, 30.0, 1)
+        for box, label, path in (
+            (self.border_x, t("Border, left and right"), "breadboard.border_x_mm"),
+            (self.border_y, t("Border, top and bottom"), "breadboard.border_y_mm"),
+        ):
+            box.setSingleStep(0.1)
+            box.editingFinished.connect(changed)
+            self._row(size, label, box, path)
 
-        pads = self._section(t("Grid and pads"))
-        self.type = _combo(w["type"], FAMILY_BOARD_TYPES)
+        pads = self._section(t("Grid and pads"), "grid")
+        self.type = _combo(
+            w["type"], tuple(kind for kind in FAMILY_BOARD_TYPES if kind not in PATTERN_KINDS)
+        )
         self.type.activated.connect(self._on_kind)
         self._row(pads, t("Kind"), self.type, "type")
         self.strip_axis = _combo(w["axis"], ("horizontal", "vertical"))
@@ -399,7 +498,7 @@ class BoardDesigner(QDialog):
         self.pad_axis.activated.connect(changed)
         self._row(pads, t("Long axis"), self.pad_axis, "pad_axis")
 
-        edge = self._section(t("Edge pads"))
+        edge = self._section(t("Edge pads"), "edge")
         self.strip_on = QCheckBox(t("Edge pads along two edges"))
         self.strip_on.toggled.connect(changed)
         edge.addRow(self.strip_on)
@@ -413,7 +512,7 @@ class BoardDesigner(QDialog):
         self.strip_width.editingFinished.connect(changed)
         self._row(edge, t("Width"), self.strip_width, "strip.width_mm")
 
-        holes = self._section(t("Mounting holes"))
+        holes = self._section(t("Mounting holes"), "holes")
         self.holes_on = QCheckBox(t("A hole in each corner"))
         self.holes_on.toggled.connect(changed)
         holes.addRow(self.holes_on)
@@ -424,7 +523,7 @@ class BoardDesigner(QDialog):
         self._row(holes, t("Diameter"), self.hole_diameter, "corner_holes.diameter_mm")
         self._row(holes, t("Screw head"), self.hole_head, "corner_holes.head_mm")
 
-        legend = self._section(t("Legend and text"))
+        legend = self._section(t("Legend and text"), "legend")
         self.letters = _combo(w["letters"], LETTER_EDGES)
         self.numbers = _combo(w["numbers"], NUMBER_EDGES)
         for combo in (self.letters, self.numbers):
@@ -440,7 +539,7 @@ class BoardDesigner(QDialog):
         self.printed.editingFinished.connect(changed)
         self._row(legend, t("Printed on it"), self.printed, "printed")
 
-        colour = self._section(t("Colour"))
+        colour = self._section(t("Colour"), "colour")
         self.mask_kind = _combo(w["mask"], MASKS)
         self.finish = _combo(w["finish"], FINISHES)
         # First, the family's own word for itself: nothing said is the material's look --
@@ -463,11 +562,21 @@ class BoardDesigner(QDialog):
             self.families.addItem(item)
 
     def _thumb(self, family: BoardFamily) -> QPixmap:
-        size = family.sizes[0] if family.sizes else self._size
-        return render_board(
+        """The family's board, centred in a slot the same size for every family: drawn at
+        its own shape, a breadboard sat at the top of its slot with its name far below."""
+        size = _first_size(family) or self._size
+        board = render_board(
             self._document(board_for(family, size, self._base)), self._lookup, THUMB,
             _face(family),
         )
+        slot = QPixmap(THUMB)
+        slot.fill(QColor(0, 0, 0, 0))
+        painter = QPainter(slot)
+        painter.drawPixmap(
+            (THUMB.width() - board.width()) // 2, (THUMB.height() - board.height()) // 2, board
+        )
+        painter.end()
+        return slot
 
     def _document(self, design: BoardDesign) -> PerfDocument:
         meta = DocumentMeta(name="preview", created="", modified="")
@@ -485,7 +594,7 @@ class BoardDesigner(QDialog):
             return
         family = everything[row]
         self._family = family
-        self._size = family.sizes[0] if family.sizes else self._size
+        self._size = _first_size(family) or self._size
         self._load(family, self._size)
         self.name.setText(family.name if family.user else "")
         self._redraw.start()
@@ -494,11 +603,28 @@ class BoardDesigner(QDialog):
         self._loading = True
         try:
             self.stock.clear()
-            for each in family.sizes:
+            listed = _listed(family)
+            for each in listed:
                 self.stock.addItem(size_name(each, family))
-            self.stock.addItem(t("Your own size"))
-            index = family.sizes.index(size) if size in family.sizes else len(family.sizes)
+            # A breadboard is not cut to measure: its sizes are all it comes in.
+            if not is_pattern(family):
+                self.stock.addItem(t("Your own size"))
+            index = next(
+                (i for i, each in enumerate(listed)
+                 if each == size or (is_pattern(family) and each.name == size.name)),
+                len(listed),
+            )
             self.stock.setCurrentIndex(index)
+            spec = family.breadboard or BreadboardSpec()
+            key = str(spec.channel_mils)
+            if spec.narrow_channel_cols == FLEX_NARROW_COLS and self.channel.findData(f"{key}-flex") >= 0:
+                key = f"{key}-flex"
+            self.channel.setCurrentIndex(max(0, self.channel.findData(key)))
+            self.narrow.setValue(spec.narrow_channel_cols)
+            self.border_x.setValue(
+                SOLDERABLE_BORDER_X_MM if spec.border_x_mm is None else spec.border_x_mm)
+            self.border_y.setValue(
+                SOLDERABLE_BORDER_Y_MM if spec.border_y_mm is None else spec.border_y_mm)
             self.cols.setValue(size.cols)
             self.rows.setValue(size.rows)
             self.width_mm.setValue(size.width_mm)
@@ -546,13 +672,67 @@ class BoardDesigner(QDialog):
 
     def _only_what_means_something(self) -> None:
         """Each setting shown only where it means something: which way the strips run on a
-        stripboard alone, an oblong pad's length and axis on an oblong pad alone."""
-        stripboard = self.type.currentData() == "stripboard"
+        stripboard alone, an oblong pad's length and axis on an oblong pad alone. A
+        breadboard is its size and its channel -- its grid, pads, drill and print are the
+        kind's, so none of that is offered -- and a solderable one its size and border; a
+        solderless one is plastic, with no corner holes and no colour to choose."""
+        kind = self._family.type
+        pattern = kind in PATTERN_KINDS
+        solderless = kind == "breadboard"
+        sections = {
+            "grid": not pattern,
+            "edge": not pattern,
+            "holes": not solderless,
+            "legend": not pattern,
+            "colour": not solderless,
+        }
+        for key, (heading, form) in self._sections.items():
+            shown = sections.get(key, True)
+            heading.setVisible(shown)
+            for index in range(form.rowCount()):
+                form.setRowVisible(index, shown)
         oblong = self.pad_shape.currentData() == "oblong"
-        for path, shown in (("strip_axis", stripboard), ("pad_length_mm", oblong),
-                            ("pad_axis", oblong)):
+        rows = {
+            "grid": not pattern,
+            "sizes": not pattern,
+            "strip_axis": not pattern and self.type.currentData() == "stripboard",
+            "pad_length_mm": not pattern and oblong,
+            "pad_axis": not pattern and oblong,
+            "breadboard.channel_mils": solderless,
+            "breadboard.narrow_channel_cols": solderless and self._channel_mils() > STANDARD_CHANNEL * 100,
+            "breadboard.border_x_mm": kind == "solderable-breadboard",
+            "breadboard.border_y_mm": kind == "solderable-breadboard",
+        }
+        for path, shown in rows.items():
             form, holder = self._rows[path]
             form.setRowVisible(holder, shown)
+
+    def _channel_mils(self) -> int:
+        return int(str(self.channel.currentData() or "300").split("-")[0])
+
+    def _on_channel(self, *_args: object) -> None:
+        """A flex body sets the narrow part to its own; a plain one makes it wide all the
+        way. Either can still be changed by hand, for a body of somebody's own."""
+        flex = str(self.channel.currentData()).endswith("-flex")
+        self._loading = True
+        try:
+            self.narrow.setValue(FLEX_NARROW_COLS if flex else 0)
+        finally:
+            self._loading = False
+        self._on_pattern()
+
+    def _on_pattern(self, *_args: object) -> None:
+        """The channel decides how many rows each size has, and which sizes can be made at
+        all, so the sizes are asked again and the one shown is kept by its name."""
+        if self._loading:
+            return
+        family = self._current_family()
+        self._size = next(
+            (each for each in family.sizes if each.name == self._size.name),
+            family.sizes[0] if family.sizes else self._size,
+        )
+        self._load(family, self._size)
+        self._redraw.start()
 
     def _show_printed(self, family: BoardFamily, size: BoardSize) -> None:
         """The words printed on the board as they read on THIS size, the template they come
@@ -568,20 +748,22 @@ class BoardDesigner(QDialog):
         )
 
     def _on_stock_size(self, index: int) -> None:
-        if 0 <= index < len(self._family.sizes):
-            self._size = self._family.sizes[index]
-            self._load(self._current_family(), self._size)
+        family = self._current_family()
+        listed = _listed(family)
+        if 0 <= index < len(listed):
+            self._size = listed[index]
+            self._load(family, self._size)
         self._redraw.start()
 
     def _on_grid(self) -> None:
-        if self._loading:
+        if self._loading or is_pattern(self._family):
             return
         self._size = size_for_grid(self._current_family(), self.cols.value(), self.rows.value())
         self._load(self._current_family(), self._size)
         self._redraw.start()
 
     def _on_outline(self) -> None:
-        if self._loading:
+        if self._loading or is_pattern(self._family):
             return
         self._size = size_for_mm(
             self._current_family(), self.width_mm.value(), self.height_mm.value())
@@ -594,6 +776,8 @@ class BoardDesigner(QDialog):
 
     def _current_family(self) -> BoardFamily:
         """The family as the fields now say it."""
+        if is_pattern(self._family):
+            return self._pattern_family()
         base = self._family
         strip = (
             EdgeStrip(
@@ -646,6 +830,48 @@ class BoardDesigner(QDialog):
             mask=self.mask_kind.currentData(),
             finish=self.finish.currentData(),
         )
+
+    def _pattern_family(self) -> BoardFamily:
+        """A breadboard family as the fields say it: its channel or its border, its corner
+        holes and colour on a solderable one, and the sizes that can be made with them --
+        a channel too wide for the mini leaves the mini out rather than refusing the full
+        size the board is shown at. When none can be made, every size is kept, so the
+        engine says why under the field that caused it."""
+        base = self._family
+        solderless = base.type == "breadboard"
+        if solderless:
+            channel = self._channel_mils()
+            narrow = self.narrow.value() if channel > STANDARD_CHANNEL * 100 else 0
+            spec: BreadboardSpec | None = BreadboardSpec(channel_mils=channel, narrow_channel_cols=narrow)
+        else:
+            x, y = self.border_x.value(), self.border_y.value()
+            spec = BreadboardSpec(
+                border_x_mm=None if x == SOLDERABLE_BORDER_X_MM else x,
+                border_y_mm=None if y == SOLDERABLE_BORDER_Y_MM else y,
+            )
+            spec = None if spec == BreadboardSpec() else spec
+        holes = (
+            CornerHoles(diameter_mm=self.hole_diameter.value(), head_mm=self.hole_head.value())
+            if not solderless and self.holes_on.isChecked()
+            else None
+        )
+        family = dataclasses.replace(
+            base,
+            breadboard=spec,
+            strip=None,
+            corner_holes=holes,
+            legend=None,
+            printed=(),
+            mask=None if solderless else self.mask_kind.currentData(),
+            finish=None if solderless else self.finish.currentData(),
+        )
+        names = {size.name for size in base.sizes}
+        named = [size for size in pattern_sizes(base.type, spec) if size.name in names]
+        made = tuple(
+            size for size in named
+            if family_problem(dataclasses.replace(family, sizes=(size,))) is None
+        )
+        return dataclasses.replace(family, sizes=made or tuple(named))
 
     # -- the board, as it is now --
 

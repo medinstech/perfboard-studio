@@ -27,6 +27,9 @@ closed without a bump.
   and corner holes, brown phenolic -- and changes its size, grid and pads, edge pads,
   mounting holes, printing and colour, with the board drawn as you go. Save it as your own
   board to start from next time. Use This Board puts it on as one undo step.
+- **Breadboards in the board designer.** Solderless ones by size and channel (with a flex
+  body's narrow part), the solderable one by size and border; each shows only the settings
+  that mean something for it.
 - **Breadboards are board families.** The solderless breadboard in its 830, 400 and 170
   sizes, a wide-channel one for an ESP32 or another module, and the solderable breadboard
   are described like every other board, ready for the board designer to choose from.

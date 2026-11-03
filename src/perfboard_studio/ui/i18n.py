@@ -54,6 +54,8 @@ TURKISH: Mapping[str, str] = {
     "Auto-wire {count} Connection": "{count} Bağlantıyı Otomatik Kablola",
     "Auto-wire {count} Connections": "{count} Bağlantıyı Otomatik Kablola",
     "Nothing in the list to go to.": "Listede gidilecek bir şey yok.",
+    "Solderless breadboard": "Lehimsiz breadboard",
+    "Solderless breadboard, wide channel (ESP32 / modules)": "Lehimsiz breadboard, geniş oluklu (ESP32 / modüller)",
     "As the material is sold": "Malzemenin satıldığı gibi",
     "&Design the Board…": "Kartı Tas&arla…",
     "Start from a board you can buy -- green with edge pads, brown phenolic -- and change its size, pads, holes, printing and colour, seen as you go.": (

@@ -15951,3 +15951,90 @@ def test_the_designers_settings_fit_their_column(monkeypatch) -> None:
         _designer(window, monkeypatch, look)
     finally:
         _close(window)
+
+
+def _shown(dialog, path: str) -> bool:
+    """Whether the designer's row for ``path`` is on show."""
+    form, holder = dialog._rows[path]
+    return form.isRowVisible(holder)
+
+
+def _choose_family(dialog, family_id: str) -> None:
+    from perfboard_studio.boardfamily import FAMILIES
+
+    dialog.families.setCurrentRow([f.id for f in FAMILIES].index(family_id))
+
+
+def test_a_breadboard_is_chosen_by_its_size_and_its_channel(monkeypatch) -> None:
+    """Board Setup's breadboard questions, in the designer: the size by its points, biggest
+    first, the channel by what straddles it, a flex body's narrow part -- and nothing a
+    breadboard's kind decides: no grid, pads, edge pads, corner holes, print or colour."""
+    from perfboard_studio.breadboard import channel_of
+
+    window = _blank_window()
+    try:
+        def choose(dialog) -> None:
+            _choose_family(dialog, "breadboard")
+            assert dialog.stock.itemText(0).startswith("Full size · 830")
+            assert dialog.stock.count() == 3, "sold in its sizes, not cut to measure"
+            assert _shown(dialog, "breadboard.channel_mils")
+            for path in ("grid", "sizes", "breadboard.narrow_channel_cols",
+                         "breadboard.border_x_mm", "pitch_mm", "strip.edges", "mask"):
+                assert not _shown(dialog, path), path
+            for key in ("grid", "edge", "holes", "legend", "colour"):
+                assert dialog._sections[key][0].isHidden(), key
+            dialog.channel.setCurrentIndex(dialog.channel.findData("1000-flex"))
+            dialog._on_channel()
+            assert dialog.narrow.value() == 39 and _shown(dialog, "breadboard.narrow_channel_cols")
+            # The 400 and the mini cannot keep 39 columns narrow: only what can be made.
+            assert [dialog.stock.itemText(i) for i in range(dialog.stock.count())] == [
+                "Full size · 830 points · 63 columns"]
+            dialog._use()
+
+        _designer(window, monkeypatch, choose)
+        board = window.bus.document.board
+        assert (board.type, board.cols, channel_of(board), board.narrow_channel_cols) == (
+            "breadboard", 63, 10, 39)
+    finally:
+        _close(window)
+
+
+def test_a_solderable_breadboard_is_asked_its_size_and_its_border(monkeypatch) -> None:
+    """Its border is where its makers differ, so it is asked; its channel is the ordinary
+    one, so it is not. Corner holes and colour are a copper board's to choose."""
+    window = _blank_window()
+    try:
+        def choose(dialog) -> None:
+            _choose_family(dialog, "solderable-breadboard")
+            assert _shown(dialog, "breadboard.border_x_mm") and _shown(dialog, "breadboard.border_y_mm")
+            assert not _shown(dialog, "breadboard.channel_mils")
+            assert not dialog._sections["holes"][0].isHidden()
+            assert not dialog._sections["colour"][0].isHidden()
+            dialog.border_x.setValue(3.0)
+            dialog._use()
+
+        _designer(window, monkeypatch, choose)
+        board = window.bus.document.board
+        assert (board.type, board.cols, board.border_x_mm) == ("solderable-breadboard", 63, 3.0)
+    finally:
+        _close(window)
+
+
+def test_leaving_a_breadboard_brings_its_settings_back(monkeypatch) -> None:
+    """Every section a breadboard hides is back on the next perfboard, and the kind is
+    offered there again -- with no breadboard in it, which is a family of its own."""
+    window = _blank_window()
+    try:
+        def look(dialog) -> None:
+            _choose_family(dialog, "breadboard")
+            _choose_family(dialog, "double-sided-fr4")
+            for key in ("grid", "edge", "holes", "legend", "colour"):
+                assert not dialog._sections[key][0].isHidden(), key
+            assert _shown(dialog, "grid") and _shown(dialog, "type")
+            assert not _shown(dialog, "breadboard.channel_mils")
+            kinds = {dialog.type.itemData(i) for i in range(dialog.type.count())}
+            assert kinds == {"pad-per-hole", "stripboard"}
+
+        _designer(window, monkeypatch, look)
+    finally:
+        _close(window)

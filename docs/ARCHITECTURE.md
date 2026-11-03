@@ -1865,6 +1865,14 @@ The printed words show as they read on the size shown, the template on hover.
 Board, which is one `board.applyPreset`: the grid, its edge pads and its corner holes, one
 undo step, refused in words when a part already down would be stranded.
 
+A breadboard is a family like any other, and shows only what it is asked: a solderless one
+its size (by its points, biggest first, never "your own size") and its channel by what
+straddles it, with a flex body's narrow part; a solderable one its size, its border, its
+corner holes and its colour. Its grid, pads and drill are the kind's, so those sections are
+not on show at all -- a greyed row still has to be read past. A channel too wide for the
+mini leaves the mini out of the sizes rather than refusing the full size on screen; when no
+size can be made, all are kept, so `family_problem` says why under the field that did it.
+
 ## The words, the first start and help tell one story
 
 A newcomer met the window's jargon before anything else -- Trace, Spine, Bare, Ratsnest,
