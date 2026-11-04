@@ -148,6 +148,23 @@ def _open(window: QMainWindow, app: QApplication) -> None:
     _settle(app)
 
 
+def _grab(window: QMainWindow, app: QApplication) -> QPixmap:
+    """The window as a picture, with no text field holding the keyboard.
+
+    The window opens with the Library's filter focused, and a focused field's caret blinks:
+    of one run's three editor shots two had the caret and one had not, by where in the blink
+    each grab landed, and all three had the field's focus ring. A field let go of looks the
+    same in every grab, as it does to somebody working on the board.
+    """
+    from PySide6.QtWidgets import QLineEdit
+
+    focused = app.focusWidget()
+    if isinstance(focused, QLineEdit):
+        focused.clearFocus()
+        _settle(app, 3)
+    return window.grab()
+
+
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -180,7 +197,7 @@ def main() -> int:
 
     shots: list[tuple[str, str]] = []
 
-    window.grab().save(str(OUT_DIR / "editor-component-side.png"))
+    _grab(window, app).save(str(OUT_DIR / "editor-component-side.png"))
     shots.append(("editor-component-side.png", "2D editor, component side, routed"))
 
     # The solder side, where the copper actually is -- and where the far-side hatching
@@ -189,7 +206,7 @@ def main() -> int:
     _settle(app)
     window.view.fit_board()
     _settle(app)
-    window.grab().save(str(OUT_DIR / "editor-solder-side.png"))
+    _grab(window, app).save(str(OUT_DIR / "editor-solder-side.png"))
     shots.append(("editor-solder-side.png", "2D editor, solder side"))
 
     # The same circuit as a sheet, in the panel that draws one: a 555 is a sheet a reader
@@ -203,7 +220,7 @@ def main() -> int:
     window.view.fit_board()
     window.schematic_view.fit()
     _settle(app)
-    window.grab().save(str(OUT_DIR / "schematic.png"))
+    _grab(window, app).save(str(OUT_DIR / "schematic.png"))
     shots.append(("schematic.png", "the schematic panel"))
     # The board back in front: the next window restores this one's layout from the same
     # settings. Not the sheet closed, as it was when the views stood side by side -- they
@@ -342,7 +359,7 @@ def _nano_relay_shots(app: QApplication, shots: list[tuple[str, str]]) -> bool:
             QRectF(left, top, right - left, bottom - top), Qt.AspectRatioMode.KeepAspectRatio
         )
         _settle(app)
-    window.grab().save(str(OUT_DIR / "catalog-and-pin-names.png"))
+    _grab(window, app).save(str(OUT_DIR / "catalog-and-pin-names.png"))
     shots.append(("catalog-and-pin-names.png", "catalog parts, a module, pin names, labels"))
 
     window._mark_saved()
