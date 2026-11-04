@@ -1767,7 +1767,8 @@ command. It never holds the bus, which the window replaces when a file is opened
 `dispatch` through whichever bus is current, the footprint lookup, and `InspectorHooks`
 for what is still a dialog (another package; the board's setup). Its buttons are the
 window's own actions (`InspectorActions`). Nothing selected is the board: its name, what
-it is, Change… for the board designer, the height limit and the body clearance. One placed part
+it is, Change… for the board designer, the height limit, the body clearance, and its holes
+and connectors folded to one line (below). One placed part
 is its reference, value, package, pin 1's hole, rotation, mirroring, lock, pin names and
 note -- a value that names a catalog part brings that part's pinout in the same command,
 as Part Properties did (`ui/partfields.py`, shared with the sheet's part dialog). It
@@ -1861,8 +1862,9 @@ they went into a Schematic menu, now Circuit's; the sheet's Export was File's Ex
 another name, and is only that now.
 
 **The guide and the 3D view follow, each as far as it can.** The guide's Next Step to Do,
-Clear Progress and Export are actions in a cluster in its corner (`guide_tools`), as the
-views' are, over room kept at the foot of the list so it covers no step. The 3D view's
+Clear Progress and Export are actions in a cluster in the corner of its Overview
+(`guide_tools`), as the views' are, over room kept at the foot of the list so it covers no
+step; the bench in front of it has its own Back and "Done, next" (below). The 3D view's
 Exploded View and Reset Camera are at its FOOT, in the playback row, and not floating over
 it: the 3D view is a native OpenGL window, and Qt cannot paint a widget over one -- a bar
 laid on it would be underneath. Its own toolbar over the view was a second row for two
@@ -1979,7 +1981,7 @@ over "0.64 mm", in either language. The engine's text cannot change, so the boxe
   "routing" calqued, and reads as "steering"), and `test_the_turkish_interface_has_one_word_
   for_each_thing` refuses "yönlendir" anywhere in the catalogue.
 - **Renamed where it is shown, never in the engine.** The plain names live in the UI
-  catalogue and in `_drc_title` / `_erc_title` / `_lvs_title`; DRC, ERC and LVS messages,
+  catalogue and in `_rule_title` / `_erc_title` / `_lvs_title`; DRC, ERC and LVS messages,
   rule ids, conductor-kind ids and MCP tool names are unchanged, because the differential
   proof compares the messages byte for byte and agents read the ids. The build guide is the
   engine's own output, so its words did change ("reinforced solder trace" through
@@ -2055,7 +2057,7 @@ first start). Side by side is still a drag of a tab, and a row of views still sh
 out (`_on_view_opened`, two turns of the event loop later — one turn on, the row is not laid
 out yet and the widths come out uneven).
 
-Seven things follow, and each has a test:
+Eight things follow, and each has a test:
 
 - **The central widget is capped to nothing** (`_sync_central_hint`, `UNCAPPED`). QMainWindow
   surrounds a central widget with dock areas, so for the panels to have the whole window
@@ -2122,8 +2124,8 @@ build guide follow — and a dock stacked BEHIND another is not `isHidden`, so t
 would have the sheet rebuilding itself behind the board. Measuring it (`visibleRegion`) is
 not an option either: it reads "behind" for every panel in a window nobody has shown, which
 is every window in the test suite. So `_on_view_dock_visibility` records what Qt says came
-forward, and that is the answer. `board_is_showing` asks the same thing, and it decides
-whether the board's toolbar is up.
+forward, and that is the answer. `board_is_showing` asks the same thing about the
+board.
 
 **It is kept PER TAB GROUP** (`_note_in_front`): a panel brought forward puts only its own
 group-mates behind. It was one variable, "the panel raised last", in a window with two
@@ -2143,10 +2145,11 @@ HIDES it, in the middle of the call that was putting it up. `UpdateBar.visibilit
 exists for the strip to follow, and it is emitted from `setVisible` rather than `showEvent`
 because Qt sends no show event to a widget whose parent is hidden.
 
-**The schematic panel's tools are a `QToolBar`, and that is a layout fix.** Nine push buttons
-in a row gave the panel a minimum width of 1362 px — a panel inherits its minimum from
-whatever is in it — so the window could not be made narrower than the row and nothing in the
-layout could be resized at all.
+**A panel inherits its minimum width from whatever is in it.** The sheet's nine push buttons
+in a row gave its panel a minimum of 1362 px, so the window could not be made narrower than
+the row and nothing in the layout could be resized at all. They became a `QToolBar` for
+that, and now float over the sheet (`_build_sheet_tools`, in "The window walks through six
+steps"), children of its view and in no layout, so they ask the panel for no width at all.
 
 **The panel is a tool group, and select is IN it.** `viewsch.SheetTool` is one of
 select / wire / label / text / line / rectangle / circle, exactly one armed, `Escape` always
@@ -2212,7 +2215,7 @@ Three things about it are load-bearing:
   the sheet at all and is exactly what you ask for while looking at the pin. `Net Class` is
   not a label either: ground and power are drawn as rail glyphs and kept out of the layering
   graph, so that entry changes the drawing and the placement, not just what DRC says. Its
-  three classes come from `NetDialog.NET_CLASSES` — one table, two consumers, pinned by a
+  three classes come from `inspector.NET_CLASSES` — one table, two consumers, pinned by a
   test — and the submenu is built with its parent rather than through `addMenu(title)`,
   which hands back a menu nothing holds and is collected out from under the entry that shows
   it.
@@ -2598,7 +2601,10 @@ without asking what it says it is. The View menu's choice survives as an overrid
 every board as …", and `choose(None)` means what each board says. Each scheme still carries
 the 2D and 3D colours *together*, so a board cannot be green in the editor and blue in the
 3D view. A preset brings its product's look (`board_from_preset` takes its family's), because
-a blue mask chosen for the board being replaced is not on the board being bought.
+a blue mask chosen for the board being replaced is not on the board being bought. In the
+board designer the look is two rows of the family, Mask and Pad finish, so it is chosen with
+the board rather than after it, and a family that does not say one shows "as the material
+is sold".
 
 **Everything else that is only appearance is still a view setting.** Ask of a new visual
 option whether it describes the object being built or how the window shows it: the theme,
@@ -2637,7 +2643,9 @@ together, each pinned in `tests/test_theme.py`:
   Alt is pressed. The one place Qt insists on an image — a restyled combo or spin box's
   arrows — gets PNGs drawn by the same code into a folder removed at exit.
 - **New code names a role, not a colour**: `theme.tone(widget, role)` and
-  `theme.variant(button, "primary" | "link")` set a property the one stylesheet styles,
+  `theme.variant(button, "primary" | "link" | "danger" | "card")` set a property the one
+  stylesheet styles (`theme.mark_destructive` outlines a message box's Delete or Don't Save
+  in the danger colour, while Enter stays on the safe answer),
   `theme.ink(text, role)` colours part of a rich-text label, and `theme.colour(role)` is
   for what Qt paints from a QColor. The old names (`TEXT`, `TEXT_DIM`, `ACCENT`, …) still
   point at the active theme while their call sites move.
