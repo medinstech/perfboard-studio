@@ -1,4 +1,4 @@
-"""Where a part's reference is printed on screen.
+"""Where a part's reference is printed on screen, and how a round LED's leads show.
 
 A reference is held at a pixel size and a board note is written in millimetres, so zoomed
 out a reference outgrows the gap between them: on nano-relay J2's landed on the "LOAD"
@@ -16,7 +16,8 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtGui import QTransform
+from PySide6.QtCore import QPointF, QRectF
+from PySide6.QtGui import QColor, QImage, QPainter, QTransform
 from PySide6.QtWidgets import QApplication
 
 from perfboard_studio import persist
@@ -75,3 +76,34 @@ def test_nano_relays_j2_never_prints_on_its_load_note() -> None:
     near = j2.reference_placement(QTransform.fromScale(40.0, 40.0))
     assert near is not None and near[0] == j2.reference_anchor()
     assert j2.reference_placement(QTransform.fromScale(5.0, 5.0)) is None
+
+
+def test_a_round_leds_leads_are_quiet_and_its_plus_is_the_bright_one() -> None:
+    """Under a 5 mm LED's dome its two leads were full-size rings with the die between them,
+    and the three read as an "8". They are small marks now, the + (pin 1) still white and
+    the other the dome's own colour, darker -- not the light grey ring of a pin elsewhere."""
+    from perfboard_studio.geometry import all_pin_holes
+    from perfboard_studio.ui.view2d import LED_LEAD_MARK_MM, PIN_MARKER, PIN_ONE, hole_to_screen
+
+    scene = _scene(ROOT / "examples" / "nano-relay.perf")
+    led = next(item for item in scene.component_items.values() if item.comp.ref == "D2")
+    assert led.fp.body.archetype == "led-round"
+    scale = 40.0
+    rect = led.sceneBoundingRect().adjusted(-1, -1, 1, 1)
+    image = QImage(int(rect.width() * scale), int(rect.height() * scale), QImage.Format.Format_ARGB32)
+    image.fill(QColor("#000000"))
+    painter = QPainter(image)
+    scene.render(painter, QRectF(0, 0, image.width(), image.height()), rect)
+    painter.end()
+
+    def colour_at(point: QPointF) -> QColor:
+        return image.pixelColor(int((point.x() - rect.left()) * scale), int((point.y() - rect.top()) * scale))
+
+    holes = {pin.number: hole_to_screen(at, led.board, "top") for pin, at in all_pin_holes(led.comp, led.fp)}
+    plus, other = colour_at(holes["1"]), colour_at(holes["2"])
+    assert plus.lightness() > 200 and abs(plus.lightness() - PIN_ONE.lightness()) < 25
+    assert other.lightness() < plus.lightness() - 100
+    assert abs(other.lightness() - PIN_MARKER.lightness()) > 40
+    # A mark, not a ring: just off the lead's middle by more than the mark is the dome.
+    beside = colour_at(holes["1"] + QPointF(LED_LEAD_MARK_MM + 0.15, 0.0))
+    assert beside.lightness() < plus.lightness() - 60

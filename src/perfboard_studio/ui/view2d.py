@@ -260,6 +260,12 @@ BODY_LINE = QColor("#31313a")
 LEAD = QColor("#c2c8d0")
 PIN_MARKER = QColor("#8d949e")
 PIN_ONE = QColor("#f0f3f8")
+#: A round LED's leads seen through its dome, from the component side: a mark this wide,
+#: the dome's own colour a shade darker, and the + lead still the bright one. Full-size
+#: rings stacked with the die between them read as an "8" on a 5 mm LED, which is a glyph
+#: rather than a part; the electrolytic's two marks sit apart on a dark can and never did.
+LED_LEAD_MARK_MM = 0.3
+LED_LEAD_SHADE = 140
 #: A part off the board's wires: how thick the jacket is drawn, how much tinned wire shows
 #: between the pad and where the jacket starts, and how far past the edge each one is drawn,
 #: fading out, before it goes off to the panel. Inside the scene's own 4 mm margin, so a
@@ -4006,7 +4012,10 @@ class ComponentItem(QGraphicsItem):
         that decides whether the part goes in the right way round.
         """
         solder_side = self.side == "bottom"
-        radius = 0.62 if solder_side else 0.5
+        # Under a round LED's dome the leads are what the lens shows of them: quiet marks.
+        dome = not solder_side and self.fp.body.archetype == "led-round"
+        radius = 0.62 if solder_side else (LED_LEAD_MARK_MM if dome else 0.5)
+        lead = QColor(style_for(self.fp).fill).darker(LED_LEAD_SHADE) if dome else PIN_MARKER
         for pin in self.fp.pins:
             dx, dy = _local_offset(pin.d_col, pin.d_row, self.comp, self.side)
             centre = QPointF(dx * self.board.pitch, dy * self.board.pitch)
@@ -4015,10 +4024,12 @@ class ComponentItem(QGraphicsItem):
                 edge = SELECTED
             elif marked:
                 edge = QColor("#1b1d22")
+            elif dome:
+                edge = lead
             else:
                 edge = QColor("#42464b")
-            painter.setPen(QPen(edge, 0.18 if solder_side else 0.14))
-            painter.setBrush(QBrush(PIN_ONE if marked else PIN_MARKER))
+            painter.setPen(QPen(edge, 0.18 if solder_side else (0.08 if dome else 0.14)))
+            painter.setBrush(QBrush(PIN_ONE if marked else lead))
             painter.drawEllipse(centre, radius, radius)
 
     def set_drag_blocked(self, blocked: bool) -> None:

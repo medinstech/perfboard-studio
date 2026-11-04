@@ -228,6 +228,9 @@ closed without a bump.
   would print on a label goes under its part instead, and only where both places are taken
   is it left to Properties.
 
+- **A 5 mm LED's leads no longer read as an "8".** Under its dome its two leads were full
+  rings, the die between them. They are small marks now, the + lead the bright one.
+
 - **The GY-521 was drawn as its own mirror image.** Its board stood below the header with
   VCC on the left, so a module laid over the outline put each pin in its mirror's hole, VCC
   in INT's. It now stands above the header, the same pins in the same holes. A module
