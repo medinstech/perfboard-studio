@@ -78,15 +78,17 @@ from perfboard_studio.breadboard import breadboard  # noqa: E402
 from perfboard_studio.breadroute import plan_breadboard  # noqa: E402
 from perfboard_studio.commands import design_on_a_new_board  # noqa: E402
 from perfboard_studio.footprints import footprint_lookup  # noqa: E402
-from perfboard_studio.placer import PlacementOptions, place_design, plan_placement  # noqa: E402
+from perfboard_studio.placer import place_design  # noqa: E402
 from perfboard_studio.ui import view3d  # noqa: E402
 from perfboard_studio.ui.main import MainWindow  # noqa: E402
 
-#: The NE555 astable, which is also what ``examples/ne555-astable.net`` imports to. A
-#: recognisable circuit beats a denser but meaningless one: a reader who knows the 555
-#: can check the picture against what they expect, which is the whole point of a
-#: screenshot on a landing page.
-FIXTURE = REPO_ROOT / "tools" / "diffcheck" / "golden" / "ne555.perf"
+#: The NE555 astable example, opened as a reader opens it: placed, wired and saved on the
+#: board it is built on. A recognisable circuit beats a denser but meaningless one: a
+#: reader who knows the 555 can check the picture against what they expect, which is the
+#: whole point of a screenshot on a landing page. It was the diffcheck fixture, placed and
+#: routed by this script on a 32 x 22 board it filled a quarter of -- and the front page
+#: said "diffcheck · Not saved" across the top.
+FIXTURE = REPO_ROOT / "examples" / "ne555-astable.perf"
 
 OUT_DIR = REPO_ROOT / "docs" / "images"
 
@@ -163,26 +165,9 @@ def main() -> int:
     window = MainWindow(result.document, FIXTURE)
     _open(window, app)
 
-    # Auto-place, then route -- the order the README documents, so the picture is of the
-    # workflow it describes rather than of a fixture. The golden document's placement is
-    # spread over a mostly empty board, which routes into long insulated wires and shows
-    # the tool at its least flattering for a reason that has nothing to do with the tool.
-    #
-    # The planner and the bus are driven directly rather than through on_autoplace(),
-    # which asks for confirmation first -- correct for a person, a deadlock for a script.
-    # This is the path its accept button takes.
-    plan = plan_placement(window.bus.document, window.lookup, PlacementOptions(seed=0))
-    if not plan.is_empty:
-        moved = window.bus.dispatch("component.moveMany", plan.payload())
-        if not moved.ok:
-            print(f"PLACEMENT REFUSED [{moved.code}] {moved.message}")
-            return 1
-    _settle(app)
-
-    # An unrouted board is a picture of a to-do list. This is the same call the toolbar
-    # button makes, so the copper in the picture is what the shipped router produces.
-    window.on_autoroute_all()
-    _settle(app)
+    # Nothing is placed or wired here: the example is the board the shipped placer and
+    # router left (tools/build_examples.py builds it), and nothing dispatched means the
+    # title is the file's and nothing is unsaved.
 
     # Ratsnest off. It is on by default in the app and should be, but every net here is
     # routed, and leaving the unrouted-connection overlay switched on in a picture of a
@@ -332,6 +317,31 @@ def _nano_relay_shots(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     bottom = max(b[3] for b in boxes) + 4.0
     window.view.fitInView(QRectF(left, top, right - left, bottom - top), Qt.AspectRatioMode.KeepAspectRatio)
     _settle(app)
+    # A board label the frame cuts into is taken in whole: "LOAD" came out as "OAD". Cut by
+    # what the view SHOWS, which the aspect ratio makes wider than the parts' box, and so
+    # measured after the first fit. A label's extent is its centre and a width estimated
+    # from its cap height.
+    from perfboard_studio.geometry import hole_to_mm
+
+    shown = window.view.mapToScene(window.view.viewport().rect()).boundingRect()
+    widened = False
+    for note in document.board_notes:
+        centre = hole_to_mm(note.at, board)
+        cx, cy = centre.x + note.offset_x_mm, centre.y + note.offset_y_mm
+        half_w, half_h = 0.5 * note.size_mm * len(note.text), 0.8 * note.size_mm
+        if note.rotation in (90, 270):
+            half_w, half_h = half_h, half_w
+        inside = QRectF(cx - half_w, cy - half_h, 2 * half_w, 2 * half_h)
+        if not shown.intersects(inside) or shown.contains(inside):
+            continue
+        left, right = min(left, inside.left() - 1.0), max(right, inside.right() + 1.0)
+        top, bottom = min(top, inside.top() - 1.0), max(bottom, inside.bottom() + 1.0)
+        widened = True
+    if widened:
+        window.view.fitInView(
+            QRectF(left, top, right - left, bottom - top), Qt.AspectRatioMode.KeepAspectRatio
+        )
+        _settle(app)
     window.grab().save(str(OUT_DIR / "catalog-and-pin-names.png"))
     shots.append(("catalog-and-pin-names.png", "catalog parts, a module, pin names, labels"))
 
@@ -366,8 +376,8 @@ def _nano_relay_shots(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     return True
 
 
-#: How many of nano-relay's steps are ticked off in the guide shot: every part in the first
-#: three phases, so Next Step to Do lands on the regulator, which stands out in 3D.
+#: How many of nano-relay's steps are done in the guide shot: every part in the first three
+#: phases, so the bench card is on the regulator, which stands out in 3D.
 STEPS_DONE = 8
 
 #: How far the 3D panel's camera is brought in from where it opens, as a scroll of the
@@ -417,9 +427,21 @@ def _guide_and_3d_shot(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     window.act_show_guide.trigger()
     _settle(app, 30)
 
-    for leaf in window._guide_leaves()[:STEPS_DONE]:
-        leaf.setCheckState(0, Qt.CheckState.Checked)
-    window.on_next_step_to_do()
+    # Through the bench card's own "Done, next", as somebody at the bench goes. Ticking the
+    # overview's leaves no longer moves the card, and the picture said "Step 1" beside a
+    # board showing step 9.
+    from PySide6.QtWidgets import QPushButton
+
+    from perfboard_studio.ui.i18n import t
+
+    done_next = next(
+        button
+        for button in window.dock_guide.widget().findChildren(QPushButton)
+        if button.text() == t("Done, next  ▶")
+    )
+    for _ in range(STEPS_DONE):
+        done_next.click()
+        _settle(app, 5)
     _settle(app, 30)
     window.view.fit_board()
     _settle(app, 30)
@@ -431,6 +453,10 @@ def _guide_and_3d_shot(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     _frame_offscreen_panel(window)
     renderer.GetActiveCamera().Zoom(CAMERA_ZOOM)
     renderer.ResetCameraClippingRange()
+    # The bar over the selection, hidden just before the grab -- it puts itself back on any
+    # turn of the event loop: in a picture of a step it covers the part the step is about,
+    # and what it offers is not what this picture is of.
+    window.selection_bar.hide()
     _grab_with_3d(window).save(str(OUT_DIR / "guide-and-3d.png"))
     shots.append(("guide-and-3d.png", "board, 3D and the guide, part-way through a build"))
 
