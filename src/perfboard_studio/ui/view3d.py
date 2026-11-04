@@ -137,7 +137,6 @@ from .moduleart import (
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
     OLED_LEDGE_MM,
-    OLED_VIEW_MM,
     PCB_ANTENNA_TRACE_MM,
     SOT23_LEGS,
     TANTALUM_BAND_SHADE,
@@ -5706,6 +5705,10 @@ def _art_hole(s: _ArtSolid) -> list[_Piece]:
 def _art_oled(s: _ArtSolid) -> list[_Piece]:
     """An OLED panel: its glass, and the viewing area black on it short of the ledge at the
     ``facing`` end (``moduleart.OLED_VIEW_MM``)."""
+    # Read here, not imported: an upper-case pair of floats in this module is a material
+    # (``test_a_material_is_metal_or_it_is_not``), and this is a size.
+    from .moduleart import OLED_VIEW_MM
+
     view_across, view_along = OLED_VIEW_MM
     return [
         _Piece(
