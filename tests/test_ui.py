@@ -16324,3 +16324,20 @@ def test_a_chosen_connectors_fields_move_it_in_place() -> None:
         assert window.bus.document.edge_connectors[0].count == 4
     finally:
         _close(window)
+
+
+def test_the_boards_features_ask_no_more_room_than_the_board_editor() -> None:
+    """The group's heading on one line asked 612 px; Properties took it and the board view
+    lost a third of a 1600 px window. It wraps, as its labels do."""
+    window = _window_on(_blank_document())
+    try:
+        editor = window.inspector.board_editor
+        features = editor.features
+        others = max(
+            child.minimumSizeHint().width()
+            for child in (editor.name, editor.body_measure, editor.height_limit)
+        )
+        assert features.minimumSizeHint().width() <= others, (
+            features.minimumSizeHint().width(), others)
+    finally:
+        _close(window)

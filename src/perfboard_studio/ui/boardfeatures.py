@@ -117,6 +117,13 @@ def connector_said(connector: EdgeConnector, board: Board) -> tuple[str, str]:
     return where, f"{connector.count} × {connector.finger_width:g} mm"
 
 
+def _label(text: str) -> QLabel:
+    """A form label that wraps rather than widening the panel."""
+    label = QLabel(text)
+    label.setWordWrap(True)
+    return label
+
+
 def _narrow(combo: QComboBox) -> None:
     combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
     combo.setMinimumContentsLength(6)
@@ -141,6 +148,9 @@ class FeaturesGroup(QWidget):
         column.setSpacing(theme.SPACE["sm"])
         heading = QLabel(theme.heading(t("Mounting holes and edge connectors")))
         heading.setTextFormat(Qt.TextFormat.RichText)
+        # Wrapped: on one line the heading asked 612 px, Properties took it, and the board
+        # beside it lost a third of the window (test_home_before_the_first_showing...).
+        heading.setWordWrap(True)
         column.addWidget(heading)
         self.heading = heading
         #: One line per feature, rebuilt with the document.
@@ -168,9 +178,9 @@ class FeaturesGroup(QWidget):
         )
         self.add_corners = QPushButton(t("Add Corner Holes"))
         self.add_corners.clicked.connect(self._on_add_corners)
-        form.addRow(t("Hole diameter"), self.mount_diameter)
-        form.addRow(t("Inset from the edge (holes)"), self.mount_inset)
-        form.addRow("", self.add_corners)
+        form.addRow(_label(t("Hole diameter")), self.mount_diameter)
+        form.addRow(_label(t("Inset from the edge (holes)")), self.mount_inset)
+        form.addRow(self.add_corners)  # the whole row: in the field column it widened the panel
 
         self.edge = QComboBox()
         for edge in EDGES:
@@ -186,10 +196,10 @@ class FeaturesGroup(QWidget):
         self.finger_count.setValue(8)
         self.add_connector = QPushButton(t("Add Edge Connector"))
         self.add_connector.clicked.connect(self._on_add_connector)
-        form.addRow(t("Edge"), self.edge)
-        form.addRow(t("First hole"), self.finger_start)
-        form.addRow(t("Fingers"), self.finger_count)
-        form.addRow("", self.add_connector)
+        form.addRow(_label(t("Edge")), self.edge)
+        form.addRow(_label(t("First hole")), self.finger_start)
+        form.addRow(_label(t("Fingers")), self.finger_count)
+        form.addRow(self.add_connector)
         # As many fingers as the chosen edge has holes, so the default of eight on a board
         # five holes wide is not a refusal waiting to happen.
         self.edge.currentIndexChanged.connect(self._list_starts)
