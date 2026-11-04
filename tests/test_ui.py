@@ -16558,3 +16558,72 @@ def test_the_designer_opens_no_bigger_than_the_screen(monkeypatch) -> None:
         assert designer_module._opening_size(window) == designer_module.OPENING
     finally:
         _close(window)
+
+
+def test_the_last_step_ends_the_build_and_ticks_no_check_for_the_builder(monkeypatch) -> None:
+    """The last step's button said "Done, next" and did nothing: the release walkthrough
+    pressed it at 23 of 23 with nowhere to go. It says "Done ✓", and after it the ending
+    lists the checks not ticked -- unticked, because only the builder measured them -- and
+    offers the export and Save."""
+    from PySide6.QtWidgets import QCheckBox
+
+    from perfboard_studio.ui.benchguide import check_key
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        for _ in range(len(bench.items) - 1):
+            assert bench.next.text() == "Done, next  ▶"
+            bench.next.click()
+        assert bench.current == len(bench.items) - 1
+        assert bench.next.text() == "Done  ✓"
+        bench.next.click()
+        assert bench.pages.currentWidget() is bench.ending
+        assert not bench.next.isVisibleTo(bench)
+        assert bench.ending_title.text() == "Every step is done."
+        assert bench.go_to_first.isHidden()
+        done = window._done_steps()
+        assert all(item.key in done for item in bench.items)
+        phases = window.current_guide().phases
+        checks = list(dict.fromkeys(check_key(p, c) for p in phases for c in p.checkpoints))
+        assert checks and not any(key in done for key in checks), "a check ticked for the builder"
+        boxes = [b for b in bench.ending.findChildren(QCheckBox) if not b.isHidden()]
+        assert len(boxes) == len(checks) and not any(b.isChecked() for b in boxes)
+        # The last phase has no step and every short test: the bench showed none of them.
+        closing = phases[-1]
+        assert closing.checkpoints and not any(item.phase is closing for item in bench.items)
+        assert any(b.text() == f"Ω  {closing.checkpoints[0].title}" for b in boxes)
+        boxes[0].setChecked(True)
+        assert checks[0] in window._done_steps()
+
+        asked: list[str] = []
+        monkeypatch.setattr(window, "on_export_guide", lambda: asked.append("export"))
+        monkeypatch.setattr(window, "on_save", lambda: asked.append("save") or True)
+        bench.export_button.click()
+        bench.save_button.click()
+        assert asked == ["export", "save"]
+
+        window._refresh_guide_panel()
+        assert bench.pages.currentWidget() is bench.ending, "a finished board reopens at its end"
+        bench.back.click()
+        assert bench.pages.currentWidget() is bench.card
+        assert bench.current == len(bench.items) - 1 and bench.next.isVisibleTo(bench)
+    finally:
+        _close(window)
+
+
+def test_an_ending_with_steps_skipped_goes_to_the_first() -> None:
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        bench.show_item(len(bench.items) - 1)
+        bench.next.click()
+        assert bench.pages.currentWidget() is bench.ending
+        skipped = len(bench.items) - 1
+        assert bench.ending_title.text() == f"{skipped} steps are not ticked yet"
+        assert bench.counter.text() == f"1 of {len(bench.items)} steps done"
+        assert not bench.go_to_first.isHidden() and bench.go_to_first.text() == "Go to Step 1"
+        bench.go_to_first.click()
+        assert bench.pages.currentWidget() is bench.card and bench.current == 0
+    finally:
+        _close(window)

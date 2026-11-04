@@ -13,6 +13,19 @@ phase's checks as Ω items to tick. Back and "Done, next" walk the build. A stri
 track cuts are steps here too, first, each with its own picture: they are the first thing
 done and the one most often forgotten.
 
+THE BUILD HAS AN END. The last step's button says "Done ✓", and pressing it shows what is
+left rather than nothing at all -- it used to tick the step and stay where it was, still
+saying "Done, next", which a builder pressed again and again waiting for the next step. The
+ending says whether every step is ticked (and goes to the first one that is not), lists the
+checks not ticked yet to tick there, and offers the export and Save. It ticks nothing on
+the builder's behalf: a check is a measurement, and only the person holding the meter knows
+whether it read what it should.
+
+The ending lists the checks of EVERY phase, not only of those with a step. A step shows its
+own phase's checks, and the last phase, "Closing up", has no step and every short test --
+VCC against GND among them -- so a builder walking the bench never saw the one measurement
+to make before power goes on.
+
 PRESENTATION ONLY. Every word of a step, its order and its checks are the guide's (the
 engine's, in the guide's language); the window adds the frame. The ticks are the window's
 one store of them (``MainWindow._done_steps``), so ticking here and in the overview cannot
@@ -29,11 +42,14 @@ from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPixmap, Q
 from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -224,6 +240,8 @@ class BenchView(QWidget):
     overview_wanted = Signal()
     cut_list_wanted = Signal()
     track_cuts_wanted = Signal()
+    export_wanted = Signal()
+    save_wanted = Signal()
 
     PICTURE = QSize(560, 400)
 
@@ -263,6 +281,11 @@ class BenchView(QWidget):
             self.chips[name] = chip
         root.addLayout(top)
 
+        # The step, or the ending once the last one is done (``show_ending``).
+        self.card = QWidget()
+        card = QVBoxLayout(self.card)
+        card.setContentsMargins(0, 0, 0, 0)
+        card.setSpacing(theme.SPACE["lg"])
         self.title = QLabel()
         self.title.setWordWrap(True)
         # Sizes in pixels, as the type scale is: the window's font is set in pixels, so a
@@ -271,7 +294,7 @@ class BenchView(QWidget):
         font = self.title.font()
         font.setBold(True)
         self.title.setFont(font)
-        root.addWidget(self.title)
+        card.addWidget(self.title)
 
         # Picture beside the facts in a wide panel, above them in a narrow one
         # (``resizeEvent``): side by side, the bench held the guide's panel at 496 px.
@@ -310,7 +333,12 @@ class BenchView(QWidget):
         self.checks.setSpacing(4)
         side.addLayout(self.checks)
         body.addLayout(side, 2)
-        root.addLayout(body, 1)
+        card.addLayout(body, 1)
+        self.ending = self._build_ending()
+        self.pages = QStackedWidget()
+        self.pages.addWidget(self.card)
+        self.pages.addWidget(self.ending)
+        root.addWidget(self.pages, 1)
 
         buttons = QHBoxLayout()
         self.back = QPushButton(t("◀  Back"))
@@ -326,6 +354,52 @@ class BenchView(QWidget):
         buttons.addWidget(self.back, 1)
         buttons.addWidget(self.next, 2)
         root.addLayout(buttons)
+
+    def _build_ending(self) -> QWidget:
+        ending = QWidget()
+        column = QVBoxLayout(ending)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(theme.SPACE["lg"])
+        self.ending_title = QLabel()
+        self.ending_title.setWordWrap(True)
+        theme.size(self.ending_title, TITLE_PX)
+        font = self.ending_title.font()
+        font.setBold(True)
+        self.ending_title.setFont(font)
+        column.addWidget(self.ending_title)
+        self.go_to_first = QPushButton()
+        self.go_to_first.setAutoDefault(False)
+        self.go_to_first.clicked.connect(self._go_to_first_not_done)
+        column.addWidget(self.go_to_first, 0, Qt.AlignmentFlag.AlignLeft)
+        self.ending_said = QLabel()
+        self.ending_said.setWordWrap(True)
+        column.addWidget(self.ending_said)
+        # A phase's checks under its name, scrolling: a small circuit has forty of them.
+        holder = QWidget()
+        self.ending_checks = QVBoxLayout(holder)
+        self.ending_checks.setContentsMargins(0, 0, 0, 0)
+        self.ending_checks.setSpacing(4)
+        self.ending_scroll = QScrollArea()
+        self.ending_scroll.setWidgetResizable(True)
+        self.ending_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.ending_scroll.setWidget(holder)
+        column.addWidget(self.ending_scroll, 1)
+        # Save and the export side by side, as Back and Done are: one to a row, they took
+        # the room the checks list scrolls in.
+        row = QHBoxLayout()
+        self.save_button = QPushButton(t("Save"))
+        self.export_button = QPushButton(t("Export the Guide…"))
+        theme.variant(self.export_button, "primary")
+        for button, wanted, stretch in (
+            (self.save_button, self.save_wanted, 1),
+            (self.export_button, self.export_wanted, 2),
+        ):
+            button.setMinimumHeight(44)
+            button.setAutoDefault(False)
+            button.clicked.connect(wanted.emit)
+            row.addWidget(button, stretch)
+        column.addLayout(row)
+        return ending
 
     #: Below this width the picture goes above the facts and the chips under the counter.
     NARROW = 640
@@ -356,12 +430,19 @@ class BenchView(QWidget):
         self.chips["cuts"].setText(f"{t('Cut list')}  {cut_count}")
         self.chips["tracks"].setVisible(track_count > 0)
         self.chips["tracks"].setText(f"{t('Track cuts')}  {track_count}")
-        first = next((i for i, item in enumerate(items) if item.key not in self.done), 0)
-        self.show_item(first)
+        first = next((i for i, item in enumerate(items) if item.key not in self.done), None)
+        if first is None and items:
+            # Every step ticked: somebody coming back to a finished board is at its end.
+            self.current = len(items) - 1
+            self.show_ending()
+            return
+        self.show_item(first or 0)
 
     def set_done(self, done: set[str]) -> None:
         self.done = set(done)
         self._fill_checks()
+        if self.pages.currentWidget() is self.ending:
+            self.show_ending()
 
     def show_item(self, index: int) -> None:
         if not self.items:
@@ -373,12 +454,9 @@ class BenchView(QWidget):
         index = max(0, min(index, len(self.items) - 1))
         self.current = index
         item = self.items[index]
+        self.pages.setCurrentWidget(self.card)
         self.counter.setText(t("Step {n} of {total}").format(n=index + 1, total=len(self.items)))
-        shown = [p for p in self._phases if any(i.phase is p for i in self.items)]
-        self.phase_bar.set_phases(
-            [(f"{p.number}. {p.title}", sum(1 for i in self.items if i.phase is p)) for p in shown],
-            next((n for n, p in enumerate(shown) if p is item.phase), -1),
-        )
+        self._show_phase(item.phase)
         self.title.setText(item.title)
         self.polarity.setText(f"⚠  {t('Polarity')}: {item.polarity}" if item.polarity else "")
         self.polarity.setVisible(bool(item.polarity))
@@ -399,7 +477,80 @@ class BenchView(QWidget):
         self._fill_checks()
         self.back.setEnabled(index > 0)
         self.next.setEnabled(True)
+        self.next.setVisible(True)
+        last = index == len(self.items) - 1
+        self.next.setText(t("Done  ✓") if last else t("Done, next  ▶"))
         self.moved.emit(index)
+
+    def _shown_phases(self) -> list[GuidePhase]:
+        return [p for p in self._phases if any(i.phase is p for i in self.items)]
+
+    def _show_phase(self, phase: GuidePhase) -> None:
+        shown = self._shown_phases()
+        self.phase_bar.set_phases(
+            [(f"{p.number}. {p.title}", sum(1 for i in self.items if i.phase is p)) for p in shown],
+            next((n for n, p in enumerate(shown) if p is phase), -1),
+        )
+
+    def show_ending(self) -> None:
+        """After the last step: what is left, and the export and Save. Nothing is ticked
+        here that the builder did not tick."""
+        if not self.items:
+            return
+        total = len(self.items)
+        missing = [i for i, item in enumerate(self.items) if item.key not in self.done]
+        self.counter.setText(t("{done} of {total} steps done").format(done=total - len(missing), total=total))
+        self._show_phase(self.items[-1].phase)
+        if not missing:
+            self.ending_title.setText(t("Every step is done."))
+        elif len(missing) == 1:
+            self.ending_title.setText(t("1 step is not ticked yet"))
+        else:
+            self.ending_title.setText(t("{n} steps are not ticked yet").format(n=len(missing)))
+        self.go_to_first.setVisible(bool(missing))
+        if missing:
+            self.go_to_first.setText(t("Go to Step {n}").format(n=missing[0] + 1))
+        while self.ending_checks.count():
+            taken = self.ending_checks.takeAt(0)
+            if taken is not None and taken.widget() is not None:
+                taken.widget().deleteLater()  # type: ignore[union-attr]
+        # Every phase's, including one with no step: see the module's note.
+        checks = {check_key(phase, check): (phase, check) for phase in self._phases for check in phase.checkpoints}
+        open_checks = [(key, phase, check) for key, (phase, check) in checks.items() if key not in self.done]
+        if not checks:
+            self.ending_said.setText("")
+        elif not open_checks:
+            self.ending_said.setText(t("Every check is ticked too."))
+        else:
+            self.ending_said.setText(
+                t("Checks not ticked yet. Measure each with the board in front of you, and "
+                  "tick it when it reads what it should.")
+            )
+            heading: GuidePhase | None = None
+            for key, phase, check in open_checks:
+                if phase is not heading:
+                    heading = phase
+                    name = QLabel(f"{phase.number}. {phase.title}")
+                    name.setWordWrap(True)
+                    bold = name.font()
+                    bold.setBold(True)
+                    name.setFont(bold)
+                    self.ending_checks.addWidget(name)
+                box = QCheckBox(f"Ω  {check.title}")
+                box.setToolTip(f"{check.instruction}\n{check.expected}")
+                box.toggled.connect(lambda on, k=key: self._tick(k, on))
+                self.ending_checks.addWidget(box)
+            self.ending_checks.addStretch(1)
+        self.ending_said.setVisible(bool(checks))
+        self.ending_scroll.setVisible(bool(open_checks))
+        self.pages.setCurrentWidget(self.ending)
+        self.back.setEnabled(True)
+        self.next.setVisible(False)
+
+    def _go_to_first_not_done(self) -> None:
+        first = next((i for i, item in enumerate(self.items) if item.key not in self.done), None)
+        if first is not None:
+            self.show_item(first)
 
     def _fill_checks(self) -> None:
         while self.checks.count():
@@ -428,7 +579,8 @@ class BenchView(QWidget):
         self.ticked.emit(key, on)
 
     def done_and_next(self) -> None:
-        """The step in front of you is done: ticked, and the next one shown."""
+        """The step in front of you is done: ticked, and the next one shown -- or, after
+        the last, the ending."""
         if not self.items:
             return
         item = self.items[self.current]
@@ -436,9 +588,13 @@ class BenchView(QWidget):
             self._tick(item.key, True)
         if self.current + 1 < len(self.items):
             self.show_item(self.current + 1)
+        else:
+            self.show_ending()
 
     def go_back(self) -> None:
-        if self.current > 0:
+        if self.pages.currentWidget() is self.ending:
+            self.show_item(self.current)  # the last step, where the ending was reached from
+        elif self.current > 0:
             self.show_item(self.current - 1)
 
 

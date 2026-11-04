@@ -7486,6 +7486,8 @@ class MainWindow(QMainWindow):
         self.bench.overview_wanted.connect(self._show_guide_overview)
         self.bench.cut_list_wanted.connect(lambda: self._show_guide_sheet("cuts"))
         self.bench.track_cuts_wanted.connect(lambda: self._show_guide_sheet("tracks"))
+        self.bench.export_wanted.connect(lambda: self.on_export_guide())
+        self.bench.save_wanted.connect(lambda: self.on_save())
         self.guide_pages.addWidget(self.bench)
         self.guide_pages.addWidget(panel)
         self.guide_pages.setCurrentWidget(self.bench)

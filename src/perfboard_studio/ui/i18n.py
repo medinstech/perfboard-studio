@@ -875,6 +875,16 @@ TURKISH: Mapping[str, str] = {
     "Step {n} of {total}": "Adım {n} / {total}",
     "◀  Back": "◀  Geri",
     "Done, next  ▶": "Yapıldı, sıradaki  ▶",
+    "Done  ✓": "Yapıldı  ✓",
+    "1 step is not ticked yet": "1 adım henüz işaretlenmedi",
+    "{n} steps are not ticked yet": "{n} adım henüz işaretlenmedi",
+    "Go to Step {n}": "{n}. Adıma Git",
+    "Every check is ticked too.": "Bütün ölçümler de işaretlendi.",
+    "Checks not ticked yet. Measure each with the board in front of you, and tick it when it reads what it should.": (
+        "Henüz işaretlenmemiş ölçümler. Her birini kart önünüzdeyken ölçün ve beklenen değeri "
+        "okuyunca işaretleyin."
+    ),
+    "Save": "Kaydet",
     "Checks for this phase": "Bu aşamanın ölçümleri",
     "Cut list": "Kesim listesi",
     "Track cuts": "Şerit kesimleri",

@@ -69,7 +69,11 @@ closed without a bump.
   track cut is a step of its own, first. The list is still there as Overview, the cut list
   and the track cuts are a click away, and ticks are kept once, so the bench and the list
   always agree. Its own controls -- Next Step to Do, Clear Progress, Export -- sit in its
-  corner.
+  corner. The last step's button says "Done ✓", and after it the build has an end: whether
+  every step is ticked, with a button to the first that is not, the checks not ticked yet
+  under their phases -- the last phase's short tests, VCC against GND among them, have no
+  step of their own and appear nowhere else on the bench -- and Save and Export the Guide.
+  Nothing is ticked there on the builder's behalf.
 
 - **Design the board from one you can buy.** Board ▸ Design the Board… -- and Change… on the
   board in Properties, the board's right-click, and Other Board in the board chooser --
