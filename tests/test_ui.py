@@ -918,11 +918,17 @@ def test_a_borrowed_package_sits_on_the_hole_it_was_placed_on() -> None:
     """A KiCad through-hole model's origin is pin 1 and so is this application's anchor.
     Nothing is measured or fitted; if the two conventions ever disagree, every borrowed
     part on every board is offset by the same amount and nothing else says so."""
+    from perfboard_studio.footprints import get_footprint
     from perfboard_studio.ui import partmodels
 
     # Checked on every model rather than on one, because the claim is about the CONVENTION:
     # pin 1 at the origin, the package running +x with the column and -y against the row.
     # A model that broke it would be offset by its own length and nothing else would say so.
+    # A package whose pin 1 is outside it on purpose: the 5 mm RGB LED stands over four holes
+    # 7.62 mm across, its legs fanned out under it to the board's pitch and not drawn
+    # (``Model.leads``). Its origin is still pin 1, so the middle of its pins is inside it --
+    # placed by its centre, it would be 3.8 mm off them.
+    pin_one_outside = {"led-5mm-rgb"}
     wrong = []
     for footprint_id, model in sorted(partmodels._index().items()):
         boxes = [piece.bounds for piece in model.pieces if len(piece.bounds) == 6]
@@ -934,7 +940,16 @@ def test_a_borrowed_package_sits_on_the_hole_it_was_placed_on() -> None:
         # part of the part. A model placed by its CENTRE instead -- which is how a good many
         # surface-mount ones are drawn -- puts the origin outside, and that is the failure
         # this catches: it would offset the whole package by half its own length.
-        if not (low_x <= 0.5 <= high_x and low_y <= 0.5 and high_y >= -0.5):
+        on_pin_one = low_x <= 0.5 <= high_x and low_y <= 0.5 and high_y >= -0.5
+        if footprint_id in pin_one_outside:
+            footprint = get_footprint(footprint_id)
+            assert footprint is not None
+            middle_x = sum(pin.d_col for pin in footprint.pins) / len(footprint.pins) * 2.54
+            middle_y = -sum(pin.d_row for pin in footprint.pins) / len(footprint.pins) * 2.54
+            on_its_pins = low_x <= middle_x <= high_x and low_y <= middle_y <= high_y
+            if on_pin_one or not on_its_pins:
+                wrong.append((footprint_id, [round(v, 2) for v in (low_x, low_y, high_x, high_y)]))
+        elif not on_pin_one:
             wrong.append((footprint_id, [round(v, 2) for v in (low_x, low_y, high_x, high_y)]))
     assert wrong == []
 

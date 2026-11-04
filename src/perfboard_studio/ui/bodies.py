@@ -235,6 +235,12 @@ def plus_mark(footprint: Footprint, pitch: float) -> tuple[float, float] | None:
     )
 
 
+#: The archetypes whose colour in ``BODY_STYLES`` is a guess at a part nobody measured --
+#: a generic box's grey, a relay's slate -- and which a borrowed model's own colour replaces:
+#: a character LCD's green board, a Songle relay's blue.
+MODEL_COLOURED_ARCHETYPES: frozenset[str] = frozenset({"generic-box", "relay-box"})
+
+
 def style_for(footprint: Footprint) -> BodyStyle:
     """The style for a footprint, honouring an explicit ``BodySpec.color`` override.
 
@@ -242,10 +248,11 @@ def style_for(footprint: Footprint) -> BodyStyle:
     green", not "work out a whole new palette" -- so the edge and accent, which exist to
     stay legible against the fill, are left to the archetype.
 
-    A GENERIC BOX WITH A MEASURED MODEL IS THE MODEL'S COLOUR. The box's grey is what this
-    table says about a part it knows nothing of, and a borrowed model knows the part: a
-    character LCD's board is green and a 7-segment display's case black, in the 2D view, in
-    3D and in the guide alike, because all three ask here.
+    A GENERIC BOX WITH A MEASURED MODEL IS THE MODEL'S COLOUR, and so is a relay
+    (``MODEL_COLOURED_ARCHETYPES``). The box's grey is what this table says about a part it
+    knows nothing of, and a borrowed model knows the part: a character LCD's board is green,
+    a 7-segment display's case black and a Songle relay blue, in the 2D view, in 3D and in
+    the guide alike, because all three ask here.
     """
     archetype = footprint.body.archetype
     if archetype in AXIAL_ARCHETYPES and footprint.polarized:
@@ -253,7 +260,7 @@ def style_for(footprint: Footprint) -> BodyStyle:
     else:
         base = BODY_STYLES.get(archetype, _FALLBACK_STYLE)
     override = footprint.body.color
-    if not override and archetype == "generic-box":
+    if not override and archetype in MODEL_COLOURED_ARCHETYPES:
         model = partmodels.model_for(footprint.id)
         override = model.body.color if model is not None and model.body is not None else None
     if override:

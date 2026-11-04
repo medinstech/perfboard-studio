@@ -1018,6 +1018,13 @@ Three things about the mapping:
   sibling it has, takes the sibling's case scaled to the part's own drawing
   (`Model.case_size`): the DHT22 is the DHT11's grilled case at Aosong's 15.1 x 7.7 x 25.1
   mm, white -- a stretched grille that reads as a DHT, where a white box read as nothing.
+  A part whose legs are under its body and stand beside our holes -- the SRD relay's blades
+  off the grid, the RGB LED's legs 1.27 mm apart -- is drawn without them (`Model.leads`):
+  what shows is the body, the leads through the board are ours at the pads the footprint
+  has always had, and no document moves. `LEGS_UNDER_THE_BODY` in `test_model_leads.py`
+  names each, and holds it sitting on the board over them. A relay with a model takes the
+  model's colour as a generic box does (`bodies.MODEL_COLOURED_ARCHETYPES`): the table's
+  slate was a guess at a relay nobody had measured, and a Songle relay is blue.
 - **Position is not measured, because it is already right.** A KiCad through-hole model's
   origin is pin 1 and its axes run the way this world does — x with the column, y against
   the row. Both follow the footprint, and this project's convention is written down as "the

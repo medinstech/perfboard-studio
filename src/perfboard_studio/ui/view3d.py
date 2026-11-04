@@ -4358,6 +4358,22 @@ def _pieces_for(
         # bands) and the model's is painted in the style's accent, the colour 2D draws it.
         mark = _polarity_mark(model) if body.polarity is not None else None
         markings: list[_Piece] = list(_plus_mark_pieces(footprint, comp, board, model))
+        # A relay's case carries its value, as the generated one did, on the borrowed top.
+        printed = (
+            _printed(body.marking, min(body.size_x, body.size_y) * 0.11, body.along * 0.8)
+            if body.marking and model.body is not None and len(model.body.bounds) == 6
+            else None
+        )
+        if printed is not None and model.body is not None:
+            markings.append(
+                _Piece(
+                    source=printed,
+                    rgb=LEGEND_RGB,
+                    position=(body.x, body.y, model.body.bounds[5] + 0.01),
+                    orientation=(0.0, 0.0, 0.0 if body.axis == "x" else 90.0),
+                    material=INK,
+                )
+            )
         if archetype == "axial-cylinder":
             markings = _axial_markings(body, _barrel_of(model), polarity_band=mark is None)
         elif archetype == "axial-upright" and (barrel := _standing_barrel_of(model)) is not None:

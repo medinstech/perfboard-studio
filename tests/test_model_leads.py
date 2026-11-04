@@ -109,7 +109,25 @@ def test_there_are_models_to_measure() -> None:
     assert len(MODELLED) > 30
 
 
-@pytest.mark.parametrize("footprint_id", MODELLED)
+#: Models drawn WITHOUT their own legs (``Model.leads``), each with the reason: legs hidden
+#: under the body that would land beside our holes, where the footprint's pads stay put so
+#: no document moves. The leads through the board are ours, at those pads.
+LEGS_UNDER_THE_BODY: dict[str, str] = {
+    "relay-srd": "the SRD's blades are off the grid, under its base",
+    "led-5mm-rgb": "the RGB LED's legs are 1.27 mm apart, under it as it sits on the board",
+}
+
+
+@pytest.mark.parametrize("footprint_id", sorted(LEGS_UNDER_THE_BODY))
+def test_a_part_drawn_without_its_legs_sits_on_the_board_over_them(footprint_id: str) -> None:
+    """No leg of its own, and its body down on the board, where the legs it has are hidden."""
+    model = partmodels.model_for(footprint_id)
+    assert model is not None and model.body is not None
+    assert not [piece for piece in model.pieces if piece.material == "tinned"]
+    assert model.body.bounds[2] <= 0.15, model.body.bounds
+
+
+@pytest.mark.parametrize("footprint_id", [fid for fid in MODELLED if fid not in LEGS_UNDER_THE_BODY])
 def test_every_lead_goes_in_a_hole_and_every_hole_gets_a_lead(footprint_id: str) -> None:
     model = partmodels.model_for(footprint_id)
     assert model is not None

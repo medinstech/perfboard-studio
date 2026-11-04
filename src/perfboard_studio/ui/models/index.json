@@ -1167,6 +1167,51 @@
   ],
   "source": "OptoDevice/Vishay_MINICAST-3Pin"
  },
+ "box-3x1-p1-r1-9.53x4.83x11.05": {
+  "parts": [
+   {
+    "bounds": [
+     -0.255,
+     -0.2543,
+     -0.05,
+     5.335,
+     0.2543,
+     0.38
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-3x1-p1-r1-9.53x4.83x11.05.0.ply"
+   },
+   {
+    "bounds": [
+     -2.225,
+     -2.41,
+     0.0,
+     7.305,
+     2.42,
+     10.03
+    ],
+    "color": "#04227c",
+    "material": "sleeve",
+    "mesh": "box-3x1-p1-r1-9.53x4.83x11.05.1.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -2.05,
+     0.045,
+     10.03,
+     0.14,
+     2.235,
+     11.05
+    ],
+    "color": "#c9a45a",
+    "material": "gloss",
+    "mesh": "box-3x1-p1-r1-9.53x4.83x11.05.2.ply"
+   }
+  ],
+  "source": "Potentiometer_THT/Potentiometer_Bourns_3296W_Vertical"
+ },
  "box-4x1-p1-r1-12x5.5x15.5": {
   "parts": [
    {
@@ -2293,6 +2338,25 @@
   ],
   "source": "LED_THT/LED_D5.0mm"
  },
+ "led-5mm-rgb": {
+  "parts": [
+   {
+    "bounds": [
+     1.31,
+     -2.9,
+     0.0,
+     6.7019,
+     2.9,
+     8.6
+    ],
+    "color": "#c6c4a0",
+    "material": "lens",
+    "mesh": "led-5mm-rgb.0.ply",
+    "role": "body"
+   }
+  ],
+  "source": "LED_THT/LED_D5.0mm-4_RGB"
+ },
  "r-axial-3": {
   "parts": [
    {
@@ -2472,6 +2536,25 @@
    }
   ],
   "source": "Resistor_THT/R_Axial_DIN0309_L9.0mm_D3.2mm_P15.24mm_Horizontal"
+ },
+ "relay-srd": {
+  "parts": [
+   {
+    "bounds": [
+     -0.88,
+     -7.75,
+     0.0981,
+     18.22,
+     7.75,
+     15.3
+    ],
+    "color": "#04227c",
+    "material": "sleeve",
+    "mesh": "relay-srd.0.ply",
+    "role": "body"
+   }
+  ],
+  "source": "Relay_THT/Relay_SPDT_SANYOU_SRD_Series_Form_C"
  },
  "screw-terminal-2": {
   "parts": [

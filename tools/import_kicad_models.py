@@ -117,6 +117,16 @@ class Model:
     #: their holes. The DHT22 is the DHT11's grilled case at Aosong's 15.1 x 7.7 x 25.1 mm.
     case_size: tuple[float, float, float] | None = None
     case_shift: tuple[float, float] = (0.0, 0.0)
+    #: Whether the model's own bare legs are kept. A part whose legs are hidden under its
+    #: body -- a relay standing on its base, an LED seated on the board -- and land beside our
+    #: holes (the relay's blades are off the grid, the RGB LED's legs 1.27 mm apart) is drawn
+    #: without them: what shows is the body, and the leads through the board are ours, at the
+    #: pads the footprint has always had.
+    leads: bool = True
+    #: How far the model is lowered onto the board, for a package KiCad stands up on its legs
+    #: where our footprint seats it: KiCad's RGB LED is 3 mm up, our footprint's 8.6 mm is the
+    #: LED sitting down.
+    sink: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -261,6 +271,21 @@ MODELS: tuple[Model, ...] = (
     # The passive one, CUI's CEM-1203(42): the same 12 mm can on the same legs, 8.5 mm tall.
     Model("box-2x1-p3-r1-12x12x8.5", "Buzzer_Beeper", "Buzzer_12x9.5RM7.6", splay=True,
           materials=(("#9e2705", "moulded"),), colours=(("#9e2705", "#141414"),), height=8.5),
+    # -- a relay, a trimmer and an RGB LED ---------------------------------
+    # Songle's SRD relay is KiCad's Sanyou SRD, the same blue case: its blades are off our
+    # grid, so its legs -- under its base, where nobody sees them -- are not drawn, and our
+    # pads stay where they are. KiCad's case is 19.6 x 15.4 x 15.6 mm; it is drawn at the
+    # 19.1 x 15.5 x 15.3 mm of Songle's drawing our footprint measures, centred on it.
+    Model("relay-srd", "Relay_THT", "Relay_SPDT_SANYOU_SRD_Series_Form_C", leads=False,
+          case_size=(19.1, 15.5, 15.3), case_shift=(0.17, 0.0)),
+    # Bourns' 3296W, turned onto our pin order: the blue case and its adjusting screw, which
+    # KiCad paints brown and is brass.
+    Model("box-3x1-p1-r1-9.53x4.83x11.05", "Potentiometer_THT", "Potentiometer_Bourns_3296W_Vertical",
+          rotate=180.0, colours=(("#772707", "#c9a45a"),)),
+    # The 5 mm RGB LED, its dome a lens, seated on the board as our footprint measures it and
+    # centred on our four holes; its 1.27 mm legs are under it and not drawn.
+    Model("led-5mm-rgb", "LED_THT", "LED_D5.0mm-4_RGB", offset=(1.905, 0.0), leads=False,
+          sink=3.0, materials=(("#c6c4a0", "lens"),)),
     # -- light and climate sensors ---------------------------------------
     # The GL5528 photoresistor: KiCad's 5 x 4.1 mm LDR, its legs 3 mm apart bent in to our
     # one pitch -- the cell the catalog took its size from.
@@ -394,6 +419,7 @@ MATERIALS: dict[str, str] = {
     "#0f0f0f": "moulded",  # a character LCD's bezel
     "#0d0e10": "moulded",  # a display's black case, and the backlight under an LCD's glass
     "#030103": "moulded",  # an IR receiver's black epoxy
+    "#772707": "gloss",  # the adjusting screw of a 3296 trimmer, painted brass (``colours``)
 }
 
 
@@ -808,6 +834,17 @@ def main(argv: list[str] | None = None) -> int:
                     [*have_points, *points],
                     [*have_faces, *((a + start, b + start, c + start) for a, b, c in faces)],
                 )
+        if not model.leads:
+            groups = {
+                colour: piece
+                for colour, piece in groups.items()
+                if MATERIALS.get(hexed(colour)) != "tinned"
+            }
+        if model.sink:
+            groups = {
+                colour: ([(x, y, max(z - model.sink, 0.0)) for x, y, z in points], faces)
+                for colour, (points, faces) in groups.items()
+            }
         if model.case_size is not None:
             groups = _resize_case(groups, model)
         if model.height is not None:

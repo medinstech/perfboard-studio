@@ -65,6 +65,12 @@ The meshes are not the KiCad models unaltered:
   ones is the `colours` field in `tools/import_kicad_models.py`.
 - **One was made shorter.** The 8.5 mm passive buzzer is `Buzzer_12x9.5RM7.6`, the 9.5 mm
   active one's 12 mm can, scaled in height to CUI's CEM-1203(42) (the `height` field).
+- **Two lost their legs.** `Relay_SPDT_SANYOU_SRD_Series_Form_C`'s blades and
+  `LED_D5.0mm-4_RGB`'s 1.27 mm legs are hidden under their bodies and stand beside the
+  holes the footprints have always had, so they were left off (the `leads` field); the
+  relay's case is drawn at the 19.1 x 15.5 x 15.3 mm of Songle's drawing, a few tenths
+  smaller than KiCad's, and the LED lowered the 3 mm KiCad stands it up so it sits on the
+  board as its footprint measures it (the `case_size` and `sink` fields).
 - **One was made bigger.** KiCad has no model of the DHT22 (AM2302), so it is
   `Sensor/Aosong_DHT11_5.5x12.0_P2.54mm`, the DHT11's grilled case, scaled to Aosong's
   15.1 x 7.7 x 25.1 mm drawing of the DHT22 and painted white, its leads left where they

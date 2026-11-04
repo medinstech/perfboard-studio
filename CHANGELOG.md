@@ -132,6 +132,11 @@ closed without a bump.
 
 ### Changed
 
+- **The relay, the trimmer and the RGB LED are the colours they are.** The Songle relay is
+  its blue case with its value on top, the 3296W trimmer blue with its brass screw, and the
+  RGB LED's diffused dome milky white rather than red -- each from KiCad's model of it. Their
+  pads have not moved.
+
 - **The light sensor, the IR receiver and the DHT11 look like themselves.** The GL5528 is
   KiCad's 5 mm cell with its track on top, the TSOP38238 Vishay's black MINICAST body with
   its dome, the DHT11 its blue grilled case -- each the package the catalog already measured

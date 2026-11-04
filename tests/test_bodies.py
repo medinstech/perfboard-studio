@@ -481,3 +481,23 @@ def test_a_buzzers_plus_is_on_its_top_beside_its_plus_leg(footprint_id: str) -> 
         assert x == pytest.approx(5 * PITCH + at[0]) and y == pytest.approx(-(5 * PITCH + at[1]))
         assert z > model.body.bounds[5]
     assert plus_mark(get_footprint("box-2x1-p1-r1-5x4.1x4"), PITCH) is None  # type: ignore[arg-type]
+
+
+def test_the_relay_trimmer_and_rgb_led_are_the_colours_the_parts_are() -> None:
+    """A Songle relay is blue and a 3296W trimmer blue with a brass screw, from their KiCad
+    models; an RGB LED's diffused dome is milky, where a one-colour LED shines its colour."""
+    from perfboard_studio.footprints import RGB_LED_DOME
+    from perfboard_studio.ui import partmodels
+
+    relay = get_footprint("relay-srd")
+    trimmer = get_footprint("box-3x1-p1-r1-9.53x4.83x11.05")
+    rgb = get_footprint("led-5mm-rgb")
+    assert relay is not None and trimmer is not None and rgb is not None
+    assert style_for(relay).fill == style_for(trimmer).fill == "#04227c"
+    assert style_for(rgb).fill == RGB_LED_DOME
+    model = partmodels.model_for(trimmer.id)
+    assert model is not None
+    assert "#c9a45a" in {piece.color for piece in model.pieces}  # the brass screw
+    # A relay nobody has a model of keeps the table's colour.
+    plain = get_footprint("relay-spdt")
+    assert plain is not None and style_for(plain).fill == BODY_STYLES["relay-box"].fill

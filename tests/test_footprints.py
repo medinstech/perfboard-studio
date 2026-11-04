@@ -59,6 +59,7 @@ import pytest
 
 from perfboard_studio.footprints import (
     GENERATED_ID_GRAMMAR,
+    RGB_LED_DOME,
     axial_footprint,
     box_film_capacitor_footprint,
     crystal_hc49_footprint,
@@ -717,7 +718,12 @@ def test_an_rgb_led_is_the_round_led_with_four_legs_in_a_row() -> None:
         ("1", 0, 0), ("2", 1, 0), ("3", 2, 0), ("4", 3, 0),
     ]
     assert [pin.name for pin in rgb.pins] == ["R", None, None, None]
-    assert (rgb.body, rgb.body_height, rgb.polarized) == (plain.body, plain.body_height, True)
+    # The same lens and height; the dome is diffused, milky, where a one-colour LED is the
+    # colour it shines.
+    assert (rgb.body.archetype, rgb.body.dims, rgb.body_height, rgb.polarized) == (
+        plain.body.archetype, plain.body.dims, plain.body_height, True
+    )
+    assert rgb.body.color == RGB_LED_DOME and plain.body.color is None
     assert rgb.name == "RGB LED, 5 mm round, 4 legs"
     assert get_footprint("led-05mm-rgb") is None and get_footprint("led-5mm-RGB") is None
 

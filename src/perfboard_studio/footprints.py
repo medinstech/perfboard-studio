@@ -714,6 +714,10 @@ _LED_HEIGHT_BY_DIAMETER_MM: dict[int, Mm] = {3: 4.8, 5: 8.6, 10: 13.0}
 _LED_FLANGE_MAX_MM: dict[int, float] = {3: 3.8, 5: 6.15, 10: 11.0}
 
 
+#: The milky white of a diffused RGB LED's dome.
+RGB_LED_DOME = "#e9e6dc"
+
+
 def led_footprint(
     *,
     diameter_mm: int,
@@ -757,7 +761,11 @@ def led_footprint(
         pins=pins,
         body_outline=outline,
         body_height=body_height,
-        body=BodySpec(archetype="led-round", dims={"diameter": flange}),
+        # An RGB LED is diffused: its dome is milky, lit or not, where a one-colour LED is the
+        # colour it shines.
+        body=BodySpec(
+            archetype="led-round", dims={"diameter": flange}, color=RGB_LED_DOME if rgb else None
+        ),
         lead_diameter=lead_diameter,
         polarized=True,
     )
