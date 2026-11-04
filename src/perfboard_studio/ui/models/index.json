@@ -884,6 +884,64 @@
   ],
   "source": "Display/WC1602A"
  },
+ "box-2x1-p1-r1-5x4.1x4": {
+  "parts": [
+   {
+    "bounds": [
+     -1.2232,
+     -2.05,
+     2.4,
+     3.7632,
+     2.05,
+     4.0
+    ],
+    "color": "#720301",
+    "material": "gloss",
+    "mesh": "box-2x1-p1-r1-5x4.1x4.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.48,
+     -0.2493,
+     -0.05,
+     3.02,
+     0.2493,
+     2.4
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-2x1-p1-r1-5x4.1x4.1.ply"
+   },
+   {
+    "bounds": [
+     -0.48,
+     -0.2493,
+     3.9,
+     3.02,
+     0.2493,
+     4.0
+    ],
+    "color": "#383838",
+    "material": "moulded",
+    "mesh": "box-2x1-p1-r1-5x4.1x4.2.ply"
+   },
+   {
+    "bounds": [
+     -1.2232,
+     -2.05,
+     2.4,
+     3.7632,
+     2.05,
+     3.9
+    ],
+    "color": "#c6c4a0",
+    "material": "moulded",
+    "mesh": "box-2x1-p1-r1-5x4.1x4.3.ply"
+   }
+  ],
+  "source": "OptoDevice/R_LDR_5.0x4.1mm_P3mm_Vertical"
+ },
  "box-2x1-p3-r1-12x12x8.5": {
   "parts": [
    {
@@ -1063,6 +1121,109 @@
    }
   ],
   "source": "Display_7Segment/CA56-12EWA"
+ },
+ "box-3x1-p1-r1-5.92x4.8x10.35-o0x1": {
+  "parts": [
+   {
+    "bounds": [
+     0.04,
+     -3.3944,
+     3.4,
+     5.04,
+     1.4,
+     10.35
+    ],
+    "color": "#030103",
+    "material": "moulded",
+    "mesh": "box-3x1-p1-r1-5.92x4.8x10.35-o0x1.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.425,
+     -0.2,
+     -0.05,
+     5.505,
+     0.2,
+     3.4
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-3x1-p1-r1-5.92x4.8x10.35-o0x1.1.ply"
+   },
+   {
+    "bounds": [
+     -0.425,
+     -0.2,
+     0.1,
+     5.505,
+     0.2,
+     3.4
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "box-3x1-p1-r1-5.92x4.8x10.35-o0x1.2.ply"
+   }
+  ],
+  "source": "OptoDevice/Vishay_MINICAST-3Pin"
+ },
+ "box-4x1-p1-r1-12x5.5x15.5": {
+  "parts": [
+   {
+    "bounds": [
+     -2.19,
+     -2.75,
+     0.0,
+     9.81,
+     2.75,
+     15.5
+    ],
+    "color": "#04227c",
+    "material": "sleeve",
+    "mesh": "box-4x1-p1-r1-12x5.5x15.5.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -1.0,
+     -2.4,
+     4.0,
+     8.0,
+     -2.2,
+     12.0
+    ],
+    "color": "#383838",
+    "material": "moulded",
+    "mesh": "box-4x1-p1-r1-12x5.5x15.5.1.ply"
+   },
+   {
+    "bounds": [
+     -1.7,
+     -2.2,
+     2.0,
+     9.3,
+     -1.6,
+     13.0
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "box-4x1-p1-r1-12x5.5x15.5.2.ply"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.15,
+     -0.05,
+     7.87,
+     0.15,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-4x1-p1-r1-12x5.5x15.5.3.ply"
+   }
+  ],
+  "source": "Sensor/Aosong_DHT11_5.5x12.0_P2.54mm"
  },
  "c-disc-p2": {
   "parts": [

@@ -255,6 +255,15 @@ MODELS: tuple[Model, ...] = (
     # The passive one, CUI's CEM-1203(42): the same 12 mm can on the same legs, 8.5 mm tall.
     Model("box-2x1-p3-r1-12x12x8.5", "Buzzer_Beeper", "Buzzer_12x9.5RM7.6", splay=True,
           materials=(("#9e2705", "moulded"),), colours=(("#9e2705", "#141414"),), height=8.5),
+    # -- light and climate sensors ---------------------------------------
+    # The GL5528 photoresistor: KiCad's 5 x 4.1 mm LDR, its legs 3 mm apart bent in to our
+    # one pitch -- the cell the catalog took its size from.
+    Model("box-2x1-p1-r1-5x4.1x4", "OptoDevice", "R_LDR_5.0x4.1mm_P3mm_Vertical",
+          offset=(-0.23, 0.0), splay=True),
+    # Vishay's TSOP382xx IR receiver in its MINICAST package, the dome facing down the rows.
+    Model("box-3x1-p1-r1-5.92x4.8x10.35-o0x1", "OptoDevice", "Vishay_MINICAST-3Pin"),
+    # Aosong's DHT11, turned a quarter onto our row.
+    Model("box-4x1-p1-r1-12x5.5x15.5", "Sensor", "Aosong_DHT11_5.5x12.0_P2.54mm", rotate=90.0),
     # -- a terminal block of any length, as three ways of the 3-way one -----
     #
     # A MKDS-1,5 block IS a repetition, like a header, and it was measured rather than
@@ -372,6 +381,7 @@ MATERIALS: dict[str, str] = {
     "#a4a392": "steel",  # the contacts in a Phoenix MSTB header, one shade off the metal grey
     "#0f0f0f": "moulded",  # a character LCD's bezel
     "#0d0e10": "moulded",  # a display's black case, and the backlight under an LCD's glass
+    "#030103": "moulded",  # an IR receiver's black epoxy
 }
 
 
