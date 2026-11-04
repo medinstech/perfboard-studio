@@ -1645,10 +1645,24 @@ drew two segments turning once, horizontal first, whatever was in the way -- so 
 wired pin to pin had lines across the very parts they joined, and a line through a body
 reads as a short. It searches the sheet grid instead: out of each pin the way its lead
 points, round every symbol's box edges included (no line runs along another pin's leads),
-fewest corners first, off other nets' wires where it can; the preview shows the same route
-while the pointer is on the target pin. Where there is no way round -- a pin off the sheet,
-a sheet walled shut -- the elbow is still what is drawn. The search is deterministic, so a
-route does not flip while the pointer moves.
+the shortest it can with the fewest corners; the preview shows the same route while the
+pointer is on the target pin. Where there is no way round -- a pin off the sheet, a sheet
+walled shut -- the elbow is still what is drawn. The search is deterministic, so a route
+does not flip while the pointer moves.
+
+**And it never reads as a join that is not there.** The first version priced a run along
+another net's wire and nothing else, and padded every box by a grid all round, which left
+one track between symbols the layout had put three apart. The NE555 wired pin to pin in a
+release walkthrough came out with two nets on one line in nine places (40.6 mm of it), its
+wires round the outside of the sheet and 361 mm of runs a grid from another net's. Two
+nets on one line, and one net's corner or end on another's line (a T), both read as
+joined, so neither is done while any route exists without it. A part's reference and
+value, and the point in front of every other pin, are kept off too, and given up first
+(`_Sheet.level`). A crossing square on costs four steps and a step beside another net's
+run one; those were chosen from that NE555 rendered at several settings, and the same
+sheet now has 0 mm on another net and 2.5 mm beside one, for 28 crossings instead of 22.
+`test_an_example_wired_pin_to_pin_has_no_join_that_is_not_there` wires every example net
+by net, the way a person does, and looks for a false join on the result.
 
 ## The window walks through six steps
 

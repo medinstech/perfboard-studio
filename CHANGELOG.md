@@ -261,7 +261,9 @@ closed without a bump.
   nano-relay's relay. Every chip now straddles the groove, no clip holds two nets, and every
   example goes onto an 830 breadboard whole and wires clean.
 - **A wire drawn on the schematic went straight through the parts in its way**, so the sheet
-  looked shorted; it goes round every symbol now. Zoomed out, the sheet's labels no longer
+  looked shorted; it goes round every symbol now, the shortest way with the fewest corners.
+  It never runs along another net's wire or ends on one in a T, which would read as joined,
+  and keeps off the parts' names and values. Zoomed out, the sheet's labels no longer
   print over one another, and a big chip's pin names wait until they fit.
 - **Go to Part went to R10 for "R1"** when R10 to R19 came first in the document.
 - **Escape did not call off a drag**: let go after it, and the part, the label or the rubber

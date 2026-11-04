@@ -517,17 +517,39 @@ def pin_position(drawing: SchematicDrawing, ref: str, number: str) -> Point2 | N
     return None
 
 
-#: What a drawn wire's search pays, in grid steps: a step is one, a corner is
-#: ``ROUTE_BEND_COST`` more -- so of two routes as long, the one with fewer corners --
-#: and running along another net's wire is ``ROUTE_OVERLAP_COST`` a step, because two
-#: nets drawn on one line read as one net. Crossing one square on is free: it is what a
-#: crossing is, and the sheet draws no dot there.
+#: What a drawn wire's search pays, in grid steps. A step is one and a corner is
+#: ``ROUTE_BEND_COST`` more, so of two routes as long the one with fewer corners wins: the
+#: shortest L or Z that clears the symbols, wherever there is one. Crossing another net
+#: square on costs ``ROUTE_CROSSING_COST`` -- it is what a crossing is and the sheet draws
+#: no dot there, but a sheet with fewer reads more easily -- and each step within one grid
+#: of another net's parallel run costs ``ROUTE_BESIDE_COST``, because lines packed side by
+#: side read as one bundle and the eye loses which is which.
+#:
+#: Chosen on the NE555 a new user wires pin to pin, rendered at several settings: a
+#: crossing at 1 left 31 crossings, at 6 it sent wires round the outside to save one, and
+#: at 4 with a beside cost of 1 every run kept a grid clear of the next.
 ROUTE_BEND_COST = 2.0
+ROUTE_CROSSING_COST = 4.0
+ROUTE_BESIDE_COST = 1.0
+#: What the search keeps off while there is any other way, given up in this order and
+#: only where no route exists without giving it up (``route_sheet_wire``):
+#:
+#: 1. a part's reference or value, and the grid point in front of another pin, where that
+#:    pin's own wire has to leave -- a wire through either is clutter;
+#: 2. another net's line, run along (two nets on one line) or met at a corner or an end (a
+#:    T) -- either reads as a JOIN that is not there, so it is the last thing given up.
+#:
+#: Given up, each costs this much a time, so the route has as few as it can.
+ROUTE_CLUTTER_COST = 4.0
 ROUTE_OVERLAP_COST = 12.0
 #: How far past the symbols the search may go, in grid steps, and how much it may look at
 #: before it gives up and the wire is drawn as it always was.
 ROUTE_MARGIN_STEPS = 8
 ROUTE_MAX_VISITS = 40_000
+#: A reference or value keeps this much of the sheet clear on the side of its point it
+#: is printed on, a grid deep and this many grids wide a character: the panel's smallest
+#: text at the zoom a fitted sheet opens at.
+ROUTE_TEXT_GRIDS_PER_CHAR = 0.6
 
 _STEP: dict[str, tuple[int, int]] = {
     "left": (-1, 0),
@@ -535,6 +557,66 @@ _STEP: dict[str, tuple[int, int]] = {
     "top": (0, -1),
     "bottom": (0, 1),
 }
+_DIRECTIONS: tuple[tuple[int, int], ...] = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+type Cell = tuple[int, int]
+
+
+def _cell(point: Point2) -> Cell:
+    return (round(point.x / GRID_MM), round(point.y / GRID_MM))
+
+
+def _axis(step: tuple[int, int]) -> str:
+    return "h" if step[1] == 0 else "v"
+
+
+@dataclass(slots=True)
+class _Sheet:
+    """What a drawn wire's search keeps out of, a grid point at a time.
+
+    ``other`` is every other net's lines (the axes they run on through a point) and
+    ``nodes`` their corners and ends; ``own`` is the lines of the nets the new wire joins,
+    which it may share. ``clutter`` is the points a reference or a value is printed over
+    and the point in front of every pin but the wire's own two.
+
+    ``level`` is how much has been given up (``ROUTE_CLUTTER_COST``): 0 nothing, 1 the
+    clutter, 2 another net's line as well.
+    """
+
+    blocked: set[Cell]
+    other: dict[Cell, set[str]]
+    nodes: set[Cell]
+    own: dict[Cell, set[str]]
+    clutter: set[Cell]
+    level: int = 0
+
+    def through(self, at: Cell, step: tuple[int, int]) -> float | None:
+        """The price of the wire running straight through ``at`` on ``step``'s axis, or
+        None where that is not done at this level."""
+        axis = _axis(step)
+        price = 0.0
+        if axis in self.other.get(at, ()) or at in self.nodes:
+            if self.level < 2:
+                return None
+            price += ROUTE_OVERLAP_COST
+        elif at in self.other:
+            price += ROUTE_CROSSING_COST
+        if at in self.clutter:
+            if self.level < 1:
+                return None
+            price += ROUTE_CLUTTER_COST
+        across = (step[1], step[0])
+        for side in (1, -1):
+            beside = (at[0] + side * across[0], at[1] + side * across[1])
+            if axis in self.other.get(beside, ()):
+                price += ROUTE_BESIDE_COST
+        return price
+
+    def corner(self, at: Cell) -> float | None:
+        """The price of the wire turning at ``at``: a corner on another net's line is a T."""
+        if at in self.other or at in self.nodes:
+            return None if self.level < 2 else ROUTE_OVERLAP_COST
+        return 0.0
 
 
 def route_sheet_wire(
@@ -548,60 +630,162 @@ def route_sheet_wire(
     turning once, whatever was in the way, so a 555 blinker wired pin to pin had its lines
     running across R1, R2, C1 and J1. This searches the sheet's grid instead: out of each
     pin the way its lead points, round every symbol's box (edges included, so no line runs
-    along the leads of another pin), as few corners as it can, off other nets' wires where
-    it can.
+    along the leads of another pin), the shortest it can with as few corners.
+
+    A WIRE LAID ON ANOTHER NET'S LINE READS AS A JOIN, and so does one meeting it at a
+    corner. The first version only priced running along another net's wire, and padded
+    every box by a grid all round, which left one free track between symbols the layout
+    had put three apart: the NE555 wired pin to pin had two nets on one line in nine
+    places and its wires round the outside. Neither join is drawn now while any route
+    exists without it, and the search gives things up in the order ``ROUTE_CLUTTER_COST``
+    lists only where it has to.
     """
-    pins = {}
+    pins: dict[tuple[str, str], tuple[Point2, str]] = {}
     for symbol in drawing.symbols:
         for pin in symbol.pins:
-            if (symbol.ref, pin.number) in (a, b):
-                pins[(symbol.ref, pin.number)] = (
-                    Point2(symbol.at.x + pin.at.x, symbol.at.y + pin.at.y),
-                    pin.side,
-                )
+            pins[(symbol.ref, pin.number)] = (
+                Point2(symbol.at.x + pin.at.x, symbol.at.y + pin.at.y),
+                pin.side,
+            )
     if a not in pins or b not in pins or a == b:
         return None
     (start, start_side), (end, end_side) = pins[a], pins[b]
 
-    def cell(point: Point2) -> tuple[int, int]:
-        return (round(point.x / GRID_MM), round(point.y / GRID_MM))
-
-    blocked: set[tuple[int, int]] = set()
+    blocked: set[Cell] = set()
     lo_x = lo_y = math.inf
     hi_x = hi_y = -math.inf
     for symbol in drawing.symbols:
-        x0, y0 = math.floor(symbol.at.x / GRID_MM - 1e-9), math.floor(symbol.at.y / GRID_MM - 1e-9)
-        x1 = math.ceil((symbol.at.x + symbol.width) / GRID_MM + 1e-9)
-        y1 = math.ceil((symbol.at.y + symbol.height) / GRID_MM + 1e-9)
+        # The box's own grid points, edges included, and no more.
+        x0 = math.floor(symbol.at.x / GRID_MM + 1e-9)
+        y0 = math.floor(symbol.at.y / GRID_MM + 1e-9)
+        x1 = math.ceil((symbol.at.x + symbol.width) / GRID_MM - 1e-9)
+        y1 = math.ceil((symbol.at.y + symbol.height) / GRID_MM - 1e-9)
         blocked.update((x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1))
         lo_x, lo_y, hi_x, hi_y = min(lo_x, x0), min(lo_y, y0), max(hi_x, x1), max(hi_y, y1)
     # Out of each pin the way its lead points, as far as it takes to clear its own box.
-    leave = _clear_of(cell(start), _STEP[start_side], blocked)
-    arrive = _clear_of(cell(end), _STEP[end_side], blocked)
+    leave = _clear_of(_cell(start), _STEP[start_side], blocked)
+    arrive = _clear_of(_cell(end), _STEP[end_side], blocked)
     if leave is None or arrive is None:
         return None
     first, out = leave
     last, back = arrive
-    lo_x, lo_y = int(lo_x) - ROUTE_MARGIN_STEPS, int(lo_y) - ROUTE_MARGIN_STEPS
-    hi_x, hi_y = int(hi_x) + ROUTE_MARGIN_STEPS, int(hi_y) + ROUTE_MARGIN_STEPS
+    bounds = (
+        int(lo_x) - ROUTE_MARGIN_STEPS,
+        int(lo_y) - ROUTE_MARGIN_STEPS,
+        int(hi_x) + ROUTE_MARGIN_STEPS,
+        int(hi_y) + ROUTE_MARGIN_STEPS,
+    )
+    sheet = _sheet_for(drawing, (start, end), blocked, pins, (a, b))
 
-    taken: dict[tuple[int, int], set[str]] = defaultdict(set)
+    leaving = _DIRECTIONS.index(_STEP[start_side])
+    arriving = _DIRECTIONS.index((-_STEP[end_side][0], -_STEP[end_side][1]))
+    found = None
+    for level in (0, 1, 2):
+        sheet.level = level
+        # The stubs out of the two pins are not the search's to choose, but they are held
+        # to the same rules: a stub on another net's line is a join as well.
+        stubs = [sheet.through(c, _STEP[start_side]) for c in out[:-1]] + [
+            sheet.through(c, _STEP[end_side]) for c in back[:-1]
+        ]
+        if any(price is None for price in stubs):
+            continue
+        found = _search(first, last, leaving, arriving, sheet, bounds)
+        if found is not None:
+            break
+    if found is None:
+        return None
+    grid = [_cell(start), *out, *found, *reversed(back), _cell(end)]
+    points = [Point2(x * GRID_MM, y * GRID_MM) for x, y in grid]
+    points[0], points[-1] = start, end
+    return _aligned(_corners_only(_tidy(points)))
+
+
+def _sheet_for(
+    drawing: SchematicDrawing,
+    ends: tuple[Point2, Point2],
+    blocked: set[Cell],
+    pins: dict[tuple[str, str], tuple[Point2, str]],
+    wired: tuple[tuple[str, str], tuple[str, str]],
+) -> _Sheet:
+    """Everything already on the sheet, sorted into what the new wire may share and what
+    it keeps off.
+
+    A pin carries no net on the sheet, so the new wire's nets are the ones whose lines END
+    at one of its two pins -- a drawn wire, a name's stub or a rail's. A pin with nothing
+    drawn at it yet adds no net, and then every line is somebody else's, which only makes
+    the search keep further off.
+    """
+
+    def at_an_end(point: Point2) -> bool:
+        return any(abs(point.x - e.x) < 1e-6 and abs(point.y - e.y) < 1e-6 for e in ends)
+
+    lines: list[tuple[NetId, tuple[Point2, ...]]] = []
     for wire in drawing.wires:
-        for p, q in zip(wire.path, wire.path[1:], strict=False):
-            (px, py), (qx, qy) = cell(p), cell(q)
+        lines.append((wire.net_id, wire.path))
+    for rail in drawing.rails:
+        lines.append((rail.net_id, rail.path))
+        lines.extend((rail.net_id, bar) for bar in rail_glyph_bars(rail))
+    own_nets = {
+        net for net, path in lines if path and (at_an_end(path[0]) or at_an_end(path[-1]))
+    }
+    other: dict[Cell, set[str]] = defaultdict(set)
+    own: dict[Cell, set[str]] = defaultdict(set)
+    nodes: set[Cell] = set()
+    for net, path in lines:
+        into = own if net in own_nets else other
+        for p, q in itertools.pairwise(path):
+            (px, py), (qx, qy) = _cell(p), _cell(q)
+            if (px, py) == (qx, qy):
+                continue
             axis = "h" if py == qy else "v"
             for step in range(max(abs(qx - px), abs(qy - py)) + 1):
                 sx = px + (step if qx > px else -step if qx < px else 0)
                 sy = py + (step if qy > py else -step if qy < py else 0)
-                taken[(sx, sy)].add(axis)
+                into[(sx, sy)].add(axis)
+        if net not in own_nets:
+            nodes.update(_cell(point) for point in _bends_and_ends(path))
+    clutter = _text_cells(drawing)
+    for key, (at, side) in pins.items():
+        if key in wired:
+            continue
+        door = _clear_of(_cell(at), _STEP[side], blocked)
+        if door is not None:
+            clutter.add(door[0])
+    return _Sheet(blocked=blocked, other=dict(other), nodes=nodes, own=dict(own), clutter=clutter)
 
-    found = _search(first, last, blocked - {first, last}, taken, (lo_x, lo_y, hi_x, hi_y))
-    if found is None:
-        return None
-    grid = [cell(start), *out, *found, *reversed(back), cell(end)]
-    points = [Point2(x * GRID_MM, y * GRID_MM) for x, y in grid]
-    points[0], points[-1] = start, end
-    return _aligned(_corners_only(_tidy(points)))
+
+def _text_cells(drawing: SchematicDrawing) -> set[Cell]:
+    """The grid points a part's reference or value is printed over.
+
+    A reference prints above its point and a value below it (``viewsch``'s alignment), a
+    grid deep and ``ROUTE_TEXT_GRIDS_PER_CHAR`` a character wide, from its anchor.
+    """
+    cells: set[Cell] = set()
+    for label in drawing.labels:
+        if label.kind not in ("ref", "value"):
+            continue
+        x, y = label.at.x / GRID_MM, label.at.y / GRID_MM
+        width = len(label.text) * ROUTE_TEXT_GRIDS_PER_CHAR
+        left = {"left": x, "centre": x - width / 2, "right": x - width}[label.anchor]
+        top, bottom = (y - 1.0, y) if label.kind == "ref" else (y, y + 1.0)
+        for cx in range(math.ceil(left - 1e-9), math.floor(left + width + 1e-9) + 1):
+            for cy in range(math.ceil(top - 1e-9), math.floor(bottom + 1e-9) + 1):
+                cells.add((cx, cy))
+    return cells
+
+
+def _bends_and_ends(path: tuple[Point2, ...]) -> list[Point2]:
+    """A path's two ends and every point where it turns."""
+    if not path:
+        return []
+    kept = [path[0], path[-1]]
+    for before, at, after in zip(path, path[1:], path[2:], strict=False):
+        straight = (abs(before.x - at.x) < 1e-6 and abs(at.x - after.x) < 1e-6) or (
+            abs(before.y - at.y) < 1e-6 and abs(at.y - after.y) < 1e-6
+        )
+        if not straight:
+            kept.append(at)
+    return kept
 
 
 def _aligned(points: tuple[Point2, ...]) -> tuple[Point2, ...]:
@@ -635,12 +819,12 @@ def _corners_only(points: Sequence[Point2]) -> tuple[Point2, ...]:
 
 
 def _clear_of(
-    at: tuple[int, int], step: tuple[int, int], blocked: set[tuple[int, int]]
-) -> tuple[tuple[int, int], list[tuple[int, int]]] | None:
+    at: Cell, step: tuple[int, int], blocked: set[Cell]
+) -> tuple[Cell, list[Cell]] | None:
     """The first grid point out of a pin, the way its lead points, that is clear of every
     box, and the points on the way there (that point last)."""
     x, y = at
-    passed: list[tuple[int, int]] = []
+    passed: list[Cell] = []
     for _ in range(64):
         x, y = x + step[0], y + step[1]
         passed.append((x, y))
@@ -650,59 +834,81 @@ def _clear_of(
 
 
 def _search(
-    start: tuple[int, int],
-    goal: tuple[int, int],
-    blocked: set[tuple[int, int]],
-    taken: dict[tuple[int, int], set[str]],
+    start: Cell,
+    goal: Cell,
+    leaving: int,
+    arriving: int,
+    sheet: _Sheet,
     bounds: tuple[int, int, int, int],
-) -> list[tuple[int, int]] | None:
+) -> list[Cell] | None:
     """A* over the grid with a corner cost: the points from ``start`` to ``goal``, both
-    included, or None."""
+    included, or None. The wire is already moving ``leaving`` at ``start`` (out of its pin)
+    and has to be moving ``arriving`` at ``goal`` (into the other), so a turn at either is
+    a corner like any other."""
     lo_x, lo_y, hi_x, hi_y = bounds
-    directions = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    blocked = sheet.blocked - {start, goal}
 
     def guess(x: int, y: int) -> float:
         return abs(goal[0] - x) + abs(goal[1] - y)
 
-    # (estimate, cost, tie, point, direction index); -1 is "not moving yet".
-    frontier: list[tuple[float, float, int, tuple[int, int], int]] = [
-        (guess(*start), 0.0, 0, start, -1)
+    begin = sheet.through(start, _DIRECTIONS[leaving])
+    if begin is None:
+        return None
+    if start == goal:
+        return [start] if leaving == arriving else None
+    # (estimate, cost, tie, point, direction index)
+    frontier: list[tuple[float, float, int, Cell, int]] = [
+        (begin + guess(*start), begin, 0, start, leaving)
     ]
-    best: dict[tuple[tuple[int, int], int], float] = {(start, -1): 0.0}
-    came: dict[tuple[tuple[int, int], int], tuple[tuple[int, int], int] | None] = {(start, -1): None}
+    best: dict[tuple[Cell, int], float] = {(start, leaving): begin}
+    came: dict[tuple[Cell, int], tuple[Cell, int] | None] = {(start, leaving): None}
     tie = 0
     visits = 0
     while frontier:
         _estimate, cost, _tie, point, heading = heapq.heappop(frontier)
+        if cost > best.get((point, heading), math.inf):
+            continue
         if point == goal:
-            path: list[tuple[int, int]] = []
-            state: tuple[tuple[int, int], int] | None = (point, heading)
+            path: list[Cell] = []
+            state: tuple[Cell, int] | None = (point, heading)
             while state is not None:
                 path.append(state[0])
                 state = came[state]
             return path[::-1]
-        if cost > best.get((point, heading), math.inf):
-            continue
         visits += 1
         if visits > ROUTE_MAX_VISITS:
             return None
-        for index, (dx, dy) in enumerate(directions):
-            if heading >= 0 and (dx, dy) == (-directions[heading][0], -directions[heading][1]):
+        for index, (dx, dy) in enumerate(_DIRECTIONS):
+            if (dx, dy) == (-_DIRECTIONS[heading][0], -_DIRECTIONS[heading][1]):
                 continue
             nxt = (point[0] + dx, point[1] + dy)
             if nxt in blocked or not (lo_x <= nxt[0] <= hi_x and lo_y <= nxt[1] <= hi_y):
                 continue
-            step_cost = 1.0
-            if heading >= 0 and index != heading:
-                step_cost += ROUTE_BEND_COST
-            if ("h" if dy == 0 else "v") in taken.get(nxt, ()):
-                step_cost += ROUTE_OVERLAP_COST
+            on = sheet.through(nxt, (dx, dy))
+            if on is None:
+                continue
+            step_cost = 1.0 + on
+            if index != heading:
+                turn = sheet.corner(point)
+                if turn is None:
+                    continue
+                step_cost += ROUTE_BEND_COST + turn
+            moving = index
+            if nxt == goal and index != arriving:
+                # The goal is where the wire turns into its pin, unless it runs straight in.
+                if (dx, dy) == (-_DIRECTIONS[arriving][0], -_DIRECTIONS[arriving][1]):
+                    continue
+                turn = sheet.corner(nxt)
+                if turn is None:
+                    continue
+                step_cost += ROUTE_BEND_COST + turn
+                moving = arriving
             total = cost + step_cost
-            if total < best.get((nxt, index), math.inf):
-                best[(nxt, index)] = total
-                came[(nxt, index)] = (point, heading)
+            if total < best.get((nxt, moving), math.inf):
+                best[(nxt, moving)] = total
+                came[(nxt, moving)] = (point, heading)
                 tie += 1
-                heapq.heappush(frontier, (total + guess(*nxt), total, tie, nxt, index))
+                heapq.heappush(frontier, (total + guess(*nxt), total, tie, nxt, moving))
     return None
 
 
