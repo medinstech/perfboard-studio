@@ -1112,6 +1112,45 @@ class ExtraBoard:
 
 
 @dataclass(frozen=True, slots=True)
+class CableEnd:
+    """One end of a cable: a connector part on one board. The part is named by its ID, which
+    a rename and a move between the board and the design both keep."""
+
+    board: BoardId
+    connector: ComponentId
+
+
+@dataclass(frozen=True, slots=True)
+class CableWire:
+    """One conductor of a cable, from a pin of the ``a`` end's connector to a pin of the
+    ``b`` end's. Its colour and gauge, when given, are what the harness is cut from."""
+
+    a_pin: str
+    b_pin: str
+    colour: str | None = None
+    gauge_awg: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Cable:
+    """Wires joining a connector on one board to a connector on another (or on the same).
+
+    A first-class thing rather than wires on a board, because it belongs to neither board:
+    it is cut, stripped and fitted on its own, it carries a net from one board to the next,
+    and the system's connectivity runs through it. Between CONNECTOR parts only -- a header,
+    a terminal, a ``wire-<n>`` pad row -- never a bare pad: the thing a builder plugs in is a
+    part with pins, and those pins are already in ``doc.nets``."""
+
+    id: str
+    ref: str
+    a: CableEnd
+    b: CableEnd
+    wires: tuple[CableWire, ...]
+    length_mm: Mm | None = None
+    note: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class PerfDocument:
     meta: DocumentMeta
     board: Board
@@ -1169,6 +1208,9 @@ class PerfDocument:
     #: Every board of the system after the first, which is the fields above. Empty on a
     #: board alone -- which is every document before 0.24 -- and then left out of the file.
     boards: tuple[ExtraBoard, ...] = ()
+    #: The cables between the system's connectors. Empty on a board alone, and then left
+    #: out of the file.
+    cables: tuple[Cable, ...] = ()
     format_version: int = DOCUMENT_FORMAT_VERSION
 
 

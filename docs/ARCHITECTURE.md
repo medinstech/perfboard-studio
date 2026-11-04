@@ -2979,3 +2979,17 @@ it hands out is new to the whole document. `board.add` refuses a board exactly w
 `board.set` refuses, by asking `board.set` itself; `board.delete` takes the board's parts back
 into the design wired as they were (`component.unplace` on each), and the first board, being
 the document itself, cannot be deleted.
+
+**A cable is the system's, and its ends resolve.** `doc.cables` joins a connector part on one
+board to one on another, wire by wire (`CableWire`: a pin at each end, a colour, a gauge), and
+belongs to no board: a board's view holds none, and the merge takes them back from the
+document, so no board command can change one. Its ends name parts by ID, which a rename and a
+move between the board and the design both keep. CLAUDE.md's rule decides what is refused:
+an end on a board or a part that is not there, a cable back to the same connector, two wires
+on one pin, no wires, a reference another cable or part holds -- refused by `cable.add` and
+`cable.update` (`system.cable_problem`), and by `persist` at load for the ends. A board
+command whose result leaves a cable to nowhere -- the connector deleted, taken off the board,
+its board removed -- is refused naming the cable. Whether a wire's pin is a pin of its part
+needs the footprint registry, which a command has none of (`net.connect` does not ask it
+either), so DRC reports that; and a wire joining two different nets is a design mistake the
+document can hold, so DRC and LVS report it and nothing refuses it.

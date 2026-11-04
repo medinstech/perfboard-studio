@@ -79,6 +79,7 @@ from .model import (
     BoardMask,
     BoardNote,
     BoardSide,
+    Cable,
     ComponentId,
     ComponentInstance,
     Conductor,
@@ -117,7 +118,14 @@ from .model import (
     normalized_pin_names,
     supply_net_class,
 )
-from .system import FIRST_BOARD, board_document, board_ids, extra_board, merge_board
+from .system import (
+    FIRST_BOARD,
+    board_document,
+    board_ids,
+    cable_problem,
+    extra_board,
+    merge_board,
+)
 
 # ---------------------------------------------------------------------------
 # Document construction
@@ -159,6 +167,8 @@ def create_document_id_generator(doc: PerfDocument) -> NextId:
     boards = [board_document(doc, board_id) for board_id in board_ids(doc)]
     for extra in doc.boards:
         note(extra.id)
+    for cable in doc.cables:
+        note(cable.id)
     for seen in boards:
         for component in seen.components:
             note(component.id)
@@ -3822,7 +3832,9 @@ class DeleteBoardPayload:
 
 
 #: The commands about the SYSTEM rather than one board, which are not done on a board.
-_SYSTEM_COMMANDS = frozenset({"board.on", "board.add", "board.rename", "board.delete"})
+_SYSTEM_COMMANDS = frozenset(
+    {"board.on", "board.add", "board.rename", "board.delete", "cable.add", "cable.update", "cable.delete"}
+)
 
 
 def _board_command(type_: str) -> CommandDefinition[Any]:
@@ -3859,6 +3871,11 @@ def _assert_one_system(doc: PerfDocument) -> None:
                     f'A component with ref "{component.ref}" is already on another board.',
                 )
             seen_refs[component.ref] = board_id
+    # A part a cable is fitted to cannot leave its board while the cable is: taking it off,
+    # deleting it or moving it to the design would leave a cable to nowhere.
+    for cable in doc.cables:
+        if (problem := cable_problem(doc, cable)) is not None:
+            raise CommandError("cable-end", f"{problem} Take {cable.ref} off it first.")
 
 
 def _board_name(doc: PerfDocument, board_id: BoardId) -> str:
@@ -3939,6 +3956,13 @@ class _DeleteBoard:
                 "first-board",
                 "The first board is the document itself and cannot be taken out of it.",
             )
+        reaching = [c.ref for c in doc.cables if p.board in (c.a.board, c.b.board)]
+        if reaching:
+            raise CommandError(
+                "cable-end",
+                f"{', '.join(reaching)} reach{'es' if len(reaching) == 1 else ''} this board; "
+                f"take {'it' if len(reaching) == 1 else 'them'} off first.",
+            )
         seen = board_document(doc, p.board)
         for component in seen.components:
             seen = unplace_component.apply(seen, UnplaceComponentPayload(id=component.id), ctx)
@@ -3950,6 +3974,86 @@ class _DeleteBoard:
 
     def describe(self, p: DeleteBoardPayload, doc: PerfDocument) -> str:
         return f"Remove the board {_board_name(doc, p.board)!r}"
+
+
+
+@dataclass(frozen=True, slots=True)
+class AddCablePayload:
+    """A cable between two connectors; its id is generated when left out (``cable.id`` is
+    ignored then)."""
+
+    cable: Cable
+
+
+@dataclass(frozen=True, slots=True)
+class UpdateCablePayload:
+    """The cable with this id, as given -- its ends, wires, length and note."""
+
+    cable: Cable
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteCablePayload:
+    id: str
+
+
+def _check_cable(doc: PerfDocument, cable: Cable, *, ignoring: str | None = None) -> None:
+    """What ``cable.add`` and ``cable.update`` refuse: the cable rule
+    (``system.cable_problem``) and a reference somebody else has -- another cable, or a part
+    on any board or in the design, since a reference is the one language every list speaks."""
+    if (problem := cable_problem(doc, cable)) is not None:
+        raise CommandError("invalid-cable", problem)
+    ref = cable.ref.strip()
+    if any(other.ref == ref and other.id != ignoring for other in doc.cables):
+        raise CommandError("duplicate-ref", f'A cable with ref "{ref}" is already in the system.')
+    for board_id in board_ids(doc):
+        if any(c.ref == ref for c in board_document(doc, board_id).components):
+            raise CommandError("duplicate-ref", f'A part with ref "{ref}" is on a board.')
+    if any(part.ref == ref for part in doc.parts):
+        raise CommandError("duplicate-ref", f'A part with ref "{ref}" is in the design.')
+
+
+class _AddCable:
+    type = "cable.add"
+
+    def apply(self, doc: PerfDocument, p: AddCablePayload, ctx: CommandContext) -> PerfDocument:
+        cable = dataclasses.replace(p.cable, id=ctx.next_id("cable"), ref=p.cable.ref.strip())
+        if any(other.id == cable.id for other in doc.cables):
+            raise CommandError("duplicate-id", f"There is already a cable {cable.id!r}.")
+        _check_cable(doc, cable)
+        return dataclasses.replace(doc, cables=(*doc.cables, cable))
+
+    def describe(self, p: AddCablePayload, doc: PerfDocument) -> str:
+        return f"Add the cable {p.cable.ref.strip()}"
+
+
+class _UpdateCable:
+    type = "cable.update"
+
+    def apply(self, doc: PerfDocument, p: UpdateCablePayload, ctx: CommandContext) -> PerfDocument:
+        if not any(other.id == p.cable.id for other in doc.cables):
+            raise CommandError("unknown-cable", f"There is no cable {p.cable.id!r}.")
+        cable = dataclasses.replace(p.cable, ref=p.cable.ref.strip())
+        _check_cable(doc, cable, ignoring=cable.id)
+        return dataclasses.replace(
+            doc, cables=tuple(cable if other.id == cable.id else other for other in doc.cables)
+        )
+
+    def describe(self, p: UpdateCablePayload, doc: PerfDocument) -> str:
+        return f"Change the cable {p.cable.ref.strip()}"
+
+
+class _DeleteCable:
+    type = "cable.delete"
+
+    def apply(self, doc: PerfDocument, p: DeleteCablePayload, ctx: CommandContext) -> PerfDocument:
+        if not any(other.id == p.id for other in doc.cables):
+            raise CommandError("unknown-cable", f"There is no cable {p.id!r}.")
+        return dataclasses.replace(doc, cables=tuple(c for c in doc.cables if c.id != p.id))
+
+    def describe(self, p: DeleteCablePayload, doc: PerfDocument) -> str:
+        ref = next((c.ref for c in doc.cables if c.id == p.id), p.id)
+        return f"Remove the cable {ref}"
 
 
 # ---------------------------------------------------------------------------
@@ -4016,6 +4120,9 @@ on_board: CommandDefinition[OnBoardPayload] = _OnBoard()
 add_board: CommandDefinition[AddBoardPayload] = _AddBoard()
 rename_board: CommandDefinition[RenameBoardPayload] = _RenameBoard()
 delete_board: CommandDefinition[DeleteBoardPayload] = _DeleteBoard()
+add_cable: CommandDefinition[AddCablePayload] = _AddCable()
+update_cable: CommandDefinition[UpdateCablePayload] = _UpdateCable()
+delete_cable: CommandDefinition[DeleteCablePayload] = _DeleteCable()
 
 # Typed with Any because CommandDefinition's payload is contravariant, so a specific
 # command is deliberately NOT assignable to CommandDefinition[object]. See the note on
@@ -4081,6 +4188,9 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_board,
     rename_board,
     delete_board,
+    add_cable,
+    update_cable,
+    delete_cable,
 )
 
 

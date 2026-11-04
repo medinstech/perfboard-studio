@@ -57,6 +57,9 @@ from .model import (
     BoardSide,
     BoardText,
     BoardType,
+    Cable,
+    CableEnd,
+    CableWire,
     ComponentInstance,
     Conductor,
     DocumentMeta,
@@ -225,7 +228,11 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "sheetWires",
     "sheetNotes",
     "boards",
+    "cables",
 )
+CABLE_KEY_ORDER: tuple[str, ...] = ("id", "ref", "a", "b", "wires", "lengthMm", "note")
+CABLE_END_KEY_ORDER: tuple[str, ...] = ("board", "connector")
+CABLE_WIRE_KEY_ORDER: tuple[str, ...] = ("aPin", "bPin", "colour", "gaugeAwg")
 #: One board after the first: an id and a name, then exactly the first board's own keys in
 #: the first board's own order (``system.BOARD_FIELDS``).
 EXTRA_BOARD_KEY_ORDER: tuple[str, ...] = (
@@ -783,6 +790,18 @@ def serialize_document(doc: PerfDocument) -> str:
                 if doc.boards
                 else {}
             ),
+            # The cables between them, by id; omitted when there are none, for the same
+            # reason again.
+            **(
+                {
+                    "cables": [
+                        _ordered_cable(cable)
+                        for cable in sorted(doc.cables, key=lambda cable: cable.id)
+                    ]
+                }
+                if doc.cables
+                else {}
+            ),
         },
     )
 
@@ -849,6 +868,42 @@ def _ordered_board_fields(source: PerfDocument | ExtraBoard) -> dict[str, JsonVa
             else {}
         ),
     }
+
+
+def _ordered_cable(cable: Cable) -> JsonValue:
+    """A cable: its ends, its wires in their own order (the order they are cut and listed),
+    and its length and note only when it has them."""
+    return _build_ordered(
+        CABLE_KEY_ORDER,
+        {
+            "id": cable.id,
+            "ref": cable.ref,
+            "a": _build_ordered(CABLE_END_KEY_ORDER, {"board": cable.a.board, "connector": cable.a.connector}),
+            "b": _build_ordered(CABLE_END_KEY_ORDER, {"board": cable.b.board, "connector": cable.b.connector}),
+            "wires": [
+                _build_ordered(
+                    CABLE_WIRE_KEY_ORDER,
+                    {
+                        "aPin": wire.a_pin,
+                        "bPin": wire.b_pin,
+                        **({"colour": wire.colour} if wire.colour is not None else {}),
+                        **(
+                            {"gaugeAwg": _num("gaugeAwg", wire.gauge_awg)}
+                            if wire.gauge_awg is not None
+                            else {}
+                        ),
+                    },
+                )
+                for wire in cable.wires
+            ],
+            **(
+                {"lengthMm": _num("lengthMm", cable.length_mm)}
+                if cable.length_mm is not None
+                else {}
+            ),
+            **({"note": cable.note} if cable.note else {}),
+        },
+    )
 
 
 def _ordered_extra_board(extra: ExtraBoard) -> JsonValue:
@@ -1811,6 +1866,63 @@ def _migrate(doc: dict[str, object], from_version: int) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
+def _parse_cable(
+    raw: object, path: str, warnings: list[str], on_board: dict[str, set[str]]
+) -> Cable:
+    """A cable, whose ends have to RESOLVE: a board this file has, and a part placed on it.
+    Refused otherwise, as a duplicated id is -- a cable to nowhere is a reference no command
+    can mend. Pins are a command's to check (``system.cable_problem``), because only the
+    footprint registry knows them and this module reads text."""
+    obj = _expect_object(raw, path)
+    _check_unknown_keys(obj, CABLE_KEY_ORDER, path, warnings)
+    ends: list[CableEnd] = []
+    for side in ("a", "b"):
+        end_path = _field_path(path, side)
+        end = _expect_object(_require_field(obj, side, path), end_path)
+        _check_unknown_keys(end, CABLE_END_KEY_ORDER, end_path, warnings)
+        board = _expect_string(_require_field(end, "board", end_path), _field_path(end_path, "board"))
+        connector = _expect_string(
+            _require_field(end, "connector", end_path), _field_path(end_path, "connector")
+        )
+        if connector not in on_board.get(board, set()):
+            raise ValidationError(
+                "unknown-reference",
+                f'A cable end names part "{connector}" on board "{board}", which this file '
+                f"does not have.",
+                end_path,
+            )
+        ends.append(CableEnd(board=board, connector=connector))
+    wires_path = _field_path(path, "wires")
+    wires: list[CableWire] = []
+    for index, item in enumerate(_expect_array(_require_field(obj, "wires", path), wires_path)):
+        wire_path = _index_path(wires_path, index)
+        wire = _expect_object(item, wire_path)
+        _check_unknown_keys(wire, CABLE_WIRE_KEY_ORDER, wire_path, warnings)
+        colour = wire.get("colour")
+        gauge = wire.get("gaugeAwg")
+        wires.append(
+            CableWire(
+                a_pin=_expect_string(_require_field(wire, "aPin", wire_path), _field_path(wire_path, "aPin")),
+                b_pin=_expect_string(_require_field(wire, "bPin", wire_path), _field_path(wire_path, "bPin")),
+                colour=None if colour is None else _expect_string(colour, _field_path(wire_path, "colour")),
+                gauge_awg=None
+                if gauge is None
+                else int(_expect_number(gauge, _field_path(wire_path, "gaugeAwg"))),
+            )
+        )
+    length = obj.get("lengthMm")
+    note = obj.get("note", "")
+    return Cable(
+        id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
+        ref=_expect_string(_require_field(obj, "ref", path), _field_path(path, "ref")),
+        a=ends[0],
+        b=ends[1],
+        wires=tuple(wires),
+        length_mm=None if length is None else _expect_number(length, _field_path(path, "lengthMm")),
+        note=_expect_string(note, _field_path(path, "note")),
+    )
+
+
 def _parse_board_fields(
     container: dict[str, object],
     parent: str,
@@ -2075,6 +2187,24 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         own = _parse_board_fields(entry, path, warnings, seen_ids, seen_refs)
         boards.append(ExtraBoard(id=board_id, name=name, **own))
 
+    on_board: dict[str, set[str]] = {
+        FIRST_BOARD: {c.id for c in first["components"]},
+        **{extra.id: {c.id for c in extra.components} for extra in boards},
+    }
+    cables_raw = _expect_array(migrated.get("cables", []), "cables")
+    cables: list[Cable] = []
+    seen_cables: set[str] = set()
+    for index, item in enumerate(cables_raw):
+        cable = _parse_cable(item, _index_path("cables", index), warnings, on_board)
+        if cable.id in seen_cables:
+            raise ValidationError(
+                "duplicate-id",
+                f'Two cables share the id "{cable.id}".',
+                _index_path("cables", index),
+            )
+        seen_cables.add(cable.id)
+        cables.append(cable)
+
     document = PerfDocument(
         meta=meta,
         parts=parts,
@@ -2083,6 +2213,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         sheet_wires=sheet_wires,
         sheet_notes=tuple(sheet_notes),
         boards=tuple(boards),
+        cables=tuple(cables),
         **first,
         format_version=CURRENT_FORMAT_VERSION,
     )

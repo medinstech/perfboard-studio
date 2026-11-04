@@ -274,3 +274,125 @@ def test_only_board_commands_are_done_on_a_board() -> None:
     assert not nested.ok and nested.code == "unknown-command"
     nowhere = bus.dispatch("board.on", OnBoardPayload(board="b9", type="document.rename", payload=None))
     assert not nowhere.ok and nowhere.code == "unknown-board"
+
+
+# ---------------------------------------------------------------------------
+# Cables
+# ---------------------------------------------------------------------------
+
+
+def _ends(doc: PerfDocument):  # type: ignore[no-untyped-def]
+    """The supply's DC OUT (J2, the first board) and the controller's 12V IN (its J1)."""
+    from perfboard_studio.model import CableEnd
+
+    supply_out = next(c for c in doc.components if c.ref == "J2")
+    controller_in = next(c for c in system.extra_board(doc, "b2").components if c.ref == "B2J1")
+    return CableEnd(system.FIRST_BOARD, supply_out.id), CableEnd("b2", controller_in.id)
+
+
+def _cable(doc: PerfDocument, **changes):  # type: ignore[no-untyped-def]
+    from perfboard_studio.model import Cable, CableWire
+
+    a, b = _ends(doc)
+    cable = Cable(
+        id="", ref="W1", a=a, b=b,
+        wires=(CableWire("1", "1", colour="red", gauge_awg=22), CableWire("2", "2", colour="black")),
+        length_mm=150,
+    )
+    return dataclasses.replace(cable, **changes)
+
+
+def test_a_cable_joins_two_connectors_and_goes_through_the_file() -> None:
+    from perfboard_studio.commands import AddCablePayload
+
+    doc = _system()
+    bus = _bus(doc)
+    result = bus.dispatch("cable.add", AddCablePayload(cable=_cable(doc)))
+    assert result.ok, result.message
+    cable = bus.document.cables[0]
+    assert cable.id.startswith("cable-") and cable.ref == "W1"
+    text = persist.serialize_document(bus.document)
+    back = persist.parse_document_or_throw(text)
+    assert back.cables == bus.document.cables
+    assert persist.serialize_document(back) == text
+    assert system.board_document(back).cables == (), "a board's view holds no cable"
+
+
+@pytest.mark.parametrize(
+    ("changes", "why"),
+    [
+        ({"wires": ()}, "no wires"),
+        ({"ref": " "}, "needs a reference"),
+        ({"length_mm": 0}, "more than nothing"),
+    ],
+)
+def test_a_cable_that_is_not_whole_is_refused(changes, why) -> None:  # type: ignore[no-untyped-def]
+    from perfboard_studio.commands import AddCablePayload
+
+    doc = _system()
+    result = _bus(doc).dispatch("cable.add", AddCablePayload(cable=_cable(doc, **changes)))
+    assert not result.ok and result.code == "invalid-cable" and why in result.message
+
+
+def test_a_cable_to_nowhere_or_onto_one_pin_twice_is_refused() -> None:
+    from perfboard_studio.commands import AddCablePayload
+    from perfboard_studio.model import CableEnd, CableWire
+
+    doc = _system()
+    a, b = _ends(doc)
+    bus = _bus(doc)
+    for cable in (
+        _cable(doc, b=CableEnd("b9", b.connector)),
+        _cable(doc, b=CableEnd("b3", b.connector)),
+        _cable(doc, b=a),
+        _cable(doc, wires=(CableWire("1", "1"), CableWire("1", "2"))),
+    ):
+        result = bus.dispatch("cable.add", AddCablePayload(cable=cable))
+        assert not result.ok and result.code == "invalid-cable", result.message
+    taken = bus.dispatch("cable.add", AddCablePayload(cable=_cable(doc, ref=doc.components[0].ref)))
+    assert not taken.ok and taken.code == "duplicate-ref"
+
+
+def test_a_wire_between_two_different_nets_is_not_refused() -> None:
+    """Joining two nets is a mistake in the design, not a broken document: DRC and LVS say
+    it. Only what makes the document whole is a command's to refuse."""
+    from perfboard_studio.commands import AddCablePayload
+    from perfboard_studio.model import CableWire
+
+    doc = _system()
+    crossed = _cable(doc, wires=(CableWire("1", "2"), CableWire("2", "1")))
+    assert _bus(doc).dispatch("cable.add", AddCablePayload(cable=crossed)).ok
+
+
+def test_a_board_command_cannot_leave_a_cable_to_nowhere() -> None:
+    """Delete the connector a cable is fitted to, or take its board out, and the cable would
+    reach nothing: both refused, naming the cable."""
+    from perfboard_studio.commands import (
+        AddCablePayload,
+        DeleteBoardPayload,
+        DeleteComponentPayload,
+        OnBoardPayload,
+        UnplaceComponentPayload,
+    )
+
+    doc = _system()
+    bus = _bus(doc)
+    assert bus.dispatch("cable.add", AddCablePayload(cable=_cable(doc))).ok
+    _, b = _ends(doc)
+    for type_, payload in (
+        ("component.delete", DeleteComponentPayload(id=b.connector)),
+        ("component.unplace", UnplaceComponentPayload(id=b.connector)),
+    ):
+        result = bus.dispatch("board.on", OnBoardPayload(board="b2", type=type_, payload=payload))
+        assert not result.ok and result.code == "cable-end" and "W1" in result.message, type_
+    gone = bus.dispatch("board.delete", DeleteBoardPayload(board="b2"))
+    assert not gone.ok and gone.code == "cable-end" and "W1" in gone.message
+
+
+def test_a_file_whose_cable_reaches_a_missing_part_is_refused() -> None:
+    from perfboard_studio.model import CableEnd
+
+    doc = _system()
+    broken = dataclasses.replace(doc, cables=(_cable(doc, id="cable-1", b=CableEnd("b2", "nothing")),))
+    result = persist.deserialize_document(persist.serialize_document(broken))
+    assert not result.ok and result.code == "unknown-reference"
