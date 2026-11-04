@@ -278,6 +278,31 @@ def test_no_section_repeats_a_subsection() -> None:
         assert not duplicates, f"[{section}] repeats {duplicates}; its headings are {names}"
 
 
+def test_no_section_repeats_an_entry() -> None:
+    """No ``- **…**`` headline twice in one section.
+
+    CHANGELOG.md merges as a union, which keeps both sides' lines: a rewrite of a section
+    that lands beside somebody's new entry next to the lines it removed keeps the old lines
+    as well. On 2026-11-04 the tidied Unreleased landed with the 31 entries it had folded
+    standing in Fixed again beside their replacements, twice. The same headline twice in a
+    section is what that looks like from the outside, so the gate says so before a release
+    page does.
+    """
+    current: str | None = None
+    headlines: dict[str, list[str]] = {}
+    for line in _changelog_lines():
+        if line.startswith("## "):
+            current = line[3:].strip()
+            headlines[current] = []
+        elif current is not None:
+            match = re.match(r"- \*\*(.+?)\*\*", line)
+            if match:
+                headlines[current].append(match.group(1))
+    for section, names in headlines.items():
+        repeated = sorted({name for name in names if names.count(name) > 1})
+        assert not repeated, f"[{section}] lists these entries twice: {repeated}"
+
+
 def test_subsections_are_in_keep_a_changelog_order() -> None:
     """Added before Changed before Fixed, as the format this file claims to follow says."""
     for section, names in _subsections().items():
