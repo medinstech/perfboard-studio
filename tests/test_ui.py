@@ -16486,6 +16486,40 @@ def test_a_shipped_example_opens_with_no_problem_and_its_bench_check_listed() ->
         _close(window)
 
 
+def test_a_bench_check_picked_in_the_drawer_rings_its_holes_over_the_parts() -> None:
+    """The drawer is how a bench check is gone to: picking it, or pointing at its row, brings
+    its rings up over the parts (``BoardScene.set_focused_holes``); picking nothing, or a
+    row with no holes, puts them back under (``tests/test_bench_rings.py``)."""
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY, ROLE_HOLES
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    document = persist.parse_document_or_throw(
+        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
+    )
+    window = _window_on(document)
+    try:
+        groups = [
+            window.drc_tree.topLevelItem(i).child(j)
+            for i in range(window.drc_tree.topLevelItemCount())
+            for j in range(window.drc_tree.topLevelItem(i).childCount())
+        ]
+        (bench,) = [g for g in groups if g.data(0, ROLE_FINDING_KEY) == "drc:solder-trace-proximity"]
+        leaf = bench.child(0)
+        while leaf.childCount():
+            leaf = leaf.child(0)
+        assert leaf.data(0, ROLE_HOLES)
+        assert window.scene._focus_item is None, "nothing picked, nothing over the parts"
+        window.drc_tree.setCurrentItem(leaf)
+        assert window.scene._focus_item is not None
+        assert {(h.col, h.row) for h in window.scene._focus_item.holes} == {
+            (h.col, h.row) for h in leaf.data(0, ROLE_HOLES)
+        }
+        window.drc_tree.setCurrentItem(bench.parent())
+        assert window.scene._focus_item is None
+    finally:
+        _close(window)
+
+
 
 def test_the_boards_features_are_one_line_until_asked_for(monkeypatch, tmp_path) -> None:
     """Open, the group was the whole panel with nothing selected -- every user's first view

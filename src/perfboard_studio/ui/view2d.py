@@ -132,6 +132,7 @@ from perfboard_studio.guide import (
     COLOR_BY_NET_CLASS,
     SIGNAL_COLORS,
     conductor_word,
+    is_bench_check,
     lead_end,
     lead_marker,
     net_colours,
@@ -313,6 +314,18 @@ ERROR_OUTLINE = QColor(CANVAS_ERROR)
 BODY_SHADOW = QColor("#95a3b8")
 BODY_SHADOW_EDGE = QColor("#6d7a8c")
 RISK_RING = QColor(CANVAS_ERROR)
+#: A finding the build guide checks at the bench (``guide.is_bench_check``) is not a problem,
+#: and its rings say so: in the dim colour the Problems drawer counts it in, and UNDER the
+#: parts, over the copper they are about (``BENCH_RING_Z``). In danger red over every part,
+#: two of them under a 5 mm LED read as an "8" on its dome, and told the opposite story from
+#: the bar beneath. Picked or hovered in the drawer, its rings come up over the parts in
+#: ``RISK_RING`` (``BoardScene.set_focused_holes``).
+BENCH_RING = QColor(THEME_TOKENS.text_secondary)
+#: Over the pads (-90) and the strips and spines (-84), under the parts (10) and the copper on
+#: the side looked at (40).
+BENCH_RING_Z = -80
+#: Over every part: where a finding's rings go while it is a problem, or picked.
+RISK_RING_Z = 60
 #: The ruler is drawn on the canvas, outside the board, so it is the theme's too.
 RULER_TEXT = QColor(THEME_TOKENS.canvas_ruler)
 RULER_TEXT_MAJOR = QColor(THEME_TOKENS.canvas_ruler_major)
@@ -1827,26 +1840,35 @@ class RatsnestItem(QGraphicsItem):
 
 
 class RiskRingsItem(QGraphicsItem):
-    """Red rings on the holes named by any ``solder-trace-proximity`` violation.
+    """Rings on the holes named by a ``solder-trace-proximity`` violation: red over the parts
+    for a problem, ``BENCH_RING`` under them for a bench check.
 
     A separate, cheap item rather than folded into the pad grid: it is rebuilt after
     every DRC run and there is no reason to disturb the pad-grid item (and its own
     exposedRect culling) to do it.
     """
 
-    def __init__(self, holes: Sequence[HoleCoord], board: Board, side: BoardSide) -> None:
+    def __init__(
+        self,
+        holes: Sequence[HoleCoord],
+        board: Board,
+        side: BoardSide,
+        colour: QColor = RISK_RING,
+        z: float = RISK_RING_Z,
+    ) -> None:
         super().__init__()
         self.holes = list(holes)
         self.board = board
         self.side = side
-        self.setZValue(60)
+        self.colour = QColor(colour)
+        self.setZValue(z)
 
     def boundingRect(self) -> QRectF:
         return _outline_rect(self.board).adjusted(-1, -1, 1, 1)
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         r = self.board.pad_diameter / 2 + 0.35
-        pen = QPen(RISK_RING, 0.3)
+        pen = QPen(self.colour, 0.3)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         for hole in self.holes:
@@ -4314,6 +4336,12 @@ class BoardScene(QGraphicsScene):
         #: The physical nets of the document last asked about -- see _conductors_on.
         self._physical_nets: tuple[PerfDocument, list[PhysicalNet]] | None = None
         self._risk_item: RiskRingsItem | None = None
+        self._bench_item: RiskRingsItem | None = None
+        self._focus_item: RiskRingsItem | None = None
+        #: The holes of the finding picked or hovered in the drawer, and the holes a bench
+        #: check rings -- see ``set_focused_holes``.
+        self._focused_holes: tuple[HoleCoord, ...] = ()
+        self._bench_holes: frozenset[tuple[int, int]] = frozenset()
         self._ratsnest_item: RatsnestItem | None = None
         self._ratsnest_links: tuple[RatsnestLink, ...] = ()
         self._armed_footprint: Footprint | None = None
@@ -4574,6 +4602,8 @@ class BoardScene(QGraphicsScene):
         )
         self.clear()
         self._risk_item = None
+        self._bench_item = None
+        self._focus_item = None
         self._ratsnest_item = None
         self._ghost = None
         # Destroyed with the rest and not re-created: the next drag move draws it again.
@@ -4834,26 +4864,57 @@ class BoardScene(QGraphicsScene):
 
     # -- DRC overlay --------------------------------------------------------
 
+    def set_focused_holes(self, holes: Sequence[HoleCoord]) -> None:
+        """The holes of the finding picked or hovered in the Problems drawer, or none.
+
+        A bench check's rings are under the parts and dim (``BENCH_RING``), which is right
+        for a finding that is not a problem and wrong for one somebody has just asked to
+        see: going to it must still show exactly which two pads. So those of its holes that
+        a bench check rings come up over the parts in ``RISK_RING`` while it is picked. A
+        problem's rings are already on top, so nothing else changes.
+        """
+        self._focused_holes = tuple(holes)
+        self._refresh_focus()
+
+    def _refresh_focus(self) -> None:
+        focus = [h for h in self._focused_holes if (h.col, h.row) in self._bench_holes]
+        self._focus_item = self._rings(self._focus_item, focus, RISK_RING, RISK_RING_Z)
+
+    def _rings(
+        self,
+        item: RiskRingsItem | None,
+        holes: Sequence[HoleCoord],
+        colour: QColor,
+        z: float,
+    ) -> RiskRingsItem | None:
+        """``item`` replaced by rings on ``holes``, or by nothing where there are none."""
+        if item is not None:
+            self.removeItem(item)
+        if not holes:
+            return None
+        rings = RiskRingsItem(holes, self.document.board, self.side, colour, z)
+        self.addItem(rings)
+        return rings
+
     def set_violations(self, violations: Sequence[DrcViolation]) -> None:
         self.violations = tuple(violations)
         self._apply_violations()
 
     def _apply_violations(self) -> None:
-        board = self.document.board
         risk_holes: list[HoleCoord] = []
+        bench_holes: list[HoleCoord] = []
         error_component_ids: set[str] = set()
         for v in self.violations:
             if v.rule == "solder-trace-proximity":
-                risk_holes.extend(v.holes)
+                # The drawer's own predicate, so the two cannot disagree about which is which.
+                (bench_holes if is_bench_check(v) else risk_holes).extend(v.holes)
             if v.severity == "error":
                 error_component_ids.update(v.component_ids)
 
-        if self._risk_item is not None:
-            self.removeItem(self._risk_item)
-            self._risk_item = None
-        if risk_holes:
-            self._risk_item = RiskRingsItem(risk_holes, board, self.side)
-            self.addItem(self._risk_item)
+        self._risk_item = self._rings(self._risk_item, risk_holes, RISK_RING, RISK_RING_Z)
+        self._bench_item = self._rings(self._bench_item, bench_holes, BENCH_RING, BENCH_RING_Z)
+        self._bench_holes = frozenset((hole.col, hole.row) for hole in bench_holes)
+        self._refresh_focus()
 
         for comp_id, item in self.component_items.items():
             item.set_error(comp_id in error_component_ids)

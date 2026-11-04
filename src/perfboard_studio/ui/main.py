@@ -2486,6 +2486,21 @@ class _FrameOnFirstSize(QObject):
         return False
 
 
+class _LeaveWatcher(QObject):
+    """Calls ``left`` when the pointer leaves ``widget``: the one thing a tree view has no
+    signal for, and what puts the drawer's hovered finding back to the picked one."""
+
+    def __init__(self, widget: QWidget, left: Callable[[], None]) -> None:
+        super().__init__(widget)
+        self._left = left
+        widget.installEventFilter(self)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.Leave:
+            self._left()
+        return False
+
+
 class MainWindow(QMainWindow):
     #: Where the selection was last made, so Properties describes that one
     #: (``_current_selection``).
@@ -8102,6 +8117,17 @@ class MainWindow(QMainWindow):
         self.drc_tree.setHeaderLabels([t("Problem"), t("Details")])
         self.drc_tree.setColumnWidth(0, 260)
         self.drc_tree.itemClicked.connect(self._on_drc_item_clicked)
+        # The finding picked, or the row under the pointer, brings a bench check's rings up
+        # over the parts (``BoardScene.set_focused_holes``); off the rows, back to the pick.
+        self.drc_tree.setMouseTracking(True)
+        self.drc_tree.currentItemChanged.connect(lambda now, _then: self._focus_drc_item(now))
+        self.drc_tree.itemEntered.connect(lambda item, _column: self._focus_drc_item(item))
+        self.drc_tree.viewportEntered.connect(
+            lambda: self._focus_drc_item(self.drc_tree.currentItem())
+        )
+        _LeaveWatcher(
+            self.drc_tree.viewport(), lambda: self._focus_drc_item(self.drc_tree.currentItem())
+        )
         self.drc_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.drc_tree.customContextMenuRequested.connect(self._on_drc_context_menu)
         layout.addWidget(self.drc_tree)
@@ -9526,6 +9552,11 @@ class MainWindow(QMainWindow):
         for index in range(self.drc_tree.topLevelItemCount()):
             walk(self.drc_tree.topLevelItem(index))
         return found
+
+    def _focus_drc_item(self, item: QTreeWidgetItem | None) -> None:
+        """The board shows the holes of the finding picked or hovered in the drawer."""
+        holes = item.data(0, ROLE_HOLES) if item is not None else None
+        self.scene.set_focused_holes(list(holes) if holes else [])
 
     def _on_drc_item_clicked(self, item: QTreeWidgetItem, _column: int) -> None:
         holes = item.data(0, ROLE_HOLES)

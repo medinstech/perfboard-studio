@@ -245,8 +245,10 @@ closed without a bump.
   would print on a label goes under its part instead, and only where both places are taken
   is it left to Properties.
 
-- **A 5 mm LED's leads no longer read as an "8".** Under its dome its two leads were full
-  rings, the die between them. They are small marks now, the + lead the bright one.
+- **A 5 mm LED no longer reads as an "8".** Under its dome its two leads were full rings,
+  the die between them; they are small marks now, the + lead the bright one. And a check
+  left for the bench drew two red rings over it: those rings are dim and under the parts
+  now, and come up in red while the finding is picked in the Problems drawer.
 - **Arrange the Sheet drew a supply's bar touching the wire beside it.** A ground or power
   bar reached a tenth of a grid from the next wire on every sheet with a rail, and read as
   joined to it; every bar now keeps about a millimetre clear. Zoomed out, a supply's name

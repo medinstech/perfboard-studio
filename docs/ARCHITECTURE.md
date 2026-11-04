@@ -2120,7 +2120,12 @@ Eight things follow, and each has a test:
   `_risks_by_conductor` and by the window's bar, list and Check step alike, and a test holds
   it to the guide's own isolation checks on every board in the repository, both ways. A
   shipped example, ne555-astable, opened on an orange "Problems 1" over a gap its guide
-  checks. The drawer still lists them, in a group of their own with the same go-to.
+  checks. The drawer still lists them, in a group of their own with the same go-to. The
+  board says the same by the same predicate: a bench check's rings (`view2d.BENCH_RING`) are
+  in the drawer's dim colour and under the parts, over the copper they are about, and come
+  up over the parts in red only while the finding is picked or its row is under the pointer
+  (`BoardScene.set_focused_holes`). Drawn red over everything, ne555-astable's two sat under
+  LED1's dome and read as an "8"; `tests/test_bench_rings.py` holds the dome clear.
 - **`_apply_default_sizes` caps and lets go**, from `showEvent` and through two turns of the
   event loop, because `resizeDocks` does nothing useful here — it divides the room the
   window HAS, and a window that is not on screen yet has none. A maximum is honoured at any
