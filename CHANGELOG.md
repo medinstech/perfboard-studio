@@ -236,7 +236,11 @@ closed without a bump.
 
 - **A 5 mm LED's leads no longer read as an "8".** Under its dome its two leads were full
   rings, the die between them. They are small marks now, the + lead the bright one.
-
+- **Arrange the Sheet drew a supply's bar touching the wire beside it.** A ground or power
+  bar reached a tenth of a grid from the next wire on every sheet with a rail, and read as
+  joined to it; every bar now keeps about a millimetre clear. Zoomed out, a supply's name
+  that would print across a wire moves beside its bar instead, so +12V and +5V can still be
+  told apart.
 - **The GY-521 was drawn as its own mirror image.** Its board stood below the header with
   VCC on the left, so a module laid over the outline put each pin in its mirror's hole, VCC
   in INT's. It now stands above the header, the same pins in the same holes. A module

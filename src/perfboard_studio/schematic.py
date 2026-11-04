@@ -471,6 +471,12 @@ class SchematicDrawing:
 #: as three wires that happen to be stacked.
 _GROUND_BARS: tuple[tuple[float, float], ...] = ((1.0, 0.0), (0.6, 0.35), (0.25, 0.70))
 
+#: How far a glyph's bars reach into the box the layout cleared for them, across the stub
+#: and along it alike: the ground's last bar sits at this much of the depth, and every bar
+#: is at most this much of the half-width. A bar reaching the box's edge ends a tenth of a
+#: grid from whatever runs in the next lane, and reads as touching it.
+RAIL_BAR_REACH = 0.7
+
 
 def symbol_at(drawing: SchematicDrawing, point: Point2) -> Symbol | None:
     """The symbol whose box contains ``point``, or None.
@@ -955,8 +961,11 @@ def rail_glyph_bars(rail: Rail) -> tuple[tuple[Point2, Point2], ...]:
     The bars stay inside the box the LAYOUT cleared -- ``RAIL_GLYPH_MM`` across the stub and
     ``RAIL_GLYPH_DEPTH_MM`` along it -- because that box is the only reason no wire is lying
     where they go; ``test_nothing_is_drawn_through_a_rail_glyph`` measures the layout half of
-    that bargain. They use 0.7 of the depth rather than all of it: the next lane is one track
-    pitch away and a bar reaching for it reads as touching.
+    that bargain. They use ``RAIL_BAR_REACH`` of the box rather than all of it, ACROSS the
+    stub as well as along it: the next lane is one track pitch away and a bar reaching for it
+    reads as touching. Across was the half left out -- a bar the box's whole width ended a
+    tenth of a grid from the wire in the next vertical track, on every sheet with a rail, and
+    J1's +V on the NE555 read as joined to the net beside it.
 
     ``direction`` is honoured rather than assumed. Every ground rail this module emits points
     down and every power rail up, because ``rail_channel`` picks the channel from the net
@@ -964,13 +973,14 @@ def rail_glyph_bars(rail: Rail) -> tuple[tuple[Point2, Point2], ...]:
     case anybody has seen.
     """
     x, y = rail.at.x, rail.at.y
+    across = RAIL_GLYPH_MM * RAIL_BAR_REACH
     if rail.net_class == "power":
-        return ((Point2(x=x - RAIL_GLYPH_MM, y=y), Point2(x=x + RAIL_GLYPH_MM, y=y)),)
+        return ((Point2(x=x - across, y=y), Point2(x=x + across, y=y)),)
     sign = 1.0 if rail.direction == "down" else -1.0
     return tuple(
         (
-            Point2(x=x - RAIL_GLYPH_MM * shrink, y=y + sign * RAIL_GLYPH_DEPTH_MM * step),
-            Point2(x=x + RAIL_GLYPH_MM * shrink, y=y + sign * RAIL_GLYPH_DEPTH_MM * step),
+            Point2(x=x - across * shrink, y=y + sign * RAIL_GLYPH_DEPTH_MM * step),
+            Point2(x=x + across * shrink, y=y + sign * RAIL_GLYPH_DEPTH_MM * step),
         )
         for shrink, step in _GROUND_BARS
     )

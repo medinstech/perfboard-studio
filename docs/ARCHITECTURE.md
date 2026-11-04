@@ -1457,6 +1457,24 @@ drawn from the same `SchematicDrawing`, and the schematic goldens hold them; not
 panel does moves them. Where a label IS -- and so whether two collide -- is the layout's,
 and is fixed there, never by drawing round it.
 
+What the panel may do is leave a label OUT at a zoom (`visible_labels`): text held at a
+readable size takes two or three times the room the layout gave it, so a label that would
+print on one already drawn waits until the view closes in.
+
+A supply's name is the one label the panel may also MOVE (`label_places`). The layout
+keeps it in the band over its bar, short of the next lane, but at the panel's smallest
+size it reached that lane, and the NE555 arranged printed VCC across the wire there. Left
+out wherever it met a wire, the NE555 showed none of its supply names at the zoom it opens
+at, and on a board with two rails the name is the only thing that tells them apart --
+orange says power, not which one. So where over its bar would meet a wire, a rail's stub
+or another label, it tries beside the bar to the right and the left, then the stub's side
+of the bar, and takes the first that is clear; only where none is does it wait. Measured
+on every example's arranged sheet at the zoom it opens at in a 1280 x 720 window, it shows
+as many names as before or more, none of them on a wire, and every supply is named:
+atmega328-relay 12 of 13 (8 before, some of them on wires), nano-relay 7 of 9 with both
++12V and +5V, the walkthrough NE555 4 of 4 (2). Drawing the name on a plate over the wire
+instead was rejected: a wire that vanishes under "VCC" reads as ending on it.
+
 **Past a fan-out, a net is said by name at its pins on the derived sheet too.** A net
 touching a symbol with `SchematicOptions.name_nets_at` pins or more (12: a
 microcontroller, a module) gets no trunk and no tracks: each pin it reaches gets a stub
@@ -1552,7 +1570,10 @@ Four decisions carry it, and each has a test that would notice it going:
   dot and reads correctly while a line lying along a ground symbol's bars does not.
   `RAIL_GLYPH_MM`/`RAIL_GLYPH_DEPTH_MM` are the layout's contract with the renderer — one
   fact, two consumers, and both must stay under `TRACK_PITCH_MM` or the guarantee needs
-  another allocation pass.
+  another allocation pass. The bars reach `RAIL_BAR_REACH` of that box, across the stub as
+  well as along it. Along was always so; across, a bar the box's whole width ended a tenth
+  of a grid from the wire in the next lane on every sheet with a rail, and read as joined
+  to it. `test_a_rail_glyph_keeps_clear_of_every_other_nets_line` holds the gap that leaves.
 - **A symbol gets its real shape only where something knows what every lead IS**, and the
   question is always whether the fact belongs to the PACKAGE or to the PART. Polarity is
   read from the pin NAMES with pin 1 as the cathode for an unnamed polarised part — the

@@ -8,6 +8,8 @@ the schematic goldens, are drawn from that and not from this.
 
 from __future__ import annotations
 
+import dataclasses
+import itertools
 import os
 from pathlib import Path
 
@@ -156,3 +158,58 @@ def test_close_enough_every_label_comes_back(name: str) -> None:
     kept = viewsch.visible_labels(drawing.labels, QTransform.fromScale(px, px), _sizes(px))
     named = [i for i, label in enumerate(drawing.labels) if label.kind != "pin"]
     assert sorted(kept) == named
+
+
+def _arranged(path: Path) -> SchematicDrawing:
+    doc = persist.parse_document_or_throw(path.read_text(encoding="utf-8"))
+    return build_schematic(dataclasses.replace(doc, sheet=(), sheet_wires=()), footprint_lookup())
+
+
+#: The zooms the examples' arranged sheets open at, fitted in a 1280 x 720 window (2.0 for
+#: atmega328-relay up to 4.1 for the NE555), and two closer in.
+FITTED_ZOOMS = (2.0, 2.7, 3.7, 4.1, 6.0, 10.0)
+
+
+@pytest.mark.parametrize("path", sorted(EXAMPLES.glob("*.perf")), ids=lambda path: path.stem)
+def test_zoomed_out_a_supply_name_moves_off_a_wire_rather_than_vanish(path: Path) -> None:
+    """The layout keeps a power rail's name in the band over its bar, short of the next
+    lane; held at a readable size zoomed out it reached into that lane, and the NE555
+    arranged had a VCC printed across the wire running there.
+
+    So at every zoom an example opens at, and a little closer: no supply name the panel
+    draws meets a wire or another label, wherever it was moved to -- and every supply on
+    the sheet is still named somewhere, because on a board with two rails (nano-relay's
+    +12V and +5V) the name is all that tells them apart. Leaving every name out that met a
+    wire showed none of the NE555's at the zoom it opens at."""
+    drawing = _arranged(path)
+    supplies = {label.text for label in drawing.labels if label.kind == "rail"}
+    for px in FITTED_ZOOMS:
+        transform = QTransform.fromScale(px, px)
+        sizes = _sizes(px)
+        places = viewsch.label_places(
+            drawing.labels, transform, sizes,
+            wires=[wire.path for wire in drawing.wires], rails=drawing.rails,
+        )
+        runs = [
+            transform.mapRect(QRectF(viewsch._point(p), viewsch._point(q)).normalized())
+            .adjusted(-0.5, -0.5, 0.5, 0.5)
+            for wire in drawing.wires
+            for p, q in itertools.pairwise(wire.path)
+        ]
+        plates = {}
+        for index, (device, alignment) in places.items():
+            label = drawing.labels[index]
+            size = sizes["net"] if label.kind in ("net", "rail") else sizes[label.kind]
+            plates[index] = label_plate_rect(
+                device, label.text, size, alignment, bold=label.kind in ("ref", "net")
+            )
+        for index, plate in plates.items():
+            if drawing.labels[index].kind != "rail":
+                continue
+            assert not any(plate.intersects(run) for run in runs), (drawing.labels[index].text, px)
+            others = [other for key, other in plates.items() if key != index]
+            assert not any(plate.intersects(other) for other in others), (
+                drawing.labels[index].text, px
+            )
+        named = {drawing.labels[index].text for index in places if drawing.labels[index].kind == "rail"}
+        assert named == supplies, (px, supplies - named)

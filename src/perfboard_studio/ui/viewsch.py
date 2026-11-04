@@ -39,6 +39,7 @@ be the one view that says nothing.
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -82,6 +83,8 @@ from perfboard_studio.schematic import (
     NET_LABEL_MM,
     PIN_LABEL_MM,
     PIN_PITCH_MM,
+    RAIL_BAR_REACH,
+    RAIL_GLYPH_MM,
     REF_LABEL_MM,
     VALUE_LABEL_MM,
     Annotation,
@@ -673,9 +676,20 @@ class SheetItem(QGraphicsItem):
             "pin": label_px(PIN_LABEL_MM, PIN_PX, scale),
         }
         pins_fit = pin_text_fits(scale, sizes["pin"])
-        shown = set(visible_labels(self.drawing.labels, painter.transform(), sizes))
+        places = label_places(
+            self.drawing.labels, painter.transform(), sizes,
+            wires=[wire.path for wire in self.drawing.wires], rails=self.drawing.rails,
+        )
+        back = painter.transform().inverted()[0]
         for index, label in enumerate(self.drawing.labels):
-            if label.kind != "pin" and index not in shown:
+            if label.kind != "pin" and index not in places:
+                continue
+            if label.kind == "rail":
+                device, alignment = places[index]
+                draw_outlined_label(
+                    painter, back.map(device), label.text, sizes["net"], alignment,
+                    bold=False, colour=QColor(SIGNAL), halo=QColor(TEXT_HALO),
+                )
                 continue
             if label.kind == "ref":
                 colour, size, bold = INK, sizes["ref"], True
@@ -711,10 +725,31 @@ LABEL_PRIORITY = {"ref": 0, "net": 1, "rail": 2, "value": 3}
 
 
 def visible_labels(
-    labels: Sequence[Label], transform: QTransform, sizes: dict[str, int]
+    labels: Sequence[Label],
+    transform: QTransform,
+    sizes: dict[str, int],
+    wires: Sequence[Sequence[Point2]] = (),
+    rails: Sequence[Rail] = (),
 ) -> list[int]:
     """The labels that can be drawn at this zoom without printing over one another, by
-    index into ``labels``.
+    index into ``labels`` -- ``label_places`` without the places."""
+    return sorted(label_places(labels, transform, sizes, wires, rails))
+
+
+#: How far a supply's name stands off its own glyph when it is moved beside it, in device
+#: pixels: past the plate's own padding (``scenetext._plate``), so the plate clears the bar.
+RAIL_NAME_GAP_PX = 6.0
+
+
+def label_places(
+    labels: Sequence[Label],
+    transform: QTransform,
+    sizes: dict[str, int],
+    wires: Sequence[Sequence[Point2]] = (),
+    rails: Sequence[Rail] = (),
+) -> dict[int, tuple[QPointF, Qt.AlignmentFlag]]:
+    """Where each label that can be drawn at this zoom goes: its anchor in DEVICE pixels
+    and ``draw_label``'s alignment, by index into ``labels``.
 
     The LAYOUT never overlaps two labels: each is placed clear of the others at its size on
     the sheet, and the exports draw them at that size. The panel cannot -- zoomed out, text
@@ -724,25 +759,91 @@ def visible_labels(
     any that would land on one already drawn; each comes back as the view closes in and
     there is room, and nothing on paper changes. Deterministic: same sheet, same zoom, same
     labels.
+
+    A supply's name must not print on a WIRE either (``wires``, the drawing's), nor on a
+    rail's stub or bars (``rails``). The layout keeps it inside the band over its bar, which
+    stops short of the next lane; held at a readable size it reached into that lane, and the
+    NE555 arranged had a VCC printed across the wire running there. So where it is drawn
+    over its bar would meet one, it tries its other places in ``_rail_name_places`` order
+    and takes the first that is clear, and only where none is does it wait for a closer
+    zoom. Two rails on one board are told apart by nothing else -- orange says power, not
+    which one. A net's own name sits on its own wire, on a flag, so it is not asked.
     """
     order = sorted(
         (index for index, label in enumerate(labels) if label.kind in LABEL_PRIORITY),
         key=lambda index: (LABEL_PRIORITY[labels[index].kind], index),
     )
-    kept: list[int] = []
+    # Each line on screen with the rail it belongs to, None for a wire: a name over its own
+    # bar is where the layout put it, and its own glyph does not count against it there.
+    lines: list[tuple[Rail | None, Sequence[Point2]]] = [(None, path) for path in wires]
+    for rail in rails:
+        lines.append((rail, rail.path))
+        lines.extend((rail, bar) for bar in rail_glyph_bars(rail))
+    runs = [
+        (owner, transform.mapRect(QRectF(_point(p), _point(q)).normalized()).adjusted(-1, -1, 1, 1))
+        for owner, path in lines
+        for p, q in itertools.pairwise(path)
+    ]
+    kept: dict[int, tuple[QPointF, Qt.AlignmentFlag]] = {}
     taken: list[QRectF] = []
     for index in order:
         label = labels[index]
         size = sizes["net"] if label.kind in ("net", "rail") else sizes[label.kind]
-        rect = label_plate_rect(
-            transform.map(_point(label.at)), label.text, size, label_alignment(label),
-            bold=label.kind in ("ref", "net"),
-        )
-        if any(rect.intersects(other) for other in taken):
-            continue
-        kept.append(index)
-        taken.append(rect)
+        bold = label.kind in ("ref", "net")
+        places = [(transform.map(_point(label.at)), label_alignment(label))]
+        own: Rail | None = None
+        if label.kind == "rail":
+            own, places = _rail_name_places(label, places[0], transform, rails)
+        for place, (device, alignment) in enumerate(places):
+            rect = label_plate_rect(device, label.text, size, alignment, bold=bold)
+            if label.kind == "rail" and any(
+                rect.intersects(run) for owner, run in runs
+                if place or owner is None or owner is not own
+            ):
+                continue
+            if any(rect.intersects(other) for other in taken):
+                continue
+            kept[index] = (device, alignment)
+            taken.append(rect)
+            break
     return kept
+
+
+def _rail_name_places(
+    label: Label,
+    over: tuple[QPointF, Qt.AlignmentFlag],
+    transform: QTransform,
+    rails: Sequence[Rail],
+) -> tuple[Rail | None, list[tuple[QPointF, Qt.AlignmentFlag]]]:
+    """A supply's name's glyph and places, the one the layout gave it first: past the end of the bar
+    (where the layout put it), then beside the bar to the right and to the left, then on
+    the stub's side of the bar, right of the stub and left of it.
+
+    The glyph is the rail whose name this is, at the label's x -- ``_rail_names`` puts the
+    name on the bar's centre line -- and nearest in y. A label no rail owns keeps its one
+    place.
+    """
+    own = [
+        rail for rail in rails
+        if rail.net_name == label.text and abs(rail.at.x - label.at.x) < 1e-6
+    ]
+    if not own:
+        return None, [over]
+    rail = min(own, key=lambda rail: abs(rail.at.y - label.at.y))
+    bar = transform.map(_point(rail.at))
+    half = transform.map(QPointF(rail.at.x + RAIL_GLYPH_MM * RAIL_BAR_REACH, rail.at.y)).x() - bar.x()
+    gap = RAIL_NAME_GAP_PX
+    # The stub is below the bar for a rail pointing up, and above it for one pointing down.
+    stub_side = Qt.AlignmentFlag.AlignBottom if rail.direction == "up" else Qt.AlignmentFlag.AlignTop
+    step = gap if rail.direction == "up" else -gap
+    middle = Qt.AlignmentFlag.AlignVCenter
+    return rail, [
+        over,
+        (QPointF(bar.x() + half + gap, bar.y()), Qt.AlignmentFlag.AlignRight | middle),
+        (QPointF(bar.x() - half - gap, bar.y()), Qt.AlignmentFlag.AlignLeft | middle),
+        (QPointF(bar.x() + gap, bar.y() + step), Qt.AlignmentFlag.AlignRight | stub_side),
+        (QPointF(bar.x() - gap, bar.y() + step), Qt.AlignmentFlag.AlignLeft | stub_side),
+    ]
 
 
 def pin_text_fits(px_per_mm: float, pin_px: int) -> bool:

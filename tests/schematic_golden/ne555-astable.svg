@@ -23,21 +23,21 @@
 <polyline points="63.5,96.52 55.88,96.52 55.88,81.28" fill="none" stroke="#111111" stroke-width="0.25"/>
 <polyline points="53.34,81.28 55.88,81.28" fill="none" stroke="#111111" stroke-width="0.25"/>
 <polyline points="50.8,55.88 58.42,55.88 58.42,43.18" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="56.134" y1="43.18" x2="60.706" y2="43.18" stroke="#111111" stroke-width="0.35"/>
+<line x1="56.82" y1="43.18" x2="60.02" y2="43.18" stroke="#111111" stroke-width="0.35"/>
 <polyline points="63.5,63.5 53.34,63.5 53.34,40.64" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="51.054" y1="40.64" x2="55.626" y2="40.64" stroke="#111111" stroke-width="0.35"/>
+<line x1="51.74" y1="40.64" x2="54.94" y2="40.64" stroke="#111111" stroke-width="0.35"/>
 <polyline points="124.46,60.96 116.84,60.96 116.84,40.64" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="114.554" y1="40.64" x2="119.126" y2="40.64" stroke="#111111" stroke-width="0.35"/>
+<line x1="115.24" y1="40.64" x2="118.44" y2="40.64" stroke="#111111" stroke-width="0.35"/>
 <polyline points="20.32,55.88 15.24,55.88 15.24,81.28" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="12.954" y1="81.28" x2="17.526" y2="81.28" stroke="#111111" stroke-width="0.35"/><line x1="13.868" y1="82.08" x2="16.612" y2="82.08" stroke="#111111" stroke-width="0.35"/><line x1="14.668" y1="82.88" x2="15.811" y2="82.88" stroke="#111111" stroke-width="0.35"/>
+<line x1="13.64" y1="81.28" x2="16.84" y2="81.28" stroke="#111111" stroke-width="0.35"/><line x1="14.28" y1="82.08" x2="16.2" y2="82.08" stroke="#111111" stroke-width="0.35"/><line x1="14.84" y1="82.88" x2="15.64" y2="82.88" stroke="#111111" stroke-width="0.35"/>
 <polyline points="83.82,27.94 86.36,27.94 86.36,40.64" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="84.074" y1="40.64" x2="88.646" y2="40.64" stroke="#111111" stroke-width="0.35"/><line x1="84.988" y1="41.44" x2="87.732" y2="41.44" stroke="#111111" stroke-width="0.35"/><line x1="85.788" y1="42.24" x2="86.931" y2="42.24" stroke="#111111" stroke-width="0.35"/>
+<line x1="84.76" y1="40.64" x2="87.96" y2="40.64" stroke="#111111" stroke-width="0.35"/><line x1="85.4" y1="41.44" x2="87.32" y2="41.44" stroke="#111111" stroke-width="0.35"/><line x1="85.96" y1="42.24" x2="86.76" y2="42.24" stroke="#111111" stroke-width="0.35"/>
 <polyline points="83.82,96.52 86.36,96.52 86.36,106.68" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="84.074" y1="106.68" x2="88.646" y2="106.68" stroke="#111111" stroke-width="0.35"/><line x1="84.988" y1="107.48" x2="87.732" y2="107.48" stroke="#111111" stroke-width="0.35"/><line x1="85.788" y1="108.28" x2="86.931" y2="108.28" stroke="#111111" stroke-width="0.35"/>
+<line x1="84.76" y1="106.68" x2="87.96" y2="106.68" stroke="#111111" stroke-width="0.35"/><line x1="85.4" y1="107.48" x2="87.32" y2="107.48" stroke="#111111" stroke-width="0.35"/><line x1="85.96" y1="108.28" x2="86.76" y2="108.28" stroke="#111111" stroke-width="0.35"/>
 <polyline points="93.98,96.52 88.9,96.52 88.9,109.22" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="86.614" y1="109.22" x2="91.186" y2="109.22" stroke="#111111" stroke-width="0.35"/><line x1="87.528" y1="110.02" x2="90.272" y2="110.02" stroke="#111111" stroke-width="0.35"/><line x1="88.329" y1="110.82" x2="89.472" y2="110.82" stroke="#111111" stroke-width="0.35"/>
+<line x1="87.3" y1="109.22" x2="90.5" y2="109.22" stroke="#111111" stroke-width="0.35"/><line x1="87.94" y1="110.02" x2="89.86" y2="110.02" stroke="#111111" stroke-width="0.35"/><line x1="88.5" y1="110.82" x2="89.3" y2="110.82" stroke="#111111" stroke-width="0.35"/>
 <polyline points="124.46,66.04 119.38,66.04 119.38,83.82" fill="none" stroke="#111111" stroke-width="0.25"/>
-<line x1="117.094" y1="83.82" x2="121.666" y2="83.82" stroke="#111111" stroke-width="0.35"/><line x1="118.008" y1="84.62" x2="120.752" y2="84.62" stroke="#111111" stroke-width="0.35"/><line x1="118.808" y1="85.42" x2="119.951" y2="85.42" stroke="#111111" stroke-width="0.35"/>
+<line x1="117.78" y1="83.82" x2="120.98" y2="83.82" stroke="#111111" stroke-width="0.35"/><line x1="118.42" y1="84.62" x2="120.34" y2="84.62" stroke="#111111" stroke-width="0.35"/><line x1="118.98" y1="85.42" x2="119.78" y2="85.42" stroke="#111111" stroke-width="0.35"/>
 <circle cx="55.88" cy="38.1" r="0.6" fill="#111111"/>
 <circle cx="53.34" cy="38.1" r="0.6" fill="#111111"/>
 <circle cx="86.36" cy="45.72" r="0.6" fill="#111111"/>

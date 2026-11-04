@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import dataclasses
 import difflib
+import itertools
 import os
 from pathlib import Path
 from typing import get_args
@@ -68,6 +69,7 @@ from perfboard_studio.schematic import (
     NET_LABEL_MM,
     NO_CONNECT_MM,
     PIN_PITCH_MM,
+    RAIL_BAR_REACH,
     RAIL_GLYPH_DEPTH_MM,
     RAIL_GLYPH_MM,
     REF_LABEL_MM,
@@ -78,6 +80,7 @@ from perfboard_studio.schematic import (
     SchematicOptions,
     Symbol,
     SymbolKind,
+    _net_name_box,
     _PinSpec,
     _relay_sides,
     _split_tall_layers,
@@ -85,6 +88,7 @@ from perfboard_studio.schematic import (
     build_schematic,
     pin_at,
     pin_position,
+    rail_glyph_bars,
     snap_to_grid,
     symbol_at,
     symbol_kind_for,
@@ -1781,3 +1785,70 @@ def test_with_no_threshold_every_net_is_wired() -> None:
     longest = max(len(wire.path) for wire in wired.wires)
     assert longest > 2
     assert len([w for w in wired.wires if len(w.path) > 2]) > len([w for w in named.wires if len(w.path) > 2])
+
+
+def _arranged(path: Path) -> SchematicDrawing:
+    """The sheet as Arrange the Sheet draws it: whatever was placed or drawn, forgotten."""
+    return build_schematic(dataclasses.replace(load(path), sheet=(), sheet_wires=()), REGISTRY)
+
+
+def _lines_of(drawing: SchematicDrawing) -> list[tuple[str, tuple[Point2, ...]]]:
+    """Every line on a sheet with its net: wires, and each rail's stub and bars."""
+    lines = [(wire.net_id, wire.path) for wire in drawing.wires]
+    for rail in drawing.rails:
+        lines.append((rail.net_id, rail.path))
+        lines.extend((rail.net_id, bar) for bar in rail_glyph_bars(rail))
+    return lines
+
+
+def _gap(a: tuple[Point2, Point2], b: tuple[Point2, Point2]) -> float:
+    """How far apart two axis-aligned segments are, 0 where they meet."""
+    (p, q), (r, s) = a, b
+    dx = max(0.0, max(min(p.x, q.x), min(r.x, s.x)) - min(max(p.x, q.x), max(r.x, s.x)))
+    dy = max(0.0, max(min(p.y, q.y), min(r.y, s.y)) - min(max(p.y, q.y), max(r.y, s.y)))
+    return float((dx * dx + dy * dy) ** 0.5)
+
+
+@pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
+def test_a_rail_glyph_keeps_clear_of_every_other_nets_line(path: Path) -> None:
+    """Nothing is drawn THROUGH a glyph (the test above); this is how close one may come.
+
+    The bars reached the whole width of the box the layout clears, so the wire in the next
+    vertical track passed a tenth of a grid from a bar's end -- on every sheet with a rail,
+    and J1's +V on the NE555 arranged read as joined to N4 beside it. They reach
+    ``RAIL_BAR_REACH`` of the box across now, as they always did along it, which leaves a
+    pitch less that much of the box between a bar and any other net's line.
+    """
+    drawing = _arranged(path)
+    least = TRACK_PITCH_MM - RAIL_BAR_REACH * max(RAIL_GLYPH_MM, RAIL_GLYPH_DEPTH_MM)
+    lines = _lines_of(drawing)
+    for rail in drawing.rails:
+        for bar in rail_glyph_bars(rail):
+            for net, line in lines:
+                if net == rail.net_id:
+                    continue
+                for segment in itertools.pairwise(line):
+                    assert _gap(bar, segment) >= least - 1e-6, (
+                        f"the {rail.net_name} glyph at {rail.at.x:.2f},{rail.at.y:.2f} is "
+                        f"{_gap(bar, segment) / GRID_MM:.2f} grid from a line of another net"
+                    )
+
+
+@pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
+def test_a_supplys_name_prints_on_no_line(path: Path) -> None:
+    """On paper, at the size the layout reserved: a power rail's name over its bar meets no
+    line of any net. (On screen, where text is held at a readable size, the panel leaves a
+    name out while it would -- ``tests/test_sheet_look.py``.)"""
+    drawing = _arranged(path)
+    lines = _lines_of(drawing)
+    for label in drawing.labels:
+        if label.kind != "rail":
+            continue
+        x0, y0, x1, y1 = _net_name_box(label)
+        for _net, line in lines:
+            for p, q in itertools.pairwise(line):
+                meets = (
+                    min(p.x, q.x) <= x1 and max(p.x, q.x) >= x0
+                    and min(p.y, q.y) <= y1 and max(p.y, q.y) >= y0
+                )
+                assert not meets, f"{label.text} at {label.at} prints on a line"
