@@ -27,7 +27,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, TypeVar, cast
 
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QAction, QKeyEvent
@@ -112,6 +112,10 @@ class InspectorHooks:
     design_board: Callable[[], object]
     #: Another package for a part still only in the design: the library, in a dialog.
     change_design_part: Callable[[str], object]
+    #: Whether the board's holes and connectors open as they did last time, and where to
+    #: say they were opened or closed: asked when the board's editor is first built.
+    features_open: Callable[[], bool] = lambda: False
+    features_opened: Callable[[bool], object] = lambda _on: None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1644,8 +1648,16 @@ class _Summary(QWidget):
 # -- the inspector ----------------------------------------------------------------------------
 
 
+_Page = TypeVar("_Page", bound=QWidget)
+
+
 class Inspector(QWidget):
-    """The editors, one shown at a time, for whatever the panel says is selected."""
+    """The editors, one shown at a time, for whatever the panel says is selected.
+
+    EACH EDITOR IS BUILT THE FIRST TIME IT IS ASKED FOR. Built together, the eleven of them
+    were 120 ms of every start -- the part editor alone 40 -- for editors most sessions
+    never open, and the start was 800 ms where 0.22.0's was 580 (ship's frozen-build
+    measurement). Each is a property that builds its page into the column on first use."""
 
     def __init__(
         self,
@@ -1660,33 +1672,75 @@ class Inspector(QWidget):
         self.hooks = hooks
         self._document: PerfDocument | None = None
         self.selection = NOTHING
-        self.board_editor = _BoardEditor(self)
-        self.part_editor = _PartEditor(self, actions)
-        self.design_part_editor = _DesignPartEditor(self, actions)
-        self.parts_editor = _PartsEditor(self, actions)
-        self.placing_editor = _PlacingEditor(self)
-        self.net_editor = _NetEditor(self, actions)
-        self.board_note_editor = _BoardNoteEditor(self, actions)
-        self.sheet_note_editor = _SheetNoteEditor(self)
-        self.conductor_editor = _ConductorEditor(self, actions)
-        self.feature_editor = FeatureEditor(self.dispatch)
-        self.summary = _Summary()
+        self._actions = actions
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         # Stacked by hand rather than in a QStackedWidget, which is as tall as its tallest
         # page: the board's three fields would sit over the part editor's empty height.
-        self._pages: tuple[QWidget, ...] = (
-            self.board_editor, self.part_editor, self.design_part_editor,
-            self.parts_editor, self.placing_editor,
-            self.net_editor, self.board_note_editor, self.sheet_note_editor,
-            self.conductor_editor, self.feature_editor, self.summary,
-        )
-        for page in self._pages:
-            layout.addWidget(page)
-            page.hide()
+        self._column = layout
+        self._built: dict[str, QWidget] = {}
+        self.summary = _Summary()
+        layout.addWidget(self.summary)
+        self.summary.hide()
         layout.addStretch(1)
         self.shown: QWidget = self.summary
+
+    def _page(self, key: str, make: Callable[[], _Page]) -> _Page:
+        """The editor ``key``, built and put in the column, hidden, the first time."""
+        page = self._built.get(key)
+        if page is None:
+            page = make()
+            self._column.insertWidget(self._column.count() - 1, page)
+            page.hide()
+            self._built[key] = page
+        return cast(_Page, page)
+
+    def _board_editor(self) -> _BoardEditor:
+        editor = _BoardEditor(self)
+        editor.features.set_open(self.hooks.features_open())
+        editor.features.opened.connect(self.hooks.features_opened)
+        return editor
+
+    @property
+    def board_editor(self) -> _BoardEditor:
+        return self._page("board", self._board_editor)
+
+    @property
+    def part_editor(self) -> _PartEditor:
+        return self._page("part", lambda: _PartEditor(self, self._actions))
+
+    @property
+    def design_part_editor(self) -> _DesignPartEditor:
+        return self._page("design-part", lambda: _DesignPartEditor(self, self._actions))
+
+    @property
+    def parts_editor(self) -> _PartsEditor:
+        return self._page("parts", lambda: _PartsEditor(self, self._actions))
+
+    @property
+    def placing_editor(self) -> _PlacingEditor:
+        return self._page("placing", lambda: _PlacingEditor(self))
+
+    @property
+    def net_editor(self) -> _NetEditor:
+        return self._page("net", lambda: _NetEditor(self, self._actions))
+
+    @property
+    def board_note_editor(self) -> _BoardNoteEditor:
+        return self._page("board-note", lambda: _BoardNoteEditor(self, self._actions))
+
+    @property
+    def sheet_note_editor(self) -> _SheetNoteEditor:
+        return self._page("sheet-note", lambda: _SheetNoteEditor(self))
+
+    @property
+    def conductor_editor(self) -> _ConductorEditor:
+        return self._page("conductor", lambda: _ConductorEditor(self, self._actions))
+
+    @property
+    def feature_editor(self) -> FeatureEditor:
+        return self._page("feature", lambda: FeatureEditor(self.dispatch))
 
     def dispatch(self, name: str, payload: object) -> str | None:
         """One command; why it was refused, in the window's language, or None."""
@@ -1776,22 +1830,18 @@ class Inspector(QWidget):
         the part's Reference, a double-click its Value, Rename Board the board's Name.
         False when the editor showing has no such field."""
         fields: dict[str, QLineEdit] = {}
-        if self.shown is self.part_editor:
-            fields = {"ref": self.part_editor.ref, "value": self.part_editor.value}
-        elif self.shown is self.design_part_editor:
-            fields = {"ref": self.design_part_editor.ref, "value": self.design_part_editor.value}
-        elif self.shown is self.parts_editor:
-            fields = {"value": self.parts_editor.value}
-        elif self.shown is self.placing_editor:
-            fields = {"value": self.placing_editor.value}
-        elif self.shown is self.net_editor:
-            fields = {"name": self.net_editor.name}
-        elif self.shown is self.board_note_editor:
-            fields = {"text": self.board_note_editor.text}
-        elif self.shown is self.sheet_note_editor:
-            fields = {"text": self.sheet_note_editor.text}
-        elif self.shown is self.board_editor:
-            fields = {"name": self.board_editor.name}
+        shown = self.shown
+        # Matched on its type, so asking builds no editor that is not showing.
+        if isinstance(shown, (_PartEditor, _DesignPartEditor)):
+            fields = {"ref": shown.ref, "value": shown.value}
+        elif isinstance(shown, (_PartsEditor, _PlacingEditor)):
+            fields = {"value": shown.value}
+        elif isinstance(shown, _NetEditor):
+            fields = {"name": shown.name}
+        elif isinstance(shown, (_BoardNoteEditor, _SheetNoteEditor)):
+            fields = {"text": shown.text}
+        elif isinstance(shown, _BoardEditor):
+            fields = {"name": shown.name}
         field = fields.get(name)
         if field is None:
             return False

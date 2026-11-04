@@ -2491,7 +2491,9 @@ class MainWindow(QMainWindow):
     #: (``_current_selection``).
     _selection_from: Literal["board", "sheet", "nets"]
 
-    def __init__(self, document: PerfDocument, path: Path | None = None) -> None:
+    def __init__(
+        self, document: PerfDocument, path: Path | None = None, *, defer_properties: bool = False
+    ) -> None:
         super().__init__()
         # Before any field is made: a widget takes its locale when it is created. And the
         # window's OWN locale too: it was made, under the machine's, before this line ran,
@@ -2502,6 +2504,10 @@ class MainWindow(QMainWindow):
         self.lookup = footprint_lookup()
         self.side: BoardSide = "top"
         self.current_path = path
+        #: Properties filled after the window is up rather than while it is built
+        #: (``_fill_properties``); until the end of this method, not even on demand.
+        self._defer_properties = defer_properties
+        self._constructing = True
         self.bus = self._new_bus(document)
         self._unsubscribe: Any = None
         self._last_drc_ms = 0.0
@@ -2785,6 +2791,9 @@ class MainWindow(QMainWindow):
             text, _problem = read_document_text(self.current_path)
             self._disk_text = text
             self._watch_current_path()
+        self._constructing = False
+        if self._defer_properties:
+            QTimer.singleShot(0, self._fill_properties)
 
     def start_tour(self) -> None:
         """The getting-started tour (ui/tour.py), on the example that is drawn and not built.
@@ -8179,6 +8188,10 @@ class MainWindow(QMainWindow):
                 change_part=lambda component_id: self.on_change_part(component_id),
                 design_board=lambda: self.on_design_board(),
                 change_design_part=lambda part_id: self.on_schematic_part_properties(part_id),
+                # The board's holes and connectors: closed to one line unless somebody
+                # opened them, remembered as the window's other view state is.
+                features_open=lambda: _stored_bool(app_settings(), FEATURES_OPEN_KEY, False),
+                features_opened=lambda on: app_settings().setValue(FEATURES_OPEN_KEY, on),
             ),
             InspectorActions(
                 route_selected=self.act_route_selected,
@@ -8196,12 +8209,23 @@ class MainWindow(QMainWindow):
         self.placing_value = self.inspector.placing_editor.value
         self.placing_value.textChanged.connect(self._on_placement_value_changed)
         self.properties.refresh(self.bus.document)
+        self._properties_filled = False
+        if not self._defer_properties:
+            self._fill_properties()
+
+    def _fill_properties(self) -> None:
+        """Put the Inspector in Properties: the board's editor built and loaded, the
+        panel's selection shown in it.
+
+        AFTER THE WINDOW IS ON SCREEN at a real start (``defer_properties``, by a zero
+        timer at the end of ``__init__``), because it was 50 to 80 ms of the first frame
+        on its own -- and a second earlier if anything asks first: ``_refresh_properties``
+        fills it before it says a selection, so nothing ever describes a selection to the
+        placeholder."""
+        if self._properties_filled:
+            return
+        self._properties_filled = True
         self.properties.set_content(self.inspector)
-        # The board's holes and connectors: closed to one line unless somebody opened them,
-        # remembered as the window's other view state is.
-        features = self.inspector.board_editor.features
-        features.set_open(_stored_bool(app_settings(), FEATURES_OPEN_KEY, False))
-        features.opened.connect(lambda on: app_settings().setValue(FEATURES_OPEN_KEY, on))
 
     def _current_selection(self) -> Selection:
         """What is selected, said once for the Properties panel: a part armed for placing
@@ -8285,6 +8309,8 @@ class MainWindow(QMainWindow):
             return
         panel = getattr(self, "properties", None)
         if panel is not None and hasattr(self, "scene"):
+            if not self._properties_filled and not self._constructing:
+                self._fill_properties()
             panel.set_selection(self._current_selection())
 
     def _on_drc_filter_changed(self, _text: str) -> None:
@@ -13807,7 +13833,9 @@ def main() -> int:
             DocumentMeta(name=UNTITLED_NAME, created=_now_iso(), modified=_now_iso())
         )
 
-    window = MainWindow(document, path)
+    # Properties filled after the window is up (``_fill_properties``): 50 to 80 ms of
+    # the first frame, for a panel Home covers on a first start anyway.
+    window = MainWindow(document, path, defer_properties=True)
     # Before show(): Home, when it is offered, is the first thing on screen.
     window.offer_home()
     window.show()

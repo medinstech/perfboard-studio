@@ -17019,3 +17019,45 @@ def test_an_unnamed_boards_name_field_says_untitled_in_the_windows_language() ->
         assert field.text() == "Zamanlayıcı"
     finally:
         _close(window)
+
+
+def test_the_inspector_builds_an_editor_the_first_time_it_is_shown() -> None:
+    """Built together, the eleven editors were 120 ms of every start for editors most
+    sessions never open. A window starts with the board's and the placing value's only."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        built = set(window.inspector._built)
+        assert built <= {"board", "placing"}, built
+        part = next(c for c in window.bus.document.components if c.ref == "R1")
+        window.scene.select_components([part.id])
+        window._selection_from = "board"
+        window._refresh_properties()
+        assert "part" in window.inspector._built
+        assert window.inspector.shown is window.inspector.part_editor
+        assert window.inspector.focus_field("ref")
+    finally:
+        _close(window)
+
+
+def test_a_real_start_fills_properties_once_the_window_is_up() -> None:
+    """At a real start Properties is filled by a zero timer after the window is shown: it
+    was 50 to 80 ms of the first frame. Anything that asks first fills it then."""
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_example_document("ne555-astable"), defer_properties=True)
+    try:
+        assert not window._properties_filled
+        assert window.properties.content is not window.inspector
+        QApplication.processEvents()
+        assert window._properties_filled and window.properties.content is window.inspector
+        assert window.inspector.shown is window.inspector.board_editor
+    finally:
+        _close(window)
+
+    window = MainWindow(_example_document("ne555-astable"), defer_properties=True)
+    try:
+        window.scene.clearSelection()
+        window._refresh_properties()
+        assert window.properties.content is window.inspector, "asked first, filled then"
+    finally:
+        _close(window)
