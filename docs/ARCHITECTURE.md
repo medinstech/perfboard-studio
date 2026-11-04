@@ -2930,3 +2930,40 @@ before the first request, so `updater.stored_preference` has **three** states: `
 board rather than a dialog, because a modal over a board somebody is routing gets
 dismissed unread; Hide remembers **that version only**, so the next release is still
 announced.
+
+## Several boards are one document, and each is seen alone
+
+A system -- a supply board, a controller board and the cable between them -- is ONE `.perf`:
+`doc.boards` holds every board after the first, and the design (`parts`, `nets`, the sheet)
+is shared by all of them, as one circuit drawn once. Not a folder of `.perf` files with a
+harness file beside them, which was the other option weighed: there the design is split
+before it is drawn, a net that crosses two boards is two nets and a line in a third file,
+and adding a cable is three documents, three buses and no single undo step. The user chose
+one document from the two, rendered as mockups, on 2026-11-04.
+
+**The first board keeps the fields it has always had.** `board`, `components`,
+`conductors`, `cuts`, `mountingHoles`, `edgeConnectors`, `boardNotes`, `heightLimitMm` and
+`bodyClearanceMm` at the top of the file are the first board, exactly as before, and
+`boards` is omitted when it is empty (the `stripAxis` rule). So every single-board file,
+all fifteen golden fixtures and every example are byte for byte what they were, and
+`DOCUMENT_FORMAT_VERSION` does not move. An `ExtraBoard` carries the same fields under an
+`id` and a `name`, and which board a part is on is which list holds it -- no per-part field,
+so no single-board file grows one. The first board's id is `system.FIRST_BOARD`, which no
+extra board may take.
+
+**Each board is seen alone.** The engine reads `doc.board`, `doc.components` and
+`doc.conductors` some six hundred times, from DRC to the router, the placer, stripboard, the
+guide, both renderers and the STEP export, and every one of them is right to assume ONE
+board. Teaching each of them "which board?" would put the differential proof at risk in
+every one. Instead `system.board_document(doc, board_id)` returns the single-board document
+they already understand -- that board's own fields, the shared design, and no other board --
+and `system.merge_board(doc, board_id, seen)` writes a changed view back: that board's fields
+from the view, the shared design from the view (a part placed on that board leaves
+`doc.parts`), every other board untouched. `test_system.py` holds the round trip exact for
+every board of a document, and holds a change to one board to leave the others as they were.
+
+**One id space, one set of references.** Component, conductor and part ids are unique
+across the whole document and references across every board and the design, because a net
+node is a `(ref, pin)` and has to name one pin in the system. `persist` refuses a
+duplicated id or board id at load, as it does on one board; a duplicated reference is a
+warning, as it is on one board.
