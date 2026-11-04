@@ -133,8 +133,10 @@ closed without a bump.
   encoder, the LCD1602 with its I2C backpack, the DS3231 clock (ZS-042), the MAX7219 8 x 8
   matrix, the TM1637 four-digit display, a WS2812B strip and a micro SD card module. Each one
   goes on the board as the header its cable plugs into, with the pins named as the module
-  names them. The build guide says the module is not on the board and lists its leads pin by
-  pin, and so does it now for the 4x4 keypad and the hobby servo.
+  names them, and its value is what it is sold as (KY-040, TM1637) so it reads the same in
+  either language. The build guide says the module is not on the board and lists its leads
+  pin by pin, in place of the numbered holes and the + lead's polarity line, and so does it
+  now for the 4x4 keypad and the hobby servo.
 - **The HC-SR501 PIR motion sensor, drawn as itself.** It goes on the board on its three pins,
   VCC, OUT and GND. Its Fresnel lens is drawn with its square foot and its dome, with an M2
   hole at each end of its board. Each is measured: the board, the holes and the lens's width

@@ -45,6 +45,7 @@ from .breadboard import has_breadboard_pattern, is_breadboard, is_solderable_bre
 from .drc import MATERIAL_LABELS
 from .geometry import board_size_mm, format_hole, holeless_positions
 from .guide import (
+    JSON_OMITTED_AT_DEFAULT,
     TEMPLATE_MARGIN_MM,
     WIRE_INK,
     Checkpoint,
@@ -139,7 +140,11 @@ def _plain(value: Any, *, board: Board | None) -> Any:
     if isinstance(value, HoleCoord):
         return {"col": value.col, "row": value.row, "ref": format_hole(value, board)}
     if is_dataclass(value) and not isinstance(value, type):
-        return {f.name: _plain(getattr(value, f.name), board=board) for f in fields(value)}
+        return {
+            f.name: _plain(getattr(value, f.name), board=board)
+            for f in fields(value)
+            if not (f.metadata.get(JSON_OMITTED_AT_DEFAULT) and getattr(value, f.name) == f.default)
+        }
     if isinstance(value, dict):
         return {key: _plain(item, board=board) for key, item in value.items()}
     if isinstance(value, list | tuple):
@@ -664,12 +669,16 @@ def _html_part_step(
 ) -> str:
     say = say or phrasebook("en")
     holes = " ".join(f"{escape(number)}:{_hole(at, board=board)}" for number, at in step.pin_holes)
+    # A cabled module's notes give its leads pin by pin, by name: a second, numbered list of
+    # the same holes would be the same thing said twice.
+    meta = (
+        escape(step.footprint_name)
+        if step.cabled
+        else say("{footprint} · pins {holes}", footprint=escape(step.footprint_name), holes=holes)
+    )
     bits = [
         f'<div class="title">{escape(step.title)}</div>',
-        '<div class="meta">'
-        + say("{footprint} · pins {holes}", footprint=escape(step.footprint_name), holes=holes)
-        + (f" · {step.rotation}°" if step.rotation else "")
-        + "</div>",
+        '<div class="meta">' + meta + (f" · {step.rotation}°" if step.rotation else "") + "</div>",
     ]
     if step.bend_template_mm:
         bits.append(

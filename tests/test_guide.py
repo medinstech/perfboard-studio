@@ -270,7 +270,10 @@ def test_a_dip_is_oriented_by_pin_one() -> None:
         ("lcd-1602", None),
         ("tact-6x6", None),
         # + and - without the electrolytic's long lead and stripe.
-        ("servo-header", "Positive lead in D3; Negative lead in E3"),
+        ("buzzer-active-12mm", "Positive lead in C3; Negative lead in F3"),
+        # A servo plugs in on a cable, and its pin-by-pin list says where + and - go
+        # (tests/test_cabled_modules.py): a header pin is not a polarised lead.
+        ("servo-header", None),
     ],
 )
 def test_a_lead_name_means_what_the_part_is(part: str, note: str | None) -> None:

@@ -134,3 +134,65 @@ def test_a_header_with_named_pins_and_no_value_is_not_said_to_be_off_the_board()
     assert not plugs_in_on_a_cable(dataclasses.replace(component, pin_names=()), footprint)
     bare = dataclasses.replace(doc, components=(dataclasses.replace(component, value=""),))
     assert not [note for note in _step(bare, "J1").notes if "plugs into this header" in note]
+
+
+def test_a_cabled_step_says_each_thing_once() -> None:
+    """The pin-by-pin list is the step's one list of holes and its one word on which way
+    round: no polarity line ("Positive lead in G4" for a header pin named +), and no
+    numbered "pins 1:D4 2:E4" in the exported guide. A header nobody named keeps both."""
+    from perfboard_studio.guide_export import guide_to_html
+
+    doc = _placed("ky-040-encoder")
+    step = _step(doc, "J1")
+    assert step.cabled and step.polarity is None
+    guide = build_guide(doc, LOOKUP, DEFAULT_GUIDE_OPTIONS)
+    html = guide_to_html(guide)
+    assert "Pin by pin: CLK in D4" in html
+    assert "pins 1:" not in html
+    bare = dataclasses.replace(
+        doc, components=(dataclasses.replace(doc.components[0], pin_names=(), value=""),)
+    )
+    plain = _step(bare, "J1")
+    assert not plain.cabled
+    assert "pins 1:" in guide_to_html(build_guide(bare, LOOKUP, DEFAULT_GUIDE_OPTIONS))
+
+
+def test_the_json_says_cabled_only_of_a_cabled_step() -> None:
+    """``cabled`` is in a step's JSON only where it is true, so every guide written before it
+    is byte for byte what it was -- the NE555 golden among them."""
+    import json
+
+    from perfboard_studio.guide_export import guide_to_json
+
+    def part_steps(doc: PerfDocument) -> list[dict]:  # type: ignore[type-arg]
+        data = json.loads(guide_to_json(build_guide(doc, LOOKUP, DEFAULT_GUIDE_OPTIONS)))
+        return [step for phase in data["phases"] for step in phase["steps"] if step["kind"] == "part"]
+
+    (cabled,) = part_steps(_placed("ky-040-encoder"))
+    assert cabled["cabled"] is True
+    golden = persist.parse_document_or_throw(
+        (ROOT / "tools" / "diffcheck" / "golden" / "ne555.perf").read_text(encoding="utf-8")
+    )
+    assert all("cabled" not in step for step in part_steps(golden))
+
+
+#: What each module on a cable is called on the board: what it is sold as, so the guide's
+#: sentence reads the same in either language ("KY-040 bu kartın üzerinde değil").
+SOLD_AS = {
+    "ky-023-joystick": "KY-023",
+    "ky-040-encoder": "KY-040",
+    "lcd-1602-i2c": "LCD1602 I2C",
+    "ds3231-rtc": "DS3231 RTC",
+    "max7219-matrix": "MAX7219 8x8",
+    "tm1637-display": "TM1637",
+    "ws2812b-strip": "WS2812B",
+    "micro-sd-module": "Micro SD",
+}
+
+
+@pytest.mark.parametrize("part_id", sorted(SOLD_AS))
+def test_a_cabled_module_is_named_as_it_is_sold_in_either_language(part_id: str) -> None:
+    part = catalog_part(part_id)
+    assert part is not None and part.placed_value == SOLD_AS[part_id]
+    step = _step(_placed(part_id), "J1", "tr")
+    assert step.notes[0].startswith(f"{SOLD_AS[part_id]} bu kartın üzerinde değil")

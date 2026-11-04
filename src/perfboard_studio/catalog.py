@@ -594,7 +594,7 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("ws2812b-strip", "WS2812B LED strip (on a header)", "led", "hdr-1x3",
                 "Addressable RGB LED strip or ring. Its cable plugs into this 3-pin header: "
                 "+5V DIN GND from pin 1",
-                _legs("+5V", "DIN", "GND"), value="WS2812B strip", ref_prefix="J",
+                _legs("+5V", "DIN", "GND"), value="WS2812B", ref_prefix="J",
                 source=(
                     "Worldsemi WS2812B datasheet (VDD, DIN, VSS; DOUT on to the next LED); the "
                     "strip's input pads 5V, DIN, GND, as Adafruit's NeoPixel Uberguide wires "
@@ -902,7 +902,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 "hdr-1x5",
                 "8x8 LED matrix driven by a MAX7219. Its cable plugs into this 5-pin header: "
                 "VCC GND DIN CS CLK from pin 1",
-                _legs("VCC", "GND", "DIN", "CS", "CLK"), value="MAX7219 matrix", ref_prefix="J",
+                _legs("VCC", "GND", "DIN", "CS", "CLK"), value="MAX7219 8x8", ref_prefix="J",
                 source=(
                     "SunFounder Raphael kit, MAX7219 module (VCC, GND, DIN, CS, CLK; the left "
                     "header the input, the right one the output to the next module); Maxim "
@@ -917,7 +917,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 "hdr-1x4",
                 "Four-digit 7-segment display driven by a TM1637. Its cable plugs into this "
                 "4-pin header: CLK DIO VCC GND from pin 1",
-                _legs("CLK", "DIO", "VCC", "GND"), value="TM1637 display", ref_prefix="J",
+                _legs("CLK", "DIO", "VCC", "GND"), value="TM1637", ref_prefix="J",
                 source=(
                     "ProtoSupplies TM1637 4-Digit 7-Segment Display Module (DSP-6), module "
                     "connections: CLK, DIO, VCC, GND; Titan Micro TM1637 datasheet"
@@ -1237,11 +1237,13 @@ CATALOG: tuple[CatalogPart, ...] = (
                 aliases=("keypad", "tuş takımı", "membrane", "matrix keypad")),
     # A module on a cable plugs into a header on the board, named as the module names its
     # leads (``guide.plugs_in_on_a_cable``); each is held to one sentence by
-    # tests/test_cabled_modules.py.
+    # tests/test_cabled_modules.py. Its value is what it is sold as, a number and not a word,
+    # because the guide says the value as written in either language: "KY-040 is not on this
+    # board" reads in Turkish too, "KY-040 encoder" does not.
     CatalogPart("ky-023-joystick", "KY-023 joystick module (on a header)", "switch", "hdr-1x5",
                 "Two-axis joystick that is also a switch when pressed. Its cable plugs into "
                 "this 5-pin header: GND +5V VRx VRy SW from pin 1",
-                _legs("GND", "+5V", "VRx", "VRy", "SW"), value="KY-023 joystick", ref_prefix="J",
+                _legs("GND", "+5V", "VRx", "VRy", "SW"), value="KY-023", ref_prefix="J",
                 source=(
                     "components101 Joystick Module, pin configuration (pins 1 to 5); Joy-IT "
                     "SensorKit KY-023 (the signals: two pots and a button to ground)"
@@ -1255,7 +1257,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 "hdr-1x5",
                 "Rotary encoder that is also a switch when pressed. Its cable plugs into this "
                 "5-pin header: CLK DT SW + GND from pin 1",
-                _legs("CLK", "DT", "SW", "+", "GND"), value="KY-040 encoder", ref_prefix="J",
+                _legs("CLK", "DT", "SW", "+", "GND"), value="KY-040", ref_prefix="J",
                 source=(
                     "components101 KY-040 Rotary Encoder, pin configuration; Joy-IT SensorKit "
                     "KY-040 (CLK and DT the two phases, SW the button)"

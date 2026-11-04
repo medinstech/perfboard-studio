@@ -452,6 +452,11 @@ DEFAULT_GUIDE_OPTIONS = GuideOptions()
 # ---------------------------------------------------------------------------
 
 
+#: The field metadata that leaves a field out of the guide's JSON while it holds its
+#: default -- the stripAxis rule, for a field added after the goldens were written.
+JSON_OMITTED_AT_DEFAULT = "json-omitted-at-default"
+
+
 @dataclass(frozen=True, slots=True)
 class PartStep:
     """Fit one component."""
@@ -475,6 +480,12 @@ class PartStep:
     #: "Cathode (banded end) at D12" -- None when the part is symmetrical.
     polarity: str | None
     notes: tuple[str, ...]
+    #: Whether something off the board plugs into this header on a cable
+    #: (``plugs_in_on_a_cable``): its notes then name every lead pin by pin, so the step
+    #: carries no numbered hole list and no polarity line besides. Left out of the JSON when
+    #: False (``JSON_OMITTED_AT_DEFAULT``), as ``language`` is: every guide without one is
+    #: byte for byte what it was.
+    cabled: bool = dataclasses.field(default=False, metadata={JSON_OMITTED_AT_DEFAULT: True})
 
     @property
     def title(self) -> str:
@@ -1184,7 +1195,8 @@ def _part_step(
         notes.extend(
             _flying_lead_notes(component, footprint, holes, board, strip_mm, say, wires or {})
         )
-    elif plugs_in_on_a_cable(component, footprint):
+    cabled = not off_board and plugs_in_on_a_cable(component, footprint)
+    if cabled:
         notes.extend(_cabled_module_notes(component, holes, board, say))
     breadboard = is_breadboard(board)
     if breadboard and footprint.body.archetype in ("dip", "smd-adapter"):
@@ -1319,8 +1331,10 @@ def _part_step(
         rotation=component.rotation,
         mirrored=component.mirrored,
         height_mm=footprint.body_height,
-        polarity=_polarity_note(footprint, pin_holes, component, say, board=board),
+        # A header pin named + is not a polarised lead: the pin-by-pin list says where it goes.
+        polarity=None if cabled else _polarity_note(footprint, pin_holes, component, say, board=board),
         notes=tuple(notes),
+        cabled=cabled,
     )
 
 
