@@ -107,6 +107,10 @@ class Model:
     #: Colours swapped after the materials are read, for a part whose model was painted in
     #: another variant than the one this application names: ``(KiCad's, ours)``.
     colours: tuple[tuple[str, str], ...] = ()
+    #: The height the package stands, where it is another part in the same case at another
+    #: height than KiCad modelled: everything above the board scaled in z until its top is
+    #: this. The 8.5 mm passive buzzer is the 9.5 mm active one's 12 mm can, shorter.
+    height: float | None = None
 
 
 @dataclass(frozen=True)
@@ -242,6 +246,15 @@ MODELS: tuple[Model, ...] = (
     # beside pin 5 as on Kingbright's drawing -- painted with the CA56-12's black face.
     Model("box-2x5-p6-r1-19.05x12.7x8-ccw", "Display_7Segment", "7SegmentLED_LTS6760_LTS6780",
           colours=(("#c6c4a0", "#0d0e10"),)),
+    # -- buzzers -----------------------------------------------------------
+    # The 12 mm active buzzer, its legs 7.6 mm apart bent the 0.02 mm out to our 7.62.
+    # KiCad paints the bottom of the sound hole a disc capacitor's red-brown; it is the dark
+    # of the hole.
+    Model("box-2x1-p3-r1-12x12x9.5", "Buzzer_Beeper", "Buzzer_12x9.5RM7.6", splay=True,
+          materials=(("#9e2705", "moulded"),), colours=(("#9e2705", "#141414"),)),
+    # The passive one, CUI's CEM-1203(42): the same 12 mm can on the same legs, 8.5 mm tall.
+    Model("box-2x1-p3-r1-12x12x8.5", "Buzzer_Beeper", "Buzzer_12x9.5RM7.6", splay=True,
+          materials=(("#9e2705", "moulded"),), colours=(("#9e2705", "#141414"),), height=8.5),
     # -- a terminal block of any length, as three ways of the 3-way one -----
     #
     # A MKDS-1,5 block IS a repetition, like a header, and it was measured rather than
@@ -744,6 +757,13 @@ def main(argv: list[str] | None = None) -> int:
                     [*have_points, *points],
                     [*have_faces, *((a + start, b + start, c + start) for a, b, c in faces)],
                 )
+        if model.height is not None:
+            top = max(z for points, _faces in groups.values() for _x, _y, z in points)
+            scale = model.height / top
+            groups = {
+                colour: ([(x, y, z * scale if z > 0 else z) for x, y, z in points], faces)
+                for colour, (points, faces) in groups.items()
+            }
         overrides = dict(model.materials)
         ordered = [item for item in sorted(groups.items(), key=lambda item: -len(item[1][1])) if item[1][1]]
         # THE BODY IS THE BIGGEST PIECE THAT IS NOT METAL, and it is worth naming because the

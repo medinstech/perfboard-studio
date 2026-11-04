@@ -221,3 +221,19 @@ def test_the_relay_is_drawn_as_its_own_footprint() -> None:
     """``relay-spdt`` is an on-grid approximation that no KiCad relay model shares a pinout
     with, so it has no model and the generated box -- its own footprint's size -- draws it."""
     assert partmodels.model_for("relay-spdt") is None
+
+
+def test_the_passive_buzzer_is_the_active_ones_can_at_its_own_height() -> None:
+    """CUI's CEM-1203(42) is the 12 mm can of KiCad's 9.5 mm buzzer, 8.5 mm tall: the same
+    model scaled in height (``Model.height``), its legs still in their holes."""
+    active = partmodels.model_for("box-2x1-p3-r1-12x12x9.5")
+    passive = partmodels.model_for("box-2x1-p3-r1-12x12x8.5")
+    footprint = get_footprint("box-2x1-p3-r1-12x12x8.5")
+    assert active is not None and passive is not None and footprint is not None
+    assert active.source == passive.source == "Buzzer_Beeper/Buzzer_12x9.5RM7.6"
+
+    def top(model: partmodels.PartModel) -> float:
+        return max(piece.bounds[5] for piece in model.pieces)
+
+    assert top(passive) == pytest.approx(footprint.body_height)
+    assert top(active) == pytest.approx(9.53, abs=0.01)

@@ -884,6 +884,96 @@
   ],
   "source": "Display/WC1602A"
  },
+ "box-2x1-p3-r1-12x12x8.5": {
+  "parts": [
+   {
+    "bounds": [
+     -2.2,
+     -5.9832,
+     0.0268,
+     9.8,
+     5.9832,
+     8.5
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "box-2x1-p3-r1-12x12x8.5.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.457,
+     -0.4487,
+     -0.05,
+     8.063,
+     0.4487,
+     0.0268
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-2x1-p3-r1-12x12x8.5.1.ply"
+   },
+   {
+    "bounds": [
+     2.8,
+     -0.9972,
+     8.3216,
+     4.8,
+     0.9972,
+     8.3216
+    ],
+    "color": "#141414",
+    "material": "moulded",
+    "mesh": "box-2x1-p3-r1-12x12x8.5.2.ply"
+   }
+  ],
+  "source": "Buzzer_Beeper/Buzzer_12x9.5RM7.6"
+ },
+ "box-2x1-p3-r1-12x12x9.5": {
+  "parts": [
+   {
+    "bounds": [
+     -2.2,
+     -5.9832,
+     0.03,
+     9.8,
+     5.9832,
+     9.53
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "box-2x1-p3-r1-12x12x9.5.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.457,
+     -0.4487,
+     -0.05,
+     8.063,
+     0.4487,
+     0.03
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-2x1-p3-r1-12x12x9.5.1.ply"
+   },
+   {
+    "bounds": [
+     2.8,
+     -0.9972,
+     9.33,
+     4.8,
+     0.9972,
+     9.33
+    ],
+    "color": "#141414",
+    "material": "moulded",
+    "mesh": "box-2x1-p3-r1-12x12x9.5.2.ply"
+   }
+  ],
+  "source": "Buzzer_Beeper/Buzzer_12x9.5RM7.6"
+ },
  "box-2x5-p6-r1-19.05x12.7x8-ccw": {
   "parts": [
    {

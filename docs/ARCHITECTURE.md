@@ -1012,6 +1012,9 @@ Three things about the mapping:
   nothing too: Winstar's WC1602A is the display alone, 4.4 mm up with no leg to the board,
   so `Model.header` merges KiCad's own straight header in under it, pin 1 on pin 1
   (`tests/test_model_leads.py` found it, as it finds any model whose legs miss a hole).
+  A part in the same case as a KiCad model at another height takes that model scaled in z
+  (`Model.height`): the 8.5 mm passive buzzer is the 9.5 mm active one's can, its legs'
+  feet left where they meet the board.
 - **Position is not measured, because it is already right.** A KiCad through-hole model's
   origin is pin 1 and its axes run the way this world does — x with the column, y against
   the row. Both follow the footprint, and this project's convention is written down as "the

@@ -1129,7 +1129,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 _legs("+", "-"), value="Buzzer",
                 source=(
                     "KiCad Buzzer_Beeper:Buzzer_12x9.5RM7.6 (pad 1 is +, as Device:Buzzer "
-                    "pin 1); drawn as the 12 mm square its round body sits in"
+                    "pin 1), and drawn from its model: the 12 mm square its round body sits in"
                 ),
                 check=(
                     "An ACTIVE buzzer is sealed underneath; a PASSIVE one shows its board "
@@ -1143,7 +1143,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 source=(
                     "CUI CEM-1203(42) magnetic transducer: 12 mm across and 8.5 mm tall, "
                     "externally driven at 2048 Hz from 3 to 5 V; the legs as KiCad's "
-                    "Buzzer_Beeper:Buzzer_12x9.5RM7.6"
+                    "Buzzer_Beeper:Buzzer_12x9.5RM7.6, and drawn as its model's can at 8.5 mm"
                 ),
                 check=(
                     "A PASSIVE buzzer is silent on DC: drive it with a square wave from a pin "

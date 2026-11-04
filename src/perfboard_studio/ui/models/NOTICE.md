@@ -61,7 +61,10 @@ The meshes are not the KiCad models unaltered:
 - **Some were painted another colour**, where the model shows another variant of the part
   than the one builders hold: the LCD's glass is yellow-green rather than beige, and
   Lite-On's LTS-6760 digit has the black face of the four-digit display beside it rather
-  than a beige one. Which ones is the `colours` field in `tools/import_kicad_models.py`.
+  than a beige one; the bottom of a buzzer's sound hole is dark rather than red-brown. Which
+  ones is the `colours` field in `tools/import_kicad_models.py`.
+- **One was made shorter.** The 8.5 mm passive buzzer is `Buzzer_12x9.5RM7.6`, the 9.5 mm
+  active one's 12 mm can, scaled in height to CUI's CEM-1203(42) (the `height` field).
 
 Nothing about the source models' geometry was otherwise altered, and no colours or
 materials were taken from them into the application's own tables.
