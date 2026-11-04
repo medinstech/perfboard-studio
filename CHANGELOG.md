@@ -30,18 +30,19 @@ closed without a bump.
   time with Next Problem, and on a checked breadboard Take It to Perfboard…. Board,
   Schematic, 3D and Build Guide are tabs over one canvas, and a tab dragged aside stands
   beside the others. The library, the design's parts and its nets are three tabs of one
-  sidebar. Problems fold into a drawer under the canvas: a badge with the number of
-  problems, how many connections are left to wire with Auto-wire beside it, how many nets
-  match the circuit, and the board's side and size; a click or Ctrl+7 opens the list, and
-  what Auto-wire could not do is listed there with its reason, where a box used to list it
-  and had to be closed first. The board's tools float down its left and what it shows, Flip,
-  zoom and Fit sit in its corner, and the schematic's the same way; the three wire tools
-  share one button and the two solder tools another (hold it or right-click it for the
-  rest), and J is Jumper Over the Parts. Selected parts get a small bar above them --
-  Rotate, Mirror, Lock, Auto-wire the Selection, Delete and the right-click menu -- that
-  follows them as the view moves. The menus are the steps: File, Edit, Circuit, Board,
-  Wiring, View, Help, with the exports in one Export submenu and no two entries of a menu
-  sharing an Alt letter, in English or Turkish.
+  sidebar. Problems fold into a drawer under the canvas: a badge that counts only what is
+  wrong, how many connections are left to wire with Auto-wire beside it, how many places to
+  check at the bench (a narrow solder gap the build guide turns into a check, listed in a
+  group of its own), how many nets match the circuit, and the board's side and size; a click
+  or Ctrl+7 opens the list, and what Auto-wire could not do is listed there with its reason,
+  where a box used to list it and had to be closed first. The board's tools float down its
+  left and what it shows, Flip, zoom and Fit sit in its corner, and the schematic's the same
+  way; the three wire tools share one button and the two solder tools another (hold it or
+  right-click it for the rest), and J is Jumper Over the Parts. Selected parts get a small
+  bar above them -- Rotate, Mirror, Lock, Auto-wire the Selection, Delete and the
+  right-click menu -- that follows them as the view moves. The menus are the steps: File,
+  Edit, Circuit, Board, Wiring, View, Help, with the exports in one Export submenu and no
+  two entries of a menu sharing an Alt letter, in English or Turkish.
 
 - **Properties: what is selected is edited where it is, with no OK.** A panel down the
   right, always open, shows the board when nothing is selected -- its name, what it is, the
@@ -205,158 +206,6 @@ closed without a bump.
 
 ### Fixed
 
-- **A module's chips show pin 1 in the corner it is in.** The dot on a module's chip sat on one
-  side of the chip whichever way it was really turned, and on the other side in 3D, so the
-  2D and 3D views disagreed. Each chip's corner is now read off the photograph, board or
-  drawing its module was measured on. Both views put the dot there, and it turns with the
-  module. The ESP-01's flash had its pin 1 at the wrong end too. Where the source does not
-  show the dot (the nRF24L01+'s chip, the Pico's two), none is drawn.
-- **The Problems badge counts only what is wrong.** A narrow solder gap the build guide turns
-  into a check at the bench is counted beside it -- "1 to check at the bench" -- and listed in
-  a group of its own. The ne555-astable example no longer opens on an orange "Problems 1".
-
-- **What a search finds best comes first.** "resistor" lists the resistor before the inductor
-  and the light sensor, "power" the power inputs first, and Turkish "LED" the LEDs -- in the
-  Library and in the package picker alike. The board's own parts are "This board".
-
-- **A module with a header of two rows prints each row's names on its own side.** On the
-  ESP-01 and the nRF24L01+ the outer row's names ran across the inner row's pins and over
-  their names ("TXD" on "GND"). The inner row's names stay on the module; the outer row's
-  are printed on the board just past the module's edge, in 2D and in 3D.
-
-- **The GY-521 was drawn as its own mirror image, and is now drawn as itself.** Its board
-  stood below the header with VCC on the left, which no GY-521 does: a module laid over the
-  outline put each pin in its mirror's hole, VCC in INT's. The board now stands above the
-  header, the same pins in the same holes, and it is drawn as the real one is -- the
-  MPU-6050, its regulator, the yellow tantalum, the small parts and the two mounting holes,
-  measured on a photograph. A board saved with the old package opens as it was, and the
-  Problems drawer says so ("Older package") until the GY-521 is chosen again under
-  Properties' Change…. A module drawing is now turned to fit its board and never mirrored:
-  pins named in a mirrored order keep the plain block.
-- **Fit leaves the floating bars their room.** The board's corner sat under the tool rail,
-  and a corner hole chosen there was half hidden by it.
-
-- **The Library's names have the room.** Its Pins column took half the panel and cut "AA
-  battery holder" to "AA battery h…"; the count is as wide as it needs and right-aligned. The
-  package picker, the Nets panel and the shortcut list had the same split.
-
-- **A part moved onto a hole with no pad says so when it lands.** It went red while it was
-  dragged and then landed with a plain "Done"; now the status line says a pin has no pad
-  there, as it does when a part is placed there, and the part stays marked in Problems.
-
-- **A search puts what you typed first.** Parts are ranked by where the words were found
-  -- a name that starts with them, then names they match word by word, then a name with
-  them inside a word, then a summary that merely mentions them -- so "resistor" finds the
-  resistor before the photoresistor and the inductor, and "power" the power inputs before
-  a power transistor, in English and in Turkish.
-
-- **A wire drawn on the schematic goes round the parts.** Joined pin to pin, it was two
-  straight lines whatever was in the way, so it could run straight through the part it
-  came from and the sheet looked shorted; it now finds its way round every symbol, with as
-  few corners as it can.
-
-- **Go to Part finds the part you typed.** "R1" goes to R1 even when R10 to R19 come
-  first in the document, instead of to whichever of them is listed first.
-
-- **What Auto-wire could not do is in Problems, not a box.** Each connection it left, with
-  its reason and a click to where it is, until the board changes; the box listed twelve
-  and had to be closed before any could be looked at.
-
-- **The way from a breadboard to perfboard is found.** The command palette searches what a
-  command does, not only its name: "perfboard", "move to", "delikli" and "taşı" find New Board
-  from This Design. A checked breadboard's Next is Take It to Perfboard…, which offers to
-  save the breadboard on the way, where it offered only Save.
-
-- **The board's own parts are searched like the rest.** A custom part's group listed above
-  every Library search, whatever was typed.
-
-- **Properties shows only the editor in front.** The first summary -- the board's name and
-  size -- could stay drawn under every editor after it, and push their right edges out of
-  the panel.
-
-- **Enter in the Library's search adds the part**, as the status line always said it would:
-  the one chosen in the list, or else the first the search lists.
-
-- **Next no longer loops on Show Problems.** After a part was moved off its copper, Next sent
-  you to a Problems drawer that could not wire anything, then did it again. It now goes in
-  the order of the work -- Auto-wire first, then the problems that are left, one at a time
-  with Next Problem -- and the drawer has Auto-wire beside the count left to wire, a
-  finding's menu has Go to It and Auto-wire Its Connections, and the Wiring step offers
-  Auto-wire when pressed.
-
-- **A module's pads lie flat on its board in 3D.** Each pad round a Nano's or an SMD
-  adapter's pins stood on its edge, half sunk into the board, so every pin wore a white
-  mushroom that the 2D view does not have.
-
-- **The board's print in 3D is in the 2D's letters.** The hole addresses, the words a board
-  is printed with and a part's own print are the bold lettering the 2D view and the 1:1
-  print use, instead of thin strokes, and Turkish letters are printed: "ALT YÜZ" lost its Ü,
-  and a relay valued "Röle 12V" was left blank.
-
-- **Edge pads in 3D are the shape they are in 2D.** A green board's stadium strip, a rounded
-  one or the phenolic board's squares, where the 3D view drew every edge pad as a grey
-  rectangle.
-
-- **Which way round a polarised part goes reads from above in 3D, as in 2D.** An
-  electrolytic's minus stripe is on its top as well as down its side, and an LED's cathode
-  flat shows on its flange, in the same place and colour the 2D view marks them. Seen from
-  above, the stripe could face away and the can said nothing.
-
-- **A stock board's corner holes are where the real board has them.** In the corners of the
-  border, outside the grid, with every pad kept -- they had taken the four corner pads and
-  worn a dashed orange ring that read as copper. The ring, which is where the screw head
-  will sit, now shows while the pointer is on the hole or a part is too close to it. The
-  boards' printed letters and numbers are on one edge each, as on the boards sold, not on
-  all four.
-
-- **A module's board has square corners.** An Arduino Nano or an ESP32 board was drawn as a
-  soft block with corners rounded 2 mm, as a moulded case is; a board is cut from a panel
-  with square ones. A chip's SMD adapter likewise.
-
-- **A breadboard is laid out the way one is built.** Place on the Board placed nothing
-  itself on a breadboard -- the rails and the groove broke every row it packs -- and left
-  every part to the search, which found the few places a relay fits at some seeds and not
-  others: nano-relay could come back without its relay. Now every chip straddles the
-  groove, a resistor lies across columns or shares a clip with the pin it is wired to, no
-  clip ever holds two nets, and the relay and the modules go down first. Every example
-  goes onto an 830 breadboard whole and wires clean, at every seed tried.
-- **A dialog's default button lost a letter at each end** -- "pen the Guide", "ecide
-  Later", "heck for Update", every confirmation's Cancel. It was measured in the regular
-  weight and drawn semibold; the weight now belongs to the primary variant alone.
-- **Board Setup cut its answers off mid-word** ("Pad per hole — every hole is its o"),
-  worse in Turkish: its questions now have a column of their own beside the picture. The
-  keyboard shortcuts list had the same trouble with its longest actions.
-- **About named one licence.** It said Apache-2.0, and the 3D part models are KiCad's,
-  under CC-BY-SA 4.0; it now names both, and prints the version once.
-- **A planner's Cancel looked like the thing to press.** The progress dialog drew its
-  only button in the accent and put Enter on it; it is a plain button under Esc.
-- **The 5-hole axial resistor was a different resistor in 3D.** `r-axial-5` is a 0207
-  body, and the 3D view drew KiCad's 9 mm DIN0309 for it -- 2.7 mm longer than the body DRC
-  measured, so two parts DRC passed stood into each other on screen. It now takes KiCad's
-  0207 made for 10.16 mm, centred, with its legs bent out to the holes as the radial cans'
-  are.
-- **Zoomed out, the sheet's labels no longer print over one another.** "VCC" landed on
-  "VCC", a value on a net's name, a connector's five names in one smudge: the layout
-  gives every label its own room at its size on the sheet, and zoomed out the window
-  draws text two or three times that size so it can be read. It now leaves out what
-  would land on a label already drawn -- part names first, then net names, supplies and
-  values -- and each comes back as you zoom in. The exported sheet is unchanged.
-- **Parts are the size of the real packages.** Sixteen of the library's bodies were smaller
-  than the parts they stand for -- a 1/4 W resistor 5 mm long where a 0207 is 6.5, a 5 mm LED
-  5 mm across where its flange is 6.15, a TO-92 4.5 × 3.7 where it is 5.21 × 4.19 -- so DRC
-  passed parts that touch on the bench. Every body is now the datasheet's maximum, or KiCad's
-  model where that is larger. A TO-92, a TO-220 and a screw terminal stand where the real
-  ones do, behind their pin row rather than centred on it, and a DIP's courtyard now holds
-  its whole body. A board DRC passed before may show an overlap or an edge warning now: the
-  parts always touched.
-- **Escape calls off a drag in the middle of it.** Let go after Escape and the part, the
-  label, the symbols or the rubber band went where the pointer was: the window's Escape
-  shortcut took the key before the board or the sheet saw it. Both now take Escape back
-  while a drag is in flight, and only then, and put everything back where it was.
-- **Undo and Redo say what they took back and put back.** The Edit menu named the command
-  beforehand and nothing did afterwards: the status bar kept the last command's message,
-  so "Deleted 3 part(s)" stood over a board that already had one of them back. It now
-  reads "Undone: …" or "Redone: …", in the window's language.
 - **The GY-521 was drawn as its own mirror image.** Its board stood below the header with
   VCC on the left, so a module laid over the outline put each pin in its mirror's hole, VCC
   in INT's. It now stands above the header, the same pins in the same holes. A module
