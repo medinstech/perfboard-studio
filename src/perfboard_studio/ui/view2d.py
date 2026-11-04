@@ -175,6 +175,9 @@ from .bodies import (
     PIN_NAME_HEIGHT_MM,
     PIN_NAME_TAG_HEIGHT_MM,
     PIN_NAME_TAG_PAD_MM,
+    PLUS_MARK_INK,
+    PLUS_MARK_MM,
+    PLUS_MARK_STROKE_MM,
     BodyPlacement,
     BodyStyle,
     PinLabel,
@@ -183,6 +186,7 @@ from .bodies import (
     leads_for,
     module_block_size,
     placement_for,
+    plus_mark,
     polarity_pin_offset,
     resistor_bands,
     style_for,
@@ -3097,6 +3101,22 @@ def _paint_standing_board(
     painter.drawPath(outline)
 
 
+def _paint_plus_mark(painter: QPainter, footprint: Footprint, pitch: float) -> None:
+    """A buzzer's "+" on its top, beside its + leg (``bodies.plus_mark``)."""
+    at = plus_mark(footprint, pitch)
+    if at is None:
+        return
+    half = PLUS_MARK_MM / 2
+    pen = QPen(QColor(PLUS_MARK_INK), PLUS_MARK_STROKE_MM)
+    pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+    painter.save()
+    painter.setPen(pen)
+    x, y = at
+    painter.drawLine(QPointF(x - half, y), QPointF(x + half, y))
+    painter.drawLine(QPointF(x, y - half), QPointF(x, y + half))
+    painter.restore()
+
+
 def _paint_module_art(painter: QPainter, parts: Sequence[PlacedArt]) -> None:
     """Each part in its own frame: its own axis along x, its feature (a can's stripe, a
     regulator's legs, an antenna) at +x, as ``view3d``'s builders have it."""
@@ -3915,6 +3935,7 @@ class ComponentItem(QGraphicsItem):
             if not off_board and measured:
                 _paint_top_view(painter, view, style, self.isSelected(), placement, bands)
                 _paint_top_marking(painter, self.fp, placement, self.comp, view.marking)
+                _paint_plus_mark(painter, self.fp, self.board.pitch)
             elif not off_board and self.standing is not None:
                 _paint_standing_board(painter, self.standing, style, self.isSelected())
             elif not off_board:

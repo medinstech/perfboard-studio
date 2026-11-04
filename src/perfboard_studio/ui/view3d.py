@@ -119,6 +119,9 @@ from .bodies import (
     PIN_NAME_HEIGHT_MM,
     PIN_NAME_TAG_HEIGHT_MM,
     PIN_NAME_TAG_PAD_MM,
+    PLUS_MARK_INK,
+    PLUS_MARK_MM,
+    PLUS_MARK_STROKE_MM,
     BodyStyle,
     PinLabel,
     Surface,
@@ -127,6 +130,7 @@ from .bodies import (
     module_block_size,
     pin_labels,
     placement_for,
+    plus_mark,
     polarity_pin_offset,
     resistor_bands,
     style_for,
@@ -4353,7 +4357,7 @@ def _pieces_for(
         # a diode's band, a can's stripe -- so ours is not added (on a diode it made two
         # bands) and the model's is painted in the style's accent, the colour 2D draws it.
         mark = _polarity_mark(model) if body.polarity is not None else None
-        markings: list[_Piece] = []
+        markings: list[_Piece] = list(_plus_mark_pieces(footprint, comp, board, model))
         if archetype == "axial-cylinder":
             markings = _axial_markings(body, _barrel_of(model), polarity_band=mark is None)
         elif archetype == "axial-upright" and (barrel := _standing_barrel_of(model)) is not None:
@@ -4480,6 +4484,30 @@ def _standing_board_pieces(placed: PlacedStanding, comp: Any, board: Board) -> l
                 )
             )
     return pieces
+
+
+def _plus_mark_pieces(footprint: Any, comp: Any, board: Board, model: PartModel) -> list[_Piece]:
+    """A buzzer's "+" on top of its can, beside its + leg, where 2D prints it
+    (``bodies.plus_mark``): two strokes a hair proud of the borrowed mesh's top."""
+    at_local = plus_mark(footprint, board.pitch)
+    if at_local is None or model.body is None or len(model.body.bounds) != 6:
+        return []
+    top = model.body.bounds[5]
+    tx, ty = transform_offset(at_local[0], at_local[1], comp.rotation, comp.mirrored)
+    x, y = comp.anchor.col * board.pitch + tx, -(comp.anchor.row * board.pitch + ty)
+    rgb = _hex_rgb(PLUS_MARK_INK, LEGEND_RGB)
+    return [
+        _Piece(
+            source=_box(size_x, size_y, _DECAL_PROUD_MM),
+            rgb=rgb,
+            position=(x, y, top + _DECAL_PROUD_MM / 2),
+            material=INK,
+        )
+        for size_x, size_y in (
+            (PLUS_MARK_MM, PLUS_MARK_STROKE_MM),
+            (PLUS_MARK_STROKE_MM, PLUS_MARK_MM),
+        )
+    ]
 
 
 #: The plastic of a header strip, under a module or holding its pins.

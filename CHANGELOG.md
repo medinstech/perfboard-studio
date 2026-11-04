@@ -139,7 +139,8 @@ closed without a bump.
 
 - **The 12 mm buzzers are round.** The active and the passive buzzer were grey squares.
   They are now KiCad's model of the 12 mm buzzer, a black can with its sound hole, the
-  passive one at its own 8.5 mm.
+  passive one at its own 8.5 mm, and both carry the "+" the real can has on its top beside
+  its + leg, in 2D and 3D.
 
 - **The HC-SR04 stands up, as it does on the bench.** It was a grey slab lying on the board.
   It is now its board standing on its header with the two transducers looking out across the

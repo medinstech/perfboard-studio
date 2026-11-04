@@ -446,3 +446,38 @@ def test_an_explicit_colour_overrides_the_fill_and_nothing_else() -> None:
 
     assert style.fill == "#00ff00"
     assert (style.edge, style.accent) == (base.edge, base.accent)
+
+
+@pytest.mark.parametrize("footprint_id", ["box-2x1-p3-r1-12x12x9.5", "box-2x1-p3-r1-12x12x8.5"])
+def test_a_buzzers_plus_is_on_its_top_beside_its_plus_leg(footprint_id: str) -> None:
+    """Which leg is + is what a buzzer has to be got right by, and KiCad's mesh does not
+    carry the "+" its top has: both views print it, nearer pin 1 than pin 2, on the can,
+    and clear of the sound hole in its middle."""
+    import math
+
+    from perfboard_studio.model import ComponentInstance, HoleCoord
+    from perfboard_studio.ui import partmodels, view3d
+    from perfboard_studio.ui.bodies import plus_mark
+
+    footprint = get_footprint(footprint_id)
+    assert footprint is not None
+    at = plus_mark(footprint, PITCH)
+    assert at is not None
+    pins = {pin.number: (pin.d_col * PITCH, pin.d_row * PITCH) for pin in footprint.pins}
+    assert math.dist(at, pins["1"]) < math.dist(at, pins["2"])
+    placement = placement_for(footprint, PITCH)
+    reach = math.dist(at, (placement.centre_x, placement.centre_y))
+    assert 1.5 < reach < 6.0 - 1.0  # past the hole, inside the 12 mm can
+    # 3D puts it at the same place, on the can's top.
+    model = partmodels.model_for(footprint_id)
+    assert model is not None and model.body is not None
+    comp = ComponentInstance(id="bz", ref="BZ1", value="Buzzer", footprint_id=footprint_id, anchor=HoleCoord(col=5, row=5))
+    from perfboard_studio.commands import DEFAULT_BOARD
+
+    pieces = view3d._plus_mark_pieces(footprint, comp, DEFAULT_BOARD, model)
+    assert len(pieces) == 2
+    for piece in pieces:
+        x, y, z = piece.position
+        assert x == pytest.approx(5 * PITCH + at[0]) and y == pytest.approx(-(5 * PITCH + at[1]))
+        assert z > model.body.bounds[5]
+    assert plus_mark(get_footprint("box-2x1-p1-r1-5x4.1x4"), PITCH) is None  # type: ignore[arg-type]

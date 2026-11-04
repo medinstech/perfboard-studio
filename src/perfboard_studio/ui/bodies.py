@@ -205,6 +205,36 @@ def surface_for(style: BodyStyle) -> Surface:
     return _PLASTIC_SURFACE
 
 
+#: Packages with a "+" moulded on their top beside their + leg that KiCad's mesh leaves off:
+#: the 12 mm buzzers, active and passive. Both views print it where ``plus_mark`` says,
+#: because which leg is + is the one thing about a buzzer that has to be got right.
+PLUS_MARKED: frozenset[str] = frozenset({"box-2x1-p3-r1-12x12x9.5", "box-2x1-p3-r1-12x12x8.5"})
+#: The "+"'s span and stroke, and how far out from the body's centre towards the + leg it
+#: stands, as a share of the way: on the real can it is printed between the sound hole and
+#: the rim, above the leg.
+PLUS_MARK_MM = 1.8
+PLUS_MARK_STROKE_MM = 0.35
+PLUS_MARK_REACH = 0.6
+#: The ink it is shown in: the moulding catches the light, so it reads pale on the black can.
+PLUS_MARK_INK = "#c9cdd4"
+
+
+def plus_mark(footprint: Footprint, pitch: float) -> tuple[float, float] | None:
+    """Where a package's "+" goes (``PLUS_MARKED``), in its local millimetres: between the
+    body's centre and pin 1, its + leg -- or ``None`` for a package that has none."""
+    if footprint.id not in PLUS_MARKED:
+        return None
+    plus = next((pin for pin in footprint.pins if pin.number == "1"), None)
+    if plus is None:
+        return None
+    placement = placement_for(footprint, pitch)
+    x, y = plus.d_col * pitch, plus.d_row * pitch
+    return (
+        placement.centre_x + (x - placement.centre_x) * PLUS_MARK_REACH,
+        placement.centre_y + (y - placement.centre_y) * PLUS_MARK_REACH,
+    )
+
+
 def style_for(footprint: Footprint) -> BodyStyle:
     """The style for a footprint, honouring an explicit ``BodySpec.color`` override.
 
