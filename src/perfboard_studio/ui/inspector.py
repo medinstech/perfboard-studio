@@ -73,6 +73,7 @@ from perfboard_studio.footprints import SUPERSEDED_FOOTPRINTS
 from perfboard_studio.geometry import format_hole, parse_hole
 from perfboard_studio.guide import CABLED_MODULE, plugs_in_on_a_cable
 from perfboard_studio.model import (
+    UNTITLED_NAME,
     BoardNote,
     BoardSide,
     ComponentInstance,
@@ -282,6 +283,10 @@ class _BoardEditor(QWidget):
                 "the project folder. A board is named after its file when first saved."
             )
         )
+        # A board nobody has named is stored as "untitled", which is data and stays
+        # English; the field shows it empty with the word in the window's language, as the
+        # header says it. In a Turkish window the header said "adsız" and this "untitled".
+        self.name.setPlaceholderText(t("untitled"))
         _add_field(form, t("Name"), self.name, self.name.problem)
 
         board = QWidget()
@@ -354,7 +359,8 @@ class _BoardEditor(QWidget):
         self._document = document
         self._loading = True
         try:
-            self.name.show_value(document.meta.name)
+            named = document.meta.name
+            self.name.show_value("" if named == UNTITLED_NAME else named)
             board = document.board
             kind = self.kind_name(board.type)
             words = [kind] if kind is not None else []

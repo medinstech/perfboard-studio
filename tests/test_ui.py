@@ -16990,3 +16990,32 @@ def test_a_cabled_step_on_the_bench_gives_its_leads_once() -> None:
         assert any("VCC" in note or "GND" in note for note in item.notes)
     finally:
         _close(window)
+
+
+def test_an_unnamed_boards_name_field_says_untitled_in_the_windows_language() -> None:
+    """The document stores "untitled"; a Turkish window's header said "adsız" and its Name
+    field "untitled". The field is empty with the word as its placeholder, and a name typed
+    into it is the board's name."""
+    from perfboard_studio.model import UNTITLED_NAME
+    from perfboard_studio.ui.i18n import language, set_language
+
+    unnamed = _blank_document()
+    unnamed = dataclasses.replace(unnamed, meta=dataclasses.replace(unnamed.meta, name=UNTITLED_NAME))
+    before = language()
+    set_language("tr")
+    try:
+        window = _window_on(unnamed)
+    finally:
+        set_language(before)
+    try:
+        window.scene.clearSelection()
+        window._refresh_properties()
+        field = window.inspector.board_editor.name
+        assert field.text() == "" and field.placeholderText() == "adsız"
+        field.setText("Zamanlayıcı")
+        field.setModified(True)
+        field.editingFinished.emit()
+        assert window.bus.document.meta.name == "Zamanlayıcı"
+        assert field.text() == "Zamanlayıcı"
+    finally:
+        _close(window)
