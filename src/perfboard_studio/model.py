@@ -1085,6 +1085,32 @@ class DocumentMeta:
     modified: str
 
 
+#: Names one board of a document. The first board's is ``system.FIRST_BOARD``; it is never
+#: written, because the first board is the document's own top-level fields.
+type BoardId = str
+
+
+@dataclass(frozen=True, slots=True)
+class ExtraBoard:
+    """A board of the system after the first: everything the first board has at the top of
+    the document, under an id and a name. The design -- ``parts``, ``nets``, the sheet -- is
+    the document's, shared by every board. See docs/ARCHITECTURE.md, "Several boards are
+    one document, and each is seen alone"; ``system.board_document`` is how the engine
+    sees one."""
+
+    id: BoardId
+    name: str
+    board: Board
+    components: tuple[ComponentInstance, ...] = ()
+    conductors: tuple[Conductor, ...] = ()
+    cuts: tuple[TrackCut, ...] = ()
+    mounting_holes: tuple[MountingHole, ...] = ()
+    edge_connectors: tuple[EdgeConnector, ...] = ()
+    board_notes: tuple[BoardNote, ...] = ()
+    height_limit_mm: Mm | None = None
+    body_clearance_mm: Mm | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class PerfDocument:
     meta: DocumentMeta
@@ -1140,6 +1166,9 @@ class PerfDocument:
     #: ``height_limit_mm`` is: it is how this build is laid out, not the stock it is on, and
     #: a field on ``board`` would be lost each time the board is chosen again.
     body_clearance_mm: Mm | None = None
+    #: Every board of the system after the first, which is the fields above. Empty on a
+    #: board alone -- which is every document before 0.24 -- and then left out of the file.
+    boards: tuple[ExtraBoard, ...] = ()
     format_version: int = DOCUMENT_FORMAT_VERSION
 
 

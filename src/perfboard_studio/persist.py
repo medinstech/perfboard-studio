@@ -35,7 +35,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Literal, cast, get_args
+from typing import Any, Literal, cast, get_args
 
 from .breadboard import board_problem, has_breadboard_pattern, is_breadboard
 from .geometry import board_text_problem, legend_problem, validate_orthogonal_chain
@@ -61,6 +61,7 @@ from .model import (
     Conductor,
     DocumentMeta,
     EdgeConnector,
+    ExtraBoard,
     FingerShape,
     HoleCoord,
     LeadBendConductor,
@@ -90,6 +91,7 @@ from .model import (
     body_clearance_problem,
     normalized_pin_names,
 )
+from .system import FIRST_BOARD
 
 #: Re-exported so callers of persist.py don't also need to import model.py.
 CURRENT_FORMAT_VERSION: int = DOCUMENT_FORMAT_VERSION
@@ -222,6 +224,22 @@ DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "sheet",
     "sheetWires",
     "sheetNotes",
+    "boards",
+)
+#: One board after the first: an id and a name, then exactly the first board's own keys in
+#: the first board's own order (``system.BOARD_FIELDS``).
+EXTRA_BOARD_KEY_ORDER: tuple[str, ...] = (
+    "id",
+    "name",
+    "board",
+    "components",
+    "conductors",
+    "cuts",
+    "mountingHoles",
+    "edgeConnectors",
+    "boardNotes",
+    "heightLimitMm",
+    "bodyClearanceMm",
 )
 SYMBOL_PLACEMENT_KEY_ORDER: tuple[str, ...] = ("id", "at", "rotation", "mirrored")
 SHEET_WIRE_KEY_ORDER: tuple[str, ...] = ("a", "b", "path", "tap")
@@ -687,11 +705,6 @@ def serialize_document(doc: PerfDocument) -> str:
     a non-finite number (see :func:`_num`) rather than silently writing something a
     reader can't trust.
     """
-    components = sorted(doc.components, key=lambda c: c.id)
-    conductors = sorted(doc.conductors, key=lambda c: c.id)
-    cuts = sorted(doc.cuts, key=_cut_sort_key)
-    mounting_holes = sorted(doc.mounting_holes, key=_mounting_hole_sort_key)
-    edge_connectors = sorted(doc.edge_connectors, key=lambda e: e.id)
     parts = sorted(doc.parts, key=lambda part: part.id)
     nets = sorted(doc.nets, key=lambda n: n.id)
     sheet = sorted(doc.sheet, key=lambda placement: placement.id)
@@ -699,7 +712,6 @@ def serialize_document(doc: PerfDocument) -> str:
     # reorder the file. A wire is named by its two pins and a note by its id.
     sheet_wires = sorted(doc.sheet_wires, key=lambda wire: (wire.a, wire.b))
     sheet_notes = sorted(doc.sheet_notes, key=lambda note: note.id)
-    board_notes = sorted(doc.board_notes, key=lambda note: note.id)
 
     root = _build_ordered(
         DOCUMENT_KEY_ORDER,
@@ -713,44 +725,8 @@ def serialize_document(doc: PerfDocument) -> str:
                     "modified": doc.meta.modified,
                 },
             ),
-            "board": _ordered_board(doc.board),
-            "components": [_ordered_component(c, i) for i, c in enumerate(components)],
-            "conductors": [_ordered_conductor(c, i) for i, c in enumerate(conductors)],
-            "cuts": [_ordered_cut(c, i) for i, c in enumerate(cuts)],
+            **_ordered_board_fields(doc),
             "nets": [_ordered_net(n, i) for i, n in enumerate(nets)],
-            # Unlike the four arrays above, these are omitted entirely when empty --
-            # see the note in `_ordered_board` about why an unused feature has to leave
-            # no trace in the file.
-            **(
-                {
-                    "mountingHoles": [
-                        _ordered_mounting_hole(m, i) for i, m in enumerate(mounting_holes)
-                    ]
-                }
-                if mounting_holes
-                else {}
-            ),
-            **(
-                {
-                    "edgeConnectors": [
-                        _ordered_edge_connector(e, i) for i, e in enumerate(edge_connectors)
-                    ]
-                }
-                if edge_connectors
-                else {}
-            ),
-            **(
-                {"heightLimitMm": _num("heightLimitMm", doc.height_limit_mm)}
-                if doc.height_limit_mm is not None
-                else {}
-            ),
-            # Omitted when unset -- the courtyard rule every file before it was judged by --
-            # so all fifteen golden fixtures keep their bytes.
-            **(
-                {"bodyClearanceMm": _num("bodyClearanceMm", doc.body_clearance_mm)}
-                if doc.body_clearance_mm is not None
-                else {}
-            ),
             # Omitted when empty, like the two arrays above and for the same reason: a
             # board laid out part-first has none, and every one of the fifteen golden
             # fixtures predates the idea. An array emitted unconditionally would change
@@ -799,22 +775,88 @@ def serialize_document(doc: PerfDocument) -> str:
                 if sheet_notes
                 else {}
             ),
-            # Omitted when there are none, which is every board saved before a board could
-            # be written on -- so none of them changes by a byte.
+            # Every board after the first, in the document's order (the order of their
+            # tabs). Omitted when there are none, which is every board alone -- every
+            # document written before several boards existed -- so none of them changes.
             **(
-                {
-                    "boardNotes": [
-                        _ordered_board_note(note, i)
-                        for i, note in enumerate(board_notes)
-                    ]
-                }
-                if board_notes
+                {"boards": [_ordered_extra_board(extra) for extra in doc.boards]}
+                if doc.boards
                 else {}
             ),
         },
     )
 
     return f"{_write_json(root, 0)}\n"
+
+
+def _ordered_board_fields(source: PerfDocument | ExtraBoard) -> dict[str, JsonValue]:
+    """One board's own entries (``system.BOARD_FIELDS``), for the first board at the top of
+    the document and for an extra board under ``boards``: ONE writer, so a second board is
+    written exactly as the first, sorted and omitted by the same rules."""
+    components = sorted(source.components, key=lambda c: c.id)
+    conductors = sorted(source.conductors, key=lambda c: c.id)
+    cuts = sorted(source.cuts, key=_cut_sort_key)
+    mounting_holes = sorted(source.mounting_holes, key=_mounting_hole_sort_key)
+    edge_connectors = sorted(source.edge_connectors, key=lambda e: e.id)
+    board_notes = sorted(source.board_notes, key=lambda note: note.id)
+    return {
+        "board": _ordered_board(source.board),
+        "components": [_ordered_component(c, i) for i, c in enumerate(components)],
+        "conductors": [_ordered_conductor(c, i) for i, c in enumerate(conductors)],
+        "cuts": [_ordered_cut(c, i) for i, c in enumerate(cuts)],
+        # Unlike the four arrays above, these are omitted entirely when empty --
+        # see the note in `_ordered_board` about why an unused feature has to leave
+        # no trace in the file.
+        **(
+            {
+                "mountingHoles": [
+                    _ordered_mounting_hole(m, i) for i, m in enumerate(mounting_holes)
+                ]
+            }
+            if mounting_holes
+            else {}
+        ),
+        **(
+            {
+                "edgeConnectors": [
+                    _ordered_edge_connector(e, i) for i, e in enumerate(edge_connectors)
+                ]
+            }
+            if edge_connectors
+            else {}
+        ),
+        **(
+            {"heightLimitMm": _num("heightLimitMm", source.height_limit_mm)}
+            if source.height_limit_mm is not None
+            else {}
+        ),
+        # Omitted when unset -- the courtyard rule every file before it was judged by --
+        # so all fifteen golden fixtures keep their bytes.
+        **(
+            {"bodyClearanceMm": _num("bodyClearanceMm", source.body_clearance_mm)}
+            if source.body_clearance_mm is not None
+            else {}
+        ),
+        # Omitted when there are none, which is every board saved before a board could
+        # be written on -- so none of them changes by a byte.
+        **(
+            {
+                "boardNotes": [
+                    _ordered_board_note(note, i) for i, note in enumerate(board_notes)
+                ]
+            }
+            if board_notes
+            else {}
+        ),
+    }
+
+
+def _ordered_extra_board(extra: ExtraBoard) -> JsonValue:
+    """A board after the first: its id and name, then its own entries."""
+    return _build_ordered(
+        EXTRA_BOARD_KEY_ORDER,
+        {"id": extra.id, "name": extra.name, **_ordered_board_fields(extra)},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1769,6 +1811,142 @@ def _migrate(doc: dict[str, object], from_version: int) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
+def _parse_board_fields(
+    container: dict[str, object],
+    parent: str,
+    warnings: list[str],
+    seen_ids: set[str],
+    seen_refs: set[str],
+) -> dict[str, Any]:
+    """One board's own fields (``system.BOARD_FIELDS``) -- the first board's at the top of
+    the document, an extra board's under ``boards`` -- read by ONE set of rules, so a
+    second board is refused exactly what the first is. ``seen_ids`` and ``seen_refs`` are
+    the whole document's: ids are unique across every board, and so are references."""
+    board = _parse_board(_require_field(container, "board", parent), warnings)
+
+    components_path = _field_path(parent, "components")
+    components_raw = _expect_array(_require_field(container, "components", parent), components_path)
+    components = tuple(
+        _parse_component(item, _index_path(components_path, i), warnings)
+        for i, item in enumerate(components_raw)
+    )
+    # Each component is parsed on its own, so nothing above can see two of them. Two
+    # sharing an id is refused: every command looks a component up by id and would find
+    # the first, so the second is a part no edit can ever reach -- and the placer, which
+    # moves the whole board as one command, refused the batch outright. A shared
+    # REFERENCE is a warning, in the spirit of validate_orthogonal_chain: the board still
+    # opens, and the wiring's ambiguity is said out loud.
+    for index, component in enumerate(components):
+        if component.id in seen_ids:
+            raise ValidationError(
+                "duplicate-id",
+                f'Component id "{component.id}" appears more than once; ids must be unique.',
+                _index_path(components_path, index),
+            )
+        seen_ids.add(component.id)
+        if component.ref in seen_refs:
+            warnings.append(
+                f'Reference "{component.ref}" is used by more than one component. Every net '
+                f"node names a part by reference, so the wiring cannot tell them apart."
+            )
+        seen_refs.add(component.ref)
+
+    conductors_path = _field_path(parent, "conductors")
+    conductors_raw = _expect_array(_require_field(container, "conductors", parent), conductors_path)
+    conductors = tuple(
+        _parse_conductor(item, _index_path(conductors_path, i), warnings)
+        for i, item in enumerate(conductors_raw)
+    )
+
+    cuts_path = _field_path(parent, "cuts")
+    cuts_raw = _expect_array(_require_field(container, "cuts", parent), cuts_path)
+    cuts = tuple(_parse_cut(item, _index_path(cuts_path, i), warnings) for i, item in enumerate(cuts_raw))
+
+    # Optional, unlike the arrays above: every file written before these features existed
+    # simply has no such key, and requiring one would make this build unable to open its
+    # own back catalogue. That is the same property that keeps the format version at 1.
+    mounting_path = _field_path(parent, "mountingHoles")
+    mounting_raw = _expect_array(container.get("mountingHoles", []), mounting_path)
+    mounting_holes = tuple(
+        _parse_mounting_hole(item, _index_path(mounting_path, i), warnings)
+        for i, item in enumerate(mounting_raw)
+    )
+
+    connectors_path = _field_path(parent, "edgeConnectors")
+    connectors_raw = _expect_array(container.get("edgeConnectors", []), connectors_path)
+    edge_connectors = tuple(
+        _parse_edge_connector(item, _index_path(connectors_path, i), warnings)
+        for i, item in enumerate(connectors_raw)
+    )
+
+    notes_path = _field_path(parent, "boardNotes")
+    board_notes_raw = _expect_array(container.get("boardNotes", []), notes_path)
+    board_notes: list[BoardNote] = []
+    seen_board_notes: set[str] = set()
+    for index, item in enumerate(board_notes_raw):
+        board_note = _parse_board_note(item, _index_path(notes_path, index), warnings)
+        if board_note.id in seen_board_notes:
+            raise ValidationError(
+                "duplicate-id",
+                f'Two labels on the board share the id "{board_note.id}".',
+                _index_path(notes_path, index),
+            )
+        seen_board_notes.add(board_note.id)
+        board_notes.append(board_note)
+
+    height_path = _field_path(parent, "heightLimitMm")
+    height_limit_raw = container.get("heightLimitMm")
+    height_limit_mm = (
+        None if height_limit_raw is None else _expect_number(height_limit_raw, height_path)
+    )
+    if height_limit_mm is not None and height_limit_mm <= 0:
+        # A warning rather than a refusal, following validate_orthogonal_chain's example:
+        # a hand-edited number nobody can build under should not lock the user out of the
+        # rest of their board. Dropped, so the height rule stays quiet instead of
+        # reporting every part on the board.
+        warnings.append(
+            f"{height_path} is {height_limit_mm}, which is not a height anything fits "
+            f"under. Ignored; the board is treated as having no height limit."
+        )
+        height_limit_mm = None
+
+    clearance_path = _field_path(parent, "bodyClearanceMm")
+    clearance_raw = container.get("bodyClearanceMm")
+    body_clearance_mm = (
+        None if clearance_raw is None else _expect_number(clearance_raw, clearance_path)
+    )
+    clearance_problem = (
+        None if body_clearance_mm is None else body_clearance_problem(body_clearance_mm)
+    )
+    if clearance_problem is not None:
+        # Dropped with a warning, as a height limit nothing fits under is: a hand-edited
+        # number should not lock anybody out of their board, and without it the parts are
+        # judged exactly as before the setting existed.
+        warnings.append(f"{clearance_path}: {clearance_problem} Ignored.")
+        body_clearance_mm = None
+
+    # What ``board.set`` refuses about a breadboard's features, refused here too: a bore
+    # or a finger strip in a block of plastic describes no board anybody can hold, and a
+    # solderable breadboard's pattern runs to the edge where a finger strip would go.
+    board_path = _field_path(parent, "board")
+    if is_breadboard(board) and mounting_holes:
+        raise ValidationError("invalid-board", "A breadboard has no mounting holes.", board_path)
+    if has_breadboard_pattern(board) and edge_connectors:
+        raise ValidationError("invalid-board", "A breadboard has no edge connectors.", board_path)
+
+    return {
+        "board": board,
+        "components": components,
+        "conductors": conductors,
+        "cuts": cuts,
+        "mounting_holes": mounting_holes,
+        "edge_connectors": edge_connectors,
+        "board_notes": tuple(board_notes),
+        "height_limit_mm": height_limit_mm,
+        "body_clearance_mm": body_clearance_mm,
+    }
+
+
 def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
     warnings: list[str] = []
     root = _expect_object(raw_input, "")
@@ -1795,57 +1973,11 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
     _check_unknown_keys(migrated, DOCUMENT_KEY_ORDER, "", warnings)
 
     meta = _parse_meta(_require_field(migrated, "meta", ""), warnings)
-    board = _parse_board(_require_field(migrated, "board", ""), warnings)
-
-    components_raw = _expect_array(_require_field(migrated, "components", ""), "components")
-    components = tuple(
-        _parse_component(item, _index_path("components", i), warnings) for i, item in enumerate(components_raw)
-    )
-    # Each component is parsed on its own, so nothing above can see two of them. Two
-    # sharing an id is refused: every command looks a component up by id and would find
-    # the first, so the second is a part no edit can ever reach -- and the placer, which
-    # moves the whole board as one command, refused the batch outright. A shared
-    # REFERENCE is a warning, in the spirit of validate_orthogonal_chain: the board still
-    # opens, and the wiring's ambiguity is said out loud.
+    # One id space and one set of references across every board and the design: a net
+    # node is a (ref, pin) and has to name one pin in the system.
     seen_ids: set[str] = set()
     seen_refs: set[str] = set()
-    for index, component in enumerate(components):
-        if component.id in seen_ids:
-            raise ValidationError(
-                "duplicate-id",
-                f'Component id "{component.id}" appears more than once; ids must be unique.',
-                _index_path("components", index),
-            )
-        seen_ids.add(component.id)
-        if component.ref in seen_refs:
-            warnings.append(
-                f'Reference "{component.ref}" is used by more than one component. Every net '
-                f"node names a part by reference, so the wiring cannot tell them apart."
-            )
-        seen_refs.add(component.ref)
-
-    conductors_raw = _expect_array(_require_field(migrated, "conductors", ""), "conductors")
-    conductors = tuple(
-        _parse_conductor(item, _index_path("conductors", i), warnings) for i, item in enumerate(conductors_raw)
-    )
-
-    cuts_raw = _expect_array(_require_field(migrated, "cuts", ""), "cuts")
-    cuts = tuple(_parse_cut(item, _index_path("cuts", i), warnings) for i, item in enumerate(cuts_raw))
-
-    # Optional, unlike the arrays above: every file written before these features existed
-    # simply has no such key, and requiring one would make this build unable to open its
-    # own back catalogue. That is the same property that keeps the format version at 1.
-    mounting_raw = _expect_array(migrated.get("mountingHoles", []), "mountingHoles")
-    mounting_holes = tuple(
-        _parse_mounting_hole(item, _index_path("mountingHoles", i), warnings)
-        for i, item in enumerate(mounting_raw)
-    )
-
-    connectors_raw = _expect_array(migrated.get("edgeConnectors", []), "edgeConnectors")
-    edge_connectors = tuple(
-        _parse_edge_connector(item, _index_path("edgeConnectors", i), warnings)
-        for i, item in enumerate(connectors_raw)
-    )
+    first = _parse_board_fields(migrated, "", warnings, seen_ids, seen_refs)
 
     parts_raw = _expect_array(migrated.get("parts", []), "parts")
     parts = tuple(
@@ -1921,73 +2053,37 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         seen_notes.add(note.id)
         sheet_notes.append(note)
 
-    board_notes_raw = _expect_array(migrated.get("boardNotes", []), "boardNotes")
-    board_notes: list[BoardNote] = []
-    seen_board_notes: set[str] = set()
-    for index, item in enumerate(board_notes_raw):
-        board_note = _parse_board_note(item, _index_path("boardNotes", index), warnings)
-        if board_note.id in seen_board_notes:
+    # Every board after the first. Optional, and omitted when empty, so a board alone --
+    # every document before several boards existed -- has no such key.
+    boards_raw = _expect_array(migrated.get("boards", []), "boards")
+    boards: list[ExtraBoard] = []
+    seen_boards: set[str] = {FIRST_BOARD}
+    for index, item in enumerate(boards_raw):
+        path = _index_path("boards", index)
+        entry = _expect_object(item, path)
+        _check_unknown_keys(entry, EXTRA_BOARD_KEY_ORDER, path, warnings)
+        board_id = _expect_string(_require_field(entry, "id", path), _field_path(path, "id"))
+        if board_id in seen_boards:
             raise ValidationError(
                 "duplicate-id",
-                f'Two labels on the board share the id "{board_note.id}".',
-                _index_path("boardNotes", index),
+                f'Board id "{board_id}" is used more than once, or is the first board\'s '
+                f'own "{FIRST_BOARD}"; every board needs its own.',
+                _field_path(path, "id"),
             )
-        seen_board_notes.add(board_note.id)
-        board_notes.append(board_note)
-
-    height_limit_raw = migrated.get("heightLimitMm")
-    height_limit_mm = (
-        None if height_limit_raw is None else _expect_number(height_limit_raw, "heightLimitMm")
-    )
-    if height_limit_mm is not None and height_limit_mm <= 0:
-        # A warning rather than a refusal, following validate_orthogonal_chain's example:
-        # a hand-edited number nobody can build under should not lock the user out of the
-        # rest of their board. Dropped, so the height rule stays quiet instead of
-        # reporting every part on the board.
-        warnings.append(
-            f"heightLimitMm is {height_limit_mm}, which is not a height anything fits "
-            f"under. Ignored; the board is treated as having no height limit."
-        )
-        height_limit_mm = None
-
-    clearance_raw = migrated.get("bodyClearanceMm")
-    body_clearance_mm = (
-        None if clearance_raw is None else _expect_number(clearance_raw, "bodyClearanceMm")
-    )
-    clearance_problem = (
-        None if body_clearance_mm is None else body_clearance_problem(body_clearance_mm)
-    )
-    if clearance_problem is not None:
-        # Dropped with a warning, as a height limit nothing fits under is: a hand-edited
-        # number should not lock anybody out of their board, and without it the parts are
-        # judged exactly as before the setting existed.
-        warnings.append(f"bodyClearanceMm: {clearance_problem} Ignored.")
-        body_clearance_mm = None
-
-    # What ``board.set`` refuses about a breadboard's features, refused here too: a bore
-    # or a finger strip in a block of plastic describes no board anybody can hold, and a
-    # solderable breadboard's pattern runs to the edge where a finger strip would go.
-    if is_breadboard(board) and mounting_holes:
-        raise ValidationError("invalid-board", "A breadboard has no mounting holes.", "board")
-    if has_breadboard_pattern(board) and edge_connectors:
-        raise ValidationError("invalid-board", "A breadboard has no edge connectors.", "board")
+        seen_boards.add(board_id)
+        name = _expect_string(_require_field(entry, "name", path), _field_path(path, "name"))
+        own = _parse_board_fields(entry, path, warnings, seen_ids, seen_refs)
+        boards.append(ExtraBoard(id=board_id, name=name, **own))
 
     document = PerfDocument(
         meta=meta,
-        board=board,
-        components=components,
-        conductors=conductors,
         parts=parts,
-        cuts=cuts,
         nets=nets,
         sheet=tuple(sheet),
         sheet_wires=sheet_wires,
         sheet_notes=tuple(sheet_notes),
-        mounting_holes=mounting_holes,
-        edge_connectors=edge_connectors,
-        board_notes=tuple(board_notes),
-        height_limit_mm=height_limit_mm,
-        body_clearance_mm=body_clearance_mm,
+        boards=tuple(boards),
+        **first,
         format_version=CURRENT_FORMAT_VERSION,
     )
     return document, warnings
