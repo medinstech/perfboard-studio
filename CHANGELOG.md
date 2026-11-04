@@ -223,6 +223,11 @@ closed without a bump.
 
 ### Fixed
 
+- **A part's name never prints over a label written on the board.** Zoomed out, J2's name on
+  the Nano relay board landed on the "LOAD" written above it and read "LOJ2D". A name that
+  would print on a label goes under its part instead, and only where both places are taken
+  is it left to Properties.
+
 - **The GY-521 was drawn as its own mirror image.** Its board stood below the header with
   VCC on the left, so a module laid over the outline put each pin in its mirror's hole, VCC
   in INT's. It now stands above the header, the same pins in the same holes. A module

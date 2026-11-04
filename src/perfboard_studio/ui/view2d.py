@@ -3547,7 +3547,7 @@ class ComponentItem(QGraphicsItem):
         self._hit_shape: QPainterPath | None = None
         #: The same with the printed reference taken in, for the zoom it was worked out at:
         #: the label holds a pixel size, so its share of the scene changes with every zoom.
-        self._hit_with_label: tuple[tuple[float, str], QPainterPath] | None = None
+        self._hit_with_label: tuple[tuple[float, str, float, float, float], QPainterPath] | None = None
         self._sync_position()
 
     def _sync_position(self) -> None:
@@ -3584,17 +3584,26 @@ class ComponentItem(QGraphicsItem):
         """What the printed pin names cover, in item coordinates -- they run past the
         body, and a repaint that does not reach them leaves them smeared behind a drag."""
         rect = QRectF()
+        for label in self.pin_name_rects():
+            rect = rect.united(label)
+        return rect
+
+    def pin_name_rects(self) -> list[QRectF]:
+        """Each printed pin name's tag, in item coordinates: one rectangle a name."""
         if not self.show_pin_names or self.side != "top":
-            return rect
+            return []
         half = PIN_NAME_TAG_HEIGHT_MM / 2
+        rects = []
         for label in self.pin_names:
+            rect = QRectF()
             reach = label.start + label.room + PIN_NAME_TAG_PAD_MM
             for along in (label.start - PIN_NAME_TAG_PAD_MM, reach):
                 x, y = _local_offset_mm(
                     label.x + label.dx * along, label.y + label.dy * along, self.comp, self.side
                 )
                 rect = rect.united(QRectF(x - half, y - half, 2 * half, 2 * half))
-        return rect
+            rects.append(rect)
+        return rects
 
     def _flying_lead_routes(self) -> list[tuple[str, list[QPointF]]]:
         """Each wire of a part off the board, pad to past the edge, in item coordinates.
@@ -3810,27 +3819,21 @@ class ComponentItem(QGraphicsItem):
             return self._hit_shape
         scale = transform.m11()
         value = self.shown_value()
-        if self._hit_with_label is None or self._hit_with_label[0] != (scale, value):
+        placement = self.reference_placement(transform)
+        if placement is None:
+            return self._hit_shape
+        key = (scale, value, placement[0].x(), placement[0].y(), placement[1].y())
+        if self._hit_with_label is None or self._hit_with_label[0] != key:
             # The value is on the reference's plate, so the plate a click lands on is the
-            # whole of it.
-            plate = (
-                reference_plate(
-                    transform.map(self.reference_anchor()), self.comp.ref, value, REF_LABEL_PX,
-                    offset=REF_LABEL_OFFSET,
-                )[0]
-                if value
-                else label_plate_rect(
-                    transform.map(self.reference_anchor()), self.comp.ref, REF_LABEL_PX,
-                    REF_LABEL_ALIGN, bold=True, offset=REF_LABEL_OFFSET,
-                )
-            )
+            # whole of it -- wherever ``reference_placement`` has put it.
+            plate = self.reference_rect(transform.map(placement[0]), placement[1])
             label = QPainterPath()
             label.addRect(
                 self.mapRectFromScene(transform.inverted()[0].mapRect(plate)).intersected(
                     self.boundingRect()
                 )
             )
-            self._hit_with_label = ((scale, value), self._hit_shape.united(label))
+            self._hit_with_label = (key, self._hit_shape.united(label))
         return self._hit_with_label[1]
 
     def shown_value(self) -> str:
@@ -4029,6 +4032,67 @@ class ComponentItem(QGraphicsItem):
         body = self._local_body_rect()
         return self.mapToScene(QPointF(body.center().x(), body.top()))
 
+    def reference_placement(self, transform: QTransform) -> tuple[QPointF, QPointF] | None:
+        """Where this part's reference goes on screen at this zoom, as (scene anchor, device
+        offset): over its body, as ``reference_anchor`` says -- or under it, where over it
+        would print on a board note, or nowhere when both would.
+
+        A reference is held at a pixel size and a note is written in millimetres, so zoomed
+        out the reference outgrows the gap between them: on nano-relay J2's landed on the
+        "LOAD" written over it and the two read "LOJ2D". The note is the builder's own and
+        the reference is in Properties, so the reference is the one that moves, and yields.
+        Under it, it must not print on a pin name either -- its own part's or the next
+        one's -- or it would only have moved the collision.
+
+        The layer that prints it and the part's hit area both ask here."""
+        over = (self.reference_anchor(), REF_LABEL_OFFSET)
+        notes = self._note_rects(transform)
+        if not notes:
+            return over
+        if not any(self.reference_rect(transform.map(over[0]), over[1]).intersects(n) for n in notes):
+            return over
+        height = QFontMetricsF(label_font(REF_LABEL_PX, True)).height()
+        body = self._local_body_rect()
+        anchor = self.mapToScene(QPointF(body.center().x(), body.bottom()))
+        offset = QPointF(0.0, height - REF_LABEL_OFFSET.y())
+        plate = self.reference_rect(transform.map(anchor), offset)
+        taken = notes + self._pin_name_rects_on_screen(transform)
+        if any(plate.intersects(rect) for rect in taken):
+            return None
+        return anchor, offset
+
+    def _pin_name_rects_on_screen(self, transform: QTransform) -> list[QRectF]:
+        """Every part's printed pin names in this scene, in device pixels."""
+        scene = self.scene()
+        items: dict[str, ComponentItem] = getattr(scene, "component_items", {}) if scene else {}
+        return [
+            transform.mapRect(item.mapRectToScene(rect))
+            for item in items.values()
+            if item.isVisible()
+            for rect in item.pin_name_rects()
+        ]
+
+    def reference_rect(self, device_anchor: QPointF, offset: QPointF) -> QRectF:
+        """The plate a reference (and its value, when shown) is printed on, in device pixels."""
+        value = self.shown_value()
+        if value:
+            return reference_plate(device_anchor, self.comp.ref, value, REF_LABEL_PX, offset=offset)[0]
+        return label_plate_rect(
+            device_anchor, self.comp.ref, REF_LABEL_PX, REF_LABEL_ALIGN, bold=True, offset=offset
+        )
+
+    def _note_rects(self, transform: QTransform) -> list[QRectF]:
+        """The board notes this scene shows, as rectangles in device pixels."""
+        scene = self.scene()
+        if scene is None or not getattr(scene, "show_board_notes", False):
+            return []
+        items: dict[str, BoardNoteItem] = getattr(scene, "board_note_items", {})
+        return [
+            transform.mapRect(note.mapToScene(note.shape()).boundingRect())
+            for note in items.values()
+            if note.isVisible()
+        ]
+
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value: Any) -> Any:
         if change in (
             QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged,
@@ -4101,10 +4165,16 @@ class ReferenceLayerItem(QGraphicsItem):
                 continue
             # Over the body, never on it, where it would hide a resistor's bands, and laid
             # out as the plate was, so the part's hit area (ComponentItem.shape) still
-            # takes it in. Outlined rather than plated: see REF_HALO.
+            # takes it in -- or under it, or not at all, where over it is a board note
+            # (``ComponentItem.reference_placement``). Outlined rather than plated: see
+            # REF_HALO.
+            placement = item.reference_placement(painter.transform())
+            if placement is None:
+                continue
+            anchor, offset = placement
             draw_outlined_reference(
-                painter, item.reference_anchor(), item.comp.ref, value, REF_LABEL_PX,
-                offset=REF_LABEL_OFFSET, reference_colour=colour, value_colour=VALUE_LABEL,
+                painter, anchor, item.comp.ref, value, REF_LABEL_PX,
+                offset=offset, reference_colour=colour, value_colour=VALUE_LABEL,
                 halo=REF_HALO,
             )
 
