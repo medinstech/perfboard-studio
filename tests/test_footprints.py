@@ -323,6 +323,8 @@ REAL_PACKAGES: dict[str, tuple[float, float, str]] = {
     "dip-28": (7.62, 36.2, "TI MPDI004 (NT), A max"),
     "dip-40": (7.62, 50.46, "length unchanged; the courtyard holds it"),
     "dip-40-wide": (15.24, 53.09, "TI MPDI008 (N, 600 mil), A max"),
+    "dip-4": (7.62, 5.08, "Sharp PC817X (D2-A03101EN), 4.58 +-0.5; KiCad's model 4.92"),
+    "dip-24": (7.62, 32.13, "Maxim 21-0043 D, D max for 24 pins; KiCad's model 31.74"),
     "r-axial-3": (6.5, 2.5, "Vishay MBB/SMA 0207 (doc 28766), L and D max"),
     "r-axial-4": (6.5, 2.5, "Vishay MBB/SMA 0207 (doc 28766), L and D max"),
     "r-axial-5": (6.5, 2.5, "Vishay MBB/SMA 0207 (doc 28766), L and D max"),
@@ -337,8 +339,14 @@ REAL_PACKAGES: dict[str, tuple[float, float, str]] = {
 }
 
 
+#: Entries above whose id the original never had -- a generated id, a part added since -- so
+#: they are not divergences from it, only the same rule applied to a package it did not know.
+NOT_IN_THE_ORIGINAL: frozenset[str] = frozenset({"dip-4", "dip-24"})
+
+
 def test_every_divergence_but_the_crystal_is_a_real_package() -> None:
-    assert set(REAL_PACKAGES) | {"xtal-hc49"} == set(DIVERGES_FROM_TYPESCRIPT)
+    assert set(REAL_PACKAGES) - NOT_IN_THE_ORIGINAL | {"xtal-hc49"} == set(DIVERGES_FROM_TYPESCRIPT)
+    assert not NOT_IN_THE_ORIGINAL & set(ORIGINAL_FOOTPRINTS)
 
 
 @pytest.mark.parametrize("footprint_id", sorted(REAL_PACKAGES))
@@ -348,7 +356,8 @@ def test_a_body_is_the_real_package(footprint_id: str) -> None:
     from perfboard_studio.footprints import body_extent
 
     size_x, size_y, _source = REAL_PACKAGES[footprint_id]
-    footprint = REGISTRY[footprint_id]
+    footprint = get_footprint(footprint_id)
+    assert footprint is not None
     body = body_extent(footprint, 2.54)
     assert (round(body.size_x, 2), round(body.size_y, 2)) == (size_x, size_y)
     xs = [p.x for p in footprint.body_outline]

@@ -910,11 +910,18 @@ def box_header_footprint(
 
 
 #: PDIP body length A, maximum, where it is longer than the formula above gives (MPDI002C N,
-#: MPDI004 NT, MPDI008 N 600 mil).
+#: MPDI004 NT, MPDI008 N 600 mil) -- or KiCad's model of the package where that is longer
+#: still, because the 3D view draws the model and DRC must not measure a smaller part.
 _PDIP_LENGTH_MAX_MM: dict[tuple[int, bool], float] = {
+    # A 4-pin DIP is an optocoupler's: Sharp's PC817X (D2-A03101EN) gives 4.58 +-0.5, so
+    # 5.08; KiCad's DIP-4_W7.62mm model is 4.92.
+    (4, False): 5.08,
     (14, False): 19.69,
     (18, False): 23.37,
     (20, False): 26.92,
+    # Maxim's 21-0043 D (PDIP .300", in the MAX7219's datasheet), D for 24 pins: 1.265 in,
+    # 32.13 mm; KiCad's DIP-24_W7.62mm model is 31.74.
+    (24, False): 32.13,
     (28, False): 36.20,
     (40, True): 53.09,
 }

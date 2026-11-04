@@ -343,8 +343,20 @@ def _top_view(footprint: Footprint, pitch: Mm) -> TopView:
     view = _from_models(footprint, pitch) or _parametric(footprint, pitch)
     if footprint.body.archetype == "dip" and view.marking is None:
         box = view.body.boundingRect()
-        view.marking = box.adjusted(1.2, 2.0, -1.2, -1.2)
-        view.marking_vertical = True
+        if box.width() > box.height():
+            # A DIP-4 -- an optocoupler's case, Sharp's PC817 6.5 x 4.58 -- is wider than it is
+            # long, and its print runs across it: on its flat top, under the notch. The margins
+            # a long DIP keeps for its notch and its far end left a PC817 1.7 mm of its 4.9 mm
+            # case, and its name a third of a millimetre tall.
+            flat = next((path.boundingRect() for role, path, _ink in view.shapes if role == "body"), box)
+            notch = max(
+                (path.boundingRect().bottom() for role, path, _ink in view.shapes if role == "recess"),
+                default=flat.top(),
+            )
+            view.marking = QRectF(flat.left(), notch, flat.width(), flat.bottom() - notch)
+        else:
+            view.marking = box.adjusted(1.2, 2.0, -1.2, -1.2)
+            view.marking_vertical = True
     metal = QPainterPath()
     for role, path, _ink in view.shapes:
         if role in ("metal", "metal-recess"):

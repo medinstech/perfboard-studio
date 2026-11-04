@@ -2062,6 +2062,51 @@
   ],
   "source": "Package_DIP/DIP-20_W7.62mm"
  },
+ "dip-24": {
+  "parts": [
+   {
+    "bounds": [
+     -0.127,
+     -28.1685,
+     0.0,
+     7.747,
+     0.2285,
+     2.157
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "dip-24.0.ply"
+   },
+   {
+    "bounds": [
+     -0.127,
+     -28.1685,
+     -0.05,
+     7.747,
+     0.2285,
+     2.157
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "dip-24.1.ply"
+   },
+   {
+    "bounds": [
+     0.635,
+     -29.845,
+     0.38,
+     6.985,
+     1.905,
+     3.68
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "dip-24.2.ply",
+    "role": "body"
+   }
+  ],
+  "source": "Package_DIP/DIP-24_W7.62mm"
+ },
  "dip-28": {
   "parts": [
    {
@@ -2106,6 +2151,51 @@
    }
   ],
   "source": "Package_DIP/DIP-28_W7.62mm"
+ },
+ "dip-4": {
+  "parts": [
+   {
+    "bounds": [
+     -0.127,
+     -2.7685,
+     0.0,
+     7.747,
+     0.2285,
+     2.157
+    ],
+    "color": "#a5a392",
+    "material": "steel",
+    "mesh": "dip-4.0.ply"
+   },
+   {
+    "bounds": [
+     0.635,
+     -3.735,
+     0.38,
+     6.985,
+     1.195,
+     3.68
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "dip-4.1.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.127,
+     -2.7685,
+     -0.05,
+     7.747,
+     0.2285,
+     2.157
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "dip-4.2.ply"
+   }
+  ],
+  "source": "Package_DIP/DIP-4_W7.62mm"
  },
  "dip-40-wide": {
   "parts": [

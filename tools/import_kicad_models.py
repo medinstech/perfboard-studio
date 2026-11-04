@@ -175,11 +175,13 @@ def _standing(library: str, step: str) -> Model:
 #: generated box, which is its own footprint's size.
 MODELS: tuple[Model, ...] = (
     # -- ICs ---------------------------------------------------------------
+    Model("dip-4", "Package_DIP", "DIP-4_W7.62mm"),
     Model("dip-8", "Package_DIP", "DIP-8_W7.62mm"),
     Model("dip-14", "Package_DIP", "DIP-14_W7.62mm"),
     Model("dip-16", "Package_DIP", "DIP-16_W7.62mm"),
     Model("dip-18", "Package_DIP", "DIP-18_W7.62mm"),
     Model("dip-20", "Package_DIP", "DIP-20_W7.62mm"),
+    Model("dip-24", "Package_DIP", "DIP-24_W7.62mm"),
     Model("dip-28", "Package_DIP", "DIP-28_W7.62mm"),
     Model("dip-40-wide", "Package_DIP", "DIP-40_W15.24mm"),
     # -- discretes ---------------------------------------------------------

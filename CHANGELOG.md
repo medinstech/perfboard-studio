@@ -132,6 +132,12 @@ closed without a bump.
 
 ### Changed
 
+- **The PC817 and the MAX7219 are DIPs like the others.** The 4-pin and the 24-pin DIP are
+  drawn from KiCad's models of them in 2D and 3D, as every other DIP is, where they were a
+  box. DRC measures each at its datasheet maximum: Sharp's 5.08 mm for the PC817 and Maxim's
+  32.13 mm for the MAX7219, both a little longer than before. The PC817's name runs across
+  its case, which is wider than it is long.
+
 - **The relay, the trimmer and the RGB LED are the colours they are.** The Songle relay is
   its blue case with its value on top, the 3296W trimmer blue with its brass screw, and the
   RGB LED's diffused dome milky white rather than red -- each from KiCad's model of it. Their

@@ -123,6 +123,22 @@ def test_a_dip_is_narrower_than_its_rows_and_its_legs_reach_the_holes() -> None:
     assert not view.hidden_pins
 
 
+def test_a_dip_4_prints_across_its_case_under_the_notch() -> None:
+    """A PC817's case is wider than it is long, so its name runs across it; a long DIP's
+    margins left it 1.7 mm of its 4.9 mm case and a name a third of a millimetre tall."""
+    view = topview.top_view(get_footprint("dip-4"), PITCH)  # type: ignore[arg-type]
+    assert view.marking is not None
+    flat = next(path.boundingRect() for role, path, _ink in view.shapes if role == "body")
+    notch = next(path.boundingRect() for role, path, _ink in view.shapes if role == "recess")
+    assert view.marking.width() > view.marking.height() > 3.0
+    assert flat.contains(view.marking)
+    assert view.marking.top() >= notch.bottom()
+    # A long DIP still prints along itself, inside its shoulders.
+    long_one = topview.top_view(get_footprint("dip-8"), PITCH)  # type: ignore[arg-type]
+    assert long_one.marking is not None
+    assert long_one.marking.height() > long_one.marking.width()
+
+
 @pytest.mark.parametrize("footprint_id", ["hdr-1x7", "hdr-2x13", "screw-terminal-5", "screw-terminal-4-v"])
 def test_a_repeated_package_of_any_length_is_drawn_from_its_pieces(footprint_id: str) -> None:
     footprint = get_footprint(footprint_id)
