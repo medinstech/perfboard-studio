@@ -1685,6 +1685,9 @@ class Inspector(QWidget):
             return
         selection = self.selection
         page: QWidget = self.summary
+        if selection.kind in ("mounting-hole", "edge-connector"):
+            # Chosen on the board: the board's list of them opens, for when it is shown next.
+            self.board_editor.features.set_open(True, emit=True)
         if selection.kind == "board":
             self.board_editor.load(document)
             page = self.board_editor

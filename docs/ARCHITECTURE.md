@@ -1932,7 +1932,11 @@ Setup's fields, the designer's row it became and a board that row is shown on.
 **Board Features retired into Properties: the designer is which board, Properties is what
 this board has** (`ui/boardfeatures.py`). The board's editor lists its mounting holes and
 edge connectors, each with Remove, and adds corner holes (diameter, inset) and an edge
-connector (edge, first hole, fingers); the height limit and the body clearance were already
+connector (edge, first hole, fingers) -- behind ONE line, closed by default, that says how
+many ("4 mounting holes · 2 edge connectors"): open, it was the whole panel with nothing
+selected, every user's first view of Properties and the README's front picture. Board >
+Board Features... and a hole or a connector chosen on the board open it, and open or closed
+is remembered (`FEATURES_OPEN_KEY`). The height limit and the body clearance were already
 its fields. Each button is one command, dispatched as pressed, as the dialog's were -- one
 undo step each, the board redrawn beside it -- and what a board cannot take is not offered
 (no bore through a solderless breadboard, no fingers on either kind). A hole or a connector

@@ -20,7 +20,8 @@ import math
 from collections.abc import Callable
 from typing import cast
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -117,6 +118,21 @@ def connector_said(connector: EdgeConnector, board: Board) -> tuple[str, str]:
     return where, f"{connector.count} × {connector.finger_width:g} mm"
 
 
+class _Clickable(QLabel):
+    """A label pressed like a button: the section's words open it as its chevron does."""
+
+    clicked = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
 def _label(text: str) -> QLabel:
     """A form label that wraps rather than widening the panel."""
     label = QLabel(text)
@@ -137,22 +153,52 @@ def _remove_button() -> QToolButton:
 
 
 class FeaturesGroup(QWidget):
-    """The board's holes and connectors, each with Remove, and the two ways to add some."""
+    """The board's holes and connectors, each with Remove, and the two ways to add some --
+    behind one line that says how many, closed until somebody asks.
+
+    OPEN, IT WAS THE WHOLE PANEL: with nothing selected Properties is the board, and an
+    18 px heading over six rows of Remove and both Add forms was every user's first view
+    of it, and the README's front picture -- a settings dump (lead). Closed, it is one
+    line, "4 mounting holes · 2 edge connectors", with a chevron. Board > Board Features...
+    and a hole or a connector chosen on the board open it; open or closed is remembered by
+    the window (``opened``), as its other view state is."""
+
+    #: Open (True) or closed by a person, for the window to remember.
+    opened = Signal(bool)
 
     def __init__(self, dispatch: Dispatch) -> None:
         super().__init__()
         self._dispatch = dispatch
         self._document: PerfDocument | None = None
-        column = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(theme.SPACE["sm"])
+        # The section's one line: a chevron and what it has, at the size of the panel's
+        # other labels. The words are a label that wraps -- a tool button's text cannot,
+        # and "No mounting holes or edge connectors" on one line widened the panel again.
+        line = QWidget()
+        row = QHBoxLayout(line)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(theme.SPACE["sm"])
+        self.toggle = QToolButton()
+        self.toggle.setCheckable(True)
+        self.toggle.setAutoRaise(True)
+        self.toggle.setToolTip(t("Mounting holes and edge connectors"))
+        self.toggle.toggled.connect(self._on_toggled)
+        row.addWidget(self.toggle, 0, Qt.AlignmentFlag.AlignTop)
+        self.summary = _Clickable()
+        self.summary.setWordWrap(True)
+        self.summary.setToolTip(t("Mounting holes and edge connectors"))
+        self.summary.clicked.connect(self.toggle.click)
+        row.addWidget(self.summary, 1)
+        outer.addWidget(line)
+        #: What the menu scrolls into view: the section's own line.
+        self.heading = line
+        self.body = QWidget()
+        column = QVBoxLayout(self.body)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(theme.SPACE["sm"])
-        heading = QLabel(theme.heading(t("Mounting holes and edge connectors")))
-        heading.setTextFormat(Qt.TextFormat.RichText)
-        # Wrapped: on one line the heading asked 612 px, Properties took it, and the board
-        # beside it lost a third of the window (test_home_before_the_first_showing...).
-        heading.setWordWrap(True)
-        column.addWidget(heading)
-        self.heading = heading
+        outer.addWidget(self.body)
         #: One line per feature, rebuilt with the document.
         self._rows = QVBoxLayout()
         self._rows.setSpacing(0)
@@ -215,11 +261,49 @@ class FeaturesGroup(QWidget):
         theme.tone(self.problem, "danger")
         self.problem.hide()
         column.addWidget(self.problem)
+        self.set_open(False)
+
+    # -- open or closed --
+
+    def is_open(self) -> bool:
+        return self.toggle.isChecked()
+
+    def set_open(self, on: bool, *, emit: bool = False) -> None:
+        """Open or close it; ``emit`` says so to the window, which remembers it."""
+        self.toggle.blockSignals(True)
+        self.toggle.setChecked(on)
+        self.toggle.blockSignals(False)
+        self._show_open(on)
+        if emit:
+            self.opened.emit(on)
+
+    def _on_toggled(self, on: bool) -> None:
+        self._show_open(on)
+        self.opened.emit(on)
+
+    def _show_open(self, on: bool) -> None:
+        self.body.setVisible(on)
+        self.toggle.setArrowType(Qt.ArrowType.DownArrow if on else Qt.ArrowType.RightArrow)
+
+    def _say_counts(self, document: PerfDocument) -> None:
+        holes, connectors = len(document.mounting_holes), len(document.edge_connectors)
+        if not holes and not connectors:
+            self.summary.setText(t("No mounting holes or edge connectors"))
+            return
+        said = []
+        if holes:
+            said.append((t("{count} mounting hole") if holes == 1 else t("{count} mounting holes"))
+                        .format(count=holes))
+        if connectors:
+            said.append((t("{count} edge connector") if connectors == 1
+                         else t("{count} edge connectors")).format(count=connectors))
+        self.summary.setText("  ·  ".join(said))
 
     # -- what the board has --
 
     def load(self, document: PerfDocument) -> None:
         self._document = document
+        self._say_counts(document)
         board = document.board
         while self._rows.count():
             item = self._rows.takeAt(0)

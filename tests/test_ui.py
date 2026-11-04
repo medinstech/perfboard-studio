@@ -4401,7 +4401,9 @@ def _board_features(window):
     window._selection_from = "board"
     window._refresh_properties()
     assert window.inspector.shown is window.inspector.board_editor
-    return window.inspector.board_editor.features
+    features = window.inspector.board_editor.features
+    features.set_open(True)  # closed by default: these tests are about what is inside
+    return features
 
 
 def test_the_boards_features_add_four_corner_holes_as_one_undo_step() -> None:
@@ -16478,5 +16480,59 @@ def test_a_shipped_example_opens_with_no_problem_and_its_bench_check_listed() ->
 
         check = next(s for s in workflow_steps(window.workflow_facts()) if s.key == "check")
         assert check.status == "done"
+    finally:
+        _close(window)
+
+
+
+def test_the_boards_features_are_one_line_until_asked_for(monkeypatch, tmp_path) -> None:
+    """Open, the group was the whole panel with nothing selected -- every user's first view
+    of Properties and the README's front picture. Closed by default, it says how many in one
+    line; the menu and a hole chosen on the board open it, and open or closed is kept."""
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui.main import FEATURES_OPEN_KEY, _stored_bool
+
+    store = QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
+    monkeypatch.setattr(main_module, "app_settings", lambda: store)
+    window = _window_on(_featured_document())
+    try:
+        window.scene.clearSelection()
+        window._refresh_properties()
+        features = window.inspector.board_editor.features
+        assert not features.is_open() and features.body.isHidden()
+        assert features.summary.text() == "1 mounting hole  ·  1 edge connector"
+
+        window.on_board_features()
+        assert features.is_open() and not features.body.isHidden()
+        assert _stored_bool(store, FEATURES_OPEN_KEY, False) is True
+
+        features.toggle.click()  # closed by hand, and remembered so
+        assert not features.is_open()
+        assert _stored_bool(store, FEATURES_OPEN_KEY, True) is False
+
+        (mount,) = window.bus.document.mounting_holes
+        window.scene.mount_items[mount.id].setSelected(True)
+        window._selection_from = "board"
+        window._refresh_properties()
+        assert features.is_open(), "a hole chosen on the board opens the board's list"
+    finally:
+        _close(window)
+
+    window = _window_on(_featured_document())
+    try:
+        assert window.inspector.board_editor.features.is_open(), "kept for the next window"
+    finally:
+        _close(window)
+
+
+def test_a_board_with_no_features_says_so_in_one_line() -> None:
+    window = _window_on(_blank_document())
+    try:
+        features = window.inspector.board_editor.features
+        window.scene.clearSelection()
+        window._refresh_properties()
+        assert features.summary.text() == "No mounting holes or edge connectors"
     finally:
         _close(window)

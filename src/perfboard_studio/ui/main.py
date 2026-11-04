@@ -606,6 +606,10 @@ def _stored_strings(settings: QSettings, key: str) -> set[str]:
     return set()
 
 
+#: Whether the board's holes and connectors are open in Properties.
+FEATURES_OPEN_KEY = "properties/boardFeaturesOpen"
+
+
 def _stored_bool(settings: QSettings, key: str, default: bool) -> bool:
     """A tick from the store, whichever way the platform round-tripped it.
 
@@ -8021,6 +8025,11 @@ class MainWindow(QMainWindow):
         self.placing_value.textChanged.connect(self._on_placement_value_changed)
         self.properties.refresh(self.bus.document)
         self.properties.set_content(self.inspector)
+        # The board's holes and connectors: closed to one line unless somebody opened them,
+        # remembered as the window's other view state is.
+        features = self.inspector.board_editor.features
+        features.set_open(_stored_bool(app_settings(), FEATURES_OPEN_KEY, False))
+        features.opened.connect(lambda on: app_settings().setValue(FEATURES_OPEN_KEY, on))
 
     def _current_selection(self) -> Selection:
         """What is selected, said once for the Properties panel: a part armed for placing
@@ -11314,6 +11323,7 @@ class MainWindow(QMainWindow):
         self.dock_properties.show()
         self.dock_properties.raise_()
         features = self.inspector.board_editor.features
+        features.set_open(True, emit=True)
         self.properties.scroller.ensureWidgetVisible(features.heading, 0, 0)
         features.mount_diameter.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
