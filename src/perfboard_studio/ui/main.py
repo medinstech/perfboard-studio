@@ -101,6 +101,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressDialog,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QSpinBox,
     QStackedWidget,
@@ -2367,6 +2368,35 @@ def vtk_paints_on_screen(platform: str, qt_version: str) -> bool:
     return (major, minor) < (6, 10)
 
 
+class _StepLabel(updater.ElidingLabel):
+    """The step the 3D view is showing: as wide as its words where there is room, and
+    ending in an ellipsis where there is not, with the whole line in its tip.
+
+    A QLabel's minimum is its whole text. "9/40 · U1 L7805 -- P7 → R7, 3 pins with pin 1"
+    beside the guide at a third of the window held its full width, and the slider whose
+    stretch was the rest got nothing but its handle (reach, from the README shots)."""
+
+    #: What the label keeps however narrow the row: the step's number and a word of it.
+    LEAST = 160
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.setMinimumWidth(self.LEAST)
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        self.setToolTip(text)
+        self.updateGeometry()
+
+    def sizeHint(self) -> QSize:
+        """The whole line, so the row gives it its words when it has the room."""
+        return QSize(self.fontMetrics().horizontalAdvance(self.text()) + 4, super().sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(self.LEAST, super().minimumSizeHint().height())
+
+
 class _FrameOnFirstSize(QObject):
     """Frames the 3D panel once, when its render window first has a size to frame it in.
 
@@ -3838,9 +3868,10 @@ class MainWindow(QMainWindow):
             t("Drag back to see the board part-way through the build.")
         )
         self.assembly_slider.valueChanged.connect(self._on_assembly_moved)
+        # A groove to drag, however long the step's words (``_StepLabel``).
+        self.assembly_slider.setMinimumWidth(96)
 
-        self.assembly_label = QLabel()
-        self.assembly_label.setMinimumWidth(160)
+        self.assembly_label = _StepLabel()
 
         row.addWidget(self.act_step_back)
         row.addWidget(self.act_play)

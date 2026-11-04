@@ -16656,3 +16656,33 @@ def test_a_phases_checks_scroll_in_a_short_narrow_panel() -> None:
         assert bench.checks_scroll.height() >= 2 * boxes[0].sizeHint().height()
     finally:
         _close(window)
+
+
+def test_a_long_step_leaves_the_3d_slider_its_groove() -> None:
+    """Beside the guide at a third of the window, the step's label held its whole line and
+    the slider got only its handle. The label ends in an ellipsis, the line in its tip."""
+    from PySide6.QtWidgets import QLabel
+
+    window = _window_on(_load_dense())
+    try:
+        bar = window._build_assembly_bar()
+        window._3d_layout.addWidget(bar)
+        window.act_step_back.click()
+        label = window.assembly_label
+        line = label.text()
+        assert line.startswith(f"{len(window._assembly_steps())}/") and label.toolTip() == line
+        bar.setParent(None)
+        bar.resize(476, 40)
+        bar.show()
+        QApplication.processEvents()
+        bar.layout().activate()
+        assert window.assembly_slider.width() >= 96
+        assert label.width() < label.fontMetrics().horizontalAdvance(line), "nothing to elide"
+        assert QLabel.text(label).endswith("…")
+        bar.resize(1600, 40)
+        QApplication.processEvents()
+        bar.layout().activate()
+        assert QLabel.text(label) == line, "the whole line where there is room"
+        bar.close()
+    finally:
+        _close(window)
