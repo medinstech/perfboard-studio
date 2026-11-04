@@ -25,10 +25,17 @@ code rather than a special case. The one shot of the 3D panel IN the window
 (``guide-and-3d.png``) grabs the window and then pastes in what the panel's own render
 window holds, read back from VTK -- see ``_grab_with_3d``.
 
-The window is shown briefly on a real display, which is unavoidable: Qt's offscreen
-plugin has no font database on Windows (see ``_default_headless_platform`` in
-ui/main.py), so an offscreen grab would come back with every label as a missing-glyph
-box -- and the 3D panel needs a real window to draw in.
+**Nothing is shown on screen.** The window runs on Qt's offscreen platform, pointed at the
+system's fonts with ``QT_QPA_FONTDIR`` -- the offscreen plugin has no font database of its
+own on Windows (see ``_default_headless_platform`` in ui/main.py), and without one every
+label came back as a missing-glyph box, which is why this used to need a real display and a
+desktop moment to take. ``QT_QPA_PLATFORM=windows`` puts the window on screen again.
+
+The one thing offscreen cannot do is the 3D PANEL's own widget: QVTK asks the platform for a
+native window with a GL pixel format, gets none, and the process ends. So the panel is given
+``_OffscreenPanel`` instead -- the renderer the panel would hold, in VTK's own offscreen
+render window -- and ``_grab_with_3d`` paints its frame where the panel is. It is the same
+frame the readback of the on-screen panel pasted in; only where it is drawn changes.
 
 **The scale is pinned, not taken from the monitor.** Every editor shot is the window at
 ``WINDOW_SIZE`` drawn at ``SCALE``, so 2000 x 1250 pixels on any machine. Taken from the
@@ -55,6 +62,13 @@ WINDOW_SIZE = (1600, 1000)
 SCALE = "1.25"
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
 os.environ["QT_SCALE_FACTOR"] = SCALE
+# Offscreen unless asked otherwise -- see this module's docstring.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if sys.platform == "win32":
+    os.environ.setdefault(
+        "QT_QPA_FONTDIR", str(Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts")
+    )
+OFFSCREEN = os.environ["QT_QPA_PLATFORM"] == "offscreen"
 
 from PySide6.QtGui import QPixmap  # noqa: E402
 from PySide6.QtWidgets import QApplication, QMainWindow  # noqa: E402
@@ -138,6 +152,8 @@ def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     assert isinstance(app, QApplication)
     _fresh_settings()
+    if OFFSCREEN:
+        MainWindow._create_3d_widget = _create_offscreen_3d  # type: ignore[method-assign]
 
     result = persist.deserialize_document(FIXTURE.read_text(encoding="utf-8"))
     if not result.ok:
@@ -204,9 +220,10 @@ def main() -> int:
     _settle(app)
     window.grab().save(str(OUT_DIR / "schematic.png"))
     shots.append(("schematic.png", "the schematic panel"))
-    # Closed again, not merely put behind: the next window restores this one's layout from
-    # the same settings, and a close-up of the board wants the whole width.
-    window.dock_schematic.close()
+    # The board back in front: the next window restores this one's layout from the same
+    # settings. Not the sheet closed, as it was when the views stood side by side -- they
+    # are tabs now, and closing one brings the next tab forward, which is the 3D view.
+    window.show_board()
     _settle(app)
 
     document = window.bus.document
@@ -372,12 +389,31 @@ def _guide_and_3d_shot(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     window = MainWindow(result.document, NANO_RELAY)
     _open(window, app)
     window.act_ratsnest.setChecked(False)
-    # The parts and nets panels closed, as somebody at the bench would: what this picture
-    # is about needs the width, and the editor shots show those two already.
-    window.dock_library.close()
-    window.dock_nets.close()
+    # The sidebar closed, as somebody at the bench would: what this picture is about needs
+    # the width, and the editor shots show the library and the nets already.
+    for dock in (window.dock_library, window.dock_part_list, window.dock_nets):
+        dock.close()
+    # SIDE BY SIDE, which the views are not by default: they are tabs over one canvas. The
+    # sheet, the 3D view and the guide leave the group, and the last two are split off
+    # Properties, the one panel in the middle row that is in no tab group: split off the
+    # board, which still is in one, they went back into it as tabs -- ``splitDockWidget``
+    # handed a dock in a group adds to the group (MainWindow's default layout says so too).
+    # Properties then goes to the end of the row: board, 3D, guide, Properties.
+    for dock in (window.dock_schematic, window.dock_3d, window.dock_guide):
+        window.removeDockWidget(dock)
+    _settle(app, 5)
+    window.splitDockWidget(window.dock_properties, window.dock_3d, Qt.Orientation.Horizontal)
+    window.dock_3d.show()
+    window.splitDockWidget(window.dock_3d, window.dock_guide, Qt.Orientation.Horizontal)
+    window.dock_guide.show()
+    window.splitDockWidget(window.dock_guide, window.dock_properties, Qt.Orientation.Horizontal)
+    _settle(app, 30)
     window.act_show_3d.trigger()
     _settle(app, 30)
+    if window.vtk_widget is None:
+        # Offscreen, the panel never hears it came in front: Qt sends visibilityChanged
+        # only for a window on screen (see MainWindow._raise_view), so it is asked here.
+        window._create_3d_widget()
     window.act_show_guide.trigger()
     _settle(app, 30)
 
@@ -392,6 +428,7 @@ def _guide_and_3d_shot(app: QApplication, shots: list[tuple[str, str]]) -> bool:
     if renderer is None:
         print("THE 3D VIEW DID NOT OPEN")
         return False
+    _frame_offscreen_panel(window)
     renderer.GetActiveCamera().Zoom(CAMERA_ZOOM)
     renderer.ResetCameraClippingRange()
     _grab_with_3d(window).save(str(OUT_DIR / "guide-and-3d.png"))
@@ -419,6 +456,8 @@ def _grab_with_3d(window: MainWindow) -> QPixmap:
     pixmap = window.grab()
     widget = window.vtk_widget
     render_window = widget.GetRenderWindow()
+    # Offscreen the panel holds its placeholder label, and the frame goes where that is.
+    target = window._3d_placeholder if isinstance(widget, _OffscreenPanel) else widget
     render_window.Render()
     readback = view3d.vtk.vtkWindowToImageFilter()
     readback.SetInput(render_window)
@@ -433,9 +472,57 @@ def _grab_with_3d(window: MainWindow) -> QPixmap:
     # The pixmap is painted in the window's units and the frame is in pixels, so the frame
     # is drawn into the panel's rectangle in units and lands one pixel for one.
     painter = QPainter(pixmap)
-    painter.drawImage(QRect(widget.mapTo(window, QPoint(0, 0)), widget.size()), QImage(str(frame)))
+    painter.drawImage(QRect(target.mapTo(window, QPoint(0, 0)), target.size()), QImage(str(frame)))
     painter.end()
     return pixmap
+
+
+class _OffscreenPanel:
+    """The 3D panel's widget where there is no display: VTK's offscreen render window,
+    holding the renderer the panel would. The window asks its 3D widget for exactly one
+    thing, ``GetRenderWindow()``, and gets this one."""
+
+    def __init__(self, render_window: object) -> None:
+        self._render_window = render_window
+
+    def GetRenderWindow(self) -> object:  # VTK's name, which the window calls
+        return self._render_window
+
+
+def _create_offscreen_3d(self: MainWindow) -> None:
+    """``MainWindow._create_3d_widget`` for a window on the offscreen platform: the same
+    renderer, with the same pin names, labels and owners, in an offscreen render window
+    rather than a QVTK widget that cannot get a pixel format. The placeholder label stays
+    in the panel, for ``_grab_with_3d`` to paint the frame over."""
+    ren, _stats = view3d.build_renderer(
+        self.bus.document,
+        self.lookup,
+        flipped=(self.side == "bottom"),
+        pin_names=self._pin_names_shown(),
+        board_notes=self._board_labels_shown(),
+        owners=self._3d_owners,
+    )
+    render_window = view3d.vtk.vtkRenderWindow()
+    render_window.SetOffScreenRendering(1)
+    render_window.AddRenderer(ren)
+    self._vtk_renderer = ren
+    self.vtk_widget = _OffscreenPanel(render_window)
+    self._3d_stale = False
+    self._show_selection_in_3d()
+
+
+def _frame_offscreen_panel(window: MainWindow) -> None:
+    """Size the stand-in to the panel, in pixels, and frame it as the panel frames itself
+    on its first size (``_FrameOnFirstSize``). Nothing to do for a panel on screen."""
+    widget = window.vtk_widget
+    if not isinstance(widget, _OffscreenPanel):
+        return
+    label = window._3d_placeholder
+    ratio = label.devicePixelRatioF()
+    widget.GetRenderWindow().SetSize(  # type: ignore[attr-defined]
+        round(label.width() * ratio), round(label.height() * ratio)
+    )
+    view3d.apply_default_camera(window._vtk_renderer, flipped=(window.side == "bottom"))
 
 
 if __name__ == "__main__":
