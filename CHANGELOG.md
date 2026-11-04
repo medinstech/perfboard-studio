@@ -361,6 +361,10 @@ closed without a bump.
   VCC on the left, so a module laid over the outline put each pin in its mirror's hole, VCC
   in INT's. It now stands above the header, the same pins in the same holes. A module
   drawing is turned to fit its board and never mirrored.
+- **A module's chips showed pin 1 on the wrong side**, and on the other side again in 3D, so
+  the two views disagreed. Each chip's corner is now read off the photograph, board or
+  drawing its module was measured on, both views put the dot there, and it turns with the
+  module; where the source does not show the dot, none is drawn.
 - **Parts are the size of the real packages.** The library's bodies were often smaller than
   the parts they stand for -- a 1/4 W resistor 5 mm long where a 0207 is 6.5, a 5 mm LED 5
   mm across where its flange is 6.15, a TO-92 4.5 × 3.7 where it is 5.21 × 4.19 -- so DRC
