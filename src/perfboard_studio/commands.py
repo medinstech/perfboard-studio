@@ -75,6 +75,7 @@ from .model import (
     BoardEdge,
     BoardFace,
     BoardFinish,
+    BoardId,
     BoardMask,
     BoardNote,
     BoardSide,
@@ -85,6 +86,7 @@ from .model import (
     ConductorKind,
     DocumentMeta,
     EdgeConnector,
+    ExtraBoard,
     FingerShape,
     HoleCoord,
     LeadBendConductor,
@@ -115,6 +117,7 @@ from .model import (
     normalized_pin_names,
     supply_net_class,
 )
+from .system import FIRST_BOARD, board_document, board_ids, extra_board, merge_board
 
 # ---------------------------------------------------------------------------
 # Document construction
@@ -151,12 +154,24 @@ def create_document_id_generator(doc: PerfDocument) -> NextId:
         if separator and prefix and suffix.isdigit():
             highest[prefix] = max(highest.get(prefix, 0), int(suffix))
 
-    for component in doc.components:
-        note(component.id)
-    for conductor in doc.conductors:
-        note(conductor.id)
-    for cut in doc.cuts:
-        note(cut.id)
+    # Every board's own lists, the first board's and every other's: ids are one space
+    # across the document (docs/ARCHITECTURE.md, "Several boards are one document").
+    boards = [board_document(doc, board_id) for board_id in board_ids(doc)]
+    for extra in doc.boards:
+        note(extra.id)
+    for seen in boards:
+        for component in seen.components:
+            note(component.id)
+        for conductor in seen.conductors:
+            note(conductor.id)
+        for cut in seen.cuts:
+            note(cut.id)
+        for hole in seen.mounting_holes:
+            note(hole.id)
+        for connector in seen.edge_connectors:
+            note(connector.id)
+        for board_note in seen.board_notes:
+            note(board_note.id)
     # Nets are here because ``net.add`` generates ids the same way the others do. A net
     # named by a netlist ("+5V", "N$3") almost never has this shape and is simply not
     # noted, which is the behaviour described above rather than an exception to it.
@@ -170,14 +185,8 @@ def create_document_id_generator(doc: PerfDocument) -> NextId:
     # out the same way.
     for part in doc.parts:
         note(part.id)
-    for hole in doc.mounting_holes:
-        note(hole.id)
-    for connector in doc.edge_connectors:
-        note(connector.id)
     for sheet_note in doc.sheet_notes:
         note(sheet_note.id)
-    for board_note in doc.board_notes:
-        note(board_note.id)
 
     return create_id_generator(initial=highest)
 
@@ -3769,6 +3778,181 @@ class _RenameDocument:
 
 
 # ---------------------------------------------------------------------------
+# Several boards
+# ---------------------------------------------------------------------------
+#
+# A system is one document (docs/ARCHITECTURE.md, "Several boards are one document, and each
+# is seen alone"). Every command above is a command on ONE board, and stays one: ``board.on``
+# hands it the board's own view (``system.board_document``) and merges what it did back, so
+# not one of them learns that a second board exists. The three after it make, name and
+# remove the boards themselves.
+
+
+@dataclass(frozen=True, slots=True)
+class OnBoardPayload:
+    """A board command, done on one board of the system: ``type`` and ``payload`` are the
+    command exactly as it is dispatched on a board alone."""
+
+    board: BoardId
+    type: str
+    payload: Any
+
+
+@dataclass(frozen=True, slots=True)
+class AddBoardPayload:
+    """A new board for the system, after every other. ``id`` is generated when left out."""
+
+    board: Board
+    name: str
+    id: BoardId | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RenameBoardPayload:
+    board: BoardId
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteBoardPayload:
+    """Take a board out of the system. Its parts go back to the design, wired as they were
+    (``component.unplace``), and its copper goes with it."""
+
+    board: BoardId
+
+
+#: The commands about the SYSTEM rather than one board, which are not done on a board.
+_SYSTEM_COMMANDS = frozenset({"board.on", "board.add", "board.rename", "board.delete"})
+
+
+def _board_command(type_: str) -> CommandDefinition[Any]:
+    if type_ not in _SYSTEM_COMMANDS:
+        for definition in STANDARD_COMMANDS:
+            if definition.type == type_:
+                return definition
+    raise CommandError(
+        "unknown-command", f"{type_!r} is not a command that can be done on one board."
+    )
+
+
+def _require_board(doc: PerfDocument, board_id: BoardId) -> None:
+    if board_id not in board_ids(doc):
+        raise CommandError("unknown-board", f"There is no board {board_id!r} in this document.")
+
+
+def _assert_one_system(doc: PerfDocument) -> None:
+    """What no single board can see: an id or a reference that is now on two boards, or on
+    a board and in the design. A board's own commands check their own board; this checks
+    the system they were merged into."""
+    seen_ids: set[str] = set()
+    seen_refs: dict[str, str] = {}
+    for board_id in board_ids(doc):
+        for component in board_document(doc, board_id).components:
+            if component.id in seen_ids:
+                raise CommandError(
+                    "duplicate-id", f"Component id {component.id!r} is on two boards."
+                )
+            seen_ids.add(component.id)
+            if component.ref in seen_refs and seen_refs[component.ref] != board_id:
+                raise CommandError(
+                    "duplicate-ref",
+                    f'A component with ref "{component.ref}" is already on another board.',
+                )
+            seen_refs[component.ref] = board_id
+
+
+def _board_name(doc: PerfDocument, board_id: BoardId) -> str:
+    return doc.meta.name if board_id == FIRST_BOARD else extra_board(doc, board_id).name
+
+
+class _OnBoard:
+    """Any board command, on one board of the system: done to that board's view of the
+    system and merged back, then checked against the whole system."""
+
+    type = "board.on"
+
+    def apply(self, doc: PerfDocument, p: OnBoardPayload, ctx: CommandContext) -> PerfDocument:
+        _require_board(doc, p.board)
+        inner = _board_command(p.type)
+        seen = board_document(doc, p.board)
+        merged = merge_board(doc, p.board, inner.apply(seen, p.payload, ctx))
+        _assert_one_system(merged)
+        return merged
+
+    def describe(self, p: OnBoardPayload, doc: PerfDocument) -> str:
+        inner = _board_command(p.type)
+        what = inner.describe(p.payload, board_document(doc, p.board))
+        return f"{what} on {_board_name(doc, p.board)}"
+
+
+class _AddBoard:
+    type = "board.add"
+
+    def apply(self, doc: PerfDocument, p: AddBoardPayload, ctx: CommandContext) -> PerfDocument:
+        name = p.name.strip() if isinstance(p.name, str) else ""
+        if not name:
+            raise CommandError("empty-name", "A board needs a name; it cannot be blank.")
+        board_id = p.id if p.id is not None else ctx.next_id("board")
+        if board_id in board_ids(doc):
+            raise CommandError("duplicate-id", f"There is already a board {board_id!r}.")
+        # The board is refused exactly what board.set refuses, by board.set itself on a
+        # board with nothing on it yet.
+        set_board.apply(create_empty_document(doc.meta), SetBoardPayload(board=p.board), ctx)
+        return dataclasses.replace(
+            doc, boards=(*doc.boards, ExtraBoard(id=board_id, name=name, board=p.board))
+        )
+
+    def describe(self, p: AddBoardPayload, doc: PerfDocument) -> str:
+        return f"Add the board {p.name.strip()!r}"
+
+
+class _RenameBoard:
+    type = "board.rename"
+
+    def apply(self, doc: PerfDocument, p: RenameBoardPayload, ctx: CommandContext) -> PerfDocument:
+        _require_board(doc, p.board)
+        name = p.name.strip() if isinstance(p.name, str) else ""
+        if not name:
+            raise CommandError("empty-name", "A board needs a name; it cannot be blank.")
+        if p.board == FIRST_BOARD:
+            # The first board is the document's own, and so is its name.
+            return rename_document.apply(doc, RenameDocumentPayload(name=name), ctx)
+        return dataclasses.replace(
+            doc,
+            boards=tuple(
+                dataclasses.replace(extra, name=name) if extra.id == p.board else extra
+                for extra in doc.boards
+            ),
+        )
+
+    def describe(self, p: RenameBoardPayload, doc: PerfDocument) -> str:
+        return f"Name the board {p.name.strip()!r}"
+
+
+class _DeleteBoard:
+    type = "board.delete"
+
+    def apply(self, doc: PerfDocument, p: DeleteBoardPayload, ctx: CommandContext) -> PerfDocument:
+        _require_board(doc, p.board)
+        if p.board == FIRST_BOARD:
+            raise CommandError(
+                "first-board",
+                "The first board is the document itself and cannot be taken out of it.",
+            )
+        seen = board_document(doc, p.board)
+        for component in seen.components:
+            seen = unplace_component.apply(seen, UnplaceComponentPayload(id=component.id), ctx)
+        # Back into the design: the board's view now holds its parts in ``parts``.
+        merged = merge_board(doc, p.board, seen)
+        return dataclasses.replace(
+            merged, boards=tuple(extra for extra in merged.boards if extra.id != p.board)
+        )
+
+    def describe(self, p: DeleteBoardPayload, doc: PerfDocument) -> str:
+        return f"Remove the board {_board_name(doc, p.board)!r}"
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -3828,6 +4012,10 @@ update_edge_connector: CommandDefinition[UpdateEdgeConnectorPayload] = _UpdateEd
 set_height_limit: CommandDefinition[SetHeightLimitPayload] = _SetHeightLimit()
 set_body_clearance: CommandDefinition[SetBodyClearancePayload] = _SetBodyClearance()
 rename_document: CommandDefinition[RenameDocumentPayload] = _RenameDocument()
+on_board: CommandDefinition[OnBoardPayload] = _OnBoard()
+add_board: CommandDefinition[AddBoardPayload] = _AddBoard()
+rename_board: CommandDefinition[RenameBoardPayload] = _RenameBoard()
+delete_board: CommandDefinition[DeleteBoardPayload] = _DeleteBoard()
 
 # Typed with Any because CommandDefinition's payload is contravariant, so a specific
 # command is deliberately NOT assignable to CommandDefinition[object]. See the note on
@@ -3889,6 +4077,10 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     set_height_limit,
     set_body_clearance,
     rename_document,
+    on_board,
+    add_board,
+    rename_board,
+    delete_board,
 )
 
 

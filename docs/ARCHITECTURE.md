@@ -2967,3 +2967,15 @@ across the whole document and references across every board and the design, beca
 node is a `(ref, pin)` and has to name one pin in the system. `persist` refuses a
 duplicated id or board id at load, as it does on one board; a duplicated reference is a
 warning, as it is on one board.
+
+**A command is done on a board, not taught about one.** `board.on` takes any board command
+as it is dispatched on a board alone -- `type` and `payload` -- applies it to that board's
+view and merges the result back, so one step goes on the one undo stack whichever board it
+was on, and the journal says which board. A `board` field on every payload was the other
+way: sixty payloads, and every command's own lookups widened to the system. Two things a
+single board cannot see are checked on the merged document instead: a reference now on two
+boards (`duplicate-ref`), and an id now on two. The id generator reads every board, so an id
+it hands out is new to the whole document. `board.add` refuses a board exactly what
+`board.set` refuses, by asking `board.set` itself; `board.delete` takes the board's parts back
+into the design wired as they were (`component.unplace` on each), and the first board, being
+the document itself, cannot be deleted.

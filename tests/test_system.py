@@ -168,3 +168,109 @@ def test_ids_are_one_space_across_every_board() -> None:
         twice = dataclasses.replace(doc, boards=(doc.boards[0], dataclasses.replace(doc.boards[1], id=taken)))
         result = persist.deserialize_document(persist.serialize_document(twice))
         assert not result.ok and result.code == "duplicate-id", taken
+
+
+# ---------------------------------------------------------------------------
+# The commands: board.on, board.add, board.rename, board.delete
+# ---------------------------------------------------------------------------
+
+
+def _bus(doc: PerfDocument):  # type: ignore[no-untyped-def]
+    from perfboard_studio.command import CommandBus, CommandContext
+    from perfboard_studio.commands import create_document_id_generator, create_standard_registry
+
+    return CommandBus(doc, create_standard_registry(), CommandContext(next_id=create_document_id_generator(doc)))
+
+
+def test_a_board_command_done_on_one_board_moves_that_board_alone() -> None:
+    """``board.on`` hands any board command the board's own view and merges it back: the
+    second board's part moves, the first board and the third do not, and one undo puts it
+    back -- one step on the one stack, whichever board it was on."""
+    from perfboard_studio.commands import MoveComponentPayload, OnBoardPayload
+
+    doc = _system()
+    bus = _bus(doc)
+    part = system.extra_board(doc, "b2").components[0]
+    to = HoleCoord(part.anchor.col, part.anchor.row + 1)
+    result = bus.dispatch(
+        "board.on", OnBoardPayload(board="b2", type="component.move", payload=MoveComponentPayload(id=part.id, anchor=to))
+    )
+    assert result.ok, result.message
+    after = bus.document
+    assert next(c for c in system.extra_board(after, "b2").components if c.id == part.id).anchor == to
+    assert system.board_document(after) == system.board_document(doc)
+    assert system.extra_board(after, "b3") == system.extra_board(doc, "b3")
+    assert result.description.endswith("on Controller"), result.description
+    assert bus.undo() == doc
+
+
+def test_a_reference_another_board_holds_is_refused() -> None:
+    """No board can see another's references, so the system checks them after the merge:
+    placing an R1 on the second board while the first holds R1 is refused."""
+    from perfboard_studio.commands import OnBoardPayload, PlaceComponentPayload
+
+    doc = _system()
+    taken = doc.components[0].ref
+    result = _bus(doc).dispatch(
+        "board.on",
+        OnBoardPayload(
+            board="b2",
+            type="component.place",
+            payload=PlaceComponentPayload(ref=taken, value="", footprint_id="r-axial-3", anchor=HoleCoord(1, 1)),
+        ),
+    )
+    assert not result.ok and result.code == "duplicate-ref"
+
+
+def test_a_new_id_on_any_board_is_new_to_the_whole_document() -> None:
+    """The id generator reads every board: an id generated after a reopen is held by no
+    board of the system."""
+    from perfboard_studio.commands import create_document_id_generator
+
+    doc = _system()
+    held = {
+        item.id
+        for board_id in system.board_ids(doc)
+        for seen in (system.board_document(doc, board_id),)
+        for items in (seen.components, seen.conductors, seen.cuts, seen.mounting_holes, seen.edge_connectors, seen.board_notes)
+        for item in items
+    } | {extra.id for extra in doc.boards}
+    next_id = create_document_id_generator(doc)
+    for prefix in ("cmp", "cond", "cut", "mh", "ec", "label", "board"):
+        assert next_id(prefix) not in held, prefix
+
+
+def test_boards_are_added_named_and_taken_out_with_their_parts_kept_in_the_design() -> None:
+    from perfboard_studio.commands import AddBoardPayload, DeleteBoardPayload, RenameBoardPayload
+
+    doc = _system()
+    bus = _bus(doc)
+    assert bus.dispatch("board.add", AddBoardPayload(board=doc.board, name="Spare")).ok
+    added = bus.document.boards[-1]
+    assert added.name == "Spare" and added.id not in {"b2", "b3", system.FIRST_BOARD}
+    assert bus.dispatch("board.rename", RenameBoardPayload(board=added.id, name="Panel")).ok
+    assert system.extra_board(bus.document, added.id).name == "Panel"
+    assert not bus.dispatch("board.add", AddBoardPayload(board=doc.board, name="  ")).ok
+
+    nets_before = bus.document.nets
+    leaving = system.extra_board(bus.document, "b2")
+    assert bus.dispatch("board.delete", DeleteBoardPayload(board="b2")).ok
+    after = bus.document
+    assert "b2" not in system.board_ids(after)
+    assert {c.ref for c in leaving.components} <= {p.ref for p in after.parts}, "its parts are in the design"
+    assert after.nets == nets_before, "and wired as they were"
+    first = bus.dispatch("board.delete", DeleteBoardPayload(board=system.FIRST_BOARD))
+    assert not first.ok and first.code == "first-board"
+
+
+def test_only_board_commands_are_done_on_a_board() -> None:
+    from perfboard_studio.commands import AddBoardPayload, OnBoardPayload
+
+    doc = _system()
+    bus = _bus(doc)
+    nested = bus.dispatch(
+        "board.on", OnBoardPayload(board="b2", type="board.add", payload=AddBoardPayload(board=doc.board, name="x"))
+    )
+    assert not nested.ok and nested.code == "unknown-command"
+    nowhere = bus.dispatch("board.on", OnBoardPayload(board="b9", type="document.rename", payload=None))
+    assert not nowhere.ok and nowhere.code == "unknown-board"
