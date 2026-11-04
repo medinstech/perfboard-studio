@@ -319,6 +319,11 @@ def next_step(steps: tuple[StepState, ...]) -> StepKey:
 # The widget
 # ---------------------------------------------------------------------------
 
+#: How much the step bar says, fullest first (``WorkflowBar._fit``).
+type FitMode = Literal["full", "compact", "current", "tiny"]
+FIT_MODES: tuple[FitMode, ...] = ("full", "compact", "current", "tiny")
+
+
 def _step_dot(number: int, status: StepStatus) -> QIcon:
     """The round mark in front of a step's name: a tick when it is done, its number --
     filled in the accent when it is the one to do, outlined when it comes later -- and an
@@ -397,9 +402,9 @@ class WorkflowBar(QWidget):
         # whole window: with it, a 1100 px window could not be made.
         layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
         layout.addStretch(1)
-        #: How much each step says: the step to do with its line, every step by name, or
-        #: only the dots.
-        self._mode: Literal["full", "compact", "tiny"] = "full"
+        #: How much each step says: the step to do with its line, every step by name, the
+        #: step to do by name and the others as dots, or only the dots.
+        self._mode: FitMode = "full"
         self._fitting = False
         self.buttons: dict[StepKey, QToolButton] = {}
         for index, key in enumerate(STEP_ORDER):
@@ -437,7 +442,10 @@ class WorkflowBar(QWidget):
     def _label(self, step: StepState, mode: str) -> str:
         if mode == "tiny":
             return ""
-        if mode == "full" and step.status in ("current", "problem"):
+        doing = step.status in ("current", "problem")
+        if mode == "current" and not doing:
+            return ""
+        if mode == "full" and doing:
             return f"{step_title(step.key)} · {step.summary}"
         return step_title(step.key)
 
@@ -447,7 +455,11 @@ class WorkflowBar(QWidget):
 
     def _fit(self) -> None:
         """Say as much as the width allows: the step to do in full, then names only, then
-        the dots alone.
+        the step to do's name alone, then the dots alone.
+
+        The third is for a 1280 x 720 laptop, where every name did not fit and the bar went
+        straight to six numbered dots (the release walkthrough): which step you are on is
+        the one word the bar is for.
 
         Measured by writing each wording and asking the layout, fullest first, because the
         widths are the font's and the language's -- "Kablolama" is not "Wiring". What a
@@ -460,8 +472,8 @@ class WorkflowBar(QWidget):
             return
         self._fitting = True
         try:
-            chosen: Literal["full", "compact", "tiny"] = "tiny"
-            for mode in ("full", "compact", "tiny"):
+            chosen: FitMode = "tiny"
+            for mode in FIT_MODES:
                 self._write_labels(mode)
                 if layout.sizeHint().width() <= self.width():
                     chosen = mode

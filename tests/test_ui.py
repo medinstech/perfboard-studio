@@ -16686,3 +16686,29 @@ def test_a_long_step_leaves_the_3d_slider_its_groove() -> None:
         bar.close()
     finally:
         _close(window)
+
+
+def test_a_narrow_step_bar_keeps_the_name_of_the_step_to_do() -> None:
+    """At 1280 x 720 every step's name did not fit and the bar went straight to six dots.
+    Before it gives up every name it keeps the one step it is there to name."""
+    from perfboard_studio.ui.workflow import step_title
+
+    window = _window_on(_blank_document())
+    try:
+        bar = window.workflow_bar
+        doing = next(s for s in bar.steps if s.status in ("current", "problem"))
+        widths = {}
+        for mode in ("full", "compact", "current", "tiny"):
+            bar._write_labels(mode)
+            widths[mode] = bar.layout().sizeHint().width()
+        assert widths["full"] >= widths["compact"] > widths["current"] > widths["tiny"]
+        bar.resize(widths["current"] + 2, bar.height())
+        bar._fit()
+        assert bar._mode == "current"
+        assert bar.buttons[doing.key].text() == step_title(doing.key)
+        assert all(bar.buttons[s.key].text() == "" for s in bar.steps if s is not doing)
+        bar.resize(widths["tiny"] + 2, bar.height())
+        bar._fit()
+        assert bar._mode == "tiny"
+    finally:
+        _close(window)
