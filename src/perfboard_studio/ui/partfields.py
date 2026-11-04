@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
@@ -55,6 +55,29 @@ def pinout_for_retyped_value(
     return part if dict(names) == dict(previous.pin_names) else None
 
 
+class PinTable(QTableWidget):
+    """The pin names: asks for a few rows' height, and takes whatever more it is given.
+
+    Qt's table asks for 192 px whatever it holds, and Properties is a scroll area that
+    makes its content as tall as that content ASKS to be at its width -- so in a 1280 x 720
+    window a resistor's editor was 19 px taller than the panel, and its Auto-wire and
+    Delete row sat half under the status bar (the release walkthrough). Asking for three
+    rows, the editor fits; the table still expands into the room the panel has, and a
+    40-pin module's scrolls inside it rather than pushing the panel's last row away."""
+
+    #: The rows it asks room for. A 2-pin part asks for two.
+    WANTED_ROWS = 3
+
+    def sizeHint(self) -> QSize:
+        rows = min(max(self.rowCount(), 1), self.WANTED_ROWS)
+        height = (
+            self.horizontalHeader().sizeHint().height()
+            + rows * self.verticalHeader().defaultSectionSize()
+            + 2 * self.frameWidth()
+        )
+        return QSize(super().sizeHint().width(), height)
+
+
 class PinoutEditor(QWidget):
     """What a part is and what it calls its leads -- the two things its package cannot say.
 
@@ -94,7 +117,7 @@ class PinoutEditor(QWidget):
                 "is a fact about the part, not the package."
             )
         )
-        self.table = QTableWidget(0, 2)
+        self.table = PinTable(0, 2)
         self.table.setHorizontalHeaderLabels([t("Pin"), t("Name")])
         self.table.verticalHeader().setVisible(False)
         # As wide as its heading: at Qt's default width the Turkish "Pin no" was cut to "Pin nc".
@@ -174,6 +197,7 @@ class PinoutEditor(QWidget):
         self._hints = {}
         pins = footprint.pins if footprint is not None else ()
         self.table.setRowCount(len(pins))
+        self.table.updateGeometry()
         for row, pin in enumerate(pins):
             number = QTableWidgetItem(pin.number)
             number.setFlags(number.flags() & ~Qt.ItemFlag.ItemIsEditable)

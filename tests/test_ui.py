@@ -16712,3 +16712,28 @@ def test_a_narrow_step_bar_keeps_the_name_of_the_step_to_do() -> None:
         assert bar._mode == "tiny"
     finally:
         _close(window)
+
+
+def test_a_parts_editor_fits_a_720_px_window_with_its_last_row_showing() -> None:
+    """At 1280 x 720 a resistor's editor was 19 px taller than Properties, because the pin
+    names asked for Qt's 192 px: the Auto-wire and Delete row sat half under the status
+    bar. The table asks for its rows, up to three, and the editor fits."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.resize(1280, 720)
+        window.show()
+        part = next(c for c in window.bus.document.components if c.ref == "R1")
+        window.scene.select_components([part.id])
+        window._selection_from = "board"
+        window._refresh_properties()
+        QApplication.processEvents()
+        editor = window.inspector.shown
+        table = editor.pinout.table
+        rows = table.rowCount()
+        assert 0 < rows <= table.WANTED_ROWS
+        assert table.sizeHint().height() < 192
+        scroller = window.properties.scroller
+        need = scroller.widget().heightForWidth(scroller.viewport().width())
+        assert need <= scroller.viewport().height() or need < 0, (need, scroller.viewport().height())
+    finally:
+        _close(window)
