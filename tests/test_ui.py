@@ -16917,3 +16917,76 @@ def test_the_arrange_hint_wraps_to_the_room_beside_the_sheets_tools() -> None:
         assert hint.words.maximumWidth() == hint.WIDEST
     finally:
         _close(window)
+
+
+def _cabled_document():
+    """The KY-040 encoder on the header its cable plugs into, as the catalog places it."""
+    from perfboard_studio.catalog import catalog_part
+    from perfboard_studio.mcp.session import new_board
+    from perfboard_studio.model import ComponentInstance, DocumentMeta, HoleCoord, PerfDocument
+
+    part = catalog_part("ky-040-encoder")
+    assert part is not None
+    component = ComponentInstance(
+        id="c1", ref="J1", value=part.placed_value, footprint_id=part.footprint_id,
+        pin_names=part.pin_names, anchor=HoleCoord(3, 3),
+    )
+    return PerfDocument(
+        meta=DocumentMeta(name="cabled", created="", modified=""),
+        board=new_board(cols=30, rows=12).board, components=(component,),
+    )
+
+
+def test_a_cabled_part_says_in_properties_that_it_plugs_in_on_its_cable() -> None:
+    """The guide's step says the module is not on the board; Properties says it in the same
+    words, in the window's language, and says nothing of the kind for a plain part."""
+    from perfboard_studio.guide import CABLED_MODULE
+    from perfboard_studio.ui.i18n import language, set_language
+
+    for code in ("en", "tr"):
+        before = language()
+        set_language(code)
+        try:
+            window = _window_on(_cabled_document())
+            try:
+                component = window.bus.document.components[0]
+                window.scene.select_components([component.id])
+                window._selection_from = "board"
+                window._refresh_properties()
+                editor = window.inspector.shown
+                assert not editor.cabled.isHidden()
+                said = editor.cabled.text()
+                assert component.value.strip() in said
+                if code == "en":
+                    assert said == CABLED_MODULE.format(module=component.value.strip())
+                else:
+                    assert "kablo" in said.lower() and "is not on this board" not in said
+            finally:
+                _close(window)
+        finally:
+            set_language(before)
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        part = next(c for c in window.bus.document.components if c.ref == "R1")
+        window.scene.select_components([part.id])
+        window._selection_from = "board"
+        window._refresh_properties()
+        assert window.inspector.shown.cabled.isHidden()
+    finally:
+        _close(window)
+
+
+def test_a_cabled_step_on_the_bench_gives_its_leads_once() -> None:
+    """Its notes give each lead by name and hole; the numbered Holes row said the same holes
+    again by pin number, which the module does not use."""
+    from perfboard_studio.ui.i18n import t
+
+    window = _window_on(_cabled_document())
+    try:
+        bench = _bench(window)
+        (item,) = [i for i in bench.items if i.component_id == "c1"]
+        assert t("Holes") not in {what for what, _value in item.facts}
+        assert any("VCC" in note or "GND" in note for note in item.notes)
+    finally:
+        _close(window)

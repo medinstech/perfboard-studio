@@ -71,6 +71,7 @@ from perfboard_studio.commands import (
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.footprints import SUPERSEDED_FOOTPRINTS
 from perfboard_studio.geometry import format_hole, parse_hole
+from perfboard_studio.guide import CABLED_MODULE, plugs_in_on_a_cable
 from perfboard_studio.model import (
     BoardNote,
     BoardSide,
@@ -84,11 +85,12 @@ from perfboard_studio.model import (
     SheetNote,
 )
 from perfboard_studio.parsers.kicad import infer_net_class
+from perfboard_studio.phrasebook import guide_language, phrasebook
 
 from . import theme
 from .boardfeatures import FeatureEditor, FeaturesGroup
 from .engine_text import say
-from .i18n import t
+from .i18n import language, t
 from .partfields import PinoutEditor, note_editor, pinout_for_retyped_value
 from .partnames import footprint_label
 from .properties import describe
@@ -530,6 +532,15 @@ class _PartEditor(QWidget):
         form.addRow(t("Height"), self.facts)
         layout.addLayout(form)
 
+        # A header something plugs into on its cable says so, in the build guide's words
+        # (``guide.CABLED_MODULE``): the module is not on the board, and the names below
+        # are its leads.
+        self.cabled = QLabel()
+        self.cabled.setWordWrap(True)
+        theme.tone(self.cabled, "secondary")
+        self.cabled.hide()
+        layout.addWidget(self.cabled)
+
         # What its leads are called and what it is, when its package cannot say: committed
         # as they are changed, each change one step.
         self.pinout = PinoutEditor()
@@ -600,6 +611,11 @@ class _PartEditor(QWidget):
             self.facts.setText(
                 f"{footprint.body_height:.1f} mm" if footprint is not None else "?"
             )
+            cabled = footprint is not None and plugs_in_on_a_cable(component, footprint)
+            self.cabled.setVisible(cabled)
+            if cabled:
+                say_it = phrasebook(guide_language(language()))
+                self.cabled.setText(say_it(CABLED_MODULE, module=component.value.strip()))
             if another:
                 self.pinout.say("")
                 for problem in (self.rotation_problem, self.flags_problem, self.pinout_problem,

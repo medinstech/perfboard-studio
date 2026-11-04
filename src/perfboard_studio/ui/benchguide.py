@@ -139,6 +139,10 @@ def _step_item(step: GuideStep, phase: GuidePhase, index: int | None, board: Boa
             (t("Holes"), "  ".join(f"{pin}: {format_hole(hole, board)}" for pin, hole in step.pin_holes)),
             (t("Height"), f"{step.height_mm:.1f} mm"),
         )
+        if step.cabled:
+            # Its notes give each lead by name and hole ("VCC in C4"); pin numbers beside
+            # them said the same holes a second time in a language the module does not use.
+            facts = facts[1:]
         return BenchItem(
             key=step_focus(step), phase=phase, title=step.title, step_index=index,
             holes=holes, solder_side=False, polarity=step.polarity, facts=facts,
