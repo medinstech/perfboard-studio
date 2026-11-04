@@ -16627,3 +16627,32 @@ def test_an_ending_with_steps_skipped_goes_to_the_first() -> None:
         assert bench.pages.currentWidget() is bench.card and bench.current == 0
     finally:
         _close(window)
+
+
+def test_a_phases_checks_scroll_in_a_short_narrow_panel() -> None:
+    """At 1280 x 720 the guide's panel is narrow and short, and a phase of nine checks was
+    nine rows drawn over one another. They scroll, each row its full height."""
+    import itertools
+
+    from PySide6.QtWidgets import QCheckBox
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        most = max(range(len(bench.items)), key=lambda i: len(bench.items[i].phase.checkpoints))
+        bench.show_item(most)
+        window.resize(1280, 720)
+        window.show()
+        QApplication.processEvents()
+        bench.checks.activate()
+        laid = (bench.checks.itemAt(i).widget() for i in range(bench.checks.count()))
+        boxes = [b for b in laid if isinstance(b, QCheckBox)]
+        assert len(boxes) >= 5
+        for box in boxes:
+            assert box.height() >= box.sizeHint().height(), "a check squeezed under its own height"
+        tops = [b.y() for b in boxes]
+        assert all(b - a >= boxes[0].sizeHint().height() for a, b in itertools.pairwise(tops))
+        assert bench.checks_scroll.verticalScrollBar().maximum() > 0
+        assert bench.checks_scroll.height() >= 2 * boxes[0].sizeHint().height()
+    finally:
+        _close(window)

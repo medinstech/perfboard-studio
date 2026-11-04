@@ -323,15 +323,16 @@ class BenchView(QWidget):
         self.notes = QLabel()
         self.notes.setWordWrap(True)
         side.addWidget(self.notes)
-        side.addStretch(1)
         self.checks_title = QLabel(t("Checks for this phase"))
         cfont = self.checks_title.font()
         cfont.setBold(True)
         self.checks_title.setFont(cfont)
         side.addWidget(self.checks_title)
-        self.checks = QVBoxLayout()
-        self.checks.setSpacing(4)
-        side.addLayout(self.checks)
+        # The checks scroll, and take the room left under the step's facts. In a column
+        # they were a layout every row of which the panel had to hold: a phase of nine in a
+        # 1280 x 720 window was nine rows drawn over one another (the release walkthrough).
+        self.checks, self.checks_scroll = _scrolling()
+        side.addWidget(self.checks_scroll, 1)
         body.addLayout(side, 2)
         card.addLayout(body, 1)
         self.ending = self._build_ending()
@@ -375,14 +376,7 @@ class BenchView(QWidget):
         self.ending_said.setWordWrap(True)
         column.addWidget(self.ending_said)
         # A phase's checks under its name, scrolling: a small circuit has forty of them.
-        holder = QWidget()
-        self.ending_checks = QVBoxLayout(holder)
-        self.ending_checks.setContentsMargins(0, 0, 0, 0)
-        self.ending_checks.setSpacing(4)
-        self.ending_scroll = QScrollArea()
-        self.ending_scroll.setWidgetResizable(True)
-        self.ending_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.ending_scroll.setWidget(holder)
+        self.ending_checks, self.ending_scroll = _scrolling()
         column.addWidget(self.ending_scroll, 1)
         # Save and the export side by side, as Back and Done are: one to a row, they took
         # the room the checks list scrolls in.
@@ -561,6 +555,7 @@ class BenchView(QWidget):
             return
         phase = self.items[self.current].phase
         self.checks_title.setVisible(bool(phase.checkpoints))
+        rows = 0
         for check in phase.checkpoints:
             key = check_key(phase, check)
             box = QCheckBox(f"Ω  {check.title}")
@@ -568,6 +563,10 @@ class BenchView(QWidget):
             box.setChecked(key in self.done)
             box.toggled.connect(lambda on, k=key: self._tick(k, on))
             self.checks.addWidget(box)
+            rows = box.sizeHint().height() + self.checks.spacing()
+        self.checks.addStretch(1)
+        # Room for a few whichever way the panel is cut, and the scroll bar for the rest.
+        self.checks_scroll.setMinimumHeight(min(len(phase.checkpoints), 3) * rows)
 
     # -- walking the build --
 
@@ -596,6 +595,19 @@ class BenchView(QWidget):
             self.show_item(self.current)  # the last step, where the ending was reached from
         elif self.current > 0:
             self.show_item(self.current - 1)
+
+
+def _scrolling() -> tuple[QVBoxLayout, QScrollArea]:
+    """A column of rows in a frameless scroll area: the layout to fill, and the area."""
+    holder = QWidget()
+    rows = QVBoxLayout(holder)
+    rows.setContentsMargins(0, 0, 0, 0)
+    rows.setSpacing(4)
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.Shape.NoFrame)
+    area.setWidget(holder)
+    return rows, area
 
 
 def crop_around(
