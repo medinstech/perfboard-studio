@@ -607,6 +607,24 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "5 kohm. Put that in the value."
                 ),
                 aliases=("trimmer", "trimpot", "potentiometer", "potansiyometre", "preset")),
+    # The pot every kit has, on the panel or the box's lid and wired to the board: the pads
+    # its three wires land in (``wire-3``), declared a potentiometer so the sheet draws one.
+    CatalogPart("pot-panel", "Potentiometer 16 mm, panel mount", "passive", "wire-3",
+                "A panel pot off the board on its three wires: CCW end, wiper, CW end",
+                _legs("CCW", "W", "CW"), "potentiometer", value="B10K", ref_prefix="RV",
+                source=(
+                    "Taiwan Alpha 16 mm metal shaft series (RV16): drawn in its full "
+                    "counter-clockwise position, its travel runs from terminal 1 to terminal 3, "
+                    "and terminal 2 is the wiper"
+                ),
+                check=(
+                    "Seen from the shaft with its tags at the bottom, they are CCW, W and CW "
+                    "from the left. If it turns the wrong way, swap the CCW and CW wires, not "
+                    "the wiper. Put its value, printed as B10K or A10K, in the value: B is "
+                    "linear, A is the log taper a volume control wants."
+                ),
+                aliases=("potentiometer", "pot", "volume", "knob", "WH148", "RV16",
+                         "potansiyometre")),
     CatalogPart("bourns-78f101j", "Bourns 78F101J axial inductor", "passive",
                 "axial-4h-7.11x2.79",
                 "100 uH RF choke, 165 mA, laid flat like a resistor",

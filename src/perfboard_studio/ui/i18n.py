@@ -2089,6 +2089,19 @@ TURKISH: Mapping[str, str] = {
     "Sound": "Ses",
     "Trimmers and inductors": "Trimpotlar ve bobinler",
     "Bourns 3296W trimmer": "Bourns 3296W trimpot",
+    "Potentiometer 16 mm, panel mount": "Potansiyometre 16 mm, panele takılan",
+    "A panel pot off the board on its three wires: CCW end, wiper, CW end": (
+        "Kartın dışında, üç teliyle bağlanan bir panel potansiyometresi: CCW ucu, orta uç, CW "
+        "ucu"
+    ),
+    "Seen from the shaft with its tags at the bottom, they are CCW, W and CW from the left. If "
+    "it turns the wrong way, swap the CCW and CW wires, not the wiper. Put its value, printed "
+    "as B10K or A10K, in the value: B is linear, A is the log taper a volume control wants.": (
+        "Milden bakıldığında, uçları aşağıdayken soldan CCW, W ve CW'dir. Ters yöne dönüyorsa "
+        "orta ucu değil, CCW ile CW tellerini değiştirin. Üzerinde B10K ya da A10K diye yazan "
+        "değerini değer alanına girin: B doğrusal, A ise ses kontrolünün istediği logaritmik "
+        "eğridir."
+    ),
     "Multi-turn trimmer potentiometer, 25 turns, adjusted from the top": (
         "Çok turlu trimpot, 25 tur, üstten ayarlanır"
     ),

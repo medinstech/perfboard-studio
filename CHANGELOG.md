@@ -126,6 +126,9 @@ closed without a bump.
 - **Two hall sensors.** The A3144 switch, whose output pulls low near a magnet, and the
   SS49E linear sensor, whose output follows the field. Both are in the Library by name, with
   "hall" and "magnet" finding them.
+- **The panel potentiometer every kit has.** A 16 mm pot goes on the board as the three
+  pads its wires land in, named CCW, W and CW, and the schematic draws it as a pot. Its check
+  says which tag is which from the shaft, and which wires to swap if it turns the wrong way.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
