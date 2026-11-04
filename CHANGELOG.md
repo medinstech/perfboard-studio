@@ -22,422 +22,186 @@ closed without a bump.
 
 ### Added
 
-- **A part on an older package is one press from the current one.** Its Properties say so,
-  with Use the Current Package beside it, and the Problems finding offers the same: the
-  same pins on the same holes, one undo step.
+- **A new window, built around the steps a board goes through.** One slim header holds ☰
+  with every menu behind it (Alt opens it; Alt+F and the other menu letters still work), the
+  board's name and whether it is saved ("Not saved" saves it in one click), the six steps
+  with the one to do saying where it stands, undo and redo, and the button that does the
+  next step -- in the order of the work: Auto-wire, then the problems that are left one at a
+  time with Next Problem, and on a checked breadboard Take It to Perfboard…. Board,
+  Schematic, 3D and Build Guide are tabs over one canvas, and a tab dragged aside stands
+  beside the others. The library, the design's parts and its nets are three tabs of one
+  sidebar. Problems fold into a drawer under the canvas: a badge with the number of
+  problems, how many connections are left to wire with Auto-wire beside it, how many nets
+  match the circuit, and the board's side and size; a click or Ctrl+7 opens the list, and
+  what Auto-wire could not do is listed there with its reason, where a box used to list it
+  and had to be closed first. The board's tools float down its left and what it shows, Flip,
+  zoom and Fit sit in its corner, and the schematic's the same way; the three wire tools
+  share one button and the two solder tools another (hold it or right-click it for the
+  rest), and J is Jumper Over the Parts. Selected parts get a small bar above them --
+  Rotate, Mirror, Lock, Auto-wire the Selection, Delete and the right-click menu -- that
+  follows them as the view moves. The menus are the steps: File, Edit, Circuit, Board,
+  Wiring, View, Help, with the exports in one Export submenu and no two entries of a menu
+  sharing an Alt letter, in English or Turkish.
 
-- **A mounting hole and an edge connector are changed in place.** Chosen on the board,
-  a hole's address, offset, diameter and screw head, and a connector's edge, first hole
-  and number of fingers, are fields in Properties -- each change one undo step, refused for
-  what adding it that way would be. Agents get the same through `update_board_feature`.
-
-- **Design the board from one you can buy.** Board ▸ Design the Board… (and Change… on the
-  board in Properties) starts from a real board family -- green double-sided with an edge
-  connector and corner holes, brown phenolic -- and changes its size, grid and pads, edge connector,
-  mounting holes, printing and colour, with the board drawn as you go. Save it as your own
-  board to start from next time. Use This Board puts it on as one undo step.
-- **Breadboards in the board designer.** Solderless ones by size and channel (with a flex
-  body's narrow part), the solderable one by size and border; each shows only the settings
-  that mean something for it.
-- **Breadboards are board families.** The solderless breadboard in its 830, 400 and 170
-  sizes, a wide-channel one for an ESP32 or another module, and the solderable breadboard
-  are described like every other board, ready for the board designer to choose from.
-
-- **A wire starts from a pin in Select too, and C is Connect on the sheet as well.**
-  Dragging from a pin on the schematic draws a wire to the pin it is let go on instead of
-  moving the part (a click still selects it), and C arms Connect on whichever of the
-  schematic and the board has the keyboard.
-
-- **The board says what is under the pointer.** A part under the pointer is outlined and
-  shows the move cursor when it can be moved (a locked one does not), and the Connect and
-  drawing tools ring the pin they would take, as the sheet's wire tool does.
-
-- **An unmasked board's legend is copper.** On a phenolic board, or any board with no
-  mask, the letters and printed lines are drawn in the pads' bare copper, as they are
-  etched on the real board, instead of white ink.
-
-- **Stock boards are described as the products they are.** A board family says what one kind
-  of board is -- the green double-sided board or the phenolic one: its strip, corner holes,
-  legend, mask and print -- and every size it is sold in, with the grid counts suppliers
-  list. It is what the coming board designer edits and saves.
-
-- **A board's legend is printed where the board prints it.** Letters and numbers can each
-  be on one edge or both, and beside an edge strip the numbers go between the strip and
-  the grid when that is where there is room, as on the green boards. Edge pads can be
-  stadiums or squares, like the green and phenolic boards' strips.
+- **Properties: what is selected is edited where it is, with no OK.** A panel down the
+  right, always open, shows the board when nothing is selected -- its name, what it is, the
+  height limit and the body clearance -- and otherwise whatever is: a part (reference,
+  value, package, pin 1's hole, rotation, mirrored, locked, pin names, note), several parts
+  at once (a value typed once goes to all of them as one undo step, and the lock shows all,
+  none or some), a part drawn on the schematic and not placed yet, the part about to be
+  placed (its value is the value each part placed from it gets), a net (name, class, current
+  and voltage, pins), a board label, a caption on the schematic, a wire or a trace (a bare
+  wire becomes insulated or a jumper, a solder trace reinforced, on the same holes and net),
+  and a mounting hole or an edge connector (address, offset, diameter and screw head; edge,
+  first hole and fingers). Each field is one undo step when Enter is pressed or the field is
+  left, Esc puts it back, and a refusal is said under the field rather than in a box. F2
+  puts the keyboard in a part's reference and a double-click in its value. Change… beside a
+  package opens the library in a popup that says, as you move through it, where pin 1 and
+  the last pin land and which lead bends go; a part on a package the library has since
+  replaced says so, with Use the Current Package beside it. New Net, Add Label and the
+  schematic's Text tool make the thing at once and put the keyboard in its name or words.
 
 - **The build guide is worked at the bench, one step at a time.** The Build Guide panel
-  shows the step in front of you large: the board as it stands at that step, zoomed onto
-  the step's holes and seen from the side it is done on, what goes in and which way round,
-  and the phase's checks to tick, with big Back and "Done, next" buttons. On a stripboard
-  each track cut is a step of its own, first. The list is still there as Overview, and the
-  cut list and the track cuts are a click away. Ticks are kept once: the bench and the list
-  always agree.
+  shows the step in front of you large: the board as it stands at that step, zoomed onto the
+  step's holes and seen from the side it is done on, what goes in and which way round, and
+  the phase's checks to tick, with big Back and "Done, next" buttons. On a stripboard each
+  track cut is a step of its own, first. The list is still there as Overview, the cut list
+  and the track cuts are a click away, and ticks are kept once, so the bench and the list
+  always agree. Its own controls -- Next Step to Do, Clear Progress, Export -- sit in its
+  corner.
 
-- **A board can carry the words it is printed with.** Its size ("5cmX7cm"), a batch code or
-  a maker's name, in the border along any edge, drawn in 2D, in 3D and on the 1:1 print; a
-  legend letter it covers is left off, as on the real board.
+- **Design the board from one you can buy.** Board ▸ Design the Board… -- and Change… on the
+  board in Properties, the board's right-click, and Other Board in the board chooser --
+  starts from a real board family: green double-sided with an edge connector and corner
+  holes, brown phenolic, the solderless breadboard in its 830, 400 and 170 sizes and a
+  wide-channel one for an ESP32, or the solderable breadboard. It changes the size, the grid
+  and the pads, the edge connector, the mounting holes, the printing and the colour, with
+  the board drawn as you go and only the settings that mean something for that kind of
+  board; Save as My Board keeps it to start from next time, and Use This Board puts it on as
+  one undo step. It opens on the board you have, and using it unchanged changes nothing. A
+  board now says what it looks like and is drawn so, in 2D, in 3D and in the STEP model: its
+  solder mask (green, blue, black, red, purple, white or none) and its pads' finish (HASL,
+  lead-free HASL, bare copper or ENIG gold), the words it is printed with (its size, a batch
+  code, a maker's name) along any edge, its letters and numbers on one edge or both, and an
+  edge strip that can stand in the border outside the grid, with stadium or square pads.
+  View ▸ Board Colour's first entry is As the Board Says. Agents get the same through
+  `set_board`'s `mask` and `finish`, `add_edge_connector`'s `outside`, and
+  `update_board_feature`.
 
-- **A board says what it looks like, and is drawn so.** Its solder mask (green, blue,
-  black, red, purple, white or none) and its pads' finish (HASL, lead-free HASL, bare
-  copper or ENIG gold) are saved with the board, so a matte black gold board looks like one
-  in 2D, in 3D and in the STEP model. A board that says nothing looks as its material is
-  sold, exactly as before; the agent's `set_board` takes `mask` and `finish`. View ▸ Board
-  Colour still draws every board in one colour when you want it to, and its first entry is
-  now As the Board Says.
+- **Home, a one-minute tour, and help where the question is.** On a start with nothing open,
+  Home is the whole window, in place of the welcome dialog: draw your first circuit, open an
+  example, open a file or import from KiCad, or take the tour. The tour opens the circuit
+  that is drawn and not yet built and lights the button that does the next step, one
+  sentence a stop; it never presses anything itself and never starts on its own. F1 shows a
+  card for whatever is under the pointer, in plain words with its technical name beside it,
+  Shift+F1 is What's This, Help ▸ Glossary explains the window's and the guide's words in
+  English and Turkish, and the keyboard shortcuts card is Ctrl+/. An empty panel says what
+  will be there and how it gets there.
 
-- **An edge strip can stand outside the grid, as it does on the boards you buy.** An edge
-  connector can now be laid in the border beside the outermost row instead of on it, so
-  every hole of the grid stays a hole; the agent's `add_edge_connector` takes `outside`
-  too. A board with no border for one says so instead of drawing a sliver.
+- **Ctrl+K finds any command, part or net.** The header's search opens it too. It lists
+  every menu entry in its own words with the menu it lives in and its key, and finds a
+  command by what it does as well as its name ("perfboard" finds New Board from This
+  Design); a part's reference selects it on the board and puts the view on it, and a net's
+  name selects it in Nets. Go to Part (Ctrl+G) is the palette on the parts.
 
-- **Parts on the board look like the parts in your hand.** Every part KiCad has a model of
-  is drawn from that model seen from above: a DIP narrower than its rows with its notch,
-  a terminal block's screws, each pin of a header, a tactile switch's frame and button, an
-  electrolytic's can. Polarity reads at a glance at the zoom the window opens at: an
-  electrolytic's negative side, an LED's flat side and a diode's band are inked in a
-  colour that stands off the part. The 1:1 print draws the same outlines, flat.
-
-- **What each part looks like from straight above is measured.** The outline of every
-  package KiCad models -- its case, the notch in it, its metal legs and tabs, a screw's
-  slot -- traced off the same meshes the 3D view draws, for the 2D view to draw parts as
-  they look on the bench rather than as blocks. Rebuilt by `python tools/make_topviews.py`
-  whenever a mesh changes; the outlines carry the meshes' licence.
+- **Parts on the board look like the parts in your hand.** Every package KiCad has a model
+  of is drawn from that model seen from straight above -- a DIP narrower than its rows with
+  its notch, a terminal block's screws, each pin of a header, an electrolytic's can --
+  traced off the same meshes the 3D view draws (`python tools/make_topviews.py` rebuilds
+  them, under the meshes' licence). Polarity reads at a glance in 2D and in 3D alike: an
+  electrolytic's minus stripe, an LED's flat side and a diode's band. The modules nobody
+  publishes a drawing of are measured on photographs and drawn as themselves: the ESP-01,
+  the nRF24L01+, the 0.96 inch SSD1306 OLED on its header, the GY-521, and the HC-SR04
+  standing on its header with its transducers looking out across the board. The parts that
+  were grey boxes are drawn from KiCad's models of them, in their colours: the 16 x 2 LCD
+  and the 7-segment displays, the PC817 and the MAX7219 as DIPs like the others, the Songle
+  relay's blue case with its value on top, the 3296W trimmer with its brass screw, the RGB
+  LED's milky dome, the GL5528, the TSOP38238 and the DHT11 (the DHT22 is its case at its
+  own size, white), and the 12 mm buzzers round, with the "+" the real can has on its top
+  beside its + leg. A board saved with one of the old blocks opens as it was, and Problems
+  says "Older package" until it is chosen again. The 1:1 print draws the same outlines,
+  flat.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
-  Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light`
-  picks it for one run. Both were chosen from candidates rendered on the real window.
-  The window is now styled as one application over Fusion rather than as a dark sheet
-  over the platform's widgets, so on Windows the dock tabs, search fields, check boxes,
-  combo boxes and spin boxes stop drawing as light Windows 11 controls in a dark window,
-  and a dialog with no parent is themed too. Access keys are underlined once Alt is
-  pressed rather than all the time, and a checked tool's icon turns the accent colour.
-  The board itself -- substrate, copper, solder, parts -- looks as it did in both.
-
-- **Help is reached from where the question is.** F1 shows a card for whatever is under
-  the pointer: what it is in plain words, with its technical name beside it. Shift+F1 is
-  What's This: click anything for the same card. Help ▸ Glossary explains the words the
-  window and the build guide use, searchable, in English and Turkish. The keyboard
-  shortcuts card that F1 used to open is Ctrl+/.
-- **A one-minute tour.** Help ▸ Getting Started Tour opens the circuit that is drawn and
-  not yet built and lights the button at the top right that does the next step, with one
-  sentence a stop: choose a board, place, wire, check, open the guide. It never presses
-  anything itself, follows a step done from a menu too, and never starts on its own; Skip
-  ends it anywhere.
-- **An empty panel says what will be there and how it gets there.** Nets, Parts, the
-  schematic and the build guide said nothing when empty. The schematic now offers Add a
-  Part… and links to an example and to KiCad, the guide offers Place on the Board while a
-  drawn circuit waits, and the board names the two steps that bring a circuit to it. A
-  board with nothing on it no longer fills the guide with an empty board's closing checks.
+  Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
+  it for one run. The window is styled as one application, so on Windows the tabs, search
+  fields, check boxes and spin boxes no longer draw as light Windows 11 controls in a dark
+  window. Access keys are underlined once Alt is pressed. The board itself is not themed.
 
 ### Changed
 
-- **The PC817 and the MAX7219 are DIPs like the others.** The 4-pin and the 24-pin DIP are
-  drawn from KiCad's models of them in 2D and 3D, as every other DIP is, where they were a
-  box. DRC measures each at its datasheet maximum: Sharp's 5.08 mm for the PC817 and Maxim's
-  32.13 mm for the MAX7219, both a little longer than before. The PC817's name runs across
-  its case, which is wider than it is long.
+- **The stock boards are the boards in the photographs.** Every board in the chooser is
+  landscape, with its letters along the long edge; its edge strip stands outside the grid,
+  so no row is lost to it; its corner holes sit bare in the border with every pad kept; the
+  row numbers are printed between the grid and the strip, and the green board says
+  "5cmX7cm". Grid counts follow the suppliers' listings (2 x 8 is 28 x 6, 6 x 8 is 27 x 22,
+  7 x 9 is 31 x 26, 9 x 15 is 52 x 34, the phenolic 5 x 7 24 x 18), the phenolic boards have
+  their corner holes, the green mask is brighter, a phenolic board's rings and strip pads
+  are its pale bare copper, and on a board with no mask the letters are that copper too.
+  Documents you already have keep the board they were saved on. The examples were rebuilt on
+  the new boards.
 
-- **The relay, the trimmer and the RGB LED are the colours they are.** The Songle relay is
-  its blue case with its value on top, the 3296W trimmer blue with its brass screw, and the
-  RGB LED's diffused dome milky white rather than red -- each from KiCad's model of it. Their
-  pads have not moved.
+- **The board looks like a board with parts on it.** Parts stand on the board with a contact
+  shadow and are lit from the top left; a DIP carries its value on its top as the chip does;
+  references are outlined letters instead of a dark pill beside every part; pin names sit on
+  light chips, and a module's two rows of names each stay on their own side; copper on the
+  far face is quieter; every pad is tin, as on the board in your hand. Chosen from rendered
+  looks. The 1:1 print is unchanged.
 
-- **The light sensor, the IR receiver and the DHT11 look like themselves.** The GL5528 is
-  KiCad's 5 mm cell with its track on top, the TSOP38238 Vishay's black MINICAST body with
-  its dome, the DHT11 its blue grilled case -- each the package the catalog already measured
-  it by, where they were grey boxes. The DHT22, which KiCad has no model of, is the DHT11's
-  case at its own size, white.
+- **The schematic reads at the size it opens at.** Wires are 0.4 mm and symbols 0.5 mm where
+  they were hairlines, a symbol's body is tinted, a net's name sits on a flag in the net's
+  colour, and only every fifth grid line is drawn. Each net class is one colour on the sheet
+  and on the board (power orange, signal blue, ground grey). A net reaching a chip of 12
+  pins or more is a short named stub at each pin, the way a schematic draws a chip, where it
+  was a wire round it. The schematic's commands are in the Circuit menu.
 
-- **The 12 mm buzzers are round.** The active and the passive buzzer were grey squares.
-  They are now KiCad's model of the 12 mm buzzer, a black can with its sound hole, the
-  passive one at its own 8.5 mm, and both carry the "+" the real can has on its top beside
-  its + leg, in 2D and 3D.
+- **Working on the board and the sheet.** Shift or Ctrl adds a part or a symbol to the
+  selection and takes it back out, on both, and Edit ▸ Select All (Ctrl+A) selects
+  everything. Turning, flipping, locking or deleting several parts is one undo step, and a
+  locked part refuses the group by name. R, Shift+R and M turn the part about to be placed,
+  under the pointer. A solder trace is drawn in runs: a click is where it turns, and `/`
+  turns the corner the other way. A dragged part's outline turns red where it cannot land --
+  a used hole, past the edge, a hole with no pad -- with a line saying where it is going and
+  what is in the way. A part under the pointer is outlined and the Connect and drawing tools
+  ring the pin they would take. Dragging from a pin on the sheet draws a wire, and C arms
+  Connect on whichever of the two has the keyboard. Holding Space pans in every tool, a
+  trackpad that says it is one pans with two fingers, Ctrl+wheel or a pinch zooms, and View
+  ▸ Mouse Wheel ▸ Scrolls makes every wheel pan.
 
-- **The HC-SR04 stands up, as it does on the bench.** It was a grey slab lying on the board.
-  It is now its board standing on its header with the two transducers looking out across the
-  board and the crystal along its top, in 2D from above and in 3D, measured on photographs of
-  one. Its package now reaches as far as the transducers do, 3.9 mm further in front of the
-  pins than before, and no longer pretends to stand 2.75 mm behind them; a board saved with
-  the old package opens as it was and the Problems drawer says so ("Older package").
-
-- **The ESP-01 and the nRF24L01+ are drawn as themselves.** They were a plain block on
-  purpose, because nobody publishes a drawing of what is on them. Each is now measured on a
-  photograph rectified onto the board its maker or KiCad draws: the ESP-01's ESP8266, flash,
-  crystal and printed antenna on its black board; the nRF24's chip, its crystal in a metal
-  can, the small parts and the antenna. The nRF24's crystal stands up to 3.8 mm, where its
-  package said 2 mm, so it is measured that tall now; a board saved with the old package
-  opens as it was and the Problems drawer says so ("Older package").
-
-- **The 0.96 inch SSD1306 OLED is a module on its header, drawn as itself.** It was a grey
-  block from the board up. It is now a board standing in its header with the glass, its
-  black viewing area, the flex folded round the bottom edge and a plated hole in each
-  corner, measured on a photograph -- in either order of names -- and a short part can go
-  under it. Its header is 1.45 mm in from the board's edge, as measured, where 2 mm was
-  guessed. A board saved with the old block opens as it was, and the Problems drawer says so
-  ("Older package") until it is chosen again.
-
-- **The 16 x 2 LCD and the 7-segment displays look like themselves.** They were a grey slab
-  in 2D and 3D. They are now drawn from KiCad's models of the parts: the LCD's green board,
-  black bezel and yellow-green glass, standing on the 16-pin header it is soldered in by; the
-  CA56-12 and CC56-12 a black face with their four red digits, and the SA56-11 and SC56-11
-  one digit, from Lite-On's LTS-6760, the same package pad for pad. A printed or moulded
-  part of any borrowed package is now the same colour in 2D as in 3D, which also turns the
-  collar of the 12 mm push button dark grey, as it already was in 3D.
-- **Board Features is part of Properties.** The board's mounting holes and edge connectors
-  are listed on the board in Properties, each with Remove, beside Add Corner Holes and Add
-  Edge Connector. A hole or a connector clicked on the board shows where it is, its size and
-  Remove. Board ▸ Board Features… takes you there.
-
-- **Board Setup is part of Design the Board.** One place to choose a board: the Board menu, the
-  board's right-click, Other Board and Change… in Properties all open the designer, which
-  opens on the board you have -- as the stock board it is, or as "This board" with its own
-  grid, pads, material and printed numbering. Using it unchanged changes nothing.
-
-- **A phenolic board's copper shows.** Its rings, strip pads and etched letters are drawn in
-  the pale copper of the real board's copper side, measured off a photograph of one, rather
-  than a copper so close to the substrate that they all but disappeared.
-
-- **The stock boards are the boards in the photographs.** Every board in the chooser is now
-  landscape, with its letters along the long edge; its edge strip stands outside the grid
-  (stadium pads on the green boards, square ones on the phenolic), so no row is lost to it;
-  its corner holes sit bare in the border; the row numbers are printed between the grid and
-  the strip; and the green board says "5cmX7cm". Grid counts follow the suppliers' listings
-  (2 x 8 is 28 x 6, 6 x 8 is 27 x 22, 7 x 9 is 31 x 26, 9 x 15 is 52 x 34, the phenolic 5 x 7
-  24 x 18), the phenolic boards now have their corner holes, and the green mask is brighter,
-  as the board is. Documents you already have keep the board they were saved on: only a new
-  board, and the board chooser, change. The examples were rebuilt on the new boards.
-
-- **A dialog's button says what it does.** OK, Apply and Yes are gone from the dialogs
-  that remain: New Board's button is Create Board, Board Setup's and the board chooser's
-  Use This Board, Custom Part's Use This Part, New Project's Create Project, and Apply
-  this placement? moves the parts under Move the Parts. The question about nets whose
-  parts moved was Yes and No, and Esc meant wiring anyway; it is now Redo Their Wiring…,
-  Wire Beside It and Cancel. Counts in the dialogs are said in real plurals ("1 part",
-  "3 parts"), the board chooser says what its percentages are measured against, and a
-  delete asks without naming DRC and LVS. A destructive answer -- Delete, Don't Save,
-  Discard It -- is outlined in red, and Enter stays on the safe answer, which keeps the
-  blue.
-
-- **Every pad is tin, as on the board in your hand.** Pads nothing was soldered to were
-  drawn faded on screen so that the circuit stood out; a real perfboard's pads are all
-  alike, and the board now looks like one, on screen as in the 1:1 print.
-
-- **A part dragged across the board says whether it can land, while it is dragged.** Its
-  outline turns red over a hole another part's pin is in, past the edge, or where there is
-  no pad -- the same test the ghost of a part being placed has always made -- and a line
-  over the board says where it is going and what is in the way: "R1 → D11 · 1 pin(s) in a
-  used hole". It used to find out from a refusal after it was let go.
-
-- **Turning, flipping, locking or deleting several parts is one step.** R over five parts
-  was five commands: five presses of Ctrl+Z to put them back, and a locked one among them
-  left the rest turned and itself not. Now the selection turns, flips, locks or goes as one
-  command, as a drag always has: one Ctrl+Z, and a locked part refuses the whole group by
-  name. Deleting parts takes the copper selected with them in the same step.
-
-- **The board looks like a board with parts on it.** Pads nothing lands in step back --
-  their copper mixed toward the substrate, with no catch of light -- so the pads a lead,
-  a run or a wire's end uses draw the circuit, where 945 equally bright rings used to
-  bury it. Parts stand on the board with a contact shadow and are lit from the top left;
-  a DIP carries its value on its top as the chip does; references are outlined letters
-  instead of a dark pill beside every part; pin names sit on light chips; copper on the
-  far face is quieter. Chosen from rendered looks. The 1:1 print is unchanged: every
-  pad as the board has it, every part flat, references on their plates.
-- **One header row instead of three.** The menu bar, the toolbar's save, undo and redo,
-  and the step bar's own row are one slim header: ☰ with every menu behind it, the
-  board's name and whether it is saved ("Not saved" saves it in one click), the six steps
-  on one line with the one to do saying where it stands, undo and redo, and the button
-  that does the next step. Alt+F and the other menu letters still open their menus, and
-  Alt by itself opens ☰.
-- **The board's tools are on the board, and the views are tabs.** The row of fifteen
-  buttons under the header is gone. The pointer, Connect, the solder tools, the wire tools,
-  Cut Strip (on a stripboard) and Measure float down the left of the board; what the board
-  shows, Flip, zoom and Fit sit in its bottom-right corner. The three wire tools share one
-  button, and the two solder tools another: it shows the one picked last, and holding it
-  or right-clicking it offers the rest. Board, Schematic, 3D and Build Guide are tabs on
-  top of the canvas, every one there from the first start; dragging a tab beside another
-  still puts two views side by side. Jumper Over the Parts gets a key of its own, J.
-- **The left column is one sidebar.** The library, the design's parts and its nets are
-  three tabs of one panel, each with the column's whole height, instead of a library over
-  a Nets / Part List pair that each had a third of it.
-- **Problems are a drawer with a count.** The findings list folds to one bar under the
-  canvas: a red or amber badge with the number of problems, or "No problems"; how many
-  connections are left to wire; how many nets match the circuit; and the side and the
-  board at its right end. A click on the bar, or Ctrl+7, opens the list, and the Check
-  step opens it. The status bar's six counts (ERC, DRC, LVS, to route, the side) are that
-  bar now, and a pin not wired yet still counts as work left rather than a problem.
-- **Home is the first thing on screen, and the welcome dialog is gone.** On a start with
-  nothing open, Home is the whole window -- no panels, header or status bar around it --
-  before the window is even shown, rather than a dialog over an editor nobody had chosen
-  yet. Every door is a command the window already had, taken once Home has gone; Escape
-  leaves it, a recovered board leaves it, and the window comes back exactly as it was. A
-  window closed while Home shows keeps the panel layout it covered.
-- **What a selected part can do floats over it.** Select parts on the board and a small
-  bar stands above them: Rotate, Mirror, Lock, Auto-wire the Selection and Delete, and
-  the dots for everything a right-click offers. It follows the parts as the view scrolls
-  and zooms, and goes while a drawing tool is armed.
-- **A Properties panel down the right, always open.** It says what is selected -- a part,
-  several, a part picked on the sheet, the part about to be placed -- and the board itself
-  when nothing is, so there is never an empty panel and nothing to close it for. This is
-  the panel's frame; what it lets you edit arrives next, in place of the Part Properties
-  dialog.
-- **A library group cut short says its name in full on hover**, as its parts already did:
-  at the sidebar's width "Regülatörler ve referanslar" read "Regülatörler v…".
-- **The window with every view closed says how to get one back** with the keys and the
-  menu (Ctrl+1, Ctrl+2, View ▸ Panels); it still pointed at a toolbar that is gone.
-- **Ctrl+K finds any command by its name, and any part or net.** The header's search field
-  opens it too. It lists every enabled entry of every menu in its own words, with the menu
-  it lives in and its key, so "Lay Wires Along the Grid" is four letters away rather than
-  three menus deep; a part's reference selects it on the board, and a net's name selects
-  it in the Nets panel. Enter runs the one picked, Escape closes it.
-- **The schematic's tools are on the schematic, and its commands have a menu.** The row of
-  buttons across the sheet's panel is gone: Select, Connect, Label, Text and the shapes
-  float down the sheet's left, Arrange, zoom and Fit sit in its corner, and a bar over the
-  selected symbols offers Turn, Flip, Remove and the right-click menu. A new Schematic
-  menu holds Add Part, the drawing tools, Turn, Flip, Remove, Arrange, Fit, Place on the
-  Board and Float the Panel, so every one of them is behind ☰ and in Ctrl+K.
-- **The 3D view and the build guide keep their controls where the others do.** The 3D
-  view's own toolbar is gone: Exploded View and Reset Camera sit at its foot beside the
-  playback, with pictures of their own. The guide's row of push buttons is a cluster in its
-  corner -- Next Step to Do, Clear Progress, and Export, which is File's Export Build Guide.
-  A tool button holding several tools says so on hover: "(hold for more)".
-- **Properties edit the board and a part in place, with no OK.** With nothing selected
-  the panel is the board: its name, what it is (Change… opens Board Setup), the height
-  limit and the body clearance. With one part selected it is the part: reference, value,
-  package (Change…), pin 1's hole, rotation, mirrored, locked, pin names and note. Each
-  field is one undo step when Enter is pressed or the field is left, Esc puts it back, and
-  a refusal is said under the field instead of in a message box. Part Properties and the
-  Rename Board dialog are gone: F2 puts the keyboard in the part's Reference, a
-  double-click on a part in its Value, and Board ▸ Rename Board in the board's Name.
-- **Several parts take one value typed once, as one undo step.** Select five resistors and
-  type 10k in Properties: one step, and a locked part among them takes it too. The lock
-  box shows all, none or some, and a click locks or unlocks the lot. With a library part
-  armed, Properties shows the part about to be placed, and its Value is the value each
-  part placed from it gets; the library's own "Value for parts placed now" box is gone.
-- **A net is edited in Properties.** Pick it in the Nets panel: its name, its class, the
-  current and voltage it carries, and its pins, with Add Pins and Delete Net. New Net makes
-  the net under its next free name with no form, selects it and puts the keyboard in its
-  name while the board picks its pins; Edit Net and Rename Net go to the same name field.
-  The net dialog is gone.
-- **A board label is edited in Properties.** Add Label writes one at once and puts the
-  keyboard in its text; its height, rotation and face are beside it, each one undo step. A
-  double-click on a label selects it there. The Board Label dialog is gone.
-- **Text on the schematic is written in place.** The Text tool writes a caption where it
-  is clicked and puts the keyboard in its words in Properties, beside its size; it used to
-  ask in a dialog first. A note picked on the sheet is shown there too.
-- **A part drawn on the schematic and not placed yet is edited in Properties** as a placed
-  one is: reference, value, package, pin names and note, with Place on the Board. A
-  double-click on its symbol puts the keyboard in its value, and Rename on a symbol's menu
-  in its reference. The Edit a Part and Rename Part dialogs are gone; Change… opens the
-  library for another package.
-- **Go to Part (Ctrl+G) is the command palette on the parts.** Type a reference, a value
-  or a package; the part is selected and the view put on it. The separate Go to Part
-  dialog is gone.
-- **What is selected is said in Properties, not in the status bar.** The status bar's
-  selection line is gone; a conductor selected on its own shows its kind, its two ends,
-  its holes and its net in Properties.
-- **Every number in the window is written one way.** On a Turkish Windows a field said
-  "2,28 mm" while the line under it said "0.64 mm", even in the English window; fields
-  now use a decimal point too, as everything the board's checks and the guide write does,
-  and a comma typed into one is taken as the point it means.
-- **Every field IN the window writes a decimal point too.** The window was made under the
-  machine's locale before the format was set, and its fields inherited the window's: on a
-  Turkish Windows Properties still said "0,00 mm".
 - **Add Part is the Library.** Circuit ▸ Add Part and Home's first door bring the sheet
-  forward and put the keyboard in the Library's search; Enter or a double-click puts the
-  part on the sheet and shows it in Properties, ready for the next. The Add a Part dialog
-  that copied the Library is no longer opened for adding.
-- **Another package is picked in place.** Change… beside a part's package in Properties
-  opens the Library in a popup: type, and Enter takes the part the text names; as you
-  move through it, it says where pin 1 and the last pin land and which lead bends go. A
-  catalog part brings its value and pin names with it. The Add a Part dialog is gone.
-- **A wire or a trace changes kind in Properties.** A bare wire becomes insulated, or a
-  jumper over the parts, and a solder trace reinforced, in one undo step on the same holes
-  and net; it took deleting it and drawing it again.
-- **Nothing in Properties is cut off at its right edge.** Change…, the 270° button and Delete
-  were, at every window size: a check box with a sentence on it, a combo as wide as its
-  longest entry and three wire kinds in a row each made an editor wider than the panel. The
-  lock is "Locked" with the reason on hover, the wire kinds are one list, and the panel
-  takes the width the editor showing needs. The package picker opens beside the panel,
-  never over it or off the screen, wide enough to tell a 3-hole resistor from a 4-hole one.
-- **New Board starts a blank design.** It opened Board Setup before there was a circuit to
-  try on any board, and the Board step then asked again; now the sheet is in front and the
-  Board step chooses, as New Project does. Board ▸ Board Setup is there for anybody who
-  knows the board already.
-- **Redoing the wiring of nets whose parts moved is asked once.** Redo Their Wiring opened
-  a second box asking to redo the wiring, with the count the first one lacked; the one
-  question now says how many conductors go.
-- **The menus follow the steps: File, Edit, Circuit, Board, Wiring, View, Help.** Nine
-  menus became seven. Circuit holds the nets and the schematic's commands, Board the board's
-  setup (out of File) and placing, and Wiring the drawing tools beside Auto-wire. File's
-  exports are one Export submenu. View opens with the views, keeps what the board shows in
-  one Show on the Board submenu (the board corner's Show menu), and Go to Part moved to
-  Edit. No two entries of a menu share an Alt letter any more, in English or Turkish.
-- **One selection grammar on the board and the sheet, and Select All.** Shift+click
-  replaced the board's selection (Qt reads only Ctrl), while on the sheet Shift added and
-  never removed and Ctrl did nothing. Now Shift and Ctrl each add a part or a symbol to the
-  selection and take it back out, for a click and for a rubber band, on both. Edit ▸ Select
-  All (Ctrl+A) selects every part on the board, or every symbol when the sheet has the
-  keyboard; a text field keeps Ctrl+A for its own text.
-- **R, Shift+R and M turn and flip the part about to be placed.** They turned the selection
-  while a part was armed and the ghost stayed upright, so a part that had to go in
-  sideways went down the wrong way and was turned afterwards. The ghost now turns under the
-  pointer, red where the turned part does not fit, and goes down as shown; the next one of
-  the same part goes down the same way round.
-- **A solder trace is drawn in runs, not pad by pad.** Seven holes of solder took seven
-  clicks, and a click two holes away did nothing at all. Now a click is where the trace
-  turns: the preview runs along the row and down the column to the pointer through every
-  pad it will solder, red where it would cross itself or leave the board; `/` turns the
-  corner the other way; Enter, right-click, a double-click or a click on the last pad again
-  finishes. The copper still never steps diagonally.
-- **A trackpad pans the board and the sheet, and the wheel can be told to.** The wheel
-  always zoomed, so on a laptop two fingers zoomed, a sideways swipe zoomed out, and with
-  no middle button the scrollbars were the only way across a board. Now holding Space turns
-  the left button into the hand in every tool; a trackpad that says it is one (macOS, and
-  Linux under libinput) pans with two fingers; Ctrl+wheel or a pinch zooms; Shift+wheel or
-  a wheel tilted sideways pans sideways; and a wheel, notched or smooth, still zooms.
-  Windows hands a touchpad's scrolling to the application exactly as a mouse wheel's, so
-  there two fingers zoom unless View ▸ Mouse Wheel ▸ Scrolls is chosen: then every wheel
-  pans and Ctrl+wheel zooms. The board and the sheet read the wheel through one rule, the
-  choice is remembered, and the shortcuts card (Ctrl+/) lists the new gestures.
+  forward with the keyboard in the Library's search; Enter or a double-click puts the part
+  on the sheet and shows it in Properties, ready for the next. What a search finds best
+  comes first, in the Library and in the package picker -- a name that starts with what you
+  typed, then a word match, then a summary that only mentions it -- in English and in
+  Turkish. A package group named like a catalog group says it is the package ("LED
+  packages"), and says on hover what a package is; the board's own parts are "This board".
 
-- **Text in the accent colour uses the theme's accent for text.** The build guide's
-  checks and its links borrowed the button blue, which is a fill colour; they now take
-  the lighter blue the dark theme keeps for text and the deeper one the light theme
-  does, and every last widget that set its own colour -- the welcome dialog's buttons,
-  the update strip, the board's mode banner and empty-board hint, the status bar's
-  counts -- is styled by the theme instead.
-- **A chip's nets are said by name at its pins.** Every net reaching a microcontroller
-  or a module was a wire round it through the channels, and atmega328-relay's ATmega
-  sat in a bus nobody could follow. A net touching a symbol with 12 pins or more is now
-  a short stub at each pin it reaches with its name on it, the way a schematic draws a
-  chip; everything else is wired as before. A sheet that has been edited says an
-  undrawn connection the same way, so the first nudge moves no name.
-- **The sheet reads at the size it opens at.** Wires are 0.4 mm and symbols 0.5 mm where
-  they were hairlines; a symbol's body is filled with a tint of the paper; a net's name
-  sits on a flag in the net's colour instead of floating beside the wire; text is larger
-  and outlined in the paper's colour where it crosses a wire; only every fifth grid line
-  is drawn. Zoomed out on a big chip, its pins' names and numbers are left out until
-  they fit, where they used to over-print each other into a grey bar. Chosen from
-  sheets rendered in both themes; the exported SVG and PDF are drawn as before.
-- **The sheet draws each net class in the board's colours.** Power was amber on the
-  sheet and orange in the ratsnest, and signal two different blues, so one net was two
-  colours a panel apart -- and the sheet's power was also the warning colour. Both now
-  read one table: power orange, signal blue, ground grey. The sheet's background is the
-  board's near-black rather than a second one beside it.
+- **The window says what its tools do.** Autoroute is Auto-wire, Auto-place is Rearrange,
+  Spine is a reinforced solder trace, Ratsnest is Missing Connections, the ERC / DRC / LVS
+  panel is Problems (Circuit check (ERC), Board check (DRC), Matches circuit (LVS)), the
+  Parts panel is the Library and the Part List is Parts, Verify is Checks, a footprint is a
+  package, and the sheet's Wire tool is Connect, as the board's is. A dialog's button says
+  what it does -- Create Board, Use This Board, Create Project, Move the Parts -- and a
+  destructive answer (Delete, Don't Save, Discard It) is outlined in red while Enter stays
+  on the safe one. Counts are said in real plurals in the dialogs, the planners' summaries
+  ("13 connections wired across 7/7 nets") and the guide's ("24 steps across 8 phases, 39
+  checks"). Every number, in a field too, is written with a decimal point, and a comma typed
+  is taken as the point it means. Undo and Redo say what they took back and put back. In
+  Turkish the window and the guide speak to the builder as "siz", command names keep the
+  bare form, routing is "kablolama", and each thing has one word: kılıf, ped, parça yüzü,
+  montaj rehberi, izoleli tel. Rule ids, the engine's messages and the MCP tools keep their
+  names.
 
-- **The window says what its tools do.** The words a newcomer could not read are renamed,
-  in English and Turkish: Autoroute is Auto-wire, Auto-place is Rearrange, Spine is a
-  reinforced solder trace, Ratsnest is Missing Connections, the ERC / DRC / LVS panel is
-  Problems with its groups named Circuit check (ERC), Board check (DRC) and Matches circuit
-  (LVS), the Parts panel is the Library and the Part List is Parts, Verify is Checks, a
-  footprint is a package, and the sheet's Wire tool is Connect, as the board's is. The
-  build guide says "reinforced solder trace" and "reinforcing wire". In Turkish, routing is
-  "kablolama". Rule ids, the engine's messages and the MCP tools keep their names.
-- **Turkish speaks to the builder as "siz", and says each thing with one word.** The
-  interface and the build guide mixed "sen" and "siz", sometimes on one screen. Every
-  sentence is "siz" now, and command names keep the bare form ("Kaydet"). One word for each
-  thing: kılıf, ped, parça yüzü, montaj rehberi, izoleli tel.
+- **New Board starts a blank design**, as New Project does, and the Board step chooses the
+  board. Redoing the wiring of nets whose parts moved is asked once, with the count of what
+  goes.
+
+### Removed
+
+- **The dialogs Properties and the designer replaced**: Part Properties, Edit a Part, Rename
+  Part, Rename Board, Board Label, Board Features, Board Setup, the net dialog, Add a Part
+  and Go to Part -- and the welcome dialog, which is Home. The toolbar row, the step bar's
+  row and the status bar's six counts are the header and the Problems drawer.
 
 ### Fixed
 
@@ -590,6 +354,37 @@ closed without a bump.
   beforehand and nothing did afterwards: the status bar kept the last command's message,
   so "Deleted 3 part(s)" stood over a board that already had one of them back. It now
   reads "Undone: …" or "Redone: …", in the window's language.
+- **The GY-521 was drawn as its own mirror image.** Its board stood below the header with
+  VCC on the left, so a module laid over the outline put each pin in its mirror's hole, VCC
+  in INT's. It now stands above the header, the same pins in the same holes. A module
+  drawing is turned to fit its board and never mirrored.
+- **Parts are the size of the real packages.** The library's bodies were often smaller than
+  the parts they stand for -- a 1/4 W resistor 5 mm long where a 0207 is 6.5, a 5 mm LED 5
+  mm across where its flange is 6.15, a TO-92 4.5 × 3.7 where it is 5.21 × 4.19 -- so DRC
+  passed parts that touch on the bench. Every body is now the datasheet's maximum, or
+  KiCad's model where that is larger; a TO-92, a TO-220 and a screw terminal stand behind
+  their pin row as the real ones do, and a DIP's courtyard holds its whole body -- the
+  PC817's and the MAX7219's at Sharp's and Maxim's datasheet maximum -- while the HC-SR04's
+  package reaches as far as its transducers do. A board DRC passed before may show an
+  overlap or an edge warning now: the parts always touched.
+- **The 5-hole axial resistor was a different resistor in 3D**: KiCad's 9 mm DIN0309 for a
+  0207 body, 2.7 mm longer than the body DRC measured. It is the 0207 now.
+- **3D drew a module's pads on their edges** -- a white mushroom on every pin of a Nano or
+  an SMD adapter -- and its print in thin strokes that lost Turkish letters ("ALT YÜZ" lost
+  its Ü). The pads lie flat and the print is the 2D view's lettering.
+- **A module's board had rounded corners**, as a moulded case does; a board cut from a panel
+  has square ones.
+- **Place on the Board on a breadboard** placed nothing itself and could come back without
+  nano-relay's relay. Every chip now straddles the groove, no clip holds two nets, and every
+  example goes onto an 830 breadboard whole and wires clean.
+- **A wire drawn on the schematic went straight through the parts in its way**, so the sheet
+  looked shorted; it goes round every symbol now. Zoomed out, the sheet's labels no longer
+  print over one another, and a big chip's pin names wait until they fit.
+- **Go to Part went to R10 for "R1"** when R10 to R19 came first in the document.
+- **Escape did not call off a drag**: let go after it, and the part, the label or the rubber
+  band went where the pointer was. It now puts everything back.
+- **About named one licence.** The 3D part models are KiCad's, under CC-BY-SA 4.0; it names
+  both, and prints the version once.
 - **The findings panel's circuit row was English in a Turkish window** ("0 error(s) · 0
   warning(s)"). A string the window shows with no Turkish now fails a test.
 
