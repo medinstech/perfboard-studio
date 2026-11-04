@@ -16536,3 +16536,25 @@ def test_a_board_with_no_features_says_so_in_one_line() -> None:
         assert features.summary.text() == "No mounting holes or edge connectors"
     finally:
         _close(window)
+
+
+def test_the_designer_opens_no_bigger_than_the_screen(monkeypatch) -> None:
+    """At 1180 x 820 on a 1280 x 720 laptop its Use This Board was below the screen."""
+    from PySide6.QtCore import QRect
+
+    from perfboard_studio.ui import designer as designer_module
+
+    class _Screen:
+        def availableGeometry(self) -> QRect:
+            return QRect(0, 0, 1280, 680)
+
+    window = _blank_window()
+    try:
+        monkeypatch.setattr(type(window), "screen", lambda self: _Screen())
+        size = designer_module._opening_size(window)
+        assert size.width() <= 1280 - 40 and size.height() <= 680 - 60
+        roomy = type("Roomy", (), {"availableGeometry": lambda self: QRect(0, 0, 2560, 1440)})()
+        monkeypatch.setattr(type(window), "screen", lambda self: roomy)
+        assert designer_module._opening_size(window) == designer_module.OPENING
+    finally:
+        _close(window)

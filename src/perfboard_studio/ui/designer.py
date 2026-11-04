@@ -374,6 +374,26 @@ def _first_size(family: BoardFamily) -> BoardSize | None:
     return family.sizes[0]
 
 
+#: The size the designer opens at when the screen has room for it.
+OPENING = QSize(1180, 820)
+
+
+def _opening_size(parent: QWidget | None) -> QSize:
+    """``OPENING``, or the screen's available room less a margin when that is smaller.
+
+    A fixed 1180 x 820 put Cancel and Use This Board below the bottom of a 1280 x 720
+    laptop -- about 680 px once the taskbar has its share -- so the first board anybody
+    chose there could not be confirmed (the release walkthrough). Its columns scroll and
+    its preview draws at whatever size it is given, so smaller costs nothing."""
+    from PySide6.QtGui import QGuiApplication
+
+    screen = parent.screen() if parent is not None else QGuiApplication.primaryScreen()
+    if screen is None:
+        return OPENING
+    room = screen.availableGeometry()
+    return QSize(min(OPENING.width(), room.width() - 40), min(OPENING.height(), room.height() - 60))
+
+
 def _listed(family: BoardFamily) -> tuple[BoardSize, ...]:
     """A family's sizes in the order the picker lists them: a breadboard's biggest first, as
     Board Setup listed them."""
@@ -440,7 +460,7 @@ class BoardDesigner(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(t("Design the Board"))
-        self.resize(1180, 820)
+        self.resize(_opening_size(parent))
         self._base = base
         self._lookup = lookup
         self._apply = apply
