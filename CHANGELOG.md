@@ -151,6 +151,11 @@ closed without a bump.
   it for one run. The window is styled as one application, so on Windows the tabs, search
   fields, check boxes and spin boxes no longer draw as light Windows 11 controls in a dark
   window. Access keys are underlined once Alt is pressed. The board itself is not themed.
+- **A tangled hand-wired sheet is offered Arrange.** The sheet's Arrange button says its name
+  now, and a sheet wired by hand that Arrange would redraw much shorter -- the NE555 drawn
+  part by part, 1437 mm of wire, comes out at 457 mm with power and ground as rail symbols
+  -- gets one line over it, once per document: what Arrange does, that the symbols move and
+  every connection stays, and the button.
 
 ### Changed
 

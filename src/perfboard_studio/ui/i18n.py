@@ -1193,6 +1193,9 @@ TURKISH: Mapping[str, str] = {
     "Add Pa&rt…": "Parça &Ekle…",
     "Arran&ge the Sheet": "Say&fayı Düzenle",
     "Arrange": "Düzenle",
+    "Arrange redraws this sheet tidily, with power and ground as rail symbols. Symbols move; every connection stays. One undo step.": (
+        "Düzenle, bu sayfayı derli toplu yeniden çizer; güç ve toprak ray simgesi olur. Semboller yer değiştirir, her bağlantı yerinde kalır. Tek adımda geri alınır."
+    ),
     "Fit the S&heet": "Sayfayı &Sığdır",
     # -- projects: the folder a board and everything made from it live in ------
     "New &Project…": "Yeni &Proje…",

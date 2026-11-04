@@ -28,6 +28,7 @@ import dataclasses
 import datetime
 import gc
 import hashlib
+import itertools
 import math
 import os
 import re
@@ -311,7 +312,12 @@ from perfboard_studio.project import DOCUMENT_SUFFIX, document_in, project_name
 from perfboard_studio.ratsnest import NetRatsnest, ratsnest, summarize
 from perfboard_studio.recovery import RecoveryRecord, is_worth_offering
 from perfboard_studio.router import CrossingPolicy, RouterOptions, RoutingStyle, options_for_style
-from perfboard_studio.schematic import build_schematic, snap_to_grid, wires_as_drawn
+from perfboard_studio.schematic import (
+    SchematicDrawing,
+    build_schematic,
+    snap_to_grid,
+    wires_as_drawn,
+)
 from perfboard_studio.schematic_export import drawing_to_svg
 from perfboard_studio.stripboard import board_joins_holes, is_stripboard
 from perfboard_studio.striproute import StripboardPlan
@@ -597,6 +603,30 @@ def progress_key(path: Path) -> str:
     return f"{PROGRESS_GROUP}/{hashlib.sha256(normal.encode('utf-8')).hexdigest()}"
 
 
+#: The documents whose sheet has been offered Arrange (``_consider_arrange_hint``), by
+#: their creation stamp: offered once per document, ever, and never as a box.
+ARRANGE_OFFERED_KEY = "sheet/arrangeOffered"
+#: How many it remembers; the oldest is forgotten first.
+ARRANGE_OFFERED_KEPT = 200
+#: A hand-wired sheet is offered Arrange once it has this many drawn wires...
+ARRANGE_HINT_WIRES = 3
+#: ...and arranged, its wiring would be at most this share of the length drawn now.
+ARRANGE_HINT_SHARE = 0.6
+
+
+def sheet_arrange_gain(drawn: SchematicDrawing, arranged: SchematicDrawing) -> tuple[float, float]:
+    """The wire on the sheet as drawn and as Arrange would draw it, in sheet millimetres."""
+
+    def length(drawing: SchematicDrawing) -> float:
+        return sum(
+            abs(b.x - a.x) + abs(b.y - a.y)
+            for wire in drawing.wires
+            for a, b in itertools.pairwise(wire.path)
+        )
+
+    return length(drawn), length(arranged)
+
+
 def _stored_strings(settings: QSettings, key: str) -> set[str]:
     """A list of strings from the store. The INI backend hands a one-item list back as the
     item itself, and an empty one as nothing at all."""
@@ -606,6 +636,16 @@ def _stored_strings(settings: QSettings, key: str) -> set[str]:
     if isinstance(stored, (list, tuple)):
         return {str(item) for item in stored}
     return set()
+
+
+def _stored_list(settings: QSettings, key: str) -> list[str]:
+    """``_stored_strings`` in the order they were stored, oldest first."""
+    stored = settings.value(key, [])
+    if isinstance(stored, str):
+        return [stored] if stored else []
+    if isinstance(stored, (list, tuple)):
+        return [str(item) for item in stored]
+    return []
 
 
 #: Whether the board's holes and connectors are open in Properties.
@@ -2396,6 +2436,28 @@ class _StepLabel(updater.ElidingLabel):
 
     def minimumSizeHint(self) -> QSize:
         return QSize(self.LEAST, super().minimumSizeHint().height())
+
+
+class _SheetHint(FloatingBar):
+    """A line said over the sheet in its top right corner, its words wrapping to the room
+    right of the sheet's own tools rather than covering them: beside the 3D view the sheet
+    is a third of the window."""
+
+    #: The words' widest, and what is kept for the tools down the sheet's left edge and
+    #: for this bar's own buttons.
+    WIDEST = 480
+    KEPT = 280
+
+    def __init__(self, host: QWidget, words: QLabel) -> None:
+        super().__init__(host, Qt.Corner.TopRightCorner, vertical=False, name="sheetArrangeHint")
+        self.words = words
+        self.add_widget(words)
+
+    def place(self) -> None:
+        host = self.parentWidget()
+        if host is not None:
+            self.words.setMaximumWidth(max(160, min(self.WIDEST, host.width() - self.KEPT)))
+        super().place()
 
 
 class _FrameOnFirstSize(QObject):
@@ -5362,6 +5424,7 @@ class MainWindow(QMainWindow):
         bar.hide()
         bar.track(self._sheet_selection_rect, sheet.viewport())
         self.sheet_selection_bar = bar
+        self._build_arrange_hint()
 
     def _sheet_selection_rect(self) -> QRect | None:
         """Where the selected symbols are, in the sheet view's coordinates; nowhere while a
@@ -6280,6 +6343,7 @@ class MainWindow(QMainWindow):
         self.schematic_view.set_findings(self._last_erc)
         self.schematic_view.set_drawing(drawing)
         self._sync_schematic_highlight()
+        self._consider_arrange_hint(drawing)
 
         parts = len(drawing.symbols)
         nets = len(self.bus.document.nets)
@@ -6314,6 +6378,73 @@ class MainWindow(QMainWindow):
             if len(drawing.notes) > 4:
                 summary += "\n• " + t("…and {count} more").format(count=len(drawing.notes) - 4)
         self.schematic_summary.setText(summary)
+
+    #: The document the arrange hint last measured (``_consider_arrange_hint``).
+    _arrange_measured: PerfDocument | None = None
+
+    def _consider_arrange_hint(self, drawing: SchematicDrawing) -> None:
+        """Offer Arrange, once per document, on a hand-wired sheet it would make much tidier.
+
+        A sheet drawn before any net existed freezes on its first wire in the order the parts
+        were added: the release walkthrough's NE555 was 1397 mm of wire and 28 crossings, and
+        Arrange made it 457 mm and 4 with power and ground as rails -- from an icon among the
+        zooms nobody new pressed. One line over the sheet, with Arrange and a close, saying
+        that the symbols move and every connection stays. Measured only on a frozen sheet
+        with a few wires drawn, and once per document version (the document is immutable,
+        so the object is the version)."""
+        document = self.bus.document
+        hint = getattr(self, "sheet_arrange_hint", None)
+        if hint is None:
+            return
+        if not document.sheet:
+            hint.hide()  # arranged, by the hint or the menu: nothing left to offer
+            return
+        if not hint.isHidden() or document is self._arrange_measured:
+            return
+        self._arrange_measured = document
+        if len(document.sheet_wires) < ARRANGE_HINT_WIRES:
+            return
+        key = document.meta.created or document.meta.name
+        settings = app_settings()
+        offered = _stored_list(settings, ARRANGE_OFFERED_KEY)
+        if key in offered:
+            return
+        arranged = build_schematic(
+            dataclasses.replace(document, sheet=(), sheet_wires=()), self.lookup
+        )
+        drawn_mm, arranged_mm = sheet_arrange_gain(drawing, arranged)
+        if drawn_mm <= 0 or arranged_mm > ARRANGE_HINT_SHARE * drawn_mm:
+            return
+        offered.append(key)
+        settings.setValue(ARRANGE_OFFERED_KEY, offered[-ARRANGE_OFFERED_KEPT:])
+        hint.place()
+        hint.show()
+
+    def _build_arrange_hint(self) -> None:
+        """The one line ``_consider_arrange_hint`` shows: what Arrange does, its button, and
+        a close. In the sheet's top right corner, clear of its tools."""
+        words = QLabel(
+            t(
+                "Arrange redraws this sheet tidily, with power and ground as rail symbols. "
+                "Symbols move; every connection stays. One undo step."
+            )
+        )
+        words.setWordWrap(True)
+        words.setContentsMargins(theme.SPACE["sm"], 0, theme.SPACE["sm"], 0)
+        hint = _SheetHint(self.schematic_view, words)
+        arrange = hint.add_action(self.act_sch_auto)
+        arrange.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        close = QToolButton()
+        close.setIcon(icons.icon("clear"))
+        close.setAutoRaise(True)
+        close.setToolTip(t("Close"))
+        close.clicked.connect(hint.hide)
+        hint.add_widget(close)
+        self.act_sch_auto.triggered.connect(hint.hide)
+        hint.hide()
+        self.sheet_arrange_hint = hint
+        self.sheet_arrange_hint_close = close
+        self._arrange_measured = None
 
     def _sync_schematic_highlight(self) -> None:
         """Light up on the sheet whatever is selected on the board, in the Nets dock, or

@@ -16794,3 +16794,126 @@ def test_the_sheets_arrange_says_its_name() -> None:
         assert window.act_sch_auto.text() == "Arran&ge the Sheet"
     finally:
         _close(window)
+
+
+def _hand_wired_sheet(window, wires: int = 3, skip: int = 0) -> None:
+    """The NE555's sheet frozen where the layout put it, as the window freezes one, and
+    ``wires`` of its connections drawn pin to pin, after the first ``skip``."""
+    from perfboard_studio.commands import DrawSheetWirePayload, MoveSymbolsPayload
+    from perfboard_studio.model import Point2, SheetWire
+    from perfboard_studio.schematic import build_schematic, pin_position
+
+    if not window.bus.document.sheet:
+        placements = window._sheet_placements({})
+        assert window.bus.dispatch("symbol.move", MoveSymbolsPayload(placements=placements)).ok
+    for net in [n for n in window.bus.document.nets if len(n.nodes) >= 2][skip:skip + wires]:
+        a, b = net.nodes[0], net.nodes[1]
+        drawing = build_schematic(window.bus.document, window.lookup)
+        start = pin_position(drawing, a.component_ref, a.pin)
+        end = pin_position(drawing, b.component_ref, b.pin)
+        assert start is not None and end is not None
+        path = (start, end) if start.y == end.y or start.x == end.x else (
+            start, Point2(x=end.x, y=start.y), end
+        )
+        result = window.bus.dispatch("sheet.wire", DrawSheetWirePayload(wire=SheetWire(a=a, b=b, path=path)))
+        assert result.ok, result.message
+
+
+def test_a_tangled_hand_wired_sheet_is_offered_arrange_once(monkeypatch, tmp_path) -> None:
+    """The NE555 drawn before any net existed was 1397 mm of wire and 28 crossings; Arrange
+    makes it 457 mm and 4, and nobody new found it. A hand-wired sheet Arrange would make
+    much shorter is offered it in one line over the sheet -- once per document, ever."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QLabel
+
+    from perfboard_studio.ui import main as main_module
+
+    store = QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
+    monkeypatch.setattr(main_module, "app_settings", lambda: store)
+    monkeypatch.setattr(main_module, "sheet_arrange_gain", lambda drawn, arranged: (1000.0, 300.0))
+    document = _example_document("ne555-astable")
+    window = _window_on(document)
+    try:
+        window.show_schematic()
+        hint = window.sheet_arrange_hint
+        assert hint.isHidden(), "a sheet the layout draws has nothing to arrange"
+        _hand_wired_sheet(window, wires=2)
+        window._refresh_schematic_panel()
+        assert hint.isHidden(), "two wires are not yet a tangle"
+        _hand_wired_sheet(window, wires=1, skip=2)
+        window._refresh_schematic_panel()
+        assert not hint.isHidden()
+        assert "every connection stays" in hint.findChild(QLabel).text()
+        window.sheet_arrange_hint_close.click()
+        assert hint.isHidden()
+        window._refresh_schematic_panel()
+        assert hint.isHidden(), "closed is closed"
+    finally:
+        _close(window)
+
+    window = _window_on(document)
+    try:
+        window.show_schematic()
+        _hand_wired_sheet(window)
+        window._refresh_schematic_panel()
+        assert window.sheet_arrange_hint.isHidden(), "once per document, not once per window"
+    finally:
+        _close(window)
+
+
+def test_the_hints_arrange_arranges_and_the_hint_goes(monkeypatch, tmp_path) -> None:
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio.ui import main as main_module
+
+    store = QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
+    monkeypatch.setattr(main_module, "app_settings", lambda: store)
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.show_schematic()
+        monkeypatch.setattr(main_module, "sheet_arrange_gain", lambda drawn, arranged: (1000.0, 900.0))
+        _hand_wired_sheet(window)
+        window._refresh_schematic_panel()
+        assert window.sheet_arrange_hint.isHidden(), "not offered where it would hardly help"
+
+        monkeypatch.setattr(main_module, "sheet_arrange_gain", lambda drawn, arranged: (1000.0, 300.0))
+        _hand_wired_sheet(window, wires=1, skip=3)
+        window._refresh_schematic_panel()
+        hint = window.sheet_arrange_hint
+        assert not hint.isHidden()
+        button = next(b for b in hint.buttons if b.defaultAction() is window.act_sch_auto)
+        nets = window.bus.document.nets
+        button.click()
+        assert hint.isHidden()
+        assert not window.bus.document.sheet and not window.bus.document.sheet_wires
+        assert window.bus.document.nets == nets, "every connection stays"
+    finally:
+        _close(window)
+
+
+def test_the_arrange_measure_is_the_wire_on_the_sheet() -> None:
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.schematic import build_schematic
+    from perfboard_studio.ui.main import sheet_arrange_gain
+
+    drawing = build_schematic(_example_document("ne555-astable"), footprint_lookup())
+    drawn, arranged = sheet_arrange_gain(drawing, drawing)
+    assert drawn == arranged > 0
+
+
+def test_the_arrange_hint_wraps_to_the_room_beside_the_sheets_tools() -> None:
+    """Beside the 3D view the sheet is a third of the window: the hint's words wrap to the
+    room right of the tools down the sheet's left, rather than covering them."""
+    window = _window_on(_load_dense())
+    try:
+        hint = window.sheet_arrange_hint
+        sheet = window.schematic_view
+        sheet.resize(476, 500)
+        hint.place()
+        assert hint.words.maximumWidth() <= 476 - hint.KEPT or hint.words.maximumWidth() == 160
+        assert hint.x() >= window.sheet_tools.geometry().right() - 1 or hint.words.maximumWidth() == 160
+        sheet.resize(1400, 800)
+        hint.place()
+        assert hint.words.maximumWidth() == hint.WIDEST
+    finally:
+        _close(window)
