@@ -51,6 +51,7 @@ from .model import (
     NetNode,
     PerfDocument,
 )
+from .system import FIRST_BOARD, board_document, board_ids, connector_of, extra_board
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -592,3 +593,122 @@ def isolation_checks(doc: PerfDocument) -> tuple[IsolationCheck, ...]:
         IsolationCheck(a=pin_a, b=pin_b, net_a=net_a.name, net_b=net_b.name)
         for _priority, net_a, net_b, pin_a, pin_b in candidates[:DEFAULT_ISOLATION_CHECK_CAP]
     )
+
+
+# ---------------------------------------------------------------------------
+# The system: several boards and the cables between them
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class SystemLvsResult:
+    """LVS of a whole system: the design's nets against the boards' copper joined through
+    the cables. ``ok`` when every net placed on the boards is one connection and no
+    connection carries two nets."""
+
+    ok: bool
+    issues: tuple[LvsIssue, ...]
+    matched_nets: int
+    nets: int
+
+
+def run_system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> SystemLvsResult:
+    """The design's nets against every board's copper, joined wherever a cable wire runs.
+
+    Each board's islands come from ``connectivity`` on that board's own view, unchanged --
+    a board knows nothing of the others -- and a cable wire joins the island holding its
+    ``a`` pin to the island holding its ``b`` pin. A net whose pins end up in more than one
+    joined island is OPEN (named with the boards it is split across, because "add a cable
+    wire" and "route the board" are different fixes); one joined island holding pins of two
+    nets is a SHORT, which is also how a cable wired pin 1 to pin 2 shows up. Pins of parts
+    on no board are the design's business, not the copper's, and are left out, as the
+    board's own LVS reports them as unplaced.
+    """
+    parent: dict[tuple[str, str], tuple[str, str]] = {}
+
+    def find(key: tuple[str, str]) -> tuple[str, str]:
+        while parent.setdefault(key, key) != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    island_of: dict[_PinKey, tuple[str, str]] = {}
+    board_of: dict[str, str] = {}
+    names: dict[str, str] = {}
+    for board_id in board_ids(doc):
+        seen = board_document(doc, board_id)
+        names[board_id] = doc.meta.name if board_id == FIRST_BOARD else extra_board(doc, board_id).name
+        for component in seen.components:
+            board_of[component.ref] = board_id
+        for pn in extract_physical_nets(seen, lookup):
+            key = (board_id, pn.id)
+            find(key)
+            for pin in pn.pins:
+                island_of[_pin_key(pin.component_ref, pin.pin)] = key
+
+    for cable in doc.cables:
+        a = connector_of(doc, cable.a)
+        b = connector_of(doc, cable.b)
+        if a is None or b is None:
+            continue
+        for wire in cable.wires:
+            left = island_of.get(_pin_key(a.ref, wire.a_pin))
+            right = island_of.get(_pin_key(b.ref, wire.b_pin))
+            if left is not None and right is not None:
+                parent[find(left)] = find(right)
+
+    issues: list[LvsIssue] = []
+    held_by: dict[tuple[str, str], dict[str, Net]] = {}
+    matched = 0
+    counted = 0
+    for net in doc.nets:
+        placed = [n for n in net.nodes if n.component_ref in board_of]
+        groups: dict[tuple[str, str], list[NetNode]] = {}
+        for node in placed:
+            island = island_of.get(_pin_key(node.component_ref, node.pin))
+            if island is None:
+                continue
+            root = find(island)
+            groups.setdefault(root, []).append(node)
+            held_by.setdefault(root, {})[net.id] = net
+        if not placed:
+            continue
+        counted += 1
+        if len(groups) <= 1:
+            matched += 1
+            continue
+        boards = sorted({names[board_of[n.component_ref]] for n in placed})
+        across = f" across {' and '.join(boards)}" if len(boards) > 1 else f" on {boards[0]}"
+        issues.append(
+            LvsIssue(
+                kind="open",
+                message=(
+                    f"'{net.name}' is split into {len(groups)} connections{across}"
+                    + (" -- a cable wire has to carry it between them." if len(boards) > 1 else ".")
+                ),
+                net_names=(net.name,),
+                pins=tuple(sorted(_to_pin_ref(n) for n in placed)),
+                physical_net_ids=tuple(sorted(f"{b}:{p}" for b, p in groups)),
+            )
+        )
+
+    for root, nets in held_by.items():
+        if len(nets) < 2:
+            continue
+        net_names = sorted(n.name for n in nets.values())
+        issues.append(
+            LvsIssue(
+                kind="short",
+                message=(
+                    "SHORT: one connection of the system ties together "
+                    + " and ".join(f"'{n}'" for n in net_names)
+                    + " -- through a board's copper or a cable wired across."
+                ),
+                net_names=tuple(net_names),
+                pins=(),
+                physical_net_ids=(f"{root[0]}:{root[1]}",),
+            )
+        )
+
+    issues.sort(key=_issue_sort_key)
+    return SystemLvsResult(ok=not issues, issues=tuple(issues), matched_nets=matched, nets=counted)

@@ -396,3 +396,75 @@ def test_a_file_whose_cable_reaches_a_missing_part_is_refused() -> None:
     broken = dataclasses.replace(doc, cables=(_cable(doc, id="cable-1", b=CableEnd("b2", "nothing")),))
     result = persist.deserialize_document(persist.serialize_document(broken))
     assert not result.ok and result.code == "unknown-reference"
+
+
+# ---------------------------------------------------------------------------
+# LVS through the cables
+# ---------------------------------------------------------------------------
+
+
+def _two_headers(wires):  # type: ignore[no-untyped-def]
+    """Two boards with a 2-pin header each, GND on pin 2 and SIG on pin 1 of both, joined
+    by a cable with ``wires`` (or none)."""
+    from perfboard_studio.commands import DEFAULT_BOARD
+    from perfboard_studio.model import (
+        Cable,
+        CableEnd,
+        ComponentInstance,
+        DocumentMeta,
+        Net,
+        NetNode,
+    )
+
+    header_a = ComponentInstance(id="cmp-1", ref="JA", value="", footprint_id="hdr-1x2", anchor=HoleCoord(2, 2))
+    header_b = ComponentInstance(id="cmp-2", ref="JB", value="", footprint_id="hdr-1x2", anchor=HoleCoord(2, 2))
+    nets = (
+        Net(id="n1", name="GND", nodes=(NetNode("JA", "2"), NetNode("JB", "2")), net_class="ground"),
+        Net(id="n2", name="SIG", nodes=(NetNode("JA", "1"), NetNode("JB", "1"))),
+    )
+    cables = (
+        ()
+        if wires is None
+        else (Cable(id="cable-1", ref="W1", a=CableEnd(system.FIRST_BOARD, "cmp-1"), b=CableEnd("b2", "cmp-2"), wires=wires),)
+    )
+    return PerfDocument(
+        meta=DocumentMeta(name="Main", created="", modified=""),
+        board=DEFAULT_BOARD,
+        components=(header_a,),
+        nets=nets,
+        boards=(ExtraBoard(id="b2", name="Remote", board=DEFAULT_BOARD, components=(header_b,)),),
+        cables=cables,
+    )
+
+
+def test_a_net_across_two_boards_is_open_until_a_cable_carries_it() -> None:
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.lvs import run_system_lvs
+
+    result = run_system_lvs(_two_headers(None), footprint_lookup())
+    assert not result.ok
+    opens = [issue for issue in result.issues if issue.kind == "open"]
+    assert {issue.net_names[0] for issue in opens} == {"GND", "SIG"}
+    assert all("across Main and Remote" in issue.message and "cable wire" in issue.message for issue in opens)
+
+
+def test_a_cable_wired_straight_makes_the_system_whole() -> None:
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.lvs import run_system_lvs
+    from perfboard_studio.model import CableWire
+
+    result = run_system_lvs(_two_headers((CableWire("1", "1"), CableWire("2", "2"))), footprint_lookup())
+    assert result.ok, [i.message for i in result.issues]
+    assert result.matched_nets == result.nets == 2
+
+
+def test_a_cable_wired_across_is_a_short() -> None:
+    """Pin 1 to pin 2 and pin 2 to pin 1: the document is whole (nothing refuses it), and
+    LVS says what it is."""
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.lvs import run_system_lvs
+    from perfboard_studio.model import CableWire
+
+    result = run_system_lvs(_two_headers((CableWire("1", "2"), CableWire("2", "1"))), footprint_lookup())
+    shorts = [issue for issue in result.issues if issue.kind == "short"]
+    assert shorts and set(shorts[0].net_names) == {"GND", "SIG"}

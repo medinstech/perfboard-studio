@@ -2993,3 +2993,12 @@ its board removed -- is refused naming the cable. Whether a wire's pin is a pin 
 needs the footprint registry, which a command has none of (`net.connect` does not ask it
 either), so DRC reports that; and a wire joining two different nets is a design mistake the
 document can hold, so DRC and LVS report it and nothing refuses it.
+
+**LVS of the system joins the boards' islands through the cables.** `lvs.run_system_lvs` takes
+each board's islands from `connectivity` on that board's own view -- unchanged, so a board
+still knows nothing of the others -- and unites the island holding a wire's `a` pin with the
+one holding its `b` pin. A design net left in more than one joined island is an open, named
+with the boards it is split across, because "add a cable wire" and "route the board" are
+different fixes; one joined island holding two nets is a short, which is also exactly how a
+cable wired pin 1 to pin 2 shows up. Pins of parts on no board are left out: the design is
+asked about them, not the copper.
