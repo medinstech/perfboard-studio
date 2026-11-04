@@ -1225,6 +1225,64 @@
   ],
   "source": "Sensor/Aosong_DHT11_5.5x12.0_P2.54mm"
  },
+ "box-4x1-p1-r1-15.1x7.7x25.1-o0x1.4": {
+  "parts": [
+   {
+    "bounds": [
+     -3.74,
+     -5.25,
+     0.0,
+     11.36,
+     2.45,
+     25.1
+    ],
+    "color": "#e9e7e1",
+    "material": "moulded",
+    "mesh": "box-4x1-p1-r1-15.1x7.7x25.1-o0x1.4.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -2.2426,
+     -4.76,
+     6.4774,
+     9.0824,
+     -4.48,
+     19.4323
+    ],
+    "color": "#383838",
+    "material": "moulded",
+    "mesh": "box-4x1-p1-r1-15.1x7.7x25.1-o0x1.4.1.ply"
+   },
+   {
+    "bounds": [
+     -3.1234,
+     -4.48,
+     3.2387,
+     10.7183,
+     -3.64,
+     21.0516
+    ],
+    "color": "#050505",
+    "material": "moulded",
+    "mesh": "box-4x1-p1-r1-15.1x7.7x25.1-o0x1.4.2.ply"
+   },
+   {
+    "bounds": [
+     -0.25,
+     -0.15,
+     -0.05,
+     7.87,
+     0.15,
+     0.0
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "box-4x1-p1-r1-12x5.5x15.5.3.ply"
+   }
+  ],
+  "source": "Sensor/Aosong_DHT11_5.5x12.0_P2.54mm"
+ },
  "c-disc-p2": {
   "parts": [
    {

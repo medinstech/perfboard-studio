@@ -237,3 +237,18 @@ def test_the_passive_buzzer_is_the_active_ones_can_at_its_own_height() -> None:
 
     assert top(passive) == pytest.approx(footprint.body_height)
     assert top(active) == pytest.approx(9.53, abs=0.01)
+
+
+def test_the_dht22_is_the_dht11s_case_at_aosongs_size() -> None:
+    """KiCad has the AM2302's footprint and not its case: it is the DHT11's grilled case
+    scaled to Aosong's 15.1 x 7.7 x 25.1 mm drawing (``Model.case_size``), white, its body
+    1.4 mm in front of its pins as its footprint has it, and its legs still in their holes."""
+    dht11 = partmodels.model_for("box-4x1-p1-r1-12x5.5x15.5")
+    dht22 = partmodels.model_for("box-4x1-p1-r1-15.1x7.7x25.1-o0x1.4")
+    assert dht11 is not None and dht22 is not None and dht22.body is not None
+    assert dht22.source == dht11.source == "Sensor/Aosong_DHT11_5.5x12.0_P2.54mm"
+    x0, y0, z0, x1, y1, z1 = dht22.body.bounds
+    assert (x1 - x0, y1 - y0, z1 - z0) == pytest.approx((15.1, 7.7, 25.1), abs=0.01)
+    # The model's y runs up the board: 1.4 mm in front of the pins is y = -1.4 here.
+    assert ((x0 + x1) / 2, (y0 + y1) / 2) == pytest.approx((3.81, -1.4), abs=0.01)
+    assert dht22.body.color == "#e9e7e1"

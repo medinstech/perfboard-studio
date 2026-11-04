@@ -135,7 +135,8 @@ closed without a bump.
 - **The light sensor, the IR receiver and the DHT11 look like themselves.** The GL5528 is
   KiCad's 5 mm cell with its track on top, the TSOP38238 Vishay's black MINICAST body with
   its dome, the DHT11 its blue grilled case -- each the package the catalog already measured
-  it by, where they were grey boxes.
+  it by, where they were grey boxes. The DHT22, which KiCad has no model of, is the DHT11's
+  case at its own size, white.
 
 - **The 12 mm buzzers are round.** The active and the passive buzzer were grey squares.
   They are now KiCad's model of the 12 mm buzzer, a black can with its sound hole, the

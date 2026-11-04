@@ -1014,7 +1014,10 @@ Three things about the mapping:
   (`tests/test_model_leads.py` found it, as it finds any model whose legs miss a hole).
   A part in the same case as a KiCad model at another height takes that model scaled in z
   (`Model.height`): the 8.5 mm passive buzzer is the 9.5 mm active one's can, its legs'
-  feet left where they meet the board.
+  feet left where they meet the board. A part KiCad has no model of at all, beside a smaller
+  sibling it has, takes the sibling's case scaled to the part's own drawing
+  (`Model.case_size`): the DHT22 is the DHT11's grilled case at Aosong's 15.1 x 7.7 x 25.1
+  mm, white -- a stretched grille that reads as a DHT, where a white box read as nothing.
 - **Position is not measured, because it is already right.** A KiCad through-hole model's
   origin is pin 1 and its axes run the way this world does — x with the column, y against
   the row. Both follow the footprint, and this project's convention is written down as "the

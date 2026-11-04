@@ -65,6 +65,10 @@ The meshes are not the KiCad models unaltered:
   ones is the `colours` field in `tools/import_kicad_models.py`.
 - **One was made shorter.** The 8.5 mm passive buzzer is `Buzzer_12x9.5RM7.6`, the 9.5 mm
   active one's 12 mm can, scaled in height to CUI's CEM-1203(42) (the `height` field).
+- **One was made bigger.** KiCad has no model of the DHT22 (AM2302), so it is
+  `Sensor/Aosong_DHT11_5.5x12.0_P2.54mm`, the DHT11's grilled case, scaled to Aosong's
+  15.1 x 7.7 x 25.1 mm drawing of the DHT22 and painted white, its leads left where they
+  meet the board (the `case_size` field). Its grille is the DHT11's, stretched.
 
 Nothing about the source models' geometry was otherwise altered, and no colours or
 materials were taken from them into the application's own tables.

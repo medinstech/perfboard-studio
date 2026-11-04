@@ -111,6 +111,12 @@ class Model:
     #: height than KiCad modelled: everything above the board scaled in z until its top is
     #: this. The 8.5 mm passive buzzer is the 9.5 mm active one's 12 mm can, shorter.
     height: float | None = None
+    #: The size a part's CASE is drawn at, where KiCad has no model of it and does have one of
+    #: its smaller sibling: everything but the metal scaled about the body's own centre until
+    #: the body is ``(along x, along y, up z)``, then moved ``case_shift`` -- the leads left in
+    #: their holes. The DHT22 is the DHT11's grilled case at Aosong's 15.1 x 7.7 x 25.1 mm.
+    case_size: tuple[float, float, float] | None = None
+    case_shift: tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -264,6 +270,12 @@ MODELS: tuple[Model, ...] = (
     Model("box-3x1-p1-r1-5.92x4.8x10.35-o0x1", "OptoDevice", "Vishay_MINICAST-3Pin"),
     # Aosong's DHT11, turned a quarter onto our row.
     Model("box-4x1-p1-r1-12x5.5x15.5", "Sensor", "Aosong_DHT11_5.5x12.0_P2.54mm", rotate=90.0),
+    # The DHT22 (AM2302): KiCad has its footprint and not its case, so it is the DHT11's grilled
+    # case scaled to Aosong's 15.1 x 7.7 x 25.1 mm and painted the DHT22's white, its body
+    # 1.4 mm in front of its pins as the footprint has it (the model's y runs up the board).
+    Model("box-4x1-p1-r1-15.1x7.7x25.1-o0x1.4", "Sensor", "Aosong_DHT11_5.5x12.0_P2.54mm",
+          rotate=90.0, case_size=(15.1, 7.7, 25.1), case_shift=(0.0, -1.4),
+          materials=(("#04227c", "moulded"),), colours=(("#04227c", "#e9e7e1"),)),
     # -- a terminal block of any length, as three ways of the 3-way one -----
     #
     # A MKDS-1,5 block IS a repetition, like a header, and it was measured rather than
@@ -383,6 +395,35 @@ MATERIALS: dict[str, str] = {
     "#0d0e10": "moulded",  # a display's black case, and the backlight under an LCD's glass
     "#030103": "moulded",  # an IR receiver's black epoxy
 }
+
+
+def _resize_case(groups: dict[Any, tuple[list[Any], list[Any]]], model: Model) -> dict[Any, tuple[list[Any], list[Any]]]:
+    """Every piece but the metal scaled about the body's centre to ``model.case_size`` and
+    moved ``model.case_shift`` (``Model.case_size``); the leads stay where they meet the board."""
+    assert model.case_size is not None
+    metal = ("tinned", "steel", "plated")
+    body = max(
+        (item for item in groups.items() if MATERIALS.get(hexed(item[0]), "moulded") not in metal),
+        key=lambda item: len(item[1][1]),
+    )
+    xs = [x for x, _y, _z in body[1][0]]
+    ys = [y for _x, y, _z in body[1][0]]
+    zs = [z for _x, _y, z in body[1][0]]
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    sx = model.case_size[0] / (max(xs) - min(xs))
+    sy = model.case_size[1] / (max(ys) - min(ys))
+    sz = model.case_size[2] / max(zs)
+    dx, dy = model.case_shift
+    resized = {}
+    for colour, (points, faces) in groups.items():
+        if MATERIALS.get(hexed(colour), "moulded") in metal:
+            resized[colour] = (points, faces)
+            continue
+        resized[colour] = (
+            [(cx + (x - cx) * sx + dx, cy + (y - cy) * sy + dy, z * sz) for x, y, z in points],
+            faces,
+        )
+    return resized
 
 
 def hexed(rgb: tuple[int, int, int]) -> str:
@@ -767,6 +808,8 @@ def main(argv: list[str] | None = None) -> int:
                     [*have_points, *points],
                     [*have_faces, *((a + start, b + start, c + start) for a, b, c in faces)],
                 )
+        if model.case_size is not None:
+            groups = _resize_case(groups, model)
         if model.height is not None:
             top = max(z for points, _faces in groups.values() for _x, _y, z in points)
             scale = model.height / top
