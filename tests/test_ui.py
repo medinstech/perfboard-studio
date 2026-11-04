@@ -15801,7 +15801,9 @@ def test_the_boards_own_parts_are_searched_like_every_other() -> None:
     assert groups("")[0] == "This board"
     assert "This board" not in groups("resistor")
     assert "This board" in groups("dip")
-    assert groups("this board") == ["This board"]
+    # First, as for any search: a catalog part may also say "this" and "board" (the relay
+    # module's summary and its "relay board"), and is listed below it.
+    assert groups("this board")[0] == "This board"
 
 
 @pytest.mark.parametrize(

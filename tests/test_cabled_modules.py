@@ -187,6 +187,13 @@ SOLD_AS = {
     "tm1637-display": "TM1637",
     "ws2812b-strip": "WS2812B",
     "micro-sd-module": "Micro SD",
+    "hc-05": "HC-05",
+    "hc-06": "HC-06",
+    "max485-module": "MAX485",
+    "gy-bmp280": "GY-BMP280",
+    "gy-bme280": "GY-BME280",
+    "gy-bme280-3v3": "GY-BME280-3.3",
+    "relay-module-1ch": "SRD-05VDC",
 }
 
 

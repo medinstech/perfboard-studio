@@ -1274,6 +1274,25 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("srd-12vdc-sl-c", "Songle SRD-12VDC-SL-C relay", "relay", "relay-srd",
                 "SPDT relay, 12 V coil of 400 ohm, contacts 10 A at 125 V AC",
                 _SRD_LEGS, value="SRD-12VDC-SL-C", source=_SRD_SOURCE, check=_SRD_CHECK),
+    # The one-channel relay board every kit has: a Songle cube, a transistor or an
+    # optocoupler to drive it, and a screw terminal for what it switches. Its three control
+    # pins are the header; the contacts stay on the module.
+    CatalogPart("relay-module-1ch", "1-channel 5 V relay module (on a header)", "relay",
+                "hdr-1x3",
+                "A Songle SRD-05VDC relay and its driver on a small module. Its cable plugs into this "
+                "3-pin header: VCC GND IN from pin 1",
+                _legs("VCC", "GND", "IN"), value="SRD-05VDC", ref_prefix="J",
+                source=(
+                    "ShillehTek 1-channel 5 V relay module manual (control pins VCC, GND, IN; "
+                    "outputs NO, COM, NC; active LOW; SONGLE SRD-05VDC-SL-C, 10 A 250 V AC)"
+                ),
+                check=(
+                    "Most of these boards switch on when IN is pulled LOW. What the relay "
+                    "switches goes to the module's own screw terminals, not to the perfboard. "
+                    "Mains there needs proper insulation and spacing and is not a perfboard "
+                    "job. " + _CABLED_CHECK
+                ),
+                aliases=("relay module", "relay board", "5V relay", "röle modülü", "röle kartı")),
     # -- connectors -------------------------------------------------------------------
     CatalogPart("servo-header", "Hobby servo (on a header)", "connector", "hdr-1x3",
                 "A hobby servo such as the SG90. Its cable plugs into this 3-pin header: "
@@ -1319,6 +1338,106 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "with other parts. " + _CABLED_CHECK
                 ),
                 aliases=("SD card", "micro SD", "TF card", "Catalex", "SD kart")),
+    # Bluetooth serial modules on their carrier boards. The HC-05 is the one on the ZS-040
+    # board with an EN pin where older boards had KEY; the HC-06 is the four-pin slave-only
+    # one. Both run at 3.3 V inside, and their RXD is not 5 V tolerant.
+    CatalogPart("hc-05", "HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
+                "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
+                "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",
+                _legs("STATE", "RXD", "TXD", "GND", "VCC", "EN"), value="HC-05", ref_prefix="J",
+                source=(
+                    "ProtoSupplies HC-05 ZS-040 Bluetooth module, 1 x 6 header (STATE, RXD, TXD, "
+                    "GND, VCC, EN; VCC 3.6 to 6 V, the module 3.3 V inside, EN its AT mode)"
+                ),
+                check=(
+                    "TXD goes to the controller's RX and RXD to its TX. RXD is 3.3 V logic: from "
+                    "a 5 V board's TX, bring it down through a divider of 1k and 2k. EN and STATE "
+                    "can be left unwired. " + _CABLED_CHECK
+                ),
+                aliases=("Bluetooth", "HC05", "ZS-040", "serial Bluetooth", "Bluetooth modülü")),
+    CatalogPart("hc-06", "HC-06 Bluetooth module (on a header)", "connector", "hdr-1x4",
+                "Bluetooth serial module, slave only, 3.3 V logic. Its cable plugs into this "
+                "4-pin header: VCC GND TXD RXD from pin 1",
+                _legs("VCC", "GND", "TXD", "RXD"), value="HC-06", ref_prefix="J",
+                source=(
+                    "eTechnophiles HC-06 pinout, 4-pin table (VCC, GND, TXD, RXD; RXD 3.3 V "
+                    "tolerant, not 5 V)"
+                ),
+                check=(
+                    "TXD goes to the controller's RX and RXD to its TX. RXD is 3.3 V logic: from "
+                    "a 5 V board's TX, bring it down through a divider of 1k and 2k. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("Bluetooth", "HC06", "serial Bluetooth", "Bluetooth modülü")),
+    # The common blue MAX485 board: the chip's two sides on two 4-pin headers at its two
+    # ends, RO RE DE DI on one and VCC B A GND on the other, as the chip numbers them, with
+    # A and B on a screw terminal as well. Here both are one header, in that order.
+    CatalogPart("max485-module", "MAX485 RS-485 module (on a header)", "connector", "hdr-1x8",
+                "TTL to RS-485 transceiver module, 5 V. Its cable plugs into this 8-pin header: "
+                "RO RE DE DI VCC B A GND from pin 1",
+                _legs("RO", "RE", "DE", "DI", "VCC", "B", "A", "GND"), value="MAX485",
+                ref_prefix="J",
+                source=(
+                    "Maxim MAX485 datasheet, pin description (1 RO, 2 RE, 3 DE, 4 DI, 5 GND, 6 A, "
+                    "7 B, 8 VCC, supply 4.75 to 5.25 V); Kunkune MAX485 TTL to RS-485 module (its "
+                    "0.1 in pins VCC A B GND RO RE DE DI, A and B also on a 5.08 mm terminal)"
+                ),
+                check=(
+                    "RE is on when low and DE when high: join them and drive both from one pin to "
+                    "switch between listening and sending. A and B are the bus, on the module's "
+                    "screw terminal too: A goes to A and B to B along it. " + _CABLED_CHECK
+                ),
+                aliases=("RS485", "RS-485", "MAX485", "Modbus", "TTL to RS485")),
+    # The cheap Bosch sensor boards most people buy, by the name printed on them. The purple
+    # six-pin ones have no regulator and run on 3.3 V; the four-pin GY-BME280 has one.
+    CatalogPart("gy-bmp280", "GY-BMP280 pressure sensor module (on a header)", "sensor",
+                "hdr-1x6",
+                "BMP280 pressure and temperature sensor, I2C or SPI, 3.3 V only. Its cable plugs "
+                "into this 6-pin header: VCC GND SCL SDA CSB SDO from pin 1",
+                _legs("VCC", "GND", "SCL", "SDA", "CSB", "SDO"), value="GY-BMP280",
+                ref_prefix="J",
+                source=(
+                    "components101 GY-BMP280 module, pin configuration (1 VCC 3.3 V, 2 GND, 3 SCL, "
+                    "4 SDA, 5 CSB, 6 SDO; CSB pulled up on the board for I2C, SDO open 0x76)"
+                ),
+                check=(
+                    "It has no regulator: 3.3 V only. For I2C leave CSB unwired; its address is "
+                    "0x76 with SDO unwired, 0x77 with SDO to VCC. " + _CABLED_CHECK
+                ),
+                aliases=("BMP280", "GY-BMP280-3.3", "barometer", "pressure sensor",
+                         "basınç sensörü")),
+    CatalogPart("gy-bme280", "GY-BME280 sensor module, 4-pin (on a header)", "sensor",
+                "hdr-1x4",
+                "BME280 pressure, humidity and temperature sensor on I2C, with a 3.3 V regulator "
+                "for 3.3 or 5 V. Its cable plugs into this 4-pin header: VIN GND SCL SDA from "
+                "pin 1",
+                _legs("VIN", "GND", "SCL", "SDA"), value="GY-BME280", ref_prefix="J",
+                source=(
+                    "AZ-Delivery BME280 module datasheet (pins VIN, GND, SCL, SDA; an LM6206 3.3 V "
+                    "regulator and a level translator, for 3.3 or 5 V)"
+                ),
+                check=(
+                    "The six-pin GY-BME280-3.3 is another board, with no regulator: check which "
+                    "one you have before giving it 5 V. " + _CABLED_CHECK
+                ),
+                aliases=("BME280", "humidity sensor", "pressure sensor", "nem sensörü",
+                         "basınç sensörü")),
+    CatalogPart("gy-bme280-3v3", "GY-BME280-3.3 sensor module, 6-pin (on a header)", "sensor",
+                "hdr-1x6",
+                "BME280 pressure, humidity and temperature sensor, I2C or SPI, 3.3 V only. Its "
+                "cable plugs into this 6-pin header: VCC GND SCL SDA CSB SDO from pin 1",
+                _legs("VCC", "GND", "SCL", "SDA", "CSB", "SDO"), value="GY-BME280-3.3",
+                ref_prefix="J",
+                source=(
+                    "Robu GY-BME280-3.3 module (pins VCC, GND, SCL, SDA, CSB, SDO; CSB to VCC for "
+                    "I2C, SDO to GND 0x76 or VCC 0x77; supply 1.71 to 3.6 V)"
+                ),
+                check=(
+                    "It has no regulator: 3.3 V only. For I2C tie CSB to VCC; its address is 0x76 "
+                    "with SDO to GND, 0x77 with SDO to VCC. " + _CABLED_CHECK
+                ),
+                aliases=("BME280", "humidity sensor", "pressure sensor", "nem sensörü",
+                         "basınç sensörü")),
     # -- sound ------------------------------------------------------------------------
     CatalogPart("buzzer-active-12mm", "Active buzzer 12 mm", "sound",
                 "box-2x1-p3-r1-12x12x9.5",

@@ -141,6 +141,12 @@ closed without a bump.
   either language. The build guide says the module is not on the board and lists its leads
   pin by pin, in place of the numbered holes and the + lead's polarity line, and so does it
   now for the 4x4 keypad and the hobby servo.
+- **Seven more modules on a cable.** The HC-05 (ZS-040) and HC-06 Bluetooth modules, a MAX485
+  RS-485 module, the GY-BMP280, GY-BME280 and GY-BME280-3.3 sensor boards by the names
+  printed on them, and the 1-channel 5 V relay module. Each check says what the module needs:
+  a divider into the Bluetooth module's 3.3 V RXD, which sensor board has no regulator, and,
+  for the relay, that what it switches stays on its own screw terminals, because mains needs
+  proper insulation and spacing and is not a perfboard job.
 - **The HC-SR501 PIR motion sensor, drawn as itself.** It goes on the board on its three pins,
   VCC, OUT and GND. Its Fresnel lens is drawn with its square foot and its dome, with an M2
   hole at each end of its board. Each is measured: the board, the holes and the lens's width

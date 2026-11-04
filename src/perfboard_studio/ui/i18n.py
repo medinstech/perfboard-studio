@@ -2618,6 +2618,129 @@ TURKISH: Mapping[str, str] = {
         "şarj diyotunu sökün. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan "
         "ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
+    "HC-05 Bluetooth module, ZS-040 (on a header)": (
+        "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
+    ),
+    "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into this "
+    "6-pin header: STATE RXD TXD GND VCC EN from pin 1": (
+        "Ana ya da bağımlı çalışan, 3,3 V mantıklı Bluetooth seri modülü. Kablosu bu 6 pinli "
+        "header'a takılır: 1. pinden STATE RXD TXD GND VCC EN"
+    ),
+    "TXD goes to the controller's RX and RXD to its TX. RXD is 3.3 V logic: from a 5 V "
+    "board's TX, bring it down through a divider of 1k and 2k. EN and STATE can be left "
+    "unwired. Match each lead to the name printed beside the module's pins, not to its "
+    "place: sellers' boards are not all wired in the same order.": (
+        "TXD denetleyicinin RX'ine, RXD de TX'ine gider. RXD 3,3 V mantıktır: 5 V'luk bir "
+        "kartın TX'inden 1k ve 2k'lık bir bölücüyle düşürün. EN ve STATE boş bırakılabilir. "
+        "Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: "
+        "satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "HC-06 Bluetooth module (on a header)": (
+        "HC-06 Bluetooth modülü (header üzerinde)"
+    ),
+    "Bluetooth serial module, slave only, 3.3 V logic. Its cable plugs into this 4-pin "
+    "header: VCC GND TXD RXD from pin 1": (
+        "Yalnızca bağımlı çalışan, 3,3 V mantıklı Bluetooth seri modülü. Kablosu bu 4 pinli "
+        "header'a takılır: 1. pinden VCC GND TXD RXD"
+    ),
+    "TXD goes to the controller's RX and RXD to its TX. RXD is 3.3 V logic: from a 5 V "
+    "board's TX, bring it down through a divider of 1k and 2k. Match each lead to the "
+    "name printed beside the module's pins, not to its place: sellers' boards are not all "
+    "wired in the same order.": (
+        "TXD denetleyicinin RX'ine, RXD de TX'ine gider. RXD 3,3 V mantıktır: 5 V'luk bir "
+        "kartın TX'inden 1k ve 2k'lık bir bölücüyle düşürün. Her kabloyu yerine göre değil, "
+        "modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
+        "sırayla bağlanmamıştır."
+    ),
+    "MAX485 RS-485 module (on a header)": (
+        "MAX485 RS-485 modülü (header üzerinde)"
+    ),
+    "TTL to RS-485 transceiver module, 5 V. Its cable plugs into this 8-pin header: RO RE "
+    "DE DI VCC B A GND from pin 1": (
+        "5 V'luk TTL'den RS-485'e alıcı-verici modülü. Kablosu bu 8 pinli header'a takılır: "
+        "1. pinden RO RE DE DI VCC B A GND"
+    ),
+    "RE is on when low and DE when high: join them and drive both from one pin to switch "
+    "between listening and sending. A and B are the bus, on the module's screw terminal "
+    "too: A goes to A and B to B along it. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "RE düşükken, DE yüksekken açıktır: ikisini birleştirip tek pinden sürün, böylece "
+        "dinleme ile gönderme arasında geçiş yapılır. A ve B hattır, modülün vidalı "
+        "klemensinde de vardır: hat boyunca A A'ya, B B'ye gider. Her kabloyu yerine göre "
+        "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
+        "sırayla bağlanmamıştır."
+    ),
+    "GY-BMP280 pressure sensor module (on a header)": (
+        "GY-BMP280 basınç sensörü modülü (header üzerinde)"
+    ),
+    "BMP280 pressure and temperature sensor, I2C or SPI, 3.3 V only. Its cable plugs into "
+    "this 6-pin header: VCC GND SCL SDA CSB SDO from pin 1": (
+        "I2C ya da SPI ile çalışan, yalnızca 3,3 V'luk BMP280 basınç ve sıcaklık sensörü. "
+        "Kablosu bu 6 pinli header'a takılır: 1. pinden VCC GND SCL SDA CSB SDO"
+    ),
+    "It has no regulator: 3.3 V only. For I2C leave CSB unwired; its address is 0x76 with "
+    "SDO unwired, 0x77 with SDO to VCC. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "Regülatörü yoktur: yalnızca 3,3 V. I2C için CSB'yi boş bırakın; adresi SDO boşken "
+        "0x76, SDO VCC'ye bağlıyken 0x77'dir. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "GY-BME280 sensor module, 4-pin (on a header)": (
+        "GY-BME280 sensör modülü, 4 pinli (header üzerinde)"
+    ),
+    "BME280 pressure, humidity and temperature sensor on I2C, with a 3.3 V regulator for "
+    "3.3 or 5 V. Its cable plugs into this 4-pin header: VIN GND SCL SDA from pin 1": (
+        "I2C ile çalışan BME280 basınç, nem ve sıcaklık sensörü; 3,3 V regülatörü sayesinde "
+        "3,3 ya da 5 V ile beslenir. Kablosu bu 4 pinli header'a takılır: 1. pinden VIN GND "
+        "SCL SDA"
+    ),
+    "The six-pin GY-BME280-3.3 is another board, with no regulator: check which one you "
+    "have before giving it 5 V. Match each lead to the name printed beside the module's "
+    "pins, not to its place: sellers' boards are not all wired in the same order.": (
+        "Altı pinli GY-BME280-3.3 başka bir karttır ve regülatörü yoktur: 5 V vermeden önce "
+        "hangisine sahip olduğunuzu kontrol edin. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "GY-BME280-3.3 sensor module, 6-pin (on a header)": (
+        "GY-BME280-3.3 sensör modülü, 6 pinli (header üzerinde)"
+    ),
+    "BME280 pressure, humidity and temperature sensor, I2C or SPI, 3.3 V only. Its cable "
+    "plugs into this 6-pin header: VCC GND SCL SDA CSB SDO from pin 1": (
+        "I2C ya da SPI ile çalışan, yalnızca 3,3 V'luk BME280 basınç, nem ve sıcaklık "
+        "sensörü. Kablosu bu 6 pinli header'a takılır: 1. pinden VCC GND SCL SDA CSB SDO"
+    ),
+    "It has no regulator: 3.3 V only. For I2C tie CSB to VCC; its address is 0x76 with "
+    "SDO to GND, 0x77 with SDO to VCC. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "Regülatörü yoktur: yalnızca 3,3 V. I2C için CSB'yi VCC'ye bağlayın; adresi SDO "
+        "GND'ye bağlıyken 0x76, VCC'ye bağlıyken 0x77'dir. Her kabloyu yerine göre değil, "
+        "modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
+        "sırayla bağlanmamıştır."
+    ),
+    "1-channel 5 V relay module (on a header)": (
+        "1 kanallı 5 V röle modülü (header üzerinde)"
+    ),
+    "A Songle SRD-05VDC relay and its driver on a small module. Its cable plugs into this 3-pin "
+    "header: VCC GND IN from pin 1": (
+        "Küçük bir modül üzerinde Songle SRD-05VDC rölesi ve sürücüsü. Kablosu bu 3 pinli "
+        "header'a takılır: 1. pinden VCC GND IN"
+    ),
+    "Most of these boards switch on when IN is pulled LOW. What the relay switches goes "
+    "to the module's own screw terminals, not to the perfboard. Mains there needs proper "
+    "insulation and spacing and is not a perfboard job. Match each lead to the name "
+    "printed beside the module's pins, not to its place: sellers' boards are not all "
+    "wired in the same order.": (
+        "Bu kartların çoğu IN düşük çekildiğinde çeker. Rölenin anahtarladığı hat perfboard'a "
+        "değil, modülün kendi vidalı klemenslerine gider. Orada şebeke gerilimi uygun yalıtım "
+        "ve aralık ister; bu bir perfboard işi değildir. Her kabloyu yerine göre "
+        "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
+        "sırayla bağlanmamıştır."
+    ),
     "Micro SD card module (on a header)": "Micro SD kart modülü (header üzerinde)",
     "Micro SD card socket on SPI, with a 3.3 V regulator. Its cable plugs into this 6-pin "
     "header: GND VCC MISO MOSI SCK CS from pin 1": (

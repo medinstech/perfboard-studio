@@ -370,8 +370,13 @@ def test_the_songle_relay_is_on_its_own_footprint_and_named_as_kicad_numbers_it(
     assert relay is not None and relay.footprint_id == "relay-srd"
     assert dict(relay.pin_names) == {"1": "COM", "2": "COIL", "3": "NO", "4": "NC", "5": "COIL"}
     assert relay.reference_prefix == "K"
-    assert [part.id for part in search_catalog("relay")] == ["srd-05vdc-sl-c", "srd-12vdc-sl-c"]
-    assert [part.id for part in search_catalog("SRD-05VDC-SL-C")] == ["srd-05vdc-sl-c"]
+    assert [part.id for part in search_catalog("relay")] == [
+        "srd-05vdc-sl-c", "srd-12vdc-sl-c", "relay-module-1ch"
+    ]
+    # The one-channel module is that relay on a board, so it comes after it, never first.
+    assert [part.id for part in search_catalog("SRD-05VDC-SL-C")] == [
+        "srd-05vdc-sl-c", "relay-module-1ch"
+    ]
     # The 12 V one is the same package and the same legs.
     twelve = catalog_part("srd-12vdc-sl-c")
     assert twelve is not None
