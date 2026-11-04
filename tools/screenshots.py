@@ -399,8 +399,9 @@ STEPS_DONE = 8
 
 #: How far the 3D panel's camera is brought in from where it opens, as a scroll of the
 #: wheel would: the opening frame fits the whole board with room to turn it, which in a
-#: third of the window leaves the parts small.
-CAMERA_ZOOM = 1.3
+#: third of the window leaves the parts small. 1.1 is as far as the board's far corner stays
+#: in the picture: it was 1.3 while the panel had no playback row, in a frame cut wider.
+CAMERA_ZOOM = 1.1
 
 
 def _guide_and_3d_shot(app: QApplication, shots: list[tuple[str, str]]) -> bool:
@@ -550,6 +551,14 @@ def _create_offscreen_3d(self: MainWindow) -> None:
     render_window.AddRenderer(ren)
     self._vtk_renderer = ren
     self.vtk_widget = _OffscreenPanel(render_window)
+    # The playback row under it, as the panel builds: the slider is what a guide step moves
+    # (``_show_build_step``), so without it the guide shot's 3D view showed the finished
+    # board beside a card at step 9 -- the README says the board as it stands at that step --
+    # and the row with Play and its arrows was missing from the picture.
+    # The placeholder takes the height, as the QVTK widget it stands for does: a label is
+    # not asked to grow, and the row took half the panel with the frame over the other half.
+    self._3d_layout.addWidget(self._build_assembly_bar())
+    self._3d_layout.setStretchFactor(self._3d_placeholder, 1)
     self._3d_stale = False
     self._show_selection_in_3d()
 
