@@ -2058,6 +2058,19 @@ TURKISH: Mapping[str, str] = {
         "kondansatör olarak tanımlayın ve sigorta olarak işaretleyin."
     ),
     "Temperature sensor, 10 mV per degree C": "Sıcaklık sensörü, derece başına 10 mV",
+    "HC-SR501 PIR motion sensor": "HC-SR501 PIR hareket sensörü",
+    "Passive infrared motion sensor: OUT goes to 3.3 V when something warm moves, for 5 s to "
+    "5 minutes": (
+        "Pasif kızılötesi hareket sensörü: sıcak bir şey kıpırdayınca OUT 5 saniye ile 5 dakika "
+        "arası 3,3 V'a çıkar"
+    ),
+    "Feed it 5 to 20 V: below 5 V it does not work. Its two trimmers set how long OUT stays high "
+    "and how far it sees, 3 to 7 m, and its jumper whether a new movement starts that time "
+    "again (H) or not (L).": (
+        "5 ile 20 V arasıyla besleyin: 5 V'un altında çalışmaz. İki trimpotu OUT'un ne kadar "
+        "yüksek kalacağını ve ne kadar uzağı gördüğünü (3-7 m), jumper'ı ise yeni bir hareketin "
+        "bu süreyi yeniden başlatıp (H) başlatmayacağını (L) ayarlar."
+    ),
     "Temperature sensor, 1-Wire, needs a 4.7k pull-up on DQ": (
         "Sıcaklık sensörü, 1-Wire, DQ hattında 4,7k pull-up ister"
     ),

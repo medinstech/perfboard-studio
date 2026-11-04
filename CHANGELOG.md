@@ -135,6 +135,10 @@ closed without a bump.
   goes on the board as the header its cable plugs into, with the pins named as the module
   names them. The build guide says the module is not on the board and lists its leads pin by
   pin, and so does it now for the 4x4 keypad and the hobby servo.
+- **The HC-SR501 PIR motion sensor, drawn as itself.** It goes on the board on its three pins,
+  VCC, OUT and GND. Its Fresnel lens is drawn with its square foot and its dome, with an M2
+  hole at each end of its board. Each is measured: the board, the holes and the lens's width
+  on TruSens' sheet, and the lens's height on a photograph of one.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks

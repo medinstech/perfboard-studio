@@ -1207,7 +1207,11 @@ ids. Five rules hold it, each pinned in
   nRF24L01+'s only free photographs are oblique, so each was RECTIFIED: a homography from the
   four corners of its board onto the board its maker or KiCad draws, which puts the header
   where the drawing has it -- to 0.1 mm on the ESP-01 -- and leaves only the parallax of a
-  part's own height. That is the rule, pinned by
+  part's own height. The HC-SR501's photograph is rectified the same way onto the board
+  TruSens' sheet draws, and a height no sheet gives is read off it too: the same four corners
+  solve the camera (focal length and pose, the principal point taken at the image's middle),
+  which puts the two mounting holes back where the photograph has them, and the lens's top is
+  the height whose image meets the dome's -- 16.3 mm, to about 1 mm. That is the rule, pinned by
   `test_every_layout_says_what_it_was_measured_on`: measured from a drawing, or from a
   calibrated photograph of the board everybody sells, cited with its scale and its error --
   never invented, and a module there is nothing to measure it on stays the block

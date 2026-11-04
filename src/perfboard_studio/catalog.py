@@ -749,6 +749,24 @@ CATALOG: tuple[CatalogPart, ...] = (
     # pin 1 at the anchor and the board stands ABOVE the row (``o0x-6.7``): seen from above,
     # a GY-521 with its header along the bottom edge reads VCC to INT left to right. Below
     # the row was its mirror image, and ``footprints.SUPERSEDED_FOOTPRINTS`` says so.
+    # The PIR every kit has, on its three pins in a female header: its lens 16.3 mm over its
+    # board, and its parts underneath clear of the board it plugs into.
+    CatalogPart("hc-sr501", "HC-SR501 PIR motion sensor", "sensor",
+                "mod-3x1-p1-r1-32x24x16.3-s8.5-o-0.7x9.2",
+                "Passive infrared motion sensor: OUT goes to 3.3 V when something warm moves, "
+                "for 5 s to 5 minutes",
+                _legs("VCC", "OUT", "GND"), value="HC-SR501", ref_prefix="U",
+                source=(
+                    "TruSens HC-SR501 PIR Motion Detector sheet (Rapid 74-1108): +Power, "
+                    "High/Low Output, GND on its underside, 5 to 20 V in and 3.3 V out, the "
+                    "time 5 to 300 s; the board as moduleart's HC_SR501_MODULE measures it"
+                ),
+                check=(
+                    "Feed it 5 to 20 V: below 5 V it does not work. Its two trimmers set how "
+                    "long OUT stays high and how far it sees, 3 to 7 m, and its jumper whether "
+                    "a new movement starts that time again (H) or not (L)."
+                ),
+                aliases=("PIR", "motion sensor", "SR501", "pyroelectric", "hareket sensörü")),
     CatalogPart("gy-521", "GY-521 MPU-6050", "sensor", "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x-6.7",
                 "Accelerometer and gyroscope, three axes each, on I2C",
                 _legs("VCC", "GND", "SCL", "SDA", "XDA", "XCL", "AD0", "INT"), ref_prefix="U",

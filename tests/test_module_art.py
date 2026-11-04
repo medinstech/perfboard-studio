@@ -498,6 +498,36 @@ def test_every_layout_is_drawn_turned_and_never_mirrored(art, footprint_id: str,
     raise AssertionError(f"{art.key}: nothing on it says which way round it is")
 
 
+def test_an_hc_sr501_is_drawn_as_its_sheet_and_photograph_have_it() -> None:
+    """The lens in the middle of the board, a hole at each end 28 mm apart, and the trigger
+    jumper's three joints at the GND end of the board, on the far side of the lens from the
+    header -- the corner TruSens' underside photograph and the top-side one agree on."""
+    from perfboard_studio.ui.moduleart import HC_SR501_MODULE
+
+    pir = next(part for part in CATALOG_MODULES if part.id == "hc-sr501")
+    assert dict(pir.pin_names) == {"1": "VCC", "2": "OUT", "3": "GND"}
+    footprint = _footprint(pir.footprint_id)
+    placed = fit_module_art(footprint, _part(pir.footprint_id, pir.placed_value, pir.pin_names), PITCH)
+    assert placed is not None
+    placement = placement_for(footprint, PITCH)
+    centre = (placement.centre_x, placement.centre_y)
+    pins = {pin.number: (pin.d_col * PITCH, pin.d_row * PITCH) for pin in footprint.pins}
+    lens = next(part for part in placed if part.kind == "fresnel")
+    holes = [part for part in placed if part.kind == "hole"]
+    jumper = next(part for part in placed if part.kind == "pads")
+    assert (lens.x, lens.y) == pytest.approx(centre)
+    assert len(holes) == 2 and math.dist((holes[0].x, holes[0].y), (holes[1].x, holes[1].y)) == pytest.approx(28.0)
+    # The header's middle pin is 0.7 mm towards GND from the board's middle, 9.2 mm from it.
+    assert pins["2"][0] - centre[0] == pytest.approx(0.7, abs=0.01)
+    assert centre[1] - pins["2"][1] == pytest.approx(9.2, abs=0.01)
+    # The jumper: nearer GND than VCC, and the far side of the lens from the header.
+    assert math.dist((jumper.x, jumper.y), pins["3"]) < math.dist((jumper.x, jumper.y), pins["1"])
+    assert (jumper.y - centre[1]) * (pins["2"][1] - centre[1]) < 0
+    # Its top is the height the camera measured, and the id says no less.
+    assert lens.height == pytest.approx(16.3)
+    assert HC_SR501_MODULE.names_over_parts
+
+
 def test_a_gy521_is_drawn_as_the_photograph_has_it() -> None:
     """The regulator by VCC with its three legs towards the header, the chip's pin-1 dot
     towards VCC too, the tantalum's + band towards INT, and the two mounting holes along the
@@ -749,6 +779,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "pololu-drv8825": POLOLU_DRV8825_MODULE.board_colour,
         "seeed-xiao-esp32c3": ESPRESSIF_BLACK,
         "lm2596-module": None,  # the blue every seller's board is
+        "hc-sr501": None,  # blue, as the photograph's is
         "sparkfun-tb6612fng": SPARKFUN_RED,
         "pololu-drv8833": PICO_MODULE.board_colour,
         "gy-521": None,  # the photograph's blue is the module style's, within the lighting

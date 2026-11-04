@@ -197,6 +197,7 @@ from .i18n import language as current_language
 from .i18n import t
 from .moduleart import (
     ART_COLOURS,
+    FRESNEL_DOME_MM,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
     OLED_LEDGE_MM,
@@ -3318,6 +3319,26 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
         painter.setBrush(QBrush(_art_colour("hole")))
         painter.drawEllipse(QPointF(0.0, 0.0), radius - ring, radius - ring)
+    elif kind == "fresnel":
+        # The square foot, the dome on it, and the facets a Fresnel lens is moulded in: a
+        # hexagon at the top of the dome and the ridges out from its corners.
+        lens = _art_colour("fresnel")
+        painter.setBrush(QBrush(lens.darker(108)))
+        painter.drawRoundedRect(QRectF(-half_l, -half_w, length, width), 0.8, 0.8)
+        dome = min(FRESNEL_DOME_MM, length, width) / 2
+        painter.setBrush(QBrush(lens))
+        painter.drawEllipse(QPointF(0.0, 0.0), dome, dome)
+        painter.save()
+        painter.setPen(QPen(lens.darker(118), 0.12))
+        corners = [
+            QPointF(dome * 0.42 * math.cos(math.radians(60 * k + 30)),
+                    dome * 0.42 * math.sin(math.radians(60 * k + 30)))
+            for k in range(6)
+        ]
+        painter.drawPolygon(QPolygonF(corners))
+        for tip in corners:
+            painter.drawLine(tip, QPointF(tip.x() / 0.42 * 0.97, tip.y() / 0.42 * 0.97))
+        painter.restore()
     elif kind == "oled":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("glass"))
         view_across, view_along = OLED_VIEW_MM

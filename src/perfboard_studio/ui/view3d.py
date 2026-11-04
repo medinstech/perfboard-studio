@@ -138,6 +138,7 @@ from .bodies import (
 )
 from .moduleart import (
     ART_COLOURS,
+    FRESNEL_DOME_MM,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
     OLED_LEDGE_MM,
@@ -5873,6 +5874,25 @@ def _art_hole(s: _ArtSolid) -> list[_Piece]:
     ]
 
 
+def _art_fresnel(s: _ArtSolid) -> list[_Piece]:
+    """A PIR's Fresnel lens: the square foot, and the dome on it, its top ``height`` above the
+    module's board -- a sphere of few facets, as the moulding is."""
+    radius = min(FRESNEL_DOME_MM, s.length, s.width) / 2
+    foot = max(s.height - radius, 0.5)
+    dome = _sphere(radius, 18)
+    dome.SetEndPhi(90.0)
+    rgb = _hex_rgb(ART_COLOURS["fresnel"], BODY_RGB)
+    return [
+        _Piece(
+            source=s.box(s.length, s.width, foot, moulded=True),
+            rgb=rgb,
+            position=s.at(0.0, 0.0, foot / 2),
+            material=MOULDED,
+        ),
+        _Piece(source=dome, rgb=rgb, position=s.at(0.0, 0.0, foot), material=MOULDED),
+    ]
+
+
 def _art_oled(s: _ArtSolid) -> list[_Piece]:
     """An OLED panel: its glass, and the viewing area black on it short of the ledge at the
     ``facing`` end (``moduleart.OLED_VIEW_MM``)."""
@@ -6002,6 +6022,7 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "silk": _art_silk,
     "hole": _art_hole,
     "oled": _art_oled,
+    "fresnel": _art_fresnel,
     "flex": _art_flex,
     "pcb-antenna": _art_pcb_antenna,
     "hc49": _art_hc49,

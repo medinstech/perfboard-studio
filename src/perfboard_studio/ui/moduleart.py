@@ -94,6 +94,9 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:  * ``pcb-antenna`` -- an antenna printed on the module's own board: a meander of bare
 #:                       copper, each stroke across ``width`` and ``pitch`` from the next.
 #:  * ``hc49``        -- an HC-49/US crystal: a steel can with round ends, standing on the board.
+#:  * ``fresnel``     -- a PIR sensor's Fresnel lens: its square foot ``length`` x ``width``
+#:                       and the dome of ``FRESNEL_DOME_MM`` on it, its top ``height`` above
+#:                       the module's board.
 ArtKind = Literal[
     "can",
     "inductor",
@@ -134,6 +137,7 @@ ArtKind = Literal[
     "flex",
     "pcb-antenna",
     "hc49",
+    "fresnel",
 ]
 
 #: What the parts on a module are made of, as the colours both views paint them in -- one
@@ -184,6 +188,8 @@ OLED_LEDGE_MM = 4.4
 #: How wide a printed antenna's copper is: the ESP-01's and the nRF24's, measured on their
 #: rectified photographs. How far apart its strokes are is the part's own ``pitch``.
 PCB_ANTENNA_TRACE_MM = 0.45
+#: The dome of a PIR sensor's Fresnel lens, across: the 23 mm every HC-SR501's sheet gives.
+FRESNEL_DOME_MM = 23.0
 
 ART_COLOURS: dict[str, str] = {
     "ferrite": "#2a2b2f",
@@ -222,6 +228,8 @@ ART_COLOURS: dict[str, str] = {
     "tin": "#c3c6ca",
     "flex": "#c98b2e",
     "flex-stiffener": "#17181b",
+    # A PIR's Fresnel lens: milky white polyethylene.
+    "fresnel": "#e6e6e1",
 }
 
 #: How far a module's board may be from the reference a layout was drawn on, either way, as a
@@ -943,6 +951,46 @@ NRF24_MODULE = ModuleArt(
     ),
 )
 
+#: The HC-SR501 PIR motion sensor, as it is seen from above standing on its pins with its
+#: header along the top -- VCC at the left (``pin_one``), OUT, GND: the Fresnel lens's square
+#: foot over the middle of the board and its dome on that, an M2 hole at each end, and the
+#: three solder joints of the trigger jumper underneath, at the right-hand end towards the
+#: far edge. TruSens' HC-SR501 sheet (Rapid 74-1108) draws the 32 x 24 mm board, the screws
+#: 28 mm apart and the lens 23 mm across, and its straight-down photograph of the underside,
+#: at 34 px/mm, puts the header 2.9 mm in from its long edge with its middle pin 0.7 mm
+#: towards GND, and the jumper in the corner the top-side photograph has its joints. The lens
+#: was measured on Nowforever's photograph of one (Wikimedia Commons, CC BY-SA 4.0), oblique
+#: and RECTIFIED by a homography from the board's four corners, at 25 px/mm: its foot 23.6 mm
+#: square, centred, the holes 28.2 mm apart, the jumper's joints 2.5 mm apart. The camera
+#: solved from those same corners, which puts the two holes back where the photograph has
+#: them, finds the dome's top 16.3 mm above the board -- a 4.8 mm foot and the 23 mm dome --
+#: good to about 1 mm, and 24.66 mm overall less the 1.6 mm board and the 7 mm parts under it
+#: says the same. The lens leaves its header no room for names, which the module prints on
+#: its underside, so they are printed over it (``names_over_parts``).
+HC_SR501_MODULE = ModuleArt(
+    key="hc-sr501",
+    names=("hc-sr501", "hc sr501", "hcsr501"),
+    board=(32.0, 24.0),
+    pins=3,
+    frame="header",
+    pin_one=-1,
+    names_over_parts=True,
+    parts=(
+        ArtPart("fresnel", 0.0, 0.0, 23.6, 23.6, 16.3),
+        ArtPart("hole", -14.0, 0.0, 2.0, 2.0, 0.0),
+        ArtPart("hole", 14.0, 0.0, 2.0, 2.0, 0.0),
+        ArtPart("pads", 14.4, 7.85, 7.6, 1.8, 0.0, along_v=True),
+    ),
+    source=(
+        "TruSens HC-SR501 PIR Motion Detector sheet, Rapid 74-1108 (the 32 x 24 mm board, its "
+        "M2 screws 28 mm apart, the 23 mm lens; its underside photographed at 34 px/mm: the "
+        "header's place, VCC OUT GND); Nowforever's photograph of one, Wikimedia Commons, CC "
+        "BY-SA 4.0 (https://commons.wikimedia.org/wiki/File:PIR_sensor_for_arduino.jpg), "
+        "rectified onto that board at 25 px/mm, positions to about 0.3 mm, and the lens's "
+        "height from the camera its corners solve, to about 1 mm"
+    ),
+)
+
 MODULE_ARTS: tuple[ModuleArt, ...] = (
     LM2596_MODULE,
     SN65HVD230_MODULE,
@@ -960,6 +1008,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SSD1306_MODULE,
     ESP01_MODULE,
     NRF24_MODULE,
+    HC_SR501_MODULE,
 )
 
 

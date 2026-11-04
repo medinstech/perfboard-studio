@@ -119,3 +119,6 @@ layout's `source`:
   (its front, 27.8 px/mm on its header), and by Suyash Dwivedi, CC BY-SA 4.0:
   <https://commons.wikimedia.org/wiki/File:HC-SR04_ultrasonic_distance_sensor_module_pcb.jpg>
   (its back: the header behind the board)
+- **HC-SR501 PIR** — photograph by Nowforever, Wikimedia Commons, CC BY-SA 4.0:
+  <https://commons.wikimedia.org/wiki/File:PIR_sensor_for_arduino.jpg> (oblique, rectified
+  onto the 32 x 24 mm board TruSens' sheet draws)
