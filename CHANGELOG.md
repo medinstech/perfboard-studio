@@ -123,6 +123,10 @@ closed without a bump.
   says "Older package" until it is chosen again. The 1:1 print draws the same outlines,
   flat.
 
+- **Two hall sensors.** The A3144 switch, whose output pulls low near a magnet, and the
+  SS49E linear sensor, whose output follows the field. Both are in the Library by name, with
+  "hall" and "magnet" finding them.
+
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
   it for one run. The window is styled as one application, so on Windows the tabs, search

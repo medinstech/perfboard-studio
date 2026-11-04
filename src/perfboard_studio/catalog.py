@@ -626,6 +626,36 @@ CATALOG: tuple[CatalogPart, ...] = (
                 _legs("GND", "DQ", "VDD"), ref_prefix="U",
                 source=f"Analog Devices DS18B20 datasheet; {_TO92_ORDER}", check=_CHECK_LEGS,
                 aliases=("one-wire",)),
+    # The hall sensors come in Allegro's UA case, a flat 4.2 x 3.1 mm SIP with its legs
+    # 1.27 mm apart: bent out to the grid and drawn as the TO-92 they are sold beside, a
+    # little larger than they are, which is the side DRC can afford to be wrong on.
+    CatalogPart("a3144", "A3144", "sensor", "to92",
+                "Hall-effect switch: its open-collector output pulls low when a magnet comes "
+                "close",
+                _legs("VCC", "GND", "OUT"), ref_prefix="U",
+                source=(
+                    "Allegro A3141-A3144 datasheet (27621.6A), UA package: 1 supply, 2 ground, "
+                    "3 output, seen from the branded face; Diodes AH1806-P in KiCad "
+                    f"Sensor_Magnetic, the same three in the same order; {_TO92_ORDER}"
+                ),
+                check=(
+                    "Its output only pulls low: give OUT a pull-up resistor to VCC. Only one "
+                    "pole of a magnet switches it: if nothing happens, turn the magnet round. "
+                    + _CHECK_LEGS
+                ),
+                aliases=("hall sensor", "magnet sensor", "3144", "KY-003", "hall sensörü")),
+    CatalogPart("ss49e", "SS49E", "sensor", "to92",
+                "Linear Hall-effect sensor: about 2.5 V with no field, about 1.8 mV per gauss "
+                "at 5 V",
+                _legs("VCC", "GND", "VOUT"), ref_prefix="U",
+                source=(
+                    "SS49E datasheet V2.00 (2008), 3-pin SIP (UA): 1 Vcc, 2 GND, 3 Vout, and "
+                    "2.25 to 2.75 V out at no field; Allegro A1301xUA in KiCad "
+                    f"Sensor_Magnetic, the same three in the same order; {_TO92_ORDER}"
+                ),
+                check=_CHECK_LEGS,
+                aliases=("linear hall", "hall sensor", "magnetic field sensor", "49E", "KY-035",
+                         "KY-024", "hall sensörü")),
     # The bare sensors, four legs in a row on 2.54 mm and the body standing on them: a box
     # with the legs along its width, as wide and as thick as the sensor and as tall.
     CatalogPart("dht11", "DHT11", "sensor", "box-4x1-p1-r1-12x5.5x15.5",

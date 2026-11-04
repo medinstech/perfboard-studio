@@ -2061,6 +2061,21 @@ TURKISH: Mapping[str, str] = {
     "Temperature sensor, 1-Wire, needs a 4.7k pull-up on DQ": (
         "Sıcaklık sensörü, 1-Wire, DQ hattında 4,7k pull-up ister"
     ),
+    "Hall-effect switch: its open-collector output pulls low when a magnet comes close": (
+        "Hall etkili anahtar: açık kollektörlü çıkışı bir mıknatıs yaklaşınca düşük seviyeye "
+        "çeker"
+    ),
+    "Its output only pulls low: give OUT a pull-up resistor to VCC. Only one pole of a magnet "
+    "switches it: if nothing happens, turn the magnet round. Check the legs against the "
+    "datasheet of the part you have before soldering.": (
+        "Çıkışı yalnızca düşük seviyeye çeker: OUT ile VCC arasına bir pull-up direnci koyun. "
+        "Onu mıknatısın yalnızca bir kutbu tetikler: hiçbir şey olmazsa mıknatısı çevirin. "
+        "Lehimlemeden önce bacakları elinizdeki parçanın datasheet'iyle karşılaştırın."
+    ),
+    "Linear Hall-effect sensor: about 2.5 V with no field, about 1.8 mV per gauss at 5 V": (
+        "Doğrusal Hall etkili sensör: alan yokken yaklaşık 2,5 V, 5 V'ta gauss başına yaklaşık "
+        "1,8 mV"
+    ),
     "Timer": "Zamanlayıcı",
     "Switches": "Anahtarlar",
     # Catalog names that describe the part; a part NUMBER has no entry and stays as printed.
