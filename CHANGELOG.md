@@ -129,6 +129,12 @@ closed without a bump.
 - **The panel potentiometer every kit has.** A 16 mm pot goes on the board as the three
   pads its wires land in, named CCW, W and CW, and the schematic draws it as a pot. Its check
   says which tag is which from the shaft, and which wires to swap if it turns the wrong way.
+- **Eight modules that plug in on a cable, by name.** The KY-023 joystick, the KY-040 rotary
+  encoder, the LCD1602 with its I2C backpack, the DS3231 clock (ZS-042), the MAX7219 8 x 8
+  matrix, the TM1637 four-digit display, a WS2812B strip and a micro SD card module. Each one
+  goes on the board as the header its cable plugs into, with the pins named as the module
+  names them. The build guide says the module is not on the board and lists its leads pin by
+  pin, and so does it now for the 4x4 keypad and the hobby servo.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks

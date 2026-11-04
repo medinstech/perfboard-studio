@@ -1184,6 +1184,8 @@ def _part_step(
         notes.extend(
             _flying_lead_notes(component, footprint, holes, board, strip_mm, say, wires or {})
         )
+    elif plugs_in_on_a_cable(component, footprint):
+        notes.extend(_cabled_module_notes(component, holes, board, say))
     breadboard = is_breadboard(board)
     if breadboard and footprint.body.archetype in ("dip", "smd-adapter"):
         # No socket and no iron: the chip goes straight in, and what goes wrong is a leg
@@ -1341,6 +1343,51 @@ def lead_end(ref: str, pin: str, name: str | None, say: Phrasebook = ENGLISH) ->
     if name:
         return say("{ref} pin {pin} ({name})", ref=ref, pin=pin, name=name)
     return say("{ref} pin {pin}", ref=ref, pin=pin)
+
+
+def plugs_in_on_a_cable(component: ComponentInstance, footprint: Footprint) -> bool:
+    """Whether this part is a header that something off the board plugs into on a cable --
+    a keypad's ribbon, a servo's plug, a sensor module's leads, a programmer's.
+
+    A pin header whose pins THE PART has named (a header's own pins have no names, so a name
+    on one is what plugs in saying which lead goes where), and whose value names what plugs
+    in: without one, the sentence would have to call the header itself the thing that is
+    not on the board. THE ONE ANSWER, asked by the guide's step and by Properties, so the
+    two cannot say it about different parts (``CABLED_MODULE``)."""
+    return (
+        footprint.body.archetype == "pin-header"
+        and bool(component.value.strip())
+        and any(declared_pin_name(component, pin.number) for pin in footprint.pins)
+    )
+
+
+#: What a cabled module's step and its Properties both say (``plugs_in_on_a_cable``): one key,
+#: so the window and the guide use the same words in both languages.
+CABLED_MODULE = (
+    "{module} is not on this board: it plugs into this header on its cable, each lead on "
+    "the pin of its name."
+)
+
+
+def _cabled_module_notes(
+    component: ComponentInstance,
+    holes: list[tuple[FootprintPin, HoleCoord]],
+    board: Board,
+    say: Phrasebook,
+) -> list[str]:
+    """What a header something plugs into on a cable is for (``plugs_in_on_a_cable``): the
+    step names the module and says it is not on this board, so nobody wonders where it went,
+    and gives its leads pin by pin, since a plug on the wrong way round looks exactly right
+    from the board."""
+    pairs = [
+        say("{name} in {hole}", name=name, hole=format_hole(at, board))
+        for pin, at in holes
+        if (name := declared_pin_name(component, pin.number))
+    ]
+    return [
+        say(CABLED_MODULE, module=component.value.strip()),
+        say("Pin by pin: {pairs}.", pairs="; ".join(pairs)),
+    ]
 
 
 def _flying_lead_notes(

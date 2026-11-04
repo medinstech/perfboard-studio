@@ -2136,8 +2136,10 @@ TURKISH: Mapping[str, str] = {
         "tone()). Altında kartı görünür; aktif olandan böyle ayırt edilir."
     ),
     "4x4 membrane keypad (on a header)": "4x4 membran tuş takımı (header üzerinde)",
-    "Sixteen keys in four rows and four columns, eight leads": (
-        "Dört satır ve dört sütunda on altı tuş, sekiz uç"
+    "Sixteen keys in four rows and four columns. Its cable plugs into this 8-pin header: "
+    "C4 C3 C2 C1 R4 R3 R2 R1 from pin 1": (
+        "Dört satır ve dört sütunda on altı tuş. Kablosu bu 8 pinli header'a takılır: "
+        "1. pinden C4 C3 C2 C1 R4 R3 R2 R1"
     ),
     "Seen from the front its leftmost lead is R1 and its rightmost C4. Other makers' keypads "
     "are usually wired the same: test one key with a meter before trusting a clone.": (
@@ -2482,15 +2484,124 @@ TURKISH: Mapping[str, str] = {
         "Yanına + ve - yazın: klemensin kendisi bunu söylemez."
     ),
     "Power in, 2-pin header": "Güç girişi, 2 pinli header",
-    "Two header pins named + and -, for a lead that plugs on": (
-        "Takılıp çıkarılan bir kablo için + ve - adlı iki header pini"
+    "A power lead. Its cable plugs into this 2-pin header: + - from pin 1": (
+        "Bir güç kablosu. Bu 2 pinli header'a takılır: 1. pinden + -"
     ),
     "Print + and - beside it: the header itself does not say.": (
         "Yanına + ve - yazın: header'ın kendisi bunu söylemez."
     ),
-    "Servo header": "Servo konnektörü",
-    "Three header pins for a hobby servo's plug: PWM, + in the middle, -": (
-        "Hobi servosunun fişi için üç header pini: PWM, ortada +, -"
+    "Hobby servo (on a header)": "Hobi servosu (header üzerinde)",
+    "KY-023 joystick module (on a header)": "KY-023 joystick modülü (header üzerinde)",
+    "Two-axis joystick that is also a switch when pressed. Its cable plugs into this 5-pin "
+    "header: GND +5V VRx VRy SW from pin 1": (
+        "Bastırınca anahtar da olan iki eksenli joystick. Kablosu bu 5 pinli header'a takılır: "
+        "1. pinden GND +5V VRx VRy SW"
+    ),
+    "Feed +5V from the board's own logic supply: on a 3.3 V board, 3.3 V, or the two pots read "
+    "past the top of its ADC. Match each lead to the name printed beside the module's pins, "
+    "not to its place: sellers' boards are not all wired in the same order.": (
+        "+5V'u kartın kendi mantık beslemesinden verin: 3,3 V'luk bir kartta 3,3 V; yoksa iki "
+        "potansiyometre ADC'nin üst sınırını aşar. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "KY-040 rotary encoder module (on a header)": "KY-040 döner enkoder modülü (header üzerinde)",
+    "Rotary encoder that is also a switch when pressed. Its cable plugs into this 5-pin "
+    "header: CLK DT SW + GND from pin 1": (
+        "Bastırınca anahtar da olan döner enkoder. Kablosu bu 5 pinli header'a takılır: 1. "
+        "pinden CLK DT SW + GND"
+    ),
+    "+ only feeds its pull-ups: give it the board's logic voltage. Match each lead to the name "
+    "printed beside the module's pins, not to its place: sellers' boards are not all wired in "
+    "the same order.": (
+        "+ yalnızca pull-up dirençlerini besler: kartın mantık gerilimini verin. Her kabloyu "
+        "yerine göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
+    "LCD1602 with I2C backpack (on a header)": "I2C arka kartlı LCD1602 (header üzerinde)",
+    "16x2 character LCD driven over I2C by a PCF8574. Its cable plugs into this 4-pin header: "
+    "GND VCC SDA SCL from pin 1": (
+        "Bir PCF8574 ile I2C üzerinden sürülen 16x2 karakter LCD. Kablosu bu 4 pinli header'a "
+        "takılır: 1. pinden GND VCC SDA SCL"
+    ),
+    "It answers at 0x27 with a PCF8574 or 0x3F with a PCF8574A: try both if it stays blank, and "
+    "turn its contrast trimmer before deciding it is dead. Match each lead to the name printed "
+    "beside the module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "PCF8574 ile 0x27'de, PCF8574A ile 0x3F'de yanıt verir: ekran boş kalırsa ikisini de "
+        "deneyin ve bozuk olduğuna karar vermeden önce kontrast trimpotunu çevirin. Her kabloyu "
+        "yerine göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
+    "MAX7219 8x8 LED matrix module (on a header)": "MAX7219 8x8 LED matris modülü (header üzerinde)",
+    "8x8 LED matrix driven by a MAX7219. Its cable plugs into this 5-pin header: VCC GND DIN CS "
+    "CLK from pin 1": (
+        "Bir MAX7219 ile sürülen 8x8 LED matris. Kablosu bu 5 pinli header'a takılır: 1. pinden "
+        "VCC GND DIN CS CLK"
+    ),
+    "It has a header at each end: the cable goes on the one marked DIN, the other is its output "
+    "to the next matrix. Match each lead to the name printed beside the module's pins, not to "
+    "its place: sellers' boards are not all wired in the same order.": (
+        "İki ucunda da bir header vardır: kablo DIN yazan uca takılır, diğeri sonraki matrise "
+        "giden çıkışıdır. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada "
+        "göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "TM1637 4-digit display module (on a header)": "TM1637 4 haneli gösterge modülü (header üzerinde)",
+    "Four-digit 7-segment display driven by a TM1637. Its cable plugs into this 4-pin header: "
+    "CLK DIO VCC GND from pin 1": (
+        "Bir TM1637 ile sürülen dört haneli 7 segment gösterge. Kablosu bu 4 pinli header'a "
+        "takılır: 1. pinden CLK DIO VCC GND"
+    ),
+    "CLK and DIO are not interchangeable. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same order.": (
+        "CLK ve DIO birbirinin yerine kullanılamaz. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "WS2812B LED strip (on a header)": "WS2812B LED şerit (header üzerinde)",
+    "Addressable RGB LED strip or ring. Its cable plugs into this 3-pin header: +5V DIN GND from "
+    "pin 1": (
+        "Adreslenebilir RGB LED şerit ya da halka. Kablosu bu 3 pinli header'a takılır: 1. "
+        "pinden +5V DIN GND"
+    ),
+    "Its cable goes on the end its arrows point away from, DIN in. Adafruit puts a 300 to 500 "
+    "ohm resistor in DIN and 1000 uF across +5V and GND at the strip. Match each lead to the "
+    "name printed beside the module's pins, not to its place: sellers' boards are not all wired "
+    "in the same order.": (
+        "Kablo, okların uzaklaştığı uca takılır: DIN girişi. Adafruit DIN'e 300-500 ohm bir "
+        "direnç, şeridin ucunda +5V ile GND arasına 1000 uF koyar. Her kabloyu yerine göre "
+        "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
+        "sırayla bağlanmamıştır."
+    ),
+    "DS3231 RTC module, ZS-042 (on a header)": "DS3231 RTC modülü, ZS-042 (header üzerinde)",
+    "Real-time clock with a coin cell, on I2C. Its cable plugs into this 6-pin header: GND VCC "
+    "SDA SCL SQW 32K from pin 1": (
+        "Düğme pilli, I2C'li gerçek zamanlı saat. Kablosu bu 6 pinli header'a takılır: 1. "
+        "pinden GND VCC SDA SCL SQW 32K"
+    ),
+    "Many ZS-042 boards charge their coin cell: fit an LIR2032, or take off the charging diode "
+    "before fitting a CR2032. Match each lead to the name printed beside the module's pins, not "
+    "to its place: sellers' boards are not all wired in the same order.": (
+        "Birçok ZS-042 kartı düğme pilini şarj eder: LIR2032 takın ya da CR2032 takmadan önce "
+        "şarj diyotunu sökün. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan "
+        "ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "Micro SD card module (on a header)": "Micro SD kart modülü (header üzerinde)",
+    "Micro SD card socket on SPI, with a 3.3 V regulator. Its cable plugs into this 6-pin "
+    "header: GND VCC MISO MOSI SCK CS from pin 1": (
+        "SPI üzerinden çalışan, 3,3 V regülatörlü micro SD kart yuvası. Kablosu bu 6 pinli "
+        "header'a takılır: 1. pinden GND VCC MISO MOSI SCK CS"
+    ),
+    "Its MISO is driven even when CS is high, so it shares the SPI bus badly with other parts. "
+    "Match each lead to the name printed beside the module's pins, not to its place: sellers' "
+    "boards are not all wired in the same order.": (
+        "MISO'su CS yüksekken bile sürülür; bu yüzden SPI hattını başka parçalarla iyi "
+        "paylaşamaz. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada göre "
+        "bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "A hobby servo such as the SG90. Its cable plugs into this 3-pin header: PWM + - from "
+    "pin 1": (
+        "SG90 gibi bir hobi servosu. Kablosu bu 3 pinli header'a takılır: 1. pinden PWM + -"
     ),
     "Turned round, PWM and - swap and the servo does nothing. Feed it from its own 5 V, "
     "not from a board's regulator pin.": (

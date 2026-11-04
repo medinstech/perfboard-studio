@@ -463,6 +463,13 @@ TURKISH: dict[str, str] = {
         "lehimleyin ve hepsini {side} kenardan dışarı çıkarın."
     ),
     "{hole} to {lead}": "{hole} → {lead}",
+    "{module} is not on this board: it plugs into this header on its cable, each lead on "
+    "the pin of its name.": (
+        "{module} bu kartın üzerinde değil: kablosuyla bu pin başlığına takılır, her kablo "
+        "kendi adını taşıyan pine."
+    ),
+    "Pin by pin: {pairs}.": "Pin pin: {pairs}.",
+    "{name} in {hole}": "{name} {hole} deliğinde",
     "{hole} to {lead} — {net}, {colour} wire": "{hole} → {lead} — {net}, {colour} tel",
     "Wire by wire: {pairs}.": "Tel tel: {pairs}.",
     "Cut each wire {length:g} mm and strip {strip:g} mm at both ends.": (

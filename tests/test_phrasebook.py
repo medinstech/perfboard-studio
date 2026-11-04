@@ -101,6 +101,8 @@ def said_from_tables() -> set[str]:
         | set(guide_module._MARKED_LEAD_MEANING.values())
         | set(guide_module._DIODE_LEAD_MEANING.values())
         | set(guide_module._LEAD_NAME_MEANING.values())
+        # One key the guide's step and Properties both say (``plugs_in_on_a_cable``).
+        | {guide_module.CABLED_MODULE}
         | set(guide_module.COLOR_BY_NET_CLASS.values())
         | set(guide_module.SIGNAL_COLORS)
         # A step's tag: its package family, or what its copper is made of.

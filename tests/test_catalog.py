@@ -314,14 +314,15 @@ def test_a_part_whose_name_says_it_comes_before_one_whose_summary_does() -> None
 
 def test_a_name_is_named_from_the_start_of_a_word() -> None:
     """"led" is inside "SSD1306 OLED" and names no display: the LEDs come first, a plain
-    one at their head, then the MAX7219, whose alias is "LED matrix", and the OLEDs
-    only after it. And "voltage regulator" names the regulators by their kind, which no
-    7805's own words say."""
+    one at their head, then the MAX7219's matrix module, "LED matrix" in its name, and the
+    chip, whose alias it is, and the OLEDs only after them. And "voltage regulator" names
+    the regulators by their kind, which no 7805's own words say."""
     led = [part.id for part in search_catalog("led")]
     assert led[0] == "led-3mm"
     leds = [part.id for part in CATALOG if part.category == "led"]
-    assert led[: len(leds)] == leds and led[len(leds)] == "max7219"
-    assert {"ssd1306-i2c-gnd-vcc", "ssd1306-i2c-vcc-gnd"} <= set(led[len(leds) + 1 :])
+    assert led[: len(leds)] == leds
+    assert led[len(leds) : len(leds) + 2] == ["max7219-matrix", "max7219"]
+    assert {"ssd1306-i2c-gnd-vcc", "ssd1306-i2c-vcc-gnd"} <= set(led[len(leds) + 2 :])
     assert search_catalog("voltage regulator")[0].category == "regulator"
 
 

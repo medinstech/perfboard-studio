@@ -148,6 +148,14 @@ def free_reference(document: PerfDocument, prefix: str) -> str:
     return f"{prefix}{index}"
 
 
+#: What every module on a cable says last (``guide.plugs_in_on_a_cable``): its header's
+#: order is the one documented, and the names are what count.
+_CABLED_CHECK = (
+    "Match each lead to the name printed beside the module's pins, not to its place: "
+    "sellers' boards are not all wired in the same order."
+)
+
+
 def _legs(*names: str) -> PinNames:
     """Pin names in pin order: ``_legs("C", "B", "E")`` is 1=C, 2=B, 3=E."""
     return tuple((str(index + 1), name) for index, name in enumerate(names))
@@ -496,7 +504,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 check="Print + and - beside it: the terminal itself does not say.",
                 aliases=(*_POWER_WORDS, "terminal block")),
     CatalogPart("power-header-2", "Power in, 2-pin header", "power", "hdr-1x2",
-                "Two header pins named + and -, for a lead that plugs on",
+                "A power lead. Its cable plugs into this 2-pin header: + - from pin 1",
                 _legs("+", "-"), value="DC IN",
                 source="2.54 mm pin header; which way is + is the board's choice",
                 check="Print + and - beside it: the header itself does not say.",
@@ -583,6 +591,22 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "longest leg), 3 blue, 4 green, 1.27 mm apart"
                 ),
                 check=_RGB_CHECK, aliases=("RGB", "WP154A4SEJ3VBDZGW/CA")),
+    CatalogPart("ws2812b-strip", "WS2812B LED strip (on a header)", "led", "hdr-1x3",
+                "Addressable RGB LED strip or ring. Its cable plugs into this 3-pin header: "
+                "+5V DIN GND from pin 1",
+                _legs("+5V", "DIN", "GND"), value="WS2812B strip", ref_prefix="J",
+                source=(
+                    "Worldsemi WS2812B datasheet (VDD, DIN, VSS; DOUT on to the next LED); the "
+                    "strip's input pads 5V, DIN, GND, as Adafruit's NeoPixel Uberguide wires "
+                    "them"
+                ),
+                check=(
+                    "Its cable goes on the end its arrows point away from, DIN in. Adafruit puts "
+                    "a 300 to 500 ohm resistor in DIN and 1000 uF across +5V and GND at the "
+                    "strip. " + _CABLED_CHECK
+                ),
+                aliases=("NeoPixel", "WS2812", "addressable LED", "LED strip", "LED şerit",
+                         "adreslenebilir LED")),
     # -- protection -------------------------------------------------------------------
     CatalogPart("ptc-radial", "PTC resettable fuse", "protection", "c-disc-d8-p2-t3",
                 "Polymer PTC (polyfuse), radial, leads 5 mm apart",
@@ -840,6 +864,48 @@ CATALOG: tuple[CatalogPart, ...] = (
                 source=f"Kingbright CC56-12EWA datasheet: {_FOUR_DIGITS_PINS}",
                 check=_FOUR_DIGITS_CHECK,
                 aliases=(*_DIGIT_ALIASES, "CC56-12EWA")),
+    CatalogPart("lcd-1602-i2c", "LCD1602 with I2C backpack (on a header)", "display",
+                "hdr-1x4",
+                "16x2 character LCD driven over I2C by a PCF8574. Its cable plugs into this "
+                "4-pin header: GND VCC SDA SCL from pin 1",
+                _legs("GND", "VCC", "SDA", "SCL"), value="LCD1602 I2C", ref_prefix="J",
+                source=(
+                    "ShillehTek PCF8574 I2C adapter for 1602/2004 LCD manual (the header: GND, "
+                    "VCC, SDA, SCL); NXP PCF8574 datasheet (addresses 0x20 to 0x27, 0x38 to "
+                    "0x3F on the PCF8574A)"
+                ),
+                check=(
+                    "It answers at 0x27 with a PCF8574 or 0x3F with a PCF8574A: try both if it "
+                    "stays blank, and turn its contrast trimmer before deciding it is dead. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("I2C LCD", "LCD I2C", "PCF8574 backpack", "1602 I2C", "LCD backpack")),
+    CatalogPart("max7219-matrix", "MAX7219 8x8 LED matrix module (on a header)", "display",
+                "hdr-1x5",
+                "8x8 LED matrix driven by a MAX7219. Its cable plugs into this 5-pin header: "
+                "VCC GND DIN CS CLK from pin 1",
+                _legs("VCC", "GND", "DIN", "CS", "CLK"), value="MAX7219 matrix", ref_prefix="J",
+                source=(
+                    "SunFounder Raphael kit, MAX7219 module (VCC, GND, DIN, CS, CLK; the left "
+                    "header the input, the right one the output to the next module); Maxim "
+                    "MAX7219 datasheet"
+                ),
+                check=(
+                    "It has a header at each end: the cable goes on the one marked DIN, the "
+                    "other is its output to the next matrix. " + _CABLED_CHECK
+                ),
+                aliases=("LED matrix", "dot matrix", "8x8 matrix", "FC-16", "LED matris")),
+    CatalogPart("tm1637-display", "TM1637 4-digit display module (on a header)", "display",
+                "hdr-1x4",
+                "Four-digit 7-segment display driven by a TM1637. Its cable plugs into this "
+                "4-pin header: CLK DIO VCC GND from pin 1",
+                _legs("CLK", "DIO", "VCC", "GND"), value="TM1637 display", ref_prefix="J",
+                source=(
+                    "ProtoSupplies TM1637 4-Digit 7-Segment Display Module (DSP-6), module "
+                    "connections: CLK, DIO, VCC, GND; Titan Micro TM1637 datasheet"
+                ),
+                check="CLK and DIO are not interchangeable. " + _CABLED_CHECK,
+                aliases=("TM1637", "4 digit display", "clock display", "7-segment module")),
     # -- integrated circuits ------------------------------------------------------------
     CatalogPart("ne555", "NE555", "ic", "dip-8", "Timer",
                 _legs("GND", "TRIG", "OUT", "RESET", "CTRL", "THR", "DIS", "VCC"),
@@ -1136,7 +1202,8 @@ CATALOG: tuple[CatalogPart, ...] = (
     # header that socket goes on. Numbered as Parallax numbers it, right to left with the keys
     # facing you; its figure 1 says which lead is which row and column.
     CatalogPart("keypad-4x4", "4x4 membrane keypad (on a header)", "switch", "hdr-1x8",
-                "Sixteen keys in four rows and four columns, eight leads",
+                "Sixteen keys in four rows and four columns. Its cable plugs into this 8-pin "
+                "header: C4 C3 C2 C1 R4 R3 R2 R1 from pin 1",
                 _legs("C4", "C3", "C2", "C1", "R4", "R3", "R2", "R1"),
                 value="4x4 keypad", ref_prefix="J",
                 source=(
@@ -1150,6 +1217,36 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "before trusting a clone."
                 ),
                 aliases=("keypad", "tuş takımı", "membrane", "matrix keypad")),
+    # A module on a cable plugs into a header on the board, named as the module names its
+    # leads (``guide.plugs_in_on_a_cable``); each is held to one sentence by
+    # tests/test_cabled_modules.py.
+    CatalogPart("ky-023-joystick", "KY-023 joystick module (on a header)", "switch", "hdr-1x5",
+                "Two-axis joystick that is also a switch when pressed. Its cable plugs into "
+                "this 5-pin header: GND +5V VRx VRy SW from pin 1",
+                _legs("GND", "+5V", "VRx", "VRy", "SW"), value="KY-023 joystick", ref_prefix="J",
+                source=(
+                    "components101 Joystick Module, pin configuration (pins 1 to 5); Joy-IT "
+                    "SensorKit KY-023 (the signals: two pots and a button to ground)"
+                ),
+                check=(
+                    "Feed +5V from the board's own logic supply: on a 3.3 V board, 3.3 V, or the "
+                    "two pots read past the top of its ADC. " + _CABLED_CHECK
+                ),
+                aliases=("joystick", "thumbstick", "KY-023", "kumanda kolu")),
+    CatalogPart("ky-040-encoder", "KY-040 rotary encoder module (on a header)", "switch",
+                "hdr-1x5",
+                "Rotary encoder that is also a switch when pressed. Its cable plugs into this "
+                "5-pin header: CLK DT SW + GND from pin 1",
+                _legs("CLK", "DT", "SW", "+", "GND"), value="KY-040 encoder", ref_prefix="J",
+                source=(
+                    "components101 KY-040 Rotary Encoder, pin configuration; Joy-IT SensorKit "
+                    "KY-040 (CLK and DT the two phases, SW the button)"
+                ),
+                check=(
+                    "+ only feeds its pull-ups: give it the board's logic voltage. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("rotary encoder", "encoder", "KY-040", "enkoder", "döner kodlayıcı")),
     # -- relays -----------------------------------------------------------------------
     CatalogPart("srd-05vdc-sl-c", "Songle SRD-05VDC-SL-C relay", "relay", "relay-srd",
                 "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC",
@@ -1158,8 +1255,9 @@ CATALOG: tuple[CatalogPart, ...] = (
                 "SPDT relay, 12 V coil of 400 ohm, contacts 10 A at 125 V AC",
                 _SRD_LEGS, value="SRD-12VDC-SL-C", source=_SRD_SOURCE, check=_SRD_CHECK),
     # -- connectors -------------------------------------------------------------------
-    CatalogPart("servo-header", "Servo header", "connector", "hdr-1x3",
-                "Three header pins for a hobby servo's plug: PWM, + in the middle, -",
+    CatalogPart("servo-header", "Hobby servo (on a header)", "connector", "hdr-1x3",
+                "A hobby servo such as the SG90. Its cable plugs into this 3-pin header: "
+                "PWM + - from pin 1",
                 _legs("PWM", "+", "-"), value="SERVO",
                 source=(
                     "TowerPro SG90 datasheet: orange PWM, red +, brown -, the + in the middle "
@@ -1170,6 +1268,37 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "own 5 V, not from a board's regulator pin."
                 ),
                 aliases=("servo", "SG90", "motor")),
+    CatalogPart("ds3231-rtc", "DS3231 RTC module, ZS-042 (on a header)", "connector",
+                "hdr-1x6",
+                "Real-time clock with a coin cell, on I2C. Its cable plugs into this 6-pin "
+                "header: GND VCC SDA SCL SQW 32K from pin 1",
+                _legs("GND", "VCC", "SDA", "SCL", "SQW", "32K"), value="DS3231 RTC",
+                ref_prefix="J",
+                source=(
+                    "Cirkit Designer ZS-042 RTC module, pin table (1 GND, 2 VCC, 3 SDA, 4 SCL, "
+                    "5 SQW, 6 32K); Maxim DS3231 datasheet (SQW the alarm and square-wave "
+                    "output, 32K the 32 kHz one)"
+                ),
+                check=(
+                    "Many ZS-042 boards charge their coin cell: fit an LIR2032, or take off the "
+                    "charging diode before fitting a CR2032. " + _CABLED_CHECK
+                ),
+                aliases=("RTC", "real time clock", "DS3231", "ZS-042", "gerçek zamanlı saat")),
+    CatalogPart("micro-sd-module", "Micro SD card module (on a header)", "connector", "hdr-1x6",
+                "Micro SD card socket on SPI, with a 3.3 V regulator. Its cable plugs into "
+                "this 6-pin header: GND VCC MISO MOSI SCK CS from pin 1",
+                _legs("GND", "VCC", "MISO", "MOSI", "SCK", "CS"), value="Micro SD",
+                ref_prefix="J",
+                source=(
+                    "components101 Micro SD Card Module, pin configuration (GND, VCC, MISO, "
+                    "MOSI, SCK, CS); CircuitState, interfacing the Catalex module (its "
+                    "regulator and level shifter)"
+                ),
+                check=(
+                    "Its MISO is driven even when CS is high, so it shares the SPI bus badly "
+                    "with other parts. " + _CABLED_CHECK
+                ),
+                aliases=("SD card", "micro SD", "TF card", "Catalex", "SD kart")),
     # -- sound ------------------------------------------------------------------------
     CatalogPart("buzzer-active-12mm", "Active buzzer 12 mm", "sound",
                 "box-2x1-p3-r1-12x12x9.5",
