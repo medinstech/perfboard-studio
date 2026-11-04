@@ -113,8 +113,8 @@ is sold in, and its holes are named the way it prints them — `e12`, row letter
 placer keeps two nets out of one clip and puts each chip across the groove, the router runs
 jumpers into free holes and ground and power down the rails, and the guide becomes a
 building guide: jumpers first, flat on the plastic, and no iron anywhere. When the circuit
-works, *File ▸ New Board from This Design* takes it on to perfboard, and the breadboard's
-file stays as it was. Or *File ▸ Same Layout on a Solderable Breadboard* puts it on a
+works, *File ▸ New Board from This Design…* takes it on to perfboard, and the breadboard's
+file stays as it was. Or *File ▸ Same Layout on a Solderable Breadboard…* puts it on a
 solderable one — the same holes and strips in copper — with every part and jumper on the
 holes it had, and the guide that comes with it is a soldering guide again.
 
@@ -125,9 +125,9 @@ holes it had, and the guide that comes with it is a soldering guide again.
 ![the 2D editor, with an NE555 astable placed and routed](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/editor-component-side.png)
 
 <p align="center">
-  The status bar is the whole claim: fourteen connections across seven nets, no DRC<br>
-  error and LVS agreeing with the schematic — and one pad to measure for isolation, the<br>
-  warning below, which the build guide turns into a check with a meter.
+  The status bar is the whole claim: no problems, and the board matching the circuit on<br>
+  all seven of its nets — and one thing to check at the bench, a pad to measure for<br>
+  isolation, which the build guide turns into a check with a meter.
 </p>
 
 The solder side is where the copper is, so it is a first-class view rather than a mirror
@@ -201,8 +201,8 @@ cut list in its net's colour, and checks its nets only once its wires are in.
 
 ## Draw the circuit first
 
-The board says where everything goes. The schematic panel (`Ctrl+2`), which opens beside
-it, says *what you are building* — and it is where you say it: **Add Part**, **Connect** two
+The board says where everything goes. The schematic panel (`Ctrl+2`), the tab beside
+it, says *what you are building* — and it is where you say it: **Add Part…**, **Connect** two
 pins, **Place on the Board**. The circuit comes first and the layout second, which is how
 every other EDA tool works and is the order this one could not do until now.
 
@@ -254,13 +254,17 @@ same numbers.
 
 ![Board, 3D and the build guide side by side: eight steps ticked off, and the next one, the 7805, picked out in all three](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/guide-and-3d.png)
 
-**And it keeps your place at the bench.** The Build Guide panel (`Ctrl+4`) stands beside
-the board and the 3D view. Tick a step off and it stays ticked for that board — kept in the
-application's settings rather than in the file, so ticking is not an edit and joins no undo
-— and **Next Step to Do** picks the first step without a tick: its part selected on the
-board, picked out in 3D, and the 3D view showing the board as it stands at that moment of
-the build. The arrows either side of **Play** go one step at a time, which is how somebody
-with an iron in their hand wants to move through it.
+**And it keeps your place at the bench.** The Build Guide panel (`Ctrl+4`) shows one step at
+a time, large enough to read from across the bench: the board as it stands at that step,
+zoomed onto the step's holes with the part picked out — from the solder side for a step done
+there — then the step in the guide's words, which way round the part goes, its holes and the
+phase's checks to tick. **Done, next** ticks it off and moves on, and **Back** goes back. The
+ticks stay with that board — kept in the application's settings rather than in the file, so
+ticking is not an edit and joins no undo — and the whole build is a click away in
+**Overview**, where **Next Step to Do** finds the first step without a tick. The step is
+picked out on the board and in 3D too, and the 3D view shows the board as it stands at that
+moment of the build; the arrows either side of its **Play** go one step at a time, which is
+how somebody with an iron in their hand wants to move through it.
 
 ## Running it
 
@@ -312,20 +316,20 @@ Build** — says where the board stands on each step, and the button at its righ
 whichever comes next. By hand, it goes like this.
 
 Open the schematic (`Ctrl+2`) and draw the circuit: drag parts onto the sheet out
-of the Library, or add them one after another with **Add Part**, which stays open for
-the next; move and turn them where you want them, **Connect** from pin to pin or onto a wire
+of the Library, or press **Add Part…**, type what the part is and press Enter, one after
+another; move and turn them where you want them, **Connect** from pin to pin or onto a wire
 already drawn (click both ends, or drag; a net joined at a supply pin takes its name, VCC
 or GND) — or **Label** a pin to join it to a net by name, or right-click it for GND and
 +5V — then **Place on the Board**, which first
 asks which stock board to use: your circuit is placed, wired and checked on a roomy board
 and on each smaller one, and the suggestion is the smallest it builds as well on. From there
-**Board → Rearrange Parts** (`Ctrl+Shift+A`), **`Ctrl+R`** to auto-wire, and
-**File → Export → Build Guide** (`Ctrl+B`). No KiCad anywhere in that.
+**Board ▸ Rearrange Parts** (`Ctrl+Shift+A`), **Wiring ▸ Auto-wire Everything** (`Ctrl+R`),
+and **File ▸ Export ▸ Build Guide…** (`Ctrl+B`). No KiCad anywhere in that.
 
-With a circuit that already exists, start at **File → Import from KiCad** on
+With a circuit that already exists, start at **File ▸ Import from KiCad…** (`Ctrl+I`) on
 `examples/ne555-astable.net` instead: each part arrives in the design as what its value and
 its KiCad footprint say it is, and the header's steps take it from
-there — **Choose a Board**, **Place on the Board**, wiring, checks, build. That is the
+there — **Choose a Board…**, **Place on the Board**, wiring, checks, build. That is the
 sequence the screenshots above come out of — see
 [`tools/screenshots.py`](https://github.com/medinstech/perfboard-studio/blob/main/tools/screenshots.py).
 
@@ -410,7 +414,7 @@ src/perfboard_studio/ui/         Qt application: 2D editor, VTK 3D view, 1:1 PDF
 src/perfboard_studio/mcp/        the MCP server (docs/MCP.md)
 src/perfboard_studio/catalog.py  the real parts, by name, each with its datasheet
 examples/                  netlists to import, and the boards they become
-tests/                     ~5000 tests; the engine is mypy --strict clean
+tests/                     ~6400 tests; the engine is mypy --strict clean
 packages/                  the original TypeScript engine, kept as the reference the
                            Python port is proved against
 ```
@@ -451,7 +455,7 @@ library does not have them, parts on the panel wired to the board, solderless br
 the circuit tried on one and then taken to perfboard, or soldered hole for hole on a
 solderable one —, crash recovery, the MCP server, TR/EN localisation, the
 three-platform packaging that a `v*` tag runs, and the update check that tells you a release exists and fetches it (**Help ▸ Check
-for Updates**; it verifies the download against the release's `SHA256SUMS` and then hands
+for Updates…**; it verifies the download against the release's `SHA256SUMS` and then hands
 it to you — running it stays your click).
 
 Next, in the order [PLAN.md](https://github.com/medinstech/perfboard-studio/blob/main/PLAN.md) §11 puts them:

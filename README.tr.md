@@ -110,8 +110,8 @@ delikleri tahtanın bastığı gibi adlandırılır — `e12`, önce sıra harfi
 neti aynı klibe koymaz ve her entegreyi oluğun üstüne oturtur, router jumper'ları boş
 deliklere, toprağı ve gücü raylara taşır, rehber de bir kurulum rehberine dönüşür: önce
 plastiğin üstüne düz yatan jumper'lar, hiçbir yerde havya yok. Devre çalışınca *Dosya ▸ Bu
-Tasarımdan Yeni Kart Oluştur* onu plakete taşır; breadboard'un dosyası olduğu gibi kalır.
-Ya da *Dosya ▸ Aynı Yerleşimle Lehimlenebilir Breadboard'a* onu lehimlenebilir bir karta
+Tasarımdan Yeni Kart Oluştur…* onu plakete taşır; breadboard'un dosyası olduğu gibi kalır.
+Ya da *Dosya ▸ Aynı Yerleşimle Lehimlenebilir Breadboard'a…* onu lehimlenebilir bir karta
 koyar — aynı delikler ve şeritler, bakırda — her parça ve jumper eski deliklerinde; onunla
 gelen rehber de yeniden bir lehimleme rehberidir.
 
@@ -124,8 +124,8 @@ gelen rehber de yeniden bir lehimleme rehberidir.
 ![NE555 astable devresi yerleştirilmiş ve kablolanmış hâliyle 2D editör](./docs/images/editor-component-side.png)
 
 <p align="center">
-  İddianın tamamı durum çubuğunda: yedi net üzerinde on dört bağlantı, DRC hatası yok ve<br>
-  LVS şemayla aynı fikirde — bir de yalıtımı ölçülecek bir ped: aşağıdaki uyarı, montaj<br>
+  İddianın tamamı durum çubuğunda: sorun yok, kart yedi netinin yedisinde de devreyle<br>
+  uyuşuyor — bir de tezgâhta kontrol edilecek bir yer: yalıtımı ölçülecek bir ped, montaj<br>
   rehberinin multimetreyle yapılacak bir kontrole çevirdiği.
 </p>
 
@@ -202,8 +202,8 @@ renginde kesim listesine koyar ve netlerini ancak telleri takıldıktan sonra ko
 
 ## Önce devreyi çizin
 
-Kart neyin nereye gideceğini söyler. Kartın yanında açılan şema paneli (`Ctrl+2`) *ne inşa
-ettiğinizi* söyler — ve onu söylediğiniz yer de burasıdır: **Parça Ekle**, iki pini
+Kart neyin nereye gideceğini söyler. Kartın yanındaki sekmede duran şema paneli (`Ctrl+2`) *ne inşa
+ettiğinizi* söyler — ve onu söylediğiniz yer de burasıdır: **Parça Ekle…**, iki pini
 **Bağla**, **Karta Yerleştir**. Önce devre, sonra yerleşim; diğer her EDA aracının
 çalıştığı sıra ve bu aracın şimdiye kadar yapamadığı şey.
 
@@ -255,13 +255,17 @@ kendisidir, çünkü ikisi de aynı sayılardan gelir.
 
 ![Kart, 3D ve montaj rehberi yan yana: sekiz adım işaretlenmiş, sıradaki — 7805 — üçünde de vurgulanmış](./docs/images/guide-and-3d.png)
 
-**Ve tezgâhta kaldığınız yeri tutar.** Montaj Rehberi paneli (`Ctrl+4`) kartın ve 3D
-görünümün yanında durur. Bir adımı işaretleyin, o kart için işaretli kalır — dosyada değil
-uygulamanın ayarlarında tutulur, yani işaretlemek bir düzenleme sayılmaz ve geri alma
-geçmişine girmez — ve **Sıradaki Adım** işaretsiz ilk adımı seçer: parçası kartta seçilir,
-3D'de vurgulanır, 3D görünüm de kartı montajın o anındaki hâliyle gösterir. **Oynat**'ın iki
-yanındaki oklar birer adım ilerler; elinde havya olan birinin montajda ilerlemek istediği
-yol da budur.
+**Ve tezgâhta kaldığınız yeri tutar.** Montaj Rehberi paneli (`Ctrl+4`) adımları teker
+teker, tezgâhın öbür ucundan okunacak büyüklükte gösterir: kartın o adımdaki hâli, adımın
+deliklerine yakınlaştırılmış ve parçası vurgulanmış — lehim yüzeyinde yapılan bir adım için
+lehim yüzeyinden —, ardından rehberin kendi sözleriyle adım, parçanın hangi yönde takılacağı,
+delikleri ve aşamanın işaretlenecek ölçümleri. **Yapıldı, sıradaki** adımı işaretleyip
+ilerler, **Geri** geri döner. İşaretler o kartta kalır — dosyada değil uygulamanın
+ayarlarında tutulur, yani işaretlemek bir düzenleme sayılmaz ve geri alma geçmişine girmez —
+ve montajın tamamı bir tık ötede, **Genel bakış** içindedir; orada **Sıradaki Adım**
+işaretsiz ilk adımı bulur. Adım kartta ve 3D'de de vurgulanır, 3D görünüm de kartı montajın
+o anındaki hâliyle gösterir; altındaki **Oynat**'ın iki yanındaki oklar birer adım ilerler —
+elinde havya olan birinin montajda ilerlemek istediği yol da budur.
 
 ## Çalıştırmak
 
@@ -313,7 +317,7 @@ Kablolama, Kontrol, Montaj** —, kartın her adımda nerede durduğunu söyler 
 düğme sıradaki adımı yapar. Elle yapıldığında akış şöyle:
 
 Şemayı açın (`Ctrl+2`) ve devreyi çizin: parçaları Kütüphaneden sayfaya
-sürükleyin ya da bir sonraki için açık kalan **Parça Ekle** ile art arda ekleyin;
+sürükleyin ya da art arda ekleyin: **Parça Ekle…**, parçanın ne olduğunu yazın, Enter;
 istediğiniz yere taşıyıp döndürün, **Bağla** ile pinden pine ya da çizilmiş bir telin
 üstüne tel çekin (iki ucuna tıklayarak ya da sürükleyerek; bir besleme pininde birleşen
 net o pinin adını alır, VCC ya da GND) — ya da bir pini
@@ -321,14 +325,14 @@ net o pinin adını alır, VCC ya da GND) — ya da bir pini
 sonra **Karta Yerleştir**; önce hangi hazır kartın kullanılacağını sorar: devreniz
 geniş bir kartta ve ondan küçük her boyda yerleştirilir, kablolanır ve denetlenir, ve öneri
 aynı iyilikte kurulduğu en küçük karttır.
-Oradan **Kart →
-Parçaları Yeniden Diz** (`Ctrl+Shift+A`), otomatik kablolama için **`Ctrl+R`**, ardından **Dosya → Dışa Aktar →
-Montaj Rehberi** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
+Oradan **Kart ▸
+Parçaları Yeniden Diz** (`Ctrl+Shift+A`), **Kablolama ▸ Hepsini Otomatik Kablola** (`Ctrl+R`),
+ardından **Dosya ▸ Dışa Aktar ▸ Montaj Rehberi…** (`Ctrl+B`). Bu akışın hiçbir yerinde KiCad yok.
 
-Devre zaten varsa ilk üç adım yerine `examples/ne555-astable.net` üzerinde **Dosya → KiCad'den
-İçe Aktar** ile başlayın: her parça, değerinin ve KiCad footprint'inin söylediği şey
+Devre zaten varsa ilk üç adım yerine `examples/ne555-astable.net` üzerinde **Dosya ▸ KiCad'den
+İçe Aktar…** (`Ctrl+I`) ile başlayın: her parça, değerinin ve KiCad footprint'inin söylediği şey
 olarak tasarıma gelir; oradan sonrasını başlıktaki adımlar götürür — **Kart
-Seç**, **Karta Yerleştir**, kablolama, kontrol, montaj. Yukarıdaki ekran görüntüleri
+Seç…**, **Karta Yerleştir**, kablolama, kontrol, montaj. Yukarıdaki ekran görüntüleri
 bu sıradan çıkıyor — bkz. [`tools/screenshots.py`](./tools/screenshots.py).
 
 ### Ya da hazır bir kart açın
@@ -414,7 +418,7 @@ src/perfboard_studio/ui/         Qt uygulaması: 2D editör, VTK 3D görünüm, 
 src/perfboard_studio/mcp/        MCP sunucusu (docs/MCP.md)
 src/perfboard_studio/catalog.py  gerçek parçalar, adlarıyla ve veri sayfalarıyla
 examples/                  içe aktarılacak netlist'ler ve çıktıkları kartlar
-tests/                     ~5000 test; motor mypy --strict temiz
+tests/                     ~6400 test; motor mypy --strict temiz
 packages/                  Python portunun karşısında kanıtlandığı referans olarak
                            saklanan orijinal TypeScript motoru
 ```
@@ -457,7 +461,7 @@ taşınır ya da lehimlenebilir bir breadboard'a delik delik lehimlenir —,
 çökme kurtarma, MCP
 sunucusu, TR/EN yerelleştirme, bir `v*` etiketiyle çalışan üç platformluk paketleme, ve
 yeni sürümü haber verip indiren güncelleme denetimi
-(**Yardım ▸ Güncellemeleri Denetle**; indirdiğini sürümün `SHA256SUMS` dosyasıyla
+(**Yardım ▸ Güncellemeleri Denetle…**; indirdiğini sürümün `SHA256SUMS` dosyasıyla
 doğrulayıp size teslim eder — çalıştırmak sizin tıklamanız).
 
 Sırada, [PLAN.md](./PLAN.md) §11'in koyduğu sırayla:
