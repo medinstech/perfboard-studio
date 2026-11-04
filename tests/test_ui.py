@@ -5761,11 +5761,16 @@ def test_a_severity_has_the_same_colour_in_the_tree_as_on_the_status_bar() -> No
     by_rule = {v.rule: v.severity for v in window._last_violations}
     wiring = summarize(window._last_ratsnest).links > 0
 
+    from perfboard_studio.guide import is_bench_check
+
+    bench = {v.rule for v in window._last_violations if is_bench_check(v)}
     for j in range(root.childCount()):
         item = root.child(j)
         rule = item.toolTip(0)  # the row is in words; the rule's id is its tooltip
         expected = ERROR if by_rule[rule] == "error" else WARNING
         if wiring and rule in UNWIRED_RULES:
+            expected = TEXT_DIM
+        if rule in bench:  # counted apart on the bar, in its quiet colour (guide.is_bench_check)
             expected = TEXT_DIM
         assert item.foreground(0).color().name() == expected, rule
     _close(window)
@@ -13428,9 +13433,13 @@ def test_the_findings_do_not_call_pins_waiting_for_their_wiring_violations() -> 
         assert group is not None
         assert group.text(0).endswith("(warning)")
         assert group.foreground(0).color().name() == WARNING.lower()
+        from perfboard_studio.guide import is_bench_check
+
+        bench = sum(1 for v in window._last_violations if is_bench_check(v))
+        wrong = len(window._last_violations) - bench
         assert _findings_root(window, "DRC").text(1) == (
-            f"{len(window._last_violations)} problem"
-            + ("" if len(window._last_violations) == 1 else "s")
+            f"{wrong} problem" + ("" if wrong == 1 else "s")
+            + (f" · {bench} to check at the bench" if bench else "")
         )
     finally:
         _close(window)
@@ -16434,5 +16443,40 @@ def test_the_older_package_finding_offers_the_current_one() -> None:
         window._use_current_packages(window._superseded_for(found))
         (component,) = window.bus.document.components
         assert component.footprint_id not in SUPERSEDED_FOOTPRINTS
+    finally:
+        _close(window)
+
+
+def test_a_shipped_example_opens_with_no_problem_and_its_bench_check_listed() -> None:
+    """ne555-astable opened on an orange "Problems 1": an R5' gap the router accepted and
+    the guide checks at the bench. The badge is what is wrong; the gap is counted beside
+    "to wire", and listed in a group of its own with its go-to."""
+    from perfboard_studio.ui.main import ROLE_FINDING_KEY, ROLE_HOLES
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    document = persist.parse_document_or_throw(
+        (root / "examples" / "ne555-astable.perf").read_text(encoding="utf-8")
+    )
+    window = _window_on(document)
+    try:
+        bar = window.problems_bar
+        assert bar.badge.isHidden() and bar.errors == 0 and bar.warnings == 0
+        assert "1 to check at the bench" in bar.facts.text()
+        groups = [
+            window.drc_tree.topLevelItem(i).child(j)
+            for i in range(window.drc_tree.topLevelItemCount())
+            for j in range(window.drc_tree.topLevelItem(i).childCount())
+        ]
+        (bench,) = [g for g in groups if g.data(0, ROLE_FINDING_KEY) == "drc:solder-trace-proximity"]
+        assert bench.text(0) == "To check at the bench"
+        leaf = bench.child(0)
+        while leaf.childCount():
+            leaf = leaf.child(0)
+        assert leaf.data(0, ROLE_HOLES)
+        # The Check step says what is wrong too: nothing.
+        from perfboard_studio.ui.workflow import workflow_steps
+
+        check = next(s for s in workflow_steps(window.workflow_facts()) if s.key == "check")
+        assert check.status == "done"
     finally:
         _close(window)

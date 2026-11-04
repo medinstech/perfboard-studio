@@ -1310,3 +1310,42 @@ def test_a_wire_laid_along_the_grid_is_soldered_at_its_two_ends() -> None:
     for step in bent:
         card = _html_conductor_step(step, "s1", board=None)
         assert " pads" not in card and "Path:" in card, card
+
+
+def _every_board() -> list:
+    from pathlib import Path
+
+    from perfboard_studio import persist
+
+    repo = Path(__file__).resolve().parents[1]
+    paths = sorted({*repo.glob("examples/**/*.perf"), *repo.glob("tools/diffcheck/golden/*.perf")})
+    return [(path.name, persist.parse_document_or_throw(path.read_text(encoding="utf-8")))
+            for path in paths]
+
+
+def test_a_bench_check_is_exactly_what_the_guide_makes_a_check_of() -> None:
+    """The window counts ``is_bench_check`` findings apart from the problems; the guide makes
+    an isolation check of each. Both directions, on every board in the repository: a
+    finding counted apart that the guide never checks would be a fault hidden, and a check
+    the window counts as a problem is the orange "Problems 1" this replaced."""
+    from perfboard_studio.drc import run_drc
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.guide import all_checkpoints, build_guide, is_bench_check
+
+    lookup = footprint_lookup()
+    seen = 0
+    for name, doc in _every_board():
+        violations = run_drc(doc, lookup)
+        counted_apart = {
+            frozenset(v.holes[:2]) for v in violations if is_bench_check(v)
+        }
+        checked = {
+            frozenset(check.holes)
+            for check in all_checkpoints(build_guide(doc, lookup))
+            # The R5' probes: an isolation check between two named holes. The net-pair ones
+            # ("GND <-> +5V must be separate") are made from the netlist, on pins.
+            if check.kind == "isolation" and check.holes
+        }
+        assert counted_apart == checked, name
+        seen += len(checked)
+    assert seen, "some board in the repository carries a bench check, or this proves nothing"

@@ -2182,6 +2182,16 @@ def trapped_jumper_ids(violations: list[DrcViolation]) -> frozenset[ConductorId]
     )
 
 
+def is_bench_check(violation: DrcViolation) -> bool:
+    """Whether the guide turns this finding into a check made at the bench, rather than it
+    being something wrong with the board: an R5' proximity between two named holes is a gap
+    the router accepted knowingly, and becomes an isolation probe right after its trace
+    (``_risks_by_conductor``). The window counts these apart from the problems
+    (``ui/problems.py``) by this one predicate, so the two cannot drift -- a shipped
+    example opened with an orange "Problems 1" over a gap its own guide checks."""
+    return violation.rule == "solder-trace-proximity" and len(violation.holes) >= 2
+
+
 def _risks_by_conductor(
     violations: list[DrcViolation], say: Phrasebook, *, board: Board | None
 ) -> dict[ConductorId, tuple[RiskNote, ...]]:
@@ -2192,7 +2202,7 @@ def _risks_by_conductor(
     """
     by_conductor: dict[ConductorId, list[RiskNote]] = {}
     for violation in violations:
-        if violation.rule != "solder-trace-proximity" or len(violation.holes) < 2:
+        if not is_bench_check(violation):
             continue
         for conductor_id in violation.conductor_ids:
             by_conductor.setdefault(conductor_id, []).append(

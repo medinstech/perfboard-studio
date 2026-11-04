@@ -246,6 +246,7 @@ from perfboard_studio.guide import (
     build_guide,
     conductor_word,
     document_at_step,
+    is_bench_check,
     step_focus,
 )
 from perfboard_studio.guide import describe as describe_guide
@@ -385,6 +386,15 @@ SHEET_PICK_MM = 1.6
 #: a pin of a net with nothing touching it. Kept out of the step bar's Verify count and the
 #: status bar's while connections are left to route.
 UNWIRED_RULES = frozenset({"pin-not-connected"})
+
+
+def _rules_at_the_bench(violations: Sequence[DrcViolation]) -> frozenset[str]:
+    """The rules whose every finding the build guide makes a check at the bench of
+    (``guide.is_bench_check``): the drawer's group for them is the bench's, not a fault's."""
+    rules: dict[str, bool] = {}
+    for v in violations:
+        rules[v.rule] = rules.get(v.rule, True) and is_bench_check(v)
+    return frozenset(rule for rule, all_bench in rules.items() if all_bench)
 
 
 def work_left(*, wiring: bool, stripboard: bool) -> frozenset[str]:
@@ -2963,7 +2973,11 @@ class MainWindow(QMainWindow):
             board_chosen=self._board_chosen,
             unrouted=summarize(self._last_ratsnest).links,
             drc_errors=sum(1 for v in self._last_violations if v.severity == "error"),
-            drc_warnings=sum(1 for v in self._last_violations if v.severity == "warning"),
+            # Not a check the guide makes at the bench: the Check step says what is wrong.
+            drc_warnings=sum(
+                1 for v in self._last_violations
+                if v.severity == "warning" and not is_bench_check(v)
+            ),
             drc_unwired=sum(1 for v in self._last_violations if v.rule in UNWIRED_RULES),
             lvs_problems=problems,
             erc_errors=sum(1 for f in self._last_erc if f.severity == "error"),
@@ -8643,6 +8657,8 @@ class MainWindow(QMainWindow):
         tree = self.drc_tree
         left = self._work_left()
         waiting = {f"{group}:{name}" for name in left for group in ("drc", "lvs")}
+        # Not wrong: the guide checks them at the bench.
+        waiting |= {f"drc:{rule}" for rule in _rules_at_the_bench(self._last_violations)}
         leaves: list[QTreeWidgetItem] = []
 
         def under_work_left(item: QTreeWidgetItem) -> bool:
@@ -8958,8 +8974,12 @@ class MainWindow(QMainWindow):
         erc_errors = sum(1 for f in self._last_erc if f.severity == "error")
         erc_warns = len(self._last_erc) - erc_errors
         drc_errors = sum(1 for v in self._last_violations if v.severity == "error")
+        # A gap the guide checks at the bench is not wrong, so it is counted apart rather
+        # than in the badge: ne555-astable, a shipped example, opened on "Problems 1".
+        bench = sum(1 for v in self._last_violations if is_bench_check(v))
         drc_warns = sum(
-            1 for v in self._last_violations if v.severity == "warning" and v.rule not in waiting
+            1 for v in self._last_violations
+            if v.severity == "warning" and v.rule not in waiting and not is_bench_check(v)
         )
         lvs_wrong = 0
         matched: int | None = None
@@ -8978,6 +8998,7 @@ class MainWindow(QMainWindow):
             to_wire=summarize(self._last_ratsnest).links,
             matched=matched,
             nets=nets,
+            to_check=bench,
         )
         board = self.bus.document.board
         preset = _matching_preset(board)
@@ -9047,13 +9068,18 @@ class MainWindow(QMainWindow):
         left = self._work_left()
         to_do = left & UNWIRED_RULES
         unwired = sum(1 for v in violations if v.rule in to_do)
-        drc_count = counted(len(violations), t("{count} problem"), t("{count} problems"))
+        bench = sum(1 for v in violations if is_bench_check(v))
+        #: Rules every finding of which the guide checks at the bench: their own group.
+        at_the_bench = _rules_at_the_bench(violations)
+        drc_count = counted(
+            len(violations) - unwired - bench, t("{count} problem"), t("{count} problems")
+        )
         if unwired:
-            drc_count = (
-                counted(len(violations) - unwired, t("{count} problem"), t("{count} problems"))
-                + " · "
-                + counted(unwired, t("{count} pin not wired yet"), t("{count} pins not wired yet"))
+            drc_count += " · " + counted(
+                unwired, t("{count} pin not wired yet"), t("{count} pins not wired yet")
             )
+        if bench:
+            drc_count += " · " + t("{count} to check at the bench").format(count=bench)
         drc_root = QTreeWidgetItem([t("Board check (DRC)"), drc_count])
         drc_root.setData(0, ROLE_FINDING_KEY, "DRC")
         tree.addTopLevelItem(drc_root)
@@ -9061,6 +9087,8 @@ class MainWindow(QMainWindow):
         def rule_title(rule: str, severity: str) -> str:
             if rule in to_do:  # ``pin-not-connected``, the one rule in UNWIRED_RULES
                 return t("Pin not wired yet")
+            if rule in at_the_bench:
+                return t("To check at the bench")
             return f"{_rule_title(rule)} ({_severity_word(severity)})"
 
         by_rule: dict[str, list[DrcViolation]] = {}
@@ -9072,18 +9100,27 @@ class MainWindow(QMainWindow):
             if needle and needle not in haystack:
                 continue
             by_rule.setdefault(v.rule, []).append(v)
-        # What is wrong first, the work left to do after it.
-        for rule in sorted(by_rule, key=lambda rule: (rule in to_do, rule)):
+        # What is wrong first, then the checks at the bench, then the work left to do.
+        quiet = to_do | at_the_bench
+        for rule in sorted(by_rule, key=lambda rule: (rule in to_do, rule in at_the_bench, rule)):
             items = by_rule[rule]
             severity = items[0].severity
             rule_item = QTreeWidgetItem([rule_title(rule, severity), f"{len(items)}"])
             # The id stays one hover away: it is what the documentation and the MCP
             # server call the rule, and what somebody searching for it will type.
             rule_item.setToolTip(0, rule)
+            if rule in at_the_bench:
+                # A check the guide makes at the bench, in its own group with the same go-to
+                # and menu -- listed, never hidden, just not among what is wrong.
+                rule_item.setToolTip(
+                    1,
+                    t("Not wrong: the build guide turns each of these into a check to make "
+                      "with a meter or by eye."),
+                )
             # The colour the status bar already uses for the same count, so a warning
             # reads the same whether it is a number on the bar or a row in this tree.
             colour = theme.colour("danger" if severity == "error" else "warning")
-            rule_item.setForeground(0, QColor(theme.colour("secondary") if rule in to_do else colour))
+            rule_item.setForeground(0, QColor(theme.colour("secondary") if rule in quiet else colour))
             rule_item.setData(0, ROLE_FINDING_KEY, f"drc:{rule}")
             drc_root.addChild(rule_item)
             self._add_drc_findings(rule_item, rule, items, expanded)

@@ -211,6 +211,9 @@ closed without a bump.
   drawing its module was measured on. Both views put the dot there, and it turns with the
   module. The ESP-01's flash had its pin 1 at the wrong end too. Where the source does not
   show the dot (the nRF24L01+'s chip, the Pico's two), none is drawn.
+- **The Problems badge counts only what is wrong.** A narrow solder gap the build guide turns
+  into a check at the bench is counted beside it -- "1 to check at the bench" -- and listed in
+  a group of its own. The ne555-astable example no longer opens on an orange "Problems 1".
 
 - **What a search finds best comes first.** "resistor" lists the resistor before the inductor
   and the light sensor, "power" the power inputs first, and Turkish "LED" the LEDs -- in the

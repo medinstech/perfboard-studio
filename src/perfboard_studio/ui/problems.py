@@ -100,10 +100,19 @@ class ProblemsBar(QWidget):
         super().mouseReleaseEvent(event)
 
     def set_counts(
-        self, *, errors: int, warnings: int, to_wire: int, matched: int | None, nets: int
+        self,
+        *,
+        errors: int,
+        warnings: int,
+        to_wire: int,
+        matched: int | None,
+        nets: int,
+        to_check: int = 0,
     ) -> None:
         """What the bar says. ``matched`` is None while there is nothing on the board to
-        compare with the circuit."""
+        compare with the circuit. ``to_check`` is the findings the build guide makes a check
+        at the bench of (``guide.is_bench_check``): counted beside what is left to wire,
+        never in the badge, which is what is wrong."""
         self.errors, self.warnings = errors, warnings
         total = errors + warnings
         if total:
@@ -123,6 +132,11 @@ class ProblemsBar(QWidget):
         if to_wire:
             facts.append(
                 theme.ink("●", "warning") + " " + t("{count} to wire").format(count=to_wire)
+            )
+        if to_check:
+            facts.append(
+                theme.ink("●", "secondary") + " "
+                + t("{count} to check at the bench").format(count=to_check)
             )
         if matched is not None and nets:
             facts.append(t("Matches the circuit: {matched} of {total} nets").format(

@@ -2067,6 +2067,15 @@ Seven things follow, and each has a test:
   is what gives the views every other pixel of the column. The bar must report its height
   in `sizeHint`, not only as a fixed height: a dock sizes its title bar from the hint, and
   the drawer folded to the 19 px its labels asked for and cut the bar off.
+  **Its badge counts what is wrong, and only that.** What is work left -- a pin not wired
+  yet, while there is wiring to do -- is counted beside it ("3 to wire"), and so is what the
+  build guide turns into a check at the bench ("1 to check at the bench"): an R5' gap the
+  router accepted knowingly, which the guide probes right after its trace. Which findings
+  those are is ONE predicate, `guide.is_bench_check`, read by the guide's
+  `_risks_by_conductor` and by the window's bar, list and Check step alike, and a test holds
+  it to the guide's own isolation checks on every board in the repository, both ways. A
+  shipped example, ne555-astable, opened on an orange "Problems 1" over a gap its guide
+  checks. The drawer still lists them, in a group of their own with the same go-to.
 - **`_apply_default_sizes` caps and lets go**, from `showEvent` and through two turns of the
   event loop, because `resizeDocks` does nothing useful here — it divides the room the
   window HAS, and a window that is not on screen yet has none. A maximum is honoured at any
