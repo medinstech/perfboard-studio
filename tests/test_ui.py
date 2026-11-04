@@ -1877,7 +1877,7 @@ def test_exporting_the_guide_writes_all_four_files(tmp_path, monkeypatch) -> Non
     # The export ends by offering to open what it wrote, which is a modal dialog: in a
     # headless run it waits for a click that never comes. Its own behaviour is checked by
     # test_the_export_offers_to_open_what_it_wrote below.
-    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written: None)
+    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written, **kwargs: None)
     # The export asks where to write; this answers with what it suggests.
     monkeypatch.setattr(
         main_module.MainWindow,
@@ -1906,7 +1906,7 @@ def test_guide_gaps_are_reported_in_a_dialog_not_only_the_status_bar(tmp_path, m
         "perfboard_studio.ui.main.QMessageBox.warning",
         lambda parent, title, text, *args, **kwargs: shown.append(text),
     )
-    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written: None)
+    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written, **kwargs: None)
     # The export asks where to write; this answers with what it suggests.
     monkeypatch.setattr(
         main_module.MainWindow,
@@ -1937,7 +1937,7 @@ def test_the_step_pictures_are_counted_and_can_be_skipped(tmp_path, monkeypatch)
     monkeypatch.setattr(
         "perfboard_studio.ui.main.QMessageBox.warning", lambda *args, **kwargs: None
     )
-    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written: None)
+    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written, **kwargs: None)
     monkeypatch.setattr(
         main_module.MainWindow,
         "_ask_where_to_export",
@@ -2329,7 +2329,7 @@ def test_a_turkish_window_exports_a_turkish_guide(tmp_path, monkeypatch) -> None
 
     monkeypatch.setattr(view3d, "offscreen_gl_available", lambda: False)
     monkeypatch.setattr("perfboard_studio.ui.main.QMessageBox.warning", lambda *a, **k: None)
-    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written: None)
+    monkeypatch.setattr(main_module.MainWindow, "_offer_to_open", lambda self, written, **kwargs: None)
     monkeypatch.setattr(
         main_module.MainWindow,
         "_ask_where_to_export",
@@ -16735,5 +16735,46 @@ def test_a_parts_editor_fits_a_720_px_window_with_its_last_row_showing() -> None
         scroller = window.properties.scroller
         need = scroller.widget().heightForWidth(scroller.viewport().width())
         assert need <= scroller.viewport().height() or need < 0, (need, scroller.viewport().height())
+    finally:
+        _close(window)
+
+
+@requires_offscreen_gl  # the render is stubbed, but the scanner reads on_export_guide
+def test_a_boards_edge_fingers_are_a_note_beside_the_files_not_a_gap(tmp_path, monkeypatch) -> None:
+    """A stock board's fingers came up as "The guide has gaps" on every export. They are a
+    note: said in the written box's details. A real gap still stops the export."""
+    from perfboard_studio.commands import DeleteConductorsPayload
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui import view3d
+
+    monkeypatch.setattr(view3d, "offscreen_gl_available", lambda: False)
+    warned: list[str] = []
+    monkeypatch.setattr(
+        "perfboard_studio.ui.main.QMessageBox.warning",
+        lambda parent, title, text, *args, **kwargs: warned.append(text),
+    )
+    offered: list[list[str] | None] = []
+    monkeypatch.setattr(
+        main_module.MainWindow, "_offer_to_open",
+        lambda self, written, notes=None, **kwargs: offered.append(notes),
+    )
+    monkeypatch.setattr(
+        main_module.MainWindow,
+        "_ask_where_to_export",
+        lambda self, title, suggested, file_filter: tmp_path / suggested,
+    )
+    window = _window_on(_example_document("ne555-astable"))
+    window.current_path = tmp_path / "board.perf"
+    try:
+        assert window.bus.document.edge_connectors, "the example is a stock board with fingers"
+        window.on_export_guide()
+        assert warned == [], "a note is not a gap"
+        assert offered and offered[-1] and "edge" in offered[-1][0]
+
+        ids = tuple(c.id for c in window.bus.document.conductors)
+        assert window.bus.dispatch("conductor.deleteMany", DeleteConductorsPayload(ids=ids)).ok
+        assert not window.bus.document.conductors
+        window.on_export_guide()
+        assert warned and "could not cover" in warned[0]
     finally:
         _close(window)

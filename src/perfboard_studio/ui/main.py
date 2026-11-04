@@ -248,6 +248,7 @@ from perfboard_studio.guide import (
     conductor_word,
     document_at_step,
     is_bench_check,
+    is_guide_gap,
     step_focus,
 )
 from perfboard_studio.guide import describe as describe_guide
@@ -13177,20 +13178,27 @@ class MainWindow(QMainWindow):
             + without,
             0,
         )
-        if guide.warnings:
+        gaps = [w for w in guide.warnings if is_guide_gap(w)]
+        if gaps:
             # Said in a dialog, not just the status bar: each of these is a statement that
             # the guide describes less than the whole build, and a user who misses it will
             # follow the steps to the end and find the board does not work.
-            lines = "\n".join(f"  • {w.message}" for w in guide.warnings)
+            lines = "\n".join(f"  • {w.message}" for w in gaps)
             QMessageBox.warning(
                 self,
                 t("The guide has gaps"),
                 t("Written to {folder}, with {count} thing(s) it could not cover:").format(
-                    folder=written[0].parent, count=len(guide.warnings)
+                    folder=written[0].parent, count=len(gaps)
                 )
                 + f"\n\n{lines}",
             )
-        self._offer_to_open(written)
+        # A note -- a board's edge fingers -- is not a gap, and a warning box for it on
+        # every export of a stock board taught people to dismiss the box unread.
+        notes = [w.message for w in guide.warnings if not is_guide_gap(w)]
+        if notes:
+            self._offer_to_open(written, notes=notes)
+        else:
+            self._offer_to_open(written)
 
     def on_export_schematic(self) -> None:
         """Write the circuit as a sheet -- SVG, PDF and PNG under the one name asked for,
@@ -13263,7 +13271,11 @@ class MainWindow(QMainWindow):
         )
 
     def _offer_to_open(
-        self, written: list[Path], title: str | None = None, open_label: str | None = None
+        self,
+        written: list[Path],
+        title: str | None = None,
+        open_label: str | None = None,
+        notes: list[str] | None = None,
     ) -> None:
         """Several files, and a way to reach them.
 
@@ -13274,7 +13286,8 @@ class MainWindow(QMainWindow):
         it with its own two words, because the same objection applies to a sheet.
 
         ``written[0]`` is the one the Open button opens, so a caller puts the file a person
-        would actually read first in the list.
+        would actually read first in the list. ``notes`` are the guide's notes, said as the
+        box's details: something to know, not something missing (``guide.is_guide_gap``).
         """
         box = QMessageBox(self)
         box.setWindowTitle(title or t("Build guide written"))
@@ -13286,6 +13299,8 @@ class MainWindow(QMainWindow):
                 else t("Written to {folder}, with {count} other files.")
             ).format(folder=written[0].parent, count=others)
         )
+        if notes:
+            box.setDetailedText("\n\n".join(f"• {note}" for note in notes))
         open_it = box.addButton(
             open_label or t("Open the Guide"), QMessageBox.ButtonRole.AcceptRole
         )

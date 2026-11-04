@@ -2253,6 +2253,21 @@ def is_bench_check(violation: DrcViolation) -> bool:
     return violation.rule == "solder-trace-proximity" and len(violation.holes) >= 2
 
 
+#: Notes: a note is information about the board, not something the guide failed to cover
+#: -- a board's edge fingers are part of it, not a step left out. They stay in
+#: ``Guide.warnings``, so the guide's model and JSON are what they were.
+GUIDE_NOTES = frozenset({"edge-connector"})
+
+
+def is_guide_gap(warning: GuideWarning) -> bool:
+    """Whether this warning is a part of the build the guide does not cover -- a net not
+    wired, a part with no footprint -- rather than a note about it. The window stops an
+    export with a gap and lists a note beside the files it wrote: a stock board's fingers
+    came up as "The guide has gaps" on every export of a board that had none, the shipped
+    NE555 example among them."""
+    return warning.code not in GUIDE_NOTES
+
+
 def _risks_by_conductor(
     violations: list[DrcViolation], say: Phrasebook, *, board: Board | None
 ) -> dict[ConductorId, tuple[RiskNote, ...]]:
