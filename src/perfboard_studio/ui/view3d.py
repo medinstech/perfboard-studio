@@ -4826,6 +4826,9 @@ class _ArtSolid:
     inset: float = 0.0
     colour: str = ""
     pitch: float = 0.0
+    #: Which side of its own axis a chip's pin 1 is on, as a world sign along the other axis
+    #: (``PlacedArt.across``, turned with the part); 0 draws no dot.
+    across: float = 0.0
 
     def at(self, along: float, across: float, z: float) -> tuple[float, float, float]:
         """A point ``along`` the part's own axis and ``across`` it from its centre, ``z``
@@ -4861,6 +4864,11 @@ def _art_solid(placed: PlacedArt, comp: Any, board: Board, base: float) -> _ArtS
     # Turned on its corner (``moduleart.outline``), a part has a corner where its own axis
     # meets its edge, and that corner is its feature's.
     corner = math.degrees(math.atan2(fy, fx)) if placed.diagonal else None
+    # What is across the part turns as its axis does: the same transform on the other axis.
+    side = (0.0, float(placed.across)) if placed.axis == "x" else (float(placed.across), 0.0)
+    sx, sy = transform_offset(side[0], side[1], comp.rotation, comp.mirrored)
+    sy = -sy
+    across = sy if along_x else sx
     return _ArtSolid(
         kind=placed.kind,
         x=comp.anchor.col * board.pitch + tx,
@@ -4877,6 +4885,7 @@ def _art_solid(placed: PlacedArt, comp: Any, board: Board, base: float) -> _ArtS
         inset=placed.inset,
         colour=placed.colour,
         pitch=placed.pitch,
+        across=math.copysign(1.0, across) if across else 0.0,
     )
 
 
@@ -5120,15 +5129,18 @@ def _art_gull_wing(s: _ArtSolid) -> list[_Piece]:
                 instances=tuple(s.at(along, side * across, z) for side in (-1.0, 1.0) for along in legs),
             )
         )
-    pieces.append(
-        _Piece(
-            source=_cylinder(0.3, 0.05, resolution=16),
-            rgb=_ART_DOT_RGB,
-            position=s.at(s.facing * (s.length / 2 - 0.75), -(body_w / 2 - 0.6), s.height - 0.025),
-            orientation=_ALONG_Z,
-            material=MOULDED,
+    if s.across:
+        pieces.append(
+            _Piece(
+                source=_cylinder(0.3, 0.05, resolution=16),
+                rgb=_ART_DOT_RGB,
+                position=s.at(
+                    s.facing * (s.length / 2 - 0.75), s.across * (body_w / 2 - 0.6), s.height - 0.025
+                ),
+                orientation=_ALONG_Z,
+                material=MOULDED,
+            )
         )
-    )
     return pieces
 
 
@@ -5226,17 +5238,18 @@ def _art_soic8(s: _ArtSolid) -> list[_Piece]:
                 ),
             )
         )
-    pieces.append(
-        _Piece(
-            source=_cylinder(0.32, 0.05, resolution=16),
-            rgb=_ART_DOT_RGB,
-            position=s.at(
-                s.facing * (s.length / 2 - 0.75), -(body_w / 2 - 0.7), s.height + 0.02
-            ),
-            orientation=_ALONG_Z,
-            material=MOULDED,
+    if s.across:
+        pieces.append(
+            _Piece(
+                source=_cylinder(0.32, 0.05, resolution=16),
+                rgb=_ART_DOT_RGB,
+                position=s.at(
+                    s.facing * (s.length / 2 - 0.75), s.across * (body_w / 2 - 0.7), s.height + 0.02
+                ),
+                orientation=_ALONG_Z,
+                material=MOULDED,
+            )
         )
-    )
     if s.text:
         glyphs, orientation = s.printed(s.text, body_w * 0.24, s.length * 0.7)
         if glyphs is not None:
@@ -5585,17 +5598,20 @@ def _art_qfn(s: _ArtSolid) -> list[_Piece]:
         )
     )
     dot = min(0.35, min(s.length, s.width) * 0.1)
-    pieces.append(
-        _Piece(
-            source=_cylinder(dot, 0.05, resolution=16),
-            rgb=_ART_DOT_RGB,
-            position=s.at(
-                s.facing * (s.length / 2 - dot * 2.2), -(s.width / 2 - dot * 2.2), s.height + 0.02
-            ),
-            orientation=_ALONG_Z,
-            material=MOULDED,
+    if s.across:
+        pieces.append(
+            _Piece(
+                source=_cylinder(dot, 0.05, resolution=16),
+                rgb=_ART_DOT_RGB,
+                position=s.at(
+                    s.facing * (s.length / 2 - dot * 2.2),
+                    s.across * (s.width / 2 - dot * 2.2),
+                    s.height + 0.02,
+                ),
+                orientation=_ALONG_Z,
+                material=MOULDED,
+            )
         )
-    )
     if s.text:
         glyphs, orientation = s.printed(s.text, s.width * 0.16, s.length * 0.75)
         if glyphs is not None:
@@ -5641,7 +5657,8 @@ def _art_tqfp32(s: _ArtSolid) -> list[_Piece]:
         towards = (math.cos(math.radians(s.corner)), math.sin(math.radians(s.corner)))
     else:
         turn = 0.0 if s.axis == "x" else 90.0
-        towards = (s.facing, 0.0) if s.axis == "x" else (0.0, s.facing)
+        # Square on the board, its pin-1 corner: at ``facing`` along it and ``across``.
+        towards = (s.facing, s.across) if s.axis == "x" else (s.across, s.facing)
     legs = _Mesh()
     shoulder = standoff + body_h * 0.45
     for side in range(4):
@@ -5679,15 +5696,16 @@ def _art_tqfp32(s: _ArtSolid) -> list[_Piece]:
     ]
     # The pin-1 dot, in from the corner its feature is at.
     dot = (body / 2 - 1.0) * math.sqrt(2.0) if s.corner is not None else body / 2 - 1.0
-    pieces.append(
-        _Piece(
-            source=_cylinder(0.4, 0.05, resolution=16),
-            rgb=_ART_DOT_RGB,
-            position=(s.x + towards[0] * dot, s.y + towards[1] * dot, s.z + s.height + 0.02),
-            orientation=_ALONG_Z,
-            material=MOULDED,
+    if s.corner is not None or s.across:
+        pieces.append(
+            _Piece(
+                source=_cylinder(0.4, 0.05, resolution=16),
+                rgb=_ART_DOT_RGB,
+                position=(s.x + towards[0] * dot, s.y + towards[1] * dot, s.z + s.height + 0.02),
+                orientation=_ALONG_Z,
+                material=MOULDED,
+            )
         )
-    )
     if s.text:
         glyphs = _printed(s.text, body * 0.11, body * 0.8)
         if glyphs is not None:

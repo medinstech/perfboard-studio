@@ -1183,9 +1183,21 @@ ids. Five rules hold it, each pinned in
   the real module's mirror image, so a builder laying the module over the outline put VCC in
   INT's hole. `test_every_layout_is_drawn_turned_and_never_mirrored` measures it on what is
   placed; the footprint is corrected and its old id said by DRC (see "Footprints are
-  generated, not shipped"). One thing does not turn yet: a chip's pin-1 dot sits on a fixed
-  side ACROSS its part, so a layout turned half round has its dot at the right end and the
-  wrong side.
+  generated, not shipped").
+- **A chip's pin-1 dot is in the corner its source shows, or nowhere.** A dot is in a corner:
+  at `facing` along the chip and at `ArtPart.across` across it, both read off the source the
+  layout was measured on and both turned by `fit_module_art` with the layout, into
+  `PlacedArt.across`. The builders used to put every dot on one fixed side of its axis, and
+  the 2D view's side was the 3D view's opposite, so each chip was right in one view at most:
+  the GY-521's in 3D, the Pololu carriers' in 2D, and the ESP-01's flash in neither, its pin 1
+  at the other END as well. Where a layout's source does not show the dot -- the nRF24L01+'s
+  photograph too dark on the chip, KiCad's Pico model with plain boxes for chips -- `across`
+  is 0 and no dot is drawn, for the reason the block is drawn: a missing mark claims nothing,
+  and a wrong one tells a builder the chip is turned. The layout says which chips came out
+  dotless and why. `test_every_chip_on_a_layout_says_where_its_pin_1_is` makes every dotted
+  chip declare it; `PIN_ONE_CORNERS` in `tests/test_module_art.py` holds each catalog chip to
+  its corner in both views; and one test per builder and per view holds the corner through
+  every turn and flip.
 - **Measured, not eyeballed.** Every layout's `source` names the drawing or model its
   positions come from — Espressif's and Arduino's dimension drawings, KiCad's models of the
   Pico, the D1 mini and the radio modules, Pololu's own top-view photographs of its two

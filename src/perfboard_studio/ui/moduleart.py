@@ -155,6 +155,10 @@ GULL_WING_LEGS: dict[str, tuple[int, float, float]] = {
     "ssop24": (12, 0.65, 1.0),
 }
 
+#: The chips whose builders print a pin-1 dot in a corner: at ``facing`` along the chip's
+#: axis and at ``across`` across it (``ArtPart.across``).
+PIN_ONE_KINDS: frozenset[str] = frozenset({"soic8", "qfn", "tqfp32", *GULL_WING_LEGS})
+
 #: A SOT-23's legs, by kind: where each leaves the body's two long sides, as a share of the
 #: body's length, ``(back, front)`` -- the front being the ``facing`` side. One table, so the
 #: 2D view and the 3D builder draw the same legs; 0.33 of a 2.9 mm body is the 0.95 mm pitch.
@@ -278,6 +282,14 @@ class ArtPart:
     colour: str = ""
     #: For a ``pcb-antenna``: how far one stroke of its meander is from the next.
     pitch: float = 0.0
+    #: For a chip (``PIN_ONE_KINDS``): which side of its own axis pin 1 is on, as the dot on
+    #: it shows in the source the layout was measured on -- +1 or -1 along ``v`` (along ``u``
+    #: for a part along ``v``), in the layout as drawn. With ``facing`` that is the corner
+    #: the dot goes in, and both turn with the layout. 0 where that source does not show the
+    #: dot, and then none is drawn: a missing mark claims nothing, and a wrong one tells a
+    #: builder the chip is turned. ``None`` only for a part with no pin 1, or one turned on
+    #: its corner (``diagonal``), whose feature IS a corner.
+    across: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,6 +362,10 @@ class PlacedArt:
     inset: float = 0.0
     colour: str = ""
     pitch: float = 0.0
+    #: Which side of its own axis a chip's pin 1 is on (``ArtPart.across``), turned onto the
+    #: footprint: +1 or -1 along local y for a part along x, along local x for one along y.
+    #: 0 draws no dot.
+    across: int = 0
 
 
 # -- the layouts -------------------------------------------------------------------------
@@ -393,7 +409,9 @@ LM2596_MODULE = ModuleArt(
 #: The SN65HVD230 CAN transceiver breakout, sold as CJMCU-230 or "VP230 module": the SO-8
 #: chip in the middle, its decoupling capacitors to one side and its slope resistor and the
 #: 120 ohm terminator to the other, the header along one edge. The board is the size sellers
-#: give (16 x 14.5 mm); the chip is TI's D package; the passives are 0805.
+#: give (16 x 14.5 mm); the chip is TI's D package; the passives are 0805. Its chip has no
+#: pin-1 dot: none of the sellers' photographs it was placed from is named here to read one
+#: off.
 SN65HVD230_MODULE = ModuleArt(
     key="sn65hvd230",
     names=("hvd230", "vp230", "cjmcu-230", "cjmcu230"),
@@ -401,7 +419,7 @@ SN65HVD230_MODULE = ModuleArt(
     pins=6,
     frame="header",
     parts=(
-        ArtPart("soic8", 0.0, 2.2, 4.9, 6.0, 1.6, facing=-1, text="VP230"),
+        ArtPart("soic8", 0.0, 2.2, 4.9, 6.0, 1.6, facing=-1, text="VP230", across=0),
         ArtPart("chip-c", -5.6, -0.2, 2.0, 1.25, 0.85, along_v=True),
         ArtPart("chip-c", -5.6, 3.4, 2.0, 1.25, 0.85, along_v=True),
         ArtPart("chip-r", 5.6, -0.2, 2.0, 1.25, 0.6, along_v=True),
@@ -427,7 +445,10 @@ ESPRESSIF_BLACK = "#24262c"
 #: board, the regulator and the USB bridge under it, the two auto-reset transistors by the
 #: right-hand pins, and EN and Boot either side of the micro-USB socket. Positions read off
 #: Espressif's esp32_devkitc_v4_dimensions drawing; the WROOM's can and antenna measured on
-#: KiCad's ESP32-WROOM-32 model. Sellers' clones copy this board part for part.
+#: KiCad's ESP32-WROOM-32 model. Sellers' clones copy this board part for part. The USB
+#: bridge's pin 1 is the corner its outline is chamfered at on Espressif's
+#: esp32_devkitc_v4_pcb_layout: away from the USB socket, on the side of the header that
+#: runs GND, 23, 22.
 DEVKITC_MODULE = ModuleArt(
     key="esp32-devkitc",
     board_colour=ESPRESSIF_BLACK,
@@ -445,7 +466,7 @@ DEVKITC_MODULE = ModuleArt(
         ArtPart("chip-c", 9.4, -5.85, 2.0, 1.25, 0.85),
         ArtPart("sot223", 7.67, 0.12, 7.0, 6.5, 1.7, along_v=True, facing=-1),
         ArtPart("sot23", 7.75, 7.77, 2.4, 2.9, 1.1),
-        ArtPart("qfn", 14.68, 0.2, 5.0, 5.0, 0.9, facing=-1, text="CP2102N"),
+        ArtPart("qfn", 14.68, 0.2, 5.0, 5.0, 0.9, facing=-1, text="CP2102N", across=1),
         ArtPart("sot23", 15.71, 7.77, 2.4, 2.9, 1.1),
         ArtPart("led", 18.82, -4.65, 1.6, 0.8, 0.6, colour="#d83a32"),
         ArtPart("button", 23.67, -7.76, 4.7, 3.5, 2.0),
@@ -454,7 +475,7 @@ DEVKITC_MODULE = ModuleArt(
     ),
     source=(
         "Espressif esp32_devkitc_v4_dimensions (positions); KiCad ESP32-WROOM-32 model "
-        "(the can and the antenna)"
+        "(the can and the antenna); Espressif esp32_devkitc_v4_pcb_layout (the bridge's pin 1)"
     ),
 )
 
@@ -463,7 +484,9 @@ DEVKITC_MODULE = ModuleArt(
 #: by the right-hand pins, and Boot and RST either side of the micro-USB socket. Positions
 #: read off Espressif's DIMENSION_ESP32-C3-DEVKITM-1 drawing. The two buttons stand 0.5 mm
 #: and the transistors 0.1 mm further in than the board has them: where the board has them,
-#: the names beside those pins would be squeezed past reading.
+#: the names beside those pins would be squeezed past reading. The USB bridge's pin 1 is
+#: where Espressif's PCB_ESP32-C3-DEVKITM-1_V1 layout rings and chamfers U3: away from the
+#: USB socket, on the side of the right-hand pins.
 C3_DEVKITM_MODULE = ModuleArt(
     key="esp32-c3-devkitm-1",
     board_colour=ESPRESSIF_BLACK,
@@ -478,7 +501,7 @@ C3_DEVKITM_MODULE = ModuleArt(
         ArtPart("sot223", 1.18, -0.83, 7.0, 6.5, 1.7, along_v=True, facing=-1),
         ArtPart("led", -0.44, 6.69, 3.5, 3.5, 1.5),
         ArtPart("sot23", 8.03, 7.45, 2.4, 2.9, 1.1),
-        ArtPart("qfn", 8.48, -2.18, 4.0, 4.0, 0.9, facing=-1),
+        ArtPart("qfn", 8.48, -2.18, 4.0, 4.0, 0.9, facing=-1, across=1),
         ArtPart("sot23", 11.84, 7.45, 2.4, 2.9, 1.1),
         ArtPart("led", 12.35, -8.18, 1.6, 0.8, 0.6, colour="#d83a32"),
         ArtPart("sma", 13.07, -4.53, 1.7, 1.25, 0.9, along_v=True),
@@ -488,7 +511,7 @@ C3_DEVKITM_MODULE = ModuleArt(
     ),
     source=(
         "Espressif DIMENSION_ESP32-C3-DEVKITM-1_V1 (positions); ESP32-C3-MINI-1 datasheet "
-        "(the module)"
+        "(the module); Espressif PCB_ESP32-C3-DEVKITM-1_V1 (the bridge's pin 1)"
     ),
 )
 
@@ -529,7 +552,8 @@ NANO_MODULE = ModuleArt(
 #: the regulator's inductors and diode, the RP2040 in the middle and its crystal under it.
 #: Every position and size measured on KiCad's RaspberryPi_Pico model. The diode and one
 #: inductor stand 0.5 and 0.7 mm in from where the model has them, clear of the names
-#: beside the right-hand pins.
+#: beside the right-hand pins. Neither chip has a pin-1 dot: the model's RP2040 and flash are
+#: plain boxes, with nothing to say which corner is pin 1.
 PICO_MODULE = ModuleArt(
     key="raspberry-pi-pico",
     board_colour="#2a7a40",
@@ -548,8 +572,8 @@ PICO_MODULE = ModuleArt(
         ArtPart("inductor", -13.95, 5.3, 2.5, 2.0, 1.2),
         ArtPart("button", -12.85, -3.5, 4.26, 3.2, 2.5, colour="#f2f0ea"),
         ArtPart("chip-c", -11.45, 2.9, 2.0, 1.25, 1.25, along_v=True),
-        ArtPart("qfn", -5.75, -3.8, 3.0, 2.0, 0.6),
-        ArtPart("qfn", 1.15, 0.0, 7.0, 7.0, 0.9, facing=-1, text="RP2-B2"),
+        ArtPart("qfn", -5.75, -3.8, 3.0, 2.0, 0.6, across=0),
+        ArtPart("qfn", 1.15, 0.0, 7.0, 7.0, 0.9, facing=-1, text="RP2-B2", across=0),
         ArtPart("crystal", 9.7, -2.3, 3.2, 2.5, 0.6, along_v=True),
     ),
     source="KiCad RaspberryPi_Pico model (every position and size)",
@@ -587,7 +611,8 @@ D1_MINI_MODULE = ModuleArt(
 #: the parts (``names_over_parts``) and every part is where the photograph has it.
 #:
 #: Only "Pololu" names it. The red and green StepStick boards sold as "A4988" share the pins
-#: and not the layout, so they keep the block rather than wear Pololu's parts.
+#: and not the layout, so they keep the block rather than wear Pololu's parts. The chip's
+#: dot is in its corner nearest VMOT on the photograph.
 POLOLU_A4988_MODULE = ModuleArt(
     key="pololu-a4988",
     board_colour=PICO_MODULE.board_colour,
@@ -600,7 +625,7 @@ POLOLU_A4988_MODULE = ModuleArt(
     parts=(
         ArtPart("chip-c", -8.31, 2.58, 4.2, 1.8, 1.25, along_v=True),
         ArtPart("chip-r", -5.2, 3.73, 3.2, 1.6, 0.55),
-        ArtPart("qfn", -1.11, -1.78, 5.0, 5.0, 0.9, along_v=True, text="4988"),
+        ArtPart("qfn", -1.11, -1.78, 5.0, 5.0, 0.9, along_v=True, text="4988", across=-1),
         ArtPart("chip-r", 3.68, 3.73, 3.2, 1.6, 0.55),
         ArtPart("trimmer", 7.43, 1.23, 4.2, 3.1, 1.9, along_v=True),
     ),
@@ -615,7 +640,8 @@ POLOLU_A4988_MODULE = ModuleArt(
 #: motor supply's capacitor along the top, small capacitors either side. Positions measured
 #: on that photograph at 46.7 px/mm against the 0.6 x 0.8 inch outline; sizes are the
 #: packages' own (TI's PWP outline for the chip). The chip spans both rows of names, which
-#: Pololu prints on the back, so they are printed over it.
+#: Pololu prints on the back, so they are printed over it. Its dot is at its end towards the
+#: VMOT column, on its side towards the trimmer, on the photograph.
 POLOLU_DRV8825_MODULE = ModuleArt(
     key="pololu-drv8825",
     board_colour="#5f288c",
@@ -634,7 +660,7 @@ POLOLU_DRV8825_MODULE = ModuleArt(
         ArtPart("chip-c", -2.66, -3.64, 2.0, 1.25, 0.85, along_v=True),
         ArtPart("chip-c", -3.08, 2.57, 2.0, 1.25, 0.85),
         ArtPart("chip-c", -3.08, 4.18, 2.0, 1.25, 0.85),
-        ArtPart("tssop28", 3.13, -0.05, 9.7, 6.4, 1.2, along_v=True),
+        ArtPart("tssop28", 3.13, -0.05, 9.7, 6.4, 1.2, along_v=True, across=-1),
         ArtPart("chip-c", 9.01, -3.64, 2.0, 1.25, 0.85, along_v=True),
         ArtPart("chip-r", 9.01, -0.43, 1.6, 0.8, 0.45, along_v=True),
         ArtPart("chip-r", 9.01, 3.21, 1.6, 0.8, 0.45, along_v=True),
@@ -683,9 +709,8 @@ SPARKFUN_RED = "#b8262b"
 #: above them, its + end towards the left-hand pins. Every position and package read off
 #: SparkFun's own Eagle board (SparkFun_Motor_Driver-TB6612FNG_v11c.brd); the chip's size is
 #: Toshiba's SSOP24-P-300-0.65A drawing and the tantalum EIA 3528's, drawn as the moulded
-#: part with its band on the + end that tantalums mark. The chip's pin 1 is at its top LEFT
-#: on the real board; the builders put a chip's dot on one side of its axis only, so here it
-#: is drawn at the top right -- the right end, the wrong side.
+#: part with its band on the + end that tantalums mark. The chip's pin 1, U1's pad 1 on that
+#: board, is at its corner towards VM and the left-hand pins.
 SPARKFUN_TB6612_MODULE = ModuleArt(
     key="sparkfun-tb6612fng",
     board_colour=SPARKFUN_RED,
@@ -695,7 +720,7 @@ SPARKFUN_TB6612_MODULE = ModuleArt(
     frame="columns",
     landmark=("VM", -1, -1),
     parts=(
-        ArtPart("ssop24", 1.27, 0.0, 7.8, 7.6, 1.5, facing=-1, text="TB6612"),
+        ArtPart("ssop24", 1.27, 0.0, 7.8, 7.6, 1.5, facing=-1, text="TB6612", across=-1),
         ArtPart("chip-c", -3.81, 1.27, 1.0, 0.5, 0.5, along_v=True),
         ArtPart("chip-c", -3.81, -1.27, 1.0, 0.5, 0.5, along_v=True),
         ArtPart("sma", -6.35, 0.0, 3.5, 2.8, 1.9, along_v=True, facing=-1),
@@ -714,7 +739,8 @@ SPARKFUN_TB6612_MODULE = ModuleArt(
 #: bottom (bare copper, not drawn). Positions measured on that picture at 19.7 px/mm against
 #: the 0.4 inch between its header rows; sizes are the packages' own (TI's RTY outline for
 #: the chip). The parts stand close to the pins on both sides, and Pololu prints the names
-#: on the back, so they are printed over the parts.
+#: on the back, so they are printed over the parts. The chip's dot is in its corner towards
+#: AOUT1 on the picture, its marking upside down.
 POLOLU_DRV8833_MODULE = ModuleArt(
     key="pololu-drv8833",
     board_colour=PICO_MODULE.board_colour,
@@ -732,7 +758,7 @@ POLOLU_DRV8833_MODULE = ModuleArt(
         ArtPart("chip-c", -4.71, -1.88, 1.6, 0.8, 0.8, along_v=True),
         ArtPart("chip-r", -3.17, 2.01, 1.6, 0.8, 0.45, along_v=True),
         ArtPart("chip-c", -0.34, -3.01, 1.6, 0.8, 0.8),
-        ArtPart("qfn", 0.8, 0.51, 4.0, 4.0, 0.8, text="8833"),
+        ArtPart("qfn", 0.8, 0.51, 4.0, 4.0, 0.8, text="8833", across=1),
         ArtPart("chip-c", 3.85, -2.96, 1.6, 0.8, 0.8),
         ArtPart("chip-r", 7.31, -2.65, 1.6, 0.8, 0.45),
     ),
@@ -745,7 +771,7 @@ POLOLU_DRV8833_MODULE = ModuleArt(
 #: The GY-521 MPU-6050 breakout everybody sells, as it is seen from above with its header
 #: along the top -- INT at the left, VCC at the right (``pin_one``): the 3.3 V regulator (a
 #: SOT-23-5, its three legs towards the header) by VCC, the MPU-6050 in the middle with its
-#: pin-1 dot towards VCC,
+#: pin-1 dot in its corner towards VCC and the header,
 #: the yellow tantalum beside it with its + end towards INT, a column of 0603 parts each side
 #: of the chip, the power LED by AD0 and the two 3 mm mounting holes on the far edge. Measured
 #: on Nevit Dilmen's straight-down photograph of one (Wikimedia Commons, CC BY-SA 3.0), scaled
@@ -768,7 +794,7 @@ GY521_MODULE = ModuleArt(
         ArtPart("chip-c", 5.35, 2.29, 1.6, 0.8, 0.8, along_v=True),
         ArtPart("chip-r", 4.00, -1.22, 1.6, 0.8, 0.45, along_v=True),
         ArtPart("chip-c", 4.05, 2.29, 1.6, 0.8, 0.8, along_v=True),
-        ArtPart("qfn", 0.40, 0.58, 4.0, 4.0, 0.9, facing=1, text="MPU-6050"),
+        ArtPart("qfn", 0.40, 0.58, 4.0, 4.0, 0.9, facing=1, text="MPU-6050", across=-1),
         ArtPart("sma", 0.43, 4.79, 3.2, 1.6, 1.6, facing=-1, colour=ART_COLOURS["tantalum"]),
         ArtPart("chip-c", -3.55, -1.25, 1.6, 0.8, 0.8, along_v=True),
         ArtPart("chip-c", -3.55, 2.31, 1.6, 0.8, 0.8, along_v=True),
@@ -826,6 +852,9 @@ SSD1306_MODULE = ModuleArt(
 #: the header where figure 2.1 has it to 0.1 mm. A part's top stands up to 1.75 mm off that
 #: plane, so a position is good to about 0.3 mm. Drawn with its header along the top, the
 #: way the header frame is written: pin 1, GND, at the right of the row nearer the chip.
+#: On that photograph the ESP8266EX's dot is in its corner towards the antenna and GND, and
+#: the flash's, its marking upside down, in its corner towards the antenna and the board's
+#: edge.
 ESP01_MODULE = ModuleArt(
     key="esp-01",
     # Black, as both are sold: the black of Espressif's devkits, which reads the same.
@@ -838,8 +867,8 @@ ESP01_MODULE = ModuleArt(
     rows=2,
     pin_one=1,
     parts=(
-        ArtPart("qfn", 1.95, -1.45, 5.0, 5.0, 0.85, text="ESP8266EX"),
-        ArtPart("soic8", -4.6, -1.6, 5.0, 7.9, 1.75, text="25Q80"),
+        ArtPart("qfn", 1.95, -1.45, 5.0, 5.0, 0.85, text="ESP8266EX", across=1),
+        ArtPart("soic8", -4.6, -1.6, 5.0, 7.9, 1.75, facing=-1, text="25Q80", across=1),
         ArtPart("crystal", -0.35, 3.8, 2.5, 2.0, 0.6),
         ArtPart("pcb-antenna", 2.0, 9.1, 8.8, 5.9, 0.0, pitch=1.05),
         ArtPart("chip-c", 6.5, -2.6, 2.0, 1.25, 0.85, along_v=True),
@@ -873,7 +902,8 @@ ESP01_MODULE = ModuleArt(
 #: RECTIFIED onto that board by a homography from its four corners -- pin 1's square pad lands
 #: on KiCad's -- so a part on the board is good to about 0.5 mm and the crystal, which stands
 #: 3.6 mm and leans in the photograph, to about 1 mm. Its height is YXC's HC-49US drawing:
-#: 11.5 x 4.5 x 3.6 +- 0.2 mm, the most of which the id's top now says.
+#: 11.5 x 4.5 x 3.6 +- 0.2 mm, the most of which the id's top now says. The chip has no
+#: pin-1 dot: on that photograph its top is too dark to read a marking off.
 NRF24_MODULE = ModuleArt(
     key="nrf24l01",
     # Black, as both are sold: the black of Espressif's devkits, which reads the same.
@@ -886,7 +916,7 @@ NRF24_MODULE = ModuleArt(
     rows=2,
     pin_one=1,
     parts=(
-        ArtPart("qfn", 1.42, -2.9, 4.0, 4.0, 0.85, text="24L01+"),
+        ArtPart("qfn", 1.42, -2.9, 4.0, 4.0, 0.85, text="24L01+", across=0),
         ArtPart("hc49", -5.22, -3.25, 11.5, 4.5, 3.6, along_v=True),
         ArtPart("chip-r", -1.97, -2.2, 2.0, 1.25, 0.6, along_v=True),
         ArtPart("chip-c", 6.03, -7.2, 2.0, 1.25, 0.85),
@@ -1075,6 +1105,9 @@ def fit_module_art(
         own_u = not part.along_v  # the part's own axis lies along u
         size_u, size_v = (part.length, part.width) if own_u else (part.width, part.length)
         facing = part.facing * int(sign_u if own_u else sign_v)
+        # What is across the part is along the layout's other axis, and turns with it: a
+        # layout turned half round puts pin 1 on the other side as well as at the other end.
+        across = (part.across or 0) * int(sign_v if own_u else sign_u)
         x, y = (cx + u, cy + v) if u_along_x else (cx + v, cy + u)
         size_x, size_y = (size_u, size_v) if u_along_x else (size_v, size_u)
         axis: Literal["x", "y"] = "x" if own_u == u_along_x else "y"
@@ -1096,6 +1129,7 @@ def fit_module_art(
                 inset=part.inset,
                 colour=part.colour,
                 pitch=part.pitch,
+                across=across,
             )
         )
     return tuple(placed)

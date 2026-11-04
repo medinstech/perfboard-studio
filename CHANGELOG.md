@@ -441,6 +441,13 @@ closed without a bump.
 
 ### Fixed
 
+- **A module's chips show pin 1 in the corner it is in.** The dot on a module's chip sat on one
+  side of the chip whichever way it was really turned, and on the other side in 3D, so the
+  2D and 3D views disagreed. Each chip's corner is now read off the photograph, board or
+  drawing its module was measured on. Both views put the dot there, and it turns with the
+  module. The ESP-01's flash had its pin 1 at the wrong end too. Where the source does not
+  show the dot (the nRF24L01+'s chip, the Pico's two), none is drawn.
+
 - **What a search finds best comes first.** "resistor" lists the resistor before the inductor
   and the light sensor, "power" the power inputs first, and Turkish "LED" the LEDs -- in the
   Library and in the package picker alike. The board's own parts are "This board".

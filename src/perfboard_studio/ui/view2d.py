@@ -3137,9 +3137,17 @@ def _paint_module_art(painter: QPainter, parts: Sequence[PlacedArt]) -> None:
         painter.restore()
 
 
+def _dot_side(part: PlacedArt) -> float:
+    """Which side of its axis a chip's pin-1 dot is on, in the frame ``_paint_module_art``
+    paints the part in (``PlacedArt.across``): the quarter turn that lays a part along y
+    takes local x to the frame's -y. 0 for a chip whose dot is not drawn."""
+    return float(part.across) if part.axis == "x" else -float(part.across)
+
+
 def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: float) -> None:
     half_l, half_w = length / 2, width / 2
     kind = part.kind
+    pin_one = _dot_side(part)
     if kind == "can":
         style = BODY_STYLES["radial-electrolytic"]
         radius = min(length, width) / 2
@@ -3184,8 +3192,9 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
                 painter.setBrush(QBrush(LEAD))
                 painter.drawRect(QRectF(along - 0.21, min(side * body_half, side * half_w), 0.42, 1.05))
         _art_box(painter, -half_l, half_l, body_half, _art_colour("epoxy"))
-        painter.setBrush(QBrush(_art_colour("dot")))
-        painter.drawEllipse(QPointF(half_l - 0.75, -(body_half - 0.7)), 0.32, 0.32)
+        if pin_one:
+            painter.setBrush(QBrush(_art_colour("dot")))
+            painter.drawEllipse(QPointF(half_l - 0.75, pin_one * (body_half - 0.7)), 0.32, 0.32)
     elif kind in GULL_WING_LEGS:
         legs, pitch, reach = GULL_WING_LEGS[kind]
         body_half = half_w - reach
@@ -3197,8 +3206,9 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
                     QRectF(along - 0.15, min(side * body_half, side * half_w), 0.3, reach)
                 )
         _art_box(painter, -half_l, half_l, body_half, _art_colour("epoxy"))
-        painter.setBrush(QBrush(_art_colour("dot")))
-        painter.drawEllipse(QPointF(half_l - 0.75, -(body_half - 0.6)), 0.3, 0.3)
+        if pin_one:
+            painter.setBrush(QBrush(_art_colour("dot")))
+            painter.drawEllipse(QPointF(half_l - 0.75, pin_one * (body_half - 0.6)), 0.3, 0.3)
     elif kind == "shield":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("shield"))
         rim = min(0.35, min(length, width) * 0.05)
@@ -3215,8 +3225,9 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
     elif kind == "qfn":
         dot = min(0.35, min(length, width) * 0.1)
         _art_box(painter, -half_l, half_l, half_w, _art_colour("epoxy"))
-        painter.setBrush(QBrush(_art_colour("dot")))
-        painter.drawEllipse(QPointF(half_l - dot * 2.2, -(half_w - dot * 2.2)), dot, dot)
+        if pin_one:
+            painter.setBrush(QBrush(_art_colour("dot")))
+            painter.drawEllipse(QPointF(half_l - dot * 2.2, pin_one * (half_w - dot * 2.2)), dot, dot)
     elif kind == "tqfp32":
         if part.diagonal:
             # A corner along the axis: the chip's own (1, 1) corner, turned onto +x.
@@ -3237,9 +3248,11 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
                 painter.drawRect(QRectF(x0, y0, w, h))
         painter.setBrush(QBrush(_art_colour("epoxy")))
         painter.drawRect(QRectF(-body, -body, 2 * body, 2 * body))
-        painter.setBrush(QBrush(_art_colour("dot")))
+        # Turned on its corner, that corner is its feature's; square, its pin-1 corner.
         corner = body - 1.0
-        painter.drawEllipse(QPointF(corner, corner if part.diagonal else 0.0), 0.4, 0.4)
+        if part.diagonal or pin_one:
+            painter.setBrush(QBrush(_art_colour("dot")))
+            painter.drawEllipse(QPointF(corner, corner if part.diagonal else pin_one * corner), 0.4, 0.4)
     elif kind == "rf-module":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("rf-board"))
         _art_box(

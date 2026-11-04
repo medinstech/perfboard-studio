@@ -1172,3 +1172,284 @@ def test_no_pin_name_runs_over_another_name_or_another_pins_pad(part) -> None:
             x, y = pin.d_col * PITCH, pin.d_row * PITCH
             pad = (x - PAD_HALF_MM, x + PAD_HALF_MM, y - PAD_HALF_MM, y + PAD_HALF_MM)
             assert not _boxes_meet(box, pad), (part.id, label.name, pin.number)
+
+
+# ---------------------------------------------------------------------- a chip's pin 1
+#
+# A chip's pin-1 dot is in a corner: at ``facing`` along its axis and at ``across`` across
+# it. Both are read off the source each layout was measured on, both turn with the layout
+# and with the part, and the two views put the dot in the same corner -- where the 2D view
+# had it on one side of the axis and the 3D view on the other, whatever the chip was.
+
+#: Each dotted chip on a catalog module, by its module and its marking, and the corner its
+#: dot is in on the catalog's footprint as placed: (x, y) from the chip's middle, x along
+#: the columns and y down the rows. ``None`` where the layout's source does not show the
+#: dot, which is then not drawn. Each was read off the source its layout names, with the
+#: catalog's footprint drawn the same way up beside it.
+PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
+    ("gy-521", "MPU-6050"): (-1, 1),  # Nevit Dilmen's photograph: towards VCC and the header
+    ("esp-01", "ESP8266EX"): (-1, -1),  # SparkFun's photograph: towards GND and the antenna
+    ("esp-01", "25Q80"): (1, -1),  # the same: towards the board's edge and the antenna
+    ("nrf24l01", "24L01+"): None,  # Dmcole's photograph: the chip's top too dark to read
+    ("raspberry-pi-pico", ""): None,  # KiCad's model: the flash a plain box
+    ("raspberry-pi-pico", "RP2-B2"): None,  # and the RP2040 too
+    ("esp32-devkitc", "CP2102N"): (1, -1),  # Espressif's PCB layout: the chamfered corner
+    ("esp32-c3-devkitm-1", ""): (1, -1),  # Espressif's PCB layout: U3's ring and chamfer
+    ("pololu-a4988", "4988"): (1, -1),  # Pololu's photograph: nearest VMOT
+    ("pololu-drv8825", ""): (1, -1),  # Pololu's photograph: VMOT end, trimmer side
+    ("pololu-drv8833", "8833"): (1, 1),  # Pololu's picture: towards AOUT1
+    ("sparkfun-tb6612fng", "TB6612"): (-1, -1),  # SparkFun's board: U1's pad 1, towards VM
+}
+
+#: A chip of each dotted kind at its usual size: length along its axis, width, height.
+_CHIP_SIZES: dict[str, tuple[float, float, float]] = {
+    "qfn": (5.0, 5.0, 0.9),
+    "soic8": (4.9, 6.0, 1.6),
+    "ssop24": (7.8, 7.6, 1.5),
+    "tssop28": (9.7, 6.4, 1.2),
+    "tqfp32": (9.0, 9.0, 1.2),
+}
+
+#: How the 2D view's dot is told from everything else in a test: painted pure red.
+_TEST_DOT = "#ff0000"
+
+
+def _chip(kind: str, axis: str, facing: int, across: int):  # type: ignore[no-untyped-def]
+    from perfboard_studio.ui.moduleart import PlacedArt
+
+    length, width, height = _CHIP_SIZES[kind]
+    size_x, size_y = (length, width) if axis == "x" else (width, length)
+    return PlacedArt(
+        kind=kind,  # type: ignore[arg-type]
+        x=0.0,
+        y=0.0,
+        size_x=size_x,
+        size_y=size_y,
+        height=height,
+        axis=axis,  # type: ignore[arg-type]
+        facing=facing,
+        text="",
+        across=across,
+    )
+
+
+def _dots_painted(parts, monkeypatch, window):  # type: ignore[no-untyped-def]
+    """The 2D view's art for ``parts``, in the footprint's own millimetres over ``window``
+    (left, top, right, bottom), its pin-1 dots painted red: what a test reads them off."""
+    _qt_app()
+    from PySide6.QtGui import QColor, QImage, QPainter
+
+    from perfboard_studio.ui import view2d
+
+    real = view2d._art_colour
+    monkeypatch.setattr(
+        view2d, "_art_colour", lambda name: QColor(_TEST_DOT) if name == "dot" else real(name)
+    )
+    left, top, right, bottom = window
+    scale = 40.0
+    image = QImage(
+        int((right - left) * scale), int((bottom - top) * scale), QImage.Format.Format_ARGB32
+    )
+    image.fill(0)
+    painter = QPainter(image)
+    painter.scale(scale, scale)
+    painter.translate(-left, -top)
+    view2d._paint_module_art(painter, parts)
+    painter.end()
+    return image, scale
+
+
+def _red_middle(image, scale: float, window, box):  # type: ignore[no-untyped-def]
+    """The middle of the red pixels inside ``box`` (x0, y0, x1, y1 in millimetres, in the
+    picture ``_dots_painted`` made of ``window``), or ``None``."""
+    left, top = window[0], window[1]
+    x0, y0, x1, y1 = box
+    xs: list[float] = []
+    ys: list[float] = []
+    for py in range(max(0, int((y0 - top) * scale)), min(image.height(), int((y1 - top) * scale))):
+        for px in range(max(0, int((x0 - left) * scale)), min(image.width(), int((x1 - left) * scale))):
+            colour = image.pixelColor(px, py)
+            if colour.red() > 200 and colour.green() < 80 and colour.blue() < 80 and colour.alpha() > 200:
+                xs.append(left + (px + 0.5) / scale)
+                ys.append(top + (py + 0.5) / scale)
+    if not xs:
+        return None
+    return sum(xs) / len(xs), sum(ys) / len(ys)
+
+
+def _sign(value: float) -> int:
+    return 1 if value > 0 else -1
+
+
+def test_every_chip_on_a_layout_says_where_its_pin_1_is() -> None:
+    """A dotted chip declares its corner, or says (0) that its source does not show one --
+    so no layout leaves a dot to a default side, which is how half of them came to be on
+    the wrong one. A chip turned on its corner has that corner for its feature."""
+    from perfboard_studio.ui.moduleart import PIN_ONE_KINDS
+
+    for art in MODULE_ARTS:
+        for part in art.parts:
+            if part.kind not in PIN_ONE_KINDS or part.diagonal:
+                assert part.across is None, (art.key, part.kind)
+            else:
+                assert part.across in (-1, 0, 1), (art.key, part.kind, part.text)
+
+
+def test_every_dotted_chip_on_a_catalog_module_has_its_corner_recorded() -> None:
+    from perfboard_studio.ui.moduleart import PIN_ONE_KINDS
+
+    found = set()
+    for part in CATALOG_MODULES:
+        component = _part(part.footprint_id, part.placed_value, part.pin_names)
+        placed = fit_module_art(_footprint(part.footprint_id), component, PITCH)
+        assert placed is not None, part.id
+        found |= {
+            (part.id, chip.text)
+            for chip in placed
+            if chip.kind in PIN_ONE_KINDS and not chip.diagonal
+        }
+    assert found == set(PIN_ONE_CORNERS)
+
+
+@pytest.mark.parametrize("kind", sorted(_CHIP_SIZES))
+def test_2d_puts_a_chips_dot_in_its_pin_1_corner(kind: str, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Every 2D builder, along either axis, facing either way, pin 1 on either side: the
+    dot in that corner, and none where there is none to draw. The 2D view paints a module's
+    art in the footprint's frame and turns the whole picture with the part, so this frame
+    is the one place the corner is decided."""
+    import itertools
+
+    window = (-8.0, -8.0, 8.0, 8.0)
+    for axis, facing, across in itertools.product("xy", (1, -1), (1, -1, 0)):
+        image, scale = _dots_painted([_chip(kind, axis, facing, across)], monkeypatch, window)
+        middle = _red_middle(image, scale, window, window)
+        if not across:
+            assert middle is None, (kind, axis, facing)
+            continue
+        assert middle is not None, (kind, axis, facing, across)
+        corner = (facing, across) if axis == "x" else (across, facing)
+        assert (_sign(middle[0]), _sign(middle[1])) == corner, (kind, axis, facing, across)
+        # In the corner, not on the middle of an edge.
+        assert min(abs(middle[0]), abs(middle[1])) > 0.5, (kind, axis, facing, across)
+
+
+@pytest.mark.parametrize("kind", sorted(_CHIP_SIZES))
+@pytest.mark.parametrize("rotation", TURNS)
+@pytest.mark.parametrize("mirrored", [False, True])
+def test_3d_puts_a_chips_dot_in_its_pin_1_corner_however_it_is_turned(
+    kind: str, rotation: int, mirrored: bool
+) -> None:
+    """Every 3D builder, the part turned and flipped every way: the dot is where the same
+    turn takes the chip's pin-1 corner, and there is none where there is none to draw."""
+    import itertools
+
+    from perfboard_studio.geometry import transform_offset
+    from perfboard_studio.mcp.session import new_board
+    from perfboard_studio.ui import view3d
+
+    board = new_board(cols=40, rows=40).board
+    component = _part(BUCK, "a part", (), rotation, mirrored)  # only its turn is read
+    for axis, facing, across in itertools.product("xy", (1, -1), (1, -1, 0)):
+        solid = view3d._art_solid(_chip(kind, axis, facing, across), component, board, 1.6)
+        dots = [piece for piece in view3d._art_pieces(solid) if piece.rgb == view3d._ART_DOT_RGB]
+        if not across:
+            assert not dots, (kind, axis, facing)
+            continue
+        assert len(dots) == 1, (kind, axis, facing, across)
+        corner = (facing, across) if axis == "x" else (across, facing)
+        wx, wy = transform_offset(float(corner[0]), float(corner[1]), rotation, mirrored)  # type: ignore[arg-type]
+        dx, dy = dots[0].position[0] - solid.x, dots[0].position[1] - solid.y
+        # The world's y runs up the board, the rows down it.
+        assert (_sign(dx), _sign(dy)) == (_sign(wx), _sign(-wy)), (kind, axis, facing, across)
+        assert min(abs(dx), abs(dy)) > 0.5, (kind, axis, facing, across)
+
+
+@pytest.mark.parametrize("key", sorted(PIN_ONE_CORNERS))
+def test_both_views_put_each_catalog_chips_dot_where_its_source_has_it(key, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The 2D and the 3D dot in the corner the photograph, the board or the drawing shows,
+    on the module as the catalog places it -- or neither view drawing one."""
+    from perfboard_studio.ui import view3d
+
+    part_id, text = key
+    part = next(p for p in CATALOG_MODULES if p.id == part_id)
+    component = _part(part.footprint_id, part.placed_value, part.pin_names)
+    placed = fit_module_art(_footprint(part.footprint_id), component, PITCH)
+    assert placed is not None
+    chip = next(p for p in placed if p.text == text and p.kind in _CHIP_SIZES)
+    box = (
+        chip.x - chip.size_x / 2,
+        chip.y - chip.size_y / 2,
+        chip.x + chip.size_x / 2,
+        chip.y + chip.size_y / 2,
+    )
+    expected = PIN_ONE_CORNERS[key]
+
+    # 2D, in the footprint's frame.
+    xs = [p.x - p.size_x / 2 for p in placed] + [p.x + p.size_x / 2 for p in placed]
+    ys = [p.y - p.size_y / 2 for p in placed] + [p.y + p.size_y / 2 for p in placed]
+    window = (min(xs) - 1, min(ys) - 1, max(xs) + 1, max(ys) + 1)
+    image, scale = _dots_painted(placed, monkeypatch, window)
+    middle = _red_middle(image, scale, window, box)
+    # 3D, on a board: the dot on this chip, back in the footprint's frame (y down the rows).
+    _body, _fp, pieces = _board_and_pieces(part.footprint_id, part.placed_value, part.pin_names)
+    x0, y0 = component.anchor.col * PITCH, component.anchor.row * PITCH
+    dots = [
+        (piece.position[0] - x0, -piece.position[1] - y0)
+        for piece in pieces
+        if piece.rgb == view3d._ART_DOT_RGB
+    ]
+    on_chip = [(x, y) for x, y in dots if box[0] < x < box[2] and box[1] < y < box[3]]
+    if expected is None:
+        assert middle is None and not on_chip
+        return
+    assert middle is not None and len(on_chip) == 1
+    assert (_sign(middle[0] - chip.x), _sign(middle[1] - chip.y)) == expected
+    assert (_sign(on_chip[0][0] - chip.x), _sign(on_chip[0][1] - chip.y)) == expected
+
+
+@pytest.mark.parametrize(
+    "part_id",
+    [
+        "esp32-devkitc",
+        "esp32-c3-devkitm-1",
+        "pololu-a4988",
+        "pololu-drv8825",
+        "pololu-drv8833",
+        "sparkfun-tb6612fng",
+    ],
+)
+def test_a_chips_pin_1_turns_with_its_layout(part_id: str) -> None:
+    """A module described from its other end is its layout turned half round, and a chip's
+    pin 1 turns with it: to the other end AND the other side. Turning the end alone, as the
+    builders once did, is a mirror image of the chip."""
+    part = next(p for p in CATALOG_MODULES if p.id == part_id)
+    footprint = _footprint(part.footprint_id)
+    placement = placement_for(footprint, PITCH)
+    cx, cy = placement.centre_x, placement.centre_y
+
+    # The names turned half round about the middle of the PINS, which on a board with an
+    # antenna past its end is not the middle of the board; the art turns about the board's.
+    xs = [pin.d_col * PITCH for pin in footprint.pins]
+    ys = [pin.d_row * PITCH for pin in footprint.pins]
+    mx, my = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+
+    def at(x: float, y: float) -> tuple[float, float]:
+        return (round(x - mx, 3) + 0.0, round(y - my, 3) + 0.0)
+
+    names = dict(part.pin_names)
+    by_place = {at(pin.d_col * PITCH, pin.d_row * PITCH): pin.number for pin in footprint.pins}
+    turned = tuple(
+        (pin.number, names[by_place[at(2 * mx - pin.d_col * PITCH, 2 * my - pin.d_row * PITCH)]])
+        for pin in footprint.pins
+    )
+    straight = fit_module_art(
+        footprint, _part(part.footprint_id, part.placed_value, part.pin_names), PITCH
+    )
+    round_ = fit_module_art(footprint, _part(part.footprint_id, part.placed_value, turned), PITCH)
+    assert straight is not None and round_ is not None
+    chips = [p for p in straight if p.kind in _CHIP_SIZES and p.across]
+    assert chips
+    for chip in chips:
+        other = next(p for p in round_ if p.kind == chip.kind and p.text == chip.text)
+        assert (other.x - cx, other.y - cy) == pytest.approx((cx - chip.x, cy - chip.y))
+        assert (other.axis, other.facing, other.across) == (chip.axis, -chip.facing, -chip.across)
