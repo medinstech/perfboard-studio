@@ -17,7 +17,7 @@ git clone https://github.com/medinstech/perfboard-studio.git
 cd perfboard-studio
 pip install -e ".[dev,mcp]"
 
-pytest                 # the whole suite, ~5000 tests in about five minutes
+pytest                 # the whole suite, ~6400 tests in about eight minutes
 perfboard-studio       # launch the app on a blank board
 ```
 
