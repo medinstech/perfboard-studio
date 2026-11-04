@@ -1192,6 +1192,7 @@ TURKISH: Mapping[str, str] = {
     "&Add Part…": "Parça &Ekle…",
     "Add Pa&rt…": "Parça &Ekle…",
     "Arran&ge the Sheet": "Say&fayı Düzenle",
+    "Arrange": "Düzenle",
     "Fit the S&heet": "Sayfayı &Sığdır",
     # -- projects: the folder a board and everything made from it live in ------
     "New &Project…": "Yeni &Proje…",

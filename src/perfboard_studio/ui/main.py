@@ -5338,7 +5338,12 @@ class MainWindow(QMainWindow):
         self.act_sch_zoom_out = QAction(icons.icon("zoom-out"), t("Zoom Out"), self)
         self.act_sch_zoom_out.triggered.connect(lambda: self.schematic_view.zoom_by(1 / 1.25))
         corner = FloatingBar(sheet, Qt.Corner.BottomRightCorner, vertical=False, name="sheetView")
-        corner.add_action(self.act_sch_auto)
+        # Arrange says its name: an icon among the zooms, it was the one way to tidy a
+        # hand-wired sheet -- 1397 mm of wire and 28 crossings down to 457 mm and 4 on the
+        # NE555 -- and nobody new found it (parts, from the release walkthrough's sheet).
+        arrange = corner.add_action(self.act_sch_auto)
+        arrange.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.sheet_arrange_button = arrange
         corner.add_separator()
         corner.add_action(self.act_sch_zoom_out)
         corner.add_action(self.act_sch_zoom_in)
@@ -6157,6 +6162,8 @@ class MainWindow(QMainWindow):
             )
         )
         self.act_sch_auto.triggered.connect(self.on_schematic_auto_layout)
+        # The word its button says on the sheet, beside the icon (``_build_sheet_tools``).
+        self.act_sch_auto.setIconText(t("Arrange"))
 
         self.act_sch_fit = QAction(icons.icon("fit"), t("Fit the S&heet"), self)
         self.act_sch_fit.setToolTip(

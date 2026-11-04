@@ -16778,3 +16778,19 @@ def test_a_boards_edge_fingers_are_a_note_beside_the_files_not_a_gap(tmp_path, m
         assert warned and "could not cover" in warned[0]
     finally:
         _close(window)
+
+
+def test_the_sheets_arrange_says_its_name() -> None:
+    """An unlabelled icon among the zooms, Arrange was the way to tidy a hand-wired sheet
+    nobody new found. It says its name beside the icon; the menu keeps its longer one."""
+    from PySide6.QtCore import Qt
+
+    window = _window_on(_load_dense())
+    try:
+        button = window.sheet_arrange_button
+        assert button.defaultAction() is window.act_sch_auto
+        assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        assert button.text() == "Arrange"
+        assert window.act_sch_auto.text() == "Arran&ge the Sheet"
+    finally:
+        _close(window)
