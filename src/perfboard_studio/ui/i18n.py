@@ -2317,12 +2317,13 @@ TURKISH: Mapping[str, str] = {
     "Ultrasonic distance sensor, 2 cm to 4 m, 5 V; stands on its edge": (
         "Ultrasonik mesafe sensörü, 2 cm ile 4 m arası, 5 V; kenarı üzerinde dik durur"
     ),
-    "ECHO is a 5 V output: put a divider between it and a 3.3 V pin. How far the "
-    "transducers stand in front of the pins, and how high the board sits on them, are "
-    "estimates.": (
+    "ECHO is a 5 V output: put a divider between it and a 3.3 V pin. The transducers "
+    "stand 12 mm out in front of the board and its header behind it, as photographs of one "
+    "show; how high the board stands on its pins is an estimate.": (
         "ECHO 5 V'luk bir çıkıştır: 3,3 V'luk bir pine bağlamadan önce araya bir bölücü "
-        "koyun. Dönüştürücülerin pinlerin ne kadar önünde durduğu ve kartın pinlerin "
-        "üzerinde ne kadar yüksekte oturduğu tahmindir."
+        "koyun. Bir kartın fotoğraflarında görüldüğü gibi dönüştürücüler kartın 12 mm "
+        "önünde, header'ı ise arkasında durur; kartın pinlerinin üzerinde ne kadar "
+        "yüksekte durduğu tahmindir."
     ),
     "128 x 64 OLED on I2C, pins printed GND, VCC, SCL, SDA": (
         "I2C ile bağlanan 128 × 64 OLED, pinlerinde GND, VCC, SCL, SDA yazar"

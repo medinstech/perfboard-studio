@@ -205,8 +205,10 @@ from .moduleart import (
     TQFP32_LEGS_PER_SIDE,
     TQFP32_PITCH_MM,
     PlacedArt,
+    PlacedStanding,
     board_colour_for,
     fit_module_art,
+    fit_standing_board,
 )
 from .partnames import footprint_label
 from .scenetext import (
@@ -3049,6 +3051,52 @@ def _art_legs(
         painter.drawRect(QRectF(min(x0, x1), across - width / 2, abs(x1 - x0), width))
 
 
+def _rect_path(x0: float, x1: float, y0: float, y1: float) -> QPainterPath:
+    path = QPainterPath()
+    path.addRect(QRectF(x0, y0, x1 - x0, y1 - y0))
+    return path
+
+
+def _paint_standing_board(
+    painter: QPainter, placed: PlacedStanding, style: BodyStyle, selected: bool
+) -> None:
+    """A board standing on its edge (``moduleart.fit_standing_board``), from straight above:
+    the header's plastic behind it, the board's top edge, and what stands out of its front
+    -- an HC-SR04's two cans as the cylinders they are, lying out across this board, and its
+    crystal along the top. Square, unlit: a board is not moulded."""
+    x0, x1, y0, y1, _z0, _z1 = placed.board
+    hx0, hx1, hy0, hy1, _hz0, _hz1 = placed.header
+    shapes: list[tuple[QPainterPath, QColor]] = [
+        (_rect_path(hx0, hx1, hy0, hy1), _art_colour("switch")),
+        (_rect_path(x0, x1, y0, y1), QColor(placed.board_colour)),
+    ]
+    can = _art_colour("shield")
+    for part in placed.parts:
+        half = part.length / 2
+        if part.kind == "transducer":
+            shapes.append((_rect_path(part.x - half, part.x + half, part.y0, part.y1), can))
+            # The light along the top of the cylinder, and its rolled rim at the mesh.
+            shapes.append(
+                (_rect_path(part.x - half * 0.3, part.x + half * 0.3, part.y0, part.y1), can.lighter(110))
+            )
+            shapes.append((_rect_path(part.x - half, part.x + half, part.y1 - 0.8, part.y1), can.darker(135)))
+        elif part.kind == "crystal":
+            shapes.append((_rect_path(part.x - half, part.x + half, part.y0, part.y1), can.darker(108)))
+    outline = QPainterPath()
+    for path, _colour in shapes:
+        outline = outline.united(path)
+    outline = outline.simplified()
+    if not _on_paper(painter):
+        _paint_contact_shadow(painter, outline)
+    painter.setPen(Qt.PenStyle.NoPen)
+    for path, colour in shapes:
+        painter.setBrush(QBrush(colour))
+        painter.drawPath(path)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setPen(QPen(QColor(SELECTED if selected else style.edge), 0.2 if selected else 0.1))
+    painter.drawPath(outline)
+
+
 def _paint_module_art(painter: QPainter, parts: Sequence[PlacedArt]) -> None:
     """Each part in its own frame: its own axis along x, its feature (a can's stripe, a
     regulator's legs, an antenna) at +x, as ``view3d``'s builders have it."""
@@ -3435,6 +3483,7 @@ class ComponentItem(QGraphicsItem):
         #: What stands on a module ``moduleart`` recognises, laid out once: the part is a
         #: frozen snapshot and the item is rebuilt with the document.
         self.art = fit_module_art(fp, comp, board.pitch)
+        self.standing = fit_standing_board(fp, comp, board.pitch)
         #: Its own board's colour, when that is not the module style's (a Pico is green).
         self.board_colour = board_colour_for(fp, comp, board.pitch)
         self._names_rect = self._pin_names_rect()
@@ -3866,6 +3915,8 @@ class ComponentItem(QGraphicsItem):
             if not off_board and measured:
                 _paint_top_view(painter, view, style, self.isSelected(), placement, bands)
                 _paint_top_marking(painter, self.fp, placement, self.comp, view.marking)
+            elif not off_board and self.standing is not None:
+                _paint_standing_board(painter, self.standing, style, self.isSelected())
             elif not off_board:
                 _paint_body(
                     painter,

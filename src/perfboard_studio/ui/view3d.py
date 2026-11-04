@@ -145,8 +145,10 @@ from .moduleart import (
     TQFP32_LEGS_PER_SIDE,
     TQFP32_PITCH_MM,
     PlacedArt,
+    PlacedStanding,
     board_colour_for,
     fit_module_art,
+    fit_standing_board,
 )
 from .partmodels import (
     ModelPiece,
@@ -4331,6 +4333,10 @@ def _pieces_for(
                 *_header_model_pieces(body, header),
                 *_through_hole_pieces(body, 0.0, blade=(_MODULE_PIN_MM, _MODULE_PIN_MM)),
             ]
+    if footprint.body.archetype == "generic-box":
+        standing = fit_standing_board(footprint, comp, board.pitch)
+        if standing is not None:
+            return [*_standing_board_pieces(standing, comp, board), *_through_hole_pieces(body, 0.0)]
     model = _model_for(comp.footprint_id)
     if model is None and footprint.body.archetype == "screw-terminal" and len(body.pins) >= 2:
         # A terminal with no model of its own -- every length the library does not have,
@@ -4371,6 +4377,109 @@ def _pieces_for(
     builder = _BUILDERS.get(footprint.body.archetype, _box_pieces)
     generated: list[_Piece] = builder(body)
     return generated
+
+
+#: An ultrasonic transducer's mesh, as the front of its can is seen.
+_TRANSDUCER_MESH_RGB = (0.22, 0.22, 0.21)
+
+
+def _standing_board_pieces(placed: PlacedStanding, comp: Any, board: Board) -> list[_Piece]:
+    """A board standing on its edge (``moduleart.fit_standing_board``): the board up off
+    this one on its right-angle header, the header's plastic behind it with the pins down
+    through it, and what stands out of its front -- an HC-SR04's two cans, its mesh-faced
+    transducers, lying out across this board, its crystal along the top edge and a hole in
+    each corner. Built in the footprint's frame and put down through the part's own turn
+    and flip, as a module's art is."""
+    turned = int(comp.rotation) in (90, 270)
+    pitch = board.pitch
+
+    def at(x: float, y: float, z: float) -> tuple[float, float, float]:
+        tx, ty = transform_offset(x, y, comp.rotation, comp.mirrored)
+        return (comp.anchor.col * pitch + tx, -(comp.anchor.row * pitch + ty), z)
+
+    def block(
+        span: tuple[float, float, float, float, float, float],
+        rgb: tuple[float, float, float],
+        material: tuple[float, float],
+    ) -> _Piece:
+        x0, x1, y0, y1, z0, z1 = span
+        size_x, size_y = (y1 - y0, x1 - x0) if turned else (x1 - x0, y1 - y0)
+        return _Piece(
+            source=_box(size_x, size_y, z1 - z0),
+            rgb=rgb,
+            position=at((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
+            material=material,
+        )
+
+    # A cylinder's own axis is y: out of the board's face, turned with the part.
+    across = (0.0, 0.0, 90.0) if turned else (0.0, 0.0, 0.0)
+    pieces = [
+        block(placed.board, _hex_rgb(placed.board_colour, BODY_RGB), MASK),
+        block(placed.header, _HEADER_PLASTIC_RGB, MOULDED),
+    ]
+    _hx0, _hx1, hy0, hy1, _hz0, hz1 = placed.header
+    row = (hy0 + hy1) / 2
+    for pin in placed.pins:
+        pieces.append(
+            block((pin - 0.32, pin + 0.32, row - 0.32, row + 0.32, 0.0, hz1 - 0.4), LEAD_RGB, TINNED)
+        )
+    for part in placed.parts:
+        out = part.y1 - part.y0
+        if part.kind == "transducer":
+            radius = part.length / 2
+            # The can stops a twentieth short of its front, and the mesh fills that: inside
+            # the box, and never two faces in one plane.
+            mesh = 0.05
+            pieces.append(
+                _Piece(
+                    source=_cylinder(radius, out - mesh, resolution=40),
+                    rgb=_ART_SHIELD_RGB,
+                    position=at(part.x, part.y0 + (out - mesh) / 2, part.z),
+                    orientation=across,
+                    material=STEEL,
+                )
+            )
+            pieces.append(
+                _Piece(
+                    source=_cylinder(radius * 0.8, mesh, resolution=40),
+                    rgb=_TRANSDUCER_MESH_RGB,
+                    position=at(part.x, part.y1 - mesh / 2, part.z),
+                    orientation=across,
+                    material=MOULDED,
+                )
+            )
+        elif part.kind == "crystal":
+            radius = part.height / 2
+            straight = max(part.length - part.height, 0.0)
+            pieces.append(
+                block(
+                    (part.x - straight / 2, part.x + straight / 2, part.y0, part.y1,
+                     part.z - radius, part.z + radius),
+                    _ART_SHIELD_RGB,
+                    STEEL,
+                )
+            )
+            for end in (-1.0, 1.0):
+                pieces.append(
+                    _Piece(
+                        source=_cylinder(radius, out, resolution=28),
+                        rgb=_ART_SHIELD_RGB,
+                        position=at(part.x + end * straight / 2, part.y0 + out / 2, part.z),
+                        orientation=across,
+                        material=STEEL,
+                    )
+                )
+        elif part.kind == "hole":
+            pieces.append(
+                _Piece(
+                    source=_cylinder(part.length / 2, 0.04, resolution=24),
+                    rgb=DRILL_RGB,
+                    position=at(part.x, placed.board[3] + 0.02, part.z),
+                    orientation=across,
+                    material=LAMINATE,
+                )
+            )
+    return pieces
 
 
 #: The plastic of a header strip, under a module or holding its pins.

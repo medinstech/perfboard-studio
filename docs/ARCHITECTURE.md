@@ -1136,6 +1136,18 @@ ids. Five rules hold it, each pinned in
   the rest of the board's names and left on this board when 3D explodes the module up.
   `test_no_pin_name_runs_over_another_name_or_another_pins_pad` holds every catalog part
   with two rows or more to it; on the code before it, it fails on exactly those two.
+- **A board that stands on its edge is drawn standing, in the box it fills.** The HC-SR04
+  stands up off this board on a right-angle header with its transducers looking out across
+  it, so it is not a module on a seat: its footprint stays a `generic-box`, and
+  `moduleart.fit_standing_board` draws in that box the board at the back, the header's
+  plastic behind it with the pins down through it, and the two cans and the crystal out of
+  its front -- from above in 2D, stood up in 3D. Its layout (`StandingBoard`) is in the
+  board's own frame: along it, up it, and out of its face. It is refused, and the plain box
+  stands, on a box it does not fit (the box has to reach from behind the pins to the front
+  of the cans: the old one stopped 3.9 mm short and is `superseded-footprint`) and on one
+  facing the other way, which would put pin 1 on the right seen from the front: the board's
+  mirror image. `tests/test_standing_board.py` holds it inside the box at every turn and
+  flip, measured on the actors.
 - **Unless the real board's parts ARE where the names go.** A shield can over most of a
   XIAO, a DRV8825 across both rows of a Pololu carrier: moving those in would draw a board
   nobody makes, and their makers print the names on the back. Such a layout says

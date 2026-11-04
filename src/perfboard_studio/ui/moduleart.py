@@ -1122,6 +1122,197 @@ def board_colour_for(
     return art.board_colour
 
 
+# -- a board that stands on its edge -----------------------------------------------------
+#
+# A module whose board stands up off this one on a right-angle header -- the HC-SR04, its
+# transducers looking out across the board -- is not a module lying on a seat: its footprint
+# is the box it fills (a ``generic-box``), and what is drawn in it is the board standing at
+# the back of that box with its parts on its front face. The layout is in the BOARD's frame:
+# ``u`` along it from its middle, ``w`` up it from its bottom edge, and a part's ``depth``
+# out of its front face. ``fit_standing_board`` puts it in the footprint's frame -- x along
+# the pins, y the way the front faces, z up from this board -- which both views draw from.
+
+#: What stands on a standing board's front face.
+#:  * ``transducer`` -- an ultrasonic transducer: an aluminium can, its axis out of the face,
+#:                      its mesh at the front. ``length`` and ``height`` are its diameter.
+#:  * ``crystal``    -- an HC-49 can lying on the face, its long side along the board.
+#:  * ``hole``       -- a mounting hole through the board, ``length`` across.
+StandingKind = Literal["transducer", "crystal", "hole"]
+
+
+@dataclass(frozen=True, slots=True)
+class StandingPart:
+    """One part on a standing board's front face, in the board's own frame."""
+
+    kind: StandingKind
+    u: float
+    w: float
+    length: float
+    height: float
+    depth: float
+
+
+@dataclass(frozen=True, slots=True)
+class StandingBoard:
+    """A module that stands on its edge: how to recognise it and what is on it."""
+
+    key: str
+    names: tuple[str, ...]
+    #: The board, along it and up it, in millimetres.
+    board: tuple[float, float]
+    pins: int
+    #: From the pin row to the board's back face: half the right-angle header's plastic,
+    #: which stands against the back of the board with the pins down through it.
+    behind: float
+    thickness: float
+    #: How far the board's bottom edge stands off this board.
+    standoff: float
+    #: The right-angle header's plastic, along the row, through it and up it.
+    header: tuple[float, float, float]
+    board_colour: str
+    parts: tuple[StandingPart, ...]
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlacedStandingPart:
+    """A standing board's part in the footprint's frame: its centre along x, how far out it
+    reaches along y (``y0`` at the board's face to ``y1``), its centre up z, and its size
+    along x and up z."""
+
+    kind: StandingKind
+    x: float
+    y0: float
+    y1: float
+    z: float
+    length: float
+    height: float
+
+
+@dataclass(frozen=True, slots=True)
+class PlacedStanding:
+    """A standing board in the footprint's frame (x along the row, y down the rows -- the
+    way its front faces -- and z up from this board)."""
+
+    #: The board: ``(x0, x1, y0, y1, z0, z1)``, ``y0`` its back face.
+    board: tuple[float, float, float, float, float, float]
+    #: The header's plastic, the same way round.
+    header: tuple[float, float, float, float, float, float]
+    parts: tuple[PlacedStandingPart, ...]
+    board_colour: str
+    #: Where the pins are along x, on the row at the header's middle.
+    pins: tuple[float, ...] = ()
+
+
+#: The HC-SR04 as Nevit Dilmen's straight-on photograph of its front has it (Wikimedia
+#: Commons, CC BY-SA 3.0), scaled by its header -- 2.54 mm between pins, 27.8 px/mm -- which
+#: makes its board 44.9 x 20.4 mm against ElecFreaks' 45 x 20: the transmitter left and the
+#: receiver right, each a 16 mm can whose centre stands 10.6 mm up the board, 27.8 mm apart
+#: (the cans' fronts stand 12 mm nearer the camera than the board, so their spacing is read
+#: 4 % small of the photograph's, to about 0.5 mm), the 4 MHz crystal lying along the top edge
+#: between them, and a mounting hole in each corner. Its header is a right-angle one, its
+#: plastic against the BACK of the board (Suyash Dwivedi's photograph of the back), so the
+#: pins stand 1.2 mm behind the board and the cans 12 mm out in front of it -- which is
+#: where the footprint's box now stands too. How high the board's bottom edge stands off
+#: this board is NOT measured: 2.5 mm, the rest of the 22.5 mm the footprint gives it.
+HC_SR04_BOARD = StandingBoard(
+    key="hc-sr04",
+    names=("hc-sr04", "hcsr04", "hc sr04"),
+    board=(45.0, 20.0),
+    pins=4,
+    behind=1.2,
+    thickness=1.6,
+    standoff=2.5,
+    header=(10.16, 2.4, 2.5),
+    board_colour="#1f6e86",
+    parts=(
+        StandingPart("transducer", -13.9, 10.6, 16.0, 16.0, 12.0),
+        StandingPart("transducer", 13.9, 10.6, 16.0, 16.0, 12.0),
+        StandingPart("crystal", -0.6, 17.75, 9.1, 3.9, 3.6),
+        StandingPart("hole", -21.3, 1.3, 1.8, 1.8, 0.0),
+        StandingPart("hole", 21.3, 1.3, 1.8, 1.8, 0.0),
+        StandingPart("hole", -21.3, 18.6, 1.8, 1.8, 0.0),
+        StandingPart("hole", 21.3, 18.6, 1.8, 1.8, 0.0),
+    ),
+    source=(
+        "Nevit Dilmen's photograph of an HC-SR04's front, Wikimedia Commons, CC BY-SA 3.0 "
+        "(https://commons.wikimedia.org/wiki/File:HC_SR04_Ultrasonic_sensor_1480322_3_4_HDR_"
+        "Enhancer.jpg), calibrated on its header at 27.8 px/mm, positions to about 0.5 mm; "
+        "Suyash Dwivedi's of its back (the header on the back); ElecFreaks' user guide (the "
+        "45 x 20 mm board); Handsontec's (the cans standing 15 mm off it)"
+    ),
+)
+
+STANDING_BOARDS: tuple[StandingBoard, ...] = (HC_SR04_BOARD,)
+
+
+def recognise_standing_board(value: str) -> StandingBoard | None:
+    """The standing board a part's value names, or ``None``."""
+    text = value.casefold()
+    return next((art for art in STANDING_BOARDS if any(name in text for name in art.names)), None)
+
+
+def fit_standing_board(
+    footprint: Footprint, component: ComponentInstance, pitch: float
+) -> PlacedStanding | None:
+    """A standing board in this footprint's box -- or ``None`` to draw the box: not a box, a
+    value nobody wrote a layout for, pins not in one row along x, a box the board does not
+    fit, or one facing the other way (whose front, seen from in front of it, would have pin
+    1 on the right: the board's mirror image, which nobody makes)."""
+    if footprint.body.archetype != "generic-box":
+        return None
+    art = recognise_standing_board(component.value)
+    if art is None or len(footprint.pins) != art.pins:
+        return None
+    if len({pin.d_row for pin in footprint.pins}) != 1:
+        return None
+    dims = footprint.body.dims
+    length = float(dims.get("width", 0.0))
+    if length <= 0 or abs(length / art.board[0] - 1) > SIZE_TOLERANCE:
+        return None
+    offset = float(dims.get("offsetY", 0.0))
+    if offset <= 0:
+        return None
+    # Never past the box DRC measures: it has to reach from the header's plastic behind the
+    # pins to the front of the furthest part. A box the board does not fit -- the HC-SR04's
+    # old one, 3.9 mm short in front -- keeps the plain box.
+    reach = art.behind + art.thickness + max(part.depth for part in art.parts)
+    depth = float(dims.get("depth", 0.0))
+    tolerance = 0.06
+    if offset + depth / 2 < reach - tolerance or offset - depth / 2 > -art.header[1] / 2 + tolerance:
+        return None
+    xs = [pin.d_col * pitch for pin in footprint.pins]
+    middle = (min(xs) + max(xs)) / 2
+    row = footprint.pins[0].d_row * pitch
+    back = row + art.behind
+    front = back + art.thickness
+    half = length / 2
+    header_x, header_y, header_z = art.header
+    placed = tuple(
+        PlacedStandingPart(
+            kind=part.kind,
+            x=middle + part.u * length / art.board[0],
+            y0=front,
+            y1=front + part.depth,
+            z=art.standoff + part.w,
+            length=part.length,
+            height=part.height,
+        )
+        for part in art.parts
+    )
+    return PlacedStanding(
+        board=(middle - half, middle + half, back, front, art.standoff, art.standoff + art.board[1]),
+        header=(
+            middle - header_x / 2, middle + header_x / 2,
+            row - header_y / 2, row + header_y / 2,
+            art.standoff, art.standoff + header_z,
+        ),
+        parts=placed,
+        board_colour=art.board_colour,
+        pins=tuple(xs),
+    )
+
+
 # -- what a part covers ------------------------------------------------------------------
 
 

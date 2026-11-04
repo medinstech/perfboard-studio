@@ -101,3 +101,8 @@ layout's `source`:
 - **nRF24L01+ module** — photograph by Dmcole, Wikimedia Commons, CC BY-SA 3.0:
   <https://commons.wikimedia.org/wiki/File:NRF24l01_Nordic_Semiconductor_radio.JPG>
   (oblique, rectified onto the board KiCad's `nRF24L01_Breakout` draws)
+- **HC-SR04** — photographs by Nevit Dilmen, Wikimedia Commons, CC BY-SA 3.0:
+  <https://commons.wikimedia.org/wiki/File:HC_SR04_Ultrasonic_sensor_1480322_3_4_HDR_Enhancer.jpg>
+  (its front, 27.8 px/mm on its header), and by Suyash Dwivedi, CC BY-SA 4.0:
+  <https://commons.wikimedia.org/wiki/File:HC-SR04_ultrasonic_distance_sensor_module_pcb.jpg>
+  (its back: the header behind the board)

@@ -2372,6 +2372,12 @@ SUPERSEDED_FOOTPRINTS: dict[str, tuple[str, str]] = {
         "HC-49/US can, stands up to 3.8 mm (YXC's drawing): a part that fits under 2 mm of "
         "room may not fit under the module",
     ),
+    "box-4x1-p1-r1-45x15x22.5-o0x3.5": (
+        "box-4x1-p1-r1-45x16x22.5-o0x6.8",
+        "puts an HC-SR04's body 2.75 mm behind its pins, where nothing stands, and stops it "
+        "3.9 mm short of where its transducers reach in front: a part placed there stands "
+        "where the cans are, and nothing says so",
+    ),
 }
 
 

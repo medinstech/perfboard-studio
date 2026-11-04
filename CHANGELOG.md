@@ -132,6 +132,13 @@ closed without a bump.
 
 ### Changed
 
+- **The HC-SR04 stands up, as it does on the bench.** It was a grey slab lying on the board.
+  It is now its board standing on its header with the two transducers looking out across the
+  board and the crystal along its top, in 2D from above and in 3D, measured on photographs of
+  one. Its package now reaches as far as the transducers do, 3.9 mm further in front of the
+  pins than before, and no longer pretends to stand 2.75 mm behind them; a board saved with
+  the old package opens as it was and the Problems drawer says so ("Older package").
+
 - **The ESP-01 and the nRF24L01+ are drawn as themselves.** They were a plain block on
   purpose, because nobody publishes a drawing of what is on them. Each is now measured on a
   photograph rectified onto the board its maker or KiCad draws: the ESP-01's ESP8266, flash,

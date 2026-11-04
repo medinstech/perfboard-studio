@@ -654,8 +654,11 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "on one of those, go by what the board itself has printed."
                 )),
     # Its board stands up on its four pins, the transducers facing down the rows: a box as
-    # wide as the board, as deep as the transducers stand out, as tall as it stands.
-    CatalogPart("hc-sr04", "HC-SR04", "sensor", "box-4x1-p1-r1-45x15x22.5-o0x3.5",
+    # wide as the board, as deep as it reaches -- the right-angle header's plastic 1.2 mm
+    # behind the pins, the cans 12 mm out in front of the board (``moduleart.HC_SR04_BOARD``)
+    # -- and 22.5 mm tall: the 20 mm board and 2.5 mm for its header's standoff, which is
+    # not measured and errs on the tall side.
+    CatalogPart("hc-sr04", "HC-SR04", "sensor", "box-4x1-p1-r1-45x16x22.5-o0x6.8",
                 "Ultrasonic distance sensor, 2 cm to 4 m, 5 V; stands on its edge",
                 _legs("VCC", "TRIG", "ECHO", "GND"), ref_prefix="U",
                 source=(
@@ -663,9 +666,10 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "the transducers towards you; 45 x 20 x 15 mm; 5 V"
                 ),
                 check=(
-                    "ECHO is a 5 V output: put a divider between it and a 3.3 V pin. How far "
-                    "the transducers stand in front of the pins, and how high the board sits "
-                    "on them, are estimates."
+                    "ECHO is a 5 V output: put a divider between it and a 3.3 V pin. The "
+                    "transducers stand 12 mm out in front of the board and its header behind "
+                    "it, as photographs of one show; how high the board stands on its pins is "
+                    "an estimate."
                 ),
                 aliases=("ultrasonic", "sonar", "distance")),
     # The MPU-6050 board everybody sells: its eight names are printed on it and the same on
