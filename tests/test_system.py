@@ -488,9 +488,10 @@ def test_every_command_is_the_systems_the_designs_or_a_boards() -> None:
     registered = {definition.type for definition in STANDARD_COMMANDS}
     assert registered >= SYSTEM_COMMANDS and registered >= DESIGN_COMMANDS
     assert not SYSTEM_COMMANDS & DESIGN_COMMANDS
+    # The boards and cables, and the one command that spans two boards.
     assert {t for t in registered if t.startswith(("board.", "cable."))} - {
         "board.set", "board.applyPreset", "board.note.add", "board.note.delete", "board.note.update"
-    } == SYSTEM_COMMANDS
+    } | {"component.moveToBoard"} == SYSTEM_COMMANDS
     assert {t for t in registered if t.startswith(("net.", "sheet.", "symbol."))} <= DESIGN_COMMANDS
 
 
