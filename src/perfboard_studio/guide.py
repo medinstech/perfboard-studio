@@ -218,6 +218,7 @@ PHASE_BY_ARCHETYPE: dict[BodyArchetype, PhaseNumber] = {
     "relay-box": 5,
     "generic-box": 5,
     "box-header": 5,
+    "wire-to-board": 5,
     "screw-terminal-vertical": 5,
     "module-board": 5,
     # It goes in as the DIP it stands in for: a socket in phase 2 if there is one, and the
@@ -1367,9 +1368,10 @@ def plugs_in_on_a_cable(component: ComponentInstance, footprint: Footprint) -> b
     on one is what plugs in saying which lead goes where), and whose value names what plugs
     in: without one, the sentence would have to call the header itself the thing that is
     not on the board. THE ONE ANSWER, asked by the guide's step and by Properties, so the
-    two cannot say it about different parts (``CABLED_MODULE``)."""
+    two cannot say it about different parts (``CABLED_MODULE``). A wire-to-board header (a JST
+    XH, a KK 254) is the same, its plug latched."""
     return (
-        footprint.body.archetype == "pin-header"
+        footprint.body.archetype in ("pin-header", "wire-to-board")
         and bool(component.value.strip())
         and any(declared_pin_name(component, pin.number) for pin in footprint.pins)
     )
@@ -1739,6 +1741,17 @@ def _polarity_note(
             return say(
                 "Key slot on the side of the pin-1 row; pin 1 in {hole} "
                 "(the cable's red stripe goes to pin 1)",
+                hole=format_hole(first, board),
+            )
+
+    if footprint.body.archetype == "wire-to-board":
+        # A housing takes its plug one way round, so soldered in turned half round it puts
+        # the plug's first wire on the last pin -- the IDC header's mistake, one row long.
+        first = by_number.get("1")
+        if first is not None:
+            return say(
+                "Pin 1 in {hole}: the plug goes in one way round, so turned half round "
+                "its first wire lands on the last pin",
                 hole=format_hole(first, board),
             )
 

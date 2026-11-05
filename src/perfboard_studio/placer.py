@@ -168,6 +168,7 @@ EDGE_SEEKING_ARCHETYPES: frozenset[BodyArchetype] = frozenset(
         "screw-terminal",
         "pin-header",
         "box-header",
+        "wire-to-board",
         "potentiometer",
         "tactile-switch",
         "flying-leads",

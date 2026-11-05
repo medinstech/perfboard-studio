@@ -147,6 +147,11 @@ closed without a bump.
   a divider into the Bluetooth module's 3.3 V RXD, which sensor board has no regulator, and,
   for the relay, that what it switches stays on its own screw terminals, because mains needs
   proper insulation and spacing and is not a perfboard job.
+- **JST XH and Molex KK 254 connectors.** The wire-to-board headers a perfboard takes: JST XH
+  from 2 to 4 pins, top and side entry, and Molex KK 254 (KF2510) from 2 to 16, drawn from
+  KiCad's models with pin 1 marked in both views. An XH is 2.50 mm a pin, and four is as many
+  as go into a 1.0 mm-drilled 0.1 in board before a post meets the side of its hole. Search
+  "JST PH", "ZH", "SH" or "VH" and the Library says why those are not here and what to use.
 - **The HC-SR501 PIR motion sensor, drawn as itself.** It goes on the board on its three pins,
   VCC, OUT and GND. Its Fresnel lens is drawn with its square foot and its dome, with an M2
   hole at each end of its board. Each is measured: the board, the holes and the lens's width

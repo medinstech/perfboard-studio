@@ -905,6 +905,136 @@ def box_header_footprint(
 
 
 # ---------------------------------------------------------------------------
+# Wire-to-board headers
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class WireToBoardFamily:
+    """One family of one-row wire-to-board headers, measured on KiCad 10's models of it.
+
+    ``length = pitch x (pins - 1) + end``; the body is ``depth`` across the row and stands
+    ``height`` above the board, its centre ``offset_y`` from the pin row (+y the side the
+    housing reaches further to, which for a side entry is the face the plug goes in by).
+    """
+
+    name: str
+    pitch_mm: Mm
+    end_mm: Mm
+    depth_mm: Mm
+    height_mm: Mm
+    offset_y_mm: Mm
+    entry: Literal["top", "side"]
+    min_pins: int
+    max_pins: int
+    #: Where pin 1's mark goes on the housing's top, from pin 1, mm: the back wall beside pin
+    #: 1 of a top entry, the roof over it of a side entry, a KK 254's back wall -- the nearest
+    #: place to pin 1 where a 0.8 mm disc lies all on the housing's top, measured on the mesh
+    #: (``tests/test_wire_to_board.py``).
+    pin_one_mark_mm: tuple[Mm, Mm] = (0.0, 0.0)
+
+
+#: The posts of every family here are 0.64 mm square (JST eXH; Molex 22-27-2xx1 the
+#: 0.025 in post every KK header has).
+WIRE_TO_BOARD_POST_MM: Mm = 0.64
+
+#: The drill this application's stock boards are sold with (``boardfamily``: every family's
+#: ``drill_mm``). A wire-to-board housing on another pitch than the grid is held to it by
+#: ``pins_on_the_grid``, and ``tests/test_wire_to_board.py`` holds this to the families.
+STOCK_DRILL_MM: Mm = 1.0
+
+
+def pins_on_the_grid(pitch_mm: Mm, drill_mm: Mm, post_mm: Mm = WIRE_TO_BOARD_POST_MM) -> int:
+    """The most pins a housing ``pitch_mm`` apart can put into 2.54 mm holes of ``drill_mm``.
+
+    THE ARITHMETIC, because the answer is not a matter of taste. A square post of side
+    ``s`` in a round hole of diameter ``d`` can stand off the hole's centre along the row
+    by at most ``e = sqrt((d/2)^2 - (s/2)^2) - s/2`` before a corner meets the bore. Centred
+    on its holes, an n-pin housing has its end posts ``(n - 1) / 2 x |2.54 - pitch|`` off
+    theirs. So n is the largest with ``(n - 1) x |2.54 - pitch| / 2 <= e``. A JST XH (2.50)
+    in a 1.0 mm hole: e = sqrt(0.25 - 0.1024) - 0.32 = 0.064 mm, and its end posts are
+    (n - 1) x 0.02 mm off -- 0.060 for 4 pins, which goes in, and 0.080 for 5, which does not.
+    A housing on the grid's own pitch has no limit here, and is given its family's.
+    """
+    error = abs(STANDARD_PITCH_MM - pitch_mm)
+    slack = math.sqrt((drill_mm / 2) ** 2 - (post_mm / 2) ** 2) - post_mm / 2
+    if error < 1e-9:
+        return 1_000
+    return 1 + math.floor(2 * slack / error + 1e-9)
+
+
+#: JST XH, 2.50 mm: B#B-XH-A is the top entry and S#B-XH-A the side entry (KiCad 10's
+#: ``JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical`` and ``..._S2B-XH-A_..._Horizontal``, after JST's
+#: eXH drawing: 7.4 mm long for 2 pins and 2.5 more a pin, 5.75 deep and 7.0 high, or 11.5
+#: deep and 6.1 high on its side). Molex KK 254, 2.54 mm: AE-6410 (22-27-2xx1), whose
+#: KF2510 clones are the same housing -- 2.54 mm a pin end to end, 5.8 deep and 11.7 high.
+WIRE_TO_BOARD_FAMILIES: dict[str, WireToBoardFamily] = {
+    "jst-xh": WireToBoardFamily(
+        name="JST XH", pitch_mm=2.50, end_mm=4.9, depth_mm=5.75, height_mm=7.0,
+        offset_y_mm=0.525, entry="top", min_pins=2,
+        max_pins=pins_on_the_grid(2.50, STOCK_DRILL_MM), pin_one_mark_mm=(-0.9, -1.9),
+    ),
+    "jst-xh-side": WireToBoardFamily(
+        name="JST XH", pitch_mm=2.50, end_mm=4.9, depth_mm=11.5, height_mm=6.1,
+        offset_y_mm=3.45, entry="side", min_pins=2,
+        max_pins=pins_on_the_grid(2.50, STOCK_DRILL_MM), pin_one_mark_mm=(0.0, 3.6),
+    ),
+    # KiCad's KK 254 model has a slot through its 3.2 mm base midway between each pair of
+    # posts (|y| < 0.3 mm at x = 1.27 from a post), which the 2D view draws the board through.
+    # It is KiCad's, and is NOT confirmed against Molex's 22-27-2xx1 drawing: whoever has the
+    # drawing checks the base between posts. Its 11.7 mm friction wall is on the +y side, as
+    # KiCad's footprint has it, so the posts stand in front of it seen from -y.
+    "kk254": WireToBoardFamily(
+        name="Molex KK 254", pitch_mm=2.54, end_mm=2.54, depth_mm=5.8, height_mm=11.7,
+        offset_y_mm=0.0, entry="top", min_pins=2, max_pins=16, pin_one_mark_mm=(0.7, 2.4),
+    ),
+}
+
+
+def wire_to_board_id(family: str, pins: int) -> str:
+    """``jst-xh-3``, ``jst-xh-3-side``, ``kk254-3``: the id a family's n-pin header is."""
+    if family == "jst-xh-side":
+        return f"jst-xh-{pins}-side"
+    return f"{family}-{pins}"
+
+
+def wire_to_board_footprint(*, family: str, pins: int) -> Footprint:
+    """A one-row wire-to-board header of ``pins`` pins. Pin 1 is the anchor at (0,0) and the
+    pins go along +x one grid step apart, as a 1xN pin header's do -- the housing's own
+    pitch is only its body, and where that is not the grid's (a JST XH) the count is held to
+    what goes into the holes (``pins_on_the_grid``)."""
+    spec = WIRE_TO_BOARD_FAMILIES.get(family)
+    if spec is None:
+        raise ValueError(f"wire_to_board_footprint: no family {family!r}.")
+    if not isinstance(pins, int) or not spec.min_pins <= pins <= spec.max_pins:
+        raise ValueError(
+            f"wire_to_board_footprint: a {spec.name} header has {spec.min_pins}.."
+            f"{spec.max_pins} pins on a 2.54 mm board (got {pins})."
+        )
+    pins_t = tuple(_make_pin(str(i + 1), i, 0) for i in range(pins))
+    length_mm = round(spec.pitch_mm * (pins - 1) + spec.end_mm, 4)
+    outline = _offset_rect_outline(
+        _to_mm(pins_t), length_mm, spec.depth_mm, 0.0, spec.offset_y_mm, COURTYARD_MARGIN_MM
+    )
+    entry = "side entry" if spec.entry == "side" else "top entry"
+    name = f"{spec.name}, {pins}-pin, {entry}" if family.startswith("jst-xh") else f"{spec.name}, {pins}-pin"
+    dims: dict[str, Mm] = {"length": length_mm, "width": spec.depth_mm, "height": spec.height_mm}
+    if spec.offset_y_mm:
+        dims["offsetY"] = spec.offset_y_mm
+    dims["markX"], dims["markY"] = spec.pin_one_mark_mm
+    return Footprint(
+        id=wire_to_board_id(family, pins),
+        name=name,
+        pins=pins_t,
+        body_outline=outline,
+        body_height=spec.height_mm,
+        body=BodySpec(archetype="wire-to-board", dims=dims),
+        lead_diameter=WIRE_TO_BOARD_POST_MM,
+        polarized=False,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Screw terminals
 # ---------------------------------------------------------------------------
 
@@ -2118,6 +2248,12 @@ most two decimals and are written without units.
                                                         adapter: soic, ssop, tssop or msop;
                                                         numbered as the DIP, rows 0.3 inch
                                                         apart for 8 pins and 0.6 above
+  jst-xh-<pins>[-side]                                  a JST XH wire-to-board header,
+                                                        2 to 4 pins (its 2.50 mm pitch goes
+                                                        into 2.54 mm holes no further); -side
+                                                        takes its plug from the side
+  kk254-<pins>                                          a Molex KK 254 (KF2510) header,
+                                                        2 to 16 pins
   screw-terminal-<ways>[-v]                             a screw terminal; -v takes its
                                                         wires from above (pluggable, on a
                                                         vertical header)
@@ -2233,6 +2369,16 @@ _GENERATED: tuple[tuple[re.Pattern[str], Callable[[re.Match[str]], Footprint]], 
             offset_x_mm=_offset(m[9]),
             offset_y_mm=_offset(m[10]),
         ),
+    ),
+    (
+        re.compile(r"^jst-xh-(\d+)(-side)?$"),
+        lambda m: wire_to_board_footprint(
+            family="jst-xh-side" if m[2] else "jst-xh", pins=_grid(m[1])
+        ),
+    ),
+    (
+        re.compile(r"^kk254-(\d+)$"),
+        lambda m: wire_to_board_footprint(family="kk254", pins=_grid(m[1])),
     ),
     (
         re.compile(r"^idc-2x(\d+)$"),
@@ -2476,6 +2622,8 @@ BODY_DIM_KEYS: dict[BodyArchetype, tuple[str, str, Literal["x", "y"]]] = {
     # Along the pin rows and across them, as the pin header runs; the key slot is not part
     # of the extent -- it is a gap in a wall, not a wall further out.
     "box-header": ("length", "width", "x"),
+    # Along the row and across it, as a pin header's moulding is.
+    "wire-to-board": ("length", "width", "x"),
     "screw-terminal-vertical": ("length", "width", "x"),
     # The module's own board, named as a box's body is: width along the columns.
     "module-board": ("width", "depth", "x"),

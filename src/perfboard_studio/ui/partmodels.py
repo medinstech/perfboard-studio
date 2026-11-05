@@ -235,6 +235,24 @@ def vertical_header_models() -> tuple[PartModel, PartModel, PartModel] | None:
     return head, way, tail
 
 
+#: A Molex KK 254 header of ANY length, as three pieces cut out of KiCad's 3-pin AE-6410 --
+#: the terminal block's cut, at the middles between its 2.54 mm pins.
+KK254_HEAD = "kk254-head"
+KK254_WAY = "kk254-way"
+KK254_TAIL = "kk254-tail"
+
+
+def wire_to_board_slices(footprint_id: str) -> tuple[PartModel, PartModel, PartModel] | None:
+    """The head, way and tail a wire-to-board header of this id is drawn from, or ``None``
+    where it has a model of its own (a JST XH) or none at all."""
+    if not footprint_id.startswith("kk254-"):
+        return None
+    head, way, tail = model_for(KK254_HEAD), model_for(KK254_WAY), model_for(KK254_TAIL)
+    if head is None or way is None or tail is None:
+        return None
+    return head, way, tail
+
+
 def known_footprints() -> frozenset[str]:
     """Every footprint that has a model. For tests and for the About box's count."""
     return frozenset(_index())

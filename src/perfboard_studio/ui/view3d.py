@@ -161,6 +161,7 @@ from .partmodels import (
     header_pin_model,
     terminal_block_models,
     vertical_header_models,
+    wire_to_board_slices,
 )
 from .partmodels import model_for as _model_for
 
@@ -3718,6 +3719,8 @@ _BUILDERS: dict[str, Any] = {
     "relay-box": _relay_pieces,
     "generic-box": _box_pieces,
     "box-header": _box_header_pieces,
+    # A housing with no mesh of its own -- the meshes are KiCad's -- is its box.
+    "wire-to-board": _box_pieces,
     "screw-terminal-vertical": _vertical_terminal_pieces,
     # Drawn by ``_module_pieces`` from ``_pieces_for``, because its pin names are the
     # PART's and a builder here sees only the body. The box is the fallback's fallback.
@@ -4061,6 +4064,31 @@ def _header_model_pieces(body: _WorldBody, model: PartModel) -> list[_Piece]:
     ]
 
 
+def _wire_to_board_mark(
+    body: _WorldBody, footprint: Any, comp: Any, board: Board
+) -> list[_Piece]:
+    """Pin 1 of a wire-to-board header: a dimple in the housing's top, where the footprint's
+    ``markX``/``markY`` put it -- the housing takes its plug one way round, so it is soldered
+    in one way round, and the meshes mark nothing. A DIP's dimple, pressed into its plastic."""
+    dims = footprint.body.dims
+    if footprint.body.archetype != "wire-to-board" or "markX" not in dims:
+        return []
+    tx, ty = transform_offset(dims["markX"], dims["markY"], comp.rotation, comp.mirrored)
+    return [
+        _Piece(
+            source=_cylinder(0.35, 0.24, resolution=14),
+            rgb=_lit(body.style.fill, 0.55),
+            position=(
+                comp.anchor.col * board.pitch + tx,
+                -(comp.anchor.row * board.pitch + ty),
+                footprint.body_height + _LIFT - 0.06,
+            ),
+            orientation=_ALONG_Z,
+            material=MOULDED,
+        )
+    ]
+
+
 def _terminal_block_pieces(
     body: _WorldBody, blocks: tuple[PartModel, PartModel, PartModel], comp: Any
 ) -> list[_Piece]:
@@ -4352,6 +4380,15 @@ def _pieces_for(
                 *_terminal_block_pieces(body, blocks, comp),
                 *_through_hole_pieces(body, 0.0),
             ]
+    if model is None and footprint.body.archetype == "wire-to-board" and len(body.pins) >= 2:
+        # A KK 254 of any length, from the three slices of the 3-pin one, as a terminal is.
+        slices = wire_to_board_slices(comp.footprint_id)
+        if slices is not None:
+            return [
+                *_terminal_block_pieces(body, slices, comp),
+                *_wire_to_board_mark(body, footprint, comp, board),
+                *_through_hole_pieces(body, 0.0, blade=(_MODULE_PIN_MM, _MODULE_PIN_MM)),
+            ]
     if model is not None:
         archetype = footprint.body.archetype
         # A borrowed polarised part already carries its mark where the real part has it --
@@ -4359,6 +4396,7 @@ def _pieces_for(
         # bands) and the model's is painted in the style's accent, the colour 2D draws it.
         mark = _polarity_mark(model) if body.polarity is not None else None
         markings: list[_Piece] = list(_plus_mark_pieces(footprint, comp, board, model))
+        markings += _wire_to_board_mark(body, footprint, comp, board)
         # A relay's case carries its value, as the generated one did, on the borrowed top.
         printed = (
             _printed(body.marking, min(body.size_x, body.size_y) * 0.11, body.along * 0.8)

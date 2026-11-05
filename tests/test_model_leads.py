@@ -48,6 +48,9 @@ ONE_PIN_MODELS = frozenset(
         partmodels.VERTICAL_HEADER_HEAD,
         partmodels.VERTICAL_HEADER_WAY,
         partmodels.VERTICAL_HEADER_TAIL,
+        partmodels.KK254_HEAD,
+        partmodels.KK254_WAY,
+        partmodels.KK254_TAIL,
     }
 )
 

@@ -155,6 +155,23 @@ _CABLED_CHECK = (
     "sellers' boards are not all wired in the same order."
 )
 
+#: The wire-to-board headers (``footprints.WIRE_TO_BOARD_FAMILIES``): JST XH, whose 2.50 mm
+#: goes into a 0.1 in board's holes up to ``pins_on_the_grid`` pins, and the Molex KK 254 a
+#: KF2510 is a copy of, on the grid's own pitch.
+_XH_SUMMARY_TOP = "A 2.50 mm wire-to-board header for a crimped JST XH plug, from above. On a 2.54 mm board it goes in up to 4 pins"
+_XH_SUMMARY_SIDE = "A 2.50 mm wire-to-board header for a crimped JST XH plug, from the side. On a 2.54 mm board it goes in up to 4 pins"
+_XH_CHECK = "Its pins are 2.50 mm apart and the holes 2.54: press it in square and solder the two end pins first. The plug goes in one way round, so turned half round its first wire lands on the last pin."
+_KK_SUMMARY = "A 2.54 mm wire-to-board header for a crimped Molex KK 254 or KF2510 plug, from above"
+_KK_CHECK = "KF2510 headers are KK 254 clones and take the same plugs. The plug goes in one way round, so turned half round its first wire lands on the last pin."
+_ON_THE_GRID = (
+    "its 0.64 mm posts go into 1.0 mm holes 2.54 mm apart up to 4 pins "
+    "(footprints.pins_on_the_grid)"
+)
+_XH_WORDS = ("JST", "XH", "JST-XH", "XH2.54", "XH2.5", "wire-to-board", "connector",
+             "konnektör", "JST konnektör")
+_KK_WORDS = ("Molex", "KK", "KK254", "KK 254", "KF2510", "2510", "wire-to-board",
+             "connector", "konnektör")
+
 
 def _legs(*names: str) -> PinNames:
     """Pin names in pin order: ``_legs("C", "B", "E")`` is 1=C, 2=B, 3=E."""
@@ -1294,6 +1311,66 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("relay module", "relay board", "5V relay", "röle modülü", "röle kartı")),
     # -- connectors -------------------------------------------------------------------
+    CatalogPart("jst-xh-2", "JST XH connector, 2-pin, top entry", "connector", "jst-xh-2",
+                _XH_SUMMARY_TOP, value="B2B-XH-A", ref_prefix="J",
+                source="KiCad 10 Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical and its model, after JST's eXH "
+                       "drawing; " + _ON_THE_GRID,
+                check=_XH_CHECK, aliases=_XH_WORDS),
+    CatalogPart("jst-xh-2-side", "JST XH connector, 2-pin, side entry", "connector", "jst-xh-2-side",
+                _XH_SUMMARY_SIDE, value="S2B-XH-A", ref_prefix="J",
+                source="KiCad 10 Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal and its model, after JST's eXH "
+                       "drawing; " + _ON_THE_GRID,
+                check=_XH_CHECK, aliases=_XH_WORDS),
+    CatalogPart("jst-xh-3", "JST XH connector, 3-pin, top entry", "connector", "jst-xh-3",
+                _XH_SUMMARY_TOP, value="B3B-XH-A", ref_prefix="J",
+                source="KiCad 10 Connector_JST:JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical and its model, after JST's eXH "
+                       "drawing; " + _ON_THE_GRID,
+                check=_XH_CHECK, aliases=_XH_WORDS),
+    CatalogPart("jst-xh-3-side", "JST XH connector, 3-pin, side entry", "connector", "jst-xh-3-side",
+                _XH_SUMMARY_SIDE, value="S3B-XH-A", ref_prefix="J",
+                source="KiCad 10 Connector_JST:JST_XH_S3B-XH-A_1x03_P2.50mm_Horizontal and its model, after JST's eXH "
+                       "drawing; " + _ON_THE_GRID,
+                check=_XH_CHECK, aliases=_XH_WORDS),
+    CatalogPart("jst-xh-4", "JST XH connector, 4-pin, top entry", "connector", "jst-xh-4",
+                _XH_SUMMARY_TOP, value="B4B-XH-A", ref_prefix="J",
+                source="KiCad 10 Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical and its model, after JST's eXH "
+                       "drawing; " + _ON_THE_GRID,
+                check=_XH_CHECK, aliases=_XH_WORDS),
+    CatalogPart("jst-xh-4-side", "JST XH connector, 4-pin, side entry", "connector", "jst-xh-4-side",
+                _XH_SUMMARY_SIDE, value="S4B-XH-A", ref_prefix="J",
+                source="KiCad 10 Connector_JST:JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal and its model, after JST's eXH "
+                       "drawing; " + _ON_THE_GRID,
+                check=_XH_CHECK, aliases=_XH_WORDS),
+    CatalogPart("kk254-2", "Molex KK 254 connector, 2-pin", "connector", "kk254-2",
+                _KK_SUMMARY, value="22-27-2021", ref_prefix="J",
+                source="KiCad 10 Connector_Molex:Molex_KK-254_AE-6410-02A_1x02_P2.54mm_Vertical "
+                       "(Molex 22-27-2021); drawn from the 3-pin model cut into three",
+                check=_KK_CHECK, aliases=(*_KK_WORDS, "KF2510-2A", "AE-6410-02A")),
+    CatalogPart("kk254-3", "Molex KK 254 connector, 3-pin", "connector", "kk254-3",
+                _KK_SUMMARY, value="22-27-2031", ref_prefix="J",
+                source="KiCad 10 Connector_Molex:Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical "
+                       "(Molex 22-27-2031); drawn from the 3-pin model cut into three",
+                check=_KK_CHECK, aliases=(*_KK_WORDS, "KF2510-3A", "AE-6410-03A")),
+    CatalogPart("kk254-4", "Molex KK 254 connector, 4-pin", "connector", "kk254-4",
+                _KK_SUMMARY, value="22-27-2041", ref_prefix="J",
+                source="KiCad 10 Connector_Molex:Molex_KK-254_AE-6410-04A_1x04_P2.54mm_Vertical "
+                       "(Molex 22-27-2041); drawn from the 3-pin model cut into three",
+                check=_KK_CHECK, aliases=(*_KK_WORDS, "KF2510-4A", "AE-6410-04A")),
+    CatalogPart("kk254-5", "Molex KK 254 connector, 5-pin", "connector", "kk254-5",
+                _KK_SUMMARY, value="22-27-2051", ref_prefix="J",
+                source="KiCad 10 Connector_Molex:Molex_KK-254_AE-6410-05A_1x05_P2.54mm_Vertical "
+                       "(Molex 22-27-2051); drawn from the 3-pin model cut into three",
+                check=_KK_CHECK, aliases=(*_KK_WORDS, "KF2510-5A", "AE-6410-05A")),
+    CatalogPart("kk254-6", "Molex KK 254 connector, 6-pin", "connector", "kk254-6",
+                _KK_SUMMARY, value="22-27-2061", ref_prefix="J",
+                source="KiCad 10 Connector_Molex:Molex_KK-254_AE-6410-06A_1x06_P2.54mm_Vertical "
+                       "(Molex 22-27-2061); drawn from the 3-pin model cut into three",
+                check=_KK_CHECK, aliases=(*_KK_WORDS, "KF2510-6A", "AE-6410-06A")),
+    CatalogPart("kk254-8", "Molex KK 254 connector, 8-pin", "connector", "kk254-8",
+                _KK_SUMMARY, value="22-27-2081", ref_prefix="J",
+                source="KiCad 10 Connector_Molex:Molex_KK-254_AE-6410-08A_1x08_P2.54mm_Vertical "
+                       "(Molex 22-27-2081); drawn from the 3-pin model cut into three",
+                check=_KK_CHECK, aliases=(*_KK_WORDS, "KF2510-8A", "AE-6410-08A")),
     CatalogPart("servo-header", "Hobby servo (on a header)", "connector", "hdr-1x3",
                 "A hobby servo such as the SG90. Its cable plugs into this 3-pin header: "
                 "PWM + - from pin 1",
@@ -1634,6 +1711,58 @@ CATALOG: tuple[CatalogPart, ...] = (
 )
 
 _BY_ID: dict[str, CatalogPart] = {part.id: part for part in CATALOG}
+
+
+@dataclass(frozen=True, slots=True)
+class NotOffered:
+    """A part somebody looks for and the library deliberately does not have: why, in one line
+    the Library shows, and the catalog ids it offers instead."""
+
+    reason: str
+    instead: tuple[str, ...]
+
+
+_XH_INSTEAD = ("jst-xh-2", "jst-xh-3", "jst-xh-4", "jst-xh-2-side", "jst-xh-3-side", "jst-xh-4-side")
+
+#: The connector families that do not go into a 0.1 in board: (the series' word, its pitch
+#: as sellers write it, what to say). A series is matched with "JST" beside it or with its
+#: pitch -- "JST PH", "jst-ph", "PH2.0" -- never on its two letters alone, which "phone" and
+#: "photo" begin with too.
+NOT_OFFERED: tuple[tuple[str, str, NotOffered], ...] = (
+    ("ph", "2.0", NotOffered(
+        "JST PH is 2.0 mm a pin and does not go into a 0.1 in board's holes. A JST XH "
+        "(2.5 mm) does, up to 4 pins.",
+        _XH_INSTEAD,
+    )),
+    ("zh", "1.5", NotOffered(
+        "JST ZH is 1.5 mm a pin and does not go into a 0.1 in board's holes. A JST XH "
+        "(2.5 mm) does, up to 4 pins.",
+        _XH_INSTEAD,
+    )),
+    ("sh", "1.0", NotOffered(
+        "JST SH is 1.0 mm a pin, a surface-mount part that does not go into a 0.1 in board's "
+        "holes. A JST XH (2.5 mm) does, up to 4 pins.",
+        _XH_INSTEAD,
+    )),
+    ("vh", "3.96", NotOffered(
+        "JST VH is 3.96 mm a pin, which no row of 0.1 in holes matches. For power, a 5.08 mm "
+        "screw terminal or a JST XH does the job.",
+        ("power-terminal-2", *_XH_INSTEAD),
+    )),
+)
+
+
+def not_offered(query: str) -> NotOffered | None:
+    """Why the library has nothing called ``query``, where it deliberately has not: a JST
+    series on another pitch than a perfboard's. ``None`` for anything else -- "PH" alone,
+    "phone", "photo", or a JST the library does have."""
+    words = re.findall(r"[a-z]+|\d+(?:\.\d+)?", query.lower())
+    for series, pitch, answer in NOT_OFFERED:
+        if series not in words:
+            continue
+        if "jst" in words or pitch in words or pitch.rstrip("0").rstrip(".") in words:
+            return answer
+    return None
 
 
 def catalog_part(part_id: str) -> CatalogPart | None:

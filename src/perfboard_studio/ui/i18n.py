@@ -1423,6 +1423,7 @@ TURKISH: Mapping[str, str] = {
     "TO-220 packages": "TO-220 kılıfları",
     "DIP packages": "DIP kılıfları",
     "Pin headers": "Pin başlıkları",
+    "Wire-to-board connectors": "Kablo-kart konnektörleri",
     "IDC box headers": "IDC kutu başlıklar",
     "Screw terminals": "Vidalı klemensler",
     "Screw terminals, wires from above": "Dik klemensler, tel yukarıdan",
@@ -2740,6 +2741,89 @@ TURKISH: Mapping[str, str] = {
         "ve aralık ister; bu bir perfboard işi değildir. Her kabloyu yerine göre "
         "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
         "sırayla bağlanmamıştır."
+    ),
+    "A 2.50 mm wire-to-board header for a crimped JST XH plug, from above. On a 2.54 mm "
+    "board it goes in up to 4 pins": (
+        "Sıkma uçlu JST XH fiş için 2,50 mm aralıklı, kablo-kart başlığı; fiş üstten "
+        "takılır. 2,54 mm'lik bir karta 4 pine kadar oturur"
+    ),
+    "A 2.50 mm wire-to-board header for a crimped JST XH plug, from the side. On a 2.54 "
+    "mm board it goes in up to 4 pins": (
+        "Sıkma uçlu JST XH fiş için 2,50 mm aralıklı, kablo-kart başlığı; fiş yandan "
+        "takılır. 2,54 mm'lik bir karta 4 pine kadar oturur"
+    ),
+    "Its pins are 2.50 mm apart and the holes 2.54: press it in square and solder the "
+    "two end pins first. The plug goes in one way round, so turned half round its first "
+    "wire lands on the last pin.": (
+        "Pinleri 2,50 mm, delikler 2,54 mm arayla: dik bastırın ve önce iki uçtaki pini "
+        "lehimleyin. Fiş tek yönde takılır, bu yüzden ters çevrilirse ilk kablosu son pine "
+        "gelir."
+    ),
+    "A 2.54 mm wire-to-board header for a crimped Molex KK 254 or KF2510 plug, from "
+    "above": (
+        "Sıkma uçlu Molex KK 254 ya da KF2510 fiş için 2,54 mm aralıklı, kablo-kart "
+        "başlığı; fiş üstten takılır"
+    ),
+    "KF2510 headers are KK 254 clones and take the same plugs. The plug goes in one way "
+    "round, so turned half round its first wire lands on the last pin.": (
+        "KF2510 başlıklar KK 254 kopyalarıdır ve aynı fişleri alır. Fiş tek yönde takılır, "
+        "bu yüzden ters çevrilirse ilk kablosu son pine gelir."
+    ),
+    "JST XH connector, 2-pin, top entry": (
+        "JST XH konnektör, 2 pinli, üstten girişli"
+    ),
+    "JST XH connector, 2-pin, side entry": (
+        "JST XH konnektör, 2 pinli, yandan girişli"
+    ),
+    "JST XH connector, 3-pin, top entry": (
+        "JST XH konnektör, 3 pinli, üstten girişli"
+    ),
+    "JST XH connector, 3-pin, side entry": (
+        "JST XH konnektör, 3 pinli, yandan girişli"
+    ),
+    "JST XH connector, 4-pin, top entry": (
+        "JST XH konnektör, 4 pinli, üstten girişli"
+    ),
+    "JST XH connector, 4-pin, side entry": (
+        "JST XH konnektör, 4 pinli, yandan girişli"
+    ),
+    "Molex KK 254 connector, 2-pin": (
+        "Molex KK 254 konnektör, 2 pinli"
+    ),
+    "Molex KK 254 connector, 3-pin": (
+        "Molex KK 254 konnektör, 3 pinli"
+    ),
+    "Molex KK 254 connector, 4-pin": (
+        "Molex KK 254 konnektör, 4 pinli"
+    ),
+    "Molex KK 254 connector, 5-pin": (
+        "Molex KK 254 konnektör, 5 pinli"
+    ),
+    "Molex KK 254 connector, 6-pin": (
+        "Molex KK 254 konnektör, 6 pinli"
+    ),
+    "Molex KK 254 connector, 8-pin": (
+        "Molex KK 254 konnektör, 8 pinli"
+    ),
+    "JST PH is 2.0 mm a pin and does not go into a 0.1 in board's holes. A JST XH (2.5 "
+    "mm) does, up to 4 pins.": (
+        "JST PH 2,0 mm aralıklıdır ve 0,1 inçlik bir kartın deliklerine oturmaz. JST XH "
+        "(2,5 mm) 4 pine kadar oturur."
+    ),
+    "JST ZH is 1.5 mm a pin and does not go into a 0.1 in board's holes. A JST XH (2.5 "
+    "mm) does, up to 4 pins.": (
+        "JST ZH 1,5 mm aralıklıdır ve 0,1 inçlik bir kartın deliklerine oturmaz. JST XH "
+        "(2,5 mm) 4 pine kadar oturur."
+    ),
+    "JST SH is 1.0 mm a pin, a surface-mount part that does not go into a 0.1 in "
+    "board's holes. A JST XH (2.5 mm) does, up to 4 pins.": (
+        "JST SH 1,0 mm aralıklı, yüzey montajlı bir parçadır ve 0,1 inçlik bir kartın "
+        "deliklerine oturmaz. JST XH (2,5 mm) 4 pine kadar oturur."
+    ),
+    "JST VH is 3.96 mm a pin, which no row of 0.1 in holes matches. For power, a 5.08 "
+    "mm screw terminal or a JST XH does the job.": (
+        "JST VH 3,96 mm aralıklıdır; 0,1 inçlik deliklerin hiçbir sırası buna denk gelmez. "
+        "Güç için 5,08 mm'lik bir vidalı klemens ya da JST XH aynı işi görür."
     ),
     "Micro SD card module (on a header)": "Micro SD kart modülü (header üzerinde)",
     "Micro SD card socket on SPI, with a 3.3 V regulator. Its cable plugs into this 6-pin "

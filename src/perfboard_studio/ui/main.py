@@ -930,6 +930,7 @@ def _archetype_headings() -> dict[BodyArchetype, str]:
         "smd-adapter": t("SMD chips on DIP adapters"),
         "pin-header": t("Pin headers"),
         "box-header": t("IDC box headers"),
+        "wire-to-board": t("Wire-to-board connectors"),
         "screw-terminal": t("Screw terminals"),
         "screw-terminal-vertical": t("Screw terminals, wires from above"),
         "potentiometer": t("Potentiometers"),

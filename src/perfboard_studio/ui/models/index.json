@@ -2332,6 +2332,411 @@
   ],
   "source": "Connector_PinHeader_2.54mm/PinHeader_1x01_P2.54mm_Vertical"
  },
+ "jst-xh-2": {
+  "parts": [
+   {
+    "bounds": [
+     -2.43,
+     -3.4,
+     0.0,
+     4.97,
+     2.35,
+     7.0
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "jst-xh-2.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.3,
+     -0.32,
+     1.85,
+     2.84,
+     0.32,
+     6.5
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "jst-xh-2.1.ply"
+   },
+   {
+    "bounds": [
+     -0.3,
+     -0.32,
+     -0.05,
+     2.84,
+     0.32,
+     0.3
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "jst-xh-2.2.ply"
+   }
+  ],
+  "source": "Connector_JST/JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+ },
+ "jst-xh-2-side": {
+  "parts": [
+   {
+    "bounds": [
+     -2.43,
+     -9.2,
+     0.0,
+     4.97,
+     2.3,
+     6.1
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "jst-xh-2-side.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.3,
+     -8.7,
+     3.38,
+     2.84,
+     0.32,
+     4.07
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "jst-xh-2-side.1.ply"
+   },
+   {
+    "bounds": [
+     -0.3,
+     -2.5,
+     -0.05,
+     2.84,
+     0.32,
+     4.07
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "jst-xh-2-side.2.ply"
+   }
+  ],
+  "source": "Connector_JST/JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal"
+ },
+ "jst-xh-3": {
+  "parts": [
+   {
+    "bounds": [
+     -2.41,
+     -3.4,
+     0.0,
+     7.49,
+     2.35,
+     7.0
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "jst-xh-3.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.28,
+     -0.32,
+     1.85,
+     5.36,
+     0.32,
+     6.5
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "jst-xh-3.1.ply"
+   },
+   {
+    "bounds": [
+     -0.28,
+     -0.32,
+     -0.05,
+     5.36,
+     0.32,
+     0.3
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "jst-xh-3.2.ply"
+   }
+  ],
+  "source": "Connector_JST/JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical"
+ },
+ "jst-xh-3-side": {
+  "parts": [
+   {
+    "bounds": [
+     -2.41,
+     -9.2,
+     0.0,
+     7.49,
+     2.3,
+     6.1
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "jst-xh-3-side.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.28,
+     -8.7,
+     3.38,
+     5.36,
+     0.32,
+     4.07
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "jst-xh-3-side.1.ply"
+   },
+   {
+    "bounds": [
+     -0.28,
+     -2.5,
+     -0.05,
+     5.36,
+     0.32,
+     4.07
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "jst-xh-3-side.2.ply"
+   }
+  ],
+  "source": "Connector_JST/JST_XH_S3B-XH-A_1x03_P2.50mm_Horizontal"
+ },
+ "jst-xh-4": {
+  "parts": [
+   {
+    "bounds": [
+     -2.39,
+     -3.4,
+     0.0,
+     10.01,
+     2.35,
+     7.0
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "jst-xh-4.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.26,
+     -0.32,
+     1.85,
+     7.88,
+     0.32,
+     6.5
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "jst-xh-4.1.ply"
+   },
+   {
+    "bounds": [
+     -0.26,
+     -0.32,
+     -0.05,
+     7.88,
+     0.32,
+     0.3
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "jst-xh-4.2.ply"
+   }
+  ],
+  "source": "Connector_JST/JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical"
+ },
+ "jst-xh-4-side": {
+  "parts": [
+   {
+    "bounds": [
+     -2.39,
+     -9.2,
+     0.0,
+     10.01,
+     2.3,
+     6.1
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "jst-xh-4-side.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.26,
+     -8.7,
+     3.38,
+     7.88,
+     0.32,
+     4.07
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "jst-xh-4-side.1.ply"
+   },
+   {
+    "bounds": [
+     -0.26,
+     -2.5,
+     -0.05,
+     7.88,
+     0.32,
+     4.07
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "jst-xh-4-side.2.ply"
+   }
+  ],
+  "source": "Connector_JST/JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal"
+ },
+ "kk254-head": {
+  "parts": [
+   {
+    "bounds": [
+     -1.27,
+     -2.9,
+     0.0,
+     1.27,
+     2.9,
+     11.7
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "kk254-head.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.32,
+     -0.32,
+     3.17,
+     0.32,
+     0.32,
+     10.66
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "kk254-head.1.ply"
+   },
+   {
+    "bounds": [
+     -0.32,
+     -0.32,
+     -0.05,
+     0.32,
+     0.32,
+     0.6
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "kk254-head.2.ply"
+   }
+  ],
+  "source": "Connector_Molex/Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical"
+ },
+ "kk254-tail": {
+  "parts": [
+   {
+    "bounds": [
+     -1.27,
+     -2.9,
+     0.0,
+     1.27,
+     2.9,
+     11.7
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "kk254-tail.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.32,
+     -0.32,
+     3.17,
+     0.32,
+     0.32,
+     10.66
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "kk254-tail.1.ply"
+   },
+   {
+    "bounds": [
+     -0.32,
+     -0.32,
+     -0.05,
+     0.32,
+     0.32,
+     0.6
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "kk254-head.2.ply"
+   }
+  ],
+  "source": "Connector_Molex/Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical"
+ },
+ "kk254-way": {
+  "parts": [
+   {
+    "bounds": [
+     -1.27,
+     -2.9,
+     0.0,
+     1.27,
+     2.9,
+     11.7
+    ],
+    "color": "#c6c49f",
+    "material": "moulded",
+    "mesh": "kk254-way.0.ply",
+    "role": "body"
+   },
+   {
+    "bounds": [
+     -0.32,
+     -0.32,
+     3.17,
+     0.32,
+     0.32,
+     10.66
+    ],
+    "color": "#a4a392",
+    "material": "steel",
+    "mesh": "kk254-way.1.ply"
+   },
+   {
+    "bounds": [
+     -0.32,
+     -0.32,
+     -0.05,
+     0.32,
+     0.32,
+     0.6
+    ],
+    "color": "#aaaaaa",
+    "material": "tinned",
+    "mesh": "kk254-head.2.ply"
+   }
+  ],
+  "source": "Connector_Molex/Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical"
+ },
  "led-10mm": {
   "parts": [
    {

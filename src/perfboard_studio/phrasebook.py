@@ -131,6 +131,9 @@ NAME_TEMPLATES: tuple[str, ...] = (
     "LED, {0} mm round",
     "Pin header, {0}",
     "IDC box header, {0}",
+    "JST XH, {0}-pin, top entry",
+    "JST XH, {0}-pin, side entry",
+    "Molex KK 254, {0}-pin",
     "Screw terminal, {0}-way, 5.08 mm pitch, vertical (wires from above)",
     "Screw terminal, {0}-way, 5.08 mm pitch",
     "Screw terminal, {0}-way",
@@ -549,6 +552,11 @@ TURKISH: dict[str, str] = {
     "to pin 1)": (
         "Kilit yuvası 1. pin sırası tarafında; 1. pin {hole} deliğine (kablonun kırmızı "
         "şeridi 1. pine gelir)"
+    ),
+    "Pin 1 in {hole}: the plug goes in one way round, so turned half round its first wire "
+    "lands on the last pin": (
+        "1. pin {hole} deliğine: fiş tek yönde takılır, bu yüzden ters çevrilirse ilk kablosu "
+        "son pine gelir"
     ),
     "Cathode — the banded end — in {hole}": "Katot — bantlı uç — {hole} deliğine",
     # An axial part stood on end, over one hole, its top lead bent back down into the next.
@@ -1012,6 +1020,7 @@ TURKISH: dict[str, str] = {
     "relay-box": "röle",
     "generic-box": "kutu",
     "box-header": "IDC başlık",
+    "wire-to-board": "konnektör",
     "screw-terminal-vertical": "dik klemens",
     "module-board": "modül",
     "flying-leads": "kart dışı parça",
@@ -1050,6 +1059,9 @@ TURKISH: dict[str, str] = {
     "LED, {0} mm round": "LED, {0} mm yuvarlak",
     "Pin header, {0}": "Pin başlığı, {0}",
     "IDC box header, {0}": "IDC kutu başlık, {0}",
+    "JST XH, {0}-pin, top entry": "JST XH, {0} pinli, üstten girişli",
+    "JST XH, {0}-pin, side entry": "JST XH, {0} pinli, yandan girişli",
+    "Molex KK 254, {0}-pin": "Molex KK 254, {0} pinli",
     "Screw terminal, {0}-way, 5.08 mm pitch, vertical (wires from above)": (
         "Vidalı klemens, {0} yollu, 5.08 mm aralık, dik (kablo yukarıdan)"
     ),

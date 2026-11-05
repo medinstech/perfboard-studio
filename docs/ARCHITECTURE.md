@@ -1083,6 +1083,30 @@ piece in. Three rules hold it:
   The data names the KiCad package each entry was measured from, so a mesh re-imported from
   another package fails the test until the tool is run again.
 
+**A wire-to-board header is a pin header in a housing that takes its plug one way round**
+(`wire-to-board`: JST XH top and side entry, Molex KK 254 and its KF2510 copies). Three
+things about it were measured rather than chosen:
+
+- **How many XH pins go in.** An XH is 2.50 mm a pin and the holes are 2.54, so its end posts
+  stand `(n - 1) x 0.02` mm off their holes, and a 0.64 mm square post in a 1.0 mm hole can
+  stand 0.064 mm off before a corner meets the bore. Four pins go in and five do not
+  (`footprints.pins_on_the_grid`, from `STOCK_DRILL_MM`); `tests/test_wire_to_board.py`
+  holds that drill to every board family's, so a family drilled otherwise moves the limit
+  rather than drawing a part that does not go in. JST PH, ZH and SH (2.0, 1.5, 1.0 mm) and
+  VH (3.96, which no row of holes matches) are not offered, and a search for one is
+  answered: `catalog.not_offered` gives the Library the reason and the parts to use instead,
+  matched on the series with "JST" or its pitch beside it, never on two letters "phone"
+  starts with too.
+- **The meshes.** An XH is a model per count, moved (n - 1) x 0.02 mm to sit centred on our
+  holes. A KK 254 is three slices of the 3-pin one, as a terminal block is: for 2 to 6 pins
+  they are KiCad's own models colour by colour, and from 7 KiCad draws less of the housing's
+  detail inside the same envelope, so a longer header has the short one's ways.
+- **Pin 1.** The housing is keyed (`bodies._ALWAYS_KEYED`), so pin 1's pad is the bright
+  one in 2D as a DIP's is, and in 3D a dimple is pressed into the housing's top beside it.
+  The meshes mark nothing, and the first dimples, placed by eye, floated over a side entry's
+  mouth and a KK's sloping ramp: each family's `pin_one_mark_mm` is now the nearest place to
+  pin 1 where the disc lies wholly on the top, and a test reads the mesh under it.
+
 **The 2D view draws a part from its top view wherever one was measured**
 (`view2d._paint_top_view`), and by archetype where not (modules, the SRD relay, the pot). Every
 role is inked from the part's own `BODY_STYLES` colours and the leads' metal, so no colour is

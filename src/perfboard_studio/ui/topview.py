@@ -141,6 +141,12 @@ def _from_models(footprint: Footprint, pitch: Mm) -> TopView | None:
     whole = _measured(footprint.id)
     if whole is not None:
         return whole
+    if arch == "wire-to-board" and footprint.id.startswith("kk254-") and len(pins) >= 2:
+        head, way, tail = (_measured(f"kk254-{part}") for part in ("head", "way", "tail"))
+        if head is None or way is None or tail is None:
+            return None
+        placed = [(head, *pins[0]), *((way, x, y) for x, y in pins[1:-1]), (tail, *pins[-1])]
+        return _repeated(placed, head.source)
     if arch in ("screw-terminal", "screw-terminal-vertical") and len(pins) >= 2:
         stem = partmodels.TERMINAL_HEAD if arch == "screw-terminal" else partmodels.VERTICAL_HEADER_HEAD
         prefix = stem.removesuffix("-head")
@@ -182,6 +188,14 @@ def _parametric(footprint: Footprint, pitch: Mm) -> TopView:
             ("body", outer.subtracted(cavity).subtracted(key), None),
             ("recess", cavity.united(key), None),
         ]
+        view.shapes += [("metal", _rect(x - 0.32, y - 0.32, 0.64, 0.64), None) for x, y in pins]
+        view.body = outer
+    elif arch == "wire-to-board":
+        # Where there is no mesh: the housing, the cavity its plug goes into, its posts.
+        wall = 0.6
+        outer = _rect(left, top, sx, sy, 0.3)
+        cavity = _rect(left + wall, top + wall, sx - 2 * wall, sy - 2 * wall, 0.2)
+        view.shapes = [("body", outer.subtracted(cavity), None), ("recess", cavity, None)]
         view.shapes += [("metal", _rect(x - 0.32, y - 0.32, 0.64, 0.64), None) for x, y in pins]
         view.body = outer
     elif arch == "potentiometer":

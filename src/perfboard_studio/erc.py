@@ -157,6 +157,7 @@ KIND_BY_ARCHETYPE: dict[BodyArchetype, PartKind] = {
     # names a pin VCC it means it.
     "generic-box": "chip",
     "box-header": "connector",
+    "wire-to-board": "connector",
     "screw-terminal-vertical": "connector",
     "module-board": "module",
     # A part on the panel, seen from the board as the pads its wires land in.

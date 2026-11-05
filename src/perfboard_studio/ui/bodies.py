@@ -110,6 +110,8 @@ BODY_STYLES: dict[BodyArchetype, BodyStyle] = {
     "generic-box": BodyStyle(fill="#6b7280", edge="#343a44", accent="#e6e8ec"),
     # The header's black and gold, because it IS a header -- inside a shroud.
     "box-header": BodyStyle(fill="#1c1e24", edge=_PLASTIC_EDGE, accent="#d8b45a"),
+    # Natural nylon, as JST and Molex mould them: the off-white every one of them is.
+    "wire-to-board": BodyStyle(fill="#e9e4d4", edge=_PLASTIC_EDGE, accent="#d8b45a"),
     # The same green as the side-entry terminal: it is the same family, plugged in upright.
     "screw-terminal-vertical": BodyStyle(fill="#2f7d4f", edge="#164a2c", accent="#c8ccd2"),
     # A module's own board: the blue solder mask most hobby modules are made in, with white
@@ -337,6 +339,7 @@ _SILHOUETTES: dict[BodyArchetype, Silhouette] = {
     "relay-box": "rounded",
     "generic-box": "rect",
     "box-header": "rect",
+    "wire-to-board": "rect",
     "screw-terminal-vertical": "rect",
     "module-board": "rect",
     "flying-leads": "rounded",
@@ -486,7 +489,8 @@ def leads_for(footprint: Footprint, placement: BodyPlacement, pitch: float) -> t
 #: has no electrical polarity -- which is what ``Footprint.polarized`` records -- and fitting
 #: one backwards still destroys it, so its pin-1 dot must be drawn regardless. A chip on an
 #: adapter is the same chip, one board further up.
-_ALWAYS_KEYED: frozenset[BodyArchetype] = frozenset({"dip", "smd-adapter"})
+#: A wire-to-board housing is the same: no polarity, and its plug goes in one way round.
+_ALWAYS_KEYED: frozenset[BodyArchetype] = frozenset({"dip", "smd-adapter", "wire-to-board"})
 
 
 def polarity_pin_offset(footprint: Footprint, pitch: float) -> tuple[float, float] | None:

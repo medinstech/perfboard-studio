@@ -303,6 +303,37 @@ MODELS: tuple[Model, ...] = (
     Model("box-4x1-p1-r1-15.1x7.7x25.1-o0x1.4", "Sensor", "Aosong_DHT11_5.5x12.0_P2.54mm",
           rotate=90.0, case_size=(15.1, 7.7, 25.1), case_shift=(0.0, -1.4),
           materials=(("#04227c", "moulded"),), colours=(("#04227c", "#e9e7e1"),)),
+    # -- JST XH, whole, and Molex KK 254 of any length, as three ways of the 3-pin one --
+    #
+    # An XH is 2.50 mm a pin and goes into 2.54 mm holes from two to four pins
+    # (``footprints.pins_on_the_grid``), so each count is its own model, moved along x by
+    # (n - 1) x 0.02 mm to sit centred on our holes; its posts stand at most 0.06 mm off
+    # them, and below the board the leads are ours. A KK 254 is on the grid's own pitch
+    # and is a repetition the way a terminal block is: cut out of the 3-pin model at the
+    # middles between its pins, head + (n - 2) ways + tail is KiCad's own n-pin model for 2
+    # to 6 pins, colour by colour to a relative surface difference of 1e-15 (measured on
+    # KiCad 10). From 7 pins KiCad draws less of the housing's detail -- the posts and the
+    # envelope still match exactly, the nylon's surface is 10 to 38 % less -- so a longer
+    # header is drawn with the short one's ways, inside the same box. Three slices (14 KB)
+    # draw 2 to 16 pins.
+    Model("jst-xh-2", "Connector_JST", "JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical",
+          offset=(0.02, 0.0)),
+    Model("jst-xh-2-side", "Connector_JST", "JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal",
+          offset=(0.02, 0.0)),
+    Model("jst-xh-3", "Connector_JST", "JST_XH_B3B-XH-A_1x03_P2.50mm_Vertical",
+          offset=(0.04, 0.0)),
+    Model("jst-xh-3-side", "Connector_JST", "JST_XH_S3B-XH-A_1x03_P2.50mm_Horizontal",
+          offset=(0.04, 0.0)),
+    Model("jst-xh-4", "Connector_JST", "JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical",
+          offset=(0.06, 0.0)),
+    Model("jst-xh-4-side", "Connector_JST", "JST_XH_S4B-XH-A_1x04_P2.50mm_Horizontal",
+          offset=(0.06, 0.0)),
+    Model("kk254-head", "Connector_Molex", "Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical",
+          clip=(-1000.0, 1.27)),
+    Model("kk254-way", "Connector_Molex", "Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical",
+          clip=(1.27, 3.81), offset=(-2.54, 0.0)),
+    Model("kk254-tail", "Connector_Molex", "Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical",
+          clip=(3.81, 1000.0), offset=(-5.08, 0.0)),
     # -- a terminal block of any length, as three ways of the 3-way one -----
     #
     # A MKDS-1,5 block IS a repetition, like a header, and it was measured rather than
@@ -422,6 +453,7 @@ MATERIALS: dict[str, str] = {
     "#0d0e10": "moulded",  # a display's black case, and the backlight under an LCD's glass
     "#030103": "moulded",  # an IR receiver's black epoxy
     "#772707": "gloss",  # the adjusting screw of a 3296 trimmer, painted brass (``colours``)
+    "#c6c49f": "moulded",  # the natural nylon of a JST XH or a Molex KK housing
 }
 
 

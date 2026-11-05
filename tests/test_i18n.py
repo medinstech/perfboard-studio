@@ -117,12 +117,14 @@ def catalog_texts() -> set[str]:
     t(): its summary, its check, and its NAME where the name describes the part -- a word
     in lower case, as in "Tactile switch 6x6 mm" -- rather than being a number or a maker's
     product name ("BC547", "Raspberry Pi Pico"), which reads the same in any language."""
-    from perfboard_studio.catalog import CATALOG
+    from perfboard_studio.catalog import CATALOG, NOT_OFFERED
 
     described = {
         part.name for part in CATALOG if re.search(r"(?<![A-Za-z])[a-z]{3,}(?![A-Za-z])", part.name)
     }
-    return described | {text for part in CATALOG for text in (part.summary, part.check) if text}
+    # And why it has no JST PH, which the Library says when somebody looks for one.
+    refused = {answer.reason for _series, _pitch, answer in NOT_OFFERED}
+    return described | refused | {text for part in CATALOG for text in (part.summary, part.check) if text}
 
 
 #: Catalog summaries and names that read the same in Turkish, and so have no entry: an entry

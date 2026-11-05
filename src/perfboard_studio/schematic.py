@@ -2118,6 +2118,7 @@ _KIND_BY_ARCHETYPE: dict[BodyArchetype, SymbolKind] = {
     "relay-box": "relay",  # the coil is the pair of pins; the contacts stay numbered
     "generic-box": "box",
     "box-header": "connector",
+    "wire-to-board": "connector",
     "screw-terminal-vertical": "connector",
     # A box whose pins carry the module's own names, when the part declares them.
     "module-board": "box",

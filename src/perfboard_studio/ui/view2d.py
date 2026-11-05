@@ -1556,6 +1556,7 @@ REF_PREFIXES: dict[str, str] = {
     "relay-box": "K",
     "generic-box": "X",
     "box-header": "J",
+    "wire-to-board": "J",
     "screw-terminal-vertical": "TB",
     "module-board": "U",
     # Whatever it is on the panel; "J" until it is given its own letter, as a jack would be.
@@ -2969,6 +2970,15 @@ def _paint_body(
         painter.drawRect(cavity)
         slot = footprint.body.dims.get("keySlot", 4.5)
         painter.drawRect(QRectF(rect.center().x() - slot / 2, rect.top(), slot, wall))
+        _paint_pin_marks(painter, footprint, pitch, accent, square=True)
+
+    elif archetype == "wire-to-board":
+        # Where there is no mesh: the cavity the plug goes into, open to the side it comes
+        # from, and the posts standing in it.
+        wall = min(rect.width(), rect.height()) * 0.13
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(style.fill).darker(115)))
+        painter.drawRect(rect.adjusted(wall, wall, -wall, -wall))
         _paint_pin_marks(painter, footprint, pitch, accent, square=True)
 
     elif archetype == "screw-terminal":
