@@ -741,7 +741,7 @@ TURKISH: Mapping[str, str] = {
     # board nobody named, as the phrasebook calls it.
     "{what} on {board}": "{what} ({board})",
     # Add Cable, in reach's words.
-    "Add &Cable…": "Ka&blo Ekle…",
+    "Add &Cable…": "&Kablo Ekle…",
     "A cable from a connector on one board to a connector on another. Its wires are paired "
     "by net: a pin of each on the same net takes a wire, and what is not certain is left "
     "for you and said.": (
