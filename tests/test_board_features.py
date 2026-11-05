@@ -51,7 +51,8 @@ from perfboard_studio.geometry import (
     pad_extent_mm,
     printed_row_label,
 )
-from perfboard_studio.guide import build_guide
+from perfboard_studio.guide import GuideWarning, build_guide
+from perfboard_studio.guide_export import guide_to_html
 from perfboard_studio.model import (
     Board,
     BoardLabels,
@@ -480,6 +481,30 @@ def test_the_guide_says_the_fingers_are_there_because_nothing_else_will() -> Non
     codes = {w.code: w.message for w in build_guide(doc, LOOKUP).warnings}
     assert "edge-connector" in codes
     assert "C10" in codes["edge-connector"], "it should name where the run starts"
+
+
+def test_the_exported_guide_says_the_fingers_in_a_note_and_a_gap_in_a_warning() -> None:
+    """The window lists a board's fingers beside the files it wrote, as a note, and keeps
+    its "The guide has gaps" dialog for what the guide does not cover (``is_guide_gap``).
+    The HTML guide says each in the same voice: the fingers printed in the warning box on
+    every export of a stock board was the dialog's mistake over again, on paper."""
+    doc = _doc(edge_connectors=(EdgeConnector(id="ec-1", edge="bottom", start=2, count=4),))
+    guide = build_guide(doc, LOOKUP)
+
+    def boxes(page: str, kind: str) -> list[str]:
+        return [part.split("</div>", 1)[0] for part in page.split(f'<div class="{kind}">')[1:]]
+
+    page = guide_to_html(guide)
+    notes, warnings = boxes(page, "notebox"), boxes(page, "warnbox")
+    assert len(notes) == 1 and "C10" in notes[0], "the fingers' note is the one in the note box"
+    assert not any("C10" in box for box in warnings)
+    # Every other warning this board raises is a gap, and stays in the warning box.
+    assert len(warnings) == len(guide.warnings) - 1
+
+    gap = GuideWarning(code="unknown-footprint", message="U9 has no footprint")
+    page = guide_to_html(dataclasses.replace(guide, warnings=(*guide.warnings, gap)))
+    assert any("U9 has no footprint" in box for box in boxes(page, "warnbox"))
+    assert len(boxes(page, "notebox")) == 1
 
 
 # ---------------------------------------------------------------------------

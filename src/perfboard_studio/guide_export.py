@@ -59,6 +59,7 @@ from .guide import (
     WireTemplate,
     all_steps,
     conductor_word,
+    is_guide_gap,
     lead_end,
     step_focus,
     wire_template,
@@ -309,6 +310,8 @@ input[type=checkbox] { width: 1.25rem; height: 1.25rem; margin-top: .2rem; flex:
 .check.blocking { border-left-color: var(--error); }
 .warnbox { background: var(--panel-2); border-left: 3px solid var(--warn);
            border-radius: 6px; padding: .6rem .9rem; margin: .5rem 0; }
+.notebox { background: var(--panel-2); border-left: 3px solid var(--line);
+           border-radius: 6px; padding: .6rem .9rem; margin: .5rem 0; }
 table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: .5rem 0; }
 th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line); }
 th { color: var(--dim); font-weight: 600; }
@@ -461,9 +464,13 @@ def guide_to_html(guide: Guide, step_images: Mapping[str, bytes] | None = None) 
         + "</p>",
     ]
 
+    # A gap -- a part of the build the guide does not cover -- in the warning box; a note
+    # about the board -- a stock board's fingers -- in a quiet one, as the window lists it
+    # beside the files rather than in its "The guide has gaps" dialog (``is_guide_gap``).
     for warning in guide.warnings:
+        box = "warnbox" if is_guide_gap(warning) else "notebox"
         parts.append(
-            f'<div class="warnbox"><b>{escape(say(warning.code))}</b> — '
+            f'<div class="{box}"><b>{escape(say(warning.code))}</b> — '
             f"{escape(warning.message)}</div>"
         )
 

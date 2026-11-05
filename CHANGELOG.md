@@ -328,6 +328,8 @@ closed without a bump.
   shipped NE555 example's among them, about fingers that are part of the board rather than
   a step left out. That note is now in the details of the box that says what was written;
   a real gap -- a net not wired, a part with no footprint -- still stops on its warning.
+  The exported HTML guide says it the same way: the fingers in a plain note box, the
+  warning box kept for what the guide does not cover.
 
 ## [0.22.0] - 2026-10-28
 
