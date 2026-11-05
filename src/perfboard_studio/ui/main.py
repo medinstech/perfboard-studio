@@ -3413,6 +3413,10 @@ class MainWindow(QMainWindow):
             self._raise_view(self.dock_properties)
             self._point_at(self.dock_properties)
         elif key == "tools":
+            # With System in front the board -- and its tools -- are behind it: the ring
+            # would land over the System drawing where the tools were last laid out.
+            if self._system_in_front():
+                self._on_board_picked(self.bus.board_id)
             self.show_board()
             self._point_at(self.board_tools)
         elif key == "auto-wire":
@@ -11186,7 +11190,10 @@ class MainWindow(QMainWindow):
         document = self.bus.system_document
         ids = board_ids(document)
         several = len(ids) > 1
-        self.board_strip.setVisible(several)
+        if self.board_strip.isHidden() == several:
+            # Only when it changes: setting it every refresh asks the window to lay its
+            # panels out again after every edit.
+            self.board_strip.setVisible(several)
         if not several:
             if self._system_in_front():
                 self.board_stack.setCurrentWidget(self.view)

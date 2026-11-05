@@ -517,3 +517,23 @@ def test_adding_a_board_puts_it_in_front_named_by_its_place(qapp) -> None:  # ty
     finally:
         window.close()
         window.deleteLater()
+
+
+def test_what_moved_points_at_the_board_tools_with_the_board_in_front(qapp, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """With System in front, the "What moved" card's line for the board's tools puts the
+    board in front before it rings them, rather than ringing where they were last laid out."""
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_system())
+    try:
+        rung: list[object] = []
+        monkeypatch.setattr(type(window), "_point_at", lambda self, widget: rung.append(widget))
+        window.board_strip.tabs.setCurrentIndex(0)
+        assert window._system_in_front()
+        window._show_moved("tools")
+        assert not window._system_in_front() and window.board_stack.currentWidget() is window.view
+        assert rung == [window.board_tools]
+    finally:
+        window.close()
+        window.deleteLater()
+

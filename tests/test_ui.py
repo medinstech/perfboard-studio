@@ -7923,7 +7923,9 @@ def test_the_board_and_the_sheet_are_both_panels(monkeypatch) -> None:
 
     window = _shown_window_without_3d(monkeypatch)
 
-    assert window.dock_board.widget() is window.view
+    # The Board panel holds the strip of boards over the view; on one board the strip is
+    # hidden, so the panel is the view as it always was.
+    assert window.dock_board.isAncestorOf(window.view) and window.board_strip.isHidden()
     assert window.dock_schematic.widget() is window.schematic_page
     assert window.board_is_showing()
     assert not window.dock_schematic.isHidden() and window.schematic_is_showing() is False

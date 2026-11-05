@@ -17,7 +17,6 @@ from collections.abc import Sequence
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QTabBar, QToolButton, QWidget
 
-from . import theme
 from .i18n import t
 
 #: The strip's own id for its first entry, which is not a board.
@@ -42,13 +41,6 @@ class BoardStrip(QWidget):
         self.tabs.setDrawBase(False)
         self.tabs.setExpanding(False)
         self.tabs.setUsesScrollButtons(True)
-        tokens = theme.ACTIVE
-        self.tabs.setStyleSheet(
-            f"QTabBar::tab {{ padding: 5px 12px; color: {tokens.text_secondary};"
-            f" border: none; border-bottom: 2px solid transparent; }}"
-            f"QTabBar::tab:selected {{ color: {tokens.text};"
-            f" border-bottom: 2px solid {tokens.accent}; }}"
-        )
         self.tabs.currentChanged.connect(self._on_current)
         row.addWidget(self.tabs)
         row.addStretch(1)

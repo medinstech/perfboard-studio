@@ -42,7 +42,7 @@ from perfboard_studio.system import board_document, board_ids, board_title, conn
 
 from . import theme
 from .i18n import t
-from .view2d import BoardScene, hole_to_screen
+from .view2d import _INSULATION_SCREEN, CONDUCTOR_STYLE, BoardScene, hole_to_screen
 
 #: Pixels per millimetre a board is drawn at before it is scaled into the view: enough that
 #: a part's label still reads when the System view is the whole panel.
@@ -50,13 +50,6 @@ DRAW_PX_PER_MM = 6.0
 
 #: Millimetres between two boards, and round the row.
 GAP_MM = 25.0
-
-#: What a wire with no colour of its own and no net is drawn in.
-_WIRE_COLOURS = {
-    "red": "#d4373a", "black": "#2b2d31", "blue": "#2f6fd6", "green": "#2f9e44",
-    "yellow": "#e3b505", "orange": "#e8730c", "white": "#f0f0f0", "grey": "#8a8f98",
-    "brown": "#8b5a2b", "purple": "#8e44ad",
-}
 
 _BOARD_ROLE = 0  # QGraphicsItem.data key holding a board's id
 
@@ -185,9 +178,13 @@ class SystemView(QGraphicsView):
             path = QPainterPath(p)
             mid = (p.x() + q.x()) / 2
             path.cubicTo(QPointF(mid, sag), QPointF(mid, sag), q)
-            shadow = self._scene.addPath(path, QPen(QColor("#0b0c0f"), 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            # The wire in the colour the board's own wires take for that name (the 2D
+            # view's insulation table), over an outline in the window's background.
+            colour = _INSULATION_SCREEN.get(colour_id, CONDUCTOR_STYLE["insulated-wire"][0])
+            outline = QPen(QColor(theme.ACTIVE.bg_app), 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            shadow = self._scene.addPath(path, outline)
             shadow.setZValue(2)
-            line = self._scene.addPath(path, QPen(QColor(_WIRE_COLOURS.get(colour_id, "#8a8f98")), 1.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            line = self._scene.addPath(path, QPen(colour, 1.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             line.setZValue(3)
 
     def _fit(self) -> None:
