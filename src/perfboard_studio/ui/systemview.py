@@ -5,8 +5,9 @@ Behind the board strip's first entry (``ui.boardstrip``). Each board is the 2D s
 drawing of that board alone (``system.board_document``), so a board looks here exactly as it
 does when opened; the cables are drawn over them, one curve per wire in the wire's colour --
 the colour the harness cuts it in -- from its pin on one connector to its pin on the other.
-Double-click a board to open it. The boards sit in a row in the order the document holds
-them; where a person may move them is a later decision, and nothing here is saved.
+Double-click a board to open it. The boards sit in ``system.board_row``'s row, the one the
+3D panel lays them out by too; where a person may move them is a later decision, and nothing
+here is saved.
 """
 
 from __future__ import annotations
@@ -38,19 +39,26 @@ from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import all_pin_holes
 from perfboard_studio.lvs import crossed_cables
 from perfboard_studio.model import BoardId, Cable, CableEnd, Net, PerfDocument
-from perfboard_studio.system import board_document, board_ids, board_title, connector_of
+from perfboard_studio.system import (
+    BOARD_GAP_MM,
+    board_document,
+    board_ids,
+    board_row,
+    board_title,
+    connector_of,
+)
 from perfboard_studio.wirecolour import net_colours
 
 from . import theme
 from .i18n import t
-from .view2d import _INSULATION_SCREEN, CONDUCTOR_STYLE, BoardScene, hole_to_screen
+from .view2d import BoardScene, hole_to_screen, named_insulation
 
 #: Pixels per millimetre a board is drawn at before it is scaled into the view: enough that
 #: a part's label still reads when the System view is the whole panel.
 DRAW_PX_PER_MM = 6.0
 
-#: Millimetres between two boards, and round the row.
-GAP_MM = 25.0
+#: Millimetres of bench between two boards (``system.board_row``), and round the row.
+GAP_MM = BOARD_GAP_MM
 
 _BOARD_ROLE = 0  # QGraphicsItem.data key holding a board's id
 
@@ -80,11 +88,14 @@ class SystemView(QGraphicsView):
         self._shown = doc
         self._scene.clear()
         origins: dict[BoardId, tuple[QPointF, PerfDocument, QRectF]] = {}
-        x = 0.0
+        row = board_row(doc)
         for board_id in board_ids(doc):
             view = board_document(doc, board_id)
             pixmap, rect = self._draw(view)
-            at = QPointF(x, 0.0)
+            # The scene's own frame is the board's, so the drawing goes where the row puts
+            # the board's frame, offset by however far the drawing reaches past hole A1.
+            dx, dy = row[board_id]
+            at = QPointF(dx + rect.x(), dy + rect.y())
             item = QGraphicsPixmapItem(pixmap)
             item.setScale(1.0 / DRAW_PX_PER_MM)
             item.setPos(at)
@@ -92,7 +103,6 @@ class SystemView(QGraphicsView):
             self._scene.addItem(item)
             self._frame(at, rect, board_title(doc, board_id, language), board_id)
             origins[board_id] = (at, view, rect)
-            x += rect.width() + GAP_MM
         colours = net_colours(doc)
         net_of = {(node.component_ref, node.pin): net for net in doc.nets for node in net.nodes}
         # A cable wired across is drawn in the danger colour, as the finding about it says.
@@ -180,7 +190,11 @@ class SystemView(QGraphicsView):
             p, q = a_pins.get(wire.a_pin), b_pins.get(wire.b_pin)
             if p is None or q is None:
                 continue
-            net = net_of.get((a_part.ref, wire.a_pin)) if a_part is not None else None
+            # The harness's choice (``harness._cable``): its own colour, else its net's
+            # -- the net at either end -- else grey.
+            net = (net_of.get((a_part.ref, wire.a_pin)) if a_part is not None else None) or (
+                net_of.get((b_part.ref, wire.b_pin)) if b_part is not None else None
+            )
             colour_id = wire.colour or (colours.get(net.id, "grey") if net is not None else "grey")
             sag = max(p.y(), q.y()) + 18
             path = QPainterPath(p)
@@ -188,7 +202,7 @@ class SystemView(QGraphicsView):
             path.cubicTo(QPointF(mid, sag), QPointF(mid, sag), q)
             # The wire in the colour the board's own wires take for that name (the 2D
             # view's insulation table), over an outline in the window's background.
-            colour = _INSULATION_SCREEN.get(colour_id, CONDUCTOR_STYLE["insulated-wire"][0])
+            colour = named_insulation(colour_id)
             edge = theme.ACTIVE.danger if wrong else theme.ACTIVE.bg_app
             outline = QPen(QColor(edge), 2.2 if wrong else 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
             shadow = self._scene.addPath(path, outline)

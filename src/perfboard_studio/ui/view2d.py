@@ -443,6 +443,19 @@ def explicit_colour(value: str | None) -> QColor | None:
     colour = QColor(value.strip())
     return colour if colour.isValid() else None
 
+
+def named_insulation(name: str | None) -> QColor:
+    """A wire's colour given by NAME -- a cable wire's own, or the one ``wirecolour`` gives its
+    net -- as the board's own wires of that name are drawn: "red" is this view's red, not
+    ``QColor``'s. A name the table does not have is read as ``QColor`` reads it, and no name
+    at all is the insulated wire's grey. The System view and the System's 3D both draw a
+    cable's wires through it, so a cable is one colour in each and on the cut list."""
+    if name:
+        known = _INSULATION_SCREEN.get(name.strip().lower())
+        if known is not None:
+            return known
+    return explicit_colour(name) or CONDUCTOR_STYLE["insulated-wire"][0]
+
 #: Millimetres of scene reserved outside the substrate for the hole-address rulers.
 RULER_MARGIN_MM = 6.0
 

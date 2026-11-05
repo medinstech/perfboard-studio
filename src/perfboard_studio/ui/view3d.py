@@ -98,7 +98,9 @@ from perfboard_studio.guide import (
 )
 from perfboard_studio.model import (
     Board,
+    BoardId,
     BoardSide,
+    CableEnd,
     Conductor,
     Footprint,
     HoleCoord,
@@ -111,6 +113,8 @@ from perfboard_studio.model import (
 )
 from perfboard_studio.occupancy import stacking_layers
 from perfboard_studio.stripboard import cut_holes, segments
+from perfboard_studio.system import board_document, board_ids, board_row, connector_of
+from perfboard_studio.wirecolour import net_colours
 
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
@@ -7318,6 +7322,199 @@ def populate_renderer(
 
     ren.ResetCameraClippingRange()
     return {"actors": ren.GetActors().GetNumberOfItems(), "pads": board.cols * board.rows}
+
+
+# ---------------------------------------------------------------------------
+# The System: every board in the row, and the cables between them
+# ---------------------------------------------------------------------------
+
+#: How far a cable's wire leaves its connector straight before it turns for the other end --
+#: at least; a share of the distance between the two ends where that is more, so the arch
+#: between two far connectors is still an arch rather than a wire laid flat over the parts.
+CABLE_RISE_MM = 10.0
+CABLE_RISE_SHARE = 0.35
+
+#: A crimped DuPont shell, the female end a harness wire has on a pin header: 2.54 mm square
+#: and 14 mm long, slid over the pin down to the moulding.
+DUPONT_SHELL_MM = 2.5
+DUPONT_SHELL_LENGTH_MM = 14.0
+DUPONT_RGB = (0.08, 0.08, 0.09)
+
+#: Points along a wire's arch: enough that it is a curve at the size the System is framed at.
+_CABLE_SAMPLES = 32
+
+
+def populate_system_renderer(
+    ren: vtk.vtkRenderer,
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    *,
+    exploded_mm: float = 0.0,
+    pin_names: bool = True,
+    board_notes: bool = True,
+) -> dict[str, int]:
+    """Every board of ``doc`` in the System view's row (``system.board_row``) and the cables
+    between them, in an EXISTING renderer, leaving the camera alone as
+    :func:`populate_renderer` does.
+
+    Each board is :func:`populate_renderer`'s own drawing of that board alone, built in a
+    renderer of its own and moved into place: one way to draw a board, so it looks the same
+    in front and beside another.
+    """
+    ren.RemoveAllViewProps()
+    offsets = _world_offsets(doc)
+    scratch = vtk.vtkRenderer()
+    pads = 0
+    for board_id in board_ids(doc):
+        pads += populate_renderer(
+            scratch,
+            board_document(doc, board_id),
+            lookup,
+            exploded_mm=exploded_mm,
+            pin_names=pin_names,
+            board_notes=board_notes,
+        )["pads"]
+        dx, dy = offsets[board_id]
+        props = scratch.GetViewProps()
+        props.InitTraversal()
+        for _ in range(props.GetNumberOfItems()):
+            prop = props.GetNextProp()
+            # By its position, which is how every actor here is placed: none carries a user
+            # matrix that would turn the offset with it.
+            prop.AddPosition(dx, dy, 0.0)
+            ren.AddViewProp(prop)
+        scratch.RemoveAllViewProps()
+    for actor in build_cables(doc, lookup, exploded_mm=exploded_mm):
+        ren.AddActor(actor)
+    ren.ResetCameraClippingRange()
+    return {"actors": ren.GetActors().GetNumberOfItems(), "pads": pads}
+
+
+def _world_offsets(doc: PerfDocument) -> dict[BoardId, tuple[float, float]]:
+    """``system.board_row`` in this view's world, where a row further down is a smaller y."""
+    return {board_id: (x, -y) for board_id, (x, y) in board_row(doc).items()}
+
+
+@dataclass(frozen=True, slots=True)
+class _Socket:
+    """Where a cable's wire leaves one pin of its connector, which way, and the DuPont shell
+    it leaves from when the connector is a pin header."""
+
+    at: tuple[float, float, float]
+    out: tuple[float, float, float]
+    shell: _Piece | None = None
+
+
+def build_cables(
+    doc: PerfDocument, lookup: FootprintLookup, *, exploded_mm: float = 0.0
+) -> list[vtk.vtkActor]:
+    """Every cable of ``doc`` as its wires, in the System's row: a tube per wire from its pin to
+    its pin, arching over between them, in the colour the harness cuts it in -- its own, else
+    its net's (``wirecolour``), through the table the board's own wires are drawn from.
+
+    A crossed cable is drawn as it is wired. This shows what will be built; the System view
+    and the checks say what is wrong with it.
+    """
+    from .view2d import named_insulation
+
+    offsets = _world_offsets(doc)
+    colours = net_colours(doc)
+    net_of = {(node.component_ref, node.pin): net.id for net in doc.nets for node in net.nodes}
+    pieces: list[_Piece] = []
+    for cable in doc.cables:
+        a = _sockets(doc, lookup, cable.a, offsets, exploded_mm)
+        b = _sockets(doc, lookup, cable.b, offsets, exploded_mm)
+        if a is None or b is None:
+            continue
+        (a_ref, a_sockets), (b_ref, b_sockets) = a, b
+        for wire in cable.wires:
+            start, end = a_sockets.get(wire.a_pin), b_sockets.get(wire.b_pin)
+            if start is None or end is None:
+                # A pin its part does not have: ERC's pin-not-on-part says so.
+                continue
+            net_id = net_of.get((a_ref, wire.a_pin)) or net_of.get((b_ref, wire.b_pin))
+            colour = named_insulation(
+                wire.colour or (colours.get(net_id, "grey") if net_id is not None else "grey")
+            )
+            pieces.append(
+                _Piece(
+                    source=_tube_source(_arch(start, end), INSULATED_RADIUS_MM),
+                    rgb=(colour.redF(), colour.greenF(), colour.blueF()),
+                    position=(0.0, 0.0, 0.0),
+                    material=INSULATION,
+                )
+            )
+            pieces.extend(socket.shell for socket in (start, end) if socket.shell is not None)
+    return [_actor_for(piece) for piece in pieces]
+
+
+def _sockets(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    end: CableEnd,
+    offsets: dict[BoardId, tuple[float, float]],
+    lift: float,
+) -> tuple[str, dict[str, _Socket]] | None:
+    """The reference of the part a cable end is fitted to, and where a wire leaves each of its
+    pins: out of a DuPont shell over a pin header's pin, out of a side-entry terminal's mouth
+    where ``_wire_entry_pieces`` draws it, and out of the top of anything else. ``lift`` is
+    the exploded view's, which the part rises by."""
+    part = connector_of(doc, end)
+    footprint = lookup(part.footprint_id) if part is not None else None
+    if part is None or footprint is None:
+        return None
+    board = board_document(doc, end.board).board
+    body = _world_body(lookup, part, board)
+    if body is None:
+        return None
+    dx, dy = offsets[end.board]
+    archetype = footprint.body.archetype
+    up = (0.0, 0.0, 1.0)
+    sockets: dict[str, _Socket] = {}
+    for pin, hole in all_pin_holes(part, footprint):
+        x, y = _xy(board, hole)
+        x, y = x + dx, y + dy
+        if archetype == "screw-terminal" and body.entry is not None:
+            ex, ey = body.entry
+            half_across = (body.size_y if abs(ex) < abs(ey) else body.size_x) / 2
+            z = min(_ENTRY_CENTRE_Z_MM, body.height * 0.4) + _LIFT + lift
+            sockets[pin.number] = _Socket(
+                (x + ex * half_across, y + ey * half_across, z), (ex, ey, 0.0)
+            )
+        elif archetype == "pin-header":
+            seat = min(body.height * 0.3, 2.6) + _LIFT + lift
+            shell = _Piece(
+                source=_moulded_box(DUPONT_SHELL_MM, DUPONT_SHELL_MM, DUPONT_SHELL_LENGTH_MM),
+                rgb=DUPONT_RGB,
+                position=(x, y, seat + DUPONT_SHELL_LENGTH_MM / 2),
+                material=MOULDED,
+            )
+            sockets[pin.number] = _Socket((x, y, seat + DUPONT_SHELL_LENGTH_MM), up, shell)
+        else:
+            sockets[pin.number] = _Socket((x, y, body.height + _LIFT + lift), up)
+    return part.ref, sockets
+
+
+def _arch(start: _Socket, end: _Socket) -> list[tuple[float, float, float]]:
+    """A wire's centreline: out of each socket the way it faces, and round to the other in one
+    cubic curve -- straight out of the shell or the mouth, which is where a wire is held."""
+    reach = max(CABLE_RISE_MM, CABLE_RISE_SHARE * math.dist(start.at, end.at))
+    p0, p3 = start.at, end.at
+    p1 = (p0[0] + start.out[0] * reach, p0[1] + start.out[1] * reach, p0[2] + start.out[2] * reach)
+    p2 = (p3[0] + end.out[0] * reach, p3[1] + end.out[1] * reach, p3[2] + end.out[2] * reach)
+    points: list[tuple[float, float, float]] = []
+    for i in range(_CABLE_SAMPLES + 1):
+        t = i / _CABLE_SAMPLES
+        u = 1.0 - t
+        a, b, c, d = u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t
+        points.append(
+            (
+                a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+                a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1],
+                a * p0[2] + b * p1[2] + c * p2[2] + d * p3[2],
+            )
+        )
+    return points
 
 
 # ---------------------------------------------------------------------------

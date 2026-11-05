@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, replace
 
+from .geometry import board_outline_mm
 from .model import (
     BoardId,
     Cable,
@@ -23,6 +24,7 @@ from .model import (
     CableWire,
     ComponentInstance,
     ExtraBoard,
+    Mm,
     PerfDocument,
     SchematicPart,
 )
@@ -88,6 +90,28 @@ def board_document(doc: PerfDocument, board_id: BoardId = FIRST_BOARD) -> PerfDo
         board_name=extra.name,
         **{name: getattr(extra, name) for name in BOARD_FIELDS},
     )
+
+
+#: Millimetres of bench between two boards where a system is laid out in a row.
+BOARD_GAP_MM: Mm = 25.0
+
+
+def board_row(doc: PerfDocument, gap_mm: Mm = BOARD_GAP_MM) -> dict[BoardId, tuple[Mm, Mm]]:
+    """Where each board's own frame -- ``geometry.hole_to_mm``'s, hole A1 at the origin and
+    rows growing down -- sits when the system is laid out in a row: in the document's order,
+    left to right, ``gap_mm`` between two substrates, every top edge on one line.
+
+    The System view and the System's 3D both lay the boards out by it, so a board is in the
+    same place in each. Nothing about it is saved: where a person may put a board is a later
+    decision, and it would be the document's.
+    """
+    row: dict[BoardId, tuple[Mm, Mm]] = {}
+    left = 0.0
+    for board_id in board_ids(doc):
+        outline = board_outline_mm(board_document(doc, board_id).board)
+        row[board_id] = (left - outline.x, -outline.y)
+        left += outline.width + gap_mm
+    return row
 
 
 def merge_board(doc: PerfDocument, board_id: BoardId, seen: PerfDocument) -> PerfDocument:

@@ -3945,6 +3945,9 @@ class MainWindow(QMainWindow):
                 widget.setAttribute(Qt.WidgetAttribute.WA_PaintOnScreen, False)
             self._3d_owners.clear()
             self._3d_tinted.clear()
+            # Built on the board in front; with System in front the refresh at the end
+            # puts every board in it and frames them.
+            self._3d_subject = self.bus.board_id
             ren, _stats = view3d.build_renderer(
                 self.bus.document,
                 self.lookup,
@@ -3972,6 +3975,8 @@ class MainWindow(QMainWindow):
             self._3d_stale = False
             self._install_3d_picking(widget)
             self._show_selection_in_3d()
+            if self._system_in_front():
+                self._refresh_3d()
         except Exception as exc:  # pragma: no cover - environment dependent
             # In the panel, where the person who opened it is looking. A packaged build
             # has no console for a print to land in.
@@ -4087,8 +4092,15 @@ class MainWindow(QMainWindow):
 
     _assembly_timer: QTimer
 
+    #: The 3D panel's foot, made with the panel: stood down while System is in front.
+    _assembly_bar: QWidget | None = None
+
+    #: What the 3D panel was last framed on: a board's id, or ``SYSTEM_ENTRY``.
+    _3d_subject: str | None = None
+
     def _build_assembly_bar(self) -> QWidget:
         bar = QWidget()
+        self._assembly_bar = bar
         row = QHBoxLayout(bar)
         row.setContentsMargins(6, 2, 6, 4)
 
@@ -4351,6 +4363,14 @@ class MainWindow(QMainWindow):
         if not self.dock_3d.isVisible():
             self._3d_stale = True
             return
+        # System in front: every board and the cables between them. A build is one
+        # board's, so the assembly bar stands down while it is.
+        system_wide = self._system_in_front()
+        if self._assembly_bar is not None:
+            if system_wide and self.act_play.isChecked():
+                self.act_play.setChecked(False)
+            self._assembly_bar.setEnabled(not system_wide)
+        subject = SYSTEM_ENTRY if system_wide else self.bus.board_id
         index = self._assembly_index()
         if index is None:
             document = self.bus.document
@@ -4367,16 +4387,33 @@ class MainWindow(QMainWindow):
         self._3d_tinted.clear()
         from . import view3d
 
-        view3d.populate_renderer(
-            self._vtk_renderer,
-            document,
-            self.lookup,
-            exploded_mm=view3d.EXPLODED_LIFT_MM if self.act_exploded.isChecked() else 0.0,
-            highlight=highlight,
-            pin_names=self._pin_names_shown(),
-            board_notes=self._board_labels_shown(),
-            owners=self._3d_owners,
-        )
+        exploded_mm = view3d.EXPLODED_LIFT_MM if self.act_exploded.isChecked() else 0.0
+        if system_wide:
+            # No owners: what a click selects across boards waits on the System's editors.
+            view3d.populate_system_renderer(
+                self._vtk_renderer,
+                self.bus.system_document,
+                self.lookup,
+                exploded_mm=exploded_mm,
+                pin_names=self._pin_names_shown(),
+                board_notes=self._board_labels_shown(),
+            )
+        else:
+            view3d.populate_renderer(
+                self._vtk_renderer,
+                document,
+                self.lookup,
+                exploded_mm=exploded_mm,
+                highlight=highlight,
+                pin_names=self._pin_names_shown(),
+                board_notes=self._board_labels_shown(),
+                owners=self._3d_owners,
+            )
+        if subject != self._3d_subject:
+            # Something else is in front -- the System, another board: a request to look at
+            # it, as opening the panel is, so it is framed. An edit never gets here.
+            view3d.apply_default_camera(self._vtk_renderer, flipped=(self.side == "bottom"))
+            self._3d_subject = subject
         self._show_selection_in_3d()
         self.vtk_widget.GetRenderWindow().Render()
         self._3d_stale = False
@@ -11229,6 +11266,8 @@ class MainWindow(QMainWindow):
 
     #: The status bar's one offered action (``_offer_in_status``), made when first needed.
     _status_offer: QToolButton | None = None
+    #: What that button does when it is pressed: the last thing offered.
+    _status_offer_act: Callable[[], None] | None = None
 
     @property
     def _shown_board(self) -> BoardId:
@@ -11248,6 +11287,7 @@ class MainWindow(QMainWindow):
             self.system_view.set_document(self.bus.system_document, current_language())
             self._refresh_board_strip()
             self._refresh_status()
+            self._schedule_3d_refresh()
             return
         if entry != self.bus.board_id:
             self.bus.show(entry)
@@ -11325,17 +11365,19 @@ class MainWindow(QMainWindow):
             self.statusBar().messageChanged.connect(
                 lambda text: self._status_offer.hide() if not text and self._status_offer else None
             )
-        button = self._status_offer
-        button.setText(label)
-        with contextlib.suppress(RuntimeError, TypeError):
-            button.clicked.disconnect()
+            # Connected once, to whatever was offered last: disconnecting a signal with
+            # nothing on it is a RuntimeWarning in PySide6, not an exception to suppress.
+            self._status_offer.clicked.connect(self._take_status_offer)
+        self._status_offer_act = act
+        self._status_offer.setText(label)
+        self._status_offer.show()
 
-        def run(_checked: bool = False) -> None:
-            button.hide()
+    def _take_status_offer(self, _checked: bool = False) -> None:
+        if self._status_offer is not None:
+            self._status_offer.hide()
+        act, self._status_offer_act = self._status_offer_act, None
+        if act is not None:
             act()
-
-        button.clicked.connect(run)
-        button.show()
 
     def _add_move_to_board(self, menu: QMenu, component_id: str) -> None:
         """Move to Board ▸ each other board, on a placed part, when there is another."""

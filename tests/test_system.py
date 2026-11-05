@@ -591,3 +591,23 @@ def test_a_cable_wired_straight_has_no_crossing() -> None:
     from perfboard_studio.model import CableWire
 
     assert crossed_cables(_two_headers((CableWire("1", "1"), CableWire("2", "2")))) == []
+
+
+def test_the_boards_stand_in_a_row_level_at_the_top_with_bench_between() -> None:
+    """``board_row``, which both System views lay the boards out by: the document's order,
+    left to right, ``BOARD_GAP_MM`` between two substrates, every top edge on one line."""
+    from perfboard_studio.geometry import board_outline_mm
+
+    main = _example("ne555-astable")
+    other = _example("lm317-supply")
+    first, second = board_outline_mm(main.board), board_outline_mm(other.board)
+    assert (first.width, first.height) != (second.width, second.height)
+    doc = dataclasses.replace(main, boards=(_as_extra(other, "b2", "Supply"),))
+    row = system.board_row(doc)
+    assert list(row) == ["main", "b2"]
+    assert (row["main"][0] + first.x, row["main"][1] + first.y) == pytest.approx((0.0, 0.0))
+    assert (row["b2"][0] + second.x, row["b2"][1] + second.y) == pytest.approx(
+        (first.width + system.BOARD_GAP_MM, 0.0)
+    )
+    # One board alone stands where it always did, its substrate's corner at the origin.
+    assert system.board_row(main) == {"main": pytest.approx((-first.x, -first.y))}

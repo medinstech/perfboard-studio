@@ -3109,6 +3109,28 @@ there, and a board chosen from the title was a dropdown nobody would find. Syste
 first entry, is the boards drawn as the Board panel draws them and the cables between them in
 their wires' colours (`ui.systemview`); double-clicking a board opens it.
 
+**The System is drawn in 3D as it is in 2D.** With System in front, the 3D panel shows every
+board at once, laid out by the row the System view lays them out by (`system.board_row`: the
+document's order, left to right, 25 mm of bench between two substrates, every top edge on one
+line), so a board is in the same place in both panels. Each board is built by
+`view3d.populate_renderer` from its own view, exactly as when it is in front, and moved into
+place whole -- `AddPosition` on each of its actors, which is right because no actor here
+carries a user matrix that would turn the offset with it. One way to draw a board, so it looks
+the same in front and beside another. What the System adds is the cables
+(`view3d.build_cables`): each wire a tube from its pin to its pin, in the colour the harness
+cuts it in (`wirecolour.net_colours`, through the insulation table the board's own wires are
+drawn from), out of a crimped DuPont shell over a pin header's pin, out of the mouth of a
+side-entry screw terminal, out of the top of anything else, arching over between its two
+ends. It is a picture of which pin goes where, not of the cable's length, which is the cut
+list's. A crossed cable is drawn as it is wired, its colours landing where they land: this
+view shows what will be built, and the System view and the checks say what is wrong with it.
+
+The camera is framed again when what is in front changes -- System to a board, one board to
+another -- because that is a request to look at something else, as opening the panel is; an
+edit still never moves it. A click in the System's 3D selects nothing yet, as a click in the
+System view does not: what a selection is across boards waits on the System's own editors.
+The assembly bar is disabled there, a build being one board's.
+
 **The window's bus shows the board in front** (`boardbus.BoardBus`). It is the one
 `CommandBus` of the system -- one undo stack whichever board a step was on -- whose `document`
 is the board in front alone and whose `dispatch` sends a board's command through `board.on` for
