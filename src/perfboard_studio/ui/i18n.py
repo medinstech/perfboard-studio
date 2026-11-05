@@ -2487,6 +2487,7 @@ TURKISH: Mapping[str, str] = {
         "Kristali 3,6 mm yükselir, üzerindeki en uzun parça odur."
     ),
     "ESP-01 (ESP8266 module)": "ESP-01 (ESP8266 modülü)",
+    "ESP32 DevKit V1 (30-pin)": "ESP32 DevKit V1 (30 pinli)",
     "Adafruit INA219 (original, 4 holes)": "Adafruit INA219 (orijinal, 4 delikli)",
     "Wi-Fi on an ESP8266, 3.3 V: serial, two GPIOs, enable and reset on 8 pins": (
         "ESP8266 ile Wi-Fi, 3,3 V: 8 pinde seri port, iki GPIO, etkinleştirme ve reset"
@@ -3132,6 +3133,24 @@ TURKISH: Mapping[str, str] = {
     ),
     "Adafruit BMP280 (original)": (
         "Adafruit BMP280 (orijinal)"
+    ),
+    "ESP32-WROOM-32 dev board, 30 pins, rows 25.4 mm apart": (
+        "ESP32-WROOM-32 geliştirme kartı, 30 pin, sıralar arası 25,4 mm"
+    ),
+    "Sold by many makers: the 30 pins and their order are fixed, the parts' places vary "
+    "from one to the next, and this drawing is one of them to about half a millimetre. "
+    "The 38-pin ESP32-DevKitC is a different board with its own entry: count your pins. "
+    "Its pins are 3.3 V; VIN takes 5 V. VP, VN, D34 and D35 are inputs only, and "
+    "nothing may hold D12 high as it starts (it sets the flash voltage). The height of "
+    "what is on the board is an estimate, and so is its colour; the pins, the rows and "
+    "the board outline are measured.": (
+        "Birçok üretici satar: 30 pin ve sıraları sabittir, parçaların yeri birinden "
+        "ötekine değişir ve bu çizim yaklaşık yarım milimetreyle onlardan biridir. 38 pinli "
+        "ESP32-DevKitC başka bir karttır ve kendi girdisi vardır: pinlerinizi sayın. "
+        "Pinleri 3,3 V'tur; VIN 5 V alır. VP, VN, D34 ve D35 yalnızca giriştir; açılırken "
+        "hiçbir şey D12'yi high'a çekmemelidir (flash gerilimini o seçer). Kartın "
+        "üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart çerçevesi "
+        "ölçülmüştür."
     ),
     "RP2040 board, 40 pins, rows 17.78 mm apart": "RP2040 kartı, 40 pin, sıralar arası 17,78 mm",
     "ESP8266 board, 16 pins, rows 22.86 mm apart": (

@@ -245,6 +245,10 @@ _DEVKITC_RIGHT = (
     "GND", "IO23", "IO22", "TX", "RX", "IO21", "GND", "IO19", "IO18", "IO5",
     "IO17", "IO16", "IO4", "IO0", "IO2", "IO15", "D1", "D0", "CLK",
 )  # fmt: skip
+# The 30-pin ESP32 DevKit V1 as its silkscreen names the pins, the antenna end up: EN down
+# to VIN on one row, D23 down to 3V3 on the other -- the order every clone keeps.
+_DEVKIT_V1_LEFT = ("EN", "VP", "VN", "D34", "D35", "D32", "D33", "D25", "D26", "D27", "D14", "D12", "D13", "GND", "VIN")
+_DEVKIT_V1_RIGHT = ("D23", "D22", "TX0", "RX0", "D21", "D19", "D18", "D5", "TX2", "RX2", "D4", "D2", "D15", "GND", "3V3")
 _NANO_LEFT = (
     "D1/TX", "D0/RX", "RESET", "GND", "D2", "D3", "D4", "D5", "D6", "D7",
     "D8", "D9", "D10", "D11", "D12",
@@ -1682,6 +1686,26 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "row spacing: count your pins and measure across the rows. "
                     + _MODULE_TOP
                 )),
+    CatalogPart("esp32-devkit-v1", "ESP32 DevKit V1 (30-pin)", "module",
+                "mod-2x15-p10-r1-28x51.1x3.2-s8.5-o-0.3x1.81",
+                "ESP32-WROOM-32 dev board, 30 pins, rows 25.4 mm apart",
+                _two_columns(_DEVKIT_V1_LEFT, _DEVKIT_V1_RIGHT), ref_prefix="U",
+                value="ESP32 DevKit V1",
+                source=(
+                    "Four makers' KiCad footprints of it, which agree pin for pin (15 a row, the "
+                    "rows 25.4 mm apart); the names as its silkscreen prints them; the 51.1 x 28.0 "
+                    "mm board measured on Edwiyanto's photograph (Wikimedia Commons, CC BY-SA 4.0), "
+                    "rectified on its pads"
+                ),
+                check=(
+                    "Sold by many makers: the 30 pins and their order are fixed, the parts' places "
+                    "vary from one to the next, and this drawing is one of them to about half a "
+                    "millimetre. The 38-pin ESP32-DevKitC is a different board with its own entry: "
+                    "count your pins. Its pins are 3.3 V; VIN takes 5 V. VP, VN, D34 and D35 are "
+                    "inputs only, and nothing may hold D12 high as it starts (it sets the flash "
+                    "voltage). " + _MODULE_TOP
+                ),
+                aliases=("ESP32 DOIT", "DOIT", "ESP-WROOM-32", "ESP32")),
     CatalogPart("esp32-c3-devkitm-1", "ESP32-C3-DevKitM-1", "module",
                 "mod-2x15-p9-r1-25.4x44.31x3.5-s8.5-o0x-2.7",
                 "ESP32-C3 dev board, 30 pins, rows 22.86 mm apart",

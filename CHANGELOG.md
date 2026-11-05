@@ -220,6 +220,11 @@ closed without a bump.
   SCK SDO SDI CS, with the sensor, the regulator and the level shifter where Adafruit's
   board files put them. Their check says how the pins serve I2C and SPI and which address
   SDO picks.
+- **The 30-pin ESP32 DevKit V1, drawn as itself.** The DOIT board and its clones go in on
+  their two rows of fifteen, 1.0 inch apart, named as the silkscreen has them, with the
+  WROOM-32, the USB bridge, the regulator, the micro-USB socket and the BOOT and EN buttons
+  where a photograph of one, straightened on its own pads, puts them. Its check says the
+  clones keep the pins and move the parts, and that the 38-pin DevKitC is another board.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks

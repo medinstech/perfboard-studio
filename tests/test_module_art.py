@@ -28,6 +28,7 @@ from perfboard_studio.ui.bodies import (
 from perfboard_studio.ui.moduleart import (
     ADAFRUIT_BLACK,
     ADAFRUIT_BLUE,
+    DEVKIT_V1_BLACK,
     LM2596_MODULE,
     MODULE_ARTS,
     NAME_ROOM_ENOUGH_MM,
@@ -774,6 +775,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
     }
     assert colours == {
         "esp32-devkitc": ESPRESSIF_BLACK,
+        "esp32-devkit-v1": DEVKIT_V1_BLACK,
         "esp32-c3-devkitm-1": ESPRESSIF_BLACK,
         "arduino-nano": None,
         "raspberry-pi-pico": PICO_MODULE.board_colour,
@@ -1246,6 +1248,8 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     ("adafruit-ina219-stemma-qt", ""): (1, -1),
     # NodeMCU's PCB print: the silkscreen's dot at U2's corner towards the antenna and D0.
     ("nodemcu-devkit-1.0", "CP2102"): (1, -1),
+    # Edwiyanto's photograph: too soft to show the USB bridge's dot.
+    ("esp32-devkit-v1", ""): None,
 }
 
 #: A chip of each dotted kind at its usual size: length along its axis, width, height.

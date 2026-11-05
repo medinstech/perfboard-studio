@@ -1054,6 +1054,59 @@ ADAFRUIT_BMP280_QT_MODULE = ModuleArt(
     ),
 )
 
+#: The ESP32 DevKit V1 clones' black, as the photograph its layout was measured on shows
+#: it. An estimate, as every colour here is.
+DEVKIT_V1_BLACK = "#1e1f23"
+
+#: The 30-pin "ESP32 DevKit V1" -- DOIT's board as its many clones make it. Nobody publishes
+#: its board, so the board and its big parts were measured on Edwiyanto's photograph of one
+#: (Wikimedia Commons, "ESP32 Dev Board.jpg", CC BY-SA 4.0), rectified to the board's plane
+#: on 25 of its 30 pads (each within 0.1 mm of its place once fitted; the other five sit
+#: under printed names): the 51.1 x 28.0 mm board, the four 2.8 mm holes, the CP2102 in its
+#: 5 mm QFN, the AMS1117 in its SOT-223 (legs towards the D23 row), the micro-USB socket and
+#: BOOT and EN either side of it -- to about half a millimetre, and clones differ by more. The
+#: WROOM-32 is the DevKitC's, which is exact: its antenna end flush with the board's, its can
+#: where the photograph has it. The socket stands 0.9 mm past the board on that one and is
+#: drawn flush, since nothing is drawn past the body DRC measures; the module stands 0.5 mm
+#: further from the D23 row than its can measured, to keep clear of the holes the photograph
+#: shows open. The small parts are not drawn: at this accuracy, and with every clone placing
+#: them its own way, they would be invented. ``u`` runs towards the antenna, ``v`` from the
+#: D23 row to the EN row.
+ESP32_DEVKIT_V1_MODULE = ModuleArt(
+    key="esp32-devkit-v1",
+    board_colour=DEVKIT_V1_BLACK,
+    names=("devkit v1", "doit"),
+    excludes=("devkitc", "s2", "s3", "c3", "c6", "36", "38"),
+    board=(51.1, 28.0),
+    pins=30,
+    frame="columns",
+    landmark=("EN", 1, 1),
+    # The WROOM's can stands close beside the D23 row, so the names there would be shrunk to
+    # fit while the rest of that row prints full size: printed over the parts instead, the
+    # whole row at one size, as the Pololu boards' are.
+    names_over_parts=True,
+    parts=(
+        ArtPart("rf-module", 12.72, -1.3, 25.5, 18.0, 3.1, facing=1, antenna=6.94, inset=1.0,
+                text="ESP32-WROOM-32"),
+        ArtPart("qfn", -13.41, -6.4, 5.0, 5.0, 0.9, across=0),
+        ArtPart("sot223", -13.61, 3.9, 7.0, 6.5, 1.7, along_v=True, facing=-1),
+        ArtPart("usb", -23.0, -1.32, 5.0, 7.5, 2.6, facing=-1),
+        ArtPart("button", -22.6, -8.8, 4.0, 2.6, 2.0),
+        ArtPart("button", -22.81, 7.05, 4.0, 2.6, 2.0),
+        ArtPart("hole", 22.87, 11.76, 2.84, 2.84, 0.0),
+        ArtPart("hole", 22.87, -11.76, 2.84, 2.84, 0.0),
+        ArtPart("hole", -22.87, 11.76, 2.84, 2.84, 0.0),
+        ArtPart("hole", -22.87, -11.76, 2.84, 2.84, 0.0),
+    ),
+    source=(
+        "Edwiyanto's photograph, Wikimedia Commons, CC BY-SA 4.0 "
+        "(https://commons.wikimedia.org/wiki/File:ESP32_Dev_Board.jpg), "
+        "rectified on its pads at about 33.9 px/mm (the board, the holes, the big parts, to "
+        "about 0.5 mm); the "
+        "DevKitC layout (the WROOM-32)"
+    ),
+)
+
 #: The NodeMCU board's black, as the NodeMCU team's photograph of it shows. An estimate, as
 #: every colour here is.
 NODEMCU_BLACK = "#232428"
@@ -1386,6 +1439,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     LM2596_MODULE,
     SN65HVD230_MODULE,
     DEVKITC_MODULE,
+    ESP32_DEVKIT_V1_MODULE,
     C3_DEVKITM_MODULE,
     NANO_MODULE,
     PICO_MODULE,

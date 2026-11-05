@@ -95,6 +95,8 @@ def test_the_chips_whose_supply_is_not_at_the_corners_say_where_it_is() -> None:
 def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() -> None:
     expected_rows_mm = {
         "esp32-devkitc": 25.4,
+        # Four makers' footprints agree: the rows 1.0 inch apart.
+        "esp32-devkit-v1": 25.4,
         "esp32-c3-devkitm-1": 22.86,
         "arduino-nano": 15.24,
         "raspberry-pi-pico": 17.78,
@@ -222,7 +224,7 @@ def test_the_nano_right_column_runs_from_vin_to_d13() -> None:
 def test_search_matches_the_name_the_summary_and_the_kind() -> None:
     assert [part.id for part in search_catalog("bc547")] == ["bc547"]
     assert {part.id for part in search_catalog("esp32")} == {
-        "esp32-devkitc", "esp32-c3-devkitm-1", "seeed-xiao-esp32c3"
+        "esp32-devkitc", "esp32-devkit-v1", "esp32-c3-devkitm-1", "seeed-xiao-esp32c3"
     }
     assert all(part.symbol == "pmos" for part in search_catalog("p-channel"))
     assert {part.category for part in search_catalog(category="regulator")} == {"regulator"}
