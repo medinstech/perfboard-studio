@@ -171,6 +171,10 @@ closed without a bump.
   part by part, 1437 mm of wire, comes out at 457 mm with power and ground as rail symbols
   -- gets one line over it, once per document: what Arrange does, that the symbols move and
   every connection stays, and the button.
+- **What moved in 0.23, for somebody who knew 0.22.** The first start after upgrading shows
+  a card, once and never to somebody new: Board Setup, Part Properties, the toolbar, the
+  Route menu and the menu bar, each with where it is now and a link that shows it, and
+  Ctrl+K for a command that cannot be found. Help ▸ What Moved in 0.23 brings it back.
 
 ### Changed
 

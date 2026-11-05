@@ -17119,3 +17119,103 @@ def test_a_library_search_that_finds_nothing_says_so_and_names_custom_part() -> 
         assert note.isHidden()
     finally:
         _close(window)
+
+
+def test_who_upgraded_is_read_off_the_settings(tmp_path) -> None:
+    """0.22 never wrote the version that ran; what it did write says it was used."""
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio.ui import whatsnew
+    from perfboard_studio.ui.main import GEOMETRY_KEY
+
+    def store(name: str) -> QSettings:
+        return QSettings(str(tmp_path / f"{name}.ini"), QSettings.Format.IniFormat)
+
+    used = (GEOMETRY_KEY,)
+    assert not whatsnew.upgraded_from_before(store("fresh"), used), "a first start"
+    old = store("old")
+    old.setValue(GEOMETRY_KEY, b"x")
+    assert whatsnew.upgraded_from_before(old, used), "0.22 left its geometry and no version"
+    for version, upgraded in (("0.22.0", True), ("0.21.3", True), ("0.23.0.dev0", False),
+                              ("0.23.0", False), ("0.24.1", False), ("nonsense", False)):
+        said = store(version)
+        said.setValue(whatsnew.LAST_VERSION_KEY, version)
+        assert whatsnew.upgraded_from_before(said, used) is upgraded, version
+
+
+def test_what_moved_is_shown_once_to_an_upgrader_and_never_to_somebody_new(monkeypatch, tmp_path) -> None:
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui import whatsnew
+
+    store = QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
+    monkeypatch.setattr(main_module, "app_settings", lambda: store)
+
+    window = _window_on(_blank_document())  # an empty store: somebody new
+    try:
+        window.consider_moved_card()
+        assert window.moved_card is None
+    finally:
+        _close(window)
+
+    fresh = QSettings(str(tmp_path / "old.ini"), QSettings.Format.IniFormat)
+    fresh.setValue(main_module.GEOMETRY_KEY, b"0.22 was here")
+    monkeypatch.setattr(main_module, "app_settings", lambda: fresh)
+    window = _window_on(_blank_document())
+    try:
+        window.consider_moved_card()
+        card = window.moved_card
+        assert card is not None and not card.isHidden()
+        assert "Board Setup… → Board ▸ Design the Board…" in card.rows["design-board"].text()
+        card.done.click()
+        assert card.isHidden()
+    finally:
+        _close(window)
+    assert fresh.value(whatsnew.LAST_VERSION_KEY), "written down as the window closed"
+
+    window = _window_on(_blank_document())
+    try:
+        window.consider_moved_card()
+        assert window.moved_card is None, "never twice"
+        window.on_whats_moved()  # Help brings it back
+        assert window.moved_card is not None and not window.moved_card.isHidden()
+    finally:
+        _close(window)
+
+
+def test_a_line_of_what_moved_shows_the_place(monkeypatch) -> None:
+    window = _window_on(_blank_document())
+    try:
+        window.on_whats_moved()
+        card = window.moved_card
+        card.rows["properties"].linkActivated.emit("properties")
+        assert window._pointer is not None and not window._pointer.isHidden()
+        assert window.dock_properties.isVisibleTo(window) or not window.dock_properties.isHidden()
+        opened: list[str] = []
+        monkeypatch.setattr(window.command_palette, "open", lambda: opened.append("search"))
+        monkeypatch.setattr(type(window), "on_design_board", lambda self: opened.append("design") or False)
+        card.rows["search"].linkActivated.emit("search")
+        card.rows["design-board"].linkActivated.emit("design-board")
+        assert opened == ["search", "design"]
+    finally:
+        _close(window)
+
+
+def test_what_moved_waits_for_home(monkeypatch, tmp_path) -> None:
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio.ui import main as main_module
+
+    store = QSettings(str(tmp_path / "old.ini"), QSettings.Format.IniFormat)
+    store.setValue(main_module.GEOMETRY_KEY, b"0.22 was here")
+    monkeypatch.setattr(main_module, "app_settings", lambda: store)
+    window = _window_on(_blank_document())
+    try:
+        window.show_home(window._make_home())
+        window.consider_moved_card()
+        assert window.moved_card is None, "not over Home"
+        window.leave_home()
+        assert window.moved_card is not None and not window.moved_card.isHidden()
+    finally:
+        _close(window)

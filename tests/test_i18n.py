@@ -375,7 +375,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
         "export": ["&Build Guide…", "&Schematic…", "1:1 &PDF (parts side + solder side)…",
                    "3D S&napshot…", "3D &Model (STEP)…"],
         "help": ["Help for What's Under the &Pointer", "What's &This?", "&Glossary…",
-                 "Getting Started T&our",
+                 "Getting Started T&our", "What &Moved in 0.23",
                  "&Keyboard Shortcuts…", "Check for &Updates…",
                  "Check Automatically at &Startup", "&About Perfboard Studio"],
         "edit": ["&Undo", "&Redo", "Cop&y", "&Paste", "Dupl&icate", "Select &All",
@@ -461,7 +461,13 @@ def test_the_turkish_interface_has_one_word_for_each_thing() -> None:
     "steering" to anybody who has not designed a PCB; it is "kablolamak" now, the everyday
     word for wiring, and a trace is still a "lehim yolu", everywhere."""
     assert [value for value in TURKISH.values() if "route" in value.lower()] == []
-    assert [value for value in TURKISH.values() if "yönlendir" in value.lower()] == []
+    # One place must say the old word: the card that tells somebody who knew 0.22 where its
+    # Route menu went names that menu by the name 0.22 gave it (ui/whatsnew.py).
+    names_the_old_menu = {"Route ▸ Autoroute All Nets → Wiring ▸ Auto-wire Everything"}
+    assert [
+        value for key, value in TURKISH.items()
+        if "yönlendir" in value.lower() and key not in names_the_old_menu
+    ] == []
     assert TURKISH["&Wiring"].replace("&", "") != TURKISH["&Solder Trace"].replace("&", "")
     assert "Kablola" in TURKISH["Auto-wire"]
 

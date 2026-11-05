@@ -1393,6 +1393,28 @@ TURKISH: Mapping[str, str] = {
     "No part matches “{query}”. Try a shorter word, or describe the part with Custom Part…": (
         "“{query}” ile eşleşen bir parça yok. Daha kısa bir kelime deneyin ya da parçayı Özel Parça… ile tanımlayın."
     ),
+    # -- what moved in 0.23 (ui/whatsnew.py) -------------------------------------------
+    "What moved in 0.23": "0.23'te yeri değişenler",
+    "The window is new. Click a line to see where it went.": (
+        "Pencere yenilendi. Bir satıra tıklayın; yeni yeri gösterilir."
+    ),
+    "Board Setup… → Board ▸ Design the Board…": "Kart Ayarları… → Kart ▸ Kartı Tasarla…",
+    "Part Properties → Properties, always open on the right": (
+        "Parça Özellikleri → Özellikler, sağda hep açık"
+    ),
+    "The toolbar → tools inside the Board panel": "Araç çubuğu → Kart panelinin içindeki araçlar",
+    "Route ▸ Autoroute All Nets → Wiring ▸ Auto-wire Everything": (
+        "Yönlendir ▸ Tüm Netleri Otomatik Yönlendir → Kablolama ▸ Hepsini Otomatik Kablola"
+    ),
+    "The menu bar → ☰ at the top left, or Alt": "Menü çubuğu → sol üstte ☰ ya da Alt",
+    "A command you can't find → Ctrl+K, by its name": (
+        "Bulamadığınız bir komut → Ctrl+K, adını yazarak"
+    ),
+    "Got It": "Tamam",
+    "What &Moved in 0.23": "0.23'te Ye&ri Değişenler",
+    "Where Board Setup, Part Properties, the toolbar and the menus went.": (
+        "Kart Ayarları, Parça Özellikleri, araç çubuğu ve menülerin yeni yerleri."
+    ),
     "Custom Part…": "Özel Parça…",
     "Describe a part the library does not have. It is stored as an identifier "
     "that carries its own dimensions, so it travels with the board.": (

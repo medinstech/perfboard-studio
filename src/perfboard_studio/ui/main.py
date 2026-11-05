@@ -75,6 +75,7 @@ from PySide6.QtGui import (
     QKeySequence,
     QPainter,
     QPixmap,
+    QResizeEvent,
     QShortcut,
     QShowEvent,
 )
@@ -326,7 +327,7 @@ from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 
-from . import helpcards, icons, planner_pool, theme, updater
+from . import helpcards, icons, planner_pool, theme, updater, whatsnew
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .benchguide import BenchItem, BenchView, bench_items, crop_around
@@ -357,8 +358,8 @@ from .project import write_project
 from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
 from .properties import PropertiesPanel
 from .selection import NOTHING, Selection, SelectionKind
+from .tour import Spotlight, Tour
 from .tour import Stop as TourStop
-from .tour import Tour
 from .view2d import (
     FOOTPRINT_MIME,
     BoardScene,
@@ -2810,6 +2811,14 @@ class MainWindow(QMainWindow):
         self._constructing = False
         if self._defer_properties:
             QTimer.singleShot(0, self._fill_properties)
+        # Somebody who knew the window before 0.23 is shown what moved, once
+        # (``ui/whatsnew.py``); this version is written down as the window closes.
+        settings = app_settings()
+        self._moved_due = whatsnew.upgraded_from_before(
+            settings, (GEOMETRY_KEY, RECENT_FILES_KEY, HAS_PLACED_KEY)
+        ) and not _stored_bool(settings, whatsnew.MOVED_SHOWN_KEY, False)
+        self.moved_card: whatsnew.MovedCard | None = None
+        self._pointer: Spotlight | None = None
 
     def start_tour(self) -> None:
         """The getting-started tour (ui/tour.py), on the example that is drawn and not built.
@@ -3315,6 +3324,92 @@ class MainWindow(QMainWindow):
             # never pinned; a window with nothing to divide has nothing to pin.
             self._sizes_after_home = False
             self._apply_default_sizes()
+        # Over the window it is about, not over Home.
+        self.consider_moved_card()
+
+    # -- what moved in 0.23 (ui/whatsnew.py) ---------------------------------------------
+
+    def consider_moved_card(self) -> None:
+        """Show what moved in 0.23 if this start is an upgrade and it has not been shown --
+        after the window is up, and never over Home."""
+        if not getattr(self, "_moved_due", False) or self.home_is_showing():
+            return
+        self._moved_due = False
+        app_settings().setValue(whatsnew.MOVED_SHOWN_KEY, True)
+        self.on_whats_moved()
+
+    def on_whats_moved(self) -> None:
+        """The card, over the window: by itself once after an upgrade, and from Help."""
+        card = self.moved_card
+        if card is None:
+            card = whatsnew.MovedCard(self)
+            card.picked.connect(self._show_moved)
+            card.dismissed.connect(card.hide)
+            self.moved_card = card
+        # Shown, then sized: before its first showing the theme's type sizes are not on it
+        # yet, and the card came out a row taller than its words with the space between them.
+        card.show()
+        self._place_moved_card()
+        card.raise_()
+
+    def _place_moved_card(self) -> None:
+        """Under the header, in the middle of the window: over the canvas, where somebody
+        looking for the old toolbar is looking."""
+        card = self.moved_card
+        if card is None:
+            return
+        card.ensurePolished()
+        card.adjustSize()
+        # As tall as its words at its width: a child's adjustSize goes by the labels' own
+        # guesses, three lines each, and the rows stood forty pixels apart.
+        tall = card.heightForWidth(card.width())
+        if tall > 0:
+            card.resize(card.width(), tall)
+        top = self.header_strip.geometry().bottom() if self.header_strip.isVisible() else 0
+        x = max(theme.SPACE["lg"], (self.width() - card.width()) // 2)
+        card.move(x, top + theme.SPACE["2xl"])
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        if self.moved_card is not None and self.moved_card.isVisible():
+            self._place_moved_card()
+
+    def _show_moved(self, key: str) -> None:
+        """Show where one thing went: the designer itself, ☰ itself, the command search
+        itself -- or a ring round the place, for a panel, the board's tools and Wiring."""
+        if key == "design-board":
+            self.on_design_board()
+        elif key == "menus":
+            self.header.open_menu()
+        elif key == "search":
+            self.command_palette.open()
+        elif key == "properties":
+            self._raise_view(self.dock_properties)
+            self._point_at(self.dock_properties)
+        elif key == "tools":
+            self.show_board()
+            self._point_at(self.board_tools)
+        elif key == "auto-wire":
+            self._point_at(self.workflow_bar.buttons["route"])
+
+    #: How long the ring stays round what a line of the card points at, in milliseconds.
+    POINTING_MS = 1800
+
+    def _point_at(self, widget: QWidget) -> None:
+        """Dim the window round ``widget`` for a moment, the tour's way; it takes no click."""
+        if self._pointer is None:
+            self._pointer = Spotlight(self)
+        spot = self._pointer
+        spot.setGeometry(self.rect())
+        corner = widget.mapTo(self, QPoint(0, 0))
+        spot.target = QRect(corner, widget.size()).adjusted(-4, -4, 4, 4)
+        spot.region = QRect()
+        spot.show()
+        spot.raise_()
+        if self.moved_card is not None:
+            self.moved_card.raise_()
+        spot.update()
+        QTimer.singleShot(self.POINTING_MS, spot.hide)
 
     def home_is_showing(self) -> bool:
         return self._home is not None and self._central_stack.currentWidget() is self._home
@@ -5251,6 +5346,11 @@ class MainWindow(QMainWindow):
               "wiring, checks, guide.")
         )
         act_tour.triggered.connect(lambda _checked=False: self.start_tour())
+        act_moved = help_menu.addAction(t("What &Moved in 0.23"))
+        act_moved.setToolTip(
+            t("Where Board Setup, Part Properties, the toolbar and the menus went.")
+        )
+        act_moved.triggered.connect(lambda _checked=False: self.on_whats_moved())
         help_menu.addSeparator()
         act_keys = help_menu.addAction(t("&Keyboard Shortcuts…"))
         act_keys.setShortcut(QKeySequence("Ctrl+/"))
@@ -12864,6 +12964,9 @@ class MainWindow(QMainWindow):
     def _save_session(self) -> None:
         settings = app_settings()
         settings.setValue(GEOMETRY_KEY, self.saveGeometry())
+        # With the rest of the session, not as the window opens: building a window writes
+        # nothing to the store, and a store only a closed window wrote to says who upgraded.
+        whatsnew.note_this_version(settings)
         # The panels as they were before Home, if Home is showing: a window of nothing is
         # not a layout anybody wants back.
         layout = (
@@ -13904,6 +14007,8 @@ def main() -> int:
     # question arrives over a board rather than instead of one.
     window.start_autosave()
     QTimer.singleShot(RECOVERY_OFFER_DELAY_MS, window.offer_recovery)
+    # After the window is up, like the rest: what moved in 0.23, for somebody upgrading.
+    QTimer.singleShot(0, window.consider_moved_card)
     return app.exec()
 
 
