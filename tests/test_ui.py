@@ -2507,6 +2507,47 @@ def test_insulated_wire_takes_its_nets_colour_from_the_build_guides_convention()
         assert name in _INSULATION_SCREEN, name
 
 
+def test_a_wire_on_screen_is_the_colour_the_saved_board_draws_it() -> None:
+    """The 2D view numbered the signal nets in the order they were made, and a board opened
+    from its .perf has them in the file's order, sorted by id -- so the wire a builder saw
+    yellow before saving was another colour after reopening, and the cut list printed from
+    either session disagreed with the other's screen. The guide's half is
+    ``test_guide.test_a_wire_is_the_colour_the_saved_board_calls_it``."""
+    from .test_guide import eleven_signal_nets_in_the_order_they_were_made, reopened
+
+    doc = eleven_signal_nets_in_the_order_they_were_made()
+    lookup = footprint_lookup()
+
+    def on_screen(board: PerfDocument) -> dict[str, str]:
+        scene = BoardScene(board, lookup, side="top")
+        return {
+            item.conductor.id: item._colour().name()
+            for item in scene.items()
+            if isinstance(item, ConductorItem)
+        }
+
+    assert on_screen(doc) == on_screen(reopened(doc))
+
+
+def test_a_wire_in_3d_and_in_step_is_the_colour_the_saved_board_paints_it() -> None:
+    """The 3D view and the STEP export number the signal nets through
+    ``view3d.net_colouring``, which walked them in the order they were made."""
+    from perfboard_studio.ui import view3d
+
+    from .test_guide import eleven_signal_nets_in_the_order_they_were_made, reopened
+
+    doc = eleven_signal_nets_in_the_order_they_were_made()
+
+    def painted(board: PerfDocument) -> dict[str, tuple[float, float, float]]:
+        net_class, signal_index = view3d.net_colouring(board)
+        return {
+            c.id: view3d.wire_rgb(c, net_class.get(c.net_id or ""), signal_index.get(c.net_id or "", 0))
+            for c in board.conductors
+        }
+
+    assert painted(doc) == painted(reopened(doc))
+
+
 def test_a_wire_s_own_colour_is_drawn_the_same_in_both_views() -> None:
     """The 3D view read a wire's own colour only as #rrggbb, so one the document called
     "red" was red on the board and its net's colour in 3D. Both views now read it through
