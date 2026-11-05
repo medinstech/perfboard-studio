@@ -128,6 +128,19 @@ def test_every_not_offered_reason_names_its_series_and_an_offered_part() -> None
         assert f"JST {series.upper()}" in answer.reason and pitch in answer.reason
 
 
+def test_every_part_a_refused_family_offers_instead_is_in_the_catalog() -> None:
+    """Walked over the table itself, not over the queries above: a family added to
+    ``NOT_OFFERED`` with no query in that list is held to it too. The Library drops an id it
+    cannot find, so a typo or a renamed part would otherwise shrink "Offered instead" to
+    nothing without a word."""
+    ids = {part.id for part in CATALOG}
+    for series, _pitch, answer in NOT_OFFERED:
+        assert answer.instead, series
+        assert len(set(answer.instead)) == len(answer.instead), (series, answer.instead)
+        missing = [part_id for part_id in answer.instead if part_id not in ids]
+        assert not missing, (series, missing)
+
+
 def test_a_jst_with_a_named_lead_and_a_value_plugs_in_on_a_cable() -> None:
     """A JST XH is where a module's cable latches on, as a pin header is: named, the guide
     says what plugs in and where each lead goes."""
