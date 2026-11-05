@@ -954,6 +954,83 @@ ADAFRUIT_INA219_QT_MODULE = ModuleArt(
     ),
 )
 
+#: The NodeMCU board's black, as the NodeMCU team's photograph of it shows. An estimate, as
+#: every colour here is.
+NODEMCU_BLACK = "#232428"
+
+#: The NodeMCU DevKit 1.0 -- the 0.9 inch "Amica" board, the NodeMCU team's own design --
+#: read off its published Gerbers and PCB print (github nodemcu/nodemcu-devkit-v1.0, MIT):
+#: the 25.4 x 48.26 mm board, its two rows of fifteen 0.9 inch apart, the ESP-12E flush with
+#: the top edge, and below it the NCP1117 in its SOT-223, the 100 uF tantalum (its + end
+#: up, as the silkscreen's bar and the team's photograph have it), the two S8050s of the
+#: auto-reset, the row of 0402 parts, the blue LED, the CP2102 (its pin 1 where the
+#: silkscreen's dot is), the Schottky from USB (band down), the micro-USB socket at the
+#: bottom edge and the RST and FLASH buttons beside it (C&K PTS 820). Sizes are the
+#: packages'. ``u`` runs up the board towards the antenna, ``v`` from the D0 row to the A0
+#: row. R10 is marked not fitted in the bill of materials and is not drawn.
+#:
+#: Only the 0.9 inch board is this one: LoLin's wider "V3", rows 1.1 inch apart, is a board
+#: of another size that the fit turns away, and is named out besides.
+NODEMCU_MODULE = ModuleArt(
+    key="nodemcu-devkit-1.0",
+    board_colour=NODEMCU_BLACK,
+    names=("nodemcu",),
+    excludes=("lolin", "v3", "esp32", "esp-32"),
+    board=(48.26, 25.4),
+    pins=30,
+    frame="columns",
+    landmark=("A0", 1, 1),
+    # The board prints each name along its edge beside the pin, in a hand much smaller than
+    # the tags here, and the ESP-12E and the 0402 columns stand where the tags would go:
+    # printed over the parts, as the Pro Mini's are.
+    names_over_parts=True,
+    parts=(
+        ArtPart("rf-module", 12.08, 0.0, 24.0, 16.0, 3.2, facing=1, antenna=7.75, inset=2.0,
+                text="ESP8266MOD"),
+        ArtPart("chip-c", 17.55, 9.04, 1.0, 0.5, 0.5),
+        ArtPart("chip-r", 14.67, 9.04, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", 11.79, 9.04, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", 8.97, -9.04, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", 6.08, -9.04, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", 3.20, -9.04, 1.0, 0.5, 0.35),
+        ArtPart("chip-c", -1.92, 4.24, 1.0, 0.5, 0.5, along_v=True),
+        ArtPart("sot223", -4.22, -1.30, 7.0, 6.5, 1.7, along_v=True, facing=1),
+        ArtPart("sma", -4.22, 7.34, 3.5, 2.8, 1.9, facing=1, colour=ART_COLOURS["tantalum"]),
+        ArtPart("chip-c", -5.79, 4.24, 2.0, 1.25, 1.25),
+        ArtPart("sot23", -5.89, -7.33, 2.4, 2.9, 1.1, facing=1),
+        ArtPart("chip-r", -9.51, 8.28, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", -9.51, 6.62, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", -9.51, 4.97, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", -9.51, 1.66, 1.0, 0.5, 0.35),
+        ArtPart("chip-c", -9.51, 0.0, 1.0, 0.5, 0.5),
+        ArtPart("chip-c", -9.51, -1.66, 1.0, 0.5, 0.5),
+        ArtPart("chip-r", -9.51, -3.31, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", -9.51, -4.97, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", -9.51, -6.62, 1.0, 0.5, 0.35),
+        ArtPart("chip-r", -9.51, -8.28, 1.0, 0.5, 0.35),
+        ArtPart("led", -12.12, 4.09, 1.6, 0.8, 0.6, along_v=True, colour="#4a7fd8"),
+        ArtPart("sot23", -13.24, -7.33, 2.4, 2.9, 1.1, facing=-1),
+        ArtPart("qfn", -14.45, -1.19, 5.0, 5.0, 0.9, facing=1, text="CP2102", across=-1),
+        ArtPart("sma", -14.36, 7.80, 2.5, 1.25, 0.95, facing=-1),
+        ArtPart("chip-c", -14.84, 4.92, 1.0, 0.5, 0.5),
+        ArtPart("chip-c", -14.84, 3.28, 1.0, 0.5, 0.5),
+        ArtPart("button", -21.09, 6.22, 3.9, 2.9, 2.5),
+        ArtPart("button", -21.09, -6.22, 3.9, 2.9, 2.5),
+        ArtPart("usb", -21.63, 0.0, 5.0, 7.5, 2.6, facing=-1),
+        ArtPart("hole", 21.84, 10.41, 3.16, 3.16, 0.0),
+        ArtPart("hole", 21.84, -10.41, 3.16, 3.16, 0.0),
+        ArtPart("hole", -21.84, 10.41, 3.16, 3.16, 0.0),
+        ArtPart("hole", -21.84, -10.41, 3.16, 3.16, 0.0),
+    ),
+    source=(
+        "NodeMCU DevKit 1.0 Gerbers (V3) and PCB print, github nodemcu/nodemcu-devkit-v1.0, "
+        "MIT (the board, both rows, the holes, every top-side part's place and turn, the "
+        "tantalum's, the diode's and the CP2102's marks); its bill of materials (the "
+        "packages); its photograph (the board's colour, the tantalum's band); C&K PTS 820 "
+        "(the buttons)"
+    ),
+)
+
 #: Pololu's DRV8833 dual motor driver carrier (item 2130) as its own top-view pinout picture
 #: has it: the 10 uF capacitor and the 180 ohm resistor along the top, the reverse-
 #: protection MOSFET and its diode under them, the QFN in the middle, small capacitors and
@@ -1213,6 +1290,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     NANO_MODULE,
     PICO_MODULE,
     D1_MINI_MODULE,
+    NODEMCU_MODULE,
     POLOLU_A4988_MODULE,
     POLOLU_DRV8825_MODULE,
     XIAO_ESP32C3_MODULE,

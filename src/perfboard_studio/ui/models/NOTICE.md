@@ -109,6 +109,8 @@ positions, packages and turns, never its artwork -- and nothing of the file is s
   Creative Commons Attribution/Share-Alike, designed by Limor Fried/Ladyada:
   <https://github.com/adafruit/Adafruit-INA219-Current-Sensor-PCB>
   (`Adafruit_INA219_CurPowerMonitor.brd`, `Adafruit INA219 STEMMA QT.brd`)
+- **NodeMCU DevKit 1.0** -- the NodeMCU team, Gerbers, PCB print, schematic and
+  photograph, MIT: <https://github.com/nodemcu/nodemcu-devkit-v1.0>
 - **SparkFun Motor Driver - Dual TB6612FNG v1.1c** -- SparkFun Electronics, Eagle board
   (`SparkFun_Motor_Driver-TB6612FNG_v11c.brd`), credited here as the Pro Mini's is
 

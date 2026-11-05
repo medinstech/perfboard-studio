@@ -32,6 +32,7 @@ from perfboard_studio.ui.moduleart import (
     MODULE_ARTS,
     NAME_ROOM_ENOUGH_MM,
     NANO_MODULE,
+    NODEMCU_BLACK,
     SN65HVD230_MODULE,
     SPARKFUN_RED,
     TQFP32_BODY_MM,
@@ -787,6 +788,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,
         "adafruit-ina219-stemma-qt": ADAFRUIT_BLACK,
+        "nodemcu-devkit-1.0": NODEMCU_BLACK,
         "pololu-drv8833": PICO_MODULE.board_colour,
         "gy-521": None,  # the photograph's blue is the module style's, within the lighting
         "ssd1306-i2c-gnd-vcc": None,
@@ -1239,6 +1241,8 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     # Adafruit's boards, both revisions: U1's pad 1, towards VIN+ and the shunt.
     ("adafruit-ina219", ""): (1, -1),
     ("adafruit-ina219-stemma-qt", ""): (1, -1),
+    # NodeMCU's PCB print: the silkscreen's dot at U2's corner towards the antenna and D0.
+    ("nodemcu-devkit-1.0", "CP2102"): (1, -1),
 }
 
 #: A chip of each dotted kind at its usual size: length along its axis, width, height.

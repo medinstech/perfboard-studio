@@ -3084,6 +3084,24 @@ TURKISH: Mapping[str, str] = {
         "Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart "
         "çerçevesi ölçülmüştür."
     ),
+    "ESP8266 board, 30 pins, rows 22.86 mm apart": (
+        "ESP8266 kartı, 30 pin, sıralar arası 22,86 mm"
+    ),
+    "Its pins are 3.3 V logic. VIN is the 5 V rail: USB feeds it through a Schottky "
+    "diode, or feed it yourself. D3, D4 and D8 are GPIO0, GPIO2 and GPIO15, which "
+    "choose how it boots: nothing may hold D3 or D4 low, or D8 high, as it starts. SD0 "
+    "to SD3, CMD and CLK are the module's flash: leave them free. LoLin's wider \"V3\", "
+    "rows 27.94 mm apart, is another board. The height of what is on the board is an "
+    "estimate, and so is its colour; the pins, the rows and the board outline are "
+    "measured.": (
+        "Pinleri 3,3 V mantık seviyesindedir. VIN 5 V hattıdır: USB onu bir Schottky diyot "
+        "üzerinden besler, ya da siz besleyin. D3, D4 ve D8, kartın nasıl açılacağını seçen "
+        "GPIO0, GPIO2 ve GPIO15'tir: açılırken hiçbir şey D3'ü ya da D4'ü low'a, D8'i "
+        "high'a çekmemelidir. SD0-SD3, CMD ve CLK modülün flash hattıdır: bunları boş "
+        "bırakın. LoLin'in daha geniş \"V3\" kartı, sıraları 27,94 mm arayla, başka bir "
+        "karttır. Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve "
+        "kart çerçevesi ölçülmüştür."
+    ),
     "RP2040 board, 40 pins, rows 17.78 mm apart": "RP2040 kartı, 40 pin, sıralar arası 17,78 mm",
     "ESP8266 board, 16 pins, rows 22.86 mm apart": (
         "ESP8266 kartı, 16 pin, sıralar arası 22,86 mm"

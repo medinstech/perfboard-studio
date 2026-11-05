@@ -263,6 +263,10 @@ _PICO_RIGHT = (
 )  # fmt: skip
 _D1_MINI_LEFT = ("RST", "A0", "D0", "SCK/D5", "MISO/D6", "MOSI/D7", "CS/D8", "3V3")
 _D1_MINI_RIGHT = ("TX", "RX", "SCL/D1", "SDA/D2", "D3", "D4", "GND", "5V")
+# The NodeMCU DevKit 1.0, as its silkscreen and its schematic's IO CONN sheet name the
+# pins, the antenna end up: A0 down to VIN on one row, D0 down to 3V3 on the other.
+_NODEMCU_LEFT = ("A0", "RSV", "RSV", "SD3", "SD2", "SD1", "CMD", "SD0", "CLK", "GND", "3V3", "EN", "RST", "GND", "VIN")
+_NODEMCU_RIGHT = ("D0", "D1", "D2", "D3", "D4", "3V3", "GND", "D5", "D6", "D7", "D8", "RX", "TX", "GND", "3V3")
 _C3_DEVKITM_LEFT = (
     "GND", "3V3", "3V3", "IO2", "IO3", "GND", "RST", "GND", "IO0", "IO1",
     "IO10", "GND", "5V", "5V", "GND",
@@ -1728,6 +1732,25 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 check="The USB-C socket stands about 1.8 mm past the end of the board. "
                 + _MODULE_TOP),
+    CatalogPart("nodemcu-devkit-1.0", "NodeMCU DevKit 1.0 (ESP-12E)", "module",
+                "mod-2x15-p9-r1-25.4x48.26x3.2-s8.5",
+                "ESP8266 board, 30 pins, rows 22.86 mm apart",
+                _two_columns(_NODEMCU_LEFT, _NODEMCU_RIGHT), ref_prefix="U",
+                value="NodeMCU",
+                source=(
+                    "NodeMCU DevKit 1.0 Gerbers, PCB print and schematic (github "
+                    "nodemcu/nodemcu-devkit-v1.0): the 25.4 x 48.26 mm board, both 15-pin rows 0.9 "
+                    "inch apart, the names printed beside them and the schematic IO CONN sheet "
+                    "behind them"
+                ),
+                check=(
+                    "Its pins are 3.3 V logic. VIN is the 5 V rail: USB feeds it through a Schottky "
+                    "diode, or feed it yourself. D3, D4 and D8 are GPIO0, GPIO2 and GPIO15, which "
+                    "choose how it boots: nothing may hold D3 or D4 low, or D8 high, as it starts. "
+                    "SD0 to SD3, CMD and CLK are the module's flash: leave them free. LoLin's wider "
+                    "\"V3\", rows 27.94 mm apart, is another board. " + _MODULE_TOP
+                ),
+                aliases=("NodeMCU", "ESP8266", "ESP-12E", "Amica", "CP2102")),
     CatalogPart("wemos-d1-mini", "WEMOS D1 mini", "module",
                 "mod-2x8-p9-r1-25.6x34.2x3.5-s8.5",
                 "ESP8266 board, 16 pins, rows 22.86 mm apart",

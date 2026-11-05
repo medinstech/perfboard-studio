@@ -210,6 +210,11 @@ closed without a bump.
   original is also found as "INA219 module" and "CJMCU-219", and its check says a clone
   usually keeps the header order but is to be measured. Three new kinds of part on a module
   make it: a screw terminal block, a STEMMA QT / Qwiic socket and a SOT-23-8.
+- **The NodeMCU DevKit 1.0, drawn as itself.** The 0.9 inch board with the ESP-12E goes
+  in on its two rows of fifteen, named as its silkscreen has them, with the regulator,
+  the tantalum, the CP2102, the micro-USB socket and the RST and FLASH buttons where the
+  NodeMCU team's own Gerbers put them. Its check says which pins set how it boots, that
+  the SD pins are the module's flash, and that LoLin's wider "V3" is another board.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
