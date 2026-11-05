@@ -51,7 +51,14 @@ from .model import (
     NetNode,
     PerfDocument,
 )
-from .system import board_document, board_ids, board_title, connector_of, every_component
+from .system import (
+    board_document,
+    board_ids,
+    board_title,
+    connector_of,
+    every_component,
+    placed_components,
+)
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -629,6 +636,9 @@ class SystemLvsResult:
     issues: tuple[LvsIssue, ...]
     matched_nets: int
     nets: int
+    #: The nets on more than one board that no cable wire carries between them -- what
+    #: Add Cable is for, by name, in document order.
+    uncabled: tuple[str, ...] = ()
 
 
 def run_system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> SystemLvsResult:
@@ -730,7 +740,38 @@ def run_system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> SystemLvsResul
         )
 
     issues.sort(key=_issue_sort_key)
-    return SystemLvsResult(ok=not issues, issues=tuple(issues), matched_nets=matched, nets=counted)
+    return SystemLvsResult(
+        ok=not issues,
+        issues=tuple(issues),
+        matched_nets=matched,
+        nets=counted,
+        uncabled=_uncabled(doc),
+    )
+
+
+def _uncabled(doc: PerfDocument) -> tuple[str, ...]:
+    """The nets placed on more than one board whose boards no cable wire OF THAT NET joins:
+    the boards holding the net, linked wherever a wire's two pins are both on it, are not
+    one group. Judged on the cables and the netlist alone, so a board not yet routed inside
+    does not read as a missing cable."""
+    board_of = {c.ref: b for b, c in placed_components(doc)}
+    out: list[str] = []
+    for net in doc.nets:
+        pins = {(n.component_ref, n.pin) for n in net.nodes if n.component_ref in board_of}
+        boards = {board_of[ref] for ref, _pin in pins}
+        if len(boards) < 2:
+            continue
+        group = {b: b for b in boards}
+        for cable in doc.cables:
+            a, b = connector_of(doc, cable.a), connector_of(doc, cable.b)
+            if a is None or b is None:
+                continue
+            if any((a.ref, w.a_pin) in pins and (b.ref, w.b_pin) in pins for w in cable.wires):
+                old_group, new_group = group[cable.a.board], group[cable.b.board]
+                group = {k: (new_group if v == old_group else v) for k, v in group.items()}
+        if len(set(group.values())) > 1:
+            out.append(net.name)
+    return tuple(out)
 
 
 def _system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> LvsResult:

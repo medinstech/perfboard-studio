@@ -158,6 +158,7 @@ from perfboard_studio.catalog import (
     CATEGORY_ORDER,
     CatalogPart,
     catalog_part,
+    free_reference,
     names_part,
     not_offered,
     part_rank,
@@ -167,6 +168,7 @@ from perfboard_studio.command import CommandContext, DispatchResult, HistoryEntr
 from perfboard_studio.commands import (
     AddBoardNotePayload,
     AddBoardPayload,
+    AddCablePayload,
     AddNetPayload,
     AddPartPayload,
     AddPartsPayload,
@@ -268,6 +270,8 @@ from perfboard_studio.model import (
     BoardId,
     BoardSide,
     BodyArchetype,
+    Cable,
+    CableEnd,
     ComponentInstance,
     ConductorKind,
     DocumentMeta,
@@ -335,6 +339,7 @@ from perfboard_studio.system import (
     board_title,
     circuit_parts,
     every_component,
+    pair_by_net,
     placed_components,
 )
 from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
@@ -350,6 +355,7 @@ from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
 from .boardpreview import render_board, with_arrangement, with_board
 from .boardstrip import SYSTEM_ENTRY, BoardStrip
+from .cabledialog import CableDialog
 from .canvastools import FloatingBar
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
 from .designer import BoardDesigner, load_user_families, store_user_families
@@ -4601,6 +4607,16 @@ class MainWindow(QMainWindow):
         )
         act_add_board.setProperty(PALETTE_ALSO, t("second board, several boards, system"))
         act_add_board.triggered.connect(self.on_add_board)
+        act_add_cable = self.act_add_cable = board_menu.addAction(t("Add &Cable…"))
+        act_add_cable.setToolTip(
+            t(
+                "A cable from a connector on one board to a connector on another. Its wires "
+                "are paired by net: a pin of each on the same net takes a wire, and what is "
+                "not certain is left for you and said."
+            )
+        )
+        act_add_cable.setProperty(PALETTE_ALSO, t("harness, wire between boards, connect boards"))
+        act_add_cable.triggered.connect(lambda _checked=False: self.on_add_cable())
         act_features = board_menu.addAction(t("Board &Features…"))
         act_features.setToolTip(
             t(
@@ -11187,6 +11203,52 @@ class MainWindow(QMainWindow):
         added = self.bus.system_document.boards[-1].id
         self._on_board_picked(added)
         self.statusBar().showMessage(did(result.description), 6000)
+
+    def on_add_cable(self, a: CableEnd | None = None) -> None:
+        """Add Cable: the dialog, with ``a`` -- a connector picked on System or a board --
+        already chosen at one end, then one cable.add."""
+        if len(board_ids(self.bus.system_document)) < 2:
+            self.statusBar().showMessage(t("A cable joins two boards: add a board first."), 8000)
+            return
+        dialog = CableDialog(
+            self.bus.system_document, self.lookup, free_reference(self.bus.system_document, "W"), a, self
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        ends = dialog.ends()
+        if ends is None:
+            return
+        self.add_cable_between(*ends, ref=dialog.reference.text(), length_mm=dialog.length_mm())
+
+    def add_cable_between(
+        self, a: CableEnd, b: CableEnd, *, ref: str | None = None, length_mm: float | None = None
+    ) -> DispatchResult:
+        """A cable between two connectors with its wires paired by net, as one cable.add --
+        and in the status bar how many were paired and how many pins were left for the
+        person (the dialog lists which)."""
+        document = self.bus.system_document
+        pairing = pair_by_net(document, a, b)
+        cable = Cable(
+            id="",
+            ref=(ref or free_reference(document, "W")).strip(),
+            a=a,
+            b=b,
+            wires=pairing.wires,
+            length_mm=length_mm,
+        )
+        result = self.bus.dispatch("cable.add", AddCablePayload(cable=cable))
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return result
+        message = did(result.description)
+        if pairing.unpaired:
+            message += "  ·  " + counted(
+                len(pairing.unpaired),
+                t("{count} pin left unpaired"),
+                t("{count} pins left unpaired"),
+            )
+        self.statusBar().showMessage(message, 8000)
+        return result
 
     def _refresh_board_strip(self) -> None:
         """The strip's entries from the document: shown only when there is a second board."""

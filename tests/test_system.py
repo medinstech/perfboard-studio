@@ -505,3 +505,51 @@ def test_a_design_command_is_refused_on_a_board() -> None:
         OnBoardPayload(board="b2", type="part.add", payload=AddPartPayload(ref="R99", value="", footprint_id="r-axial-4")),
     )
     assert not result.ok and result.code == "unknown-command" and "design" in result.message
+
+
+# ---------------------------------------------------------------------------
+# A cable's wires, paired by net
+# ---------------------------------------------------------------------------
+
+
+def _headers(nets):  # type: ignore[no-untyped-def]
+    """JA on the first board and JB (3 pins) on the second, with ``nets`` between them."""
+    from perfboard_studio.commands import DEFAULT_BOARD
+    from perfboard_studio.model import ComponentInstance, DocumentMeta, Net, NetNode
+
+    ja = ComponentInstance(id="cmp-1", ref="JA", value="", footprint_id="hdr-1x3", anchor=HoleCoord(2, 2))
+    jb = ComponentInstance(id="cmp-2", ref="JB", value="", footprint_id="hdr-1x3", anchor=HoleCoord(2, 2))
+    return PerfDocument(
+        meta=DocumentMeta(name="Bench", created="", modified=""),
+        board=DEFAULT_BOARD,
+        components=(ja,),
+        nets=tuple(
+            Net(id=f"n{i}", name=name, nodes=tuple(NetNode(ref, pin) for ref, pin in pins))
+            for i, (name, pins) in enumerate(nets)
+        ),
+        boards=(ExtraBoard(id="b2", name="Remote", board=DEFAULT_BOARD, components=(jb,)),),
+    )
+
+
+def test_a_cable_pairs_each_net_one_pin_to_one_pin() -> None:
+    from perfboard_studio.model import CableEnd, CableWire
+
+    doc = _headers([("GND", [("JA", "2"), ("JB", "1")]), ("SIG", [("JA", "1"), ("JB", "3")])])
+    pairing = system.pair_by_net(doc, CableEnd(system.FIRST_BOARD, "cmp-1"), CableEnd("b2", "cmp-2"))
+    assert pairing.wires == (CableWire("1", "3"), CableWire("2", "1")), "by net, not by pin number"
+    assert pairing.unpaired == ()
+
+
+def test_what_is_not_certain_is_left_unpaired_and_said() -> None:
+    """A net with no counterpart, and a net on two pins of one connector: neither guessed."""
+    from perfboard_studio.model import CableEnd
+
+    doc = _headers([
+        ("GND", [("JA", "1"), ("JA", "2"), ("JB", "1")]),
+        ("SENSE", [("JA", "3")]),
+        ("SIG", [("JB", "3"), ("JA", "9")]),
+    ])
+    pairing = system.pair_by_net(doc, CableEnd(system.FIRST_BOARD, "cmp-1"), CableEnd("b2", "cmp-2"))
+    assert [(w.a_pin, w.b_pin) for w in pairing.wires] == [("9", "3")]
+    assert any("GND is on JA pins 1, 2 and JB pin 1" in why for why in pairing.unpaired), pairing.unpaired
+    assert "JA pin 3 (SENSE): JB has no pin on SENSE." in pairing.unpaired, pairing.unpaired

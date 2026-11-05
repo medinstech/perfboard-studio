@@ -14,12 +14,13 @@ Hangs off ``model`` alone, and is pure: no clock, no filesystem.
 
 from __future__ import annotations
 
-from dataclasses import fields, replace
+from dataclasses import dataclass, fields, replace
 
 from .model import (
     BoardId,
     Cable,
     CableEnd,
+    CableWire,
     ComponentInstance,
     ExtraBoard,
     PerfDocument,
@@ -186,6 +187,62 @@ def connector_of(doc: PerfDocument, end: CableEnd) -> ComponentInstance | None:
     return next(
         (c for c in board_document(doc, end.board).components if c.id == end.connector), None
     )
+
+
+@dataclass(frozen=True, slots=True)
+class CablePairing:
+    """The wires a cable between two connectors takes, paired by net, and what was not."""
+
+    wires: tuple[CableWire, ...]
+    #: Why each pin left without a wire was left, one English sentence each (engine text).
+    unpaired: tuple[str, ...]
+
+
+def pair_by_net(doc: PerfDocument, a: CableEnd, b: CableEnd) -> CablePairing:
+    """A cable's wires from the design itself: a pin of ``a`` and a pin of ``b`` on the same
+    net take a wire between them, which is what the net says the cable is for.
+
+    Only where it is certain. A net on one connector and not the other has nothing to pair
+    with; a net on two pins of either has more than one way to go, and which pin goes to
+    which is the person's to say. Both are left unpaired and said, never guessed: a guessed
+    wire is a crossed cable nobody chose. A pin on no net takes no wire.
+    """
+    a_part = connector_of(doc, a)
+    b_part = connector_of(doc, b)
+    if a_part is None or b_part is None:
+        return CablePairing((), ("A cable's two ends have to be parts placed on boards of this document.",))
+    wires: list[CableWire] = []
+    unpaired: list[str] = []
+    for net in doc.nets:
+        on_a = sorted({n.pin for n in net.nodes if n.component_ref == a_part.ref}, key=_pin_order)
+        on_b = sorted({n.pin for n in net.nodes if n.component_ref == b_part.ref}, key=_pin_order)
+        if not on_a and not on_b:
+            continue
+        if len(on_a) == 1 and len(on_b) == 1:
+            wires.append(CableWire(a_pin=on_a[0], b_pin=on_b[0]))
+        elif not on_b:
+            unpaired.append(
+                f"{a_part.ref} {_pins(on_a)} ({net.name}): {b_part.ref} has no pin on {net.name}."
+            )
+        elif not on_a:
+            unpaired.append(
+                f"{b_part.ref} {_pins(on_b)} ({net.name}): {a_part.ref} has no pin on {net.name}."
+            )
+        else:
+            unpaired.append(
+                f"{net.name} is on {a_part.ref} {_pins(on_a)} and {b_part.ref} {_pins(on_b)}: "
+                f"which goes to which is yours to say."
+            )
+    wires.sort(key=lambda wire: _pin_order(wire.a_pin))
+    return CablePairing(tuple(wires), tuple(unpaired))
+
+
+def _pin_order(pin: str) -> tuple[int, str]:
+    return (int(pin), "") if pin.isdigit() else (1_000_000, pin)
+
+
+def _pins(pins: list[str]) -> str:
+    return f"pin {pins[0]}" if len(pins) == 1 else "pins " + ", ".join(pins)
 
 
 #: The gauges a cable wire may be given, as American Wire Gauge numbers.

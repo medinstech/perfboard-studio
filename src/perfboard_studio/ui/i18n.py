@@ -740,6 +740,28 @@ TURKISH: Mapping[str, str] = {
     # A board's own command done on one board of several (``board.on``'s undo label), and a
     # board nobody named, as the phrasebook calls it.
     "{what} on {board}": "{what} ({board})",
+    # Add Cable (draft words; reach to read).
+    "Add &Cable…": "Ka&blo Ekle…",
+    "A cable from a connector on one board to a connector on another. Its wires are paired "
+    "by net: a pin of each on the same net takes a wire, and what is not certain is left "
+    "for you and said.": (
+        "Bir karttaki konnektörden ötekindeki konnektöre bir kablo. Telleri nete göre "
+        "eşlenir: ikisinde aynı nette olan pinler birer tel alır, kesin olmayanlar size "
+        "bırakılır ve söylenir."
+    ),
+    "harness, wire between boards, connect boards": "kablo demeti, kartlar arası tel, kartları bağla",
+    "A cable joins two boards: add a board first.": "Kablo iki kartı birleştirir: önce bir kart ekleyin.",
+    "Add Cable": "Kablo Ekle",
+    "From": "Nereden",
+    "To": "Nereye",
+    "Length": "Uzunluk",
+    "cut to fit": "ölçüye göre kesin",
+    "Choose a connector at each end.": "Her iki uç için bir konnektör seçin.",
+    "{count} wire, paired by net:": "Nete göre eşlenen {count} tel:",
+    "{count} wires, paired by net:": "Nete göre eşlenen {count} tel:",
+    "Not paired:": "Eşlenmeyen:",
+    "{count} pin left unpaired": "{count} pin eşlenmedi",
+    "{count} pins left unpaired": "{count} pin eşlenmedi",
     "Add a board": "Kart ekle",
     "Add the board '{boardname}'": "'{boardname}' kartını ekle",
     "Name the board '{boardname}'": "Kartın adını '{boardname}' yap",
