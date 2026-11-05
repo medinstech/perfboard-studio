@@ -180,6 +180,13 @@ _PRO_MINI_LEFT = ("TXO", "RXI", "RST", "GND", "D2", "D3", "D4", "D5", "D6", "D7"
 _PRO_MINI_RIGHT = ("RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D13", "D12", "D11", "D10")
 
 
+# SparkFun"s Arduino Pro Mini 328, its silkscreen read off its Eagle board, the FTDI end
+# up: TXO down to 9 on one row, RAW down to 10 on the other (printed as bare numbers,
+# named here D2 ... D13 as the Nano"s are).
+_PRO_MINI_LEFT = ("TXO", "RXI", "RST", "GND", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9")
+_PRO_MINI_RIGHT = ("RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D13", "D12", "D11", "D10")
+
+
 def _legs(*names: str) -> PinNames:
     """Pin names in pin order: ``_legs("C", "B", "E")`` is 1=C, 2=B, 3=E."""
     return tuple((str(index + 1), name) for index, name in enumerate(names))
