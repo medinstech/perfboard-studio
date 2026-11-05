@@ -788,6 +788,46 @@ SPARKFUN_PRO_MINI_MODULE = ModuleArt(
     ),
 )
 
+#: SparkFun's Logic Level Converter - Bi-Directional (BOB-12009), read off SparkFun's own Eagle
+#: board (Logic_Level_Bidirectional.brd): the 0.6 x 0.5 inch board, its two rows of six 0.4
+#: inch apart, and on the top side a BSS138 per channel with its two 10k pull-ups, one towards
+#: each row. ``u`` runs along the rows from HV1/LV1 to HV4/LV4, ``v`` from the LV row to the
+#: HV row, as SparkFun's silkscreen reads. Each SOT-23 has its two legs (gate and source)
+#: towards LV and its one (drain) towards HV, as the board's nets have them. Sizes are the
+#: packages'; the tallest thing on it is the header pins' tips, 1.6 mm up, which is the
+#: footprint's top.
+SPARKFUN_LOGIC_LEVEL_MODULE = ModuleArt(
+    key="sparkfun-logic-level-converter",
+    board_colour=SPARKFUN_RED,
+    names=("level converter",),
+    board=(15.24, 12.70),
+    pins=12,
+    frame="columns",
+    landmark=("HV1", -1, 1),
+    # SparkFun prints each name in the strip between its pin and the 10k beside it, smaller
+    # than the tags here: printed over the parts, as the Pro Mini's are.
+    names_over_parts=True,
+    parts=(
+        ArtPart("sot23", -5.66, 0.1, 2.4, 2.9, 1.1, along_v=True, facing=1),
+        ArtPart("sot23", -1.80, 0.1, 2.4, 2.9, 1.1, along_v=True, facing=1),
+        ArtPart("sot23", 1.98, 0.1, 2.4, 2.9, 1.1, along_v=True, facing=1),
+        ArtPart("sot23", 5.74, 0.1, 2.4, 2.9, 1.1, along_v=True, facing=1),
+        ArtPart("chip-r", -5.66, -2.59, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", -1.78, -2.62, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", 1.98, -2.64, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", 5.64, -2.64, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", -5.61, 2.62, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", -1.91, 2.64, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", 1.80, 2.64, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", 5.61, 2.64, 1.6, 0.8, 0.5),
+    ),
+    source=(
+        "SparkFun Logic Level Converter - Bi-Directional Eagle board, github "
+        "sparkfun/Logic_Level_Bidirectional, Hardware/Logic_Level_Bidirectional.brd, CC BY-SA "
+        "3.0 (the board, both rows, every top-side part's place, package and turn)"
+    ),
+)
+
 #: Pololu's DRV8833 dual motor driver carrier (item 2130) as its own top-view pinout picture
 #: has it: the 10 uF capacitor and the 180 ohm resistor along the top, the reverse-
 #: protection MOSFET and its diode under them, the QFN in the middle, small capacitors and
@@ -1052,6 +1092,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     XIAO_ESP32C3_MODULE,
     SPARKFUN_TB6612_MODULE,
     SPARKFUN_PRO_MINI_MODULE,
+    SPARKFUN_LOGIC_LEVEL_MODULE,
     POLOLU_DRV8833_MODULE,
     GY521_MODULE,
     SSD1306_MODULE,

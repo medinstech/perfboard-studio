@@ -107,6 +107,8 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "sparkfun-tb6612fng": 15.24,
         # SparkFun's Eagle board: its rows at x = 1.27 and 16.51 mm, 0.6 inch apart.
         "sparkfun-pro-mini": 15.24,
+        # SparkFun's Eagle board: its rows at y = 1.27 and 11.43 mm, 0.4 inch apart.
+        "sparkfun-logic-level-converter": 10.16,
         "pololu-drv8833": 10.16,
         # Two headers of four, side by side, at one end of the board.
         "nrf24l01": 2.54,

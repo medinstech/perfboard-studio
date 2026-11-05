@@ -1627,6 +1627,27 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("Pro Mini", "Arduino Pro Mini", "DEV-11113", "DEV-11114",
                          "ATmega328P", "Arduino")),
+    CatalogPart("sparkfun-logic-level-converter",
+                "SparkFun Logic Level Converter - Bi-Directional", "module",
+                "mod-6x2-p1-r4-15.24x12.7x1.6-s8.5",
+                "Four channels between two logic levels, both ways: 12 pins, rows 10.16 mm apart",
+                _legs("HV1", "HV2", "HV", "GND", "HV3", "HV4",
+                      "LV1", "LV2", "LV", "GND", "LV3", "LV4"),
+                value="Logic Level Converter", ref_prefix="U",
+                source=(
+                    "SparkFun Logic Level Converter - Bi-Directional Eagle board (github "
+                    "sparkfun/Logic_Level_Bidirectional, Hardware/Logic_Level_Bidirectional"
+                    ".brd): the 0.6 x 0.5 inch board, both 6-pin rows 0.4 inch apart, the "
+                    "names printed beside them and the nets they are on"
+                ),
+                check=(
+                    "HV takes the higher supply and LV the lower (5 V and 3.3 V, say), with "
+                    "GND; then HV1 is LV1 at the other level, and so on for all four. Each "
+                    "channel is a BSS138 with a 10k pull-up to each side, so a rising edge is "
+                    "only as quick as that 10k makes it. " + _MODULE_TOP
+                ),
+                aliases=("level shifter", "level converter", "BOB-12009", "BSS138",
+                         "3.3 V to 5 V", "I2C")),
     CatalogPart("raspberry-pi-pico", "Raspberry Pi Pico", "module",
                 "mod-2x20-p7-r1-21x52.3x3.5-s8.5-o0x-0.65",
                 "RP2040 board, 40 pins, rows 17.78 mm apart",

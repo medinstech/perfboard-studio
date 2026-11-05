@@ -3039,6 +3039,20 @@ TURKISH: Mapping[str, str] = {
         "bu yüzden bunları elinizdeki karta bakarak kablolayın. Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart "
         "çerçevesi ölçülmüştür."
     ),
+    "Four channels between two logic levels, both ways: 12 pins, rows 10.16 mm apart": (
+        "İki mantık seviyesi arasında iki yönlü dört kanal: 12 pin, sıralar 10,16 mm arayla"
+    ),
+    "HV takes the higher supply and LV the lower (5 V and 3.3 V, say), with GND; then "
+    "HV1 is LV1 at the other level, and so on for all four. Each channel is a BSS138 "
+    "with a 10k pull-up to each side, so a rising edge is only as quick as that 10k "
+    "makes it. The height of what is on the board is an estimate, and so is its colour; "
+    "the pins, the rows and the board outline are measured.": (
+        "HV yüksek beslemeye, LV düşük beslemeye bağlanır (örneğin 5 V ve 3,3 V), GND ile "
+        "birlikte; böylece HV1, LV1'in öbür seviyedeki karşılığıdır, dört kanalın hepsinde "
+        "de böyle. Her kanal, iki yanında birer 10k pull-up olan bir BSS138'dir; yükselen "
+        "kenar ancak o 10k'nın izin verdiği kadar hızlıdır. Kartın üzerindekilerin "
+        "yüksekliği ve rengi tahmindir; pinler, sıralar ve kart çerçevesi ölçülmüştür."
+    ),
     "RP2040 board, 40 pins, rows 17.78 mm apart": "RP2040 kartı, 40 pin, sıralar arası 17,78 mm",
     "ESP8266 board, 16 pins, rows 22.86 mm apart": (
         "ESP8266 kartı, 16 pin, sıralar arası 22,86 mm"

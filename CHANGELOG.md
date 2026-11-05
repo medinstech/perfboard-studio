@@ -166,6 +166,10 @@ closed without a bump.
   where SparkFun's own board file puts them. Its check says A4 to A7 are on pads inside the
   rows, off the grid, to be wired on their own, and that a clone shares the 24 header pins
   but may put those pads and the FTDI ones elsewhere.
+- **SparkFun's bidirectional Logic Level Converter, drawn as itself.** Its two rows of six,
+  HV1 to HV4 and LV1 to LV4 with each side's supply and GND, go in 0.4 inch apart, and its
+  four BSS138s and eight 10k resistors stand where SparkFun's board file puts them. Its
+  check says which supply goes where and that the 10k pull-ups set how fast an edge rises.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
