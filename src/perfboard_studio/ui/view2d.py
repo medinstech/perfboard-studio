@@ -203,11 +203,15 @@ from .moduleart import (
     FRESNEL_DOME_MM,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
+    JST_SH_PITCH_MM,
+    JST_SH_TAILS_MM,
     OLED_LEDGE_MM,
     OLED_VIEW_MM,
     PCB_ANTENNA_TRACE_MM,
     SOT23_LEGS,
     TANTALUM_BAND_SHADE,
+    TERMINAL_MOUTH_MM,
+    TERMINAL_SCREW_MM,
     TQFP32_BODY_MM,
     TQFP32_LEG_MM,
     TQFP32_LEGS_PER_SIDE,
@@ -217,6 +221,7 @@ from .moduleart import (
     board_colour_for,
     fit_module_art,
     fit_standing_board,
+    gull_wing_dot,
 )
 from .partnames import footprint_label
 from .scenetext import (
@@ -3249,7 +3254,10 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         _art_box(painter, -half_l, half_l, body_half, _art_colour("epoxy"))
         if pin_one:
             painter.setBrush(QBrush(_art_colour("dot")))
-            painter.drawEllipse(QPointF(half_l - 0.75, pin_one * (body_half - 0.6)), 0.3, 0.3)
+            end, side, radius = gull_wing_dot(body_half)
+            painter.drawEllipse(
+                QPointF(half_l - end, pin_one * (body_half - side)), radius, radius
+            )
     elif kind == "shield":
         _art_box(painter, -half_l, half_l, half_w, _art_colour("shield"))
         rim = min(0.35, min(length, width) * 0.05)
@@ -3359,6 +3367,36 @@ def _paint_art_part(painter: QPainter, part: PlacedArt, length: float, width: fl
         painter.drawEllipse(QPointF(0.0, 0.0), radius, radius)
         painter.setBrush(QBrush(_art_colour("hole")))
         painter.drawEllipse(QPointF(0.0, 0.0), radius - ring, radius - ring)
+    elif kind == "terminal":
+        # From above: the blue block, a slotted screw head per way over its pin, the test
+        # slot behind each, and the dark of the wire mouths along the face they open in.
+        ways = max(round(width / part.pitch), 1) if part.pitch else 1
+        step = width / ways
+        mouth_wide = TERMINAL_MOUTH_MM[0]
+        _art_box(painter, -half_l, half_l, half_w, _art_colour("terminal"))
+        radius = min(TERMINAL_SCREW_MM, step * 0.86) / 2
+        for way in range(ways):
+            across = (way - (ways - 1) / 2) * step
+            painter.setBrush(QBrush(_art_colour("mouth")))
+            painter.drawRect(QRectF(half_l - 0.35, across - mouth_wide / 2, 0.35, mouth_wide))
+            painter.drawRect(QRectF(-half_l + 0.8, across - mouth_wide / 2, 0.4, mouth_wide))
+            painter.setBrush(QBrush(_art_colour("screw")))
+            painter.drawEllipse(QPointF(-0.1, across), radius, radius)
+            painter.save()
+            painter.setPen(QPen(_art_colour("mouth"), 0.3))
+            painter.drawLine(QPointF(-0.1 - radius * 0.7, across), QPointF(-0.1 + radius * 0.7, across))
+            painter.drawLine(QPointF(-0.1, across - radius * 0.7), QPointF(-0.1, across + radius * 0.7))
+            painter.restore()
+    elif kind == "jst-sh":
+        # The natural nylon housing, its mouth at the front and its contacts' tails, tinned,
+        # out of the back past the housing.
+        _art_legs(
+            painter, -half_l - JST_SH_TAILS_MM, -half_l + 0.2,
+            [(index - 1.5) * JST_SH_PITCH_MM for index in range(4)], 0.3,
+        )
+        housing = QColor(part.colour) if part.colour else _art_colour("jst")
+        _art_box(painter, -half_l, half_l, half_w, housing)
+        _art_box(painter, half_l - 0.45, half_l, half_w * 0.68, _art_colour("mouth"))
     elif kind == "fresnel":
         # The square foot, the dome on it, and the facets a Fresnel lens is moulded in: a
         # hexagon at the top of the dome and the ridges out from its corners.

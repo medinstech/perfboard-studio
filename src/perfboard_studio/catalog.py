@@ -813,6 +813,46 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "a new movement starts that time again (H) or not (L)."
                 ),
                 aliases=("PIR", "motion sensor", "SR501", "pyroelectric", "hareket sensörü")),
+    # Adafruit's INA219 breakout, both revisions, read off Adafruit's own Eagle boards: the
+    # same six pins in the same order, on boards of two sizes. The names are the nets the
+    # header pads are on; the STEMMA QT board prints pin 1 as VIN.
+    CatalogPart("adafruit-ina219", "Adafruit INA219 (original, 4 holes)", "sensor",
+                "mod-6x1-p1-r1-25.4x22.24x8.5-s8.5-o-0.38x-8.33",
+                "Current, voltage and power on I2C, through a 0.1 ohm shunt: up to 26 V and ±3.2 A",
+                _legs("VCC", "GND", "SCL", "SDA", "VIN-", "VIN+"),
+                value="Adafruit INA219", ref_prefix="U",
+                source=(
+                    "Adafruit INA219 Eagle board, Adafruit_INA219_CurPowerMonitor.brd (github "
+                    "adafruit/Adafruit-INA219-Current-Sensor-PCB): the 25.4 x 22.24 mm board, the "
+                    "header and the nets on it; TI INA219 datasheet SBOS448G (0x40 with A0 and A1 "
+                    "low)"
+                ),
+                check=(
+                    "VCC is the logic supply, 3 to 5 V. The current to measure goes in at VIN+ and "
+                    "out at VIN-, on these pins or on the terminal block, which carries the same "
+                    "two. Its address is 0x40 until A0 or A1 is bridged. Clones such as the purple "
+                    "CJMCU-219 usually keep this header order; measure your board's size and header "
+                    "position before placing. " + _MODULE_TOP
+                ),
+                aliases=("INA219", "INA219 module", "CJMCU-219", "current sensor", "power monitor")),
+    CatalogPart("adafruit-ina219-stemma-qt", "Adafruit INA219 (STEMMA QT)", "sensor",
+                "mod-6x1-p1-r1-25.4x20.32x8.5-s8.5-o0x-7.62",
+                "Current, voltage and power on I2C, through a 0.1 ohm shunt: up to 26 V and ±3.2 A",
+                _legs("VCC", "GND", "SCL", "SDA", "VIN-", "VIN+"),
+                value="Adafruit INA219 STEMMA QT", ref_prefix="U",
+                source=(
+                    "Adafruit INA219 STEMMA QT Eagle board (github "
+                    "adafruit/Adafruit-INA219-Current-Sensor-PCB): the 25.4 x 20.32 mm board, the "
+                    "header and the nets on it; TI INA219 datasheet SBOS448G (0x40 with A0 and A1 "
+                    "low)"
+                ),
+                check=(
+                    "The board prints pin 1 as VIN: it is VCC, the logic supply, 3 to 5 V. The "
+                    "current to measure goes in at VIN+ and out at VIN-, on these pins or on the "
+                    "terminal block, which carries the same two. Its address is 0x40 until A0 or A1 "
+                    "is bridged on the back, and the two STEMMA QT sockets carry the same I2C. " + _MODULE_TOP
+                ),
+                aliases=("INA219", "current sensor", "power monitor", "STEMMA QT", "Qwiic")),
     CatalogPart("gy-521", "GY-521 MPU-6050", "sensor", "mod-8x1-p1-r1-21.2x16.4x1.5-s8.5-o0x-6.7",
                 "Accelerometer and gyroscope, three axes each, on I2C",
                 _legs("VCC", "GND", "SCL", "SDA", "XDA", "XCL", "AD0", "INT"), ref_prefix="U",

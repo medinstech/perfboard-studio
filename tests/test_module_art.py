@@ -26,6 +26,8 @@ from perfboard_studio.ui.bodies import (
     placement_for,
 )
 from perfboard_studio.ui.moduleart import (
+    ADAFRUIT_BLACK,
+    ADAFRUIT_BLUE,
     LM2596_MODULE,
     MODULE_ARTS,
     NAME_ROOM_ENOUGH_MM,
@@ -783,6 +785,8 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "sparkfun-tb6612fng": SPARKFUN_RED,
         "sparkfun-pro-mini": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
+        "adafruit-ina219": ADAFRUIT_BLUE,
+        "adafruit-ina219-stemma-qt": ADAFRUIT_BLACK,
         "pololu-drv8833": PICO_MODULE.board_colour,
         "gy-521": None,  # the photograph's blue is the module style's, within the lighting
         "ssd1306-i2c-gnd-vcc": None,
@@ -1232,6 +1236,9 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     ("pololu-drv8825", ""): (1, -1),  # Pololu's photograph: VMOT end, trimmer side
     ("pololu-drv8833", "8833"): (1, 1),  # Pololu's picture: towards AOUT1
     ("sparkfun-tb6612fng", "TB6612"): (-1, -1),  # SparkFun's board: U1's pad 1, towards VM
+    # Adafruit's boards, both revisions: U1's pad 1, towards VIN+ and the shunt.
+    ("adafruit-ina219", ""): (1, -1),
+    ("adafruit-ina219-stemma-qt", ""): (1, -1),
 }
 
 #: A chip of each dotted kind at its usual size: length along its axis, width, height.
@@ -1239,6 +1246,7 @@ _CHIP_SIZES: dict[str, tuple[float, float, float]] = {
     "qfn": (5.0, 5.0, 0.9),
     "soic8": (4.9, 6.0, 1.6),
     "ssop24": (7.8, 7.6, 1.5),
+    "sot23-8": (3.0, 3.0, 1.45),
     "tssop28": (9.7, 6.4, 1.2),
     "tqfp32": (9.0, 9.0, 1.2),
 }

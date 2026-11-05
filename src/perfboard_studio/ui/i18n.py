@@ -2487,6 +2487,7 @@ TURKISH: Mapping[str, str] = {
         "Kristali 3,6 mm yükselir, üzerindeki en uzun parça odur."
     ),
     "ESP-01 (ESP8266 module)": "ESP-01 (ESP8266 modülü)",
+    "Adafruit INA219 (original, 4 holes)": "Adafruit INA219 (orijinal, 4 delikli)",
     "Wi-Fi on an ESP8266, 3.3 V: serial, two GPIOs, enable and reset on 8 pins": (
         "ESP8266 ile Wi-Fi, 3,3 V: 8 pinde seri port, iki GPIO, etkinleştirme ve reset"
     ),
@@ -3053,6 +3054,35 @@ TURKISH: Mapping[str, str] = {
         "de böyle. Her kanal, iki yanında birer 10k pull-up olan bir BSS138'dir; yükselen "
         "kenar ancak o 10k'nın izin verdiği kadar hızlıdır. Kartın üzerindekilerin "
         "yüksekliği ve rengi tahmindir; pinler, sıralar ve kart çerçevesi ölçülmüştür."
+    ),
+    "Current, voltage and power on I2C, through a 0.1 ohm shunt: up to 26 V and ±3.2 A": (
+        "I2C üzerinden akım, gerilim ve güç, 0,1 ohm'luk şönt üzerinden: en çok 26 V ve "
+        "±3,2 A"
+    ),
+    "The board prints pin 1 as VIN: it is VCC, the logic supply, 3 to 5 V. The current "
+    "to measure goes in at VIN+ and out at VIN-, on these pins or on the terminal "
+    "block, which carries the same two. Its address is 0x40 until A0 or A1 is bridged "
+    "on the back, and the two STEMMA QT sockets carry the same I2C. The height of what "
+    "is on the board is an estimate, and so is its colour; the pins, the rows and the "
+    "board outline are measured.": (
+        "Kart 1. pinin yanına VIN yazar: bu pin VCC'dir, 3-5 V'luk mantık beslemesi. "
+        "Ölçülecek akım VIN+ pininden girer, VIN- pininden çıkar; bu pinlerde ya da aynı "
+        "ikisini taşıyan klemenste. Arkadaki A0 ya da A1 köprülenene kadar adresi 0x40'tır; "
+        "iki STEMMA QT soketi de aynı I2C hattını taşır. Kartın üzerindekilerin yüksekliği "
+        "ve rengi tahmindir; pinler, sıralar ve kart çerçevesi ölçülmüştür."
+    ),
+    "VCC is the logic supply, 3 to 5 V. The current to measure goes in at VIN+ and out "
+    "at VIN-, on these pins or on the terminal block, which carries the same two. Its "
+    "address is 0x40 until A0 or A1 is bridged. Clones such as the purple CJMCU-219 "
+    "usually keep this header order; measure your board's size and header position "
+    "before placing. The height of what is on the board is an estimate, and so is its "
+    "colour; the pins, the rows and the board outline are measured.": (
+        "VCC, 3-5 V'luk mantık beslemesidir. Ölçülecek akım VIN+ pininden girer, VIN- "
+        "pininden çıkar; bu pinlerde ya da aynı ikisini taşıyan klemenste. A0 ya da A1 "
+        "köprülenene kadar adresi 0x40'tır. Mor CJMCU-219 gibi klonlar genellikle bu header "
+        "sırasını korur; yerleştirmeden önce kartınızın boyutunu ve header'ın yerini ölçün. "
+        "Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart "
+        "çerçevesi ölçülmüştür."
     ),
     "RP2040 board, 40 pins, rows 17.78 mm apart": "RP2040 kartı, 40 pin, sıralar arası 17,78 mm",
     "ESP8266 board, 16 pins, rows 22.86 mm apart": (

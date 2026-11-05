@@ -142,10 +142,14 @@ from .moduleart import (
     FRESNEL_DOME_MM,
     GULL_WING_LEGS,
     HOLE_EDGE_MM,
+    JST_SH_PITCH_MM,
+    JST_SH_TAILS_MM,
     OLED_LEDGE_MM,
     PCB_ANTENNA_TRACE_MM,
     SOT23_LEGS,
     TANTALUM_BAND_SHADE,
+    TERMINAL_MOUTH_MM,
+    TERMINAL_SCREW_MM,
     TQFP32_BODY_MM,
     TQFP32_LEG_MM,
     TQFP32_LEGS_PER_SIDE,
@@ -155,6 +159,7 @@ from .moduleart import (
     board_colour_for,
     fit_module_art,
     fit_standing_board,
+    gull_wing_dot,
 )
 from .partmodels import (
     ModelPiece,
@@ -5170,12 +5175,13 @@ def _art_gull_wing(s: _ArtSolid) -> list[_Piece]:
             )
         )
     if s.across:
+        end, side, radius = gull_wing_dot(body_w / 2)
         pieces.append(
             _Piece(
-                source=_cylinder(0.3, 0.05, resolution=16),
+                source=_cylinder(radius, 0.05, resolution=16),
                 rgb=_ART_DOT_RGB,
                 position=s.at(
-                    s.facing * (s.length / 2 - 0.75), s.across * (body_w / 2 - 0.6), s.height - 0.025
+                    s.facing * (s.length / 2 - end), s.across * (body_w / 2 - side), s.height - 0.025
                 ),
                 orientation=_ALONG_Z,
                 material=MOULDED,
@@ -5913,6 +5919,99 @@ def _art_hole(s: _ArtSolid) -> list[_Piece]:
     ]
 
 
+def _art_terminal(s: _ArtSolid) -> list[_Piece]:
+    """A screw terminal block on the module: the moulded block, per way a slotted steel
+    screw head standing its decal's tenth and a half proud of the top over its pin, the
+    test slot behind it, and the dark of the wire mouth in the face at ``facing``, inside the
+    part's length so a block flush with the module's edge does not stand past it (4UCON's
+    drawing 19963, ``moduleart.TERMINAL_MOUTH_MM``)."""
+    ways = max(round(s.width / s.pitch), 1) if s.pitch else 1
+    step = s.width / ways
+    mouth_wide, mouth_low, mouth_high = TERMINAL_MOUTH_MM
+    mouth_high = min(mouth_high, s.height * 0.6)
+    radius = min(TERMINAL_SCREW_MM, step * 0.86) / 2
+    rgb = _hex_rgb(s.colour or ART_COLOURS["terminal"], BODY_RGB)
+    screw = _hex_rgb(ART_COLOURS["screw"], LEAD_RGB)
+    face = 0.08
+    acrosses = [(way - (ways - 1) / 2) * step for way in range(ways)]
+    top = s.height + _DECAL_PROUD_MM
+    return [
+        _Piece(
+            source=s.box(s.length - face, s.width, s.height, moulded=True),
+            rgb=rgb,
+            position=s.at(-s.facing * face / 2, 0.0, s.height / 2),
+            material=GLOSS,
+        ),
+        _Piece(
+            source=s.box(face, mouth_wide, mouth_high - mouth_low),
+            rgb=_ART_MOUTH_RGB,
+            position=(0.0, 0.0, 0.0),
+            material=MOULDED,
+            instances=tuple(
+                s.at(s.facing * (s.length / 2 - face / 2), across, (mouth_low + mouth_high) / 2)
+                for across in acrosses
+            ),
+        ),
+        _Piece(
+            source=s.box(0.4, mouth_wide, _DECAL_PROUD_MM),
+            rgb=_ART_MOUTH_RGB,
+            position=(0.0, 0.0, 0.0),
+            material=MOULDED,
+            instances=tuple(
+                s.at(-s.facing * (s.length / 2 - 1.0), across, s.height + _DECAL_PROUD_MM / 2 - 0.02)
+                for across in acrosses
+            ),
+        ),
+        _Piece(
+            source=_cylinder(radius, 0.4, resolution=20),
+            rgb=screw,
+            position=(0.0, 0.0, 0.0),
+            orientation=_ALONG_Z,
+            material=STEEL,
+            instances=tuple(s.at(-s.facing * 0.1, across, top - 0.23) for across in acrosses),
+        ),
+        _Piece(
+            source=s.box(radius * 1.4, 0.3, 0.05),
+            rgb=_ART_MOUTH_RGB,
+            position=(0.0, 0.0, 0.0),
+            material=MOULDED,
+            instances=tuple(s.at(-s.facing * 0.1, across, top - 0.026) for across in acrosses),
+        ),
+    ]
+
+
+def _art_jst_sh(s: _ArtSolid) -> list[_Piece]:
+    """A JST SH socket lying down: the nylon housing, the dark of its mouth in the face at
+    ``facing``, and its four contacts' tails, tinned, out of the back past the housing onto
+    their pads (``moduleart.JST_SH_TAILS_MM``)."""
+    tails = JST_SH_TAILS_MM + 0.2
+    face = 0.08
+    return [
+        _Piece(
+            source=s.box(s.length - face, s.width, s.height, moulded=True),
+            rgb=_hex_rgb(s.colour or ART_COLOURS["jst"], BODY_RGB),
+            position=s.at(-s.facing * face / 2, 0.0, s.height / 2),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=s.box(face, s.width * 0.68, s.height * 0.5),
+            rgb=_ART_MOUTH_RGB,
+            position=s.at(s.facing * (s.length / 2 - face / 2), 0.0, s.height * 0.45),
+            material=MOULDED,
+        ),
+        _Piece(
+            source=s.box(tails, 0.3, 0.15),
+            rgb=LEAD_RGB,
+            position=(0.0, 0.0, 0.0),
+            material=TINNED,
+            instances=tuple(
+                s.at(-s.facing * (s.length / 2 + tails / 2 - 0.2), (index - 1.5) * JST_SH_PITCH_MM, 0.075)
+                for index in range(4)
+            ),
+        ),
+    ]
+
+
 def _art_fresnel(s: _ArtSolid) -> list[_Piece]:
     """A PIR's Fresnel lens: the square foot, and the dome on it, its top ``height`` above the
     module's board -- a sphere of few facets, as the moulding is."""
@@ -6044,6 +6143,7 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "soic8": _art_soic8,
     "tssop28": _art_gull_wing,
     "ssop24": _art_gull_wing,
+    "sot23-8": _art_gull_wing,
     "qfn": _art_qfn,
     "tqfp32": _art_tqfp32,
     "rf-module": _art_rf_module,
@@ -6062,6 +6162,8 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "hole": _art_hole,
     "oled": _art_oled,
     "fresnel": _art_fresnel,
+    "terminal": _art_terminal,
+    "jst-sh": _art_jst_sh,
     "flex": _art_flex,
     "pcb-antenna": _art_pcb_antenna,
     "hc49": _art_hc49,

@@ -97,6 +97,16 @@ from .bodies import PIN_NAME_HEIGHT_MM, placement_for
 #:  * ``fresnel``     -- a PIR sensor's Fresnel lens: its square foot ``length`` x ``width``
 #:                       and the dome of ``FRESNEL_DOME_MM`` on it, its top ``height`` above
 #:                       the module's board.
+#:  * ``terminal``    -- a screw terminal block standing on the module: ``length`` from its
+#:                       back to the face its wires go in by, at ``facing``; a screw on top
+#:                       per way, the ways ``pitch`` apart across ``width``.
+#:  * ``jst-sh``      -- a JST SH socket lying down (a STEMMA QT or Qwiic port): ``length``
+#:                       is its housing, its mouth at the ``facing`` end; its contacts'
+#:                       tails reach ``JST_SH_TAILS_MM`` out of the other end, only as
+#:                       wide as the four of them, so they are drawn past the box. A
+#:                       ``colour`` for a housing that is not natural nylon.
+#:  * ``sot23-8``     -- a SOT-23-8 (TI's DCN), four gull-wing legs a side, drawn from
+#:                       ``GULL_WING_LEGS`` as the TSSOP is.
 ArtKind = Literal[
     "can",
     "inductor",
@@ -114,6 +124,8 @@ ArtKind = Literal[
     # A 24-leg SSOP (Toshiba's SSOP24-P-300-0.65A, 7.8 x 5.6 mm, legs 0.65 mm apart): the
     # TB6612FNG's. Drawn as the TSSOP is, from ``GULL_WING_LEGS``.
     "ssop24",
+    # A SOT-23-8: TI's DCN (R-PDSO-G8), 3.0 x 1.75 mm, legs 0.65 mm apart -- an INA219's.
+    "sot23-8",
     "qfn",
     "tqfp32",
     "rf-module",
@@ -138,6 +150,8 @@ ArtKind = Literal[
     "pcb-antenna",
     "hc49",
     "fresnel",
+    "terminal",
+    "jst-sh",
 ]
 
 #: What the parts on a module are made of, as the colours both views paint them in -- one
@@ -157,7 +171,17 @@ TSSOP28_REACH_MM = 1.0
 GULL_WING_LEGS: dict[str, tuple[int, float, float]] = {
     "tssop28": (TSSOP28_LEGS_PER_SIDE, TSSOP28_PITCH_MM, TSSOP28_REACH_MM),
     "ssop24": (12, 0.65, 1.0),
+    # TI's DCN drawing: a 3.00 mm span over a 1.75 mm body, at most.
+    "sot23-8": (4, 0.65, 0.625),
 }
+
+def gull_wing_dot(body_half: float) -> tuple[float, float, float]:
+    """Where a gull-wing chip's pin-1 dot goes on a body ``body_half`` wide either side of
+    its axis: ``(in from the end, in from the side, radius)``. In from the side by at most a
+    share of the half-width, so a SOT-23-8's lands in its corner and not on its middle; one
+    rule, so the 2D and the 3D dot are one dot."""
+    return 0.75, min(0.6, body_half * 0.4), min(0.3, body_half * 0.25)
+
 
 #: The chips whose builders print a pin-1 dot in a corner: at ``facing`` along the chip's
 #: axis and at ``across`` across it (``ArtPart.across``).
@@ -230,7 +254,23 @@ ART_COLOURS: dict[str, str] = {
     "flex-stiffener": "#17181b",
     # A PIR's Fresnel lens: milky white polyethylene.
     "fresnel": "#e6e6e1",
+    # A screw terminal's blue polyamide (4UCON's drawing 19963 says blue) and its steel
+    # screws; a JST SH socket's natural nylon, as a wire-to-board header's is.
+    "terminal": "#2d63b4",
+    "screw": "#c3c6ca",
+    "jst": "#e9e4d4",
 }
+
+#: A screw terminal's wire mouth, per way: how wide, and from how high to how high up its
+#: face; and how far across its screw head is -- 4UCON's drawing 19963 (the 3.5 mm
+#: blocks Adafruit sells), measured on its front view and its top view.
+TERMINAL_MOUTH_MM = (2.6, 0.6, 4.4)
+TERMINAL_SCREW_MM = 3.0
+#: A JST SH socket's contact tails, out of its back: how far they reach past the housing
+#: (KiCad's SM04B-SRSS-TB model, 5.05 mm overall against its 4.25 mm housing), and how
+#: far apart they are.
+JST_SH_TAILS_MM = 0.8
+JST_SH_PITCH_MM = 1.0
 
 #: How far a module's board may be from the reference a layout was drawn on, either way, as a
 #: fraction. Wide enough for one maker's board against another's drawing of the same module
@@ -288,7 +328,8 @@ class ArtPart:
     #: The colour a part is seen as where that varies between parts of one kind -- an LED's
     #: lens, a button's cap -- as ``#rrggbb``. Empty for the kind's own.
     colour: str = ""
-    #: For a ``pcb-antenna``: how far one stroke of its meander is from the next.
+    #: For a ``pcb-antenna``: how far one stroke of its meander is from the next. For a
+    #: ``terminal``: how far one way is from the next, which says how many ways it has.
     pitch: float = 0.0
     #: For a chip (``PIN_ONE_KINDS``): which side of its own axis pin 1 is on, as the dot on
     #: it shows in the source the layout was measured on -- +1 or -1 along ``v`` (along ``u``
@@ -828,6 +869,91 @@ SPARKFUN_LOGIC_LEVEL_MODULE = ModuleArt(
     ),
 )
 
+#: Adafruit's boards: the blue its older ones are made in, sampled on Adafruit's own
+#: photograph of its BME280 breakout, and the black of its STEMMA QT ones with their
+#: gold-plated holes, as its photograph of the STEMMA QT INA219 shows them. Estimates, as
+#: every colour here is.
+ADAFRUIT_BLUE = "#0a64b2"
+ADAFRUIT_BLACK = "#1c1d20"
+
+#: Adafruit's INA219 current sensor breakout, both revisions, read off Adafruit's own Eagle
+#: boards (github adafruit/Adafruit-INA219-Current-Sensor-PCB) and seen from above with the
+#: header along the top, VCC at the right (``pin_one``): the INA219 in TI's SOT-23-8 with its
+#: pin 1 towards VCC and away from the header, its 10k pull-ups and decoupling, the 2512
+#: shunt across the middle, and the blue 3.5 mm terminal block on the far edge, its wire
+#: mouths outwards (4UCON's drawing 19963). The block and the header come loose in the bag
+#: and are drawn fitted, the way the board goes onto a perfboard. The sizes are the
+#: packages'.
+#:
+#: The original (four M2.5 holes, 25.4 x 22.24 mm). Its terminal block stands 0.26 mm past the
+#: board's edge on Adafruit's board; drawn flush, since nothing is drawn past the body DRC
+#: measures.
+ADAFRUIT_INA219_MODULE = ModuleArt(
+    key="adafruit-ina219",
+    board_colour=ADAFRUIT_BLUE,
+    names=("ina219",),
+    excludes=("stemma", "qt"),
+    board=(25.4, 22.24),
+    pins=6,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("sot23-8", 0.0, -2.74, 3.0, 3.0, 1.45, facing=-1, across=1),
+        ArtPart("chip-c", 8.69, -2.74, 2.0, 1.25, 0.85, along_v=True),
+        ArtPart("chip-r", -5.59, -4.26, 2.0, 1.25, 0.5),
+        ArtPart("chip-r", -5.59, -1.73, 2.0, 1.25, 0.5),
+        ArtPart("chip-r", 6.15, -2.74, 2.0, 1.25, 0.5, along_v=True),
+        ArtPart("chip-r", 3.81, -2.74, 2.0, 1.25, 0.5, along_v=True),
+        ArtPart("chip-r", 0.0, 2.42, 6.35, 3.2, 0.6),
+        ArtPart("terminal", -0.05, 7.62, 7.0, 7.0, 8.5, along_v=True, facing=1, pitch=3.5),
+        ArtPart("hole", -10.16, -8.58, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["tin"]),
+        ArtPart("hole", 10.16, -8.58, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["tin"]),
+        ArtPart("hole", -10.16, 8.58, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["tin"]),
+        ArtPart("hole", 10.16, 8.58, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["tin"]),
+    ),
+    source=(
+        "Adafruit INA219 Eagle board, github adafruit/Adafruit-INA219-Current-Sensor-PCB, "
+        "Adafruit_INA219_CurPowerMonitor.brd, CC BY-SA (the board, the header, every top-side "
+        "part's place, package and turn); TI INA219 datasheet SBOS448G, DCN (the chip); 4UCON "
+        "drawing 19963 (the terminal block)"
+    ),
+)
+
+#: The STEMMA QT revision (two M2.5 holes a side, 25.4 x 20.32 mm): a STEMMA QT socket on
+#: each side, mouth outwards, a resistor array for the pull-ups, and the green power LED.
+ADAFRUIT_INA219_QT_MODULE = ModuleArt(
+    key="adafruit-ina219-stemma-qt",
+    board_colour=ADAFRUIT_BLACK,
+    names=("ina219 stemma", "ina219 qt"),
+    board=(25.4, 20.32),
+    pins=6,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("sot23-8", 0.0, -3.17, 3.0, 3.0, 1.45, facing=-1, across=1),
+        ArtPart("chip-c", 2.54, -3.05, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", 4.32, -3.05, 2.0, 1.25, 1.25, along_v=True),
+        # A 4 x 0603 resistor array: its terminals down its two long sides.
+        ArtPart("chip-r", -3.81, -3.17, 1.6, 3.2, 0.5),
+        ArtPart("chip-r", 0.0, 1.02, 6.35, 3.2, 0.6),
+        ArtPart("terminal", 0.05, 6.45, 7.0, 7.0, 8.5, along_v=True, facing=1, pitch=3.5),
+        ArtPart("jst-sh", -10.10, 0.0, 4.25, 6.0, 2.9, facing=-1),
+        ArtPart("jst-sh", 10.10, 0.0, 4.25, 6.0, 2.9, facing=1),
+        ArtPart("led", 9.14, 4.19, 1.6, 0.8, 0.6, along_v=True, colour="#3fae49"),
+        ArtPart("chip-r", 7.11, 3.56, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("hole", -10.16, -7.62, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 10.16, -7.62, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", -10.16, 7.62, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 10.16, 7.62, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+    ),
+    source=(
+        "Adafruit INA219 STEMMA QT Eagle board, github adafruit/Adafruit-INA219-Current-Sensor-"
+        "PCB, Adafruit INA219 STEMMA QT.brd, CC BY-SA (the board, the header, every top-side "
+        "part's place, package and turn); TI INA219 datasheet SBOS448G, DCN (the chip); 4UCON "
+        "drawing 19963 (the terminal block); KiCad's JST SM04B-SRSS-TB model (the sockets)"
+    ),
+)
+
 #: Pololu's DRV8833 dual motor driver carrier (item 2130) as its own top-view pinout picture
 #: has it: the 10 uF capacitor and the 180 ohm resistor along the top, the reverse-
 #: protection MOSFET and its diode under them, the QFN in the middle, small capacitors and
@@ -1093,6 +1219,8 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SPARKFUN_TB6612_MODULE,
     SPARKFUN_PRO_MINI_MODULE,
     SPARKFUN_LOGIC_LEVEL_MODULE,
+    ADAFRUIT_INA219_QT_MODULE,
+    ADAFRUIT_INA219_MODULE,
     POLOLU_DRV8833_MODULE,
     GY521_MODULE,
     SSD1306_MODULE,

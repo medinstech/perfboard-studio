@@ -105,6 +105,10 @@ positions, packages and turns, never its artwork -- and nothing of the file is s
 - **SparkFun Logic Level Converter - Bi-Directional** -- SparkFun Electronics, Eagle board,
   CC BY-SA 3.0: <https://github.com/sparkfun/Logic_Level_Bidirectional>
   (`Hardware/Logic_Level_Bidirectional.brd`)
+- **Adafruit INA219 Current Sensor**, both revisions -- Adafruit Industries, Eagle boards,
+  Creative Commons Attribution/Share-Alike, designed by Limor Fried/Ladyada:
+  <https://github.com/adafruit/Adafruit-INA219-Current-Sensor-PCB>
+  (`Adafruit_INA219_CurPowerMonitor.brd`, `Adafruit INA219 STEMMA QT.brd`)
 - **SparkFun Motor Driver - Dual TB6612FNG v1.1c** -- SparkFun Electronics, Eagle board
   (`SparkFun_Motor_Driver-TB6612FNG_v11c.brd`), credited here as the Pro Mini's is
 
