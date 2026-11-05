@@ -184,6 +184,14 @@ closed without a bump.
 
 ### Changed
 
+- **A breadboard's jumpers to the rails come down short, and stay out from under chips.**
+  A jumper passing under a part was priced the same whatever the part, so one from a pin
+  to its rail went round every resistor in its column and landed up to 28 columns along
+  the rail -- the long diagonal on the 555 in the README. A short jumper under a part
+  standing on its leads is now cheap, and one under a part sitting on the board (a chip,
+  a relay, an electrolytic, a header) still costs the full price: the longest rail jumper
+  on the examples is 18 columns instead of 28, and a third fewer go under seated parts.
+
 - **The stock boards are the boards in the photographs.** Every board in the chooser is
   landscape, with its letters along the long edge; its edge strip stands outside the grid,
   so no row is lost to it; its corner holes sit bare in the border with every pad kept; the

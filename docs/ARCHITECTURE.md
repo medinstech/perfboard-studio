@@ -2451,6 +2451,31 @@ what every caller asks of a board that joins its own holes. Four rules, each wit
   reach a clip a trimmer stands over — but it is priced (`UNDER_BODY_COST`) with the parts
   a jumper runs under, by `jumper-under-body`'s own predicate, so it is never chosen while
   an open hole will do. Forbidding it left three of the six examples unwireable.
+- **Under a part is priced by what the builder can do there** (`breadroute.under_price`). A
+  short flat jumper under a resistor, an LED or a TO-220 standing on its leads is ordinary at
+  the bench, and costs `ON_LEADS_UNDER_COST` (10 holes); under a part SEATED on the board
+  (`model.SEATED_ARCHETYPES`: a chip, a relay, a header, a terminal block, an electrolytic on
+  its base, a pot) the part sits on the wire, and it costs `SEATED_UNDER_COST`, the full 100.
+  One price of 100 for every part was the first attempt: a jumper from a pin to its rail went
+  round every resistor in its column instead, and landed 28 columns along the rail on
+  nano-relay, 21 on arduino-io-shield, and 11 on the 555 in the README, where it was the long
+  diagonal across the picture. Measured over every example on an 830 at four seeds and a 400
+  where it fits (`tests/test_breadroute.py` holds each example to what was measured):
+
+  | Price under a part | Worst rail jumper | Under a part | Under a SEATED part | LVS |
+  | --- | --- | --- | --- | --- |
+  | 100 for every part | 28 columns | 231 | 163 | clean |
+  | 10 for every part | 8 | 309 | 196 | clean |
+  | 5 for every part | 5 | 359 | 215 | clean |
+  | 10 on leads, 100 seated | 18 | 282 | 110 | clean |
+  | 10 on leads, 1000 seated | 18 | 279 | 106 | clean |
+
+  One cheap price shortened every rail jumper and put a third more of them under chips and
+  electrolytics. Pricing by the part keeps the short ones short and cuts the seated count by a
+  third; raising the seated price to 1000 removed only 4 of the 110, so those are forced -- no
+  other route exists -- and 100 is the price. Nano-relay's 18 columns are jumpers going round
+  an electrolytic or a terminal block rather than under it: a straight jumper cannot step
+  round a body, and a bent one along the grid that would is the next decision, not this one.
 - **Supply comes from the rails.** A ground net takes the − rails and a power net the +
   rails (`RAILS_FOR_CLASS`; one net of a class takes both, two take one each), every island
   of it drops a jumper to its nearer rail, and a pair that ends up carrying a net both top

@@ -23,6 +23,8 @@ from perfboard_studio.geometry import all_pin_holes, hole_key
 from perfboard_studio.lvs import run_lvs
 from perfboard_studio.mcp.session import BoardSession
 from perfboard_studio.model import (
+    SEATED_ARCHETYPES,
+    Board,
     ComponentInstance,
     DocumentMeta,
     HoleCoord,
@@ -286,15 +288,15 @@ def test_the_placer_counts_exactly_what_the_planner_refuses() -> None:
 EXAMPLES = sorted(path.stem for path in (REPO / "examples").glob("*.perf"))
 
 
-def _on_a_breadboard(example: str) -> PerfDocument:
-    """An example taken back to its DESIGN, on a full breadboard: what Place on the Board
-    is asked when somebody builds the circuit on one."""
+def _on_a_breadboard(example: str, board: Board = FULL) -> PerfDocument:
+    """An example taken back to its DESIGN, on a full breadboard (or ``board``): what Place
+    on the Board is asked when somebody builds the circuit on one."""
     loaded = deserialize_document((REPO / "examples" / f"{example}.perf").read_text(encoding="utf-8"))
     assert loaded.ok
     doc = loaded.document
     return dataclasses.replace(
         doc,
-        board=FULL,
+        board=board,
         components=(),
         conductors=(),
         mounting_holes=(),
@@ -364,12 +366,101 @@ def test_the_arrangement_lays_out_a_breadboard_as_one_is_built(example: str) -> 
     assert not shorted, f"{example}: clips holding two nets: {shorted}"
 
 
+#: How far along its rail a jumper from a pin may land, in columns, per board and example, at
+#: the worst of the four seeds: what was measured when the price became what the builder can
+#: do -- little under a part on its leads, the full price under one seated on the board
+#: (``breadroute.under_price``). At one price for every part, a jumper from a pin to its rail
+#: went round every resistor in its column: 28 columns along on nano-relay, 21 on
+#: arduino-io-shield, 11 on the README's 555. Nano-relay's 18 is a jumper going round an
+#: electrolytic rather than under it, which is the rule doing its job.
+RAIL_JUMPER_COLUMNS_AT_MOST: dict[tuple[str, str], int] = {
+    ("830", "arduino-io-shield"): 8,
+    ("830", "atmega328-relay"): 11,
+    ("830", "lm317-supply"): 7,
+    ("830", "lpb1-booster"): 3,
+    ("830", "nano-relay"): 18,
+    ("830", "ne555-astable"): 1,
+    ("400", "arduino-io-shield"): 1,
+    ("400", "lm317-supply"): 2,
+    ("400", "lpb1-booster"): 7,
+    ("400", "ne555-astable"): 0,
+}
+
+#: The most jumpers under a SEATED part (``model.SEATED_ARCHETYPES``: a chip, a relay, a
+#: header, an electrolytic on its base) each plan lays, at the worst of the four seeds: the
+#: ones no other route avoids. Pricing a seated part at 1000 instead of 100 removed 4 of 110
+#: across every example, so these are forced; a price that let a jumper under a chip to save
+#: a few holes would raise one of them.
+SEATED_JUMPERS_AT_MOST: dict[tuple[str, str], int] = {
+    ("830", "arduino-io-shield"): 0,
+    ("830", "atmega328-relay"): 18,
+    ("830", "lm317-supply"): 0,
+    ("830", "lpb1-booster"): 4,
+    ("830", "nano-relay"): 4,
+    ("830", "ne555-astable"): 1,
+    ("400", "arduino-io-shield"): 0,
+    ("400", "lm317-supply"): 1,
+    ("400", "lpb1-booster"): 0,
+    ("400", "ne555-astable"): 0,
+}
+
+#: The examples that fit on a half-size breadboard; the others are too big for one.
+FITS_ON_A_HALF = ('arduino-io-shield', 'lm317-supply', 'lpb1-booster', 'ne555-astable')
+
+
+def _rail_jumper_reach(doc: PerfDocument) -> int:
+    """The furthest a jumper with one end on a rail lands along it from the other end, in
+    columns."""
+    worst = 0
+    for conductor in doc.conductors:
+        path = getattr(conductor, "path", ())
+        if len(path) < 2:
+            continue
+        a, b = path[0], path[-1]
+        if (rail_of(doc.board, a.row) is None) != (rail_of(doc.board, b.row) is None):
+            worst = max(worst, abs(a.col - b.col))
+    return worst
+
+
+def _seated_jumpers(doc: PerfDocument) -> int:
+    """How many times a jumper passes under a seated part, as ``jumper-under-body`` counts."""
+    by_id = {c.id: c for c in doc.components}
+    count = 0
+    for violation in run_drc(doc, get_footprint):
+        if violation.rule != "jumper-under-body":
+            continue
+        for component_id in violation.component_ids:
+            footprint = get_footprint(by_id[component_id].footprint_id)
+            if footprint is None or footprint.body.archetype in SEATED_ARCHETYPES:
+                count += 1
+    return count
+
+
+def _wired_well(size: str, example: str, wired: PerfDocument) -> None:
+    assert run_lvs(wired, get_footprint).ok, example
+    assert _rail_jumper_reach(wired) <= RAIL_JUMPER_COLUMNS_AT_MOST[(size, example)], example
+    assert _seated_jumpers(wired) <= SEATED_JUMPERS_AT_MOST[(size, example)], example
+
+
 @pytest.mark.parametrize("seed", [0, 1, 2, 3])
 @pytest.mark.parametrize("example", EXAMPLES)
 def test_every_example_places_fully_on_a_breadboard(example: str, seed: int) -> None:
     """Place on the Board at four seeds, then the planner: every part on, nothing the
-    planner cannot wire. On the old arrangement nano-relay left its relay off at one seed and
-    atmega328-relay its connector at three, once a TO-220 stood where it really stands."""
+    planner cannot wire, the circuit as drawn, rail jumpers short and jumpers under seated
+    parts no more than they have to be. On the old arrangement nano-relay left its relay off
+    at one seed and atmega328-relay its connector at three, once a TO-220 stood where it
+    really stands."""
     placed = place_design(_on_a_breadboard(example), get_footprint, PlacementOptions(seed=seed))
     assert placed.unplaced == ()
-    assert plan_breadboard(placed.document, get_footprint).problems == ()
+    plan = plan_breadboard(placed.document, get_footprint)
+    assert plan.problems == ()
+    _wired_well("830", example, plan.document)
+
+
+@pytest.mark.parametrize("example", FITS_ON_A_HALF)
+def test_an_example_that_fits_a_half_breadboard_is_wired_as_well_on_one(example: str) -> None:
+    placed = place_design(_on_a_breadboard(example, breadboard("400")), get_footprint)
+    assert placed.unplaced == ()
+    plan = plan_breadboard(placed.document, get_footprint)
+    assert plan.problems == ()
+    _wired_well("400", example, plan.document)

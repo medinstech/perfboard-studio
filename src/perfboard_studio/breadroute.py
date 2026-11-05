@@ -66,7 +66,7 @@ from .commands import (
 )
 from .connectivity import FootprintLookup, PhysicalPinRef, extract_physical_nets
 from .geometry import format_hole, hole_key, manhattan
-from .model import HoleCoord, Net, NetClass, NetId, PerfDocument
+from .model import SEATED_ARCHETYPES, HoleCoord, Net, NetClass, NetId, PerfDocument
 from .occupancy import OccupancyIndex, build_occupancy
 from .router import WirePath
 from .striproute import (
@@ -78,15 +78,16 @@ from .striproute import (
     Router,
     StripboardPlan,
     StripProblem,
+    UnderPrice,
     cheapest_join,
     cover_of,
     free_holes,
     net_of_pin,
-    parts_under,
     pins_by_hole,
     plan_stripboard,
     straight_router,
     take_join,
+    under_cost,
     wanted_nets,
 )
 from .wiregauge import wire_gauge_for_current
@@ -184,7 +185,8 @@ def plan_breadboard(
     net_of = net_of_pin(doc, every_net)
     occupancy = build_occupancy(doc, lookup)
     cover = cover_of(doc, occupancy)
-    route = _router(doc, occupancy, wire_path, cover)
+    price = under_price(doc, lookup)
+    route = _router(doc, occupancy, wire_path, cover, price)
     problems = _shorts(doc, pins, net_of, every_net) + _wrong_rails(doc, pins, net_of)
 
     # What is already joined, by the board and by anything fitted: the islands every jumper
@@ -253,7 +255,11 @@ def plan_breadboard(
         for a, b in joins:
             # The ends were chosen by what a jumper costs on its own; its shape is chosen
             # knowing the ones already laid, so that it takes a lane of its own.
-            path = _grid_path(a, b, doc, occupancy, lanes, cover)[1] if wire_path == "grid" else route(a, b)[1]
+            path = (
+                _grid_path(a, b, doc, occupancy, lanes, cover, price)[1]
+                if wire_path == "grid"
+                else route(a, b)[1]
+            )
             lanes.update(_steps(path))
             conductors.append(
                 NewWireConductor(
@@ -462,18 +468,48 @@ def _reach(doc: PerfDocument, holes: Iterable[HoleCoord]) -> tuple[set[Rail], li
     return rails, list(reach.values())
 
 
+#: What a flat jumper passing UNDER a part standing on its leads costs, in holes of extra
+#: length: a resistor, an LED, a TO-92, a module on its header. Little, because a short
+#: jumper under one is ordinary bench practice -- and at the full price a jumper from a pin
+#: to its rail went round every resistor in its column and landed 28 columns along the rail
+#: on nano-relay (docs/ARCHITECTURE.md, "A breadboard is stripboard nobody can cut").
+ON_LEADS_UNDER_COST = 10
+
+#: What one passing under a part SEATED on the board costs (``model.SEATED_ARCHETYPES``): a
+#: chip, a relay, a header, an electrolytic on its base. Under one the part sits on the wire,
+#: so the jumper goes there only when no other route exists.
+SEATED_UNDER_COST = 100
+
+
+def under_price(doc: PerfDocument, lookup: FootprintLookup) -> UnderPrice:
+    """What a jumper passing under each part of this board costs: :data:`SEATED_UNDER_COST`
+    for a seated body or one nothing describes, :data:`ON_LEADS_UNDER_COST` for the rest."""
+    on_leads = frozenset(
+        component.id
+        for component in doc.components
+        if (footprint := lookup(component.footprint_id)) is not None
+        and footprint.body.archetype not in SEATED_ARCHETYPES
+    )
+    return lambda part: ON_LEADS_UNDER_COST if part in on_leads else SEATED_UNDER_COST
+
+
 def _router(
-    doc: PerfDocument, occupancy: OccupancyIndex, wire_path: WirePath, cover: Cover | None = None
+    doc: PerfDocument,
+    occupancy: OccupancyIndex,
+    wire_path: WirePath,
+    cover: Cover | None = None,
+    price: UnderPrice | None = None,
 ) -> Router:
     """The jumper between two holes for this ``wire_path``, with its cost: its length in
-    holes, plus :data:`UNDER_BODY_COST` for every part it runs under and for each end that
-    goes in under one, plus :data:`BEND_COST` a bend. A straight one is a stripboard link,
-    priced by the same function (``striproute.straight_router``). Remembered per pair,
-    because the planner asks again for the jumper it chose."""
+    holes, plus what every part it runs under costs (``price``; :data:`UNDER_BODY_COST`
+    apiece without one), :data:`UNDER_BODY_COST` for each end that goes in under one, and
+    :data:`BEND_COST` a bend. A straight one is a stripboard link, priced by the same
+    function (``striproute.straight_router``). Remembered per pair, because the planner asks
+    again for the jumper it chose."""
     if cover is None:
         cover = cover_of(doc, occupancy)
     if wire_path != "grid":
-        return straight_router(occupancy, cover)
+        return straight_router(occupancy, cover, price)
     seen: dict[tuple[str, str], tuple[int, JumperRoute]] = {}
 
     def route(a: HoleCoord, b: HoleCoord) -> tuple[int, JumperRoute]:
@@ -481,7 +517,7 @@ def _router(
         found = seen.get(key)
         if found is None:
             covered = sum(occupancy.body_covers(end) is not None for end in (a, b))
-            cost, path = _grid_path(a, b, doc, occupancy, cover=cover)
+            cost, path = _grid_path(a, b, doc, occupancy, cover=cover, price=price)
             found = seen[key] = (cost + UNDER_BODY_COST * covered, path)
         return found
 
@@ -523,8 +559,10 @@ def _grid_path(
     occupancy: OccupancyIndex,
     lanes: set[Step] | None = None,
     cover: Cover | None = None,
+    price: UnderPrice | None = None,
 ) -> tuple[int, JumperRoute]:
-    """The cheapest jumper from a to b that runs only along rows and columns.
+    """The cheapest jumper from a to b that runs only along rows and columns, the parts it
+    passes under priced by ``price`` (:func:`under_price`).
 
     Every path with at most two bends, which is every shape the pre-bent kits come in:
     straight when the ends share a row or a column, an L, and a U or a Z through any row
@@ -549,7 +587,7 @@ def _grid_path(
         length = sum(manhattan(p, q) for p, q in pairwise(path))
         if best is not None and length + BEND_COST * bends > best[0][0]:
             continue
-        cost = length + BEND_COST * bends + UNDER_BODY_COST * parts_under(path, occupancy, cover)
+        cost = length + BEND_COST * bends + under_cost(path, occupancy, cover, price)
         if lanes:
             cost += ALONG_COST * len(_steps(path) & lanes)
         key = (cost, bends, tuple((p.row, p.col) for p in path))

@@ -389,6 +389,31 @@ def parts_under(path: JumperRoute, occupancy: OccupancyIndex, cover: Cover | Non
     two ends, counted as ``jumper-under-body`` counts them -- a corner included, since the
     wire lies over it. A run along a row or a column is read off ``cover`` when it is given,
     which is the same holes: ``holes_under_line`` of such a run is every hole on it."""
+    return len(_crossed(path, occupancy, cover))
+
+
+#: What a link or a jumper passing under one part costs, by the part's id, in holes of
+#: extra length: breadroute's :func:`breadroute.under_price`. Without one, every part costs
+#: :data:`UNDER_BODY_COST`.
+type UnderPrice = Callable[[ComponentId], int]
+
+
+def under_cost(
+    path: JumperRoute,
+    occupancy: OccupancyIndex,
+    cover: Cover | None = None,
+    price: UnderPrice | None = None,
+) -> int:
+    """What the parts a link along ``path`` passes under add to its cost: each part's
+    ``price``, or :data:`UNDER_BODY_COST` apiece without one."""
+    crossed = _crossed(path, occupancy, cover)
+    if price is None:
+        return UNDER_BODY_COST * len(crossed)
+    return sum(price(part) for part in crossed)
+
+
+def _crossed(path: JumperRoute, occupancy: OccupancyIndex, cover: Cover | None) -> set[ComponentId]:
+    """The parts a link along ``path`` passes under (:func:`parts_under`)."""
     ends = {(path[0].col, path[0].row), (path[-1].col, path[-1].row)}
     crossed: set[ComponentId | None] = set()
     for p, q in pairwise(path):
@@ -407,13 +432,16 @@ def parts_under(path: JumperRoute, occupancy: OccupancyIndex, cover: Cover | Non
                 occupancy.body_covers(h) for h in holes_under_line(p, q) if (h.col, h.row) not in ends
             )
     crossed.discard(None)
-    return len(crossed)
+    return {part for part in crossed if part is not None}
 
 
-def straight_router(occupancy: OccupancyIndex, cover: Cover) -> Router:
-    """A straight link between two holes, with its cost: its length in holes, plus
-    :data:`UNDER_BODY_COST` for every part it runs under and for each end that goes in
-    under one. Remembered per pair, because a planner asks again for the link it chose."""
+def straight_router(
+    occupancy: OccupancyIndex, cover: Cover, price: UnderPrice | None = None
+) -> Router:
+    """A straight link between two holes, with its cost: its length in holes, plus what
+    every part it runs under costs (``price``, or :data:`UNDER_BODY_COST` apiece) and
+    :data:`UNDER_BODY_COST` for each end that goes in under one. Remembered per pair,
+    because a planner asks again for the link it chose."""
     seen: dict[tuple[str, str], tuple[int, JumperRoute]] = {}
 
     def route(a: HoleCoord, b: HoleCoord) -> tuple[int, JumperRoute]:
@@ -422,7 +450,7 @@ def straight_router(occupancy: OccupancyIndex, cover: Cover) -> Router:
         if found is None:
             covered = sum(occupancy.body_covers(end) is not None for end in (a, b))
             path = (a, b)
-            cost = manhattan(a, b) + UNDER_BODY_COST * parts_under(path, occupancy, cover)
+            cost = manhattan(a, b) + under_cost(path, occupancy, cover, price)
             found = seen[key] = (cost + UNDER_BODY_COST * covered, path)
         return found
 

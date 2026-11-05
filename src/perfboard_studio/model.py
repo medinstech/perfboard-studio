@@ -468,6 +468,30 @@ BodyArchetype: TypeAlias = Literal[  # noqa: UP040
 #: told.
 HEAT_SOURCE_ARCHETYPES: frozenset[BodyArchetype] = frozenset({"to220", "relay-box"})
 
+#: Archetypes whose body sits ON the board once it is fitted -- a chip, a relay, the
+#: plastic of a header or a terminal block, a can on its base, a pot, a box capacitor -- so
+#: a flat jumper laid under one lifts it off its pins or keeps it from going in at all. A
+#: part standing on its leads (a resistor, an LED, a TO-92 or a TO-220, a module on its
+#: header) clears one, which is ordinary practice at the bench. ``breadroute`` prices a
+#: jumper under a part by which of the two it is; a body nothing describes is taken as
+#: seated.
+SEATED_ARCHETYPES: frozenset[BodyArchetype] = frozenset(
+    {
+        "dip",
+        "relay-box",
+        "pin-header",
+        "box-header",
+        "screw-terminal",
+        "screw-terminal-vertical",
+        "tactile-switch",
+        "crystal-hc49",
+        "radial-electrolytic",
+        "potentiometer",
+        "box-film",
+        "generic-box",
+    }
+)
+
 #: Archetypes whose life is measurably shortened by sitting next to one. An electrolytic
 #: loses electrolyte with temperature; the usual rule of thumb is halved life per 10 °C.
 HEAT_SENSITIVE_ARCHETYPES: frozenset[BodyArchetype] = frozenset({"radial-electrolytic"})
