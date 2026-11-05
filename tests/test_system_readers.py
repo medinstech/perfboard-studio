@@ -799,3 +799,26 @@ def test_the_move_to_board_label_reads_whole_in_turkish() -> None:
         )
     finally:
         i18n.set_language(before)
+
+
+def test_a_part_moved_away_stays_put_and_show_goes_to_it(qapp) -> None:  # type: ignore[no-untyped-def]
+    """Moved off the board in front: the window stays, says which board needs wiring again,
+    and Show puts the new board in front with the part picked."""
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_with_wire_to_r1())
+    try:
+        window.move_to_board("cmp-2", "b2")
+        assert window.bus.board_id == system.FIRST_BOARD, "not followed"
+        message = window.statusBar().currentMessage()
+        assert message.endswith("Wire it again: Main."), message
+        offer = window._status_offer
+        assert offer is not None and not offer.isHidden() and offer.text() == "Show"
+        offer.click()
+        assert window.bus.board_id == "b2" and offer.isHidden()
+        assert "cmp-2" in window.scene.selected_component_ids()
+    finally:
+        window._mark_saved()
+        window.close()
+        window.deleteLater()
+

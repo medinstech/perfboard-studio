@@ -11227,6 +11227,9 @@ class MainWindow(QMainWindow):
             return
         self.command_palette.open(frozenset({"part"}))
 
+    #: The status bar's one offered action (``_offer_in_status``), made when first needed.
+    _status_offer: QToolButton | None = None
+
     @property
     def _shown_board(self) -> BoardId:
         """The board the views show: the bus's (``boardbus.BoardBus``). What reads "the
@@ -11279,20 +11282,60 @@ class MainWindow(QMainWindow):
         source = next(b for b, c in placed_components(system_doc) if c.id == component_id)
         old = board_document(system_doc, source)
         part = next(c for c in old.components if c.id == component_id)
+        copper = conductors_touching(old, component_id, self.lookup)
         result = self.bus.dispatch(
             "component.moveToBoard",
             MoveToBoardPayload(
                 id=component_id,
                 board=board_id,
                 anchor=anchor if anchor is not None else part.anchor,
-                conductor_ids=conductors_touching(old, component_id, self.lookup),
+                conductor_ids=copper,
             ),
         )
         if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
             return result
-        self.statusBar().showMessage(did(result.description), 6000)
+        language = current_language()
+        message = did(result.description)
+        if copper:
+            # The copper that ran to it went with it, so the board it left has nets open.
+            message += "  ·  " + t("Wire it again: {board}.").format(
+                board=board_title(self.bus.system_document, source, language)
+            )
+        self.statusBar().showMessage(message, 10000)
+        if board_id != self.bus.board_id:
+            # Not followed: somebody moving five parts off a board one by one is not flipped
+            # back and forth five times. Show goes there and picks it.
+            self._offer_in_status(
+                t("Show"), lambda: self._show_moved_part(board_id, component_id), 10000
+            )
         return result
+
+    def _show_moved_part(self, board_id: BoardId, component_id: str) -> None:
+        self._on_board_picked(board_id)
+        self.go_to_component(component_id)
+
+    def _offer_in_status(self, label: str, act: Callable[[], None], ms: int) -> None:
+        """A button at the right of the status bar beside the message it belongs to, gone
+        when the message is: what Show and Undo look like in every editor that has them."""
+        if self._status_offer is None:
+            self._status_offer = QToolButton(self.statusBar())
+            self._status_offer.setAutoRaise(True)
+            self.statusBar().addPermanentWidget(self._status_offer)
+            self.statusBar().messageChanged.connect(
+                lambda text: self._status_offer.hide() if not text and self._status_offer else None
+            )
+        button = self._status_offer
+        button.setText(label)
+        with contextlib.suppress(RuntimeError, TypeError):
+            button.clicked.disconnect()
+
+        def run(_checked: bool = False) -> None:
+            button.hide()
+            act()
+
+        button.clicked.connect(run)
+        button.show()
 
     def _add_move_to_board(self, menu: QMenu, component_id: str) -> None:
         """Move to Board ▸ each other board, on a placed part, when there is another."""

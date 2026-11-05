@@ -772,6 +772,7 @@ TURKISH: Mapping[str, str] = {
     "Remove the cable {ref}": "{ref} kablosunu çıkar",
     # Move to Board, in reach's words: the boards in a submenu, so a name stands alone.
     "Move to &Board": "Karta &Taşı",
+    "Wire it again: {board}.": "Yeniden kablolayın: {board}.",
     "Move {ref} to the board {board}": "{ref} parçasını başka karta taşı: {board}",
     "taking off {count} conductor that ran to it": "ona giden {count} iletken kaldırıldı",
     "taking off {count} conductors that ran to it": "ona giden {count} iletken kaldırıldı",
