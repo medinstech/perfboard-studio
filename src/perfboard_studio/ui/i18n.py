@@ -2091,6 +2091,20 @@ TURKISH: Mapping[str, str] = {
         "yüksek kalacağını ve ne kadar uzağı gördüğünü (3-7 m), jumper'ı ise yeni bir hareketin "
         "bu süreyi yeniden başlatıp (H) başlatmayacağını (L) ayarlar."
     ),
+    "Reflective IR sensor: an IR LED and a phototransistor side by side, seeing 0.2 to "
+    "15 mm, best at 2.5": (
+        "Yansımalı kızılötesi sensör: yan yana bir IR LED ve bir fototransistör; 0,2 ile 15 "
+        "mm arasını görür, en iyi 2,5 mm'de"
+    ),
+    "Its legs are 5.5 mm apart across and the holes 5.08: bend them in a little. Its "
+    "two snap-in clips are for 2.5 mm holes, so cut them off or let it stand on them. "
+    "The blue dome is the LED (A, K), which needs its series resistor; the black one is "
+    "the phototransistor (C, E).": (
+        "Bacakları enine 5,5 mm, delikler 5,08 mm arayla: bacakları biraz içe bükün. İki "
+        "geçmeli tırnağı 2,5 mm'lik delikler içindir; kesin ya da parçayı üzerlerinde "
+        "durdurun. Mavi kubbe LED'dir (A, K) ve seri direnç ister; siyah olan "
+        "fototransistördür (C, E)."
+    ),
     "Temperature sensor, 1-Wire, needs a 4.7k pull-up on DQ": (
         "Sıcaklık sensörü, 1-Wire, DQ hattında 4,7k pull-up ister"
     ),

@@ -268,6 +268,19 @@ MODELS: tuple[Model, ...] = (
     # The 12 mm active buzzer, its legs 7.6 mm apart bent the 0.02 mm out to our 7.62.
     # KiCad paints the bottom of the sound hole a disc capacitor's red-brown; it is the dark
     # of the hole.
+    # The TCRT5000 reflective sensor, as Vishay sells it bare: its legs are 5.5 mm apart
+    # across and 2.54 along, and it sits down on the board with them under it, so the
+    # model is centred on our 5.08 mm holes (-0.21 mm) and drawn without them -- its two
+    # mounting clips are the same uncoloured metal to the converter, and splaying found six
+    # "legs" for four holes. The legs through the board are ours, as the relay's are.
+    # Its domes the other way round in colour: KiCad's model is Vishay's top view (its
+    # chamfered end on the LED's side, A and cathode, and its print on the emitter row), and
+    # paints the dome over C and E blue -- where the blue one is the IR LED (ProtoSupplies:
+    # "an IR emitter LED which is blue in color ... a phototransistor receiver that looks
+    # black"). Its body is the black housing, not the print, which has more triangles.
+    Model("box-2x2-p2-r1-10.3x5.9x7.2", "OptoDevice", "Vishay_TCRT5000", offset=(-0.21, 0.0),
+          leads=False, body="#050505",
+          colours=(("#030d72", "#222a2d"), ("#222a2d", "#030d72"))),
     Model("box-2x1-p3-r1-12x12x9.5", "Buzzer_Beeper", "Buzzer_12x9.5RM7.6", splay=True,
           materials=(("#9e2705", "moulded"),), colours=(("#9e2705", "#141414"),)),
     # The passive one, CUI's CEM-1203(42): the same 12 mm can on the same legs, 8.5 mm tall.
@@ -452,6 +465,8 @@ MATERIALS: dict[str, str] = {
     "#0f0f0f": "moulded",  # a character LCD's bezel
     "#0d0e10": "moulded",  # a display's black case, and the backlight under an LCD's glass
     "#030103": "moulded",  # an IR receiver's black epoxy
+    "#030d72": "gloss",  # a TCRT5000's IR LED lens, blue (``colours``)
+    "#222a2d": "gloss",  # a TCRT5000's phototransistor lens, black
     "#772707": "gloss",  # the adjusting screw of a 3296 trimmer, painted brass (``colours``)
     "#c6c49f": "moulded",  # the natural nylon of a JST XH or a Molex KK housing
 }

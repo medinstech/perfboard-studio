@@ -141,6 +141,10 @@ closed without a bump.
   either language. The build guide says the module is not on the board and lists its leads
   pin by pin, in place of the numbered holes and the + lead's polarity line, and so does it
   now for the 4x4 keypad and the hobby servo.
+- **The TCRT5000 reflective IR sensor**, the bare part, drawn from KiCad's model with its blue
+  LED over A and K and its black phototransistor over C and E, as Vishay lays them out. Its
+  legs are 5.5 mm apart and are bent to the 0.1 in grid; its check says so, and that its
+  snap-in clips are for 2.5 mm holes.
 - **Seven more modules on a cable.** The HC-05 (ZS-040) and HC-06 Bluetooth modules, a MAX485
   RS-485 module, the GY-BMP280, GY-BME280 and GY-BME280-3.3 sensor boards by the names
   printed on them, and the 1-channel 5 V relay module. Each check says what the module needs:

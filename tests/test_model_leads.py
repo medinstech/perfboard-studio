@@ -118,6 +118,10 @@ def test_there_are_models_to_measure() -> None:
 LEGS_UNDER_THE_BODY: dict[str, str] = {
     "relay-srd": "the SRD's blades are off the grid, under its base",
     "led-5mm-rgb": "the RGB LED's legs are 1.27 mm apart, under it as it sits on the board",
+    "box-2x2-p2-r1-10.3x5.9x7.2": (
+        "the TCRT5000 sits down on its legs, 5.5 mm apart under it, and its snap-in clips are "
+        "the same bare metal to the converter"
+    ),
 }
 
 

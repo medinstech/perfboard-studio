@@ -680,6 +680,28 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("lm35", "LM35", "sensor", "to92", "Temperature sensor, 10 mV per degree C",
                 _legs("+VS", "VOUT", "GND"), ref_prefix="U",
                 source=f"TI LM35 datasheet, LP package; {_TO92_ORDER}", check=_CHECK_LEGS),
+    # The bare Vishay TCRT5000, an IR LED and a phototransistor in one housing. Its pins
+    # are numbered here row by row, as a generated box's are: Vishay's footprint top view
+    # has Coll. and A on one row and E and Cath. on the other, 5.5 mm across.
+    CatalogPart("tcrt5000", "TCRT5000", "sensor", "box-2x2-p2-r1-10.3x5.9x7.2",
+                "Reflective IR sensor: an IR LED and a phototransistor side by side, seeing 0.2 "
+                "to 15 mm, best at 2.5",
+                _legs("C", "A", "E", "K"), ref_prefix="U",
+                source=(
+                    "Vishay TCRT5000 datasheet (83760, rev 1.7): footprint top view, Coll. and A "
+                    "on one row and E and Cath. on the other, 5.5 mm across and 2.54 along; "
+                    "body 10.2 x 5.8 x 7 mm, +0.1/+0.1/+0.2; KiCad 10 "
+                    "OptoDevice:Vishay_TCRT5000 for the model"
+                ),
+                check=(
+                    "Its legs are 5.5 mm apart across and the holes 5.08: bend them in a little. "
+                    "Its two snap-in clips are for 2.5 mm holes, so cut them off or let it stand "
+                    "on them. The blue dome is the LED (A, K), which needs its series resistor; "
+                    "the black one is the phototransistor (C, E)."
+                ),
+                aliases=("TCRT5000L", "reflective sensor", "IR sensor", "line sensor",
+                         "line follower", "optical sensor", "kızılötesi sensör",
+                         "çizgi sensörü")),
     CatalogPart("ds18b20", "DS18B20", "sensor", "to92",
                 "Temperature sensor, 1-Wire, needs a 4.7k pull-up on DQ",
                 _legs("GND", "DQ", "VDD"), ref_prefix="U",
