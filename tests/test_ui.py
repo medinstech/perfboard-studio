@@ -14918,7 +14918,7 @@ def test_the_board_is_what_properties_shows_with_nothing_selected() -> None:
     editor = window.inspector.board_editor
     assert window.inspector.shown is editor
     board = window.bus.document.board
-    assert f"{board.cols} × {board.rows}" in editor.summary.text()
+    assert f"{board.cols} × {board.rows}" in editor.summary.text()  # wraps whole
     editor.height_limit.setValue(12.5)
     editor.height_limit.editingFinished.emit()
     assert window.bus.document.height_limit_mm == 12.5
@@ -17269,3 +17269,27 @@ def test_the_reason_a_family_is_left_out_is_said_in_turkish() -> None:
     finally:
         set_language(before)
         _close(window)
+
+
+def test_the_board_size_in_properties_wraps_whole() -> None:
+    """The narrow Properties panel broke the board line as "Pad per hole, 28 ×" over
+    "6 holes" -- in the README's first shot. The size is one thing to read, so only the
+    break after the board's kind is left to wrap at, in either language."""
+    from perfboard_studio.ui.i18n import language, set_language
+
+    before = language()
+    for lang, word in (("en", "holes"), ("tr", "delik")):
+        set_language(lang)
+        try:
+            window = _window_on(_load_dense())
+            try:
+                window.scene.clearSelection()
+                window._refresh_properties()
+                text = window.inspector.board_editor.summary.text()
+                size = text.rsplit(",", 1)[-1].lstrip(" ")
+                assert size.endswith(word) and "\u00a0×\u00a0" in size, (lang, text)
+                assert " " not in size, (lang, text)
+            finally:
+                _close(window)
+        finally:
+            set_language(before)

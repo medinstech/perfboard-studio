@@ -368,7 +368,10 @@ class _BoardEditor(QWidget):
             board = document.board
             kind = self.kind_name(board.type)
             words = [kind] if kind is not None else []
-            words.append(t("{cols} × {rows} holes").format(cols=board.cols, rows=board.rows))
+            # The size is one thing to read, so it wraps whole after the board's kind:
+            # the narrow panel broke it as "28 ×" over "6 holes".
+            size = t("{cols} × {rows} holes").format(cols=board.cols, rows=board.rows)
+            words.append(size.replace(" ", "\u00a0"))
             self.summary.setText(",  ".join(words))
             if not self.height_limit.hasFocus():
                 self.height_limit.setValue(document.height_limit_mm or 0.0)
