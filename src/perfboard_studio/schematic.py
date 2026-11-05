@@ -90,6 +90,7 @@ from .model import (
     pin_name_of,
     pin_number_sort_key,
 )
+from .system import every_component
 
 # ---------------------------------------------------------------------------
 # The sheet's units
@@ -2352,7 +2353,8 @@ def _collect_symbols(
     A part's own definition -- its footprint and value -- comes from wherever it lives,
     so an unplaced resistor is drawn as a resistor rather than as a box with two pins.
     """
-    placed_by_ref = {component.ref: component for component in doc.components}
+    # Every board's: the sheet is the design's, and a part on the second board is placed.
+    placed_by_ref = {component.ref: component for component in every_component(doc)}
     designed_by_ref = {part.ref: part for part in doc.parts}
     pins_named: dict[str, set[str]] = defaultdict(set)
     for net in doc.nets:
@@ -2844,7 +2846,7 @@ def build_schematic(
     # a part moving between doc.parts and doc.components -- and everything from here on is
     # keyed on the reference, which is what the drawing speaks.
     ref_of = {part.id: part.ref for part in doc.parts}
-    ref_of.update({component.id: component.ref for component in doc.components})
+    ref_of.update({component.id: component.ref for component in every_component(doc)})
     placements = {
         ref_of[placement.id]: placement
         for placement in doc.sheet

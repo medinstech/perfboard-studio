@@ -2987,12 +2987,29 @@ document, so no board command can change one. Its ends name parts by ID, which a
 move between the board and the design both keep. CLAUDE.md's rule decides what is refused:
 an end on a board or a part that is not there, a cable back to the same connector, two wires
 on one pin, no wires, a reference another cable or part holds -- refused by `cable.add` and
-`cable.update` (`system.cable_problem`), and by `persist` at load for the ends. A board
-command whose result leaves a cable to nowhere -- the connector deleted, taken off the board,
-its board removed -- is refused naming the cable. Whether a wire's pin is a pin of its part
-needs the footprint registry, which a command has none of (`net.connect` does not ask it
-either), so DRC reports that; and a wire joining two different nets is a design mistake the
-document can hold, so DRC and LVS report it and nothing refuses it.
+`cable.update` (`system.cable_problem`), and by `persist` at load, the same function asked:
+one fact, two consumers. A board command whose result leaves a cable to nowhere -- the
+connector deleted, taken off the board, its board removed -- is refused naming the cable.
+Whether a wire's pin is a pin of its part is NOT refused, and that is the same answer the
+document already gives a net: only the footprint registry knows a part's pins, a command has
+no registry (`CommandContext` holds `next_id` alone, so a journal replays byte for byte), and
+a file is opened under whatever version of the registry the reader has -- a package swapped
+by `component.update`, or a footprint regenerated with fewer pins, puts a wire on a missing
+pin with no command able to see it. ERC's `pin-not-on-part` says it, for a cable wire as for
+a net ("W1 lands on J2 pin 5, which conn-2 does not have"), and no new rule was made for it. A
+wire joining two different nets is a design mistake the document can hold, so LVS reports it
+and nothing refuses it.
+
+**A command dispatched on the document itself is checked against the system too.** Every
+host has always dispatched `component.move` and the rest with no board named, and on a system
+that is the first board's fields, as it always was. But it is not the first board ALONE: a
+plain `component.delete` of a cabled connector would leave the cable to nowhere, and a rename
+to a reference the second board holds would make one name for two parts. So every board
+command is registered inside `commands._OnTheSystem`, which, when the document has another
+board or a cable, runs the same check `board.on` runs after its merge. On one board it is the
+command, untouched. The check refuses only what the command MADE (`_assert_one_system(before,
+after)`): a duplicated reference is a warning at load, on one board or several, and a file that
+opened with one must not then refuse every command.
 
 **LVS of the system joins the boards' islands through the cables.** `lvs.run_system_lvs` takes
 each board's islands from `connectivity` on that board's own view -- unchanged, so a board
@@ -3002,3 +3019,31 @@ with the boards it is split across, because "add a cable wire" and "route the bo
 different fixes; one joined island holding two nets is a short, which is also exactly how a
 cable wired pin 1 to pin 2 shows up. Pins of parts on no board are left out: the design is
 asked about them, not the copper.
+
+`lvs.run_lvs` itself answers for the system when the document has another board or a cable,
+so the window, the MCP server, `--headless` and the guide all get the system's verdict
+without one of them having to know. Each board is checked on its own view with only its own
+pins (a net split or shorted ON that board, said with the board's name), a part on no board is
+reported once rather than once per board, and the cables' opens and shorts are added unless a
+board already said the same about the same nets -- "route Remote" is the fix to say first.
+
+**Every reader of the circuit reads every board; every reader of the board reads one.** The
+projection is right for a board's questions and wrong for the circuit's: on one board's view a
+part on the second board is neither placed nor in the design, a reference nothing defines.
+The first reader found that way was ERC, which would have called every net reaching the second
+board `part-not-defined`, and the guide counts ERC's errors before it writes a step. So the
+readers were audited, and each is one of three kinds:
+
+| Kind | Reads | Readers |
+| --- | --- | --- |
+| The board | one board's view (`board_document`); the window's is `MainWindow._shown_board` | DRC, the router and planners, the placer, stripboard, occupancy, connectivity, ratsnest, the guide, both renderers, the STEP export, `--headless`'s renders; in the window the DRC and ratsnest refresh, the selection, Properties, the Inspector, Place All, Auto-place, the empty-board hint, a drop on the board |
+| The circuit | every board through `system.py` (`circuit_parts`, `every_component`, `placed_components`, `references_in_use`) | ERC, LVS, the sheet (`schematic`), `catalog.free_reference` and `view2d.next_reference`, `assert_ref_free` and `part.add`'s id, a symbol move, the supply names a net takes, `design_on_a_new_board`; in the window the Parts list, the palette and Go to Part, the step bar's counts, a click or menu on a symbol, `_id_of` / `_ref_of_id`, what a document opens on; in MCP the status, `list_components` and a part looked up by reference |
+| The design | `doc.parts`, `doc.nets`, the sheet | the netlist, the sheet's layout, the step bar's "not on the board yet" -- a part placed on any board has left `doc.parts` |
+
+A gesture on a symbol whose part is on another board than the one shown (a drop, Properties,
+Rename) is answered in the status bar -- "JB is on the board Remote." -- rather than dropped;
+taking it back into the design needs no view of its board and goes through `board.on`.
+`tests/test_system_readers.py` holds each reader of the circuit on a document of two boards,
+and finds the pattern that produced the bug by reading the sources: a function reading a
+document's `components` and `parts` together is a reader of the circuit, unless
+`BOARD_READERS` names it with the reason it reads one board.

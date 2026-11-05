@@ -122,9 +122,12 @@ from .system import (
     FIRST_BOARD,
     board_document,
     board_ids,
+    board_name,
     cable_problem,
-    extra_board,
+    circuit_parts,
+    every_component,
     merge_board,
+    placed_components,
 )
 
 # ---------------------------------------------------------------------------
@@ -280,7 +283,9 @@ def design_on_a_new_board(doc: PerfDocument, meta: DocumentMeta) -> PerfDocument
     starter = create_starter_document(meta)
     return dataclasses.replace(
         starter,
-        parts=doc.parts + tuple(part_of(component) for component in doc.components),
+        # Every board's parts: the circuit is carried whole, and a new document is one
+        # board.
+        parts=doc.parts + tuple(part_of(component) for component in every_component(doc)),
         nets=doc.nets,
         sheet=doc.sheet,
         sheet_wires=doc.sheet_wires,
@@ -363,9 +368,15 @@ def assert_ref_free(doc: PerfDocument, ref: str, *, ignoring: ComponentId | None
     and the refusal names which side already has it, because "place it" and "rename it"
     are different fixes.
     """
-    for component in doc.components:
+    # Every board's parts, not this one's: a command dispatched on a system document is
+    # on its first board, and a reference is the system's.
+    for board_id, component in placed_components(doc):
         if component.ref == ref and component.id != ignoring:
-            raise CommandError("duplicate-ref", f'A component with ref "{ref}" is on the board.')
+            where = f"on {board_name(doc, board_id)}" if doc.boards else "on the board"
+            raise CommandError("duplicate-ref", f'A component with ref "{ref}" is {where}.')
+    for cable in doc.cables:
+        if cable.ref == ref:
+            raise CommandError("duplicate-ref", f'A cable with ref "{ref}" is in the system.')
     for part in doc.parts:
         if part.ref == ref and part.id != ignoring:
             raise CommandError(
@@ -1846,7 +1857,7 @@ class _AddPart:
             raise CommandError("empty-ref", "A part needs a reference designator.")
         assert_ref_free(doc, ref)
         id_ = p.id if p.id is not None else ctx.next_id("part")
-        if any(part.id == id_ for part in doc.parts) or any(c.id == id_ for c in doc.components):
+        if any(part.id == id_ for part in circuit_parts(doc)):
             raise CommandError("duplicate-id", f'Something with id "{id_}" already exists.')
         part = SchematicPart(
             id=id_,
@@ -2494,7 +2505,7 @@ def _supply_names(doc: PerfDocument, nodes: Sequence[NetNode]) -> dict[str, str]
     in the registry names a supply pin (they say A, K, + and -), so a pin is a supply here
     exactly when ``pin_name_of`` would say so -- and a command has no footprint lookup.
     """
-    owners = {part.ref: part for part in doc.parts} | {c.ref: c for c in doc.components}
+    owners = {part.ref: part for part in doc.parts} | {c.ref: c for c in every_component(doc)}
     found: dict[str, str] = {}
     for node in nodes:
         owner = owners.get(node.component_ref)
@@ -2587,7 +2598,8 @@ class _MoveSymbols:
                 "symbol.move needs at least one placement; an empty batch would put a "
                 "no-op on the undo stack.",
             )
-        known = {part.id for part in doc.parts} | {c.id for c in doc.components}
+        # A symbol is the design's, whichever board its part is on.
+        known = {part.id for part in circuit_parts(doc)}
         seen: set[ComponentId] = set()
         for placement in p.placements:
             if placement.id not in known:
@@ -2617,9 +2629,7 @@ class _MoveSymbols:
             # By its reference, which is what the sheet shows: "Move part-7" named a
             # symbol by an id nobody on the screen could see.
             moved = p.placements[0].id
-            refs = {part.id: part.ref for part in doc.parts} | {
-                component.id: component.ref for component in doc.components
-            }
+            refs = {part.id: part.ref for part in circuit_parts(doc)}
             named = refs.get(moved, moved)
             return f"Move {named} on the sheet"
         return f"Move {len(p.placements)} symbol(s) on the sheet"
@@ -3852,34 +3862,69 @@ def _require_board(doc: PerfDocument, board_id: BoardId) -> None:
         raise CommandError("unknown-board", f"There is no board {board_id!r} in this document.")
 
 
-def _assert_one_system(doc: PerfDocument) -> None:
-    """What no single board can see: an id or a reference that is now on two boards, or on
-    a board and in the design. A board's own commands check their own board; this checks
-    the system they were merged into."""
-    seen_ids: set[str] = set()
-    seen_refs: dict[str, str] = {}
-    for board_id in board_ids(doc):
-        for component in board_document(doc, board_id).components:
-            if component.id in seen_ids:
-                raise CommandError(
-                    "duplicate-id", f"Component id {component.id!r} is on two boards."
-                )
-            seen_ids.add(component.id)
-            if component.ref in seen_refs and seen_refs[component.ref] != board_id:
-                raise CommandError(
-                    "duplicate-ref",
-                    f'A component with ref "{component.ref}" is already on another board.',
-                )
-            seen_refs[component.ref] = board_id
+def _holders(doc: PerfDocument) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Who holds each reference and each id of the system: a board by name, the design, or
+    a cable."""
+    refs: dict[str, list[str]] = {}
+    ids: dict[str, list[str]] = {}
+    for board_id, component in placed_components(doc):
+        where = f"one on {board_name(doc, board_id)}"
+        refs.setdefault(component.ref, []).append(where)
+        ids.setdefault(component.id, []).append(where)
+    for part in doc.parts:
+        refs.setdefault(part.ref, []).append("one in the design")
+        ids.setdefault(part.id, []).append("one in the design")
+    for cable in doc.cables:
+        refs.setdefault(cable.ref, []).append("a cable")
+    return refs, ids
+
+
+def _assert_one_system(before: PerfDocument, after: PerfDocument) -> None:
+    """What no single board can see: a reference or an id now held twice in the system --
+    on two boards, or on a board and in the design -- and a cable left to nowhere.
+
+    Only what the command MADE is refused. A duplicated reference is a warning at load, as
+    it is on one board, and a file that opened with one must not refuse every command after
+    it; a cable's problems are refused at load, so ``before`` has none to excuse."""
+    refs_before, ids_before = _holders(before)
+    refs_after, ids_after = _holders(after)
+    for ref, holders in sorted(refs_after.items()):
+        if len(holders) > 1 and len(holders) > len(refs_before.get(ref, ())):
+            raise CommandError(
+                "duplicate-ref",
+                f'"{ref}" would name two things in the system: {" and ".join(holders)}.',
+            )
+    for id_, holders in sorted(ids_after.items()):
+        if len(holders) > 1 and len(holders) > len(ids_before.get(id_, ())):
+            raise CommandError(
+                "duplicate-id", f"The id {id_!r} would be held twice: {' and '.join(holders)}."
+            )
     # A part a cable is fitted to cannot leave its board while the cable is: taking it off,
     # deleting it or moving it to the design would leave a cable to nowhere.
-    for cable in doc.cables:
-        if (problem := cable_problem(doc, cable)) is not None:
+    for cable in after.cables:
+        if (problem := cable_problem(after, cable)) is not None:
             raise CommandError("cable-end", f"{problem} Take {cable.ref} off it first.")
 
 
-def _board_name(doc: PerfDocument, board_id: BoardId) -> str:
-    return doc.meta.name if board_id == FIRST_BOARD else extra_board(doc, board_id).name
+class _OnTheSystem:
+    """A board command dispatched on the document itself rather than through ``board.on``:
+    done to the first board's fields exactly as it always was -- and, on a document of
+    several boards or with a cable, checked against the system afterwards, as ``board.on``
+    checks what it merges. On one board it is the command, untouched, so nothing a single
+    board does moves."""
+
+    def __init__(self, inner: CommandDefinition[Any]) -> None:
+        self._inner = inner
+        self.type = inner.type
+
+    def apply(self, doc: PerfDocument, payload: Any, ctx: CommandContext) -> PerfDocument:
+        after = self._inner.apply(doc, payload, ctx)
+        if doc.boards or doc.cables or after.boards or after.cables:
+            _assert_one_system(doc, after)
+        return after
+
+    def describe(self, payload: Any, doc: PerfDocument) -> str:
+        return self._inner.describe(payload, doc)
 
 
 class _OnBoard:
@@ -3893,13 +3938,13 @@ class _OnBoard:
         inner = _board_command(p.type)
         seen = board_document(doc, p.board)
         merged = merge_board(doc, p.board, inner.apply(seen, p.payload, ctx))
-        _assert_one_system(merged)
+        _assert_one_system(doc, merged)
         return merged
 
     def describe(self, p: OnBoardPayload, doc: PerfDocument) -> str:
         inner = _board_command(p.type)
         what = inner.describe(p.payload, board_document(doc, p.board))
-        return f"{what} on {_board_name(doc, p.board)}"
+        return f"{what} on {board_name(doc, p.board)}"
 
 
 class _AddBoard:
@@ -3973,7 +4018,7 @@ class _DeleteBoard:
         )
 
     def describe(self, p: DeleteBoardPayload, doc: PerfDocument) -> str:
-        return f"Remove the board {_board_name(doc, p.board)!r}"
+        return f"Remove the board {board_name(doc, p.board)!r}"
 
 
 
@@ -4127,7 +4172,7 @@ delete_cable: CommandDefinition[DeleteCablePayload] = _DeleteCable()
 # Typed with Any because CommandDefinition's payload is contravariant, so a specific
 # command is deliberately NOT assignable to CommandDefinition[object]. See the note on
 # TPayload in command.py.
-STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
+_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     place_component,
     place_block,
     move_component,
@@ -4191,6 +4236,15 @@ STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_cable,
     update_cable,
     delete_cable,
+)
+
+#: Every command the bus knows. A board command is registered inside ``_OnTheSystem``, so
+#: one dispatched on a system document is checked against the system, whichever host sent
+#: it; ``board.on`` finds it here too and runs it on a board's view, where the check has
+#: nothing to say.
+STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = tuple(
+    definition if definition.type in _SYSTEM_COMMANDS else _OnTheSystem(definition)
+    for definition in _COMMANDS
 )
 
 

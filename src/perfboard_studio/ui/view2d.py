@@ -168,6 +168,7 @@ from perfboard_studio.occupancy import stacking_layers
 from perfboard_studio.phrasebook import guide_language, phrasebook
 from perfboard_studio.ratsnest import RatsnestLink, all_links, ratsnest
 from perfboard_studio.stripboard import cut_holes, is_stripboard, segments
+from perfboard_studio.system import references_in_use
 
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
@@ -1636,14 +1637,17 @@ def next_reference(document: PerfDocument, footprint_id: str, prefix: str | None
 
     THE DESIGN COUNTS AS WELL AS THE BOARD. A reference is unique across both lists (see
     ``commands.assert_ref_free``), so counting only the placed parts would offer R1 to
-    somebody who has just drawn R1 on the schematic and then have the bus refuse it.
+    somebody who has just drawn R1 on the schematic and then have the bus refuse it -- and
+    so do the other boards of a system and its cables, for the same reason. ``document`` is
+    the bus's, the whole system, never a board's view.
     """
     from perfboard_studio.footprints import get_footprint
 
     if prefix is None:
         footprint = get_footprint(footprint_id)
         prefix = reference_prefix(footprint) if footprint is not None else "X"
-    used = {c.ref for c in document.components} | {part.ref for part in document.parts}
+    # Every board's, the design's and the cables': one namespace (``system.references_in_use``).
+    used = references_in_use(document)
     index = 1
     while f"{prefix}{index}" in used:
         index += 1

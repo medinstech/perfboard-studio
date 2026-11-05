@@ -94,7 +94,7 @@ from .model import (
     body_clearance_problem,
     normalized_pin_names,
 )
-from .system import FIRST_BOARD
+from .system import FIRST_BOARD, cable_problem
 
 #: Re-exported so callers of persist.py don't also need to import model.py.
 CURRENT_FORMAT_VERSION: int = DOCUMENT_FORMAT_VERSION
@@ -2217,6 +2217,12 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         **first,
         format_version=CURRENT_FORMAT_VERSION,
     )
+    # What cable.add refuses, refused here too: one fact, two consumers. A file holding a
+    # cable with no wires, or two wires on one pin, would otherwise open and then refuse
+    # every command that checks the system it was merged into.
+    for index, cable in enumerate(document.cables):
+        if (problem := cable_problem(document, cable)) is not None:
+            raise ValidationError("invalid-cable", problem, _index_path("cables", index))
     return document, warnings
 
 

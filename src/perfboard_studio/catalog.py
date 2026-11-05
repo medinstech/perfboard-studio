@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .model import PartSymbol, PerfDocument, PinNames
+from .system import references_in_use
 
 #: What a part is, for grouping a list of them. Engine text; the interface translates the
 #: group headings itself.
@@ -138,10 +139,9 @@ _PREFIX_BY_CATEGORY: dict[str, str] = {
 
 
 def free_reference(document: PerfDocument, prefix: str) -> str:
-    """The first unused reference with this prefix, across the board AND the design --
-    a reference is unique across both lists (``commands.assert_ref_free``)."""
-    used = {component.ref for component in document.components}
-    used |= {part.ref for part in document.parts}
+    """The first unused reference with this prefix, across every board, the design and
+    the cables -- a reference is unique across all of them (``commands.assert_ref_free``)."""
+    used = references_in_use(document)
     index = 1
     while f"{prefix}{index}" in used:
         index += 1

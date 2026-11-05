@@ -168,6 +168,13 @@ from perfboard_studio.router import (
 from perfboard_studio.step_export import Plate, board_model, model_to_step
 from perfboard_studio.stripboard import board_joins_holes
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
+from perfboard_studio.system import (
+    board_document,
+    board_ids,
+    board_name,
+    every_component,
+    placed_components,
+)
 from perfboard_studio.version import __version__
 
 # ---------------------------------------------------------------------------
@@ -324,22 +331,41 @@ class BoardSession:
         trips.
         """
         erc = run_erc(self.document, self.lookup)
-        drc = run_drc(self.document, self.lookup)
         lvs = run_lvs(self.document, self.lookup)
-        remaining = summarize(ratsnest(self.document, self.lookup))
+        # Every board's, each on its own view: DRC, the ratsnest and stale copper are a
+        # board's questions, and the status sums them. On one board, exactly as before.
+        views = [board_document(self.document, b) for b in board_ids(self.document)]
+        drc = [v for view in views for v in run_drc(view, self.lookup)]
+        links = sum(summarize(ratsnest(view, self.lookup)).links for view in views)
+        stale = sum(len(stale_conductor_ids(view, self.lookup)) for view in views)
+        system: dict[str, Any] = {}
+        if self.document.boards:
+            system["boards"] = [
+                {
+                    "id": board_id,
+                    "name": board_name(self.document, board_id),
+                    "components": len(view.components),
+                }
+                for board_id, view in zip(board_ids(self.document), views, strict=True)
+            ]
+        if self.document.cables:
+            system["cables"] = len(self.document.cables)
         return {
             "version": __version__,
             "document": self.document.meta.name,
             "path": str(self.path) if self.path else None,
             "board": f"{self.document.board.cols}x{self.document.board.rows} "
             f"{self.document.board.material}",
-            "components": len(self.document.components),
+            "components": len(every_component(self.document)),
+            # Only on a document of several boards, so a single board's status is the one
+            # it always was.
+            **system,
             # Parts in the design and not on the board. Reported beside the components
             # rather than folded into them, because "the circuit is drawn and nothing is
             # placed" and "the board is empty" look identical from a component count and
             # call for opposite next moves.
             "parts_not_placed": len(self.document.parts),
-            "conductors": len(self.document.conductors),
+            "conductors": sum(len(view.conductors) for view in views),
             "schematic_nets": len(self.document.nets),
             # The circuit's own check, before the board's: a design with nothing placed
             # has no DRC or LVS worth reading, and this is already the whole answer for it.
@@ -357,8 +383,8 @@ class BoardSession:
                 "opens": lvs.summary.opens,
                 "shorts": lvs.summary.shorts,
             },
-            "unrouted_connections": remaining.links,
-            "stale_conductors": len(stale_conductor_ids(self.document, self.lookup)),
+            "unrouted_connections": links,
+            "stale_conductors": stale,
             "undo_depth": len(self.bus.history()),
             # The last few entries, not the whole journal: an agent wants to know what
             # just happened, and a hundred-entry list in every status call is context
@@ -536,7 +562,16 @@ class BoardSession:
         }
 
     def list_components(self) -> list[dict[str, Any]]:
-        return [self._component_summary(c) for c in self.document.components]
+        """Every placed part, on every board -- with the board's name when there is more
+        than one, and exactly as before when there is not."""
+        several = bool(self.document.boards)
+        return [
+            {
+                **self._component_summary(c),
+                **({"board": board_name(self.document, b)} if several else {}),
+            }
+            for b, c in placed_components(self.document)
+        ]
 
     def _component_summary(self, component: ComponentInstance) -> dict[str, Any]:
         footprint = self.lookup(component.footprint_id)
@@ -1116,9 +1151,13 @@ class BoardSession:
             if part.ref == ref:
                 return part
         known = ", ".join(p.ref for p in self.document.parts) or "(nothing is waiting)"
-        on_board = any(c.ref == ref for c in self.document.components)
+        where = next((b for b, c in placed_components(self.document) if c.ref == ref), None)
         extra = (
-            f" {ref} IS on the board; unplace_component takes it off." if on_board else ""
+            ""
+            if where is None
+            else f" {ref} IS on the board; unplace_component takes it off."
+            if not self.document.boards
+            else f" {ref} IS on {board_name(self.document, where)}."
         )
         raise SessionError(f"No part called {ref!r} in the design. Waiting: {known}.{extra}")
 
@@ -1130,7 +1169,7 @@ class BoardSession:
         does. But an agent that meant to write "U1.8" and wrote "U11.8" needs to hear
         about it now rather than from LVS at the end.
         """
-        placed = {c.ref for c in self.document.components}
+        placed = {c.ref for c in every_component(self.document)}
         return sorted({node.component_ref for node in nodes if node.component_ref not in placed})
 
     # -- editing -----------------------------------------------------------
@@ -2295,6 +2334,16 @@ class BoardSession:
             if component.ref == ref:
                 return component
         known = ", ".join(c.ref for c in self.document.components) or "(the board is empty)"
+        elsewhere = next(
+            (b for b, c in placed_components(self.document) if c.ref == ref), None
+        )
+        if elsewhere is not None:
+            # The board tools act on the first board; a part on another is named where it
+            # is rather than reported missing.
+            raise SessionError(
+                f"{ref} is on {board_name(self.document, elsewhere)}, not on the first "
+                f"board, which is the one this tool works on. On the first board: {known}."
+            )
         raise SessionError(f"No component called {ref!r}. On this board: {known}.")
 
     def _net_id(self, name: str | None) -> str | None:

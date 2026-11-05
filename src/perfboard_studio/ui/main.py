@@ -188,6 +188,7 @@ from perfboard_studio.commands import (
     MirrorComponentsPayload,
     MoveComponentPayload,
     MoveSymbolsPayload,
+    OnBoardPayload,
     PartPlacement,
     PlacePartsPayload,
     RenameDocumentPayload,
@@ -261,6 +262,7 @@ from perfboard_studio.model import (
     UNTITLED_NAME,
     VALID_ROTATIONS,
     Board,
+    BoardId,
     BoardSide,
     BodyArchetype,
     ComponentInstance,
@@ -324,6 +326,14 @@ from perfboard_studio.schematic_export import drawing_to_svg
 from perfboard_studio.stripboard import board_joins_holes, is_stripboard
 from perfboard_studio.striproute import StripboardPlan
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
+from perfboard_studio.system import (
+    FIRST_BOARD,
+    board_document,
+    board_name,
+    circuit_parts,
+    every_component,
+    placed_components,
+)
 from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
@@ -1671,8 +1681,7 @@ class PackagePicker(QDialog):
             for footprint in (
                 get_footprint(used)
                 for used in {
-                    *(component.footprint_id for component in document.components),
-                    *(part.footprint_id for part in document.parts),
+                    *(part.footprint_id for part in circuit_parts(document)),
                 }
             )
             if footprint is not None and footprint.id not in standard_footprints()
@@ -3038,11 +3047,17 @@ class MainWindow(QMainWindow):
             footprint = self.lookup(footprint_id)
             return footprint_label(footprint.name) if footprint is not None else footprint_id
 
-        for component in document.components:
+        for board_id, component in placed_components(document):
+            # A part on another board of the system is found too, and says which board.
+            on = (
+                t("Part on the board")
+                if board_id == self._shown_board
+                else board_name(document, board_id)
+            )
             entries.append(
                 Entry(
                     label=f"{component.ref}  {component.value}".strip(),
-                    where=f"{t('Part on the board')}  ·  {package(component.footprint_id)}",
+                    where=f"{on}  ·  {package(component.footprint_id)}",
                     keys="",
                     run=partial(self._palette_go_to_component, component.id),
                     kind="part",
@@ -3102,7 +3117,9 @@ class MainWindow(QMainWindow):
         problems = lvs.summary.opens + lvs.summary.shorts if lvs is not None else 0
         return WorkflowFacts(
             parts_off_board=len(document.parts),
-            parts_on_board=len(document.components),
+            # On ANY board: a part on the second board is placed, and "7 not on the board
+            # yet" must not count it.
+            parts_on_board=len(every_component(document)),
             nets=sum(1 for net in document.nets if len(net.nodes) >= 2),
             board_label=label,
             board_chosen=self._board_chosen,
@@ -3159,7 +3176,7 @@ class MainWindow(QMainWindow):
         elif step == "circuit":
             self.show_schematic()
             document = self.bus.document
-            if document.parts or document.components:
+            if document.parts or every_component(document):
                 # Parts and nothing joining them: the sheet's wire tool, armed -- the Next
                 # button is then one drag from a pin to a pin away from a circuit.
                 self.on_sheet_tool("wire")
@@ -5704,8 +5721,7 @@ class MainWindow(QMainWindow):
         """
         document = self.bus.document
         used = {
-            *(component.footprint_id for component in document.components),
-            *(part.footprint_id for part in document.parts),
+            *(part.footprint_id for part in circuit_parts(document)),
         }
         found = dict(self._described_here)
         for footprint_id in used:
@@ -5965,7 +5981,7 @@ class MainWindow(QMainWindow):
         3D view and the build guide, and a tab behind two others is still hidden.
         """
         document = self.bus.document
-        if document.components or document.parts or document.nets or document.conductors:
+        if every_component(document) or document.parts or document.nets or document.conductors:
             return
         self.show_schematic()
 
@@ -5980,7 +5996,7 @@ class MainWindow(QMainWindow):
         Not on a reload from disk: somebody watching an agent work chose what to look at.
         """
         document = self.bus.document
-        if document.components:
+        if every_component(document):
             self.show_board()
         elif document.parts:
             self.show_schematic()
@@ -6637,9 +6653,7 @@ class MainWindow(QMainWindow):
         # of why it cannot work is worse than a greyed-out one.
         ref = self._schematic_ref
         document = self.bus.document
-        defined = ref is not None and (
-            any(c.ref == ref for c in document.components) or any(p.ref == ref for p in document.parts)
-        )
+        defined = ref is not None and any(p.ref == ref for p in circuit_parts(document))
         self.act_sch_delete.setEnabled(defined)
         self.act_sch_place.setEnabled(bool(document.parts))
 
@@ -6649,7 +6663,7 @@ class MainWindow(QMainWindow):
 
     def _on_schematic_part_clicked(self, ref: str) -> None:
         self._schematic_ref = ref
-        component = next((c for c in self.bus.document.components if c.ref == ref), None)
+        component = next((c for c in every_component(self.bus.document) if c.ref == ref), None)
         if component is None:
             # Not on the board. That is the normal state of a part on a schematic being
             # drawn, so it is selected here and reported rather than treated as a miss.
@@ -6673,10 +6687,7 @@ class MainWindow(QMainWindow):
         The sheet speaks references and ``doc.sheet`` is keyed on ids, which is what makes a
         position survive a rename and survive a part moving between the two lists.
         """
-        document = self.bus.document
-        found = next((p for p in document.parts if p.ref == ref), None) or next(
-            (c for c in document.components if c.ref == ref), None
-        )
+        found = next((p for p in circuit_parts(self.bus.document) if p.ref == ref), None)
         return found.id if found is not None else None
 
     def _sheet_placements(self, moved: dict[str, Point2]) -> tuple[SymbolPlacement, ...]:
@@ -6810,10 +6821,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(refused(result), 8000)
 
     def _ref_of_id(self, part_id: str) -> str | None:
-        document = self.bus.document
-        found = next((p for p in document.parts if p.id == part_id), None) or next(
-            (c for c in document.components if c.id == part_id), None
-        )
+        found = next((p for p in circuit_parts(self.bus.document) if p.id == part_id), None)
         return found.ref if found is not None else None
 
     def _sheet_selection(self) -> list[str]:
@@ -7037,6 +7045,8 @@ class MainWindow(QMainWindow):
         """
         if not isinstance(hole, HoleCoord):
             return
+        if self._said_it_is_elsewhere(ref):
+            return
         document = self.bus.document
         component = next((c for c in document.components if c.ref == ref), None)
         if component is not None:
@@ -7084,6 +7094,8 @@ class MainWindow(QMainWindow):
         self.scene.place_armed(hole)
 
     def _on_schematic_part_activated(self, ref: str) -> None:
+        if self._said_it_is_elsewhere(ref):
+            return
         component = next((c for c in self.bus.document.components if c.ref == ref), None)
         if component is not None:
             self.on_component_properties(component.id)
@@ -7385,9 +7397,16 @@ class MainWindow(QMainWindow):
         Split out for the context menu, which acts on what the pointer was over. Same rule
         as ``board_menu``: a menu built over one part must not act on another.
         """
-        component = next((c for c in self.bus.document.components if c.ref == ref), None)
-        if component is not None:
-            result = self.bus.dispatch("component.unplace", UnplaceComponentPayload(id=component.id))
+        found = next(
+            ((b, c) for b, c in placed_components(self.bus.document) if c.ref == ref), None
+        )
+        component = found[1] if found is not None else None
+        if found is not None:
+            # On whichever board it is on: taking a part back into the design needs no view
+            # of its board.
+            result = self.bus.dispatch(
+                *self._on_board(found[0], "component.unplace", UnplaceComponentPayload(id=found[1].id))
+            )
         else:
             part = next((p for p in self.bus.document.parts if p.ref == ref), None)
             if part is None:
@@ -7428,9 +7447,9 @@ class MainWindow(QMainWindow):
         come out connected to nothing.
         """
         document = self.bus.document
-        if not any(c.ref == ref for c in document.components) and not any(
-            p.ref == ref for p in document.parts
-        ):
+        if not any(p.ref == ref for p in circuit_parts(document)):
+            return
+        if self._said_it_is_elsewhere(ref):
             return
         self._show_symbol_in_properties(ref)
         self.inspector.focus_field("ref")
@@ -7453,7 +7472,7 @@ class MainWindow(QMainWindow):
             (part for part in document.parts if part.ref == ref), None
         )
         if source is None:
-            source = next((c for c in document.components if c.ref == ref), None)
+            source = next((c for c in every_component(document) if c.ref == ref), None)
         if source is None:
             return
         result = self.bus.dispatch(
@@ -8455,7 +8474,10 @@ class MainWindow(QMainWindow):
             if len(notes) == 1 and 0 <= notes[0] < len(document.sheet_notes):
                 return Selection("sheet-note", (document.sheet_notes[notes[0]].id,), "sheet")
             return None
-        placed = tuple(c.id for c in document.components if c.ref in refs)
+        # The shown board's: a selection is of the board in front, and a part on another
+        # board is reached by going to that board.
+        shown = board_document(document, self._shown_board).components
+        placed = tuple(c.id for c in shown if c.ref in refs)
         design = tuple(p.id for p in document.parts if p.ref in refs)
         if placed and not design:
             return Selection("part" if len(placed) == 1 else "parts", placed, "sheet")
@@ -8726,6 +8748,18 @@ class MainWindow(QMainWindow):
         hole" must not delete the circuit around it.
         """
         document = self.bus.document
+        if (elsewhere := self._board_elsewhere(ref)) is not None:
+            # On another board of the system: said, and the one thing that needs no view of
+            # that board -- taking it back into the design -- offered.
+            note = menu.addAction(
+                t("{ref} is on the board {board}.").format(ref=ref, board=elsewhere)
+            )
+            note.setEnabled(False)
+            menu.addSeparator()
+            remove = menu.addAction(t("Take &off the Board"))
+            remove.setToolTip(t("Back into the design, with its wiring intact."))
+            remove.triggered.connect(lambda _checked=False, r=ref: self._remove_symbol(r))
+            return
         component = next((c for c in document.components if c.ref == ref), None)
         part = next((p for p in document.parts if p.ref == ref), None)
         if component is None and part is None:
@@ -9145,14 +9179,17 @@ class MainWindow(QMainWindow):
         # The circuit's check, ahead of the board's: it is what the Circuit step, the first
         # rows of the findings and the status bar's first count are measured on.
         self._last_erc = run_erc(document, self.lookup)
+        # DRC and the ratsnest are a board's, on the board shown; ERC above and LVS below are
+        # the system's, on the whole document.
+        shown = board_document(document, self._shown_board)
         t0 = time.perf_counter()
-        violations = run_drc(document, self.lookup)
+        violations = run_drc(shown, self.lookup)
         self._last_drc_ms = (time.perf_counter() - t0) * 1000
         self._last_violations = tuple(violations)
         self.scene.set_violations(violations)
 
         self._last_lvs = run_lvs(document, self.lookup)
-        self._last_ratsnest = ratsnest(document, self.lookup)
+        self._last_ratsnest = ratsnest(shown, self.lookup)
         self._refresh_drc_panel(self._last_violations, self._last_lvs)
         self._refresh_nets_panel(self._last_ratsnest)
         self._refresh_part_list()
@@ -11059,15 +11096,49 @@ class MainWindow(QMainWindow):
         it: the command palette on the parts alone (Ctrl+K is everything). It was a dialog
         of its own, a second search that found the same parts a different way."""
         document = self.bus.document
-        if not document.components and not document.parts:
+        if not circuit_parts(document):
             self.statusBar().showMessage(t("There are no parts on this board yet."), 6000)
             return
         self.command_palette.open(frozenset({"part"}))
 
+    #: The board the views show: the first one, until the System tab lets a person pick
+    #: another (docs/ARCHITECTURE.md, "Several boards are one document, and each is seen
+    #: alone"). What reads "the board" in this window reads this one; what reads "the
+    #: circuit" reads every board.
+    _shown_board: BoardId = FIRST_BOARD
+
+    def _board_elsewhere(self, ref: str) -> str | None:
+        """The name of the board a part is placed on, when that is not the board shown."""
+        document = self.bus.document
+        found = next((b for b, c in placed_components(document) if c.ref == ref), None)
+        if found is None or found == self._shown_board:
+            return None
+        return board_name(document, found)
+
+    def _said_it_is_elsewhere(self, ref: str) -> bool:
+        """Whether a part is on another board than the one shown -- said in the status bar
+        when it is, so a gesture that needs its board is answered rather than dropped."""
+        elsewhere = self._board_elsewhere(ref)
+        if elsewhere is None:
+            return False
+        self.statusBar().showMessage(
+            t("{ref} is on the board {board}.").format(ref=ref, board=elsewhere), 6000
+        )
+        return True
+
+    def _on_board(self, board_id: BoardId, type_: str, payload: object) -> tuple[str, object]:
+        """A board command as the bus takes it for ``board_id``: itself on the first board,
+        inside ``board.on`` on any other."""
+        if board_id == FIRST_BOARD:
+            return type_, payload
+        return "board.on", OnBoardPayload(board=board_id, type=type_, payload=payload)
+
     def go_to_component(self, component_id: str) -> None:
         """Select a part and centre the view on it. Also what the DRC dock wants."""
-        component = next((c for c in self.bus.document.components if c.id == component_id), None)
-        if component is None:
+        component = next(
+            (c for c in every_component(self.bus.document) if c.id == component_id), None
+        )
+        if component is None or self._said_it_is_elsewhere(component.ref):
             return
         self.scene.select_components([component_id])
         self.view.look_at(hole_to_screen(component.anchor, self.bus.document.board, self.side))
@@ -12792,7 +12863,7 @@ class MainWindow(QMainWindow):
         if (
             self.current_path is not None
             or self.is_modified
-            or document.components
+            or every_component(document)
             or document.parts
             or document.nets
         ):

@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import format_hole
 from perfboard_studio.model import ComponentInstance, PerfDocument, SchematicPart
+from perfboard_studio.system import board_document, board_ids, board_name
 
 from . import theme
 from .i18n import t
@@ -130,8 +131,16 @@ class PartListPanel(QWidget):
         blocked = self.tree.blockSignals(True)
         try:
             self.tree.clear()
-            for component in document.components:
-                self.tree.addTopLevelItem(self._placed_row(component, document, lookup))
+            # Every board's parts: a part on the second board is placed, not missing, and
+            # its position says which board it is on.
+            several = len(board_ids(document)) > 1
+            for order, board_id in enumerate(board_ids(document)):
+                view = board_document(document, board_id)
+                where = board_name(document, board_id) if several else None
+                for component in view.components:
+                    self.tree.addTopLevelItem(
+                        self._placed_row(component, view, lookup, where=where, order=order)
+                    )
             for part in document.parts:
                 self.tree.addTopLevelItem(self._design_row(part, lookup))
         finally:
@@ -141,9 +150,16 @@ class PartListPanel(QWidget):
         self._apply_filter()
 
     def _placed_row(
-        self, component: ComponentInstance, document: PerfDocument, lookup: FootprintLookup
+        self,
+        component: ComponentInstance,
+        document: PerfDocument,
+        lookup: FootprintLookup,
+        *,
+        where: str | None = None,
+        order: int = 0,
     ) -> _Row:
         anchor = component.anchor
+        hole = format_hole(anchor, document.board)
         return self._row(
             component.id,
             PLACED,
@@ -151,9 +167,10 @@ class PartListPanel(QWidget):
             component.value,
             component.footprint_id,
             lookup,
-            format_hole(anchor, document.board),
-            # Placed parts first, then by row and column: down the board as it is read.
-            (0, anchor.row, anchor.col),
+            hole if where is None else f"{where}: {hole}",
+            # Placed parts first, then by row and column: down the board as it is read --
+            # the first board's, then the next one's.
+            (0, order * 1_000_000 + anchor.row, anchor.col),
             _state_words(component),
         )
 

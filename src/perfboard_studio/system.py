@@ -14,10 +14,17 @@ Hangs off ``model`` alone, and is pure: no clock, no filesystem.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import fields, replace
 
-from .model import BoardId, Cable, CableEnd, ComponentInstance, ExtraBoard, Footprint, PerfDocument
+from .model import (
+    BoardId,
+    Cable,
+    CableEnd,
+    ComponentInstance,
+    ExtraBoard,
+    PerfDocument,
+    SchematicPart,
+)
 
 #: The first board's id: never written, because the first board is the document's own
 #: top-level fields. No extra board may take it.
@@ -103,6 +110,48 @@ def shared_fields() -> tuple[str, ...]:
     )
 
 
+def placed_components(doc: PerfDocument) -> tuple[tuple[BoardId, ComponentInstance], ...]:
+    """Every part placed on any board, with the board it is on: the first board's first,
+    each board's in its own order. On one board, ``doc.components`` with ``"main"``."""
+    return tuple(
+        (board_id, component)
+        for board_id in board_ids(doc)
+        for component in board_document(doc, board_id).components
+    )
+
+
+def every_component(doc: PerfDocument) -> tuple[ComponentInstance, ...]:
+    """Every part placed on any board of the document. What ``doc.components`` meant when
+    a document had one board -- and still means, on a board's own view."""
+    return tuple(component for _, component in placed_components(doc))
+
+
+def circuit_parts(doc: PerfDocument) -> tuple[ComponentInstance | SchematicPart, ...]:
+    """Every part of the circuit, wherever it is: placed on any board, then waiting in the
+    design. The question ``(*doc.components, *doc.parts)`` asked on one board, and the one
+    reader of it that has to see every board -- ERC, the sheet, the Parts list, a free
+    reference -- asks here, so that a part on the second board is never "not defined"."""
+    return (*every_component(doc), *doc.parts)
+
+
+def board_of(doc: PerfDocument, component_id: str) -> BoardId | None:
+    """The board a placed part is on, or ``None`` when no board has it (it is in the
+    design, or nowhere)."""
+    return next((b for b, c in placed_components(doc) if c.id == component_id), None)
+
+
+def references_in_use(doc: PerfDocument) -> set[str]:
+    """Every reference the document gives out: the parts on every board, the parts in the
+    design and the cables. One namespace, because a net node is a ``(ref, pin)`` and a cable
+    is listed by its reference beside the parts."""
+    return {part.ref for part in circuit_parts(doc)} | {cable.ref for cable in doc.cables}
+
+
+def board_name(doc: PerfDocument, board_id: BoardId) -> str:
+    """What a board is called: the document's own name for the first board."""
+    return doc.meta.name if board_id == FIRST_BOARD else extra_board(doc, board_id).name
+
+
 def connector_of(doc: PerfDocument, end: CableEnd) -> ComponentInstance | None:
     """The part a cable end is fitted to, or ``None`` when that board has no such part (or
     there is no such board)."""
@@ -117,20 +166,20 @@ def connector_of(doc: PerfDocument, end: CableEnd) -> ComponentInstance | None:
 CABLE_GAUGE_RANGE: tuple[int, int] = (10, 32)
 
 
-def cable_problem(
-    doc: PerfDocument, cable: Cable, lookup: Callable[[str], Footprint | None] | None = None
-) -> str | None:
+def cable_problem(doc: PerfDocument, cable: Cable) -> str | None:
     """Why ``cable`` is not a cable this document can hold, or ``None``.
 
     The references have to resolve -- both ends a part placed on a board of this document
     -- and no pin can carry two wires, one lead to a hole as on a breadboard. These are
     REFUSED (CLAUDE.md: what makes the document whole is a command's), by ``cable.add`` and
-    ``cable.update`` and by every board command whose result would leave a cable dangling.
+    ``cable.update``, by every command whose result would leave a cable dangling, and by
+    ``persist`` at load.
 
-    Whether a wire's pin is a pin of its part takes a footprint ``lookup``, which a command
-    has none of (``net.connect`` does not ask it either), so it is asked only when one is
-    given -- by DRC, which reports it. A wire joining two different NETS is not a problem
-    here at all: the document is still whole, and DRC and LVS report it.
+    Whether a wire's pin is a pin of its part is NOT asked here: it takes the footprint
+    registry, which a command has none of and a file is opened under whatever version of
+    it the reader has. ERC's ``pin-not-on-part`` reports it, as it does for a net naming a
+    pin the part lacks. A wire joining two different NETS is not a problem here either: the
+    document is still whole, and LVS reports it.
     """
     if not cable.ref.strip():
         return "A cable needs a reference, such as W1."
@@ -138,7 +187,7 @@ def cable_problem(
         return f"{cable.ref} has no wires; a cable carries at least one."
     if cable.length_mm is not None and not cable.length_mm > 0:
         return f"{cable.ref}'s length has to be more than nothing."
-    ends: dict[str, tuple[ComponentInstance, set[str] | None]] = {}
+    ends: dict[str, ComponentInstance] = {}
     for side, end in (("a", cable.a), ("b", cable.b)):
         part = connector_of(doc, end)
         if part is None:
@@ -146,17 +195,14 @@ def cable_problem(
                 f"{cable.ref}'s {side} end is fitted to a part that is not on board "
                 f"{end.board!r}."
             )
-        footprint = None if lookup is None else lookup(part.footprint_id)
-        ends[side] = (part, None if footprint is None else {p.number for p in footprint.pins})
+        ends[side] = part
     if cable.a == cable.b:
         return f"{cable.ref} runs from a connector back to itself."
     for side in ("a", "b"):
-        part, pins = ends[side]
+        part = ends[side]
         taken: set[str] = set()
         for wire in cable.wires:
             pin = wire.a_pin if side == "a" else wire.b_pin
-            if pins is not None and pin not in pins:
-                return f"{part.ref} has no pin {pin} for {cable.ref} to land on."
             if pin in taken:
                 return f"Two wires of {cable.ref} land on {part.ref} pin {pin}."
             taken.add(pin)

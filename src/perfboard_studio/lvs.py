@@ -29,7 +29,7 @@ so results are reproducible and diffable across runs.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import pairwise
 from typing import Literal
 
@@ -51,7 +51,7 @@ from .model import (
     NetNode,
     PerfDocument,
 )
-from .system import FIRST_BOARD, board_document, board_ids, connector_of, extra_board
+from .system import board_document, board_ids, board_name, connector_of, every_component
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -195,6 +195,22 @@ class _SortedGroup:
 
 
 def run_lvs(doc: PerfDocument, lookup: FootprintLookup) -> LvsResult:
+    """The schematic's nets against the board's copper -- or, on a document of several
+    boards, against every board's copper joined through the cables (:func:`_system_lvs`).
+
+    Every host asks this one function, so a window, the MCP server, ``--headless`` and the
+    guide all get the system's answer on a system without one of them having to know: on
+    one board's view a part on the next board is not on the board, and every net reaching it
+    would be reported unplaced."""
+    if doc.boards or doc.cables:
+        return _system_lvs(doc, lookup)
+    return _board_lvs(doc, lookup, placed_only=False)
+
+
+def _board_lvs(doc: PerfDocument, lookup: FootprintLookup, *, placed_only: bool) -> LvsResult:
+    """One board's LVS. ``placed_only`` leaves out every pin of a part this board does not
+    carry -- on a system, those are another board's or nobody's, and the system says which.
+    """
     physical_nets = extract_physical_nets(doc, lookup)
     physical_net_by_id: dict[str, PhysicalNet] = {pn.id: pn for pn in physical_nets}
 
@@ -300,7 +316,10 @@ def run_lvs(doc: PerfDocument, lookup: FootprintLookup) -> LvsResult:
         for node in net.nodes:
             comp = components_by_ref.get(node.component_ref)
             if comp is None:
-                classified.append(_ClassifiedNode(node=node, status="unplaced", physical_net_id=None))
+                if not placed_only:
+                    classified.append(
+                        _ClassifiedNode(node=node, status="unplaced", physical_net_id=None)
+                    )
                 continue
 
             footprint = lookup(comp.footprint_id)
@@ -637,7 +656,7 @@ def run_system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> SystemLvsResul
     names: dict[str, str] = {}
     for board_id in board_ids(doc):
         seen = board_document(doc, board_id)
-        names[board_id] = doc.meta.name if board_id == FIRST_BOARD else extra_board(doc, board_id).name
+        names[board_id] = board_name(doc, board_id)
         for component in seen.components:
             board_of[component.ref] = board_id
         for pn in extract_physical_nets(seen, lookup):
@@ -712,3 +731,70 @@ def run_system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> SystemLvsResul
 
     issues.sort(key=_issue_sort_key)
     return SystemLvsResult(ok=not issues, issues=tuple(issues), matched_nets=matched, nets=counted)
+
+
+def _system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> LvsResult:
+    """LVS of a system, in the one shape every host reads.
+
+    Each board is checked on its own view with only its own pins (a floating conductor, an
+    unknown footprint, a net split or shorted ON that board), its findings said with its
+    name; a design part on no board is reported once, as one board reports it; and what only
+    the cables can do comes from :func:`run_system_lvs` -- a net carried between two boards
+    by no wire, a short a crossed wire makes -- unless a board already said it about the same
+    nets, since "route the board" is the fix to say first.
+    """
+    several = len(board_ids(doc)) > 1
+    issues: list[LvsIssue] = []
+    physical = 0
+    for board_id in board_ids(doc):
+        result = _board_lvs(board_document(doc, board_id), lookup, placed_only=True)
+        physical += result.summary.physical_nets
+        prefix = f"On {board_name(doc, board_id)}: " if several else ""
+        issues.extend(replace(issue, message=prefix + issue.message) for issue in result.issues)
+
+    placed = {component.ref for component in every_component(doc)}
+    for net in doc.nets:
+        pins = sorted(_to_pin_ref(n) for n in dict.fromkeys(net.nodes) if n.component_ref not in placed)
+        if not pins:
+            continue
+        refs = sorted({p.component_ref for p in pins})
+        issues.append(
+            LvsIssue(
+                kind="unplaced-component",
+                message=(
+                    f"Net '{net.name}' references pin(s) {', '.join(_format_pin_ref(p) for p in pins)}, "
+                    f"but component(s) {', '.join(refs)} are not placed on any board."
+                ),
+                net_names=(net.name,),
+                pins=tuple(pins),
+                physical_net_ids=(),
+            )
+        )
+
+    said_open = {n for i in issues if i.kind in ("open", "unrouted-net") for n in i.net_names}
+    said_short = [set(i.net_names) for i in issues if i.kind == "short"]
+    for issue in run_system_lvs(doc, lookup).issues:
+        if issue.kind == "open" and said_open & set(issue.net_names):
+            continue
+        if issue.kind == "short" and any(set(issue.net_names) <= s for s in said_short):
+            continue
+        issues.append(issue)
+    issues.sort(key=_issue_sort_key)
+
+    named = {n for issue in issues for n in issue.net_names}
+    matched = sum(
+        1
+        for net in doc.nets
+        if net.name not in named and any(n.component_ref in placed for n in net.nodes)
+    )
+    return LvsResult(
+        ok=not issues,
+        issues=tuple(issues),
+        summary=LvsSummary(
+            schematic_nets=len(doc.nets),
+            physical_nets=physical,
+            matched_nets=matched,
+            opens=sum(1 for i in issues if i.kind in ("open", "unrouted-net")),
+            shorts=sum(1 for i in issues if i.kind == "short"),
+        ),
+    )

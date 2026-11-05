@@ -33,8 +33,10 @@ is building a circuit with one, so an error has to be something nobody does on p
   to a rail is a clamp, and that is how half of them are used. And not on a NEGATIVE rail,
   where the + on ground is exactly right (``is_negative_rail``; KiCad's import classes
   ``-12V`` and ``VEE`` as power, so the class alone would be wrong here).
-- ``pin-not-on-part`` -- a net naming a pin the footprint does not have. The connection
-  cannot be made by anybody.
+- ``pin-not-on-part`` -- a net naming a pin the footprint does not have, or a cable wire
+  landing on one. The connection cannot be made by anybody. Reported, not refused, because
+  only the footprint registry knows a part's pins: a command has none, and a file is opened
+  under whatever version of it the reader has.
 
 and the warnings:
 
@@ -78,6 +80,7 @@ from .model import (
     pin_name_of,
     supply_kind,
 )
+from .system import circuit_parts, connector_of
 
 type ErcSeverity = Literal["error", "warning"]
 
@@ -266,7 +269,9 @@ class _Circuit:
 def run_erc(doc: PerfDocument, lookup: FootprintLookup) -> tuple[ErcFinding, ...]:
     """Every finding about the circuit, errors first."""
     parts: dict[str, _Part] = {}
-    everything: tuple[_Part, ...] = (*doc.components, *doc.parts)
+    # Every board's parts and the design's: on one board's view a part on the next board
+    # would be a reference nothing defines.
+    everything: tuple[_Part, ...] = circuit_parts(doc)
     for part in everything:
         parts.setdefault(part.ref, part)
     circuit = _Circuit(
@@ -283,6 +288,7 @@ def run_erc(doc: PerfDocument, lookup: FootprintLookup) -> tuple[ErcFinding, ...
 
     for net in doc.nets:
         _check_net(circuit, net)
+    _check_cables(circuit, doc)
 
     anything_joined = any(len(nodes) >= 2 for nodes in circuit.real_nodes.values())
     for ref, part in parts.items():
@@ -392,6 +398,27 @@ def _check_power_entry(circuit: _Circuit, nets: tuple[Net, ...]) -> None:
         pins=(ring,) if ring is not None else (),
         nets=tuple(ordered),
     )
+
+
+def _check_cables(circuit: _Circuit, doc: PerfDocument) -> None:
+    """``pin-not-on-part`` for a cable: a wire landing on a pin its connector does not have
+    -- named in the cable's own words, and after the nets', in document order."""
+    for cable in doc.cables:
+        for wire in cable.wires:
+            for end, pin in ((cable.a, wire.a_pin), (cable.b, wire.b_pin)):
+                part = connector_of(doc, end)
+                if part is None:
+                    continue
+                footprint = circuit.footprints.get(part.ref)
+                if footprint is None or any(p.number == pin for p in footprint.pins):
+                    continue
+                circuit.report(
+                    "pin-not-on-part",
+                    f"{cable.ref} lands on {part.ref} pin {pin}, which {footprint.id} does not "
+                    f"have.",
+                    refs=(cable.ref, part.ref),
+                    pins=(NetNode(component_ref=part.ref, pin=pin),),
+                )
 
 
 def _check_net(circuit: _Circuit, net: Net) -> None:
