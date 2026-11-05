@@ -559,3 +559,24 @@ def test_a_part_on_the_first_board_is_taken_off_with_the_second_in_front(qapp) -
         window.close()
         window.deleteLater()
 
+
+def test_the_board_and_cable_steps_read_in_the_windows_language() -> None:
+    """An undo step done on one board of several says which board, and the commands that
+    make a system are said in Turkish like every other step -- a board nobody named as
+    "Kart 2", not the engine's "Board 2"."""
+    from perfboard_studio.ui import i18n
+    from perfboard_studio.ui.engine_text import say
+
+    before = i18n.language()
+    i18n.set_language("tr")
+    try:
+        assert say("Take J1 off the board on Board 1") == "J1 parçasını karttan kaldır (Kart 1)"
+        assert say("Move R1 to C7 on Remote") == "R1 parçasını C7 deliğine taşı (Remote)"
+        assert say("Add a board") == "Kart ekle"
+        assert say("Add the board 'Besleme'") == "'Besleme' kartını ekle"
+        assert say("Unname Board 2") == "Kartın adını kaldır (Kart 2)"
+        assert say("Remove the board 'Board 2'") == "Kartı çıkar (Kart 2)"
+        assert say("Add the cable W1") == "W1 kablosunu ekle"
+    finally:
+        i18n.set_language(before)
+

@@ -122,6 +122,15 @@ def _end_phrase(end: HarnessEnd, say: Phrasebook) -> str:
     return say("{board} {ref} pin {pin}", board=end.board, ref=end.ref, pin=end.pin)
 
 
+def _sentence(text: str) -> str:
+    """A step as a sentence: a capital first, whatever field the language put first ("kırmızı
+    teli ..."), the Turkish i's capital being İ."""
+    first = text[:1]
+    if not first.islower():
+        return text
+    return ("İ" if first == "i" else first.upper()) + text[1:]
+
+
 def _mm(value: Mm) -> str:
     return f"{value:g}"
 
@@ -187,11 +196,11 @@ def _cable(
             strip=_mm(strip),
         ),
         *(
-            say(
+            _sentence(say(
                 "Connect the {colour} wire (AWG {awg}, {net}) from {a} to {b}.",
                 colour=say(wire.colour), awg=wire.awg, net=wire.net_name,
                 a=_end_phrase(wire.a, say), b=_end_phrase(wire.b, say),
-            )
+            ))
             for wire in wires
         ),
     ]

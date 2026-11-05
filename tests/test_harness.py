@@ -110,7 +110,7 @@ def test_the_harness_is_said_in_turkish_and_calls_a_board_what_lvs_does() -> Non
     assert english.wires[0].b.board == system.board_title(doc, "b2") == "Board 2"
     assert turkish.wires[0].b.board == system.board_title(doc, "b2", "tr") == "Kart 2"
     assert turkish.steps[0] == "W1 için 2 tel kesin, her biri soyulacak uçları dahil 160 mm."
-    assert "siyah teli" in turkish.steps[-1]
+    assert turkish.steps[-1].startswith("Siyah teli"), "a step begins with a capital"
     unwired = dataclasses.replace(doc, cables=())
     opens = [i.message for i in run_lvs(unwired, footprint_lookup()).issues if i.kind == "open"]
     assert opens and all("Board 2" in message for message in opens)

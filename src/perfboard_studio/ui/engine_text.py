@@ -68,6 +68,15 @@ TEMPLATES: tuple[str, ...] = (
     "Unmirror {ref}",
     "Mirror {ref}",
     "Take {ref} off the board",
+    # -- several boards and the cables between them -----------------------------------------
+    "Add a board",
+    "Add the board '{boardname}'",
+    "Name the board '{boardname}'",
+    "Unname {board}",
+    "Remove the board '{board}'",
+    "Add the cable {ref}",
+    "Change the cable {ref}",
+    "Remove the cable {ref}",
     "Paste {parts} part(s) and {links} connection(s)",
     "Paste {parts} part(s)",
     "Paste {links} connection(s)",
@@ -436,6 +445,10 @@ def _word(field: str, value: str) -> str:
         ]
     if field == "what":
         return {"Paste": t("paste"), "Duplicate": t("duplicate")}[value]
+    if field == "board":
+        # A board nobody named is called by its place, which the engine says in English.
+        numbered = re.fullmatch(r"Board (\d+)", value)
+        return t("Board {n}").format(n=numbered.group(1)) if numbered else value
     return _finding_word(field, value)
 
 
@@ -571,6 +584,10 @@ def _finding_word(field: str, value: str) -> str:
     return value
 
 
+#: ``board.on``'s undo label: "Move R1 to C7 on Remote" -- a board's own command, then the board.
+_ON_A_BOARD = re.compile(r"(?P<what>.+) on (?P<board>[^,]+)")
+
+
 def _one(text: str) -> str | None:
     return _match(text, _compiled())
 
@@ -677,6 +694,13 @@ def say(text: str) -> str:
     whole = _one(text)
     if whole is not None:
         return _capitalised(whole)
+    on_board = _ON_A_BOARD.fullmatch(text)
+    if on_board is not None:
+        # ``board.on``'s label: a board's own command, with the board it was done on.
+        what = _one(on_board["what"])
+        if what is not None:
+            board = _word("board", on_board["board"])
+            return _capitalised(t("{what} on {board}").format(what=what, board=board))
     if ", " not in text:
         return text
     clauses = text.split(", ")

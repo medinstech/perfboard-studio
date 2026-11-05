@@ -737,6 +737,18 @@ TURKISH: Mapping[str, str] = {
     "{count} boards": "{count} kart",
     "{count} cable": "{count} kablo",
     "{count} cables": "{count} kablo",
+    # A board's own command done on one board of several (``board.on``'s undo label), and a
+    # board nobody named, as the phrasebook calls it.
+    "{what} on {board}": "{what} ({board})",
+    "Add a board": "Kart ekle",
+    "Add the board '{boardname}'": "'{boardname}' kartını ekle",
+    "Name the board '{boardname}'": "Kartın adını '{boardname}' yap",
+    "Unname {board}": "Kartın adını kaldır ({board})",
+    "Remove the board '{board}'": "Kartı çıkar ({board})",
+    "Add the cable {ref}": "{ref} kablosunu ekle",
+    "Change the cable {ref}": "{ref} kablosunu değiştir",
+    "Remove the cable {ref}": "{ref} kablosunu çıkar",
+    "Board {n}": "Kart {n}",
     "In the design, not on the board yet.": "Tasarımda var, ama henüz kartta değil.",
     "{ref} is in the design, not on the board yet. Place on the Board puts it there.": (
         "{ref} tasarımda var, ama henüz kartta değil. Karta Yerleştir onu karta koyar."
