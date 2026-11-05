@@ -14331,6 +14331,11 @@ def test_every_action_the_old_toolbars_had_has_a_place_on_screen() -> None:
         _close(window)
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin",
+    reason="macOS has no Alt+letter menu access: Option+letter types a character, and the "
+    "menus are the system menu bar's",
+)
 def test_alt_and_a_letter_drop_that_menu_and_alt_alone_opens_the_button() -> None:
     """The menus moved behind ☰, and Alt kept working: Alt+F drops File (the menu bar is
     still there, at no height, at the top-left where ☰ is), and Alt by itself -- which put
@@ -14585,7 +14590,11 @@ def test_the_palette_offers_every_menu_command_and_runs_it() -> None:
         palette.field.setText("show missing")
         first = palette.shown()[0]
         assert first.label.startswith("Show Missing Connections")
-        assert first.keys == window.act_ratsnest.shortcut().toString()
+        from PySide6.QtGui import QKeySequence
+
+        # Said as the platform says it -- "⌘E" on macOS -- as the palette shows it.
+        native = QKeySequence.SequenceFormat.NativeText
+        assert first.keys == window.act_ratsnest.shortcut().toString(native)
         palette.run_current()
         assert window.act_ratsnest.isChecked() is not before
         assert not palette.isVisibleTo(window)
@@ -16332,10 +16341,16 @@ def test_fit_leaves_the_floating_bars_their_room() -> None:
         window.resize(1440, 900)
         window.show()
         window.show_board()
-        QApplication.processEvents()
+        # Fitted at the layout the window settles on. With no fonts -- the CI runner's
+        # offscreen platform -- the docks lay themselves out again a few passes after the
+        # first showing (Properties' minimum width grows), and the Windows runner on
+        # PySide6 6.12 did it after the fit: the board panel gave up 18 px and a board
+        # fitted to the wider panel met the tool rail. Keeping a fit through a resize is
+        # its own change (BoardView, after 0.23).
+        _settle_events(QApplication)
         view = window.view
         view.fit_board()
-        QApplication.processEvents()
+        _settle_events(QApplication)
         board = view.mapFromScene(view.sceneRect()).boundingRect()
         for bar in view.overlays:
             assert bar.isVisible()

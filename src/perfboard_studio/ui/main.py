@@ -5771,9 +5771,10 @@ class MainWindow(QMainWindow):
             if offered:
                 group = QTreeWidgetItem([t("Offered instead"), ""])
                 group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-                for part in offered:
-                    group.addChild(catalog_leaf(part))
-                group.setIcon(0, group.child(0).icon(0))
+                leaves = [catalog_leaf(part) for part in offered]
+                for leaf in leaves:
+                    group.addChild(leaf)
+                group.setIcon(0, leaves[0].icon(0))
                 tree.insertTopLevelItem(0, group)
                 group.setExpanded(True)
         tree.blockSignals(False)
