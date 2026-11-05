@@ -17219,3 +17219,53 @@ def test_what_moved_waits_for_home(monkeypatch, tmp_path) -> None:
         assert window.moved_card is not None and not window.moved_card.isHidden()
     finally:
         _close(window)
+
+
+def test_a_family_the_library_leaves_out_says_why_and_offers_what_fits() -> None:
+    """JST PH is 2.0 mm a pin and goes into no 0.1 in board: somebody typing it is told so
+    under the filter, and the XH connectors that do fit are offered at the top."""
+    from perfboard_studio.catalog import not_offered
+    from perfboard_studio.ui.main import ROLE_CATALOG_ID
+
+    window = _window_on(_blank_document())
+    try:
+        refused = not_offered("JST PH")
+        assert refused is not None
+        window.library_filter.setText("JST PH")
+        note = window.library_note
+        assert not note.isHidden() and note.text() == refused.reason
+        top = window.library_tree.topLevelItem(0)
+        assert top.text(0) == "Offered instead"
+        offered = [top.child(i).data(0, ROLE_CATALOG_ID) for i in range(top.childCount())]
+        assert offered == list(refused.instead)
+        assert top.isExpanded()
+
+        window.library_filter.setText("photo")  # "ph" alone is not the family
+        assert window.library_tree.topLevelItem(0) is None or (
+            window.library_tree.topLevelItem(0).text(0) != "Offered instead"
+        )
+        assert "JST" not in note.text()
+    finally:
+        _close(window)
+
+
+def test_the_reason_a_family_is_left_out_is_said_in_turkish() -> None:
+    from perfboard_studio.catalog import not_offered
+    from perfboard_studio.ui.i18n import language, set_language
+
+    before = language()
+    set_language("tr")
+    try:
+        window = _window_on(_blank_document())
+    finally:
+        set_language(before)
+    try:
+        set_language("tr")
+        window.library_filter.setText("JST PH")
+        refused = not_offered("JST PH")
+        assert refused is not None
+        assert window.library_note.text() not in ("", refused.reason)
+        assert window.library_tree.topLevelItem(0).text(0) == "Bunun yerine önerilenler"
+    finally:
+        set_language(before)
+        _close(window)

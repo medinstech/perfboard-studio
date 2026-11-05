@@ -158,6 +158,7 @@ from perfboard_studio.catalog import (
     CatalogPart,
     catalog_part,
     names_part,
+    not_offered,
     part_rank,
     search_rank,
 )
@@ -1072,19 +1073,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
             )
             if rank is None:
                 continue
-            packaged = get_footprint(part.footprint_id)
-            # A part NUMBER is the same in every language and has no entry; a name that
-            # describes the part -- "Tactile switch 6x6 mm" -- is said in the window's.
-            leaf = QTreeWidgetItem(
-                [t(part.name), str(len(packaged.pins)) if packaged is not None else ""]
-            )
-            leaf.setData(0, ROLE_FOOTPRINT_ID, part.footprint_id)
-            leaf.setData(0, ROLE_CATALOG_ID, part.id)
-            leaf.setTextAlignment(1, PINS_ALIGNMENT)
-            if packaged is not None:
-                leaf.setIcon(0, icons.part_icon(packaged))
-            leaf.setToolTip(0, _catalog_tooltip(part))
-            found.append((rank, index, leaf))
+            found.append((rank, index, catalog_leaf(part)))
         if found:
             groups.append((place, group_item(headings[category]), found, bool(needle)))
 
@@ -1126,6 +1115,21 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
         for _rank, _index, leaf in found:
             group.addChild(leaf)
         group.setExpanded(opened)
+
+
+def catalog_leaf(part: CatalogPart) -> QTreeWidgetItem:
+    """One catalog part's row: its name, its pin count, its picture and what it places."""
+    packaged = get_footprint(part.footprint_id)
+    # A part NUMBER is the same in every language and has no entry; a name that describes
+    # the part -- "Tactile switch 6x6 mm" -- is said in the window's.
+    leaf = QTreeWidgetItem([t(part.name), str(len(packaged.pins)) if packaged is not None else ""])
+    leaf.setData(0, ROLE_FOOTPRINT_ID, part.footprint_id)
+    leaf.setData(0, ROLE_CATALOG_ID, part.id)
+    leaf.setTextAlignment(1, PINS_ALIGNMENT)
+    if packaged is not None:
+        leaf.setIcon(0, icons.part_icon(packaged))
+    leaf.setToolTip(0, _catalog_tooltip(part))
+    return leaf
 
 
 class PartTree(QTreeWidget):
@@ -5754,20 +5758,36 @@ class MainWindow(QMainWindow):
 
     def _refresh_library(self) -> None:
         tree = self.library_tree
+        typed = self.library_filter.text().strip()
         tree.blockSignals(True)
         populate_part_tree(tree, self.library_filter.text(), self.custom_footprints())
-        tree.blockSignals(False)
-        typed = self.library_filter.text().strip()
         found_nothing = bool(typed) and tree.topLevelItemCount() == 0
-        self.library_note.setText(
-            t(
+        # A family the library leaves out on purpose -- JST PH is 2.0 mm a pin and goes
+        # into no 0.1 in board -- is said so, with what fits offered at the top, rather
+        # than a blank list or the nearest spelling (parts' ``catalog.not_offered``).
+        refused = not_offered(typed) if typed else None
+        if refused is not None:
+            offered = [part for part in map(catalog_part, refused.instead) if part is not None]
+            if offered:
+                group = QTreeWidgetItem([t("Offered instead"), ""])
+                group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+                for part in offered:
+                    group.addChild(catalog_leaf(part))
+                group.setIcon(0, group.child(0).icon(0))
+                tree.insertTopLevelItem(0, group)
+                group.setExpanded(True)
+        tree.blockSignals(False)
+        if refused is not None:
+            said = t(refused.reason)
+        elif found_nothing:
+            said = t(
                 "No part matches “{query}”. Try a shorter word, or describe the part with "
                 "Custom Part…"
             ).format(query=typed)
-            if found_nothing
-            else ""
-        )
-        self.library_note.setVisible(found_nothing)
+        else:
+            said = ""
+        self.library_note.setText(said)
+        self.library_note.setVisible(bool(said))
 
     def _on_placement_value_changed(self, text: str) -> None:
         self.scene.placement_value = text.strip()
