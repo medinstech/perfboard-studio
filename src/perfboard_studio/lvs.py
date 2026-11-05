@@ -59,6 +59,7 @@ from .system import (
     every_component,
     placed_components,
 )
+from .wirecolour import net_colours
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -739,6 +740,17 @@ def run_system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> SystemLvsResul
             )
         )
 
+    crossed = crossed_cables(doc)
+    if crossed:
+        # Said once per cable, as what it is; the shorts and opens the crossing alone makes
+        # are not said again in the boards' own words.
+        explained = {name for finding in crossed for name in finding.net_names}
+        issues = [
+            issue
+            for issue in issues
+            if not (issue.kind in ("short", "open") and set(issue.net_names) <= explained)
+        ]
+        issues.extend(crossed)
     issues.sort(key=_issue_sort_key)
     return SystemLvsResult(
         ok=not issues,
@@ -747,6 +759,61 @@ def run_system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> SystemLvsResul
         nets=counted,
         uncabled=_uncabled(doc),
     )
+
+
+def crossed_cables(doc: PerfDocument) -> list[LvsIssue]:
+    """A short for every cable with a wire joining two different nets, said as the cable:
+    "W1's red and black wires are swapped" for a pair that trades nets, otherwise each wire
+    by its colour (the harness's: its own, or its net's) and what it joins to what. Engine
+    text, in English, like every finding."""
+    colours = net_colours(doc)
+    net_of = {(n.component_ref, n.pin): net for net in doc.nets for n in net.nodes}
+    findings: list[LvsIssue] = []
+    for cable in sorted(doc.cables, key=lambda c: (c.ref, c.id)):
+        a, b = connector_of(doc, cable.a), connector_of(doc, cable.b)
+        if a is None or b is None:
+            continue
+        wrong: list[tuple[str, Net, Net, str, str]] = []
+        for wire in cable.wires:
+            net_a, net_b = net_of.get((a.ref, wire.a_pin)), net_of.get((b.ref, wire.b_pin))
+            if net_a is None or net_b is None or net_a.id == net_b.id:
+                continue
+            colour = wire.colour or colours.get(net_a.id, "grey")
+            wrong.append((colour, net_a, net_b, wire.a_pin, wire.b_pin))
+        if not wrong:
+            continue
+        swapped = (
+            len(wrong) == 2
+            and wrong[0][1].id == wrong[1][2].id
+            and wrong[0][2].id == wrong[1][1].id
+        )
+        if swapped:
+            (c1, x, y, p1, q1), (c2, _y, _x, _p2, _q2) = wrong
+            message = (
+                f"{cable.ref}'s {c1} and {c2} wires are swapped: the {c1} lands {x.name} "
+                f"({a.ref} pin {p1}) on {y.name} ({b.ref} pin {q1}), and the {c2} the other "
+                f"way round."
+            )
+        else:
+            message = "; ".join(
+                f"{cable.ref}'s {colour} wire lands {x.name} ({a.ref} pin {p}) on {y.name} "
+                f"({b.ref} pin {q})"
+                for colour, x, y, p, q in wrong
+            ) + "."
+        findings.append(
+            LvsIssue(
+                kind="short",
+                message=message,
+                net_names=tuple(sorted({n.name for _c, x, y, _p, _q in wrong for n in (x, y)})),
+                pins=tuple(
+                    pin
+                    for _c, _x, _y, p, q in wrong
+                    for pin in (PhysicalPinRef(a.ref, p), PhysicalPinRef(b.ref, q))
+                ),
+                physical_net_ids=(),
+            )
+        )
+    return findings
 
 
 def _uncabled(doc: PerfDocument) -> tuple[str, ...]:

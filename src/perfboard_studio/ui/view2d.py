@@ -126,18 +126,11 @@ from perfboard_studio.geometry import (
     transform_pin_offset,
     undrilled_holes,
 )
-
-# The one place the wire-colour convention is defined, so the editor and the cut list a
-# person actually works from cannot disagree about which wire is which.
 from perfboard_studio.guide import (
-    COLOR_BY_NET_CLASS,
-    SIGNAL_COLORS,
     conductor_word,
     is_bench_check,
     lead_end,
     lead_marker,
-    net_colours,
-    signal_colour_index,
 )
 from perfboard_studio.model import (
     STANDARD_PITCH_MM,
@@ -169,6 +162,15 @@ from perfboard_studio.phrasebook import guide_language, phrasebook
 from perfboard_studio.ratsnest import RatsnestLink, all_links, ratsnest
 from perfboard_studio.stripboard import cut_holes, is_stripboard, segments
 from perfboard_studio.system import references_in_use
+
+# The one place the wire-colour convention is defined, so the editor and the cut list a
+# person actually works from cannot disagree about which wire is which.
+from perfboard_studio.wirecolour import (
+    COLOR_BY_NET_CLASS,
+    SIGNAL_COLORS,
+    net_colours,
+    signal_colour_index,
+)
 
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (

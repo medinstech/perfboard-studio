@@ -112,6 +112,13 @@ from .model import (
 )
 from .phrasebook import ENGLISH, GuideLanguage, Phrasebook, phrasebook
 from .stripboard import is_stripboard, strip_axis
+
+# The wire-colour convention lives under LVS now (``wirecolour``), which names a cable's wire
+# by it; re-exported here for everything that has always asked the guide.
+from .wirecolour import COLOR_BY_NET_CLASS as COLOR_BY_NET_CLASS
+from .wirecolour import SIGNAL_COLORS as SIGNAL_COLORS
+from .wirecolour import net_colours as net_colours
+from .wirecolour import signal_colour_index as signal_colour_index
 from .wiregauge import awg_diameter_mm, cut_gauge_awg, fits_hole
 
 if TYPE_CHECKING:  # harness.py builds on this module, so only the type crosses back
@@ -319,14 +326,6 @@ IRON_BY_MATERIAL: dict[BoardMaterial, IronSettings] = {
         ),
     ),
 }
-
-#: Insulation colour by net class, the convention every schematic reader already knows.
-COLOR_BY_NET_CLASS: dict[NetClass, str] = {"power": "red", "ground": "black"}
-
-#: Signal colours, cycled by net order so the same board always assigns the same colours.
-SIGNAL_COLORS: tuple[str, ...] = (
-    "yellow", "green", "blue", "white", "orange", "violet", "grey", "brown",
-)
 
 #: What a BARE wire's "colour" is: the metal, named as a spine's material is named. The
 #: net's insulation colour belongs to insulation, and a bare wire has none -- "black AWG 24"
@@ -2226,45 +2225,6 @@ def _runs_straight_on(a: tuple[Mm, Mm], b: tuple[Mm, Mm], c: tuple[Mm, Mm]) -> b
     cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
     forward = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])
     return abs(cross) < 1e-9 and forward > 0
-
-
-def signal_colour_index(doc: PerfDocument) -> dict[str, int]:
-    """Each signal net's place in the ``SIGNAL_COLORS`` cycle, per net id.
-
-    Counted over the nets sorted by id -- the order ``persist`` writes them in -- and never
-    in the order the document happens to hold them. A board built in a session holds its
-    nets in the order they were made, and the same board opened from its .perf holds them
-    in the file's order: counted in whichever order was at hand, one wire was brown in the
-    cut list printed before saving and blue on the screen after reopening. Every board ever
-    opened from a file already had its nets in this order, so no colour it showed moves.
-    The guide, the 2D view and the 3D view and STEP export (``view3d.net_colouring``) all
-    count here, which is what keeps the three agreeing.
-    """
-    signals = sorted(
-        (net for net in doc.nets if net.net_class not in COLOR_BY_NET_CLASS),
-        key=lambda net: net.id,
-    )
-    return {net.id: index for index, net in enumerate(signals)}
-
-
-def net_colours(doc: PerfDocument) -> dict[str, str]:
-    """Insulation colour per net id, by NAME: red for power, black for ground, then a cycle.
-
-    The cycle is :func:`signal_colour_index`, so the same board produces the same cut list
-    whether it was just built or opened from its file -- a colour convention that changed
-    between two runs would be worse than none. The cut list, the guide's steps and the
-    board view's wire tooltips all read this, so the colour a wire is called on the screen
-    is the colour it is called at the bench.
-    """
-    signal_index = signal_colour_index(doc)
-    colors: dict[str, str] = {}
-    for net in doc.nets:
-        fixed = COLOR_BY_NET_CLASS.get(net.net_class)
-        if fixed is not None:
-            colors[net.id] = fixed
-        else:
-            colors[net.id] = SIGNAL_COLORS[signal_index[net.id] % len(SIGNAL_COLORS)]
-    return colors
 
 
 def trapped_jumper_ids(violations: list[DrcViolation]) -> frozenset[ConductorId]:

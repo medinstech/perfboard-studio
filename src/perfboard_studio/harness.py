@@ -21,10 +21,11 @@ from dataclasses import dataclass
 from itertools import pairwise
 
 from .connectivity import PhysicalPinRef
-from .guide import DEFAULT_GUIDE_OPTIONS, Checkpoint, GuideOptions, net_colours
+from .guide import DEFAULT_GUIDE_OPTIONS, Checkpoint, GuideOptions
 from .model import Cable, CableEnd, Mm, Net, PerfDocument, declared_pin_name
 from .phrasebook import GuideLanguage, Phrasebook, phrasebook
 from .system import board_title, connector_of
+from .wirecolour import net_colours
 from .wiregauge import cut_gauge_awg
 
 

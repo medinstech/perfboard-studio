@@ -3048,6 +3048,13 @@ different fixes; one joined island holding two nets is a short, which is also ex
 cable wired pin 1 to pin 2 shows up. Pins of parts on no board are left out: the design is
 asked about them, not the copper.
 
+A cable wired across is said as itself (`lvs.crossed_cables`): one finding per cable, naming
+the wire by the colour the harness cuts it in -- its own, or its net's (`wirecolour`, moved
+under LVS for this) -- and what it lands on what, a swapped pair as one sentence ("W1's yellow
+and black wires are swapped"). The shorts and opens the crossing alone explains are not said
+again in the boards' words, and the System view draws that cable in the danger colour. A
+crossed pair used to read as two shorts and two opens, none of which named the cable.
+
 `lvs.run_lvs` itself answers for the system when the document has another board or a cable,
 so the window, the MCP server, `--headless` and the guide all get the system's verdict
 without one of them having to know. Each board is checked on its own view with only its own

@@ -554,3 +554,40 @@ def test_what_is_not_certain_is_left_unpaired_and_said() -> None:
     assert [(w.a_pin, w.b_pin) for w in pairing.wires] == [("9", "3")]
     assert any("GND is on JA pins 1, 2 and JB pin 1" in why for why in pairing.unpaired), pairing.unpaired
     assert "JA pin 3 (SENSE): JB has no pin on SENSE." in pairing.unpaired, pairing.unpaired
+
+
+def test_a_swapped_pair_is_one_finding_named_by_the_cable_and_its_colours() -> None:
+    """Pin 1 to pin 2 and pin 2 to pin 1: one short, said as the cable and its wires' colours
+    (the harness's: SIG's yellow, GND's black), and nothing else the crossing alone explains."""
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.lvs import run_lvs, run_system_lvs
+    from perfboard_studio.model import CableWire
+
+    doc = _two_headers((CableWire("1", "2"), CableWire("2", "1")))
+    system_result = run_system_lvs(doc, footprint_lookup())
+    (finding,) = system_result.issues
+    assert finding.kind == "short"
+    assert finding.message == (
+        "W1's yellow and black wires are swapped: the yellow lands SIG (JA pin 1) on GND "
+        "(JB pin 2), and the black the other way round."
+    )
+    assert set(finding.net_names) == {"GND", "SIG"}
+    combined = run_lvs(doc, footprint_lookup())
+    assert [i.message for i in combined.issues if i.kind in ("short", "open")] == [finding.message]
+
+
+def test_one_crossed_wire_is_said_by_its_own_colour() -> None:
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.lvs import run_system_lvs
+    from perfboard_studio.model import CableWire
+
+    doc = _two_headers((CableWire("1", "1"), CableWire("2", "1", colour="red")))
+    messages = [i.message for i in run_system_lvs(doc, footprint_lookup()).issues if i.kind == "short"]
+    assert "W1's red wire lands GND (JA pin 2) on SIG (JB pin 1)." in messages
+
+
+def test_a_cable_wired_straight_has_no_crossing() -> None:
+    from perfboard_studio.lvs import crossed_cables
+    from perfboard_studio.model import CableWire
+
+    assert crossed_cables(_two_headers((CableWire("1", "1"), CableWire("2", "2")))) == []

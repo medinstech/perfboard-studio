@@ -36,9 +36,10 @@ from PySide6.QtWidgets import (
 
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import all_pin_holes
-from perfboard_studio.guide import net_colours
+from perfboard_studio.lvs import crossed_cables
 from perfboard_studio.model import BoardId, Cable, CableEnd, Net, PerfDocument
 from perfboard_studio.system import board_document, board_ids, board_title, connector_of
+from perfboard_studio.wirecolour import net_colours
 
 from . import theme
 from .i18n import t
@@ -94,8 +95,12 @@ class SystemView(QGraphicsView):
             x += rect.width() + GAP_MM
         colours = net_colours(doc)
         net_of = {(node.component_ref, node.pin): net for net in doc.nets for node in net.nodes}
+        # A cable wired across is drawn in the danger colour, as the finding about it says.
+        crossed = {
+            pin.component_ref for finding in crossed_cables(doc) for pin in finding.pins
+        }
         for cable in doc.cables:
-            self._cable(doc, cable.a, cable.b, cable, origins, colours, net_of)
+            self._cable(doc, cable.a, cable.b, cable, origins, colours, net_of, crossed)
         bounds = self._scene.itemsBoundingRect()
         hint = QGraphicsSimpleTextItem(t("Double-click a board to open it."))
         hint.setBrush(QBrush(QColor(theme.ACTIVE.text_secondary)))
@@ -164,10 +169,13 @@ class SystemView(QGraphicsView):
         origins: dict[BoardId, tuple[QPointF, PerfDocument, QRectF]],
         colours: dict[str, str],
         net_of: dict[tuple[str, str], Net],
+        crossed: set[str],
     ) -> None:
         a_pins = self._pin_points(doc, a_end, origins)
         b_pins = self._pin_points(doc, b_end, origins)
         a_part = connector_of(doc, a_end)
+        b_part = connector_of(doc, b_end)
+        wrong = a_part is not None and b_part is not None and {a_part.ref, b_part.ref} <= crossed
         for wire in cable.wires:
             p, q = a_pins.get(wire.a_pin), b_pins.get(wire.b_pin)
             if p is None or q is None:
@@ -181,7 +189,8 @@ class SystemView(QGraphicsView):
             # The wire in the colour the board's own wires take for that name (the 2D
             # view's insulation table), over an outline in the window's background.
             colour = _INSULATION_SCREEN.get(colour_id, CONDUCTOR_STYLE["insulated-wire"][0])
-            outline = QPen(QColor(theme.ACTIVE.bg_app), 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            edge = theme.ACTIVE.danger if wrong else theme.ACTIVE.bg_app
+            outline = QPen(QColor(edge), 2.2 if wrong else 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
             shadow = self._scene.addPath(path, outline)
             shadow.setZValue(2)
             line = self._scene.addPath(path, QPen(colour, 1.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
