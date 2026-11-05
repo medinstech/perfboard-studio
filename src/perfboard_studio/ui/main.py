@@ -628,6 +628,16 @@ def progress_key(path: Path) -> str:
     return f"{PROGRESS_GROUP}/{hashlib.sha256(normal.encode('utf-8')).hexdigest()}"
 
 
+#: The board in front when a file was last left, per file, by the same hashed path as the
+#: guide's ticks: which board somebody was working on is the window's to remember, not an
+#: edit to the document.
+BOARD_IN_FRONT_GROUP = "boardInFront"
+
+
+def board_in_front_key(path: Path) -> str:
+    return f"{BOARD_IN_FRONT_GROUP}/{progress_key(path).split('/', 1)[1]}"
+
+
 #: The documents whose sheet has been offered Arrange (``_consider_arrange_hint``), by
 #: their creation stamp: offered once per document, ever, and never as a box.
 ARRANGE_OFFERED_KEY = "sheet/arrangeOffered"
@@ -2899,11 +2909,18 @@ class MainWindow(QMainWindow):
         duplicate id. Every bus this window makes has to be seeded from the document it is
         given -- see ``commands.create_document_id_generator``.
         """
-        return BoardBus(
+        bus = BoardBus(
             document,
             create_standard_registry(),
             CommandContext(next_id=create_document_id_generator(document)),
         )
+        # The board somebody last had in front in this file, when it is still one of its
+        # boards: every way a file is opened makes its bus here, with its path already set.
+        if self.current_path is not None and document.boards:
+            remembered = app_settings().value(board_in_front_key(self.current_path))
+            if isinstance(remembered, str) and remembered in board_ids(document):
+                bus.show(remembered)
+        return bus
 
     def _subscribe_bus(self) -> None:
         """Listen to the current bus, dropping any previous subscription first.
@@ -11225,9 +11242,15 @@ class MainWindow(QMainWindow):
             return
         if entry != self.bus.board_id:
             self.bus.show(entry)
+        self._remember_board_in_front()
         self.board_stack.setCurrentWidget(self.view)
         self.on_bus_changed(self.bus.system_document, None)
         self.view.fit_board()
+
+    def _remember_board_in_front(self) -> None:
+        """Keep the board in front for this file, so it comes back in front next time."""
+        if self.current_path is not None and self.bus.system_document.boards:
+            app_settings().setValue(board_in_front_key(self.current_path), self.bus.board_id)
 
     def on_add_board(self) -> None:
         """Another board, the size of the one in front and named by its place until somebody
@@ -12895,6 +12918,7 @@ class MainWindow(QMainWindow):
             # Not saved there, so not "the file this window is on" either.
             self.current_path = previous
             return False
+        self._remember_board_in_front()
         if previous is not None and previous != path:
             self._carry_progress(previous, path)
         return True

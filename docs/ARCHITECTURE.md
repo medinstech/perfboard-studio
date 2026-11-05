@@ -2887,6 +2887,12 @@ the step is ABOUT (`guide.step_focus`), never its number, which every edit renum
 board with no file keeps its ticks in the window until it has one, and Save As takes them
 to the new name.
 
+**So is the board in front, per board file** (`BOARD_IN_FRONT_GROUP`, the same hashed path): a
+document of several boards opens on the board it was left on, as a choice of view rather than
+an edit. Every way a file is opened makes its bus in `_new_bus` with its path already set, so
+that is the one place it comes back; a board no longer in the file is forgotten, not refused,
+and Save As takes it to the new name.
+
 ## The update check decides nothing on the network and installs nothing at all
 
 `updates.py` is an engine module and follows the engine's rule: **no network, no clock, no

@@ -716,3 +716,39 @@ def test_dropping_another_boards_part_moves_it_here_and_the_menus_offer_it(qapp)
         window._mark_saved()
         window.close()
         window.deleteLater()
+
+
+def test_the_board_in_front_comes_back_with_its_file(qapp, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Left on Remote, the file opens on Remote; a board that is no longer there is forgotten
+    rather than refused, and a file never saved remembers nothing."""
+    from PySide6.QtCore import QSettings
+
+    from perfboard_studio.ui import main as main_module
+    from perfboard_studio.ui.main import MainWindow
+
+    store = QSettings(str(tmp_path / "s.ini"), QSettings.Format.IniFormat)
+    monkeypatch.setattr(main_module, "app_settings", lambda: store)
+    path = tmp_path / "bench.perf"
+    path.write_text(persist.serialize_document(_system()), encoding="utf-8")
+    first = MainWindow(_system(), path)
+    try:
+        first.board_strip.tabs.setCurrentIndex(2)
+        assert first.bus.board_id == "b2"
+    finally:
+        first.close()
+        first.deleteLater()
+    again = MainWindow(persist.parse_document_or_throw(path.read_text(encoding="utf-8")), path)
+    try:
+        assert again.bus.board_id == "b2"
+        assert again.board_strip.tabs.tabText(again.board_strip.tabs.currentIndex()).startswith("Remote")
+    finally:
+        again.close()
+        again.deleteLater()
+    store.setValue(main_module.board_in_front_key(path), "b9")
+    gone = MainWindow(persist.parse_document_or_throw(path.read_text(encoding="utf-8")), path)
+    try:
+        assert gone.bus.board_id == system.FIRST_BOARD
+    finally:
+        gone.close()
+        gone.deleteLater()
+
