@@ -3051,7 +3051,11 @@ worse than none; each wire the colour and gauge every other wire of its net gets
 (`guide.net_colours`, `wiregauge.cut_gauge_awg`) unless the cable says; each end named by its
 board, connector and pin; and the checks -- each wire end to end, each neighbouring pair on
 different nets kept apart -- all blocking, because they are the last thing before the system
-sees power. Every sentence is the guide's phrasebook (`test_phrasebook` reads `harness.py`
+sees power. It is part of the guide: `Guide.harness` carries the cables, the window adds the
+system's harness to the guide of the board in front -- so every board's guide ends with the
+same harness -- and the exports give it a section after the board's phases and a cut-list row
+per cable wire; with no cable it is empty and left out of every export, so no single board's
+guide moved. Every sentence is the guide's phrasebook (`test_phrasebook` reads `harness.py`
 too), and every board is called what `system.board_title` calls it, so the harness, the strip
 and LVS's lines say one name.
 

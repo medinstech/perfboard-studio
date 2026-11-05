@@ -55,7 +55,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache, partial
-from typing import Literal, get_args
+from typing import TYPE_CHECKING, Literal, get_args
 
 from .breadboard import has_breadboard_pattern, has_rails, is_breadboard
 from .connectivity import FootprintLookup, PhysicalPinRef
@@ -113,6 +113,9 @@ from .model import (
 from .phrasebook import ENGLISH, GuideLanguage, Phrasebook, phrasebook
 from .stripboard import is_stripboard, strip_axis
 from .wiregauge import awg_diameter_mm, cut_gauge_awg, fits_hole
+
+if TYPE_CHECKING:  # harness.py builds on this module, so only the type crosses back
+    from .harness import HarnessCable
 
 # ---------------------------------------------------------------------------
 # Phases (PLAN.md Sec 7.1)
@@ -712,6 +715,11 @@ class Guide:
     #: none, and left out of every export then, so every guide written before there were any
     #: is what it was.
     lead_list: tuple[LeadCut, ...] = ()
+    #: The cables between the boards of a system (``harness.build_harness``), fitted once
+    #: every board is built; the window adds them to the guide of the board in front, so
+    #: every board's guide ends with the same harness. Empty on a document with no cable,
+    #: and left out of every export then, so no single board's guide moves.
+    harness: tuple[HarnessCable, ...] = ()
 
     @property
     def total_steps(self) -> int:

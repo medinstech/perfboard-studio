@@ -214,6 +214,14 @@ TURKISH: dict[str, str] = {
         "{colour} teli (AWG {awg}, {net}) {a} ile {b} arasına bağlayın."
     ),
     "{cable}: {net} end to end": "{cable}: {net} uçtan uca",
+    # guide_export.py: the harness section and its cut-list rows.
+    "Harness": "Kablo demeti",
+    "Fitted once every board is built: a cable joins connectors that are already soldered, "
+    "and is checked end to end before anything is powered.": (
+        "Her kart kurulduktan sonra takılır: kablo, lehimlenmiş konnektörleri birbirine "
+        "bağlar ve enerji verilmeden önce uçtan uca kontrol edilir."
+    ),
+    "cable wire": "kablo teli",
     "With {cable} fitted and nothing powered, measure resistance between {a} and {b}.": (
         "{cable} takılıyken ve enerji verilmeden {a} ile {b} arasındaki direnci ölçün."
     ),

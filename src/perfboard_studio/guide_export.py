@@ -64,6 +64,7 @@ from .guide import (
     step_focus,
     wire_template,
 )
+from .harness import HarnessEnd
 from .model import Board, HoleCoord
 from .phrasebook import Phrasebook, phrasebook
 from .version import __version__
@@ -110,6 +111,8 @@ def guide_to_json(guide: Guide, indent: int = 2) -> str:
             # Only when there are any, for the reason ``language`` is: a guide with no part
             # off the board is byte for byte the guide it always was.
             **({"lead_list": [_plain(lead, board=guide.board) for lead in guide.lead_list]} if guide.lead_list else {}),
+            # The cables between a system's boards, only when there are any.
+            **({"harness": [_plain(cable, board=None) for cable in guide.harness]} if guide.harness else {}),
             "phases": [
                 {
                     "number": phase.number,
@@ -206,6 +209,22 @@ def cut_list_to_csv(guide: Guide) -> str:
                 say("cut to fit") if lead.cut_mm is None else "",
             ]
         )
+    for cable in guide.harness:
+        for wire in cable.wires:
+            writer.writerow(
+                [
+                    say("cable wire"),
+                    wire.net_name,
+                    harness_end(wire.a, say),
+                    harness_end(wire.b, say),
+                    "",
+                    "" if wire.cut_mm is None else f"{wire.cut_mm:.1f}",
+                    f"{wire.strip_mm:.1f}",
+                    wire.awg,
+                    say(wire.colour),
+                    cable.ref if wire.cut_mm is not None else f"{cable.ref}, {say('cut to fit')}",
+                ]
+            )
     for spine in guide.spine_list:
         writer.writerow(
             [
@@ -233,6 +252,17 @@ def _html_lead_row(lead: LeadCut, say: Phrasebook, *, board: Board | None) -> st
         f"<td>{escape(lead_end(lead.ref, lead.pin, lead.pin_name, say))}</td>"
         f"<td>{escape(cut)}</td><td>{lead.awg}</td><td>{escape(say(lead.colour))}</td></tr>"
     )
+
+
+def harness_end(end: HarnessEnd, say: Phrasebook) -> str:
+    """A cable wire's end in the cut list: "Supply J2 pin 1", with the pin's name when the
+    connector gives one -- the harness steps' own words."""
+    if end.pin_name:
+        return say(
+            "{board} {ref} pin {pin} ({name})",
+            board=end.board, ref=end.ref, pin=end.pin, name=end.pin_name,
+        )
+    return say("{board} {ref} pin {pin}", board=end.board, ref=end.ref, pin=end.pin)
 
 
 def _wire_type(insulated: bool, say: Phrasebook) -> str:
@@ -495,6 +525,23 @@ def guide_to_html(guide: Guide, step_images: Mapping[str, bytes] | None = None) 
             for check in phase.checkpoints:
                 step_id += 1
                 parts.append(_html_check(check, f"s{step_id}", say, board=guide.board))
+        parts.append("</section>")
+
+    if guide.harness:
+        parts.append(
+            '<section class="phase"><h2>'
+            + escape(say("Harness"))
+            + f'</h2><p class="sub">{escape(say("Fitted once every board is built: a cable joins connectors that are already soldered, and is checked end to end before anything is powered."))}</p>'
+        )
+        for cable in guide.harness:
+            parts.append(f"<h3>{escape(cable.ref)}</h3><ol>")
+            parts.extend(f"<li>{escape(text)}</li>" for text in cable.steps)
+            parts.append("</ol>")
+            if cable.checkpoints:
+                parts.append("<h3>" + say("Check before moving on") + "</h3>")
+                for check in cable.checkpoints:
+                    step_id += 1
+                    parts.append(_html_check(check, f"s{step_id}", say, board=None))
         parts.append("</section>")
 
     parts.append(_html_tables(guide, say))
@@ -1077,7 +1124,7 @@ def _html_tables(guide: Guide, say: Phrasebook) -> str:
         )
     parts.append("</table></div>")
 
-    if guide.cut_list or guide.spine_list or guide.lead_list:
+    if guide.cut_list or guide.spine_list or guide.lead_list or guide.harness:
         parts.append(f'<h3>{say("Wire")}</h3><div class="wrap"><table>')
         parts.append(
             "<tr>"
@@ -1101,6 +1148,15 @@ def _html_tables(guide: Guide, say: Phrasebook) -> str:
             )
         for lead in guide.lead_list:
             parts.append(_html_lead_row(lead, say, board=guide.board))
+        for cable in guide.harness:
+            for wire in cable.wires:
+                length = say("cut to fit") if wire.cut_mm is None else f"{wire.cut_mm:.0f} mm"
+                parts.append(
+                    f"<tr><td>{say('cable wire')} ({escape(cable.ref)})</td>"
+                    f"<td>{escape(wire.net_name)}</td><td>{escape(harness_end(wire.a, say))}</td>"
+                    f"<td>{escape(harness_end(wire.b, say))}</td><td>{escape(length)}</td>"
+                    f"<td>{wire.awg}</td><td>{escape(say(wire.colour))}</td></tr>"
+                )
         for spine in guide.spine_list:
             parts.append(
                 f"<tr><td>{say('reinforcing wire')}</td><td>{escape(spine.net_name)}</td>"

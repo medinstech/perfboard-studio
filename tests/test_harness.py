@@ -114,3 +114,57 @@ def test_the_harness_is_said_in_turkish_and_calls_a_board_what_lvs_does() -> Non
     unwired = dataclasses.replace(doc, cables=())
     opens = [i.message for i in run_lvs(unwired, footprint_lookup()).issues if i.kind == "open"]
     assert opens and all("Board 2" in message for message in opens)
+
+
+# ---------------------------------------------------------------------------
+# In the guide and its exports
+# ---------------------------------------------------------------------------
+
+
+def _guide_with_harness(language: str = "en"):  # type: ignore[no-untyped-def]
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.guide import build_guide
+
+    doc = _system()
+    options = GuideOptions(language=language)  # type: ignore[arg-type]
+    guide = build_guide(system.board_document(doc), footprint_lookup(), options)
+    return dataclasses.replace(guide, harness=build_harness(doc, options).cables), guide
+
+
+def test_a_guide_with_no_cable_exports_exactly_as_it_did() -> None:
+    from perfboard_studio.guide_export import guide_to_html, guide_to_json
+
+    _with, without = _guide_with_harness()
+    assert without.harness == ()
+    assert '"harness"' not in guide_to_json(without)
+    assert "Harness" not in guide_to_html(without)
+
+
+def test_the_harness_is_in_every_export_of_the_guide() -> None:
+    import json
+
+    from perfboard_studio.guide_export import cut_list_to_csv, guide_to_html, guide_to_json
+
+    guide, _without = _guide_with_harness()
+    data = json.loads(guide_to_json(guide))
+    assert [cable["ref"] for cable in data["harness"]] == ["W1"]
+    assert data["harness"][0]["wires"][0]["a"] == {"board": "Main", "ref": "JA", "pin": "1", "pin_name": None}
+    rows = [line for line in cut_list_to_csv(guide).splitlines() if line.startswith("cable wire")]
+    assert rows == [
+        "cable wire,SIG,Main JA pin 1,Remote JB pin 1,,160.0,5.0,24,yellow,W1",
+        "cable wire,GND,Main JA pin 2,Remote JB pin 2,,160.0,5.0,24,black,W1",
+    ], rows
+    html = guide_to_html(guide)
+    assert "<h2>Harness</h2>" in html and "<h3>W1</h3>" in html
+    assert "Cut 2 wires for W1, 160 mm each with the ends stripped." in html
+    assert "Probe Main JA pin 1 and Remote JB pin 1." in html
+
+
+def test_the_harness_in_the_guide_is_said_in_turkish() -> None:
+    from perfboard_studio.guide_export import cut_list_to_csv, guide_to_html
+
+    guide, _without = _guide_with_harness("tr")
+    html = guide_to_html(guide)
+    assert "<h2>Kablo demeti</h2>" in html
+    assert "W1 için 2 tel kesin, her biri soyulacak uçları dahil 160 mm." in html
+    assert any(line.startswith("kablo teli,GND") for line in cut_list_to_csv(guide).splitlines())

@@ -258,6 +258,7 @@ from perfboard_studio.guide import (
 )
 from perfboard_studio.guide import describe as describe_guide
 from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
+from perfboard_studio.harness import build_harness
 from perfboard_studio.lvs import LvsIssue, LvsResult, run_lvs, stale_conductor_ids
 from perfboard_studio.model import (
     UNTITLED_NAME,
@@ -4141,9 +4142,14 @@ class MainWindow(QMainWindow):
         """
         if self._assembly_doc is not self.bus.document or self._assembly_guide is None:
             self._assembly_doc = self.bus.document
-            self._assembly_guide = build_guide(
-                self.bus.document, self.lookup, GuideOptions(language=self._guide_language())
-            )
+            options = GuideOptions(language=self._guide_language())
+            guide = build_guide(self.bus.document, self.lookup, options)
+            if self.bus.system_document.cables:
+                # The board in front's guide ends with the system's harness: every board's
+                # guide ends with the same one, because a cable is fitted once all are built.
+                harness = build_harness(self.bus.system_document, options)
+                guide = dataclasses.replace(guide, harness=harness.cables)
+            self._assembly_guide = guide
             self._assembly_cached = all_steps(self._assembly_guide)
         return self._assembly_guide
 
