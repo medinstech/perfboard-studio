@@ -17368,3 +17368,68 @@ def test_a_bench_steps_rows_leave_with_it() -> None:
         assert all(widget.isHidden() for widget in old)
     finally:
         _close(window)
+
+
+def test_a_fitted_board_stays_fitted_until_somebody_zooms_or_pans() -> None:
+    """A fit was good for the size it was made at: a panel dragged wider or the docks laid
+    out again left the board where it was, and it slid under the tool rail (ship's
+    multiboard run). A resize fits it again -- until the person zooms or pans, and then it
+    stays where they put it."""
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QAbstractSlider
+
+    window = _window_on(_load_dense())
+    try:
+        window.resize(1440, 900)
+        window.show()
+        window.show_board()
+        QApplication.processEvents()
+        view = window.view
+
+        def settle() -> None:
+            for _ in range(5):
+                QApplication.processEvents()
+
+        def clear_of_the_bars() -> bool:
+            board = view.mapFromScene(view.sceneRect()).boundingRect()
+            for bar in view.overlays:
+                corner = view.viewport().mapFromGlobal(bar.mapToGlobal(QPoint(0, 0)))
+                if QRect(corner, bar.size()).intersects(board):
+                    return False
+            return True
+
+        def fits_its_room() -> bool:
+            """What a fit made just now at this size would be -- not the first fit's scale:
+            the docks do not hand back the width they took when the window narrowed."""
+            kept = view.current_scale()
+            view.fit_board()
+            return view.current_scale() == pytest.approx(kept) and clear_of_the_bars()
+
+        view.fit_board()
+        settle()
+        for width, height in ((1100, 900), (1100, 700)):
+            before = view.viewport().size()
+            window.resize(width, height)
+            settle()
+            assert view.viewport().size() != before, (width, height)
+            assert fits_its_room(), (width, height)
+
+        view.zoom_by(1.15)
+        zoomed = view.current_scale()
+        window.resize(1100, 900)
+        settle()
+        assert view.current_scale() == pytest.approx(zoomed), "a zoom of theirs is kept"
+
+        for navigate in (
+            lambda: view._pan_by(30, 0),
+            lambda: view.horizontalScrollBar().triggerAction(
+                QAbstractSlider.SliderAction.SliderSingleStepAdd
+            ),
+            lambda: window.go_to_component(window.bus.document.components[0].id),
+        ):
+            view.fit_board()
+            assert view._fitted
+            navigate()
+            assert not view._fitted
+    finally:
+        _close(window)

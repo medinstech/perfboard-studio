@@ -49,6 +49,7 @@ from PySide6.QtGui import (
     QPen,
     QPixmap,
     QPolygonF,
+    QResizeEvent,
     QTransform,
 )
 from PySide6.QtWidgets import (
@@ -6394,6 +6395,13 @@ class BoardView(QGraphicsView):
         self._space_held = False
         #: Every wheel pans, and Ctrl+wheel zooms (View > Mouse Wheel). The window sets it.
         self.wheel_scrolls = False
+        #: The board was fitted and nobody has zoomed or panned since, so a resize -- a panel
+        #: dragged wider, the window maximised, the docks laid out again -- fits it again
+        #: (``resizeEvent``). A navigation of the person's own ends it (``_navigated``).
+        self._fitted = False
+        for scrollbar in (self.horizontalScrollBar(), self.verticalScrollBar()):
+            # actionTriggered is somebody on the scrollbar; a resize moves it by setValue.
+            scrollbar.actionTriggered.connect(lambda _action: self._navigated())
         # Children of the VIEWPORT, not of the view: the viewport is what the scrollbars
         # leave behind, so an overlay parented to it stays inside the board area and does
         # not drift under a scrollbar when one appears.
@@ -6632,6 +6640,7 @@ class BoardView(QGraphicsView):
         """Zoom or pan, by the rule the sheet uses too (``canvasinput.wheel_intent``)."""
         intent = wheel_intent(event, self.wheel_scrolls)
         if intent.zoom_steps:
+            self._navigated()
             factor = self._clamped_factor(1.15**intent.zoom_steps)
             if factor != 1.0:
                 self.scale(factor, factor)
@@ -6659,6 +6668,7 @@ class BoardView(QGraphicsView):
             isinstance(event, QNativeGestureEvent)
             and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture
         ):
+            self._navigated()
             factor = self._clamped_factor(1.0 + event.value())
             if factor != 1.0:
                 self.scale(factor, factor)
@@ -6669,6 +6679,7 @@ class BoardView(QGraphicsView):
 
     def _pan_by(self, dx: float, dy: float) -> None:
         """Move the board by this many pixels: right and down are positive."""
+        self._navigated()
         h = self.horizontalScrollBar()
         v = self.verticalScrollBar()
         h.setValue(h.value() - round(dx))
@@ -6677,6 +6688,7 @@ class BoardView(QGraphicsView):
 
     def zoom_by(self, factor: float) -> None:
         """Zoom about the viewport centre, for a toolbar button or a keyboard shortcut."""
+        self._navigated()
         factor = self._clamped_factor(factor)
         if factor == 1.0:
             return
@@ -6711,6 +6723,28 @@ class BoardView(QGraphicsView):
             self.scale(scale, scale)
             self.centerOn(rect.center())
         self._clamp_scale()
+        self._fitted = True
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Fit the board again if it was fitted and nobody has moved it since.
+
+        A fit was good for the size it was made at: a panel dragged wider, the window
+        maximised, or the docks laid out again after the first showing left the board where
+        it was, smaller than the room or slid under the tool rail. The bars are at the new
+        edges already -- their filter on this view saw the resize before this handler did
+        (``FloatingBar.eventFilter``) -- so the fit leaves them their room."""
+        super().resizeEvent(event)
+        if self._fitted:
+            self.fit_board()
+
+    def _navigated(self) -> None:
+        """The person zoomed or panned: a resize leaves the board where they put it."""
+        self._fitted = False
+
+    def look_at(self, point: QPointF) -> None:
+        """Centre on one point -- a part somebody asked to go to."""
+        self._navigated()
+        self.centerOn(point)
 
     def _overlay_room(self, viewport: QRect) -> tuple[int, int]:
         """(across, down): the room the visible bars take from the viewport's sides --
@@ -6863,6 +6897,7 @@ class BoardView(QGraphicsView):
         a violation is to get a close look at the two pads it names."""
         if not holes:
             return
+        self._navigated()
         self.fitInView(self._holes_rect(holes, board, side, 6.0), Qt.AspectRatioMode.KeepAspectRatio)
         self._clamp_scale()
 
@@ -6878,8 +6913,10 @@ class BoardView(QGraphicsView):
         rect = self._holes_rect(holes, board, side, 4.0)
         viewport = self.mapToScene(self.viewport().rect()).boundingRect()
         if rect.width() > viewport.width() or rect.height() > viewport.height():
+            self._navigated()
             self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
             self._clamp_scale()
             return
         if not viewport.contains(rect):
+            self._navigated()
             self.centerOn(rect.center())

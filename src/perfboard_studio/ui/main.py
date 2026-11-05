@@ -11070,9 +11070,7 @@ class MainWindow(QMainWindow):
         if component is None:
             return
         self.scene.select_components([component_id])
-        self.view.centerOn(
-            hole_to_screen(component.anchor, self.bus.document.board, self.side)
-        )
+        self.view.look_at(hole_to_screen(component.anchor, self.bus.document.board, self.side))
         self.statusBar().showMessage(
             t("{ref} at {hole}").format(
                 ref=component.ref, hole=format_hole(component.anchor, self.bus.document.board)
