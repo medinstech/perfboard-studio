@@ -210,7 +210,8 @@ every other EDA tool works and is the order this one could not do until now.
 
 **The sheet is laid out for you until you take it over.** Until anything on it is moved it
 is drawn from the netlist, so there is nothing to keep in step; move a symbol, turn one or
-draw a wire, and from then on the sheet is yours. A wire goes from pin to pin, or onto a
+draw a wire, and from then on the sheet is yours — until **Arrange** hands it back to the
+layout, every connection kept, in one undo step. A wire goes from pin to pin, or onto a
 wire already drawn — a **T**, with a dot where it lands — and a net too busy to draw is
 joined by name with a label at the pin. Ground and power become rail symbols instead of wires, which is the difference
 between a sheet you can read and eleven lines crossing everything. Polarity comes from the

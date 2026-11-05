@@ -211,9 +211,10 @@ ettiğinizi* söyler — ve onu söylediğiniz yer de burasıdır: **Parça Ekle
 
 **Sayfa, siz devralana kadar sizin için yerleşir.** Üzerinde hiçbir şey taşınmadıkça
 netlist'ten çizilir, yani senkron tutulacak bir şey yoktur; bir sembolü taşıyın, döndürün ya
-da bir tel çekin, o andan itibaren sayfa sizindir. Tel pinden pine ya da çizilmiş bir telin
-üstüne gider — bir **T**, düştüğü yerde bir noktayla — çizilemeyecek kadar kalabalık bir net
-de pindeki bir etiketle adına göre bağlanır. Toprak ve besleme hat sembolüne dönüşür, tel olarak çizilmez: okunabilir bir sayfa
+da bir tel çekin, o andan itibaren sayfa sizindir — **Düzenle** onu yerleşime geri verene
+kadar; her bağlantı yerinde kalır ve tek adımda geri alınır. Tel pinden pine ya da çizilmiş
+bir telin üstüne gider — bir **T**, düştüğü yerde bir noktayla — çizilemeyecek kadar kalabalık bir net
+de pindeki bir etiketle adına göre bağlanır. Toprak ve besleme ray simgesine dönüşür, tel olarak çizilmez: okunabilir bir sayfa
 ile her şeyin üzerinden geçen on bir çizgi arasındaki fark budur. Polarite parça
 kütüphanesinin kendi pin ADLARINDAN okunur; böylece bir LED'in katodu da bir diyotun katodu
 da bantlı uca gelir — bunlar karşıt pinlerdir ve pin 1'e bakarak tahmin eden bir kural
@@ -230,7 +231,7 @@ yazar: gömmek ya da düzenlemek için SVG, basıp kartın yanında tutmak için
 neden çalışmadığını sorduğunuz mesaja yapıştırmak için PNG. Üçü de aynı SVG'den üretilir,
 dolayısıyla devre konusunda birbirleriyle çelişemezler — ve dışa aktarılan sayfa panelin
 koyu zemini yerine beyaz üzerine siyahtır: hangi hattın kaynak hangisinin toprak olduğunu
-zaten hat sembolleri söylüyor, fotokopi ise rengi değil biçimi taşıyor.
+zaten ray simgeleri söylüyor, fotokopi ise rengi değil biçimi taşıyor.
 
 ## Rehberin bir sırası var, ve onu izleyebilirsiniz
 
