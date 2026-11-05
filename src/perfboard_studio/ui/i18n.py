@@ -1390,6 +1390,9 @@ TURKISH: Mapping[str, str] = {
     # gets (`box-4x2-p1-r3-15x10x8`) is engine text and stays untranslated, like a hole
     # address or a DRC rule name, because it is what goes into the file.
     "Custom Part": "Özel Parça",
+    "No part matches “{query}”. Try a shorter word, or describe the part with Custom Part…": (
+        "“{query}” ile eşleşen bir parça yok. Daha kısa bir kelime deneyin ya da parçayı Özel Parça… ile tanımlayın."
+    ),
     "Custom Part…": "Özel Parça…",
     "Describe a part the library does not have. It is stored as an identifier "
     "that carries its own dimensions, so it travels with the board.": (

@@ -5529,6 +5529,14 @@ class MainWindow(QMainWindow):
         # what the package picker's search already did: Enter in the search did nothing.
         self.library_filter.returnPressed.connect(self._on_library_return)
         layout.addWidget(self.library_filter)
+        # What a search that found nothing has to say, under the box it was typed in: the
+        # tree went blank and said nothing, and nobody new knew that Custom Part… is the
+        # answer to "my part is not here" (``_refresh_library``).
+        self.library_note = QLabel()
+        self.library_note.setWordWrap(True)
+        theme.tone(self.library_note, "secondary")
+        self.library_note.hide()
+        layout.addWidget(self.library_note)
 
         self.library_tree = PartTree()
         self.library_tree.setHeaderLabels([t("Part"), t("Pins")])
@@ -5649,6 +5657,17 @@ class MainWindow(QMainWindow):
         tree.blockSignals(True)
         populate_part_tree(tree, self.library_filter.text(), self.custom_footprints())
         tree.blockSignals(False)
+        typed = self.library_filter.text().strip()
+        found_nothing = bool(typed) and tree.topLevelItemCount() == 0
+        self.library_note.setText(
+            t(
+                "No part matches “{query}”. Try a shorter word, or describe the part with "
+                "Custom Part…"
+            ).format(query=typed)
+            if found_nothing
+            else ""
+        )
+        self.library_note.setVisible(found_nothing)
 
     def _on_placement_value_changed(self, text: str) -> None:
         self.scene.placement_value = text.strip()

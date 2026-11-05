@@ -17097,3 +17097,25 @@ def test_a_real_start_fills_properties_once_the_window_is_up() -> None:
         assert window.properties.content is window.inspector, "asked first, filled then"
     finally:
         _close(window)
+
+
+def test_a_library_search_that_finds_nothing_says_so_and_names_custom_part() -> None:
+    """The tree went blank and said nothing. A search that finds nothing says so under the
+    box, and names Custom Part… -- the answer to "my part is not here" nobody new knew."""
+    window = _window_on(_blank_document())
+    try:
+        note = window.library_note
+        assert note.isHidden()
+        window.library_filter.setText("zzqx-no-such-part")
+        assert window.library_tree.topLevelItemCount() == 0
+        assert not note.isHidden()
+        assert note.text() == (
+            "No part matches “zzqx-no-such-part”. Try a shorter word, or describe the part "
+            "with Custom Part…"
+        )
+        window.library_filter.setText("resistor")
+        assert window.library_tree.topLevelItemCount() > 0 and note.isHidden()
+        window.library_filter.clear()
+        assert note.isHidden()
+    finally:
+        _close(window)
