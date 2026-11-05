@@ -1588,6 +1588,57 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("BME280", "humidity sensor", "pressure sensor", "nem sensörü",
                          "basınç sensörü")),
+    # Adafruit's Bosch breakouts, read off Adafruit's own Eagle boards: the same seven pins
+    # in the same order on all three, the names as the silkscreen prints them.
+    CatalogPart("adafruit-bme280", "Adafruit BME280 (original)", "sensor",
+                "mod-7x1-p1-r1-17.78x19.05x1.6-s8.5-o0x-6.99",
+                "Temperature, humidity and pressure on I2C or SPI, 3 to 5 V",
+                _legs("VIN", "3Vo", "GND", "SCK", "SDO", "SDI", "CS"),
+                value="Adafruit BME280", ref_prefix="U",
+                source=(
+                    "Adafruit BME280 Eagle board (github adafruit/Adafruit-BME280-Breakout-PCB): "
+                    "the 17.78 x 19.05 mm board, the header and the nets on it; Bosch BME280 "
+                    "datasheet (0x76 or 0x77 by SDO)"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V and 3Vo gives out the board's 3.3 V. For I2C, SCK is SCL "
+                    "and SDI is SDA, with CS left alone: the address is 0x77, or 0x76 with SDO to "
+                    "GND. For SPI, SDO is the data out. " + _MODULE_TOP
+                ),
+                aliases=("BME280", "humidity sensor", "pressure sensor", "barometer", "weather")),
+    CatalogPart("adafruit-bmp280", "Adafruit BMP280 (original)", "sensor",
+                "mod-7x1-p1-r1-17.78x19.05x1.6-s8.5-o0x-6.99",
+                "Temperature and pressure on I2C or SPI, 3 to 5 V",
+                _legs("VIN", "3Vo", "GND", "SCK", "SDO", "SDI", "CS"),
+                value="Adafruit BMP280", ref_prefix="U",
+                source=(
+                    "Adafruit BMP280 Eagle board (github adafruit/Adafruit-BMP280-Breakout-PCB): "
+                    "the same board as the BME280's, the header and the nets on it; Bosch BMP280 "
+                    "datasheet (0x76 or 0x77 by SDO)"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V and 3Vo gives out the board's 3.3 V. For I2C, SCK is SCL "
+                    "and SDI is SDA, with CS left alone: the address is 0x77, or 0x76 with SDO to "
+                    "GND. For SPI, SDO is the data out. " + _MODULE_TOP
+                ),
+                aliases=("BMP280", "pressure sensor", "barometer")),
+    CatalogPart("adafruit-bmp280-stemma-qt", "Adafruit BMP280 (STEMMA QT)", "sensor",
+                "mod-7x1-p1-r1-25.4x17.78x2.9-s8.5-o0x-6.35",
+                "Temperature and pressure on I2C or SPI, 3 to 5 V",
+                _legs("VIN", "3Vo", "GND", "SCK", "SDO", "SDI", "CS"),
+                value="Adafruit BMP280 STEMMA QT", ref_prefix="U",
+                source=(
+                    "Adafruit BMP280 STEMMA QT Eagle board (github "
+                    "adafruit/Adafruit-BMP280-Breakout-PCB): the 25.4 x 17.78 mm board, the header "
+                    "and the nets on it; Bosch BMP280 datasheet"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V and 3Vo gives out the board's 3.3 V. For I2C, SCK is SCL "
+                    "and SDI is SDA, with CS left alone: the address is 0x77, or 0x76 with SDO to "
+                    "GND. For SPI, SDO is the data out. The two STEMMA QT sockets carry the same "
+                    "I2C. " + _MODULE_TOP
+                ),
+                aliases=("BMP280", "pressure sensor", "barometer", "STEMMA QT", "Qwiic")),
     # -- sound ------------------------------------------------------------------------
     CatalogPart("buzzer-active-12mm", "Active buzzer 12 mm", "sound",
                 "box-2x1-p3-r1-12x12x9.5",

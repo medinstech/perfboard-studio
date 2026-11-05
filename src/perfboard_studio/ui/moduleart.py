@@ -114,6 +114,9 @@ ArtKind = Literal[
     "sot223",
     "sot23",
     "sot23-5",
+    # A SOT-363: a dual transistor, three legs out of each long side -- a level shifter's
+    # pair of BSS138s.
+    "sot363",
     "trimpot",
     # A single-turn SMD trimmer: a square plastic base and the round metal rotor on it, slot
     # and all -- not the blue multi-turn block a buck module has.
@@ -193,6 +196,8 @@ PIN_ONE_KINDS: frozenset[str] = frozenset({"soic8", "qfn", "tqfp32", *GULL_WING_
 SOT23_LEGS: dict[str, tuple[tuple[float, ...], tuple[float, ...]]] = {
     "sot23": ((-0.33, 0.33), (0.0,)),
     "sot23-5": ((-0.33, 0.0, 0.33), (-0.33, 0.33)),
+    # A SOT-363 (SC-88): three legs a side, 0.65 mm apart along its 2.0 mm body.
+    "sot363": ((-0.33, 0.0, 0.33), (-0.33, 0.0, 0.33)),
 }
 
 #: How much darker a tantalum's band is than its body, as ``QColor.darker`` takes it (190:
@@ -954,6 +959,101 @@ ADAFRUIT_INA219_QT_MODULE = ModuleArt(
     ),
 )
 
+#: Adafruit's BME280 (product 2652) and BMP280 (2651) breakouts as first made: one board for
+#: both, 17.78 x 19.05 mm, read off Adafruit's own Eagle boards (github
+#: adafruit/Adafruit-BME280-Breakout-PCB and Adafruit-BMP280-Breakout-PCB, CC BY-SA) and seen
+#: from above with the seven-pin header along the top, VIN at the right (``pin_one``): the
+#: sensor's lidded package in the middle, the MIC5225 regulator (its three legs towards the
+#: header), the two BSS138s of the level shifter, the 0805 parts, the 1N4148 with its band
+#: as the board's C pad has it, and the two M2 holes on the far edge, gold-plated as
+#: Adafruit's photograph of the BME280 shows them. Sizes are the packages': Bosch's 2.5 x 2.5
+#: mm BME280 and 2.0 x 2.5 mm BMP280 on the one footprint.
+_ADAFRUIT_BOSCH_PARTS = (
+    ArtPart("sot23-5", 6.48, -0.51, 2.8, 2.9, 1.1, along_v=True, facing=1),
+    ArtPart("chip-c", 6.48, 2.54, 2.0, 1.25, 1.25),
+    ArtPart("chip-c", 6.60, -3.68, 2.0, 1.25, 1.25),
+    ArtPart("sot23", 0.76, -3.18, 2.4, 2.9, 1.1, along_v=True, facing=-1),
+    ArtPart("sot23", -5.21, -2.79, 2.4, 2.9, 1.1, along_v=True, facing=-1),
+    ArtPart("chip-r", -5.21, 0.0, 2.0, 1.25, 0.5),
+    ArtPart("chip-r", 0.76, -0.51, 2.0, 1.25, 0.5),
+    ArtPart("chip-r", 3.68, 1.52, 2.0, 1.25, 0.5, along_v=True),
+    ArtPart("chip-r", 3.68, -2.92, 2.0, 1.25, 0.5, along_v=True),
+    ArtPart("chip-r", -2.03, -2.92, 2.0, 1.25, 0.5, along_v=True),
+    ArtPart("sma", -4.83, 1.90, 2.5, 1.25, 1.0, facing=-1),
+    ArtPart("hole", 6.35, 6.99, 3.0, 3.0, 0.0, inset=0.4, colour=ART_COLOURS["brass"]),
+    ArtPart("hole", -6.35, 6.99, 3.0, 3.0, 0.0, inset=0.4, colour=ART_COLOURS["brass"]),
+)
+_ADAFRUIT_BOSCH_SOURCE = (
+    "Adafruit BME280 and BMP280 Eagle boards, github adafruit/Adafruit-BME280-Breakout-PCB "
+    "and Adafruit-BMP280-Breakout-PCB, CC BY-SA (the board, the header, every top-side part's "
+    "place, package and turn); Adafruit's photograph of the BME280 (the colours); Bosch "
+    "BME280 and BMP280 datasheets (the sensor)"
+)
+ADAFRUIT_BME280_MODULE = ModuleArt(
+    key="adafruit-bme280",
+    board_colour=ADAFRUIT_BLUE,
+    names=("bme280",),
+    excludes=("gy", "stemma", "qt"),
+    board=(17.78, 19.05),
+    pins=7,
+    frame="header",
+    pin_one=1,
+    parts=(ArtPart("crystal", 0.0, 2.92, 2.5, 2.5, 0.93), *_ADAFRUIT_BOSCH_PARTS),
+    source=_ADAFRUIT_BOSCH_SOURCE,
+)
+ADAFRUIT_BMP280_MODULE = ModuleArt(
+    key="adafruit-bmp280",
+    board_colour=ADAFRUIT_BLUE,
+    names=("bmp280",),
+    excludes=("gy", "stemma", "qt"),
+    board=(17.78, 19.05),
+    pins=7,
+    frame="header",
+    pin_one=1,
+    parts=(ArtPart("crystal", 0.0, 2.92, 2.5, 2.0, 0.95), *_ADAFRUIT_BOSCH_PARTS),
+    source=_ADAFRUIT_BOSCH_SOURCE,
+)
+
+#: The BMP280's STEMMA QT board (25.4 x 17.78 mm), read off its Eagle board in the same repo
+#: and seen the same way: the sensor in the middle, the AP2112K regulator, the dual BSS138 in
+#: its SOT-363, a resistor array for the pull-ups, a STEMMA QT socket on each side and the
+#: green power LED. The LED stands 0.15 mm further from its socket than the board has it:
+#: the two packages' outlines overlap by that much on Adafruit's board.
+ADAFRUIT_BMP280_QT_MODULE = ModuleArt(
+    key="adafruit-bmp280-stemma-qt",
+    board_colour=ADAFRUIT_BLACK,
+    names=("bmp280 stemma", "bmp280 qt"),
+    board=(25.4, 17.78),
+    pins=7,
+    frame="header",
+    pin_one=1,
+    parts=(
+        ArtPart("crystal", 0.0, 0.0, 2.5, 2.0, 0.95, along_v=True),
+        ArtPart("sot23-5", 4.83, 0.0, 2.8, 2.9, 1.1, along_v=True, facing=1),
+        ArtPart("chip-c", 4.95, -3.18, 2.0, 1.25, 1.25),
+        ArtPart("chip-c", 4.57, 3.30, 2.0, 1.25, 1.25),
+        ArtPart("chip-c", 2.54, 0.03, 1.6, 0.8, 0.8, along_v=True),
+        # A 4 x 0603 resistor array: its terminals down its two long sides.
+        ArtPart("chip-r", -4.45, 2.54, 1.6, 3.2, 0.5, along_v=True),
+        ArtPart("sot363", -4.19, -1.40, 2.1, 2.0, 1.0),
+        ArtPart("jst-sh", -10.10, 0.0, 4.25, 6.0, 2.9, facing=-1),
+        ArtPart("jst-sh", 10.10, 0.0, 4.25, 6.0, 2.9, facing=1),
+        ArtPart("led", 9.14, 3.83, 1.6, 0.8, 0.6, along_v=True, colour="#3fae49"),
+        ArtPart("chip-r", 7.11, 3.56, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-r", -0.05, -3.10, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", 1.27, 2.41, 1.6, 0.8, 0.5),
+        ArtPart("sma", 0.0, 4.06, 2.5, 1.25, 1.0, facing=-1),
+        ArtPart("hole", -10.16, 6.35, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+        ArtPart("hole", 10.16, 6.35, 3.2, 3.2, 0.0, inset=0.35, colour=ART_COLOURS["brass"]),
+    ),
+    source=(
+        "Adafruit BMP280 STEMMA QT Eagle board, github adafruit/Adafruit-BMP280-Breakout-PCB, "
+        "CC BY-SA (the board, the header, every top-side part's place, package and turn); "
+        "Adafruit's photograph of it (the colours); Bosch BMP280 datasheet (the sensor); KiCad's "
+        "JST SM04B-SRSS-TB model (the sockets)"
+    ),
+)
+
 #: The NodeMCU board's black, as the NodeMCU team's photograph of it shows. An estimate, as
 #: every colour here is.
 NODEMCU_BLACK = "#232428"
@@ -1299,6 +1399,9 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     SPARKFUN_LOGIC_LEVEL_MODULE,
     ADAFRUIT_INA219_QT_MODULE,
     ADAFRUIT_INA219_MODULE,
+    ADAFRUIT_BMP280_QT_MODULE,
+    ADAFRUIT_BME280_MODULE,
+    ADAFRUIT_BMP280_MODULE,
     POLOLU_DRV8833_MODULE,
     GY521_MODULE,
     SSD1306_MODULE,

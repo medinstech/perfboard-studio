@@ -109,6 +109,10 @@ positions, packages and turns, never its artwork -- and nothing of the file is s
   Creative Commons Attribution/Share-Alike, designed by Limor Fried/Ladyada:
   <https://github.com/adafruit/Adafruit-INA219-Current-Sensor-PCB>
   (`Adafruit_INA219_CurPowerMonitor.brd`, `Adafruit INA219 STEMMA QT.brd`)
+- **Adafruit BME280 and BMP280 breakouts** -- Adafruit Industries, Eagle boards and
+  photographs, Creative Commons Attribution/Share-Alike, designed by Limor Fried/Ladyada:
+  <https://github.com/adafruit/Adafruit-BME280-Breakout-PCB>,
+  <https://github.com/adafruit/Adafruit-BMP280-Breakout-PCB>
 - **NodeMCU DevKit 1.0** -- the NodeMCU team, Gerbers, PCB print, schematic and
   photograph, MIT: <https://github.com/nodemcu/nodemcu-devkit-v1.0>
 - **SparkFun Motor Driver - Dual TB6612FNG v1.1c** -- SparkFun Electronics, Eagle board

@@ -3102,6 +3102,37 @@ TURKISH: Mapping[str, str] = {
         "karttır. Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve "
         "kart çerçevesi ölçülmüştür."
     ),
+    "Temperature, humidity and pressure on I2C or SPI, 3 to 5 V": (
+        "I2C ya da SPI üzerinden sıcaklık, nem ve basınç, 3-5 V"
+    ),
+    "Temperature and pressure on I2C or SPI, 3 to 5 V": (
+        "I2C ya da SPI üzerinden sıcaklık ve basınç, 3-5 V"
+    ),
+    "VIN takes 3 to 5 V and 3Vo gives out the board's 3.3 V. For I2C, SCK is SCL and "
+    "SDI is SDA, with CS left alone: the address is 0x77, or 0x76 with SDO to GND. For "
+    "SPI, SDO is the data out. The height of what is on the board is an estimate, and "
+    "so is its colour; the pins, the rows and the board outline are measured.": (
+        "VIN 3-5 V alır, 3Vo kartın 3,3 V'unu verir. I2C için SCK SCL, SDI SDA'dır; CS'ye "
+        "dokunmayın: adres 0x77'dir, SDO GND'ye bağlıysa 0x76. SPI için SDO veri çıkışıdır. "
+        "Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart "
+        "çerçevesi ölçülmüştür."
+    ),
+    "VIN takes 3 to 5 V and 3Vo gives out the board's 3.3 V. For I2C, SCK is SCL and "
+    "SDI is SDA, with CS left alone: the address is 0x77, or 0x76 with SDO to GND. For "
+    "SPI, SDO is the data out. The two STEMMA QT sockets carry the same I2C. The height "
+    "of what is on the board is an estimate, and so is its colour; the pins, the rows "
+    "and the board outline are measured.": (
+        "VIN 3-5 V alır, 3Vo kartın 3,3 V'unu verir. I2C için SCK SCL, SDI SDA'dır; CS'ye "
+        "dokunmayın: adres 0x77'dir, SDO GND'ye bağlıysa 0x76. SPI için SDO veri çıkışıdır. "
+        "İki STEMMA QT soketi de aynı I2C hattını taşır. Kartın üzerindekilerin yüksekliği "
+        "ve rengi tahmindir; pinler, sıralar ve kart çerçevesi ölçülmüştür."
+    ),
+    "Adafruit BME280 (original)": (
+        "Adafruit BME280 (orijinal)"
+    ),
+    "Adafruit BMP280 (original)": (
+        "Adafruit BMP280 (orijinal)"
+    ),
     "RP2040 board, 40 pins, rows 17.78 mm apart": "RP2040 kartı, 40 pin, sıralar arası 17,78 mm",
     "ESP8266 board, 16 pins, rows 22.86 mm apart": (
         "ESP8266 kartı, 16 pin, sıralar arası 22,86 mm"

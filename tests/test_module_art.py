@@ -788,6 +788,9 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,
         "adafruit-ina219-stemma-qt": ADAFRUIT_BLACK,
+        "adafruit-bme280": ADAFRUIT_BLUE,
+        "adafruit-bmp280": ADAFRUIT_BLUE,
+        "adafruit-bmp280-stemma-qt": ADAFRUIT_BLACK,
         "nodemcu-devkit-1.0": NODEMCU_BLACK,
         "pololu-drv8833": PICO_MODULE.board_colour,
         "gy-521": None,  # the photograph's blue is the module style's, within the lighting

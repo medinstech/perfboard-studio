@@ -215,6 +215,11 @@ closed without a bump.
   the tantalum, the CP2102, the micro-USB socket and the RST and FLASH buttons where the
   NodeMCU team's own Gerbers put them. Its check says which pins set how it boots, that
   the SD pins are the module's flash, and that LoLin's wider "V3" is another board.
+- **Adafruit's BME280 and BMP280 breakouts, drawn as themselves.** The original board the
+  two share and the BMP280's STEMMA QT board go in on their seven-pin header, VIN 3Vo GND
+  SCK SDO SDI CS, with the sensor, the regulator and the level shifter where Adafruit's
+  board files put them. Their check says how the pins serve I2C and SPI and which address
+  SDO picks.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
