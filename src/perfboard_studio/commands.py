@@ -80,6 +80,7 @@ from .model import (
     BoardNote,
     BoardSide,
     Cable,
+    CableEnd,
     ComponentId,
     ComponentInstance,
     Conductor,
@@ -122,6 +123,7 @@ from .system import (
     FIRST_BOARD,
     board_document,
     board_ids,
+    board_of,
     board_title,
     cable_problem,
     circuit_parts,
@@ -3843,7 +3845,16 @@ class DeleteBoardPayload:
 
 #: The commands about the SYSTEM rather than one board, which are not done on a board.
 SYSTEM_COMMANDS = frozenset(
-    {"board.on", "board.add", "board.rename", "board.delete", "cable.add", "cable.update", "cable.delete"}
+    {
+        "board.on",
+        "board.add",
+        "board.rename",
+        "board.delete",
+        "cable.add",
+        "cable.update",
+        "cable.delete",
+        "component.moveToBoard",
+    }
 )
 
 #: The commands about the DESIGN -- the parts not yet on a board, the nets, the sheet, the
@@ -4070,6 +4081,93 @@ class _DeleteBoard:
 
 
 @dataclass(frozen=True, slots=True)
+class MoveToBoardPayload:
+    """A placed part to another board of the system, its first pin at ``anchor`` there.
+
+    ``conductor_ids`` is the copper on its old board that ran to it
+    (``occupancy.conductors_touching``), taken off with it so nothing is left ending in an
+    empty hole -- named by the caller, as ``component.deleteMany`` takes the copper chosen
+    with the parts, because which copper runs to a pin is the footprint's to say and a
+    command has no footprint lookup. Its own lead bends go with it whatever is named.
+    """
+
+    id: ComponentId
+    board: BoardId
+    anchor: HoleCoord
+    conductor_ids: tuple[ConductorId, ...] = ()
+
+
+class _MoveToBoard:
+    type = "component.moveToBoard"
+
+    def apply(self, doc: PerfDocument, p: MoveToBoardPayload, ctx: CommandContext) -> PerfDocument:
+        _require_board(doc, p.board)
+        source = board_of(doc, p.id)
+        if source is None:
+            raise CommandError("unknown-component", f"No part with id {p.id!r} is on a board.")
+        if source == p.board:
+            raise CommandError(
+                "same-board", "The part is on that board already: move it there instead."
+            )
+        old = board_document(doc, source)
+        part = next(c for c in old.components if c.id == p.id)
+        if part.locked:
+            raise CommandError("component-locked", f"{part.ref} is locked.")
+        on_old = {c.id for c in old.conductors}
+        missing = [cid for cid in p.conductor_ids if cid not in on_old]
+        if missing:
+            raise CommandError(
+                "unknown-conductor",
+                f"{', '.join(missing)} {'is' if len(missing) == 1 else 'are'} not on "
+                f"{board_title(doc, source)}.",
+            )
+        taken = set(p.conductor_ids)
+        left = dataclasses.replace(
+            old,
+            components=tuple(c for c in old.components if c.id != p.id),
+            conductors=tuple(
+                c
+                for c in old.conductors
+                if c.id not in taken
+                and not (c.kind == "lead-bend" and getattr(c, "component_id", None) == p.id)
+            ),
+        )
+        moved = merge_board(doc, source, left)
+        new = board_document(moved, p.board)
+        assert_hole_on_board(p.anchor, new.board, f"Pin 1 of {part.ref} at")
+        arrived = dataclasses.replace(
+            new, components=(*new.components, dataclasses.replace(part, anchor=p.anchor))
+        )
+        placed = merge_board(moved, p.board, arrived)
+        # A cable fitted to the part goes with it: its end names the part's board, and the
+        # part is on another one now.
+        def follow(end: CableEnd) -> CableEnd:
+            return CableEnd(p.board, end.connector) if end == CableEnd(source, p.id) else end
+
+        return dataclasses.replace(
+            placed,
+            cables=tuple(
+                dataclasses.replace(cable, a=follow(cable.a), b=follow(cable.b))
+                for cable in placed.cables
+            ),
+        )
+
+    def describe(self, p: MoveToBoardPayload, doc: PerfDocument) -> str:
+        source = board_of(doc, p.id)
+        part = (
+            next((c for c in board_document(doc, source).components if c.id == p.id), None)
+            if source is not None
+            else None
+        )
+        ref = part.ref if part is not None else p.id
+        text = f"Move {ref} to the board {board_title(doc, p.board)}"
+        if p.conductor_ids:
+            count = len(p.conductor_ids)
+            text += f", taking off {count} conductor{'' if count == 1 else 's'} that ran to it"
+        return text
+
+
+@dataclass(frozen=True, slots=True)
 class AddCablePayload:
     """A cable between two connectors; its id is generated when left out (``cable.id`` is
     ignored then)."""
@@ -4212,6 +4310,7 @@ on_board: CommandDefinition[OnBoardPayload] = _OnBoard()
 add_board: CommandDefinition[AddBoardPayload] = _AddBoard()
 rename_board: CommandDefinition[RenameBoardPayload] = _RenameBoard()
 delete_board: CommandDefinition[DeleteBoardPayload] = _DeleteBoard()
+move_to_board: CommandDefinition[MoveToBoardPayload] = _MoveToBoard()
 add_cable: CommandDefinition[AddCablePayload] = _AddCable()
 update_cable: CommandDefinition[UpdateCablePayload] = _UpdateCable()
 delete_cable: CommandDefinition[DeleteCablePayload] = _DeleteCable()
@@ -4283,6 +4382,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     add_cable,
     update_cable,
     delete_cable,
+    move_to_board,
 )
 
 #: Every command the bus knows. A board command is registered inside ``_OnTheSystem``, so

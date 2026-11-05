@@ -192,6 +192,7 @@ from perfboard_studio.commands import (
     MirrorComponentsPayload,
     MoveComponentPayload,
     MoveSymbolsPayload,
+    MoveToBoardPayload,
     OnBoardPayload,
     PartPlacement,
     PlacePartsPayload,
@@ -292,6 +293,7 @@ from perfboard_studio.model import (
     SheetWire,
     SymbolPlacement,
 )
+from perfboard_studio.occupancy import conductors_touching
 from perfboard_studio.parsers.kicad import infer_net_class, parse_kicad_netlist
 from perfboard_studio.parsers.kicad_parts import (  # noqa: F401 - guess_footprint_id re-exported
     NetlistPlan,
@@ -7103,7 +7105,14 @@ class MainWindow(QMainWindow):
         """
         if not isinstance(hole, HoleCoord):
             return
-        if self._said_it_is_elsewhere(ref):
+        elsewhere = next(
+            (c for b, c in placed_components(self.bus.system_document)
+             if c.ref == ref and b != self.bus.board_id),
+            None,
+        )
+        if elsewhere is not None:
+            # A part on another board, dropped on this one: it moves here, one step.
+            self.move_to_board(elsewhere.id, self.bus.board_id, hole)
             return
         document = self.bus.document
         component = next((c for c in document.components if c.ref == ref), None)
@@ -8635,6 +8644,9 @@ class MainWindow(QMainWindow):
                 (c for c in self.bus.document.components if [c.id] == list(selected)), None
             )
             only_footprint = get_footprint(only.footprint_id) if only is not None else None
+            if only is not None:
+                # One part, and another board to put it on: Move to Board ▸ each of them.
+                self._add_move_to_board(menu, only.id)
             if (
                 only is not None
                 and only_footprint is not None
@@ -8878,6 +8890,8 @@ class MainWindow(QMainWindow):
             )
             mount.triggered.connect(lambda _checked=False, r=ref: self.mount_off_board(r))
 
+        if component is not None:
+            self._add_move_to_board(menu, component.id)
         menu.addSeparator()
         if component is not None:
             remove = menu.addAction(t("Take &off the Board"))
@@ -11203,6 +11217,47 @@ class MainWindow(QMainWindow):
         added = self.bus.system_document.boards[-1].id
         self._on_board_picked(added)
         self.statusBar().showMessage(did(result.description), 6000)
+
+    def move_to_board(
+        self, component_id: str, board_id: BoardId, anchor: HoleCoord | None = None
+    ) -> DispatchResult:
+        """A placed part to another board, its first pin at ``anchor`` there (where it stood
+        on its old board, when not given), with the copper that ran to it on the old board
+        taken off -- one component.moveToBoard, one undo step."""
+        system_doc = self.bus.system_document
+        source = next(b for b, c in placed_components(system_doc) if c.id == component_id)
+        old = board_document(system_doc, source)
+        part = next(c for c in old.components if c.id == component_id)
+        result = self.bus.dispatch(
+            "component.moveToBoard",
+            MoveToBoardPayload(
+                id=component_id,
+                board=board_id,
+                anchor=anchor if anchor is not None else part.anchor,
+                conductor_ids=conductors_touching(old, component_id, self.lookup),
+            ),
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return result
+        self.statusBar().showMessage(did(result.description), 6000)
+        return result
+
+    def _add_move_to_board(self, menu: QMenu, component_id: str) -> None:
+        """Move to Board ▸ each other board, on a placed part, when there is another."""
+        system_doc = self.bus.system_document
+        source = next((b for b, c in placed_components(system_doc) if c.id == component_id), None)
+        others = [b for b in board_ids(system_doc) if b != source]
+        if source is None or not others:
+            return
+        # Parented explicitly: the menu owns it, however long the caller keeps the wrapper.
+        submenu = QMenu(t("Move to &Board"), menu)
+        menu.addMenu(submenu)
+        for board_id in others:
+            action = submenu.addAction(board_title(system_doc, board_id, current_language()))
+            action.triggered.connect(
+                lambda _checked=False, c=component_id, b=board_id: self.move_to_board(c, b)
+            )
 
     def on_add_cable(self, a: CableEnd | None = None) -> None:
         """Add Cable: the dialog, with ``a`` -- a connector picked on System or a board --

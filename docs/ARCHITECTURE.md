@@ -3025,6 +3025,20 @@ command, untouched. The check refuses only what the command MADE (`_assert_one_s
 after)`): a duplicated reference is a warning at load, on one board or several, and a file that
 opened with one must not then refuse every command.
 
+**A cable's wires are paired by net, and a part moves between boards in one step.** Add Cable
+asks only for the two connectors, a reference and a length: `system.pair_by_net` gives a pin of
+each on the same net a wire, and what is not certain -- a net with no counterpart, a net on two
+pins of one connector -- is left unpaired and said, never guessed, because a guessed wire is a
+crossed cable nobody chose. It is laid as one `cable.add`. Moving a placed part to another
+board is one `component.moveToBoard`, a system command, behind dropping its symbol on the board
+in front and the part's Move to Board ▸ submenu (the boards' names standing alone there, so no
+name takes a suffix). The copper that ran to it on its old board -- its lead bends, a conductor
+ending in one of its pin holes, a solder run across one -- goes with it rather than being left
+ending in an empty hole; which copper that is takes the footprint, so the caller names it
+(`occupancy.conductors_touching`), as `component.deleteMany` takes the copper chosen with the
+parts. A cable fitted to the part follows it to its new board. Both were found missing by
+walking the whole flow as a new user would, offscreen in Turkish.
+
 **LVS of the system joins the boards' islands through the cables.** `lvs.run_system_lvs` takes
 each board's islands from `connectivity` on that board's own view -- unchanged, so a board
 still knows nothing of the others -- and unites the island holding a wire's `a` pin with the

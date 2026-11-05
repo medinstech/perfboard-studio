@@ -301,3 +301,35 @@ def _paths_may_meet(a: tuple[HoleCoord, ...], b: tuple[HoleCoord, ...]) -> bool:
         and min(a_rows) <= max(b_rows)
         and max(a_rows) >= min(b_rows)
     )
+
+
+def conductors_touching(
+    doc: PerfDocument, component_id: str, lookup: FootprintLookup
+) -> tuple[ConductorId, ...]:
+    """The copper on ``doc``'s board that runs to a part: its own lead bends, every conductor
+    with an end in one of its pin holes, and every solder run across one -- what would be
+    left ending in an empty hole, or soldered to nothing, if the part went. In document
+    order. What ``component.moveToBoard`` takes off the part's old board with it."""
+    component = next((c for c in doc.components if c.id == component_id), None)
+    if component is None:
+        return ()
+    footprint = lookup(component.footprint_id)
+    holes = (
+        {hole_key(hole) for _pin, hole in all_pin_holes(component, footprint)}
+        if footprint is not None
+        else set()
+    )
+    touching: list[ConductorId] = []
+    for conductor in doc.conductors:
+        if conductor.kind == "lead-bend" and getattr(conductor, "component_id", None) == component_id:
+            touching.append(conductor.id)
+            continue
+        path = getattr(conductor, "path", ())
+        if not path:
+            continue
+        ends = {hole_key(path[0]), hole_key(path[-1])}
+        crossed = {hole_key(h) for h in path} if contacts_every_path_hole(conductor) else set()
+        if (ends | crossed) & holes:
+            touching.append(conductor.id)
+    return tuple(touching)
+

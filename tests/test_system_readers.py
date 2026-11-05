@@ -631,3 +631,88 @@ def test_add_cable_opens_with_one_end_chosen_and_lays_what_it_shows(qapp, monkey
         window._mark_saved()
         window.close()
         window.deleteLater()
+
+
+# ---------------------------------------------------------------------------
+# A part moved to another board
+# ---------------------------------------------------------------------------
+
+
+def _with_wire_to_r1() -> PerfDocument:
+    """``_system`` with a wire on Main from R1's first pin to an empty hole."""
+    from perfboard_studio.model import WireConductor
+
+    doc = _system()
+    footprint = footprint_lookup()("r-axial-4")
+    from perfboard_studio.geometry import all_pin_holes
+
+    r1 = next(c for c in doc.components if c.ref == "R1")
+    pin_hole = next(hole for _pin, hole in all_pin_holes(r1, footprint))
+    wire = WireConductor(
+        id="cond-1", kind="insulated-wire", side="top", path=(pin_hole, HoleCoord(pin_hole.col, pin_hole.row + 3))
+    )
+    return dataclasses.replace(doc, conductors=(wire,))
+
+
+def test_a_part_moves_to_another_board_with_its_copper_as_one_step() -> None:
+    from perfboard_studio.commands import MoveToBoardPayload
+    from perfboard_studio.occupancy import conductors_touching
+
+    doc = _with_wire_to_r1()
+    bus = _bus(doc)
+    copper = conductors_touching(system.board_document(doc), "cmp-2", footprint_lookup())
+    assert copper == ("cond-1",)
+    result = bus.dispatch("component.moveToBoard", MoveToBoardPayload("cmp-2", "b2", HoleCoord(8, 8), copper))
+    assert result.ok, result.message
+    assert result.description == "Move R1 to the board Remote, taking off 1 conductor that ran to it"
+    after = bus.system_document
+    assert "R1" not in {c.ref for c in after.components} and not after.conductors
+    moved = next(c for c in system.extra_board(after, "b2").components if c.ref == "R1")
+    assert moved.anchor == HoleCoord(8, 8) and moved.id == "cmp-2"
+    bus.undo()
+    assert bus.system_document == doc
+
+
+def test_a_cabled_connector_takes_its_cable_end_with_it() -> None:
+    from perfboard_studio.commands import MoveToBoardPayload
+
+    doc = _system()
+    bus = _bus(doc)
+    result = bus.dispatch("component.moveToBoard", MoveToBoardPayload("cmp-1", "b2", HoleCoord(10, 2)))
+    assert result.ok, result.message
+    (cable,) = bus.system_document.cables
+    assert cable.a.board == "b2" and cable.a.connector == "cmp-1"
+
+
+def test_a_move_to_the_board_it_is_on_or_of_a_locked_part_is_refused() -> None:
+    from perfboard_studio.commands import MoveToBoardPayload
+
+    same = _bus(_system()).dispatch("component.moveToBoard", MoveToBoardPayload("cmp-2", system.FIRST_BOARD, HoleCoord(1, 1)))
+    assert not same.ok and same.code == "same-board"
+    doc = _system()
+    locked = dataclasses.replace(doc, components=tuple(dataclasses.replace(c, locked=c.id == "cmp-2") for c in doc.components))
+    refused = _bus(locked).dispatch("component.moveToBoard", MoveToBoardPayload("cmp-2", "b2", HoleCoord(1, 1)))
+    assert not refused.ok and refused.code == "component-locked"
+
+
+def test_dropping_another_boards_part_moves_it_here_and_the_menus_offer_it(qapp) -> None:  # type: ignore[no-untyped-def]
+    from PySide6.QtWidgets import QMenu
+
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_with_wire_to_r1())
+    try:
+        window.bus.show("b2")
+        window.on_bus_changed(window.bus.system_document, None)
+        window._on_part_dropped("R1", HoleCoord(9, 9))
+        remote = system.extra_board(window.bus.system_document, "b2")
+        assert "R1" in {c.ref for c in remote.components}, window.statusBar().currentMessage()
+        assert not window.bus.system_document.conductors, "the wire that ran to it went with it"
+        menu = QMenu()
+        window._add_move_to_board(menu, "cmp-2")
+        (submenu,) = [a.menu() for a in menu.actions() if a.menu() is not None]
+        assert [a.text() for a in submenu.actions()] == ["Main"]
+    finally:
+        window._mark_saved()
+        window.close()
+        window.deleteLater()

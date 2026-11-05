@@ -740,26 +740,26 @@ TURKISH: Mapping[str, str] = {
     # A board's own command done on one board of several (``board.on``'s undo label), and a
     # board nobody named, as the phrasebook calls it.
     "{what} on {board}": "{what} ({board})",
-    # Add Cable (draft words; reach to read).
+    # Add Cable, in reach's words.
     "Add &Cable…": "Ka&blo Ekle…",
     "A cable from a connector on one board to a connector on another. Its wires are paired "
     "by net: a pin of each on the same net takes a wire, and what is not certain is left "
     "for you and said.": (
-        "Bir karttaki konnektörden ötekindeki konnektöre bir kablo. Telleri nete göre "
-        "eşlenir: ikisinde aynı nette olan pinler birer tel alır, kesin olmayanlar size "
-        "bırakılır ve söylenir."
+        "Bir karttaki konnektörden başka bir karttaki konnektöre giden kablo. Telleri nete "
+        "göre eşlenir: iki uçta aynı nette olan pinler birer tel alır; kesin olmayan "
+        "eşleşmeler size bırakılır ve söylenir."
     ),
     "harness, wire between boards, connect boards": "kablo demeti, kartlar arası tel, kartları bağla",
-    "A cable joins two boards: add a board first.": "Kablo iki kartı birleştirir: önce bir kart ekleyin.",
+    "A cable joins two boards: add a board first.": "Kablo iki kartı bağlar: önce bir kart ekleyin.",
     "Add Cable": "Kablo Ekle",
     "From": "Nereden",
     "To": "Nereye",
     "Length": "Uzunluk",
-    "cut to fit": "ölçüye göre kesin",
+    "cut to fit": "ölçüye göre",
     "Choose a connector at each end.": "Her iki uç için bir konnektör seçin.",
     "{count} wire, paired by net:": "Nete göre eşlenen {count} tel:",
     "{count} wires, paired by net:": "Nete göre eşlenen {count} tel:",
-    "Not paired:": "Eşlenmeyen:",
+    "Not paired:": "Eşlenmeyenler:",
     "{count} pin left unpaired": "{count} pin eşlenmedi",
     "{count} pins left unpaired": "{count} pin eşlenmedi",
     "Add a board": "Kart ekle",
@@ -770,6 +770,11 @@ TURKISH: Mapping[str, str] = {
     "Add the cable {ref}": "{ref} kablosunu ekle",
     "Change the cable {ref}": "{ref} kablosunu değiştir",
     "Remove the cable {ref}": "{ref} kablosunu çıkar",
+    # Move to Board, in reach's words: the boards in a submenu, so a name stands alone.
+    "Move to &Board": "Karta &Taşı",
+    "Move {ref} to the board {board}": "{ref} parçasını başka karta taşı: {board}",
+    "taking off {count} conductor that ran to it": "ona giden {count} iletken kaldırıldı",
+    "taking off {count} conductors that ran to it": "ona giden {count} iletken kaldırıldı",
     "Board {n}": "Kart {n}",
     "In the design, not on the board yet.": "Tasarımda var, ama henüz kartta değil.",
     "{ref} is in the design, not on the board yet. Place on the Board puts it there.": (
