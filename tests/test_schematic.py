@@ -68,6 +68,7 @@ from perfboard_studio.schematic import (
     NET_LABEL_CLEARANCE_MM,
     NET_LABEL_MM,
     NO_CONNECT_MM,
+    PIN_LABEL_MM,
     PIN_PITCH_MM,
     RAIL_BAR_REACH,
     RAIL_GLYPH_DEPTH_MM,
@@ -81,14 +82,17 @@ from perfboard_studio.schematic import (
     Symbol,
     SymbolKind,
     _net_name_box,
+    _part_label_box,
     _PinSpec,
     _relay_sides,
     _split_tall_layers,
     _switch_poles,
+    _text_width,
     build_schematic,
     pin_at,
     pin_position,
     rail_glyph_bars,
+    rail_glyph_box,
     snap_to_grid,
     symbol_at,
     symbol_kind_for,
@@ -588,6 +592,50 @@ def test_nothing_is_drawn_through_a_rail_glyph(path: Path) -> None:
                 assert not through, (
                     f"{other.net_name} is drawn through the {rail.net_name} glyph "
                     f"at {rail.at.x:.2f},{rail.at.y:.2f}"
+                )
+
+
+def _text_box(label: Label) -> tuple[float, float, float, float]:
+    """Where a piece of text is on paper, as both renderers draw it."""
+    if label.kind in ("ref", "value"):
+        box = _part_label_box(label)
+        assert box is not None
+        return box
+    if label.kind in ("net", "rail"):
+        return _net_name_box(label)
+    width = _text_width(label.text, PIN_LABEL_MM)
+    left = {"left": label.at.x, "centre": label.at.x - width / 2, "right": label.at.x - width}
+    return left[label.anchor], label.at.y - PIN_LABEL_MM, left[label.anchor] + width, label.at.y
+
+
+def _box_gap(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    dx = max(0.0, max(a[0], b[0]) - min(a[2], b[2]))
+    dy = max(0.0, max(a[1], b[1]) - min(a[3], b[3]))
+    return float((dx * dx + dy * dy) ** 0.5)
+
+
+@pytest.mark.parametrize("path", ALL_BOARDS, ids=lambda path: path.stem)
+def test_no_rail_glyph_meets_another_or_a_name(path: Path) -> None:
+    """Every sheet, as the document has it and as Arrange draws it: no two glyphs within
+    half a track of each other, and no text on a glyph but a supply's own name over its
+    bar. A glyph is most of a track deep, and the densest packing hung one a quarter of a
+    millimetre under another's box -- C2's and LED1's grounds on the NE555 read as one
+    smudge of six bars -- while a name kept off the BARS could still sit in the box: "OUT"
+    on U1's ground."""
+    for drawing in (drawing_for(path), _arranged(path)):
+        glyphs = [(rail, rail_glyph_box(rail)) for rail in drawing.rails]
+        for (a, box_a), (b, box_b) in itertools.combinations(glyphs, 2):
+            assert _box_gap(box_a, box_b) >= TRACK_PITCH_MM / 2, (
+                f"{a.net_name} at {a.at.x:.2f},{a.at.y:.2f} and {b.net_name} at "
+                f"{b.at.x:.2f},{b.at.y:.2f} read as one glyph"
+            )
+        for rail, box in glyphs:
+            for label in drawing.labels:
+                if label.kind == "rail" and abs(label.at.x - rail.at.x) < 1e-6:
+                    continue  # a supply's own name, printed over its bar
+                assert _box_gap(box, _text_box(label)) > 0, (
+                    f"{label.kind} {label.text!r} prints on the {rail.net_name} glyph at "
+                    f"{rail.at.x:.2f},{rail.at.y:.2f}"
                 )
 
 

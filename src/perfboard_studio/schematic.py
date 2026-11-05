@@ -950,6 +950,21 @@ def no_connect_arms(mark: NoConnect) -> tuple[tuple[Point2, Point2], tuple[Point
     )
 
 
+def rail_glyph_box(rail: Rail) -> tuple[Mm, Mm, Mm, Mm]:
+    """The box the layout clears for a rail's glyph: ``RAIL_GLYPH_MM`` either side of the
+    stub and ``RAIL_GLYPH_DEPTH_MM`` past the anchor, the way the glyph points. The bars are
+    drawn inside it (``rail_glyph_bars``); a name placed on the sheet keeps out of all of it,
+    not just off the bars -- clear of the bars by a fraction of a millimetre, "OUT" on the
+    NE555 read as written on U1's ground."""
+    deep = RAIL_GLYPH_DEPTH_MM if rail.direction == "down" else -RAIL_GLYPH_DEPTH_MM
+    return (
+        rail.at.x - RAIL_GLYPH_MM,
+        min(rail.at.y, rail.at.y + deep),
+        rail.at.x + RAIL_GLYPH_MM,
+        max(rail.at.y, rail.at.y + deep),
+    )
+
+
 def rail_glyph_bars(rail: Rail) -> tuple[tuple[Point2, Point2], ...]:
     """The bars to draw at ``rail.at``: one for power, three shrinking ones for ground.
 
@@ -2239,6 +2254,46 @@ def _assign_tracks(intervals: Sequence[tuple[str, float, float]]) -> tuple[dict[
     return tracks, len(last_end)
 
 
+def _space_rails(
+    runs: Sequence[tuple[str, float, float]], tracks: dict[str, int], count: int
+) -> tuple[dict[str, int], int]:
+    """The tracks ``_assign_tracks`` gave a channel's runs, with an empty track put between
+    two rails of one lane -- one vertical channel, so their stubs are a track or two apart
+    -- where the glyph of either reaches towards the other's track.
+
+    A glyph is most of a track deep, so the sweep's densest packing hung one glyph a track
+    below and a track beside another, a quarter of a millimetre under its box: on the NE555
+    C2's and LED1's grounds read as one smudge of six bars, and on nano-relay "+5V" printed
+    under the +12V bar. A ground points down, so the track below it is the one kept free of
+    another glyph; a power symbol points up, its name over its bar, and keeps the one above.
+    Everything from the lower of the two down moves one track, which keeps every run's order
+    and every gap the sweep made, and costs the channel one track for each such pair.
+    """
+    tracks = dict(tracks)
+    lanes = {key: low for key, low, _high in runs if key.startswith("rail")}
+
+    def points_down(key: str) -> bool:
+        return key.split("")[1] == "1"  # ``_rail_key`` orders power "0", ground "1"
+
+    while True:
+        clash = next(
+            (
+                below
+                for upper in lanes
+                for below in lanes
+                if lanes[upper] == lanes[below]
+                and tracks[below] == tracks[upper] + 1
+                and (points_down(upper) or not points_down(below))
+            ),
+            None,
+        )
+        if clash is None:
+            return tracks, count
+        cut = tracks[clash]
+        tracks = {key: track + (track >= cut) for key, track in tracks.items()}
+        count += 1
+
+
 def _named_stub(name: str, side: PinSide) -> Mm:
     """How far a pin's stub runs when its net is said by name: under the whole name, when
     the name runs along the stub; a plain stub when the pin points up or down."""
@@ -3119,7 +3174,7 @@ def _hand_drawn_sheet(
         obstacles.extend(_segments_of(drawn_wire.path))
     for rail in rails:
         obstacles.extend(_segments_of(rail.path))
-        obstacles.extend(rail_glyph_bars(rail))
+        obstacles.extend(_box_obstacle(rail_glyph_box(rail)))
     rail_names = _rail_names(rails)
     for label in rail_names:
         obstacles.extend(_box_obstacle(_net_name_box(label)))
@@ -3498,7 +3553,7 @@ def _derived_sheet(
     horizontal_track: dict[str, int] = {}
     horizontal_tracks = [0] * (nrows + 1)
     for channel, runs in horizontal_runs.items():
-        assigned, count = _assign_tracks(runs)
+        assigned, count = _space_rails(runs, *_assign_tracks(runs))
         horizontal_track.update(assigned)
         horizontal_tracks[channel] = count
 
@@ -3712,7 +3767,7 @@ def _derived_sheet(
         obstacles.extend(_segments_of(wire.path))
     for rail in rails:
         obstacles.extend(_segments_of(rail.path))
-        obstacles.extend(rail_glyph_bars(rail))
+        obstacles.extend(_box_obstacle(rail_glyph_box(rail)))
     # Text is in the way too. A net name used to be kept off the WIRES and nothing else, so
     # three names looking for room near the same corner of an IC all found the same room
     # and were printed on top of one another ("VCC", "THRESH" and "OUT" in one smudge), and
