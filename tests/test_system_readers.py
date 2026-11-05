@@ -466,3 +466,54 @@ def test_the_window_shows_the_second_board_and_saves_the_whole_system(qapp, tmp_
     finally:
         window.close()
         window.deleteLater()
+
+
+def test_the_board_strip_shows_only_with_a_second_board_and_switches_the_panel(qapp) -> None:  # type: ignore[no-untyped-def]
+    """One board: no strip, and Add Board in the Board menu. Two: System and each board,
+    the board picked in front of the scene, System behind its own entry saying the
+    system's counts."""
+    from perfboard_studio.ui.main import MainWindow
+
+    one = MainWindow(dataclasses.replace(_system(wires=None), boards=()))
+    try:
+        assert one.board_strip.isHidden() and one.act_add_board.isEnabled()
+    finally:
+        one.close()
+        one.deleteLater()
+
+    window = MainWindow(_system())
+    try:
+        strip = window.board_strip
+        assert not strip.isHidden()
+        labels = [strip.tabs.tabText(i) for i in range(strip.tabs.count())]
+        assert labels[0] == "System" and labels[1].startswith("Main  ·  ") and labels[2].startswith("Remote  ·  ")
+        strip.tabs.setCurrentIndex(2)
+        assert window.bus.board_id == "b2"
+        assert {c.ref for c in window.scene.document.components} == {"JB", "R2"}
+        strip.tabs.setCurrentIndex(0)
+        assert window.board_stack.currentWidget() is window.system_view
+        assert window.problems_bar.where.text() == "2 boards  ·  1 cable"
+        window.system_view.board_opened.emit("main")
+        assert window.bus.board_id == "main" and window.board_stack.currentWidget() is window.view
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_adding_a_board_puts_it_in_front_named_by_its_place(qapp) -> None:  # type: ignore[no-untyped-def]
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(dataclasses.replace(_system(wires=None), boards=()))
+    try:
+        window.on_add_board()
+        added = window.bus.system_document.boards[-1]
+        assert added.name == "" and window.bus.board_id == added.id
+        assert not window.board_strip.isHidden()
+        labels = [window.board_strip.tabs.tabText(i) for i in range(window.board_strip.tabs.count())]
+        assert labels[2].startswith("Board 2  ·  "), labels
+        window.bus.undo()
+        window.on_bus_changed(window.bus.system_document, None)
+        assert window.board_strip.isHidden() and window.bus.board_id == "main"
+    finally:
+        window.close()
+        window.deleteLater()

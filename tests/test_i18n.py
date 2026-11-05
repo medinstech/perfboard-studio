@@ -388,7 +388,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                     "De&lete Net", "Drawing &Tools", "R&otate", "Fl&ip",
                     "Remo&ve from the Design", "Arran&ge the Sheet", "Fit the S&heet",
                     "Float the &Panel"],
-        "board": ["&Design the Board…", "Board &Features…", "Rena&me Board…", "&Place on the Board",
+        "board": ["&Design the Board…", "&Add Board", "Board &Features…", "Rena&me Board…", "&Place on the Board",
                   "&Rearrange Parts", "&Try Another Arrangement"],
         # Drawing a connection by hand and having it drawn, in one menu.
         "wiring": ["&Solder Trace", "&Reinforced Solder Trace", "&Bare Wire",

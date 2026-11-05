@@ -721,6 +721,22 @@ TURKISH: Mapping[str, str] = {
     "Pins sharing a hole: {before} → {after}.": "Aynı deliği paylaşan pinler: {before} → {after}.",
     "{ref} is in the design, not on the board yet.": "{ref} tasarımda var, ama henüz kartta değil.",
     "{ref} is on another board: {board}.": "{ref} başka bir kartta: {board}.",
+    # The board strip and the System view (reach's words).
+    "System": "Sistem",
+    "+ Add Board": "+ Kart Ekle",
+    "&Add Board": "Kart &Ekle",
+    "Another board in this document, for a circuit built on more than one: the circuit stays "
+    "one, and a cable joins a connector on one board to one on the other.": (
+        "Bu belgede bir kart daha, birden çok karta kurulan bir devre için: devre tek kalır, "
+        "bir kablo bir karttaki konnektörü ötekindekine bağlar."
+    ),
+    "second board, several boards, system": "ikinci kart, birden çok kart, sistem",
+    "Double-click a board to open it.": "Açmak için bir karta çift tıklayın.",
+    "The 3D View shows the board in front.": "3D Görünüm, öndeki kartı gösterir.",
+    "{count} board": "{count} kart",
+    "{count} boards": "{count} kart",
+    "{count} cable": "{count} kablo",
+    "{count} cables": "{count} kablo",
     "In the design, not on the board yet.": "Tasarımda var, ama henüz kartta değil.",
     "{ref} is in the design, not on the board yet. Place on the Board puts it there.": (
         "{ref} tasarımda var, ama henüz kartta değil. Karta Yerleştir onu karta koyar."

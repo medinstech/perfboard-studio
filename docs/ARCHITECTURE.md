@@ -3068,6 +3068,16 @@ readers were audited, and each is one of three kinds:
 | The circuit | every board through `system.py` (`circuit_parts`, `every_component`, `placed_components`, `references_in_use`) | ERC, LVS, the sheet (`schematic`), `catalog.free_reference` and `view2d.next_reference`, `assert_ref_free` and `part.add`'s id, a symbol move, the supply names a net takes, `design_on_a_new_board`; in the window the Parts list, the palette and Go to Part, the step bar's counts, a click or menu on a symbol, `_id_of` / `_ref_of_id`, what a document opens on; in MCP the status, `list_components` and a part looked up by reference |
 | The design | `doc.parts`, `doc.nets`, the sheet | the netlist, the sheet's layout, the step bar's "not on the board yet" -- a part placed on any board has left `doc.parts` |
 
+**The board in front is picked from a strip in the Board panel** (`ui.boardstrip`): "System |
+Controller · 6 x 8 cm | Supply · 3 x 7 cm" and "+ Add Board", shown only when there is a second
+board, so a single-board window does not change by a pixel; until then Add Board is in the
+Board menu and the palette. Its own row inside the panel, not beside the step bar, whose fit is
+chosen from the width it is given. Three candidates were rendered into the real window at
+1280 x 720 in both languages and the user picked this one: a fifth view tab elided to "Syst…"
+there, and a board chosen from the title was a dropdown nobody would find. System, the strip's
+first entry, is the boards drawn as the Board panel draws them and the cables between them in
+their wires' colours (`ui.systemview`); double-clicking a board opens it.
+
 **The window's bus shows the board in front** (`ui.boardbus.BoardBus`). It is the one
 `CommandBus` of the system -- one undo stack whichever board a step was on -- whose `document`
 is the board in front alone and whose `dispatch` sends a board's command through `board.on` for

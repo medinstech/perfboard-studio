@@ -165,6 +165,7 @@ from perfboard_studio.catalog import (
 from perfboard_studio.command import CommandContext, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
     AddBoardNotePayload,
+    AddBoardPayload,
     AddNetPayload,
     AddPartPayload,
     AddPartsPayload,
@@ -329,6 +330,7 @@ from perfboard_studio.striproute import describe_plan as describe_strip_plan
 from perfboard_studio.system import (
     FIRST_BOARD,
     board_document,
+    board_ids,
     board_title,
     circuit_parts,
     every_component,
@@ -347,6 +349,7 @@ from .boardcolors import SCHEMES as BOARD_SCHEMES
 from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
 from .boardpreview import render_board, with_arrangement, with_board
+from .boardstrip import SYSTEM_ENTRY, BoardStrip
 from .canvastools import FloatingBar
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
 from .designer import BoardDesigner, load_user_families, store_user_families
@@ -370,6 +373,7 @@ from .project import write_project
 from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
 from .properties import PropertiesPanel
 from .selection import NOTHING, Selection, SelectionKind
+from .systemview import SystemView
 from .tour import Spotlight, Tour
 from .tour import Stop as TourStop
 from .view2d import (
@@ -3518,7 +3522,25 @@ class MainWindow(QMainWindow):
         # Named because QMainWindow.restoreState matches docks BY objectName and silently
         # drops the ones without one.
         dock.setObjectName("dockBoard")
-        dock.setWidget(self.view)
+        # The strip of boards over a stack of the board in front and the System view. The
+        # strip shows only with a second board, so on one board the panel is the view, as
+        # it always was; the view keeps its own children (the floating tools ring on it).
+        self.board_strip = BoardStrip()
+        self.board_strip.hide()
+        self.board_strip.picked.connect(self._on_board_picked)
+        self.board_strip.add_requested.connect(self.on_add_board)
+        self.system_view = SystemView(self.lookup)
+        self.system_view.board_opened.connect(self._on_board_picked)
+        self.board_stack = QStackedWidget()
+        self.board_stack.addWidget(self.view)
+        self.board_stack.addWidget(self.system_view)
+        holder = QWidget()
+        column = QVBoxLayout(holder)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addWidget(self.board_strip)
+        column.addWidget(self.board_stack)
+        dock.setWidget(holder)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         dock.visibilityChanged.connect(self._on_view_dock_visibility)
         dock.dockLocationChanged.connect(self._on_view_dock_moved)
@@ -4560,6 +4582,16 @@ class MainWindow(QMainWindow):
               "change its size, pads, holes, printing and colour, seen as you go.")
         )
         self.act_design_board.triggered.connect(self.on_design_board)
+        act_add_board = self.act_add_board = board_menu.addAction(t("&Add Board"))
+        act_add_board.setToolTip(
+            t(
+                "Another board in this document, for a circuit built on more than one: the "
+                "circuit stays one, and a cable joins a connector on one board to one on the "
+                "other."
+            )
+        )
+        act_add_board.setProperty(PALETTE_ALSO, t("second board, several boards, system"))
+        act_add_board.triggered.connect(self.on_add_board)
         act_features = board_menu.addAction(t("Board &Features…"))
         act_features.setToolTip(
             t(
@@ -9169,6 +9201,7 @@ class MainWindow(QMainWindow):
             self._redraw_for(document, entry)
         finally:
             self._bus_changing = False
+        self._refresh_board_strip()
         if hasattr(self, "properties"):
             self.properties.refresh(self.bus.document)
             self._refresh_properties()
@@ -9418,6 +9451,12 @@ class MainWindow(QMainWindow):
         preset = _matching_preset(board)
         size = preset.name if preset is not None else f"{board.cols} × {board.rows}"
         side = t("parts side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
+        if self._system_in_front():
+            system_doc = self.bus.system_document
+            boards = counted(len(board_ids(system_doc)), t("{count} board"), t("{count} boards"))
+            cables = counted(len(system_doc.cables), t("{count} cable"), t("{count} cables"))
+            self.problems_bar.set_where(f"{boards}  ·  {cables}")
+            return
         self.problems_bar.set_where(f"{side}  ·  {size}")
 
     def on_move_committed(self, results: list[DispatchResult]) -> None:
@@ -11110,6 +11149,60 @@ class MainWindow(QMainWindow):
         board" in this window reads ``self.bus.document``, which is this board alone; what
         reads "the circuit" reads ``self.bus.system_document``, every board."""
         return self.bus.board_id
+
+    def _system_in_front(self) -> bool:
+        """Whether the Board panel shows the System view rather than a board."""
+        return hasattr(self, "board_stack") and self.board_stack.currentWidget() is self.system_view
+
+    def _on_board_picked(self, entry: str) -> None:
+        """The strip's pick, or a double-click on System: that board in front, or System."""
+        if entry == SYSTEM_ENTRY:
+            self.board_stack.setCurrentWidget(self.system_view)
+            self.system_view.set_document(self.bus.system_document, current_language())
+            self._refresh_board_strip()
+            self._refresh_status()
+            return
+        if entry != self.bus.board_id:
+            self.bus.show(entry)
+        self.board_stack.setCurrentWidget(self.view)
+        self.on_bus_changed(self.bus.system_document, None)
+        self.view.fit_board()
+
+    def on_add_board(self) -> None:
+        """Another board, the size of the one in front and named by its place until somebody
+        names it, put in front."""
+        result = self.bus.dispatch("board.add", AddBoardPayload(board=self.bus.document.board, name=""))
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        added = self.bus.system_document.boards[-1].id
+        self._on_board_picked(added)
+        self.statusBar().showMessage(did(result.description), 6000)
+
+    def _refresh_board_strip(self) -> None:
+        """The strip's entries from the document: shown only when there is a second board."""
+        if not hasattr(self, "board_strip"):
+            return
+        document = self.bus.system_document
+        ids = board_ids(document)
+        several = len(ids) > 1
+        self.board_strip.setVisible(several)
+        if not several:
+            if self._system_in_front():
+                self.board_stack.setCurrentWidget(self.view)
+            return
+        language = current_language()
+
+        def label(board_id: str) -> str:
+            board = board_document(document, board_id).board
+            preset = _matching_preset(board)
+            size = preset.name if preset is not None else f"{board.cols} × {board.rows}"
+            return f"{board_title(document, board_id, language)}  ·  {size}"
+
+        current = SYSTEM_ENTRY if self._system_in_front() else self.bus.board_id
+        self.board_strip.set_entries([(board_id, label(board_id)) for board_id in ids], current)
+        if self._system_in_front():
+            self.system_view.set_document(document, language)
 
     def _board_elsewhere(self, ref: str) -> str | None:
         """The name of the board a part is placed on, when that is not the board shown."""
