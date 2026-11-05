@@ -330,7 +330,6 @@ from perfboard_studio.stripboard import board_joins_holes, is_stripboard
 from perfboard_studio.striproute import StripboardPlan
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
 from perfboard_studio.system import (
-    FIRST_BOARD,
     board_document,
     board_ids,
     board_title,
@@ -11237,9 +11236,11 @@ class MainWindow(QMainWindow):
         return True
 
     def _on_board(self, board_id: BoardId, type_: str, payload: object) -> tuple[str, object]:
-        """A board command as the bus takes it for ``board_id``: itself on the first board,
-        inside ``board.on`` on any other."""
-        if board_id == FIRST_BOARD:
+        """A board command as the bus takes it for ``board_id`` -- a board NAMED, whichever is
+        in front: inside ``board.on`` whenever the document has another board, because the
+        window's bus sends a bare board command to the board in front. On one board, the
+        command as it is."""
+        if not self.bus.system_document.boards:
             return type_, payload
         return "board.on", OnBoardPayload(board=board_id, type=type_, payload=payload)
 

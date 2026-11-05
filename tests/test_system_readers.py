@@ -537,3 +537,23 @@ def test_what_moved_points_at_the_board_tools_with_the_board_in_front(qapp, monk
         window.close()
         window.deleteLater()
 
+
+def test_a_part_on_the_first_board_is_taken_off_with_the_second_in_front(qapp) -> None:  # type: ignore[no-untyped-def]
+    """Take off the Board on a symbol names its part's board, whichever board is in front:
+    the window's bus sends a bare board command to the board in front, so a part on the
+    first board taken off with the second in front used to be "no component" there."""
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_system())
+    try:
+        window.bus.show("b2")
+        window._remove_symbol("R1")
+        assert "R1" in {p.ref for p in window.bus.system_document.parts}, window.statusBar().currentMessage()
+        assert "R1" not in {c.ref for c in window.bus.system_document.components}
+        # A cabled connector stays: the system refuses to leave W1 to nowhere, and says so.
+        window._remove_symbol("JA")
+        assert "W1" in window.statusBar().currentMessage()
+    finally:
+        window.close()
+        window.deleteLater()
+
