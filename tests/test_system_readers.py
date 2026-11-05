@@ -74,6 +74,7 @@ def _system(*, wires: tuple[CableWire, ...] | None = (CableWire("1", "1"), Cable
     )
     return PerfDocument(
         meta=DocumentMeta(name="Main", created="", modified=""),
+        board_name="Main",
         board=DEFAULT_BOARD,
         components=(ja, r1),
         parts=(SchematicPart(id="part-1", ref="R9", value="10k", footprint_id="r-axial-4"),),
@@ -381,3 +382,61 @@ def test_every_reader_of_the_whole_circuit_goes_through_system() -> None:
     )
     stale = sorted(set(BOARD_READERS) - readers)
     assert not stale, f"BOARD_READERS names functions that no longer read both: {stale}"
+
+
+# ---------------------------------------------------------------------------
+# A board is called one thing everywhere
+# ---------------------------------------------------------------------------
+
+
+def _one_unnamed() -> PerfDocument:
+    """Main named "Controller", the second board nobody named, and W1 not fitted, so LVS
+    names both boards in its line."""
+    doc = _system(wires=None)
+    remote = dataclasses.replace(system.extra_board(doc, "b2"), name="")
+    return dataclasses.replace(doc, board_name="Controller", boards=(remote,))
+
+
+def test_an_unnamed_board_is_called_by_its_place_in_every_language() -> None:
+    doc = _one_unnamed()
+    assert system.board_title(doc, system.FIRST_BOARD) == "Controller"
+    assert system.board_title(doc, "b2") == "Board 2"
+    assert system.board_title(doc, "b2", "tr") == "Kart 2"
+    alone = dataclasses.replace(doc, board_name="", boards=())
+    assert system.board_title(alone, system.FIRST_BOARD) == "Main", "one board is the document"
+
+
+def test_the_parts_list_lvs_and_mcp_call_a_board_the_same_thing() -> None:
+    """The one name, asked of ``system.board_title`` by every reader that says one."""
+    from perfboard_studio.lvs import run_lvs
+    from perfboard_studio.mcp.session import BoardSession
+
+    doc = _one_unnamed()
+    opens = [i.message for i in run_lvs(doc, footprint_lookup()).issues if i.kind == "open"]
+    assert opens and all("across Board 2 and Controller" in m for m in opens), opens
+    session = BoardSession(document=doc)
+    assert [b["name"] for b in session.get_status()["boards"]] == ["Controller", "Board 2"]
+    assert {c["board"] for c in session.list_components()} == {"Controller", "Board 2"}
+
+
+def test_the_parts_list_says_the_same_name(qapp) -> None:  # type: ignore[no-untyped-def]
+    from perfboard_studio.ui.partlist import PartListPanel
+
+    panel = PartListPanel()
+    panel.refresh(_one_unnamed(), footprint_lookup())
+    positions = {
+        panel.tree.topLevelItem(i).text(0): panel.tree.topLevelItem(i).text(3)
+        for i in range(panel.tree.topLevelItemCount())
+    }
+    assert positions["JB"].startswith("Board 2: ") and positions["JA"].startswith("Controller: ")
+
+
+def test_a_board_name_goes_through_the_file_only_when_there_is_one() -> None:
+    doc = _one_unnamed()
+    text = persist.serialize_document(doc)
+    assert '"boardName": "Controller"' in text
+    assert persist.parse_document_or_throw(text) == doc
+    remote = text[text.index('"boards"'):]
+    assert '"name"' not in remote.split('"board"')[0], "an unnamed board writes no name"
+    one = dataclasses.replace(doc, board_name="", boards=(), cables=())
+    assert '"boardName"' not in persist.serialize_document(one)

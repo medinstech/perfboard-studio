@@ -213,6 +213,7 @@ def _mounting_hole_sort_key(m: MountingHole) -> tuple[int, int, str]:
 DOCUMENT_KEY_ORDER: tuple[str, ...] = (
     "formatVersion",
     "meta",
+    "boardName",
     "board",
     "components",
     "conductors",
@@ -732,6 +733,9 @@ def serialize_document(doc: PerfDocument) -> str:
                     "modified": doc.meta.modified,
                 },
             ),
+            # The first board's name, only when it has one: every single-board file
+            # keeps its bytes.
+            **({"boardName": doc.board_name} if doc.board_name else {}),
             **_ordered_board_fields(doc),
             "nets": [_ordered_net(n, i) for i, n in enumerate(nets)],
             # Omitted when empty, like the two arrays above and for the same reason: a
@@ -910,7 +914,11 @@ def _ordered_extra_board(extra: ExtraBoard) -> JsonValue:
     """A board after the first: its id and name, then its own entries."""
     return _build_ordered(
         EXTRA_BOARD_KEY_ORDER,
-        {"id": extra.id, "name": extra.name, **_ordered_board_fields(extra)},
+        {
+            "id": extra.id,
+            **({"name": extra.name} if extra.name else {}),
+            **_ordered_board_fields(extra),
+        },
     )
 
 
@@ -2090,6 +2098,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
     seen_ids: set[str] = set()
     seen_refs: set[str] = set()
     first = _parse_board_fields(migrated, "", warnings, seen_ids, seen_refs)
+    board_name = _expect_string(migrated.get("boardName", ""), "boardName")
 
     parts_raw = _expect_array(migrated.get("parts", []), "parts")
     parts = tuple(
@@ -2183,7 +2192,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
                 _field_path(path, "id"),
             )
         seen_boards.add(board_id)
-        name = _expect_string(_require_field(entry, "name", path), _field_path(path, "name"))
+        name = _expect_string(entry.get("name", ""), _field_path(path, "name"))
         own = _parse_board_fields(entry, path, warnings, seen_ids, seen_refs)
         boards.append(ExtraBoard(id=board_id, name=name, **own))
 
@@ -2214,6 +2223,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         sheet_notes=tuple(sheet_notes),
         boards=tuple(boards),
         cables=tuple(cables),
+        board_name=board_name,
         **first,
         format_version=CURRENT_FORMAT_VERSION,
     )

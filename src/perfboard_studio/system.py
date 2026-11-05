@@ -25,6 +25,7 @@ from .model import (
     PerfDocument,
     SchematicPart,
 )
+from .phrasebook import guide_language, phrasebook
 
 #: The first board's id: never written, because the first board is the document's own
 #: top-level fields. No extra board may take it.
@@ -52,6 +53,12 @@ BOARD_FIELDS: tuple[str, ...] = (
 #: them back from the document, so no board command can change them.
 SYSTEM_FIELDS: tuple[str, ...] = ("boards", "cables")
 
+#: The first board's own name, which every other board keeps on ``ExtraBoard.name``: not
+#: shared, and not a field a board command changes, so a view carries its board's stored
+#: name and the merge leaves every name where it was. What a board is CALLED is
+#: :func:`board_title`, asked of the whole document.
+NAME_FIELD = "board_name"
+
 
 def board_ids(doc: PerfDocument) -> tuple[BoardId, ...]:
     """Every board of the document, the first board first."""
@@ -74,7 +81,11 @@ def board_document(doc: PerfDocument, board_id: BoardId = FIRST_BOARD) -> PerfDo
         return replace(doc, boards=(), cables=())
     extra = extra_board(doc, board_id)
     return replace(
-        doc, boards=(), cables=(), **{name: getattr(extra, name) for name in BOARD_FIELDS}
+        doc,
+        boards=(),
+        cables=(),
+        board_name=extra.name,
+        **{name: getattr(extra, name) for name in BOARD_FIELDS},
     )
 
 
@@ -89,13 +100,14 @@ def merge_board(doc: PerfDocument, board_id: BoardId, seen: PerfDocument) -> Per
     if seen.boards or seen.cables:
         raise ValueError("a board's view of the system holds no other board and no cable")
     if board_id == FIRST_BOARD:
-        return replace(seen, boards=doc.boards, cables=doc.cables)
+        return replace(seen, boards=doc.boards, cables=doc.cables, board_name=doc.board_name)
     extra = extra_board(doc, board_id)
     changed = replace(extra, **{name: getattr(seen, name) for name in BOARD_FIELDS})
     return replace(
         seen,
         boards=tuple(changed if other.id == board_id else other for other in doc.boards),
         cables=doc.cables,
+        board_name=doc.board_name,
         **{name: getattr(doc, name) for name in BOARD_FIELDS},
     )
 
@@ -106,7 +118,7 @@ def shared_fields() -> tuple[str, ...]:
     return tuple(
         f.name
         for f in fields(PerfDocument)
-        if f.name not in BOARD_FIELDS and f.name not in SYSTEM_FIELDS
+        if f.name not in BOARD_FIELDS and f.name not in SYSTEM_FIELDS and f.name != NAME_FIELD
     )
 
 
@@ -147,9 +159,23 @@ def references_in_use(doc: PerfDocument) -> set[str]:
     return {part.ref for part in circuit_parts(doc)} | {cable.ref for cable in doc.cables}
 
 
-def board_name(doc: PerfDocument, board_id: BoardId) -> str:
-    """What a board is called: the document's own name for the first board."""
-    return doc.meta.name if board_id == FIRST_BOARD else extra_board(doc, board_id).name
+def board_title(doc: PerfDocument, board_id: BoardId, language: str = "en") -> str:
+    """What a board is CALLED, everywhere -- the strip, the System view, the guide, LVS,
+    the exports and the MCP server all ask this, so a board is one name in all of them.
+
+    Its own name when somebody gave it one. Otherwise, in a document of several boards,
+    its place among them, "Board 2", in ``language`` (the guide's phrasebook, so "Kart 2"
+    in Turkish); and on a document of one board, the document's own name, which is all a
+    board has ever been called there.
+    """
+    own = doc.board_name if board_id == FIRST_BOARD else extra_board(doc, board_id).name
+    if own.strip():
+        return own.strip()
+    ids = board_ids(doc)
+    if len(ids) == 1:
+        return doc.meta.name
+    say = phrasebook(guide_language(language))
+    return say("Board {n}", n=ids.index(board_id) + 1)
 
 
 def connector_of(doc: PerfDocument, end: CableEnd) -> ComponentInstance | None:

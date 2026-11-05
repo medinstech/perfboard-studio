@@ -2962,6 +2962,16 @@ from the view, the shared design from the view (a part placed on that board leav
 `doc.parts`), every other board untouched. `test_system.py` holds the round trip exact for
 every board of a document, and holds a change to one board to leave the others as they were.
 
+**A board is called one thing everywhere** (`system.board_title`). Its own name when somebody
+gave it one -- `ExtraBoard.name`, and for the first board `boardName`, written only when set
+so every single-board file keeps its bytes. Unnamed in a document of several boards, it is
+its place among them, "Board 2", in the guide's phrasebook ("Kart 2"); unnamed and alone, it
+is the document's name, which is all a board was ever called. The window's strip, the System
+view, the guide, LVS's lines, the exports and the MCP server all ask that one function, so
+the name cannot drift between them -- and `board.rename` on the first board sets its own name
+beside the document's, rather than renaming the document. Not `board_label`: a board label
+is already the text printed on a board (`board_notes`).
+
 **One id space, one set of references.** Component, conductor and part ids are unique
 across the whole document and references across every board and the design, because a net
 node is a `(ref, pin)` and has to name one pin in the system. `persist` refuses a

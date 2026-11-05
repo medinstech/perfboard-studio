@@ -184,6 +184,8 @@ def matching_template(name: str) -> str | None:
 #: -- so the suffix goes on the word beside it: "C7 deliğine". Numbers keep their point,
 #: as they do everywhere else in the window, because a board has "0.6 mm" printed on it.
 TURKISH: dict[str, str] = {
+    # system.board_label: a board nobody named, by its place among the boards.
+    "Board {n}": "Kart {n}",
     # -- joining things -----------------------------------------------------------------
     "{first} and {second}": "{first} ve {second}",
     "{items}, and {last}.": "{items} ve {last}.",

@@ -171,7 +171,7 @@ from perfboard_studio.striproute import describe_plan as describe_strip_plan
 from perfboard_studio.system import (
     board_document,
     board_ids,
-    board_name,
+    board_title,
     every_component,
     placed_components,
 )
@@ -343,7 +343,7 @@ class BoardSession:
             system["boards"] = [
                 {
                     "id": board_id,
-                    "name": board_name(self.document, board_id),
+                    "name": board_title(self.document, board_id),
                     "components": len(view.components),
                 }
                 for board_id, view in zip(board_ids(self.document), views, strict=True)
@@ -568,7 +568,7 @@ class BoardSession:
         return [
             {
                 **self._component_summary(c),
-                **({"board": board_name(self.document, b)} if several else {}),
+                **({"board": board_title(self.document, b)} if several else {}),
             }
             for b, c in placed_components(self.document)
         ]
@@ -1157,7 +1157,7 @@ class BoardSession:
             if where is None
             else f" {ref} IS on the board; unplace_component takes it off."
             if not self.document.boards
-            else f" {ref} IS on {board_name(self.document, where)}."
+            else f" {ref} IS on {board_title(self.document, where)}."
         )
         raise SessionError(f"No part called {ref!r} in the design. Waiting: {known}.{extra}")
 
@@ -2341,7 +2341,7 @@ class BoardSession:
             # The board tools act on the first board; a part on another is named where it
             # is rather than reported missing.
             raise SessionError(
-                f"{ref} is on {board_name(self.document, elsewhere)}, not on the first "
+                f"{ref} is on {board_title(self.document, elsewhere)}, not on the first "
                 f"board, which is the one this tool works on. On the first board: {known}."
             )
         raise SessionError(f"No component called {ref!r}. On this board: {known}.")

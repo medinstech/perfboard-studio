@@ -32,10 +32,10 @@ from PySide6.QtWidgets import (
 from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.geometry import format_hole
 from perfboard_studio.model import ComponentInstance, PerfDocument, SchematicPart
-from perfboard_studio.system import board_document, board_ids, board_name
+from perfboard_studio.system import board_document, board_ids, board_title
 
 from . import theme
-from .i18n import t
+from .i18n import language, t
 from .partnames import footprint_label
 
 #: Where each column is. The order a person reads a part in: what it is called, what it
@@ -136,7 +136,7 @@ class PartListPanel(QWidget):
             several = len(board_ids(document)) > 1
             for order, board_id in enumerate(board_ids(document)):
                 view = board_document(document, board_id)
-                where = board_name(document, board_id) if several else None
+                where = board_title(document, board_id, language()) if several else None
                 for component in view.components:
                     self.tree.addTopLevelItem(
                         self._placed_row(component, view, lookup, where=where, order=order)

@@ -51,7 +51,7 @@ from .model import (
     NetNode,
     PerfDocument,
 )
-from .system import board_document, board_ids, board_name, connector_of, every_component
+from .system import board_document, board_ids, board_title, connector_of, every_component
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -656,7 +656,7 @@ def run_system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> SystemLvsResul
     names: dict[str, str] = {}
     for board_id in board_ids(doc):
         seen = board_document(doc, board_id)
-        names[board_id] = board_name(doc, board_id)
+        names[board_id] = board_title(doc, board_id)
         for component in seen.components:
             board_of[component.ref] = board_id
         for pn in extract_physical_nets(seen, lookup):
@@ -749,7 +749,7 @@ def _system_lvs(doc: PerfDocument, lookup: FootprintLookup) -> LvsResult:
     for board_id in board_ids(doc):
         result = _board_lvs(board_document(doc, board_id), lookup, placed_only=True)
         physical += result.summary.physical_nets
-        prefix = f"On {board_name(doc, board_id)}: " if several else ""
+        prefix = f"On {board_title(doc, board_id)}: " if several else ""
         issues.extend(replace(issue, message=prefix + issue.message) for issue in result.issues)
 
     placed = {component.ref for component in every_component(doc)}

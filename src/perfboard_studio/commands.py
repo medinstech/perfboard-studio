@@ -122,7 +122,7 @@ from .system import (
     FIRST_BOARD,
     board_document,
     board_ids,
-    board_name,
+    board_title,
     cable_problem,
     circuit_parts,
     every_component,
@@ -372,7 +372,7 @@ def assert_ref_free(doc: PerfDocument, ref: str, *, ignoring: ComponentId | None
     # on its first board, and a reference is the system's.
     for board_id, component in placed_components(doc):
         if component.ref == ref and component.id != ignoring:
-            where = f"on {board_name(doc, board_id)}" if doc.boards else "on the board"
+            where = f"on {board_title(doc, board_id)}" if doc.boards else "on the board"
             raise CommandError("duplicate-ref", f'A component with ref "{ref}" is {where}.')
     for cable in doc.cables:
         if cable.ref == ref:
@@ -3868,7 +3868,7 @@ def _holders(doc: PerfDocument) -> tuple[dict[str, list[str]], dict[str, list[st
     refs: dict[str, list[str]] = {}
     ids: dict[str, list[str]] = {}
     for board_id, component in placed_components(doc):
-        where = f"one on {board_name(doc, board_id)}"
+        where = f"one on {board_title(doc, board_id)}"
         refs.setdefault(component.ref, []).append(where)
         ids.setdefault(component.id, []).append(where)
     for part in doc.parts:
@@ -3944,16 +3944,16 @@ class _OnBoard:
     def describe(self, p: OnBoardPayload, doc: PerfDocument) -> str:
         inner = _board_command(p.type)
         what = inner.describe(p.payload, board_document(doc, p.board))
-        return f"{what} on {board_name(doc, p.board)}"
+        return f"{what} on {board_title(doc, p.board)}"
 
 
 class _AddBoard:
     type = "board.add"
 
     def apply(self, doc: PerfDocument, p: AddBoardPayload, ctx: CommandContext) -> PerfDocument:
+        # Blank is a board nobody has named yet: it is called by its place,
+        # "Board 3" (``system.board_title``), until somebody does.
         name = p.name.strip() if isinstance(p.name, str) else ""
-        if not name:
-            raise CommandError("empty-name", "A board needs a name; it cannot be blank.")
         board_id = p.id if p.id is not None else ctx.next_id("board")
         if board_id in board_ids(doc):
             raise CommandError("duplicate-id", f"There is already a board {board_id!r}.")
@@ -3965,7 +3965,8 @@ class _AddBoard:
         )
 
     def describe(self, p: AddBoardPayload, doc: PerfDocument) -> str:
-        return f"Add the board {p.name.strip()!r}"
+        name = p.name.strip() if isinstance(p.name, str) else ""
+        return f"Add the board {name!r}" if name else "Add a board"
 
 
 class _RenameBoard:
@@ -3973,12 +3974,11 @@ class _RenameBoard:
 
     def apply(self, doc: PerfDocument, p: RenameBoardPayload, ctx: CommandContext) -> PerfDocument:
         _require_board(doc, p.board)
+        # Blank takes the name away: the board is called by its place again.
         name = p.name.strip() if isinstance(p.name, str) else ""
-        if not name:
-            raise CommandError("empty-name", "A board needs a name; it cannot be blank.")
         if p.board == FIRST_BOARD:
-            # The first board is the document's own, and so is its name.
-            return rename_document.apply(doc, RenameDocumentPayload(name=name), ctx)
+            # The first board's own name, beside the document's rather than instead of it.
+            return dataclasses.replace(doc, board_name=name)
         return dataclasses.replace(
             doc,
             boards=tuple(
@@ -3988,7 +3988,8 @@ class _RenameBoard:
         )
 
     def describe(self, p: RenameBoardPayload, doc: PerfDocument) -> str:
-        return f"Name the board {p.name.strip()!r}"
+        name = p.name.strip() if isinstance(p.name, str) else ""
+        return f"Name the board {name!r}" if name else f"Unname {board_title(doc, p.board)}"
 
 
 class _DeleteBoard:
@@ -4018,7 +4019,7 @@ class _DeleteBoard:
         )
 
     def describe(self, p: DeleteBoardPayload, doc: PerfDocument) -> str:
-        return f"Remove the board {board_name(doc, p.board)!r}"
+        return f"Remove the board {board_title(doc, p.board)!r}"
 
 
 

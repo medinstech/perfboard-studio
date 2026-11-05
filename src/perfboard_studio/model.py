@@ -1099,6 +1099,7 @@ class ExtraBoard:
     sees one."""
 
     id: BoardId
+    #: "" when nobody named it: ``system.board_label`` calls it by its position.
     name: str
     board: Board
     components: tuple[ComponentInstance, ...] = ()
@@ -1207,6 +1208,10 @@ class PerfDocument:
     body_clearance_mm: Mm | None = None
     #: Every board of the system after the first, which is the fields above. Empty on a
     #: board alone -- which is every document before 0.24 -- and then left out of the file.
+    #: The first board's own name, when somebody gave it one; "" when not. Only a
+    #: document of several boards shows it -- ``system.board_label`` says what an
+    #: unnamed one is called -- and it is omitted from the file when "".
+    board_name: str = ""
     boards: tuple[ExtraBoard, ...] = ()
     #: The cables between the system's connectors. Empty on a board alone, and then left
     #: out of the file.

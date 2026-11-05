@@ -329,7 +329,7 @@ from perfboard_studio.striproute import describe_plan as describe_strip_plan
 from perfboard_studio.system import (
     FIRST_BOARD,
     board_document,
-    board_name,
+    board_title,
     circuit_parts,
     every_component,
     placed_components,
@@ -3052,7 +3052,7 @@ class MainWindow(QMainWindow):
             on = (
                 t("Part on the board")
                 if board_id == self._shown_board
-                else board_name(document, board_id)
+                else board_title(document, board_id, current_language())
             )
             entries.append(
                 Entry(
@@ -11113,7 +11113,7 @@ class MainWindow(QMainWindow):
         found = next((b for b, c in placed_components(document) if c.ref == ref), None)
         if found is None or found == self._shown_board:
             return None
-        return board_name(document, found)
+        return board_title(document, found, current_language())
 
     def _said_it_is_elsewhere(self, ref: str) -> bool:
         """Whether a part is on another board than the one shown -- said in the status bar

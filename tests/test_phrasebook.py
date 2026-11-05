@@ -122,7 +122,7 @@ def said_from_tables() -> set[str]:
 
 def said() -> set[str]:
     literals = set().union(
-        *(_said_literals(SRC / name) for name in ("guide.py", "guide_export.py", "phrasebook.py"))
+        *(_said_literals(SRC / name) for name in ("guide.py", "guide_export.py", "phrasebook.py", "system.py"))
     )
     return literals | said_from_tables()
 

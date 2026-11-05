@@ -250,7 +250,9 @@ def test_boards_are_added_named_and_taken_out_with_their_parts_kept_in_the_desig
     assert added.name == "Spare" and added.id not in {"b2", "b3", system.FIRST_BOARD}
     assert bus.dispatch("board.rename", RenameBoardPayload(board=added.id, name="Panel")).ok
     assert system.extra_board(bus.document, added.id).name == "Panel"
-    assert not bus.dispatch("board.add", AddBoardPayload(board=doc.board, name="  ")).ok
+    unnamed = bus.dispatch("board.add", AddBoardPayload(board=doc.board, name="  "))
+    assert unnamed.ok and bus.document.boards[-1].name == "", "blank is a board nobody named yet"
+    assert system.board_title(bus.document, bus.document.boards[-1].id) == "Board 5"
 
     nets_before = bus.document.nets
     leaving = system.extra_board(bus.document, "b2")
@@ -429,6 +431,7 @@ def _two_headers(wires):  # type: ignore[no-untyped-def]
     )
     return PerfDocument(
         meta=DocumentMeta(name="Main", created="", modified=""),
+        board_name="Main",
         board=DEFAULT_BOARD,
         components=(header_a,),
         nets=nets,
