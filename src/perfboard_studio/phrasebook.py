@@ -184,8 +184,36 @@ def matching_template(name: str) -> str | None:
 #: -- so the suffix goes on the word beside it: "C7 deliğine". Numbers keep their point,
 #: as they do everywhere else in the window, because a board has "0.6 mm" printed on it.
 TURKISH: dict[str, str] = {
-    # system.board_label: a board nobody named, by its place among the boards.
+    # system.board_title: a board nobody named, by its place among the boards.
     "Board {n}": "Kart {n}",
+    # harness.py: the cables between the boards. A board's name and a connector's reference
+    # are said as they are, side by side, with no suffix on either.
+    "{board} {ref} pin {pin} ({name})": "{board} {ref} pin {pin} ({name})",
+    "{board} {ref} pin {pin}": "{board} {ref} pin {pin}",
+    "Cut {count} wire(s) for {cable}, {length} mm each with the ends stripped.": (
+        "{cable} için {count} tel kesin; soyulacak uçlarıyla birlikte her biri {length} mm olsun."
+    ),
+    "Cut {count} wire(s) for {cable}, long enough to reach between the boards as "
+    "they will sit, and a little more.": (
+        "{cable} için {count} tel kesin; kartlar duracakları yerdeyken aralarına yetecek "
+        "uzunlukta, biraz da pay bırakarak."
+    ),
+    "Strip {strip} mm at both ends of every wire and twist the strands.": (
+        "Her telin iki ucundan {strip} mm soyun ve damarlarını bükün."
+    ),
+    "Fit the {colour} wire (AWG {awg}, {net}) from {a} to {b}.": (
+        "{colour} teli (AWG {awg}, {net}) {a} ile {b} arasına takın."
+    ),
+    "{cable}: {net} end to end": "{cable}: {net} uçtan uca",
+    "With {cable} fitted and nothing powered, measure resistance between {a} and {b}.": (
+        "{cable} takılıyken ve hiçbir şeye güç verilmemişken {a} ile {b} arasındaki "
+        "direnci ölçün."
+    ),
+    "Open circuit: {first} and {second} are different nets. A beep is two strands "
+    "touching at a terminal.": (
+        "Açık devre: {first} ile {second} ayrı netler. Ses geliyorsa bir klemenste iki "
+        "damar birbirine değiyordur."
+    ),
     # -- joining things -----------------------------------------------------------------
     "{first} and {second}": "{first} ve {second}",
     "{items}, and {last}.": "{items} ve {last}.",

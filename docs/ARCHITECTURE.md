@@ -3037,6 +3037,20 @@ pins (a net split or shorted ON that board, said with the board's name), a part 
 reported once rather than once per board, and the cables' opens and shorts are added unless a
 board already said the same about the same nets -- "route Remote" is the fix to say first.
 
+**The harness is built from the system, after the boards** (`harness.build_harness`). The
+build guide is a board's, handed one board's view like every single-board module, and a cable
+is the system's -- so its part of the build is worked out in a module of its own, from the
+whole document, and comes after every board is built: a cable is fitted to connectors that
+are already soldered. Per cable: the wires cut to the cable's length and a stripped end at
+each end, or "cut to fit" when no length is given, since a guessed number in a cut list is
+worse than none; each wire the colour and gauge every other wire of its net gets
+(`guide.net_colours`, `wiregauge.cut_gauge_awg`) unless the cable says; each end named by its
+board, connector and pin; and the checks -- each wire end to end, each neighbouring pair on
+different nets kept apart -- all blocking, because they are the last thing before the system
+sees power. Every sentence is the guide's phrasebook (`test_phrasebook` reads `harness.py`
+too), and every board is called what `system.board_title` calls it, so the harness, the strip
+and LVS's lines say one name.
+
 **Every reader of the circuit reads every board; every reader of the board reads one.** The
 projection is right for a board's questions and wrong for the circuit's: on one board's view a
 part on the second board is neither placed nor in the design, a reference nothing defines.
