@@ -127,49 +127,37 @@ closed without a bump.
   says "Older package" until it is chosen again. The 1:1 print draws the same outlines,
   flat.
 
-- **Two hall sensors.** The A3144 switch, whose output pulls low near a magnet, and the
-  SS49E linear sensor, whose output follows the field. Both are in the Library by name, with
-  "hall" and "magnet" finding them.
-- **The panel potentiometer every kit has.** A 16 mm pot goes on the board as the three
-  pads its wires land in, named CCW, W and CW, and the schematic draws it as a pot. Its check
-  says which tag is which from the shaft, and which wires to swap if it turns the wrong way.
-- **Eight modules that plug in on a cable, by name.** The KY-023 joystick, the KY-040 rotary
-  encoder, the LCD1602 with its I2C backpack, the DS3231 clock (ZS-042), the MAX7219 8 x 8
-  matrix, the TM1637 four-digit display, a WS2812B strip and a micro SD card module. Each one
-  goes on the board as the header its cable plugs into, with the pins named as the module
-  names them, and its value is what it is sold as (KY-040, TM1637) so it reads the same in
-  either language. The build guide says the module is not on the board and lists its leads
-  pin by pin, in place of the numbered holes and the + lead's polarity line, and so does it
-  now for the 4x4 keypad and the hobby servo.
-- **The TCRT5000 reflective IR sensor**, the bare part, drawn from KiCad's model with its blue
-  LED over A and K and its black phototransistor over C and E, as Vishay lays them out. Its
-  legs are 5.5 mm apart and are bent to the 0.1 in grid; its check says so, and that its
-  snap-in clips are for 2.5 mm holes.
-- **Seven more modules on a cable.** The HC-05 (ZS-040) and HC-06 Bluetooth modules, a MAX485
-  RS-485 module, the GY-BMP280, GY-BME280 and GY-BME280-3.3 sensor boards by the names
-  printed on them, and the 1-channel 5 V relay module. Each check says what the module needs:
-  a divider into the Bluetooth module's 3.3 V RXD, which sensor board has no regulator, and,
-  for the relay, that what it switches stays on its own screw terminals, because mains needs
-  proper insulation and spacing and is not a perfboard job.
-- **JST XH and Molex KK 254 connectors.** The wire-to-board headers a perfboard takes: JST XH
-  from 2 to 4 pins, top and side entry, and Molex KK 254 (KF2510) from 2 to 16, drawn from
-  KiCad's models with pin 1 marked in both views. An XH is 2.50 mm a pin, and four is as many
-  as go into a 1.0 mm-drilled 0.1 in board before a post meets the side of its hole. Search
-  "JST PH", "ZH", "SH" or "VH" and the Library says why those are not here and what to use.
-- **The HC-SR501 PIR motion sensor, drawn as itself.** It goes on the board on its three pins,
-  VCC, OUT and GND. Its Fresnel lens is drawn with its square foot and its dome, with an M2
-  hole at each end of its board. Each is measured: the board, the holes and the lens's width
-  on TruSens' sheet, and the lens's height on a photograph of one.
-- **The SparkFun Arduino Pro Mini 328, drawn as itself.** Its two rows of twelve go into female
-  strips 0.6 inch apart, named as its silkscreen has them, and on its red board stand the
-  ATmega328P on its corner, the resonator, the regulator, the reset button and its two LEDs
-  where SparkFun's own board file puts them. Its check says A4 to A7 are on pads inside the
-  rows, off the grid, to be wired on their own, and that a clone shares the 24 header pins
-  but may put those pads and the FTDI ones elsewhere.
-- **SparkFun's bidirectional Logic Level Converter, drawn as itself.** Its two rows of six,
-  HV1 to HV4 and LV1 to LV4 with each side's supply and GND, go in 0.4 inch apart, and its
-  four BSS138s and eight 10k resistors stand where SparkFun's board file puts them. Its
-  check says which supply goes where and that the 10k pull-ups set how fast an edge rises.
+- **More of the parts a kit is built from, by name.** The A3144 hall switch and the SS49E
+  linear hall sensor ("hall" and "magnet" find them); the TCRT5000 reflective IR sensor, its
+  blue LED over A and K and its black phototransistor over C and E as Vishay lays them out,
+  its legs bent from 5.5 mm to the 0.1 in grid; the HC-SR501 PIR sensor drawn as itself, its
+  board, holes and lens measured; the SparkFun Arduino Pro Mini 328 on two female strips 0.6
+  inch apart, named as its silkscreen has them, with the ATmega328P on its corner, the
+  resonator, the regulator, the reset button and its LEDs where SparkFun's board file puts
+  them; SparkFun's bidirectional Logic Level Converter, HV1 to HV4 and LV1 to LV4 with each
+  side's supply and GND in two rows of six 0.4 inch apart, its four BSS138s and eight 10k
+  resistors where SparkFun's board file puts them; and the wire-to-board headers a perfboard
+  takes, JST XH from 2 to 4 pins (top and side entry) and Molex KK 254 from 2 to 16, pin 1
+  marked in both views. Each check says what the part needs: the TCRT5000's clips are for
+  2.5 mm holes, four XH pins are as many as go into a 1.0 mm-drilled board, the Pro Mini's
+  A4 to A7 are pads inside its rows, off the grid, to be wired on their own, and the level
+  converter's says which supply goes to which side and that its 10k pull-ups set how fast an
+  edge rises. Search "JST PH", "ZH", "SH" or "VH" and the Library says why those do not go
+  into a 0.1 in board's holes, with what does under it.
+- **Parts that live off the board are wired to it, by name.** The panel potentiometer every
+  kit has goes on the board as the three pads its wires land in, named CCW, W and CW; its
+  check says which tag is which from the shaft, and which wires to swap if it turns the
+  wrong way. Fifteen modules that plug in on a cable go on as the header the cable plugs
+  into, the pins named as the module names them and the value what it is sold as: the KY-023
+  joystick, the KY-040 encoder, the LCD1602 with its I2C backpack, the DS3231 clock
+  (ZS-042), the MAX7219 8 x 8 matrix, the TM1637 display, a WS2812B strip, a micro SD
+  module, the HC-05 (ZS-040) and HC-06 Bluetooth modules, a MAX485 RS-485 module, the
+  GY-BMP280, GY-BME280 and GY-BME280-3.3 by the names printed on them, and the 1-channel 5 V
+  relay module. Properties says it plugs in on its cable, and the build guide says it is not
+  on the board and gives its leads pin by pin, once -- as it does now for the 4x4 keypad and
+  the hobby servo. Each check says what the module needs: a divider into the Bluetooth
+  module's 3.3 V RXD, which sensor board has no regulator, and for the relay, that what it
+  switches stays on its own screw terminals, because mains is not a perfboard job.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
@@ -241,6 +229,8 @@ closed without a bump.
   typed, then a word match, then a summary that only mentions it -- in English and in
   Turkish. A package group named like a catalog group says it is the package ("LED
   packages"), and says on hover what a package is; the board's own parts are "This board".
+  A search that finds nothing says so, and names Custom Part… for a part the library does
+  not have.
 
 - **The window says what its tools do.** Autoroute is Auto-wire, Auto-place is Rearrange,
   Spine is a reinforced solder trace, Ratsnest is Missing Connections, the ERC / DRC / LVS
@@ -271,28 +261,25 @@ closed without a bump.
 
 ### Fixed
 
-- **A part's name never prints over a label written on the board.** Zoomed out, J2's name on
-  the Nano relay board landed on the "LOAD" written above it and read "LOJ2D". A name that
-  would print on a label goes under its part instead, and only where both places are taken
-  is it left to Properties.
+- **Nothing on the board or the sheet reads as something it is not.** Zoomed out, J2's name
+  on the Nano relay board landed on the "LOAD" written above it and read "LOJ2D"; a name
+  that would print on a label now goes under its part, or is left to Properties. A 5 mm LED
+  read as an "8": its leads under the dome were full rings, and a check left for the bench
+  drew two red rings over it. The leads are small marks now, the + lead the bright one, and
+  a bench check's rings are dim and under the parts until the finding is picked in the
+  Problems drawer. And Arrange the Sheet drew a supply's bar a tenth of a grid from the wire
+  beside it, where it read as joined; every bar keeps about a millimetre clear, and a
+  supply's name that would print across a wire moves beside its bar.
 
-- **A 5 mm LED no longer reads as an "8".** Under its dome its two leads were full rings,
-  the die between them; they are small marks now, the + lead the bright one. And a check
-  left for the bench drew two red rings over it: those rings are dim and under the parts
-  now, and come up in red while the finding is picked in the Problems drawer.
-- **Arrange the Sheet drew a supply's bar touching the wire beside it.** A ground or power
-  bar reached a tenth of a grid from the next wire on every sheet with a rail, and read as
-  joined to it; every bar now keeps about a millimetre clear. Zoomed out, a supply's name
-  that would print across a wire moves beside its bar instead, so +12V and +5V can still be
-  told apart.
-- **The GY-521 was drawn as its own mirror image.** Its board stood below the header with
-  VCC on the left, so a module laid over the outline put each pin in its mirror's hole, VCC
-  in INT's. It now stands above the header, the same pins in the same holes. A module
-  drawing is turned to fit its board and never mirrored.
-- **A module's chips showed pin 1 on the wrong side**, and on the other side again in 3D, so
-  the two views disagreed. Each chip's corner is now read off the photograph, board or
-  drawing its module was measured on, both views put the dot there, and it turns with the
-  module; where the source does not show the dot, none is drawn.
+- **Modules are drawn the way round they are, as boards.** The GY-521 was its own mirror
+  image -- its board below the header with VCC on the left, so a module laid over the
+  outline put each pin in its mirror's hole -- and a drawing is now turned to fit its board,
+  never mirrored. A module's chips showed pin 1 on one side in 2D and the other in 3D; each
+  corner is read off the photograph, board or drawing the module was measured on, and where
+  the source shows no dot none is drawn. 3D drew a module's pads on their edges, a white
+  mushroom on every pin of a Nano or an SMD adapter, and its print in strokes that lost
+  Turkish letters ("ALT YÜZ" lost its Ü); the pads lie flat and the print is the 2D view's
+  lettering. And a module's board has square corners, as a board cut from a panel does.
 - **Parts are the size of the real packages.** The library's bodies were often smaller than
   the parts they stand for -- a 1/4 W resistor 5 mm long where a 0207 is 6.5, a 5 mm LED 5
   mm across where its flange is 6.15, a TO-92 4.5 × 3.7 where it is 5.21 × 4.19 -- so DRC
@@ -304,11 +291,6 @@ closed without a bump.
   overlap or an edge warning now: the parts always touched.
 - **The 5-hole axial resistor was a different resistor in 3D**: KiCad's 9 mm DIN0309 for a
   0207 body, 2.7 mm longer than the body DRC measured. It is the 0207 now.
-- **3D drew a module's pads on their edges** -- a white mushroom on every pin of a Nano or
-  an SMD adapter -- and its print in thin strokes that lost Turkish letters ("ALT YÜZ" lost
-  its Ü). The pads lie flat and the print is the 2D view's lettering.
-- **A module's board had rounded corners**, as a moulded case does; a board cut from a panel
-  has square ones.
 - **Place on the Board on a breadboard** placed nothing itself and could come back without
   nano-relay's relay. Every chip now straddles the groove, no clip holds two nets, and every
   example goes onto an 830 breadboard whole and wires clean.
