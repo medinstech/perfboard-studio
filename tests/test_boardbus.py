@@ -14,6 +14,7 @@ import dataclasses
 import pytest
 
 from perfboard_studio import system
+from perfboard_studio.boardbus import BoardBus
 from perfboard_studio.command import CommandContext
 from perfboard_studio.commands import (
     DEFAULT_BOARD,
@@ -30,7 +31,6 @@ from perfboard_studio.model import (
     HoleCoord,
     PerfDocument,
 )
-from perfboard_studio.ui.boardbus import BoardBus
 
 
 def _doc(*, second: bool = True) -> PerfDocument:

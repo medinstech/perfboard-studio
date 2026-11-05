@@ -133,6 +133,7 @@ from perfboard_studio.autoroute import (
 from perfboard_studio.autoroute import (
     describe as describe_plan,
 )
+from perfboard_studio.boardbus import BoardBus
 from perfboard_studio.boardfamily import (
     STANDARD_PRESETS,
     BoardDesign,
@@ -345,7 +346,6 @@ from . import helpcards, icons, planner_pool, theme, updater, whatsnew
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .benchguide import BenchItem, BenchView, bench_items, crop_around
-from .boardbus import BoardBus
 from .boardcolors import SCHEMES as BOARD_SCHEMES
 from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
@@ -11155,7 +11155,7 @@ class MainWindow(QMainWindow):
 
     @property
     def _shown_board(self) -> BoardId:
-        """The board the views show: the bus's (``ui.boardbus.BoardBus``). What reads "the
+        """The board the views show: the bus's (``boardbus.BoardBus``). What reads "the
         board" in this window reads ``self.bus.document``, which is this board alone; what
         reads "the circuit" reads ``self.bus.system_document``, every board."""
         return self.bus.board_id

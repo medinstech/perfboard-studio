@@ -1,6 +1,6 @@
 """The command bus as the board in front sees it.
 
-The window shows one board of a system at a time, and everything in it that is about THE
+The window -- and the MCP server, through ``select_board`` -- shows one board of a system at a time, and everything in it that is about THE
 board -- the 2D scene, the 3D view, the guide, DRC, placing and routing -- was written for a
 document of one board and is right to be (docs/ARCHITECTURE.md, "Several boards are one
 document, and each is seen alone"). So the window's bus is a :class:`BoardBus`: one
@@ -19,10 +19,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from perfboard_studio.command import CommandBus, CommandContext, CommandRegistry, DispatchResult
-from perfboard_studio.commands import OnBoardPayload, command_scope
-from perfboard_studio.model import BoardId, PerfDocument
-from perfboard_studio.system import FIRST_BOARD, board_document, board_ids
+from .command import CommandBus, CommandContext, CommandRegistry, DispatchResult
+from .commands import OnBoardPayload, command_scope
+from .model import BoardId, PerfDocument
+from .system import FIRST_BOARD, board_document, board_ids
 
 
 class BoardBus(CommandBus):

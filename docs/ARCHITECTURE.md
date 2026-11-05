@@ -3082,7 +3082,7 @@ there, and a board chosen from the title was a dropdown nobody would find. Syste
 first entry, is the boards drawn as the Board panel draws them and the cables between them in
 their wires' colours (`ui.systemview`); double-clicking a board opens it.
 
-**The window's bus shows the board in front** (`ui.boardbus.BoardBus`). It is the one
+**The window's bus shows the board in front** (`boardbus.BoardBus`). It is the one
 `CommandBus` of the system -- one undo stack whichever board a step was on -- whose `document`
 is the board in front alone and whose `dispatch` sends a board's command through `board.on` for
 it, and a design's or the system's to the document. So the scene, the 3D view, the guide,
