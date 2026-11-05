@@ -3071,3 +3071,40 @@ taking it back into the design needs no view of its board and goes through `boar
 and finds the pattern that produced the bug by reading the sources: a function reading a
 document's `components` and `parts` together is a reader of the circuit, unless
 `BOARD_READERS` names it with the reason it reads one board.
+
+## A start is paid for in breadth, and it is measured A/B
+
+How long the window takes to appear is measured on the FROZEN build (PyInstaller in the clean
+3.12 venv, as `release.yml` builds it), launch to the main window's handle, two builds
+alternated run by run, fifteen each, wall time and the process's own CPU time at that moment.
+Alternated because the machine is never quiet: in a team session there are a hundred other
+Python processes, and a number measured on its own says as much about them as about the build.
+Read the differences, not the absolute figures -- 0.22.0 measured 580 ms on a quiet machine
+and 812 ms on a loaded one, in the same week.
+
+Measured this way, 0.23 (at the lazy Inspector, 01de1b8) appears about 180 ms after 0.22.0
+did, of a regression of about 290 that the lazy Inspector had already cut by 110. Profiled
+from source in the same venv -- the phases of a start, `-X importtime` and a cProfile of
+`MainWindow()`, against 0.22.0 -- the difference is BREADTH, not one culprit:
+
+| Where | 0.23 over 0.22 | What |
+| --- | --- | --- |
+| Importing `ui.main` | +83 ms | nineteen modules 0.22 did not have (`helpcards` 12, `designer` 7, `inspector` 6, `boardfamily` 5, `header` 4, `emptystate` 3, a dozen at 1-2), and `theme`'s own import +8 |
+| `MainWindow()`, on the path to the window | about +140 ms | the Library's tree +35 (more catalogue rows), the canvas tools +24, the Build Guide dock +21, the Schematic dock +14, the menu +13, and the comma-is-a-point filter: a Python call on every one of 11 312 events while the window is built, and on every event after |
+| `MainWindow()`, deferred | about +65 ms | Inspector and Properties, built after the window appears since 01de1b8 (`defer_properties`) |
+| `offer_home()`, a blank start | +44 ms | the Home dialog 28, reading every example for its one-line summary 17 |
+
+Two things in the profile are not costs to chase. The first text laid out pays about 230 ms
+for the font database in both versions; 0.23 only moved it from the board's empty hint to the
+central hint. And one footprint took 20 ms under the profiler where all of them build in under
+a millisecond alone -- a stall, which is why a single profile is never the evidence for a fix.
+
+What was weighed for 0.23.0 and left for 0.24, as one startup pass agreed with the window's
+owner: the comma filter on the number fields rather than the application, with a test that
+every `QDoubleSpinBox` the window can make -- the Inspector's lazily built editors included --
+still takes a comma, because a per-widget install that misses one turns 2,28 into 228 without
+a word; `designer` and `helpcards` imported when first used; Home's examples read after it
+shows; and the Build Guide, Schematic and canvas tools built when first shown. Together they
+were estimated at 40-60 ms, and the lazy docks at most of the rest: not a difference a user
+notices on its own, and not a risk worth taking the week of a release.
+
