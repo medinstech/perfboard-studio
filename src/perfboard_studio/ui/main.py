@@ -351,7 +351,7 @@ from perfboard_studio.version import describe as describe_version
 from . import helpcards, icons, planner_pool, theme, updater, whatsnew
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
-from .benchguide import BenchItem, BenchView, bench_items, crop_around
+from .benchguide import BenchItem, BenchView, bench_items, bench_phases, crop_around
 from .boardcolors import SCHEMES as BOARD_SCHEMES
 from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
@@ -8014,10 +8014,21 @@ class MainWindow(QMainWindow):
         # Every step accounted for, or the panel and the slider are counting different
         # things and one of them is wrong.
         assert index == len(steps), f"{index} steps in phases, {len(steps)} in the flat list"
+        items = bench_items(guide, list(steps), self._cable_ends_here())
         self.bench.set_items(
-            bench_items(guide, list(steps)), list(guide.phases), done,
+            items, bench_phases(guide, items), done,
             len(guide.cut_list), len(guide.track_cuts),
         )
+
+    def _cable_ends_here(self) -> dict[str, str]:
+        """Each cable's connector on the board in front, by cable id: where the bench
+        pictures that cable's step."""
+        here = self.bus.board_id
+        return {
+            cable.id: cable.a.connector if cable.a.board == here else cable.b.connector
+            for cable in self.bus.system_document.cables
+            if here in (cable.a.board, cable.b.board)
+        }
 
     def _track_cut_rows(self, guide: Guide, done: set[str]) -> QTreeWidgetItem:
         """The tracks to cut on stripboard, one tickable row each, first in Preparation.
@@ -8189,6 +8200,14 @@ class MainWindow(QMainWindow):
         if not 0 <= index < len(self.bench.items):
             return
         item = self.bench.items[index]
+        if item.built:
+            # A cable, fitted to the finished board: its connector here, and 3D at the end.
+            if item.component_id is not None:
+                self.scene.select_components([item.component_id])
+                self.view.reveal_holes(list(item.holes), self.bus.document.board, self.side)
+            if self.assembly_slider is not None and self.assembly_slider.isEnabled():
+                self.assembly_slider.setValue(self.assembly_slider.maximum())
+            return
         self._show_build_step(item.step_index, item.holes, item.key)
 
     def _bench_picture(self, item: BenchItem, size: QSize) -> QPixmap:
@@ -8197,7 +8216,10 @@ class MainWindow(QMainWindow):
         step is done on."""
         document = self.bus.document
         guide = self.current_guide()
-        at = document_at_step(document, guide, -1 if item.step_index is None else item.step_index)
+        if item.built:
+            at = document
+        else:
+            at = document_at_step(document, guide, -1 if item.step_index is None else item.step_index)
         side: BoardSide = "bottom" if item.solder_side else "top"
         scene = BoardScene(at, self.lookup, side=side, show_ratsnest=False)
         if item.component_id is not None:

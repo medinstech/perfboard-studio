@@ -1700,7 +1700,9 @@ def _close(window) -> None:
     which is a reasonable thing for it to do and the reason the tests say explicitly
     that they are discarding, rather than the suite quietly never exercising it.
     """
-    window._saved_document = window.bus.document
+    # The whole system, which is what the window asks about: with several boards the bus's
+    # ``document`` is only the board in front, and a window closed on it waited forever.
+    window._saved_document = window.bus.system_document
     window.close()
 
 
@@ -17435,3 +17437,112 @@ def test_a_fitted_board_stays_fitted_until_somebody_zooms_or_pans() -> None:
             assert not view._fitted
     finally:
         _close(window)
+
+
+def _cabled_system():
+    """Main's JA and Remote's JB, SIG on pin 1 and GND on pin 2 of both, joined by W1:
+    ``tests/test_harness.py``'s system."""
+    from perfboard_studio import system
+    from perfboard_studio.commands import DEFAULT_BOARD
+    from perfboard_studio.model import (
+        Cable,
+        CableEnd,
+        CableWire,
+        ComponentInstance,
+        DocumentMeta,
+        ExtraBoard,
+        HoleCoord,
+        Net,
+        NetNode,
+        PerfDocument,
+    )
+
+    ja = ComponentInstance(id="cmp-1", ref="JA", value="", footprint_id="hdr-1x2", anchor=HoleCoord(2, 2))
+    jb = ComponentInstance(id="cmp-2", ref="JB", value="", footprint_id="hdr-1x2", anchor=HoleCoord(2, 2))
+    return PerfDocument(
+        meta=DocumentMeta(name="Bench", created="", modified=""),
+        board_name="Main",
+        board=DEFAULT_BOARD,
+        components=(ja,),
+        nets=(
+            Net(id="n1", name="SIG", nodes=(NetNode("JA", "1"), NetNode("JB", "1"))),
+            Net(id="n2", name="GND", nodes=(NetNode("JA", "2"), NetNode("JB", "2")), net_class="ground"),
+        ),
+        boards=(ExtraBoard(id="b2", name="Remote", board=DEFAULT_BOARD, components=(jb,)),),
+        cables=(
+            Cable(
+                id="cable-1",
+                ref="W1",
+                a=CableEnd(system.FIRST_BOARD, "cmp-1"),
+                b=CableEnd("b2", "cmp-2"),
+                wires=(CableWire("1", "1"), CableWire("2", "2")),
+                length_mm=150,
+            ),
+        ),
+    )
+
+
+def test_each_cable_is_a_bench_step_after_closing_up() -> None:
+    """A cable is fitted once every board is built and checked before power: on the bench
+    it is one more step, under "9. Harness", pictured on the finished board at this
+    board's connector, its wires by colour end to end -- and its checks keyed under 9, not
+    8, which is Closing up's."""
+    from perfboard_studio.ui.benchguide import HARNESS_PHASE, HarnessPhase, check_key
+
+    window = _window_on(_cabled_system())
+    try:
+        bench = _bench(window)
+        cable = bench.items[-1]
+        assert cable.key == "cable:cable-1" and cable.built
+        assert cable.title == "W1 — Main JA → Remote JB"
+        assert isinstance(cable.phase, HarnessPhase)
+        assert (cable.phase.number, cable.phase.title) == (HARNESS_PHASE, "Harness")
+        assert bench._phases[-1] is cable.phase
+        assert cable.component_id == "cmp-1" and len(cable.holes) == 2
+        ends = [value for _what, value in cable.facts]
+        assert "Main JA pin 1 → Remote JB pin 1" in ends
+        assert "Main JA pin 2 → Remote JB pin 2" in ends
+        assert cable.notes and cable.phase.checkpoints
+        keys = {check_key(cable.phase, check) for check in cable.phase.checkpoints}
+        assert all(key.startswith("check:9:") for key in keys)
+        closing = {check_key(p, c) for p in bench._phases[:-1] for c in p.checkpoints}
+        assert not keys & closing
+
+        bench.show_item(len(bench.items) - 1)
+        assert bench.title.text() == cable.title
+        assert not bench.picture.pixmap().isNull()
+        assert window.scene.selected_component_ids() == ("cmp-1",)
+        bench.next.click()  # the last step: the ending lists the harness's checks under 9
+        headings = [
+            bench.ending_checks.itemAt(i).widget().text()
+            for i in range(bench.ending_checks.count())
+            if bench.ending_checks.itemAt(i).widget() is not None
+        ]
+        assert "9. Harness" in headings
+    finally:
+        _close(window)
+
+
+def test_the_harness_step_is_said_in_the_guides_language() -> None:
+    from perfboard_studio.ui.i18n import language, set_language
+
+    before = language()
+    set_language("tr")
+    try:
+        window = _window_on(_cabled_system())
+        try:
+            from perfboard_studio.phrasebook import phrasebook
+
+            cable = _bench(window).items[-1]
+            assert cable.phase.title == "Kablo demeti"
+            say = phrasebook("tr")
+            (wires,) = [c.wires for c in window.current_guide().harness]
+            colours = {say(wire.colour) for wire in wires}
+            assert colours and colours <= {what for what, _value in cable.facts}
+            assert ("Kesilecek tel", "150 mm · AWG 24") in cable.facts or any(
+                what == "Kesilecek tel" for what, _value in cable.facts
+            )
+        finally:
+            _close(window)
+    finally:
+        set_language(before)

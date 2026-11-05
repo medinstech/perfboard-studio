@@ -26,6 +26,14 @@ own phase's checks, and the last phase, "Closing up", has no step and every shor
 VCC against GND among them -- so a builder walking the bench never saw the one measurement
 to make before power goes on.
 
+THE HARNESS IS THE LAST PHASE. A system's cables (``harness.py``) are fitted once every
+board is built -- to connectors already soldered -- and checked end to end before anything
+is powered, so each cable is one more step after Closing up, under a phase of its own:
+"9. Harness". Nine, because the guide's phases stop at eight and a check's tick is kept
+under its phase's number (``check_key``): a harness check numbered 8 would have shared
+Closing up's store. A cable's step is pictured on the finished board, at this board's end
+of it, and its wires are listed by colour, end to end.
+
 PRESENTATION ONLY. Every word of a step, its order and its checks are the guide's (the
 engine's, in the guide's language); the window adds the frame. The ticks are the window's
 one store of them (``MainWindow._done_steps``), so ticking here and in the overview cannot
@@ -34,7 +42,7 @@ disagree.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
@@ -66,8 +74,10 @@ from perfboard_studio.guide import (
     PartStep,
     step_focus,
 )
+from perfboard_studio.guide_export import harness_end
+from perfboard_studio.harness import HarnessCable, HarnessWire
 from perfboard_studio.model import Board, HoleCoord
-from perfboard_studio.phrasebook import phrasebook
+from perfboard_studio.phrasebook import Phrasebook, phrasebook
 
 from . import theme
 from .i18n import t
@@ -78,13 +88,32 @@ TITLE_PX = 26
 POLARITY_PX = 17
 
 
+#: The harness's phase number on the bench: after the guide's last, Closing up (8).
+HARNESS_PHASE = 9
+
+
+@dataclass(frozen=True, slots=True)
+class HarnessPhase:
+    """The system's cables, as one more phase on the bench (see the module's note): what a
+    phase is to the bench -- a number, a title, its checks -- and no more."""
+
+    number: int
+    title: str
+    checkpoints: tuple[Checkpoint, ...]
+
+
+type BenchPhase = GuidePhase | HarnessPhase
+
+
 @dataclass(frozen=True, slots=True)
 class BenchItem:
-    """One thing done at the bench: a step of the guide, or a stripboard's track cut."""
+    """One thing done at the bench: a step of the guide, a stripboard's track cut, or a
+    cable of the harness."""
 
-    #: What the tick is kept under: the step's ``step_focus``, or ``cut:col,row``.
+    #: What the tick is kept under: the step's ``step_focus``, ``cut:col,row`` or
+    #: ``cable:<id>``.
     key: str
-    phase: GuidePhase
+    phase: BenchPhase
     title: str
     #: The step's index in the guide's flat list -- what the 3D slider and
     #: ``document_at_step`` count in -- or None for a cut, which comes before any part.
@@ -98,16 +127,24 @@ class BenchItem:
     notes: tuple[str, ...]
     #: The component to select in the picture, if the step is a part.
     component_id: str | None = None
+    #: Done on the finished board -- a cable, fitted once every part is soldered: pictured
+    #: as the board stands at the end, not at a step of its build.
+    built: bool = False
 
 
-def check_key(phase: GuidePhase, check: Checkpoint) -> str:
+def check_key(phase: BenchPhase, check: Checkpoint) -> str:
     """What a check's tick is kept under, beside the steps' in the same store."""
     return f"check:{phase.number}:{check.title}"
 
 
-def bench_items(guide: Guide, steps: list[GuideStep]) -> list[BenchItem]:
+def bench_items(
+    guide: Guide, steps: list[GuideStep], ends_here: Mapping[str, str] | None = None
+) -> list[BenchItem]:
     """Everything done at the bench, in the guide's order: a stripboard's track cuts first,
-    then every step of every phase."""
+    then every step of every phase, then each cable of the harness.
+
+    ``ends_here`` is each cable's connector on this board, by cable id: where a cable's
+    step is pictured. A cable with no end on this board is pictured as the whole board."""
     say = phrasebook(guide.language)
     board = guide.board
     items: list[BenchItem] = []
@@ -130,7 +167,65 @@ def bench_items(guide: Guide, steps: list[GuideStep]) -> list[BenchItem]:
                 )
         for step in phase.steps:
             items.append(_step_item(step, phase, index.get(id(step)), board))
+    if guide.harness:
+        harness = HarnessPhase(
+            HARNESS_PHASE,
+            say("Harness"),
+            tuple(check for cable in guide.harness for check in cable.checkpoints),
+        )
+        parts = {
+            step.component_id: step
+            for phase in guide.phases
+            for step in phase.steps
+            if isinstance(step, PartStep)
+        }
+        for cable in guide.harness:
+            connector = (ends_here or {}).get(cable.cable_id)
+            items.append(_cable_item(cable, harness, parts.get(connector or ""), say))
     return items
+
+
+def bench_phases(guide: Guide, items: Sequence[BenchItem]) -> list[BenchPhase]:
+    """The guide's phases, then the harness's when ``items`` have one -- the very object
+    the items carry, since the bench tells a phase by identity."""
+    harness = next((item.phase for item in items if isinstance(item.phase, HarnessPhase)), None)
+    return [*guide.phases, *([harness] if harness is not None else [])]
+
+
+def _cut_said(wire: HarnessWire, say: Phrasebook) -> str:
+    length = say("cut to fit") if wire.cut_mm is None else f"{wire.cut_mm:.0f} mm"
+    return f"{length} · AWG {wire.awg}"
+
+
+def _cable_item(
+    cable: HarnessCable, phase: HarnessPhase, here: PartStep | None, say: Phrasebook
+) -> BenchItem:
+    """One cable: which connector goes to which, each wire by its colour from end to end,
+    what to cut, and its steps -- the guide's own words, as the export gives them."""
+    title = cable.ref
+    if cable.wires:
+        a, b = cable.wires[0].a, cable.wires[0].b
+        title = f"{cable.ref} — {a.board} {a.ref} → {b.board} {b.ref}"
+    facts = [
+        (say(wire.colour), f"{harness_end(wire.a, say)} → {harness_end(wire.b, say)}")
+        for wire in cable.wires
+    ]
+    cuts = list(dict.fromkeys(_cut_said(wire, say) for wire in cable.wires))
+    if cuts:
+        facts.append((t("Wire to cut"), ", ".join(cuts)))
+    return BenchItem(
+        key=f"cable:{cable.cable_id}",
+        phase=phase,
+        title=title,
+        step_index=None,
+        holes=tuple(hole for _pin, hole in here.pin_holes) if here is not None else (),
+        solder_side=False,
+        polarity=None,
+        facts=tuple(facts),
+        notes=(*cable.steps, *((cable.note,) if cable.note else ())),
+        component_id=here.component_id if here is not None else None,
+        built=True,
+    )
 
 
 def _step_item(step: GuideStep, phase: GuidePhase, index: int | None, board: Board) -> BenchItem:
@@ -256,7 +351,7 @@ class BenchView(QWidget):
         self.items: list[BenchItem] = []
         self.done: set[str] = set()
         self.current = 0
-        self._phases: list[GuidePhase] = []
+        self._phases: list[BenchPhase] = []
         root = QVBoxLayout(self)
         root.setContentsMargins(theme.SPACE["xl"], theme.SPACE["lg"], theme.SPACE["xl"], theme.SPACE["lg"])
         root.setSpacing(theme.SPACE["lg"])
@@ -420,11 +515,11 @@ class BenchView(QWidget):
 
     # -- what it shows --
 
-    def set_items(self, items: list[BenchItem], phases: list[GuidePhase], done: set[str],
+    def set_items(self, items: list[BenchItem], phases: Sequence[BenchPhase], done: set[str],
                   cut_count: int, track_count: int) -> None:
         """A new build: start on the first item not ticked off -- where somebody coming back
         to the bench left off."""
-        self.items, self._phases, self.done = items, phases, set(done)
+        self.items, self._phases, self.done = items, list(phases), set(done)
         self.chips["cuts"].setVisible(cut_count > 0)
         self.chips["cuts"].setText(f"{t('Cut list')}  {cut_count}")
         self.chips["tracks"].setVisible(track_count > 0)
@@ -478,10 +573,10 @@ class BenchView(QWidget):
         self.next.setText(t("Done  ✓") if last else t("Done, next  ▶"))
         self.moved.emit(index)
 
-    def _shown_phases(self) -> list[GuidePhase]:
+    def _shown_phases(self) -> list[BenchPhase]:
         return [p for p in self._phases if any(i.phase is p for i in self.items)]
 
-    def _show_phase(self, phase: GuidePhase) -> None:
+    def _show_phase(self, phase: BenchPhase) -> None:
         shown = self._shown_phases()
         self.phase_bar.set_phases(
             [(f"{p.number}. {p.title}", sum(1 for i in self.items if i.phase is p)) for p in shown],
@@ -519,7 +614,7 @@ class BenchView(QWidget):
                 t("Checks not ticked yet. Measure each with the board in front of you, and "
                   "tick it when it reads what it should.")
             )
-            heading: GuidePhase | None = None
+            heading: BenchPhase | None = None
             for key, phase, check in open_checks:
                 if phase is not heading:
                     heading = phase
@@ -625,7 +720,9 @@ def crop_around(
 ) -> QRectF:
     """The part of the board to show for a step: its holes with a margin, in the picture's
     proportions."""
-    points = [to_scene(hole) for hole in holes] or [QPointF(0, 0)]
+    # No holes -- a cable with no end on this board -- is the whole board.
+    corners = (HoleCoord(0, 0), HoleCoord(board.cols - 1, board.rows - 1))
+    points = [to_scene(hole) for hole in holes or corners]
     xs, ys = [p.x() for p in points], [p.y() for p in points]
     margin = board.pitch * 3.5
     area = QRectF(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)).adjusted(
