@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -458,10 +459,7 @@ class BenchView(QWidget):
         self.title.setText(item.title)
         self.polarity.setText(f"⚠  {t('Polarity')}: {item.polarity}" if item.polarity else "")
         self.polarity.setVisible(bool(item.polarity))
-        while self.facts.count():
-            taken = self.facts.takeAt(0)
-            if taken is not None and taken.widget() is not None:
-                taken.widget().deleteLater()  # type: ignore[union-attr]
+        _empty(self.facts)
         for row, (what, value) in enumerate(item.facts):
             name = QLabel(what)
             theme.tone(name, "secondary")
@@ -508,10 +506,7 @@ class BenchView(QWidget):
         self.go_to_first.setVisible(bool(missing))
         if missing:
             self.go_to_first.setText(t("Go to Step {n}").format(n=missing[0] + 1))
-        while self.ending_checks.count():
-            taken = self.ending_checks.takeAt(0)
-            if taken is not None and taken.widget() is not None:
-                taken.widget().deleteLater()  # type: ignore[union-attr]
+        _empty(self.ending_checks)
         # Every phase's, including one with no step: see the module's note.
         checks = {check_key(phase, check): (phase, check) for phase in self._phases for check in phase.checkpoints}
         open_checks = [(key, phase, check) for key, (phase, check) in checks.items() if key not in self.done]
@@ -551,10 +546,7 @@ class BenchView(QWidget):
             self.show_item(first)
 
     def _fill_checks(self) -> None:
-        while self.checks.count():
-            taken = self.checks.takeAt(0)
-            if taken is not None and taken.widget() is not None:
-                taken.widget().deleteLater()  # type: ignore[union-attr]
+        _empty(self.checks)
         if not self.items:
             return
         phase = self.items[self.current].phase
@@ -599,6 +591,20 @@ class BenchView(QWidget):
             self.show_item(self.current)  # the last step, where the ending was reached from
         elif self.current > 0:
             self.show_item(self.current - 1)
+
+
+def _empty(layout: QLayout) -> None:
+    """Take every row out of ``layout``, and out of sight now.
+
+    ``deleteLater`` alone left the old rows painted under the new ones until the event loop
+    came round to deleting them -- the previous step's Holes and Height over a cable's
+    wires, in a walkthrough that pumped events without going back to the loop."""
+    while layout.count():
+        taken = layout.takeAt(0)
+        widget = taken.widget() if taken is not None else None
+        if widget is not None:
+            widget.hide()
+            widget.deleteLater()
 
 
 def _scrolling() -> tuple[QVBoxLayout, QScrollArea]:

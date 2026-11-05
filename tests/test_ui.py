@@ -17349,3 +17349,22 @@ def test_the_board_size_in_properties_wraps_whole() -> None:
                 _close(window)
         finally:
             set_language(before)
+
+
+def test_a_bench_steps_rows_leave_with_it() -> None:
+    """The previous step's facts stayed painted under the next step's until the event loop
+    came round to deleting them -- Holes and Height over a cable's wires, in ship's
+    walkthrough. They are out of sight the moment the next step is shown, and so are its
+    checks."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        bench = _bench(window)
+        bench.show_item(0)
+        facts = [bench.facts.itemAt(i).widget() for i in range(bench.facts.count())]
+        checks = [bench.checks.itemAt(i).widget() for i in range(bench.checks.count())]
+        old = [widget for widget in (*facts, *checks) if widget is not None]
+        assert old
+        bench.show_item(1)
+        assert all(widget.isHidden() for widget in old)
+    finally:
+        _close(window)
