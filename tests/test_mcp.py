@@ -1001,7 +1001,14 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # be changed by removing and adding again -- two undo steps and a new id the agent was
     # never told -- while the window changes them in place (mounting-hole.update,
     # edge-connector.update). Not parameters on the add tools: those make a new feature.
-    assert len(tools) <= 59, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 63, for several boards: select_board, add_board, add_cable, get_system_info. Four
+    # rather than a `board` argument on fifty board tools, each of which would be a chance to
+    # act on the wrong board: one tool puts a board in front and every board tool acts on
+    # it, through the same BoardBus the window uses. add_board and add_cable are the two
+    # things a system has that a board does not, and get_system_info the one reading that
+    # spans the boards -- what each holds, what each cable carries, the system's LVS.
+    assert len(tools) <= 63, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"

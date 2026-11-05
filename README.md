@@ -376,7 +376,7 @@ clone it is `pip install -e ".[mcp]"` and then `claude mcp add perfboard-studio 
 From 0.22.0 the installed application is the server too, with no Python at all: on Windows
 `perfboard-studio-cli.exe --mcp`, and the path on each platform is in docs/MCP.md.
 
-59 tools, every hole addressed the way people talk about perfboard (`A1`, `C7`,
+63 tools, every hole addressed the way people talk about perfboard (`A1`, `C7`,
 `AC12`) — or, on a breadboard, the way it prints them (`e12`, `T+12`) — and never as raw
 coordinates — down to `export_step`, which hands the finished board
 to the CAD program its case is drawn in. See [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) for the tool list,
@@ -482,7 +482,7 @@ Next, in the order the project plan puts them:
 
 | | |
 |---|---|
-| [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | the 59 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
+| [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | the 63 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
 | [docs/FIRST_BOARD.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/FIRST_BOARD.md) | your first board: the 555 blinker from Home to the build guide, a picture per step |
 | [examples/README.md](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) | what each example board is there to demonstrate |
 | [CHANGELOG.md](https://github.com/medinstech/perfboard-studio/blob/main/CHANGELOG.md) | every release, and what an unreleased build is accumulating towards the next one |

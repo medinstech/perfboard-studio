@@ -38,6 +38,7 @@ from perfboard_studio.autoroute import (
     plan_reroute,
 )
 from perfboard_studio.autoroute import describe as describe_route
+from perfboard_studio.boardbus import BoardBus
 from perfboard_studio.breadboard import (
     MAX_CHANNEL,
     PATTERN_TYPES,
@@ -59,10 +60,12 @@ from perfboard_studio.catalog import (
     free_reference,
     search_catalog,
 )
-from perfboard_studio.command import CommandBus, CommandContext
+from perfboard_studio.command import CommandContext
 from perfboard_studio.commands import (
     KEEP,
     AddBoardNotePayload,
+    AddBoardPayload,
+    AddCablePayload,
     AddConductorPayload,
     AddCutPayload,
     AddEdgeConnectorPayload,
@@ -129,6 +132,7 @@ from perfboard_studio.geometry import (
 from perfboard_studio.guide import GuideOptions, build_guide
 from perfboard_studio.guide import describe as describe_guide
 from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
+from perfboard_studio.harness import build_harness
 from perfboard_studio.lvs import run_lvs, stale_conductor_ids
 from perfboard_studio.model import (
     UNTITLED_NAME,
@@ -140,6 +144,9 @@ from perfboard_studio.model import (
     BoardMaterial,
     BoardSide,
     BoardType,
+    Cable,
+    CableEnd,
+    CableWire,
     ComponentInstance,
     DocumentMeta,
     HoleCoord,
@@ -172,6 +179,7 @@ from perfboard_studio.system import (
     board_document,
     board_ids,
     board_title,
+    connector_of,
     every_component,
     placed_components,
 )
@@ -288,7 +296,7 @@ class BoardSession:
         )
     )
     path: Path | None = None
-    bus: CommandBus = field(init=False)
+    bus: BoardBus = field(init=False)
     snapshots: dict[str, _Snapshot] = field(default_factory=dict, init=False)
     _snapshot_counter: int = field(default=0, init=False)
 
@@ -302,16 +310,24 @@ class BoardSession:
         Seeded, not fresh: a loaded document already contains cmp-1..cmp-8, and a
         generator starting at 1 would have its first edit refused as a duplicate id.
         """
-        self.document = document
-        self.bus = CommandBus(
+        # A BoardBus (``boardbus.py``): ``document`` is the board in front -- the first,
+        # until ``select_board`` picks another -- and every board tool acts on it, its
+        # commands going through ``board.on``; ``system_document`` is every board.
+        self.bus = BoardBus(
             document,
             create_standard_registry(),
             CommandContext(next_id=create_document_id_generator(document)),
         )
+        self.document = self.bus.document
         self.bus.subscribe(self._on_change)
 
-    def _on_change(self, document: PerfDocument, _entry: Any) -> None:
-        self.document = document
+    def _on_change(self, _document: PerfDocument, _entry: Any) -> None:
+        self.document = self.bus.document
+
+    @property
+    def system_document(self) -> PerfDocument:
+        """Every board of the document; ``document`` is the board in front."""
+        return self.bus.system_document
 
     # -- dispatch ----------------------------------------------------------
 
@@ -330,33 +346,35 @@ class BoardSession:
         it carries the DRC and LVS summaries rather than making that two more round
         trips.
         """
-        erc = run_erc(self.document, self.lookup)
-        lvs = run_lvs(self.document, self.lookup)
+        system_doc = self.system_document
+        erc = run_erc(system_doc, self.lookup)
+        lvs = run_lvs(system_doc, self.lookup)
         # Every board's, each on its own view: DRC, the ratsnest and stale copper are a
         # board's questions, and the status sums them. On one board, exactly as before.
-        views = [board_document(self.document, b) for b in board_ids(self.document)]
+        views = [board_document(system_doc, b) for b in board_ids(system_doc)]
         drc = [v for view in views for v in run_drc(view, self.lookup)]
         links = sum(summarize(ratsnest(view, self.lookup)).links for view in views)
         stale = sum(len(stale_conductor_ids(view, self.lookup)) for view in views)
         system: dict[str, Any] = {}
-        if self.document.boards:
+        if system_doc.boards:
             system["boards"] = [
                 {
                     "id": board_id,
-                    "name": board_title(self.document, board_id),
+                    "name": board_title(system_doc, board_id),
                     "components": len(view.components),
                 }
-                for board_id, view in zip(board_ids(self.document), views, strict=True)
+                for board_id, view in zip(board_ids(system_doc), views, strict=True)
             ]
-        if self.document.cables:
-            system["cables"] = len(self.document.cables)
+            system["board_in_front"] = self.bus.board_id
+        if system_doc.cables:
+            system["cables"] = len(system_doc.cables)
         return {
             "version": __version__,
             "document": self.document.meta.name,
             "path": str(self.path) if self.path else None,
             "board": f"{self.document.board.cols}x{self.document.board.rows} "
             f"{self.document.board.material}",
-            "components": len(every_component(self.document)),
+            "components": len(every_component(system_doc)),
             # Only on a document of several boards, so a single board's status is the one
             # it always was.
             **system,
@@ -564,13 +582,13 @@ class BoardSession:
     def list_components(self) -> list[dict[str, Any]]:
         """Every placed part, on every board -- with the board's name when there is more
         than one, and exactly as before when there is not."""
-        several = bool(self.document.boards)
+        several = bool(self.system_document.boards)
         return [
             {
                 **self._component_summary(c),
-                **({"board": board_title(self.document, b)} if several else {}),
+                **({"board": board_title(self.system_document, b)} if several else {}),
             }
-            for b, c in placed_components(self.document)
+            for b, c in placed_components(self.system_document)
         ]
 
     def _component_summary(self, component: ComponentInstance) -> dict[str, Any]:
@@ -771,8 +789,8 @@ class BoardSession:
             if not renamed["ok"]:
                 return renamed
         stamped = dataclasses.replace(
-            self.document,
-            meta=dataclasses.replace(self.document.meta, modified=_now_iso()),
+            self.system_document,
+            meta=dataclasses.replace(self.system_document.meta, modified=_now_iso()),
         )
         try:
             target.write_text(persist.serialize_document(stamped), encoding="utf-8")
@@ -1151,13 +1169,13 @@ class BoardSession:
             if part.ref == ref:
                 return part
         known = ", ".join(p.ref for p in self.document.parts) or "(nothing is waiting)"
-        where = next((b for b, c in placed_components(self.document) if c.ref == ref), None)
+        where = next((b for b, c in placed_components(self.system_document) if c.ref == ref), None)
         extra = (
             ""
             if where is None
             else f" {ref} IS on the board; unplace_component takes it off."
-            if not self.document.boards
-            else f" {ref} IS on {board_title(self.document, where)}."
+            if not self.system_document.boards
+            else f" {ref} IS on {board_title(self.system_document, where)}."
         )
         raise SessionError(f"No part called {ref!r} in the design. Waiting: {known}.{extra}")
 
@@ -1169,7 +1187,7 @@ class BoardSession:
         does. But an agent that meant to write "U1.8" and wrote "U11.8" needs to hear
         about it now rather than from LVS at the end.
         """
-        placed = {c.ref for c in every_component(self.document)}
+        placed = {c.ref for c in every_component(self.system_document)}
         return sorted({node.component_ref for node in nodes if node.component_ref not in placed})
 
     # -- editing -----------------------------------------------------------
@@ -2025,9 +2043,13 @@ class BoardSession:
                 f"A guide can be written in {', '.join(GUIDE_LANGUAGES)}; "
                 f"{language!r} is not one of them.",
             )
-        guide = build_guide(
-            self.document, self.lookup, GuideOptions(language=language)
-        )
+        options = GuideOptions(language=language)
+        guide = build_guide(self.document, self.lookup, options)
+        if self.system_document.cables:
+            # The system's harness, after the board's phases: every board's guide ends
+            # with the same one, as in the window.
+            harness = build_harness(self.system_document, options)
+            guide = dataclasses.replace(guide, harness=harness.cables)
         report: dict[str, Any] = {
             "summary": describe_guide(guide),
             "part_steps": guide.part_steps,
@@ -2291,7 +2313,7 @@ class BoardSession:
         """
         self._snapshot_counter += 1
         key = label.strip() or f"snapshot-{self._snapshot_counter}"
-        self.snapshots[key] = _Snapshot(label=key, document=self.document)
+        self.snapshots[key] = _Snapshot(label=key, document=self.system_document)
         return _ok(snapshot=key, snapshots=sorted(self.snapshots))
 
     #: Where ``restore`` parks the board it is about to replace.
@@ -2317,7 +2339,7 @@ class BoardSession:
                 f"No snapshot called {label!r}. Have: {', '.join(sorted(self.snapshots)) or 'none'}.",
             )
         self.snapshots[self.AUTO_SNAPSHOT] = _Snapshot(
-            label=self.AUTO_SNAPSHOT, document=self.document
+            label=self.AUTO_SNAPSHOT, document=self.system_document
         )
         self._install(snapshot.document)
         return _ok(
@@ -2327,6 +2349,154 @@ class BoardSession:
             status=self.get_status(),
         )
 
+    # -- several boards ----------------------------------------------------
+
+    def _board_id(self, board: str) -> str:
+        """A board by its id, its name, or what it is called ("Board 2")."""
+        document = self.system_document
+        wanted = board.strip()
+        for board_id in board_ids(document):
+            if wanted in (board_id, board_title(document, board_id)):
+                return board_id
+        known = ", ".join(
+            f"{board_title(document, b)} ({b})" for b in board_ids(document)
+        )
+        raise SessionError(f"No board called {board!r}. The boards: {known}.")
+
+    def select_board(self, board: str) -> dict[str, Any]:
+        """Put a board in front: every board tool after this -- placing, moving, wiring,
+        DRC, the renders, the guide -- acts on it, until another is selected."""
+        board_id = self._board_id(board)
+        self.bus.show(board_id)
+        self.document = self.bus.document
+        return _ok(
+            board_in_front=board_id,
+            name=board_title(self.system_document, board_id),
+            components=len(self.document.components),
+        )
+
+    def add_board(self, name: str = "", like: str | None = None) -> dict[str, Any]:
+        """Another board in the document, the same kind and size as ``like`` (a board's id
+        or name; the board in front if left out), and put it in front. Left unnamed, it is
+        called by its place ("Board 2") until it is named."""
+        source = self.bus.document if like is None else board_document(
+            self.system_document, self._board_id(like)
+        )
+        result = self._dispatch("board.add", AddBoardPayload(board=source.board, name=name))
+        if not result["ok"]:
+            return result
+        added = self.system_document.boards[-1].id
+        self.bus.show(added)
+        self.document = self.bus.document
+        return {**result, "board": added, "name": board_title(self.system_document, added)}
+
+    def add_cable(
+        self,
+        ref: str,
+        a_board: str,
+        a_connector: str,
+        b_board: str,
+        b_connector: str,
+        wires: list[dict[str, Any]],
+        length_mm: float | None = None,
+        note: str = "",
+    ) -> dict[str, Any]:
+        """A cable from a connector on one board to one on another, wire by wire: each
+        ``{"a_pin": "1", "b_pin": "1", "colour": "red", "gauge_awg": 22}`` (colour and gauge
+        optional). The connectors are named by their references on their boards."""
+        document = self.system_document
+
+        def end(board: str, connector: str) -> CableEnd:
+            board_id = self._board_id(board)
+            part = next(
+                (c for c in board_document(document, board_id).components if c.ref == connector.strip()),
+                None,
+            )
+            if part is None:
+                raise SessionError(
+                    f"No part called {connector!r} on {board_title(document, board_id)}."
+                )
+            return CableEnd(board=board_id, connector=part.id)
+
+        try:
+            laid = tuple(
+                CableWire(
+                    a_pin=str(wire["a_pin"]),
+                    b_pin=str(wire["b_pin"]),
+                    colour=wire.get("colour"),
+                    gauge_awg=None if wire.get("gauge_awg") is None else int(wire["gauge_awg"]),
+                )
+                for wire in wires
+            )
+        except (KeyError, TypeError, ValueError) as err:
+            raise SessionError(
+                f"Each wire is {{\"a_pin\": ..., \"b_pin\": ...}} with an optional colour and "
+                f"gauge_awg: {err}."
+            ) from err
+        cable = Cable(
+            id="",
+            ref=ref,
+            a=end(a_board, a_connector),
+            b=end(b_board, b_connector),
+            wires=laid,
+            length_mm=length_mm,
+            note=note,
+        )
+        return self._dispatch("cable.add", AddCablePayload(cable=cable))
+
+    def get_system_info(self) -> dict[str, Any]:
+        """Every board and every cable: which board is in front, what each holds, each
+        cable's ends and wires, and the system's LVS -- a net carried between two boards by
+        no wire is an open, a crossed wire is a short."""
+        document = self.system_document
+        lvs = run_lvs(document, self.lookup)
+        boards = []
+        for board_id in board_ids(document):
+            view = board_document(document, board_id)
+            boards.append(
+                {
+                    "id": board_id,
+                    "name": board_title(document, board_id),
+                    "board": f"{view.board.cols}x{view.board.rows} {view.board.material}",
+                    "components": [c.ref for c in view.components],
+                    "in_front": board_id == self.bus.board_id,
+                }
+            )
+        cables = []
+        for cable in document.cables:
+            ends = []
+            for cable_end in (cable.a, cable.b):
+                part = connector_of(document, cable_end)
+                ends.append(f"{board_title(document, cable_end.board)} {part.ref if part else '?'}")
+            cables.append(
+                {
+                    "ref": cable.ref,
+                    "a": ends[0],
+                    "b": ends[1],
+                    "wires": [
+                        {
+                            "a_pin": wire.a_pin,
+                            "b_pin": wire.b_pin,
+                            **({"colour": wire.colour} if wire.colour else {}),
+                            **({"gauge_awg": wire.gauge_awg} if wire.gauge_awg is not None else {}),
+                        }
+                        for wire in cable.wires
+                    ],
+                    **({"length_mm": cable.length_mm} if cable.length_mm is not None else {}),
+                }
+            )
+        return {
+            "boards": boards,
+            "cables": cables,
+            "lvs": {
+                "ok": lvs.ok,
+                "matched_nets": lvs.summary.matched_nets,
+                "opens": lvs.summary.opens,
+                "shorts": lvs.summary.shorts,
+                "issues": [issue.message for issue in lvs.issues][:20],
+            },
+        }
+
     # -- helpers -----------------------------------------------------------
 
     def _require_component(self, ref: str) -> ComponentInstance:
@@ -2335,14 +2505,15 @@ class BoardSession:
                 return component
         known = ", ".join(c.ref for c in self.document.components) or "(the board is empty)"
         elsewhere = next(
-            (b for b, c in placed_components(self.document) if c.ref == ref), None
+            (b for b, c in placed_components(self.system_document) if c.ref == ref), None
         )
         if elsewhere is not None:
             # The board tools act on the first board; a part on another is named where it
             # is rather than reported missing.
             raise SessionError(
-                f"{ref} is on {board_title(self.document, elsewhere)}, not on the first "
-                f"board, which is the one this tool works on. On the first board: {known}."
+                f"{ref} is on {board_title(self.system_document, elsewhere)}, not on the board "
+                f"in front, which is the one this tool works on (select_board changes it). "
+                f"On the board in front: {known}."
             )
         raise SessionError(f"No component called {ref!r}. On this board: {known}.")
 

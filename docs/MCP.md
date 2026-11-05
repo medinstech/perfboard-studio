@@ -142,8 +142,9 @@ conductor at a time.
 | **Verifying** | `run_erc` · `run_drc` · `run_lvs` · `check_heights` |
 | **Output** | `generate_guide` · `export_pdf` · `export_step` |
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
+| **Several boards** | `select_board` · `add_board` · `add_cable` · `get_system_info` |
 
-59 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+63 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -161,6 +162,19 @@ tool-count risk was never the ceiling — it was the rule that every tool is tie
 group and a reason. Nothing measured the rule, so it slipped: `reroute` was registered and
 undocumented, and the count read forty-four here and fifty in the plan while the server
 had fifty. Three numbers in three files is what a rule nobody checks decays into.
+
+**Several boards are one document, and every board tool acts on the board in front.** A
+circuit built on a supply board and a controller board joined by a cable is one document
+with one design; `add_board` adds a board, `select_board` puts one in front, and every other
+board tool -- `place_component`, `autoroute`, `run_drc`, `render_2d_view`, `generate_guide`
+-- then acts on it, its commands done on that board alone (`board.on`) and undone one step at
+a time with the rest. That is one tool where the alternative was a `board` argument on fifty,
+each one a chance to act on the wrong board. `add_cable` joins a connector on one board to
+one on another wire by wire, and `get_system_info` says what is on each board, what each
+cable carries, and the system's LVS: a net crossing two boards with no wire carrying it is
+an open, a cable wired pin 1 to pin 2 a short. `get_status`, `list_components`,
+`save_document`, `snapshot` and `run_erc` / `run_lvs` read every board; the guide of the
+board in front ends with the system's harness.
 
 **The board group is the newest and the asymmetry it fixes is the argument for it.**
 `get_board_info` reported mounting holes and edge connectors that nothing could add, and

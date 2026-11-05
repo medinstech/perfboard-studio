@@ -896,6 +896,55 @@ def export_step(path: str | None = None) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Several boards
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def select_board(board: str) -> dict[str, Any]:
+    """Put a board of this document in front, by its id or its name: every board tool after
+    this -- placing, moving, wiring, DRC, the renders, the guide -- acts on that board until
+    another is selected. A document starts with its first board in front."""
+    return session.select_board(board)
+
+
+@mcp.tool()
+def add_board(name: str = "", like: str | None = None) -> dict[str, Any]:
+    """Add another board to this document -- for a circuit built on more than one board,
+    joined by cables -- the same kind and size as ``like`` (a board's id or name; the board
+    in front if left out), and put it in front. The circuit stays one: place its parts on
+    whichever board they belong. Left unnamed, it is called by its place ("Board 2")."""
+    return session.add_board(name, like)
+
+
+@mcp.tool()
+def add_cable(
+    ref: str,
+    a_board: str,
+    a_connector: str,
+    b_board: str,
+    b_connector: str,
+    wires: list[dict[str, Any]],
+    length_mm: float | None = None,
+    note: str = "",
+) -> dict[str, Any]:
+    """A cable from a connector on one board to a connector on another, wire by wire:
+    ``wires`` is ``[{"a_pin": "1", "b_pin": "1", "colour": "red", "gauge_awg": 22}, ...]``
+    (colour and gauge optional). Connectors are named by their references on their boards.
+    Refused if an end is not there or one pin would carry two wires; a wire joining two
+    different nets is allowed and run_lvs / get_system_info report it as a short."""
+    return session.add_cable(ref, a_board, a_connector, b_board, b_connector, wires, length_mm, note)
+
+
+@mcp.tool()
+def get_system_info() -> dict[str, Any]:
+    """Every board of this document and every cable between them: which board is in
+    front, what each holds, each cable's ends and wires, and the system's LVS -- a net
+    carried between two boards by no cable wire is an open, a crossed wire a short."""
+    return session.get_system_info()
+
+
 @mcp.tool()
 def snapshot(label: str = "") -> dict[str, Any]:
     """Remember the board as it is now, under a name you can restore later. Cheap. Take
