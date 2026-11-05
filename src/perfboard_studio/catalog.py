@@ -173,16 +173,9 @@ _KK_WORDS = ("Molex", "KK", "KK254", "KK 254", "KF2510", "2510", "wire-to-board"
              "connector", "konnektör")
 
 
-# SparkFun"s Arduino Pro Mini 328, its silkscreen read off its Eagle board, the FTDI end
+# SparkFun's Arduino Pro Mini 328, its silkscreen read off its Eagle board, the FTDI end
 # up: TXO down to 9 on one row, RAW down to 10 on the other (printed as bare numbers,
-# named here D2 ... D13 as the Nano"s are).
-_PRO_MINI_LEFT = ("TXO", "RXI", "RST", "GND", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9")
-_PRO_MINI_RIGHT = ("RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D13", "D12", "D11", "D10")
-
-
-# SparkFun"s Arduino Pro Mini 328, its silkscreen read off its Eagle board, the FTDI end
-# up: TXO down to 9 on one row, RAW down to 10 on the other (printed as bare numbers,
-# named here D2 ... D13 as the Nano"s are).
+# named here D2 ... D13 as the Nano's are).
 _PRO_MINI_LEFT = ("TXO", "RXI", "RST", "GND", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9")
 _PRO_MINI_RIGHT = ("RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D13", "D12", "D11", "D10")
 
