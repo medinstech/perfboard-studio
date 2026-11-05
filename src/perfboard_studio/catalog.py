@@ -173,6 +173,13 @@ _KK_WORDS = ("Molex", "KK", "KK254", "KK 254", "KF2510", "2510", "wire-to-board"
              "connector", "konnektör")
 
 
+# SparkFun"s Arduino Pro Mini 328, its silkscreen read off its Eagle board, the FTDI end
+# up: TXO down to 9 on one row, RAW down to 10 on the other (printed as bare numbers,
+# named here D2 ... D13 as the Nano"s are).
+_PRO_MINI_LEFT = ("TXO", "RXI", "RST", "GND", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9")
+_PRO_MINI_RIGHT = ("RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D13", "D12", "D11", "D10")
+
+
 def _legs(*names: str) -> PinNames:
     """Pin names in pin order: ``_legs("C", "B", "E")`` is 1=C, 2=B, 3=E."""
     return tuple((str(index + 1), name) for index, name in enumerate(names))
@@ -1592,6 +1599,27 @@ CATALOG: tuple[CatalogPart, ...] = (
                 _two_columns(_NANO_LEFT, _NANO_RIGHT), ref_prefix="U",
                 source="KiCad Module:Arduino_Nano footprint and MCU_Module:Arduino_Nano_v3.x",
                 check="The 6-pin ICSP header, if fitted, stands taller. " + _MODULE_TOP),
+    CatalogPart("sparkfun-pro-mini", "SparkFun Arduino Pro Mini 328", "module",
+                "mod-2x12-p6-r1-17.78x33.02x2.5-s8.5-o0x-1.27",
+                "ATmega328P board, 24 pins, rows 15.24 mm apart: 5 V at 16 MHz or 3.3 V at 8 MHz",
+                _two_columns(_PRO_MINI_LEFT, _PRO_MINI_RIGHT), ref_prefix="U",
+                value="Pro Mini 328",
+                source=(
+                    "SparkFun Arduino Pro Mini 328 Eagle board (github "
+                    "sparkfun/Arduino_Pro_Mini_328, Hardware/Arduino-Pro-Mini.brd): the 0.7 x "
+                    "1.3 inch board, both 12-pin rows 0.6 inch apart, the names printed beside "
+                    "them and the nets they are on"
+                ),
+                check=(
+                    "A4 and A5 (I2C) and A6 and A7 are on two pairs of pads inside the RAW "
+                    "row, off the 0.1 inch grid: wire them on their own. The six pads at the "
+                    "end are its FTDI programming header. RAW is the regulator's input and VCC "
+                    "its output, 5 V or 3.3 V by the version. Clones share the 24 header "
+                    "pins; A4–A7 and the FTDI pads may sit elsewhere, so wire those from the "
+                    "board in your hand. " + _MODULE_TOP
+                ),
+                aliases=("Pro Mini", "Arduino Pro Mini", "DEV-11113", "DEV-11114",
+                         "ATmega328P", "Arduino")),
     CatalogPart("raspberry-pi-pico", "Raspberry Pi Pico", "module",
                 "mod-2x20-p7-r1-21x52.3x3.5-s8.5-o0x-0.65",
                 "RP2040 board, 40 pins, rows 17.78 mm apart",

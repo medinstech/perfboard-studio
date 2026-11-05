@@ -95,6 +95,16 @@ Neither is a dependency of the application. The meshes are checked in, and a bui
 them still draws every board — the generated parametric bodies are the fallback for
 everything.
 
+## Measured on makers' board files
+
+Where the maker publishes the module's own board, the parts on it were measured there --
+positions, packages and turns, never its artwork -- and nothing of the file is shipped:
+
+- **SparkFun Arduino Pro Mini 328** -- SparkFun Electronics, Eagle board, CC BY-SA 3.0:
+  <https://github.com/sparkfun/Arduino_Pro_Mini_328> (`Hardware/Arduino-Pro-Mini.brd`)
+- **SparkFun Motor Driver - Dual TB6612FNG v1.1c** -- SparkFun Electronics, Eagle board
+  (`SparkFun_Motor_Driver-TB6612FNG_v11c.brd`), credited here as the Pro Mini's is
+
 ## Measured on photographs
 
 What stands on a module (`ui/moduleart.py`) is drawn by this application, and no image is

@@ -781,6 +781,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "lm2596-module": None,  # the blue every seller's board is
         "hc-sr501": None,  # blue, as the photograph's is
         "sparkfun-tb6612fng": SPARKFUN_RED,
+        "sparkfun-pro-mini": SPARKFUN_RED,
         "pololu-drv8833": PICO_MODULE.board_colour,
         "gy-521": None,  # the photograph's blue is the module style's, within the lighting
         "ssd1306-i2c-gnd-vcc": None,

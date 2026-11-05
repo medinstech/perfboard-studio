@@ -3021,6 +3021,24 @@ TURKISH: Mapping[str, str] = {
     "ATmega328P board, 30 pins, rows 15.24 mm apart": (
         "ATmega328P kartı, 30 pin, sıralar arası 15,24 mm"
     ),
+    "ATmega328P board, 24 pins, rows 15.24 mm apart: 5 V at 16 MHz or 3.3 V at 8 MHz": (
+        "ATmega328P kartı, 24 pin, sıralar 15,24 mm arayla: 16 MHz'de 5 V ya da 8 MHz'de "
+        "3,3 V"
+    ),
+    "A4 and A5 (I2C) and A6 and A7 are on two pairs of pads inside the RAW row, off the "
+    "0.1 inch grid: wire them on their own. The six pads at the end are its FTDI "
+    "programming header. RAW is the regulator's input and VCC its output, 5 V or 3.3 V "
+    "by the version. Clones share the 24 header pins; A4–A7 and the FTDI pads may sit "
+    "elsewhere, so wire those from the board in your hand. The height of what is on the "
+    "board is an estimate, and so is its colour; the pins, the rows and the board outline "
+    "are measured.": (
+        "A4 ve A5 (I2C) ile A6 ve A7, RAW sırasının içindeki iki çift pedde ve 0,1 inçlik "
+        "ızgaranın dışındadır: bunları ayrıca kablolayın. Uçtaki altı ped FTDI programlama "
+        "header'ıdır. RAW regülatörün girişi, VCC çıkışıdır; sürüme göre 5 V ya da 3,3 V. "
+        "Klonlarda 24 header pini aynıdır; A4–A7 ve FTDI pedleri başka yerde olabilir, "
+        "bu yüzden bunları elinizdeki karta bakarak kablolayın. Kartın üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart "
+        "çerçevesi ölçülmüştür."
+    ),
     "RP2040 board, 40 pins, rows 17.78 mm apart": "RP2040 kartı, 40 pin, sıralar arası 17,78 mm",
     "ESP8266 board, 16 pins, rows 22.86 mm apart": (
         "ESP8266 kartı, 16 pin, sıralar arası 22,86 mm"

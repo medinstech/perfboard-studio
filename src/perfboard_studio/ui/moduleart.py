@@ -740,6 +740,54 @@ SPARKFUN_TB6612_MODULE = ModuleArt(
     ),
 )
 
+#: SparkFun's Arduino Pro Mini 328 (DEV-11113/DEV-11114), read off SparkFun's own Eagle board
+#: (Arduino-Pro-Mini.brd): the 0.7 x 1.3 inch board, its two rows of twelve 0.6 inch apart
+#: and, on the top side, the ATmega328P turned on its corner with pin 1 at the corner towards
+#: the FTDI header, the resonator beside it, the MIC5205 regulator, the two EIA 3216
+#: tantalums (+ ends as the board's A pads have them), the 0603 parts, the red power LED, the
+#: green one on D13, the reset button, and the pads with no header in them: FTDI along the
+#: end, A4/A5 and A6/A7 inside the RAW row, off its grid. ``u`` runs from the D9/D10 end to the
+#: FTDI end, ``v`` from the TXO row to the RAW row. Sizes are the packages' (the button and the
+#: resonator their tDocu outlines, the pads their 1.7 mm rings).
+SPARKFUN_PRO_MINI_MODULE = ModuleArt(
+    key="sparkfun-pro-mini",
+    board_colour=SPARKFUN_RED,
+    names=("pro mini",),
+    board=(33.02, 17.78),
+    pins=24,
+    frame="columns",
+    landmark=("RAW", 1, -1),
+    # SparkFun prints the names between the pins and the parts in a smaller hand than the
+    # tags here, and C19 stands 0.02 mm short of the room "RST" needs: printed over.
+    names_over_parts=True,
+    parts=(
+        ArtPart("tqfp32", -2.54, 0.0, 9.0, 9.0, 1.2, facing=1, diagonal=True,
+                text="ATMEGA328P"),
+        ArtPart("crystal", 2.51, 4.65, 3.2, 1.3, 0.9, colour="#d8cfb0"),
+        ArtPart("sot23-5", 7.67, 0.0, 2.9, 2.8, 1.1, facing=-1),
+        ArtPart("sma", 9.52, 4.19, 3.2, 1.6, 1.6, facing=-1),
+        ArtPart("sma", 7.62, -4.32, 3.2, 1.6, 1.6, facing=1),
+        ArtPart("chip-c", 3.91, 1.70, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -9.27, -0.13, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -14.45, 4.34, 1.6, 0.8, 0.8),
+        ArtPart("chip-c", 12.70, -3.91, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", 10.16, 0.0, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-r", -11.28, 4.34, 1.6, 0.8, 0.5),
+        ArtPart("chip-r", -11.61, -4.83, 1.6, 0.8, 0.5),
+        ArtPart("led", 5.36, -0.03, 1.6, 0.8, 0.6, along_v=True, colour="#d83a32"),
+        ArtPart("led", -14.78, -4.83, 1.6, 0.8, 0.6, colour="#3fae49"),
+        ArtPart("button", -13.84, -0.13, 5.08, 5.08, 1.5),
+        ArtPart("pads", 15.24, 0.0, 1.7, 14.4, 0.0),
+        ArtPart("pads", 2.67, -4.70, 4.24, 1.7, 0.0),
+        ArtPart("pads", -7.75, -4.70, 4.24, 1.7, 0.0),
+    ),
+    source=(
+        "SparkFun Arduino Pro Mini 328 Eagle board, github sparkfun/Arduino_Pro_Mini_328, "
+        "Hardware/Arduino-Pro-Mini.brd, CC BY-SA 3.0 (the board, both rows, every top-side "
+        "part's place, package and turn); Microchip 32A (the chip)"
+    ),
+)
+
 #: Pololu's DRV8833 dual motor driver carrier (item 2130) as its own top-view pinout picture
 #: has it: the 10 uF capacitor and the 180 ohm resistor along the top, the reverse-
 #: protection MOSFET and its diode under them, the QFN in the middle, small capacitors and
@@ -1003,6 +1051,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     POLOLU_DRV8825_MODULE,
     XIAO_ESP32C3_MODULE,
     SPARKFUN_TB6612_MODULE,
+    SPARKFUN_PRO_MINI_MODULE,
     POLOLU_DRV8833_MODULE,
     GY521_MODULE,
     SSD1306_MODULE,

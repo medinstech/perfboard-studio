@@ -160,6 +160,12 @@ closed without a bump.
   VCC, OUT and GND. Its Fresnel lens is drawn with its square foot and its dome, with an M2
   hole at each end of its board. Each is measured: the board, the holes and the lens's width
   on TruSens' sheet, and the lens's height on a photograph of one.
+- **The SparkFun Arduino Pro Mini 328, drawn as itself.** Its two rows of twelve go into female
+  strips 0.6 inch apart, named as its silkscreen has them, and on its red board stand the
+  ATmega328P on its corner, the resonator, the regulator, the reset button and its two LEDs
+  where SparkFun's own board file puts them. Its check says A4 to A7 are on pads inside the
+  rows, off the grid, to be wired on their own, and that a clone shares the 24 header pins
+  but may put those pads and the FTDI ones elsewhere.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
