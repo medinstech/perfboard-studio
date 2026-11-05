@@ -291,7 +291,7 @@ def test_the_window_counts_reaches_and_names_the_second_boards_parts(qapp) -> No
         assert parts["JB"].where.startswith("Remote")
         assert window._id_of("JB") == "cmp-3" and window._ref_of_id("cmp-3") == "JB"
         window.go_to_component("cmp-3")
-        assert window.statusBar().currentMessage() == "JB is on the board Remote."
+        assert window.statusBar().currentMessage() == "JB is on another board: Remote."
         assert not [f for f in window._last_erc if f.rule == "part-not-defined"]
         assert window._last_lvs is not None and not [
             i for i in window._last_lvs.issues if i.kind == "unplaced-component" and "JB" in i.message

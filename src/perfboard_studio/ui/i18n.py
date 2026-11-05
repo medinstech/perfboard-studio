@@ -720,7 +720,7 @@ TURKISH: Mapping[str, str] = {
     "Overlapping bodies: {before} → {after}.": "Çakışan gövdeler: {before} → {after}.",
     "Pins sharing a hole: {before} → {after}.": "Aynı deliği paylaşan pinler: {before} → {after}.",
     "{ref} is in the design, not on the board yet.": "{ref} tasarımda var, ama henüz kartta değil.",
-    "{ref} is on the board {board}.": "{ref}, {board} kartında.",
+    "{ref} is on another board: {board}.": "{ref} başka bir kartta: {board}.",
     "In the design, not on the board yet.": "Tasarımda var, ama henüz kartta değil.",
     "{ref} is in the design, not on the board yet. Place on the Board puts it there.": (
         "{ref} tasarımda var, ama henüz kartta değil. Karta Yerleştir onu karta koyar."

@@ -8752,7 +8752,7 @@ class MainWindow(QMainWindow):
             # On another board of the system: said, and the one thing that needs no view of
             # that board -- taking it back into the design -- offered.
             note = menu.addAction(
-                t("{ref} is on the board {board}.").format(ref=ref, board=elsewhere)
+                t("{ref} is on another board: {board}.").format(ref=ref, board=elsewhere)
             )
             note.setEnabled(False)
             menu.addSeparator()
@@ -11122,7 +11122,7 @@ class MainWindow(QMainWindow):
         if elsewhere is None:
             return False
         self.statusBar().showMessage(
-            t("{ref} is on the board {board}.").format(ref=ref, board=elsewhere), 6000
+            t("{ref} is on another board: {board}.").format(ref=ref, board=elsewhere), 6000
         )
         return True
 

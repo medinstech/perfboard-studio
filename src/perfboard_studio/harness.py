@@ -126,6 +126,33 @@ def _mm(value: Mm) -> str:
     return f"{value:g}"
 
 
+def _cut_step(cable: Cable, count: int, strip: Mm, say: Phrasebook) -> str:
+    """What to cut: one sentence for one wire and one for several, each said whole, so the
+    phrasebook test can read each out of the source."""
+    if cable.length_mm is not None:
+        length = _mm(cable.length_mm + 2 * strip)
+        if count == 1:
+            return say(
+                "Cut 1 wire for {cable}, {length} mm with the ends stripped.",
+                cable=cable.ref, length=length,
+            )
+        return say(
+            "Cut {count} wires for {cable}, {length} mm each with the ends stripped.",
+            count=count, cable=cable.ref, length=length,
+        )
+    if count == 1:
+        return say(
+            "Cut 1 wire for {cable}, long enough to reach between the boards as they will "
+            "sit, and a little more.",
+            cable=cable.ref,
+        )
+    return say(
+        "Cut {count} wires for {cable}, long enough to reach between the boards as they "
+        "will sit, and a little more.",
+        count=count, cable=cable.ref,
+    )
+
+
 def _cable(
     doc: PerfDocument,
     cable: Cable,
@@ -154,23 +181,14 @@ def _cable(
         )
 
     steps = [
-        say(
-            "Cut {count} wire(s) for {cable}, {length} mm each with the ends stripped.",
-            count=len(wires), cable=cable.ref, length=_mm(cable.length_mm + 2 * strip),
-        )
-        if cable.length_mm is not None
-        else say(
-            "Cut {count} wire(s) for {cable}, long enough to reach between the boards as "
-            "they will sit, and a little more.",
-            count=len(wires), cable=cable.ref,
-        ),
+        _cut_step(cable, len(wires), strip, say),
         say(
             "Strip {strip} mm at both ends of every wire and twist the strands.",
             strip=_mm(strip),
         ),
         *(
             say(
-                "Fit the {colour} wire (AWG {awg}, {net}) from {a} to {b}.",
+                "Connect the {colour} wire (AWG {awg}, {net}) from {a} to {b}.",
                 colour=say(wire.colour), awg=wire.awg, net=wire.net_name,
                 a=_end_phrase(wire.a, say), b=_end_phrase(wire.b, say),
             )

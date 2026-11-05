@@ -3842,16 +3842,62 @@ class DeleteBoardPayload:
 
 
 #: The commands about the SYSTEM rather than one board, which are not done on a board.
-_SYSTEM_COMMANDS = frozenset(
+SYSTEM_COMMANDS = frozenset(
     {"board.on", "board.add", "board.rename", "board.delete", "cable.add", "cable.update", "cable.delete"}
 )
 
+#: The commands about the DESIGN -- the parts not yet on a board, the nets, the sheet, the
+#: document's name -- which every board shares. Done on the document itself, never on a
+#: board: on one board's view a symbol whose part is on another board is a part nobody has.
+DESIGN_COMMANDS = frozenset(
+    {
+        "document.rename",
+        "net.add",
+        "net.connect",
+        "net.delete",
+        "net.disconnect",
+        "net.update",
+        "netlist.import",
+        "part.add",
+        "part.addMany",
+        "part.delete",
+        "part.update",
+        "sheet.note.add",
+        "sheet.note.delete",
+        "sheet.note.update",
+        "sheet.wire",
+        "sheet.wire.delete",
+        "symbol.auto",
+        "symbol.move",
+    }
+)
+
+type CommandScope = Literal["system", "design", "board"]
+
+
+def command_scope(type_: str) -> CommandScope:
+    """Whose a command is: the system's (boards and cables), the design's, or a board's --
+    every other one, done on one board's view through ``board.on``. ``test_system`` holds
+    every registered command to one of the three, so a new command is one somebody has to
+    place."""
+    if type_ in SYSTEM_COMMANDS:
+        return "system"
+    if type_ in DESIGN_COMMANDS:
+        return "design"
+    return "board"
+
 
 def _board_command(type_: str) -> CommandDefinition[Any]:
-    if type_ not in _SYSTEM_COMMANDS:
+    if command_scope(type_) == "board":
         for definition in STANDARD_COMMANDS:
             if definition.type == type_:
                 return definition
+    if command_scope(type_) == "design":
+        raise CommandError(
+            "unknown-command",
+            f"{type_!r} is a command on the design, which every board shares: dispatch it on "
+            f"the document, not on a board.",
+        )
     raise CommandError(
         "unknown-command", f"{type_!r} is not a command that can be done on one board."
     )
@@ -4244,7 +4290,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
 #: it; ``board.on`` finds it here too and runs it on a board's view, where the check has
 #: nothing to say.
 STANDARD_COMMANDS: tuple[CommandDefinition[Any], ...] = tuple(
-    definition if definition.type in _SYSTEM_COMMANDS else _OnTheSystem(definition)
+    definition if definition.type in SYSTEM_COMMANDS else _OnTheSystem(definition)
     for definition in _COMMANDS
 )
 

@@ -2988,7 +2988,11 @@ boards (`duplicate-ref`), and an id now on two. The id generator reads every boa
 it hands out is new to the whole document. `board.add` refuses a board exactly what
 `board.set` refuses, by asking `board.set` itself; `board.delete` takes the board's parts back
 into the design wired as they were (`component.unplace` on each), and the first board, being
-the document itself, cannot be deleted.
+the document itself, cannot be deleted. Every command is one of three (`commands.command_scope`): the
+system's (`board.*` and `cable.*`), the design's (`DESIGN_COMMANDS`: the nets, the sheet, the
+design's parts, the document's name), done on the document itself because on one board's view
+a symbol whose part is on another board belongs to nobody -- `board.on` refuses them -- or a
+board's, every other one. `test_system` holds every registered command to one of the three.
 
 **A cable is the system's, and its ends resolve.** `doc.cables` joins a connector part on one
 board to one on another, wire by wire (`CableWire`: a pin at each end, a colour, a gauge), and
@@ -3065,7 +3069,7 @@ readers were audited, and each is one of three kinds:
 | The design | `doc.parts`, `doc.nets`, the sheet | the netlist, the sheet's layout, the step bar's "not on the board yet" -- a part placed on any board has left `doc.parts` |
 
 A gesture on a symbol whose part is on another board than the one shown (a drop, Properties,
-Rename) is answered in the status bar -- "JB is on the board Remote." -- rather than dropped;
+Rename) is answered in the status bar -- "JB is on another board: Remote." -- rather than dropped;
 taking it back into the design needs no view of its board and goes through `board.on`.
 `tests/test_system_readers.py` holds each reader of the circuit on a document of two boards,
 and finds the pattern that produced the bug by reading the sources: a function reading a

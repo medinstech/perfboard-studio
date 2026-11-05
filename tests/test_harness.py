@@ -71,7 +71,7 @@ def test_each_wire_is_cut_to_the_cable_and_said_end_to_end() -> None:
     assert (sig.a.board, sig.a.ref, sig.a.pin) == ("Main", "JA", "1")
     assert (sig.b.board, sig.b.ref, sig.b.pin) == ("Remote", "JB", "1")
     assert sig.net_name == "SIG" and gnd.net_name == "GND"
-    assert cable.steps[0] == "Cut 2 wire(s) for W1, 160 mm each with the ends stripped."
+    assert cable.steps[0] == "Cut 2 wires for W1, 160 mm each with the ends stripped."
     assert "from Main JA pin 2 to Remote JB pin 2" in cable.steps[-1]
 
 
@@ -109,7 +109,7 @@ def test_the_harness_is_said_in_turkish_and_calls_a_board_what_lvs_does() -> Non
     (turkish,) = build_harness(doc, GuideOptions(language="tr")).cables
     assert english.wires[0].b.board == system.board_title(doc, "b2") == "Board 2"
     assert turkish.wires[0].b.board == system.board_title(doc, "b2", "tr") == "Kart 2"
-    assert turkish.steps[0] == "W1 için 2 tel kesin; soyulacak uçlarıyla birlikte her biri 160 mm olsun."
+    assert turkish.steps[0] == "W1 için 2 tel kesin, her biri soyulacak uçları dahil 160 mm."
     assert "siyah teli" in turkish.steps[-1]
     unwired = dataclasses.replace(doc, cables=())
     opens = [i.message for i in run_lvs(unwired, footprint_lookup()).issues if i.kind == "open"]

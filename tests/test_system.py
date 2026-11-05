@@ -471,3 +471,37 @@ def test_a_cable_wired_across_is_a_short() -> None:
     result = run_system_lvs(_two_headers((CableWire("1", "2"), CableWire("2", "1"))), footprint_lookup())
     shorts = [issue for issue in result.issues if issue.kind == "short"]
     assert shorts and set(shorts[0].net_names) == {"GND", "SIG"}
+
+
+# ---------------------------------------------------------------------------
+# Whose a command is
+# ---------------------------------------------------------------------------
+
+
+def test_every_command_is_the_systems_the_designs_or_a_boards() -> None:
+    """``command_scope`` places every registered command, and the two named sets hold only
+    commands that exist: a command added to the bus, or renamed, is one somebody has to
+    place -- the window sends a design command to the document and a board's through
+    ``board.on``, and a command placed wrong is one done to the wrong thing."""
+    from perfboard_studio.commands import DESIGN_COMMANDS, STANDARD_COMMANDS, SYSTEM_COMMANDS
+
+    registered = {definition.type for definition in STANDARD_COMMANDS}
+    assert registered >= SYSTEM_COMMANDS and registered >= DESIGN_COMMANDS
+    assert not SYSTEM_COMMANDS & DESIGN_COMMANDS
+    assert {t for t in registered if t.startswith(("board.", "cable."))} - {
+        "board.set", "board.applyPreset", "board.note.add", "board.note.delete", "board.note.update"
+    } == SYSTEM_COMMANDS
+    assert {t for t in registered if t.startswith(("net.", "sheet.", "symbol."))} <= DESIGN_COMMANDS
+
+
+def test_a_design_command_is_refused_on_a_board() -> None:
+    """On one board's view a symbol whose part is on another board belongs to nobody, so the
+    sheet, the nets and the design's parts are done on the document, never through
+    ``board.on``."""
+    from perfboard_studio.commands import AddPartPayload, OnBoardPayload
+
+    result = _bus(_system()).dispatch(
+        "board.on",
+        OnBoardPayload(board="b2", type="part.add", payload=AddPartPayload(ref="R99", value="", footprint_id="r-axial-4")),
+    )
+    assert not result.ok and result.code == "unknown-command" and "design" in result.message
