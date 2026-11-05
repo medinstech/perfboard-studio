@@ -28,7 +28,14 @@ has to be sensitive to what is ON the board, not to where the board is.
 
 NO TEXT IS IN THE PICTURE. The rulers are turned off, exactly as the 1:1 PDF export turns
 them off, because a font database is the one part of this that genuinely differs between
-platforms -- Qt's offscreen plugin ships none at all on Windows.
+platforms -- Qt's offscreen plugin ships none at all on Windows. So are the references and
+the pin names, for the same reason, and it took 0.23.0's CI to show it: while a reference
+sat on a dark plate the plate was drawn with or without a font and the letters on it were
+a fraction of a level, but since references became outlined letters (REF_HALO) a platform
+with fonts draws each glyph and its halo and Windows draws nothing, and dense:top's cell 19
+came out 4.5 levels darker on Linux and macOS than the signature blessed here. Measured
+with references and pin names off, a font database moves no cell of any case by more than
+0.32 -- what is left is a chip's own top marking, which is ink on the part and stays in.
 
 To re-bless after a deliberate change: run this file with PERFBOARD_STUDIO_BLESS_RENDER=1 and
 commit the diff, having looked at the render first.
@@ -93,10 +100,19 @@ def _document(name: str) -> PerfDocument:
 def _render(doc: PerfDocument, side: BoardSide) -> QImage:
     """The board, and nothing that is not the board.
 
-    Rulers and the ratsnest off: the first draws text and the second draws what is NOT
-    built yet, and neither is what this test is about.
+    Rulers, references, pin names and the ratsnest off: the first three are text held at a
+    screen size, drawn only where there is a font database (see the module note), and the
+    last is what is NOT built yet; none of them is what this test is about.
     """
-    scene = BoardScene(doc, footprint_lookup(), side=side, show_ratsnest=False, show_rulers=False)
+    scene = BoardScene(
+        doc,
+        footprint_lookup(),
+        side=side,
+        show_ratsnest=False,
+        show_rulers=False,
+        show_references=False,
+        show_pin_names=False,
+    )
     image = QImage(WIDTH, HEIGHT, QImage.Format.Format_ARGB32)
     image.fill(BACKGROUND)
     painter = QPainter(image)
