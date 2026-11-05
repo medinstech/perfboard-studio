@@ -752,3 +752,50 @@ def test_the_board_in_front_comes_back_with_its_file(qapp, tmp_path, monkeypatch
         gone.close()
         gone.deleteLater()
 
+
+
+def test_a_new_part_takes_a_reference_free_in_the_whole_system(qapp) -> None:  # type: ignore[no-untyped-def]
+    """With JB placed on Remote, a header placed on Main from the library is not offered JB
+    -- nor anything another board holds -- and a pasted block's refs and ids are free in the
+    system too."""
+    from perfboard_studio.ui.clipboard import Block, paste_payload
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_system())
+    try:
+        assert window.bus.board_id == system.FIRST_BOARD
+        window.scene.arm_placement("hdr-1x2")
+        placed = window.scene.place_armed(HoleCoord(30, 30))
+        window.scene.arm_placement(None)
+        assert placed is not None and placed.ok, placed
+        refs = [c.ref for c in window.bus.system_document.components]
+        assert "JB" not in refs and len(set(refs)) == len(refs), refs
+        jb = next(c for c in system.extra_board(window.bus.system_document, "b2").components if c.ref == "JB")
+        paste = paste_payload(
+            window.bus.document,
+            Block(components=(jb,), conductors=()),
+            HoleCoord(40, 40),
+            system=window.bus.system_document,
+        )
+        held = {c.ref for c in system.every_component(window.bus.system_document)}
+        held_ids = {c.id for c in system.every_component(window.bus.system_document)}
+        for placement in paste.payload.components:
+            assert placement.ref not in held and placement.id not in held_ids, placement
+    finally:
+        window._mark_saved()
+        window.close()
+        window.deleteLater()
+
+
+def test_the_move_to_board_label_reads_whole_in_turkish() -> None:
+    from perfboard_studio.ui import i18n
+    from perfboard_studio.ui.engine_text import say
+
+    before = i18n.language()
+    i18n.set_language("tr")
+    try:
+        assert say("Move J1 to the board Board 2, taking off 4 conductors that ran to it") == (
+            "J1 parçasını başka karta taşı: Kart 2, ona giden 4 iletken kaldırıldı"
+        )
+    finally:
+        i18n.set_language(before)

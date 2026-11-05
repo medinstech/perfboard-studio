@@ -11177,7 +11177,13 @@ class MainWindow(QMainWindow):
         # has not moved yet -- it lands beside where the block was cut from.
         near = self._hovered_hole if self._pointer_is_on_board() else None
         at = paste_position(self.bus.document, block, near, self.lookup)
-        paste = paste_payload(self.bus.document, block, at, label=f"{what} at {format_hole(at, self.bus.document.board)}")
+        paste = paste_payload(
+            self.bus.document,
+            block,
+            at,
+            label=f"{what} at {format_hole(at, self.bus.document.board)}",
+            system=self.bus.system_document,
+        )
         if paste.is_empty:
             self.statusBar().showMessage(t("That block does not fit on this board."), 6000)
             return

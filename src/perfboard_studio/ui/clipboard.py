@@ -515,7 +515,13 @@ def _room_for(
     return None
 
 
-def paste_payload(doc: PerfDocument, block: Block, at: HoleCoord, label: str = "") -> Paste:
+def paste_payload(
+    doc: PerfDocument,
+    block: Block,
+    at: HoleCoord,
+    label: str = "",
+    system: PerfDocument | None = None,
+) -> Paste:
     """One ``block.place`` command that puts this block on this board at this hole.
 
     References are minted from the document one at a time -- R4, R5, R6 -- rather than
@@ -528,13 +534,16 @@ def paste_payload(doc: PerfDocument, block: Block, at: HoleCoord, label: str = "
     what the user is placing, and a block pasted near an edge with one trace hanging over
     it is still the paste they asked for. The count comes back so it can be said out loud.
     """
-    next_id = create_document_id_generator(doc)
+    # References and ids are the SYSTEM's when the board is one of several (``system``):
+    # minted from the board alone, a pasted R1 or cmp-5 could already be on another board.
+    whole = system if system is not None else doc
+    next_id = create_document_id_generator(whole)
     placements: list[PlaceComponentPayload] = []
     ids_by_block_id: dict[str, str] = {}
     # The document does not have the new refs until the command lands, so the running
     # tally of what this block has already claimed is kept here. Without it a block of
     # three resistors would ask for R4 three times and the bus would refuse the block.
-    claimed = doc
+    claimed = whole
     for component in block.components:
         ref = next_reference(claimed, component.footprint_id)
         id_ = next_id("cmp")

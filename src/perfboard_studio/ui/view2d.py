@@ -6079,7 +6079,11 @@ class BoardScene(QGraphicsScene):
                 # only refreshed after a command lands, so reading the reference from it would
                 # hand out a name that is already taken -- and the bus would refuse the second
                 # part of every pair as a duplicate ref.
-                ref=next_reference(self.bus.document, self._armed_id, self.placement_prefix),
+                # Free in the whole system: the window's bus shows the board in front
+                # as ``document``, and a reference another board holds is not free.
+                ref=next_reference(
+                    self.bus.system_document, self._armed_id, self.placement_prefix
+                ),
                 value=self.placement_value,
                 footprint_id=self._armed_id,
                 anchor=anchor,

@@ -349,6 +349,8 @@ _FIELDS: dict[str, str] = {
         )
     },
     "mm": r"-?\d+(?:\.\d+)?",
+    # A board's name stops at a comma: the clause after it is its own sentence.
+    "board": r"[^,]+",
     "kind": "|".join(_CONDUCTOR_KINDS),
     "netclass": r"signal|ground|power",
     "netclass_b": r"signal|ground|power",
