@@ -554,6 +554,8 @@ def test_a_part_on_the_first_board_is_taken_off_with_the_second_in_front(qapp) -
         window._remove_symbol("JA")
         assert "W1" in window.statusBar().currentMessage()
     finally:
+        # Edited and unsaved: closing would ask, and nobody answers offscreen.
+        window._mark_saved()
         window.close()
         window.deleteLater()
 
