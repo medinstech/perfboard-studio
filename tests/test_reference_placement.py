@@ -5,6 +5,13 @@ out a reference outgrows the gap between them: on nano-relay J2's landed on the 
 written over it and read "LOJ2D". ``ComponentItem.reference_placement`` puts it over the
 body, under it where over it is a note, and nowhere where both are -- the note is the
 builder's own. Every example is held to it at every zoom the references are printed at.
+
+The board's printed legend -- its column letters and row numbers -- is kept off where a place
+clear of it exists: a part on the first row printed its reference over the letters above it,
+and on ne555-astable LED1's hid the "F". Where none does the reference still prints and the
+letter under it gives way at that zoom, since a letter is one of a run and U1 is the only
+name the board's chip has -- so a reference never yields to the legend, and every letter left
+out is one under a printed reference.
 """
 
 from __future__ import annotations
@@ -45,6 +52,11 @@ def test_an_example_has_board_notes_to_be_held_against() -> None:
     assert any(_scene(path).board_note_items for path in EXAMPLES)
 
 
+def test_an_example_prints_a_legend_to_be_held_against() -> None:
+    scenes = [_scene(path) for path in EXAMPLES]
+    assert any(scene.legend_item is not None and scene.legend_item.label_rects() for scene in scenes)
+
+
 @pytest.mark.parametrize("path", EXAMPLES, ids=lambda path: path.stem)
 def test_no_reference_prints_on_a_board_note(path: Path) -> None:
     scene = _scene(path)
@@ -65,6 +77,56 @@ def test_no_reference_prints_on_a_board_note(path: Path) -> None:
                 # Moved under its part, it moved onto no pin name either.
                 for name in item._pin_name_rects_on_screen(transform):
                     assert not plate.intersects(name), (path.stem, item.comp.ref, scale)
+
+
+@pytest.mark.parametrize("path", EXAMPLES, ids=lambda path: path.stem)
+def test_no_reference_yields_to_the_legend(path: Path) -> None:
+    """A reference that yields at some zoom yields with the legend gone too: only a note,
+    or a pin name under it, ever hides one."""
+    scene = _scene(path)
+    if scene.legend_item is None:
+        return
+    for scale in ZOOMS:
+        transform = QTransform.fromScale(scale, scale)
+        for item in scene.component_items.values():
+            if item.reference_placement(transform) is not None:
+                continue
+            scene.legend_item.setVisible(False)
+            try:
+                assert item.reference_placement(transform) is None, (path.stem, item.comp.ref, scale)
+            finally:
+                scene.legend_item.setVisible(True)
+
+
+@pytest.mark.parametrize("path", EXAMPLES, ids=lambda path: path.stem)
+def test_a_legend_letter_is_left_out_only_under_a_printed_reference(path: Path) -> None:
+    """Every letter the legend leaves out lies under a reference that is printed, and no
+    letter it prints does."""
+    scene = _scene(path)
+    legend = scene.legend_item
+    if legend is None:
+        return
+    for scale in ZOOMS:
+        transform = QTransform.fromScale(scale, scale)
+        plates = []
+        for item in scene.component_items.values():
+            placement = item.reference_placement(transform)
+            if placement is not None:
+                plates.append(item.reference_rect(transform.map(placement[0]), placement[1]))
+        covered = legend.covered_labels(transform)
+        for index, rect in enumerate(legend.label_rects()):
+            under = any(transform.mapRect(rect).intersects(plate) for plate in plates)
+            assert under == (index in covered), (path.stem, index, scale)
+
+
+def test_a_legend_letter_gives_way_to_a_reference_that_has_nowhere_else() -> None:
+    """atmega328-relay opens at a zoom where U1's reference meets the legend over its chip
+    and under it: it prints all the same, and the letters under it are left out there."""
+    scene = _scene(ROOT / "examples" / "atmega328-relay.perf")
+    u1 = next(item for item in scene.component_items.values() if item.comp.ref == "U1")
+    transform = QTransform.fromScale(5.0, 5.0)
+    assert u1.reference_placement(transform) is not None
+    assert scene.legend_item is not None and scene.legend_item.covered_labels(transform)
 
 
 def test_nano_relays_j2_never_prints_on_its_load_note() -> None:

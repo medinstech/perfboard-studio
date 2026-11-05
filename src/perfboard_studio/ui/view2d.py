@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import contextlib
 import math
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterator, Sequence
 from dataclasses import replace
 from typing import Any, cast
 
@@ -830,23 +830,77 @@ class BoardLegendItem(QGraphicsItem):
         self.side = side
         #: Printed on this face, or seen faintly through the board from the other one.
         self.near_side = labels.face == "both" or labels.face == side
+        self._rects: list[QRectF] | None = None
         self.setZValue(-95)  # On the substrate, under the pads: ink goes on first.
 
     def boundingRect(self) -> QRectF:
         return _outline_rect(self.board)
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        # On paper every address is printed: the references there are millimetres over
+        # their bodies, and this is the copy taped to the board.
+        covered = set() if _on_paper(painter) else self.covered_labels(painter.transform())
+        painter.save()
+        painter.setPen(QPen(legend_ink(self.board, self.near_side)))
+        for index, (centre, text, height, wide, rotation, _ink) in enumerate(self._printed()):
+            if index in covered:
+                continue
+            draw_physical_label(
+                painter, centre, text, height, max_width_mm=wide, rotation_deg=rotation
+            )
+        painter.restore()
+
+    def label_rects(self) -> list[QRectF]:
+        """The box of every address this board prints, in scene millimetres -- what a part's
+        reference keeps off where it can (``ComponentItem.reference_placement``). Walked once
+        per item: the scene builds a new one for a new document."""
+        if self._rects is None:
+            self._rects = []
+            for centre, _text, height, _wide, rotation, ink in self._printed():
+                width, tall = (height, ink) if rotation else (ink, height)
+                self._rects.append(
+                    self.mapRectToScene(
+                        QRectF(centre.x() - width / 2, centre.y() - tall / 2, width, tall)
+                    )
+                )
+        return self._rects
+
+    def covered_labels(self, transform: QTransform) -> set[int]:
+        """The labels a printed reference lies on at this zoom, left out there.
+
+        A reference keeps off the legend where it can, over its part or under it, and where
+        it cannot it still prints: a letter is one of a run anybody reads from its
+        neighbours, and U1 is the board's only name for its chip -- hidden, atmega328-relay
+        opened without it. So the letter under it gives way at that zoom, and nothing else
+        does: a reference yields to a note, and never moves onto a pin name."""
+        scene = self.scene()
+        if scene is None or (transform.m11() or 1.0) < REF_LABEL_MIN_SCALE:
+            return set()
+        plates = []
+        for item in getattr(scene, "component_items", {}).values():
+            if not item.show_reference or not item.isVisible():
+                continue
+            placement = item.reference_placement(transform)
+            if placement is not None:
+                plates.append(item.reference_rect(transform.map(placement[0]), placement[1]))
+        if not plates:
+            return set()
+        return {
+            index
+            for index, rect in enumerate(self.label_rects())
+            if any(transform.mapRect(rect).intersects(plate) for plate in plates)
+        }
+
+    def _printed(self) -> Iterator[tuple[QPointF, str, float, float, float, float]]:
+        """Each label this board prints: (centre, text, cap height, widest it may be,
+        rotation, its ink's width) -- one walk for painting and for ``label_rects``."""
         board = self.board
-        color = legend_ink(board, self.near_side)
         # WHERE AND HOW TALL is one answer for both views and the print
         # (`geometry.legend_layout`): the bare band along each edge a run is printed on, NOT
         # the whole margin -- the outer pads eat half their extent of it, and an edge strip
         # takes what it takes -- with the cap height the narrowest of those bands allows.
         layout = legend_layout(self.document, self.labels)
         height = layout.height
-
-        painter.save()
-        painter.setPen(QPen(color))
 
         # Letters along the top (and bottom), numbers down the left (and right) -- the
         # layout every board in this class uses, and the reason `all_edges` defaults to
@@ -896,9 +950,7 @@ class BoardLegendItem(QGraphicsItem):
                     self.document, Point2(col * board.pitch, y), ink, height
                 ):
                     continue
-                draw_physical_label(
-                    painter, QPointF(x, y), column_text, height, max_width_mm=wide
-                )
+                yield QPointF(x, y), column_text, height, wide, 0.0, ink
 
         for row in range(board.rows):
             text = printed_label("rows", row, self.labels)
@@ -906,22 +958,15 @@ class BoardLegendItem(QGraphicsItem):
                 continue
             for x in row_xs:
                 # Turned on its side, so its box is turned too.
+                ink = legend_ink_width_mm(text, height, wide)
                 if not printed_label_is_clear(
                     self.document,
                     Point2(x if self.side == "top" else _span_w_for(board) - x, row * board.pitch),
                     height,
-                    legend_ink_width_mm(text, height, wide),
+                    ink,
                 ):
                     continue
-                draw_physical_label(
-                    painter,
-                    QPointF(x, row * board.pitch),
-                    text,
-                    height,
-                    max_width_mm=wide,
-                    rotation_deg=-90.0,
-                )
-        painter.restore()
+                yield QPointF(x, row * board.pitch), text, height, wide, -90.0, ink
 
 
 class BoardTextItem(QGraphicsItem):
@@ -4127,22 +4172,40 @@ class ComponentItem(QGraphicsItem):
         Under it, it must not print on a pin name either -- its own part's or the next
         one's -- or it would only have moved the collision.
 
+        The board's printed legend is kept off too, where a place clear of it exists: a
+        part on the first row had its reference over the column letters above it, and on
+        ne555-astable LED1's hid the "F" its own pins are counted from. Where neither place
+        is clear of the legend, the reference prints all the same, over its part if no note
+        is there, and the letter under it gives way (``BoardLegendItem.covered_labels``): a
+        letter is one of a run, and U1 is the only name the board's chip has.
+
         The layer that prints it and the part's hit area both ask here."""
         over = (self.reference_anchor(), REF_LABEL_OFFSET)
         notes = self._note_rects(transform)
-        if not notes:
+        legend = self._legend_rects(transform)
+        if not notes and not legend:
             return over
-        if not any(self.reference_rect(transform.map(over[0]), over[1]).intersects(n) for n in notes):
+        plate = self.reference_rect(transform.map(over[0]), over[1])
+        over_clear = not any(plate.intersects(note) for note in notes)
+        if over_clear and not any(plate.intersects(label) for label in legend):
             return over
         height = QFontMetricsF(label_font(REF_LABEL_PX, True)).height()
         body = self._local_body_rect()
-        anchor = self.mapToScene(QPointF(body.center().x(), body.bottom()))
-        offset = QPointF(0.0, height - REF_LABEL_OFFSET.y())
-        plate = self.reference_rect(transform.map(anchor), offset)
+        under = (
+            self.mapToScene(QPointF(body.center().x(), body.bottom())),
+            QPointF(0.0, height - REF_LABEL_OFFSET.y()),
+        )
+        plate = self.reference_rect(transform.map(under[0]), under[1])
         taken = notes + self._pin_name_rects_on_screen(transform)
-        if any(plate.intersects(rect) for rect in taken):
-            return None
-        return anchor, offset
+        under_clear = not any(plate.intersects(rect) for rect in taken)
+        if under_clear and not any(plate.intersects(label) for label in legend):
+            return under
+        # Neither is clear of the legend: a letter gives way, a note or a pin name never.
+        if over_clear:
+            return over
+        if under_clear:
+            return under
+        return None
 
     def _pin_name_rects_on_screen(self, transform: QTransform) -> list[QRectF]:
         """Every part's printed pin names in this scene, in device pixels."""
@@ -4164,6 +4227,14 @@ class ComponentItem(QGraphicsItem):
             device_anchor, self.comp.ref, REF_LABEL_PX, REF_LABEL_ALIGN, bold=True, offset=offset
         )
 
+    def _legend_rects(self, transform: QTransform) -> list[QRectF]:
+        """The addresses the board prints, as rectangles in device pixels."""
+        scene = self.scene()
+        legend: BoardLegendItem | None = getattr(scene, "legend_item", None) if scene else None
+        if legend is None or not legend.isVisible():
+            return []
+        return [transform.mapRect(rect) for rect in legend.label_rects()]
+
     def _note_rects(self, transform: QTransform) -> list[QRectF]:
         """The board notes this scene shows, as rectangles in device pixels."""
         scene = self.scene()
@@ -4181,7 +4252,7 @@ class ComponentItem(QGraphicsItem):
             QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged,
             QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged,
         ):
-            for name in ("reference_layer", "lead_ends_layer"):
+            for name in ("reference_layer", "lead_ends_layer", "legend_item"):
                 layer = getattr(self.scene(), name, None)
                 if layer is not None:
                     layer.update()
@@ -4378,6 +4449,8 @@ class BoardScene(QGraphicsScene):
         self.pad_grid: PadGridItem | None = None
         #: The board itself, on a breadboard -- see BreadboardItem. None on every other.
         self.breadboard_item: BreadboardItem | None = None
+        #: The addresses the board prints (BoardLegendItem); None on a board printing none.
+        self.legend_item: BoardLegendItem | None = None
         self.show_ratsnest = show_ratsnest
         self.show_rulers = show_rulers
         self.highlighted_nets: tuple[str, ...] = ()
@@ -4705,8 +4778,10 @@ class BoardScene(QGraphicsScene):
         # Ink first, then copper on top of it: the legend is printed on the substrate and
         # a pad sits over the print, which is also the order that keeps a label legible
         # where it passes close to the outer row of pads.
+        self.legend_item = None
         if board.labels is not None and not breadboard:
-            self.addItem(BoardLegendItem(self.document, board.labels, self.side))
+            self.legend_item = BoardLegendItem(self.document, board.labels, self.side)
+            self.addItem(self.legend_item)
         if board.printed and not breadboard:
             self.addItem(BoardTextItem(self.document, self.side))
 

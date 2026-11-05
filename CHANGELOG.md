@@ -44,6 +44,14 @@ closed without a bump.
   WROOM-32, the USB bridge, the regulator, the micro-USB socket and the BOOT and EN buttons
   where a photograph of one, straightened on its own pads, puts them. Its check says the
   clones keep the pins and move the parts, and that the 38-pin DevKitC is another board.
+### Fixed
+
+- **A part's name no longer prints over the board's own printed addresses.** On a board
+  that prints its column letters and row numbers, a part on the first row had its name
+  over the letters above it -- LED1 hid the "F" on the NE555 board. It now goes under
+  the part where that is clear; where neither place is, the name still prints and the
+  letter under it is left out at that zoom. A note written on the board still takes
+  precedence over a part's name, as before.
 
 ## [0.23.0] - 2026-11-09
 
