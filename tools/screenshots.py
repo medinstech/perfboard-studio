@@ -359,6 +359,12 @@ def _nano_relay_shots(app: QApplication, shots: list[tuple[str, str]]) -> bool:
             QRectF(left, top, right - left, bottom - top), Qt.AspectRatioMode.KeepAspectRatio
         )
         _settle(app)
+    # The 2D picture is the whole board after all, fitted clear of the tool bars: framed on
+    # the parts, columns A and B were cut off at the left, J2's COM was chopped in half and
+    # a scroll bar stood under the board -- and the parts fill the 6 x 8 board now, so the
+    # whole of it is hardly further out. The parts' frame above still aims the 3D close-up.
+    window.view.fit_board()
+    _settle(app)
     _grab(window, app).save(str(OUT_DIR / "catalog-and-pin-names.png"))
     shots.append(("catalog-and-pin-names.png", "catalog parts, a module, pin names, labels"))
 
