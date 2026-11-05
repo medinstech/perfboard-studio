@@ -229,6 +229,13 @@ class CommandBus:
     def document(self) -> PerfDocument:
         return self._document
 
+    @property
+    def system_document(self) -> PerfDocument:
+        """The whole document the bus holds, every board of a system. The same as
+        ``document`` here; a bus that shows one board of a system as ``document``
+        (``ui.boardbus.BoardBus``) still answers this with all of them."""
+        return self._document
+
     def dispatch(self, type_: str, payload: Any) -> DispatchResult:
         definition = self._registry.get(type_)
         if definition is None:
