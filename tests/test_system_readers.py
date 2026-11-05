@@ -440,3 +440,29 @@ def test_a_board_name_goes_through_the_file_only_when_there_is_one() -> None:
     assert '"name"' not in remote.split('"board"')[0], "an unnamed board writes no name"
     one = dataclasses.replace(doc, board_name="", boards=(), cables=())
     assert '"boardName"' not in persist.serialize_document(one)
+
+
+def test_the_window_shows_the_second_board_and_saves_the_whole_system(qapp, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """With the second board in front the scene draws it alone and a move goes to it; the
+    file written is still every board and the cable, and the window reads as saved."""
+    from perfboard_studio.commands import MoveComponentPayload
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_system())
+    try:
+        window.bus.show("b2")
+        window.on_bus_changed(window.bus.system_document, None)
+        assert {c.ref for c in window.scene.document.components} == {"JB", "R2"}
+        moved = window.bus.dispatch("component.move", MoveComponentPayload(id="cmp-4", anchor=HoleCoord(5, 8)))
+        assert moved.ok and moved.description.endswith("on Remote"), moved.description
+        assert next(c for c in window.scene.document.components if c.id == "cmp-4").anchor == HoleCoord(5, 8)
+        path = tmp_path / "system.perf"
+        assert window._save_to(path)
+        saved = persist.parse_document_or_throw(path.read_text(encoding="utf-8"))
+        # The file is stamped with the time it was written; everything else is the system.
+        assert dataclasses.replace(saved, meta=window.bus.system_document.meta) == window.bus.system_document
+        assert len(saved.boards) == 1 and saved.cables and {c.ref for c in saved.components} == {"JA", "R1"}
+        assert not window.is_modified
+    finally:
+        window.close()
+        window.deleteLater()

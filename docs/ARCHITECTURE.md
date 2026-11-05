@@ -3068,6 +3068,15 @@ readers were audited, and each is one of three kinds:
 | The circuit | every board through `system.py` (`circuit_parts`, `every_component`, `placed_components`, `references_in_use`) | ERC, LVS, the sheet (`schematic`), `catalog.free_reference` and `view2d.next_reference`, `assert_ref_free` and `part.add`'s id, a symbol move, the supply names a net takes, `design_on_a_new_board`; in the window the Parts list, the palette and Go to Part, the step bar's counts, a click or menu on a symbol, `_id_of` / `_ref_of_id`, what a document opens on; in MCP the status, `list_components` and a part looked up by reference |
 | The design | `doc.parts`, `doc.nets`, the sheet | the netlist, the sheet's layout, the step bar's "not on the board yet" -- a part placed on any board has left `doc.parts` |
 
+**The window's bus shows the board in front** (`ui.boardbus.BoardBus`). It is the one
+`CommandBus` of the system -- one undo stack whichever board a step was on -- whose `document`
+is the board in front alone and whose `dispatch` sends a board's command through `board.on` for
+it, and a design's or the system's to the document. So the scene, the 3D view, the guide,
+placing and routing, written for one board, read `self.bus.document` and are right; what reads
+the whole system -- saving, autosave and recovery, whether the window is modified, the sheet,
+the Parts list, the palette, the step bar, ERC and LVS -- asks for `system_document`, which every
+bus has. On one board `document` is the very document, so no single-board window changes.
+
 A gesture on a symbol whose part is on another board than the one shown (a drop, Properties,
 Rename) is answered in the status bar -- "JB is on another board: Remote." -- rather than dropped;
 taking it back into the design needs no view of its board and goes through `board.on`.

@@ -162,7 +162,7 @@ from perfboard_studio.catalog import (
     part_rank,
     search_rank,
 )
-from perfboard_studio.command import CommandBus, CommandContext, DispatchResult, HistoryEntry
+from perfboard_studio.command import CommandContext, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
     AddBoardNotePayload,
     AddNetPayload,
@@ -342,6 +342,7 @@ from . import helpcards, icons, planner_pool, theme, updater, whatsnew
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .benchguide import BenchItem, BenchView, bench_items, crop_around
+from .boardbus import BoardBus
 from .boardcolors import SCHEMES as BOARD_SCHEMES
 from .boardcolors import choose as choose_board_colour
 from .boardcolors import chosen_key as chosen_board_colour
@@ -2707,7 +2708,7 @@ class MainWindow(QMainWindow):
         # the first thing anybody tries. See dropEvent.
         self.setAcceptDrops(True)
 
-        self.scene = BoardScene(self.bus.document, self.lookup, side=self.side, bus=self.bus)
+        self.scene = BoardScene(self.bus.system_document, self.lookup, side=self.side, bus=self.bus)
         self.view = BoardView(self.scene)
         self.scene.moveCommitted.connect(self.on_move_committed)
         self.scene.selectionNetsChanged.connect(self._on_selection_nets_changed)
@@ -2807,7 +2808,7 @@ class MainWindow(QMainWindow):
         helpcards.install(self, self._help_action)
 
         self._subscribe_bus()
-        self.on_bus_changed(self.bus.document, None)
+        self.on_bus_changed(self.bus.system_document, None)
         # Last, and after the first repaint: restoring a toggle drives the scene through
         # the same handler the menu item does, and those handlers expect a window that is
         # already built.
@@ -2878,7 +2879,7 @@ class MainWindow(QMainWindow):
 
     # -- bus wiring ----------------------------------------------------------
 
-    def _new_bus(self, document: PerfDocument) -> CommandBus:
+    def _new_bus(self, document: PerfDocument) -> BoardBus:
         """A bus whose id generator cannot collide with the document's existing ids.
 
         ``create_id_generator()`` restarts at zero, so on a document loaded from disk with
@@ -2886,7 +2887,7 @@ class MainWindow(QMainWindow):
         duplicate id. Every bus this window makes has to be seeded from the document it is
         given -- see ``commands.create_document_id_generator``.
         """
-        return CommandBus(
+        return BoardBus(
             document,
             create_standard_registry(),
             CommandContext(next_id=create_document_id_generator(document)),
@@ -3040,7 +3041,7 @@ class MainWindow(QMainWindow):
         for top in self._top_menus:
             walk(top, (plain(top.title()),), {shiboken6.getCppPointer(top)[0]})
 
-        document = self.bus.document
+        document = self.bus.system_document
         # A part by what somebody remembers of it: "R37" from a finding, "10k" from the
         # schematic, "TO-220" from the pile on the bench -- the package is where it lives.
         def package(footprint_id: str) -> str:
@@ -3108,7 +3109,7 @@ class MainWindow(QMainWindow):
 
     def workflow_facts(self) -> WorkflowFacts:
         """What the step bar is measured against, from what the last refresh computed."""
-        document = self.bus.document
+        document = self.bus.system_document
         board = document.board
         preset = _matching_preset(board)
         grid = f"{board.cols} × {board.rows}"
@@ -3175,7 +3176,7 @@ class MainWindow(QMainWindow):
             self.show_circuit_findings()
         elif step == "circuit":
             self.show_schematic()
-            document = self.bus.document
+            document = self.bus.system_document
             if document.parts or every_component(document):
                 # Parts and nothing joining them: the sheet's wire tool, armed -- the Next
                 # button is then one drag from a pin to a pin away from a circuit.
@@ -5719,7 +5720,7 @@ class MainWindow(QMainWindow):
         is nothing for this window to have been told. ``_described_here`` only holds the
         ones defined but not yet placed, which the document cannot know about yet.
         """
-        document = self.bus.document
+        document = self.bus.system_document
         used = {
             *(part.footprint_id for part in circuit_parts(document)),
         }
@@ -5861,7 +5862,7 @@ class MainWindow(QMainWindow):
             return
         footprint = self.lookup(footprint_id)
         name = footprint_label(footprint.name) if footprint is not None else footprint_id
-        ref = next_reference(self.bus.document, footprint_id, self.scene.placement_prefix)
+        ref = next_reference(self.bus.system_document, footprint_id, self.scene.placement_prefix)
         described = f"{self.scene.placement_value} {name}" if self.scene.placement_value else name
         self.label_place_hint.setText(
             f"{t('Click a hole to place')} <b>{ref}</b> ({described}). {t('Esc cancels.')}"
@@ -5927,7 +5928,7 @@ class MainWindow(QMainWindow):
         if footprint_id:
             footprint = self.lookup(footprint_id)
             name = footprint_label(footprint.name) if footprint is not None else footprint_id
-            ref = next_reference(self.bus.document, footprint_id, self.scene.placement_prefix)
+            ref = next_reference(self.bus.system_document, footprint_id, self.scene.placement_prefix)
             value = self.scene.placement_value
             described = f"{value} {name}" if value else name
             return f"{t('Placing')} {ref} ({described})  ·  {t('click a hole, Esc cancels')}"
@@ -5949,7 +5950,7 @@ class MainWindow(QMainWindow):
         if self.scene.measure_armed:
             from_ = self.scene.measure_from()
             where = (
-                f"{t('from')} {format_hole(from_, self.bus.document.board)}" if from_ is not None else t("click two holes")
+                f"{t('from')} {format_hole(from_, self.bus.system_document.board)}" if from_ is not None else t("click two holes")
             )
             return f"{t('Measuring')}  ·  {where}, {t('Esc ends')}"
 
@@ -5980,7 +5981,7 @@ class MainWindow(QMainWindow):
         session on a real board. ``raise_`` because the panel shares a tab group with the
         3D view and the build guide, and a tab behind two others is still hidden.
         """
-        document = self.bus.document
+        document = self.bus.system_document
         if every_component(document) or document.parts or document.nets or document.conductors:
             return
         self.show_schematic()
@@ -5995,7 +5996,7 @@ class MainWindow(QMainWindow):
         placed yet opens on the sheet, which is the only place it has anything to show.
         Not on a reload from disk: somebody watching an agent work chose what to look at.
         """
-        document = self.bus.document
+        document = self.bus.system_document
         if every_component(document):
             self.show_board()
         elif document.parts:
@@ -6172,7 +6173,7 @@ class MainWindow(QMainWindow):
             self._part_list_stale = True
             return
         self._part_list_stale = False
-        self.part_list.refresh(self.bus.document, self.lookup)
+        self.part_list.refresh(self.bus.system_document, self.lookup)
         self.part_list.show_selected(self.scene.selected_component_ids())
 
     def _on_part_list_visibility_changed(self, visible: bool) -> None:
@@ -6518,7 +6519,7 @@ class MainWindow(QMainWindow):
             self._schematic_stale = True
             return
         self._schematic_stale = False
-        drawing = build_schematic(self.bus.document, self.lookup)
+        drawing = build_schematic(self.bus.system_document, self.lookup)
         # The circuit's findings ringed on the pins they are about: the sheet is where the
         # circuit is drawn, so it is where an unpowered VCC is looked for.
         self.schematic_view.set_findings(self._last_erc)
@@ -6527,7 +6528,7 @@ class MainWindow(QMainWindow):
         self._consider_arrange_hint(drawing)
 
         parts = len(drawing.symbols)
-        nets = len(self.bus.document.nets)
+        nets = len(self.bus.system_document.nets)
         # A blank panel and a count of zeros is the screen the empty state exists to
         # prevent: on an empty sheet it says what goes here and offers the first part.
         self._sheet_blank = not drawing.symbols
@@ -6652,7 +6653,7 @@ class MainWindow(QMainWindow):
         # it has nothing here to remove, and a button whose only outcome is an explanation
         # of why it cannot work is worse than a greyed-out one.
         ref = self._schematic_ref
-        document = self.bus.document
+        document = self.bus.system_document
         defined = ref is not None and any(p.ref == ref for p in circuit_parts(document))
         self.act_sch_delete.setEnabled(defined)
         self.act_sch_place.setEnabled(bool(document.parts))
@@ -6663,12 +6664,12 @@ class MainWindow(QMainWindow):
 
     def _on_schematic_part_clicked(self, ref: str) -> None:
         self._schematic_ref = ref
-        component = next((c for c in every_component(self.bus.document) if c.ref == ref), None)
+        component = next((c for c in every_component(self.bus.system_document) if c.ref == ref), None)
         if component is None:
             # Not on the board. That is the normal state of a part on a schematic being
             # drawn, so it is selected here and reported rather than treated as a miss.
             self._sync_schematic_highlight()
-            in_design = any(part.ref == ref for part in self.bus.document.parts)
+            in_design = any(part.ref == ref for part in self.bus.system_document.parts)
             self.statusBar().showMessage(
                 (
                     t("{ref} is in the design, not on the board yet.")
@@ -6687,7 +6688,7 @@ class MainWindow(QMainWindow):
         The sheet speaks references and ``doc.sheet`` is keyed on ids, which is what makes a
         position survive a rename and survive a part moving between the two lists.
         """
-        found = next((p for p in circuit_parts(self.bus.document) if p.ref == ref), None)
+        found = next((p for p in circuit_parts(self.bus.system_document) if p.ref == ref), None)
         return found.id if found is not None else None
 
     def _sheet_placements(self, moved: dict[str, Point2]) -> tuple[SymbolPlacement, ...]:
@@ -6745,9 +6746,9 @@ class MainWindow(QMainWindow):
         sheet -- see ``schematic.wires_as_drawn``. Nothing on a sheet that already has
         positions: its wires are the ones somebody drew, and they are already stored."""
         item = self.schematic_view.item
-        if self.bus.document.sheet or item is None:
+        if self.bus.system_document.sheet or item is None:
             return ()
-        return wires_as_drawn(item.drawing, self.bus.document)
+        return wires_as_drawn(item.drawing, self.bus.system_document)
 
     def _dispatch_sheet_layout(self, moved: dict[str, Point2], label: str) -> None:
         placements = self._sheet_placements(moved)
@@ -6821,7 +6822,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(refused(result), 8000)
 
     def _ref_of_id(self, part_id: str) -> str | None:
-        found = next((p for p in circuit_parts(self.bus.document) if p.id == part_id), None)
+        found = next((p for p in circuit_parts(self.bus.system_document) if p.id == part_id), None)
         return found.ref if found is not None else None
 
     def _sheet_selection(self) -> list[str]:
@@ -6858,7 +6859,7 @@ class MainWindow(QMainWindow):
         """
         if not isinstance(path, list) or len(path) < 2:
             return
-        if not self.bus.document.sheet:
+        if not self.bus.system_document.sheet:
             self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
         wire = SheetWire(
             a=NetNode(component_ref=ref_a, pin=pin_a),
@@ -6915,7 +6916,7 @@ class MainWindow(QMainWindow):
         the net IS ``doc.nets``, and the label is printed from it, so two pins carrying one
         name are the same net because they are.
         """
-        document = self.bus.document
+        document = self.bus.system_document
         existing = sorted({net.name for net in document.nets})
         name, ok = QInputDialog.getItem(
             self,
@@ -6932,7 +6933,7 @@ class MainWindow(QMainWindow):
     def join_pin_to_net_named(self, ref: str, pin: str, name: str) -> None:
         """Put one pin on the net called ``name``, making the net if there is none --
         classed by its name, so GND is a ground net and +5V a power one."""
-        document = self.bus.document
+        document = self.bus.system_document
         node = NetNode(component_ref=ref, pin=pin)
         net = next((n for n in document.nets if n.name == name), None)
         if net is None:
@@ -6985,7 +6986,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "act_sheet_tool"):
             self.act_sheet_tool["select"].setChecked(True)
         if kind == "text":
-            self.schematic_view.set_selection([], [len(self.bus.document.sheet_notes) - 1])
+            self.schematic_view.set_selection([], [len(self.bus.system_document.sheet_notes) - 1])
             self._selection_from = "sheet"
             self._refresh_properties()
             self.inspector.focus_field("text")
@@ -7002,7 +7003,7 @@ class MainWindow(QMainWindow):
         if notes and drawing is not None:
             ids = tuple(
                 note.id
-                for index, note in enumerate(self.bus.document.sheet_notes)
+                for index, note in enumerate(self.bus.system_document.sheet_notes)
                 if index in set(notes)
             )
             if ids:
@@ -7285,7 +7286,7 @@ class MainWindow(QMainWindow):
         # what the scene is armed with: the same names and symbol the board would give it.
         template = self.scene.armed_footprint_id == footprint_id
         ref = next_reference(
-            self.bus.document, footprint_id, self.scene.placement_prefix if template else None
+            self.bus.system_document, footprint_id, self.scene.placement_prefix if template else None
         )
         result = self.bus.dispatch(
             "part.add",
@@ -7398,7 +7399,7 @@ class MainWindow(QMainWindow):
         as ``board_menu``: a menu built over one part must not act on another.
         """
         found = next(
-            ((b, c) for b, c in placed_components(self.bus.document) if c.ref == ref), None
+            ((b, c) for b, c in placed_components(self.bus.system_document) if c.ref == ref), None
         )
         component = found[1] if found is not None else None
         if found is not None:
@@ -7408,7 +7409,7 @@ class MainWindow(QMainWindow):
                 *self._on_board(found[0], "component.unplace", UnplaceComponentPayload(id=found[1].id))
             )
         else:
-            part = next((p for p in self.bus.document.parts if p.ref == ref), None)
+            part = next((p for p in self.bus.system_document.parts if p.ref == ref), None)
             if part is None:
                 self.statusBar().showMessage(
                     t("{ref} is only named by a net; edit the net to remove it.").format(
@@ -7446,7 +7447,7 @@ class MainWindow(QMainWindow):
         this is safe to offer from a menu: R1 wired into six nets and relabelled R7 used to
         come out connected to nothing.
         """
-        document = self.bus.document
+        document = self.bus.system_document
         if not any(p.ref == ref for p in circuit_parts(document)):
             return
         if self._said_it_is_elsewhere(ref):
@@ -7467,7 +7468,7 @@ class MainWindow(QMainWindow):
         claim -- a copy of R1 is not R1, and putting it on R1's nets would tell LVS the
         design has a part it has never heard of wired in parallel with one it has.
         """
-        document = self.bus.document
+        document = self.bus.system_document
         source: SchematicPart | ComponentInstance | None = next(
             (part for part in document.parts if part.ref == ref), None
         )
@@ -8466,7 +8467,7 @@ class MainWindow(QMainWindow):
         """What is selected on the sheet, as the parts it names, or None: parts on the board
         by their component ids, parts still only in the design by their part ids."""
         refs = set(self.schematic_view.selected_refs)
-        document = self.bus.document
+        document = self.bus.system_document
         if not refs:
             # A note picked on the sheet: its index is its place in ``sheet_notes``, which
             # is the order the sheet draws them in.
@@ -8691,7 +8692,7 @@ class MainWindow(QMainWindow):
         net = next(
             (
                 n
-                for n in self.bus.document.nets
+                for n in self.bus.system_document.nets
                 if any(node.component_ref == ref and node.pin == number for node in n.nodes)
             ),
             None,
@@ -8861,7 +8862,7 @@ class MainWindow(QMainWindow):
         drawing at all.
         """
         best: tuple[float, SheetWire] | None = None
-        for wire in self.bus.document.sheet_wires:
+        for wire in self.bus.system_document.sheet_wires:
             for start, end in zip(wire.path, wire.path[1:], strict=False):
                 distance = _distance_to_segment(where, start, end)
                 if distance <= SHEET_PICK_MM and (best is None or distance < best[0]):
@@ -8884,7 +8885,7 @@ class MainWindow(QMainWindow):
         rather than from a tree of twenty names -- the same shape as ``view2d.join_pins``
         being shared by the board's connect tool and the sheet's.
         """
-        net = next((n for n in self.bus.document.nets if n.id == net_id), None)
+        net = next((n for n in self.bus.system_document.nets if n.id == net_id), None)
         if net is None:
             return
         rename = menu.addAction(t("Re&name Net…"))
@@ -9169,12 +9170,14 @@ class MainWindow(QMainWindow):
         finally:
             self._bus_changing = False
         if hasattr(self, "properties"):
-            self.properties.refresh(document)
+            self.properties.refresh(self.bus.document)
             self._refresh_properties()
 
     def _redraw_for(self, document: PerfDocument, entry: HistoryEntry | None) -> None:
         self._track_moved_nets(document, entry)
-        self.scene.set_document(document)
+        # ``document`` is the whole system, as the bus hands its listeners; the scene draws
+        # the board in front.
+        self.scene.set_document(self.bus.document)
 
         # The circuit's check, ahead of the board's: it is what the Circuit step, the first
         # rows of the findings and the status bar's first count are measured on.
@@ -11095,21 +11098,22 @@ class MainWindow(QMainWindow):
         """Find a part by its reference, value or package, select it, and put the view on
         it: the command palette on the parts alone (Ctrl+K is everything). It was a dialog
         of its own, a second search that found the same parts a different way."""
-        document = self.bus.document
+        document = self.bus.system_document
         if not circuit_parts(document):
             self.statusBar().showMessage(t("There are no parts on this board yet."), 6000)
             return
         self.command_palette.open(frozenset({"part"}))
 
-    #: The board the views show: the first one, until the System tab lets a person pick
-    #: another (docs/ARCHITECTURE.md, "Several boards are one document, and each is seen
-    #: alone"). What reads "the board" in this window reads this one; what reads "the
-    #: circuit" reads every board.
-    _shown_board: BoardId = FIRST_BOARD
+    @property
+    def _shown_board(self) -> BoardId:
+        """The board the views show: the bus's (``ui.boardbus.BoardBus``). What reads "the
+        board" in this window reads ``self.bus.document``, which is this board alone; what
+        reads "the circuit" reads ``self.bus.system_document``, every board."""
+        return self.bus.board_id
 
     def _board_elsewhere(self, ref: str) -> str | None:
         """The name of the board a part is placed on, when that is not the board shown."""
-        document = self.bus.document
+        document = self.bus.system_document
         found = next((b for b, c in placed_components(document) if c.ref == ref), None)
         if found is None or found == self._shown_board:
             return None
@@ -11136,7 +11140,8 @@ class MainWindow(QMainWindow):
     def go_to_component(self, component_id: str) -> None:
         """Select a part and centre the view on it. Also what the DRC dock wants."""
         component = next(
-            (c for c in every_component(self.bus.document) if c.id == component_id), None
+            (c for c in every_component(self.bus.system_document) if c.id == component_id),
+            None,
         )
         if component is None or self._said_it_is_elsewhere(component.ref):
             return
@@ -11613,7 +11618,7 @@ class MainWindow(QMainWindow):
         self._subscribe_bus()
         self.scene.bus = self.bus
         self._forget_the_previous_document()
-        self.on_bus_changed(self.bus.document, None)
+        self.on_bus_changed(self.bus.system_document, None)
         self._mark_saved()
         self.view.fit_board()
         self._open_the_schematic_on_an_empty_design()
@@ -11627,7 +11632,7 @@ class MainWindow(QMainWindow):
         """Take this circuit to another board, as a new document: the breadboard it was
         tried on stays in its file, the parts wait in the design, and the window goes
         straight to the question of which board (``on_choose_board``)."""
-        current = self.bus.document
+        current = self.bus.system_document
         if not current.parts and not current.components:
             self.statusBar().showMessage(t("There is no circuit here to take to another board."), 8000)
             return
@@ -11643,7 +11648,7 @@ class MainWindow(QMainWindow):
         self._subscribe_bus()
         self.scene.bus = self.bus
         self._forget_the_previous_document()
-        self.on_bus_changed(self.bus.document, None)
+        self.on_bus_changed(self.bus.system_document, None)
         self._mark_saved()
         self.view.fit_board()
         self.statusBar().showMessage(
@@ -11676,7 +11681,7 @@ class MainWindow(QMainWindow):
         self._subscribe_bus()
         self.scene.bus = self.bus
         self._forget_the_previous_document()
-        self.on_bus_changed(self.bus.document, None)
+        self.on_bus_changed(self.bus.system_document, None)
         self._mark_saved()
         self.view.fit_board()
         self.statusBar().showMessage(
@@ -11838,7 +11843,7 @@ class MainWindow(QMainWindow):
         self._subscribe_bus()
         self.scene.bus = self.bus
         self._forget_the_previous_document()
-        self.on_bus_changed(self.bus.document, None)
+        self.on_bus_changed(self.bus.system_document, None)
         self._mark_saved()
         self.view.fit_board()
         self._show_what_the_document_has()
@@ -11916,7 +11921,7 @@ class MainWindow(QMainWindow):
         self._subscribe_bus()
         self.scene.bus = self.bus
         self._forget_the_previous_document()
-        self.on_bus_changed(self.bus.document, None)
+        self.on_bus_changed(self.bus.system_document, None)
         if not self._save_to(self.current_path):
             return
         self._watch_current_path()
@@ -11980,7 +11985,7 @@ class MainWindow(QMainWindow):
             return False
         assert self.current_path is not None
 
-        document = self.bus.document
+        document = self.bus.system_document
         # Rendered before anything is written -- see _render_step_images, which is also why
         # a machine with no offscreen GL saves a guide without pictures rather than
         # crashing from inside Save, the one place that must not happen.
@@ -12225,7 +12230,7 @@ class MainWindow(QMainWindow):
         self._subscribe_bus()
         self.scene.bus = self.bus
         self._forget_the_previous_document()
-        self.on_bus_changed(self.bus.document, None)
+        self.on_bus_changed(self.bus.system_document, None)
         # The viewport is left alone on a reload: somebody watching an agent work is
         # looking at a particular corner of the board, and refitting on every write would
         # snatch it back to the whole board a dozen times a minute.
@@ -12627,7 +12632,7 @@ class MainWindow(QMainWindow):
         else:
             # Named after the board when it has a name -- an example opened as untitled is
             # still called what it is -- and "board" when it has none.
-            name = self.bus.document.meta.name
+            name = self.bus.system_document.meta.name
             stem = project_name(name) if name != UNTITLED_NAME else "board"
             default = str(self._documents_folder() / f"{stem}{DOCUMENT_SUFFIX}")
         path_str, _ = QFileDialog.getSaveFileName(
@@ -12662,7 +12667,7 @@ class MainWindow(QMainWindow):
         unmodified again. A value comparison would give the same answer far more slowly,
         on every keystroke.
         """
-        return self.bus.document is not self._saved_document
+        return self.bus.system_document is not self._saved_document
 
     def _document_name(self) -> str:
         """What the header calls the board: the name it was given (Rename Board), else
@@ -12675,7 +12680,7 @@ class MainWindow(QMainWindow):
         return t("untitled")
 
     def _mark_saved(self) -> None:
-        self._saved_document = self.bus.document
+        self._saved_document = self.bus.system_document
         self._refresh_title()
         # A board that has a file now is no longer one the Next button asks to save.
         self._refresh_workflow()
@@ -12827,11 +12832,11 @@ class MainWindow(QMainWindow):
             return
         # The document first, because it is the copy that is worth having: a recovery
         # record is a question asked at the next start, and a saved file is the board.
-        if self._autosave_to_the_file(persist.serialize_document(self._stamped(self.bus.document))):
+        if self._autosave_to_the_file(persist.serialize_document(self._stamped(self.bus.system_document))):
             if self._autosave.written:
                 self._autosave.clear()
             return
-        text = persist.serialize_document(self.bus.document)
+        text = persist.serialize_document(self.bus.system_document)
         if self._autosave.write(text, self.current_path):
             if self._autosave_complained:
                 # Writable again -- the disk was freed, the folder came back. The warning
@@ -12859,7 +12864,7 @@ class MainWindow(QMainWindow):
         """
         if not _stored_bool(app_settings(), SHOW_WELCOME_KEY, True):
             return
-        document = self.bus.document
+        document = self.bus.system_document
         if (
             self.current_path is not None
             or self.is_modified
@@ -13033,7 +13038,7 @@ class MainWindow(QMainWindow):
         self._subscribe_bus()
         self.scene.bus = self.bus
         self._forget_the_previous_document()
-        self.on_bus_changed(self.bus.document, None)
+        self.on_bus_changed(self.bus.system_document, None)
         self.view.fit_board()
         # Marked as unsaved by leaving _saved_document alone: it still points at whatever
         # this window started with, which is a different object, so `is_modified` is true.
@@ -13221,9 +13226,9 @@ class MainWindow(QMainWindow):
         # A board nobody has named takes its file's name, as a command so it undoes. It
         # used to keep "untitled" for good -- no route in the window changed it -- and that
         # is the title every guide, sheet and project folder then went out with.
-        if self.bus.document.meta.name == UNTITLED_NAME and path.stem:
+        if self.bus.system_document.meta.name == UNTITLED_NAME and path.stem:
             self.bus.dispatch("document.rename", RenameDocumentPayload(name=path.stem))
-        text = persist.serialize_document(self._stamped(self.bus.document))
+        text = persist.serialize_document(self._stamped(self.bus.system_document))
         # The one write that must not fail quietly -- and it was the one write with no
         # handler at all, so a read-only folder or a full disk was a traceback with the
         # board still unsaved behind it. Said in a dialog, and reported to the close
@@ -13623,7 +13628,7 @@ class MainWindow(QMainWindow):
         panel: the panel may never have been opened, and the export must not depend on
         whether somebody looked at it first.
         """
-        drawing = build_schematic(self.bus.document, self.lookup)
+        drawing = build_schematic(self.bus.system_document, self.lookup)
         if not drawing.symbols:
             QMessageBox.information(
                 self, t("Nothing to export"), t("This document has no parts to draw yet.")
@@ -13637,7 +13642,7 @@ class MainWindow(QMainWindow):
         if chosen is None:
             return
 
-        svg = drawing_to_svg(drawing, title=self.bus.document.meta.name)
+        svg = drawing_to_svg(drawing, title=self.bus.system_document.meta.name)
         written: list[Path] = []
         # Seconds, not milliseconds, on a real circuit -- Qt paginating the PDF and
         # rasterising the PNG -- and it used to give no sign at all that anything was
@@ -13652,7 +13657,7 @@ class MainWindow(QMainWindow):
                 svg_to_pdf(
                     svg,
                     chosen.with_suffix(".pdf"),
-                    title=self.bus.document.meta.name,
+                    title=self.bus.system_document.meta.name,
                 )
             )
             written.append(svg_to_png(svg, chosen.with_suffix(".png")))
