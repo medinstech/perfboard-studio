@@ -580,3 +580,54 @@ def test_the_board_and_cable_steps_read_in_the_windows_language() -> None:
     finally:
         i18n.set_language(before)
 
+
+
+def test_add_cable_pairs_the_wires_by_net_as_one_step(qapp) -> None:  # type: ignore[no-untyped-def]
+    """Between JA on Main and JB on Remote, both on GND and SIG: two wires, by net, one undo
+    step -- and the system's LVS is whole after it."""
+    from perfboard_studio.lvs import run_lvs
+    from perfboard_studio.model import CableEnd
+    from perfboard_studio.ui.main import MainWindow
+
+    window = MainWindow(_system(wires=None))
+    try:
+        steps = len(window.bus.history())
+        result = window.add_cable_between(CableEnd(system.FIRST_BOARD, "cmp-1"), CableEnd("b2", "cmp-3"))
+        assert result.ok, result.message
+        (cable,) = window.bus.system_document.cables
+        assert cable.ref == "W1" and {(w.a_pin, w.b_pin) for w in cable.wires} == {("1", "1"), ("2", "2")}
+        assert len(window.bus.history()) == steps + 1
+        assert run_lvs(window.bus.system_document, footprint_lookup()).ok
+        assert window.statusBar().currentMessage().endswith("Add the cable W1")
+    finally:
+        window._mark_saved()
+        window.close()
+        window.deleteLater()
+
+
+def test_add_cable_opens_with_one_end_chosen_and_lays_what_it_shows(qapp, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from PySide6.QtWidgets import QDialog
+
+    from perfboard_studio.model import CableEnd
+    from perfboard_studio.ui import cabledialog
+    from perfboard_studio.ui.main import MainWindow
+
+    seen: list[object] = []
+
+    def accept(self):  # type: ignore[no-untyped-def]
+        seen.append((self.ends(), self.preview.text(), self.reference.text()))
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(cabledialog.CableDialog, "exec", accept)
+    window = MainWindow(_system(wires=None))
+    try:
+        window.on_add_cable(CableEnd("b2", "cmp-3"))
+        ((ends, preview, reference),) = seen
+        assert ends[0] == CableEnd("b2", "cmp-3"), "the end it was opened on"
+        assert ends[1].board == system.FIRST_BOARD
+        assert "2 wires, paired by net:" in preview and reference == "W1"
+        assert len(window.bus.system_document.cables) == 1
+    finally:
+        window._mark_saved()
+        window.close()
+        window.deleteLater()
