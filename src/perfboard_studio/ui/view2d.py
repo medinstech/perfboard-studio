@@ -1494,12 +1494,11 @@ class BreadboardItem(QGraphicsItem):
 
 
 class TrackCutItem(QGraphicsItem):
-    """Where the copper has been drilled away.
+    """Where the copper has been cut.
 
     A cross rather than a gap, and drawn in the error colour, because a cut is the one
     feature of a stripboard design that is invisible on the finished board from more than
-    arm's length -- and getting one in the wrong hole is the classic way to spend an
-    evening. The pad is already missing underneath it; this says why.
+    arm's length. A bar between holes identifies a cut that preserves both pads.
     """
 
     def __init__(self, cut: TrackCut, board: Board, side: BoardSide) -> None:
@@ -1510,13 +1509,26 @@ class TrackCutItem(QGraphicsItem):
         self.setZValue(-84)  # Over the pads and the strips, under the parts.
 
     def boundingRect(self) -> QRectF:
-        centre = hole_to_screen(self.cut.at, self.board, self.side)
+        centre = self._centre()
         r = max(pad_extent_mm(self.board)) / 2 + 0.4
         return QRectF(centre.x() - r, centre.y() - r, 2 * r, 2 * r)
 
+    def _centre(self) -> QPointF:
+        first = hole_to_screen(self.cut.at, self.board, self.side)
+        if self.cut.to is None:
+            return first
+        return (first + hole_to_screen(self.cut.to, self.board, self.side)) / 2
+
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
-        centre = hole_to_screen(self.cut.at, self.board, self.side)
+        centre = self._centre()
         r = max(pad_extent_mm(self.board)) / 2
+        if self.cut.to is not None:
+            painter.setPen(QPen(CUT_MARK, 0.35))
+            if (self.board.strip_axis or "horizontal") == "horizontal":
+                painter.drawLine(QPointF(centre.x(), centre.y() - r), QPointF(centre.x(), centre.y() + r))
+            else:
+                painter.drawLine(QPointF(centre.x() - r, centre.y()), QPointF(centre.x() + r, centre.y()))
+            return
         painter.setBrush(QBrush(SUBSTRATE.get(self.board.material, SUBSTRATE["FR4"]).darker(140)))
         painter.setPen(QPen(CUT_MARK, 0.14))
         painter.drawEllipse(centre, r, r)
@@ -5520,11 +5532,13 @@ class BoardScene(QGraphicsScene):
         self._cut_armed = False
         self.cutArmed.emit(False)
 
-    def cut_at(self, hole: HoleCoord) -> TrackCut | None:
-        return next((c for c in self.document.cuts if c.at == hole), None)
+    def cut_at(self, hole: HoleCoord, to: HoleCoord | None = None) -> TrackCut | None:
+        return next((c for c in self.document.cuts if
+                     (c.at == hole and c.to == to) or
+                     (to is not None and c.at == to and c.to == hole)), None)
 
-    def cut_click(self, at: HoleCoord) -> DispatchResult | None:
-        """Cut the track at this hole, or take back the cut already there.
+    def cut_click(self, at: HoleCoord, to: HoleCoord | None = None) -> DispatchResult | None:
+        """Toggle a cut at a hole or between two adjacent holes.
 
         A toggle rather than an add-only tool, because a cut is small, invisible on the
         finished board and easy to put one hole out -- so the fix has to be the same
@@ -5533,14 +5547,14 @@ class BoardScene(QGraphicsScene):
         """
         if not self._cut_armed or self.bus is None:
             return None
-        if not is_inside_board(at, self.document.board):
+        if not is_inside_board(at, self.document.board) or (to is not None and not is_inside_board(to, self.document.board)):
             return None
 
-        existing = self.cut_at(at)
+        existing = self.cut_at(at, to)
         result = (
             self.bus.dispatch("cut.delete", DeleteCutPayload(id=existing.id))
             if existing is not None
-            else self.bus.dispatch("cut.add", AddCutPayload(at=at))
+            else self.bus.dispatch("cut.add", AddCutPayload(at=at, to=to))
         )
         self.cutMade.emit(result)
         return result
@@ -6054,7 +6068,19 @@ class BoardScene(QGraphicsScene):
         if self._cut_armed:
             at = screen_to_hole(event.scenePos(), self.document.board, self.side)
             if event.button() == Qt.MouseButton.LeftButton:
-                self.cut_click(at)
+                board = self.document.board
+                point = event.scenePos()
+                x = point.x() if self.side == "top" else hole_span_mm(board)[0] - point.x()
+                horizontal = (board.strip_axis or "horizontal") == "horizontal"
+                along = (x if horizontal else point.y()) / board.pitch
+                position = math.floor(along)
+                fraction = along - position
+                if 0.28 <= fraction <= 0.72:
+                    first = HoleCoord(position, at.row) if horizontal else HoleCoord(at.col, position)
+                    second = HoleCoord(position + 1, at.row) if horizontal else HoleCoord(at.col, position + 1)
+                    self.cut_click(first, second)
+                else:
+                    self.cut_click(at)
             elif event.button() == Qt.MouseButton.RightButton:
                 self._disarm_cutting()
             event.accept()
@@ -7089,3 +7115,4 @@ class BoardView(QGraphicsView):
         if not viewport.contains(rect):
             self._navigated()
             self.centerOn(rect.center())
+

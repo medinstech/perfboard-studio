@@ -38,7 +38,7 @@ from decimal import Decimal
 from typing import Any, Literal, cast, get_args
 
 from .breadboard import board_problem, has_breadboard_pattern, is_breadboard
-from .geometry import board_text_problem, legend_problem, validate_orthogonal_chain
+from .geometry import board_text_problem, is_inside_board, legend_problem, validate_orthogonal_chain
 from .model import (
     DEFAULT_BOARD_NOTE_SIZE_MM,
     DEFAULT_NOTE_SIZE_MM,
@@ -97,7 +97,7 @@ from .model import (
 from .system import FIRST_BOARD, cable_problem
 
 #: Re-exported so callers of persist.py don't also need to import model.py.
-CURRENT_FORMAT_VERSION: int = DOCUMENT_FORMAT_VERSION
+CURRENT_FORMAT_VERSION: int = DOCUMENT_FORMAT_VERSION + 1
 
 # ---------------------------------------------------------------------------
 # JSON value plumbing
@@ -343,7 +343,7 @@ CONDUCTOR_KEY_ORDER: tuple[str, ...] = (
     "pinNumber",
 )
 SPINE_KEY_ORDER: tuple[str, ...] = ("material", "gauge")
-CUT_KEY_ORDER: tuple[str, ...] = ("id", "at")
+CUT_KEY_ORDER: tuple[str, ...] = ("id", "at", "to")
 NET_KEY_ORDER: tuple[str, ...] = ("id", "name", "nodes", "class", "currentA", "voltageV")
 NET_NODE_KEY_ORDER: tuple[str, ...] = ("componentRef", "pin")
 
@@ -591,12 +591,12 @@ def _ordered_conductor(c: Conductor, index: int) -> JsonObj:
 
 def _ordered_cut(c: TrackCut, index: int) -> JsonObj:
     path = _index_path("cuts", index)
+    values: JsonObj = {"id": c.id, "at": _ordered_hole(c.at, _field_path(path, "at"))}
+    if c.to is not None:
+        values["to"] = _ordered_hole(c.to, _field_path(path, "to"))
     return _build_ordered(
         CUT_KEY_ORDER,
-        {
-            "id": c.id,
-            "at": _ordered_hole(c.at, _field_path(path, "at")),
-        },
+        values,
     )
 
 
@@ -724,7 +724,13 @@ def serialize_document(doc: PerfDocument) -> str:
     root = _build_ordered(
         DOCUMENT_KEY_ORDER,
         {
-            "formatVersion": _num("formatVersion", doc.format_version),
+            "formatVersion": _num(
+                "formatVersion",
+                max(doc.format_version, 2 if any(
+                    cut.to is not None
+                    for board in (doc, *doc.boards) for cut in board.cuts
+                ) else 1),
+            ),
             "meta": _build_ordered(
                 META_KEY_ORDER,
                 {
@@ -1807,6 +1813,7 @@ def _parse_cut(raw: object, path: str, warnings: list[str]) -> TrackCut:
     return TrackCut(
         id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
         at=_parse_hole(_require_field(obj, "at", path), _field_path(path, "at"), warnings),
+        to=_parse_hole(obj["to"], _field_path(path, "to"), warnings) if "to" in obj else None,
     )
 
 
@@ -1981,6 +1988,14 @@ def _parse_board_fields(
     cuts_path = _field_path(parent, "cuts")
     cuts_raw = _expect_array(_require_field(container, "cuts", parent), cuts_path)
     cuts = tuple(_parse_cut(item, _index_path(cuts_path, i), warnings) for i, item in enumerate(cuts_raw))
+    for index, cut in enumerate(cuts):
+        if cut.to is None:
+            continue
+        horizontal = (board.strip_axis or "horizontal") == "horizontal"
+        delta = (abs(cut.at.col - cut.to.col), abs(cut.at.row - cut.to.row))
+        if (board.type != "stripboard" or delta != ((1, 0) if horizontal else (0, 1))
+                or not is_inside_board(cut.at, board) or not is_inside_board(cut.to, board)):
+            raise ValidationError("invalid-value", "Cut endpoints must be adjacent holes on one strip.", _index_path(cuts_path, index))
 
     # Optional, unlike the arrays above: every file written before these features existed
     # simply has no such key, and requiring one would make this build unable to open its
@@ -2225,7 +2240,7 @@ def _parse_document(raw_input: object) -> tuple[PerfDocument, list[str]]:
         cables=tuple(cables),
         board_name=board_name,
         **first,
-        format_version=CURRENT_FORMAT_VERSION,
+        format_version=format_version,
     )
     # What cable.add refuses, refused here too: one fact, two consumers. A file holding a
     # cable with no wires, or two wires on one pin, would otherwise open and then refuse
@@ -2280,3 +2295,4 @@ def parse_document_or_throw(json_text: str) -> PerfDocument:
         location = f" (at {result.path})" if result.path is not None else ""
         raise ValueError(f"{result.code}: {result.message}{location}")
     return result.document
+

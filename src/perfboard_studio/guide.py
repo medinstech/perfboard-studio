@@ -555,10 +555,8 @@ class LeadCut:
 class TrackCutJob:
     """One track to break, for a stripboard build.
 
-    These come FIRST, before a single part goes in, and not as a matter of taste: the cut
-    is drilled through the hole from the copper side, and once a part is sitting over that
-    hole there is no way to get a bit to it. A board where three cuts were forgotten is a
-    board that comes apart again.
+    These come first, before parts cover the copper. A cut can remove a pad or break
+    the track between two pads.
 
     ``separates`` names the two holes either side of the cut, which is what the isolation
     check in phase 0 measures between -- the only way to confirm a cut worked without
@@ -569,6 +567,7 @@ class TrackCutJob:
     #: "row 3" or "column D", in the same words the board's own addresses use.
     strip: str
     separates: tuple[HoleCoord, HoleCoord] | None
+    to: HoleCoord | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2346,7 +2345,7 @@ def _track_cuts(doc: PerfDocument, say: Phrasebook) -> tuple[TrackCutJob, ...]:
     for cut in sorted(doc.cuts, key=lambda c: (c.at.row, c.at.col)):
         if not is_inside_board(cut.at, doc.board):
             continue
-        neighbours = (
+        neighbours = (cut.at, cut.to) if cut.to is not None else (
             (HoleCoord(cut.at.col - 1, cut.at.row), HoleCoord(cut.at.col + 1, cut.at.row))
             if horizontal
             else (HoleCoord(cut.at.col, cut.at.row - 1), HoleCoord(cut.at.col, cut.at.row + 1))
@@ -2361,6 +2360,7 @@ def _track_cuts(doc: PerfDocument, say: Phrasebook) -> tuple[TrackCutJob, ...]:
                     else say("column {label}", label=column_label(cut.at.col))
                 ),
                 separates=neighbours if on_board else None,
+                to=cut.to,
             )
         )
     return tuple(jobs)
@@ -2387,7 +2387,9 @@ def _cut_checks(cuts: tuple[TrackCutJob, ...], say: Phrasebook, *, board: Board 
                 ),
                 instruction=say(
                     "After cutting the track at {cut}, measure resistance between {a} and {b}.",
-                    cut=format_hole(cut.at, board), a=format_hole(left, board), b=format_hole(right, board),
+                    cut=(f"{format_hole(cut.at, board)}–{format_hole(cut.to, board)}"
+                         if cut.to is not None else format_hole(cut.at, board)),
+                    a=format_hole(left, board), b=format_hole(right, board),
                 ),
                 expected=say(
                     "Open circuit. Anything below a few hundred kΩ means copper is still "
@@ -3082,3 +3084,4 @@ def document_at_step(doc: PerfDocument, guide: Guide, step_index: int) -> PerfDo
         components=tuple(c for c in doc.components if c.id in fitted),
         conductors=tuple(c for c in doc.conductors if c.id in laid),
     )
+

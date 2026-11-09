@@ -8204,16 +8204,17 @@ class MainWindow(QMainWindow):
         group.setToolTip(
             0,
             say(
-                "{count} cut(s), made from the copper side with a spot-face cutter or a 3 mm "
-                "drill turned by hand. Each one takes the pad with it, so the hole it is made in "
-                "has nothing to solder to afterwards. Do them all before the first part goes in "
-                "— once a part is over a hole there is no way back to it.",
+                "{count} track cut(s). A single hole marks a cut through that pad. "
+                "Two hole addresses mark a cut in the copper between those holes. "
+                "Make the cuts from the copper side before fitting parts.",
                 count=len(guide.track_cuts),
             ),
         )
         for cut in guide.track_cuts:
-            focus = f"cut:{cut.at.col},{cut.at.row}"
-            line = f"{format_hole(cut.at, board)} · {cut.strip}"
+            focus = f"cut:{cut.at.col},{cut.at.row}" + (f":{cut.to.col},{cut.to.row}" if cut.to else "")
+            line = (f"{format_hole(cut.at, board)}"
+                    + (f" – {format_hole(cut.to, board)}" if cut.to else "")
+                    + f" · {cut.strip}")
             row = QTreeWidgetItem([line])
             row.setToolTip(0, line)
             row.setData(0, ROLE_STEP_FOCUS, focus)
@@ -8410,7 +8411,10 @@ class MainWindow(QMainWindow):
             sheet.setWindowTitle(t("Track cuts"))
             table.setHeaderLabels([t("Holes"), t("Strip")])
             for track in guide.track_cuts:
-                table.addTopLevelItem(QTreeWidgetItem([format_hole(track.at, board), track.strip]))
+                location = format_hole(track.at, board)
+                if track.to is not None:
+                    location += f" – {format_hole(track.to, board)}"
+                table.addTopLevelItem(QTreeWidgetItem([location, track.strip]))
         for column in range(table.columnCount()):
             table.resizeColumnToContents(column)
         layout.addWidget(QLabel(theme.heading(sheet.windowTitle())))
@@ -11665,7 +11669,7 @@ class MainWindow(QMainWindow):
         """Arm or disarm cutting tracks."""
         self.scene.arm_cutting(checked)
         if checked:
-            self.statusBar().showMessage(t("Click a hole to cut the strip there; click a cut again to take it back. "
+            self.statusBar().showMessage(t("Click a hole or between holes to cut the strip; click a cut again to take it back. "
                 "Esc ends."),
                 0,
             )
@@ -14638,3 +14642,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

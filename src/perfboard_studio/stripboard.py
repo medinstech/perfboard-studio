@@ -6,20 +6,9 @@ copper, so the connections are already there and the design problem is deciding 
 to break them**. Everything else in this project is about adding copper; this module is
 about copper that is subtracted.
 
-THE PHYSICAL MODEL, and the one decision everything here rests on:
-
-  **A cut destroys the copper AT a hole.** On a real board a track is broken with a spot
-  face cutter or a drill bit twisted by hand in a hole, which takes the pad with it. So a
-  cut is addressed by the hole it is made in (``TrackCut.at``), that hole has no copper
-  afterwards, and the strip it was part of becomes two strips -- one either side.
-
-  The alternative model, a cut BETWEEN two holes, describes a knife scored across the
-  track. It is a real technique and it is not the one people use, because it is much
-  harder to do reliably at 2.54 mm and much harder to inspect. Modelling it would also
-  give a cut an ambiguous address, and every message in this application is addressed.
-
-  A pin in a cut hole is therefore soldered to nothing -- which is a physical
-  impossibility DRC reports, exactly as it reports a pin in a mounting bore.
+TRACK CUTS. A drilled cut removes the pad at ``TrackCut.at``. A scored cut carries
+both adjacent hole addresses and separates their copper while leaving both pads intact.
+A pin in a drilled-out hole is soldered to nothing, which DRC reports.
 
 WHAT A SEGMENT IS. One run of copper: the holes of one strip between two cuts, or between
 a cut and the edge of the board. Two pins on the same segment are connected, and the
@@ -73,7 +62,7 @@ class StripSegment:
 #: How far apart along one strip two pins of different nets have to sit before the board
 #: can be separated at all, in holes.
 #:
-#: It is 2 because a cut destroys the copper AT a hole: to break the track between two
+#: The automatic planner chooses drilled cuts: to break the track between two
 #: pins there has to BE a hole between them to put the drill in. Two pins in neighbouring
 #: holes are joined by the board and no amount of routing changes that -- the fix is to
 #: move a part, which is why ``placer.py`` reads this number as well as ``cut_between``
@@ -106,7 +95,10 @@ def cut_holes(doc: PerfDocument) -> frozenset[str]:
     """
     if not is_stripboard(doc.board):
         return frozenset()
-    return frozenset(hole_key(cut.at) for cut in doc.cuts if is_inside_board(cut.at, doc.board))
+    return frozenset(
+        hole_key(cut.at) for cut in doc.cuts
+        if cut.to is None and is_inside_board(cut.at, doc.board)
+    )
 
 
 def strip_index(board: Board, hole: HoleCoord) -> int:
@@ -164,7 +156,7 @@ def segment_of(doc: PerfDocument, hole: HoleCoord) -> tuple[int, int] | None:
         for cut in doc.cuts
         if is_inside_board(cut.at, board)
         and strip_index(board, cut.at) == index
-        and position_along(board, cut.at) < position
+        and min(position_along(board, cut.at), position_along(board, cut.to or cut.at)) < position
     )
     return (index, before)
 
@@ -197,11 +189,22 @@ def segments(doc: PerfDocument) -> tuple[StripSegment, ...]:
 
     board = doc.board
     cuts = cut_holes(doc)
+    boundaries: dict[int, set[int]] = {}
+    for cut in doc.cuts:
+        if cut.to is not None:
+            index = strip_index(board, cut.at)
+            position = min(position_along(board, cut.at), position_along(board, cut.to))
+            boundaries.setdefault(index, set()).add(position)
     out: list[StripSegment] = []
     for index in range(_strip_count(board)):
         ordinal = 0
         run: list[HoleCoord] = []
         for position in range(_strip_length(board)):
+            if position - 1 in boundaries.get(index, set()):
+                if run:
+                    out.append(StripSegment(index, ordinal, tuple(run)))
+                    run = []
+                ordinal += 1
             hole = _hole_at(board, index, position)
             if hole_key(hole) in cuts:
                 if run:
@@ -229,18 +232,13 @@ def segment_holes(doc: PerfDocument, hole: HoleCoord) -> tuple[HoleCoord, ...]:
     if id_ is None:
         return ()
     board = doc.board
-    cuts = cut_holes(doc)
     index = strip_index(board, hole)
-    position = position_along(board, hole)
-
-    first = position
-    while first - 1 >= 0 and hole_key(_hole_at(board, index, first - 1)) not in cuts:
+    first = last = position_along(board, hole)
+    while first > 0 and segment_of(doc, _hole_at(board, index, first - 1)) == id_:
         first -= 1
-    last = position
-    length = _strip_length(board)
-    while last + 1 < length and hole_key(_hole_at(board, index, last + 1)) not in cuts:
+    while last + 1 < _strip_length(board) and segment_of(doc, _hole_at(board, index, last + 1)) == id_:
         last += 1
-    return tuple(_hole_at(board, index, p) for p in range(first, last + 1))
+    return tuple(_hole_at(board, index, pos) for pos in range(first, last + 1))
 
 
 def joined_by_board(doc: PerfDocument, a: HoleCoord, b: HoleCoord) -> bool:
@@ -290,3 +288,4 @@ def cut_between(
     if not candidates:
         return None
     return min(candidates, key=lambda h: (abs(position_along(board, h) - middle), position_along(board, h)))
+

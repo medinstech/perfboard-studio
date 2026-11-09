@@ -1020,7 +1020,7 @@ class _Strips:
     #: Almost always empty -- placement comes before cutting -- but a board that has been
     #: worked on is a board whose strips are already broken in places, and two pins either
     #: side of an existing cut are not joined and need nothing done about them.
-    cuts: dict[int, frozenset[int]]
+    cuts: dict[int, frozenset[float]]
     #: On a breadboard: every hole's (clip index, position along the clip), from
     #: ``breadboard.clip_of``. None on stripboard, whose strips are rows or columns.
     clips: dict[tuple[int, int], tuple[int, int]] | None = None
@@ -1090,11 +1090,15 @@ def _build_strips(
     if not is_stripboard(board):
         return None
     horizontal = strip_axis(board) == "horizontal"
-    cuts: dict[int, set[int]] = {}
+    cuts: dict[int, set[float]] = {}
     for cut in doc.cuts:
-        index, position = (
+        index, hole_position = (
             (cut.at.row, cut.at.col) if horizontal else (cut.at.col, cut.at.row)
         )
+        position = float(hole_position)
+        if cut.to is not None:
+            other = cut.to.col if horizontal else cut.to.row
+            position = (position + other) / 2
         cuts.setdefault(index, set()).add(position)
     return _Strips(
         horizontal=horizontal,
@@ -1107,7 +1111,7 @@ def _build_strips(
 
 def _conflicts_on_strip(
     entries: list[tuple[int, int]],
-    cuts: frozenset[int],
+    cuts: frozenset[float],
     separable: bool = True,
     takes: frozenset[int] | None = None,
 ) -> int:
@@ -1148,9 +1152,7 @@ def _conflicts_on_strip(
             # holes something else is already standing in. Measured the same way
             # ``cut_between`` measures it, so the same boards come out separable.
             gap = position - previous_position - occupied_between
-            already_cut = bool(cuts) and any(
-                at in cuts for at in range(previous_position + 1, position)
-            )
+            already_cut = any(previous_position < at < position for at in cuts)
             if not separable or (gap < MIN_SEPARABLE_GAP and not already_cut):
                 conflicts += 1
         previous_position = position
@@ -4226,3 +4228,4 @@ def summarize_changes(plan: PlacementPlan, limit: int = 12, *, board: Board | No
     if len(plan.changes) > limit:
         lines.append(f"... and {len(plan.changes) - limit} more")
     return lines
+

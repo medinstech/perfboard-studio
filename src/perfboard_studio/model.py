@@ -1025,6 +1025,8 @@ class TrackCut:
 
     id: str
     at: HoleCoord
+    # When present, the cut lies between these adjacent holes and preserves both pads.
+    to: HoleCoord | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1268,3 +1270,4 @@ def contacts_every_path_hole(c: Conductor) -> bool:
     board that is wired differently from what the screen shows.
     """
     return c.kind in ("solder-trace", "solder-trace-wired", "strip")
+

@@ -1294,6 +1294,7 @@ class DisconnectPinsPayload:
 class AddCutPayload:
     at: HoleCoord
     id: str | None = None
+    to: HoleCoord | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -2336,12 +2337,17 @@ class _SetBoard:
         for cut in doc.cuts:
             # A cut off the board is not harmless: it survives the shrink unseen and, if
             # the board is grown again, breaks a strip nobody remembers cutting.
-            if not is_inside_board(cut.at, b):
+            if not is_inside_board(cut.at, b) or (cut.to is not None and not is_inside_board(cut.to, b)):
                 raise CommandError(
                     "would-strand-cut",
                     f"The track cut at {format_hole(cut.at, doc.board)} would fall outside a "
                     f"{b.cols}x{b.rows} board.",
                 )
+            if cut.to is not None and b.type == "stripboard":
+                horizontal = (b.strip_axis or "horizontal") == "horizontal"
+                delta = (abs(cut.at.col - cut.to.col), abs(cut.at.row - cut.to.row))
+                if delta != ((1, 0) if horizontal else (0, 1)):
+                    raise CommandError("would-strand-cut", "Changing the strip direction would move a track cut off its strip.")
         for board_note in doc.board_notes:
             # Its hole, and -- a narrower border is enough -- its centre.
             if not is_inside_board(board_note.at, b) or not _label_on_substrate(
@@ -3283,13 +3289,23 @@ class _AddCut:
                 f"This board is {doc.board.type}, which has no tracks to cut.",
             )
         assert_hole_on_board(p.at, doc.board, "Cut")
+        if p.to is not None:
+            assert_hole_on_board(p.to, doc.board, "Cut")
+            horizontal = (doc.board.strip_axis or "horizontal") == "horizontal"
+            dx, dy = abs(p.at.col - p.to.col), abs(p.at.row - p.to.row)
+            if (dx, dy) != ((1, 0) if horizontal else (0, 1)):
+                raise CommandError("invalid-cut", "A cut must lie between adjacent holes on one strip.")
+            if any(c.to is not None and {c.at, c.to} == {p.at, p.to} for c in doc.cuts):
+                raise CommandError("duplicate-cut", "That section of track is already cut.")
         id_ = p.id if p.id is not None else ctx.next_id("cut")
         if any(c.id == id_ for c in doc.cuts):
             raise CommandError("duplicate-id", f'A cut with id "{id_}" already exists.')
-        cut = TrackCut(id=id_, at=p.at)
+        cut = TrackCut(id=id_, at=p.at, to=p.to)
         return dataclasses.replace(doc, cuts=(*doc.cuts, cut))
 
     def describe(self, p: AddCutPayload, doc: PerfDocument) -> str:
+        if p.to is not None:
+            return f"Cut track between {format_hole(p.at, doc.board)} and {format_hole(p.to, doc.board)}"
         return f"Cut track at {format_hole(p.at, doc.board)}"
 
 
@@ -3341,7 +3357,7 @@ class _ApplyStripboardPlan:
             )
 
         taken_cut_ids = {cut.id for cut in doc.cuts}
-        cut_at = {(cut.at.col, cut.at.row) for cut in doc.cuts}
+        cut_at = {(cut.at.col, cut.at.row) for cut in doc.cuts if cut.to is None}
         cuts: list[TrackCut] = []
         for index, at in enumerate(p.cuts):
             assert_hole_on_board(at, doc.board, "Cut")
@@ -4438,3 +4454,4 @@ def document_on_preset(
         preset_payload(preset, on),
         CommandContext(next_id=create_document_id_generator(document)),
     )
+

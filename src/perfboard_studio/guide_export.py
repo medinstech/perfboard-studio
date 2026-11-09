@@ -574,21 +574,31 @@ def _html_cuts(guide: Guide, say: Phrasebook) -> str:
     if not guide.track_cuts:
         return ""
     rows = "".join(
-        f"<tr><td>{_hole(cut.at, board=guide.board)}</td><td>{escape(cut.strip)}</td>"
+        f"<tr><td>{_hole(cut.at, board=guide.board)}"
+        f"{(' – ' + _hole(cut.to, board=guide.board)) if cut.to is not None else ''}</td><td>{escape(cut.strip)}</td>"
         f"<td>{_hole(cut.separates[0], board=guide.board)} ↔ {_hole(cut.separates[1], board=guide.board)}</td></tr>"
         if cut.separates is not None
         else f"<tr><td>{_hole(cut.at, board=guide.board)}</td><td>{escape(cut.strip)}</td><td>—</td></tr>"
         for cut in guide.track_cuts
     )
-    return (
-        "<h3>" + say("Cut these tracks first") + "</h3><p>"
-        + say(
+    if any(cut.to is not None for cut in guide.track_cuts):
+        instructions = say(
+            "{count} track cut(s). A single hole marks a cut through that pad. "
+            "Two hole addresses mark a cut in the copper between those holes. "
+            "Make the cuts from the copper side before fitting parts.",
+            count=len(guide.track_cuts),
+        )
+    else:
+        instructions = say(
             "{count} cut(s), made from the copper side with a spot-face cutter or a 3 mm "
             "drill turned by hand. Each one takes the pad with it, so the hole it is made in "
             "has nothing to solder to afterwards. Do them all before the first part goes in "
             "— once a part is over a hole there is no way back to it.",
             count=len(guide.track_cuts),
         )
+    return (
+        "<h3>" + say("Cut these tracks first") + "</h3><p>"
+        + instructions
         + '</p><div class="wrap"><table>'
         f"<tr><th>{say('Hole')}</th><th>{say('Strip')}</th><th>{say('Separates')}</th></tr>"
         f"{rows}</table></div>"
@@ -1179,3 +1189,4 @@ __all__ = [
     "guide_to_html",
     "guide_to_json",
 ]
+

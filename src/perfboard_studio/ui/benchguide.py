@@ -154,9 +154,11 @@ def bench_items(
             for cut in guide.track_cuts:
                 items.append(
                     BenchItem(
-                        key=f"cut:{cut.at.col},{cut.at.row}",
+                        key=f"cut:{cut.at.col},{cut.at.row}" + (f":{cut.to.col},{cut.to.row}" if cut.to else ""),
                         phase=phase,
-                        title=f"{format_hole(cut.at, board)} · {cut.strip}",
+                        title=(f"{format_hole(cut.at, board)}"
+                               + (f" – {format_hole(cut.to, board)}" if cut.to else "")
+                               + f" · {cut.strip}"),
                         step_index=None,
                         holes=(cut.at, *(cut.separates or ())),
                         solder_side=True,
@@ -736,3 +738,4 @@ def crop_around(
         grow = area.width() / aspect - area.height()
         area.adjust(0, -grow / 2, 0, grow / 2)
     return area
+
