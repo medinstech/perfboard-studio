@@ -1936,6 +1936,25 @@ CATALOG: tuple[CatalogPart, ...] = (
                          "KY-038 sound sensor", "flame sensor module", "sound sensor module",
                          "microphone module", "linear hall module", "thermistor module",
                          "metal touch module", "ses sensörü modülü",)),
+    CatalogPart("ky-053-ads1115", "KY-053 ADS1115 ADC module (on a header)", "sensor", "hdr-1x10",
+                "Four-input analog-to-digital converter board (ADS1115, 16 bit, I2C). Its "
+                "cable plugs into this 10-pin header: VDD GND SCL SDA ADDR ALRT A0 A1 A2 "
+                "A3 from pin 1",
+                _legs("VDD", "GND", "SCL", "SDA", "ADDR", "ALRT", "A0", "A1", "A2", "A3"), value="KY-053", ref_prefix="J",
+                source=(
+                    "Joy-IT SensorKit X40 manual (16.06.2017, CC BY-NC-SA 3.0), the "
+                    "KY-053 page, whose photograph of the board shows the labels printed "
+                    "on it, read down its edge: VDD, GND, SCL, SDA, ADDR, ALRT, A0, A1, "
+                    "A2, A3; the chip name and '16Bit I2C ADC' are as printed on the "
+                    "board in that photograph"
+                ),
+                check=(
+                    "The pins are in the order the manual's photograph shows them down "
+                    "the board's edge, VDD at the top. ADDR and ALRT are not part of the "
+                    "I2C wiring: connect the supply, SCL and SDA first. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("KY-053 ADS1115", "ADS1115 module", "16 bit ADC", "ADC module",)),
     # The cheap Bosch sensor boards most people buy, by the name printed on them. The purple
     # six-pin ones have no regulator and run on 3.3 V; the four-pin GY-BME280 has one.
     CatalogPart("gy-bmp280", "GY-BMP280 pressure sensor module (on a header)", "sensor",

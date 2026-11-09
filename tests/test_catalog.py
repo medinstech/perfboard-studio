@@ -904,3 +904,17 @@ def test_ky_011_two_colour_led_has_the_names_the_joy_it_manual_gives() -> None:
     assert "220 ohm" in part.check
     assert part in search_catalog("KY-011")
     assert part in search_catalog("KY-029")
+
+
+def test_ky_053_ads1115_has_the_names_the_joy_it_manual_gives() -> None:
+    """Pin names and order are the manual's (names only, no text copied); the source says so."""
+    part = catalog_part("ky-053-ads1115")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == ["VDD", "GND", "SCL", "SDA", "ADDR", "ALRT", "A0", "A1", "A2", "A3"]
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and len(footprint.pins) == 10
+    assert "Joy-IT SensorKit X40 manual" in part.source
+    assert "VDD at the top" in part.check
+    assert "ADDR and ALRT" in part.check
+    assert part in search_catalog("KY-053")
+    assert part in search_catalog("ADS1115")

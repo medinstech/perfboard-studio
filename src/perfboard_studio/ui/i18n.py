@@ -3163,6 +3163,22 @@ TURKISH: Mapping[str, str] = {
         "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları "
         "aynı sırayla bağlanmamıştır."
     ),
+    "KY-053 ADS1115 ADC module (on a header)": "KY-053 ADS1115 ADC modülü (header üzerinde)",
+    "Four-input analog-to-digital converter board (ADS1115, 16 bit, I2C). Its cable plugs "
+    "into this 10-pin header: VDD GND SCL SDA ADDR ALRT A0 A1 A2 A3 from pin 1": (
+        "Dört girişli analog-sayısal çevirici kart (ADS1115, 16 bit, I2C). Kablosu bu 10 "
+        "pinli header'a takılır: 1. pinden VDD GND SCL SDA ADDR ALRT A0 A1 A2 A3"
+    ),
+    "The pins are in the order the manual's photograph shows them down the board's edge, "
+    "VDD at the top. ADDR and ALRT are not part of the I2C wiring: connect the supply, "
+    "SCL and SDA first. Match each lead to the name printed beside the module's pins, not "
+    "to its place: sellers' boards are not all wired in the same order.": (
+        "Pinler, kılavuzdaki fotoğrafın kartın kenarı boyunca gösterdiği sırayla "
+        "dizilidir; VDD en üsttedir. ADDR ve ALRT I2C bağlantısının parçası değildir: "
+        "önce beslemeyi, SCL ve SDA'yı bağlayın. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
     "RC522 RFID reader module (on a header)": "RC522 RFID okuyucu modülü (header üzerinde)",
     "13.56 MHz RFID reader on SPI. Its cable plugs into this 8-pin header: 3.3V RST GND IRQ "
     "MISO MOSI SCK SDA from pin 1": (

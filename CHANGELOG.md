@@ -164,6 +164,10 @@ closed without a bump.
   numbered the same on both. The check gives the manual's series resistors for the KY-011 and
   says to look for resistors on the board.
 
+- **The KY-053 ADS1115 analog-to-digital module, as a wired header**: VDD, GND, SCL, SDA,
+  ADDR, ALRT and A0 to A3 as the board prints them down its edge in the Joy-IT manual's
+  photograph, found as "ADS1115" too.
+
 
 ### Fixed
 
