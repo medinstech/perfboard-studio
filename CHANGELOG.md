@@ -121,10 +121,12 @@ closed without a bump.
 - **The TMP36 temperature sensor**, the analog one in the official Arduino kit, pinned from
   Analog Devices' datasheet, which draws its TO-92 from below -- the check says so, and that
   it reads 500 mV at 0 degrees so the offset is subtracted before dividing by 10.
-- **The HC-49/US crystal**, the low-profile one beside an ATmega on a perfboard, from Abracon's
-  drawing: drawn at its maxima (11.5 x 5.0 x 3.5 mm), its 4.88 mm legs against the 5.08 mm
-  of two holes worked out in the note. It is not the tall HC-49/U the `xtal-hc49` footprint
-  draws, which is 13.46 mm high.
+- **Two crystals, each named for the can a kit owner holds.** The low HC-49/S (HC-49/US), the
+  one beside an ATmega on a perfboard, is drawn from Abracon's drawing at its maxima (11.5 x
+  5.0 x 3.5 mm), its 4.88 mm legs against the 5.08 mm of two holes worked out in the note. The
+  tall HC-49/U, 13.46 mm, is the footprint the registry already drew, now with an entry of its
+  own whose note says no maker drawing was found; each entry sends the owner of the other can
+  to the other.
 - **The 130-size DC motor**, the one in the Arduino kit and every toy, as two wires to a part
   off the board: no body is drawn, because no drawing of the kit ones was found. Its note
   gives Pololu's figures for the Tamiya FA-130 (150 mA unloaded, 2100 mA stalled at 3 V),

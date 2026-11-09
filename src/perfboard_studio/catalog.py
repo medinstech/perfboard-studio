@@ -722,8 +722,10 @@ CATALOG: tuple[CatalogPart, ...] = (
     # The low-profile crystal that goes next to an ATmega or ATtiny on a perfboard, drawn at
     # Abracon's MAXIMA (11.5 x 5.0 x 3.5 mm) so DRC measures no smaller a part than the one in
     # the bag. NOT the tall HC-49/U of the ``xtal-hc49`` footprint: that can is 13.46 mm high.
-    CatalogPart("crystal-hc49us", "Crystal, HC-49/US low can", "passive", "box-2x1-p2-r1-11.5x5x3.5",
-                "Quartz crystal for a microcontroller's clock, the low can, legs 4.88 mm apart",
+    CatalogPart("crystal-hc49us", "Crystal, low can HC-49/S (HC-49/US)", "passive",
+                "box-2x1-p2-r1-11.5x5x3.5",
+                "Quartz crystal for a microcontroller's clock, the low can that comes in kits, "
+                "3.5 mm tall, legs 4.88 mm apart",
                 value="16MHz", ref_prefix="Y",
                 source=(
                     "Abracon ABL series (HC49/US) datasheet, mechanical dimensions, read from "
@@ -732,6 +734,8 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "mm apart, 5.5 mm long at the least in bulk"
                 ),
                 check=(
+                    "This is the LOW can, 3.5 mm tall, the one in most kits (HC-49/S, "
+                    "HC-49/US); the tall HC-49/U, 13.46 mm, is the other entry. "
                     "Its legs are 4.88 mm apart against the board's 5.08 two holes over, so each "
                     "ends 0.10 mm off its hole, 0.20 mm at the drawing's worst, inside the "
                     "0.27 mm a 0.457 mm leg has to spare in a 1 mm hole. Its frequency is "
@@ -739,6 +743,31 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "as an option, so a bare can is metal: keep it off bare copper."
                 ),
                 aliases=("crystal", "xtal", "quartz", "HC-49S", "HC49S", "16 MHz", "kristal")),
+
+    # The TALL can, on the registry's ``xtal-hc49`` footprint: 13.46 mm high, standing on its
+    # legs like a small tin. No maker drawing of it has been found: the can is the usual
+    # published HC-49/U envelope and the footprint takes KiCad's HC-49/U model, so this is
+    # the entry whose geometry a measurement of yours would settle.
+    CatalogPart("crystal-hc49u", "Crystal, tall can HC-49/U", "passive", "xtal-hc49",
+                "Quartz crystal for a microcontroller's clock, the tall can, 13.46 mm tall, "
+                "legs 4.88 mm apart",
+                value="16MHz", ref_prefix="Y",
+                source=(
+                    "The HC-49/U envelope as distributors print it (4.65 mm across, 13.46 mm "
+                    "high) and KiCad's HC-49/U model for the 11.05 mm along its legs: some "
+                    "makers print the length as 11.35 mm. No maker drawing was found, so "
+                    "measure yours; the kit crystal is usually the low one, "
+                    "``crystal-hc49us``"
+                ),
+                check=(
+                    "This is the TALL can, 13.46 mm high. Most crystals in kits are the low one "
+                    "(HC-49/S, HC-49/US), 3.5 mm: if yours is that, take the other entry. Its "
+                    "legs are 4.88 mm apart against the board's 5.08 two holes over, so each "
+                    "ends 0.10 mm off its hole. Its frequency is printed on the can: put it in "
+                    "the value."
+                ),
+                aliases=("crystal", "xtal", "quartz", "HC-49", "HC49U", "tall crystal",
+                         "16 MHz", "kristal")),
     # -- sensors ----------------------------------------------------------------------
     CatalogPart("lm35", "LM35", "sensor", "to92", "Temperature sensor, 10 mV per degree C",
                 _legs("+VS", "VOUT", "GND"), ref_prefix="U",

@@ -775,8 +775,9 @@ def test_the_hc49us_crystal_is_drawn_at_abracons_maxima_and_its_lead_arithmetic_
     assert round(nominal, 2) == 0.10 and round(worst, 2) == 0.20 and round(spare, 2) == 0.27
     assert worst < spare
     assert "0.10 mm" in part.check and "0.27 mm" in part.check
-    # Not the tall can: that is the other footprint, and says so.
+    # Not the tall can: that is the other footprint, and each entry says which is which.
     assert part.footprint_id != "xtal-hc49"
+    assert "LOW can" in part.check and "HC-49/U" in part.check
 
 
 def test_the_dc_motor_is_two_wires_off_the_board_and_its_figures_are_pololus() -> None:
@@ -820,3 +821,16 @@ def test_the_rc522_header_is_numbered_from_the_vcc_end_as_the_photo_prints_it() 
     assert footprint is not None and len(footprint.pins) == 8
     assert "components101" in part.source and "shillehtek" in part.source
     assert "3.3 V, not 5 V" in part.check and "SDA first" in part.check
+
+
+def test_the_tall_crystal_is_the_registrys_can_and_says_it_is_not_the_kit_one() -> None:
+    """The HC-49/U is the footprint the registry already draws, 13.46 mm tall, and its entry
+    says so in words, and sends the owner of the low kit crystal to the other one."""
+    tall, low = catalog_part("crystal-hc49u"), catalog_part("crystal-hc49us")
+    assert tall is not None and low is not None
+    assert tall.footprint_id == "xtal-hc49"
+    footprint = get_footprint(tall.footprint_id)
+    assert footprint is not None and footprint.body_height == 13.46
+    assert "TALL" in tall.check and "HC-49/US" in tall.check
+    assert "No maker drawing" in tall.source
+    assert footprint.body_height > (get_footprint(low.footprint_id) or footprint).body_height

@@ -3122,19 +3122,40 @@ TURKISH: Mapping[str, str] = {
         "tarafında olacak şekilde bir diyot bağlayın. Transistörü seçmeden önce sizinkini "
         "tıkalıyken ölçün: kit motorları birbirinden farklıdır."
     ),
-    "Crystal, HC-49/US low can": "Kristal, HC-49/US alçak kılıf",
-    "Quartz crystal for a microcontroller's clock, the low can, legs 4.88 mm apart": (
-        "Mikrodenetleyicinin saati için kuvars kristal, alçak kılıf, bacaklar arası 4,88 mm"
+    "Crystal, low can HC-49/S (HC-49/US)": "Kristal, alçak kılıf HC-49/S (HC-49/US)",
+    "Quartz crystal for a microcontroller's clock, the low can that comes in kits, 3.5 mm "
+    "tall, legs 4.88 mm apart": (
+        "Mikrodenetleyicinin saati için kuvars kristal, kitlerde bulunan alçak kılıf, 3,5 mm "
+        "yüksekliğinde, bacaklar arası 4,88 mm"
     ),
-    "Its legs are 4.88 mm apart against the board's 5.08 two holes over, so each ends 0.10 mm "
-    "off its hole, 0.20 mm at the drawing's worst, inside the 0.27 mm a 0.457 mm leg has to "
-    "spare in a 1 mm hole. Its frequency is printed on the can: put it in the value. Abracon "
-    "sells an insulator tab as an option, so a bare can is metal: keep it off bare copper.": (
-        "Bacakları 4,88 mm arayla durur, kartın iki delik ötedeki 5,08 mm'sine karşı her biri "
-        "deliğinden 0,10 mm kayar, çizimin en kötü durumunda 0,20 mm; bu, 1 mm'lik bir "
-        "delikte 0,457 mm'lik bir bacağın payı olan 0,27 mm'nin içindedir. Frekansı kılıfın "
-        "üzerinde yazar: değer alanına yazın. Abracon seçenek olarak yalıtım pulu satar; yani "
-        "çıplak kılıf metaldir: çıplak bakırdan uzak tutun."
+    "This is the LOW can, 3.5 mm tall, the one in most kits (HC-49/S, HC-49/US); the tall "
+    "HC-49/U, 13.46 mm, is the other entry. Its legs are 4.88 mm apart against the board's "
+    "5.08 two holes over, so each ends 0.10 mm off its hole, 0.20 mm at the drawing's worst, "
+    "inside the 0.27 mm a 0.457 mm leg has to spare in a 1 mm hole. Its frequency is printed "
+    "on the can: put it in the value. Abracon sells an insulator tab as an option, so a bare "
+    "can is metal: keep it off bare copper.": (
+        "Bu ALÇAK kılıftır, 3,5 mm yüksekliğinde, çoğu kitte bulunan (HC-49/S, HC-49/US); "
+        "13,46 mm'lik uzun HC-49/U öbür kayıttır. Bacakları 4,88 mm arayla durur, kartın iki "
+        "delik ötedeki 5,08 mm'sine karşı her biri deliğinden 0,10 mm kayar, çizimin en kötü "
+        "durumunda 0,20 mm; bu, 1 mm'lik bir delikte 0,457 mm'lik bir bacağın payı olan 0,27 "
+        "mm'nin içindedir. Frekansı kılıfın üzerinde yazar: değer alanına yazın. Abracon "
+        "seçenek olarak yalıtım pulu satar; yani çıplak kılıf metaldir: çıplak bakırdan uzak "
+        "tutun."
+    ),
+    "Crystal, tall can HC-49/U": "Kristal, uzun kılıf HC-49/U",
+    "Quartz crystal for a microcontroller's clock, the tall can, 13.46 mm tall, legs 4.88 mm "
+    "apart": (
+        "Mikrodenetleyicinin saati için kuvars kristal, uzun kılıf, 13,46 mm yüksekliğinde, "
+        "bacaklar arası 4,88 mm"
+    ),
+    "This is the TALL can, 13.46 mm high. Most crystals in kits are the low one (HC-49/S, "
+    "HC-49/US), 3.5 mm: if yours is that, take the other entry. Its legs are 4.88 mm apart "
+    "against the board's 5.08 two holes over, so each ends 0.10 mm off its hole. Its "
+    "frequency is printed on the can: put it in the value.": (
+        "Bu UZUN kılıftır, 13,46 mm yüksekliğinde. Kitlerdeki kristallerin çoğu alçak olandır "
+        "(HC-49/S, HC-49/US), 3,5 mm: sizinki oysa öbür kaydı seçin. Bacakları 4,88 mm arayla "
+        "durur, kartın iki delik ötedeki 5,08 mm'sine karşı her biri deliğinden 0,10 mm kayar. "
+        "Frekansı kılıfın üzerinde yazar: değer alanına yazın."
     ),
     "Optocoupler with the transistor's base brought out, CTR over 100 %, 5000 V isolation": (
         "Transistörün bazı dışarı çıkarılmış optokuplör, akım aktarım oranı %100'ün üzerinde, "
