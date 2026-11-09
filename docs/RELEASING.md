@@ -35,9 +35,14 @@ link definitions at the bottom of the file.
 __version__ = "0.4.0"
 ```
 
-Then re-record the two workflow GIFs the READMEs open with, so the version Home shows in
-their first frame is the release and not a `.dev` build (Pillow needed; on Windows, for the font):
-`python tools/make_workflow_demo.py && python tools/make_workflow_demo.py --lang tr`.
+Then re-record the two workflow GIFs the READMEs open with, and the stills `docs/FIRST_BOARD.md`
+walks through, so the version Home shows in their first frame is the release and not a `.dev`
+build, and so the stills show the window as this release has it (Pillow needed; on Windows, for
+the font):
+`python tools/make_workflow_demo.py && python tools/make_workflow_demo.py --lang tr && python tools/make_workflow_demo.py --stills docs/images/first-board`.
+The stills come out named by step (`01-home.png`, `done-route.png`, ...), and the page uses
+`1-home.png` to `7-overview.png`: copy them over by hand, and re-read the page's numbers (steps,
+phases, checks) against the new guide.
 
 **3. Verify, commit and push. No tag yet.**
 
