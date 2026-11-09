@@ -22,7 +22,7 @@ than no example.
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -30,13 +30,17 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from perfboard_studio import persist  # noqa: E402
 from perfboard_studio.autoroute import AutorouteOptions, plan_autoroute  # noqa: E402
+from perfboard_studio.boardbus import BoardBus  # noqa: E402
 from perfboard_studio.boardfit import BoardChoice, choose_board  # noqa: E402
 from perfboard_studio.command import CommandBus, CommandContext  # noqa: E402
 from perfboard_studio.commands import (  # noqa: E402
     AddBoardNotePayload,
+    AddBoardPayload,
+    AddCablePayload,
     AddPartPayload,
     AddPartsPayload,
     ImportNetlistPayload,
+    RenameBoardPayload,
     create_document_id_generator,
     create_empty_document,
     create_standard_registry,
@@ -53,9 +57,18 @@ from perfboard_studio.geometry import (  # noqa: E402
     unusable_holes,
 )
 from perfboard_studio.guide import build_guide  # noqa: E402
+from perfboard_studio.harness import build_harness  # noqa: E402
 from perfboard_studio.lvs import run_lvs  # noqa: E402
-from perfboard_studio.model import Board, DocumentMeta, HoleCoord, PerfDocument  # noqa: E402
-from perfboard_studio.parsers.kicad import parse_kicad_netlist  # noqa: E402
+from perfboard_studio.model import (  # noqa: E402
+    Board,
+    Cable,
+    CableEnd,
+    DocumentMeta,
+    HoleCoord,
+    Net,
+    PerfDocument,
+)
+from perfboard_studio.parsers.kicad import KicadNetlistImport, parse_kicad_netlist  # noqa: E402
 from perfboard_studio.parsers.kicad_parts import catalog_part_for, plan_import  # noqa: E402
 from perfboard_studio.placer import (  # noqa: E402
     DesignPlacement,
@@ -65,6 +78,13 @@ from perfboard_studio.placer import (  # noqa: E402
 )
 from perfboard_studio.router import RouterOptions  # noqa: E402
 from perfboard_studio.schematic import build_schematic  # noqa: E402
+from perfboard_studio.system import (  # noqa: E402
+    FIRST_BOARD,
+    board_document,
+    board_ids,
+    pair_by_net,
+    placed_components,
+)
 
 EXAMPLES = REPO_ROOT / "examples"
 
@@ -274,7 +294,31 @@ BASE_BOARD = Board(
 def build(example: Example, lookup, *, write: bool) -> bool:
     net_path = EXAMPLES / f"{example.stem}.net"
     parsed = parse_kicad_netlist(net_path.read_text(encoding="utf-8"))
+    placed = _placed(example, parsed, lookup)
+    if placed is None:
+        return False
+    return _finish(example, placed.bus, lookup, placed.board_name, write=write)
 
+
+@dataclass(frozen=True)
+class _Placed:
+    """An example's circuit placed on the board the board question chose, not yet routed --
+    and what went into it, so a system can put the same design on one of its boards."""
+
+    bus: CommandBus
+    chosen: object  # boardfit's recommended board: ``.preset`` and ``.board``
+    placement: DesignPlacement
+    parts: tuple[AddPartPayload, ...]
+    nets: tuple[Net, ...]
+
+    @property
+    def board_name(self) -> str:
+        return self.chosen.preset.name  # type: ignore[attr-defined]
+
+
+def _placed(example: Example, parsed, lookup) -> _Placed | None:
+    """The design, the board the board question chooses for it, and the placement that
+    board was judged by -- everything the window does before Ctrl+R."""
     phenolic = example.family == "single-sided-phenolic"
     blank = replace(BASE_BOARD, single_sided=phenolic, material="FR2" if phenolic else "FR4")
     document = create_empty_document(
@@ -288,19 +332,21 @@ def build(example: Example, lookup, *, write: bool) -> bool:
 
     # The design first, as in the window: the parts into the design with no holes, the
     # netlist joining them. Nothing is on a board until a board has been chosen.
-    if not _the_design(example, parsed, bus, lookup):
-        return False
+    design = _the_design(example, parsed, bus, lookup)
+    if design is None:
+        return None
+    parts, nets = design
 
     choice = choose_board(bus.document, lookup)
     _print_choice(example, choice)
     chosen = choice.recommended
     if chosen is None:
         print(f"  {example.stem}: no stock board takes this circuit")
-        return False
+        return None
     result = bus.dispatch("board.applyPreset", preset_payload(chosen.preset, chosen.board))
     if not result.ok:
         print(f"  {example.stem}: board refused [{result.code}] {result.message}")
-        return False
+        return None
 
     # What was judged is what lands, exactly as Place on the Board does after the Board
     # step -- and when the reference was already the smallest board, nothing was tried,
@@ -317,27 +363,30 @@ def build(example: Example, lookup, *, write: bool) -> bool:
         placed = place_design(bus.document, lookup, PlacementOptions(seed=0))
     if placed.unplaced:
         print(f"  {example.stem}: no room on {chosen.preset.name} for {list(placed.unplaced)}")
-        return False
+        return None
     result = bus.dispatch("part.place", placed.payload())
     if not result.ok:
         print(f"  {example.stem}: placing refused [{result.code}] {result.message}")
-        return False
-    return _finish(example, bus, lookup, chosen.preset.name, write=write)
+        return None
+    return _Placed(bus, chosen, placed, parts, nets)
 
 
-def _the_design(example: Example, parsed, bus: CommandBus, lookup) -> bool:
+def _the_design(
+    example: Example, parsed, bus: CommandBus, lookup
+) -> tuple[tuple[AddPartPayload, ...], tuple[Net, ...]] | None:
     """Every part into the design and the netlist over them, in one ``part.addMany`` each
-    way round -- told what each part is, or reading it as File > Import KiCad Netlist does."""
+    way round -- told what each part is, or reading it as File > Import KiCad Netlist does.
+    The parts and nets that went in, or None if either was refused."""
     if example.footprints:
         refs = sorted({node.component_ref for net in parsed.nets for node in net.nodes})
         missing = [ref for ref in refs if ref not in example.footprints]
         if missing:
             print(f"  {example.stem}: netlist names {missing} with no footprint in CATALOGUE")
-            return False
+            return None
         unknown = [ref for ref in refs if lookup(example.footprints[ref]) is None]
         if unknown:
             print(f"  {example.stem}: no such footprint for {unknown}")
-            return False
+            return None
         parts = tuple(
             _told(
                 example.footprints, example.pin_names, parsed, ref, f"c-{ref.lower()}",
@@ -371,12 +420,12 @@ def _the_design(example: Example, parsed, bus: CommandBus, lookup) -> bool:
     result = bus.dispatch("part.addMany", AddPartsPayload(parts=parts))
     if not result.ok:
         print(f"  {example.stem}: adding the parts refused [{result.code}] {result.message}")
-        return False
+        return None
     result = bus.dispatch("netlist.import", ImportNetlistPayload(nets=nets))
     if not result.ok:
         print(f"  {example.stem}: netlist import refused [{result.code}] {result.message}")
-        return False
-    return True
+        return None
+    return parts, tuple(nets)
 
 
 def _told(
@@ -422,26 +471,9 @@ def _print_choice(example: Example, choice: BoardChoice) -> None:
 
 def _finish(example: Example, bus: CommandBus, lookup, board_name: str, *, write: bool) -> bool:
     """Route, write on the board, check -- the same for every example."""
-    plan = plan_autoroute(bus.document, lookup, ROUTING)
-    if not plan.is_empty:
-        result = bus.dispatch("conductor.addMany", plan.payload())
-        if not result.ok:
-            print(f"  {example.stem}: routing refused [{result.code}] {result.message}")
-            return False
-
-    for text, ref in example.labels:
-        spot = _free_spot_beside(bus.document, lookup, ref, text)
-        if spot is None:
-            print(f"  {example.stem}: no room to write {text!r} beside {ref}")
-            return False
-        at, dx, dy = spot
-        result = bus.dispatch(
-            "board.note.add",
-            AddBoardNotePayload(text=text, at=at, offset_x_mm=dx, offset_y_mm=dy, size_mm=2.0),
-        )
-        if not result.ok:
-            print(f"  {example.stem}: label refused [{result.code}] {result.message}")
-            return False
+    plan = _route_and_label(example, bus, lookup)
+    if plan is None:
+        return False
 
     document = bus.document
     violations = run_drc(document, lookup)
@@ -470,17 +502,47 @@ def _finish(example: Example, bus: CommandBus, lookup, board_name: str, *, write
             print(f"      {routing.links_unrouted} connection(s) not routed")
 
     if write and ok:
-        # The modified stamp is the host's job, and this host is deterministic on
-        # purpose -- see STAMP.
-        document = replace(document, meta=replace(document.meta, modified=STAMP))
-        # newline="\n" explicitly: .gitattributes stores every text file as LF, and the
-        # default on Windows would write CRLF, so the file on disk would differ from the
-        # file in the repository the moment it was committed.
-        (EXAMPLES / f"{example.stem}.perf").write_text(
-            persist.serialize_document(document), encoding="utf-8", newline="\n"
-        )
+        _write(example.stem, document)
 
     return ok
+
+
+def _route_and_label(example: Example, bus: CommandBus, lookup):  # type: ignore[no-untyped-def]
+    """Ctrl+R on the board in front, then the example's words written beside their parts.
+    The routing plan, or None if anything was refused."""
+    plan = plan_autoroute(bus.document, lookup, ROUTING)
+    if not plan.is_empty:
+        result = bus.dispatch("conductor.addMany", plan.payload())
+        if not result.ok:
+            print(f"  {example.stem}: routing refused [{result.code}] {result.message}")
+            return None
+
+    for text, ref in example.labels:
+        spot = _free_spot_beside(bus.document, lookup, ref, text)
+        if spot is None:
+            print(f"  {example.stem}: no room to write {text!r} beside {ref}")
+            return None
+        at, dx, dy = spot
+        result = bus.dispatch(
+            "board.note.add",
+            AddBoardNotePayload(text=text, at=at, offset_x_mm=dx, offset_y_mm=dy, size_mm=2.0),
+        )
+        if not result.ok:
+            print(f"  {example.stem}: label refused [{result.code}] {result.message}")
+            return None
+    return plan
+
+
+def _write(stem: str, document: PerfDocument) -> None:
+    # The modified stamp is the host's job, and this host is deterministic on
+    # purpose -- see STAMP.
+    document = replace(document, meta=replace(document.meta, modified=STAMP))
+    # newline="\n" explicitly: .gitattributes stores every text file as LF, and the
+    # default on Windows would write CRLF, so the file on disk would differ from the
+    # file in the repository the moment it was committed.
+    (EXAMPLES / f"{stem}.perf").write_text(
+        persist.serialize_document(document), encoding="utf-8", newline="\n"
+    )
 
 
 def _free_spot_beside(
@@ -683,11 +745,227 @@ def build_project(lookup, *, write: bool) -> bool:
     return ok
 
 
+class SystemExample:
+    """Several boards drawn as one schematic and joined by cables.
+
+    ``boards`` is, for each board in order, its name, the references that go on it, and the
+    ``Example`` that says what those parts are -- the board question, Place on the Board and
+    Ctrl+R are each that board's own, as they are with it in front in the window, and the
+    design and the netlist are the system's. ``cables`` names each cable and the connector
+    at either end; its wires are paired by net, as Add Cable pairs them.
+    """
+
+    def __init__(
+        self,
+        stem: str,
+        title: str,
+        boards: tuple[tuple[str, tuple[str, ...], Example], ...],
+        cables: tuple[tuple[str, str, str], ...],
+    ) -> None:
+        self.stem = stem
+        self.title = title
+        self.boards = boards
+        self.cables = cables
+
+
+def _example(stem: str) -> Example:
+    return next(example for example in CATALOGUE if example.stem == stem)
+
+
+#: The supply's parts, numbered in the hundreds as a KiCad schematic of two boards numbers a
+#: second one, and what each is -- lm317-supply's own choices, under these references.
+_SUPPLY_PARTS = {
+    "U101": "to220",
+    "C101": "c-disc-p2",
+    "C102": "c-elec-d5-p2",
+    "C103": "c-elec-d6.3-p2",
+    "R101": "r-axial-3",
+    "R102": "r-axial-3",
+    "RV101": "pot-3",
+    "D101": "d-do41",
+    "LED101": "led-5mm",
+    "J101": "hdr-1x2",
+    "J102": "hdr-1x2",
+}
+
+SYSTEMS: tuple[SystemExample, ...] = (
+    SystemExample(
+        stem="relay-and-supply",
+        title="Relay Driver and Its Supply",
+        boards=(
+            (
+                "Relay driver",
+                ("A1", "U1", "Q1", "D1", "K1", "C1", "C2", "C3", "R1", "R2", "D2", "SW1", "J1", "J2"),
+                _example("nano-relay"),
+            ),
+            (
+                "Supply",
+                tuple(_SUPPLY_PARTS),
+                Example(
+                    stem="relay-and-supply: Supply",
+                    title="Supply",
+                    footprints=_SUPPLY_PARTS,
+                    values={"J101": "DC IN", "J102": "12V OUT"},
+                ),
+            ),
+        ),
+        # The supply's 12 V out to the relay driver's 12 V in: +12V and GND, two wires.
+        cables=(("W1", "J102", "J1"),),
+    ),
+)
+
+
+def _alone(parsed: KicadNetlistImport, refs: tuple[str, ...]) -> KicadNetlistImport:
+    """The part of a netlist one board carries: its parts, and each net's pins among them.
+    A net keeps its id, so the system's netlist is the boards' nets joined again by id."""
+    on_board = set(refs)
+    nets = tuple(
+        replace(net, nodes=nodes)
+        for net in parsed.nets
+        if (nodes := tuple(n for n in net.nodes if n.component_ref in on_board))
+    )
+    return replace(
+        parsed,
+        components=tuple(c for c in parsed.components if c.ref in on_board),
+        nets=nets,
+        warnings=(),
+    )
+
+
+def build_system(system: SystemExample, lookup, *, write: bool) -> bool:
+    """Each board's circuit placed on its own board as its own example would be, the design
+    and netlist the system's, each board routed in front, and the cables added."""
+    parsed = parse_kicad_netlist((EXAMPLES / f"{system.stem}.net").read_text(encoding="utf-8"))
+    named = [ref for _name, refs, _example in system.boards for ref in refs]
+    every = sorted(c.ref for c in parsed.components)
+    if sorted(named) != every:
+        print(f"  {system.stem}: the boards name {sorted(named)}, the netlist {every}")
+        return False
+
+    # Each board's part of the circuit, judged and placed alone: the board question and Place
+    # on the Board see only what goes on that board.
+    arranged: list[_Placed] = []
+    for _name, refs, example in system.boards:
+        placed = _placed(example, _alone(parsed, refs), lookup)
+        if placed is None:
+            return False
+        arranged.append(placed)
+
+    document = create_empty_document(
+        DocumentMeta(name=system.title, created=STAMP, modified=STAMP), BASE_BOARD
+    )
+    bus = BoardBus(
+        document,
+        create_standard_registry(),
+        CommandContext(next_id=create_document_id_generator(document)),
+    )
+
+    # The design is the system's: every part, and each net joined again across the boards.
+    joined: dict[str, Net] = {}
+    for placed in arranged:
+        result = bus.dispatch("part.addMany", AddPartsPayload(parts=placed.parts))
+        if not result.ok:
+            print(f"  {system.stem}: adding the parts refused [{result.code}] {result.message}")
+            return False
+        for net in placed.nets:
+            seen = joined.get(net.id)
+            joined[net.id] = net if seen is None else replace(seen, nodes=seen.nodes + net.nodes)
+    nets = tuple(joined[net.id] for net in parsed.nets if net.id in joined)
+    result = bus.dispatch("netlist.import", ImportNetlistPayload(nets=nets))
+    if not result.ok:
+        print(f"  {system.stem}: netlist import refused [{result.code}] {result.message}")
+        return False
+
+    plans = []
+    for index, ((name, _refs, example), placed) in enumerate(zip(system.boards, arranged, strict=True)):
+        if index == 0:
+            board_id = FIRST_BOARD
+            result = bus.dispatch("board.rename", RenameBoardPayload(board=board_id, name=name))
+        else:
+            board_id = name.lower().replace(" ", "-")
+            result = bus.dispatch(
+                "board.add", AddBoardPayload(board=BASE_BOARD, name=name, id=board_id)
+            )
+        if not result.ok:
+            print(f"  {system.stem}: board {name!r} refused [{result.code}] {result.message}")
+            return False
+        bus.show(board_id)
+        chosen = placed.chosen
+        for type_, payload in (
+            ("board.applyPreset", preset_payload(chosen.preset, chosen.board)),  # type: ignore[attr-defined]
+            ("part.place", placed.placement.payload()),
+        ):
+            result = bus.dispatch(type_, payload)
+            if not result.ok:
+                print(f"  {system.stem}: {type_} on {name!r} refused [{result.code}] {result.message}")
+                return False
+        plan = _route_and_label(example, bus, lookup)
+        if plan is None:
+            return False
+        plans.append(plan)
+
+    for ref, a_ref, b_ref in system.cables:
+        whole = bus.system_document
+        ends = []
+        for end_ref in (a_ref, b_ref):
+            found = [(board, c) for board, c in placed_components(whole) if c.ref == end_ref]
+            if len(found) != 1:
+                print(f"  {system.stem}: cable {ref} names {end_ref}, which is not one placed part")
+                return False
+            ends.append(CableEnd(found[0][0], found[0][1].id))
+        pairing = pair_by_net(whole, ends[0], ends[1])
+        if pairing.unpaired or not pairing.wires:
+            print(f"  {system.stem}: cable {ref} does not pair: {list(pairing.unpaired)}")
+            return False
+        cable = Cable(id="", ref=ref, a=ends[0], b=ends[1], wires=pairing.wires)
+        result = bus.dispatch("cable.add", AddCablePayload(cable=cable))
+        if not result.ok:
+            print(f"  {system.stem}: cable {ref} refused [{result.code}] {result.message}")
+            return False
+
+    whole = bus.system_document
+    lvs = run_lvs(whole, lookup)
+    harness = build_harness(whole).cables
+    ok = lvs.ok and len(harness) == len(system.cables)
+    print(
+        f"  {system.stem:20} {len(board_ids(whole))} boards, {len(whole.cables)} cable(s)  "
+        f"LVS {'ok' if lvs.ok else 'MISMATCH'} across them  harness {len(harness)} cable(s)"
+    )
+    for issue in list(lvs.issues)[:5]:
+        print(f"      LVS {issue.kind}: {issue.message}")
+    for board_id, (name, _refs, _example), placed, plan in zip(
+        board_ids(whole), system.boards, arranged, plans, strict=True
+    ):
+        view = board_document(whole, board_id)
+        violations = run_drc(view, lookup)
+        errors = [v for v in violations if v.severity == "error"]
+        guide = build_guide(view, lookup)
+        routing = plan.summary
+        print(
+            f"    {name:18} {placed.board_name:>10}  {len(view.components):2} parts  "
+            f"{len(view.conductors):2} conductors  "
+            f"{routing.nets_closed}/{routing.nets_considered} nets closed  "
+            f"DRC {len(errors)} err / {len(violations) - len(errors)} warn  "
+            f"{guide.total_steps} steps / {guide.checkpoint_count} checks"
+        )
+        for v in errors[:5]:
+            print(f"      DRC error {v.rule}: {v.message}")
+        if routing.links_unrouted:
+            print(f"      {routing.links_unrouted} connection(s) not routed")
+        ok = ok and not errors and routing.links_unrouted == 0
+
+    if write and ok:
+        _write(system.stem, whole)
+    return ok
+
+
 def main(argv: list[str]) -> int:
     write = "--check" not in argv
     lookup = footprint_lookup()
-    print(f"{'building' if write else 'checking'} {len(CATALOGUE) + 1} examples\n")
+    count = len(CATALOGUE) + len(SYSTEMS) + 1
+    print(f"{'building' if write else 'checking'} {count} examples\n")
     results = [build(example, lookup, write=write) for example in CATALOGUE]
+    results.extend(build_system(system, lookup, write=write) for system in SYSTEMS)
     results.append(build_project(lookup, write=write))
     failed = results.count(False)
     print()

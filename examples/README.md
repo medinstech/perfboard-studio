@@ -1,7 +1,9 @@
 # Examples
 
 Six finished circuits, each shipped twice: as the `.net` a schematic tool exports, and as
-the `.perf` that importing, placing and routing it produces. And one **project** —
+the `.perf` that importing, placing and routing it produces. One **system** —
+`relay-and-supply` — which is two of them on two boards with a cable between, as one
+schematic and one file. And one **project** —
 [`ne555-blinker/`](./ne555-blinker/) — which is the other end of the same workflow: a
 circuit that has been drawn and not yet built. Start there if what you want to see is how
 the tool goes from a schematic to a board.
@@ -27,15 +29,17 @@ cleanly on 7 × 9.
 
 | | parts | board | what it is there to show |
 |---|---|---|---|
-| **ne555-astable** | 8 | **2 × 8 cm**, 5 × 30, FR-4 | The starting point. A 555 flashing an LED — the circuit everybody has built. |
-| **lm317-supply** | 11 | **4 × 6 cm**, 14 × 20, FR-4 | A hot part. The regulator is a TO-220, so the heat-proximity rule has something to measure. |
-| **lpb1-booster** | 12 | **5 × 7 cm**, 18 × 26, **FR-2** | The material mattering. Phenolic is what a pedal actually gets built on and it is the board whose pads lift, so the guide drops the iron 30 °C (350 → 320) and cuts the dwell from 3 s to 2 s. |
-| **arduino-io-shield** | 11 | **3 × 7 cm**, 10 × 24, FR-4 | Headers. Two of them, 8-pin and 6-pin, which is what a shield mostly is — and the case where lead bends and short traces do nearly all the work. |
-| **atmega328-relay** | 24 | **7 × 9 cm**, 27 × 35, FR-4 | Scale, and what it costs. An ATmega328 with a 7805, a crystal, a relay and four connectors: 24 nets, 59 conductors, an 83-step guide with 101 checkpoints and 51 wires to cut. It is also every rule at once — a TO-220 and a relay both run hot, two electrolytics mind, and the board's finger strips and corner screws take 50 holes nothing can be soldered into. |
-| **nano-relay** | 14 | **7 × 9 cm**, 27 × 35, FR-4 | Real parts, out of a KiCad netlist as it stands. An Arduino Nano switching a 12 V relay through a BC547, fed by a 7805, with a push button and an LED. Nothing is named for it here: the Nano, the BC547, the 1N4007 and the 7805 come out of the catalog by their values, with their pin names; everything else by its KiCad footprint; and the Nano's pins, which KiCad numbers down one side and up the other, and the LED's, which it numbers cathode first, are renumbered by name. The terminals carry their pin names and the board two labels. |
+| **ne555-astable** | 8 | **2 × 8 cm**, 6 × 28, FR-4 | The starting point. A 555 flashing an LED — the circuit everybody has built. |
+| **lm317-supply** | 11 | **3 × 7 cm**, 10 × 24, FR-4 | A hot part. The regulator is a TO-220, so the heat-proximity rule has something to measure. |
+| **lpb1-booster** | 12 | **5 × 7 cm**, 18 × 24, **FR-2** | The material mattering. Phenolic is what a pedal actually gets built on and it is the board whose pads lift, so the guide drops the iron 30 °C (350 → 320) and cuts the dwell from 3 s to 2 s. |
+| **arduino-io-shield** | 11 | **2 × 8 cm**, 6 × 28, FR-4 | Headers. Two of them, 8-pin and 6-pin, which is what a shield mostly is — and the case where lead bends and short traces do nearly all the work. |
+| **atmega328-relay** | 24 | **7 × 9 cm**, 26 × 31, FR-4 | Scale, and what it costs. An ATmega328 with a 7805, a crystal, a relay and four connectors: 24 nets, 59 conductors, an 83-step guide with 101 checkpoints and 51 wires to cut. It is also every rule at once — a TO-220 and a relay both run hot, two electrolytics mind, and the board's finger strips and corner screws take 50 holes nothing can be soldered into. |
+| **nano-relay** | 14 | **6 × 8 cm**, 22 × 27, FR-4 | Real parts, out of a KiCad netlist as it stands. An Arduino Nano switching a 12 V relay through a BC547, fed by a 7805, with a push button and an LED. Nothing is named for it here: the Nano, the BC547, the 1N4007 and the 7805 come out of the catalog by their values, with their pin names; everything else by its KiCad footprint; and the Nano's pins, which KiCad numbers down one side and up the other, and the LED's, which it numbers cathode first, are renumbered by name. The terminals carry their pin names and the board two labels. |
+| **relay-and-supply** | 25 | **6 × 8 cm** twice, 22 × 27, FR-4 | Several boards. nano-relay's driver and lm317-supply's regulator drawn as one schematic, the supply's parts numbered in the hundreds and its output called +12V like the relay's input, so KiCad exports one netlist. Each board is sized, placed and routed on its own, as it is with that board in front in the window; cable W1 carries +12V and GND from the supply's J102 to the relay's J1, LVS proves the whole system through it, and each board's guide measures only its own pins and ends with the harness. |
 | **ne555-blinker/** | 10 | *none yet* | The workflow, rather than its result. Ten parts in the design and nothing on the board, so **Choose a Board** has a board to find and **Place on the Board** an arrangement to make. Its own [README](./ne555-blinker/README.md) walks through it. |
 
-All six route to completion, match their schematics under LVS, and carry no DRC error.
+All seven route to completion, match their schematics under LVS — the system's as one
+circuit across both boards and the cable — and carry no DRC error on any board.
 `tests/test_examples.py` asserts exactly that on every commit, so an example cannot rot
 quietly — and for the project it asserts the walkthrough its README promises instead:
 that the design is still a design, that the board question still lands on a stock board,
@@ -89,3 +93,11 @@ Write the `.net`, add an entry to `CATALOGUE` in `tools/build_examples.py` namin
 board family -- and each part's footprint, or none at all to import it the way a user would --
 and run the script. The size is not yours to name: it is what the board question answers. It fails loudly if the
 circuit does not route cleanly, which is the point.
+
+An example of several boards is a `SystemExample` in `SYSTEMS`: one `.net` for the whole
+schematic, each board's name, the references that go on it and the `Example` saying what
+they are, and each cable by the connectors at its ends — its wires are paired by net, as
+**Add Cable** pairs them. The board question is each board's own, asked of only the parts
+on it, and its answer can differ from the same circuit's on its own: the supply here is on
+6 × 8 cm where `lm317-supply` is on 3 × 7, because its output is called +12V and a net
+with that name is power, and the board question prices it as power.

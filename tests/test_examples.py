@@ -9,6 +9,10 @@ re-routed -- `tools/build_examples.py` does that, takes about half a minute, and
 by hand when an example is regenerated. What is asserted here is the property that has to
 hold on every commit: the documents on disk are valid, they still match their schematics,
 and they carry no design error.
+
+An example of several boards (relay-and-supply) goes through the same tests: whatever is a
+board's question -- DRC, the stock board, the pads, the guide -- is asked of every board in
+it, each seen alone as the window sees the one in front, and LVS is the system's.
 """
 
 from __future__ import annotations
@@ -22,11 +26,19 @@ from perfboard_studio.drc import run_drc
 from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.guide import build_guide
 from perfboard_studio.lvs import run_lvs
+from perfboard_studio.model import PerfDocument
 from perfboard_studio.parsers.kicad import parse_kicad_netlist
+from perfboard_studio.system import board_document, board_ids
 
 EXAMPLES = pathlib.Path(__file__).resolve().parent.parent / "examples"
 PERF_FILES = sorted(EXAMPLES.glob("*.perf"))
 NET_FILES = sorted(EXAMPLES.glob("*.net"))
+
+
+def _boards(document: PerfDocument) -> list[tuple[str, PerfDocument]]:
+    """Every board of ``document`` as the document of that board alone -- one for an
+    example of one board, which is the document itself."""
+    return [(board_id, board_document(document, board_id)) for board_id in board_ids(document)]
 
 
 def test_every_netlist_has_a_board() -> None:
@@ -61,8 +73,9 @@ def test_example_has_no_drc_errors(path: pathlib.Path) -> None:
     drawn."""
     result = persist.deserialize_document(path.read_text(encoding="utf-8"))
     assert result.ok
-    errors = [v for v in run_drc(result.document, footprint_lookup()) if v.severity == "error"]
-    assert not errors, [f"{v.rule}: {v.message}" for v in errors]
+    for board_id, board in _boards(result.document):
+        errors = [v for v in run_drc(board, footprint_lookup()) if v.severity == "error"]
+        assert not errors, (board_id, [f"{v.rule}: {v.message}" for v in errors])
 
 
 @pytest.mark.parametrize("path", PERF_FILES, ids=lambda p: p.stem)
@@ -78,9 +91,10 @@ def test_example_produces_a_guide_with_checkpoints(path: pathlib.Path) -> None:
     """The guide is the point of the tool, and checkpoints are the point of the guide."""
     result = persist.deserialize_document(path.read_text(encoding="utf-8"))
     assert result.ok
-    guide = build_guide(result.document, footprint_lookup())
-    assert guide.total_steps > 0
-    assert guide.checkpoint_count > 0
+    for board_id, board in _boards(result.document):
+        guide = build_guide(board, footprint_lookup())
+        assert guide.total_steps > 0, board_id
+        assert guide.checkpoint_count > 0, board_id
 
 
 @pytest.mark.parametrize("path", PERF_FILES, ids=lambda p: p.stem)
@@ -93,25 +107,26 @@ def test_example_is_on_a_board_somebody_sells(path: pathlib.Path) -> None:
     from perfboard_studio.boardfamily import STANDARD_PRESETS
     from perfboard_studio.geometry import board_size_mm
 
-    document = persist.deserialize_document(path.read_text(encoding="utf-8")).document
-    board = document.board
-    preset = next(
-        (
-            p
-            for p in STANDARD_PRESETS
-            if p.cols == board.cols
-            and p.rows == board.rows
-            and p.single_sided == board.single_sided
-        ),
-        None,
-    )
-    assert preset is not None, f"{board.cols}x{board.rows} is not a size anybody stocks"
+    whole = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    for board_id, document in _boards(whole):
+        board = document.board
+        preset = next(
+            (
+                p
+                for p in STANDARD_PRESETS
+                if p.cols == board.cols
+                and p.rows == board.rows
+                and p.single_sided == board.single_sided
+            ),
+            None,
+        )
+        assert preset is not None, f"{board_id}: {board.cols}x{board.rows} is not stocked"
 
-    # ...and it is that product to the tenth of a millimetre, not merely its hole count.
-    width, height = board_size_mm(board)
-    assert width == pytest.approx(preset.width_mm, abs=0.05)
-    assert height == pytest.approx(preset.height_mm, abs=0.05)
-    assert document.edge_connectors, "a stocked board is sold with its finger strips"
+        # ...and it is that product to the tenth of a millimetre, not merely its hole count.
+        width, height = board_size_mm(board)
+        assert width == pytest.approx(preset.width_mm, abs=0.05)
+        assert height == pytest.approx(preset.height_mm, abs=0.05)
+        assert document.edge_connectors, f"{board_id}: a stocked board has its finger strips"
 
 
 @pytest.mark.parametrize("path", PERF_FILES, ids=lambda p: p.stem)
@@ -127,23 +142,24 @@ def test_nothing_is_soldered_where_there_is_no_pad(path: pathlib.Path) -> None:
     """
     from perfboard_studio.geometry import all_pin_holes, hole_key, unusable_holes
 
-    document = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    whole = persist.deserialize_document(path.read_text(encoding="utf-8")).document
     lookup = footprint_lookup()
-    dead = unusable_holes(document)
-    assert document.edge_connectors or document.mounting_holes, (
-        "a stocked board arrives with its strips and its corner holes"
-    )
+    for board_id, document in _boards(whole):
+        dead = unusable_holes(document)
+        assert document.edge_connectors or document.mounting_holes, (
+            f"{board_id}: a stocked board arrives with its strips and its corner holes"
+        )
 
-    for component in document.components:
-        footprint = lookup(component.footprint_id)
-        if footprint is None:
-            continue
-        for pin, at in all_pin_holes(component, footprint):
-            assert hole_key(at) not in dead, f"{component.ref} pin {pin.number} has no pad"
+        for component in document.components:
+            footprint = lookup(component.footprint_id)
+            if footprint is None:
+                continue
+            for pin, at in all_pin_holes(component, footprint):
+                assert hole_key(at) not in dead, f"{component.ref} pin {pin.number} has no pad"
 
-    for conductor in document.conductors:
-        for at in conductor.path:
-            assert hole_key(at) not in dead, f"{conductor.id} runs over a hole with no pad"
+        for conductor in document.conductors:
+            for at in conductor.path:
+                assert hole_key(at) not in dead, f"{conductor.id} runs over a hole with no pad"
 
 
 @pytest.mark.parametrize("path", NET_FILES, ids=lambda p: p.stem)
@@ -163,13 +179,70 @@ def test_netlist_parses(path: pathlib.Path) -> None:
 @pytest.mark.parametrize("path", PERF_FILES, ids=lambda p: p.stem)
 def test_board_carries_every_part_the_netlist_names(path: pathlib.Path) -> None:
     """The `.perf` is built from the `.net` beside it, so a part cannot go missing from
-    one without the other noticing."""
+    one without the other noticing. On several boards, on one of them."""
+    from perfboard_studio.system import every_component
+
     result = persist.deserialize_document(path.read_text(encoding="utf-8"))
     assert result.ok
     parsed = parse_kicad_netlist((EXAMPLES / f"{path.stem}.net").read_text(encoding="utf-8"))
     wanted = {node.component_ref for net in parsed.nets for node in net.nodes}
-    placed = {component.ref for component in result.document.components}
+    placed = {component.ref for component in every_component(result.document)}
     assert wanted <= placed, f"missing from the board: {sorted(wanted - placed)}"
+
+
+# ---------------------------------------------------------------------------
+# The example of several boards
+# ---------------------------------------------------------------------------
+
+SYSTEM_PERF = EXAMPLES / "relay-and-supply.perf"
+
+
+def test_the_system_example_is_two_boards_and_the_cable_between_them() -> None:
+    """What the README says it is: the relay driver and its 12 V supply, each on its own
+    stock board, one two-wire cable from the supply's output to the relay's input, and the
+    whole proven against one schematic -- every net that crosses carried by the cable."""
+    from perfboard_studio.harness import build_harness
+    from perfboard_studio.lvs import run_system_lvs
+    from perfboard_studio.system import board_title, every_component
+
+    document = persist.deserialize_document(SYSTEM_PERF.read_text(encoding="utf-8")).document
+    lookup = footprint_lookup()
+    assert [board_title(document, b) for b in board_ids(document)] == ["Relay driver", "Supply"]
+    boards = dict(_boards(document))
+    assert {c.ref for c in boards["supply"].components} >= {"U101", "J101", "J102"}
+    assert {c.ref for c in boards["main"].components} >= {"A1", "K1", "J1"}
+    assert document.parts == (), "every part is on a board"
+
+    (cable,) = document.cables
+    assert cable.ref == "W1"
+    by_id = {c.id: c.ref for c in every_component(document)}
+    assert (cable.a.board, by_id[cable.a.connector]) == ("supply", "J102")
+    assert (cable.b.board, by_id[cable.b.connector]) == ("main", "J1")
+
+    lvs = run_system_lvs(document, lookup)
+    assert lvs.ok, [f"{i.kind}: {i.message}" for i in lvs.issues]
+    assert lvs.uncabled == ()
+
+    (harness,) = build_harness(document).cables
+    assert harness.ref == "W1"
+    assert sorted(wire.net_name for wire in harness.wires) == ["+12V", "GND"]
+    assert harness.checkpoints, "the cable is checked before the system is powered"
+
+
+def test_a_boards_guide_measures_only_what_is_on_it() -> None:
+    """+12V and GND are on both boards. A continuity or isolation check on one board's
+    guide names a pin on that board, never one at the other end of the cable -- the
+    harness proves the cable. Chained through the other board, "C1.1 to C102.1" was a
+    measurement nobody can make, and it hid the one between C1 and the next pin here that
+    somebody can."""
+    document = persist.deserialize_document(SYSTEM_PERF.read_text(encoding="utf-8")).document
+    lookup = footprint_lookup()
+    for board_id, board in _boards(document):
+        here = {c.ref for c in board.components}
+        for phase in build_guide(board, lookup).phases:
+            for check in phase.checkpoints:
+                away = [pin.component_ref for pin in check.pins if pin.component_ref not in here]
+                assert away == [], (board_id, check.title)
 
 
 # ---------------------------------------------------------------------------

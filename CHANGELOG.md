@@ -86,11 +86,19 @@ closed without a bump.
   in its net's colour and gauge), where each end goes by board, connector and pin, and the
   checks before power (continuity end to end, isolation between neighbouring wires on
   different nets). The cut list gets a row per cable wire, and the HTML and JSON exports a
-  harness section, each only when there is a cable.
+  harness section, each only when there is a cable. A board's own checks measure only the
+  pins on that board: +12V on two boards is checked on each up to its connector, and the
+  harness checks the cable, where the guide used to chain a probe through a pin on the
+  other board.
 - **MCP: several boards.** `select_board` puts a board in front and every board tool acts
   on it; `add_board`, `rename_board`, `remove_board`, `move_to_board`, `add_cable`,
   `remove_cable` and `get_system_info` (what each board holds, what each cable carries,
   and the system's LVS). 67 tools, each in `docs/MCP.md` with its reason.
+- **An example of two boards: `examples/relay-and-supply.perf`.** The Nano relay driver and
+  the LM317 supply drawn as one schematic and built on two stock boards, cable W1
+  carrying +12V and GND from one to the other: each board sized, placed and routed on its
+  own, LVS clean across both through the cable, and a guide for each board ending with the
+  harness. Its `.net` is the KiCad export of the whole schematic.
 
 - **The SW-520D tilt switch**, the ball switch every starter kit holds, from Bailin's datasheet:
   drawn at the largest it can be (5.5 across, 11.9 long), its 2.4 mm leads against the board's

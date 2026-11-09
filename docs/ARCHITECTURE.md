@@ -3117,6 +3117,16 @@ guide moved. Every sentence is the guide's phrasebook (`test_phrasebook` reads `
 too), and every board is called what `system.board_title` calls it, so the harness, the strip
 and LVS's lines say one name.
 
+A board's guide therefore measures only that board's pins (`guide._measured_here`). The view
+carries the system's nets, and its continuity chain and isolation pairs were drawn from them
+whole: the relay board's guide in `examples/relay-and-supply.perf` said "probe C1.1 and
+C102.1" with C102 on the supply board, a measurement nobody can make, and the chain's link
+between the two pins either side of it went missing. Each net is narrowed to the pins of
+parts the view holds -- placed or still in the design, so a single board's guide is what it
+was -- and what crosses is the harness's to check. `test_a_boards_guide_measures_only_what_is_on_it`
+holds it on the example, and the relay board's guide there is the 68 checks nano-relay's is
+alone.
+
 **Every reader of the circuit reads every board; every reader of the board reads one.** The
 projection is right for a board's questions and wrong for the circuit's: on one board's view a
 part on the second board is neither placed nor in the design, a reference nothing defines.

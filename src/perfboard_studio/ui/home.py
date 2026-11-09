@@ -90,6 +90,7 @@ def example_title(stem: str) -> str:
         "lpb1-booster": t("Guitar booster pedal"),
         "nano-relay": t("Arduino Nano relay switch"),
         "atmega328-relay": t("ATmega328 relay controller"),
+        "relay-and-supply": t("Relay driver and its supply, two boards"),
     }
     return titles.get(stem, stem)
 

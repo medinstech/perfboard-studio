@@ -98,6 +98,7 @@ from perfboard_studio.schematic import (
     symbol_kind_for,
     wires_as_drawn,
 )
+from perfboard_studio.system import circuit_parts
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN_DIR = ROOT / "tools" / "diffcheck" / "golden"
@@ -1663,7 +1664,7 @@ REAL_BOARDS = [*sorted(EXAMPLES_DIR.glob("*.perf")), GOLDEN_DIR / "ne555.perf"]
 def _frozen(doc: PerfDocument, drawing: SchematicDrawing) -> PerfDocument:
     """``doc`` as the window freezes it on the first edit: every symbol where the drawing
     has it, and the drawing's wires as drawn wires."""
-    ids = {part.ref: part.id for part in doc.parts} | {c.ref: c.id for c in doc.components}
+    ids = {part.ref: part.id for part in circuit_parts(doc)}  # every board's, as the window freezes
     return dataclasses.replace(
         doc,
         sheet=tuple(

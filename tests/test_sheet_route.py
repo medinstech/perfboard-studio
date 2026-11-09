@@ -34,6 +34,7 @@ from perfboard_studio.schematic import (
     rail_glyph_bars,
     route_sheet_wire,
 )
+from perfboard_studio.system import circuit_parts
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 G = GRID_MM
@@ -216,7 +217,7 @@ def _frozen_unwired(doc: PerfDocument) -> PerfDocument:
     """``doc`` with its sheet frozen where the layout put every symbol, and no wire drawn:
     every connection said by name at its pins, as the window has it before the first wire."""
     doc = dataclasses.replace(doc, sheet=(), sheet_wires=())
-    ids = {part.ref: part.id for part in doc.parts} | {c.ref: c.id for c in doc.components}
+    ids = {part.ref: part.id for part in circuit_parts(doc)}  # every board's, as the window freezes
     drawing = build_schematic(doc, footprint_lookup())
     return dataclasses.replace(
         doc,

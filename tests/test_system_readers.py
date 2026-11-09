@@ -316,6 +316,7 @@ BOARD_READERS: dict[str, str] = {
     "commands.py::_UnplaceComponent.apply": "moves a part between THIS board and the design",
     "placer.py::_taken_cells": "the design arranged onto this board",
     "placer.py::design_entries": "the design arranged onto this board",
+    "guide.py::_measured_here": "the pins a probe can reach on the board being built",
     "ui/inspector.py::Inspector._show": "the selection, which is on the board shown",
     "ui/properties.py::describe": "the selection, which is on the board shown",
     "ui/main.py::example_boards": "the shipped examples, one board each",

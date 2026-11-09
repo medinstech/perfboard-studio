@@ -2443,7 +2443,7 @@ def _checkpoints(
 
     # Continuity, from the schematic. Each goes with the phase that completes its net.
     last_phase_for_net = _last_phase_by_net(conductor_steps)
-    for check in continuity_checks(doc):
+    for check in continuity_checks(_measured_here(doc)):
         closing_phase = last_phase_for_net.get(check.net_name)
         if closing_phase is None:
             continue  # Nothing on the board builds this net; the LVS warning covers it.
@@ -2574,13 +2574,36 @@ def _pin_phrase(doc: PerfDocument, ref: str, pin: str, say: Phrasebook) -> str:
     return say("{ref} pin {pin}", ref=ref, pin=pin)
 
 
+def _measured_here(doc: PerfDocument) -> PerfDocument:
+    """``doc`` with every net narrowed to the pins of parts this document holds.
+
+    On one board of a system the nets are the system's: +12V runs from the supply's output
+    connector, through the cable, to the relay's coil. A probe cannot reach a pin on the
+    other board, so a check chained through one -- "C1.1 to C102.1" with C102 on the bench
+    beside it -- is a measurement nobody can make, and it hides the one between the two
+    pins either side of it that can. Only this board's pins are chained; the cable is
+    proven by the harness's own checks. On a document of one board every net's pins are
+    its parts' (placed or not yet), so nothing changes there.
+    """
+    held = {component.ref for component in doc.components} | {part.ref for part in doc.parts}
+    narrowed = tuple(
+        dataclasses.replace(
+            net, nodes=tuple(node for node in net.nodes if node.component_ref in held)
+        )
+        for net in doc.nets
+    )
+    if narrowed == doc.nets:
+        return doc
+    return dataclasses.replace(doc, nets=narrowed)
+
+
 def _closing_checks(
     doc: PerfDocument, lookup: FootprintLookup, options: GuideOptions, say: Phrasebook
 ) -> list[Checkpoint]:
     """Phase 8: everything that must be true before power is applied."""
     checks: list[Checkpoint] = []
 
-    for check in isolation_checks(doc)[: options.isolation_cap]:
+    for check in isolation_checks(_measured_here(doc))[: options.isolation_cap]:
         blocking = {check.net_a, check.net_b} and _is_power_pair(doc, check.net_a, check.net_b)
         checks.append(
             Checkpoint(

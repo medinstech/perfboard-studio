@@ -4147,6 +4147,7 @@ TURKISH: Mapping[str, str] = {
     "Guitar booster pedal": "Gitar booster pedalı",
     "Arduino Nano relay switch": "Arduino Nano röle anahtarı",
     "ATmega328 relay controller": "ATmega328 röle kontrolcüsü",
+    "Relay driver and its supply, two boards": "Röle sürücüsü ve beslemesi, iki kart",
     # -- the welcome dialog --------------------------------------------------------
     "Examples": "Örnekler",
     "Start on the sheet: add parts and join their pins. The board comes after.": (

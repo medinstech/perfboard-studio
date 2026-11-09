@@ -284,8 +284,14 @@ def test_the_placer_counts_exactly_what_the_planner_refuses() -> None:
         assert _conflicts(doc) == refused, f"trial {trial}"
 
 
-#: Every example in the repository, each of which has to go onto a breadboard.
-EXAMPLES = sorted(path.stem for path in (REPO / "examples").glob("*.perf"))
+#: Every example of one board in the repository, each of which has to go onto a breadboard.
+#: An example of several boards (relay-and-supply) is not one circuit for one breadboard but
+#: two boards and a cable, and its two halves are nano-relay and lm317-supply, both here.
+EXAMPLES = sorted(
+    path.stem
+    for path in (REPO / "examples").glob("*.perf")
+    if not deserialize_document(path.read_text(encoding="utf-8")).document.boards
+)
 
 
 def _on_a_breadboard(example: str, board: Board = FULL) -> PerfDocument:
