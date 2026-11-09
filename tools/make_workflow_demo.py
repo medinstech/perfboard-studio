@@ -3,6 +3,8 @@ its build guide.
 
     python tools/make_workflow_demo.py               # -> docs/images/workflow.gif
     python tools/make_workflow_demo.py --lang tr     # -> docs/images/workflow.tr.gif
+    python tools/make_workflow_demo.py --stills docs/images/first-board
+                                                     # -> one PNG per stop, for docs/FIRST_BOARD.md
 
 Needs Pillow, which is not a dependency of the application -- only of this script, which
 is run by hand when the window changes enough for the tour to be out of date.
@@ -73,6 +75,10 @@ def main(argv: list[str]) -> int:
         REPO_ROOT / "docs" / "images" / ("workflow.gif" if language == "en" else f"workflow.{language}.gif")
     )
 
+    stills = Path(argv[argv.index("--stills") + 1]) if "--stills" in argv else None
+    if stills is not None:
+        stills.mkdir(parents=True, exist_ok=True)
+
     from PySide6.QtCore import QBuffer, QIODevice, QPoint, QRect, QSettings, Qt, QTimer
     from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
     from PySide6.QtWidgets import (
@@ -130,7 +136,7 @@ def main(argv: list[str]) -> int:
         return Image.open(BytesIO(bytes(buffer.data()))).convert("RGB")
 
     def shoot(ms: int, dialog: QWidget | None = None, ring: QWidget | QRect | None = None,
-              ring_in: QWidget | None = None) -> None:
+              ring_in: QWidget | None = None, still: str | None = None) -> None:
         """The window as it is, a dialog over it if one is up, and a ring round ``ring``."""
         picture = window.grab()
         painter = QPainter(picture)
@@ -158,6 +164,9 @@ def main(argv: list[str]) -> int:
             painter.drawRoundedRect(rect.adjusted(-5, -4, 5, 4), 8, 8)
         painter.end()
         frames.append((to_pil(picture), ms))
+        if stills is not None and still is not None:
+            # The same picture as the frame, for a page that walks through the steps.
+            picture.save(str(stills / f"{still}.png"))
 
     # -- Dialogs on the way are pictured and answered with what they already have selected.
     unexpected: list[str] = []
@@ -177,7 +186,7 @@ def main(argv: list[str]) -> int:
             self.choices.scrollToItem(board)
             settle()
             shoot(POINT_MS + 600, dialog=self, ring=self.choices.visualItemRect(board),
-                  ring_in=self.choices.viewport())
+                  ring_in=self.choices.viewport(), still="03-choose-the-board")
             self.choices.setCurrentItem(board)
             settle()
             shoot(POINT_MS, dialog=self, ring=_default_button(self))
@@ -235,19 +244,19 @@ def main(argv: list[str]) -> int:
             break
         settle()
     first = home.cards[0]
-    shoot(POINT_MS + 600, ring=first)
+    shoot(POINT_MS + 600, ring=first, still="01-home")
     first.click()
     settle(40)
     if window.home_is_showing() or window.bus.document.components:
         print(f"{first.example.path.name} did not open as the drawn circuit", file=sys.stderr)
         return 1
-    shoot(RESULT_MS)
+    shoot(RESULT_MS, still="02-drawn")
 
     # -- Then the one button, until the guide is in front.
     bar = window.workflow_bar
     for _press in range(8):
         step = bar._next
-        shoot(POINT_MS, ring=bar.next_button)
+        shoot(POINT_MS, ring=bar.next_button, still=f"button-{step}")
         bar.next_button.click()
         settle(40)
         if unexpected:
@@ -256,12 +265,20 @@ def main(argv: list[str]) -> int:
             return 1
         if step == "build":
             break
-        shoot(RESULT_MS)
+        shoot(RESULT_MS, still=f"done-{step}")
     else:
         print("eight presses and the guide never came up", file=sys.stderr)
         return 1
-    shoot(HOLD_MS)
+    shoot(HOLD_MS, still="done-build")
 
+    if stills is not None:
+        # The list the bench card is one step of: every phase, and what each step does.
+        window.bench.chips["overview"].click()
+        settle(40)
+        shoot(HOLD_MS, still="done-build-overview")
+        print(f"{stills}  {len(list(stills.glob('*.png')))} stills")
+        window.close()
+        os._exit(0)
     _write_gif(frames, out)
     print(f"{out}  {len(frames)} frames  {out.stat().st_size // 1024} KB")
     window.close()

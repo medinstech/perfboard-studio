@@ -37,6 +37,15 @@
   on, the parts placed, the connections wired and checked.
 </p>
 
+New here? [Your first board, from Home to the build guide](https://github.com/medinstech/perfboard-studio/blob/main/docs/FIRST_BOARD.md)
+takes the 555 blinker through every step above in about ten minutes.
+
+Perfboard Studio is made for boards that are soldered by hand, and three things follow
+from that. A solder trace and a wire are different connections with different costs and limits, and
+the router chooses between them. The build guide is a sequence of steps with checkpoints
+to measure, in the order you solder in. And the board is checked against the circuit by
+extracting what is really connected, which for perfboard means the copper you laid.
+
 ---
 
 - **A soldering guide with verification steps.** Not just "solder R1 here", but
@@ -474,6 +483,7 @@ Next, in the order the project plan puts them:
 | | |
 |---|---|
 | [docs/MCP.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/MCP.md) | the 59 MCP tools, grouped with the reason each one exists, and the client config for Claude Code, Claude Desktop, Cursor and Antigravity |
+| [docs/FIRST_BOARD.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/FIRST_BOARD.md) | your first board: the 555 blinker from Home to the build guide, a picture per step |
 | [examples/README.md](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) | what each example board is there to demonstrate |
 | [CHANGELOG.md](https://github.com/medinstech/perfboard-studio/blob/main/CHANGELOG.md) | every release, and what an unreleased build is accumulating towards the next one |
 | [docs/RELEASING.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/RELEASING.md) | the tag ritual, and what `release.yml` builds out of it on three platforms |

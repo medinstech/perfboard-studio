@@ -37,6 +37,15 @@
   parçalar yerleşiyor, bağlantılar kablolanıp denetleniyor.
 </p>
 
+Yeni misiniz? [İlk kartınız: Ana Sayfa'dan montaj rehberine](./docs/FIRST_BOARD.md)
+555 flaşörü yukarıdaki adımların hepsinden yaklaşık on dakikada geçirir (yalnızca İngilizce).
+
+Perfboard Studio elle lehimlenen kartlar için yapıldı ve bundan üç şey çıkıyor. Lehim izi
+ile tel ayrı bağlantılardır, maliyetleri ve sınırları farklıdır, hangisinin kullanılacağını
+router seçer. Montaj rehberi, lehimleme sırasına göre, ölçülecek kontrol noktalarıyla
+bir adımlar dizisidir. Kart da devreye karşı denetlenir: gerçekte neyin bağlı olduğu
+çıkarılır, perfboard için bu sizin döşediğiniz bakırdır.
+
 ---
 
 - **Doğrulama adımları olan bir lehimleme rehberi.** Sadece "R1'i buraya lehimle"
@@ -480,6 +489,7 @@ Sırada, proje planının koyduğu sırayla:
 | | |
 |---|---|
 | [docs/MCP.md](./docs/MCP.md) | 59 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
+| [docs/FIRST_BOARD.md](./docs/FIRST_BOARD.md) | ilk kartınız: 555 flaşör, Ana Sayfa'dan montaj rehberine, her adım için bir resimle (yalnızca İngilizce) |
 | [examples/README.md](./examples/README.md) | her örnek kartın neyi göstermek için orada olduğu (yalnızca İngilizce) |
 | [CHANGELOG.md](./CHANGELOG.md) | her sürüm, ve yayınlanmamış bir yapının bir sonrakine doğru ne biriktirdiği (yalnızca İngilizce) |
 | [docs/RELEASING.md](./docs/RELEASING.md) | etiket ritüeli, ve `release.yml`'in ondan üç platformda ne ürettiği (yalnızca İngilizce) |
