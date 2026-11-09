@@ -83,28 +83,6 @@ closed without a bump.
   `remove_cable` and `get_system_info` (what each board holds, what each cable carries,
   and the system's LVS). 67 tools, each in `docs/MCP.md` with its reason.
 
-### Fixed
-
-- **A part's name no longer prints over the board's own printed addresses.** On a board
-  that prints its column letters and row numbers, a part on the first row had its name
-  over the letters above it -- LED1 hid the "F" on the NE555 board. It now goes under
-  the part where that is clear; where neither place is, the name still prints and the
-  letter under it is left out at that zoom. A note written on the board still takes
-  precedence over a part's name, as before.
-- **Two supply symbols on the sheet no longer stack into one.** Where two pins in one
-  channel both go to ground, the layout hung one ground symbol just under the other's
-  bars, a track to the side -- C2's and LED1's on the NE555 read as one smudge of six
-  bars -- and two supplies did the same upwards. Such a pair now has an empty track
-  between them, and a net name keeps out of a symbol's whole box rather than just its
-  bars, so "OUT" no longer prints against U1's ground.
-- **The window opens about 80 ms sooner.** 0.23 had come to take longer to appear than
-  0.22 did, and what it spent was breadth: a little in many places. The Build Guide's panel
-  is now built the first time it is shown, the help texts when help is first asked for, the
-  board designer when it first opens, and Home shows its examples a moment after it is up.
-  Typing a comma into a number field still gives a decimal point -- each field takes care of
-  that itself now, instead of a check on every event the application handles. Measured on
-  the frozen build, fifteen starts each, interleaved: the window's median 885 ms to 806 ms,
-  and the process's CPU time 859 ms to 797 ms.
 - **The SW-520D tilt switch**, the ball switch every starter kit holds, from Bailin's datasheet:
   drawn at the largest it can be (5.5 across, 11.9 long), its 2.4 mm leads against the board's
   2.54 mm holes worked out in the part's note -- each ends 0.07 mm off its hole, inside what a
@@ -137,6 +115,29 @@ closed without a bump.
   3.2), the EC11's to snip its pegs and the switch's D and E, and the SW-520D's that its
   leads, 0.07 mm off their holes, go in with no bending. One sentence each, with the figures
   the footprint carries, in English and Turkish.
+
+### Fixed
+
+- **A part's name no longer prints over the board's own printed addresses.** On a board
+  that prints its column letters and row numbers, a part on the first row had its name
+  over the letters above it -- LED1 hid the "F" on the NE555 board. It now goes under
+  the part where that is clear; where neither place is, the name still prints and the
+  letter under it is left out at that zoom. A note written on the board still takes
+  precedence over a part's name, as before.
+- **Two supply symbols on the sheet no longer stack into one.** Where two pins in one
+  channel both go to ground, the layout hung one ground symbol just under the other's
+  bars, a track to the side -- C2's and LED1's on the NE555 read as one smudge of six
+  bars -- and two supplies did the same upwards. Such a pair now has an empty track
+  between them, and a net name keeps out of a symbol's whole box rather than just its
+  bars, so "OUT" no longer prints against U1's ground.
+- **The window opens about 80 ms sooner.** 0.23 had come to take longer to appear than
+  0.22 did, and what it spent was breadth: a little in many places. The Build Guide's panel
+  is now built the first time it is shown, the help texts when help is first asked for, the
+  board designer when it first opens, and Home shows its examples a moment after it is up.
+  Typing a comma into a number field still gives a decimal point -- each field takes care of
+  that itself now, instead of a check on every event the application handles. Measured on
+  the frozen build, fifteen starts each, interleaved: the window's median 885 ms to 806 ms,
+  and the process's CPU time 859 ms to 797 ms.
 
 ## [0.23.0] - 2026-11-09
 
