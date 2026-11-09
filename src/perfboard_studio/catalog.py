@@ -1436,6 +1436,36 @@ CATALOG: tuple[CatalogPart, ...] = (
                     + _CABLED_CHECK
                 ),
                 aliases=("rotary encoder", "encoder", "KY-040", "enkoder", "döner kodlayıcı")),
+    # The bare encoder under the KY-040's board, with only its three encoder pins on the
+    # grid: the push switch's D and E and the two pegs are 14.5 and 7.5 mm from them and fit
+    # no hole. The courtyard is still the whole part, so DRC knows what they would touch.
+    CatalogPart("ec11-encoder", "EC11 rotary encoder", "switch",
+                "box-3x1-p1-r1-12.5x14.5x24.5-o0x-7.25",
+                "Two-phase rotary encoder, shaft 20 mm above its frame: A and B pulse against "
+                "the common C as it turns",
+                _legs("A", "C", "B"), value="EC11", ref_prefix="SW",
+                source=(
+                    "Alps EC11 series drawing (Alps catalogue p.186, "
+                    "f5kav.fr/wp-content/uploads/simple-file-list/F5RCT/Realisations/Squirrely/"
+                    "Module-PLL/ALPS_EC11.pdf), read at high zoom: A, C, B 2.5 mm apart, the "
+                    "switch's D and E 5 mm apart and 14.5 mm from them, the two pegs 12.5 mm "
+                    "outer to outer and 7.5 mm from them, the frame 4.5 mm and the shaft a "
+                    "further 20 mm above the mounting surface, every terminal 3.5 mm below it. "
+                    "Only A, C and B are on the grid: the 2.5 mm pitch against the board's "
+                    "2.54 leaves A and B 0.04 mm off their holes, as the JST XH's does; the "
+                    "courtyard covers D, E and the pegs too"
+                ),
+                check=(
+                    "Snip off the two pegs and the switch's D and E flush with the frame. D and "
+                    "E sit 14.5 mm from the three pins, 0.74 mm off a row of holes, and the "
+                    "pegs are as long as the pins (3.5 mm), so left on they would stand the "
+                    "frame on the board and keep the pins out of the holes. If you want the "
+                    "push switch, solder wires to the stubs of D and E by hand; the KY-040 is "
+                    "the encoder with a switch ready to plug in. A and B are 0.04 mm off their "
+                    "holes for the 2.5 mm against 2.54 pitch, inside what a 1 mm hole has to "
+                    "spare."
+                ),
+                aliases=("rotary encoder", "encoder", "EC11", "enkoder", "döner kodlayıcı")),
     # -- relays -----------------------------------------------------------------------
     CatalogPart("srd-05vdc-sl-c", "Songle SRD-05VDC-SL-C relay", "relay", "relay-srd",
                 "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC",

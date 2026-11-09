@@ -2324,6 +2324,26 @@ TURKISH: Mapping[str, str] = {
         "içindedir. Değeri üzerinde B10K ya da A10K diye yazar: B doğrusaldır, A ses "
         "kontrolünün istediği logaritmik eğridir."
     ),
+    "EC11 rotary encoder": "EC11 döner kodlayıcı",
+    "Two-phase rotary encoder, shaft 20 mm above its frame: A and B pulse against the common "
+    "C as it turns": (
+        "İki fazlı döner kodlayıcı, mili gövdesinin 20 mm üstünde: dönerken A ve B, ortak C'ye "
+        "karşı darbe verir"
+    ),
+    "Snip off the two pegs and the switch's D and E flush with the frame. D and E sit 14.5 mm "
+    "from the three pins, 0.74 mm off a row of holes, and the pegs are as long as the pins "
+    "(3.5 mm), so left on they would stand the frame on the board and keep the pins out of "
+    "the holes. If you want the push switch, solder wires to the stubs of D and E by hand; "
+    "the KY-040 is the encoder with a switch ready to plug in. A and B are 0.04 mm off their "
+    "holes for the 2.5 mm against 2.54 pitch, inside what a 1 mm hole has to spare.": (
+        "İki tırnağı ve düğmenin D ile E uçlarını gövdeyle aynı hizada kesin. D ve E üç "
+        "pinden 14,5 mm uzaktadır, bir delik sırasından 0,74 mm kaçıktır; tırnaklar da "
+        "pinler kadar (3,5 mm) uzundur, bırakırsanız gövdeyi kartın üstüne oturtur ve "
+        "pinleri deliklerin dışında tutar. Basmalı düğmeyi isterseniz D ve E'nin kalan "
+        "uçlarına tel lehimleyin; hazır takılan düğmeli kodlayıcı KY-040'tır. A ve B, 2,5 mm "
+        "aralığın kartın 2,54 mm'sine karşı yüzünden deliklerinden 0,04 mm kayar; bu, 1 mm'lik "
+        "bir deliğin payı içindedir."
+    ),
     "Passive buzzer 12 mm": "Pasif buzzer 12 mm",
     "Sounds only when driven with a tone, 12 mm across, legs 7.6 mm apart": (
         "Yalnızca bir tonla sürülünce öter, 12 mm çapında, bacaklar arası 7,6 mm"

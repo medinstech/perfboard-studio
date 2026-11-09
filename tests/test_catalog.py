@@ -628,3 +628,31 @@ def test_the_rv09_courtyard_covers_its_lugs_and_its_pin_arithmetic_is_true() -> 
     assert abs(2 * 2.5 - 2 * STANDARD_PITCH_MM) == pytest.approx(0.08)
     assert "0.6 mm" in part.check and "0.04 mm" in part.check
     assert "ASSUMPTION" in part.source and "RK09K" in part.source
+
+
+def test_the_ec11_courtyard_covers_its_switch_pins_and_pegs_that_fit_no_hole() -> None:
+    """Alps EC11: only A, C, B are on the grid. D and E (5 mm apart, 14.5 mm out) and the
+    two pegs (12.5 mm outer to outer, 7.5 mm out) fit no hole, so the courtyard has to hold
+    them for DRC, and the arithmetic the check quotes has to come out as it says."""
+    part = catalog_part("ec11-encoder")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    assert [(pin.d_col, pin.d_row) for pin in footprint.pins] == [(0, 0), (1, 0), (2, 0)]
+    assert [name for _, name in part.pin_names] == ["A", "C", "B"]
+    extent = body_extent(footprint, STANDARD_PITCH_MM)
+    assert (extent.size_x, extent.size_y) == (12.5, 14.5)
+    assert footprint.body_height == 24.5
+    left = extent.centre_x - extent.size_x / 2
+    right = extent.centre_x + extent.size_x / 2
+    top = extent.centre_y - extent.size_y / 2
+    bottom = extent.centre_y + extent.size_y / 2
+    centre_x = STANDARD_PITCH_MM
+    assert left <= centre_x - 12.5 / 2 and centre_x + 12.5 / 2 <= right
+    assert left <= centre_x - 5 / 2 and centre_x + 5 / 2 <= right
+    assert top <= -14.5 and bottom >= -7.5
+    # Neither D and E's row nor the pegs' land on a row of holes: that is why they are cut.
+    assert min(abs(14.5 - n * STANDARD_PITCH_MM) for n in range(7)) > 0.2
+    assert round(6 * STANDARD_PITCH_MM - 14.5, 2) == 0.74
+    assert "0.74 mm" in part.check and "0.04 mm" in part.check
+    assert "KY-040" in part.check

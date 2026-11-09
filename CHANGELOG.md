@@ -126,6 +126,12 @@ closed without a bump.
   because at 3.8 mm against the pins' 3.2 they would hold the frame 0.6 mm off the board and
   keep the pins out of the holes. Its 2.5 mm pin pitch against the board's 2.54 is worked
   out the way the JST XH's is.
+- **The EC11 rotary encoder**, bare, from the Alps drawing: its three encoder pins A, C, B
+  on the grid, the courtyard still the whole part -- 12.5 mm across the pegs, 14.5 mm out to
+  the push switch's D and E -- because those, the pegs, and the pins are not on any hole: D
+  and E fall 0.74 mm off a row of holes and the pegs are as long as the pins. The check says
+  to snip them and wire the switch by hand, and points at the KY-040 for an encoder that
+  presses ready to plug in.
 
 ## [0.23.0] - 2026-11-09
 
