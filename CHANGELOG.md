@@ -59,6 +59,40 @@ closed without a bump.
   bars -- and two supplies did the same upwards. Such a pair now has an empty track
   between them, and a net name keeps out of a symbol's whole box rather than just its
   bars, so "OUT" no longer prints against U1's ground.
+- **Several boards in one document, joined by cables.** A circuit built on a supply board
+  and a controller board is one document with one design: the Board menu's Add Board adds
+  a board, and from then on a strip over the Board panel picks the board in front, each
+  by its name and stock size, with **System** first. Every edit, undo step, DRC run and
+  render acts on the board in front; the circuit, the sheet, the Parts list, ERC and LVS
+  read every board. A board nobody named is called by its place ("Board 2"). The window
+  reopens a file on the board it was left on.
+- **System view.** Every board side by side with the cables between them, each wire in
+  the colour it is cut in; a double-click opens a board. With System in front the 3D panel
+  shows every board in the same row, and the cables run from pin to pin, out of a DuPont
+  shell over a pin header and out of a side-entry terminal's mouth.
+- **Add Cable.** Choose a connector at each end and the wires are paired by net. What is
+  not certain is left unpaired and named: a net with no counterpart, or a net on two pins
+  of one connector. The cable goes in as one undo step.
+- **Move to Board.** A placed part moves to another board in one step, from its right-click
+  menu or by dragging its symbol from the schematic onto the board in front. The copper that ran to it on its old board
+  comes off with it, so nothing is left ending in an empty hole, and a cable fitted to it
+  follows. The status line names the board that needs wiring again, and Show takes you
+  there.
+- **The system is checked as one circuit.** LVS joins the boards' copper through the cable
+  wires. A net split across two boards that no wire carries is an open, said with the
+  boards it crosses. A cable wired across is said as itself, by its wires' colours ("W1's
+  red and black wires are swapped"), rather than as a short and two opens, and the System
+  view draws it red.
+- **The harness is part of the build guide.** Once every board is built, each cable is a
+  step under "9. Harness": what to cut (each wire to the cable's length plus stripped ends,
+  in its net's colour and gauge), where each end goes by board, connector and pin, and the
+  checks before power (continuity end to end, isolation between neighbouring wires on
+  different nets). The cut list gets a row per cable wire, and the HTML and JSON exports a
+  harness section, each only when there is a cable.
+- **MCP: several boards.** `select_board` puts a board in front and every board tool acts
+  on it; `add_board`, `rename_board`, `remove_board`, `move_to_board`, `add_cable`,
+  `remove_cable` and `get_system_info` (what each board holds, what each cable carries,
+  and the system's LVS). 67 tools, each in `docs/MCP.md` with its reason.
 
 ## [0.23.0] - 2026-11-09
 
