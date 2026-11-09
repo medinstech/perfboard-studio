@@ -22,7 +22,7 @@ from perfboard_studio.catalog import (
     part_matches,
     search_catalog,
 )
-from perfboard_studio.footprints import get_footprint
+from perfboard_studio.footprints import body_extent, get_footprint
 from perfboard_studio.mcp.session import BoardSession, SessionError, new_board
 from perfboard_studio.model import STANDARD_PITCH_MM
 from perfboard_studio.schematic import DECLARED_SYMBOL_PINS
@@ -564,3 +564,21 @@ def test_nothing_in_the_document_refers_back_to_the_catalog() -> None:
     # And the file says nothing more than the part: no catalog id, nothing to resolve.
     text = persist.serialize_document(from_catalog.document)
     assert "bc547" not in text and "catalog" not in text
+
+
+def test_the_tilt_switch_is_drawn_at_its_datasheets_maxima_and_its_lead_arithmetic_is_true() -> None:
+    """Bailin's SW-520D: 5.2 +0.3 across and 11.5 +0.4 long, leads 0.6 mm and 2.4 mm apart.
+    The footprint carries the maxima, and what the catalog says about the 2.4 against the
+    2.54 holes is checked here by doing the sum, not by repeating the sentence."""
+    part = catalog_part("sw-520d")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    assert [(pin.d_col, pin.d_row) for pin in footprint.pins] == [(0, 0), (1, 0)]
+    extent = body_extent(footprint, STANDARD_PITCH_MM)
+    assert (extent.size_x, extent.size_y) == (5.5, 5.5)
+    assert footprint.body_height == 11.9
+    off_by = (STANDARD_PITCH_MM - 2.4) / 2
+    spare = (1.0 - 0.6) / 2
+    assert round(off_by, 2) == 0.07 and off_by < spare
+    assert "0.07 mm" in part.check and "0.2 mm" in part.check

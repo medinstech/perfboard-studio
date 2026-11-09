@@ -105,6 +105,11 @@ closed without a bump.
   that itself now, instead of a check on every event the application handles. Measured on
   the frozen build, fifteen starts each, interleaved: the window's median 885 ms to 806 ms,
   and the process's CPU time 859 ms to 797 ms.
+- **The SW-520D tilt switch**, the ball switch every starter kit holds, from Bailin's datasheet:
+  drawn at the largest it can be (5.5 across, 11.9 long), its 2.4 mm leads against the board's
+  2.54 mm holes worked out in the part's note -- each ends 0.07 mm off its hole, inside what a
+  0.6 mm lead has to spare in a 1 mm one -- and its summary says it conducts within about 45
+  degrees of upright, with the warning that sellers disagree on which way up it does.
 
 ## [0.23.0] - 2026-11-09
 

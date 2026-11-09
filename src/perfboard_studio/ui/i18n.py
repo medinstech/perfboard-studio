@@ -2259,6 +2259,21 @@ TURKISH: Mapping[str, str] = {
         "Bacakları 3 mm arayla durur: çizilen deliklere girmesi için her birini çeyrek "
         "milimetre içe bükün. İki yönde de takılabilir."
     ),
+    "SW-520D tilt switch": "SW-520D eğim anahtarı",
+    "Ball tilt switch, 12 V contacts: closed while within about 45 degrees of upright with "
+    "its leads down, open past that": (
+        "Bilyeli eğim anahtarı, 12 V kontaklı: bacakları aşağıdayken dikten yaklaşık 45 "
+        "dereceye kadar kapalı, ötesinde açık"
+    ),
+    "Its leads are 2.4 mm apart and the holes 2.54, so each ends up 0.07 mm off its hole, "
+    "well inside the 0.2 mm a 0.6 mm lead has to spare in a 1 mm hole: it goes in as it is. "
+    "Sellers disagree on which way up it conducts, so tilt yours over a multimeter before "
+    "you solder it.": (
+        "Bacakları 2,4 mm arayla durur, delikler 2,54 mm: her biri deliğinin merkezinden 0,07 "
+        "mm kayar; bu, 1 mm'lik bir delikte 0,6 mm'lik bir bacağın payı olan 0,2 mm'nin çok "
+        "içindedir, yani olduğu gibi girer. Satıcılar hangi yönde ilettiği konusunda hemfikir "
+        "değildir: lehimlemeden önce sizinkini multimetreyle eğerek deneyin."
+    ),
     "Passive buzzer 12 mm": "Pasif buzzer 12 mm",
     "Sounds only when driven with a tone, 12 mm across, legs 7.6 mm apart": (
         "Yalnızca bir tonla sürülünce öter, 12 mm çapında, bacaklar arası 7,6 mm"

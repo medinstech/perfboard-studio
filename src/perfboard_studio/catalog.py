@@ -904,6 +904,27 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "holes drawn. Either way round works."
                 ),
                 aliases=("ldr", "photoresistor", "light sensor", "ışık sensörü", "fotodirenç")),
+    # The two-ball tilt switch of every starter kit, standing cap-end down on its two leads.
+    # Drawn at the datasheet's MAXIMA (5.2 +0.3 across, 11.5 +0.4 long), so DRC measures no
+    # smaller a part than the one in the bag; its leads are 2.4 mm apart and the holes 2.54.
+    CatalogPart("sw-520d", "SW-520D tilt switch", "switch", "box-2x1-p1-r1-5.5x5.5x11.9",
+                "Ball tilt switch, 12 V contacts: closed while within about 45 degrees of "
+                "upright with its leads down, open past that",
+                value="SW-520D", ref_prefix="SW",
+                source=(
+                    "Bailin (Beelee) SW-520 datasheet, p.2: body 5.2 +0.3/-0.1 mm across and "
+                    "11.5 +0.4/-0.1 long, leads 0.6 +-0.05 mm and 8 +-1 mm long, 2.4 mm apart "
+                    "(no tolerance printed), the 12 V contact rating, and its ON and OFF angles "
+                    "drawn at 10 and 45 degrees; the body is drawn square at those maxima"
+                ),
+                check=(
+                    "Its leads are 2.4 mm apart and the holes 2.54, so each ends up 0.07 mm off "
+                    "its hole, well inside the 0.2 mm a 0.6 mm lead has to spare in a 1 mm hole: "
+                    "it goes in as it is. Sellers disagree on which way up it conducts, so tilt "
+                    "yours over a multimeter before you solder it."
+                ),
+                aliases=("tilt", "ball switch", "tilt sensor", "SW520D", "SW-520",
+                         "eğim sensörü", "eğim anahtarı", "top anahtar")),
     # -- displays ---------------------------------------------------------------------
     CatalogPart("ssd1306-i2c-gnd-vcc", "SSD1306 OLED 0.96in I2C (GND VCC SCL SDA)", "display",
                 _OLED_FOOTPRINT, "128 x 64 OLED on I2C, pins printed GND, VCC, SCL, SDA",
