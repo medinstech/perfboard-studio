@@ -4023,12 +4023,21 @@ class MainWindow(QMainWindow):
         on the sheet goes through: a part is selected on the board and the board brought to
         it, and the build guide goes to the step that fits it; a conductor lights its net in
         the Nets panel, which lights it everywhere else; the board or the room around it puts
-        the selection down, as a click on bare board does in 2D."""
+        the selection down, as a click on bare board does in 2D.
+
+        With System in front, the doors are System's own: a board or a cable is picked for
+        Properties as a click on its drawing picks it, and the room picks the system."""
         if self._vtk_renderer is None:
             return
         from . import view3d
 
         owner = view3d.owner_at(self._vtk_renderer, self._3d_owners, x, y)
+        if self._3d_subject == SYSTEM_ENTRY:
+            if owner is not None and owner[0] in ("board", "cable"):
+                self._pick_on_system(owner[0], owner[1])
+            else:
+                self._pick_on_system(None, None)
+            return
         if owner is None:
             self.scene.clearSelection()
             return
@@ -4077,7 +4086,12 @@ class MainWindow(QMainWindow):
         if self.vtk_widget is None or not self._3d_owners:
             return
         selected: set[str] = set()
-        if self._assembly_index() is None:
+        if self._3d_subject == SYSTEM_ENTRY:
+            # Every solid there is a board's or a cable's, so their ids are all it holds.
+            picked = self.system_view.selected
+            if picked is not None:
+                selected = {picked[1]}
+        elif self._assembly_index() is None:
             selected = {component.id for component in self._selected_components()}
             if not selected:
                 nets = set(self._selected_net_ids())
@@ -4400,7 +4414,8 @@ class MainWindow(QMainWindow):
 
         exploded_mm = view3d.EXPLODED_LIFT_MM if self.act_exploded.isChecked() else 0.0
         if system_wide:
-            # No owners: what a click selects across boards waits on the System's editors.
+            # Owned by board and by cable: a click here picks what a click on System's
+            # drawing picks (``pick_in_3d``).
             view3d.populate_system_renderer(
                 self._vtk_renderer,
                 self.bus.system_document,
@@ -4408,6 +4423,7 @@ class MainWindow(QMainWindow):
                 exploded_mm=exploded_mm,
                 pin_names=self._pin_names_shown(),
                 board_notes=self._board_labels_shown(),
+                owners=self._3d_owners,
             )
         else:
             view3d.populate_renderer(
@@ -8699,6 +8715,7 @@ class MainWindow(QMainWindow):
         self.system_view.set_selected(kind, item_id)
         self._selection_from = "board"
         self._refresh_properties()
+        self._show_selection_in_3d()
 
     def _board_selection(self) -> Selection | None:
         """What is selected on the board, or None."""

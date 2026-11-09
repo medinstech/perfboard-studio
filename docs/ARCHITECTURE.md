@@ -2670,6 +2670,22 @@ things here were got wrong first:
   gives each one's colour back when it is let go. A selection is a click; rebuilding a few
   thousand actors for one is what the debounce on an edit exists to avoid. Not while the
   slider is on a step, which is picked out in the same colour already.
+- **A board's plate cannot be hit by a ray.** It is glyphed, a tile per hole
+  (`build_substrate`), and a glyph mapper's input is the points it stamps at, with no cell for
+  a ray to cross. On a board's own view that went unnoticed, because a click on the bare board
+  means "nothing" anyway; on the System it sent every click on a board through it to the
+  room. Each board there gets a stand-in in the owners (`view3d._board_stand_in`), a slab the
+  size of its substrate that is never added to the renderer, and `owner_at` takes whichever of
+  the two hits is nearer the eye. The slab has no holes, so a click through one picks the
+  board it went through.
+
+With System in front, `populate_system_renderer(owners=...)` owns every solid by its board
+-- parts included: on the System a board is what is picked, and its parts are edited with the
+board in front -- or by its cable, and `pick_in_3d` goes through System's own door,
+`_pick_on_system`, which a click on its 2D drawing goes through too: a board or a cable in
+Properties, the room the system. Whichever door picked it, it is tinted in 3D.
+`test_system_3d` clicks a board, through a hole and beside one, and a cable's wire through the
+real renderer, and drives the window's half with the click stood in for.
 
 ## The board's look is saved with it; the window's is a view setting
 
@@ -3200,9 +3216,9 @@ without being listed.
 
 The camera is framed again when what is in front changes -- System to a board, one board to
 another -- because that is a request to look at something else, as opening the panel is; an
-edit still never moves it. A click in the System's 3D selects nothing yet, though a click in
-the System view does: picking in 3D across boards is the System view's pick, not yet wired.
-The assembly bar is disabled there, a build being one board's.
+edit still never moves it. A click in the System's 3D picks a board or a cable as a click in
+the System view does, through the same door (see "A click in 3D is a third door to the same
+selection"). The assembly bar is disabled there, a build being one board's.
 
 **The window's bus shows the board in front** (`boardbus.BoardBus`). It is the one
 `CommandBus` of the system -- one undo stack whichever board a step was on -- whose `document`

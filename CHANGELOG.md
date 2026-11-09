@@ -63,7 +63,8 @@ closed without a bump.
   system: its name, its boards and cables, Add Board and Add Cable. A click on a board there
   shows its name, size and contents, with Open and Remove Board; a click on a cable shows
   its reference, its two ends, each wire pin to pin in its colour, its length and a note,
-  with Remove Cable. On a board of several, Properties' Name is that board's own, and the
+  with Remove Cable. A click on a board or a cable in the 3D panel picks it the same way,
+  and what is picked is tinted there. On a board of several, Properties' Name is that board's own, and the
   header says which board is in front, or System, beside the document's name. A board added
   with nothing on it says how parts reach it: from the Library or the schematic, or by Move
   to Board.

@@ -380,3 +380,67 @@ def test_a_click_on_the_system_names_the_board_or_the_cable_it_lands_on() -> Non
     assert click(x, y, z) == ("cable", "cable-1")
 
     assert view3d.owner_at(ren, owners, 3, 3) is None
+
+
+def test_a_click_in_the_systems_3d_picks_the_board_or_the_cable_for_properties(  # type: ignore[no-untyped-def]
+    qapp, monkeypatch
+) -> None:
+    """With System in front a click in 3D is a third door to System's pick: a board or a
+    cable is picked for Properties as a click on its drawing picks it, and the room puts the
+    system back. Whichever door picked it, it is tinted in 3D. What the click LANDED on is
+    ``owner_at``'s question, answered with GL above; here it is stood in for."""
+    from perfboard_studio.ui.main import MainWindow
+
+    monkeypatch.setattr(MainWindow, "_create_3d_widget", lambda self: None)
+    window = MainWindow(_system())
+
+    class _RenderWindow:
+        def Render(self) -> None:
+            pass
+
+    class _Widget:
+        def GetRenderWindow(self) -> _RenderWindow:
+            return _RenderWindow()
+
+    try:
+        window.vtk_widget = _Widget()
+        window._vtk_renderer = view3d.vtk.vtkRenderer()
+        window.show()
+        window._raise_view(window.dock_3d)
+        window.board_strip.tabs.setCurrentIndex(0)  # System
+        window._refresh_3d()
+        owners = window._3d_owners
+        assert {kind for kind, _ident in owners.values()} == {"board", "cable"}
+        landed: list = [None]
+        monkeypatch.setattr(view3d, "owner_at", lambda _ren, _owners, _x, _y: landed[0])
+        inspector = window.inspector
+
+        def tinted() -> set:  # type: ignore[type-arg]
+            return {owners[actor] for actor in window._3d_tinted}
+
+        landed[0] = ("board", "b2")
+        window.pick_in_3d(10, 10)
+        assert window.system_view.selected == ("board", "b2")
+        assert inspector.shown is inspector.system_board_editor
+        assert tinted() == {("board", "b2")}
+
+        landed[0] = ("cable", "cable-1")
+        window.pick_in_3d(10, 10)
+        assert window.system_view.selected == ("cable", "cable-1")
+        assert inspector.shown is inspector.cable_editor
+        assert tinted() == {("cable", "cable-1")}
+
+        landed[0] = None
+        window.pick_in_3d(10, 10)
+        assert window.system_view.selected is None
+        assert inspector.shown is inspector.system_editor
+        assert window._3d_tinted == {}
+
+        # The other door: a click on System's drawing is tinted here too.
+        window.system_view.board_clicked.emit("main")
+        assert tinted() == {("board", "main")}
+    finally:
+        window._3d_refresh_timer.stop()
+        window._mark_saved()
+        window.close()
+        window.deleteLater()
