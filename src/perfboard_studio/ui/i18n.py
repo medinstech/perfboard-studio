@@ -3089,6 +3089,25 @@ TURKISH: Mapping[str, str] = {
         "giriştir. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada "
         "göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
+    "4-pin sensor board (D0 + - A0), on a header": "4 pinli sensör kartı (D0 + - A0), header üzerinde",
+    "The four-pin KY boards with a comparator and a sensitivity trimmer: a digital and an "
+    "analog output. Its cable plugs into this 4-pin header: D0 + - A0 from pin 1": (
+        "Karşılaştırıcılı ve hassasiyet trimmerli dört pinli KY kartları: bir sayısal ve "
+        "bir analog çıkış. Kablosu bu 4 pinli header'a takılır: 1. pinden D0 + - A0"
+    ),
+    "The manual calls pin 1 the digital signal and pin 4 the analog signal; your board "
+    "may print other names for them. The digital output comes from the on-board "
+    "comparator, set with the trimmer; the analog one is the sensor's own, and the manual "
+    "says it reads inverted: a stronger input is a lower voltage. Match each lead to the "
+    "name printed beside the module's pins, not to its place: sellers' boards are not all "
+    "wired in the same order.": (
+        "Kılavuz 1. pine sayısal sinyal, 4. pine analog sinyal der; kartınız onlara başka "
+        "adlar basmış olabilir. Sayısal çıkış kart üzerindeki karşılaştırıcıdan gelir ve "
+        "trimmerle ayarlanır; analog çıkış sensörün kendisidir ve kılavuza göre ters "
+        "okunur: daha güçlü bir girdi daha düşük bir gerilimdir. Her kabloyu yerine göre "
+        "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları "
+        "aynı sırayla bağlanmamıştır."
+    ),
     "RC522 RFID reader module (on a header)": "RC522 RFID okuyucu modülü (header üzerinde)",
     "13.56 MHz RFID reader on SPI. Its cable plugs into this 8-pin header: 3.3V RST GND IRQ "
     "MISO MOSI SCK SDA from pin 1": (

@@ -1856,6 +1856,29 @@ CATALOG: tuple[CatalogPart, ...] = (
                          "knock sensor module", "heartbeat sensor module",
                          "line tracking module", "light barrier module",
                          "vibration switch module", "sensör modülü",)),
+    CatalogPart("sensor-board-4pin", "4-pin sensor board (D0 + - A0), on a header", "sensor", "hdr-1x4",
+                "The four-pin KY boards with a comparator and a sensitivity trimmer: a "
+                "digital and an analog output. Its cable plugs into this 4-pin header: D0 "
+                "+ - A0 from pin 1",
+                _legs("D0", "+", "-", "A0"), value="KY 4-pin", ref_prefix="J",
+                source=(
+                    "Joy-IT SensorKit X40 manual (16.06.2017, CC BY-NC-SA 3.0), the "
+                    "Pinout pages of KY-024, 025, 026, 028, 036, 037 and 038, pin names "
+                    "and order only: digital signal, +V, GND, analog signal"
+                ),
+                check=(
+                    "The manual calls pin 1 the digital signal and pin 4 the analog "
+                    "signal; your board may print other names for them. The digital "
+                    "output comes from the on-board comparator, set with the trimmer; the "
+                    "analog one is the sensor's own, and the manual says it reads "
+                    "inverted: a stronger input is a lower voltage. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("KY-024 linear hall sensor", "KY-025 reed", "KY-026 flame sensor",
+                         "KY-028 thermistor", "KY-036 metal touch", "KY-037 microphone",
+                         "KY-038 sound sensor", "flame sensor module", "sound sensor module",
+                         "microphone module", "linear hall module", "thermistor module",
+                         "metal touch module", "ses sensörü modülü",)),
     # The cheap Bosch sensor boards most people buy, by the name printed on them. The purple
     # six-pin ones have no regulator and run on 3.3 V; the four-pin GY-BME280 has one.
     CatalogPart("gy-bmp280", "GY-BMP280 pressure sensor module (on a header)", "sensor",

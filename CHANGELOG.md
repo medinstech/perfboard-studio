@@ -147,6 +147,11 @@ closed without a bump.
   match the silkscreen if the board is plugged straight in. Only the pin names and order come
   from the manual.
 
+- **The four-pin KY boards with a comparator, as one wired header**: D0, +, - and A0, for
+  KY-024, 025, 026, 028, 036, 037 and 038, found by their KY numbers or names. The check says
+  the digital pin is the comparator's, set with the trimmer, and that the manual reports the
+  analog one as inverted.
+
 
 ### Fixed
 
