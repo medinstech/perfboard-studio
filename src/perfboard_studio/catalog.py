@@ -661,6 +661,25 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("KY-016 RGB LED", "RGB LED module", "5mm RGB module",
                          "RGB LED modülü",)),
+    CatalogPart("ky-011-two-colour-led", "KY-011 / KY-029 two-colour LED module (on a header)", "led", "hdr-1x3",
+                "Red and green LED on a small board, one pin per colour and a common "
+                "ground. Its cable plugs into this 3-pin header: G R GND from pin 1",
+                _legs("G", "R", "GND"), value="KY-011", ref_prefix="J",
+                source=(
+                    "Joy-IT SensorKit X40 manual (16.06.2017, CC BY-NC-SA 3.0), the "
+                    "KY-011 and KY-029 Pinout pages, pin names and order only: LED Green, "
+                    "LED Red, GND, the same on both"
+                ),
+                check=(
+                    "KY-011 carries a 5 mm LED and KY-029 a 3 mm one; both are numbered "
+                    "the same. For the KY-011 the manual gives a series resistor of 120 "
+                    "ohm per colour at 3.3 V and 220 ohm per colour at 5 V: look at your "
+                    "board for resistors before driving it. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("KY-011 two-colour LED", "KY-029 two-colour 3 mm LED",
+                         "two-colour LED module", "red green LED module",
+                         "iki renkli LED modülü",)),
     CatalogPart("ws2812b-strip", "WS2812B LED strip (on a header)", "led", "hdr-1x3",
                 "Addressable RGB LED strip or ring. Its cable plugs into this 3-pin header: "
                 "+5V DIN GND from pin 1",

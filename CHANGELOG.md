@@ -160,6 +160,10 @@ closed without a bump.
   manual numbers them, red and green the other way round from the KY-009, which is why the two
   are separate entries.
 
+- **The KY-011 and KY-029 two-colour LED modules, as one wired header**: G, R and GND,
+  numbered the same on both. The check gives the manual's series resistors for the KY-011 and
+  says to look for resistors on the board.
+
 
 ### Fixed
 

@@ -3146,6 +3146,23 @@ TURKISH: Mapping[str, str] = {
         "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları "
         "aynı sırayla bağlanmamıştır."
     ),
+    "KY-011 / KY-029 two-colour LED module (on a header)": "KY-011 / KY-029 iki renkli LED modülü (header üzerinde)",
+    "Red and green LED on a small board, one pin per colour and a common ground. Its "
+    "cable plugs into this 3-pin header: G R GND from pin 1": (
+        "Küçük bir kart üzerinde kırmızı ve yeşil LED, renk başına bir pin ve ortak "
+        "toprak. Kablosu bu 3 pinli header'a takılır: 1. pinden G R GND"
+    ),
+    "KY-011 carries a 5 mm LED and KY-029 a 3 mm one; both are numbered the same. For the "
+    "KY-011 the manual gives a series resistor of 120 ohm per colour at 3.3 V and 220 ohm "
+    "per colour at 5 V: look at your board for resistors before driving it. Match each "
+    "lead to the name printed beside the module's pins, not to its place: sellers' boards "
+    "are not all wired in the same order.": (
+        "KY-011 5 mm, KY-029 3 mm LED taşır; ikisi de aynı numaralanmıştır. KY-011 için "
+        "kılavuz renk başına seri direnç olarak 3,3 V'ta 120 ohm, 5 V'ta 220 ohm verir: "
+        "sürmeden önce kartınızda direnç olup olmadığına bakın. Her kabloyu yerine göre "
+        "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları "
+        "aynı sırayla bağlanmamıştır."
+    ),
     "RC522 RFID reader module (on a header)": "RC522 RFID okuyucu modülü (header üzerinde)",
     "13.56 MHz RFID reader on SPI. Its cable plugs into this 8-pin header: 3.3V RST GND IRQ "
     "MISO MOSI SCK SDA from pin 1": (
