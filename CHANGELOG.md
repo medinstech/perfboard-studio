@@ -173,7 +173,6 @@ closed without a bump.
   pairs on a 2 x 6 header. The check gives the printed supply ranges and that VCCb is not to
   be lower than VCCa.
 
-
 ### Fixed
 
 - **A part's name no longer prints over the board's own printed addresses.** On a board
