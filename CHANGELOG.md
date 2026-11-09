@@ -44,6 +44,7 @@ closed without a bump.
   WROOM-32, the USB bridge, the regulator, the micro-USB socket and the BOOT and EN buttons
   where a photograph of one, straightened on its own pads, puts them. Its check says the
   clones keep the pins and move the parts, and that the 38-pin DevKitC is another board.
+
 ### Fixed
 
 - **A part's name no longer prints over the board's own printed addresses.** On a board
@@ -52,8 +53,6 @@ closed without a bump.
   the part where that is clear; where neither place is, the name still prints and the
   letter under it is left out at that zoom. A note written on the board still takes
   precedence over a part's name, as before.
-### Fixed
-
 - **Two supply symbols on the sheet no longer stack into one.** Where two pins in one
   channel both go to ground, the layout hung one ground symbol just under the other's
   bars, a track to the side -- C2's and LED1's on the NE555 read as one smudge of six
