@@ -16,6 +16,13 @@ Its own module rather than the bottom of ``main.py``, where it lived: it is a pr
 its own right, it shares nothing with the window but the scene it renders, and being
 importable on its own is what lets a test call it without standing up a MainWindow.
 
+SEVERAL BOARDS ARE RUN ONE AT A TIME. A document of several boards lists them and its
+cables first, then says what is the SYSTEM's once -- ERC, LVS and the schematic, which are
+about the circuit -- and then runs everything that is a board's on each board in turn, the
+first into ``headless_out/`` and every other into ``headless_out/<board id>/``. The window
+draws the same line (``MainWindow``'s refresh: DRC and the ratsnest on the board shown, ERC
+and LVS on the whole document). A document of one board prints exactly what it always did.
+
 THE TIMINGS ARE THE POINT of the numbers it prints. Each one is a claim CI can watch --
 the router's cost before and after a change, whether a style still earns its place in the
 sweep, whether the placer is still worth its runtime.
@@ -23,6 +30,7 @@ sweep, whether the placer is still worth its runtime.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 import time
@@ -37,6 +45,7 @@ from perfboard_studio.autoroute import describe as describe_plan
 from perfboard_studio.autoroute import describe_best, plan_autoroute, plan_best_autoroute
 from perfboard_studio.breadboard import is_breadboard
 from perfboard_studio.breadroute import plan_joined_board
+from perfboard_studio.connectivity import FootprintLookup
 from perfboard_studio.drc import run_drc
 from perfboard_studio.erc import run_erc
 from perfboard_studio.footprints import footprint_lookup
@@ -44,7 +53,9 @@ from perfboard_studio.geometry import board_outline_mm, hole_span_mm
 from perfboard_studio.guide import GuideOptions, build_guide
 from perfboard_studio.guide import describe as describe_guide
 from perfboard_studio.guide_export import bom_to_csv, cut_list_to_csv, guide_to_html, guide_to_json
-from perfboard_studio.lvs import run_lvs
+from perfboard_studio.harness import build_harness
+from perfboard_studio.lvs import LvsResult, run_lvs
+from perfboard_studio.model import Board, PerfDocument
 from perfboard_studio.phrasebook import guide_language
 from perfboard_studio.placer import describe as describe_placement
 from perfboard_studio.placer import plan_placement
@@ -53,6 +64,13 @@ from perfboard_studio.schematic import build_schematic
 from perfboard_studio.schematic_export import drawing_to_svg
 from perfboard_studio.stripboard import board_joins_holes
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
+from perfboard_studio.system import (
+    board_document,
+    board_ids,
+    board_title,
+    connector_of,
+    merge_board,
+)
 from perfboard_studio.version import describe as describe_version
 
 from . import planner_pool, view3d
@@ -134,13 +152,143 @@ def headless(argv: list[str]) -> int:
         for w in result.warnings:
             print(f"  - {w}")
 
+    if not doc.boards and not doc.cables:
+        # One board: the run it always was, line for line.
+        _describe_board(doc)
+        status = _run_board(doc, lookup, out_dir, system=None)
+        if status != 2:
+            print(f"\noutputs written to {out_dir}")
+        del app
+        return 1 if status else 0
+
+    # Several boards. What the system is, then what is the system's, then each board.
+    ids = board_ids(doc)
+    folders = {board_id: out_dir if board_id == ids[0] else out_dir / board_id for board_id in ids}
+    print(f"boards       {len(ids)}   cables {len(doc.cables)}")
+    for board_id in ids:
+        view = board_document(doc, board_id)
+        print(
+            f"  {board_title(doc, board_id)} ({board_id}): {view.board.cols}x{view.board.rows} "
+            f"{view.board.material}, {len(view.components)} part(s) -> {folders[board_id]}"
+        )
+    for cable in doc.cables:
+        a, b = connector_of(doc, cable.a), connector_of(doc, cable.b)
+        length = "cut to fit" if cable.length_mm is None else f"{cable.length_mm:g} mm"
+        print(
+            f"cable        {cable.ref}: {board_title(doc, cable.a.board)} {a.ref if a else '?'} -> "
+            f"{board_title(doc, cable.b.board)} {b.ref if b else '?'}, "
+            f"{len(cable.wires)} wire(s), {length}"
+        )
+
+    print("\nthe system's -- the circuit, across every board and cable:")
+    _write_schematic(doc, lookup, out_dir)
+    _print_erc(doc, lookup)
+    _print_lvs(doc, lookup)
+
+    worst = 0
+    for board_id in ids:
+        folder = folders[board_id]
+        try:
+            folder.mkdir(exist_ok=True)
+        except OSError as err:
+            print(f"CANNOT WRITE {folder}: {err.strerror or err}")
+            return 1
+        print(f"\n=== {board_title(doc, board_id)} ({board_id}) -> {folder}")
+        view = board_document(doc, board_id)
+        _describe_board(view)
+        status = _run_board(view, lookup, folder, system=(doc, board_id))
+        worst = max(worst, status)
+        if status == 2:
+            break
+    print(f"\noutputs written to {out_dir}")
+    del app
+    return 1 if worst else 0
+
+
+def _describe_board(doc: PerfDocument) -> None:
     board = doc.board
     outline = board_outline_mm(board)
-    w_mm, h_mm = outline.width, outline.height
     sw, sh = hole_span_mm(board)
     print(f"board        {board.cols}x{board.rows} {board.material}")
-    print(f"substrate    {w_mm:.2f} x {h_mm:.2f} mm   (hole span {sw:.2f} x {sh:.2f} mm)")
+    print(f"substrate    {outline.width:.2f} x {outline.height:.2f} mm   (hole span {sw:.2f} x {sh:.2f} mm)")
     print(f"parts        {len(doc.components)}   conductors {len(doc.conductors)}   nets {len(doc.nets)}")
+
+
+def _write_schematic(doc: PerfDocument, lookup: FootprintLookup, out_dir: Path) -> None:
+    # --- The schematic, exported. Here rather than left to the GUI because this is the
+    # only place the SVG writer, Qt's SVG renderer and a real board meet on all three
+    # operating systems: the goldens prove the writer says the same thing everywhere, and
+    # this proves what it says can still be turned into a page. It is also the one export
+    # that needs no GL, so it runs on the machines where the 3D section does not.
+    t0 = time.perf_counter()
+    drawing = build_schematic(doc, lookup)
+    sheet_svg = drawing_to_svg(drawing, title=doc.meta.name)
+    (out_dir / "schematic.svg").write_text(sheet_svg, encoding="utf-8")
+    sheet_pdf = svg_to_pdf(sheet_svg, out_dir / "schematic.pdf", title=doc.meta.name)
+    sheet_png = svg_to_png(sheet_svg, out_dir / "schematic.png")
+    t_sheet = (time.perf_counter() - t0) * 1000
+    print()
+    print(
+        f"schematic    {t_sheet:6.1f} ms   {len(drawing.symbols)} symbol(s), "
+        f"{len(drawing.wires)} wire(s), {len(drawing.rails)} rail(s) on a "
+        f"{drawing.width:.0f} x {drawing.height:.0f} mm sheet"
+    )
+    print(f"             schematic.svg, {sheet_pdf.name}, {sheet_png.name}")
+    for note in drawing.notes:
+        print(f"             note: {note}")
+
+
+def _print_erc(doc: PerfDocument, lookup: FootprintLookup) -> None:
+    # --- ERC first: the circuit, before anything about the board. Each finding is
+    # printed, because a circuit error is the one thing in this report the board's own
+    # checks below cannot see.
+    t0 = time.perf_counter()
+    circuit = run_erc(doc, lookup)
+    t_erc = (time.perf_counter() - t0) * 1000
+    erc_errors = sum(1 for f in circuit if f.severity == "error")
+    print(
+        f"\nERC          {t_erc:6.1f} ms   {erc_errors} error(s), "
+        f"{len(circuit) - erc_errors} warning(s)"
+    )
+    for finding in circuit:
+        print(f"             {finding.severity}: {finding.message}")
+
+
+def _print_lvs(doc: PerfDocument, lookup: FootprintLookup) -> None:
+    t0 = time.perf_counter()
+    lvs_result = run_lvs(doc, lookup)
+    t_lvs = (time.perf_counter() - t0) * 1000
+    s = lvs_result.summary
+    print(
+        f"LVS          {t_lvs:6.1f} ms   {s.matched_nets}/{s.schematic_nets} net(s) matched, "
+        f"{s.opens} open(s), {s.shorts} short(s), {s.physical_nets} physical net(s)"
+    )
+
+
+def _run_board(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    out_dir: Path,
+    *,
+    system: tuple[PerfDocument, str] | None,
+) -> int:
+    """Everything that is one board's, written into ``out_dir``: 0 when it all held, 1 when
+    the 1:1 check failed, 2 when 3D failed outright (and the run stops).
+
+    ``system`` is the whole document and this board's id when there are several: the
+    system's checks were said once already, and a dry run's "would leave LVS at" is the
+    system's LVS with the plan put on this board -- on the board alone, every net that
+    leaves it by a cable read as open."""
+
+    def lvs_of(planned: PerfDocument) -> LvsResult:
+        if system is None:
+            return run_lvs(planned, lookup)
+        whole, board_id = system
+        return run_lvs(merge_board(whole, board_id, planned), lookup)
+
+    board: Board = doc.board
+    outline = board_outline_mm(board)
+    w_mm, h_mm = outline.width, outline.height
 
     scene = BoardScene(doc, lookup, side="top")
 
@@ -189,27 +337,9 @@ def headless(argv: list[str]) -> int:
         pdf_solder = export_pdf(board, print_bottom, out_dir / "board_1to1_solder_side.pdf", mirrored=True)
         print(f"PDF mirrored {pdf_solder.stat().st_size / 1024:.0f} KB -> {pdf_solder.name}")
 
-    # --- The schematic, exported. Here rather than left to the GUI because this is the
-    # only place the SVG writer, Qt's SVG renderer and a real board meet on all three
-    # operating systems: the goldens prove the writer says the same thing everywhere, and
-    # this proves what it says can still be turned into a page. It is also the one export
-    # that needs no GL, so it runs on the machines where the 3D section does not.
-    t0 = time.perf_counter()
-    drawing = build_schematic(doc, lookup)
-    sheet_svg = drawing_to_svg(drawing, title=doc.meta.name)
-    (out_dir / "schematic.svg").write_text(sheet_svg, encoding="utf-8")
-    sheet_pdf = svg_to_pdf(sheet_svg, out_dir / "schematic.pdf", title=doc.meta.name)
-    sheet_png = svg_to_png(sheet_svg, out_dir / "schematic.png")
-    t_sheet = (time.perf_counter() - t0) * 1000
-    print()
-    print(
-        f"schematic    {t_sheet:6.1f} ms   {len(drawing.symbols)} symbol(s), "
-        f"{len(drawing.wires)} wire(s), {len(drawing.rails)} rail(s) on a "
-        f"{drawing.width:.0f} x {drawing.height:.0f} mm sheet"
-    )
-    print(f"             schematic.svg, {sheet_pdf.name}, {sheet_png.name}")
-    for note in drawing.notes:
-        print(f"             note: {note}")
+    # The schematic is the circuit's: with several boards it was drawn once, for the system.
+    if system is None:
+        _write_schematic(doc, lookup, out_dir)
 
     # --- The board as STEP solids. Like the sheet, it needs no GL, so it is written on
     # every machine -- and it is the only place the writer meets a real board end to end.
@@ -218,19 +348,10 @@ def headless(argv: list[str]) -> int:
     t_step = (time.perf_counter() - t0) * 1000
     print(f"STEP model   {t_step:6.1f} ms   {step.stat().st_size // 1024} KB -> {step.name}")
 
-    # --- ERC first: the circuit, before anything about the board. Each finding is
-    # printed, because a circuit error is the one thing in this report the board's own
-    # checks below cannot see.
-    t0 = time.perf_counter()
-    circuit = run_erc(doc, lookup)
-    t_erc = (time.perf_counter() - t0) * 1000
-    erc_errors = sum(1 for f in circuit if f.severity == "error")
-    print(
-        f"\nERC          {t_erc:6.1f} ms   {erc_errors} error(s), "
-        f"{len(circuit) - erc_errors} warning(s)"
-    )
-    for finding in circuit:
-        print(f"             {finding.severity}: {finding.message}")
+    if system is None:
+        _print_erc(doc, lookup)
+    else:
+        print()
 
     # --- DRC / LVS, timed. This is the number that matters for "is DRC fast enough to
     # run after every drag": see the docstring on view2d.BoardScene.mouseReleaseEvent
@@ -247,14 +368,8 @@ def headless(argv: list[str]) -> int:
     warns = sum(1 for v in violations if v.severity == "warning")
     print(f"DRC          {t_drc:6.1f} ms   {errors} error(s), {warns} warning(s) ({len(violations)} total)")
 
-    t0 = time.perf_counter()
-    lvs_result = run_lvs(doc, lookup)
-    t_lvs = (time.perf_counter() - t0) * 1000
-    s = lvs_result.summary
-    print(
-        f"LVS          {t_lvs:6.1f} ms   {s.matched_nets}/{s.schematic_nets} net(s) matched, "
-        f"{s.opens} open(s), {s.shorts} short(s), {s.physical_nets} physical net(s)"
-    )
+    if system is None:
+        _print_lvs(doc, lookup)
 
     # --- Ratsnest and a dry-run autoroute ---
     # Reported but NOT committed: headless mode inspects a document, it does not edit one.
@@ -278,7 +393,7 @@ def headless(argv: list[str]) -> int:
         print(f"             {describe_strip_plan(joined)}")
         for strip_problem in joined.problems:
             print(f"  ! {strip_problem.code}: {strip_problem.message}")
-        after = run_lvs(joined.document, lookup).summary
+        after = lvs_of(joined.document).summary
         print(
             f"             would leave LVS at {after.matched_nets}/{after.schematic_nets} matched, "
             f"{after.opens} open(s), {after.shorts} short(s)"
@@ -289,7 +404,7 @@ def headless(argv: list[str]) -> int:
         t_plan = (time.perf_counter() - t0) * 1000
         print(f"autoroute    {t_plan:6.1f} ms   (dry run, nothing committed)")
         print(f"             {describe_plan(plan)}")
-        after = run_lvs(plan.document, lookup).summary
+        after = lvs_of(plan.document).summary
         print(
             f"             would leave LVS at {after.matched_nets}/{after.schematic_nets} matched, "
             f"{after.opens} open(s), {after.shorts} short(s)"
@@ -340,7 +455,11 @@ def headless(argv: list[str]) -> int:
     # headless run that renders the board and does not produce it is only testing half
     # the pipeline. In the language the run was started in (--lang, or the environment),
     # the one choice the window would have made.
-    guide = build_guide(doc, lookup, GuideOptions(language=guide_language(language())))
+    options = GuideOptions(language=guide_language(language()))
+    guide = build_guide(doc, lookup, options)
+    if system is not None and system[0].cables:
+        # Every board's guide ends with the system's harness, as in the window and MCP.
+        guide = dataclasses.replace(guide, harness=build_harness(system[0], options).cables)
     # Asked once, here, and reused by the 3D stage below. On a machine with no offscreen
     # GL this run reports what it could not draw and still produces every other output,
     # rather than dying halfway through with a crash dump: a headless run is what CI and
@@ -376,8 +495,6 @@ def headless(argv: list[str]) -> int:
         # A CI job that prints this is telling you its runner has no GPU, which is worth
         # knowing and is not a regression.
         print("\n3D SKIPPED: no offscreen GL context on this machine (VTK would abort)")
-        print(f"\noutputs written to {out_dir}")
-        del app
         return 0 if check.ok else 1
 
     try:
@@ -390,9 +507,7 @@ def headless(argv: list[str]) -> int:
         print("             out_3d_solder.png (flipped to the solder side)")
     except Exception as exc:
         print(f"\n3D FAILED: {exc}")
-        return 1
+        return 2
 
-    print(f"\noutputs written to {out_dir}")
-    del app
     return 0 if check.ok else 1
 

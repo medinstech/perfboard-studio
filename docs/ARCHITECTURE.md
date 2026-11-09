@@ -2750,6 +2750,21 @@ from disk is the caller's job, as everywhere else in the engine.
 test call it. `ui/clipboard.py` is copy/paste — text in, `block.place` payload out, no
 widgets — so the interesting half is tested by calling it.
 
+**A document of several boards is run one board at a time, and the circuit once.** The run
+lists the boards and the cables, then says what is the system's -- the schematic, ERC and
+LVS, each over every board and cable -- and then gives each board the board's run: its 2D,
+1:1 PDFs, STEP, DRC, ratsnest, dry-run routing and placement, its guide (ending with the
+system's harness, as in the window and MCP) and its 3D, the first board into `headless_out/`
+and every other into `headless_out/<board id>/`. It is the line the window draws: DRC and
+the ratsnest on the board shown, ERC and LVS on the whole document. A dry run's "would leave
+LVS at" puts the plan on its board and asks the system, because on the board alone every net
+that leaves it by a cable reads as open. It still inspects and never edits. Until 0.24 it
+handed the whole document to everything and said nothing: the header named the first board,
+every output was the first board's, and the LVS line -- already the system's -- sat beside
+them unlabelled, so a second board went unchecked and nothing on the screen said so. A
+document of one board prints exactly what it printed before (`tests/test_headless_system.py`
+holds the order of its sections).
+
 ## The open file is watched, and unsaved work outlives a crash
 
 **The window watches the open file** (`QFileSystemWatcher`, PLAN.md §9.3). With nothing
