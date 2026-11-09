@@ -904,27 +904,32 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "holes drawn. Either way round works."
                 ),
                 aliases=("ldr", "photoresistor", "light sensor", "ışık sensörü", "fotodirenç")),
-    # The two-ball tilt switch of every starter kit, standing cap-end down on its two leads.
-    # Drawn at the datasheet's MAXIMA (5.2 +0.3 across, 11.5 +0.4 long), so DRC measures no
-    # smaller a part than the one in the bag; its leads are 2.4 mm apart and the holes 2.54.
-    CatalogPart("sw-520d", "SW-520D tilt switch", "switch", "box-2x1-p1-r1-5.5x5.5x11.9",
-                "Ball tilt switch, 12 V contacts: closed while within about 45 degrees of "
-                "upright with its leads down, open past that",
-                value="SW-520D", ref_prefix="SW",
+    # The epoxy-bead thermistor of the kits (MF52, as APR draws it), on its two wires. Its
+    # drawing gives the bead's width D and thickness T as maxima and the bead-to-bump length
+    # L1 as a maximum, and never says how high a builder leaves it: drawn at those maxima, so
+    # DRC measures the largest part the datasheet allows.
+    CatalogPart("ntc-mf52", "NTC thermistor (MF52 bead)", "sensor",
+                "box-2x1-p1-r1-3.8x2.5x9.5",
+                "Epoxy-bead thermistor, 10,000 ohm at 25 degrees C, its resistance falling as it "
+                "warms",
+                value="NTC", ref_prefix="RT",
                 source=(
-                    "Bailin (Beelee) SW-520 datasheet, p.2: body 5.2 +0.3/-0.1 mm across and "
-                    "11.5 +0.4/-0.1 long, leads 0.6 +-0.05 mm and 8 +-1 mm long, 2.4 mm apart "
-                    "(no tolerance printed), the 12 V contact rating, and its ON and OFF angles "
-                    "drawn at 10 and 45 degrees; the body is drawn square at those maxima"
+                    "APR MF52 datasheet, p.2 'Outlook and Dimension', model A (tinned steel "
+                    "wire): bead at most 3.8 wide (D) and 2.5 thick (T), wires 0.5 +-0.1 mm "
+                    "thick, 2.5 +-0.5 mm apart (F) and 12 mm long at least; the drawing is not to "
+                    "scale and prints no bead length, so the 9.5 mm height is its L1 maximum "
+                    "(bead end to the bump on the wires), an upper bound and not a seat. Model "
+                    "E (2.8 mm, 2.0 +-0.5 mm apart) prints no thickness and is not drawn."
                 ),
                 check=(
-                    "Its leads are 2.4 mm apart and the holes 2.54, so each ends up 0.07 mm off "
-                    "its hole, well inside the 0.2 mm a 0.6 mm lead has to spare in a 1 mm hole: "
-                    "it goes in as it is. Sellers disagree on which way up it conducts, so tilt "
-                    "yours over a multimeter before you solder it."
+                    "Its wires are 2.5 mm apart and the holes 2.54, inside the drawing's "
+                    "+-0.5. The resistance and the B value are in its part number, not on the "
+                    "bead: measure it, about 10 kohm at 25 degrees C. How high the bead stands "
+                    "is yours to choose and it is drawn at the longest the datasheet allows, "
+                    "9.5 mm; leave less wire above the board and it stands lower."
                 ),
-                aliases=("tilt", "ball switch", "tilt sensor", "SW520D", "SW-520",
-                         "eğim sensörü", "eğim anahtarı", "top anahtar")),
+                aliases=("thermistor", "NTC", "MF52", "temperature sensor",
+                         "termistör", "sıcaklık sensörü")),
     # -- displays ---------------------------------------------------------------------
     CatalogPart("ssd1306-i2c-gnd-vcc", "SSD1306 OLED 0.96in I2C (GND VCC SCL SDA)", "display",
                 _OLED_FOOTPRINT, "128 x 64 OLED on I2C, pins printed GND, VCC, SCL, SDA",
@@ -1330,6 +1335,27 @@ CATALOG: tuple[CatalogPart, ...] = (
                 value="12x12 tactile",
                 source="KiCad Button_Switch_THT:SW_PUSH-12mm and the Wuerth 430476085716 model",
                 check=_SWITCH_LEGS),
+    # The two-ball tilt switch of every starter kit, standing cap-end down on its two leads.
+    # Drawn at the datasheet's MAXIMA (5.2 +0.3 across, 11.5 +0.4 long), so DRC measures no
+    # smaller a part than the one in the bag; its leads are 2.4 mm apart and the holes 2.54.
+    CatalogPart("sw-520d", "SW-520D tilt switch", "switch", "box-2x1-p1-r1-5.5x5.5x11.9",
+                "Ball tilt switch, 12 V contacts: closed while within about 45 degrees of "
+                "upright with its leads down, open past that",
+                value="SW-520D", ref_prefix="SW",
+                source=(
+                    "Bailin (Beelee) SW-520 datasheet, p.2: body 5.2 +0.3/-0.1 mm across and "
+                    "11.5 +0.4/-0.1 long, leads 0.6 +-0.05 mm and 8 +-1 mm long, 2.4 mm apart "
+                    "(no tolerance printed), the 12 V contact rating, and its ON and OFF angles "
+                    "drawn at 10 and 45 degrees; the body is drawn square at those maxima"
+                ),
+                check=(
+                    "Its leads are 2.4 mm apart and the holes 2.54, so each ends up 0.07 mm off "
+                    "its hole, well inside the 0.2 mm a 0.6 mm lead has to spare in a 1 mm hole: "
+                    "it goes in as it is. Sellers disagree on which way up it conducts, so tilt "
+                    "yours over a multimeter before you solder it."
+                ),
+                aliases=("tilt", "ball switch", "tilt sensor", "SW520D", "SW-520",
+                         "eğim sensörü", "eğim anahtarı", "top anahtar")),
     # -- relays
     # The 4 x 4 membrane keypad's ribbon ends in a 0.1 inch socket, so on the board it is the
     # header that socket goes on. Numbered as Parallax numbers it, right to left with the keys

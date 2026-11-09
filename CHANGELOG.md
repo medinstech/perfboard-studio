@@ -110,6 +110,12 @@ closed without a bump.
   2.54 mm holes worked out in the part's note -- each ends 0.07 mm off its hole, inside what a
   0.6 mm lead has to spare in a 1 mm one -- and its summary says it conducts within about 45
   degrees of upright, with the warning that sellers disagree on which way up it does.
+- **The MF52 NTC thermistor**, the epoxy bead in the kits, from APR's drawing: its two wires
+  go into holes the drawing's tolerance allows (2.5 +-0.5 mm against 2.54), the bead is
+  drawn at the most the datasheet allows, 3.8 across and 2.5 thick, and 9.5 mm high -- a
+  ceiling, because the drawing prints no bead length and nothing about how high it is left,
+  which the part's note says. Its second variant, with a thinner bead, prints no thickness
+  and is not drawn.
 
 ## [0.23.0] - 2026-11-09
 

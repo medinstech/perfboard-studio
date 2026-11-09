@@ -2259,6 +2259,21 @@ TURKISH: Mapping[str, str] = {
         "Bacakları 3 mm arayla durur: çizilen deliklere girmesi için her birini çeyrek "
         "milimetre içe bükün. İki yönde de takılabilir."
     ),
+    "NTC thermistor (MF52 bead)": "NTC termistör (MF52 damla)",
+    "Epoxy-bead thermistor, 10,000 ohm at 25 degrees C, its resistance falling as it warms": (
+        "Epoksi damlalı termistör, 25 derecede 10.000 ohm; ısındıkça direnci düşer"
+    ),
+    "Its wires are 2.5 mm apart and the holes 2.54, inside the drawing's +-0.5. The "
+    "resistance and the B value are in its part number, not on the bead: measure it, about "
+    "10 kohm at 25 degrees C. How high the bead stands is yours to choose and it is drawn "
+    "at the longest the datasheet allows, 9.5 mm; leave less wire above the board and it "
+    "stands lower.": (
+        "Telleri 2,5 mm arayla durur, delikler 2,54 mm: çizimin ±0,5 payının içinde. Direnci "
+        "ve B değeri damlanın üstünde değil, parça numarasında yazar: ölçün, 25 derecede "
+        "yaklaşık 10 kohm olmalı. Damlanın ne kadar yüksekte duracağı sizin elinizde; çizim "
+        "veri sayfasının izin verdiği en uzun boya, 9,5 mm'ye göre yapılmıştır; kartın "
+        "üstünde daha az tel bırakırsanız daha alçakta durur."
+    ),
     "SW-520D tilt switch": "SW-520D eğim anahtarı",
     "Ball tilt switch, 12 V contacts: closed while within about 45 degrees of upright with "
     "its leads down, open past that": (

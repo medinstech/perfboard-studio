@@ -566,6 +566,22 @@ def test_nothing_in_the_document_refers_back_to_the_catalog() -> None:
     assert "bc547" not in text and "catalog" not in text
 
 
+def test_the_thermistor_is_drawn_at_the_most_its_datasheet_allows_and_says_it_is_not_a_seat() -> None:
+    """APR's MF52, model A: a bead at most 3.8 x 2.5 on wires 2.5 +-0.5 mm apart. Its drawing
+    prints no bead length and is not to scale, so the height is the L1 maximum (9.5), and
+    the note says it is a ceiling the builder lowers, not a seat the part sits in."""
+    part = catalog_part("ntc-mf52")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    assert [(pin.d_col, pin.d_row) for pin in footprint.pins] == [(0, 0), (1, 0)]
+    extent = body_extent(footprint, STANDARD_PITCH_MM)
+    assert (extent.size_x, extent.size_y) == (3.8, 2.5)
+    assert footprint.body_height == 9.5
+    assert abs(STANDARD_PITCH_MM - 2.5) <= 0.5, "the holes must be inside the drawing's tolerance"
+    assert "yours to choose" in part.check and "not a seat" in part.source
+
+
 def test_the_tilt_switch_is_drawn_at_its_datasheets_maxima_and_its_lead_arithmetic_is_true() -> None:
     """Bailin's SW-520D: 5.2 +0.3 across and 11.5 +0.4 long, leads 0.6 mm and 2.4 mm apart.
     The footprint carries the maxima, and what the catalog says about the 2.4 against the
