@@ -583,5 +583,91 @@ def _frame_offscreen_panel(window: MainWindow) -> None:
     view3d.apply_default_camera(window._vtk_renderer, flipped=(window.side == "bottom"))
 
 
+#: The two-board example the multi-board docs are shot from.
+SYSTEM_EXAMPLE = REPO_ROOT / "examples" / "relay-and-supply.perf"
+
+
+def system_shots(out_dir: Path) -> int:
+    """The pictures docs/FIRST_BOARD.md's "Several boards and a cable" section uses, from
+    the two-board example, into ``out_dir``::
+
+        python tools/screenshots.py --system docs/images/system
+
+    Offscreen and at the pinned scale like the rest: the strip with a board in front, System
+    with a cable picked, and the guide at the first step of the harness.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    from perfboard_studio.ui.boardstrip import SYSTEM_ENTRY
+    from perfboard_studio.ui.i18n import t
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    assert isinstance(app, QApplication)
+    _fresh_settings()
+    result = persist.deserialize_document(SYSTEM_EXAMPLE.read_text(encoding="utf-8"))
+    if not result.ok:
+        print(f"LOAD FAILED [{result.code}] {result.message}")
+        return 1
+    window = MainWindow(result.document, SYSTEM_EXAMPLE)
+    _open(window, app)
+    window.act_ratsnest.setChecked(False)
+    for dock in (window.dock_library, window.dock_part_list, window.dock_nets):
+        dock.close()
+    _settle(app, 30)
+
+    # A board in front, with the strip above it.
+    window.view.fit_board()
+    _settle(app, 20)
+    _grab(window, app).save(str(out_dir / "1-board-in-front.png"))
+
+    # System, and the cable picked: Properties is the cable's.
+    window._on_board_picked(SYSTEM_ENTRY)
+    _settle(app, 30)
+    cable = window.bus.system_document.cables[0]
+    window._pick_on_system("cable", cable.id)
+    _settle(app, 30)
+    # The bench's hint sits under the boards at a size the offscreen font spaces badly (and a
+    # picture of a click does not need a line saying to click), so it is left out.
+    from PySide6.QtWidgets import QGraphicsSimpleTextItem
+
+    for item in window.system_view.scene().items():
+        if isinstance(item, QGraphicsSimpleTextItem) and item.text().startswith("Click a board"):
+            item.hide()
+    _settle(app, 5)
+    _grab(window, app).save(str(out_dir / "2-system.png"))
+
+    # The guide, at the first step of the harness: the one after the last board step.
+    window._on_board_picked(window.bus.system_document.boards[0].id)
+    _settle(app, 20)
+    window.act_show_guide.trigger()
+    _settle(app, 30)
+    done_next = next(
+        b
+        for b in window.dock_guide.widget().findChildren(QPushButton)
+        if b.text() == t("Done, next  ▶")
+    )
+    for _ in range(400):
+        title = window.bench.title.text()
+        if "W1" in title or "harness" in title.lower() or "cable" in title.lower():
+            break
+        done_next.click()
+        _settle(app, 3)
+    else:
+        print("THE HARNESS STEP WAS NEVER REACHED")
+        return 1
+    _settle(app, 20)
+    window.selection_bar.hide()
+    _grab(window, app).save(str(out_dir / "3-harness-step.png"))
+    print(f"harness step reached at: {ascii(window.bench.title.text())}")
+
+    window._mark_saved()
+    window.close()
+    _settle(app)
+    return 0
+
+
 if __name__ == "__main__":
+    if "--system" in sys.argv:
+        raise SystemExit(system_shots(Path(sys.argv[sys.argv.index("--system") + 1])))
     raise SystemExit(main())

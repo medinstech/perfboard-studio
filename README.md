@@ -276,6 +276,24 @@ picked out on the board and in 3D too, and the 3D view shows the board as it sta
 moment of the build; the arrows either side of its **Play** go one step at a time, which is
 how somebody with an iron in their hand wants to move through it.
 
+## Several boards and a cable
+
+A project can be more than one board: a controller and its supply, say, with a cable between
+them. **Board ▸ Add Board** (or **+ Add Board** in the strip above the board) adds a second
+board and puts it in front; the strip then names every board, and **System**, its first
+entry, draws them side by side with the cables between them in their wires' colours. The
+circuit is still drawn once, and each part is placed on whichever board it belongs on. To
+join two boards, **Board ▸ Add Cable…** asks for a connector on each and pairs the wires
+by net, saying what it could not pair rather than guessing. The same checks run across the
+whole system, so a net that is open between the boards, or a cable wired the wrong way
+round, is reported by the cable's name. Each board's build guide ends with the cables: what
+to cut, where each end goes and what to measure.
+
+![System: two boards and the cable between them, picked, with its wires listed in Properties](https://raw.githubusercontent.com/medinstech/perfboard-studio/main/docs/images/system/2-system.png)
+
+The walkthrough is in [Your first board](https://github.com/medinstech/perfboard-studio/blob/main/docs/FIRST_BOARD.md#several-boards-and-a-cable),
+and `examples/relay-and-supply.perf` is a finished system to open.
+
 ## Running it
 
 It is a desktop application, so the ordinary way to get it is to install one. No Python

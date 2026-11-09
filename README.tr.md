@@ -277,6 +277,23 @@ işaretsiz ilk adımı bulur. Adım kartta ve 3D'de de vurgulanır, 3D görünü
 o anındaki hâliyle gösterir; altındaki **Oynat**'ın iki yanındaki oklar birer adım ilerler —
 elinde havya olan birinin montajda ilerlemek istediği yol da budur.
 
+## Birden çok kart ve bir kablo
+
+Bir proje birden çok kart olabilir: örneğin bir denetleyici ve besleme kartı, aralarında bir
+kablo. **Kart ▸ Kart Ekle** (ya da kartın üstündeki şeritte **+ Kart Ekle**) ikinci bir kart
+ekler ve öne getirir; şerit bundan sonra her kartı adıyla gösterir, ilk girişi **Sistem** ise
+kartları yan yana, aralarındaki kabloları tellerinin renkleriyle çizer. Devre yine bir kez
+çizilir, her parça ait olduğu karta yerleştirilir. İki kartı bağlamak için **Kart ▸ Kablo
+Ekle…** her karttan bir konnektör ister ve telleri net'e göre eşler; eşleyemediğini tahmin
+etmek yerine söyler. Denetimler bütün sistem boyunca çalışır; kartlar arasında kopuk bir net
+ya da ters bağlanmış bir kablo kablonun adıyla bildirilir. Her kartın montaj rehberi
+kablolarla biter: neyin kesileceği, her ucun nereye gittiği ve neyin ölçüleceği.
+
+![Sistem: iki kart ve aralarındaki kablo, kablo seçili, telleri Özellikler'de listeli](./docs/images/system/2-system.png)
+
+Anlatım [İlk kartınız](./docs/FIRST_BOARD.md#several-boards-and-a-cable) sayfasında
+(yalnızca İngilizce) ve `examples/relay-and-supply.perf` açılabilecek bitmiş bir sistem.
+
 ## Çalıştırmak
 
 Bu bir masaüstü uygulaması, yani onu edinmenin olağan yolu bir kurulum paketi kurmak.

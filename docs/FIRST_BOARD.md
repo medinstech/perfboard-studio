@@ -109,6 +109,66 @@ against the part's datasheet.
 the 1:1 print of the board, the schematic as SVG, PDF and PNG, the guide, the bill of
 materials and the cut list.
 
+## Several boards and a cable
+
+Some projects are not one board: a controller and its supply, a sensor head on a cable. A
+system is still one file and one circuit, drawn once. This section uses the finished example
+`examples/relay-and-supply.perf`, a relay driver and its supply on two boards with a cable
+between them.
+
+### Add a board
+
+**Board ▸ Add Board**, or **+ Add Board** at the right of the strip above the board, adds a
+board the size of the one in front and puts it in front. It is named by its place ("Board 2")
+until you name it: with nothing selected, Name in Properties is that board's own. **Design the
+Board…** and **Change…** work on the board in front, so each board can be a different size or
+kind.
+
+![A board in front: the strip above it names System and each board, and Add Board is at its right](images/system/1-board-in-front.png)
+
+The strip appears when there is a second board. Click a name to put that board in front; the
+Board panel, Properties, the wiring and the checks then speak about that board. A new board is
+empty, and says so, and says how a part gets there: drop a part's symbol from the schematic
+onto the board in front, or right-click a part already on another board and choose **Move to
+Board**. A part moved this way takes its copper with it, in one undo step.
+
+### Join two boards with a cable
+
+**Board ▸ Add Cable…** asks which connector on each board, a reference for the cable (W1) and,
+if you know it, its length. It pairs the wires by net: a pin of each connector on the same
+net becomes a wire, in the colour that net's wires are cut in everywhere else. What it cannot
+pair, a net that has no counterpart on the other connector, is left out and said, never
+guessed, because a guessed wire is a crossed cable nobody chose.
+
+### Read the System view
+
+![System: both boards, the cable W1 between them, and its wires in Properties](images/system/2-system.png)
+
+**System**, the strip's first entry, draws the boards side by side with the cables between
+them. Click a board to see its name, size and **Open** (a double-click opens it too) and
+**Remove Board**; click a cable to see its reference, its two ends, each wire pin to pin in
+its colour, its length and note, and **Remove Cable**. The 3D tab, with System in front,
+shows every board and the cables between them hung at their length, which is what the build
+will look like. A cable given a length shorter than the distance between its ends is said in
+the status line, not refused: where the boards sit on the bench is not something the file knows.
+
+The checks read across all the boards. **Matches the circuit** compares the whole system with
+the circuit, joining each board's copper through the cables, so a net that is open between the
+boards is reported with the boards it is split across, and a cable wired pin 1 to pin 2 shows
+as itself, drawn in red on System, with its swapped wires named by their colours.
+
+### The harness in the guide
+
+![The guide's last step: W1 from the supply's J102 to the relay driver's J1, the wires, the strip and the checks](images/system/3-harness-step.png)
+
+Each board's guide measures only its own pins, and ends with the same last phase, **Harness**,
+because a cable is fitted to connectors that are already soldered. It has a step for every
+cable: the wires to cut (to the cable's length, or "cut to fit" if none was given), each wire's
+colour and gauge, how much to strip at both ends, which connector and pin each end goes to,
+and the checks: each wire end to end, and neighbouring wires on different nets kept apart. They
+are the last thing before the system sees power. The exported guide has the same section and
+the cut list a row for each cable wire.
+
 ## Where to go next
 
 - The other examples, finished boards you can open and change, are described in
