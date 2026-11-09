@@ -1928,13 +1928,16 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "Pinout page of each board, pin names and their order only: KY-001, "
                     "002, 003, 010, 017, 022, 033 and 035 number them Signal, +V, GND; "
                     "KY-004, 006, 012, 015, 018, 020, 021, 031 and 039 number them GND, "
-                    "+V, Signal, the same three pins from the other end"
+                    "+V, Signal, the same three pins from the other end; the water level "
+                    "sensor's S, - and + are Conrad's SE045 datasheet"
                 ),
                 check=(
                     "The manual numbers some of these boards S + - and others - + S, the "
                     "same three pins from the other end, so a board plugged straight into "
                     "a header must match its silkscreen. S is the signal: an output on a "
                     "sensor, an input on a buzzer. "
+                    "A water level sensor prints its three pins - + S, as Conrad's SE045 "
+                    "datasheet lists them, S being the signal pin. "
                     + _CABLED_CHECK
                 ),
                 aliases=("KY-001 temperature sensor", "KY-002 vibration switch",
@@ -1948,7 +1951,8 @@ CATALOG: tuple[CatalogPart, ...] = (
                          "reed module", "buzzer module", "IR receiver module",
                          "knock sensor module", "heartbeat sensor module",
                          "line tracking module", "light barrier module",
-                         "vibration switch module", "sensör modülü",)),
+                         "vibration switch module", "sensör modülü",
+                         "water level sensor", "water sensor module", "su seviye sensörü",)),
     CatalogPart("sensor-board-4pin", "4-pin sensor board (D0 + - A0), on a header", "sensor", "hdr-1x4",
                 "The four-pin KY boards with a comparator and a sensitivity trimmer: a "
                 "digital and an analog output. Its cable plugs into this 4-pin header: D0 "
@@ -1957,7 +1961,10 @@ CATALOG: tuple[CatalogPart, ...] = (
                 source=(
                     "Joy-IT SensorKit X40 manual (16.06.2017, CC BY-NC-SA 3.0), the "
                     "Pinout pages of KY-024, 025, 026, 028, 036, 037 and 038, pin names "
-                    "and order only: digital signal, +V, GND, analog signal"
+                    "and order only: digital signal, +V, GND, analog signal. The soil moisture, "
+                    "rain and MQ-2 boards (components101.com/sensors/rain-drop-sensor-module, "
+                    "components101.com/node/797, the Waveshare MQ-2 datasheet) carry the same "
+                    "four outputs and supplies, in the orders the check gives"
                 ),
                 check=(
                     "The manual calls pin 1 the digital signal and pin 4 the analog "
@@ -1965,13 +1972,22 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "output comes from the on-board comparator, set with the trimmer; the "
                     "analog one is the sensor's own, and the manual says it reads "
                     "inverted: a stronger input is a lower voltage. "
+                    "The soil moisture (FC-28, YL-69), rain (YL-83, FC-37) and MQ-2 gas "
+                    "boards have the same four pins in other orders, and write the outputs "
+                    "DO and AO or DOUT and AOUT: Components101 lists VCC GND D0 A0 for the "
+                    "rain board and VCC GND DO AO for the soil one, and Waveshare's MQ-2 "
+                    "datasheet lists DOUT AOUT GND VCC. "
                     + _CABLED_CHECK
                 ),
                 aliases=("KY-024 linear hall sensor", "KY-025 reed", "KY-026 flame sensor",
                          "KY-028 thermistor", "KY-036 metal touch", "KY-037 microphone",
                          "KY-038 sound sensor", "flame sensor module", "sound sensor module",
                          "microphone module", "linear hall module", "thermistor module",
-                         "metal touch module", "ses sensörü modülü",)),
+                         "metal touch module", "ses sensörü modülü",
+                         "FC-28 soil moisture", "YL-69 soil moisture", "soil moisture sensor",
+                         "MQ-2 gas sensor", "gas sensor module", "YL-83 rain sensor",
+                         "FC-37 rain sensor", "rain sensor module", "toprak nem sensörü",
+                         "yağmur sensörü", "gaz sensörü",)),
     CatalogPart("ky-053-ads1115", "KY-053 ADS1115 ADC module (on a header)", "sensor", "hdr-1x10",
                 "Four-input analog-to-digital converter board (ADS1115, 16 bit, I2C). Its "
                 "cable plugs into this 10-pin header: VDD GND SCL SDA ADDR ALRT A0 A1 A2 "
@@ -2200,6 +2216,189 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("reed", "reed switch", "magnetic switch", "door sensor",
                          "manyetik anahtar", "KSK-1A66")),
+    CatalogPart("ds1307-tiny-rtc", "DS1307 Tiny RTC module (on a header)", "connector",
+                "hdr-1x7",
+                "Real-time clock on I2C. Its cable plugs into this 7-pin header: SQ DS SCL "
+                "SDA VCC GND BAT from pin 1",
+                _legs("SQ", "DS", "SCL", "SDA", "VCC", "GND", "BAT"), value="Tiny RTC", ref_prefix="J",
+                source=(
+                    "iarduino.ru's datasheet for the module "
+                    "(iarduino.ru/lib/758e34773ce55f85dcf04367a89b30d0.pdf): its photograph "
+                    "of the board prints SQ, DS, SCL, SDA, VCC, GND, BAT beside the header, "
+                    "and its table names them SQ the programmable square-wave output, DS "
+                    "the main supply's plus through 3.3 kOhm, SCL the clock and SDA the "
+                    "data line of I2C, VCC the main supply's plus, GND ground, BAT the "
+                    "backup supply's plus, with the module powered at 5 V, the chip's VCC "
+                    "at 4.5 to 5.5 V and its VBAT at 2.0 to 3.5 V. The datasheet draws no "
+                    "header, so no body is drawn and the header is the wires you run to it"
+                ),
+                check=(
+                    "Feed VCC 5 V: the datasheet gives the module 5 V and the chip 4.5 to "
+                    "5.5 V on VCC, so this is not a 3.3 V board. BAT is the plus of the "
+                    "backup cell, 2.0 to 3.5 V. The datasheet lists DS as the main supply's "
+                    "plus through 3.3 kOhm, so it is not a signal: it is wired to the "
+                    "supply, not to a pin. SQ is the programmable square-wave output. "
+                    + _CABLED_CHECK
+                ),
+                aliases=(
+                         "DS1307", "Tiny RTC", "real time clock", "RTC module",
+                         "saat modülü", "gerçek zamanlı saat",
+                         )),
+    CatalogPart("tp4056-module", "TP4056 charger module with protection, on six wires", "connector",
+                "wire-6",
+                "Charges one lithium cell from a 5 V input and cuts the load off when the "
+                "cell is flat or the load shorted: the cell on B, the load on OUT",
+                _legs("IN+", "IN-", "OUT+", "OUT-", "B+", "B-"), value="TP4056", ref_prefix="U",
+                source=(
+                    "mischianti.org's TP4056 module page "
+                    "(mischianti.org/tp4056-lipo-battery-charger-high-resolution-pinout-datasheet-and-specs/): "
+                    "six pads in three pairs, IN+ and IN- for the 5 V input, B+ and B- for "
+                    "the cell, OUT+ and OUT- for the load, the OUT pair switched by the "
+                    "protection circuit and B- joined to the protection chip rather than "
+                    "straight through to OUT-. The page does not say where the pads sit on "
+                    "the board, and the module is a part off the board on wires, so only "
+                    "its six wires are drawn. A plain TP4056 board without the protection "
+                    "chips is not this part; that page does not describe its pads"
+                ),
+                check=(
+                    "Put the load on OUT+ and OUT-, not on B+ and B-: the protection "
+                    "switches OUT, so a load on B goes round it. OUT- is not the same wire "
+                    "as B-: it is the protection's switch, and it opens on overdischarge "
+                    "(2.4 V) or overcurrent (3 A); the page says a tripped module is often "
+                    "reset by briefly applying the input. The input is recommended at 4.5 "
+                    "to 5.5 V, 8 V at the very most."
+                ),
+                aliases=(
+                         "TP4056", "lithium charger", "LiPo charger", "Li-ion charger",
+                         "18650 charger", "battery charger module", "pil şarj modülü",
+                         "lityum şarj",
+                         )),
+    CatalogPart("mt3608-boost", "MT3608 boost module, on four wires", "regulator",
+                "wire-4",
+                "Steps a voltage up: 2 to 24 V in, 5 to 28 V out, set with its trimmer",
+                _legs("VIN+", "VIN-", "VOUT+", "VOUT-"), value="MT3608", ref_prefix="U",
+                source=(
+                    "Components101's MT3608 module page "
+                    "(components101.com/modules/mt3608-2a-dc-dc-step-up-power-module), its "
+                    "pin table: VIN+ the voltage input, VIN- ground, VOUT+ the voltage "
+                    "output, VOUT- ground; input 2 to 24 V DC, output 5 to 28 V DC. The "
+                    "page does not say where the pads sit, and the module is a part off the "
+                    "board on wires, so only its four wires are drawn"
+                ),
+                check=(
+                    "A boost converter's output must stay above its input: if turning the "
+                    "trimmer changes nothing, the output equals the input, and a 12 V input "
+                    "cannot give 9 V. Set the trimmer with the output unloaded and a meter "
+                    "on VOUT+ and VOUT- before you connect what it feeds. Components101 "
+                    "says the output must always be higher than the input, and its page "
+                    "mentions no protection against a reversed input, so check VIN+ against "
+                    "the supply's plus."
+                ),
+                aliases=(
+                         "MT3608", "boost converter", "step up converter",
+                         "voltage booster", "yükseltici", "gerilim yükseltici",
+                         )),
+    CatalogPart("ams1117-33-module", "AMS1117-3.3 regulator module, on three wires", "regulator",
+                "wire-3",
+                "Fixed 3.3 V linear regulator on a small board: 4.75 to 12 V in, 800 mA at "
+                "most",
+                _legs("VIN", "GND", "OUT"), value="AMS1117-3.3", ref_prefix="U",
+                source=(
+                    "ANMBEST's AMS1117-3.3 module manual "
+                    "(manuals.plus/asin/B07CP4P5XJ.pdf): the pins VIN, GND and OUT, input "
+                    "4.75 to 12 V, output 3.3 V fixed, 800 mA at most with a current limit "
+                    "of 900 to 1500 mA, the board 8.6 x 12.33 mm with a row of two pins on "
+                    "each side. The manual gives no pin pitch, so no body is drawn: the "
+                    "three wires are the part's pads, the one GND serving input and output"
+                ),
+                check=(
+                    "Its manual says a reversed input shorts the module: check VIN against "
+                    "the supply's plus. It is a linear regulator, so what it drops from the "
+                    "input is heat: 5 V in and 500 mA out is 0.85 W in the chip. Input and "
+                    "output share the one GND."
+                ),
+                aliases=(
+                         "AMS1117", "3.3V regulator", "3.3V module", "LDO module",
+                         "regülatör modülü", "3.3 V regülatör",
+                         )),
+    CatalogPart("st7735-tft-18", "TFT 1.8 in ST7735 128x160 module (on a header)", "display",
+                "hdr-1x8",
+                "1.8 inch colour TFT, 128 x 160, on SPI. Its cable plugs into this 8-pin "
+                "header: VCC GND CS RESET A0 SDA SCK LED from pin 1",
+                _legs("VCC", "GND", "CS", "RESET", "A0", "SDA", "SCK", "LED"), value="ST7735 TFT", ref_prefix="J",
+                source=(
+                    "LCDWiki's page for the 1.8 inch SPI module ST7735S, SKU MSP1803 "
+                    "(lcdwiki.com/1.8inch_SPI_Module_ST7735S_SKU:MSP1803), its pin table 1 "
+                    "to 8: VCC, GND, CS, RESET, A0, SDA, SCK, LED, with VCC 3.3 to 5 V and "
+                    "the logic IO 3.3 V (TTL). The page draws no header and does not say "
+                    "the table is the order on the board, so no body is drawn and the "
+                    "header is the wires you run to it"
+                ),
+                check=(
+                    "The page gives the logic IO as 3.3 V (TTL), so a 5 V board wants level "
+                    "shifting on CS, RESET, A0, SDA and SCK. CS and RESET are low-level "
+                    "enable and low-level reset; A0 selects register (high) or data (low); "
+                    "SDA is the SPI write-data line here, not I2C, and SCK its clock. LED "
+                    "is the backlight: high lights it, and it says to tie 3.3 V to it for "
+                    "always on. "
+                    + _CABLED_CHECK
+                ),
+                aliases=(
+                         "ST7735", "ST7735S", "TFT display", "1.8 TFT", "128x160 TFT",
+                         "renkli ekran", "TFT ekran",
+                         )),
+    CatalogPart("nokia-5110", "Nokia 5110 LCD module (on a header)", "display",
+                "hdr-1x8",
+                "84 x 48 monochrome LCD (PCD8544) on SPI. Its cable plugs into this 8-pin "
+                "header: RST CE DC DIN CLK VCC LIGHT GND from pin 1",
+                _legs("RST", "CE", "DC", "DIN", "CLK", "VCC", "LIGHT", "GND"), value="Nokia 5110", ref_prefix="J",
+                source=(
+                    "microcontrollerslab.com's Nokia 5110 pin table "
+                    "(microcontrollerslab.com/nokia5110-lcd-pinout-arduino-interfacing-datasheet/), "
+                    "numbered 1 to 8: RST, CE, DC, DIN, CLK, VCC, BL (backlight), GND, with "
+                    "VCC 2.7 to 3.3 V; Espruino's PCD8544 page (espruino.com/PCD8544) names "
+                    "the same eight pins, with LIGHT for the backlight, in the opposite "
+                    "order in its wiring table. Neither draws the board, so no body is "
+                    "drawn and the header is the wires you run to it"
+                ),
+                check=(
+                    "Feed VCC 3.3 V: the first page gives 2.7 to 3.3 V, and neither page "
+                    "says the signal pins tolerate 5 V, so a 5 V Arduino wants a divider or "
+                    "level shifter on RST, CE, DC, DIN and CLK. The boards print the "
+                    "backlight pin as LIGHT or BL, and the pages differ on it: Espruino "
+                    "wires it to GND for backlight on, the other says it lights when "
+                    "powered. Read your seller's note before you tie it. The second page "
+                    "numbers the pins from the other end, GND first. "
+                    + _CABLED_CHECK
+                ),
+                aliases=(
+                         "Nokia 5110", "PCD8544", "Nokia LCD", "84x48 LCD", "Nokia ekran",
+                         )),
+    CatalogPart("ttp223-touch", "TTP223 touch module (on a header)", "sensor",
+                "hdr-1x3",
+                "Capacitive touch button on a 24 mm board: its output goes high while "
+                "touched. Its cable plugs into this 3-pin header: GND VCC SIG from pin 1",
+                _legs("GND", "VCC", "SIG"), value="TTP223", ref_prefix="J",
+                source=(
+                    "AZ-Delivery's TTP223B datasheet "
+                    "(cdn.shopify.com/s/files/1/1509/1638/files/TTP223B_Touch_Sensor_Modul_Datenblatt_AZ-Delivery_Vertriebs_GmbH.pdf), "
+                    "its pinout page printing GND, VCC, SIG down the edge of the 24 x 24 mm "
+                    "board, 2.0 to 5.5 V, the output low until touched, a response of 60 ms "
+                    "in fast mode and 220 ms in low power. The page draws no header, so no "
+                    "body is drawn and the header is the wires you run to it"
+                ),
+                check=(
+                    "In AZ-Delivery's datasheet the output is low until the body touches "
+                    "the sensor and high while it does; with no touch for more than 12 s "
+                    "the sensor falls into its low-power mode, where it answers in 220 ms "
+                    "against 60 ms in fast mode. Other boards of the part may print its "
+                    "three pins in another order. "
+                    + _CABLED_CHECK
+                ),
+                aliases=(
+                         "TTP223", "touch sensor", "capacitive touch", "touch button",
+                         "dokunmatik sensör", "dokunmatik buton",
+                         )),
     CatalogPart("esp32-devkitc", "ESP32-DevKitC V4", "module",
                 "mod-2x19-p10-r1-27.94x54.3x3.5-s8.5-o0x-3",
                 "ESP32-WROOM-32 dev board, 38 pins, rows 25.4 mm apart",

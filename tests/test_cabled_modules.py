@@ -204,6 +204,10 @@ SOLD_AS = {
     "ky-009-rgb-led": "KY-009",
     "sensor-board-4pin": "KY 4-pin",
     "sensor-board-3pin": "KY 3-pin",
+    "ds1307-tiny-rtc": "Tiny RTC",
+    "st7735-tft-18": "ST7735 TFT",
+    "nokia-5110": "Nokia 5110",
+    "ttp223-touch": "TTP223",
 }
 
 

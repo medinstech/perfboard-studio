@@ -1004,3 +1004,84 @@ def test_the_reed_switch_leaves_its_leads_room_to_bend() -> None:
     assert "at least 2 mm from the glass" in part.check
     assert "KSK-1A66" in part.source
     assert next(found.id for found in search_catalog("reed switch")) == "reed-switch-glass"
+
+
+def test_the_words_people_type_for_a_sensor_board_find_the_board_that_has_its_pins() -> None:
+    """Soil moisture, rain, MQ-2 and sound boards share the 4-pin header's pin set, and a water
+    level board the 3-pin one, so they are found by their names, not given entries of their own
+    (the order differs between sellers and the check says so)."""
+    four = "sensor-board-4pin"
+    for words in (
+        "soil moisture",
+        "FC-28",
+        "YL-69",
+        "MQ-2",
+        "gas sensor",
+        "rain sensor",
+        "KY-037",
+        "toprak nem",
+        "yağmur sensörü",
+        "gaz sensörü",
+    ):
+        assert next(found.id for found in search_catalog(words)) == four, words
+    for words in ("water level", "water level sensor", "su seviye"):
+        assert next(found.id for found in search_catalog(words)) == "sensor-board-3pin", words
+    part = catalog_part(four)
+    assert part is not None
+    assert "DOUT AOUT GND VCC" in part.check and "VCC GND D0 A0" in part.check
+
+
+def test_the_tiny_rtc_says_what_ds_is_instead_of_calling_it_a_signal() -> None:
+    part = catalog_part("ds1307-tiny-rtc")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == [
+        "SQ", "DS", "SCL", "SDA", "VCC", "GND", "BAT",
+    ]
+    assert "main supply's plus through 3.3 kOhm" in part.check
+    assert "iarduino" in part.source
+    assert next(found.id for found in search_catalog("tiny rtc")) == "ds1307-tiny-rtc"
+
+
+def test_the_power_modules_are_wires_named_as_printed() -> None:
+    """Off the board on their pads' wires: no body, and each pad as its source prints it."""
+    expected = {
+        "tp4056-module": ["IN+", "IN-", "OUT+", "OUT-", "B+", "B-"],
+        "mt3608-boost": ["VIN+", "VIN-", "VOUT+", "VOUT-"],
+        "ams1117-33-module": ["VIN", "GND", "OUT"],
+    }
+    for part_id, names in expected.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        footprint = get_footprint(part.footprint_id)
+        assert footprint is not None and footprint.body.archetype == "flying-leads", part_id
+        assert [name for _, name in part.pin_names] == names, part_id
+    tp4056 = catalog_part("tp4056-module")
+    assert tp4056 is not None
+    assert "not the same wire as B-" in tp4056.check
+    assert next(found.id for found in search_catalog("TP4056")) == "tp4056-module"
+    assert next(found.id for found in search_catalog("MT3608")) == "mt3608-boost"
+    assert next(found.id for found in search_catalog("AMS1117")) == "ams1117-33-module"
+
+
+def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> None:
+    expected = {
+        "st7735-tft-18": (
+            ["VCC", "GND", "CS", "RESET", "A0", "SDA", "SCK", "LED"],
+            "lcdwiki.com",
+            "ST7735",
+        ),
+        "nokia-5110": (
+            ["RST", "CE", "DC", "DIN", "CLK", "VCC", "LIGHT", "GND"],
+            "microcontrollerslab.com",
+            "Nokia 5110",
+        ),
+        "ttp223-touch": (["GND", "VCC", "SIG"], "AZ-Delivery", "TTP223"),
+    }
+    for part_id, (names, named_source, query) in expected.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        assert [name for _, name in part.pin_names] == names, part_id
+        assert named_source in part.source, part_id
+        assert part_id in {found.id for found in search_catalog(query)}, part_id
+    nokia = catalog_part("nokia-5110")
+    assert nokia is not None and "Espruino wires it to GND" in nokia.check

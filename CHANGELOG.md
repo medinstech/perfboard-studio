@@ -207,6 +207,10 @@ closed without a bump.
   with its two legs eight pitches (20.32 mm) apart, so each lead has 3.16 mm clear of the
   glass. The check says to bend the leads at least 2 mm from the glass and to test the switch
   with a magnet after soldering, because Standex-Meder says bending changes its sensitivity.
+- **Soil moisture, rain, MQ-2 and water level sensor boards are found by name.** They share the KY 4-pin and 3-pin headers' pins, so "soil moisture", "FC-28", "MQ-2", "gas sensor", "rain sensor", "water level" and their Turkish names ("toprak nem sensörü", "yağmur sensörü", "gaz sensörü", "su seviye sensörü") lead to the header they plug into, and each check says the other orders the boards print (Components101, Waveshare, Conrad).
+- **The DS1307 Tiny RTC board**, as a 7-pin header from iarduino's datasheet photo: SQ DS SCL SDA VCC GND BAT, with DS said to be the main supply's plus through 3.3 kOhm, not a signal.
+- **TP4056 charger (with protection), MT3608 boost and AMS1117-3.3 modules**, off the board on their pads' wires, each pad named as its source prints it: the TP4056's OUT pair is the protected one and is not the same wire as B-, the MT3608's output must stay above its input, and the AMS1117's reversed input shorts it.
+- **The 1.8 in ST7735 TFT, Nokia 5110 LCD and TTP223 touch boards**, as 8-, 8- and 3-pin headers from LCDWiki, microcontrollerslab.com and AZ-Delivery, each with its supply and logic levels as the page gives them.
 
 ### Fixed
 

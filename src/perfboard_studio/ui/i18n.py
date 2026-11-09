@@ -3121,13 +3121,13 @@ TURKISH: Mapping[str, str] = {
     ),
     "The manual numbers some of these boards S + - and others - + S, the same three pins "
     "from the other end, so a board plugged straight into a header must match its "
-    "silkscreen. S is the signal: an output on a sensor, an input on a buzzer. Match each "
+    "silkscreen. S is the signal: an output on a sensor, an input on a buzzer. A water level sensor prints its three pins - + S, as Conrad's SE045 datasheet lists them, S being the signal pin. Match each "
     "lead to the name printed beside the module's pins, not to its place: sellers' boards "
     "are not all wired in the same order.": (
         "Kılavuz bu kartların bazılarını S + -, bazılarını - + S diye numaralar; bunlar "
         "aynı üç pinin öbür uçtan sayılmasıdır. Bu yüzden bir kartı doğrudan header'a "
         "takarsanız serigrafisine uydurun. S sinyaldir: bir sensörde çıkış, bir buzzer'da "
-        "giriştir. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada "
+        "giriştir. Bir su seviyesi sensörü üç pinini - + S diye basar (Conrad'ın SE045 veri sayfası da böyle sıralar); S sinyal pinidir. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada "
         "göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
     "4-pin sensor board (D0 + - A0), on a header": "4 pinli sensör kartı (D0 + - A0), header üzerinde",
@@ -3139,15 +3139,142 @@ TURKISH: Mapping[str, str] = {
     "The manual calls pin 1 the digital signal and pin 4 the analog signal; your board "
     "may print other names for them. The digital output comes from the on-board "
     "comparator, set with the trimmer; the analog one is the sensor's own, and the manual "
-    "says it reads inverted: a stronger input is a lower voltage. Match each lead to the "
+    "says it reads inverted: a stronger input is a lower voltage. The soil moisture (FC-28, YL-69), rain (YL-83, FC-37) and MQ-2 gas boards have the same four pins in other orders, and write the outputs DO and AO or DOUT and AOUT: Components101 lists VCC GND D0 A0 for the rain board and VCC GND DO AO for the soil one, and Waveshare's MQ-2 datasheet lists DOUT AOUT GND VCC. Match each lead to the "
     "name printed beside the module's pins, not to its place: sellers' boards are not all "
     "wired in the same order.": (
         "Kılavuz 1. pine sayısal sinyal, 4. pine analog sinyal der; kartınız onlara başka "
         "adlar basmış olabilir. Sayısal çıkış kart üzerindeki karşılaştırıcıdan gelir ve "
         "trimmerle ayarlanır; analog çıkış sensörün kendisidir ve kılavuza göre ters "
-        "okunur: daha güçlü bir girdi daha düşük bir gerilimdir. Her kabloyu yerine göre "
+        "okunur: daha güçlü bir girdi daha düşük bir gerilimdir. Toprak nemi (FC-28, YL-69), yağmur (YL-83, FC-37) ve MQ-2 gaz kartlarında aynı dört pin başka sıralarla bulunur ve çıkışlar DO ve AO ya da DOUT ve AOUT diye yazılır: Components101 yağmur kartı için VCC GND D0 A0, toprak kartı için VCC GND DO AO sırasını, Waveshare'in MQ-2 veri sayfası ise DOUT AOUT GND VCC sırasını verir. Her kabloyu yerine göre "
         "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları "
         "aynı sırayla bağlanmamıştır."
+    ),
+    "DS1307 Tiny RTC module (on a header)": "DS1307 Tiny RTC modülü (header üzerinde)",
+    "Real-time clock on I2C. Its cable plugs into this 7-pin header: SQ DS SCL SDA VCC GND "
+    "BAT from pin 1": (
+        "I2C üzerinde 24C32 EEPROM'lu gerçek zamanlı saat. Kablosu bu 7 pinli header'a "
+        "takılır: 1. pinden SQ DS SCL SDA VCC GND BAT"
+    ),
+    "Feed VCC 5 V: the datasheet gives the module 5 V and the chip 4.5 to 5.5 V on VCC, so "
+    "this is not a 3.3 V board. BAT is the plus of the backup cell, 2.0 to 3.5 V. The "
+    "datasheet lists DS as the main supply's plus through 3.3 kOhm, so it is not a signal: "
+    "it is wired to the supply, not to a pin. SQ is the programmable square-wave output. "
+    "Match each lead to the name printed beside the module's pins, not to its place: "
+    "sellers' boards are not all wired in the same order.": (
+        "VCC pinine 5 V verin: veri sayfası modüle 5 V, çipin VCC ucuna 4,5 ile 5,5 V "
+        "verir; yani bu 3,3 V'luk bir kart değildir. BAT yedek pilin artısıdır (2,0 ile 3,5 "
+        "V). Veri sayfası DS'yi, 3,3 kOhm üzerinden ana beslemenin artısı olarak listeler; "
+        "yani sinyal değildir, bir pine değil beslemeye bağlanır. SQ programlanabilir kare "
+        "dalga çıkışıdır. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan "
+        "ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "TP4056 charger module with protection, on six wires": "TP4056 şarj modülü, korumalı, altı telli",
+    "Charges one lithium cell from a 5 V input and cuts the load off when the cell is flat "
+    "or the load shorted: the cell on B, the load on OUT": (
+        "Tek lityum hücreyi 5 V girişten şarj eder; hücre boşalırsa ya da yük kısa devre "
+        "olursa yükü keser: hücre B uçlarına, yük OUT uçlarına"
+    ),
+    "Put the load on OUT+ and OUT-, not on B+ and B-: the protection switches OUT, so a "
+    "load on B goes round it. OUT- is not the same wire as B-: it is the protection's "
+    "switch, and it opens on overdischarge (2.4 V) or overcurrent (3 A); the page says a "
+    "tripped module is often reset by briefly applying the input. The input is recommended "
+    "at 4.5 to 5.5 V, 8 V at the very most.": (
+        "Yükü B+ ve B- değil, OUT+ ve OUT- uçlarına bağlayın: koruma OUT uçlarını "
+        "anahtarlar, B uçlarına bağlanan yük korumayı atlar. OUT- ile B- aynı tel değildir: "
+        "OUT- korumanın anahtarıdır ve aşırı deşarjda (2,4 V) ya da aşırı akımda (3 A) "
+        "açılır; sayfa, devreye giren modülün çoğunlukla girişe kısa süre gerilim verilerek "
+        "sıfırlandığını söyler. Giriş 4,5 ile 5,5 V önerilir, en çok 8 V."
+    ),
+    "MT3608 boost module, on four wires": "MT3608 yükseltici modül, dört telli",
+    "Steps a voltage up: 2 to 24 V in, 5 to 28 V out, set with its trimmer": (
+        "Gerilimi yükseltir: 2 ile 24 V giriş, 5 ile 28 V çıkış, trimmerle ayarlanır"
+    ),
+    "A boost converter's output must stay above its input: if turning the trimmer changes "
+    "nothing, the output equals the input, and a 12 V input cannot give 9 V. Set the "
+    "trimmer with the output unloaded and a meter on VOUT+ and VOUT- before you connect "
+    "what it feeds. Components101 says the output must always be higher than the input, and "
+    "its page mentions no protection against a reversed input, so check VIN+ against the "
+    "supply's plus.": (
+        "Yükseltici bir dönüştürücünün çıkışı girişinin üstünde kalmalıdır: trimmeri "
+        "çevirmek bir şey değiştirmiyorsa çıkış girişe eşittir ve 12 V giriş 9 V veremez. "
+        "Beslediği devreyi bağlamadan önce, çıkış yüksüzken ve VOUT+ ile VOUT- uçlarında "
+        "bir ölçü aletiyle trimmeri ayarlayın. Components101 çıkışın girişten hep yüksek "
+        "olması gerektiğini söyler ve sayfası ters girişe karşı bir korumadan söz etmez; bu "
+        "yüzden VIN+ ucunu besleme kaynağının artısıyla karşılaştırın."
+    ),
+    "AMS1117-3.3 regulator module, on three wires": "AMS1117-3.3 regülatör modülü, üç telli",
+    "Fixed 3.3 V linear regulator on a small board: 4.75 to 12 V in, 800 mA at most": (
+        "Küçük bir kart üzerinde sabit 3,3 V doğrusal regülatör: 4,75 ile 12 V giriş, en "
+        "çok 800 mA"
+    ),
+    "Its manual says a reversed input shorts the module: check VIN against the supply's "
+    "plus. It is a linear regulator, so what it drops from the input is heat: 5 V in and "
+    "500 mA out is 0.85 W in the chip. Input and output share the one GND.": (
+        "Kılavuzu, ters bağlanan girişin modülü kısa devre yaptığını söyler: VIN ucunu "
+        "besleme kaynağının artısıyla karşılaştırın. Doğrusal bir regülatördür, yani "
+        "girişten düşürdüğü şey ısıdır: 5 V giriş ve 500 mA çıkışta çipte 0,85 W harcanır. "
+        "Giriş ve çıkış tek GND'yi paylaşır."
+    ),
+    "TFT 1.8 in ST7735 128x160 module (on a header)": "TFT 1,8 inç ST7735 128x160 modülü (header üzerinde)",
+    "1.8 inch colour TFT, 128 x 160, on SPI. Its cable plugs into this 8-pin header: VCC "
+    "GND CS RESET A0 SDA SCK LED from pin 1": (
+        "SPI üzerinde 1,8 inç renkli TFT, 128 x 160. Kablosu bu 8 pinli header'a takılır: "
+        "1. pinden VCC GND CS RESET A0 SDA SCK LED"
+    ),
+    "The page gives the logic IO as 3.3 V (TTL), so a 5 V board wants level shifting on CS, "
+    "RESET, A0, SDA and SCK. CS and RESET are low-level enable and low-level reset; A0 "
+    "selects register (high) or data (low); SDA is the SPI write-data line here, not I2C, "
+    "and SCK its clock. LED is the backlight: high lights it, and it says to tie 3.3 V to "
+    "it for always on. Match each lead to the name printed beside the module's pins, not to "
+    "its place: sellers' boards are not all wired in the same order.": (
+        "Sayfa mantık IO'yu 3,3 V (TTL) olarak verir; bu yüzden 5 V'luk bir kart CS, RESET, "
+        "A0, SDA ve SCK üzerinde seviye çevirici ister. CS düşük seviyede etkin, RESET "
+        "düşük seviyede sıfırlar; A0 register (yüksek) ya da veri (düşük) seçer; SDA burada "
+        "I2C değil SPI yazma veri hattıdır, SCK onun saatidir. LED arka ışıktır: yüksek "
+        "seviye yakar ve hep yanık kalması için ona 3,3 V bağlanmasını söyler. Her kabloyu "
+        "yerine göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
+    "Nokia 5110 LCD module (on a header)": "Nokia 5110 LCD modülü (header üzerinde)",
+    "84 x 48 monochrome LCD (PCD8544) on SPI. Its cable plugs into this 8-pin header: RST "
+    "CE DC DIN CLK VCC LIGHT GND from pin 1": (
+        "SPI üzerinde 84 x 48 tek renkli LCD (PCD8544). Kablosu bu 8 pinli header'a "
+        "takılır: 1. pinden RST CE DC DIN CLK VCC LIGHT GND"
+    ),
+    "Feed VCC 3.3 V: the first page gives 2.7 to 3.3 V, and neither page says the signal "
+    "pins tolerate 5 V, so a 5 V Arduino wants a divider or level shifter on RST, CE, DC, "
+    "DIN and CLK. The boards print the backlight pin as LIGHT or BL, and the pages differ "
+    "on it: Espruino wires it to GND for backlight on, the other says it lights when "
+    "powered. Read your seller's note before you tie it. The second page numbers the pins "
+    "from the other end, GND first. Match each lead to the name printed beside the module's "
+    "pins, not to its place: sellers' boards are not all wired in the same order.": (
+        "VCC pinine 3,3 V verin: ilk sayfa 2,7 ile 3,3 V verir ve iki sayfa da sinyal "
+        "pinlerinin 5 V'a dayandığını söylemez; bu yüzden 5 V'luk bir Arduino RST, CE, DC, "
+        "DIN ve CLK için bölücü ya da seviye çevirici ister. Kartlar arka ışık pinini LIGHT "
+        "ya da BL diye basar ve sayfalar bu konuda ayrışır: Espruino arka ışık için onu "
+        "GND'ye bağlar, diğeri besleme verilince yandığını söyler. Bağlamadan önce "
+        "satıcınızın notunu okuyun. İkinci sayfa pinleri öbür uçtan, GND'den başlayarak "
+        "numaralar. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada "
+        "göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "TTP223 touch module (on a header)": "TTP223 dokunmatik modülü (header üzerinde)",
+    "Capacitive touch button on a 24 mm board: its output goes high while touched. Its "
+    "cable plugs into this 3-pin header: GND VCC SIG from pin 1": (
+        "24 mm'lik kart üzerinde kapasitif dokunma düğmesi: dokunulduğu sürece çıkışı "
+        "yükselir. Kablosu bu 3 pinli header'a takılır: 1. pinden GND VCC SIG"
+    ),
+    "In AZ-Delivery's datasheet the output is low until the body touches the sensor and "
+    "high while it does; with no touch for more than 12 s the sensor falls into its "
+    "low-power mode, where it answers in 220 ms against 60 ms in fast mode. Other boards of "
+    "the part may print its three pins in another order. Match each lead to the name "
+    "printed beside the module's pins, not to its place: sellers' boards are not all wired "
+    "in the same order.": (
+        "AZ-Delivery'nin veri sayfasında çıkış, vücut sensöre dokunana kadar düşük, "
+        "dokunduğu sürece yüksektir; 12 sn'den uzun süre dokunulmazsa sensör düşük güç "
+        "kipine düşer ve hızlı kipteki 60 ms yerine 220 ms'de yanıt verir. Bu parçanın "
+        "başka kartları üç pinini başka sırayla basabilir. Her kabloyu yerine göre değil, "
+        "modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
+        "sırayla bağlanmamıştır."
     ),
     "KY-009 RGB LED module, SMD (on a header)": "KY-009 RGB LED modülü, SMD (header üzerinde)",
     "RGB LED on a small board, one pin per colour and a common ground. Its cable plugs "
