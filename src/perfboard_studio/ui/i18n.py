@@ -3072,6 +3072,24 @@ TURKISH: Mapping[str, str] = {
     "Dual comparator, open-collector outputs": "Çift karşılaştırıcı, açık kolektör çıkışlı",
     "High-speed optocoupler, 10 Mbit/s": "Yüksek hızlı optokuplör, 10 Mbit/s",
     "Optocoupler, transistor output": "Optokuplör, transistör çıkışlı",
+    "RC522 RFID reader module (on a header)": "RC522 RFID okuyucu modülü (header üzerinde)",
+    "13.56 MHz RFID reader on SPI. Its cable plugs into this 8-pin header: 3.3V RST GND IRQ "
+    "MISO MOSI SCK SDA from pin 1": (
+        "SPI üzerinden 13,56 MHz RFID okuyucu. Kablosu bu 8 pinli header'a takılır: 1. "
+        "pinden 3.3V RST GND IRQ MISO MOSI SCK SDA"
+    ),
+    "Feed it 3.3 V, not 5 V: its supply pin is the one marked 3.3V. SDA is the SPI chip "
+    "select here, not an I2C data line; MISO is also marked SCL and TX for the chip's other "
+    "modes. IRQ may stay unconnected. Sellers print the same row from the other end, SDA "
+    "first: read the names, not the place. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same order.": (
+        "Ona 5 V değil 3,3 V verin: besleme pini 3.3V yazan pindir. SDA burada SPI çip "
+        "seçimidir, bir I2C veri hattı değil; MISO çipin diğer kipleri için SCL ve TX olarak "
+        "da işaretlidir. IRQ bağlanmadan kalabilir. Satıcılar aynı sırayı öbür uçtan, önce "
+        "SDA olacak şekilde basar: yere değil, adlara bakın. Her kabloyu yerine göre değil, "
+        "modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
+        "sırayla bağlanmamıştır."
+    ),
     "L298N dual motor driver board (on a header)": "L298N çift motor sürücü kartı (header üzerinde)",
     "Dual H-bridge board for two DC motors. Its cable plugs into this 6-pin header: ENA IN1 "
     "IN2 IN3 IN4 ENB from pin 1": (

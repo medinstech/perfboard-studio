@@ -1773,6 +1773,30 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("motor driver", "H-bridge", "L298N", "dc motor driver", "L298",
                          "motor sürücü", "motor sürücüsü")),
+    # The blue RFID-RC522 board of the kits. Numbered from the VCC end, as the seller's photo
+    # prints 1 to 8 over its header; the same row read from the other end is SDA first.
+    CatalogPart("rc522-module", "RC522 RFID reader module (on a header)", "sensor", "hdr-1x8",
+                "13.56 MHz RFID reader on SPI. Its cable plugs into this 8-pin header: 3.3V "
+                "RST GND IRQ MISO MOSI SCK SDA from pin 1",
+                _legs("3.3V", "RST", "GND", "IRQ", "MISO", "MOSI", "SCK", "SDA"),
+                value="RC522", ref_prefix="J",
+                source=(
+                    "ShillehTek's RC522 manual (shillehtek.com/blogs/shillehtek-product-manuals/"
+                    "rc522-rfid-reader-writer-module-13-56mhz-spi-kit-for-arduino-manual), its "
+                    "pinout photograph with 1 to 8 printed over the header, and the components101 "
+                    "RC522 pinout drawing, both numbering it VCC, RST, GND, IRQ, MISO, MOSI, SCK, "
+                    "SDA; the board has no drawing, so no body is drawn and the header is the "
+                    "wires you run to it"
+                ),
+                check=(
+                    "Feed it 3.3 V, not 5 V: its supply pin is the one marked 3.3V. SDA is the "
+                    "SPI chip select here, not an I2C data line; MISO is also marked SCL and "
+                    "TX for the chip's other modes. IRQ may stay unconnected. Sellers print "
+                    "the same row from the other end, SDA first: read the names, not the "
+                    "place. " + _CABLED_CHECK
+                ),
+                aliases=("RFID", "RC522", "MFRC522", "RFID-RC522", "NFC", "card reader",
+                         "kart okuyucu", "RFID okuyucu")),
     # The cheap Bosch sensor boards most people buy, by the name printed on them. The purple
     # six-pin ones have no regulator and run on 3.3 V; the four-pin GY-BME280 has one.
     CatalogPart("gy-bmp280", "GY-BMP280 pressure sensor module (on a header)", "sensor",

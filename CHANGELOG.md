@@ -133,6 +133,11 @@ closed without a bump.
   kit: ENA, IN1 to IN4 and ENB in the order a seller's labelled photograph gives them, with no
   body because no drawing of the board exists. Its check says the motors and the supply are
   on the board's own screw terminals, and to join its ground to yours.
+- **The RC522 RFID reader, as a wired header**, the blue board of the kits: its eight
+  header pins numbered from the VCC end as a seller's photograph prints them and the
+  components101 drawing agrees, with no body because the board has no drawing. The check
+  says to feed it 3.3 V, that SDA is the SPI chip select, and that sellers also print the
+  row from the other end.
 
 ### Fixed
 

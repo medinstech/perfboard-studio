@@ -196,6 +196,7 @@ SOLD_AS = {
     "relay-module-1ch": "SRD-05VDC",
     "uln2003-board": "ULN2003 board",
     "l298n-board": "L298N board",
+    "rc522-module": "RC522",
 }
 
 

@@ -805,3 +805,18 @@ def test_the_l298n_board_is_a_header_in_the_order_a_sellers_photo_labels_it() ->
     assert [name for _, name in part.pin_names] == ["ENA", "IN1", "IN2", "IN3", "IN4", "ENB"]
     assert "shillehtek.com" in part.source and "no drawing" in part.source
     assert "screw terminals" in part.check and "5V jumper" in part.check
+
+
+def test_the_rc522_header_is_numbered_from_the_vcc_end_as_the_photo_prints_it() -> None:
+    """Two pinout images, one row: 1 to 8 from the VCC end (the seller's photo prints the
+    numbers over the header). The same row from the other end is the order a tutorial
+    writes, and the check says so rather than leaving a builder to guess which end."""
+    part = catalog_part("rc522-module")
+    assert part is not None
+    names = [name for _, name in part.pin_names]
+    assert names == ["3.3V", "RST", "GND", "IRQ", "MISO", "MOSI", "SCK", "SDA"]
+    assert names[::-1][0] == "SDA"  # the other end's first, which the check mentions
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and len(footprint.pins) == 8
+    assert "components101" in part.source and "shillehtek" in part.source
+    assert "3.3 V, not 5 V" in part.check and "SDA first" in part.check
