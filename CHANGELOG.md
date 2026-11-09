@@ -20,7 +20,7 @@ closed without a bump.
 
 ## [Unreleased]
 
-## [0.23.0] - 2026-11-05
+## [0.23.0] - 2026-11-09
 
 ### Added
 
