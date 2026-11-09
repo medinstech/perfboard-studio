@@ -731,7 +731,48 @@ TURKISH: Mapping[str, str] = {
         "bir kablo bir karttaki konnektörü ötekindekine bağlar."
     ),
     "second board, several boards, system": "ikinci kart, birden çok kart, sistem",
-    "Double-click a board to open it.": "Açmak için bir karta çift tıklayın.",
+    "Click a board or a cable to see it in Properties; double-click a board to open it.":
+        "Özellikler'de görmek için bir karta ya da kabloya tıklayın; açmak için bir karta "
+        "çift tıklayın.",
+    # Properties with System in front: the system, a board picked on it, a cable.
+    "This board's name among the others: on the strip, in System, on the harness and on "
+    "its build guide. Left empty, it is called by its place.":
+        "Bu kartın diğerleri arasındaki adı: şeritte, Sistem'de, kablo demetinde ve kendi "
+        "montaj kılavuzunda. Boş bırakılırsa sırasındaki yerle anılır.",
+    "The name of the whole document: its file, its project and every board's guide.":
+        "Belgenin tamamının adı: dosyası, projesi ve her kartın kılavuzu.",
+    "Contents": "İçerik",
+    "Add Board": "Kart Ekle",
+    "Add Cable…": "Kablo Ekle…",
+    "Click a board or a cable to see it here.":
+        "Burada görmek için bir karta ya da kabloya tıklayın.",
+    "Open": "Aç",
+    "This board in front, to place and wire it.":
+        "Parça yerleştirip kablolamak için bu kartı öne getirir.",
+    "Remove Board": "Kartı Kaldır",
+    "Take this board out of the document. Its parts go back to the design, wired as they "
+    "were. A cable that reaches it has to be removed first.":
+        "Bu kartı belgeden çıkarır. Parçaları bağlantıları korunarak tasarıma geri döner. "
+        "Bu karta ulaşan bir kablo varsa önce o kaldırılmalıdır.",
+    "What the harness and the cut list call this cable.":
+        "Kablo demetinin ve kesim listesinin bu kabloya verdiği ad.",
+    "Pin to pin": "Pinden pine",
+    "Not given": "Verilmedi",
+    "How long to cut it, end to end; the guide adds what is stripped. Not given, the guide "
+    "leaves the length to you.":
+        "Uçtan uca kesim uzunluğu; soyulacak kısmı kılavuz ekler. Verilmezse uzunluğu "
+        "kılavuz size bırakır.",
+    "Anything the builder should know about this cable.":
+        "Kabloyu yapacak kişinin bilmesi gereken her şey.",
+    "Remove Cable": "Kabloyu Kaldır",
+    "No wires": "Tel yok",
+    "{board} has nothing on it yet": "{board} üzerinde henüz bir şey yok",
+    "Drag a part here from the Library or the schematic, or right-click a part on another "
+    "board: Move to Board.":
+        "Kütüphaneden ya da şemadan buraya bir parça sürükleyin veya başka bir karttaki bir "
+        "parçaya sağ tıklayın: Karta Taşı.",
+    "A cable then joins the boards: Board > Add Cable.":
+        "Ardından kartları bir kablo birleştirir: Kart > Kablo Ekle.",
     "The 3D View shows the board in front.": "3D Görünüm, öndeki kartı gösterir.",
     "{count} board": "{count} kart",
     "{count} boards": "{count} kart",

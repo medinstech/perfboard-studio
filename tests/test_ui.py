@@ -17717,3 +17717,182 @@ def test_home_is_handed_its_examples_once_the_window_is_up() -> None:
         assert [card.example.path for card in home.cards] == [p for p, _ in example_boards()]
     finally:
         _close(window)
+
+
+def _commit(field, text: str) -> None:
+    """Type ``text`` into a Properties line and leave it, as a person does."""
+    field.setText(text)
+    field.setModified(True)
+    field.editingFinished.emit()
+
+
+def test_system_in_front_shows_the_system_and_a_click_shows_a_board_or_a_cable() -> None:
+    """With System in front, Properties is the system's -- its name, what it holds, Add
+    Board and Add Cable -- and a click on System picks a board or a cable for it, each with
+    its own editor; a click on the bare bench, or a pick the document no longer has, is the
+    system again."""
+    from perfboard_studio.ui.selection import Selection
+    from tests.test_system_readers import _system
+
+    window = _window_on(_system())
+    try:
+        inspector = window.inspector
+        window.board_strip.tabs.setCurrentIndex(0)
+        assert window._system_in_front()
+        assert window._current_selection() == Selection("system")
+        assert inspector.shown is inspector.system_editor
+        assert inspector.system_editor.name.text() == "Main"
+        assert inspector.system_editor.contents.text() == "2 boards,  1 cable"
+
+        window.system_view.board_clicked.emit("b2")
+        board = inspector.system_board_editor
+        assert inspector.shown is board and board.name.text() == "Remote"
+        assert window.system_view.selected == ("board", "b2")
+        # Rename Board names the board picked on System, as it names the board in front.
+        window.on_rename_board()
+        assert inspector.shown is board and board.name.selectedText() == "Remote"
+        _commit(board.name, "Far")
+        system = window.bus.system_document
+        assert system.boards[0].name == "Far" and system.meta.name == "Main"
+        assert window.board_strip.tabs.tabText(2).startswith("Far  ·  ")
+        # A cable reaches it: removing the board is refused, and said.
+        board.remove.click()
+        assert board.problem.isVisibleTo(board) and "W1" in board.problem.text()
+        assert len(window.bus.system_document.boards) == 1
+
+        window.system_view.cable_clicked.emit("cable-1")
+        cable = inspector.cable_editor
+        assert inspector.shown is cable and cable.ref.text() == "W1"
+        assert "1 → 1" in cable.wires.text() and "GND" in cable.wires.text()
+        cable.length.setValue(300.0)
+        cable.length.editingFinished.emit()
+        assert window.bus.system_document.cables[0].length_mm == 300.0
+        _commit(cable.ref, "W7")
+        assert window.bus.system_document.cables[0].ref == "W7"
+        cable.remove.click()
+        assert window.bus.system_document.cables == ()
+        # The cable is gone, so the pick is: Properties is the system's again.
+        assert inspector.shown is inspector.system_editor
+        assert window.system_view.selected is None
+
+        window.system_view.board_clicked.emit("b2")
+        inspector.system_board_editor.remove.click()
+        assert window.bus.system_document.boards == ()
+        assert {"JB", "R2"} <= {p.ref for p in window.bus.system_document.parts}
+        # One board left: no strip, no System, and Properties is that board's.
+        assert not window._system_in_front() and window.board_strip.isHidden()
+        assert inspector.shown is inspector.board_editor
+
+        window.bus.undo()
+        window.on_bus_changed(window.bus.system_document, None)
+        window.board_strip.tabs.setCurrentIndex(0)
+        window.system_view.board_clicked.emit("main")
+        assert not inspector.system_board_editor.remove.isVisibleTo(inspector.system_board_editor)
+        window.system_view.cleared.emit()
+        assert inspector.shown is inspector.system_editor
+    finally:
+        _close(window)
+
+
+def test_a_click_on_system_picks_what_is_under_it() -> None:
+    """A board under the pointer is that board; a wire under it is its cable, even over a
+    board -- and the area under a cable's sag is not the cable, though an open curve's own
+    shape says it is."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtTest import QTest
+
+    from tests.test_system_readers import _system
+
+    window = _window_on(_system())
+    try:
+        window.resize(1280, 800)
+        window.show()
+        window.board_strip.tabs.setCurrentIndex(0)
+        _settle_events(QApplication, rounds=3)
+        view = window.system_view
+        frame = view._frames["b2"]
+        inside = view.mapFromScene(frame.sceneBoundingRect().center())
+        assert view.picked_at(QPointF(inside)) == ("board", "b2")
+        wire, _pen = view._outlines["cable-1"][0]
+        on_it = view.mapFromScene(wire.path().pointAtPercent(0.5))
+        assert view.picked_at(QPointF(on_it)) == ("cable", "cable-1")
+        # Inside the curve's sag, between its ends and well clear of the wire: what the
+        # path item's own shape claims, and what a click must not take for the cable.
+        a, low = wire.path().pointAtPercent(0.0), wire.path().pointAtPercent(0.5)
+        sagged = QPointF(low.x(), (a.y() + low.y()) / 2)
+        assert wire.shape().contains(sagged)
+        assert view.picked_at(QPointF(view.mapFromScene(sagged))) != ("cable", "cable-1")
+
+        QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=on_it)
+        assert window.inspector.shown is window.inspector.cable_editor
+        QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=inside)
+        assert window.inspector.shown is window.inspector.system_board_editor
+    finally:
+        _close(window)
+
+
+def test_the_header_says_which_board_is_in_front_or_system() -> None:
+    """The document's name is the header's title, and beside it, on a document of several
+    boards, which one is in front -- or System; on one board, nothing beside it."""
+    import dataclasses
+
+    from tests.test_system_readers import _system
+
+    one = _window_on(dataclasses.replace(_system(wires=None), boards=()))
+    try:
+        assert one.header.place.isHidden()
+    finally:
+        _close(one)
+
+    window = _window_on(_system())
+    try:
+        header = window.header
+        assert header.title.text() == "Main"
+        assert not header.place.isHidden() and header.place.text() == "›  Main"
+        window.board_strip.tabs.setCurrentIndex(2)
+        assert header.place.text() == "›  Remote"
+        window.board_strip.tabs.setCurrentIndex(0)
+        assert header.place.text() == "›  System" and header.title.text() == "Main"
+    finally:
+        _close(window)
+
+
+def test_a_boards_name_in_properties_is_its_own_among_several() -> None:
+    """On a board of several, Properties' Name is that board's (``board.rename``), shown
+    empty with its place when nobody named it -- and the document keeps its own name."""
+    from tests.test_system_readers import _system
+
+    window = _window_on(_system())
+    try:
+        window.board_strip.tabs.setCurrentIndex(2)
+        window.scene.clearSelection()
+        window._refresh_properties()
+        editor = window.inspector.board_editor
+        assert window.inspector.shown is editor and editor.name.text() == "Remote"
+        _commit(editor.name, "Far")
+        assert window.bus.system_document.boards[0].name == "Far"
+        assert window.bus.system_document.meta.name == "Main"
+        _commit(editor.name, "")
+        assert window.bus.system_document.boards[0].name == ""
+        assert editor.name.text() == "" and editor.name.placeholderText() == "Board 2"
+        assert window.header.place.text() == "›  Board 2"
+    finally:
+        _close(window)
+
+
+def test_an_empty_extra_board_says_how_parts_reach_it() -> None:
+    """A board added to the system says what to do with it every time it is empty -- not
+    the first start's words about drawing the circuit, which this person has done."""
+    from tests.test_system_readers import _system
+
+    window = _window_on(_system())
+    try:
+        window._has_placed_a_part = True
+        window.on_add_board()
+        hint = window.view.empty_hint
+        assert not hint.isHidden()
+        assert "Board 3 has nothing on it yet" in hint.text()
+        assert "Move to Board" in hint.text() and "Add Cable" in hint.text()
+    finally:
+        _close(window)
+

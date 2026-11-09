@@ -19,6 +19,8 @@ from typing import Literal
 #: the board.
 #: ``placing``: a library part armed for placing, whose id is its footprint id -- the part
 #: about to be placed, so its value is typed where every other value is.
+#: ``system`` / ``system-board`` / ``cable``: with System in front, nothing picked on it (the
+#: system itself), a board picked on it, or a cable.
 type SelectionKind = Literal[
     "board",
     "part",
@@ -35,6 +37,9 @@ type SelectionKind = Literal[
     "cut",
     "mixed",
     "placing",
+    "system",
+    "system-board",
+    "cable",
 ]
 
 #: Where the selection was made: a canvas, a side panel, or the library.

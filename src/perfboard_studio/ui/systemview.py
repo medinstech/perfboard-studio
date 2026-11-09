@@ -5,9 +5,11 @@ Behind the board strip's first entry (``ui.boardstrip``). Each board is the 2D s
 drawing of that board alone (``system.board_document``), so a board looks here exactly as it
 does when opened; the cables are drawn over them, one curve per wire in the wire's colour --
 the colour the harness cuts it in -- from its pin on one connector to its pin on the other.
-Double-click a board to open it. The boards sit in ``system.board_row``'s row, the one the
-3D panel lays them out by too; where a person may move them is a later decision, and nothing
-here is saved.
+Click a board or a cable to pick it -- Properties shows it (``inspector._SystemBoardEditor``,
+``_CableEditor``), and a click on the bare bench shows the system itself -- and double-click a
+board to open it. The pick is the window's, handed back by ``set_selected``, so it outlives a
+redraw. The boards sit in ``system.board_row``'s row, the one the 3D panel lays them out by
+too; where a person may move them is a later decision, and nothing here is saved.
 """
 
 from __future__ import annotations
@@ -21,12 +23,14 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPainter,
     QPainterPath,
+    QPainterPathStroker,
     QPen,
     QPixmap,
     QResizeEvent,
 )
 from PySide6.QtWidgets import (
     QGraphicsItem,
+    QGraphicsPathItem,
     QGraphicsPixmapItem,
     QGraphicsRectItem,
     QGraphicsScene,
@@ -61,12 +65,18 @@ DRAW_PX_PER_MM = 6.0
 GAP_MM = BOARD_GAP_MM
 
 _BOARD_ROLE = 0  # QGraphicsItem.data key holding a board's id
+_CABLE_ROLE = 1  # ...and a cable's
 
 
 class SystemView(QGraphicsView):
-    """The boards in a row and their cables; double-clicking a board asks for it."""
+    """The boards in a row and their cables; a click picks one, a double-click on a board
+    asks for it."""
 
     board_opened = Signal(str)
+    #: A single click: on a board, on a cable, or on neither.
+    board_clicked = Signal(str)
+    cable_clicked = Signal(str)
+    cleared = Signal()
 
     def __init__(self, lookup: FootprintLookup, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -80,6 +90,11 @@ class SystemView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._shown: PerfDocument | None = None
+        #: What is picked, as the window last said: ("board" | "cable", id), or None.
+        self._selected: tuple[str, str] | None = None
+        self._frames: dict[BoardId, QGraphicsRectItem] = {}
+        #: Each cable's outlines, with the pen each was drawn with before any pick.
+        self._outlines: dict[str, list[tuple[QGraphicsPathItem, QPen]]] = {}
 
     def set_document(self, doc: PerfDocument, language: str = "en") -> None:
         """Draw ``doc``'s boards and cables, unless it is the document already drawn."""
@@ -87,6 +102,8 @@ class SystemView(QGraphicsView):
             return
         self._shown = doc
         self._scene.clear()
+        self._frames = {}
+        self._outlines = {}
         origins: dict[BoardId, tuple[QPointF, PerfDocument, QRectF]] = {}
         row = board_row(doc)
         for board_id in board_ids(doc):
@@ -112,14 +129,45 @@ class SystemView(QGraphicsView):
         for cable in doc.cables:
             self._cable(doc, cable.a, cable.b, cable, origins, colours, net_of, crossed)
         bounds = self._scene.itemsBoundingRect()
-        hint = QGraphicsSimpleTextItem(t("Double-click a board to open it."))
+        hint = QGraphicsSimpleTextItem(
+            t("Click a board or a cable to see it in Properties; double-click a board to open it.")
+        )
         hint.setBrush(QBrush(QColor(theme.ACTIVE.text_secondary)))
         font = QFont(self.font())
         font.setPointSizeF(4.0)
         hint.setFont(font)
         hint.setPos(bounds.center().x() - hint.boundingRect().width() / 2, bounds.bottom() + GAP_MM / 2)
         self._scene.addItem(hint)
+        self._show_selected()
         self._fit()
+
+    def set_selected(self, kind: str | None, item_id: str | None = None) -> None:
+        """Ring the picked board or thicken the picked cable; None picks nothing."""
+        self._selected = (kind, item_id) if kind is not None and item_id is not None else None
+        self._show_selected()
+
+    @property
+    def selected(self) -> tuple[str, str] | None:
+        return self._selected
+
+    def _show_selected(self) -> None:
+        picked = self._selected
+        accent = QColor(theme.ACTIVE.accent)
+        for board_id, frame in self._frames.items():
+            on = picked == ("board", board_id)
+            frame.setPen(QPen(accent, 1.0) if on else QPen(QColor(theme.ACTIVE.border), 0.4))
+        for cable_id, outlines in self._outlines.items():
+            on = picked == ("cable", cable_id)
+            for item, pen in outlines:
+                if on:
+                    wide = QPen(pen)
+                    wide.setWidthF(pen.widthF() + 1.4)
+                    if pen.color() != QColor(theme.ACTIVE.danger):
+                        # Crossed stays red: the pick must not hide what is wrong with it.
+                        wide.setColor(accent)
+                    item.setPen(wide)
+                else:
+                    item.setPen(pen)
 
     def _draw(self, view: PerfDocument) -> tuple[QPixmap, QRectF]:
         """One board as the Board panel draws it, at :data:`DRAW_PX_PER_MM`."""
@@ -144,6 +192,7 @@ class SystemView(QGraphicsView):
         frame.setZValue(-1)
         frame.setData(_BOARD_ROLE, board_id)
         self._scene.addItem(frame)
+        self._frames[board_id] = frame
         label = QGraphicsSimpleTextItem(title)
         label.setBrush(QBrush(QColor(theme.ACTIVE.text)))
         font = QFont(self.font())
@@ -207,8 +256,11 @@ class SystemView(QGraphicsView):
             outline = QPen(QColor(edge), 2.2 if wrong else 1.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
             shadow = self._scene.addPath(path, outline)
             shadow.setZValue(2)
+            shadow.setData(_CABLE_ROLE, cable.id)
+            self._outlines.setdefault(cable.id, []).append((shadow, QPen(outline)))
             line = self._scene.addPath(path, QPen(colour, 1.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             line.setZValue(3)
+            line.setData(_CABLE_ROLE, cable.id)
 
     def _fit(self) -> None:
         bounds = self._scene.itemsBoundingRect().adjusted(-GAP_MM / 2, -GAP_MM / 2, GAP_MM / 2, GAP_MM / 2)
@@ -218,6 +270,36 @@ class SystemView(QGraphicsView):
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._fit()
+
+    def picked_at(self, point: QPointF) -> tuple[str, str] | None:
+        """What a click at ``point`` (in the view) picks: a cable over a board, since a cable
+        is drawn over the boards it joins; ("board" | "cable", id), or None."""
+        found: tuple[str, str] | None = None
+        # A wire is a hairline at this scale: within a few pixels of the curve is on it. Not
+        # the item's own shape, which for an open curve is also the area under its sag --
+        # and that lies over the boards the cable joins.
+        at = self.mapToScene(point.toPoint())
+        stroker = QPainterPathStroker()
+        stroker.setWidth(8.0 / max(self.transform().m11(), 1e-6))
+        for cable_id, outlines in self._outlines.items():
+            if any(stroker.createStroke(item.path()).contains(at) for item, _pen in outlines):
+                return ("cable", cable_id)
+        for item in self.items(point.toPoint()):
+            board_id = item.data(_BOARD_ROLE)
+            if isinstance(board_id, str) and found is None:
+                found = ("board", board_id)
+        return found
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            picked = self.picked_at(event.position())
+            if picked is None:
+                self.cleared.emit()
+            elif picked[0] == "cable":
+                self.cable_clicked.emit(picked[1])
+            else:
+                self.board_clicked.emit(picked[1])
+        super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
         item: QGraphicsItem | None = self.itemAt(event.position().toPoint())

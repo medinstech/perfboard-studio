@@ -59,6 +59,14 @@ closed without a bump.
   own weight and is drawn as long as it is; one shorter than its ends are apart in the row is
   drawn taut, and the status line says so -- as information, since the row is not where
   the boards will sit.
+- **System's own editors in Properties.** With System in front, Properties shows the
+  system: its name, its boards and cables, Add Board and Add Cable. A click on a board there
+  shows its name, size and contents, with Open and Remove Board; a click on a cable shows
+  its reference, its two ends, each wire pin to pin in its colour, its length and a note,
+  with Remove Cable. On a board of several, Properties' Name is that board's own, and the
+  header says which board is in front, or System, beside the document's name. A board added
+  with nothing on it says how parts reach it: from the Library or the schematic, or by Move
+  to Board.
 - **Add Cable.** Choose a connector at each end and the wires are paired by net. What is
   not certain is left unpaired and named: a net with no counterpart, or a net on two pins
   of one connector. The cable goes in as one undo step.

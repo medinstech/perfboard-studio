@@ -336,6 +336,7 @@ from perfboard_studio.stripboard import board_joins_holes, is_stripboard
 from perfboard_studio.striproute import StripboardPlan
 from perfboard_studio.striproute import describe_plan as describe_strip_plan
 from perfboard_studio.system import (
+    FIRST_BOARD,
     board_document,
     board_ids,
     board_title,
@@ -3565,6 +3566,10 @@ class MainWindow(QMainWindow):
         self.board_strip.add_requested.connect(self.on_add_board)
         self.system_view = SystemView(self.lookup)
         self.system_view.board_opened.connect(self._on_board_picked)
+        # A click picks a board or a cable for Properties; the bare bench, the system.
+        self.system_view.board_clicked.connect(lambda board_id: self._pick_on_system("board", board_id))
+        self.system_view.cable_clicked.connect(lambda cable_id: self._pick_on_system("cable", cable_id))
+        self.system_view.cleared.connect(lambda: self._pick_on_system(None, None))
         self.board_stack = QStackedWidget()
         self.board_stack.addWidget(self.view)
         self.board_stack.addWidget(self.system_view)
@@ -6128,6 +6133,21 @@ class MainWindow(QMainWindow):
         if document.components or document.conductors or self._mode_text():
             self.view.set_empty_hint("")
             return
+        if self.bus.board_id != FIRST_BOARD:
+            # ANOTHER BOARD OF THE SYSTEM, EMPTY: the design's parts wait for "a board", and
+            # the blue button's Place on the Board is the way onto the first one -- so this
+            # board says how a part reaches IT, every time, not on a first start only.
+            name = board_title(self.bus.system_document, self.bus.board_id, current_language())
+            self.view.set_empty_hint(
+                f"<b>{escape(t('{board} has nothing on it yet').format(board=name))}</b><br><br>"
+                + t(
+                    "Drag a part here from the Library or the schematic, or right-click a "
+                    "part on another board: Move to Board."
+                )
+                + " "
+                + t("A cable then joins the boards: Board > Add Cable.")
+            )
+            return
         # A DESIGN WAITING FOR ITS BOARD says so every time, not only on a first start:
         # a circuit drawn on the sheet, or imported, and a board with nothing on it is the
         # one moment the next step is not obvious from the board -- it is two panels away.
@@ -8597,6 +8617,10 @@ class MainWindow(QMainWindow):
                 # opened them, remembered as the window's other view state is.
                 features_open=lambda: _stored_bool(app_settings(), FEATURES_OPEN_KEY, False),
                 features_opened=lambda on: app_settings().setValue(FEATURES_OPEN_KEY, on),
+                system=lambda: (self.bus.system_document, self.bus.board_id),
+                open_board=lambda board_id: self._on_board_picked(board_id),
+                add_board=lambda: self.on_add_board(),
+                add_cable=lambda: self.on_add_cable(),
             ),
             InspectorActions(
                 route_selected=self.act_route_selected,
@@ -8644,6 +8668,8 @@ class MainWindow(QMainWindow):
         """
         if self._armed_footprint_id:
             return Selection("placing", (self._armed_footprint_id,), "library")
+        if self._system_in_front() and self._selection_from == "board":
+            return self._system_selection()
         board = self._board_selection()
         sheet = self._selection_on_the_sheet()
         if self._selection_from == "sheet" and sheet is not None:
@@ -8653,6 +8679,26 @@ class MainWindow(QMainWindow):
             if len(nets) == 1:
                 return Selection("net", nets, "nets")
         return board or sheet or NOTHING
+
+    def _system_selection(self) -> Selection:
+        """What is picked on System: a board, a cable, or the system itself -- a pick of
+        something the document no longer has (removed, or undone away) is the system."""
+        picked = self.system_view.selected
+        document = self.bus.system_document
+        if picked is not None:
+            kind, item_id = picked
+            if kind == "board" and item_id in board_ids(document):
+                return Selection("system-board", (item_id,))
+            if kind == "cable" and any(c.id == item_id for c in document.cables):
+                return Selection("cable", (item_id,))
+            self.system_view.set_selected(None)
+        return Selection("system")
+
+    def _pick_on_system(self, kind: str | None, item_id: str | None) -> None:
+        """A click on System: that board or cable in Properties, or the system itself."""
+        self.system_view.set_selected(kind, item_id)
+        self._selection_from = "board"
+        self._refresh_properties()
 
     def _board_selection(self) -> Selection | None:
         """What is selected on the board, or None."""
@@ -11369,9 +11415,11 @@ class MainWindow(QMainWindow):
         if entry == SYSTEM_ENTRY:
             self.board_stack.setCurrentWidget(self.system_view)
             self.system_view.set_document(self.bus.system_document, current_language())
+            self._selection_from = "board"
             self._refresh_board_strip()
             self._refresh_status()
             self._schedule_3d_refresh()
+            self._refresh_properties()
             return
         if entry != self.bus.board_id:
             self.bus.show(entry)
@@ -11539,6 +11587,7 @@ class MainWindow(QMainWindow):
         if not several:
             if self._system_in_front():
                 self.board_stack.setCurrentWidget(self.view)
+            self._refresh_title()
             return
         language = current_language()
 
@@ -11552,6 +11601,7 @@ class MainWindow(QMainWindow):
         self.board_strip.set_entries([(board_id, label(board_id)) for board_id in ids], current)
         if self._system_in_front():
             self.system_view.set_document(document, language)
+        self._refresh_title()
 
     def _board_elsewhere(self, ref: str) -> str | None:
         """The name of the board a part is placed on, when that is not the board shown."""
@@ -13121,7 +13171,7 @@ class MainWindow(QMainWindow):
     def _document_name(self) -> str:
         """What the header calls the board: the name it was given (Rename Board), else
         its file's, else untitled."""
-        name = self.bus.document.meta.name
+        name = self.bus.system_document.meta.name
         if name and name != UNTITLED_NAME:
             return name
         if self.current_path is not None:
@@ -13138,11 +13188,26 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(window_title(self.current_path, modified=self.is_modified))
         header = getattr(self, "header", None)
         if header is not None:
-            header.set_document(self._document_name(), modified=self.is_modified)
+            header.set_document(
+                self._document_name(), modified=self.is_modified, place=self._place_name()
+            )
         # Save has nothing to do on an unmodified board, and doing it anyway rewrote the
         # file -- a new modified stamp, a new mtime -- for nothing.
         if hasattr(self, "act_save"):
             self.act_save.setEnabled(self.is_modified or self.current_path is None)
+
+    def _place_name(self) -> str | None:
+        """Which of several boards is in front, or System, for the header beside the
+        document's name; None on a document of one board, whose name is the board's."""
+        bus = getattr(self, "bus", None)
+        if bus is None:
+            return None
+        document = bus.system_document
+        if len(board_ids(document)) < 2:
+            return None
+        if self._system_in_front():
+            return t("System")
+        return board_title(document, bus.board_id, current_language())
 
     def _offer_to_save(self) -> bool:
         """Ask about unsaved work. False means the user cancelled the whole operation.

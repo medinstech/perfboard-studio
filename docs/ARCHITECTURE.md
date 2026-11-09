@@ -3124,6 +3124,21 @@ there, and a board chosen from the title was a dropdown nobody would find. Syste
 first entry, is the boards drawn as the Board panel draws them and the cables between them in
 their wires' colours (`ui.systemview`); double-clicking a board opens it.
 
+**System has editors, and a click on it is a selection.** With System in front, Properties is
+the system's -- the document's name, its boards and cables, Add Board and Add Cable -- and a
+click on System picks a board (its own name through `board.rename`, its size, Open, Remove
+Board) or a cable (reference, ends, each wire pin to pin in its harness colour, length, note,
+Remove), as `inspector._SystemEditor`, `_SystemBoardEditor` and `_CableEditor`. The pick is
+the window's (`MainWindow._system_selection`), handed to the view to draw, so it survives a
+redraw; a pick the document no longer has -- removed, or undone away -- is the system again.
+A cable is picked by its STROKE, never by its item's shape: an open curve's shape is also the
+area under its sag, which lies over the boards it joins, and a click on a board there took the
+cable. On a board of several, the board editor's Name is that board's own, empty with its place
+("Board 2") until somebody names it, and the header says which board is in front, or System,
+beside the document's name; on one board neither changes. An extra board with nothing on it
+says how a part reaches it every time, not on a first start only: the first board's way in, the
+step bar's Place on the Board, is not this board's.
+
 **The System is drawn in 3D as it is in 2D.** With System in front, the 3D panel shows every
 board at once, laid out by the row the System view lays them out by (`system.board_row`: the
 document's order, left to right, 25 mm of bench between two substrates, every top edge on one
@@ -3185,8 +3200,8 @@ without being listed.
 
 The camera is framed again when what is in front changes -- System to a board, one board to
 another -- because that is a request to look at something else, as opening the panel is; an
-edit still never moves it. A click in the System's 3D selects nothing yet, as a click in the
-System view does not: what a selection is across boards waits on the System's own editors.
+edit still never moves it. A click in the System's 3D selects nothing yet, though a click in
+the System view does: picking in 3D across boards is the System view's pick, not yet wired.
 The assembly bar is disabled there, a build being one board's.
 
 **The window's bus shows the board in front** (`boardbus.BoardBus`). It is the one

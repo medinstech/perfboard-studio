@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from typing import Literal, TypeVar, cast
 
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QAction, QKeyEvent
+from PySide6.QtGui import QAction, QColor, QKeyEvent, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -48,18 +48,22 @@ from PySide6.QtWidgets import (
 
 from perfboard_studio.command import DispatchResult
 from perfboard_studio.commands import (
+    DeleteBoardPayload,
+    DeleteCablePayload,
     LockComponentsPayload,
     MirrorComponentPayload,
     MoveComponentPayload,
     NewConductor,
     NewSolderTraceConductor,
     NewWireConductor,
+    RenameBoardPayload,
     RenameDocumentPayload,
     ReplaceConductorsPayload,
     RotateComponentPayload,
     SetBodyClearancePayload,
     SetHeightLimitPayload,
     UpdateBoardNotePayload,
+    UpdateCablePayload,
     UpdateComponentPayload,
     UpdateComponentsPayload,
     UpdateNetPayload,
@@ -73,8 +77,11 @@ from perfboard_studio.geometry import format_hole, parse_hole
 from perfboard_studio.guide import CABLED_MODULE, plugs_in_on_a_cable
 from perfboard_studio.model import (
     UNTITLED_NAME,
+    BoardId,
     BoardNote,
     BoardSide,
+    Cable,
+    CableEnd,
     ComponentInstance,
     Conductor,
     Net,
@@ -86,16 +93,28 @@ from perfboard_studio.model import (
 )
 from perfboard_studio.parsers.kicad import infer_net_class
 from perfboard_studio.phrasebook import guide_language, phrasebook
+from perfboard_studio.system import (
+    FIRST_BOARD,
+    board_document,
+    board_ids,
+    board_title,
+    connector_of,
+    extra_board,
+)
+from perfboard_studio.wirecolour import net_colours
 
 from . import theme
 from .boardfeatures import FeatureEditor, FeaturesGroup
 from .engine_text import say
-from .i18n import language, t
+from .i18n import counted, language, t
 from .numberbox import NumberBox
 from .partfields import PinoutEditor, note_editor, pinout_for_retyped_value
 from .partnames import footprint_label
 from .properties import describe
 from .selection import NOTHING, Selection
+
+#: The kinds read off the whole system rather than the board in front.
+SYSTEM_KINDS = ("system", "system-board", "cable")
 
 #: Sends one command through the window's bus, whichever that is now.
 Dispatch = Callable[[str, object], DispatchResult]
@@ -116,6 +135,15 @@ class InspectorHooks:
     #: say they were opened or closed: asked when the board's editor is first built.
     features_open: Callable[[], bool] = lambda: False
     features_opened: Callable[[bool], object] = lambda _on: None
+    #: The whole system and the id of the board in front, for what is the system's rather
+    #: than one board's: a board's own name among several, and System's editors. Left out,
+    #: the document handed over is the only board there is.
+    system: Callable[[], tuple[PerfDocument, BoardId]] | None = None
+    #: A board of the system in front, as a double-click on it in System does.
+    open_board: Callable[[BoardId], object] = lambda _board: None
+    #: Add Board and Add Cable, as the Board menu has them.
+    add_board: Callable[[], object] = lambda: None
+    add_cable: Callable[[], object] = lambda: None
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,15 +306,21 @@ class _BoardEditor(QWidget):
         self._inspector = inspector
         self._document: PerfDocument | None = None
         self._loading = False
+        #: The board this editor names, when the document has several; None on one board,
+        #: whose Name is the document's.
+        self._board_id: BoardId | None = None
         form = _form()
 
         self.name = CommitLine(self._commit_name)
-        self.name.setToolTip(
-            t(
-                "The board's title, printed on the build guide, on the schematic and on "
-                "the project folder. A board is named after its file when first saved."
-            )
+        self._document_tip = t(
+            "The board's title, printed on the build guide, on the schematic and on "
+            "the project folder. A board is named after its file when first saved."
         )
+        self._board_tip = t(
+            "This board's name among the others: on the strip, in System, on the harness "
+            "and on its build guide. Left empty, it is called by its place."
+        )
+        self.name.setToolTip(self._document_tip)
         # A board nobody has named is stored as "untitled", which is data and stays
         # English; the field shows it empty with the word in the window's language, as the
         # header says it. In a Turkish window the header said "adsız" and this "untitled".
@@ -363,8 +397,21 @@ class _BoardEditor(QWidget):
         self._document = document
         self._loading = True
         try:
-            named = document.meta.name
-            self.name.show_value("" if named == UNTITLED_NAME else named)
+            system = self._inspector.system_and_board()
+            if system is not None and len(board_ids(system[0])) > 1:
+                # One of several: the board's own name, and its place when it has none --
+                # what the strip and System call it (``system.board_title``).
+                whole, board_id = system
+                self._board_id = board_id
+                self.name.show_value(own_board_name(whole, board_id))
+                self.name.setPlaceholderText(place_name(whole, board_id))
+                self.name.setToolTip(self._board_tip)
+            else:
+                self._board_id = None
+                named = document.meta.name
+                self.name.show_value("" if named == UNTITLED_NAME else named)
+                self.name.setPlaceholderText(t("untitled"))
+                self.name.setToolTip(self._document_tip)
             board = document.board
             kind = self.kind_name(board.type)
             words = [kind] if kind is not None else []
@@ -385,6 +432,11 @@ class _BoardEditor(QWidget):
             self._loading = False
 
     def _commit_name(self, typed: str) -> str | None:
+        if self._board_id is not None:
+            # Empty is allowed: the board is called by its place again.
+            return self._inspector.dispatch(
+                "board.rename", RenameBoardPayload(board=self._board_id, name=typed)
+            )
         if not typed:
             return None
         return self._inspector.dispatch("document.rename", RenameDocumentPayload(name=typed))
@@ -419,6 +471,327 @@ class _BoardEditor(QWidget):
             )
             or ""
         )
+
+
+# -- the system: several boards and the cables between them ----------------------------------
+
+
+def own_board_name(doc: PerfDocument, board_id: BoardId) -> str:
+    """The name somebody gave a board, or "" when nobody did."""
+    return doc.board_name if board_id == FIRST_BOARD else extra_board(doc, board_id).name
+
+
+def place_name(doc: PerfDocument, board_id: BoardId) -> str:
+    """What a board of several is called when nobody named it: "Board 2", by its place."""
+    say = phrasebook(guide_language(language()))
+    return say("Board {n}", n=board_ids(doc).index(board_id) + 1)
+
+
+def _buttons(*buttons: QPushButton) -> QWidget:
+    row = QWidget()
+    line = QHBoxLayout(row)
+    line.setContentsMargins(0, 0, 0, 0)
+    line.setSpacing(theme.SPACE["sm"])
+    for button in buttons:
+        line.addWidget(button)
+    line.addStretch(1)
+    return row
+
+
+class _SystemEditor(QWidget):
+    """The system itself -- System in front, nothing picked on it: the document's name, what
+    is in it, and the two ways to add to it."""
+
+    def __init__(self, inspector: Inspector) -> None:
+        super().__init__()
+        self._inspector = inspector
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel(theme.heading(t("System")))
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+        form = _form()
+        self.name = CommitLine(self._commit_name)
+        self.name.setPlaceholderText(t("untitled"))
+        self.name.setToolTip(
+            t("The name of the whole document: its file, its project and every board's guide.")
+        )
+        _add_field(form, t("Name"), self.name, self.name.problem)
+        self.contents = _fact()
+        form.addRow(t("Contents"), self.contents)
+        layout.addLayout(form)
+        self.add_board = QPushButton(t("Add Board"))
+        self.add_board.clicked.connect(lambda: inspector.hooks.add_board())
+        self.add_cable = QPushButton(t("Add Cable…"))
+        self.add_cable.clicked.connect(lambda: inspector.hooks.add_cable())
+        layout.addWidget(_buttons(self.add_board, self.add_cable))
+        self.hint = _fact(t("Click a board or a cable to see it here."))
+        layout.addWidget(self.hint)
+
+    def load(self, system: PerfDocument) -> None:
+        named = system.meta.name
+        self.name.show_value("" if named == UNTITLED_NAME else named)
+        boards = counted(len(board_ids(system)), t("{count} board"), t("{count} boards"))
+        cables = counted(len(system.cables), t("{count} cable"), t("{count} cables"))
+        self.contents.setText(f"{boards},  {cables}")
+
+    def _commit_name(self, typed: str) -> str | None:
+        if not typed:
+            return None
+        return self._inspector.dispatch("document.rename", RenameDocumentPayload(name=typed))
+
+
+class _SystemBoardEditor(QWidget):
+    """A board picked in System: its name, what it is, what is on it; open it, or take it
+    out of the system (its parts back into the design, as ``board.delete`` does)."""
+
+    def __init__(self, inspector: Inspector) -> None:
+        super().__init__()
+        self._inspector = inspector
+        self._board_id: BoardId | None = None
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+        form = _form()
+        self.name = CommitLine(self._commit_name)
+        self.name.setToolTip(
+            t(
+                "This board's name among the others: on the strip, in System, on the harness "
+                "and on its build guide. Left empty, it is called by its place."
+            )
+        )
+        _add_field(form, t("Name"), self.name, self.name.problem)
+        self.summary = _fact()
+        form.addRow(t("Board"), self.summary)
+        self.contents = _fact()
+        form.addRow(t("Contents"), self.contents)
+        layout.addLayout(form)
+        self.open = QPushButton(t("Open"))
+        self.open.setToolTip(t("This board in front, to place and wire it."))
+        self.open.clicked.connect(self._open)
+        self.remove = QPushButton(t("Remove Board"))
+        self.remove.setToolTip(
+            t(
+                "Take this board out of the document. Its parts go back to the design, wired "
+                "as they were. A cable that reaches it has to be removed first."
+            )
+        )
+        self.remove.clicked.connect(self._remove)
+        layout.addWidget(_buttons(self.open, self.remove))
+        self.problem = _Problem()
+        layout.addWidget(self.problem)
+
+    def load(self, system: PerfDocument, board_id: BoardId) -> None:
+        if board_id != self._board_id:
+            self.problem.show_problem("")
+        self._board_id = board_id
+        self.title.setText(theme.heading(board_title(system, board_id, language())))
+        self.name.show_value(own_board_name(system, board_id))
+        self.name.setPlaceholderText(place_name(system, board_id))
+        view = board_document(system, board_id)
+        board = view.board
+        kind = _BoardEditor.kind_name(board.type)
+        size = t("{cols} × {rows} holes").format(cols=board.cols, rows=board.rows)
+        words = [kind] if kind is not None else []
+        words.append(size.replace(" ", "\u00a0"))
+        self.summary.setText(",  ".join(words))
+        reaching = sum(1 for c in system.cables if board_id in (c.a.board, c.b.board))
+        parts = counted(len(view.components), t("{count} part"), t("{count} parts"))
+        cables = counted(reaching, t("{count} cable"), t("{count} cables"))
+        self.contents.setText(f"{parts},  {cables}")
+        # The first board is the document itself: board.delete refuses it, so it is not
+        # offered.
+        self.remove.setVisible(board_id != FIRST_BOARD)
+
+    def _commit_name(self, typed: str) -> str | None:
+        if self._board_id is None:
+            return None
+        return self._inspector.dispatch(
+            "board.rename", RenameBoardPayload(board=self._board_id, name=typed)
+        )
+
+    def _open(self) -> None:
+        if self._board_id is not None:
+            self._inspector.hooks.open_board(self._board_id)
+
+    def _remove(self) -> None:
+        if self._board_id is not None:
+            self.problem.show_problem(
+                self._inspector.dispatch("board.delete", DeleteBoardPayload(board=self._board_id))
+                or ""
+            )
+
+
+class _WireList(QWidget):
+    """A cable's wires, a row each: a swatch painted in the insulation's colour -- the
+    wire as on the bench, not the chrome, so it is a picture rather than a styled span --
+    then pin to pin and the net."""
+
+    SWATCH_PX = 10
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._rows = QVBoxLayout(self)
+        self._rows.setContentsMargins(0, 0, 0, 0)
+        self._rows.setSpacing(theme.SPACE["xs"])
+        self._said: list[str] = []
+
+    def show_wires(self, lines: list[tuple[QColor, str]]) -> None:
+        while self._rows.count():
+            item = self._rows.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+        self._said = [said for _colour, said in lines] or [t("No wires")]
+        if not lines:
+            self._rows.addWidget(_fact(t("No wires")))
+            return
+        for colour, said in lines:
+            row = QWidget()
+            across = QHBoxLayout(row)
+            across.setContentsMargins(0, 0, 0, 0)
+            across.setSpacing(theme.SPACE["sm"])
+            chip = QPixmap(self.SWATCH_PX, self.SWATCH_PX)
+            chip.fill(colour)
+            swatch = QLabel()
+            swatch.setPixmap(chip)
+            across.addWidget(swatch)
+            words = _fact(said)
+            words.setTextFormat(Qt.TextFormat.PlainText)
+            across.addWidget(words, 1)
+            self._rows.addWidget(row)
+
+    def text(self) -> str:
+        """What the rows say, a line each -- for a test, and for anyone reading it out."""
+        return "\n".join(self._said)
+
+
+class _CableEditor(QWidget):
+    """A cable picked in System: its reference, its two ends, its wires pin to pin in the
+    colours the harness cuts them in, its length and note; and Remove."""
+
+    def __init__(self, inspector: Inspector) -> None:
+        super().__init__()
+        self._inspector = inspector
+        self._cable: Cable | None = None
+        self._loading = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["lg"])
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.title)
+        form = _form()
+        self.ref = CommitLine(self._commit_ref)
+        self.ref.setPlaceholderText("W1, W2…")
+        self.ref.setToolTip(t("What the harness and the cut list call this cable."))
+        _add_field(form, t("Reference"), self.ref, self.ref.problem)
+        self.a_end = _fact()
+        form.addRow(t("From"), self.a_end)
+        self.b_end = _fact()
+        form.addRow(t("To"), self.b_end)
+        self.wires = _WireList()
+        form.addRow(t("Pin to pin"), self.wires)
+        # 0 is "not given", as the height limit's 0 is "no limit": a spin box cannot be
+        # empty, and no cable is 0 mm long.
+        self.length = NumberBox()
+        self.length.setRange(0.0, 10000.0)
+        self.length.setDecimals(0)
+        self.length.setSingleStep(10.0)
+        self.length.setSuffix(" mm")
+        self.length.setSpecialValueText(t("Not given"))
+        self.length.setToolTip(
+            t("How long to cut it, end to end; the guide adds what is stripped. Not given, the "
+              "guide leaves the length to you.")
+        )
+        self.length_problem = _Problem()
+        self.length.editingFinished.connect(self._commit_length)
+        _add_field(form, t("Length"), self.length, self.length_problem)
+        self.note = CommitLine(self._commit_note)
+        self.note.setToolTip(t("Anything the builder should know about this cable."))
+        _add_field(form, t("Note"), self.note, self.note.problem)
+        layout.addLayout(form)
+        self.remove = QPushButton(t("Remove Cable"))
+        self.remove.clicked.connect(self._remove)
+        layout.addWidget(_buttons(self.remove))
+        self.problem = _Problem()
+        layout.addWidget(self.problem)
+
+    def load(self, system: PerfDocument, cable: Cable) -> None:
+        if self._cable is None or cable.id != self._cable.id:
+            self.problem.show_problem("")
+        self._cable = cable
+        self._loading = True
+        try:
+            self.title.setText(theme.heading(cable.ref))
+            self.ref.show_value(cable.ref)
+            self.a_end.setText(self._end(system, cable.a))
+            self.b_end.setText(self._end(system, cable.b))
+            self.wires.show_wires(self._wire_lines(system, cable))
+            if not self.length.hasFocus():
+                self.length.setValue(cable.length_mm or 0.0)
+            self.note.show_value(cable.note)
+        finally:
+            self._loading = False
+
+    @staticmethod
+    def _end(system: PerfDocument, end: CableEnd) -> str:
+        part = connector_of(system, end)
+        board = board_title(system, end.board, language()) if end.board in board_ids(system) else end.board
+        return f"{board}  ·  {part.ref if part is not None else end.connector}"
+
+    @staticmethod
+    def _wire_lines(system: PerfDocument, cable: Cable) -> list[tuple[QColor, str]]:
+        """One line a wire: its insulation's colour, pin to pin, and its net."""
+        from .view2d import named_insulation
+
+        a_part, b_part = connector_of(system, cable.a), connector_of(system, cable.b)
+        net_of = {(n.component_ref, n.pin): net for net in system.nets for n in net.nodes}
+        colours = net_colours(system)
+        lines = []
+        for wire in cable.wires:
+            net = (net_of.get((a_part.ref, wire.a_pin)) if a_part is not None else None) or (
+                net_of.get((b_part.ref, wire.b_pin)) if b_part is not None else None
+            )
+            colour = wire.colour or (colours.get(net.id, "grey") if net is not None else "grey")
+            said = f"{wire.a_pin} → {wire.b_pin}"
+            if net is not None:
+                said += f"  ·  {net.name}"
+            lines.append((named_insulation(colour), said))
+        return lines
+
+    def _update(self, **changes: object) -> str | None:
+        if self._cable is None:
+            return None
+        changed = dataclasses.replace(self._cable, **changes)  # type: ignore[arg-type]
+        return self._inspector.dispatch("cable.update", UpdateCablePayload(cable=changed))
+
+    def _commit_ref(self, typed: str) -> str | None:
+        if not typed:
+            return None
+        return self._update(ref=typed)
+
+    def _commit_note(self, typed: str) -> str | None:
+        return self._update(note=typed)
+
+    def _commit_length(self) -> None:
+        if self._loading or self._cable is None:
+            return
+        value = self.length.value()
+        wanted = None if value <= 0 else value
+        if wanted == self._cable.length_mm:
+            return
+        self.length_problem.show_problem(self._update(length_mm=wanted) or "")
+
+    def _remove(self) -> None:
+        if self._cable is not None:
+            self.problem.show_problem(
+                self._inspector.dispatch("cable.delete", DeleteCablePayload(id=self._cable.id)) or ""
+            )
 
 
 # -- one part on the board ------------------------------------------------------------------
@@ -1714,6 +2087,23 @@ class Inspector(QWidget):
         return self._page("part", lambda: _PartEditor(self, self._actions))
 
     @property
+    def system_editor(self) -> _SystemEditor:
+        return self._page("system", lambda: _SystemEditor(self))
+
+    @property
+    def system_board_editor(self) -> _SystemBoardEditor:
+        return self._page("system-board", lambda: _SystemBoardEditor(self))
+
+    @property
+    def cable_editor(self) -> _CableEditor:
+        return self._page("cable", lambda: _CableEditor(self))
+
+    def system_and_board(self) -> tuple[PerfDocument, BoardId] | None:
+        """The whole system and the board in front, when the window says; None otherwise."""
+        system = self.hooks.system
+        return system() if system is not None else None
+
+    @property
     def design_part_editor(self) -> _DesignPartEditor:
         return self._page("design-part", lambda: _DesignPartEditor(self, self._actions))
 
@@ -1767,9 +2157,22 @@ class Inspector(QWidget):
         if selection.kind in ("mounting-hole", "edge-connector"):
             # Chosen on the board: the board's list of them opens, for when it is shown next.
             self.board_editor.features.set_open(True, emit=True)
+        system = self.system_and_board() if selection.kind in SYSTEM_KINDS else None
         if selection.kind == "board":
             self.board_editor.load(document)
             page = self.board_editor
+        elif system is not None and selection.kind == "system":
+            self.system_editor.load(system[0])
+            page = self.system_editor
+        elif system is not None and selection.kind == "system-board" and selection.ids:
+            if selection.ids[0] in board_ids(system[0]):
+                self.system_board_editor.load(system[0], selection.ids[0])
+                page = self.system_board_editor
+        elif system is not None and selection.kind == "cable" and selection.ids:
+            cable = next((c for c in system[0].cables if c.id == selection.ids[0]), None)
+            if cable is not None:
+                self.cable_editor.load(system[0], cable)
+                page = self.cable_editor
         elif selection.kind == "part" and selection.ids:
             component = next((c for c in document.components if c.id == selection.ids[0]), None)
             if component is not None:
@@ -1843,8 +2246,10 @@ class Inspector(QWidget):
             fields = {"name": shown.name}
         elif isinstance(shown, (_BoardNoteEditor, _SheetNoteEditor)):
             fields = {"text": shown.text}
-        elif isinstance(shown, _BoardEditor):
+        elif isinstance(shown, (_BoardEditor, _SystemEditor, _SystemBoardEditor)):
             fields = {"name": shown.name}
+        elif isinstance(shown, _CableEditor):
+            fields = {"ref": shown.ref}
         field = fields.get(name)
         if field is None:
             return False

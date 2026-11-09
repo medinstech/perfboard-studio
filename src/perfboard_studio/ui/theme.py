@@ -585,6 +585,7 @@ QPushButton[variant="link"]:hover {{ color: {k.accent_text}; }}
    properties panel. Their widgets carry the names and properties; the look lives here. */
 QWidget#header {{ background: {k.bg_surface}; border-bottom: 1px solid {k.border}; }}
 QLabel#headerTitle {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
+QLabel#headerPlace {{ color: {k.text_secondary}; }}
 QToolButton#headerUnsaved {{
     color: {k.warning};
     background: transparent;

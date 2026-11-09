@@ -80,6 +80,13 @@ class HeaderBar(QWidget):
         self.title.setObjectName("headerTitle")
         self.title.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.title)
+        # Which of several boards is in front, or System: the document's name stays the
+        # title, and this says where in it the window is. Hidden on a board of one.
+        self.place = QLabel()
+        self.place.setObjectName("headerPlace")
+        self.place.setTextFormat(Qt.TextFormat.PlainText)
+        self.place.hide()
+        layout.addWidget(self.place)
         # Not saved, said where the name is, and one click from being saved: the title
         # bar's bullet said it too, in a place nobody looks while working.
         self.unsaved = QToolButton()
@@ -129,9 +136,12 @@ class HeaderBar(QWidget):
         button.setAutoRaise(True)
         return button
 
-    def set_document(self, name: str, *, modified: bool) -> None:
-        """The board's name, and whether what is on screen is what is on disk."""
+    def set_document(self, name: str, *, modified: bool, place: str | None = None) -> None:
+        """The board's name, and whether what is on screen is what is on disk; ``place``,
+        which of several boards is in front, or System."""
         self.title.setText(name)
+        self.place.setText(f"›  {place}" if place else "")
+        self.place.setVisible(bool(place))
         self.unsaved.setVisible(modified)
 
     def open_menu(self, menu: QMenu | None = None) -> QMenu:
