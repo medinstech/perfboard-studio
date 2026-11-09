@@ -156,6 +156,10 @@ closed without a bump.
   manual numbers them. The check says the KY-016 swaps red and green, so each has its own
   entry, and gives the manual's series resistors per colour.
 
+- **The KY-016 RGB LED module, as a wired header**: GND, R, G, B in the order the Joy-IT
+  manual numbers them, red and green the other way round from the KY-009, which is why the two
+  are separate entries.
+
 
 ### Fixed
 
