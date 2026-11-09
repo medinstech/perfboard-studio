@@ -184,6 +184,7 @@ from perfboard_studio.system import (
     board_document,
     board_ids,
     board_title,
+    cables_short_in_row,
     connector_of,
     every_component,
     placed_components,
@@ -2514,7 +2515,11 @@ class BoardSession:
     def get_system_info(self) -> dict[str, Any]:
         """Every board and every cable: which board is in front, what each holds, each
         cable's ends and wires, and the system's LVS -- a net carried between two boards by
-        no wire is an open, a crossed wire is a short."""
+        no wire is an open, a crossed wire is a short.
+
+        ``short_in_row`` names each cable given a length shorter than its ends are apart in
+        the System's row. Information, not a finding: the row is where the System view puts
+        the boards, not where they will be, and it is not saved."""
         document = self.system_document
         lvs = run_lvs(document, self.lookup)
         boards = []
@@ -2555,6 +2560,10 @@ class BoardSession:
         return {
             "boards": boards,
             "cables": cables,
+            "short_in_row": [
+                {"ref": cable.ref, "length_mm": cable.length_mm, "span_mm": round(span, 1)}
+                for cable, span in cables_short_in_row(document, self.lookup)
+            ],
             "lvs": {
                 "ok": lvs.ok,
                 "matched_nets": lvs.summary.matched_nets,

@@ -339,6 +339,7 @@ from perfboard_studio.system import (
     board_document,
     board_ids,
     board_title,
+    cables_short_in_row,
     circuit_parts,
     every_component,
     pair_by_net,
@@ -9570,7 +9571,15 @@ class MainWindow(QMainWindow):
             system_doc = self.bus.system_document
             boards = counted(len(board_ids(system_doc)), t("{count} board"), t("{count} boards"))
             cables = counted(len(system_doc.cables), t("{count} cable"), t("{count} cables"))
-            self.problems_bar.set_where(f"{boards}  ·  {cables}")
+            # Said, never counted as a problem: the row is where this view puts the boards,
+            # not where they will be (system.cable_span_mm).
+            short = [
+                t("{ref} is {length} mm; its ends are {span} mm apart in this row").format(
+                    ref=cable.ref, length=f"{cable.length_mm:g}", span=f"{span:.0f}"
+                )
+                for cable, span in cables_short_in_row(system_doc, self.lookup)
+            ]
+            self.problems_bar.set_where("  ·  ".join([boards, cables, *short]))
             return
         self.problems_bar.set_where(f"{side}  ·  {size}")
 

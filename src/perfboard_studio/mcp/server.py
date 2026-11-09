@@ -973,7 +973,9 @@ def remove_cable(ref: str) -> dict[str, Any]:
 def get_system_info() -> dict[str, Any]:
     """Every board of this document and every cable between them: which board is in
     front, what each holds, each cable's ends and wires, and the system's LVS -- a net
-    carried between two boards by no cable wire is an open, a crossed wire a short."""
+    carried between two boards by no cable wire is an open, a crossed wire a short.
+    short_in_row lists a cable shorter than its ends are apart in the System view's row:
+    information about that picture, not a fault -- the row is not where the boards will be."""
     return session.get_system_info()
 
 

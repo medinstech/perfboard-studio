@@ -175,7 +175,11 @@ a time with the rest. That is one tool where the alternative was a `board` argum
 each one a chance to act on the wrong board. `add_cable` joins a connector on one board to
 one on another wire by wire, and `get_system_info` says what is on each board, what each
 cable carries, and the system's LVS: a net crossing two boards with no wire carrying it is
-an open, a cable wired pin 1 to pin 2 a short. `get_status`, `list_components`,
+an open, a cable wired pin 1 to pin 2 a short. Its `short_in_row` lists each cable given a
+length shorter than its ends are apart in the System view's row, with both numbers -- the 3D
+draws such a cable pulled taut. That is information about the picture and never a finding:
+the row is where the view puts the boards, not where they will sit, and it is not saved.
+`get_status`, `list_components`,
 `save_document`, `snapshot` and `run_erc` / `run_lvs` read every board; the guide of the
 board in front ends with the system's harness.
 

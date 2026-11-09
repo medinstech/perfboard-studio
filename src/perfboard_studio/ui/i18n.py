@@ -737,6 +737,9 @@ TURKISH: Mapping[str, str] = {
     "{count} boards": "{count} kart",
     "{count} cable": "{count} kablo",
     "{count} cables": "{count} kablo",
+    "{ref} is {length} mm; its ends are {span} mm apart in this row": (
+        "{ref} {length} mm; bu dizilişte uçları arası {span} mm"
+    ),
     # A board's own command done on one board of several (``board.on``'s undo label), and a
     # board nobody named, as the phrasebook calls it.
     "{what} on {board}": "{what} ({board})",

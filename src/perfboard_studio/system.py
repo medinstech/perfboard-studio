@@ -14,9 +14,11 @@ Hangs off ``model`` alone, and is pure: no clock, no filesystem.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable
 from dataclasses import dataclass, fields, replace
 
-from .geometry import board_outline_mm
+from .geometry import all_pin_holes, board_outline_mm
 from .model import (
     BoardId,
     Cable,
@@ -24,6 +26,7 @@ from .model import (
     CableWire,
     ComponentInstance,
     ExtraBoard,
+    Footprint,
     Mm,
     PerfDocument,
     SchematicPart,
@@ -319,3 +322,55 @@ def cable_problem(doc: PerfDocument, cable: Cable) -> str | None:
         ):
             return f"AWG {wire.gauge_awg} is not a gauge a cable here is made of."
     return None
+
+
+def cable_span_mm(
+    doc: PerfDocument, cable: Cable, lookup: Callable[[str], Footprint | None]
+) -> Mm | None:
+    """How far apart a cable's ends are in the System's row (:func:`board_row`): the longest
+    straight run between the two pins of any one of its wires, hole centre to hole centre.
+    ``None`` when an end or a pin cannot be found -- ``cable_problem`` and ERC say why.
+
+    A fact about the PICTURE, not the build: the row is where the System view and its 3D
+    put the boards, and it is not saved. That is why a cable shorter than this is said as
+    information and never as a finding (docs/ARCHITECTURE.md, "Several boards are one
+    document, and each is seen alone").
+    """
+    row = board_row(doc)
+    points: list[dict[str, tuple[Mm, Mm]]] = []
+    for end in (cable.a, cable.b):
+        part = connector_of(doc, end)
+        footprint = lookup(part.footprint_id) if part is not None else None
+        if part is None or footprint is None:
+            return None
+        board = board_document(doc, end.board).board
+        dx, dy = row[end.board]
+        points.append(
+            {
+                pin.number: (dx + hole.col * board.pitch, dy + hole.row * board.pitch)
+                for pin, hole in all_pin_holes(part, footprint)
+            }
+        )
+    a_pins, b_pins = points
+    spans = [
+        math.dist(a_pins[wire.a_pin], b_pins[wire.b_pin])
+        for wire in cable.wires
+        if wire.a_pin in a_pins and wire.b_pin in b_pins
+    ]
+    return max(spans) if spans else None
+
+
+def cables_short_in_row(
+    doc: PerfDocument, lookup: Callable[[str], Footprint | None]
+) -> list[tuple[Cable, Mm]]:
+    """Every cable given a length shorter than its ends are apart in the System's row, with
+    that distance -- what the 3D draws pulled straight, and the System says in words. A
+    cable with no length is cut to fit and is never short."""
+    short: list[tuple[Cable, Mm]] = []
+    for cable in doc.cables:
+        if cable.length_mm is None:
+            continue
+        span = cable_span_mm(doc, cable, lookup)
+        if span is not None and cable.length_mm < span:
+            short.append((cable, span))
+    return short

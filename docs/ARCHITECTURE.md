@@ -3120,10 +3120,53 @@ the same in front and beside another. What the System adds is the cables
 (`view3d.build_cables`): each wire a tube from its pin to its pin, in the colour the harness
 cuts it in (`wirecolour.net_colours`, through the insulation table the board's own wires are
 drawn from), out of a crimped DuPont shell over a pin header's pin, out of the mouth of a
-side-entry screw terminal, out of the top of anything else, arching over between its two
-ends. It is a picture of which pin goes where, not of the cable's length, which is the cut
-list's. A crossed cable is drawn as it is wired, its colours landing where they land: this
-view shows what will be built, and the System view and the checks say what is wrong with it.
+side-entry screw terminal, out of the top of anything else. A crossed cable is drawn as it is
+wired, its colours landing where they land: this view shows what will be built, and the System
+view and the checks say what is wrong with it.
+
+**A cable hangs, and is drawn as long as it is** (`view3d._rope`). The first drawing was one
+cubic arch over the top from end to end, a picture of which pin goes where and of no length at
+all. Three shapes were rendered on a two-board system and the user picked the third: out of
+each socket straight for `CABLE_LEAD_MM`, then a rope under its own weight that comes to rest
+on whatever is under it -- a part's box, a board, the bench -- with its sag chosen so the wire
+drawn is the cable's `length_mm`. The other two were the arch, and the same rope hung to a
+fixed depth whatever the cable's length. The rope is not relaxed node by node, which took
+thousands of passes in the prototype: with `w = z - g i^2` a free stretch is straight, so the
+hanging rope is the upper concave hull of the floor shifted the same way, found in one pass,
+and the sag that gives the length is halved for. A wire's stiffness is one linear solve
+(`_stiffness`) with the lead-outs held, so it leaves its shell straight and bends over
+`CABLE_BEND_MM` rather than kinking where it comes off a part's edge. Smoothing pulls a wire
+into the part it comes over, so where it does the rope is lifted by as much and smoothed again
+(`_ROPE_LIFTS`); the plan is smoothed first and the floor taken under it, because smoothed
+together a node slid off the part that held it up and the wire dropped there in a step. What
+it rests on is the box of every actor the boards were drawn with, widened by the wire's radius
+(`populate_system_renderer` hands them over; built bare, as the tests do, it rests on the
+substrates alone), and no point of it past the lead-outs is inside one -- a test with every
+part's box says so. A cable longer than hanging can use lies on the bench and bows the rest out
+sideways, and where is tried rather than assumed (`_slack`): the straight path, off each board
+by its nearest edge, or off each board by its back edge and along the bench behind the whole
+row -- or in front of it -- each bowed over a stretch of it on the bench, to either side, and
+the one with the least wire over a board drawn. The first try bowed the straight path over
+its longest stretch of bench, which behind a board pointed the bow forward and laid the slack
+across the board's parts. Where the wire comes to lie over the edge of another part its length
+steps, so the halving keeps the closest it saw, within a few per cent. A cable with no length,
+cut to fit, hangs a span's depth onto the bench. The camera frames the boards and leaves the
+cables out of the fit (`CABLE_ACTOR_NAME`): fitted, a long cable's slack shrank the boards to
+a corner of the panel, and it may as well run off the frame.
+
+**A cable too short for the row is said, not refused and not red.** A cable given a length less
+than the distance between its ends in the row (`system.cables_short_in_row`, pin to pin in a
+straight line) is drawn pulled taut between them, in its own colours, no longer than that. The
+System's status line says it beside the counts, and `get_system_info` lists it as
+`short_in_row`, both as information: the row is where this view puts the boards, not where
+they will sit -- it is computed from the document's order and not saved -- so a cable short
+in the row may be exactly right on the bench, and a rule about it would fire on a picture.
+There is deliberately no `cable-too-short` rule. It waits until a board's position in the
+system is saved in the document; then the distance is a fact about the build and the rule
+belongs with the others. Do not add it before. The taut drawing and the note are also not
+quite the same threshold: the 3D's taut length runs up out of both shells and over the parts
+between, so a cable a few millimetres longer than the straight span can still be drawn taut
+without being listed.
 
 The camera is framed again when what is in front changes -- System to a board, one board to
 another -- because that is a request to look at something else, as opening the panel is; an

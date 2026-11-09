@@ -6,8 +6,12 @@ Building actors touches no GL context -- only a render does -- so none of these 
 
 from __future__ import annotations
 
+import dataclasses
+import math
 import os
+from itertools import pairwise
 
+import numpy
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -96,8 +100,133 @@ def test_a_cable_wire_runs_from_its_pin_to_its_pin_in_the_colour_it_is_cut_in() 
     radius = view3d.INSULATED_RADIUS_MM
     assert x0 == pytest.approx(pin_one_x("main", "JA") - radius, abs=0.1)
     assert x1 == pytest.approx(pin_one_x("b2", "JB") + radius, abs=0.1)
-    # It starts at the top of the shell over the pin, not on the board.
-    assert z0 == pytest.approx(view3d.DUPONT_SHELL_LENGTH_MM, abs=3.0)
+    # Cut to fit, it hangs down to the bench between the boards, under the boards' tops.
+    assert z0 < 0.0
+
+
+def _ropes(doc, lookup, monkeypatch) -> list[tuple[view3d._Socket, view3d._Socket, list[tuple[float, float, float]]]]:  # type: ignore[no-untyped-def]
+    """Each wire's centreline as ``build_cables`` draws it, with the sockets it runs between."""
+    drawn: list[tuple[view3d._Socket, view3d._Socket, list[tuple[float, float, float]]]] = []
+    rope = view3d._rope
+
+    def spy(start, end, length_mm, ground):  # type: ignore[no-untyped-def]
+        points = rope(start, end, length_mm, ground)
+        drawn.append((start, end, points))
+        return points
+
+    monkeypatch.setattr(view3d, "_rope", spy)
+    view3d.build_cables(doc, lookup)
+    return drawn
+
+
+def _length(points: list[tuple[float, float, float]]) -> float:
+    return sum(math.dist(p, q) for p, q in pairwise(points))
+
+
+@pytest.mark.parametrize("length_mm", [195.0, 400.0])
+def test_a_cable_is_drawn_as_long_as_it_is(monkeypatch, length_mm: float) -> None:  # type: ignore[no-untyped-def]
+    """The pick of three rendered shapes: a wire hangs under its own weight and is drawn
+    exactly as long as the cable -- from the top of the shell over its pin to the top of the
+    other, straight out of each, never through a board. The pins are 188 mm apart taut: 195 mm
+    hangs between the boards, and 400 is more than hanging takes, so the wire lies on the
+    bench and the rest of it bows out sideways there."""
+    base = _system()
+    doc = dataclasses.replace(base, cables=(dataclasses.replace(base.cables[0], length_mm=length_mm),))
+    lookup = footprint_lookup()
+    ground = view3d._ground(doc, None)
+    ropes = _ropes(doc, lookup, monkeypatch)
+    assert len(ropes) == 2
+    for start, end, points in ropes:
+        assert points[0] == pytest.approx(start.at) and points[-1] == pytest.approx(end.at)
+        assert start.at[2] == pytest.approx(view3d.DUPONT_SHELL_LENGTH_MM, abs=3.0)
+        # Straight up out of the shell before it turns.
+        lead = points[: view3d._LEAD_NODES]
+        assert [p[:2] for p in lead] == [pytest.approx(start.at[:2])] * len(lead)
+        assert lead[-1][2] - start.at[2] == pytest.approx(view3d.CABLE_LEAD_MM * (len(lead) - 1) / len(lead))
+        assert _length(points) == pytest.approx(length_mm, rel=0.01)
+        xyz = numpy.array(points)
+        assert (xyz[:, 2] >= ground.under(xyz[:, :2]) - 0.05).all()
+    if length_mm == 400.0:
+        # The slack went sideways -- off the boards by their nearest edges, behind them, and
+        # not across Main's 75 mm of board the straight way would lie over.
+        ys = [p[1] for _s, _e, points in ropes for p in points]
+        assert max(ys) - min(ys) > 20.0
+        for _s, _e, points in ropes:
+            assert view3d._over_boards(numpy.array(points)[:, :2], ground) < 20.0
+
+
+@pytest.mark.parametrize("length_mm", [None, 10.0, 195.0, 400.0])
+def test_a_cable_goes_over_the_parts_and_never_into_one(monkeypatch, length_mm: float | None) -> None:  # type: ignore[no-untyped-def]
+    """Drawn in the System, among every part's box: no point of a wire past its lead-outs is
+    inside any of them -- it rests on a part, comes over its edge in a curve, and lies on the
+    bench, but never passes through."""
+    base = _system()
+    doc = dataclasses.replace(base, cables=(dataclasses.replace(base.cables[0], length_mm=length_mm),))
+    lookup = footprint_lookup()
+    seen: list[tuple[list[tuple[float, float, float]], view3d._Ground]] = []
+    rope = view3d._rope
+
+    def spy(start, end, length, ground):  # type: ignore[no-untyped-def]
+        points = rope(start, end, length, ground)
+        seen.append((points, ground))
+        return points
+
+    monkeypatch.setattr(view3d, "_rope", spy)
+    view3d.populate_system_renderer(view3d.vtk.vtkRenderer(), doc, lookup)
+    assert len(seen) == 2
+    k = view3d._LEAD_NODES
+    for points, ground in seen:
+        assert len(ground.boxes) > 10  # every part's box, not the substrates alone
+        xyz = numpy.array(points)[k:-k]
+        x, y, z = xyz[:, 0:1], xyz[:, 1:2], xyz[:, 2:3]
+        b, e = ground.boxes, 0.05
+        inside = (
+            (x > b[:, 0] + e) & (x < b[:, 1] - e) & (y > b[:, 2] + e) & (y < b[:, 3] - e)
+            & (z > b[:, 4] + e) & (z < b[:, 5] - e)
+        )
+        assert not inside.any(), xyz[inside.any(axis=1)][:3]
+
+
+def test_the_camera_frames_the_boards_and_lets_a_long_cable_run_off() -> None:
+    """Reset Camera fits the boards: a 400 mm cable's slack, out on the bench, frames
+    exactly as no cable would, and is still drawn."""
+    base = _system()
+    doc = dataclasses.replace(base, cables=(dataclasses.replace(base.cables[0], length_mm=400.0),))
+    lookup = footprint_lookup()
+    ren = view3d.vtk.vtkRenderer()
+    view3d.populate_system_renderer(ren, doc, lookup)
+    view3d.apply_default_camera(ren)
+    with_cable = ren.GetActiveCamera().GetFocalPoint(), ren.GetActiveCamera().GetDistance()
+    cables = [actor for actor in view3d._actors(ren) if actor.GetObjectName() == view3d.CABLE_ACTOR_NAME]
+    assert len(cables) == 2 + 4 and all(actor.GetVisibility() for actor in cables)
+    bare = view3d.vtk.vtkRenderer()
+    view3d.populate_system_renderer(bare, dataclasses.replace(doc, cables=()), lookup)
+    view3d.apply_default_camera(bare)
+    assert with_cable[0] == pytest.approx(bare.GetActiveCamera().GetFocalPoint())
+    assert with_cable[1] == pytest.approx(bare.GetActiveCamera().GetDistance())
+
+
+def test_a_cable_too_short_for_the_row_is_drawn_taut_in_its_own_colours(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A cable shorter than the way between its ends in the System's row is drawn taut along
+    it and no longer -- not stretched to the length, and not red: the row is where the view
+    put the boards, not where they will be, so a short cable there is a fact about the
+    picture (``system.cables_short_in_row``), and the wires keep their colours."""
+    base = _system()
+    doc = dataclasses.replace(base, cables=(dataclasses.replace(base.cables[0], length_mm=10.0),))
+    lookup = footprint_lookup()
+    short = system.cables_short_in_row(doc, lookup)
+    assert [(cable.ref, round(span, 1)) for cable, span in short] == [
+        ("W1", round(system.cable_span_mm(doc, doc.cables[0], lookup) or 0.0, 1))
+    ]
+    ropes = _ropes(doc, lookup, monkeypatch)
+    for start, end, points in ropes:
+        # Never under the line between the two lead-outs' tops: taut, not hanging.
+        assert min(p[2] for p in points) >= min(start.at[2], end.at[2]) - 0.05
+        assert _length(points) > 10.0
+    uncut = dataclasses.replace(base, cables=(dataclasses.replace(base.cables[0], length_mm=None),))
+    assert system.cables_short_in_row(uncut, lookup) == []
+    colours = [actor.GetProperty().GetColor() for actor in view3d.build_cables(doc, lookup)]
+    assert colours == [actor.GetProperty().GetColor() for actor in view3d.build_cables(uncut, lookup)]
 
 
 def test_with_system_in_front_the_3d_panel_draws_every_board_and_frames_them(  # type: ignore[no-untyped-def]
@@ -144,6 +273,20 @@ def test_with_system_in_front_the_3d_panel_draws_every_board_and_frames_them(  #
         x0, x1 = _bounds(ren)[:2]
         assert ren.GetActiveCamera().GetFocalPoint()[0] == pytest.approx((x0 + x1) / 2, abs=1.0)
         assert not bar.isEnabled() and window._assembly_index() is None
+        # A cable shorter than the row's gap is said beside the counts, and counted nowhere.
+        from perfboard_studio.commands import UpdateCablePayload
+
+        cable = window.bus.system_document.cables[0]
+        result = window.bus.dispatch(
+            "cable.update", UpdateCablePayload(cable=dataclasses.replace(cable, length_mm=10.0))
+        )
+        assert result.ok, result.message
+        window._refresh_problems_bar()
+        where = window.problems_bar.where.text()
+        assert "W1 is 10 mm; its ends are " in where and where.endswith(" mm apart in this row")
+        window.bus.undo()
+        window._refresh_problems_bar()
+        assert "W1" not in window.problems_bar.where.text()
 
         camera = ren.GetActiveCamera()
         camera.Azimuth(40)

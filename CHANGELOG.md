@@ -69,7 +69,10 @@ closed without a bump.
 - **System view.** Every board side by side with the cables between them, each wire in
   the colour it is cut in; a double-click opens a board. With System in front the 3D panel
   shows every board in the same row, and the cables run from pin to pin, out of a DuPont
-  shell over a pin header and out of a side-entry terminal's mouth.
+  shell over a pin header and out of a side-entry terminal's mouth. A cable hangs under its
+  own weight and is drawn as long as it is; one shorter than its ends are apart in the row is
+  drawn taut, and the status line says so -- as information, since the row is not where
+  the boards will sit.
 - **Add Cable.** Choose a connector at each end and the wires are paired by net. What is
   not certain is left unpaired and named: a net with no counterpart, or a net on two pins
   of one connector. The cable goes in as one undo step.

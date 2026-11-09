@@ -94,6 +94,23 @@ def test_a_cable_is_laid_by_references_and_a_crossed_one_is_a_short() -> None:
     assert session.get_system_info()["lvs"]["ok"]
 
 
+
+def test_a_cable_shorter_than_its_ends_are_apart_in_the_row_is_said_and_is_not_a_fault() -> None:
+    """``short_in_row`` names a cable whose length is less than the distance between its
+    ends in the System's row, with both numbers; a cable cut to fit is never in it, and LVS
+    does not move: the row is a picture, not where the boards will be."""
+    session = _two_boards()
+    wires = [{"a_pin": "1", "b_pin": "1"}, {"a_pin": "2", "b_pin": "2"}]
+    assert session.add_cable("W1", "main", "JA", "Remote", "JB", wires, length_mm=20)["ok"]
+    info = session.get_system_info()
+    span = system.cable_span_mm(session.system_document, session.system_document.cables[0], session.lookup)
+    assert span is not None and span > 20
+    assert info["short_in_row"] == [{"ref": "W1", "length_mm": 20, "span_mm": round(span, 1)}]
+    assert info["lvs"]["ok"]
+    assert session.undo()["ok"]
+    assert session.add_cable("W1", "main", "JA", "Remote", "JB", wires)["ok"]
+    assert session.get_system_info()["short_in_row"] == []
+
 def test_the_status_the_file_and_the_guide_are_the_systems(tmp_path) -> None:  # type: ignore[no-untyped-def]
     session = _two_boards()
     session.add_cable(

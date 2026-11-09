@@ -70,6 +70,7 @@ from perfboard_studio.geometry import (
     RectMm,
     all_pin_holes,
     board_note_centre_mm,
+    board_outline_mm,
     board_size_mm,
     board_text_placement,
     edge_finger_rect,
@@ -7328,21 +7329,24 @@ def populate_renderer(
 # The System: every board in the row, and the cables between them
 # ---------------------------------------------------------------------------
 
-#: How far a cable's wire leaves its connector straight before it turns for the other end --
-#: at least; a share of the distance between the two ends where that is more, so the arch
-#: between two far connectors is still an arch rather than a wire laid flat over the parts.
-CABLE_RISE_MM = 10.0
-CABLE_RISE_SHARE = 0.35
+#: How far a cable's wire leaves its connector straight -- out of the shell or the mouth, which
+#: is where a wire is held -- before it is free to hang.
+CABLE_LEAD_MM = 6.0
+
+#: How tight a harness wire bends on its own: the length the hanging rope is smoothed over,
+#: so it turns over a few millimetres where it leaves a lead or comes off a part's edge
+#: rather than kinking there.
+CABLE_BEND_MM = 4.0
+
+#: What a cable's actors are called, so the camera can frame the boards without them: a
+#: long cable's slack lies far out on the bench, and fitting it would shrink the boards.
+CABLE_ACTOR_NAME = "system-cable"
 
 #: A crimped DuPont shell, the female end a harness wire has on a pin header: 2.54 mm square
 #: and 14 mm long, slid over the pin down to the moulding.
 DUPONT_SHELL_MM = 2.5
 DUPONT_SHELL_LENGTH_MM = 14.0
 DUPONT_RGB = (0.08, 0.08, 0.09)
-
-#: Points along a wire's arch: enough that it is a curve at the size the System is framed at.
-_CABLE_SAMPLES = 32
-
 
 def populate_system_renderer(
     ren: vtk.vtkRenderer,
@@ -7365,6 +7369,7 @@ def populate_system_renderer(
     offsets = _world_offsets(doc)
     scratch = vtk.vtkRenderer()
     pads = 0
+    obstacles: list[Bounds] = []
     for board_id in board_ids(doc):
         pads += populate_renderer(
             scratch,
@@ -7383,8 +7388,11 @@ def populate_system_renderer(
             # matrix that would turn the offset with it.
             prop.AddPosition(dx, dy, 0.0)
             ren.AddViewProp(prop)
+            bounds = prop.GetBounds()
+            if bounds is not None and bounds[0] <= bounds[1]:
+                obstacles.append(tuple(bounds))
         scratch.RemoveAllViewProps()
-    for actor in build_cables(doc, lookup, exploded_mm=exploded_mm):
+    for actor in build_cables(doc, lookup, exploded_mm=exploded_mm, obstacles=obstacles):
         ren.AddActor(actor)
     ren.ResetCameraClippingRange()
     return {"actors": ren.GetActors().GetNumberOfItems(), "pads": pads}
@@ -7406,11 +7414,17 @@ class _Socket:
 
 
 def build_cables(
-    doc: PerfDocument, lookup: FootprintLookup, *, exploded_mm: float = 0.0
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    *,
+    exploded_mm: float = 0.0,
+    obstacles: Collection[Bounds] | None = None,
 ) -> list[vtk.vtkActor]:
     """Every cable of ``doc`` as its wires, in the System's row: a tube per wire from its pin to
-    its pin, arching over between them, in the colour the harness cuts it in -- its own, else
-    its net's (``wirecolour``), through the table the board's own wires are drawn from.
+    its pin, hanging between them as long as the cable is (``_rope``) over ``obstacles`` --
+    the boxes of everything else in the scene -- in the colour the harness cuts it in: its
+    own, else its net's (``wirecolour``), through the table the board's own wires are drawn
+    from.
 
     A crossed cable is drawn as it is wired. This shows what will be built; the System view
     and the checks say what is wrong with it.
@@ -7418,6 +7432,7 @@ def build_cables(
     from .view2d import named_insulation
 
     offsets = _world_offsets(doc)
+    ground = _ground(doc, obstacles)
     colours = net_colours(doc)
     net_of = {(node.component_ref, node.pin): net.id for net in doc.nets for node in net.nodes}
     pieces: list[_Piece] = []
@@ -7438,14 +7453,19 @@ def build_cables(
             )
             pieces.append(
                 _Piece(
-                    source=_tube_source(_arch(start, end), INSULATED_RADIUS_MM),
+                    source=_tube_source(
+                        _rope(start, end, cable.length_mm, ground), INSULATED_RADIUS_MM
+                    ),
                     rgb=(colour.redF(), colour.greenF(), colour.blueF()),
                     position=(0.0, 0.0, 0.0),
                     material=INSULATION,
                 )
             )
             pieces.extend(socket.shell for socket in (start, end) if socket.shell is not None)
-    return [_actor_for(piece) for piece in pieces]
+    actors = [_actor_for(piece) for piece in pieces]
+    for actor in actors:
+        actor.SetObjectName(CABLE_ACTOR_NAME)
+    return actors
 
 
 def _sockets(
@@ -7495,26 +7515,323 @@ def _sockets(
     return part.ref, sockets
 
 
-def _arch(start: _Socket, end: _Socket) -> list[tuple[float, float, float]]:
-    """A wire's centreline: out of each socket the way it faces, and round to the other in one
-    cubic curve -- straight out of the shell or the mouth, which is where a wire is held."""
-    reach = max(CABLE_RISE_MM, CABLE_RISE_SHARE * math.dist(start.at, end.at))
-    p0, p3 = start.at, end.at
-    p1 = (p0[0] + start.out[0] * reach, p0[1] + start.out[1] * reach, p0[2] + start.out[2] * reach)
-    p2 = (p3[0] + end.out[0] * reach, p3[1] + end.out[1] * reach, p3[2] + end.out[2] * reach)
-    points: list[tuple[float, float, float]] = []
-    for i in range(_CABLE_SAMPLES + 1):
-        t = i / _CABLE_SAMPLES
-        u = 1.0 - t
-        a, b, c, d = u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t
-        points.append(
+#: Nodes of a wire's free span, between its two lead-outs, and of each lead-out: enough that
+#: the wire is a curve at the size the System is framed at.
+_ROPE_NODES = 96
+_LEAD_NODES = 4
+
+#: Halvings to find the sag -- or the bow -- that makes a wire its length: well under a
+#: tenth of a millimetre on any cable a bench holds.
+_ROPE_HALVINGS = 30
+
+#: Times the rope is lifted where smoothing pulled it into a part, and smoothed again.
+_ROPE_LIFTS = 40
+
+
+@dataclass(frozen=True, slots=True)
+class _Ground:
+    """What a hanging wire can come to rest on: the top of every box in the scene and the
+    bench under all of them -- and the substrates, which a loose wire leaves by the shortest
+    way."""
+
+    boxes: Any  # numpy (n, 6)
+    bench: float
+    boards: Any  # numpy (m, 4): x0, x1, y0, y1
+
+    def under(self, xy: Any) -> Any:
+        """How low a wire's CENTRE can come over each of ``xy``: the top of the highest box
+        within a wire's radius of it, else the bench, plus that radius -- so the tube rests
+        on a part it passes over and does not graze into the side of one it passes beside."""
+        import numpy
+
+        x, y = xy[:, 0:1], xy[:, 1:2]
+        b, r = self.boxes, INSULATED_RADIUS_MM
+        inside = (x >= b[:, 0] - r) & (x <= b[:, 1] + r) & (y >= b[:, 2] - r) & (y <= b[:, 3] + r)
+        tops = numpy.where(inside, b[:, 5], self.bench).max(axis=1, initial=self.bench)
+        return tops + r
+
+    def on_bench(self, xy: Any) -> Any:
+        """Whether each of ``xy`` has nothing under it but the bench."""
+        return self.under(xy) <= self.bench + INSULATED_RADIUS_MM + 1e-6
+
+    def off_board(self, xy: Any) -> Any:
+        """The nearest point off the substrate ``xy`` is over, past its edge by a little more
+        than a wire -- or ``xy`` itself, over no board."""
+        import numpy
+
+        margin = INSULATED_RADIUS_MM + 1.0
+        for x0, x1, y0, y1 in self.boards:
+            if x0 <= xy[0] <= x1 and y0 <= xy[1] <= y1:
+                ways = [
+                    (xy[0] - x0, (x0 - margin, xy[1])),
+                    (x1 - xy[0], (x1 + margin, xy[1])),
+                    (xy[1] - y0, (xy[0], y0 - margin)),
+                    (y1 - xy[1], (xy[0], y1 + margin)),
+                ]
+                return numpy.array(min(ways, key=lambda way: way[0])[1], dtype=float)
+        return numpy.array(xy, dtype=float)
+
+
+def _ground(doc: PerfDocument, obstacles: Collection[Bounds] | None) -> _Ground:
+    """``obstacles``, or the substrates alone where the scene's boxes were not handed over
+    (a bare call, as the tests make): a wire then rests on the boards and the bench under
+    them, not on their parts."""
+    import numpy
+
+    offsets = _world_offsets(doc)
+    substrates = []
+    for board_id in board_ids(doc):
+        board = board_document(doc, board_id).board
+        outline = board_outline_mm(board)
+        dx, dy = offsets[board_id]
+        substrates.append(
             (
-                a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
-                a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1],
-                a * p0[2] + b * p1[2] + c * p2[2] + d * p3[2],
+                outline.x + dx,
+                outline.x + outline.width + dx,
+                -(outline.y + outline.height) + dy,
+                -outline.y + dy,
+                -board.thickness,
+                0.0,
             )
         )
-    return points
+    boxes = numpy.array(list(substrates if obstacles is None else obstacles), dtype=float)
+    boxes = boxes.reshape(-1, 6)
+    bench = float(boxes[:, 4].min()) if len(boxes) else 0.0
+    return _Ground(boxes, bench, numpy.array(substrates, dtype=float).reshape(-1, 6)[:, :4])
+
+
+def _hang(za: float, zb: float, floor: Any, g: float) -> Any:
+    """The heights of a rope hung between ``za`` and ``zb`` over evenly spaced nodes, each one
+    pulled down by ``g`` and held up by its two neighbours, and none of them under ``floor``
+    (whose first and last entries, the ends, are ignored).
+
+    Not relaxed node by node, which takes thousands of passes to settle: with ``w = z - g i^2``
+    a free stretch of rope is straight, so the rope is the least CONCAVE ``w`` over the floor
+    shifted the same way -- the upper hull of those points, which one pass finds.
+    """
+    import numpy
+
+    n = len(floor)
+    i = numpy.arange(n, dtype=float)
+    w = floor - g * i * i
+    w[0], w[-1] = za, zb - g * (n - 1) ** 2
+    hull: list[int] = []
+    for k in range(n):
+        while len(hull) >= 2:
+            o, a = hull[-2], hull[-1]
+            # Drop the middle point when it sits on or under the chord to the new one.
+            if (a - o) * (w[k] - w[o]) - (w[a] - w[o]) * (k - o) >= 0:
+                hull.pop()
+            else:
+                break
+        hull.append(k)
+    return numpy.interp(i, numpy.array(hull, dtype=float), w[hull]) + g * i * i
+
+
+def _stiffness(nodes: int, held: int, kappa: float) -> Any:
+    """The matrix that bends a rope of ``nodes`` points the way a wire bends: the nearest
+    curve whose second differences are small, with ``held`` points at either end -- the
+    lead-outs -- kept where they are, so the wire leaves its socket straight and turns after
+    it. One solve per wire instead of thousands of smoothing passes."""
+    import numpy
+
+    second = numpy.zeros((nodes - 2, nodes))
+    for j in range(nodes - 2):
+        second[j, j : j + 3] = (1.0, -2.0, 1.0)
+    bending = kappa * second.T @ second
+    free = numpy.arange(held, nodes - held)
+    fixed = numpy.r_[numpy.arange(held), numpy.arange(nodes - held, nodes)]
+    a = numpy.eye(len(free)) + bending[numpy.ix_(free, free)]
+    inverse = numpy.linalg.inv(a)
+    matrix = numpy.eye(nodes)
+    matrix[free] = 0.0
+    matrix[numpy.ix_(free, free)] = inverse
+    matrix[numpy.ix_(free, fixed)] = -inverse @ bending[numpy.ix_(free, fixed)]
+    return matrix
+
+
+def _runs(flags: Any) -> list[tuple[int, int]]:
+    """Each stretch of three or more consecutive true ``flags``, by its first and last index."""
+    runs: list[tuple[int, int]] = []
+    first: int | None = None
+    for i, flag in enumerate([*map(bool, flags), False]):
+        if flag and first is None:
+            first = i
+        elif not flag and first is not None:
+            if i - first >= 3:
+                runs.append((first, i - 1))
+            first = None
+    return runs
+
+
+def _resampled(corners: list[Any], count: int) -> Any:
+    """``count`` points evenly spaced along the polyline through ``corners``."""
+    import numpy
+
+    array = numpy.array(corners, dtype=float)
+    along = numpy.r_[0.0, numpy.cumsum(numpy.linalg.norm(numpy.diff(array, axis=0), axis=1))]
+    wanted = numpy.linspace(0.0, along[-1], count)
+    return numpy.column_stack([numpy.interp(wanted, along, array[:, i]) for i in range(array.shape[1])])
+
+
+def _half_wave(count: int, first: int, last: int) -> Any:
+    """Half a sine over nodes ``first`` to ``last`` of ``count``, and nothing elsewhere."""
+    import numpy
+
+    node = numpy.arange(count, dtype=float)
+    inside = (node >= first) & (node <= last)
+    return numpy.where(inside, numpy.sin(numpy.pi * (node - first) / max(last - first, 1)), 0.0)
+
+
+def _over_boards(xy: Any, ground: _Ground) -> float:
+    """How much of the path ``xy`` runs over something rather than the bench."""
+    import numpy
+
+    middles = (xy[1:] + xy[:-1]) / 2
+    steps = numpy.linalg.norm(numpy.diff(xy, axis=0), axis=1)
+    return float(steps[~ground.on_bench(middles)].sum())
+
+
+def _length(points: Any) -> float:
+    import numpy
+
+    return float(numpy.linalg.norm(numpy.diff(points, axis=0), axis=1).sum())
+
+
+def _rope(
+    start: _Socket, end: _Socket, length_mm: float | None, ground: _Ground
+) -> list[tuple[float, float, float]]:
+    """A wire's centreline from socket to socket, as the wire hangs: straight out of each
+    socket for ``CABLE_LEAD_MM``, then down under its own weight onto whatever is beneath --
+    the parts, the boards, the bench -- and drawn exactly ``length_mm`` long.
+
+    How far it sags is found, not chosen: the sag whose wire is that long. A wire longer than
+    hanging can use up lies on the bench and the rest of it bows out sideways there, as a
+    loose wire does. A wire shorter than the straight way between its ends is drawn taut
+    along it, in its own colours: the System's row is a picture, not where the boards will
+    be (see ``system.cables_short_in_row``). With no length -- cut to fit -- it hangs a
+    span's depth, down onto the bench.
+    """
+    import numpy
+
+    p0, p3 = numpy.array(start.at), numpy.array(end.at)
+    a = p0 + numpy.array(start.out) * CABLE_LEAD_MM
+    b = p3 + numpy.array(end.out) * CABLE_LEAD_MM
+    n, k = _ROPE_NODES, _LEAD_NODES
+    t = numpy.linspace(0.0, 1.0, n)[:, None]
+    line = a[:2] * (1 - t) + b[:2] * t
+    span = math.dist(a, b)
+    step = max(span, 1.0) / (n - 1)
+    smooth = _stiffness(n + 2 * k, k, (CABLE_BEND_MM / step) ** 4)
+    lead_a = [p0 + (a - p0) * j / k for j in range(k)]
+    lead_b = [b + (p3 - b) * j / k for j in range(1, k + 1)]
+
+    leads_a, leads_b = numpy.array(lead_a), numpy.array(lead_b)
+
+    def drawn(g: float, xy: Any) -> Any:
+        # The plan is smoothed first and the floor taken under it, so the height is hung and
+        # bent over the very points it is drawn at: smoothed together, a node slid along the
+        # wire off the part it had been held up by, and the wire dropped there in a step.
+        plan = smooth @ numpy.vstack([leads_a[:, :2], xy, leads_b[:, :2]])
+        floor = ground.under(plan[k : k + n])
+        rope = numpy.r_[leads_a[:, 2], _hang(float(a[2]), float(b[2]), floor, g), leads_b[:, 2]]
+        height = smooth @ rope
+        # Smoothing rounds a wire over a part's edge by pulling it into the part. Where it
+        # does, the rope it is smoothed from is lifted by as much and smoothed again, so the
+        # wire comes over the edge in a curve rather than being cut off flat at it.
+        for _ in range(_ROPE_LIFTS):
+            lift = numpy.maximum(floor - height[k : k + n], 0.0)
+            if lift.max() < 0.01:
+                break
+            rope[k : k + n] += lift
+            height = smooth @ rope
+        height[k : k + n] = numpy.maximum(height[k : k + n], floor)
+        return numpy.column_stack([plan, height])
+
+    def matched(shape: Callable[[float], Any], low: float, high: float, want: float) -> Any:
+        # Halved toward ``want``, keeping the closest seen: where the wire comes to lie over
+        # another part's edge its length steps, and the step is as near as it gets.
+        best = shape(low)
+        for _ in range(_ROPE_HALVINGS):
+            middle = (low + high) / 2
+            points = shape(middle)
+            if abs(_length(points) - want) < abs(_length(best) - want):
+                best = points
+            low, high = (middle, high) if _length(points) < want else (low, middle)
+        return best
+
+    # Deep enough that the free span is all lying down: the drop to the bench, many times over.
+    drop = max(float(a[2]), float(b[2])) - ground.bench + span + 1.0
+    deepest = 8.0 * 100.0 * drop / (n - 1) ** 2
+    if length_mm is None:
+        points = drawn(8.0 * max(span, 1.0) / (n - 1) ** 2, line)
+    elif _length(points := drawn(0.0, line)) >= length_mm:
+        pass  # Too short to hang: taut.
+    elif _length(drawn(deepest, line)) <= length_mm:
+        # Longer than hanging uses: the rest of it bows out sideways on the bench.
+        path, bulge = _slack(line, a[:2], b[:2], length_mm, ground, lambda xy: drawn(deepest, xy))
+        points = matched(
+            lambda amplitude: drawn(deepest, path + bulge * amplitude), 0.0, length_mm, length_mm
+        )
+    else:
+        points = matched(
+            lambda log_g: drawn(math.exp(log_g), line),
+            math.log(deepest * 1e-7),
+            math.log(deepest),
+            length_mm,
+        )
+    return [(float(x), float(y), float(z)) for x, y, z in points]
+
+
+def _slack(
+    line: Any, a: Any, b: Any, length_mm: float, ground: _Ground, lying: Callable[[Any], Any]
+) -> tuple[Any, Any]:
+    """Where a wire too long to hang puts the rest of itself: the path it lies along from
+    ``a`` to ``b``, and how far each node of it moves sideways per millimetre of bow.
+
+    Tried, not assumed. The path is the straight one; or off each board by its nearest edge
+    and straight between; or off each board by its back edge, along the bench behind the
+    whole row and in again -- or the same in front of it. The bow is half a wave over one
+    stretch of the path that is on the bench, to either side. Each is bowed as deep as the
+    slack needs, roughly, and the one with the least wire over a board wins: the slack lies
+    in the gap between two boards when that is where the wire already is, and beside or
+    behind them when it is not, never across their parts.
+    """
+    import numpy
+
+    best: tuple[float, float, Any, Any] | None = None
+    margin = INSULATED_RADIUS_MM + 1.0
+    behind = float(ground.boards[:, 3].max()) + margin if len(ground.boards) else a[1]
+    before = float(ground.boards[:, 2].min()) - margin if len(ground.boards) else a[1]
+    paths = [line] + [
+        _resampled(corners, len(line))
+        for corners in (
+            [a, ground.off_board(a), ground.off_board(b), b],
+            [a, (a[0], behind), (b[0], behind), b],
+            [a, (a[0], before), (b[0], before), b],
+        )
+    ]
+    for path in paths:
+        spare = length_mm - _length(lying(path))
+        if spare < 0.0:
+            continue
+        for first, last in _runs(ground.on_bench(path)) or [(0, len(path) - 1)]:
+            chord = path[last] - path[first]
+            width = float(numpy.linalg.norm(chord))
+            normal = (
+                numpy.array([-chord[1], chord[0]]) / width if width else numpy.array([0.0, 1.0])
+            )
+            # Half a wave ``depth`` deep over ``width`` is about sqrt(width^2 + 4 depth^2) long.
+            depth = math.sqrt((width + spare) ** 2 - width**2) / 2
+            wave = _half_wave(len(path), first, last)[:, None]
+            for side in (normal, -normal):
+                bulge = wave * side
+                over = _over_boards(path + bulge * depth, ground)
+                if best is None or (over, -width) < best[:2]:
+                    best = (over, -width, path, bulge)
+    if best is None:
+        return line, numpy.zeros_like(line)
+    return best[2], best[3]
 
 
 # ---------------------------------------------------------------------------
@@ -7615,10 +7932,28 @@ def apply_default_camera(
     cam.Elevation(-32)
     cam.Azimuth(18)
     cam.OrthogonalizeViewUp()
+    # The System's cables are left out of the fit: the boards are what is framed, and the
+    # slack of a long cable may run off the frame. Shown again before the clipping range is
+    # set, so nothing of them is clipped away.
+    cables = [actor for actor in _actors(ren) if actor.GetObjectName() == CABLE_ACTOR_NAME]
+    shown = [actor for actor in cables if actor.GetVisibility()]
+    if len(shown) < len(_actors(ren)):
+        for actor in shown:
+            actor.VisibilityOff()
+    else:
+        shown = []
     ren.ResetCamera()
     if _has_viewport(ren):
         ren.ResetCameraScreenSpace(_FRAME_FILL)
+    for actor in shown:
+        actor.VisibilityOn()
     ren.ResetCameraClippingRange()
+
+
+def _actors(ren: vtk.vtkRenderer) -> list[vtk.vtkActor]:
+    collection = ren.GetActors()
+    collection.InitTraversal()
+    return [collection.GetNextActor() for _ in range(collection.GetNumberOfItems())]
 
 
 #: How much of the viewport the board fills once framed: enough margin that the orbit
