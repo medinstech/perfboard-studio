@@ -918,3 +918,17 @@ def test_ky_053_ads1115_has_the_names_the_joy_it_manual_gives() -> None:
     assert "ADDR and ALRT" in part.check
     assert part in search_catalog("KY-053")
     assert part in search_catalog("ADS1115")
+
+
+def test_ky_051_level_shifter_has_the_names_the_joy_it_manual_gives() -> None:
+    """Pin names and order are the manual's (names only, no text copied); the source says so."""
+    part = catalog_part("ky-051-level-shifter")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == ["VCCb", "VCCa", "B1", "A1", "B2", "A2", "B3", "A3", "B4", "A4", "OE", "GND"]
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and len(footprint.pins) == 12
+    assert "Joy-IT SensorKit X40 manual" in part.source
+    assert "in pairs" in part.check
+    assert "higher than or equal to VCCa" in part.check
+    assert part in search_catalog("KY-051")
+    assert part in search_catalog("level shifter")

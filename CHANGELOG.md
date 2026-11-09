@@ -168,6 +168,11 @@ closed without a bump.
   ADDR, ALRT and A0 to A3 as the board prints them down its edge in the Joy-IT manual's
   photograph, found as "ADS1115" too.
 
+- **The KY-051 voltage translator, as a wired header**: VCCb, VCCa, B1 to B4, A1 to A4, OE and
+  GND as the board prints them in the Joy-IT manual's photograph, the two sides interleaved in
+  pairs on a 2 x 6 header. The check gives the printed supply ranges and that VCCb is not to
+  be lower than VCCa.
+
 
 ### Fixed
 

@@ -197,6 +197,7 @@ SOLD_AS = {
     "uln2003-board": "ULN2003 board",
     "l298n-board": "L298N board",
     "rc522-module": "RC522",
+    "ky-051-level-shifter": "KY-051",
     "ky-053-ads1115": "KY-053",
     "ky-011-two-colour-led": "KY-011",
     "ky-016-rgb-led": "KY-016",

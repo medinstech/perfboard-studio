@@ -1955,6 +1955,28 @@ CATALOG: tuple[CatalogPart, ...] = (
                     + _CABLED_CHECK
                 ),
                 aliases=("KY-053 ADS1115", "ADS1115 module", "16 bit ADC", "ADC module",)),
+    CatalogPart("ky-051-level-shifter", "KY-051 level shifter module (on a header)", "ic", "hdr-2x6",
+                "Four-channel voltage translator board with two supply sides, A and B. "
+                "Its cable plugs into this 12-pin header: VCCb VCCa B1 A1 B2 A2 B3 A3 B4 "
+                "A4 OE GND from pin 1",
+                _legs("VCCb", "VCCa", "B1", "A1", "B2", "A2", "B3", "A3", "B4", "A4", "OE", "GND"), value="KY-051", ref_prefix="J",
+                source=(
+                    "Joy-IT SensorKit X40 manual (16.06.2017, CC BY-NC-SA 3.0), the "
+                    "KY-051 page, whose photograph shows the labels printed on the board: "
+                    "VCCb, B1, B2, B3, B4, OE down one side and VCCa, A1, A2, A3, A4, GND "
+                    "down the other, with VCCa 1.2 to 3.6 V and VCCb 1.7 to 5.5 V, and "
+                    "the text that VCCb must be higher than or equal to VCCa. The header "
+                    "interleaves the two sides in pairs, the order is ours"
+                ),
+                check=(
+                    "This header takes the board's two sides in pairs, VCCb with VCCa, B1 "
+                    "with A1 and so on, so wire by name. The board prints VCCa 1.2 to 3.6 "
+                    "V and VCCb 1.7 to 5.5 V, and the manual says VCCb must be higher "
+                    "than or equal to VCCa. GND is on the A side: join it to yours. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("KY-051 level shifter", "level converter", "voltage translator",
+                         "seviye çevirici",)),
     # The cheap Bosch sensor boards most people buy, by the name printed on them. The purple
     # six-pin ones have no regulator and run on 3.3 V; the four-pin GY-BME280 has one.
     CatalogPart("gy-bmp280", "GY-BMP280 pressure sensor module (on a header)", "sensor",
