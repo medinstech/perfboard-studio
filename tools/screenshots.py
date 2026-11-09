@@ -659,7 +659,7 @@ def system_shots(out_dir: Path) -> int:
     _settle(app, 20)
     window.selection_bar.hide()
     _grab(window, app).save(str(out_dir / "3-harness-step.png"))
-    print(f"harness step reached at: {ascii(window.bench.title.text())}")
+    print(f"harness step reached at: {window.bench.title.text()!a}")
 
     window._mark_saved()
     window.close()
