@@ -173,6 +173,21 @@ closed without a bump.
   pairs on a 2 x 6 header. The check gives the printed supply ranges and that VCCb is not to
   be lower than VCCa.
 
+- **The piezo disc, as two wires to a part off the board**: Murata's 7BB-27-4 as the sized
+  example, red and black leads with the catalog's own words that it marks no polarity. The
+  check says a bare disc wants a tone and not DC, and gives Murata's series resistor and the
+  warning against pressing on its middle. Found as "piezo disc" or "7BB", not as "piezo", which
+  stays with the buzzers.
+- **The SS-12D00 slide switch**, drawn from the Vimex drawing: 8.5 x 3.5 mm, 3.5 mm to the top
+  of the frame, three pins 2.5 mm apart (0.04 mm off the grid at each end, worked out in the
+  note like the RV09's). The lever's height is not on that drawing, so it is not in the body
+  and the note says `component-too-tall` cannot see it.
+- **The glass reed switch**, from Standex-Meder's KSK-1A66 datasheet: a 14.0 x 2.2 mm capsule
+  with its two legs eight pitches (20.32 mm) apart, so each lead has 3.16 mm clear of the
+  glass. The check says to bend the leads at least 2 mm from the glass and to test the switch
+  with a magnet after soldering, because Standex-Meder says bending changes its sensitivity.
+
+
 ### Fixed
 
 - **A part's name no longer prints over the board's own printed addresses.** On a board

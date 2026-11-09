@@ -1607,6 +1607,37 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "spare."
                 ),
                 aliases=("rotary encoder", "encoder", "EC11", "enkoder", "döner kodlayıcı")),
+    # The little slide switch of every kit and power board. Drawn at its FRAME (3.5 mm): the
+    # lever's height above it is not on the Vimex drawing, so the 3D body stops at the frame.
+    CatalogPart("ss-12d00", "SS-12D00 slide switch", "switch", "box-3x1-p1-r1-8.5x3.5x3.5",
+                "Small slide switch, one pole two positions: the lever joins the middle pin "
+                "to one end or the other",
+                _legs("A", "COM", "B"), value="SS-12D00", ref_prefix="SW",
+                source=(
+                    "Vimex International drawing of the SS-12D00, 1P2T, dated 8 March 1999 "
+                    "(vimex.com/switches/techdocs/SS12D00-tech.pdf): three pins 2.5 mm apart "
+                    "with the common in the middle, the body 8.5 x 3.5 mm and its frame 3.5 "
+                    "mm high, the pin tips 7.2 mm below the top of the frame, pins 0.5 x 0.3 "
+                    "mm in holes of 0.9 mm, 30 V DC at 0.3 A. The lever stands above the "
+                    "frame by a length the drawing leaves as a letter (it differs between "
+                    "lever codes) so it is NOT counted in the height drawn here, and "
+                    "component-too-tall cannot see it. The 2.5 mm pin pitch against the "
+                    "board's 2.54 leaves the end pins 0.04 mm off their holes, as the "
+                    "RV09's does. ASSUMPTION: the pin row is centred on the 8.5 x 3.5 mm "
+                    "body. Another maker's listing (Sofng, on LCSC) gives 8.8 x 3.9 mm for "
+                    "the same name"
+                ),
+                check=(
+                    "Measure the lever's height and the body on yours: the lever is not in "
+                    "the height DRC checks, so a lid or a panel above the switch is yours "
+                    "to check, and other makers' SS-12D00s are a little larger than the "
+                    "Vimex drawing. The 2.5 mm pin pitch against 2.54 puts the end pins "
+                    "0.04 mm off their holes, inside what a 1 mm hole has to spare. Which "
+                    "end the lever's first position joins is not something this part can "
+                    "say: try the switch with a meter before you wire the two ends."
+                ),
+                aliases=("slide switch", "SS12D00", "SS-12D00", "SS12D00G3", "SPDT switch",
+                         "1P2T switch", "kaydırmalı anahtar", "sürgülü anahtar")),
     # -- relays -----------------------------------------------------------------------
     CatalogPart("srd-05vdc-sl-c", "Songle SRD-05VDC-SL-C relay", "relay", "relay-srd",
                 "SPDT relay, 5 V coil of 70 ohm, contacts 10 A at 125 V AC",
@@ -2114,6 +2145,61 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "it from an active one."
                 ),
                 aliases=("speaker", "hoparlör", "beeper", "piezo")),
+    # A bare piezo disc lives glued in a case or to a panel, never on the board: two wires.
+    # Murata's number stands for the sized example; the lead colours are all the catalog says.
+    CatalogPart("piezo-disc-7bb", "Piezo disc, 7BB-27-4, on two wires", "sound", "wire-2",
+                "Bare piezo diaphragm off the board on two wires: it sounds from a tone on a "
+                "pin and stays silent on DC",
+                _legs("Red", "Black"), value="Piezo disc", ref_prefix="BZ",
+                source=(
+                    "Murata Piezoelectric Sound Components catalog P37E-24, the diaphragms "
+                    "table (murata.com/-/media/webrenewal/support/faqs/products/sound/sounder/"
+                    "char/sc0002/p37e.ashx?la=en): the 7BB-27-4 is 27.0 mm across on a brass "
+                    "plate, 0.54 mm thick, resonant at 4.6 kHz, 200 ohm at most, 20 nF; the "
+                    "L0 version has AWG32 lead wires 50 mm long, red and black in its "
+                    "drawing, and the catalog marks no polarity. ASSUMPTION: the 27 mm disc "
+                    "is the common one in kits; discs of 20 mm (7BB-20-6) and 35 mm "
+                    "(7BB-35-3) exist, and nothing here says which yours is, so only its two "
+                    "wires are drawn"
+                ),
+                check=(
+                    "The leads are red and black and Murata's catalog marks no polarity: "
+                    "either goes to either. A disc has no driver in it, so give it a tone "
+                    "(tone() on an Arduino), not DC: Murata says to avoid DC across it for "
+                    "long periods, and to put a 1 to 2 kohm resistor in series with the "
+                    "driving pin. Never press on the middle of the disc, which cracks the "
+                    "ceramic, and do not pull on its wires."
+                ),
+                aliases=("piezo disc", "7BB", "7BB-27-4", "piezo element", "piezo diaphragm")),
+    # The reed switch inside the Joy-IT KY-021 and every door sensor, as a bare part. Two
+    # legs on the axial generator at eight pitches: the glass is 14 mm and the legs leave it
+    # 2 mm to bend, so the span is the next whole number of pitches past 18 mm.
+    CatalogPart("reed-switch-glass", "Reed switch, glass, 14 mm", "sensor", "axial-8h-14x2.2",
+                "Glass capsule that closes when a magnet comes near, 14 mm long, legs 20.32 mm "
+                "apart: no polarity",
+                _legs("1", "2"), value="Reed switch", ref_prefix="SW",
+                source=(
+                    "Standex-Meder KSK-1A66 series datasheet (standexdetect.com/wp-content/"
+                    "uploads/sites/2/2025/09/datasheet-reed-switch-series-ksk-1a66.pdf): glass "
+                    "14.0 mm long and 2.2 mm across at most, leads 0.5 mm across at most, 44.3 "
+                    "mm overall at most, one normally open contact of 10 W, 150 V and 0.5 A. "
+                    "ASSUMPTION: the bare reeds sold in kits are about this size; the family "
+                    "runs from 7 to 21 mm of glass (MK23, KSK-1A52), so measure yours. Its two "
+                    "legs have no polarity, and the 8-pitch span is a choice: the legs are "
+                    "long enough to span less or more"
+                ),
+                check=(
+                    "Bend the leads at least 2 mm from the glass, and clamp the lead with "
+                    "pliers between the glass and the bend, and again when you solder: "
+                    "Standex-Meder says mechanical and heat stress on the leads must be "
+                    "kept off the glass, and that bending them changes the switch's "
+                    "sensitivity, so test it with the magnet after it is soldered. A drop "
+                    "from more than 30 cm can change it or destroy it. The holes are 8 "
+                    "pitches (20.32 mm) apart for a 14 mm capsule, which leaves 3.16 mm of "
+                    "lead at each end."
+                ),
+                aliases=("reed", "reed switch", "magnetic switch", "door sensor",
+                         "manyetik anahtar", "KSK-1A66")),
     CatalogPart("esp32-devkitc", "ESP32-DevKitC V4", "module",
                 "mod-2x19-p10-r1-27.94x54.3x3.5-s8.5-o0x-3",
                 "ESP32-WROOM-32 dev board, 38 pins, rows 25.4 mm apart",

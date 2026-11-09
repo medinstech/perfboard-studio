@@ -955,3 +955,52 @@ def test_the_ky_051_is_wired_by_label_and_is_not_the_boards_shape() -> None:
     part = catalog_part("ky-051-level-shifter")
     assert part is not None
     assert "opposite edges" in part.check and "not its shape" in part.check
+
+
+def test_the_piezo_disc_is_two_wires_with_no_polarity_claimed() -> None:
+    """Off the board, so only its wires. The lead colours are what the catalog shows, and the
+    note and check say exactly that: no polarity is marked, none is claimed."""
+    part = catalog_part("piezo-disc-7bb")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and footprint.body.archetype == "flying-leads"
+    assert [name for _, name in part.pin_names] == ["Red", "Black"]
+    assert "marks no polarity" in part.check and "marks no polarity" in part.source
+    assert "ASSUMPTION" in part.source and "27 mm" in part.source
+    assert "p37e.ashx" in part.source
+    # "piezo disc" and "7BB" find it; the bare word still leads to the buzzers' aliases too.
+    assert next(found.id for found in search_catalog("piezo disc")) == "piezo-disc-7bb"
+    assert next(found.id for found in search_catalog("7BB")) == "piezo-disc-7bb"
+    assert "piezo" not in part.aliases
+
+
+def test_the_slide_switch_is_drawn_at_its_frame_and_says_the_lever_is_not() -> None:
+    """The Vimex drawing gives no lever height, so the body stops at the frame (3.5 mm) and the
+    note says DRC cannot see the lever. Three pins, the common in the middle."""
+    part = catalog_part("ss-12d00")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and footprint.body_height == 3.5
+    assert [name for _, name in part.pin_names] == ["A", "COM", "B"]
+    assert "NOT counted" in part.source and "component-too-tall" in part.source
+    assert "Vimex" in part.source
+    assert next(found.id for found in search_catalog("slide switch")) == "ss-12d00"
+
+
+def test_the_reed_switch_leaves_its_leads_room_to_bend() -> None:
+    """The glass is 14 mm and the leads need 2 mm clear at each end, so the holes are the next
+    whole pitch count past 18 mm: eight, 20.32 mm. Five holes (12.7 mm) was shorter than the
+    glass itself."""
+    part = catalog_part("reed-switch-glass")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and footprint.body.archetype == "axial-cylinder"
+    assert footprint.body.dims["length"] == 14.0 and footprint.body.dims["diameter"] == 2.2
+    first, second = footprint.pins
+    span_mm = (second.d_col - first.d_col) * STANDARD_PITCH_MM
+    assert span_mm == pytest.approx(20.32)
+    assert (span_mm - 14.0) / 2 >= 2.0
+    assert 7 * STANDARD_PITCH_MM < 18.0 <= span_mm
+    assert "at least 2 mm from the glass" in part.check
+    assert "KSK-1A66" in part.source
+    assert next(found.id for found in search_catalog("reed switch")) == "reed-switch-glass"

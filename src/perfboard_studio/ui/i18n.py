@@ -3249,6 +3249,63 @@ TURKISH: Mapping[str, str] = {
         "tarafında olacak şekilde bir diyot bağlayın. Transistörü seçmeden önce sizinkini "
         "tıkalıyken ölçün: kit motorları birbirinden farklıdır."
     ),
+    "Piezo disc, 7BB-27-4, on two wires": "Piezo disk, 7BB-27-4, iki telli",
+    "Bare piezo diaphragm off the board on two wires: it sounds from a tone on a pin and "
+    "stays silent on DC": (
+        "Karttan ayrı, iki telli çıplak piezo disk: bir pindeki ton ile ses verir, DC'de "
+        "sessiz kalır"
+    ),
+    "The leads are red and black and Murata's catalog marks no polarity: either goes to "
+    "either. A disc has no driver in it, so give it a tone (tone() on an Arduino), not DC: "
+    "Murata says to avoid DC across it for long periods, and to put a 1 to 2 kohm resistor "
+    "in series with the driving pin. Never press on the middle of the disc, which cracks "
+    "the ceramic, and do not pull on its wires.": (
+        "Telleri kırmızı ve siyahtır, Murata'nın kataloğu kutup belirtmez: biri ötekinin "
+        "yerine bağlanabilir. Diskin içinde sürücü yoktur; ona DC değil bir ton verin "
+        "(Arduino'da tone()): Murata, uzun süre DC uygulanmamasını ve sürücü pinine seri "
+        "1 ila 2 kohm'luk bir direnç konmasını söyler. Diskin ortasına bastırmayın, "
+        "seramik çatlar; tellerini de çekmeyin."
+    ),
+    "Reed switch, glass, 14 mm": "Reed anahtar, cam, 14 mm",
+    "Glass capsule that closes when a magnet comes near, 14 mm long, legs 20.32 mm apart: no "
+    "polarity": (
+        "Mıknatıs yaklaşınca kapanan cam kapsül, 14 mm uzunlukta, bacaklar arası 20,32 mm: "
+        "kutupsuz"
+    ),
+    "Bend the leads at least 2 mm from the glass, and clamp the lead with pliers between the "
+    "glass and the bend, and again when you solder: Standex-Meder says mechanical and heat "
+    "stress on the leads must be kept off the glass, and that bending them changes the "
+    "switch's sensitivity, so test it with the magnet after it is soldered. A drop from "
+    "more than 30 cm can change it or destroy it. The holes are 8 pitches (20.32 mm) apart "
+    "for a 14 mm capsule, which leaves 3.16 mm of lead at each end.": (
+        "Bacakları camdan en az 2 mm uzakta bükün; cam ile büküm arasındaki bacağı, lehim "
+        "yaparken de, bir pensle tutun: Standex-Meder, bacaklardaki mekanik ve ısıl "
+        "gerilimin cama geçmemesini ve bacakları bükmenin anahtarın duyarlılığını "
+        "değiştirdiğini söyler; bu yüzden lehimledikten sonra mıknatısla deneyin. 30 cm'den "
+        "yüksekten düşürmek duyarlılığı değiştirebilir ya da anahtarı bozabilir. 14 mm'lik "
+        "kapsül için delikler 8 adım (20,32 mm) arayla durur; bu, her uçta 3,16 mm bacak "
+        "bırakır."
+    ),
+    "SS-12D00 slide switch": "SS-12D00 kaydırmalı anahtar",
+    "Small slide switch, one pole two positions: the lever joins the middle pin to one end "
+    "or the other": (
+        "Küçük kaydırmalı anahtar, tek kutuplu iki konumlu: kol orta pini uçlardan birine "
+        "ya da ötekine bağlar"
+    ),
+    "Measure the lever's height and the body on yours: the lever is not in the height DRC "
+    "checks, so a lid or a panel above the switch is yours to check, and other makers' "
+    "SS-12D00s are a little larger than the Vimex drawing. The 2.5 mm pin pitch against "
+    "2.54 puts the end pins 0.04 mm off their holes, inside what a 1 mm hole has to spare. "
+    "Which end the lever's first position joins is not something this part can say: try "
+    "the switch with a meter before you wire the two ends.": (
+        "Sizinkinin kolunun yüksekliğini ve gövdesini ölçün: kol DRC'nin denetlediği "
+        "yüksekliğe dahil değildir; bu yüzden anahtarın üstündeki kapak ya da panel sizin "
+        "denetiminizdedir, ayrıca başka üreticilerin SS-12D00'ları Vimex çiziminden biraz "
+        "büyüktür. 2,5 mm pin aralığı 2,54'e karşı uçtaki pinleri deliklerinden 0,04 mm "
+        "kaydırır, 1 mm'lik bir deliğin payı içindedir. Kolun ilk konumunun hangi ucu "
+        "bağladığını bu parça söyleyemez: iki ucu bağlamadan önce anahtarı ölçü aletiyle "
+        "deneyin."
+    ),
     "Crystal, low can HC-49/S (HC-49/US)": "Kristal, alçak kılıf HC-49/S (HC-49/US)",
     "Quartz crystal for a microcontroller's clock, the low can that comes in kits, 3.5 mm "
     "tall, legs 4.88 mm apart": (
