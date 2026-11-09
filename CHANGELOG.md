@@ -152,6 +152,10 @@ closed without a bump.
   the digital pin is the comparator's, set with the trimmer, and that the manual reports the
   analog one as inverted.
 
+- **The KY-009 RGB LED module, as a wired header**: GND, G, R, B in the order the Joy-IT
+  manual numbers them. The check says the KY-016 swaps red and green, so each has its own
+  entry, and gives the manual's series resistors per colour.
+
 
 ### Fixed
 
