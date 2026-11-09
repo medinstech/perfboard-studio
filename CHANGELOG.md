@@ -45,20 +45,6 @@ closed without a bump.
   where a photograph of one, straightened on its own pads, puts them. Its check says the
   clones keep the pins and move the parts, and that the 38-pin DevKitC is another board.
 
-### Fixed
-
-- **A part's name no longer prints over the board's own printed addresses.** On a board
-  that prints its column letters and row numbers, a part on the first row had its name
-  over the letters above it -- LED1 hid the "F" on the NE555 board. It now goes under
-  the part where that is clear; where neither place is, the name still prints and the
-  letter under it is left out at that zoom. A note written on the board still takes
-  precedence over a part's name, as before.
-- **Two supply symbols on the sheet no longer stack into one.** Where two pins in one
-  channel both go to ground, the layout hung one ground symbol just under the other's
-  bars, a track to the side -- C2's and LED1's on the NE555 read as one smudge of six
-  bars -- and two supplies did the same upwards. Such a pair now has an empty track
-  between them, and a net name keeps out of a symbol's whole box rather than just its
-  bars, so "OUT" no longer prints against U1's ground.
 - **Several boards in one document, joined by cables.** A circuit built on a supply board
   and a controller board is one document with one design: the Board menu's Add Board adds
   a board, and from then on a strip over the Board panel picks the board in front, each
@@ -96,6 +82,21 @@ closed without a bump.
   on it; `add_board`, `rename_board`, `remove_board`, `move_to_board`, `add_cable`,
   `remove_cable` and `get_system_info` (what each board holds, what each cable carries,
   and the system's LVS). 67 tools, each in `docs/MCP.md` with its reason.
+
+### Fixed
+
+- **A part's name no longer prints over the board's own printed addresses.** On a board
+  that prints its column letters and row numbers, a part on the first row had its name
+  over the letters above it -- LED1 hid the "F" on the NE555 board. It now goes under
+  the part where that is clear; where neither place is, the name still prints and the
+  letter under it is left out at that zoom. A note written on the board still takes
+  precedence over a part's name, as before.
+- **Two supply symbols on the sheet no longer stack into one.** Where two pins in one
+  channel both go to ground, the layout hung one ground symbol just under the other's
+  bars, a track to the side -- C2's and LED1's on the NE555 read as one smudge of six
+  bars -- and two supplies did the same upwards. Such a pair now has an empty track
+  between them, and a net name keeps out of a symbol's whole box rather than just its
+  bars, so "OUT" no longer prints against U1's ground.
 
 ## [0.23.0] - 2026-11-09
 
