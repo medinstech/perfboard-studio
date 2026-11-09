@@ -90,6 +90,7 @@ from perfboard_studio.geometry import (
     undrilled_holes,
 )
 from perfboard_studio.guide import (
+    ConductorStep,
     Guide,
     all_steps,
     document_at_step,
@@ -8633,7 +8634,39 @@ def render_step_images(
             highlight=focus,
             subject_actors=subject,
         )
-        frame_step(ren, cameras[step_is_solder_side(doc, focus)], subject)
+        flipped = step_is_solder_side(doc, focus)
+        frame_step(ren, cameras[flipped], subject)
+        if subject:
+            for actor in _actors(ren):
+                prop = actor.GetProperty()
+                if actor in subject:
+                    # A constant, bright finish keeps thin wires visible under any lighting.
+                    prop.SetColor(1.0, 0.68, 0.05)
+                    prop.LightingOff()
+                else:
+                    _dim(actor)
+
+        if isinstance(step, ConductorStep):
+            holes = (step.path[0], step.path[-1])
+        else:
+            holes = tuple(hole for _pin, hole in step.pin_holes)
+        face: BoardSide = "bottom" if flipped else "top"
+        radius = doc.board.pad_diameter / 2 + 0.45
+        ring = vtk.vtkDiskSource()
+        ring.SetInnerRadius(radius - 0.35)
+        ring.SetOuterRadius(radius)
+        ring.SetCircumferentialResolution(32)
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(ring.GetOutputPort())
+        for hole in dict.fromkeys(holes):
+            marker = vtk.vtkActor()
+            marker.SetMapper(mapper)
+            x, y = _xy(doc.board, hole)
+            z = pad_z(doc.board, face) + (-0.2 if flipped else 0.2)
+            marker.SetPosition(x, y, z)
+            marker.GetProperty().SetColor(1.0, 0.68, 0.05)
+            marker.GetProperty().LightingOff()
+            ren.AddActor(marker)
         win.Render()
         grab = vtk.vtkWindowToImageFilter()
         grab.SetInput(win)

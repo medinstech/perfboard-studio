@@ -748,6 +748,7 @@ ROLE_PIN = int(Qt.ItemDataRole.UserRole) + 5
 #: The references an ERC finding is about. By reference rather than component id, because
 #: a circuit finding is as often about a part in the design, which has no place to select.
 ROLE_REFS = int(Qt.ItemDataRole.UserRole) + 10
+ROLE_CONDUCTOR_IDS = int(Qt.ItemDataRole.UserRole) + 11
 
 
 def _now_iso() -> str:
@@ -2497,21 +2498,6 @@ class _FrameOnFirstSize(QObject):
         ):
             watched.removeEventFilter(self)
             QTimer.singleShot(0, self._frame)
-        return False
-
-
-class _LeaveWatcher(QObject):
-    """Calls ``left`` when the pointer leaves ``widget``: the one thing a tree view has no
-    signal for, and what puts the drawer's hovered finding back to the picked one."""
-
-    def __init__(self, widget: QWidget, left: Callable[[], None]) -> None:
-        super().__init__(widget)
-        self._left = left
-        widget.installEventFilter(self)
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if event.type() == QEvent.Type.Leave:
-            self._left()
         return False
 
 
@@ -8532,17 +8518,7 @@ class MainWindow(QMainWindow):
         self.drc_tree.setHeaderLabels([t("Problem"), t("Details")])
         self.drc_tree.setColumnWidth(0, 260)
         self.drc_tree.itemClicked.connect(self._on_drc_item_clicked)
-        # The finding picked, or the row under the pointer, brings a bench check's rings up
-        # over the parts (``BoardScene.set_focused_holes``); off the rows, back to the pick.
-        self.drc_tree.setMouseTracking(True)
         self.drc_tree.currentItemChanged.connect(lambda now, _then: self._focus_drc_item(now))
-        self.drc_tree.itemEntered.connect(lambda item, _column: self._focus_drc_item(item))
-        self.drc_tree.viewportEntered.connect(
-            lambda: self._focus_drc_item(self.drc_tree.currentItem())
-        )
-        _LeaveWatcher(
-            self.drc_tree.viewport(), lambda: self._focus_drc_item(self.drc_tree.currentItem())
-        )
         self.drc_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.drc_tree.customContextMenuRequested.connect(self._on_drc_context_menu)
         layout.addWidget(self.drc_tree)
@@ -8590,6 +8566,7 @@ class MainWindow(QMainWindow):
             )
         else:
             dock.setMaximumHeight(PROBLEMS_BAR_HEIGHT)
+        self._focus_drc_item(self.drc_tree.currentItem() if on else None)
         if hasattr(self, "act_drc_panel") and self.act_drc_panel.isChecked() != on:
             self.act_drc_panel.setChecked(on)
         # Check's Next reads whether the drawer is open: Show Problems, then Next Problem.
@@ -10001,6 +9978,10 @@ class MainWindow(QMainWindow):
             span = f"{format_hole(group[0].holes[0], self.bus.document.board)}–{format_hole(group[-1].holes[0], self.bus.document.board)}"
             node = QTreeWidgetItem([span, f"{len(group)} {t('pads')}"])
             node.setData(0, ROLE_HOLES, holes)
+            node.setData(
+                0, ROLE_CONDUCTOR_IDS,
+                tuple(dict.fromkeys(cid for finding in group for cid in finding.conductor_ids)),
+            )
             node.setData(0, ROLE_FINDING_KEY, f"drc:{rule}:{key}")
             for violation in group:
                 node.addChild(self._drc_leaf(violation))
@@ -10011,6 +9992,7 @@ class MainWindow(QMainWindow):
         leaf = QTreeWidgetItem(["", self._finding_text(violation.message, violation.conductor_ids)])
         leaf.setData(0, ROLE_HOLES, violation.holes)
         leaf.setData(0, ROLE_COMPONENT_IDS, violation.component_ids)
+        leaf.setData(0, ROLE_CONDUCTOR_IDS, violation.conductor_ids)
         return leaf
 
     def _expanded_drc_keys(self) -> set[str]:
@@ -10036,11 +10018,25 @@ class MainWindow(QMainWindow):
         return found
 
     def _focus_drc_item(self, item: QTreeWidgetItem | None) -> None:
-        """The board shows the holes of the finding picked or hovered in the drawer."""
-        holes = item.data(0, ROLE_HOLES) if item is not None else None
-        self.scene.set_focused_holes(list(holes) if holes else [])
+        """Spotlight the exact board objects named by the selected finding."""
+        targets = [set(), set(), set()]
+        rows = [item] if item is not None else []
+        while rows:
+            row = rows.pop()
+            values = [
+                row.data(0, role)
+                for role in (ROLE_HOLES, ROLE_CONDUCTOR_IDS, ROLE_COMPONENT_IDS)
+            ]
+            if any(values):
+                for target, value in zip(targets, values, strict=True):
+                    target.update(value or ())
+            else:
+                rows.extend(row.child(index) for index in range(row.childCount()))
+        holes, conductors, components = targets
+        self.scene.set_problem_focus(tuple(holes), tuple(conductors), tuple(components))
 
     def _on_drc_item_clicked(self, item: QTreeWidgetItem, _column: int) -> None:
+        self._focus_drc_item(item)
         holes = item.data(0, ROLE_HOLES)
         component_ids = item.data(0, ROLE_COMPONENT_IDS)
         if holes:

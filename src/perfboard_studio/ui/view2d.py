@@ -54,6 +54,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QGraphicsItem,
+    QGraphicsPathItem,
     QGraphicsScene,
     QGraphicsView,
     QLabel,
@@ -4479,11 +4480,10 @@ class BoardScene(QGraphicsScene):
         self._physical_nets: tuple[PerfDocument, list[PhysicalNet]] | None = None
         self._risk_item: RiskRingsItem | None = None
         self._bench_item: RiskRingsItem | None = None
-        self._focus_item: RiskRingsItem | None = None
-        #: The holes of the finding picked or hovered in the drawer, and the holes a bench
-        #: check rings -- see ``set_focused_holes``.
+        self._focus_item: QGraphicsPathItem | None = None
         self._focused_holes: tuple[HoleCoord, ...] = ()
-        self._bench_holes: frozenset[tuple[int, int]] = frozenset()
+        self._focused_conductors: tuple[str, ...] = ()
+        self._focused_components: tuple[str, ...] = ()
         self._ratsnest_item: RatsnestItem | None = None
         self._ratsnest_links: tuple[RatsnestLink, ...] = ()
         self._armed_footprint: Footprint | None = None
@@ -5008,20 +5008,54 @@ class BoardScene(QGraphicsScene):
     # -- DRC overlay --------------------------------------------------------
 
     def set_focused_holes(self, holes: Sequence[HoleCoord]) -> None:
-        """The holes of the finding picked or hovered in the Problems drawer, or none.
+        self.set_problem_focus(holes, (), ())
 
-        A bench check's rings are under the parts and dim (``BENCH_RING``), which is right
-        for a finding that is not a problem and wrong for one somebody has just asked to
-        see: going to it must still show exactly which two pads. So those of its holes that
-        a bench check rings come up over the parts in ``RISK_RING`` while it is picked. A
-        problem's rings are already on top, so nothing else changes.
-        """
+    def set_problem_focus(
+        self, holes: Sequence[HoleCoord], conductors: Sequence[str], components: Sequence[str]
+    ) -> None:
         self._focused_holes = tuple(holes)
+        self._focused_conductors = tuple(conductors)
+        self._focused_components = tuple(components)
         self._refresh_focus()
 
     def _refresh_focus(self) -> None:
-        focus = [h for h in self._focused_holes if (h.col, h.row) in self._bench_holes]
-        self._focus_item = self._rings(self._focus_item, focus, RISK_RING, RISK_RING_Z)
+        if self._focus_item is not None:
+            self.removeItem(self._focus_item)
+            self._focus_item = None
+
+        board = self.document.board
+        openings = QPainterPath()
+        radius = board.pad_diameter / 2 + 0.45
+        for hole in self._focused_holes:
+            circle = QPainterPath()
+            circle.addEllipse(hole_to_screen(hole, board, self.side), radius, radius)
+            openings = openings.united(circle)
+        for ids, items in (
+            (self._focused_conductors, self.conductor_items),
+            (self._focused_components, self.component_items),
+        ):
+            for item_id in ids:
+                item = items.get(item_id)
+                if item is not None:
+                    openings = openings.united(item.mapToScene(item.shape()))
+        if openings.isEmpty():
+            return
+
+        board_area = QPainterPath()
+        board_area.addRect(_outline_rect(board))
+        # The outline around each opening also works when a target is naturally dark.
+        pen = QPen(QColor("#ffd34e"))
+        pen.setCosmetic(True)
+        pen.setWidth(2)
+        overlay = self.addPath(
+            board_area.subtracted(openings), QPen(Qt.PenStyle.NoPen), QBrush(QColor(0, 0, 0, 175))
+        )
+        overlay.setZValue(RISK_RING_Z + 1)
+        overlay.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        outline = QGraphicsPathItem(openings, overlay)
+        outline.setPen(pen)
+        outline.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self._focus_item = overlay
 
     def _rings(
         self,
@@ -5056,7 +5090,6 @@ class BoardScene(QGraphicsScene):
 
         self._risk_item = self._rings(self._risk_item, risk_holes, RISK_RING, RISK_RING_Z)
         self._bench_item = self._rings(self._bench_item, bench_holes, BENCH_RING, BENCH_RING_Z)
-        self._bench_holes = frozenset((hole.col, hole.row) for hole in bench_holes)
         self._refresh_focus()
 
         for comp_id, item in self.component_items.items():
