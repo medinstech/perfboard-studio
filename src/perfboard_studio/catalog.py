@@ -1826,6 +1826,36 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("RFID", "RC522", "MFRC522", "RFID-RC522", "NFC", "card reader",
                          "kart okuyucu", "RFID okuyucu")),
+    CatalogPart("sensor-board-3pin", "3-pin sensor board (S + -), on a header", "sensor", "hdr-1x3",
+                "The small three-pin KY boards of a sensor kit: one signal pin, supply "
+                "and ground. Its cable plugs into this 3-pin header: S + - from pin 1",
+                _legs("S", "+", "-"), value="KY 3-pin", ref_prefix="J",
+                source=(
+                    "Joy-IT SensorKit X40 manual (16.06.2017, CC BY-NC-SA 3.0), the "
+                    "Pinout page of each board, pin names and their order only: KY-001, "
+                    "002, 003, 010, 017, 022, 033 and 035 number them Signal, +V, GND; "
+                    "KY-004, 006, 012, 015, 018, 020, 021, 031 and 039 number them GND, "
+                    "+V, Signal, the same three pins from the other end"
+                ),
+                check=(
+                    "The manual numbers some of these boards S + - and others - + S, the "
+                    "same three pins from the other end, so a board plugged straight into "
+                    "a header must match its silkscreen. S is the signal: an output on a "
+                    "sensor, an input on a buzzer. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("KY-001 temperature sensor", "KY-002 vibration switch",
+                         "KY-003 hall sensor", "KY-004 button", "KY-006 passive buzzer",
+                         "KY-010 light barrier", "KY-012 active buzzer",
+                         "KY-015 temperature humidity sensor", "KY-017 tilt switch",
+                         "KY-018 photoresistor", "KY-020 tilt switch", "KY-021 mini reed",
+                         "KY-022 IR receiver", "KY-031 sensor (knock)", "KY-033 line tracking",
+                         "KY-035 magnetic sensor", "KY-039 heartbeat sensor", "sensor module",
+                         "photoresistor module", "hall module", "button module", "tilt module",
+                         "reed module", "buzzer module", "IR receiver module",
+                         "knock sensor module", "heartbeat sensor module",
+                         "line tracking module", "light barrier module",
+                         "vibration switch module", "sensör modülü",)),
     # The cheap Bosch sensor boards most people buy, by the name printed on them. The purple
     # six-pin ones have no regulator and run on 3.3 V; the four-pin GY-BME280 has one.
     CatalogPart("gy-bmp280", "GY-BMP280 pressure sensor module (on a header)", "sensor",

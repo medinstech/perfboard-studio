@@ -834,3 +834,18 @@ def test_the_tall_crystal_is_the_registrys_can_and_says_it_is_not_the_kit_one() 
     assert "TALL" in tall.check and "HC-49/US" in tall.check
     assert "No maker drawing" in tall.source
     assert footprint.body_height > (get_footprint(low.footprint_id) or footprint).body_height
+
+
+def test_sensor_board_3pin_has_the_names_the_joy_it_manual_gives() -> None:
+    """Pin names and order are the manual's (names only, no text copied); the source says so."""
+    part = catalog_part("sensor-board-3pin")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == ["S", "+", "-"]
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and len(footprint.pins) == 3
+    assert "Joy-IT SensorKit X40 manual" in part.source
+    assert "+ - and others - + S" in part.check
+    assert "silkscreen" in part.check
+    assert part in search_catalog("KY-018")
+    assert part in search_catalog("photoresistor module")
+    assert part in search_catalog("KY-003")

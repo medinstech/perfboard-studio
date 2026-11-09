@@ -3072,6 +3072,23 @@ TURKISH: Mapping[str, str] = {
     "Dual comparator, open-collector outputs": "Çift karşılaştırıcı, açık kolektör çıkışlı",
     "High-speed optocoupler, 10 Mbit/s": "Yüksek hızlı optokuplör, 10 Mbit/s",
     "Optocoupler, transistor output": "Optokuplör, transistör çıkışlı",
+    "3-pin sensor board (S + -), on a header": "3 pinli sensör kartı (S + -), header üzerinde",
+    "The small three-pin KY boards of a sensor kit: one signal pin, supply and ground. "
+    "Its cable plugs into this 3-pin header: S + - from pin 1": (
+        "Bir sensör kitinin küçük üç pinli KY kartları: bir sinyal pini, besleme ve "
+        "toprak. Kablosu bu 3 pinli header'a takılır: 1. pinden S + -"
+    ),
+    "The manual numbers some of these boards S + - and others - + S, the same three pins "
+    "from the other end, so a board plugged straight into a header must match its "
+    "silkscreen. S is the signal: an output on a sensor, an input on a buzzer. Match each "
+    "lead to the name printed beside the module's pins, not to its place: sellers' boards "
+    "are not all wired in the same order.": (
+        "Kılavuz bu kartların bazılarını S + -, bazılarını - + S diye numaralar; bunlar "
+        "aynı üç pinin öbür uçtan sayılmasıdır. Bu yüzden bir kartı doğrudan header'a "
+        "takarsanız serigrafisine uydurun. S sinyaldir: bir sensörde çıkış, bir buzzer'da "
+        "giriştir. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada "
+        "göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
     "RC522 RFID reader module (on a header)": "RC522 RFID okuyucu modülü (header üzerinde)",
     "13.56 MHz RFID reader on SPI. Its cable plugs into this 8-pin header: 3.3V RST GND IRQ "
     "MISO MOSI SCK SDA from pin 1": (

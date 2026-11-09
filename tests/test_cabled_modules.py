@@ -197,6 +197,7 @@ SOLD_AS = {
     "uln2003-board": "ULN2003 board",
     "l298n-board": "L298N board",
     "rc522-module": "RC522",
+    "sensor-board-3pin": "KY 3-pin",
 }
 
 

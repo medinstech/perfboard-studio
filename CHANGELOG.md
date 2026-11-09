@@ -140,6 +140,13 @@ closed without a bump.
   components101 drawing agrees, with no body because the board has no drawing. The check
   says to feed it 3.3 V, that SDA is the SPI chip select, and that sellers also print the
   row from the other end.
+- **The three-pin KY boards of a sensor kit, as one wired header**: S, + and -, for KY-001,
+  002, 003, 004, 006, 010, 012, 015, 017, 018, 020, 021, 022, 031, 033, 035 and 039, each
+  found by its KY number or its name ("photoresistor module"). The Joy-IT manual numbers some
+  of them S + - and the rest - + S, so the check says to wire by the printed labels and to
+  match the silkscreen if the board is plugged straight in. Only the pin names and order come
+  from the manual.
+
 
 ### Fixed
 
