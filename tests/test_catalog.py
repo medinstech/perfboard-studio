@@ -756,3 +756,24 @@ def test_the_tmp36_is_pinned_like_the_lm35_and_its_offset_sum_is_true() -> None:
     assert [name for _, name in tmp36.pin_names] == ["+VS", "VOUT", "GND"]
     assert 750 - 25 * 10 == 500
     assert "500 mV" in tmp36.check and "from below" in tmp36.check
+
+
+def test_the_hc49us_crystal_is_drawn_at_abracons_maxima_and_its_lead_arithmetic_is_true() -> None:
+    """Abracon ABL: 11.5 x 5.0 x 3.5 mm, legs 0.457 mm and 4.88 +-0.20 mm apart. The two
+    holes two columns over are 5.08 apart; the sums in the check are done here."""
+    part = catalog_part("crystal-hc49us")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    assert [(pin.d_col, pin.d_row) for pin in footprint.pins] == [(0, 0), (2, 0)]
+    extent = body_extent(footprint, STANDARD_PITCH_MM)
+    assert (extent.size_x, extent.size_y) == (11.5, 5.0)
+    assert footprint.body_height == 3.5
+    nominal = (2 * STANDARD_PITCH_MM - 4.88) / 2
+    worst = (2 * STANDARD_PITCH_MM - (4.88 - 0.20)) / 2
+    spare = (1.0 - 0.457) / 2
+    assert round(nominal, 2) == 0.10 and round(worst, 2) == 0.20 and round(spare, 2) == 0.27
+    assert worst < spare
+    assert "0.10 mm" in part.check and "0.27 mm" in part.check
+    # Not the tall can: that is the other footprint, and says so.
+    assert part.footprint_id != "xtal-hc49"

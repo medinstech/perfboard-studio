@@ -719,6 +719,26 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 check="A larger inductance in this series is a larger body: measure yours.",
                 aliases=("inductor", "choke", "bobin", "endüktans")),
+    # The low-profile crystal that goes next to an ATmega or ATtiny on a perfboard, drawn at
+    # Abracon's MAXIMA (11.5 x 5.0 x 3.5 mm) so DRC measures no smaller a part than the one in
+    # the bag. NOT the tall HC-49/U of the ``xtal-hc49`` footprint: that can is 13.46 mm high.
+    CatalogPart("crystal-hc49us", "Crystal, HC-49/US low can", "passive", "box-2x1-p2-r1-11.5x5x3.5",
+                "Quartz crystal for a microcontroller's clock, the low can, legs 4.88 mm apart",
+                value="16MHz", ref_prefix="Y",
+                source=(
+                    "Abracon ABL series (HC49/US) datasheet, mechanical dimensions, read from "
+                    "abracon.com/Resonators/ABL.pdf: can 11.5 mm long (10.3 mm without its "
+                    "flange), 5.0 mm across, 3.5 mm high, legs 0.457 mm across and 4.88 +-0.20 "
+                    "mm apart, 5.5 mm long at the least in bulk"
+                ),
+                check=(
+                    "Its legs are 4.88 mm apart against the board's 5.08 two holes over, so each "
+                    "ends 0.10 mm off its hole, 0.20 mm at the drawing's worst, inside the "
+                    "0.27 mm a 0.457 mm leg has to spare in a 1 mm hole. Its frequency is "
+                    "printed on the can: put it in the value. Abracon sells an insulator tab "
+                    "as an option, so a bare can is metal: keep it off bare copper."
+                ),
+                aliases=("crystal", "xtal", "quartz", "HC-49S", "HC49S", "16 MHz", "kristal")),
     # -- sensors ----------------------------------------------------------------------
     CatalogPart("lm35", "LM35", "sensor", "to92", "Temperature sensor, 10 mV per degree C",
                 _legs("+VS", "VOUT", "GND"), ref_prefix="U",

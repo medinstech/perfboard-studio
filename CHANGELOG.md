@@ -121,6 +121,10 @@ closed without a bump.
 - **The TMP36 temperature sensor**, the analog one in the official Arduino kit, pinned from
   Analog Devices' datasheet, which draws its TO-92 from below -- the check says so, and that
   it reads 500 mV at 0 degrees so the offset is subtracted before dividing by 10.
+- **The HC-49/US crystal**, the low-profile one beside an ATmega on a perfboard, from Abracon's
+  drawing: drawn at its maxima (11.5 x 5.0 x 3.5 mm), its 4.88 mm legs against the 5.08 mm
+  of two holes worked out in the note. It is not the tall HC-49/U the `xtal-hc49` footprint
+  draws, which is 13.46 mm high.
 
 ### Fixed
 

@@ -3072,6 +3072,20 @@ TURKISH: Mapping[str, str] = {
     "Dual comparator, open-collector outputs": "Çift karşılaştırıcı, açık kolektör çıkışlı",
     "High-speed optocoupler, 10 Mbit/s": "Yüksek hızlı optokuplör, 10 Mbit/s",
     "Optocoupler, transistor output": "Optokuplör, transistör çıkışlı",
+    "Crystal, HC-49/US low can": "Kristal, HC-49/US alçak kılıf",
+    "Quartz crystal for a microcontroller's clock, the low can, legs 4.88 mm apart": (
+        "Mikrodenetleyicinin saati için kuvars kristal, alçak kılıf, bacaklar arası 4,88 mm"
+    ),
+    "Its legs are 4.88 mm apart against the board's 5.08 two holes over, so each ends 0.10 mm "
+    "off its hole, 0.20 mm at the drawing's worst, inside the 0.27 mm a 0.457 mm leg has to "
+    "spare in a 1 mm hole. Its frequency is printed on the can: put it in the value. Abracon "
+    "sells an insulator tab as an option, so a bare can is metal: keep it off bare copper.": (
+        "Bacakları 4,88 mm arayla durur, kartın iki delik ötedeki 5,08 mm'sine karşı her biri "
+        "deliğinden 0,10 mm kayar, çizimin en kötü durumunda 0,20 mm; bu, 1 mm'lik bir "
+        "delikte 0,457 mm'lik bir bacağın payı olan 0,27 mm'nin içindedir. Frekansı kılıfın "
+        "üzerinde yazar: değer alanına yazın. Abracon seçenek olarak yalıtım pulu satar; yani "
+        "çıplak kılıf metaldir: çıplak bakırdan uzak tutun."
+    ),
     "Optocoupler with the transistor's base brought out, CTR over 100 %, 5000 V isolation": (
         "Transistörün bazı dışarı çıkarılmış optokuplör, akım aktarım oranı %100'ün üzerinde, "
         "5000 V yalıtım"
