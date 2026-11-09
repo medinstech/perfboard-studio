@@ -932,3 +932,26 @@ def test_ky_051_level_shifter_has_the_names_the_joy_it_manual_gives() -> None:
     assert "higher than or equal to VCCa" in part.check
     assert part in search_catalog("KY-051")
     assert part in search_catalog("level shifter")
+
+
+def test_a_bare_ky_alias_is_never_next_to_another_ky_alias() -> None:
+    """``part_rank`` squeezes a part's names into one run of letters and digits, so "KY-010"
+    followed by "KY-012" spells "10k" and the part answers a search for a 10k resistor. A
+    part with several KY numbers writes each with a word after it, "KY-018 photoresistor"."""
+    import re
+
+    for part in CATALOG:
+        for before, after in zip(part.aliases, part.aliases[1:], strict=False):
+            assert not (re.fullmatch(r"KY-\d{3}", before) and after.startswith("KY")), (
+                part.id,
+                before,
+                after,
+            )
+
+
+def test_the_ky_051_is_wired_by_label_and_is_not_the_boards_shape() -> None:
+    """The real board has two rows of six on opposite edges; the 2 x 6 header only lists its
+    twelve wires in pairs, and the check says so rather than drawing a plug-in footprint."""
+    part = catalog_part("ky-051-level-shifter")
+    assert part is not None
+    assert "opposite edges" in part.check and "not its shape" in part.check

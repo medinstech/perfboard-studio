@@ -3185,17 +3185,19 @@ TURKISH: Mapping[str, str] = {
         "İki besleme tarafı (A ve B) olan dört kanallı gerilim çevirici kart. Kablosu bu "
         "12 pinli header'a takılır: 1. pinden VCCb VCCa B1 A1 B2 A2 B3 A3 B4 A4 OE GND"
     ),
-    "This header takes the board's two sides in pairs, VCCb with VCCa, B1 with A1 and so "
-    "on, so wire by name. The board prints VCCa 1.2 to 3.6 V and VCCb 1.7 to 5.5 V, and "
-    "the manual says VCCb must be higher than or equal to VCCa. GND is on the A side: "
-    "join it to yours. Match each lead to the name printed beside the module's pins, not "
-    "to its place: sellers' boards are not all wired in the same order.": (
-        "Bu header kartın iki yanını çiftler halinde alır: VCCb ile VCCa, B1 ile A1 ve "
-        "böyle sürer; bu yüzden adlara göre bağlayın. Kart VCCa için 1,2 ila 3,6 V, VCCb "
-        "için 1,7 ila 5,5 V basar; kılavuza göre VCCb, VCCa'dan yüksek ya da ona eşit "
-        "olmalıdır. GND A tarafındadır: onu kendi toprağınıza bağlayın. Her kabloyu "
-        "yerine göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: "
-        "satıcıların kartları aynı sırayla bağlanmamıştır."
+    "The real board has its two rows of six on opposite edges, so this header is not its "
+    "shape: it is only the twelve wires listed in pairs, VCCb with VCCa, B1 with A1 and "
+    "so on. Wire each by its label. The board prints VCCa 1.2 to 3.6 V and VCCb 1.7 to "
+    "5.5 V, and the manual says VCCb must be higher than or equal to VCCa. GND is on the "
+    "A side: join it to yours. Match each lead to the name printed beside the module's "
+    "pins, not to its place: sellers' boards are not all wired in the same order.": (
+        "Gerçek kartın altışarlı iki sırası karşılıklı kenarlardadır; bu yüzden bu header "
+        "kartın şekli değildir, yalnızca on iki telin çiftler halinde listesidir: VCCb "
+        "ile VCCa, B1 ile A1 ve böyle sürer. Her teli etiketine göre bağlayın. Kart VCCa "
+        "için 1,2 ila 3,6 V, VCCb için 1,7 ila 5,5 V basar; kılavuza göre VCCb, VCCa'dan "
+        "yüksek ya da ona eşit olmalıdır. GND A tarafındadır: onu kendi toprağınıza "
+        "bağlayın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada "
+        "göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
     "RC522 RFID reader module (on a header)": "RC522 RFID okuyucu modülü (header üzerinde)",
     "13.56 MHz RFID reader on SPI. Its cable plugs into this 8-pin header: 3.3V RST GND IRQ "

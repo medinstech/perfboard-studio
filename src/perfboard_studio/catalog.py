@@ -905,7 +905,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 check=_CHECK_LEGS,
                 aliases=("linear hall", "hall sensor", "magnetic field sensor", "49E", "KY-035",
-                         "KY-024", "hall sensörü")),
+                         "hall sensörü", "KY-024")),
     # The bare sensors, four legs in a row on 2.54 mm and the body standing on them: a box
     # with the legs along its width, as wide and as thick as the sensor and as tall.
     CatalogPart("dht11", "DHT11", "sensor", "box-4x1-p1-r1-12x5.5x15.5",
@@ -1883,6 +1883,11 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("RFID", "RC522", "MFRC522", "RFID-RC522", "NFC", "card reader",
                          "kart okuyucu", "RFID okuyucu")),
+    # An alias that is a KY number is written "KY-NNN <word>", never a bare "KY-NNN":
+    # part_rank squeezes a part's names into one run of letters and digits, so two bare ones
+    # side by side ("KY-010" "KY-012") spell "10k" and the part would answer a search for a
+    # 10k resistor. A digit run followed by a word keeps that out; test_a_bare_ky_alias_is_never_next_to_another_ky_alias
+    # reads them all.
     CatalogPart("sensor-board-3pin", "3-pin sensor board (S + -), on a header", "sensor", "hdr-1x3",
                 "The small three-pin KY boards of a sensor kit: one signal pin, supply "
                 "and ground. Its cable plugs into this 3-pin header: S + - from pin 1",
@@ -1969,10 +1974,12 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "interleaves the two sides in pairs, the order is ours"
                 ),
                 check=(
-                    "This header takes the board's two sides in pairs, VCCb with VCCa, B1 "
-                    "with A1 and so on, so wire by name. The board prints VCCa 1.2 to 3.6 "
-                    "V and VCCb 1.7 to 5.5 V, and the manual says VCCb must be higher "
-                    "than or equal to VCCa. GND is on the A side: join it to yours. "
+                    "The real board has its two rows of six on opposite edges, so this "
+                    "header is not its shape: it is only the twelve wires listed in "
+                    "pairs, VCCb with VCCa, B1 with A1 and so on. Wire each by its label. "
+                    "The board prints VCCa 1.2 to 3.6 V and VCCb 1.7 to 5.5 V, and the "
+                    "manual says VCCb must be higher than or equal to VCCa. GND is on the "
+                    "A side: join it to yours. "
                     + _CABLED_CHECK
                 ),
                 aliases=("KY-051 level shifter", "level converter", "voltage translator",
