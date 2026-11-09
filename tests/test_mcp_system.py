@@ -176,3 +176,27 @@ def test_a_part_moved_to_another_board_takes_its_copper_off_and_its_cable_follow
     assert [c.ref for c in session.system_document.components] == ["JA"]
     with pytest.raises(SessionError, match="JZ"):
         session.move_to_board("JZ", "Remote", "H3")
+
+
+def test_the_circuit_checks_and_the_sheet_are_the_systems_whichever_board_is_in_front() -> None:
+    """ERC, LVS and the schematic are about the circuit, so they read every board, as the
+    window does. On the board in front alone, JA on the first board read as a part the
+    design never defined, an unplaced part and a symbol "neither on the board nor in the
+    design" -- three false findings an agent would go and fix."""
+    session = _two_boards()
+    laid = session.add_cable(
+        "W1", "Board 1", "JA", "Remote", "JB",
+        [{"a_pin": "1", "b_pin": "1"}, {"a_pin": "2", "b_pin": "2"}],
+    )
+    assert laid["ok"], laid
+    seen = []
+    for board in ("Board 1", "Remote"):
+        assert session.select_board(board)["ok"]
+        erc = session.run_erc()
+        lvs = session.run_lvs()
+        _png, sheet = session.render_schematic()
+        assert not [f for f in erc["findings"] if f["rule"] == "part-not-defined"], erc
+        assert lvs["matches_schematic"] and not lvs["issues"], lvs
+        assert sheet["parts"] == 2 and not sheet["notes"], sheet
+        seen.append((erc, lvs, sheet))
+    assert seen[0] == seen[1]

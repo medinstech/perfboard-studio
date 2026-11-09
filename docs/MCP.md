@@ -180,8 +180,9 @@ length shorter than its ends are apart in the System view's row, with both numbe
 draws such a cable pulled taut. That is information about the picture and never a finding:
 the row is where the view puts the boards, not where they will sit, and it is not saved.
 `get_status`, `list_components`,
-`save_document`, `snapshot` and `run_erc` / `run_lvs` read every board; the guide of the
-board in front ends with the system's harness.
+`save_document`, `snapshot`, `run_erc` / `run_lvs` and `render_schematic` read every board,
+because the circuit is the system's -- on one board's view a part on another read as one
+the design never defined; the guide of the board in front ends with the system's harness.
 
 What is added can be taken back and named, each one command and one undo step:
 `rename_board` (a blank name and the board is called by its place again), `remove_board`

@@ -230,6 +230,8 @@ def render_schematic(px_per_mm: int = 8) -> Image:
     The sheet is generated from the document every time unless somebody has drawn on it in
     the application, and either way there is no second answer to what is connected: what a
     hand-drawn wire JOINS is still whichever net holds both of its ends.
+
+    With several boards it is the whole circuit, whichever board is in front.
     """
     png, meta = session.render_schematic(px_per_mm=px_per_mm)
     log.info(
@@ -790,7 +792,8 @@ def run_erc() -> dict[str, Any]:
     module brings onto the board (a warning). Read from the pins' names, so it checks what
     the parts declare -- a catalog part, an LED, an electrolytic -- and works on a design
     with nothing placed. LVS cannot catch any of these: it proves the board is the circuit,
-    and an unpowered chip is faithfully reproduced.
+    and an unpowered chip is faithfully reproduced. With several boards it checks the
+    whole circuit, whichever board is in front.
 
     The verdict is `errors`; `ok` means the call ran."""
     return session.run_erc()
@@ -810,7 +813,8 @@ def run_drc() -> dict[str, Any]:
 def run_lvs() -> dict[str, Any]:
     """Compare what the board connects against what the schematic asked for. Opens,
     shorts and floating copper, named down to the pin. This is the machine answer to
-    "is it actually right".
+    "is it actually right". With several boards it is the system's LVS, whichever board
+    is in front: a net is matched through the cable that carries it.
 
     The verdict is `matches_schematic`, not `ok`: `ok` means the call ran, as it does
     everywhere else here."""

@@ -1952,7 +1952,9 @@ class BoardSession:
     # -- verification ------------------------------------------------------
 
     def run_erc(self) -> dict[str, Any]:
-        findings = run_erc(self.document, self.lookup)
+        # The circuit, so the whole system: on the board in front alone, every part on
+        # another board read as a part the design never defined.
+        findings = run_erc(self.system_document, self.lookup)
         names = {net.id: net.name for net in self.document.nets}
         return {
             # "ok" is the call, as everywhere here; the verdict is the error count.
@@ -2003,7 +2005,10 @@ class BoardSession:
         }
 
     def run_lvs(self) -> dict[str, Any]:
-        result = run_lvs(self.document, self.lookup)
+        # The system's, as in the window and get_system_info: a net carried to another
+        # board by a cable is matched through the cable, not reported open, and a part on
+        # another board is not an unplaced one.
+        result = run_lvs(self.system_document, self.lookup)
         return {
             # "ok" is this API's word for "the call was not refused", and it read here as
             # "the board matches" -- so a board with an open came back looking like a tool
@@ -2265,7 +2270,10 @@ class BoardSession:
         from perfboard_studio.ui.export_schematic import svg_to_image
 
         _ensure_qt_application()
-        drawing = build_schematic(self.document, self.lookup)
+        # The whole circuit, whichever board is in front -- the window's sheet too. On a
+        # board's view a part on another board was drawn as "neither on the board nor in
+        # the design".
+        drawing = build_schematic(self.system_document, self.lookup)
         svg = drawing_to_svg(drawing, title=self.document.meta.name)
         image = svg_to_image(svg, px_per_mm=px_per_mm)
         return _png_bytes(image), {
