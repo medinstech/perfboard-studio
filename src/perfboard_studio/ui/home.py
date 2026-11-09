@@ -160,10 +160,23 @@ class Home(QWidget):
         examples: Sequence[HomeExample],
         lookup: FootprintLookup,
         parent: QWidget | None = None,
+        *,
+        has_walkthrough: bool | None = None,
     ) -> None:
+        """``examples`` may come later, through ``set_examples``: reading every example for
+        its line is most of what Home costs a blank start, so the window puts Home up with
+        none and hands them over on the first turn of the event loop. ``has_walkthrough``
+        says whether the tour's example is there before then (a file name, not a read), so
+        the "new here" card is in place on the first frame rather than arriving after it.
+        """
         super().__init__(parent)
         self.setObjectName("home")
         self._examples = list(examples)
+        self._has_walkthrough = (
+            any(e.path.stem == WALKTHROUGH for e in self._examples)
+            if has_walkthrough is None
+            else has_walkthrough
+        )
         self._lookup = lookup
         self._recent: list[str] = []
         self._showing_all = False
@@ -241,11 +254,13 @@ class Home(QWidget):
 
         # -- the examples ---------------------------------------------------------------
         heading = QHBoxLayout()
-        examples_title = QLabel(theme.heading(t("Examples")))
-        heading.addWidget(examples_title)
-        note = QLabel(t("Each opens as an untitled copy. Nothing you change touches the original."))
-        theme.tone(note, "secondary")
-        heading.addWidget(note)
+        self._examples_title = QLabel(theme.heading(t("Examples")))
+        heading.addWidget(self._examples_title)
+        self._examples_note = QLabel(
+            t("Each opens as an untitled copy. Nothing you change touches the original.")
+        )
+        theme.tone(self._examples_note, "secondary")
+        heading.addWidget(self._examples_note)
         heading.addStretch(1)
         self.show_all = QPushButton(t("Show All Examples"))
         theme.variant(self.show_all, "link")
@@ -255,6 +270,30 @@ class Home(QWidget):
         self.grid = QGridLayout()
         self.grid.setSpacing(theme.SPACE["lg"])
         self.cards: list[ExampleCard] = []
+        column.addLayout(self.grid)
+        column.addStretch(1)
+
+        self.show_at_start = QCheckBox(t("Start on the home page"))
+        self.show_at_start.setChecked(True)
+        self.show_at_start.toggled.connect(self.showAtStartChanged)
+        column.addWidget(self.show_at_start)
+
+        self.set_examples(self._examples)
+        self.set_recent([])
+
+    # -- what the window tells Home ----------------------------------------------------
+
+    def set_examples(self, examples: Sequence[HomeExample]) -> None:
+        """The example cards, made anew: one per example, in the order given. With none --
+        an install from a wheel ships none, and the window hands them over a turn after
+        Home first shows -- the heading says nothing rather than head an empty row."""
+        # Nothing still queued to be drawn may be a card about to go.
+        self._to_draw = []
+        for card in self.cards:
+            self.grid.removeWidget(card)
+            card.deleteLater()
+        self._examples = list(examples)
+        self.cards = []
         for index, example in enumerate(self._examples):
             card = ExampleCard(example)
             card.clicked.connect(lambda _checked=False, p=example.path: self.openExample.emit(str(p)))
@@ -264,23 +303,13 @@ class Home(QWidget):
         tallest = max((card.content.sizeHint().height() for card in self.cards), default=0)
         for card in self.cards:
             card.setFixedHeight(tallest)
-        column.addLayout(self.grid)
-        if not self._examples:
-            # An install from a wheel ships no examples: say nothing rather than show an
-            # empty heading.
-            for widget in (examples_title, note, self.show_all):
-                widget.hide()
-        column.addStretch(1)
-
-        self.show_at_start = QCheckBox(t("Start on the home page"))
-        self.show_at_start.setChecked(True)
-        self.show_at_start.toggled.connect(self.showAtStartChanged)
-        column.addWidget(self.show_at_start)
-
-        self.set_recent([])
-
-    # -- what the window tells Home ----------------------------------------------------
-
+        for widget in (self._examples_title, self._examples_note):
+            widget.setVisible(bool(self._examples))
+        self._lay_out_cards()
+        # Cards that arrive while Home is on screen are drawn as they would have been had
+        # they been there when it was shown.
+        if self.isVisible():
+            self._draw_pictures()
     def set_recent(self, paths: Sequence[str]) -> None:
         """The boards opened last, newest first. With none, Home is the first-run page; with
         any, it leads with them and the examples shrink to a row."""
@@ -319,8 +348,14 @@ class Home(QWidget):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
+        self._draw_pictures()
+
+    def _draw_pictures(self) -> None:
+        """Paint the cards still without a picture, one per turn of the event loop."""
+        pending = bool(self._to_draw)
         self._to_draw = [card for card in self.cards if card.picture.pixmap().isNull()]
-        if self._to_draw:
+        # One chain of turns at a time: a second would draw the same card twice.
+        if self._to_draw and not pending:
             QTimer.singleShot(0, self._draw_next)
 
     # -- inside ------------------------------------------------------------------------
@@ -364,7 +399,7 @@ class Home(QWidget):
         body.setWordWrap(True)
         theme.tone(body, "secondary")
         self.walkthrough_button = QPushButton(t("Start the Tour"))
-        if not any(e.path.stem == WALKTHROUGH for e in self._examples):
+        if not self._has_walkthrough:
             card.hide()  # the tour runs on that example, and this copy has none
         self.walkthrough_button.clicked.connect(lambda _checked=False: self.startTour.emit())
         for widget in (caption, heading, body):

@@ -35,7 +35,6 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -92,6 +91,7 @@ from . import theme
 from .boardfeatures import FeatureEditor, FeaturesGroup
 from .engine_text import say
 from .i18n import language, t
+from .numberbox import NumberBox
 from .partfields import PinoutEditor, note_editor, pinout_for_retyped_value
 from .partnames import footprint_label
 from .properties import describe
@@ -311,7 +311,7 @@ class _BoardEditor(QWidget):
 
         # 0 is "no limit", as in Board Features: with no case chosen there is no height
         # to be too tall for, and a spin box cannot be empty.
-        self.height_limit = QDoubleSpinBox()
+        self.height_limit = NumberBox()
         self.height_limit.setRange(0.0, 200.0)
         self.height_limit.setSingleStep(1.0)
         self.height_limit.setDecimals(1)
@@ -333,7 +333,7 @@ class _BoardEditor(QWidget):
                 "where every hole counts."
             )
         )
-        self.body_clearance = QDoubleSpinBox()
+        self.body_clearance = NumberBox()
         self.body_clearance.setRange(0.0, 2.5)
         self.body_clearance.setSingleStep(0.1)
         self.body_clearance.setDecimals(2)
@@ -1137,7 +1137,7 @@ class _NetEditor(QWidget):
         _add_field(form, t("Class"), classes, self.class_problem)
 
         # Blank is "not stated", which is a different thing from zero.
-        self.current = QDoubleSpinBox()
+        self.current = NumberBox()
         self.current.setRange(0.0, 100.0)
         self.current.setDecimals(2)
         self.current.setSingleStep(0.1)
@@ -1158,7 +1158,7 @@ class _NetEditor(QWidget):
         voltage_row = QHBoxLayout(voltage)
         voltage_row.setContentsMargins(0, 0, 0, 0)
         self.voltage_stated = QCheckBox(t("state a voltage"))
-        self.voltage = QDoubleSpinBox()
+        self.voltage = NumberBox()
         self.voltage.setRange(-1000.0, 1000.0)
         self.voltage.setDecimals(1)
         self.voltage.setSuffix(" V")
@@ -1297,7 +1297,7 @@ class _BoardNoteEditor(QWidget):
         self.text = CommitLine(self._commit_text)
         self.text.setPlaceholderText(t("What to write on the board: MOTOR 24V, CAN →…"))
         _add_field(form, t("Text"), self.text, self.text.problem)
-        self.text_height = QDoubleSpinBox()
+        self.text_height = NumberBox()
         self.text_height.setRange(0.5, 10.0)
         self.text_height.setSingleStep(0.25)
         self.text_height.setDecimals(2)
@@ -1424,7 +1424,7 @@ class _SheetNoteEditor(QWidget):
         form = _form()
         self.text = CommitLine(self._commit_text)
         _add_field(form, t("Text"), self.text, self.text.problem)
-        self.text_height = QDoubleSpinBox()
+        self.text_height = NumberBox()
         self.text_height.setRange(0.5, 20.0)
         self.text_height.setSingleStep(0.5)
         self.text_height.setDecimals(1)

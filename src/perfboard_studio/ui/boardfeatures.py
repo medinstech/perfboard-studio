@@ -63,6 +63,7 @@ from perfboard_studio.model import (
 
 from . import theme
 from .i18n import t
+from .numberbox import NumberBox
 
 #: One command, by name and payload; answers why it was refused, in the window's language.
 Dispatch = Callable[[str, object], str | None]
@@ -210,7 +211,7 @@ class FeaturesGroup(QWidget):
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        self.mount_diameter = QDoubleSpinBox()
+        self.mount_diameter = NumberBox()
         self.mount_diameter.setRange(0.5, 12.0)
         self.mount_diameter.setSingleStep(0.1)
         self.mount_diameter.setDecimals(1)
@@ -652,7 +653,7 @@ class FeatureEditor(QWidget):
 
 
 def _mm_box(low: float, high: float) -> QDoubleSpinBox:
-    box = QDoubleSpinBox()
+    box = NumberBox()
     box.setRange(low, high)
     box.setDecimals(2)
     box.setSingleStep(0.1)

@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -38,6 +37,7 @@ from perfboard_studio.system import (
 )
 
 from .i18n import counted, language, t
+from .numberbox import NumberBox
 
 
 def connectors_on(doc: PerfDocument, board_id: BoardId, lookup: FootprintLookup) -> list[ComponentInstance]:
@@ -79,7 +79,7 @@ class CableDialog(QDialog):
         form.addRow(t("To"), self._pair(self.b_board, self.b_part))
         self.reference = QLineEdit(reference, self)
         form.addRow(t("Reference"), self.reference)
-        self.length = QDoubleSpinBox(self)
+        self.length = NumberBox(self)
         self.length.setRange(0, 10_000)
         self.length.setDecimals(0)
         self.length.setSuffix(" mm")

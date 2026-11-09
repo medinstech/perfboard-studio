@@ -45,9 +45,14 @@ def window(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 
 
 def test_every_card_is_hung_on_something_the_window_has(window) -> None:
-    """A panel renamed or a tool removed would leave its card unread: name it here."""
+    """A panel renamed or a tool removed would leave its card unread: name it here.
+
+    The cards are hung when help is first asked for (``_hang_help``), and the guide's
+    corner is there once its panel is (``_build_guide_dock``), so both are asked for."""
     from PySide6.QtWidgets import QDockWidget
 
+    assert window.guide_tools is not None
+    window._hang_help()
     for name, text in helpcards.panel_help().items():
         found = window.findChild(QDockWidget, name) or window.findChild(QWidget, name)
         assert found is not None, f"no panel called {name}"
@@ -106,3 +111,19 @@ def test_the_glossary_is_said_in_the_window_s_language() -> None:
         assert words["Ped"].startswith("Deliğin")
     finally:
         set_language(before)
+
+
+def test_help_is_hung_when_it_is_first_asked_for(window) -> None:
+    """Not as the window is built -- the texts were a few milliseconds of every start --
+    but the moment F1 or What's This is pressed, so neither ever finds a tool without one."""
+    from PySide6.QtWidgets import QApplication, QWhatsThis
+
+    assert window.act_connect.whatsThis() == ""
+    whats_this = next(a for a in window.findChildren(type(window.act_connect))
+                      if a.shortcut().toString() == "Shift+F1")
+    whats_this.trigger()
+    try:
+        assert window.act_connect.whatsThis() == helpcards.tool_help()["act_connect"]
+    finally:
+        QWhatsThis.leaveWhatsThisMode()
+        QApplication.processEvents()

@@ -15222,22 +15222,119 @@ def test_every_number_in_the_window_has_a_decimal_point() -> None:
         QLocale.setDefault(before)
 
 
+def _takes_a_comma(box) -> bool:
+    """Whether "2,5" typed into ``box`` reads 2.5, with room made for it: the question is
+    the comma, not the field's own range, nor whether it is enabled for what is selected."""
+    from PySide6.QtTest import QTest
+
+    box.setEnabled(True)
+    box.setReadOnly(False)
+    box.setRange(min(box.minimum(), 0.0), max(box.maximum(), 100.0))
+    box.setDecimals(max(box.decimals(), 1))
+    box.lineEdit().selectAll()
+    QTest.keyClicks(box.lineEdit(), "2,5")
+    return box.cleanText() == "2.5"
+
+
 def test_a_comma_typed_into_a_number_field_is_a_decimal_point() -> None:
     """The fields write "2.28", and a Turkish hand types "2,28" anyway: the comma is taken
-    as the point it means, rather than swallowed into 228."""
+    as the point it means, rather than swallowed into 228 -- and only by a number field
+    (``ui/numberbox.py``), so a plain one is the control that says the test can tell."""
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QDoubleSpinBox
 
+    from perfboard_studio.ui.numberbox import NumberBox
+
     window = _window_on(_load_dense())
     try:
-        box = QDoubleSpinBox()
+        box = NumberBox()
         box.setDecimals(2)
         box.setRange(0.0, 100.0)
         box.lineEdit().selectAll()
         QTest.keyClicks(box, "2,28")
         box.interpretText()
         assert box.value() == 2.28
-        box.deleteLater()
+        assert _takes_a_comma(NumberBox())
+        assert not _takes_a_comma(QDoubleSpinBox())
+    finally:
+        _close(window)
+
+
+def test_no_number_field_is_made_as_a_plain_double_spin_box() -> None:
+    """The comma is taken by each field (``NumberBox``), no longer by one filter on the whole
+    application, which ran on every event the window had to catch a key typed into one kind
+    of widget. A field made as a plain ``QDoubleSpinBox`` would turn 2,28 into 228 without
+    a word -- so none is made anywhere in the interface but inside ``NumberBox`` itself."""
+    import ast
+
+    root = pathlib.Path(__file__).resolve().parents[1] / "src" / "perfboard_studio"
+    found = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name == "numberbox.py":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                called = node.func
+                name = called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+                if name == "QDoubleSpinBox":
+                    found.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert not found, f"make these NumberBox (ui/numberbox.py): {found}"
+
+
+def test_every_number_field_the_window_can_show_takes_a_comma() -> None:
+    """Every number field the window can make, typed into: the Inspector's editors (built
+    the first time each is wanted, so each is asked for here), the board's holes and
+    connectors, the board designer and the custom part's dimensions in every family."""
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    from perfboard_studio.ui.inspector import Inspector
+    from perfboard_studio.ui.main import CustomPartDialog
+    from tests.designer_support import designer_on
+
+    window = _window_on(_load_dense())
+    try:
+        inspector = window.inspector
+        editors = [
+            name for name, member in vars(Inspector).items()
+            if isinstance(member, property) and name.endswith("_editor")
+        ]
+        assert len(editors) >= 10, editors
+        for name in editors:
+            getattr(inspector, name)
+        boxes = {id(box): (f"inspector.{box.objectName() or type(box.parent()).__name__}", box)
+                 for box in inspector.findChildren(QDoubleSpinBox)}
+        assert len(boxes) >= 6
+
+        designer = designer_on(window.bus.document.board)
+        for box in designer.findChildren(QDoubleSpinBox):
+            boxes[id(box)] = ("designer", box)
+
+        refused = [where for where, box in boxes.values() if not _takes_a_comma(box)]
+        # The custom part's fields are made anew for each family, so each is typed into
+        # while its family is the one chosen.
+        custom = CustomPartDialog(window)
+        asked = 0
+        for index in range(custom.family.count()):
+            custom.family.setCurrentIndex(index)
+            for box in custom.findChildren(QDoubleSpinBox):
+                asked += 1
+                if not _takes_a_comma(box):
+                    refused.append(f"custom part {custom.family.itemText(index)}")
+        assert asked, "the custom part has dimensions in some family"
+        # Add Cable's length.
+        from perfboard_studio.footprints import footprint_lookup
+        from perfboard_studio.ui.cabledialog import CableDialog
+        from tests.test_system_readers import _system
+
+        cable = CableDialog(_system(), footprint_lookup(), "W2")
+        lengths = cable.findChildren(QDoubleSpinBox)
+        assert lengths, "Add Cable has a length"
+        refused += ["add cable" for box in lengths if not _takes_a_comma(box)]
+        assert not refused, refused
+        designer.deleteLater()
+        custom.deleteLater()
+        cable.deleteLater()
     finally:
         _close(window)
 
@@ -17439,6 +17536,59 @@ def test_a_fitted_board_stays_fitted_until_somebody_zooms_or_pans() -> None:
         _close(window)
 
 
+def test_a_start_builds_neither_the_guide_nor_the_help_and_imports_no_designer() -> None:
+    """What a start leaves for later (docs/ARCHITECTURE.md, "A start is paid for in
+    breadth"): the Build Guide's panel, built when it first comes in front; the help texts,
+    hung when help is first asked for; the board designer, imported when it first opens.
+    In a process of its own, because every other test here has imported everything."""
+    import subprocess
+    import sys
+
+    probe = (
+        "import os, sys, tempfile\n"
+        "os.environ['QT_QPA_PLATFORM'] = 'offscreen'\n"
+        "from pathlib import Path\n"
+        "from PySide6.QtCore import QSettings\n"
+        "from PySide6.QtWidgets import QApplication\n"
+        "import perfboard_studio.ui.main as m\n"
+        "from perfboard_studio.ui import autosave\n"
+        "tmp = Path(tempfile.mkdtemp())\n"
+        "store = QSettings(str(tmp / 's.ini'), QSettings.Format.IniFormat)\n"
+        "m.app_settings = lambda: store\n"
+        "autosave.default_directory = lambda: tmp\n"
+        "app = QApplication([])\n"
+        "doc = m.create_starter_document(m.DocumentMeta(name='x', created='', modified=''))\n"
+        "w = m.MainWindow(doc, None, defer_properties=True)\n"
+        "w.offer_home()\n"
+        "print(w.guide_built, 'perfboard_studio.ui.designer' in sys.modules,\n"
+        "      'perfboard_studio.ui.helpcards' in sys.modules, flush=True)\n"
+        "os._exit(0)\n"
+    )
+    root = pathlib.Path(__file__).resolve().parents[1]
+    env = {**os.environ, "PYTHONPATH": str(root / "src")}
+    out = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, env=env, timeout=120
+    )
+    assert out.stdout.split() == ["False", "False", "False"], out.stdout + out.stderr
+
+
+def test_the_guide_is_built_when_it_comes_in_front_and_works_as_it_did() -> None:
+    """The guide's panel is made the first time it is wanted, and is then the panel it
+    always was: in the dock, its corner on the list, filled for the board in front."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        assert not window.guide_built
+        assert window.act_next_step is not None and window.act_clear_progress is not None
+        window._raise_view(window.dock_guide)
+        assert window.guide_built
+        assert window.dock_guide.widget() is window.guide_pages
+        assert window.guide_tools.parent() is window.guide_overview
+        assert window.guide_tree.topLevelItemCount() > 0
+        assert window.bench.items
+    finally:
+        _close(window)
+
+
 def _cabled_system():
     """Main's JA and Remote's JB, SIG on pin 1 and GND on pin 2 of both, joined by W1:
     ``tests/test_harness.py``'s system."""
@@ -17546,3 +17696,24 @@ def test_the_harness_step_is_said_in_the_guides_language() -> None:
             _close(window)
     finally:
         set_language(before)
+
+
+def test_home_is_handed_its_examples_once_the_window_is_up() -> None:
+    """Reading every example for its line was most of what Home cost a blank start: Home
+    goes up with its doors and the tour's card, and the examples come on the next turn of
+    the event loop -- the same examples, in the same order."""
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.ui.main import example_boards
+
+    window = _blank_window()
+    try:
+        window.offer_home()
+        home = window._home_page
+        assert home is not None and window.home_is_showing()
+        assert home.cards == []
+        assert not home.walkthrough_card.isHidden()
+        _settle_events(QApplication, rounds=3)
+        assert [card.example.path for card in home.cards] == [p for p, _ in example_boards()]
+    finally:
+        _close(window)

@@ -97,6 +97,14 @@ closed without a bump.
   bars -- and two supplies did the same upwards. Such a pair now has an empty track
   between them, and a net name keeps out of a symbol's whole box rather than just its
   bars, so "OUT" no longer prints against U1's ground.
+- **The window opens about 80 ms sooner.** 0.23 had come to take longer to appear than
+  0.22 did, and what it spent was breadth: a little in many places. The Build Guide's panel
+  is now built the first time it is shown, the help texts when help is first asked for, the
+  board designer when it first opens, and Home shows its examples a moment after it is up.
+  Typing a comma into a number field still gives a decimal point -- each field takes care of
+  that itself now, instead of a check on every event the application handles. Measured on
+  the frozen build, fifteen starts each, interleaved: the window's median 885 ms to 806 ms,
+  and the process's CPU time 859 ms to 797 ms.
 
 ## [0.23.0] - 2026-11-09
 

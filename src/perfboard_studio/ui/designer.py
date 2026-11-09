@@ -100,6 +100,7 @@ from . import theme
 from .boardpreview import render_board
 from .engine_text import say
 from .i18n import t
+from .numberbox import NumberBox
 
 #: Where the user's own families are kept: in the settings, as the board colour is -- a
 #: board somebody buys is not part of any one document.
@@ -426,7 +427,7 @@ def _combo(
 
 
 def _mm(value: float, top: float = 500.0, decimals: int = 2) -> QDoubleSpinBox:
-    box = QDoubleSpinBox()
+    box = NumberBox()
     box.setRange(0.0, top)
     box.setDecimals(decimals)
     box.setSuffix(" mm")

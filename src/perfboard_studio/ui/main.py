@@ -38,6 +38,7 @@ from collections.abc import Callable, Sequence
 from functools import partial
 from html import escape
 from pathlib import Path
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from PySide6.QtCore import (
@@ -71,7 +72,6 @@ from PySide6.QtGui import (
     QDesktopServices,
     QDrag,
     QIcon,
-    QKeyEvent,
     QKeySequence,
     QPainter,
     QPixmap,
@@ -349,7 +349,7 @@ from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 
-from . import helpcards, icons, planner_pool, theme, updater, whatsnew
+from . import icons, planner_pool, theme, updater, whatsnew
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
 from .autosave import Autosave, disk_state
 from .benchguide import BenchItem, BenchView, bench_items, bench_phases, crop_around
@@ -361,17 +361,17 @@ from .boardstrip import SYSTEM_ENTRY, BoardStrip
 from .cabledialog import CableDialog
 from .canvastools import FloatingBar
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
-from .designer import BoardDesigner, load_user_families, store_user_families
 from .emptystate import EmptyOverlay, EmptyState
 from .engine_text import finding_text, names_in, net_class_word, say
 from .export_pdf import export_pdf
 from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .header import HeaderBar
-from .home import Home, HomeExample
+from .home import WALKTHROUGH, Home, HomeExample
 from .i18n import counted, set_language, t
 from .i18n import language as current_language
 from .inspector import NET_CLASSES, Inspector, InspectorActions, InspectorHooks
+from .numberbox import NumberBox
 from .palette import ALSO as PALETTE_ALSO
 from .palette import CommandPalette, Entry
 from .partlist import PartListPanel
@@ -481,34 +481,6 @@ def redone(description: str) -> str:
     return t("Redone: {what}").format(what=say(description))
 
 
-class _CommaIsAPoint(QObject):
-    """A comma typed into a number field is a decimal point.
-
-    The fields write "2.28" (``use_one_number_format``), and somebody who writes 2,28 by
-    hand types the comma anyway -- which the field's validator would swallow without a word,
-    leaving 228. The key is handed on as the point it means."""
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if (
-            event.type() == QEvent.Type.KeyPress
-            and isinstance(event, QKeyEvent)
-            and event.text() == ","
-            and isinstance(watched, QWidget)
-        ):
-            box = watched if isinstance(watched, QDoubleSpinBox) else watched.parentWidget()
-            if isinstance(box, QDoubleSpinBox):
-                point = QKeyEvent(
-                    QEvent.Type.KeyPress, Qt.Key.Key_Period, event.modifiers(), "."
-                )
-                QApplication.sendEvent(watched, point)
-                return True
-        return super().eventFilter(watched, event)
-
-
-#: The one comma filter, kept alive here and installed once per application.
-_COMMA_IS_A_POINT: _CommaIsAPoint | None = None
-
-
 def use_one_number_format() -> None:
     """Every number in the window written one way: the engine's, with a decimal point.
 
@@ -517,14 +489,9 @@ def use_one_number_format() -> None:
     hold byte for byte. On a Turkish Windows the two met in one dialog as "2,28 mm" in the
     box and "0.64 mm" in the sentence under it, even with the window in English. The
     engine's text cannot change, so the boxes follow it, in both languages -- and still
-    take the comma a Turkish hand types (``_CommaIsAPoint``).
+    take the comma a Turkish hand types, each box for itself (``ui/numberbox.py``).
     """
-    global _COMMA_IS_A_POINT
     QLocale.setDefault(QLocale.c())
-    app = QApplication.instance()
-    if app is not None and _COMMA_IS_A_POINT is None:
-        _COMMA_IS_A_POINT = _CommaIsAPoint()
-        app.installEventFilter(_COMMA_IS_A_POINT)
 
 
 def refused(result: DispatchResult) -> str:
@@ -1573,7 +1540,7 @@ class CustomPartDialog(QDialog):
                 spin.valueChanged.connect(self._refresh)
                 widget = spin
             else:
-                dspin = QDoubleSpinBox()
+                dspin = NumberBox()
                 dspin.setDecimals(2)
                 dspin.setSingleStep(0.5)
                 dspin.setRange(field.minimum, field.maximum)
@@ -1953,14 +1920,10 @@ type WelcomeChoice = Literal[
 ]
 
 
-def example_boards() -> list[tuple[Path, str]]:
-    """The shipped examples a person can open, with one line saying what each one is.
-
-    A board file directly in ``examples/`` and a PROJECT folder beside them -- the one
-    example that is a circuit drawn and not yet built, which is the one a newcomer most
-    needs to see. The line is read out of the document (its parts and its board), because
-    "ne555-astable" says nothing about whether it is eight parts or eighty.
-    """
+def example_paths() -> list[Path]:
+    """The shipped examples' files, found and not read: a board file directly in
+    ``examples/``, and the one board in each folder beside them. ``example_boards`` reads
+    them; this is for asking which there are without paying for that."""
     folder = examples_dir()
     if folder is None:
         return []
@@ -1970,8 +1933,19 @@ def example_boards() -> list[tuple[Path, str]]:
             inner = sorted(entry.glob("*.perf"))
             if len(inner) == 1:
                 found.append(inner[0])
+    return found
+
+
+def example_boards() -> list[tuple[Path, str]]:
+    """The shipped examples a person can open, with one line saying what each one is.
+
+    A board file directly in ``examples/`` and a PROJECT folder beside them -- the one
+    example that is a circuit drawn and not yet built, which is the one a newcomer most
+    needs to see. The line is read out of the document (its parts and its board), because
+    "ne555-astable" says nothing about whether it is eight parts or eighty.
+    """
     listed: list[tuple[tuple[bool, int, str], Path, str]] = []
-    for path in found:
+    for path in example_paths():
         text, _problem = read_document_text(path)
         result = persist.deserialize_document(text) if text is not None else None
         if result is None or not result.ok:
@@ -2827,8 +2801,8 @@ class MainWindow(QMainWindow):
         self._build_inspector()
         self._build_header()
         self._build_status_bar()
-        # What F1 and What's This say about each panel and tool (ui/helpcards.py).
-        helpcards.install(self, self._help_action)
+        # What F1 and What's This say about each panel and tool (ui/helpcards.py) is hung on
+        # the window when somebody first asks: ``_hang_help``.
 
         self._subscribe_bus()
         self.on_bus_changed(self.bus.system_document, None)
@@ -2891,6 +2865,20 @@ class MainWindow(QMainWindow):
         which is folded to its bar until something opens it."""
         if stop.region == "dockDrc":
             self.set_problems_open(True)
+
+    def _hang_help(self) -> ModuleType:
+        """Hang every help text on the window (``ui/helpcards.py``) and hand back the module.
+
+        Done when help is asked for -- F1, What's This, the glossary -- rather than as the
+        window is built: the texts and the module were 3 to 4 ms of every start, and only
+        F1 and What's This ever read them. Hung again on every ask, because a panel built
+        when first shown (the Build Guide) has its tools only from then on; it is a few
+        hundred setWhatsThis calls, well under a millisecond.
+        """
+        from . import helpcards
+
+        helpcards.install(self, self._help_action)
+        return helpcards
 
     def _help_action(self, name: str) -> QAction | None:
         """The action a help text is for, by name: ``draw:<kind>`` for a drawing tool, else
@@ -3475,15 +3463,31 @@ class MainWindow(QMainWindow):
         -- the rule ``board_is_showing`` and ``schematic_is_showing`` ask about their own."""
         return self._is_in_front(dock)
 
-    def _make_home(self) -> Home:
+    def _make_home(self, *, examples_later: bool = False) -> Home:
         """Home, made once and connected: every door is a command the window already has,
         taken after Home has gone, so a file dialog or a question opens over the window it
-        is about."""
+        is about.
+
+        ``examples_later`` is for a start: reading every example for its one-line summary
+        was 17 ms of the first frame, for cards below Home's doors. Home goes up with none
+        and is handed them on the first turn of the event loop, once the window is shown;
+        whether the tour's example is there is a file name, so its card is in place from
+        the first frame."""
         if self._home_page is not None:
             return self._home_page
-        home = Home(
-            [HomeExample(path, line) for path, line in example_boards()], self.lookup
-        )
+
+        def examples() -> list[HomeExample]:
+            return [HomeExample(path, line) for path, line in example_boards()]
+
+        if examples_later:
+            home = Home(
+                [],
+                self.lookup,
+                has_walkthrough=any(path.stem == WALKTHROUGH for path in example_paths()),
+            )
+            QTimer.singleShot(0, home, lambda: home.set_examples(examples()))
+        else:
+            home = Home(examples(), self.lookup)
 
         def through(action: Callable[[], object]) -> Callable[..., None]:
             def go(*_args: object) -> None:
@@ -4302,9 +4306,10 @@ class MainWindow(QMainWindow):
         board and move the 3D view to that step, which nobody asked for by stepping or by
         clicking a part.
         """
-        tree = getattr(self, "guide_tree", None)
-        if tree is None or self._guide_stale or self.dock_guide.isHidden():
+        # Not stale means filled, and filled means built: the panel is never made here.
+        if self._guide_stale or self.dock_guide.isHidden() or not self.guide_built:
             return
+        tree = self.guide_tree
         blocked = tree.blockSignals(True)
         try:
             tree.clearSelection()
@@ -5468,14 +5473,18 @@ class MainWindow(QMainWindow):
         act_help = help_menu.addAction(t("Help for What's Under the &Pointer"))
         act_help.setShortcut(QKeySequence("F1"))
         act_help.setToolTip(t("Point at a panel or a tool and press F1 to read what it is."))
-        act_help.triggered.connect(lambda _checked=False: helpcards.show_card(self))
+        act_help.triggered.connect(lambda _checked=False: self._hang_help().show_card(self))
         act_whats_this = help_menu.addAction(t("What's &This?"))
         act_whats_this.setShortcut(QKeySequence("Shift+F1"))
         act_whats_this.setToolTip(t("Then click on anything to read what it is."))
-        act_whats_this.triggered.connect(lambda _checked=False: QWhatsThis.enterWhatsThisMode())
+        act_whats_this.triggered.connect(
+            lambda _checked=False: (self._hang_help(), QWhatsThis.enterWhatsThisMode())
+        )
         act_glossary = help_menu.addAction(t("&Glossary…"))
         act_glossary.setToolTip(t("The words this window and the build guide use, explained."))
-        act_glossary.triggered.connect(lambda _checked=False: helpcards.GlossaryDialog(self).exec())
+        act_glossary.triggered.connect(
+            lambda _checked=False: self._hang_help().GlossaryDialog(self).exec()
+        )
         act_tour = help_menu.addAction(t("Getting Started T&our"))
         act_tour.setToolTip(
             t("Opens a circuit that is already drawn and walks through it: board, placement, "
@@ -5610,16 +5619,7 @@ class MainWindow(QMainWindow):
         self.view.overlays = (tools, view)
         self._build_sheet_tools()
 
-        # The guide's corner: the next step to do, its ticks cleared, the guide exported.
-        guide = FloatingBar(
-            self.guide_overview, Qt.Corner.BottomRightCorner, vertical=False, name="guideTools"
-        )
-        next_button = guide.add_action(self.act_next_step)
-        next_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        guide.add_action(self.act_clear_progress)
-        guide.add_separator()
-        guide.add_action(self.act_guide, icons.icon("export"))
-        self.guide_tools = guide
+        # The guide's corner is the guide panel's own (``_build_guide_panel``).
 
         # WHAT THE SELECTION CAN DO, OVER THE SELECTION. Rotate, mirror and delete were
         # three buttons on a row across the window, a metre from the part, and lock and
@@ -7896,19 +7896,96 @@ class MainWindow(QMainWindow):
     # panel nobody has open is the same mistake twice.
 
     def _build_guide_dock(self) -> None:
+        """The Build Guide's dock, and its actions; its panel when first wanted.
+
+        THE PANEL IS BUILT WHEN SOMETHING FIRST ASKS FOR IT -- the dock coming in front, a
+        step picked from the menu, a test reading the list -- through the properties below.
+        The bench, the list and the stack that holds them were about 20 ms of every start,
+        for a panel that starts closed behind the board and that most sessions never open.
+        The dock itself is made now, empty: ``restoreState`` matches docks by name, and the
+        View menu offers the dock's own toggle.
+        """
+        # Actions, for the guide's corner, as every view's tools are: they were a row of
+        # push buttons under the list, the one panel left with one. Made with the dock, not
+        # the panel: the menus and the command search list them from the start.
+        self.act_next_step = QAction(icons.icon("next-step"), t("Next Step to Do"), self)
+        self.act_next_step.setToolTip(
+            t("The first step not ticked off yet, shown on the board and in 3D.")
+        )
+        self.act_next_step.triggered.connect(self.on_next_step_to_do)
+        self.act_clear_progress = QAction(icons.icon("clear"), t("Clear Progress"), self)
+        self.act_clear_progress.setToolTip(t("Untick every step of this board."))
+        self.act_clear_progress.triggered.connect(self.on_clear_progress)
+
+        dock = QDockWidget(t("Build Guide"), self)
+        dock.setObjectName("dockGuide")
+        dock.setWidget(QWidget())
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self.dock_guide = dock
+        dock.hide()
+        dock.visibilityChanged.connect(self._on_guide_visibility_changed)
+        self._guide_pages_widget: QStackedWidget | None = None
+
+    @property
+    def guide_built(self) -> bool:
+        """Whether the guide's panel has been made yet."""
+        return getattr(self, "_guide_pages_widget", None) is not None
+
+    def _guide_panel(self) -> None:
+        if self._guide_pages_widget is None:
+            self._build_guide_panel()
+
+    @property
+    def guide_pages(self) -> QStackedWidget:
+        self._guide_panel()
+        assert self._guide_pages_widget is not None
+        return self._guide_pages_widget
+
+    @property
+    def guide_tree(self) -> QTreeWidget:
+        self._guide_panel()
+        return self._guide_tree_widget
+
+    @property
+    def guide_summary(self) -> QLabel:
+        self._guide_panel()
+        return self._guide_summary_widget
+
+    @property
+    def _guide_empty(self) -> EmptyOverlay:
+        self._guide_panel()
+        return self._guide_empty_widget
+
+    @property
+    def bench(self) -> BenchView:
+        self._guide_panel()
+        return self._bench_widget
+
+    @property
+    def guide_overview(self) -> QWidget:
+        self._guide_panel()
+        return self._guide_overview_widget
+
+    @property
+    def guide_tools(self) -> FloatingBar:
+        self._guide_panel()
+        return self._guide_tools_widget
+
+    def _build_guide_panel(self) -> None:
+        """The guide's panel: the bench in front, the list behind it, the list's corner."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(6)
 
-        self.guide_summary = QLabel()
-        self.guide_summary.setWordWrap(True)
-        theme.tone(self.guide_summary, "secondary")
-        layout.addWidget(self.guide_summary)
+        self._guide_summary_widget = QLabel()
+        self._guide_summary_widget.setWordWrap(True)
+        theme.tone(self._guide_summary_widget, "secondary")
+        layout.addWidget(self._guide_summary_widget)
 
-        self.guide_tree = QTreeWidget()
-        self._guide_empty = EmptyOverlay(
-            self.guide_tree.viewport(),
+        self._guide_tree_widget = QTreeWidget()
+        self._guide_empty_widget = EmptyOverlay(
+            self._guide_tree_widget.viewport(),
             EmptyState(
                 t("The guide writes itself"),
                 t("Once parts are on the board, this becomes the soldering order, one step "
@@ -7922,59 +7999,55 @@ class MainWindow(QMainWindow):
         # of them was cut to "R1…" or pushed off the edge. In a single line the part is
         # always read first and the holes follow as far as there is room; the whole line
         # is the row's tooltip.
-        self.guide_tree.setHeaderHidden(True)
-        self.guide_tree.setRootIsDecorated(True)
+        self._guide_tree_widget.setHeaderHidden(True)
+        self._guide_tree_widget.setRootIsDecorated(True)
         # Two levels deep in that same narrow dock; Qt's 20 px a level was a fifth of it
         # spent on nothing.
-        self.guide_tree.setIndentation(12)
-        self.guide_tree.itemSelectionChanged.connect(self._on_guide_step_selected)
-        layout.addWidget(self.guide_tree)
+        self._guide_tree_widget.setIndentation(12)
+        self._guide_tree_widget.itemSelectionChanged.connect(self._on_guide_step_selected)
+        layout.addWidget(self._guide_tree_widget)
 
         # WHERE YOU ARE IN THE BUILD. Each step has a tick, kept per board in the settings
         # (``PROGRESS_GROUP``); Next Step to Do picks the first one without, which is the
         # step to show on the board and in 3D when somebody comes back to the bench.
-        self.guide_tree.itemChanged.connect(self._on_guide_item_changed)
-        # Actions, for the guide's corner (``_build_canvas_tools``), as every view's tools
-        # are: they were a row of push buttons under the list, the one panel left with one.
-        self.act_next_step = QAction(icons.icon("next-step"), t("Next Step to Do"), self)
-        self.act_next_step.setToolTip(
-            t("The first step not ticked off yet, shown on the board and in 3D.")
-        )
-        self.act_next_step.triggered.connect(self.on_next_step_to_do)
-        self.act_clear_progress = QAction(icons.icon("clear"), t("Clear Progress"), self)
-        self.act_clear_progress.setToolTip(t("Untick every step of this board."))
-        self.act_clear_progress.triggered.connect(self.on_clear_progress)
+        self._guide_tree_widget.itemChanged.connect(self._on_guide_item_changed)
         # Room at the foot of the list for the corner, so it covers no step.
         layout.addSpacing(theme.SPACE["2xl"] * 2)
 
         # THE BENCH IN FRONT, THE LIST BEHIND IT (``ui/benchguide.py``): one step at a
         # time, large, with Back and "Done, next" -- the list above is its Overview.
-        self.guide_overview: QWidget = panel
-        self.bench: BenchView = BenchView(self._bench_picture)
-        self.guide_pages: QStackedWidget = QStackedWidget()
+        self._guide_overview_widget = panel
+        self._bench_widget = BenchView(self._bench_picture)
+        self._guide_pages_widget = QStackedWidget()
         back = QToolButton()
         back.setText(t("◀  Step by step"))
         back.setAutoRaise(True)
         back.clicked.connect(self._show_bench)
         layout.insertWidget(0, back, 0, Qt.AlignmentFlag.AlignLeft)
-        self.bench.moved.connect(self._on_bench_moved)
-        self.bench.ticked.connect(self._on_bench_ticked)
-        self.bench.overview_wanted.connect(self._show_guide_overview)
-        self.bench.cut_list_wanted.connect(lambda: self._show_guide_sheet("cuts"))
-        self.bench.track_cuts_wanted.connect(lambda: self._show_guide_sheet("tracks"))
-        self.bench.export_wanted.connect(lambda: self.on_export_guide())
-        self.bench.save_wanted.connect(lambda: self.on_save())
-        self.guide_pages.addWidget(self.bench)
-        self.guide_pages.addWidget(panel)
-        self.guide_pages.setCurrentWidget(self.bench)
+        self._bench_widget.moved.connect(self._on_bench_moved)
+        self._bench_widget.ticked.connect(self._on_bench_ticked)
+        self._bench_widget.overview_wanted.connect(self._show_guide_overview)
+        self._bench_widget.cut_list_wanted.connect(lambda: self._show_guide_sheet("cuts"))
+        self._bench_widget.track_cuts_wanted.connect(lambda: self._show_guide_sheet("tracks"))
+        self._bench_widget.export_wanted.connect(lambda: self.on_export_guide())
+        self._bench_widget.save_wanted.connect(lambda: self.on_save())
+        self._guide_pages_widget.addWidget(self._bench_widget)
+        self._guide_pages_widget.addWidget(panel)
+        self._guide_pages_widget.setCurrentWidget(self._bench_widget)
 
-        dock = QDockWidget(t("Build Guide"), self)
-        dock.setObjectName("dockGuide")
-        dock.setWidget(self.guide_pages)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
-        self.dock_guide = dock
-        dock.hide()
-        dock.visibilityChanged.connect(self._on_guide_visibility_changed)
+        # The guide's corner: the next step to do, its ticks cleared, the guide exported.
+        guide = FloatingBar(panel, Qt.Corner.BottomRightCorner, vertical=False, name="guideTools")
+        next_button = guide.add_action(self.act_next_step)
+        next_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        guide.add_action(self.act_clear_progress)
+        guide.add_separator()
+        guide.add_action(self.act_guide, icons.icon("export"))
+        self._guide_tools_widget = guide
+
+        stand_in = self.dock_guide.widget()
+        self.dock_guide.setWidget(self._guide_pages_widget)
+        if stand_in is not None:
+            stand_in.deleteLater()
 
     def _on_guide_visibility_changed(self, visible: bool) -> None:
         # Which of the views' tab group is in front, as the board, the sheet and the 3D view
@@ -7983,6 +8056,8 @@ class MainWindow(QMainWindow):
         # offering to open the guide that was already showing.
         if visible:
             self._note_in_front(self.dock_guide)
+            # On screen is the last moment for the panel to be made (``_build_guide_dock``).
+            self._guide_panel()
         else:
             self._in_front.discard(self.dock_guide)
         if visible and self._guide_stale:
@@ -8003,7 +8078,7 @@ class MainWindow(QMainWindow):
         # open in front of the user. The same trap as BoardView._place_overlays. And not
         # merely open: as a tab behind the board it is open and nobody can see it, and
         # filling it there ran DRC and LVS on every edit for nothing.
-        if not hasattr(self, "guide_tree") or not self._is_in_front(self.dock_guide):
+        if not hasattr(self, "dock_guide") or not self._is_in_front(self.dock_guide):
             self._guide_stale = True
             return
         self._guide_stale = False
@@ -12073,6 +12148,10 @@ class MainWindow(QMainWindow):
         nothing -- no undo step, no dirty title. The families the user saves are kept in the
         settings, as the board colour is.
         """
+        # Imported when first opened: the designer and the stock-board pictures it draws
+        # were 3 to 5 ms of every start, for a dialog most starts never open.
+        from .designer import BoardDesigner, load_user_families, store_user_families
+
         settings = app_settings()
         document = self.bus.document
         current = (document.board, document.edge_connectors, document.mounting_holes)
@@ -13243,7 +13322,7 @@ class MainWindow(QMainWindow):
             or document.nets
         ):
             return
-        home = self._make_home()
+        home = self._make_home(examples_later=True)
         recent = [entry for entry in self._recent_paths() if Path(entry).is_file()]
         home.set_recent([str(entry) for entry in recent[:8]])
         home.set_show_at_start(True)

@@ -3227,3 +3227,21 @@ shows; and the Build Guide, Schematic and canvas tools built when first shown. T
 were estimated at 40-60 ms, and the lazy docks at most of the rest: not a difference a user
 notices on its own, and not a risk worth taking the week of a release.
 
+**Done for 0.24, and measured the same way: 79 ms.** Fifteen interleaved starts of each
+frozen build, 0.24 against 0.23.0: the window's handle at a median of 806 ms against 885
+(wall), the process's CPU time at it 797 ms against 859 -- more than the 40-60 ms estimated
+for the first three items alone, as the lazy guide was expected to add.
+What went in: `ui/numberbox.NumberBox`, the comma filter on each number field, with
+`test_no_number_field_is_made_as_a_plain_double_spin_box` reading the sources for a
+`QDoubleSpinBox(` made anywhere else and
+`test_every_number_field_the_window_can_show_takes_a_comma` typing into every one the window
+can make, Add Cable's length included; the Build Guide's panel built through properties the
+first time something asks for it (`MainWindow.guide_built`, the dock itself made at once
+because `restoreState` matches docks by name); `helpcards` hung on the first F1, Shift+F1 or
+glossary request (`_hang_help`); `designer` imported when it opens; and Home given its
+examples on the event loop's first turn after it shows. A subprocess test
+(`test_a_start_builds_neither_the_guide_nor_the_help_and_imports_no_designer`) holds the
+first three, since every other test process has imported everything. The Schematic dock was
+left as it is: a blank start puts the sheet in front, so it is filled while the window is
+built and building it later would save nothing on the start that matters most.
+
