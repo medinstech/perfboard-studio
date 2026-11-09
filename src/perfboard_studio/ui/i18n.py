@@ -2306,6 +2306,24 @@ TURKISH: Mapping[str, str] = {
         "içindedir, yani olduğu gibi girer. Satıcılar hangi yönde ilettiği konusunda hemfikir "
         "değildir: lehimlemeden önce sizinkini multimetreyle eğerek deneyin."
     ),
+    "RV09 potentiometer, 9 mm": "RV09 potansiyometre, 9 mm",
+    "Potentiometer with a 6 mm shaft standing 20 mm above the board: end, wiper, end, in a "
+    "row of three pins": (
+        "Mili karttan 20 mm yukarıda duran, 6 mm milli potansiyometre: uç, orta uç, uç; "
+        "üç pinlik bir sırada"
+    ),
+    "Snip the two lugs off flush with the frame before you solder it. They are 3.8 mm long "
+    "against the pins' 3.2, so left on they hold the frame 0.6 mm clear of the board and the "
+    "pins stop short of the holes. The pins' 2.5 mm pitch against the board's 2.54 puts the "
+    "end pins 0.04 mm off their holes, inside what a 1 mm hole has to spare. Its value is "
+    "printed on it as B10K or A10K: B is linear, A the log taper of a volume control.": (
+        "Lehimlemeden önce iki tırnağı gövdeyle aynı hizada kesin. Tırnaklar pinlerin 3,2 "
+        "mm'sine karşılık 3,8 mm uzundur; bırakırsanız gövdeyi karttan 0,6 mm yukarıda "
+        "tutar ve pinler deliklere ulaşmaz. Pinlerin 2,5 mm aralığı kartın 2,54 mm'sine "
+        "karşı uçtaki pinleri deliklerinden 0,04 mm kaydırır; bu, 1 mm'lik bir deliğin payı "
+        "içindedir. Değeri üzerinde B10K ya da A10K diye yazar: B doğrusaldır, A ses "
+        "kontrolünün istediği logaritmik eğridir."
+    ),
     "Passive buzzer 12 mm": "Pasif buzzer 12 mm",
     "Sounds only when driven with a tone, 12 mm across, legs 7.6 mm apart": (
         "Yalnızca bir tonla sürülünce öter, 12 mm çapında, bacaklar arası 7,6 mm"

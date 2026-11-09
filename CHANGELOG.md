@@ -120,6 +120,12 @@ closed without a bump.
   28BYJ-48 motor is a six-pin header (IN1 IN2 IN3 IN4 - +) with the motor's cable plugging
   in, and nothing more: no maker publishes a drawing of the board, so it has no body rather
   than one invented. A caliper measurement of the board would let it be drawn.
+- **The RV09 potentiometer**, the 9 mm pot of the kits, from the Alps RK09K drawing its
+  clones follow -- an assumption its note says out loud. It is drawn at its two lugs, 10.6 mm
+  across, with the shaft 20 mm above the board; and its check says to snip the lugs off flush,
+  because at 3.8 mm against the pins' 3.2 they would hold the frame 0.6 mm off the board and
+  keep the pins out of the holes. Its 2.5 mm pin pitch against the board's 2.54 is worked
+  out the way the JST XH's is.
 
 ## [0.23.0] - 2026-11-09
 

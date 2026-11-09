@@ -681,6 +681,34 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("potentiometer", "pot", "volume", "knob", "WH148", "RV16",
                          "potansiyometre")),
+    # The 9 mm pot of the kits, on the board with its shaft pointing up. Drawn at its LUGS,
+    # not its frame: 10.6 mm across, so DRC measures what the board has to make room for.
+    CatalogPart("rv09-pot", "RV09 potentiometer, 9 mm", "passive",
+                "box-3x1-p1-r1-10.6x12.5x20-o0x-6.25",
+                "Potentiometer with a 6 mm shaft standing 20 mm above the board: end, wiper, "
+                "end, in a row of three pins",
+                _legs("1", "W", "3"), "potentiometer", value="B10K", ref_prefix="RV",
+                source=(
+                    "Alps RK09K series drawing (Alps catalogue p.370, "
+                    "mikrocontroller.net/attachment/74244/B400_ALPS-RK09K.pdf), read at high "
+                    "zoom: pins 1, 2, 3 2.5 mm apart, the two lugs 10.6 mm outer to outer and "
+                    "7 mm from the pin row, the frame 5.5 mm past the shaft's axis, the shaft "
+                    "LM1 = 20 mm above the mounting surface, pins 3.2 mm and lugs 3.8 mm below "
+                    "it. ASSUMPTION: the kit clones sold as RV09 follow the Alps RK09K pattern; "
+                    "none of them publishes a drawing of its own, so measure yours against "
+                    "this one. The 2.5 mm pin pitch against the board's 2.54 leaves the end "
+                    "pins 0.04 mm off their holes, as the JST XH's does"
+                ),
+                check=(
+                    "Snip the two lugs off flush with the frame before you solder it. They are "
+                    "3.8 mm long against the pins' 3.2, so left on they hold the frame 0.6 mm "
+                    "clear of the board and the pins stop short of the holes. The pins' 2.5 mm "
+                    "pitch against the board's 2.54 puts the end pins 0.04 mm off their holes, "
+                    "inside what a 1 mm hole has to spare. Its value is printed on it as B10K "
+                    "or A10K: B is linear, A the log taper of a volume control."
+                ),
+                aliases=("potentiometer", "pot", "RV09", "RK09K", "9 mm pot", "volume",
+                         "potansiyometre")),
     CatalogPart("bourns-78f101j", "Bourns 78F101J axial inductor", "passive",
                 "axial-4h-7.11x2.79",
                 "100 uH RF choke, 165 mA, laid flat like a resistor",

@@ -598,3 +598,33 @@ def test_the_tilt_switch_is_drawn_at_its_datasheets_maxima_and_its_lead_arithmet
     spare = (1.0 - 0.6) / 2
     assert round(off_by, 2) == 0.07 and off_by < spare
     assert "0.07 mm" in part.check and "0.2 mm" in part.check
+
+
+def test_the_rv09_courtyard_covers_its_lugs_and_its_pin_arithmetic_is_true() -> None:
+    """The Alps RK09K drawing the RV09 is drawn from: lugs 10.6 mm outer to outer, 2.1 mm
+    deep, 7 mm from the pin row; the frame 5.5 mm past the shaft's axis; pins 2.5 mm apart.
+    The footprint has to hold the whole of the part, lugs included, and the lug and pin
+    lengths the check quotes have to be the ones that make its sentence true."""
+    part = catalog_part("rv09-pot")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    assert [(pin.d_col, pin.d_row) for pin in footprint.pins] == [(0, 0), (1, 0), (2, 0)]
+    extent = body_extent(footprint, STANDARD_PITCH_MM)
+    assert (extent.size_x, extent.size_y) == (10.6, 12.5)
+    assert footprint.body_height == 20
+    left = extent.centre_x - extent.size_x / 2
+    right = extent.centre_x + extent.size_x / 2
+    top = extent.centre_y - extent.size_y / 2
+    bottom = extent.centre_y + extent.size_y / 2
+    centre_x = STANDARD_PITCH_MM  # the middle pin, which is the pin row's centre
+    for side in (-1, 1):
+        edge = centre_x + side * 10.6 / 2
+        assert left <= edge <= right
+    assert top <= -7 - 2.1 / 2 and bottom >= -7 + 2.1 / 2
+    assert top <= -(7 + 5.5) <= bottom
+    # The lugs are longer than the pins, so left on they stand the frame off the board.
+    assert pytest.approx(0.6) == 3.8 - 3.2
+    assert abs(2 * 2.5 - 2 * STANDARD_PITCH_MM) == pytest.approx(0.08)
+    assert "0.6 mm" in part.check and "0.04 mm" in part.check
+    assert "ASSUMPTION" in part.source and "RK09K" in part.source
