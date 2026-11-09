@@ -20,6 +20,31 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **Adafruit's INA219 current sensor, both revisions, drawn as themselves.** The STEMMA QT
+  board and the original with four holes each go in on their six-pin header, VCC GND SCL
+  SDA VIN- VIN+, and carry the chip, the 0.1 ohm shunt and the blue terminal block where
+  Adafruit's board files put them, the STEMMA QT one with a socket on each side. The
+  original is also found as "INA219 module" and "CJMCU-219", and its check says a clone
+  usually keeps the header order but is to be measured. Three new kinds of part on a module
+  make it: a screw terminal block, a STEMMA QT / Qwiic socket and a SOT-23-8.
+- **The NodeMCU DevKit 1.0, drawn as itself.** The 0.9 inch board with the ESP-12E goes
+  in on its two rows of fifteen, named as its silkscreen has them, with the regulator,
+  the tantalum, the CP2102, the micro-USB socket and the RST and FLASH buttons where the
+  NodeMCU team's own Gerbers put them. Its check says which pins set how it boots, that
+  the SD pins are the module's flash, and that LoLin's wider "V3" is another board.
+- **Adafruit's BME280 and BMP280 breakouts, drawn as themselves.** The original board the
+  two share and the BMP280's STEMMA QT board go in on their seven-pin header, VIN 3Vo GND
+  SCK SDO SDI CS, with the sensor, the regulator and the level shifter where Adafruit's
+  board files put them. Their check says how the pins serve I2C and SPI and which address
+  SDO picks.
+- **The 30-pin ESP32 DevKit V1, drawn as itself.** The DOIT board and its clones go in on
+  their two rows of fifteen, 1.0 inch apart, named as the silkscreen has them, with the
+  WROOM-32, the USB bridge, the regulator, the micro-USB socket and the BOOT and EN buttons
+  where a photograph of one, straightened on its own pads, puts them. Its check says the
+  clones keep the pins and move the parts, and that the 38-pin DevKitC is another board.
+
 ## [0.23.0] - 2026-11-09
 
 ### Added
@@ -160,71 +185,6 @@ closed without a bump.
   the hobby servo. Each check says what the module needs: a divider into the Bluetooth
   module's 3.3 V RXD, which sensor board has no regulator, and for the relay, that what it
   switches stays on its own screw terminals, because mains is not a perfboard job.
-- **Two hall sensors.** The A3144 switch, whose output pulls low near a magnet, and the
-  SS49E linear sensor, whose output follows the field. Both are in the Library by name, with
-  "hall" and "magnet" finding them.
-- **The panel potentiometer every kit has.** A 16 mm pot goes on the board as the three
-  pads its wires land in, named CCW, W and CW, and the schematic draws it as a pot. Its check
-  says which tag is which from the shaft, and which wires to swap if it turns the wrong way.
-- **Eight modules that plug in on a cable, by name.** The KY-023 joystick, the KY-040 rotary
-  encoder, the LCD1602 with its I2C backpack, the DS3231 clock (ZS-042), the MAX7219 8 x 8
-  matrix, the TM1637 four-digit display, a WS2812B strip and a micro SD card module. Each one
-  goes on the board as the header its cable plugs into, with the pins named as the module
-  names them, and its value is what it is sold as (KY-040, TM1637) so it reads the same in
-  either language. The build guide says the module is not on the board and lists its leads
-  pin by pin, in place of the numbered holes and the + lead's polarity line, and so does it
-  now for the 4x4 keypad and the hobby servo.
-- **The TCRT5000 reflective IR sensor**, the bare part, drawn from KiCad's model with its blue
-  LED over A and K and its black phototransistor over C and E, as Vishay lays them out. Its
-  legs are 5.5 mm apart and are bent to the 0.1 in grid; its check says so, and that its
-  snap-in clips are for 2.5 mm holes.
-- **Seven more modules on a cable.** The HC-05 (ZS-040) and HC-06 Bluetooth modules, a MAX485
-  RS-485 module, the GY-BMP280, GY-BME280 and GY-BME280-3.3 sensor boards by the names
-  printed on them, and the 1-channel 5 V relay module. Each check says what the module needs:
-  a divider into the Bluetooth module's 3.3 V RXD, which sensor board has no regulator, and,
-  for the relay, that what it switches stays on its own screw terminals, because mains needs
-  proper insulation and spacing and is not a perfboard job.
-- **JST XH and Molex KK 254 connectors.** The wire-to-board headers a perfboard takes: JST XH
-  from 2 to 4 pins, top and side entry, and Molex KK 254 (KF2510) from 2 to 16, drawn from
-  KiCad's models with pin 1 marked in both views. An XH is 2.50 mm a pin, and four is as many
-  as go into a 1.0 mm-drilled 0.1 in board before a post meets the side of its hole. Search
-  "JST PH", "ZH", "SH" or "VH" and the Library says why those are not here and what to use.
-- **The HC-SR501 PIR motion sensor, drawn as itself.** It goes on the board on its three pins,
-  VCC, OUT and GND. Its Fresnel lens is drawn with its square foot and its dome, with an M2
-  hole at each end of its board. Each is measured: the board, the holes and the lens's width
-  on TruSens' sheet, and the lens's height on a photograph of one.
-- **The SparkFun Arduino Pro Mini 328, drawn as itself.** Its two rows of twelve go into female
-  strips 0.6 inch apart, named as its silkscreen has them, and on its red board stand the
-  ATmega328P on its corner, the resonator, the regulator, the reset button and its two LEDs
-  where SparkFun's own board file puts them. Its check says A4 to A7 are on pads inside the
-  rows, off the grid, to be wired on their own, and that a clone shares the 24 header pins
-  but may put those pads and the FTDI ones elsewhere.
-- **SparkFun's bidirectional Logic Level Converter, drawn as itself.** Its two rows of six,
-  HV1 to HV4 and LV1 to LV4 with each side's supply and GND, go in 0.4 inch apart, and its
-  four BSS138s and eight 10k resistors stand where SparkFun's board file puts them. Its
-  check says which supply goes where and that the 10k pull-ups set how fast an edge rises.
-- **Adafruit's INA219 current sensor, both revisions, drawn as themselves.** The STEMMA QT
-  board and the original with four holes each go in on their six-pin header, VCC GND SCL
-  SDA VIN- VIN+, and carry the chip, the 0.1 ohm shunt and the blue terminal block where
-  Adafruit's board files put them, the STEMMA QT one with a socket on each side. The
-  original is also found as "INA219 module" and "CJMCU-219", and its check says a clone
-  usually keeps the header order but is to be measured. Three new kinds of part on a module
-  make it: a screw terminal block, a STEMMA QT / Qwiic socket and a SOT-23-8.
-- **The NodeMCU DevKit 1.0, drawn as itself.** The 0.9 inch board with the ESP-12E goes
-  in on its two rows of fifteen, named as its silkscreen has them, with the regulator,
-  the tantalum, the CP2102, the micro-USB socket and the RST and FLASH buttons where the
-  NodeMCU team's own Gerbers put them. Its check says which pins set how it boots, that
-  the SD pins are the module's flash, and that LoLin's wider "V3" is another board.
-- **Adafruit's BME280 and BMP280 breakouts, drawn as themselves.** The original board the
-  two share and the BMP280's STEMMA QT board go in on their seven-pin header, VIN 3Vo GND
-  SCK SDO SDI CS, with the sensor, the regulator and the level shifter where Adafruit's
-  board files put them. Their check says how the pins serve I2C and SPI and which address
-  SDO picks.
-- **The 30-pin ESP32 DevKit V1, drawn as itself.** The DOIT board and its clones go in on
-  their two rows of fifteen, 1.0 inch apart, named as the silkscreen has them, with the
-  WROOM-32, the USB bridge, the regulator, the micro-USB socket and the BOOT and EN buttons
-  where a photograph of one, straightened on its own pads, puts them. Its check says the
-  clones keep the pins and move the parts, and that the 38-pin DevKitC is another board.
 
 - **A light theme, and a cleaner dark one.** View ▸ Theme offers Dark (the default) and
   Light, applied at the next start like the language; `PERFBOARD_STUDIO_THEME=light` picks
