@@ -1589,6 +1589,28 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "screw terminal too: A goes to A and B to B along it. " + _CABLED_CHECK
                 ),
                 aliases=("RS485", "RS-485", "MAX485", "Modbus", "TTL to RS485")),
+    # The green ULN2003 board sold with the 28BYJ-48, as a wired header: no maker draws it and
+    # sellers' boards come in four sizes (32 to 40.5 mm), so no body is drawn until somebody
+    # measures one. The motor plugs into the board's own socket, not into this header.
+    CatalogPart("uln2003-board", "ULN2003 stepper driver board (on a header)", "connector",
+                "hdr-1x6",
+                "Driver board for a 28BYJ-48 stepper. Its cable plugs into this 6-pin header: "
+                "IN1 IN2 IN3 IN4 - + from pin 1",
+                _legs("IN1", "IN2", "IN3", "IN4", "-", "+"), value="ULN2003 board",
+                ref_prefix="J",
+                source=(
+                    "Makerguides / ProtoSupplies '4 Phase ULN2003 Stepper Motor Driver PCB' "
+                    "sheet (inputs A to D, supply 5 to 12 V, 500 mA per output); the board has "
+                    "no drawing, so no body is drawn and the header is the wires you run to it"
+                ),
+                check=(
+                    "The four inputs are lettered A to D on the board and IN1 to IN4 under its "
+                    "header; the supply is a separate pair of pins, 5 to 12 V, so give a 5 V "
+                    "28BYJ-48 5 V and join the supply's - to your logic ground. The motor plugs "
+                    "into the board's own white socket, not into this header. " + _CABLED_CHECK
+                ),
+                aliases=("stepper driver", "28BYJ-48", "ULN2003", "stepper motor board",
+                         "step motoru sürücü", "step motor sürücüsü")),
     # The cheap Bosch sensor boards most people buy, by the name printed on them. The purple
     # six-pin ones have no regulator and run on 3.3 V; the four-pin GY-BME280 has one.
     CatalogPart("gy-bmp280", "GY-BMP280 pressure sensor module (on a header)", "sensor",

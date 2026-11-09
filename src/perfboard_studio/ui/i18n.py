@@ -2274,6 +2274,23 @@ TURKISH: Mapping[str, str] = {
         "veri sayfasının izin verdiği en uzun boya, 9,5 mm'ye göre yapılmıştır; kartın "
         "üstünde daha az tel bırakırsanız daha alçakta durur."
     ),
+    "ULN2003 stepper driver board (on a header)": "ULN2003 step motor sürücü kartı (header üzerinde)",
+    "Driver board for a 28BYJ-48 stepper. Its cable plugs into this 6-pin header: IN1 IN2 IN3 "
+    "IN4 - + from pin 1": (
+        "28BYJ-48 step motoru için sürücü kartı. Kablosu bu 6 pinli header'a takılır: 1. "
+        "pinden IN1 IN2 IN3 IN4 - +"
+    ),
+    "The four inputs are lettered A to D on the board and IN1 to IN4 under its header; the "
+    "supply is a separate pair of pins, 5 to 12 V, so give a 5 V 28BYJ-48 5 V and join the "
+    "supply's - to your logic ground. The motor plugs into the board's own white socket, not "
+    "into this header. Match each lead to the name printed beside the module's pins, not to "
+    "its place: sellers' boards are not all wired in the same order.": (
+        "Dört giriş kartın üzerinde A'dan D'ye, header'ın altında IN1'den IN4'e diye yazılıdır; "
+        "besleme ayrı bir pin çiftidir, 5 ile 12 V: 5 V'luk bir 28BYJ-48'e 5 V verin ve "
+        "beslemenin - ucunu mantık topraklamanıza bağlayın. Motor bu header'a değil, kartın "
+        "kendi beyaz soketine takılır. Her kabloyu yerine göre değil, modülün pinlerinin yanında "
+        "yazan ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
     "SW-520D tilt switch": "SW-520D eğim anahtarı",
     "Ball tilt switch, 12 V contacts: closed while within about 45 degrees of upright with "
     "its leads down, open past that": (

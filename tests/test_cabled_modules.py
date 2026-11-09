@@ -194,6 +194,7 @@ SOLD_AS = {
     "gy-bme280": "GY-BME280",
     "gy-bme280-3v3": "GY-BME280-3.3",
     "relay-module-1ch": "SRD-05VDC",
+    "uln2003-board": "ULN2003 board",
 }
 
 

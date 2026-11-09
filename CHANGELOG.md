@@ -116,6 +116,10 @@ closed without a bump.
   ceiling, because the drawing prints no bead length and nothing about how high it is left,
   which the part's note says. Its second variant, with a thinner bead, prints no thickness
   and is not drawn.
+- **The ULN2003 stepper driver board, as a wired header.** The blue board sold with the
+  28BYJ-48 motor is a six-pin header (IN1 IN2 IN3 IN4 - +) with the motor's cable plugging
+  in, and nothing more: no maker publishes a drawing of the board, so it has no body rather
+  than one invented. A caliper measurement of the board would let it be drawn.
 
 ## [0.23.0] - 2026-11-09
 
