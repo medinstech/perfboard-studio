@@ -9,13 +9,13 @@ time. Each section is meant to be read on its own, before changing the code it d
 The foundations stayed in `CLAUDE.md`, because every change has to keep them, and the
 sections here lean on them. A section that names one of these means it:
 
-- [The document is immutable; every mutation is a command](../CLAUDE.md#the-document-is-immutable-every-mutation-is-a-command)
-- [The engine is pure](../CLAUDE.md#the-engine-is-pure)
-- [The differential proof](../CLAUDE.md#the-differential-proof)
-- [A perfboard connection is not one thing](../CLAUDE.md#a-perfboard-connection-is-not-one-thing)
-- [Hole addressing](../CLAUDE.md#hole-addressing)
-- [Layering](../CLAUDE.md#layering)
-- [i18n](../CLAUDE.md#i18n)
+- The document is immutable; every mutation is a command
+- The engine is pure
+- The differential proof
+- A perfboard connection is not one thing
+- Hole addressing
+- Layering
+- i18n
 
 ## CI and the goldens that are ours
 

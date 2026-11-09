@@ -46,3 +46,7 @@ examples/*_schematic.svg
 examples/*_schematic.pdf
 examples/*_schematic.png
 examples/*.perf.bak
+
+# Agent notes and internal planning, kept local.
+CLAUDE.md
+PLAN.md

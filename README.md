@@ -74,8 +74,8 @@
 
 > **Status: pre-alpha, and end to end.** A circuit goes in and a soldering guide
 > comes out. What is missing is the dogfood test — nobody has yet built a real
-> board by following a generated guide, and [PLAN.md](https://github.com/medinstech/perfboard-studio/blob/main/PLAN.md) §11
-> says M5 does not close until somebody has. Everything else runs, and every
+> board by following a generated guide, and the project plan says M5 does not
+> close until somebody has. Everything else runs, and every
 > release ships an installer for each of the three desktop platforms, none code-signed.
 
 **Jump to** — [Running it](#running-it) ·
@@ -459,7 +459,7 @@ three-platform packaging that a `v*` tag runs, and the update check that tells y
 for Updates…**; it verifies the download against the release's `SHA256SUMS` and then hands
 it to you — running it stays your click).
 
-Next, in the order [PLAN.md](https://github.com/medinstech/perfboard-studio/blob/main/PLAN.md) §11 puts them:
+Next, in the order the project plan puts them:
 
 - **The dogfood build (M5).** Somebody has to solder a real board from a generated guide.
   Until that has happened, every claim on this page is a claim about software rather than
@@ -480,9 +480,7 @@ Next, in the order [PLAN.md](https://github.com/medinstech/perfboard-studio/blob
 | [docs/prior-art.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/prior-art.md) | the tools that already exist in this space, and the licence boundary this project keeps from them |
 | [CONTRIBUTING.md](https://github.com/medinstech/perfboard-studio/blob/main/CONTRIBUTING.md) | running the suite, which checks are gates and which are reports |
 | [SECURITY.md](https://github.com/medinstech/perfboard-studio/blob/main/SECURITY.md) · [CODE_OF_CONDUCT.md](https://github.com/medinstech/perfboard-studio/blob/main/CODE_OF_CONDUCT.md) | reporting a vulnerability, and how people are expected to behave here |
-| [PLAN.md](https://github.com/medinstech/perfboard-studio/blob/main/PLAN.md) | the project plan, **written in Turkish**: what is to be done and what is deliberately not. It is not frozen; it changes when the plan does, and a prediction that did not hold stays where it was with a sentence saying what happened |
 | [docs/ARCHITECTURE.md](https://github.com/medinstech/perfboard-studio/blob/main/docs/ARCHITECTURE.md) | why the code is shaped the way it is, one decision to a section, and the most useful thing here for a person about to change something |
-| [CLAUDE.md](https://github.com/medinstech/perfboard-studio/blob/main/CLAUDE.md) | the commands, the gates and the rules every change has to keep, and which section of the architecture to read before touching what. Written for agents working in the repository, who load it in every session |
 
 ## Contributing
 

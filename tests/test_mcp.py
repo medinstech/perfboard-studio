@@ -1094,10 +1094,13 @@ def test_every_tool_is_named_in_the_documentation_and_nothing_else_is() -> None:
         f"documented but gone: {sorted(documented - registered)}"
     )
     # The count is also stated in prose, in two files, and both are read here rather than
-    # trusted: the sentence a person actually reads is the one that went wrong.
+    # trusted: the sentence a person actually reads is the one that went wrong. PLAN.md
+    # is kept on the maintainer's machine, out of the repository, so it is read where it is.
     assert f"{len(registered)} tools," in doc
-    plan = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8")
-    assert f"Gerçekleşen: {len(registered)} tool" in plan
+    plan_md = REPO_ROOT / "PLAN.md"
+    if plan_md.exists():
+        plan = plan_md.read_text(encoding="utf-8")
+        assert f"Gerçekleşen: {len(registered)} tool" in plan
 
 
 def test_nothing_in_the_mcp_package_writes_to_stdout() -> None:

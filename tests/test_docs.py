@@ -42,6 +42,12 @@ README_TR = REPO_ROOT / "README.tr.md"
 CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
 ARCHITECTURE = REPO_ROOT / "docs" / "ARCHITECTURE.md"
 
+#: CLAUDE.md is kept on the maintainer's machine, out of the public repository, so a
+#: checkout without it -- CI's -- skips what is checked about it instead of failing.
+needs_claude_md = pytest.mark.skipif(
+    not CLAUDE_MD.exists(), reason="CLAUDE.md is kept local, not in the repository"
+)
+
 #: What CLAUDE.md may grow to. It was split to 31 000; a new section belongs in
 #: docs/ARCHITECTURE.md, with one line in CLAUDE.md's list saying when to read it.
 CLAUDE_MD_BUDGET = 40_000
@@ -100,7 +106,12 @@ def test_the_two_readmes_have_the_same_shape() -> None:
 
 @pytest.mark.parametrize(
     "page",
-    [README, README_TR, CLAUDE_MD, *sorted((REPO_ROOT / "docs").glob("*.md"))],
+    [
+        README,
+        README_TR,
+        *([CLAUDE_MD] if CLAUDE_MD.exists() else []),
+        *sorted((REPO_ROOT / "docs").glob("*.md")),
+    ],
     ids=lambda p: p.name,
 )
 def test_every_link_within_a_page_lands_on_a_heading(page: Path) -> None:
@@ -117,6 +128,7 @@ def _links_into(text: str, page: str) -> list[str]:
     return re.findall(rf"\]\({re.escape(page)}#([^)]+)\)", _prose(text))
 
 
+@needs_claude_md
 def test_claude_md_lists_every_section_of_the_architecture() -> None:
     """The list at the end of CLAUDE.md is how an agent learns that a section exists at all,
     so a section added to ARCHITECTURE.md and not listed is one nobody reads before breaking
@@ -149,6 +161,7 @@ def test_the_readmes_count_the_mcp_tools_as_docs_mcp_does() -> None:
         assert set(counts) == {stated.group(1)}, f"{page.name} says {counts}"
 
 
+@needs_claude_md
 def test_claude_md_names_every_rule_the_original_never_had() -> None:
     """CLAUDE.md names PYTHON_ONLY_RULES one by one -- the DRC rules the differential proof
     leaves out because the TypeScript engine never had them -- and an agent reads that list
@@ -177,6 +190,7 @@ def test_claude_md_names_every_rule_the_original_never_had() -> None:
     )
 
 
+@needs_claude_md
 def test_claude_md_stays_small_enough_to_load_into_every_session() -> None:
     size = len(CLAUDE_MD.read_text(encoding="utf-8"))
     assert size <= CLAUDE_MD_BUDGET, (

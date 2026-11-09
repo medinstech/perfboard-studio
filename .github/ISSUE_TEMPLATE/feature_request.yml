@@ -5,10 +5,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before writing: [PLAN.md](https://github.com/medinstech/perfboard-studio/blob/main/PLAN.md)
-        §11 lists what is already planned and in what order, and §12 lists the questions
-        still open. If your idea is already there, a comment on why it matters to you is
-        more useful than a new issue.
+        Before writing, look through the
+        [open issues](https://github.com/medinstech/perfboard-studio/issues) first. If your
+        idea is already there, a comment on why it matters to you is more useful than a
+        new issue.
 
   - type: textarea
     id: problem
