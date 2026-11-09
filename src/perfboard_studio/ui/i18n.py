@@ -3072,6 +3072,19 @@ TURKISH: Mapping[str, str] = {
     "Dual comparator, open-collector outputs": "Çift karşılaştırıcı, açık kolektör çıkışlı",
     "High-speed optocoupler, 10 Mbit/s": "Yüksek hızlı optokuplör, 10 Mbit/s",
     "Optocoupler, transistor output": "Optokuplör, transistör çıkışlı",
+    "DC motor, 130 size, on two wires": "DC motor, 130 boy, iki telli",
+    "Small brushed motor off the board on two wires: swap them and it turns the other way": (
+        "Karttan ayrı, iki telli küçük fırçalı motor: telleri değiştirirseniz ters yöne döner"
+    ),
+    "Do not drive it from a pin: the FA-130 stalls at 2.1 A at 3 V, so put a transistor or a "
+    "motor driver between them, and a diode across the motor with its banded end on the "
+    "supply side. Measure yours stalled before you choose the transistor: kit motors "
+    "differ.": (
+        "Bir pinden sürmeyin: FA-130 3 V'ta tıkandığında 2,1 A çeker; bu yüzden araya bir "
+        "transistör ya da motor sürücü koyun, motorun uçlarına da çizgili ucu besleme "
+        "tarafında olacak şekilde bir diyot bağlayın. Transistörü seçmeden önce sizinkini "
+        "tıkalıyken ölçün: kit motorları birbirinden farklıdır."
+    ),
     "Crystal, HC-49/US low can": "Kristal, HC-49/US alçak kılıf",
     "Quartz crystal for a microcontroller's clock, the low can, legs 4.88 mm apart": (
         "Mikrodenetleyicinin saati için kuvars kristal, alçak kılıf, bacaklar arası 4,88 mm"

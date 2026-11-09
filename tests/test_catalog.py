@@ -777,3 +777,18 @@ def test_the_hc49us_crystal_is_drawn_at_abracons_maxima_and_its_lead_arithmetic_
     assert "0.10 mm" in part.check and "0.27 mm" in part.check
     # Not the tall can: that is the other footprint, and says so.
     assert part.footprint_id != "xtal-hc49"
+
+
+def test_the_dc_motor_is_two_wires_off_the_board_and_its_figures_are_pololus() -> None:
+    """Off the board, so only the pads its wires land in: the motor has no body to measure
+    and no drawing was found for the kit ones. The stall figure the check warns with is the
+    source's, in the unit the check uses."""
+    part = catalog_part("dc-motor-130")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and footprint.body.archetype == "flying-leads"
+    assert len(footprint.pins) == 2
+    assert [name for _, name in part.pin_names] == ["A", "B"]
+    assert "2100 mA" in part.source and 2100 / 1000 == 2.1 and "2.1 A" in part.check
+    assert "dc-motor-130" in [found.id for found in search_catalog("motor")][:8]
+    assert next(found.id for found in search_catalog("dc motor")) == "dc-motor-130"

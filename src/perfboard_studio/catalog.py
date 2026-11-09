@@ -1621,6 +1621,26 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "own 5 V, not from a board's regulator pin."
                 ),
                 aliases=("servo", "SG90", "motor")),
+    # The motor in the Arduino starter kit and every toy: two wires to a part off the board.
+    CatalogPart("dc-motor-130", "DC motor, 130 size, on two wires", "connector", "wire-2",
+                "Small brushed motor off the board on two wires: swap them and it turns the "
+                "other way",
+                _legs("A", "B"), value="DC motor", ref_prefix="M",
+                source=(
+                    "Pololu's page for the Tamiya FA-130 (pololu.com/product/77/specs): at 3 V "
+                    "it draws 150 mA unloaded and 2100 mA stalled. A brushed motor has no "
+                    "polarity, so its two wires are A and B and either goes to either; the "
+                    "130-size motors in kits are not all this motor and no drawing of them "
+                    "was found, so only the wires are drawn"
+                ),
+                check=(
+                    "Do not drive it from a pin: the FA-130 stalls at 2.1 A at 3 V, so put a "
+                    "transistor or a motor driver between them, and a diode across the motor "
+                    "with its banded end on the supply side. Measure yours stalled before you "
+                    "choose the transistor: kit motors differ."
+                ),
+                aliases=("motor", "dc motor", "130 motor", "toy motor", "FA-130", "RF-130",
+                         "elektrik motoru", "fırçalı motor")),
     CatalogPart("ds3231-rtc", "DS3231 RTC module, ZS-042 (on a header)", "connector",
                 "hdr-1x6",
                 "Real-time clock with a coin cell, on I2C. Its cable plugs into this 6-pin "

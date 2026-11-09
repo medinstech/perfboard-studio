@@ -125,6 +125,10 @@ closed without a bump.
   drawing: drawn at its maxima (11.5 x 5.0 x 3.5 mm), its 4.88 mm legs against the 5.08 mm
   of two holes worked out in the note. It is not the tall HC-49/U the `xtal-hc49` footprint
   draws, which is 13.46 mm high.
+- **The 130-size DC motor**, the one in the Arduino kit and every toy, as two wires to a part
+  off the board: no body is drawn, because no drawing of the kit ones was found. Its note
+  gives Pololu's figures for the Tamiya FA-130 (150 mA unloaded, 2100 mA stalled at 3 V),
+  and its check says not to drive it from a pin and to put a diode across it.
 
 ### Fixed
 
