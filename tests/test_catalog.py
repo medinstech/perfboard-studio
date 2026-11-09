@@ -743,3 +743,16 @@ def test_the_4n35_is_named_as_vishays_top_view_names_it() -> None:
     assert where["1"][1] == where["6"][1] and where["3"][1] == where["4"][1]
     assert where["1"][0] == where["2"][0] == where["3"][0] != where["4"][0]
     assert "81181" in part.source
+
+
+def test_the_tmp36_is_pinned_like_the_lm35_and_its_offset_sum_is_true() -> None:
+    """Analog Devices draws the TMP36's TO-92 from below -- +VS, VOUT, GND -- exactly as TI
+    draws the LM35's, so the two read alike from the flat face; and 750 mV at 25 degrees on
+    10 mV a degree is 500 mV at zero, the number the check tells the builder to subtract."""
+    tmp36, lm35 = catalog_part("tmp36"), catalog_part("lm35")
+    assert tmp36 is not None and lm35 is not None
+    assert tmp36.footprint_id == lm35.footprint_id == "to92"
+    assert tmp36.pin_names == lm35.pin_names
+    assert [name for _, name in tmp36.pin_names] == ["+VS", "VOUT", "GND"]
+    assert 750 - 25 * 10 == 500
+    assert "500 mV" in tmp36.check and "from below" in tmp36.check

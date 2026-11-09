@@ -723,6 +723,26 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("lm35", "LM35", "sensor", "to92", "Temperature sensor, 10 mV per degree C",
                 _legs("+VS", "VOUT", "GND"), ref_prefix="U",
                 source=f"TI LM35 datasheet, LP package; {_TO92_ORDER}", check=_CHECK_LEGS),
+    # The analog sensor of the official Arduino kit. Its datasheet draws the TO-92 from
+    # BELOW, as the LM35's does, so the order is the same one read from the flat face.
+    CatalogPart("tmp36", "TMP36", "sensor", "to92",
+                "Temperature sensor, 750 mV at 25 degrees C and 10 mV for each degree, from "
+                "2.7 V",
+                _legs("+VS", "VOUT", "GND"), ref_prefix="U",
+                source=(
+                    "Analog Devices TMP35/36/37 datasheet (rev. F), figure 4: TO-92 seen from "
+                    "below, pin 1 +VS, pin 2 VOUT, pin 3 GND; read from the copy at "
+                    "dept.aem.umn.edu/~./faculty/flaten/ArduinoIntroSlides/Data Sheets/"
+                    "TMP35_36_37.pdf, the maker's page being analog.com/TMP36; "
+                    f"{_TO92_ORDER}"
+                ),
+                check=(
+                    "It reads 500 mV at 0 degrees C and rises 10 mV a degree, so subtract the "
+                    "500 mV before dividing by 10. Its datasheet draws the legs from below, so "
+                    "from the left with the flat face towards you they are +VS, VOUT, GND. "
+                    + _CHECK_LEGS
+                ),
+                aliases=("temperature sensor", "sıcaklık sensörü")),
     # The bare Vishay TCRT5000, an IR LED and a phototransistor in one housing. Its pins
     # are numbered here row by row, as a generated box's are: Vishay's footprint top view
     # has Coll. and A on one row and E and Cath. on the other, 5.5 mm across.

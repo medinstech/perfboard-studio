@@ -118,6 +118,9 @@ closed without a bump.
 - **The 4N35 optocoupler**, the one in the official Arduino kit: a PC817 with its base
   brought out, pins named as Vishay's datasheet names them in its top view, and a note that
   pin 3 is not connected and the base can be left open.
+- **The TMP36 temperature sensor**, the analog one in the official Arduino kit, pinned from
+  Analog Devices' datasheet, which draws its TO-92 from below -- the check says so, and that
+  it reads 500 mV at 0 degrees so the offset is subtracted before dividing by 10.
 
 ### Fixed
 

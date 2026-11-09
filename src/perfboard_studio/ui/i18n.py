@@ -2164,6 +2164,18 @@ TURKISH: Mapping[str, str] = {
         "kondansatör olarak tanımlayın ve sigorta olarak işaretleyin."
     ),
     "Temperature sensor, 10 mV per degree C": "Sıcaklık sensörü, derece başına 10 mV",
+    "Temperature sensor, 750 mV at 25 degrees C and 10 mV for each degree, from 2.7 V": (
+        "Sıcaklık sensörü, 25 derecede 750 mV ve her derece için 10 mV, 2,7 V'tan itibaren"
+    ),
+    "It reads 500 mV at 0 degrees C and rises 10 mV a degree, so subtract the 500 mV before "
+    "dividing by 10. Its datasheet draws the legs from below, so from the left with the flat "
+    "face towards you they are +VS, VOUT, GND. Check the legs against the datasheet of the "
+    "part you have before soldering.": (
+        "0 derecede 500 mV okur ve derece başına 10 mV yükselir; bu yüzden 10'a bölmeden "
+        "önce 500 mV'u çıkarın. Veri sayfası bacakları alttan çizer; yani düz yüz size "
+        "dönükken soldan +VS, VOUT, GND'dir. Lehimlemeden önce bacakları elinizdeki "
+        "parçanın veri sayfasıyla karşılaştırın."
+    ),
     "HC-SR501 PIR motion sensor": "HC-SR501 PIR hareket sensörü",
     "Passive infrared motion sensor: OUT goes to 3.3 V when something warm moves, for 5 s to "
     "5 minutes": (
