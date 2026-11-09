@@ -1744,6 +1744,35 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("stepper driver", "28BYJ-48", "ULN2003", "stepper motor board",
                          "step motoru sürücü", "step motor sürücüsü")),
+    # The red dual H-bridge board of every robot kit. Its signal header is read off a seller's
+    # labelled photograph (the arrows from ENA to ENB along the board's edge); no drawing of
+    # the board exists, so nothing but the header is drawn.
+    CatalogPart("l298n-board", "L298N dual motor driver board (on a header)", "connector",
+                "hdr-1x6",
+                "Dual H-bridge board for two DC motors. Its cable plugs into this 6-pin "
+                "header: ENA IN1 IN2 IN3 IN4 ENB from pin 1",
+                _legs("ENA", "IN1", "IN2", "IN3", "IN4", "ENB"), value="L298N board",
+                ref_prefix="J",
+                source=(
+                    "ShillehTek's L298N page, its pinout photograph "
+                    "(shillehtek.com/blogs/shillehtek-product-manuals/l298n-motor-driver-"
+                    "controller-board-module-for-stepper-motor-dc-dual-h-bridge): the signal "
+                    "header ENA, IN1, IN2, IN3, IN4, ENB from one end to the other, and "
+                    "separate screw terminals for OUT1 to OUT4 and 12V, GND, 5V; and "
+                    "docs.circuit.rocks/motors/l298n for the 12 V terminal's 5 to 35 V and the "
+                    "5 V jumper. The board has no drawing, so no body is drawn and the header "
+                    "is the wires you run to it"
+                ),
+                check=(
+                    "ENA and ENB enable the two channels and IN1 and IN2, IN3 and IN4 set each "
+                    "one's direction. The motors, the motor supply (the 12V terminal) and the "
+                    "5V terminal are on the board's own screw terminals, not on this header: "
+                    "join the supply's GND to your logic ground. With the motor supply above "
+                    "12 V take off the board's 5V jumper and feed your logic separately. "
+                    + _CABLED_CHECK
+                ),
+                aliases=("motor driver", "H-bridge", "L298N", "dc motor driver", "L298",
+                         "motor sürücü", "motor sürücüsü")),
     # The cheap Bosch sensor boards most people buy, by the name printed on them. The purple
     # six-pin ones have no regulator and run on 3.3 V; the four-pin GY-BME280 has one.
     CatalogPart("gy-bmp280", "GY-BMP280 pressure sensor module (on a header)", "sensor",

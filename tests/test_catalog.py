@@ -792,3 +792,16 @@ def test_the_dc_motor_is_two_wires_off_the_board_and_its_figures_are_pololus() -
     assert "2100 mA" in part.source and 2100 / 1000 == 2.1 and "2.1 A" in part.check
     assert "dc-motor-130" in [found.id for found in search_catalog("motor")][:8]
     assert next(found.id for found in search_catalog("dc motor")) == "dc-motor-130"
+
+
+def test_the_l298n_board_is_a_header_in_the_order_a_sellers_photo_labels_it() -> None:
+    """No drawing of the board exists: only the signal header, from ENA at one end to ENB at
+    the other as the seller's photograph labels it, and no body. The motor and supply
+    terminals are the board's own and the check says so."""
+    part = catalog_part("l298n-board")
+    assert part is not None
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None and footprint.body.archetype == "pin-header"
+    assert [name for _, name in part.pin_names] == ["ENA", "IN1", "IN2", "IN3", "IN4", "ENB"]
+    assert "shillehtek.com" in part.source and "no drawing" in part.source
+    assert "screw terminals" in part.check and "5V jumper" in part.check

@@ -3072,6 +3072,25 @@ TURKISH: Mapping[str, str] = {
     "Dual comparator, open-collector outputs": "Çift karşılaştırıcı, açık kolektör çıkışlı",
     "High-speed optocoupler, 10 Mbit/s": "Yüksek hızlı optokuplör, 10 Mbit/s",
     "Optocoupler, transistor output": "Optokuplör, transistör çıkışlı",
+    "L298N dual motor driver board (on a header)": "L298N çift motor sürücü kartı (header üzerinde)",
+    "Dual H-bridge board for two DC motors. Its cable plugs into this 6-pin header: ENA IN1 "
+    "IN2 IN3 IN4 ENB from pin 1": (
+        "İki DC motor için çift H-köprü kartı. Kablosu bu 6 pinli header'a takılır: 1. "
+        "pinden ENA IN1 IN2 IN3 IN4 ENB"
+    ),
+    "ENA and ENB enable the two channels and IN1 and IN2, IN3 and IN4 set each one's "
+    "direction. The motors, the motor supply (the 12V terminal) and the 5V terminal are on "
+    "the board's own screw terminals, not on this header: join the supply's GND to your "
+    "logic ground. With the motor supply above 12 V take off the board's 5V jumper and feed "
+    "your logic separately. Match each lead to the name printed beside the module's pins, "
+    "not to its place: sellers' boards are not all wired in the same order.": (
+        "ENA ve ENB iki kanalı etkinleştirir; IN1 ile IN2, IN3 ile IN4 her birinin yönünü "
+        "belirler. Motorlar, motor beslemesi (12V ucu) ve 5V ucu bu header'da değil, kartın "
+        "kendi vidalı klemenslerindedir: beslemenin GND ucunu mantık topraklamanıza bağlayın. "
+        "Motor beslemesi 12 V'un üzerindeyse kartın 5V jumper'ını çıkarın ve mantığınızı ayrı "
+        "besleyin. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan ada göre "
+        "bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
     "DC motor, 130 size, on two wires": "DC motor, 130 boy, iki telli",
     "Small brushed motor off the board on two wires: swap them and it turns the other way": (
         "Karttan ayrı, iki telli küçük fırçalı motor: telleri değiştirirseniz ters yöne döner"

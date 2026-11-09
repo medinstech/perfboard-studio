@@ -129,6 +129,10 @@ closed without a bump.
   off the board: no body is drawn, because no drawing of the kit ones was found. Its note
   gives Pololu's figures for the Tamiya FA-130 (150 mA unloaded, 2100 mA stalled at 3 V),
   and its check says not to drive it from a pin and to put a diode across it.
+- **The L298N motor driver board, as a wired header**, the red dual H-bridge of every robot
+  kit: ENA, IN1 to IN4 and ENB in the order a seller's labelled photograph gives them, with no
+  body because no drawing of the board exists. Its check says the motors and the supply are
+  on the board's own screw terminals, and to join its ground to yours.
 
 ### Fixed
 
