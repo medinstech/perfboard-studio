@@ -198,6 +198,11 @@ closed without a bump.
 
 ### Fixed
 
+- **A board saved on Windows is the same file it is everywhere else.** Saving, autosave and
+  its `.bak`, the crash-recovery record, a project folder's board and the MCP server's
+  `save_document` wrote every line ending as CRLF on Windows, so a board saved on two
+  machines differed on every line, and a save never matched the bytes the document
+  serializes to. A `.perf` is now LF on every platform. Exports are unchanged.
 - **A part's name no longer prints over the board's own printed addresses.** On a board
   that prints its column letters and row numbers, a part on the first row had its name
   over the letters above it -- LED1 hid the "F" on the NE555 board. It now goes under

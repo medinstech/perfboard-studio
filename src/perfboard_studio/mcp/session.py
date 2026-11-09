@@ -799,7 +799,11 @@ class BoardSession:
             meta=dataclasses.replace(self.system_document.meta, modified=_now_iso()),
         )
         try:
-            target.write_text(persist.serialize_document(stamped), encoding="utf-8")
+            # LF on every platform: persist's output is JSON.stringify's bytes, and
+            # write_text would turn each \n into the platform's separator.
+            target.write_text(
+                persist.serialize_document(stamped), encoding="utf-8", newline="\n"
+            )
         except OSError as err:
             raise SessionError(f"Cannot write {target}: {err.strerror or err}.") from err
         self.path = target

@@ -13456,13 +13456,13 @@ class MainWindow(QMainWindow):
             if previous is not None:
                 try:
                     path.with_name(path.name + BACKUP_SUFFIX).write_text(
-                        previous, encoding="utf-8"
+                        previous, encoding="utf-8", newline="\n"
                     )
                 except OSError:
                     return False
             self._autosave_backed_up = True
         try:
-            path.write_text(text, encoding="utf-8")
+            path.write_text(text, encoding="utf-8", newline="\n")
         except OSError:
             return False
         # Remembered so the file watcher can tell this write from somebody else's, exactly
@@ -13763,9 +13763,11 @@ class MainWindow(QMainWindow):
         # The one write that must not fail quietly -- and it was the one write with no
         # handler at all, so a read-only folder or a full disk was a traceback with the
         # board still unsaved behind it. Said in a dialog, and reported to the close
-        # guard as "not saved" so it does not let the window go.
+        # guard as "not saved" so it does not let the window go. LF on every platform,
+        # as every .perf is: persist's bytes are JSON.stringify's, and write_text would
+        # otherwise turn each \n into the platform's separator.
         try:
-            path.write_text(text, encoding="utf-8")
+            path.write_text(text, encoding="utf-8", newline="\n")
         except OSError as err:
             QMessageBox.critical(
                 self,

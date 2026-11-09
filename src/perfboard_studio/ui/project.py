@@ -84,7 +84,8 @@ def write_project(
     reported rather than raised.
     """
     layout = project_layout(document_path)
-    document_path.write_text(document_text, encoding="utf-8")
+    # LF on every platform, as every .perf is: persist's bytes, untranslated.
+    document_path.write_text(document_text, encoding="utf-8", newline="\n")
 
     outputs = document_path.parent / OUTPUT_DIR
     written: list[Path] = []

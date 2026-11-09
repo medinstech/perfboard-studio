@@ -120,7 +120,8 @@ class Autosave:
         temporary = self.path.with_suffix(".tmp")
         try:
             self.directory.mkdir(parents=True, exist_ok=True)
-            temporary.write_text(format_record(record), encoding="utf-8")
+            # LF, as the document it holds is on disk (persist's bytes).
+            temporary.write_text(format_record(record), encoding="utf-8", newline="\n")
             os.replace(temporary, self.path)
         except OSError:
             self.failed = True
