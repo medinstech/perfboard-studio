@@ -17896,3 +17896,33 @@ def test_an_empty_extra_board_says_how_parts_reach_it() -> None:
     finally:
         _close(window)
 
+
+
+def test_an_example_of_several_boards_is_counted_drawn_and_opened_whole() -> None:
+    """The two-board example's card counts every part on both boards, its picture is both
+    boards side by side, and it opens on System -- counted from its first board it said 14
+    parts of its 25, and its picture showed one board of two."""
+    from perfboard_studio.ui.home import PICTURE, Home
+    from perfboard_studio.ui.main import example_boards
+
+    found = {path.stem: (path, line) for path, line in example_boards()}
+    path, line = found["relay-and-supply"]
+    assert line.startswith("25 parts on 2 boards"), line
+
+    window = _blank_window()
+    try:
+        home = Home([], window.lookup)
+        one = home._picture(found["ne555-astable"][0])
+        both = home._picture(path)
+        assert one is not None and both is not None
+        assert both.width() <= PICTURE.width() and both.height() <= PICTURE.height()
+        # Two boards of one size in a row: wider than tall, unlike one 6 x 8 cm board.
+        assert both.width() > 1.5 * both.height()
+        home.deleteLater()
+
+        window.on_open_example(path)
+        assert window._system_in_front()
+        assert window.header.place.text() == "›  System"
+        assert window.inspector.shown is window.inspector.system_editor
+    finally:
+        _close(window)

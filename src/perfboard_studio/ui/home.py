@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QPixmap, QShowEvent
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -48,8 +48,10 @@ from PySide6.QtWidgets import (
 
 from perfboard_studio import persist
 from perfboard_studio.connectivity import FootprintLookup
+from perfboard_studio.model import PerfDocument
 from perfboard_studio.schematic import build_schematic
 from perfboard_studio.schematic_export import drawing_to_svg
+from perfboard_studio.system import board_document, board_ids
 from perfboard_studio.version import __version__
 
 from . import theme
@@ -77,6 +79,26 @@ WALKTHROUGH = "ne555-blinker"
 COLUMNS = 4
 #: The size each picture is drawn at, before the card scales it.
 PICTURE = QSize(320, 180)
+
+
+def _boards_side_by_side(document: PerfDocument, lookup: FootprintLookup) -> QPixmap:
+    """Every board of a system in a row, each drawn as the window draws it -- the
+    System view's row, without its bench -- fitted together into the card's picture."""
+    gap = theme.SPACE["lg"]
+    ids = board_ids(document)
+    each = QSize(max(1, (PICTURE.width() - gap * (len(ids) - 1)) // len(ids)), PICTURE.height())
+    pictures = [render_board(board_document(document, board_id), lookup, each) for board_id in ids]
+    width = sum(picture.width() for picture in pictures) + gap * (len(pictures) - 1)
+    height = max(picture.height() for picture in pictures)
+    image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(image)
+    x = 0
+    for picture in pictures:
+        painter.drawPixmap(x, (height - picture.height()) // 2, picture)
+        x += picture.width() + gap
+    painter.end()
+    return QPixmap.fromImage(image)
 
 
 def example_title(stem: str) -> str:
@@ -442,6 +464,8 @@ class Home(QWidget):
         if not result.ok:
             return None
         document = result.document
+        if len(board_ids(document)) > 1:
+            return _boards_side_by_side(document, self._lookup)
         if document.components:
             return render_board(document, self._lookup, PICTURE)
         svg = drawing_to_svg(build_schematic(document, self._lookup), title=document.meta.name)

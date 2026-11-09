@@ -319,7 +319,6 @@ BOARD_READERS: dict[str, str] = {
     "guide.py::_measured_here": "the pins a probe can reach on the board being built",
     "ui/inspector.py::Inspector._show": "the selection, which is on the board shown",
     "ui/properties.py::describe": "the selection, which is on the board shown",
-    "ui/main.py::example_boards": "the shipped examples, one board each",
     "ui/main.py::MainWindow.on_choose_board": "which board the shown board is",
     "ui/main.py::MainWindow._refresh_empty_hint": "whether the board shown is empty",
     "ui/main.py::MainWindow._on_part_dropped": "lands on the board shown; another board's part is said first",

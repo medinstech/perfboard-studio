@@ -100,6 +100,8 @@ closed without a bump.
   carrying +12V and GND from one to the other: each board sized, placed and routed on its
   own, LVS clean across both through the cable, and a guide for each board ending with the
   harness. Its `.net` is the KiCad export of the whole schematic.
+  Home shows both boards in its picture and counts the parts on both, and it opens on
+  System.
 
 - **The SW-520D tilt switch**, the ball switch every starter kit holds, from Bailin's datasheet:
   drawn at the largest it can be (5.5 across, 11.9 long), its 2.4 mm leads against the board's

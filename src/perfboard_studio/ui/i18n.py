@@ -4165,6 +4165,8 @@ TURKISH: Mapping[str, str] = {
     # Real plurals (i18n.counted): English has two forms, Turkish the singular after a number.
     "{parts} part on a {size} board": "{size} kart üzerinde {parts} parça",
     "{parts} parts on a {size} board": "{size} kart üzerinde {parts} parça",
+    "{parts} parts on {boards} boards, {size} each": "{boards} kart üzerinde {parts} parça, her biri {size}",
+    "{parts} parts on {boards} boards": "{boards} kart üzerinde {parts} parça",
     "{parts} part, drawn and not yet placed": "{parts} parça, çizilmiş ama henüz yerleşmemiş",
     "{parts} parts, drawn and not yet placed": "{parts} parça, çizilmiş ama henüz yerleşmemiş",
     "power and ground drawn as {count} rail symbol": "güç ve toprak {count} ray simgesi olarak çizildi",

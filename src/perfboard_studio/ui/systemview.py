@@ -66,6 +66,7 @@ GAP_MM = BOARD_GAP_MM
 
 _BOARD_ROLE = 0  # QGraphicsItem.data key holding a board's id
 _CABLE_ROLE = 1  # ...and a cable's
+_TEXT_OVERSIZE = 10.0  # text is laid out this much larger and scaled back (``_text``)
 
 
 class SystemView(QGraphicsView):
@@ -129,17 +130,30 @@ class SystemView(QGraphicsView):
         for cable in doc.cables:
             self._cable(doc, cable.a, cable.b, cable, origins, colours, net_of, crossed)
         bounds = self._scene.itemsBoundingRect()
-        hint = QGraphicsSimpleTextItem(
-            t("Click a board or a cable to see it in Properties; double-click a board to open it.")
+        hint = self._text(
+            t("Click a board or a cable to see it in Properties; double-click a board to open it."),
+            theme.ACTIVE.text_secondary,
         )
-        hint.setBrush(QBrush(QColor(theme.ACTIVE.text_secondary)))
-        font = QFont(self.font())
-        font.setPointSizeF(4.0)
-        hint.setFont(font)
-        hint.setPos(bounds.center().x() - hint.boundingRect().width() / 2, bounds.bottom() + GAP_MM / 2)
+        hint.setPos(
+            bounds.center().x() - hint.sceneBoundingRect().width() / 2, bounds.bottom() + GAP_MM / 2
+        )
         self._scene.addItem(hint)
         self._show_selected()
         self._fit()
+
+    def _text(self, text: str, colour: str, *, bold: bool = False) -> QGraphicsSimpleTextItem:
+        """Text 4 pt tall in the scene's millimetres, drawn from a font ten times that and
+        scaled down: a 4 pt font is laid out in whole pixels, so its spaces rounded away and
+        the hint read "görmekiçin" -- at forty the advances are true, and the scale keeps
+        the size."""
+        item = QGraphicsSimpleTextItem(text)
+        item.setBrush(QBrush(QColor(colour)))
+        font = QFont(self.font())
+        font.setPointSizeF(4.0 * _TEXT_OVERSIZE)
+        font.setBold(bold)
+        item.setFont(font)
+        item.setScale(1.0 / _TEXT_OVERSIZE)
+        return item
 
     def set_selected(self, kind: str | None, item_id: str | None = None) -> None:
         """Ring the picked board or thicken the picked cable; None picks nothing."""
@@ -193,12 +207,7 @@ class SystemView(QGraphicsView):
         frame.setData(_BOARD_ROLE, board_id)
         self._scene.addItem(frame)
         self._frames[board_id] = frame
-        label = QGraphicsSimpleTextItem(title)
-        label.setBrush(QBrush(QColor(theme.ACTIVE.text)))
-        font = QFont(self.font())
-        font.setPointSizeF(4.0)
-        font.setBold(True)
-        label.setFont(font)
+        label = self._text(title, theme.ACTIVE.text, bold=True)
         label.setPos(at.x(), at.y() - 8.5)
         label.setData(_BOARD_ROLE, board_id)
         self._scene.addItem(label)

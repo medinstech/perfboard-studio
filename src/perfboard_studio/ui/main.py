@@ -1952,10 +1952,22 @@ def example_boards() -> list[tuple[Path, str]]:
         if result is None or not result.ok:
             continue
         document = result.document
-        parts = len(document.components) + len(document.parts)
-        preset = _matching_preset(document.board)
-        size = preset.name if preset is not None else f"{document.board.cols} × {document.board.rows}"
-        if document.components:
+        # Every part of the circuit, on whichever board it is -- an example of two boards
+        # counted from its first board alone said 14 parts of its 25.
+        parts = len(circuit_parts(document))
+        placed = bool(every_component(document))
+        boards = [board_document(document, board_id).board for board_id in board_ids(document)]
+        sizes = []
+        for board in boards:
+            preset = _matching_preset(board)
+            sizes.append(preset.name if preset is not None else f"{board.cols} × {board.rows}")
+        size = sizes[0]
+        if placed and len(boards) > 1:
+            line = (
+                t("{parts} parts on {boards} boards, {size} each") if len(set(sizes)) == 1
+                else t("{parts} parts on {boards} boards")
+            ).format(parts=parts, boards=len(boards), size=size)
+        elif placed:
             line = (
                 t("{parts} part on a {size} board") if parts == 1
                 else t("{parts} parts on a {size} board")
@@ -1967,7 +1979,7 @@ def example_boards() -> list[tuple[Path, str]]:
             ).format(parts=parts)
         # The circuit that is drawn and not yet built first -- it is the one that walks
         # through the steps -- and then the finished boards, simplest first.
-        listed.append(((bool(document.components), parts, path.stem), path, line))
+        listed.append(((placed, parts, path.stem), path, line))
     return [(path, line) for _key, path, line in sorted(listed)]
 
 
@@ -12362,6 +12374,10 @@ class MainWindow(QMainWindow):
         self._mark_saved()
         self.view.fit_board()
         self._show_what_the_document_has()
+        if self.bus.system_document.boards:
+            # An example of several boards opens on all of them and the cables between --
+            # the one view that says what it is; a board of it is a click away.
+            self._on_board_picked(SYSTEM_ENTRY)
         self.statusBar().showMessage(
             t("Opened the example {name}. Save keeps a copy of your own.").format(
                 name=path.stem
