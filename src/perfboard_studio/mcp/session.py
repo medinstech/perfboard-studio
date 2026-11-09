@@ -74,6 +74,8 @@ from perfboard_studio.commands import (
     AddPartPayload,
     ConnectPinsPayload,
     DeleteBoardNotesPayload,
+    DeleteBoardPayload,
+    DeleteCablePayload,
     DeleteComponentPayload,
     DeleteConductorsPayload,
     DeleteCutPayload,
@@ -85,6 +87,7 @@ from perfboard_studio.commands import (
     ImportNetlistPayload,
     MirrorComponentPayload,
     MoveComponentPayload,
+    MoveToBoardPayload,
     NewConductor,
     NewSolderTraceConductor,
     NewWireConductor,
@@ -92,6 +95,7 @@ from perfboard_studio.commands import (
     PlaceBlockPayload,
     PlaceComponentPayload,
     PlacePartsPayload,
+    RenameBoardPayload,
     RenameDocumentPayload,
     RotateComponentPayload,
     SetBoardPayload,
@@ -161,6 +165,7 @@ from perfboard_studio.model import (
     SpineSpec,
     pin_name_of,
 )
+from perfboard_studio.occupancy import conductors_touching
 from perfboard_studio.phrasebook import GUIDE_LANGUAGES
 from perfboard_studio.placer import PlacementOptions, plan_placement
 from perfboard_studio.placer import describe as describe_placement
@@ -2390,6 +2395,28 @@ class BoardSession:
         self.document = self.bus.document
         return {**result, "board": added, "name": board_title(self.system_document, added)}
 
+    def rename_board(self, board: str, name: str) -> dict[str, Any]:
+        """Name a board; a blank name takes it away and the board is called by its place
+        ("Board 2") again."""
+        board_id = self._board_id(board)
+        result = self._dispatch("board.rename", RenameBoardPayload(board=board_id, name=name))
+        if not result["ok"]:
+            return result
+        return {**result, "board": board_id, "name": board_title(self.system_document, board_id)}
+
+    def remove_board(self, board: str) -> dict[str, Any]:
+        """Take a board out of the document. Its parts go back to the design, wired as they
+        were, and its copper goes with it; refused for the first board, which is the
+        document itself, and for a board a cable still reaches. With the board in front
+        gone, the first board is in front."""
+        board_id = self._board_id(board)
+        returned = [c.ref for c in board_document(self.system_document, board_id).components]
+        result = self._dispatch("board.delete", DeleteBoardPayload(board=board_id))
+        if not result["ok"]:
+            return result
+        self.document = self.bus.document
+        return {**result, "parts_back_in_design": returned, "board_in_front": self.bus.board_id}
+
     def add_cable(
         self,
         ref: str,
@@ -2443,6 +2470,46 @@ class BoardSession:
             note=note,
         )
         return self._dispatch("cable.add", AddCablePayload(cable=cable))
+
+    def remove_cable(self, ref: str) -> dict[str, Any]:
+        """Take a cable out by its reference ("W1"). To change one, remove it and add it
+        again as it should be."""
+        cable = next((c for c in self.system_document.cables if c.ref == ref.strip()), None)
+        if cable is None:
+            known = ", ".join(c.ref for c in self.system_document.cables) or "none"
+            raise SessionError(f"No cable called {ref!r}. The cables: {known}.")
+        return self._dispatch("cable.delete", DeleteCablePayload(id=cable.id))
+
+    def move_to_board(self, ref: str, board: str, hole: str) -> dict[str, Any]:
+        """A placed part to another board, its pin 1 at ``hole`` there, in one undo step.
+        The copper that ran to it on its old board comes off with it, so nothing is left
+        ending in an empty hole, and a cable fitted to it follows it."""
+        document = self.system_document
+        found = next(
+            ((b, c) for b, c in placed_components(document) if c.ref == ref.strip()), None
+        )
+        if found is None:
+            raise SessionError(f"No part called {ref!r} is on a board.")
+        source, part = found
+        board_id = self._board_id(board)
+        copper = conductors_touching(board_document(document, source), part.id, self.lookup)
+        result = self._dispatch(
+            "component.moveToBoard",
+            MoveToBoardPayload(
+                id=part.id,
+                board=board_id,
+                anchor=_hole(hole, board_document(document, board_id).board),
+                conductor_ids=tuple(copper),
+            ),
+        )
+        if not result["ok"]:
+            return result
+        return {
+            **result,
+            "from": board_title(document, source),
+            "to": board_title(self.system_document, board_id),
+            "conductors_removed": len(copper),
+        }
 
     def get_system_info(self) -> dict[str, Any]:
         """Every board and every cable: which board is in front, what each holds, each

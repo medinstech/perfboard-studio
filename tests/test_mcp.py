@@ -1008,7 +1008,15 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # it, through the same BoardBus the window uses. add_board and add_cable are the two
     # things a system has that a board does not, and get_system_info the one reading that
     # spans the boards -- what each holds, what each cable carries, the system's LVS.
-    assert len(tools) <= 63, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 67, for their inverses: rename_board, remove_board, remove_cable and move_to_board.
+    # An agent could add a board and a cable and take neither back but by undo, which reaches
+    # the last step only, and could not move a part between boards at all -- while the
+    # window does all four, each one command (board.rename, board.delete, cable.delete,
+    # component.moveToBoard). move_to_board is not delete + place: that loses the part's id,
+    # leaves its copper ending in empty holes, and drops the cable fitted to it. There is no
+    # update_cable, because remove_cable and add_cable compose into it.
+    assert len(tools) <= 67, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"

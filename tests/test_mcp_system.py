@@ -109,3 +109,53 @@ def test_the_status_the_file_and_the_guide_are_the_systems(tmp_path) -> None:  #
     (json_path,) = [p for p in written["written"] if p.endswith(".json")]
     guide = json.loads(open(json_path, encoding="utf-8").read())  # noqa: SIM115
     assert [cable["ref"] for cable in guide["harness"]] == ["W1"]
+
+
+def test_a_board_is_named_and_taken_out_and_its_parts_go_back_to_the_design() -> None:
+    session = _two_boards()
+    remote_id = session.system_document.boards[-1].id
+    renamed = session.rename_board("Remote", "Sensor")
+    assert renamed["ok"] and renamed["name"] == "Sensor", renamed
+    assert session.rename_board("Sensor", "")["name"] == "Board 2"
+    session.add_cable(
+        "W1", "main", "JA", "Board 2", "JB", [{"a_pin": "1", "b_pin": "1"}, {"a_pin": "2", "b_pin": "2"}]
+    )
+    first = session.remove_board("main")
+    assert not first["ok"] and first["code"] == "first-board", first
+    reached = session.remove_board(remote_id)
+    assert not reached["ok"] and reached["code"] == "cable-end" and "W1" in reached["message"], reached
+    with pytest.raises(SessionError, match="W1"):
+        session.remove_cable("W9")
+    assert session.remove_cable("W1")["ok"]
+    assert session.get_system_info()["cables"] == []
+    removed = session.remove_board(remote_id)
+    assert removed["ok"] and removed["parts_back_in_design"] == ["JB"], removed
+    assert removed["board_in_front"] == system.FIRST_BOARD
+    assert session.system_document.boards == ()
+    assert "JB" in [p.ref for p in session.system_document.parts], "back in the design, not lost"
+    # One undo step each: the board comes back with its part on it.
+    assert session.undo()["ok"]
+    assert [c.ref for c in session.system_document.boards[0].components] == ["JB"]
+
+
+def test_a_part_moved_to_another_board_takes_its_copper_off_and_its_cable_follows() -> None:
+    session = _two_boards()
+    session.add_cable(
+        "W1", "main", "JA", "Remote", "JB", [{"a_pin": "1", "b_pin": "1"}, {"a_pin": "2", "b_pin": "2"}]
+    )
+    session.select_board("main")
+    pin_one = session.get_component("JA")["pins"][0]["hole"]
+    wired = session.add_wire(pin_one, "J9")
+    assert wired["ok"], wired
+    remote_id = session.system_document.boards[-1].id
+    moved = session.move_to_board("JA", "Remote", "H3")
+    assert moved["ok"] and moved["from"] == "Board 1" and moved["to"] == "Remote", moved
+    assert moved["conductors_removed"] == 1
+    doc = session.system_document
+    assert doc.components == () and doc.conductors == (), "nothing left ending in an empty hole"
+    assert sorted(c.ref for c in doc.boards[0].components) == ["JA", "JB"]
+    assert doc.cables[0].a.board == remote_id, "the cable fitted to JA went with it"
+    assert session.undo()["ok"]
+    assert [c.ref for c in session.system_document.components] == ["JA"]
+    with pytest.raises(SessionError, match="JZ"):
+        session.move_to_board("JZ", "Remote", "H3")

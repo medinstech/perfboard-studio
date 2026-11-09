@@ -84,8 +84,11 @@ the window's module and every Qt module that one imports.
 
 ## The shape of a session
 
-One board per server process. There is no workspace of several, on purpose: "which board
-did that tool mean" is a whole class of confusing failure, avoided by not having it.
+One document per server process. There is no workspace of several, on purpose: "which
+document did that tool mean" is a whole class of confusing failure, avoided by not having
+it. A document may hold several boards joined by cables, and then one of them is in front
+and every board tool acts on that one (see "Several boards are one document" below) -- the
+same question answered once, by `select_board`, rather than on every call.
 
 Holes are addressed the way people talk about perfboard — column letters then a 1-based
 row: `A1`, `C7`, `AC12`. Every tool speaks that and only that. There are no raw
@@ -142,9 +145,9 @@ conductor at a time.
 | **Verifying** | `run_erc` · `run_drc` · `run_lvs` · `check_heights` |
 | **Output** | `generate_guide` · `export_pdf` · `export_step` |
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
-| **Several boards** | `select_board` · `add_board` · `add_cable` · `get_system_info` |
+| **Several boards** | `select_board` · `add_board` · `rename_board` · `remove_board` · `move_to_board` · `add_cable` · `remove_cable` · `get_system_info` |
 
-63 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+67 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -175,6 +178,15 @@ cable carries, and the system's LVS: a net crossing two boards with no wire carr
 an open, a cable wired pin 1 to pin 2 a short. `get_status`, `list_components`,
 `save_document`, `snapshot` and `run_erc` / `run_lvs` read every board; the guide of the
 board in front ends with the system's harness.
+
+What is added can be taken back and named, each one command and one undo step:
+`rename_board` (a blank name and the board is called by its place again), `remove_board`
+(its parts go back to the design still wired, refused while a cable reaches it, and for the
+first board, which is the document), `remove_cable`, and `move_to_board`, which moves a
+placed part across and takes the copper that ran to it off the old board with it, so nothing
+is left ending in an empty hole; a cable fitted to the part follows it. There is no
+`update_cable`: a cable's wires are the whole of it, so changing one is `remove_cable` and
+`add_cable` again, which composes and keeps the rule above.
 
 **The board group is the newest and the asymmetry it fixes is the argument for it.**
 `get_board_info` reported mounting holes and edge connectors that nothing could add, and

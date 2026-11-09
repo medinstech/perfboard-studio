@@ -919,6 +919,31 @@ def add_board(name: str = "", like: str | None = None) -> dict[str, Any]:
 
 
 @mcp.tool()
+def rename_board(board: str, name: str) -> dict[str, Any]:
+    """Name a board (by its id or what it is called now). A blank name takes the name away,
+    and the board is called by its place ("Board 2") again."""
+    return session.rename_board(board, name)
+
+
+@mcp.tool()
+def remove_board(board: str) -> dict[str, Any]:
+    """Take a board out of this document. Its parts go back to the design, still wired, to
+    be placed on another board; its copper goes with it. Refused for the first board (it is
+    the document) and for a board a cable still reaches -- remove_cable first."""
+    return session.remove_board(board)
+
+
+@mcp.tool()
+def move_to_board(ref: str, board: str, hole: str) -> dict[str, Any]:
+    """Move a placed part to another board, its pin 1 at ``hole`` there, in one undo step.
+    The copper that ran to it on its old board comes off with it (the result says how many
+    conductors), and a cable fitted to it follows it. Its nets are untouched: they are the
+    design's, so a net now split across two boards needs a cable wire, which
+    get_system_info reports as an open until one carries it."""
+    return session.move_to_board(ref, board, hole)
+
+
+@mcp.tool()
 def add_cable(
     ref: str,
     a_board: str,
@@ -935,6 +960,13 @@ def add_cable(
     Refused if an end is not there or one pin would carry two wires; a wire joining two
     different nets is allowed and run_lvs / get_system_info report it as a short."""
     return session.add_cable(ref, a_board, a_connector, b_board, b_connector, wires, length_mm, note)
+
+
+@mcp.tool()
+def remove_cable(ref: str) -> dict[str, Any]:
+    """Take a cable out by its reference ("W1"). To change a cable's wires, length or note,
+    remove it and add_cable it again as it should be -- undo takes back each step."""
+    return session.remove_cable(ref)
 
 
 @mcp.tool()
