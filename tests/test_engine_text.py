@@ -499,6 +499,25 @@ def test_every_finding_on_every_board_is_said_in_turkish(turkish: None) -> None:
     assert {"pin-not-connected", "solder-trace-proximity", "unrouted-net"} <= seen
 
 
+def test_a_finding_on_one_board_of_a_system_is_said_with_its_board(turkish: None) -> None:
+    """A system's LVS puts the board before a board's own finding ("On Supply: ..."), and
+    that whole line used to match no template, so a Turkish window showed every such
+    finding in English. The finding is said, the board with it -- by its place when nobody
+    named it -- and a line whose finding is unknown still comes as it came."""
+    from perfboard_studio.ui.engine_text import say_finding
+
+    finding = (
+        "Net '+12V' is unrouted: all 5 of its pins are present on the board but none of them "
+        "are connected to each other yet."
+    )
+    alone = say_finding(finding)
+    assert alone != finding
+    assert say_finding(f"On Relay driver: {finding}") == f"Relay driver üzerinde: {alone}"
+    assert say_finding(f"On Board 2: {finding}") == f"Kart 2 üzerinde: {alone}"
+    unknown = "On Supply: something no rule says."
+    assert say_finding(unknown) == unknown
+
+
 def test_an_open_and_a_short_are_said_without_their_english_joins() -> None:
     """The release walk found a Turkish window saying "{C3.1, J1.1} near AY19" and
     "'DISCH' and 'LED_A' netlerini": the sentence was translated, and the words joining the

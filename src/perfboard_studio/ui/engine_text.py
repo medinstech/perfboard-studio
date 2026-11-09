@@ -689,7 +689,19 @@ def say_finding(text: str) -> str:
     if language() == "en" or not text:
         return text
     whole = _match(text, _compiled_findings())
+    if whole is None and (on := _ON_A_SYSTEMS_BOARD.fullmatch(text)) is not None:
+        # A system's LVS says which board a board's own finding is on, before it
+        # (``lvs._system_lvs``): the finding is said, and the board with it.
+        finding = _match(on["finding"], _compiled_findings())
+        if finding is not None:
+            whole = t("On {board}: {finding}").format(
+                board=_word("board", on["board"]), finding=_capitalised(finding)
+            )
     return _capitalised(whole) if whole is not None else text
+
+
+#: "On Relay driver: Net '+12V' is unrouted: ..." -- a finding on one board of a system.
+_ON_A_SYSTEMS_BOARD = re.compile(r"On (?P<board>[^:]+): (?P<finding>.+)", re.DOTALL)
 
 
 def say(text: str) -> str:

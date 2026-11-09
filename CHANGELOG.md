@@ -80,7 +80,8 @@ closed without a bump.
   wires. A net split across two boards that no wire carries is an open, said with the
   boards it crosses. A cable wired across is said as itself, by its wires' colours ("W1's
   red and black wires are swapped"), rather than as a short and two opens, and the System
-  view draws it red.
+  view draws it red. A finding on one board is said with the board's name before it,
+  in Turkish as in English ("Supply üzerinde: …").
 - **The harness is part of the build guide.** Once every board is built, each cable is a
   step under "9. Harness": what to cut (each wire to the cable's length plus stripped ends,
   in its net's colour and gauge), where each end goes by board, connector and pin, and the

@@ -4658,6 +4658,8 @@ TURKISH: Mapping[str, str] = {
     "bottom": "alt",
     "paste": "yapıştırın",
     "duplicate": "çoğaltın",
+    # A finding on one board of a system, the board said before it.
+    "On {board}: {finding}": "{board} üzerinde: {finding}",
 }
 
 CATALOGUES: Mapping[str, Mapping[str, str]] = {"tr": TURKISH}
