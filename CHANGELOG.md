@@ -115,6 +115,9 @@ closed without a bump.
   3.2), the EC11's to snip its pegs and the switch's D and E, and the SW-520D's that its
   leads, 0.07 mm off their holes, go in with no bending. One sentence each, with the figures
   the footprint carries, in English and Turkish.
+- **The 4N35 optocoupler**, the one in the official Arduino kit: a PC817 with its base
+  brought out, pins named as Vishay's datasheet names them in its top view, and a note that
+  pin 3 is not connected and the base can be left open.
 
 ### Fixed
 

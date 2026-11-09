@@ -3060,6 +3060,15 @@ TURKISH: Mapping[str, str] = {
     "Dual comparator, open-collector outputs": "Çift karşılaştırıcı, açık kolektör çıkışlı",
     "High-speed optocoupler, 10 Mbit/s": "Yüksek hızlı optokuplör, 10 Mbit/s",
     "Optocoupler, transistor output": "Optokuplör, transistör çıkışlı",
+    "Optocoupler with the transistor's base brought out, CTR over 100 %, 5000 V isolation": (
+        "Transistörün bazı dışarı çıkarılmış optokuplör, akım aktarım oranı %100'ün üzerinde, "
+        "5000 V yalıtım"
+    ),
+    "Pin 3 is not connected. Pin 6, the base, is brought out for those who want it: leave it "
+    "open if you do not.": (
+        "3. pin bağlı değildir. 6. pin, yani baz, isteyenler için dışarı çıkarılmıştır: "
+        "kullanmayacaksanız açık bırakın."
+    ),
     "CAN transceiver, 5 V, 1 Mbit/s": "CAN alıcı-verici, 5 V, 1 Mbit/s",
     "RS-485 transceiver, half duplex, 5 V": "RS-485 alıcı-verici, yarı çift yönlü, 5 V",
     "8-bit shift register, latched outputs": "8 bit kaydırmalı yazmaç, mandallı çıkışlar",

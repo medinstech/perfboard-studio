@@ -727,3 +727,19 @@ def test_the_fitting_note_figures_are_the_sums_the_catalog_check_does() -> None:
     sw = facts("sw-520d")
     assert round((sw["pitch"] - sw["lead"]) / 2, 2) == sw["off"]
     assert sw["pitch"] == STANDARD_PITCH_MM
+
+
+def test_the_4n35_is_named_as_vishays_top_view_names_it() -> None:
+    """Vishay 81181 page 1, top view: A, C, NC down the left (pins 1 to 3), E, C, B up the
+    right (4 to 6), so the base sits across from the anode and NC across from the emitter."""
+    part = catalog_part("4n35")
+    assert part is not None
+    assert dict(part.pin_names) == {
+        "1": "A", "2": "K", "3": "NC", "4": "E", "5": "C", "6": "B"
+    }
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    where = {pin.number: (pin.d_col, pin.d_row) for pin in footprint.pins}
+    assert where["1"][1] == where["6"][1] and where["3"][1] == where["4"][1]
+    assert where["1"][0] == where["2"][0] == where["3"][0] != where["4"][0]
+    assert "81181" in part.source

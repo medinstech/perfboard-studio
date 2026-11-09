@@ -1089,6 +1089,21 @@ CATALOG: tuple[CatalogPart, ...] = (
     CatalogPart("pc817", "PC817", "ic", "dip-4", "Optocoupler, transistor output",
                 _legs("A", "K", "E", "C"), ref_prefix="U", source="Sharp PC817 datasheet",
                 aliases=("opto-isolator",)),
+    # The optocoupler of the official Arduino kit: a PC817 with its base brought out.
+    CatalogPart("4n35", "4N35", "ic", "dip-6",
+                "Optocoupler with the transistor's base brought out, CTR over 100 %, 5000 V "
+                "isolation",
+                _legs("A", "K", "NC", "E", "C", "B"), ref_prefix="U",
+                source=(
+                    "Vishay 4N35 / 4N36 / 4N37 datasheet (81181, rev 1.2), page 1: top view, "
+                    "pins 1 to 3 down the left (anode, cathode, no connection), 4 to 6 up the "
+                    "right (emitter, collector, base)"
+                ),
+                check=(
+                    "Pin 3 is not connected. Pin 6, the base, is brought out for those who "
+                    "want it: leave it open if you do not."
+                ),
+                aliases=("opto-isolator", "optocoupler", "optokuplör")),
     CatalogPart("mcp2551", "MCP2551", "ic", "dip-8", "CAN transceiver, 5 V, 1 Mbit/s",
                 _legs("TXD", "VSS", "VDD", "RXD", "VREF", "CANL", "CANH", "RS"),
                 ref_prefix="U", source="Microchip MCP2551 datasheet, PDIP"),
