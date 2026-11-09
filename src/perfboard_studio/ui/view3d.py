@@ -7356,6 +7356,7 @@ def populate_system_renderer(
     exploded_mm: float = 0.0,
     pin_names: bool = True,
     board_notes: bool = True,
+    owners: dict[vtk.vtkActor, ActorOwner] | None = None,
 ) -> dict[str, int]:
     """Every board of ``doc`` in the System view's row (``system.board_row``) and the cables
     between them, in an EXISTING renderer, leaving the camera alone as
@@ -7364,6 +7365,12 @@ def populate_system_renderer(
     Each board is :func:`populate_renderer`'s own drawing of that board alone, built in a
     renderer of its own and moved into place: one way to draw a board, so it looks the same
     in front and beside another.
+
+    ``owners``, if given, is filled with whose each solid is, as the System picks: the board
+    for every solid of a board, its parts included -- on the System a board is what is
+    picked, and its parts are edited with the board in front -- and the cable for each wire
+    and shell of a cable. Each board also gets a stand-in there (:func:`_board_stand_in`),
+    which is never drawn and is what a click on its plate lands on.
     """
     ren.RemoveAllViewProps()
     offsets = _world_offsets(doc)
@@ -7371,15 +7378,18 @@ def populate_system_renderer(
     pads = 0
     obstacles: list[Bounds] = []
     for board_id in board_ids(doc):
+        alone = board_document(doc, board_id)
         pads += populate_renderer(
             scratch,
-            board_document(doc, board_id),
+            alone,
             lookup,
             exploded_mm=exploded_mm,
             pin_names=pin_names,
             board_notes=board_notes,
         )["pads"]
         dx, dy = offsets[board_id]
+        if owners is not None:
+            owners[_board_stand_in(alone.board, dx, dy)] = ("board", board_id)
         props = scratch.GetViewProps()
         props.InitTraversal()
         for _ in range(props.GetNumberOfItems()):
@@ -7388,14 +7398,46 @@ def populate_system_renderer(
             # matrix that would turn the offset with it.
             prop.AddPosition(dx, dy, 0.0)
             ren.AddViewProp(prop)
+            if owners is not None and isinstance(prop, vtk.vtkActor):
+                owners[prop] = ("board", board_id)
             bounds = prop.GetBounds()
             if bounds is not None and bounds[0] <= bounds[1]:
                 obstacles.append(tuple(bounds))
         scratch.RemoveAllViewProps()
-    for actor in build_cables(doc, lookup, exploded_mm=exploded_mm, obstacles=obstacles):
+    for actor in build_cables(
+        doc, lookup, exploded_mm=exploded_mm, obstacles=obstacles, owners=owners
+    ):
         ren.AddActor(actor)
     ren.ResetCameraClippingRange()
     return {"actors": ren.GetActors().GetNumberOfItems(), "pads": pads}
+
+
+#: The object name of a board's stand-in on the System (:func:`_board_stand_in`).
+BOARD_STAND_IN_NAME = "system-board-stand-in"
+
+
+def _board_stand_in(board: Board, dx: float, dy: float) -> vtk.vtkActor:
+    """A plain slab the size of ``board``'s substrate at ``(dx, dy)``, for picking only: it
+    goes into the owners and never into the renderer.
+
+    THE PLATE ITSELF CANNOT BE PICKED. It is glyphed -- one tile per hole, and a pad on each
+    (``build_substrate``) -- and a glyph mapper's input is the points it stamps at, with no
+    cell for a ray to cross, so :func:`owner_at`'s ray cast passed through every board on
+    the System to the room behind it and a click on a board picked nothing. On a board's own
+    view that is what a click on the bare board means anyway; on the System the board is
+    the thing being clicked. The slab is solid where the plate has holes, so a click
+    through a hole picks the board it went through as well.
+    """
+    x0, y0, x1, y1 = board_outline_rect(board)
+    slab = vtk.vtkCubeSource()
+    slab.SetBounds(x0 + dx, x1 + dx, y0 + dy, y1 + dy, -board.thickness, 0.0)
+    slab.Update()
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputData(slab.GetOutput())
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actor.SetObjectName(BOARD_STAND_IN_NAME)
+    return actor
 
 
 def _world_offsets(doc: PerfDocument) -> dict[BoardId, tuple[float, float]]:
@@ -7419,6 +7461,7 @@ def build_cables(
     *,
     exploded_mm: float = 0.0,
     obstacles: Collection[Bounds] | None = None,
+    owners: dict[vtk.vtkActor, ActorOwner] | None = None,
 ) -> list[vtk.vtkActor]:
     """Every cable of ``doc`` as its wires, in the System's row: a tube per wire from its pin to
     its pin, hanging between them as long as the cable is (``_rope``) over ``obstacles`` --
@@ -7427,7 +7470,7 @@ def build_cables(
     from.
 
     A crossed cable is drawn as it is wired. This shows what will be built; the System view
-    and the checks say what is wrong with it.
+    and the checks say what is wrong with it. ``owners``, if given, gets each actor's cable.
     """
     from .view2d import named_insulation
 
@@ -7436,6 +7479,7 @@ def build_cables(
     colours = net_colours(doc)
     net_of = {(node.component_ref, node.pin): net.id for net in doc.nets for node in net.nodes}
     pieces: list[_Piece] = []
+    whose: list[str] = []
     for cable in doc.cables:
         a = _sockets(doc, lookup, cable.a, offsets, exploded_mm)
         b = _sockets(doc, lookup, cable.b, offsets, exploded_mm)
@@ -7462,9 +7506,12 @@ def build_cables(
                 )
             )
             pieces.extend(socket.shell for socket in (start, end) if socket.shell is not None)
+            whose.extend([cable.id] * (len(pieces) - len(whose)))
     actors = [_actor_for(piece) for piece in pieces]
-    for actor in actors:
+    for actor, cable_id in zip(actors, whose, strict=True):
         actor.SetObjectName(CABLE_ACTOR_NAME)
+        if owners is not None:
+            owners[actor] = ("cable", cable_id)
     return actors
 
 
@@ -7844,22 +7891,40 @@ def _slack(
 # through the same doors the sheet's does, and what is selected anywhere is tinted here.
 
 #: What a solid belongs to: a part or a conductor, by id.
-type ActorOwner = tuple[Literal["component", "conductor"], str]
+#: Whose a solid is, for a click in 3D: a part or a conductor on a board's own view, and on
+#: the System's a board (every solid of it, parts and all) or a cable (its wires and shells).
+type ActorOwner = tuple[Literal["component", "conductor", "board", "cable"], str]
 
 
 def owner_at(
     ren: vtk.vtkRenderer, owners: dict[vtk.vtkActor, ActorOwner], x: int, y: int
 ) -> ActorOwner | None:
     """The part or conductor drawn at display position ``(x, y)`` -- VTK's, from the bottom
-    left -- or ``None`` for the board, the room or nothing at all."""
+    left -- or ``None`` for the board, the room or nothing at all. On the System, the board
+    or the cable there (see :func:`populate_system_renderer`)."""
     # A RAY CAST, not the hardware selector vtkPropPicker uses: that renders the scene
     # again into an id buffer, and through this view's render passes it fails outright
     # ("Too many props") and picks nothing.
     picker = vtk.vtkCellPicker()
     picker.SetTolerance(0.0005)
-    if not picker.Pick(x, y, 0, ren):
-        return None
-    return owners.get(picker.GetActor())
+    hit = owners.get(picker.GetActor()) if picker.Pick(x, y, 0, ren) else None
+    stand_ins = [actor for actor in owners if actor.GetObjectName() == BOARD_STAND_IN_NAME]
+    if not stand_ins:
+        return hit
+    # The boards' plates, which the cast above cannot see (``_board_stand_in``): the nearer
+    # of the two along the ray is what the click landed on.
+    plates = vtk.vtkCellPicker()
+    plates.SetTolerance(0.0005)
+    plates.PickFromListOn()
+    for actor in stand_ins:
+        plates.AddPickList(actor)
+    if not plates.Pick(x, y, 0, ren):
+        return hit
+    if hit is not None:
+        eye = ren.GetActiveCamera().GetPosition()
+        if math.dist(eye, picker.GetPickPosition()) <= math.dist(eye, plates.GetPickPosition()):
+            return hit
+    return owners.get(plates.GetActor())
 
 
 def show_selection(

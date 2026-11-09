@@ -21,6 +21,7 @@ from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.geometry import all_pin_holes, board_outline_mm
 from perfboard_studio.ui import view3d
 
+from .test_gl import requires_offscreen_gl
 from .test_system_readers import _system
 
 
@@ -309,3 +310,73 @@ def test_with_system_in_front_the_3d_panel_draws_every_board_and_frames_them(  #
         window._mark_saved()
         window.close()
         window.deleteLater()
+
+
+def test_every_solid_of_the_system_is_a_boards_or_a_cables() -> None:
+    """What a click on the System can land on: every actor drawn belongs to the board it was
+    drawn with -- its parts too, since on the System a board is what is picked -- or to the
+    cable whose wire or shell it is. Nothing is left without an owner, and nothing is owned
+    twice. Each board has one stand-in besides, which is never drawn: its plate is glyphed,
+    and a ray cast cannot see a glyph (``view3d._board_stand_in``)."""
+    doc = _system()
+    ren = view3d.vtk.vtkRenderer()
+    owners: dict = {}
+    view3d.populate_system_renderer(ren, doc, footprint_lookup(), owners=owners)
+    actors = view3d._actors(ren)
+    stand_ins = {a: whose for a, whose in owners.items() if a.GetObjectName() == view3d.BOARD_STAND_IN_NAME}
+    assert sorted(stand_ins.values()) == [("board", "b2"), ("board", "main")]
+    assert not set(stand_ins) & set(actors)
+    assert set(owners) - set(stand_ins) == set(actors)
+    kinds: dict[tuple[str, str], int] = {}
+    for kind, ident in owners.values():
+        kinds[(kind, ident)] = kinds.get((kind, ident), 0) + 1
+    assert set(kinds) == {("board", "main"), ("board", "b2"), ("cable", "cable-1")}
+    assert kinds[("cable", "cable-1")] == 2 + 4  # two tubes and four DuPont shells
+    for actor, (kind, _ident) in owners.items():
+        assert (actor.GetObjectName() == view3d.CABLE_ACTOR_NAME) == (kind == "cable")
+
+
+@requires_offscreen_gl
+def test_a_click_on_the_system_names_the_board_or_the_cable_it_lands_on() -> None:
+    """Through the renderer the window uses: on a board's middle, that board; on the middle
+    of a cable's wire, where it lies on the bench between the boards, the cable; on the room,
+    nothing."""
+    doc = _system()
+    owners: dict = {}
+    ren = view3d.vtk.vtkRenderer()
+    view3d.populate_system_renderer(ren, doc, footprint_lookup(), owners=owners)
+    window = view3d.vtk.vtkRenderWindow()
+    window.SetOffScreenRendering(1)
+    window.AddRenderer(ren)
+    window.SetSize(900, 700)
+    view3d.apply_default_camera(ren)
+    window.Render()
+
+    def click(x: float, y: float, z: float):  # type: ignore[no-untyped-def]
+        ren.SetWorldPoint(x, y, z, 1.0)
+        ren.WorldToDisplay()
+        px, py, _pz = ren.GetDisplayPoint()
+        return view3d.owner_at(ren, owners, round(px), round(py))
+
+    for board_id in ("main", "b2"):
+        bounds = [a.GetBounds() for a, whose in owners.items() if whose == ("board", board_id)]
+        # The middle of either board is a hole, which still picks the board it is in; half
+        # a pitch off it is the plate.
+        for nudge in (0.0, 1.27):
+            x = (min(b[0] for b in bounds) + max(b[1] for b in bounds)) / 2 + nudge
+            y = (min(b[2] for b in bounds) + max(b[3] for b in bounds)) / 2 + nudge
+            assert click(x, y, 0.0) == ("board", board_id), nudge
+
+    tube = next(
+        a for a, whose in owners.items()
+        if whose == ("cable", "cable-1") and a.GetMapper().GetInput().GetNumberOfPoints() > 500
+    )
+    points = numpy.array(
+        [tube.GetMapper().GetInput().GetPoint(i) for i in range(tube.GetMapper().GetInput().GetNumberOfPoints())]
+    )
+    middle = (points[:, 0].min() + points[:, 0].max()) / 2
+    near = points[numpy.abs(points[:, 0] - middle) < 1.0]
+    x, y, z = near[near[:, 2].argmax()]
+    assert click(x, y, z) == ("cable", "cable-1")
+
+    assert view3d.owner_at(ren, owners, 3, 3) is None
