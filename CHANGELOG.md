@@ -132,6 +132,11 @@ closed without a bump.
   and E fall 0.74 mm off a row of holes and the pegs are as long as the pins. The check says
   to snip them and wire the switch by hand, and points at the KY-040 for an encoder that
   presses ready to plug in.
+- **The build guide says what to do to a part before it goes in**, when the part needs
+  something done: the RV09's step says to snip its lugs off flush (3.8 mm against the pins'
+  3.2), the EC11's to snip its pegs and the switch's D and E, and the SW-520D's that its
+  leads, 0.07 mm off their holes, go in with no bending. One sentence each, with the figures
+  the footprint carries, in English and Turkish.
 
 ## [0.23.0] - 2026-11-09
 

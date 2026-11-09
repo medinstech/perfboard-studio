@@ -656,3 +656,74 @@ def test_the_ec11_courtyard_covers_its_switch_pins_and_pegs_that_fit_no_hole() -
     assert round(6 * STANDARD_PITCH_MM - 14.5, 2) == 0.74
     assert "0.74 mm" in part.check and "0.04 mm" in part.check
     assert "KY-040" in part.check
+
+
+def _guide_notes(part_id: str, language: str) -> list[str]:
+    """The notes of the one part step in a guide for a board with only this part on it."""
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.guide import DEFAULT_GUIDE_OPTIONS, PartStep, build_guide
+    from perfboard_studio.model import ComponentInstance, DocumentMeta, HoleCoord, PerfDocument
+
+    part = catalog_part(part_id)
+    assert part is not None
+    component = ComponentInstance(
+        id="c1", ref="U1", value=part.placed_value, footprint_id=part.footprint_id,
+        pin_names=part.pin_names, anchor=HoleCoord(8, 14),
+    )
+    doc = PerfDocument(
+        meta=DocumentMeta(name="fitting", created="", modified=""),
+        board=new_board(cols=30, rows=20).board, components=(component,),
+    )
+    options = dataclasses.replace(DEFAULT_GUIDE_OPTIONS, language=language)
+    guide = build_guide(doc, footprint_lookup(), options)
+    (step,) = [s for phase in guide.phases for s in phase.steps if isinstance(s, PartStep)]
+    return list(step.notes)
+
+
+@pytest.mark.parametrize(
+    ("part_id", "english", "turkish"),
+    [
+        ("rv09-pot", "lugs on the sides of its frame are 3.8 mm long against the pins' 3.2 mm",
+         "tırnak pinlerin 3.2 mm'sine karşılık 3.8 mm uzundur"),
+        ("ec11-encoder", "D and E are 14.5 mm from the other pins, 0.74 mm off a row",
+         "D ve E diğer pinlerden 14.5 mm uzaktadır, bir delik sırasından 0.74 mm"),
+        ("sw-520d", "Its leads are 2.4 mm apart and the holes 2.54: each ends 0.07 mm off",
+         "Bacakları 2.4 mm arayla durur, delikler 2.54 mm: her biri deliğinden 0.07 mm"),
+    ],
+)
+def test_the_guide_says_what_to_do_to_these_parts_before_they_fit(
+    part_id: str, english: str, turkish: str
+) -> None:
+    """One sentence each, with the footprint's own figures, in both languages -- and the
+    other language's sentence does not leak into either."""
+    in_english = _guide_notes(part_id, "en")
+    in_turkish = _guide_notes(part_id, "tr")
+    assert len([n for n in in_english if english in n]) == 1, in_english
+    assert len([n for n in in_turkish if turkish in n]) == 1, in_turkish
+    assert not [n for n in in_turkish if english in n]
+
+
+def test_only_the_three_parts_that_need_it_have_a_fitting_note_and_each_is_a_catalog_part() -> None:
+    from perfboard_studio.footprints import FITTING_NOTES, fitting_note
+
+    ids = {"rv09-pot", "ec11-encoder", "sw-520d"}
+    carried = {part.id for part in CATALOG if (fp := get_footprint(part.footprint_id)) and fitting_note(fp)}
+    assert carried == ids
+    assert set(FITTING_NOTES) == {catalog_part(i).footprint_id for i in ids}  # type: ignore[union-attr]
+
+
+def test_the_fitting_note_figures_are_the_sums_the_catalog_check_does() -> None:
+    from perfboard_studio.footprints import FITTING_NOTES
+
+    def facts(part_id: str) -> dict[str, float]:
+        part = catalog_part(part_id)
+        assert part is not None
+        return dict(FITTING_NOTES[part.footprint_id].facts)
+
+    rv09 = facts("rv09-pot")
+    assert round(rv09["lug"] - rv09["pin"], 2) == rv09["gap"]
+    ec11 = facts("ec11-encoder")
+    assert round(6 * STANDARD_PITCH_MM - ec11["out"], 2) == ec11["off"]
+    sw = facts("sw-520d")
+    assert round((sw["pitch"] - sw["lead"]) / 2, 2) == sw["off"]
+    assert sw["pitch"] == STANDARD_PITCH_MM

@@ -63,6 +63,7 @@ from .drc import DEFAULT_DRC_OPTIONS, DrcOptions, DrcViolation, run_drc, trace_e
 from .erc import run_erc
 from .footprints import (
     adapter_package,
+    fitting_note,
     flying_lead_length_mm,
     standard_footprints,
     standing_pin,
@@ -1246,6 +1247,7 @@ def _part_step(
     stood = standing_pin(footprint)
     if stood is not None:
         notes.append(_standing_note(component, footprint, holes, stood, board, say))
+    notes.extend(_fitting_notes(footprint, say))
     if component.mirrored and not breadboard:
         notes.append(say(
             "This part is mirrored: it goes in from the SOLDER side, not the component "
@@ -1528,6 +1530,36 @@ def _span_of(pin_holes: tuple[tuple[str, HoleCoord], ...], say: Phrasebook = ENG
         start=format_hole(corner_a, board), end=format_hole(corner_b, board), count=len(pin_holes),
         hole=format_hole(pin_one, board),
     )
+
+
+def _fitting_notes(footprint: Footprint, say: Phrasebook) -> list[str]:
+    """What has to be done to a part before it goes in (``footprints.fitting_note``): the
+    sentence for its kind, with the figures the footprint carries. One sentence each, said
+    the same on a breadboard and a perfboard, so it names no iron."""
+    note = fitting_note(footprint)
+    if note is None:
+        return []
+    facts = dict(note.facts)
+    if note.kind == "snip-lugs":
+        return [say(
+            "The two lugs on the sides of its frame are {lug:g} mm long against the pins' "
+            "{pin:g} mm, so left on they would hold it {gap:g} mm clear of the board and keep "
+            "the pins out of the holes: snip them off flush with the frame before you fit it.",
+            lug=facts["lug"], pin=facts["pin"], gap=facts["gap"],
+        )]
+    if note.kind == "snip-switch":
+        return [say(
+            "Snip off its two pegs and the switch pins D and E flush with the frame before you "
+            "fit it: D and E are {out:g} mm from the other pins, {off:g} mm off a row of "
+            "holes, and the pegs are as long as the pins. If you want the push switch, wire "
+            "it by hand.",
+            out=facts["out"], off=facts["off"],
+        )]
+    return [say(
+        "Its leads are {lead:g} mm apart and the holes {pitch:g}: each ends {off:g} mm off "
+        "its hole, which a hole has room for, so it goes in as it is, with no bending.",
+        lead=facts["lead"], pitch=facts["pitch"], off=facts["off"],
+    )]
 
 
 def _standing_note(

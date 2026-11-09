@@ -362,6 +362,39 @@ def standing_pin(footprint: Footprint) -> FootprintPin | None:
     return next((pin for pin in footprint.pins if pin.number == number), None)
 
 
+@dataclass(frozen=True, slots=True)
+class FittingNote:
+    """What a builder has to do to a part before it fits these holes, which nothing in the
+    pins or the body says: a kind the guide has a sentence for, and the facts that make the
+    sentence true as named numbers (millimetres), so the sentence is written once and the
+    figures stay beside the footprint they were measured for."""
+
+    kind: Literal["snip-lugs", "snip-switch", "off-pitch"]
+    facts: tuple[tuple[str, float], ...]
+
+
+#: The footprints that need one. ``snip-lugs``: lugs longer than the pins hold the part off
+#: the board (RV09: 3.8 against 3.2 mm). ``snip-switch``: terminals that sit on no hole
+#: (EC11's D and E, 14.5 mm out and 0.74 off a row, and its pegs as long as its pins).
+#: ``off-pitch``: leads off the 2.54 grid by less than the hole has to spare (SW-520D).
+FITTING_NOTES: dict[str, FittingNote] = {
+    "box-3x1-p1-r1-10.6x12.5x20-o0x-6.25": FittingNote(
+        "snip-lugs", (("lug", 3.8), ("pin", 3.2), ("gap", 0.6))
+    ),
+    "box-3x1-p1-r1-12.5x14.5x24.5-o0x-7.25": FittingNote(
+        "snip-switch", (("out", 14.5), ("off", 0.74))
+    ),
+    "box-2x1-p1-r1-5.5x5.5x11.9": FittingNote(
+        "off-pitch", (("lead", 2.4), ("pitch", 2.54), ("off", 0.07))
+    ),
+}
+
+
+def fitting_note(footprint: Footprint) -> FittingNote | None:
+    """The :class:`FittingNote` of a footprint, or None for the many that need none."""
+    return FITTING_NOTES.get(footprint.id)
+
+
 def _upright_axial_footprint(
     *,
     span_holes: int,

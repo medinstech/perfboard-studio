@@ -544,6 +544,26 @@ TURKISH: dict[str, str] = {
         "Kendi pinleriyle doğrudan lehimlenir, yani her pini sökmeden bir daha çıkmaz: "
         "önce yönünü pin adlarıyla karşılaştırın."
     ),
+    "The two lugs on the sides of its frame are {lug:g} mm long against the pins' {pin:g} "
+    "mm, so left on they would hold it {gap:g} mm clear of the board and keep the pins out "
+    "of the holes: snip them off flush with the frame before you fit it.": (
+        "Gövdesinin yanlarındaki iki tırnak pinlerin {pin:g} mm'sine karşılık {lug:g} mm "
+        "uzundur; bırakırsanız parçayı karttan {gap:g} mm yukarıda tutar ve pinleri "
+        "deliklerin dışında bırakır: takmadan önce onları gövdeyle aynı hizada kesin."
+    ),
+    "Snip off its two pegs and the switch pins D and E flush with the frame before you fit "
+    "it: D and E are {out:g} mm from the other pins, {off:g} mm off a row of holes, and the "
+    "pegs are as long as the pins. If you want the push switch, wire it by hand.": (
+        "Takmadan önce iki tırnağını ve düğmenin D ile E pinlerini gövdeyle aynı hizada "
+        "kesin: D ve E diğer pinlerden {out:g} mm uzaktadır, bir delik sırasından {off:g} mm "
+        "kaçıktır; tırnaklar da pinler kadar uzundur. Basmalı düğmeyi isterseniz elle "
+        "kablolayın."
+    ),
+    "Its leads are {lead:g} mm apart and the holes {pitch:g}: each ends {off:g} mm off its "
+    "hole, which a hole has room for, so it goes in as it is, with no bending.": (
+        "Bacakları {lead:g} mm arayla durur, delikler {pitch:g} mm: her biri deliğinden "
+        "{off:g} mm kayar, bir deliğin buna payı vardır; yani olduğu gibi, bükmeden girer."
+    ),
     "{height:g} mm tall, and this build has {limit:g} mm of room. It will not fit as it "
     "stands — lay it down or swap it before you solder it in.": (
         "{height:g} mm yüksekliğinde, bu montajda ise {limit:g} mm yer var. Bu hâliyle "
