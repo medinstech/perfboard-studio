@@ -187,7 +187,6 @@ closed without a bump.
   glass. The check says to bend the leads at least 2 mm from the glass and to test the switch
   with a magnet after soldering, because Standex-Meder says bending changes its sensitivity.
 
-
 ### Fixed
 
 - **A part's name no longer prints over the board's own printed addresses.** On a board
