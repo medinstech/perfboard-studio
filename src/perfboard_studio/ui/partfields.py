@@ -108,6 +108,7 @@ class PinoutEditor(QWidget):
             ("potentiometer", t("Potentiometer (three leads, the middle one the wiper)")),
             ("led", t("LED (names A, K)")),
             ("battery", t("Battery (names + and -)")),
+            ("jack", t("DC jack (names + and -)")),
         )
         for value, label in choices:
             self.symbol.addItem(label, value)

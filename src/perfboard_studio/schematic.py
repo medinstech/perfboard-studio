@@ -229,6 +229,7 @@ SymbolKind: TypeAlias = Literal[  # noqa: UP040
     "zener",
     "fuse",
     "battery",
+    "jack",
     "npn",
     "pnp",
     "nmos",
@@ -1807,6 +1808,8 @@ DECLARED_SYMBOL_PINS: dict[PartSymbol, frozenset[str]] = {
     "led": frozenset({"A", "K"}),
     # Which lead the long plate is on is what a cell symbol says, so the leads must be named.
     "battery": frozenset({"+", "-"}),
+    # The centre pin is the plus and the sleeve the minus, so the leads must say which.
+    "jack": frozenset({"+", "-"}),
 }
 
 #: How many leads a declared symbol with no names to check must have.
@@ -1954,6 +1957,67 @@ def _battery_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _S
         pins=_two_terminal_pins(pins, positive),
         width=_TWO_W,
         height=_TWO_H,
+    )
+
+
+def _jack_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    """A DC barrel jack in section: the centre pin reaching into the cup of the sleeve.
+
+    Drawn here from what the part is, not copied from a symbol library: a housing, the pin
+    as a filled bar entering from the left, and the sleeve as a half-round cup it sits in,
+    with the plus on the pin side and the minus on the sleeve side. The marks over the
+    leads say so on the sheet, because which way a jack is wired is the board's business
+    and a reader should not have to find it in a table.
+    """
+    positive = _positive_pin_number(pins, True)
+    half = 1.5 * GRID_MM
+    pin_half = 0.18 * GRID_MM
+    centre_x, radius = 4.6 * GRID_MM, 1.0 * GRID_MM
+    cup: list[Point2] = []
+    steps = 8
+    for index in range(steps + 1):
+        angle = -math.pi / 2 + math.pi * index / steps
+        cup.append(_p(centre_x + radius * math.cos(angle), _AXIS + radius * math.sin(angle)))
+    arm = 0.35 * GRID_MM
+    mark_y = _AXIS - 0.9 * GRID_MM
+    plus_x, minus_x = 0.9 * GRID_MM, 7.1 * GRID_MM
+    shapes = (
+        SymbolShape(kind="polyline", points=(_p(0.0, _AXIS), _p(2 * GRID_MM, _AXIS))),
+        SymbolShape(
+            kind="polygon",
+            points=(
+                _p(2 * GRID_MM, _AXIS - half),
+                _p(6 * GRID_MM, _AXIS - half),
+                _p(6 * GRID_MM, _AXIS + half),
+                _p(2 * GRID_MM, _AXIS + half),
+            ),
+        ),
+        SymbolShape(
+            kind="polygon",
+            points=(
+                _p(2 * GRID_MM, _AXIS - pin_half),
+                _p(4.4 * GRID_MM, _AXIS - pin_half),
+                _p(4.4 * GRID_MM, _AXIS + pin_half),
+                _p(2 * GRID_MM, _AXIS + pin_half),
+            ),
+            filled=True,
+        ),
+        SymbolShape(kind="polyline", points=tuple(cup)),
+        SymbolShape(
+            kind="polyline", points=(_p(centre_x + radius, _AXIS), _p(_TWO_W, _AXIS))
+        ),
+        SymbolShape(
+            kind="polyline", points=(_p(plus_x - arm, mark_y), _p(plus_x + arm, mark_y))
+        ),
+        SymbolShape(
+            kind="polyline", points=(_p(plus_x, mark_y - arm), _p(plus_x, mark_y + arm))
+        ),
+        SymbolShape(
+            kind="polyline", points=(_p(minus_x - arm, mark_y), _p(minus_x + arm, mark_y))
+        ),
+    )
+    return _SymbolBody(
+        shapes=shapes, pins=_two_terminal_pins(pins, positive), width=_TWO_W, height=_TWO_H
     )
 
 
@@ -2166,6 +2230,7 @@ _SYMBOL_BUILDERS: dict[
     "zener": _zener_body,
     "fuse": _fuse_body,
     "battery": _battery_body,
+    "jack": _jack_body,
     "npn": _npn_body,
     "pnp": _pnp_body,
     "nmos": _nmos_body,

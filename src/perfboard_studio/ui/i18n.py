@@ -2023,6 +2023,22 @@ TURKISH: Mapping[str, str] = {
     "Zener diode": "Zener diyot",
     "Fuse or PTC": "Sigorta ya da PTC",
     "Battery (names + and -)": "Pil (adlar + ve -)",
+    "DC jack (names + and -)": "DC jak (adlar + ve -)",
+    "CR2032 coin cell holder, Keystone 1067 (vertical)": (
+        "CR2032 düğme pil yuvası, Keystone 1067 (dikey)"
+    ),
+    "Stands one 20 mm coin cell on edge: CR2032, CR2016, CL2025, DL2020": (
+        "Bir adet 20 mm düğme pili ayakta tutar: CR2032, CR2016, CL2025, DL2020"
+    ),
+    "The mounting leg sits 7.1 mm to one side of the pins and wants a hole of its own, "
+    "which the 2.54 mm grid does not have (the drawing gives 2.4 mm for the pad and "
+    "1.57 mm for the leg): drill it. Match + and - to the marks on the holder before "
+    "soldering, not to the order here.": (
+        "Montaj bacağı pinlerin 7,1 mm yanında durur ve kendi deliğini ister; 2,54 mm'lik "
+        "ızgarada böyle bir delik yoktur (çizim pad için 2,4 mm, bacak için 1,57 mm verir): "
+        "kendiniz delin. + ve - uçlarını buradaki sıraya göre değil, yuvanın üzerindeki "
+        "işaretlere göre bağlayın."
+    ),
     "What this part is, when its package cannot say. A transistor symbol is "
     "drawn only once its leads are named below, because which leg is the gate "
     "is a fact about the part, not the package.": (

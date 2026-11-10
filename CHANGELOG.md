@@ -234,6 +234,8 @@ closed without a bump.
   for it. A part placed while the board is turned over (Ctrl+F) goes on the solder side. On
   the board, a part under it is a hatched shadow from above and the part itself from below,
   its value reading the right way; the guide's row and its bench picture say the solder side.
+- **The DC barrel jack is drawn as a jack on the schematic**: a part can declare itself a `jack` (leads named + and -), and the sheet draws the centre pin reaching into the cup of the sleeve with the plus and minus marked, drawn for this project rather than taken from a symbol library.
+- **A CR2032 coin cell holder, Keystone 1067 (vertical, through-hole)**, from Keystone's drawing: its two contact pins 7.6 mm apart (3 pitches here) with the body at the drawing's size, drawn as a cell. The drawing's side view gives the body's depth as .531 in and 3.6 mm; the note says which was taken and why, and that the holder's third, mounting leg has no hole on the 2.54 mm grid and is not drawn.
 
 ### Changed
 

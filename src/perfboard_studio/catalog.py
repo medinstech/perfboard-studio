@@ -515,7 +515,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 aliases=(*_POWER_WORDS, "batarya", "AAA")),
     CatalogPart("dc-jack-panel", "DC barrel jack 5.5 x 2.1 mm, panel mount", "power", "wire-2",
                 "On the case, wired to the board from its centre pin and its sleeve",
-                _legs("+", "-"), value="DC IN",
+                _legs("+", "-"), value="DC IN", symbol="jack",
                 source=(
                     "IEC 60130-10 type A plug, 5.5 mm outside and 2.1 mm pin; the jack's "
                     "centre pin is pin 1 here and its sleeve pin 2"
@@ -526,6 +526,33 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "unconnected here."
                 ),
                 aliases=(*_POWER_WORDS, "jack", "adapter", "adaptör")),
+    # Keystone's 20mm thru-hole holders sheet (datasheet.octopart.com/1026-Keystone-datasheet-
+    # 10927550.pdf), the VERTICAL COMPACT drawing, Cat. No. 1067.
+    CatalogPart("coin-holder-keystone-1067", "CR2032 coin cell holder, Keystone 1067 (vertical)",
+                "power", "box-1x2-p1-r3-22.2x13.5x19.9",
+                "Stands one 20 mm coin cell on edge: CR2032, CR2016, CL2025, DL2020",
+                _legs("+", "-"), value="CR2032", ref_prefix="BT", symbol="battery",
+                source=(
+                    "Keystone Electronics' 20mm Thru-Hole Mount Coin Cell Holders sheet, the "
+                    "VERTICAL COMPACT drawing, Cat. No. 1067: the body 22.2 mm wide and 19.9 mm "
+                    "high, the two contact pins .300 in (7.6 mm) apart, 3 pitches here, in a "
+                    "column through the middle of the body's width, one marked + and one - in "
+                    "the Mounting Detail. The drawing's side view calls the body .531 in "
+                    "and then 3.6 mm: the inches are used (13.5 mm), because the 7.6 mm "
+                    "between the pins measures a little over half of that width on the same "
+                    "drawing and 3.6 mm would be narrower than the pins' own spacing. The "
+                    "holder's third leg, 1.57 mm round and 7.1 mm from the pin column, has no "
+                    "hole on the 2.54 mm grid and is not drawn; this footprint is its two "
+                    "contact pins"
+                ),
+                check=(
+                    "The mounting leg sits 7.1 mm to one side of the pins and wants a hole of "
+                    "its own, which the 2.54 mm grid does not have (the drawing gives 2.4 mm for "
+                    "the pad and 1.57 mm for the leg): drill it. Match + and - to the marks "
+                    "on the holder before soldering, not to the order here."
+                ),
+                aliases=(*_POWER_WORDS, "CR2032", "coin cell", "button cell", "düğme pil",
+                         "pil yuvası")),
     CatalogPart("power-terminal-2", "Power in, 2-way screw terminal", "power",
                 "screw-terminal-2", "Two wires in under screws, named + and -",
                 _legs("+", "-"), value="DC IN",

@@ -464,16 +464,29 @@ def test_a_declared_battery_with_unnamed_leads_stays_a_box_and_says_why() -> Non
     assert any("X1: declared battery" in note and "+, -" in note for note in notes)
 
 
+def test_a_declared_jack_puts_its_centre_pin_on_the_left_and_needs_both_leads_named() -> None:
+    drawn = _sheet_symbol("wire-2", symbol="jack", pin_names=(("1", "+"), ("2", "-")))[0]
+    assert drawn.kind == "jack"
+    assert {pin.name: pin.side for pin in drawn.pins} == {"+": "left", "-": "right"}
+    drawn, notes = _sheet_symbol("wire-2", symbol="jack")
+    assert drawn.kind == "box"
+    assert any("X1: declared jack" in note for note in notes)
+
+
 def test_the_catalog_s_battery_clip_and_holder_are_drawn_as_cells() -> None:
     from perfboard_studio.catalog import catalog_part
 
-    for part_id in ("battery-9v-clip", "battery-aa-holder"):
+    for part_id, kind in (
+        ("battery-9v-clip", "battery"),
+        ("battery-aa-holder", "battery"),
+        ("dc-jack-panel", "jack"),
+    ):
         part = catalog_part(part_id)
-        assert part is not None and part.symbol == "battery", part_id
+        assert part is not None and part.symbol == kind, part_id
         drawn, _ = _sheet_symbol(
             part.footprint_id, symbol=part.symbol, pin_names=part.pin_names
         )
-        assert drawn.kind == "battery", part_id
+        assert drawn.kind == kind, part_id
 
 
 # ---------------------------------------------------------------------------

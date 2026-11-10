@@ -1085,3 +1085,19 @@ def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> No
         assert part_id in {found.id for found in search_catalog(query)}, part_id
     nokia = catalog_part("nokia-5110")
     assert nokia is not None and "Espruino wires it to GND" in nokia.check
+
+
+def test_the_keystone_coin_holder_is_two_pins_three_pitches_apart_and_says_what_it_left_out() -> None:
+    part = catalog_part("coin-holder-keystone-1067")
+    assert part is not None and part.symbol == "battery" and part.reference_prefix == "BT"
+    assert part.pin_names == (("1", "+"), ("2", "-"))
+    footprint = get_footprint(part.footprint_id)
+    assert footprint is not None
+    first, second = footprint.pins
+    assert (second.d_row - first.d_row) * STANDARD_PITCH_MM == pytest.approx(7.62)
+    assert footprint.body_height == 19.9
+    assert ".531" in part.source and "3.6 mm" in part.source and "1067" in part.source
+    assert "mounting leg" in part.check
+    for words in ("CR2032", "coin cell", "düğme pil"):
+        assert next(found.id for found in search_catalog(words)) == part.id, words
+

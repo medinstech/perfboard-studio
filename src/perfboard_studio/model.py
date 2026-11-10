@@ -561,7 +561,8 @@ type ComponentId = str
 #:
 #: A ``battery`` is the same shape of claim for a part off the board: a snap or a holder
 #: is two flying leads, which draw as a box, and the leads' names (+ and -) are what the
-#: cell symbol puts its long plate on.
+#: cell symbol puts its long plate on. A ``jack`` is the same claim for a panel's DC barrel
+#: jack: its centre pin is the + lead and its sleeve the - lead.
 #:
 #: The last two are the same shape of claim for a part that is not on the board at all. A
 #: pot on the panel is three ``flying-leads`` pads here, which draw as a box; the part
@@ -580,6 +581,7 @@ PartSymbol: TypeAlias = Literal[  # noqa: UP040
     "potentiometer",
     "led",
     "battery",
+    "jack",
 ]
 
 #: Pin number -> the name the part's datasheet gives that lead, in pin order.
