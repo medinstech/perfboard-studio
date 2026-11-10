@@ -243,6 +243,7 @@ from perfboard_studio.footprints import (
     vertical_screw_terminal_footprint,
 )
 from perfboard_studio.geometry import (
+    all_pin_holes,
     format_hole,
     hole_span_mm,
     legend_label,
@@ -11489,12 +11490,41 @@ class MainWindow(QMainWindow):
             if len(moves) == 1
             else self.bus.dispatch("component.setSideMany", SetComponentSidesPayload(sides=moves))
         )
+        if result.ok and len(moves) == 1 and ": " in result.description:
+            # A part with two rows of pins has no turn that keeps them in their holes, and
+            # the command's name says so after a colon. The undo label alone was too quiet
+            # for the one thing about the turn somebody has to act on.
+            self.statusBar().showMessage(say(result.description), 10000)
+            return
         done = (
             t("Moved {count} part(s) to the solder side: Ctrl+F turns the board over")
             if side == "bottom"
             else t("Moved {count} part(s) to the component side")
-        )
-        self._report_group(result, done.format(count=len(moves)))
+        ).format(count=len(moves))
+        rewired = self._moved_off_their_holes(components) if result.ok else 0
+        if rewired:
+            said = (
+                t("{count} of {total} parts changed holes: its wiring needs redoing")
+                if rewired == 1
+                else t("{count} of {total} parts changed holes: their wiring needs redoing")
+            )
+            done = said.format(count=rewired, total=len(moves)) + "  ·  " + done
+        self._report_group(result, done)
+
+    def _moved_off_their_holes(self, before: Sequence[ComponentInstance]) -> int:
+        """How many of these parts no longer have every pin in the hole it had, now that
+        the gesture has run: a turn-over keeps a part whose pins lie in a line in its
+        holes, and swaps the rows of one that has two."""
+        now = {c.id: c for c in self.bus.document.components}
+        changed = 0
+        for was in before:
+            after = now.get(was.id)
+            footprint = self.lookup(was.footprint_id)
+            if after is None or footprint is None or after.side == was.side:
+                continue
+            if all_pin_holes(was, footprint) != all_pin_holes(after, footprint):
+                changed += 1
+        return changed
 
     # -- copy, paste, duplicate ----------------------------------------------
     #

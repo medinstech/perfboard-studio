@@ -18148,6 +18148,8 @@ def test_shift_m_turns_a_part_over_onto_the_solder_side_and_back() -> None:
         assert window.bus.history()[-1] == (
             "Move U1 to Solder Side: its rows of pins swapped sides, so its wiring needs redoing"
         )
+        # ...and so does the status line, where somebody is looking.
+        assert window.statusBar().currentMessage() == window.bus.history()[-1]
         window.scene.select_components([part.id])
         window._refresh_selection_state()
         assert window.act_side.text() == "Move to Component &Side"
@@ -18295,5 +18297,29 @@ def test_a_long_name_shows_its_start() -> None:
         name = window.inspector.system_editor.name
         assert name.text() == "Relay Driver and Its Supply"
         assert name.cursorPosition() == 0
+    finally:
+        _close(window)
+
+
+def test_a_group_turned_over_says_how_many_need_rewiring() -> None:
+    """A resistor turned over keeps its holes; a DIP swaps its rows. Over a group the status
+    line counts the ones whose wiring needs redoing, and over parts that all keep their
+    holes it says only that they moved."""
+    window = _window_on(_ne555())
+    try:
+        parts = {c.ref: c for c in window.bus.document.components}
+        resistors = [ref for ref in parts if ref.startswith("R")][:2]
+        window.scene.select_components([parts[ref].id for ref in resistors])
+        window._refresh_selection_state()
+        window.on_side_selection()
+        assert window.statusBar().currentMessage().startswith("Moved 2 part(s) to the solder side")
+        window.bus.undo()
+
+        window.scene.select_components([parts[ref].id for ref in [*resistors, "U1"]])
+        window._refresh_selection_state()
+        window.on_side_selection()
+        message = window.statusBar().currentMessage()
+        assert message.startswith("1 of 3 parts changed holes: its wiring needs redoing"), message
+        assert "Moved 3 part(s) to the solder side" in message
     finally:
         _close(window)

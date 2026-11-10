@@ -1860,6 +1860,12 @@ TURKISH: Mapping[str, str] = {
         "{count} parça lehim yüzüne alındı: Ctrl+F kartı çevirir"
     ),
     "Moved {count} part(s) to the component side": "{count} parça, parça yüzüne alındı",
+    "{count} of {total} parts changed holes: its wiring needs redoing": (
+        "{total} parçadan {count} tanesi başka deliklere geçti: kablolaması yeniden yapılmalı"
+    ),
+    "{count} of {total} parts changed holes: their wiring needs redoing": (
+        "{total} parçadan {count} tanesi başka deliklere geçti: kablolaması yeniden yapılmalı"
+    ),
     "{ref} is on the solder side, turned over, so it is mirrored already. Shift+M brings it "
     "back to the component side.": (
         "{ref} lehim yüzünde, ters çevrilmiş olduğu için zaten aynalı. Shift+M onu parça "
