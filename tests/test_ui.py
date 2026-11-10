@@ -18122,3 +18122,134 @@ def test_an_example_of_several_boards_is_counted_drawn_and_opened_whole() -> Non
         assert window.inspector.shown is window.inspector.system_editor
     finally:
         _close(window)
+
+
+# -- a part on the solder side ------------------------------------------------------------
+
+
+def _ne555():
+    example = pathlib.Path(__file__).resolve().parent.parent / "examples" / "ne555-astable.perf"
+    return persist.deserialize_document(example.read_text(encoding="utf-8")).document
+
+
+def test_shift_m_turns_a_part_over_onto_the_solder_side_and_back() -> None:
+    window = _window_on(_ne555())
+    try:
+        assert window.act_side.shortcut().toString() == "Shift+M"
+        part = next(c for c in window.bus.document.components if c.ref == "U1")
+        window.scene.select_components([part.id])
+        window._refresh_selection_state()
+        assert window.act_side.isEnabled()
+        assert window.act_side.text() == "Move to &Solder Side"
+        window.act_side.trigger()
+        moved = next(c for c in window.bus.document.components if c.id == part.id)
+        assert (moved.side, moved.mirrored) == ("bottom", True)
+        assert window.bus.history()[-1] == "Move U1 to Solder Side"
+        window.scene.select_components([part.id])
+        window._refresh_selection_state()
+        assert window.act_side.text() == "Move to Component &Side"
+        # Mirror on a part turned over says why, and changes nothing.
+        steps = len(window.bus.history())
+        window.on_mirror_selection()
+        assert len(window.bus.history()) == steps
+        assert "Shift+M" in window.statusBar().currentMessage()
+        window.act_side.trigger()
+        back = next(c for c in window.bus.document.components if c.id == part.id)
+        assert (back.side, back.mirrored) == ("top", False)
+    finally:
+        _close(window)
+
+
+def test_a_group_goes_over_in_one_step() -> None:
+    window = _window_on(_ne555())
+    try:
+        ids = [c.id for c in window.bus.document.components[:3]]
+        window.scene.select_components(ids)
+        window._refresh_selection_state()
+        steps = len(window.bus.history())
+        window.on_side_selection()
+        assert len(window.bus.history()) == steps + 1
+        assert all(
+            c.side == "bottom" for c in window.bus.document.components if c.id in ids
+        )
+        window.bus.undo()
+        assert all(c.side == "top" for c in window.bus.document.components)
+    finally:
+        _close(window)
+
+
+def test_properties_puts_a_part_on_either_face() -> None:
+    window = _window_on(_ne555())
+    try:
+        part = next(c for c in window.bus.document.components if c.ref == "R1")
+        window.scene.select_components([part.id])
+        window._refresh_selection_state()
+        editor = window.inspector.part_editor
+        assert editor.face_buttons["top"].isChecked()
+        assert editor.mirrored.isEnabled()
+        editor.face_buttons["bottom"].click()
+        moved = next(c for c in window.bus.document.components if c.id == part.id)
+        assert moved.side == "bottom"
+        assert editor.face_buttons["bottom"].isChecked()
+        assert not editor.mirrored.isEnabled(), "turned over is mirrored; nothing to untick"
+    finally:
+        _close(window)
+
+
+def test_a_part_placed_on_the_turned_over_board_goes_on_the_solder_side() -> None:
+    from perfboard_studio.breadboard import breadboard
+
+    bus = _blank_bus()
+    scene = BoardScene(bus.document, footprint_lookup(), side="bottom", bus=bus)
+    scene.arm_placement("r-axial-3")
+    result = scene.place_armed(HoleCoord(3, 3))
+    assert result is not None and result.ok, result
+    placed = bus.document.components[0]
+    assert (placed.side, placed.mirrored) == ("bottom", True)
+
+    # A solderless breadboard has no underside: the part goes on top, as before.
+    bread = _new_bus(dataclasses.replace(bus.document, board=breadboard("830"), components=()))
+    scene = BoardScene(bread.document, footprint_lookup(), side="bottom", bus=bread)
+    assert scene.placing_face() == "top"
+
+
+def test_a_part_under_the_board_is_a_shadow_from_above_and_the_part_from_below() -> None:
+    from perfboard_studio.commands import SetComponentSidePayload
+
+    bus = _new_bus(_ne555())
+    part = next(c for c in bus.document.components if c.ref == "U1")
+    assert bus.dispatch("component.setSide", SetComponentSidePayload(id=part.id, side="bottom")).ok
+    top = BoardScene(bus.document, footprint_lookup(), side="top")
+    bottom = BoardScene(bus.document, footprint_lookup(), side="bottom")
+    assert not top.component_items[part.id].faces_the_viewer()
+    assert bottom.component_items[part.id].faces_the_viewer()
+    others = [i for cid, i in bottom.component_items.items() if cid != part.id]
+    assert others and not any(i.faces_the_viewer() for i in others)
+    # Its value reads the right way from below: the two reflections cancel.
+    under = bottom.component_items[part.id].comp
+    assert view2d._ink_frame(under, from_below=True)[1] is False
+    assert view2d._ink_frame(under, from_below=False)[1] is True
+
+
+def test_the_guide_says_a_part_goes_on_the_solder_side() -> None:
+    from perfboard_studio.commands import SetComponentSidePayload
+
+    window = _window_on(_ne555())
+    try:
+        part = next(c for c in window.bus.document.components if c.ref == "U1")
+        window.bus.dispatch("component.setSide", SetComponentSidePayload(id=part.id, side="bottom"))
+        guide = window.current_guide()
+        lines = [
+            main_module_step_line(step, guide.language)
+            for phase in guide.phases for step in phase.steps
+            if getattr(step, "component_id", None) == part.id
+        ]
+        assert lines and lines[0].endswith("· solder side")
+    finally:
+        _close(window)
+
+
+def main_module_step_line(step, language):
+    from perfboard_studio.ui.main import _step_line
+
+    return _step_line(step, language)

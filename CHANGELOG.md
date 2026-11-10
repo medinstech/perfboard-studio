@@ -226,6 +226,11 @@ closed without a bump.
   to leave them long. A solderless breadboard has no solder side, and refuses it. Saved
   files keep their bytes: the face is written only for a part on the solder side, and 0.23
   opens such a file with the part mirrored on the component side.
+  In the window, Edit > Move to Solder Side (Shift+M) turns the selected parts over, and
+  says Move to Component Side when they are all under the board; Properties has a Face row
+  for it. A part placed while the board is turned over (Ctrl+F) goes on the solder side. On
+  the board, a part under it is a hatched shadow from above and the part itself from below,
+  its value reading the right way; the guide's row and its bench picture say the solder side.
 
 ### Changed
 

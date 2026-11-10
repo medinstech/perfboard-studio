@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from perfboard_studio.breadboard import is_breadboard
 from perfboard_studio.command import DispatchResult
 from perfboard_studio.commands import (
     DeleteBoardPayload,
@@ -61,6 +62,7 @@ from perfboard_studio.commands import (
     ReplaceConductorsPayload,
     RotateComponentPayload,
     SetBodyClearancePayload,
+    SetComponentSidePayload,
     SetHeightLimitPayload,
     UpdateBoardNotePayload,
     UpdateCablePayload,
@@ -990,6 +992,28 @@ class _PartEditor(QWidget):
         self.rotation.idClicked.connect(self._commit_rotation)
         _add_field(form, t("Rotation"), turns, self.rotation_problem)
 
+        # Which face it stands on, in the words a label's face is chosen in: a part under
+        # the board is put in from underneath, turned over (Shift+M does the same).
+        faces = QWidget()
+        face_column = QVBoxLayout(faces)
+        face_column.setContentsMargins(0, 0, 0, 0)
+        face_column.setSpacing(2)
+        self.face = QButtonGroup(self)
+        self.face.setExclusive(True)
+        self.face_buttons: dict[BoardSide, QCheckBox] = {}
+        for value, label in _BoardNoteEditor.FACES:
+            face_button = QCheckBox(t(label))
+            self.face.addButton(face_button)
+            self.face_buttons[value] = face_button
+            face_button.clicked.connect(lambda _checked=False, v=value: self._commit_face(v))
+            face_column.addWidget(face_button)
+        faces.setToolTip(
+            t("A part on the solder side is put in from underneath, turned over, so it is "
+              "mirrored; its leads are soldered on the component side.")
+        )
+        self.face_problem = _Problem()
+        _add_field(form, t("Face"), faces, self.face_problem)
+
         self.mirrored = QCheckBox(t("Mirrored"))
         self.mirrored.toggled.connect(self._commit_mirrored)
         self.locked = QCheckBox(t("Locked"))
@@ -1085,6 +1109,13 @@ class _PartEditor(QWidget):
             if button is not None:
                 button.setChecked(True)
             self.mirrored.setChecked(component.mirrored)
+            # Under the board it is mirrored by being turned over; unmirrored there it is a
+            # part nobody can put in, which the engine refuses.
+            self.mirrored.setEnabled(component.side == "top")
+            self.face_buttons[component.side].setChecked(True)
+            self.face_buttons["bottom"].setEnabled(
+                component.side == "bottom" or not is_breadboard(document.board)
+            )
             self.locked.setChecked(component.locked)
             self.facts.setText(
                 f"{footprint.body_height:.1f} mm" if footprint is not None else "?"
@@ -1097,7 +1128,7 @@ class _PartEditor(QWidget):
             if another:
                 self.pinout.say("")
                 for problem in (self.rotation_problem, self.flags_problem, self.pinout_problem,
-                                self.note_problem):
+                                self.note_problem, self.face_problem):
                     problem.show_problem("")
             editing_names = self.pinout.table.hasFocus() or self.pinout.symbol.hasFocus()
             if another or not editing_names:
@@ -1163,6 +1194,17 @@ class _PartEditor(QWidget):
             RotateComponentPayload(id=component.id, rotation=_rotation(degrees)),
         )
         self.rotation_problem.show_problem(problem or "")
+        if problem:
+            self._put_back()
+
+    def _commit_face(self, side: BoardSide) -> None:
+        component = self._component
+        if self._loading or component is None or side == component.side:
+            return
+        problem = self._inspector.dispatch(
+            "component.setSide", SetComponentSidePayload(id=component.id, side=side)
+        )
+        self.face_problem.show_problem(problem or "")
         if problem:
             self._put_back()
 

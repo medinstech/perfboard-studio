@@ -241,7 +241,8 @@ def _step_item(step: GuideStep, phase: GuidePhase, index: int | None, board: Boa
             facts = facts[1:]
         return BenchItem(
             key=step_focus(step), phase=phase, title=step.title, step_index=index,
-            holes=holes, solder_side=False, polarity=step.polarity, facts=facts,
+            # A part on the solder side is fitted from there, and pictured from there.
+            holes=holes, solder_side=step.side == "bottom", polarity=step.polarity, facts=facts,
             notes=step.notes, component_id=step.component_id,
         )
     assert isinstance(step, ConductorStep)

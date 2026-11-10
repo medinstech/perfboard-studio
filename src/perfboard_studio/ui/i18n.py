@@ -1848,6 +1848,23 @@ TURKISH: Mapping[str, str] = {
     "{count} refused: {reasons}": "{count} reddedildi: {reasons}",
     "Rotated {count} part(s)": "{count} parça döndürüldü",
     "Mirrored {count} part(s)": "{count} parça aynalandı",
+    "Move to &Solder Side": "&Lehim Yüzüne Al",
+    "A part on the solder side is put in from underneath, turned over, so it is mirrored; "
+    "its leads are soldered on the component side.": (
+        "Lehim yüzündeki bir parça alttan, ters çevrilerek takılır; bu yüzden aynalıdır. "
+        "Bacakları parça yüzünde lehimlenir."
+    ),
+    "Move to Component &Side": "Parça Yüzüne A&l",
+    "move it to the other side": "öbür yüze alın",
+    "Moved {count} part(s) to the solder side: Ctrl+F turns the board over": (
+        "{count} parça lehim yüzüne alındı: Ctrl+F kartı çevirir"
+    ),
+    "Moved {count} part(s) to the component side": "{count} parça, parça yüzüne alındı",
+    "{ref} is on the solder side, turned over, so it is mirrored already. Shift+M brings it "
+    "back to the component side.": (
+        "{ref} lehim yüzünde, ters çevrilmiş olduğu için zaten aynalı. Shift+M onu parça "
+        "yüzüne geri getirir."
+    ),
     "Locked {count} part(s)": "{count} parça kilitlendi",
     "Unlocked {count} part(s)": "{count} parçanın kilidi açıldı",
     "Deleted {count} part(s)": "{count} parça silindi",

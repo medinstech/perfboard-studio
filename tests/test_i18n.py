@@ -380,7 +380,8 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Check Automatically at &Startup", "&About Perfboard Studio"],
         "edit": ["&Undo", "&Redo", "Cop&y", "&Paste", "Dupl&icate", "Select &All",
                  "Rotate &Clockwise",
-                 "Rotate Counter-clock&wise", "&Mirror", "Toggle &Lock", "&Delete",
+                 "Rotate Counter-clock&wise", "&Mirror", "Move to &Solder Side",
+                 "Toggle &Lock", "&Delete",
                  "Proper&ties…", "C&hange Part…", "Add La&bel…", "&Go to Part…"],
         # The nets and the sheet, one menu since the menus follow the steps.
         "circuit": ["Add Pa&rt…", "&Connect Two Pins", "&New Net…", "&Add Pins to Net",

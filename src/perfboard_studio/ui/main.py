@@ -199,6 +199,8 @@ from perfboard_studio.commands import (
     RenameDocumentPayload,
     RotateComponentPayload,
     RotateComponentsPayload,
+    SetComponentSidePayload,
+    SetComponentSidesPayload,
     UnplaceComponentPayload,
     UpdateComponentPayload,
     UpdateComponentsPayload,
@@ -2407,6 +2409,10 @@ def _step_line(step: GuideStep, language: GuideLanguage) -> str:
     English.
     """
     if isinstance(step, PartStep):
+        # A part fitted from underneath says so on its row, as a wire laid there says
+        # what it is: the one fact that changes which way up the board is held.
+        if step.side == "bottom":
+            return f"{step.title} · {t('solder side')}"
         return step.title
     return f"{step.net_name} · {conductor_word(step.conductor_kind, language)} — {step.span}"
 
@@ -4950,6 +4956,12 @@ class MainWindow(QMainWindow):
         self.act_mirror = edit_menu.addAction(t("&Mirror"))
         self.act_mirror.setShortcut(QKeySequence("M"))
         self.act_mirror.triggered.connect(self.on_mirror_selection)
+        # Turned over onto the solder side, or back: one key from Mirror, because a part
+        # under the board is the same part turned over, which mirrors it. Its words follow
+        # the selection (``_refresh_selection_state``).
+        self.act_side = edit_menu.addAction(t("Move to &Solder Side"))
+        self.act_side.setShortcut(QKeySequence("Shift+M"))
+        self.act_side.triggered.connect(self.on_side_selection)
         self.act_lock = edit_menu.addAction(t("Toggle &Lock"))
         self.act_lock.setShortcut(QKeySequence("L"))
         self.act_lock.triggered.connect(self.on_toggle_lock_selection)
@@ -4999,6 +5011,7 @@ class MainWindow(QMainWindow):
             self.act_rotate_cw,
             self.act_rotate_ccw,
             self.act_mirror,
+            self.act_side,
             self.act_lock,
             self.act_delete,
             self.act_copy,
@@ -7334,7 +7347,9 @@ class MainWindow(QMainWindow):
             result = self.bus.dispatch(
                 "part.place",
                 PlacePartsPayload(
-                    placements=(PartPlacement(id=part.id, anchor=hole),),
+                    placements=(
+                        PartPlacement(id=part.id, anchor=hole, side=self.scene.placing_face()),
+                    ),
                     label=f"Place {ref} at {format_hole(hole, document.board)}",
                 ),
             )
@@ -8965,6 +8980,7 @@ class MainWindow(QMainWindow):
             menu.addAction(self.act_rotate_cw)
             menu.addAction(self.act_rotate_ccw)
             menu.addAction(self.act_mirror)
+            menu.addAction(self.act_side)
             menu.addAction(self.act_lock)
             menu.addSeparator()
             menu.addAction(self.act_copy)
@@ -10357,6 +10373,7 @@ class MainWindow(QMainWindow):
             self.part_list.show_selected(c.id for c in components)
         for action in self.selection_actions:
             action.setEnabled(bool(components))
+        self._sync_side_action(components)
         # Turning and flipping also mean the part about to be placed, while one is armed
         # (``on_rotate_selection``): greyed out with nothing selected, R did nothing to it.
         if self.scene.armed_footprint_id is not None:
@@ -11423,6 +11440,18 @@ class MainWindow(QMainWindow):
         components = self._require_selection(t("mirror it"))
         if not components:
             return
+        under = next((c for c in components if c.side == "bottom"), None)
+        if under is not None:
+            # Turned over is mirrored, and that is the one way a part goes under the board:
+            # unmirrored there is a part nobody can put in (``solder-side-unmirrored``).
+            self.statusBar().showMessage(
+                t(
+                    "{ref} is on the solder side, turned over, so it is mirrored already. "
+                    "Shift+M brings it back to the component side."
+                ).format(ref=under.ref),
+                8000,
+            )
+            return
         flips = tuple(MirrorComponentPayload(id=c.id, mirrored=not c.mirrored) for c in components)
         result = (
             self.bus.dispatch("component.mirror", flips[0])
@@ -11430,6 +11459,43 @@ class MainWindow(QMainWindow):
             else self.bus.dispatch("component.mirrorMany", MirrorComponentsPayload(mirrors=flips))
         )
         self._report_group(result, t("Mirrored {count} part(s)").format(count=len(flips)))
+
+    def _side_to_move_to(self, components: list[ComponentInstance]) -> BoardSide:
+        """Where Move to … Side sends a selection: back to the component side when every
+        part is under the board, else under it."""
+        if components and all(c.side == "bottom" for c in components):
+            return "top"
+        return "bottom"
+
+    def _sync_side_action(self, components: list[ComponentInstance]) -> None:
+        """Move to Solder Side, or to Component Side, as the selection says -- and off on a
+        solderless breadboard, which has no underside (a solderable one has)."""
+        if self._side_to_move_to(components) == "top":
+            self.act_side.setText(t("Move to Component &Side"))
+        else:
+            self.act_side.setText(t("Move to &Solder Side"))
+        if is_breadboard(self.bus.document.board):
+            self.act_side.setEnabled(False)
+
+    def on_side_selection(self) -> None:
+        components = self._require_selection(t("move it to the other side"))
+        if not components:
+            return
+        side = self._side_to_move_to(components)
+        moves = tuple(
+            SetComponentSidePayload(id=c.id, side=side) for c in components if c.side != side
+        )
+        result = (
+            self.bus.dispatch("component.setSide", moves[0])
+            if len(moves) == 1
+            else self.bus.dispatch("component.setSideMany", SetComponentSidesPayload(sides=moves))
+        )
+        done = (
+            t("Moved {count} part(s) to the solder side: Ctrl+F turns the board over")
+            if side == "bottom"
+            else t("Moved {count} part(s) to the component side")
+        )
+        self._report_group(result, done.format(count=len(moves)))
 
     # -- copy, paste, duplicate ----------------------------------------------
     #

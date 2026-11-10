@@ -2701,11 +2701,25 @@ PIN_NAME_INK = "#15171c"
 PIN_NAME_TAG = QColor(236, 239, 244, 225)
 
 
+def _ink_frame(comp: ComponentInstance, from_below: bool) -> tuple[float, bool]:
+    """How the part's frame is turned on screen, and whether it is reflected there -- what
+    printed ink has to undo to read the right way.
+
+    From the solder side the view's reflection composes with the part's own: a part ON the
+    solder side is mirrored and seen from below, and the two cancel, so its value reads
+    plainly with nothing undone, turned the other way round (a reflection on each side of a
+    turn reverses the turn).
+    """
+    rotation = -float(comp.rotation) if from_below else float(comp.rotation)
+    return rotation, comp.mirrored != from_below
+
+
 def _paint_pin_names(
     painter: QPainter,
     labels: tuple[PinLabel, ...],
     comp: ComponentInstance,
     module_ink: str,
+    from_below: bool = False,
 ) -> None:
     """Each named pin's name, printed beside it -- see ``bodies.pin_labels`` for where and
     why, and ``bodies.lay_out_pin_names`` for what the rest of the board leaves room for.
@@ -2715,6 +2729,7 @@ def _paint_pin_names(
     transform = painter.transform()
     if (transform.m11() ** 2 + transform.m12() ** 2) ** 0.5 < 5.0:
         return
+    turned, reflected = _ink_frame(comp, from_below)
     for label in labels:
         width = physical_label_width_mm(label.name, PIN_NAME_HEIGHT_MM, label.room, bold=False)
         reach = label.start + width / 2
@@ -2723,11 +2738,11 @@ def _paint_pin_names(
         # Never upside down on screen: the frame is already turned with the part, so a
         # name that would come out reading backwards is turned half round about its own
         # centre, which leaves it exactly where it was.
-        if 90.0 < (rotation + float(comp.rotation)) % 360.0 < 270.0:
+        if 90.0 < (rotation + turned) % 360.0 < 270.0:
             rotation += 180.0
         painter.save()
         painter.translate(centre)
-        if comp.mirrored:
+        if reflected:
             # The frame is reflected for a mirrored part; ink is not.
             painter.scale(-1.0, 1.0)
         # A name over a module's parts wears the tag the names on this board wear: chosen on
@@ -2829,6 +2844,7 @@ def _paint_top_marking(
     placement: BodyPlacement,
     comp: ComponentInstance,
     rect: QRectF | None = None,
+    from_below: bool = False,
 ) -> None:
     """What a DIP says on its top: its value, along the package, as the chip carries it.
     Physical ink, so it scales with the board and prints on the 1:1 sheet too. ``rect`` is
@@ -2841,12 +2857,13 @@ def _paint_top_marking(
     along_x = rect.width() >= rect.height()
     long_side, short_side = (rect.width(), rect.height()) if along_x else (rect.height(), rect.width())
     rotation = 0.0 if along_x else 90.0
+    turned, reflected = _ink_frame(comp, from_below)
     # Never upside down on screen, as the pin names are not.
-    if 90.0 < (rotation + float(comp.rotation)) % 360.0 < 270.0:
+    if 90.0 < (rotation + turned) % 360.0 < 270.0:
         rotation += 180.0
     painter.save()
     painter.translate(rect.center())
-    if comp.mirrored:
+    if reflected:
         painter.scale(-1.0, 1.0)
     painter.setPen(TOP_MARKING_INK)
     draw_physical_label(
@@ -3790,7 +3807,7 @@ class ComponentItem(QGraphicsItem):
 
     def pin_name_rects(self) -> list[QRectF]:
         """Each printed pin name's tag, in item coordinates: one rectangle a name."""
-        if not self.show_pin_names or self.side != "top":
+        if not self.show_pin_names or not self.faces_the_viewer():
             return []
         half = PIN_NAME_TAG_HEIGHT_MM / 2
         rects = []
@@ -4044,6 +4061,11 @@ class ComponentItem(QGraphicsItem):
             return ""
         return self.comp.value.strip()
 
+    def faces_the_viewer(self) -> bool:
+        """Whether this part is on the face the view looks at: drawn as a part, rather than
+        as the hatched shadow of one through the board."""
+        return self.side == self.comp.side
+
     def _view_transform(self) -> QTransform | None:
         """The board view's scene-to-pixel transform, or None in a scene nobody is
         looking at (a board picture, a test that never shows one)."""
@@ -4136,8 +4158,15 @@ class ComponentItem(QGraphicsItem):
         # questions. So the footprint is hatched rather than drawn: the area is marked as
         # occupied, with none of the component-side detail -- no cathode band, no pin-1
         # notch, no tab -- that would make it read as a part you are looking at.
+        #
+        # A part ON the solder side is the same thing the other way up: from the component
+        # side it is the hatched shadow, and from the solder side it is the part, drawn in
+        # full and the right way round (``_apply_local_transform`` undoes the view's
+        # reflection with the part's own).
         off_board = self.fp.body.archetype == "flying-leads"
-        if self.side == "bottom" and not off_board:
+        near = self.faces_the_viewer()
+        from_below = self.side == "bottom"
+        if not near and not off_board:
             painter.save()
             self._apply_local_transform(painter)
             _paint_body_shadow(painter, self.fp, placement, self.isSelected())
@@ -4147,7 +4176,7 @@ class ComponentItem(QGraphicsItem):
         # not (``topview``'s parametric shapes stay a fallback for the data, not for this).
         view = top_view(self.fp, self.board.pitch)
         measured = view.source != "parametric"
-        if self.side == "top":
+        if near:
             # Leads, in item coordinates: a line does not care which way its frame is turned,
             # and the endpoints already come from the shared transform. A measured view has
             # its leads in it, as metal, where the mesh has them.
@@ -4171,7 +4200,9 @@ class ComponentItem(QGraphicsItem):
             bands = resistor_bands(self.fp, self.comp.value)
             if not off_board and measured:
                 _paint_top_view(painter, view, style, self.isSelected(), placement, bands)
-                _paint_top_marking(painter, self.fp, placement, self.comp, view.marking)
+                _paint_top_marking(
+                    painter, self.fp, placement, self.comp, view.marking, from_below
+                )
                 _paint_plus_mark(painter, self.fp, self.board.pitch)
             elif not off_board and self.standing is not None:
                 _paint_standing_board(painter, self.standing, style, self.isSelected())
@@ -4187,14 +4218,14 @@ class ComponentItem(QGraphicsItem):
                     bands=bands,
                     art=self.art,
                 )
-                _paint_top_marking(painter, self.fp, placement, self.comp)
+                _paint_top_marking(painter, self.fp, placement, self.comp, None, from_below)
             if self.show_pin_names:
-                _paint_pin_names(painter, self.pin_names, self.comp, style.accent)
+                _paint_pin_names(painter, self.pin_names, self.comp, style.accent, from_below)
             painter.restore()
 
         # From the solder side the scene paints the lead ends over the copper instead
         # (LeadEndsLayerItem); a part in a scene without that layer still paints its own.
-        if self.side == "top" or getattr(self.scene(), "lead_ends_layer", None) is None:
+        if near or getattr(self.scene(), "lead_ends_layer", None) is None:
             self._paint_pin_ends(painter, keyed)
 
     def _paint_pin_ends(self, painter: QPainter, keyed: tuple[float, float] | None) -> None:
@@ -4205,7 +4236,9 @@ class ComponentItem(QGraphicsItem):
         brighter on a keyed part, because "which pad is pin 1, from the back" is the question
         that decides whether the part goes in the right way round.
         """
-        solder_side = self.side == "bottom"
+        # The lead ends are on the face away from the body: the solder side's for a part on
+        # the component side, the component side's for one turned over.
+        solder_side = not self.faces_the_viewer()
         # Under a round LED's dome the leads are what the lens shows of them: quiet marks.
         dome = not solder_side and self.fp.body.archetype == "led-round"
         radius = 0.62 if solder_side else (LED_LEAD_MARK_MM if dome else 0.5)
@@ -4434,7 +4467,9 @@ class LeadEndsLayerItem(QGraphicsItem):
 
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         for item in self._board_scene.component_items.values():
-            if not item.isVisible():
+            # A part on the solder side has its lead ends on the OTHER face, and is looked at
+            # from this one: it paints its own pins, as a part from above does.
+            if not item.isVisible() or item.faces_the_viewer():
                 continue
             painter.save()
             painter.setTransform(item.sceneTransform(), True)
@@ -6130,6 +6165,13 @@ class BoardScene(QGraphicsScene):
             return
         super().mousePressEvent(event)
 
+    def placing_face(self) -> BoardSide:
+        """The face a part placed now goes on: the one in view, except on a solderless
+        breadboard, which has no underside to put one on."""
+        if self.side == "bottom" and not is_breadboard(self.document.board):
+            return "bottom"
+        return "top"
+
     def place_armed(self, anchor: HoleCoord) -> DispatchResult | None:
         """Dispatch ``component.place`` for the armed footprint. Also the seam tests drive.
 
@@ -6159,9 +6201,12 @@ class BoardScene(QGraphicsScene):
                 footprint_id=self._armed_id,
                 anchor=anchor,
                 rotation=self._armed_rotation,
-                mirrored=self._armed_mirrored,
+                # Placed while the board is turned over, it goes in from the face in view:
+                # on the solder side, turned over, which is what mirrors it.
+                mirrored=None if self.placing_face() == "bottom" else self._armed_mirrored,
                 pin_names=self.placement_pin_names,
                 symbol=self.placement_symbol,
+                side=self.placing_face(),
             ),
         )
         self.componentPlaced.emit(result)
