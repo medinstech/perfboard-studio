@@ -373,7 +373,7 @@ round, and the guide says which end is up. KiCad's `R_Axial_..._Vertical` and
 
 **A part can say what its package cannot.** `add_part`, `update_part` and `place_component`
 take `pin_names` — `{"1": "G", "2": "D", "3": "S"}`, or a module's `{"1": "3V3", "2": "EN",
-…}` — and `symbol`: `npn`, `pnp`, `nmos`, `pmos`, `zener` or `fuse`. The names come back
+…}` — and `symbol`: `npn`, `pnp`, `nmos`, `pmos`, `zener`, `fuse`, `battery` or `jack`. The names come back
 from `get_component`, are printed on the sheet and in the guide's probes, and a declared
 transistor is drawn as one only once its three leads are named B/C/E or G/D/S; until then
 `render_schematic`'s notes say what is missing. `update_part` reaches a part already on the

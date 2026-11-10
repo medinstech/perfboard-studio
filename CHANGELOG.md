@@ -22,6 +22,93 @@ closed without a bump.
 
 ### Added
 
+- **Several boards in one document, joined by cables.** A circuit built on a supply board
+  and a controller board is one document with one design: the Board menu's Add Board adds
+  a board, and from then on a strip over the Board panel picks the board in front, each
+  by its name and stock size, with **System** first. Every edit, undo step, DRC run and
+  render acts on the board in front; the circuit, the sheet, the Parts list, ERC and LVS
+  read every board. A board nobody named is called by its place ("Board 2"), and the window
+  reopens a file on the board it was left on. **Add Cable** takes a connector at each end and
+  pairs the wires by net; what is not certain is left unpaired and named (a net with no
+  counterpart, or a net on two pins of one connector), and the cable goes in as one undo step.
+  **Move to Board** moves a placed part to another board in one step, from its right-click
+  menu or by dragging its symbol from the schematic onto the board in front: the copper that
+  ran to it comes off with it, so nothing is left ending in an empty hole, a cable fitted to it
+  follows, and the status line names the board that needs wiring again, with Show to take you
+  there.
+- **System view.** Every board side by side with the cables between them, each wire in the
+  colour it is cut in. A cable leaves each board by the edge nearest its connector and
+  runs round the boards, never over them, its wires side by side; a double-click opens a
+  board. With System in front the 3D panel shows every board in the same row, and the
+  cables run from pin to pin, out of a DuPont shell over a pin header and out of a
+  side-entry terminal's mouth. A cable hangs under its own weight and is drawn as long as
+  it is; one shorter than its ends are apart in the row is drawn taut, and the status line
+  says so -- as information, since the row is not where the boards will sit. Properties shows
+  the system there: its name, its boards and cables, Add Board and Add Cable. A click on a
+  board, in the view or in 3D, shows its name, size and contents, with Open and Remove Board;
+  a click on a cable shows its reference, its two ends, each wire pin to pin in its colour, its
+  length and a note, with Remove Cable, and what is picked is tinted in 3D. On a board of
+  several, Properties' Name is that board's own, and the header says which board is in front,
+  or System, beside the document's name. A board added with nothing on it says how parts reach
+  it: from the Library or the schematic, or by Move to Board.
+- **The system is checked as one circuit, and the harness is built last.** LVS joins the
+  boards' copper through the cable wires. A net split across two boards that no wire carries
+  is an open, said with the boards it crosses. A cable wired across is said as itself, by its
+  wires' colours ("W1's red and black wires are swapped"), rather than as a short and two
+  opens, and the System view draws it red. A finding on one board is said with the board's name
+  before it, in Turkish as in English ("Supply üzerinde: …"). Once every board is built, each
+  cable is a step under "9. Harness" in the build guide: what to cut (each wire to the cable's
+  length plus stripped ends, in its net's colour and gauge), where each end goes by board,
+  connector and pin, and the checks before power (continuity end to end, isolation between
+  neighbouring wires on different nets). The cut list gets a row per cable wire, and the HTML
+  and JSON exports a harness section, each only when there is a cable. A board's own checks
+  measure only the pins on that board: +12V on two boards is checked on each up to its
+  connector, and the harness checks the cable, where the guide used to chain a probe through a
+  pin on the other board.
+- **MCP: several boards.** `select_board` puts a board in front and every board tool acts
+  on it; `add_board`, `rename_board`, `remove_board`, `move_to_board`, `add_cable`,
+  `remove_cable` and `get_system_info` (what each board holds, what each cable carries,
+  and the system's LVS). 67 tools, each in `docs/MCP.md` with its reason.
+- **An example of two boards: `examples/relay-and-supply.perf`.** The Nano relay driver and
+  the LM317 supply drawn as one schematic and built on two stock boards, cable W1
+  carrying +12V and GND from one to the other: each board sized, placed and routed on its
+  own, LVS clean across both through the cable, and a guide for each board ending with the
+  harness. Its `.net` is the KiCad export of the whole schematic.
+  Home shows both boards in its picture and counts the parts on both, and it opens on
+  System.
+- **A part can go on the solder side, turned over.** A part has a face, and on the solder
+  side its body is below the board and its pins are reflected, both set by one command and
+  one undo step (`component.setSide`, and `component.setSideMany` for a group). Before
+  this, mirroring a part reflected its pins and left its body standing on the component side
+  in 3D, in DRC, in the STEP export and in the guide. Now bodies are compared only with bodies
+  on their own face, the 3D view and the STEP model hang the part below the board, the router
+  lays no copper under it, and the guide fits it at the end of phase 7, over copper already
+  laid. Two new DRC rules: `copper-under-body` warns of a trace, a wire or another part's
+  joint hidden under a body on its face, and `joint-under-body` names a part on the solder
+  side of a single-sided board whose joints are under its own body -- an error for a part
+  seated on the board, such as a chip, and a warning for one standing on its leads, saying
+  to leave them long. A part is turned over in its own holes: one whose pins lie in a
+  line -- a resistor, a header, a TO-92, a terminal block -- keeps every pin where it was,
+  and a two-row part such as a DIP swaps its rows, which the status line says needs its
+  wiring redone, naming how many of the parts changed holes. A solderless breadboard has no solder side, and refuses it. Saved
+  files keep their bytes: the face is written only for a part on the solder side, and 0.23
+  opens such a file with the part mirrored on the component side.
+  In the window, Edit > Move to Solder Side (Shift+M) turns the selected parts over, and
+  says Move to Component Side when they are all under the board; Properties has a Face row
+  for it. A part placed while the board is turned over (Ctrl+F) goes on the solder side. On
+  the board, a part under it is a hatched shadow from above and the part itself from below,
+  its value reading the right way; the guide's row and its bench picture say the solder side.
+- **The 9 V battery clip, the AA holder and the DC barrel jack are drawn as themselves on the
+  schematic.** A part can now declare itself a `battery` or a `jack` (leads named + and -). The
+  sheet draws a battery as two cells with the long plate on the plus and a mark over each lead,
+  and a jack as the centre pin reaching into the cup of the sleeve with the plus and minus
+  marked, drawn for this project rather than taken from a symbol library, instead of a box with
+  two tiny pin names; a part with unnamed leads stays a box and the sheet's notes say why.
+- **A CR2032 coin cell holder, Keystone 1067 (vertical, through-hole)**, from Keystone's
+  drawing: its two contact pins 7.6 mm apart (3 pitches here) with the body at the drawing's
+  size, drawn as a cell. The drawing's side view gives the body's depth as .531 in and 3.6 mm;
+  the note says which was taken and why, and that the holder's third, mounting leg has no hole
+  on the 2.54 mm grid and is not drawn.
 - **Adafruit's INA219 current sensor, both revisions, drawn as themselves.** The STEMMA QT
   board and the original with four holes each go in on their six-pin header, VCC GND SCL
   SDA VIN- VIN+, and carry the chip, the 0.1 ohm shunt and the blue terminal block where
@@ -44,66 +131,34 @@ closed without a bump.
   WROOM-32, the USB bridge, the regulator, the micro-USB socket and the BOOT and EN buttons
   where a photograph of one, straightened on its own pads, puts them. Its check says the
   clones keep the pins and move the parts, and that the 38-pin DevKitC is another board.
-
-- **Several boards in one document, joined by cables.** A circuit built on a supply board
-  and a controller board is one document with one design: the Board menu's Add Board adds
-  a board, and from then on a strip over the Board panel picks the board in front, each
-  by its name and stock size, with **System** first. Every edit, undo step, DRC run and
-  render acts on the board in front; the circuit, the sheet, the Parts list, ERC and LVS
-  read every board. A board nobody named is called by its place ("Board 2"). The window
-  reopens a file on the board it was left on.
-- **System view.** Every board side by side with the cables between them, each wire in the
-  colour it is cut in. A cable leaves each board by the edge nearest its connector and
-  runs round the boards, never over them, its wires side by side; a double-click opens a
-  board. With System in front the 3D panel shows every board in the same row, and the
-  cables run from pin to pin, out of a DuPont shell over a pin header and out of a
-  side-entry terminal's mouth. A cable hangs under its own weight and is drawn as long as
-  it is; one shorter than its ends are apart in the row is drawn taut, and the status line
-  says so -- as information, since the row is not where the boards will sit.
-- **System's own editors in Properties.** With System in front, Properties shows the
-  system: its name, its boards and cables, Add Board and Add Cable. A click on a board there
-  shows its name, size and contents, with Open and Remove Board; a click on a cable shows
-  its reference, its two ends, each wire pin to pin in its colour, its length and a note,
-  with Remove Cable. A click on a board or a cable in the 3D panel picks it the same way,
-  and what is picked is tinted there. On a board of several, Properties' Name is that board's own, and the
-  header says which board is in front, or System, beside the document's name. A board added
-  with nothing on it says how parts reach it: from the Library or the schematic, or by Move
-  to Board.
-- **Add Cable.** Choose a connector at each end and the wires are paired by net. What is
-  not certain is left unpaired and named: a net with no counterpart, or a net on two pins
-  of one connector. The cable goes in as one undo step.
-- **Move to Board.** A placed part moves to another board in one step, from its right-click
-  menu or by dragging its symbol from the schematic onto the board in front. The copper that ran to it on its old board
-  comes off with it, so nothing is left ending in an empty hole, and a cable fitted to it
-  follows. The status line names the board that needs wiring again, and Show takes you
-  there.
-- **The system is checked as one circuit.** LVS joins the boards' copper through the cable
-  wires. A net split across two boards that no wire carries is an open, said with the
-  boards it crosses. A cable wired across is said as itself, by its wires' colours ("W1's
-  red and black wires are swapped"), rather than as a short and two opens, and the System
-  view draws it red. A finding on one board is said with the board's name before it,
-  in Turkish as in English ("Supply üzerinde: …").
-- **The harness is part of the build guide.** Once every board is built, each cable is a
-  step under "9. Harness": what to cut (each wire to the cable's length plus stripped ends,
-  in its net's colour and gauge), where each end goes by board, connector and pin, and the
-  checks before power (continuity end to end, isolation between neighbouring wires on
-  different nets). The cut list gets a row per cable wire, and the HTML and JSON exports a
-  harness section, each only when there is a cable. A board's own checks measure only the
-  pins on that board: +12V on two boards is checked on each up to its connector, and the
-  harness checks the cable, where the guide used to chain a probe through a pin on the
-  other board.
-- **MCP: several boards.** `select_board` puts a board in front and every board tool acts
-  on it; `add_board`, `rename_board`, `remove_board`, `move_to_board`, `add_cable`,
-  `remove_cable` and `get_system_info` (what each board holds, what each cable carries,
-  and the system's LVS). 67 tools, each in `docs/MCP.md` with its reason.
-- **An example of two boards: `examples/relay-and-supply.perf`.** The Nano relay driver and
-  the LM317 supply drawn as one schematic and built on two stock boards, cable W1
-  carrying +12V and GND from one to the other: each board sized, placed and routed on its
-  own, LVS clean across both through the cable, and a guide for each board ending with the
-  harness. Its `.net` is the KiCad export of the whole schematic.
-  Home shows both boards in its picture and counts the parts on both, and it opens on
-  System.
-
+- **Sensor-kit boards, as wired headers.** The Joy-IT KY boards: the three-pin ones as one
+  header, S, + and -, for KY-001, 002, 003, 004, 006, 010, 012, 015, 017, 018, 020, 021, 022,
+  031, 033, 035 and 039 (the manual numbers some of them S + - and the rest - + S, so the check
+  says to wire by the printed labels); the four-pin ones with a comparator, D0, + , - and A0,
+  for KY-024, 025, 026, 028, 036, 037 and 038 (the digital pin is the comparator's, set with
+  the trimmer, and the manual reports the analog one as inverted); the KY-009 RGB LED module,
+  GND, G, R, B, and the KY-016, GND, R, G, B, red and green the other way round, so each has
+  its own entry; the KY-011 and KY-029 two-colour LEDs, G, R and GND, with the manual's series
+  resistors; the KY-053 ADS1115 converter, VDD, GND, SCL, SDA, ADDR, ALRT and A0 to A3; and
+  the KY-051 voltage translator, VCCb, VCCa, B1 to B4, A1 to A4, OE and GND on a 2 x 6 header
+  (VCCb is not to be lower than VCCa). Each is found by its KY number or its name, and only the
+  pin names and order come from the manual. Soil moisture, rain, MQ-2 and water level boards
+  share those headers' pins and are found by name too -- "soil moisture", "FC-28", "MQ-2",
+  "gas sensor", "rain sensor", "water level" and their Turkish names ("toprak nem sensörü",
+  "yağmur sensörü", "gaz sensörü", "su seviye sensörü") -- each check saying the other orders the
+  boards print.
+- **Kit boards with no published drawing, as wired headers, drawn with no body rather than one
+  invented.** The ULN2003 stepper driver sold with the 28BYJ-48 motor, a six-pin header
+  (IN1 IN2 IN3 IN4 - +) with the motor's cable plugging in; the L298N dual H-bridge of every
+  robot kit, ENA, IN1 to IN4 and ENB in the order a seller's labelled photograph gives them,
+  its check saying the motors and the supply are on the board's own screw terminals and to join
+  its ground to yours; and the RC522 RFID reader, its eight header pins numbered from the VCC
+  end as a seller's photograph prints them and components101's drawing agrees, its check saying
+  to feed it 3.3 V, that SDA is the SPI chip select, and that sellers also print the row from
+  the other end.
+- **The DS1307 Tiny RTC board**, as a 7-pin header from iarduino's datasheet photo: SQ DS SCL SDA VCC GND BAT, with DS said to be the main supply's plus through 3.3 kOhm, not a signal.
+- **TP4056 charger (with protection), MT3608 boost and AMS1117-3.3 modules**, off the board on their pads' wires, each pad named as its source prints it: the TP4056's OUT pair is the protected one and is not the same wire as B-, the MT3608's output must stay above its input, and the AMS1117's reversed input shorts it.
+- **The 1.8 in ST7735 TFT, Nokia 5110 LCD and TTP223 touch boards**, as 8-, 8- and 3-pin headers from LCDWiki, microcontrollerslab.com and AZ-Delivery, each with its supply and logic levels as the page gives them.
 - **The SW-520D tilt switch**, the ball switch every starter kit holds, from Bailin's datasheet:
   drawn at the largest it can be (5.5 across, 11.9 long), its 2.4 mm leads against the board's
   2.54 mm holes worked out in the part's note -- each ends 0.07 mm off its hole, inside what a
@@ -115,10 +170,6 @@ closed without a bump.
   ceiling, because the drawing prints no bead length and nothing about how high it is left,
   which the part's note says. Its second variant, with a thinner bead, prints no thickness
   and is not drawn.
-- **The ULN2003 stepper driver board, as a wired header.** The blue board sold with the
-  28BYJ-48 motor is a six-pin header (IN1 IN2 IN3 IN4 - +) with the motor's cable plugging
-  in, and nothing more: no maker publishes a drawing of the board, so it has no body rather
-  than one invented. A caliper measurement of the board would let it be drawn.
 - **The RV09 potentiometer**, the 9 mm pot of the kits, from the Alps RK09K drawing its
   clones follow -- an assumption its note says out loud. It is drawn at its two lugs, 10.6 mm
   across, with the shaft 20 mm above the board; and its check says to snip the lugs off flush,
@@ -152,48 +203,6 @@ closed without a bump.
   off the board: no body is drawn, because no drawing of the kit ones was found. Its note
   gives Pololu's figures for the Tamiya FA-130 (150 mA unloaded, 2100 mA stalled at 3 V),
   and its check says not to drive it from a pin and to put a diode across it.
-- **The L298N motor driver board, as a wired header**, the red dual H-bridge of every robot
-  kit: ENA, IN1 to IN4 and ENB in the order a seller's labelled photograph gives them, with no
-  body because no drawing of the board exists. Its check says the motors and the supply are
-  on the board's own screw terminals, and to join its ground to yours.
-- **The RC522 RFID reader, as a wired header**, the blue board of the kits: its eight
-  header pins numbered from the VCC end as a seller's photograph prints them and the
-  components101 drawing agrees, with no body because the board has no drawing. The check
-  says to feed it 3.3 V, that SDA is the SPI chip select, and that sellers also print the
-  row from the other end.
-- **The three-pin KY boards of a sensor kit, as one wired header**: S, + and -, for KY-001,
-  002, 003, 004, 006, 010, 012, 015, 017, 018, 020, 021, 022, 031, 033, 035 and 039, each
-  found by its KY number or its name ("photoresistor module"). The Joy-IT manual numbers some
-  of them S + - and the rest - + S, so the check says to wire by the printed labels and to
-  match the silkscreen if the board is plugged straight in. Only the pin names and order come
-  from the manual.
-
-- **The four-pin KY boards with a comparator, as one wired header**: D0, +, - and A0, for
-  KY-024, 025, 026, 028, 036, 037 and 038, found by their KY numbers or names. The check says
-  the digital pin is the comparator's, set with the trimmer, and that the manual reports the
-  analog one as inverted.
-
-- **The KY-009 RGB LED module, as a wired header**: GND, G, R, B in the order the Joy-IT
-  manual numbers them. The check says the KY-016 swaps red and green, so each has its own
-  entry, and gives the manual's series resistors per colour.
-
-- **The KY-016 RGB LED module, as a wired header**: GND, R, G, B in the order the Joy-IT
-  manual numbers them, red and green the other way round from the KY-009, which is why the two
-  are separate entries.
-
-- **The KY-011 and KY-029 two-colour LED modules, as one wired header**: G, R and GND,
-  numbered the same on both. The check gives the manual's series resistors for the KY-011 and
-  says to look for resistors on the board.
-
-- **The KY-053 ADS1115 analog-to-digital module, as a wired header**: VDD, GND, SCL, SDA,
-  ADDR, ALRT and A0 to A3 as the board prints them down its edge in the Joy-IT manual's
-  photograph, found as "ADS1115" too.
-
-- **The KY-051 voltage translator, as a wired header**: VCCb, VCCa, B1 to B4, A1 to A4, OE and
-  GND as the board prints them in the Joy-IT manual's photograph, the two sides interleaved in
-  pairs on a 2 x 6 header. The check gives the printed supply ranges and that VCCb is not to
-  be lower than VCCa.
-
 - **The piezo disc, as two wires to a part off the board**: Murata's 7BB-27-4 as the sized
   example, red and black leads with the catalog's own words that it marks no polarity. The
   check says a bare disc wants a tone and not DC, and gives Murata's series resistor and the
@@ -207,59 +216,31 @@ closed without a bump.
   with its two legs eight pitches (20.32 mm) apart, so each lead has 3.16 mm clear of the
   glass. The check says to bend the leads at least 2 mm from the glass and to test the switch
   with a magnet after soldering, because Standex-Meder says bending changes its sensitivity.
-- **Soil moisture, rain, MQ-2 and water level sensor boards are found by name.** They share the KY 4-pin and 3-pin headers' pins, so "soil moisture", "FC-28", "MQ-2", "gas sensor", "rain sensor", "water level" and their Turkish names ("toprak nem sensörü", "yağmur sensörü", "gaz sensörü", "su seviye sensörü") lead to the header they plug into, and each check says the other orders the boards print (Components101, Waveshare, Conrad).
-- **The DS1307 Tiny RTC board**, as a 7-pin header from iarduino's datasheet photo: SQ DS SCL SDA VCC GND BAT, with DS said to be the main supply's plus through 3.3 kOhm, not a signal.
-- **TP4056 charger (with protection), MT3608 boost and AMS1117-3.3 modules**, off the board on their pads' wires, each pad named as its source prints it: the TP4056's OUT pair is the protected one and is not the same wire as B-, the MT3608's output must stay above its input, and the AMS1117's reversed input shorts it.
-- **The 1.8 in ST7735 TFT, Nokia 5110 LCD and TTP223 touch boards**, as 8-, 8- and 3-pin headers from LCDWiki, microcontrollerslab.com and AZ-Delivery, each with its supply and logic levels as the page gives them.
-- **The 9 V battery clip and the AA holder are drawn as cells on the schematic.** A part can now declare itself a `battery` (leads named + and -), and the sheet draws two cells with the long plate on the plus and a mark over each lead, instead of a box with two tiny pin names; a battery with unnamed leads stays a box and the sheet's notes say why.
-- **A part can go on the solder side, turned over.** A part has a face, and on the solder
-  side its body is below the board and its pins are reflected, both set by one command and
-  one undo step (`component.setSide`, and `component.setSideMany` for a group). Before
-  this, mirroring a part reflected its pins and left its body standing on the component side
-  in 3D, in DRC, in the STEP export and in the guide. Now bodies are compared only with bodies
-  on their own face, the 3D view and the STEP model hang the part below the board, the router
-  lays no copper under it, and the guide fits it at the end of phase 7, over copper already
-  laid. Two new DRC rules: `copper-under-body` warns of a trace, a wire or another part's
-  joint hidden under a body on its face, and `joint-under-body` names a part on the solder
-  side of a single-sided board whose joints are under its own body -- an error for a part
-  seated on the board, such as a chip, and a warning for one standing on its leads, saying
-  to leave them long. A part is turned over in its own holes: one whose pins lie in a
-  line -- a resistor, a header, a TO-92, a terminal block -- keeps every pin where it was,
-  and a two-row part such as a DIP swaps its rows, which the status line says needs its
-  wiring redone. A solderless breadboard has no solder side, and refuses it. Saved
-  files keep their bytes: the face is written only for a part on the solder side, and 0.23
-  opens such a file with the part mirrored on the component side.
-  In the window, Edit > Move to Solder Side (Shift+M) turns the selected parts over, and
-  says Move to Component Side when they are all under the board; Properties has a Face row
-  for it. A part placed while the board is turned over (Ctrl+F) goes on the solder side. On
-  the board, a part under it is a hatched shadow from above and the part itself from below,
-  its value reading the right way; the guide's row and its bench picture say the solder side.
-- **The DC barrel jack is drawn as a jack on the schematic**: a part can declare itself a `jack` (leads named + and -), and the sheet draws the centre pin reaching into the cup of the sleeve with the plus and minus marked, drawn for this project rather than taken from a symbol library.
-- **A CR2032 coin cell holder, Keystone 1067 (vertical, through-hole)**, from Keystone's drawing: its two contact pins 7.6 mm apart (3 pitches here) with the body at the drawing's size, drawn as a cell. The drawing's side view gives the body's depth as .531 in and 3.6 mm; the note says which was taken and why, and that the holder's third, mounting leg has no hole on the 2.54 mm grid and is not drawn.
 
 ### Changed
 
-- **The MCP tool `mirror_component` is replaced by `set_component_side`.**
+- **Breaking for an MCP caller: `mirror_component` is replaced by `set_component_side`.**
   `mirror_component` left a part's body on the component side; `set_component_side(ref,
   "bottom")` turns the part over. `place_component` and `place_parts` take `side`, and a
   component's summary says it. The tool count stays at 67.
 
 ### Fixed
 
-- **A board that is no stock board is said in holes.** Its size was "60 × 40" with no unit
-  in the step bar, the status bar, the board question and the board strip, and beside
-  "5 x 7 cm" it read as millimetres. It is now "60 × 40 holes" everywhere.
-- **A long name shows its start.** The Name field of a system, a board or a cable showed the
-  end of a name longer than the panel ("lay Driver and Its Supply"); it now shows the start.
-- **With nothing selected, Properties says what to do next.** It opened on the board's
-  settings -- a height limit, the clearance between bodies, pads per hole, mounting holes --
-  while somebody new was about to draw their first circuit. It now shows the step the work
-  is at, what to do in one sentence, and the step's own action on a button; Board Settings…
-  under it opens what was there before, and Rename Board and a mounting hole picked on the
-  board still go straight to it. After Place on the Board and Auto-wire, the part last added
-  on the sheet is no longer left selected and described as if it were what had just been
-  done. In Choose a Board, the board chosen is now shown at once, rather than first at
-  Place.
+- **The first board reads as a path, not a pile of settings.** With nothing selected,
+  Properties opened on the board's settings -- a height limit, the clearance between bodies,
+  pads per hole, mounting holes -- while somebody new was about to draw their first circuit.
+  It now shows the step the work is at, what to do in one sentence, and the step's own action on
+  a button; Board Settings… under it opens what was there before, and Rename Board and a
+  mounting hole picked on the board still go straight to it. After Place on the Board and
+  Auto-wire, the part last added on the sheet is no longer left selected and described as if it
+  were what had just been done. The board question says what it did in one line -- the smallest
+  stock board your parts fit on was picked, and another can be -- with the paragraph on how that
+  board was judged as its tooltip, and the board chosen is shown at once rather than first at
+  Place. The step bar ends: once the guide has been opened on a board with nothing wrong it says
+  it is ready to build, Next no longer offers Save the Board… again after it was cancelled
+  (saving is still in the File menu and on Ctrl+S), and on a system it says "2 boards" and counts
+  them all, where it had said the first board's size and the connections and findings of the board
+  in front, so a second board with nothing wired read "all wired".
 - **The copper on the far side shows through the board.** Auto-wire lays its wires on
   the solder side, under the board, and from the parts side they were drawn hatched at
   half strength over white pads -- a first board looked as if nothing had happened. On
@@ -267,19 +248,18 @@ closed without a bump.
   shows its back layer, and Auto-wire's status line says how many went to the face not in
   view and that Ctrl+F turns the board over. View > Show on the Board > Copper on the Far
   Side turns it off, except a selected wire and a lit net. The 1:1 PDF keeps the hatch.
-- **The step bar ends.** Build was never done, so the last step stayed the one to do after
-  the guide had been read. Once the guide has been opened on a board with nothing wrong,
-  the bar says it is ready to build. Next no longer offers Save the Board… again after it
-  was cancelled; saving is still in the File menu and on Ctrl+S.
-- **The board question says what it did in one line**: the smallest stock board your parts
-  fit on was picked, and another can be. The paragraph on how that board was judged is
-  the line's tooltip.
-- **The step bar counts every board of a system.** It said the first board's size and the
-  connections and findings of the board in front, so a second board with nothing wired
-  read "all wired". It now says "2 boards" and counts them all.
-- **An empty value says what a value looks like.** A resistor's empty value field offered
-  "10k, 100nF, NE555…"; it now says "e.g. 470, 10k", and a capacitor's and an inductor's
-  give their own examples.
+- **Sizes, names and empty fields say what they are.** A board that is no stock board is said
+  in holes: its size was "60 × 40" with no unit in the step bar, the status bar, the board
+  question and the board strip, and beside "5 x 7 cm" it read as millimetres; it is now "60 × 40
+  holes" everywhere. The Name field of a system, a board or a cable showed the end of a name
+  longer than the panel ("lay Driver and Its Supply") and now shows the start. A resistor's empty
+  value field offered "10k, 100nF, NE555…"; it now says "e.g. 470, 10k", and a capacitor's and an
+  inductor's give their own examples.
+- **The installers carry the walkthrough example.** `ne555-blinker`, the circuit drawn and
+  not yet built, is a project folder, and the installers packed only the files directly in
+  `examples/`: from Windows, macOS and Linux alike, Home had no walkthrough to offer first and
+  the tour said this copy had no examples. A source install was never affected. Every
+  installer is now checked for every example, file for file, as it is for the 3D meshes.
 - **A board saved on Windows is the same file it is everywhere else.** Saving, autosave and
   its `.bak`, the crash-recovery record, a project folder's board and the MCP server's
   `save_document` wrote every line ending as CRLF on Windows, so a board saved on two
@@ -305,11 +285,6 @@ closed without a bump.
   that itself now, instead of a check on every event the application handles. Measured on
   the frozen build, fifteen starts each, interleaved: the window's median 885 ms to 806 ms,
   and the process's CPU time 859 ms to 797 ms.
-- **The installers carry the walkthrough example.** `ne555-blinker`, the circuit drawn and
-  not yet built, is a project folder, and the installers packed only the files directly in
-  `examples/`: from Windows, macOS and Linux alike, Home had no walkthrough to offer first and
-  the tour said this copy had no examples. A source install was never affected. Every
-  installer is now checked for every example, file for file, as it is for the 3D meshes.
 
 ## [0.23.0] - 2026-11-09
 

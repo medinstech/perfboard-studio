@@ -1611,7 +1611,7 @@ Four decisions carry it, and each has a test that would notice it going:
     the way to the bench.
   - **So the PART carries it.** `ComponentInstance` and `SchematicPart` both have
     `pin_names` (pin number → name, in pin order, `model.normalized_pin_names`) and
-    `symbol` (`model.PartSymbol`: `npn`/`pnp`/`nmos`/`pmos`/`zener`/`fuse`).
+    `symbol` (`model.PartSymbol`: `npn`/`pnp`/`nmos`/`pmos`/`zener`/`fuse`/`battery`/`jack`).
     `model.pin_name_of` is THE answer to "what is this pin called" — declared name first,
     footprint name second — and the sheet, the guide's polarity note and the MCP server all
     read it. A declaration is drawn only when `schematic.DECLARED_SYMBOL_PINS` is met
