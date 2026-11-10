@@ -4321,6 +4321,8 @@ TURKISH: Mapping[str, str] = {
     "{count} warning": "{count} uyarı",
     "{count} warnings": "{count} uyarı",
     "guide ready": "rehber hazır",
+    "We picked the smallest stock board your parts fit on. Pick another if you have "
+    "one.": "Parçalarınızın sığdığı en küçük hazır kartı seçtik. Elinizde başka bir kart varsa onu seçin.",
     "ready to build": "montaja hazır",
     "What the board is: its parts and what joins them. Drawn on the sheet, or by placing "
     "parts on the board and connecting their pins. The circuit check (ERC) runs as it is "

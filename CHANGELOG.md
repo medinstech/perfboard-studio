@@ -256,6 +256,9 @@ closed without a bump.
   the guide had been read. Once the guide has been opened on a board with nothing wrong,
   the bar says it is ready to build. Next no longer offers Save the Board… again after it
   was cancelled; saving is still in the File menu and on Ctrl+S.
+- **The board question says what it did in one line**: the smallest stock board your parts
+  fit on was picked, and another can be. The paragraph on how that board was judged is
+  the line's tooltip.
 - **A board saved on Windows is the same file it is everywhere else.** Saving, autosave and
   its `.bak`, the crash-recovery record, a project folder's board and the MCP server's
   `save_document` wrote every line ending as CRLF on Windows, so a board saved on two

@@ -17573,6 +17573,8 @@ def test_the_board_size_in_properties_wraps_whole() -> None:
             try:
                 window.scene.clearSelection()
                 window._refresh_properties()
+                # With nothing selected Properties says the step; the board is one click on.
+                window.inspector.open_board_settings()
                 text = window.inspector.board_editor.summary.text()
                 size = text.rsplit(",", 1)[-1].lstrip(" ")
                 assert size.endswith(word) and "\u00a0×\u00a0" in size, (lang, text)

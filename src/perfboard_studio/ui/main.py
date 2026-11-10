@@ -2031,18 +2031,23 @@ class BoardSizeDialog(QDialog):
         self._suggestions = tuple(suggestions)
 
         layout = QVBoxLayout(self)
-        text = t(
-            "Your circuit was placed, wired and checked on the roomy board and on the "
-            "sizes below it. The suggested one is the smallest that builds as well: every "
-            "part placed, every connection made, no warning the roomy board does not have, "
-            "and at most {percent}% dearer to wire."
-        ).format(percent=round((ROUTE_COST_TOLERANCE - 1) * 100))
+        # One plain line. It was a paragraph on how the suggestion is judged, read by
+        # nobody at the moment they want a board; how it is judged is the line's tooltip.
+        text = t("We picked the smallest stock board your parts fit on. Pick another if you have one.")
         if not complete:
             text += " " + t(
                 "Stopped before every board was tried; the suggestion is the smallest tried."
             )
         blurb = QLabel(text)
         blurb.setWordWrap(True)
+        blurb.setToolTip(
+            t(
+                "Your circuit was placed, wired and checked on the roomy board and on the "
+                "sizes below it. The suggested one is the smallest that builds as well: every "
+                "part placed, every connection made, no warning the roomy board does not have, "
+                "and at most {percent}% dearer to wire."
+            ).format(percent=round((ROUTE_COST_TOLERANCE - 1) * 100))
+        )
         theme.tone(blurb, "secondary")
         layout.addWidget(blurb)
 
