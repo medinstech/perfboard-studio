@@ -15344,6 +15344,28 @@ def test_a_part_only_in_the_design_is_edited_in_properties() -> None:
 
 
 
+def test_an_empty_value_shows_what_a_value_of_that_kind_looks_like() -> None:
+    """A new resistor's value was a blank box whose one example named a chip."""
+    from perfboard_studio.ui.inspector import value_placeholder
+
+    assert value_placeholder("R4") == "e.g. 470, 10k"
+    assert value_placeholder("RV1") == "e.g. 10k"
+    assert value_placeholder("C12") == "e.g. 100nF, 10µF"
+    assert value_placeholder("L1") == "e.g. 10µH, 100µH"
+    assert value_placeholder("U1") == "10k, 100nF, NE555…"
+    assert value_placeholder("R?") == "e.g. 470, 10k"
+
+    example = pathlib.Path(__file__).resolve().parent.parent / "examples" / "ne555-astable.perf"
+    window = _window_on(persist.deserialize_document(example.read_text(encoding="utf-8")).document)
+    try:
+        resistor = next(c for c in window.bus.document.components if c.ref.startswith("R"))
+        window.scene.select_components([resistor.id])
+        window._refresh_selection_state()
+        assert window.inspector.part_editor.value.placeholderText() == "e.g. 470, 10k"
+    finally:
+        _close(window)
+
+
 def test_the_status_bar_no_longer_repeats_the_selection() -> None:
     """(c) The bar said the selected part's reference, value, package, hole and turn in a
     line nobody could act on; Properties shows all of it, editable."""

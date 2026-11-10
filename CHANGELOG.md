@@ -262,6 +262,9 @@ closed without a bump.
 - **The step bar counts every board of a system.** It said the first board's size and the
   connections and findings of the board in front, so a second board with nothing wired
   read "all wired". It now says "2 boards" and counts them all.
+- **An empty value says what a value looks like.** A resistor's empty value field offered
+  "10k, 100nF, NE555…"; it now says "e.g. 470, 10k", and a capacitor's and an inductor's
+  give their own examples.
 - **A board saved on Windows is the same file it is everywhere else.** Saving, autosave and
   its `.bak`, the crash-recovery record, a project folder's board and the MCP server's
   `save_document` wrote every line ending as CRLF on Windows, so a board saved on two

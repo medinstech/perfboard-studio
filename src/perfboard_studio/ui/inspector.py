@@ -269,6 +269,24 @@ def _form() -> QFormLayout:
     return form
 
 
+def value_placeholder(ref: str) -> str:
+    """What an empty value field shows, by the reference's letters.
+
+    A new resistor's value was a blank box whose one example named a chip; "e.g. 470,
+    10k" says what a resistor's value looks like, as the guide's parts list prints it.
+    """
+    letters = ref.rstrip("0123456789?").upper()
+    if letters == "R":
+        return t("e.g. 470, 10k")
+    if letters in ("RV", "VR"):
+        return t("e.g. 10k")
+    if letters == "C":
+        return t("e.g. 100nF, 10µF")
+    if letters == "L":
+        return t("e.g. 10µH, 100µH")
+    return "10k, 100nF, NE555…"
+
+
 def _add_field(form: QFormLayout, label: str, field: QWidget, problem: _Problem) -> None:
     """A field and, under it, the line that says why it was refused."""
     holder = QWidget()
@@ -1048,6 +1066,7 @@ class _PartEditor(QWidget):
         try:
             self.title.setText(theme.heading(component.ref))
             self.ref.show_value(component.ref)
+            self.value.setPlaceholderText(value_placeholder(component.ref))
             self.value.show_value(component.value)
             name = footprint_label(footprint.name) if footprint is not None else component.footprint_id
             self.package.setText(f"{name}  ({component.footprint_id})")
@@ -1284,6 +1303,7 @@ class _DesignPartEditor(QWidget):
         try:
             self.title.setText(theme.heading(part.ref))
             self.ref.show_value(part.ref)
+            self.value.setPlaceholderText(value_placeholder(part.ref))
             self.value.show_value(part.value)
             name = footprint_label(footprint.name) if footprint is not None else part.footprint_id
             self.package.setText(f"{name}  ({part.footprint_id})")
