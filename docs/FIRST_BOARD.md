@@ -42,17 +42,19 @@ drawn and not built". It opens as an untitled copy, so nothing you do touches th
 
 What opens is the circuit: ten parts and seven nets, drawn on the schematic, and none of it
 on a board. The step bar along the top says where you stand (Circuit is done, Board is next),
-and the button at its right end is the next thing to do. You press that button for every
-step below.
+and the button at its right end is the next thing to do. Properties, with nothing selected,
+is a card for the same step: where the work stands, what to do now and a button for it. You
+press that button for every step below.
 
 ## 3. Choose the board
 
 ![The board dialog: every stock size the circuit was tried on, with how well it builds on each](images/first-board/3-board.png)
 
-**Choose a Board…** does not ask you to guess. It places and wires the circuit on a roomy
-board, then on each smaller stock size, and shows each result with its size in holes and
-what the wiring cost against the roomy one. The smallest board that builds as well is
-suggested. Pick one (this page picks 5 × 7 cm) and press **Use This Board**.
+**Choose a Board…** does not ask you to guess: "We picked the smallest stock board your parts
+fit on. Pick another if you have one." It places and wires the circuit on a roomy board, then
+on each smaller stock size, and shows each result with its size in holes and what the wiring
+cost against the roomy one; the suggested board is starred. Pick one (this page picks
+5 × 7 cm) and press **Use This Board**.
 
 ## 4. Place the parts
 
