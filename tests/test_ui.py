@@ -4439,10 +4439,12 @@ def test_the_designer_cannot_produce_an_oblong_pad_the_bus_would_refuse() -> Non
 
 
 def _board_features(window):
-    """The board's holes and connectors in Properties, where Board Features was a dialog."""
+    """The board's holes and connectors in Properties, where Board Features was a dialog:
+    nothing selected, and Board Settings on the step card pressed."""
     window.scene.clearSelection()
     window._selection_from = "board"
     window._refresh_properties()
+    window.inspector.step_card.board_settings.click()
     assert window.inspector.shown is window.inspector.board_editor
     features = window.inspector.board_editor.features
     features.set_open(True)  # closed by default: these tests are about what is inside
@@ -8650,6 +8652,28 @@ def test_placing_after_choosing_a_board_does_not_ask_again(monkeypatch) -> None:
         )
         window.on_schematic_place_all()
         assert asked == [True], "placing asked about the board a second time"
+    finally:
+        _close(window)
+
+
+def test_after_place_and_auto_wire_properties_shows_the_step_not_the_last_part(
+    monkeypatch,
+) -> None:
+    """The part last added on the sheet stayed selected through Place and Auto-wire, and
+    Properties went on describing it as if it were what had just been done."""
+    from perfboard_studio.ui import main as main_module
+
+    window = _blank_window()
+    try:
+        _add(window, "R1", "r-axial-3")
+        for step, action in (("place", "on_schematic_place_all"), ("route", "on_autoroute_all")):
+            monkeypatch.setattr(main_module.MainWindow, action, lambda self: None)
+            window.schematic_view.set_selection(["R1"])
+            window._selection_from = "sheet"
+            window._refresh_properties()
+            assert window.inspector.shown is not window.inspector.step_card
+            window.on_workflow_next(step)
+            assert window.inspector.shown is window.inspector.step_card, step
     finally:
         _close(window)
 
@@ -14986,10 +15010,19 @@ def test_a_part_turns_flips_and_moves_from_properties() -> None:
     _close(window)
 
 
-def test_the_board_is_what_properties_shows_with_nothing_selected() -> None:
+def test_the_step_is_what_properties_shows_with_nothing_selected() -> None:
+    """Nothing selected is where the work stands and what to do now -- the board's settings
+    opened on a height limit and pads per hole for somebody about to draw their first
+    circuit -- and the board's editor is one click away, until something else is picked."""
     window = _window_on(_load_dense())
     window.scene.clearSelection()
     window._refresh_properties()
+    card = window.inspector.step_card
+    assert window.inspector.shown is card
+    bar = window.workflow_bar
+    assert bar.next_button.text().endswith(card.next.text())
+    assert "Height" not in card.hint.text()
+    card.board_settings.click()
     editor = window.inspector.board_editor
     assert window.inspector.shown is editor
     board = window.bus.document.board
@@ -14999,6 +15032,13 @@ def test_the_board_is_what_properties_shows_with_nothing_selected() -> None:
     assert window.bus.document.height_limit_mm == 12.5
     editor.body_measure.setChecked(True)
     assert window.bus.document.body_clearance_mm is not None
+    assert window.inspector.shown is editor, "an edit in the board's settings keeps them open"
+    part = window.bus.document.components[0]
+    window.scene.select_components([part.id])
+    window._refresh_properties()
+    window.scene.clearSelection()
+    window._refresh_properties()
+    assert window.inspector.shown is card, "picking something else puts the step back"
     _close(window)
 
 
@@ -17241,7 +17281,7 @@ def test_the_inspector_builds_an_editor_the_first_time_it_is_shown() -> None:
     window = _window_on(_example_document("ne555-astable"))
     try:
         built = set(window.inspector._built)
-        assert built <= {"board", "placing"}, built
+        assert built <= {"step", "placing"}, built
         part = next(c for c in window.bus.document.components if c.ref == "R1")
         window.scene.select_components([part.id])
         window._selection_from = "board"
@@ -17264,7 +17304,7 @@ def test_a_real_start_fills_properties_once_the_window_is_up() -> None:
         assert window.properties.content is not window.inspector
         QApplication.processEvents()
         assert window._properties_filled and window.properties.content is window.inspector
-        assert window.inspector.shown is window.inspector.board_editor
+        assert window.inspector.shown is window.inspector.step_card
     finally:
         _close(window)
 
@@ -17800,9 +17840,9 @@ def test_system_in_front_shows_the_system_and_a_click_shows_a_board_or_a_cable()
         inspector.system_board_editor.remove.click()
         assert window.bus.system_document.boards == ()
         assert {"JB", "R2"} <= {p.ref for p in window.bus.system_document.parts}
-        # One board left: no strip, no System, and Properties is that board's.
+        # One board left: no strip, no System, and Properties is that board's step.
         assert not window._system_in_front() and window.board_strip.isHidden()
-        assert inspector.shown is inspector.board_editor
+        assert inspector.shown is inspector.step_card
 
         window.bus.undo()
         window.on_bus_changed(window.bus.system_document, None)
@@ -17888,6 +17928,7 @@ def test_a_boards_name_in_properties_is_its_own_among_several() -> None:
         window.board_strip.tabs.setCurrentIndex(2)
         window.scene.clearSelection()
         window._refresh_properties()
+        window.inspector.step_card.board_settings.click()
         editor = window.inspector.board_editor
         assert window.inspector.shown is editor and editor.name.text() == "Remote"
         _commit(editor.name, "Far")

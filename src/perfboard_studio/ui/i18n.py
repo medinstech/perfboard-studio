@@ -4349,6 +4349,48 @@ TURKISH: Mapping[str, str] = {
     "The soldering guide, step by step, with the board in 3D beside it.": (
         "Adım adım lehimleme rehberi, yanında kartın 3D görünümüyle."
     ),
+    # -- the step, in Properties with nothing selected (inspector._StepCard) ----------
+    "Step {number} of 6": "Adım {number} / 6",
+    "Board Settings…": "Kart Ayarları…",
+    "The board's name, its size and type, and what a case asks of it.": (
+        "Kartın adı, boyutu ve türü, ve bir kutunun ondan istedikleri."
+    ),
+    "The circuit has a mistake to put right first. Show Problems says what and where.": (
+        "Devrede önce düzeltilmesi gereken bir hata var. Sorunları Göster neyin nerede "
+        "olduğunu söyler."
+    ),
+    "Join the parts on the sheet: click a pin, then the pin it connects to. Every pin that "
+    "should be joined needs a line.": (
+        "Şemadaki parçaları birleştirin: bir pine, sonra bağlandığı pine tıklayın. "
+        "Birleşmesi gereken her pinin bir çizgisi olmalı."
+    ),
+    "Start with the parts. Type a part's name in the Library and press Enter: it goes on "
+    "the sheet, ready to be joined to the others.": (
+        "Parçalarla başlayın. Kütüphanede bir parçanın adını yazıp Enter'a basın: parça, "
+        "diğerlerine bağlanmaya hazır olarak şemaya gelir."
+    ),
+    "Pick the perfboard it goes on. Every stock size is tried with your circuit on it, and "
+    "the smallest that fits is suggested.": (
+        "Devrenin gideceği delikli kartı seçin. Satılan her boy devreniz üzerine "
+        "yerleştirilerek denenir ve sığdığı en küçük kart önerilir."
+    ),
+    "Put the parts on the board. They are arranged for you; drag any of them afterwards.": (
+        "Parçaları karta yerleştirin. Sizin için dizilirler; sonra istediğinizi "
+        "sürükleyebilirsiniz."
+    ),
+    "Join the pins on the board. Auto-wire lays the wires on the solder side, under the "
+    "board; Ctrl+F turns the board over to see them.": (
+        "Karttaki pinleri birleştirin. Otomatik Kablola telleri lehim yüzüne, kartın altına "
+        "döşer; onları görmek için Ctrl+F kartı çevirir."
+    ),
+    "Something on the board needs a look. Show Problems lists each one and where it is.": (
+        "Kartta bakılması gereken bir şey var. Sorunları Göster her birini ve yerini listeler."
+    ),
+    "The board is ready to build. The build guide takes you through it one part at a "
+    "time.": (
+        "Kart yapılmaya hazır. Montaj rehberi size her seferinde bir parça olmak üzere yol "
+        "gösterir."
+    ),
     # -- what the engine says it did (ui/engine_text.py) ---------------------------
     "Place {parts} part(s) and {links} connection(s)": "{parts} parça ve {links} bağlantı yerleştir",
     "Place and arrange {count} part(s) from the schematic": "Şemadaki {count} parçayı karta yerleştir ve diz",

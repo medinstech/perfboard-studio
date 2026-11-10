@@ -236,6 +236,15 @@ closed without a bump.
 
 ### Fixed
 
+- **With nothing selected, Properties says what to do next.** It opened on the board's
+  settings -- a height limit, the clearance between bodies, pads per hole, mounting holes --
+  while somebody new was about to draw their first circuit. It now shows the step the work
+  is at, what to do in one sentence, and the step's own action on a button; Board Settings…
+  under it opens what was there before, and Rename Board and a mounting hole picked on the
+  board still go straight to it. After Place on the Board and Auto-wire, the part last added
+  on the sheet is no longer left selected and described as if it were what had just been
+  done. In Choose a Board, the board chosen is now shown at once, rather than first at
+  Place.
 - **A board saved on Windows is the same file it is everywhere else.** Saving, autosave and
   its `.bak`, the crash-recovery record, a project folder's board and the MCP server's
   `save_document` wrote every line ending as CRLF on Windows, so a board saved on two

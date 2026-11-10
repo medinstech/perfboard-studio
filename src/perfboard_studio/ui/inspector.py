@@ -144,6 +144,29 @@ class InspectorHooks:
     #: Add Board and Add Cable, as the Board menu has them.
     add_board: Callable[[], object] = lambda: None
     add_cable: Callable[[], object] = lambda: None
+    #: The step bar's Next, as the step card's button does it.
+    next_step: Callable[[], object] = lambda: None
+    #: Whether the window says where the work stands (``Inspector.set_step``): nothing
+    #: selected is then the step, and the board's editor waits for Board Settings. Left out,
+    #: nothing selected is the board, as it always was.
+    shows_steps: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class StepNote:
+    """Where the work stands, as the window's step bar says it: what Properties shows with
+    nothing selected (``_StepCard``). Plain words, so the inspector needs nothing from the
+    step bar's module."""
+
+    #: 1 to 6, in the order the steps are done.
+    number: int
+    title: str
+    #: The step bar's line under the step's name: "3 connections to wire".
+    summary: str
+    #: What to do now, in a sentence (``workflow.step_hint``).
+    hint: str
+    #: What the Next button says.
+    action: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,6 +301,56 @@ def _action_button(action: QAction) -> QToolButton:
     button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
     button.setAutoRaise(True)
     return button
+
+
+# -- nothing selected: the step, and the board a click away -------------------------------
+
+
+class _StepCard(QWidget):
+    """Nothing selected: where the work stands and what to do now, with the step's own
+    action on a button and the board's settings one click away.
+
+    THE BOARD'S EDITOR USED TO BE WHAT "NOTHING SELECTED" SHOWED, and on the first screen --
+    a person about to draw their first circuit -- the right-hand panel opened on a height
+    limit, the clearance between bodies, pads per hole and mounting holes (the newcomer
+    walkthrough's third stall). The board is still the selection when nothing else is; its
+    editor is what Board Settings opens, and what Rename Board and a mounting hole picked on
+    the board open straight away.
+    """
+
+    def __init__(self, inspector: Inspector) -> None:
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.SPACE["md"])
+        self.step = _fact()
+        self.title = QLabel()
+        self.title.setTextFormat(Qt.TextFormat.RichText)
+        self.summary = _fact()
+        self.hint = QLabel()
+        self.hint.setWordWrap(True)
+        self.hint.setTextFormat(Qt.TextFormat.PlainText)
+        self.next = QPushButton()
+        theme.variant(self.next, "primary")
+        self.next.clicked.connect(lambda: inspector.hooks.next_step())
+        self.board_settings = QPushButton(t("Board Settings…"))
+        theme.variant(self.board_settings, "link")
+        self.board_settings.setToolTip(
+            t("The board's name, its size and type, and what a case asks of it.")
+        )
+        self.board_settings.clicked.connect(inspector.open_board_settings)
+        for widget in (self.step, self.title, self.summary, self.hint):
+            layout.addWidget(widget)
+        layout.addWidget(self.next, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.board_settings, 0, Qt.AlignmentFlag.AlignLeft)
+
+    def load(self, note: StepNote) -> None:
+        self.step.setText(t("Step {number} of 6").format(number=note.number))
+        # A step's name is the interface's own word, never something typed.
+        self.title.setText(theme.heading(note.title))
+        self.summary.setText(note.summary)
+        self.hint.setText(note.hint)
+        self.next.setText(note.action)
 
 
 # -- nothing selected: the board ----------------------------------------------------------
@@ -2061,6 +2134,11 @@ class Inspector(QWidget):
         self.summary.hide()
         layout.addStretch(1)
         self.shown: QWidget = self.summary
+        #: Where the work stands, from the window (``set_step``); None until it first says.
+        self._step: StepNote | None = None
+        #: The board's editor asked for with nothing selected (``open_board_settings``),
+        #: until something else is selected.
+        self._board_settings = False
 
     def _page(self, key: str, make: Callable[[], _Page]) -> _Page:
         """The editor ``key``, built and put in the column, hidden, the first time."""
@@ -2081,6 +2159,25 @@ class Inspector(QWidget):
     @property
     def board_editor(self) -> _BoardEditor:
         return self._page("board", self._board_editor)
+
+    @property
+    def step_card(self) -> _StepCard:
+        return self._page("step", lambda: _StepCard(self))
+
+    def set_step(self, note: StepNote) -> None:
+        """Where the work stands now; said again if the card is what is showing."""
+        if note == self._step:
+            return
+        self._step = note
+        if self.shown is self._built.get("step"):
+            self.step_card.load(note)
+        elif self._document is not None and self.selection.kind == "board":
+            self._show()
+
+    def open_board_settings(self) -> None:
+        """The board's editor, with nothing selected: Board Settings on the step card."""
+        self._board_settings = True
+        self._show()
 
     @property
     def part_editor(self) -> _PartEditor:
@@ -2141,6 +2238,12 @@ class Inspector(QWidget):
         return None if result.ok else say(result.message)
 
     def set_selection(self, selection: Selection) -> None:
+        if selection.kind in ("mounting-hole", "edge-connector"):
+            # The board's own features: the board's editor is where they are listed, so it
+            # is what nothing selected shows after one.
+            self._board_settings = True
+        elif selection.kind != "board":
+            self._board_settings = False
         self.selection = selection
         self._show()
 
@@ -2158,7 +2261,14 @@ class Inspector(QWidget):
             # Chosen on the board: the board's list of them opens, for when it is shown next.
             self.board_editor.features.set_open(True, emit=True)
         system = self.system_and_board() if selection.kind in SYSTEM_KINDS else None
-        if selection.kind == "board":
+        if selection.kind == "board" and self.hooks.shows_steps and not self._board_settings:
+            # Until the window first says where the work stands -- the first repaint, a
+            # moment into a start -- the one-line summary stands in, rather than building
+            # the board's editor for an instant nobody sees.
+            if self._step is not None:
+                self.step_card.load(self._step)
+                page = self.step_card
+        elif selection.kind == "board":
             self.board_editor.load(document)
             page = self.board_editor
         elif system is not None and selection.kind == "system":
@@ -2236,6 +2346,9 @@ class Inspector(QWidget):
         the part's Reference, a double-click its Value, Rename Board the board's Name.
         False when the editor showing has no such field."""
         fields: dict[str, QLineEdit] = {}
+        if name == "name" and self.shown is self._built.get("step"):
+            # Rename Board with nothing selected: the board's name is in its settings.
+            self.open_board_settings()
         shown = self.shown
         # Matched on its type, so asking builds no editor that is not showing.
         if isinstance(shown, (_PartEditor, _DesignPartEditor)):

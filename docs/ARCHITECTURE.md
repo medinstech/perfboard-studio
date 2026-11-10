@@ -1825,9 +1825,13 @@ holds no state: every editor is re-read from the document the panel hands over a
 command. It never holds the bus, which the window replaces when a file is opened, only a
 `dispatch` through whichever bus is current, the footprint lookup, and `InspectorHooks`
 for what is still a dialog (another package; the board's setup). Its buttons are the
-window's own actions (`InspectorActions`). Nothing selected is the board: its name, what
-it is, Change… for the board designer, the height limit, the body clearance, and its holes
-and connectors folded to one line (below). One placed part
+window's own actions (`InspectorActions`). Nothing selected is the step (`_StepCard`):
+where the work stands, what to do now in one sentence (`workflow.step_hint`) and the step's
+action on a button -- the board's settings were what the first screen showed somebody about
+to draw their first circuit. Board Settings… under it opens the board: its name, what it
+is, Change… for the board designer, the height limit, the body clearance, and its holes and
+connectors folded to one line (below); Rename Board and a hole picked on the board open it
+directly, and it stays open until something else is picked. One placed part
 is its reference, value, package, pin 1's hole, rotation, mirroring, lock, pin names and
 note -- a value that names a catalog part brings that part's pinout in the same command,
 as Part Properties did (`ui/partfields.py`, shared with the sheet's part dialog). It

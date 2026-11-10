@@ -371,7 +371,7 @@ from .header import HeaderBar
 from .home import WALKTHROUGH, Home, HomeExample
 from .i18n import counted, set_language, t
 from .i18n import language as current_language
-from .inspector import NET_CLASSES, Inspector, InspectorActions, InspectorHooks
+from .inspector import NET_CLASSES, Inspector, InspectorActions, InspectorHooks, StepNote
 from .numberbox import NumberBox
 from .palette import ALSO as PALETTE_ALSO
 from .palette import CommandPalette, Entry
@@ -396,10 +396,14 @@ from .view2d import (
 )
 from .viewsch import SchematicView, SheetTool
 from .workflow import (
+    STEP_ORDER,
     StepKey,
     WorkflowBar,
     WorkflowFacts,
     build_action,
+    next_step,
+    step_hint,
+    step_title,
     workflow_steps,
 )
 
@@ -3178,8 +3182,25 @@ class MainWindow(QMainWindow):
 
     def _refresh_workflow(self) -> None:
         bar = getattr(self, "workflow_bar", None)
-        if bar is not None:
-            bar.set_steps(workflow_steps(self.workflow_facts()))
+        if bar is None:
+            return
+        facts = self.workflow_facts()
+        steps = workflow_steps(facts)
+        bar.set_steps(steps)
+        # The same step, said in Properties for when nothing is selected (``_StepCard``).
+        inspector = getattr(self, "inspector", None)
+        if inspector is not None:
+            key = next_step(steps)
+            state = next(step for step in steps if step.key == key)
+            inspector.set_step(
+                StepNote(
+                    number=STEP_ORDER.index(key) + 1,
+                    title=step_title(key),
+                    summary=state.summary,
+                    hint=step_hint(key, facts),
+                    action=state.action,
+                )
+            )
 
     def on_workflow_step(self, key: str) -> None:
         """A step pressed: go where that step is done. Nothing is changed by going there."""
@@ -3221,9 +3242,11 @@ class MainWindow(QMainWindow):
         elif step == "place":
             self.show_board()
             self.on_schematic_place_all()
+            self._select_nothing()
         elif step == "route":
             self.show_board()
             self.on_autoroute_all()
+            self._select_nothing()
         elif step == "check" and self.problems_bar.expanded:
             # The drawer is open already: the next thing is the next problem in it.
             self.show_board()
@@ -8659,6 +8682,8 @@ class MainWindow(QMainWindow):
                 open_board=lambda board_id: self._on_board_picked(board_id),
                 add_board=lambda: self.on_add_board(),
                 add_cable=lambda: self.on_add_cable(),
+                next_step=lambda: self.on_workflow_next(self.workflow_bar.next_key),
+                shows_steps=True,
             ),
             InspectorActions(
                 route_selected=self.act_route_selected,
@@ -12280,16 +12305,23 @@ class MainWindow(QMainWindow):
             self._refresh_workflow()
         return accepted
 
+    def _select_nothing(self) -> None:
+        """Let go of the selection on the board and the sheet, so Properties shows where
+        the work stands (``inspector._StepCard``). After Place and Auto-wire, which change
+        the whole board: the part last added on the sheet stayed selected through both, and
+        Properties went on describing it as if it were what had just been done."""
+        self.scene.clearSelection()
+        self.schematic_view.set_selection([])
+        self._selection_from = "board"
+        self._refresh_properties()
+
     def on_rename_board(self) -> None:
         """Name the board -- the title its guide, its schematic and its project carry --
         in Properties, where the board is shown when nothing is selected: the selection is
         let go and the keyboard put in the board's Name. Through ``document.rename`` like
         any other edit, so it undoes. A board never named is named after its file on the
         first save (``_save_to``)."""
-        self.scene.clearSelection()
-        self.schematic_view.set_selection([])
-        self._selection_from = "board"
-        self._refresh_properties()
+        self._select_nothing()
         self.inspector.focus_field("name")
 
     def on_board_features(self) -> None:
@@ -12297,10 +12329,8 @@ class MainWindow(QMainWindow):
         Features was a dialog (``ui/boardfeatures.py``): the selection let go, the board
         shown, and its holes and connectors scrolled into view. Each change there is a
         command of its own, and the board redraws beside it."""
-        self.scene.clearSelection()
-        self.schematic_view.set_selection([])
-        self._selection_from = "board"
-        self._refresh_properties()
+        self._select_nothing()
+        self.inspector.open_board_settings()
         self.dock_properties.show()
         self.dock_properties.raise_()
         features = self.inspector.board_editor.features

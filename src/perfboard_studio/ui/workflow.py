@@ -203,6 +203,43 @@ def step_tooltip(key: StepKey) -> str:
     }[key]
 
 
+def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
+    """What to do now, said in Properties when nothing is selected (``inspector._StepCard``).
+
+    Not the tooltip, which says what a step IS and names the checks by their initials:
+    this is the one sentence somebody who has never soldered a board reads to know what
+    their next click is, so it names no check, no rule and no data-model word.
+    """
+    parts = facts.parts_off_board + facts.parts_on_board
+    if key == "circuit" and parts and facts.erc_errors:
+        return t("The circuit has a mistake to put right first. Show Problems says what and where.")
+    if key == "circuit" and parts:
+        return t(
+            "Join the parts on the sheet: click a pin, then the pin it connects to. "
+            "Every pin that should be joined needs a line."
+        )
+    if key == "circuit":
+        return t(
+            "Start with the parts. Type a part's name in the Library and press Enter: it "
+            "goes on the sheet, ready to be joined to the others."
+        )
+    if key == "board":
+        return t(
+            "Pick the perfboard it goes on. Every stock size is tried with your circuit on "
+            "it, and the smallest that fits is suggested."
+        )
+    if key == "place":
+        return t("Put the parts on the board. They are arranged for you; drag any of them afterwards.")
+    if key == "route":
+        return t(
+            "Join the pins on the board. Auto-wire lays the wires on the solder side, under "
+            "the board; Ctrl+F turns the board over to see them."
+        )
+    if key == "check":
+        return t("Something on the board needs a look. Show Problems lists each one and where it is.")
+    return t("The board is ready to build. The build guide takes you through it one part at a time.")
+
+
 def _counted(count: int, one: str, many: str) -> str:
     """``one`` or ``many`` -- each already through ``t()`` -- with the count in it."""
     return (one if count == 1 else many).format(count=count)
