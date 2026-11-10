@@ -16569,6 +16569,8 @@ def test_the_boards_kind_in_properties_is_said_in_the_windows_language() -> None
         try:
             window.scene.clearSelection()
             window._refresh_properties()
+            # With nothing selected Properties says the step; the board is one click on.
+            window.inspector.open_board_settings()
             assert window.inspector.board_editor.summary.text().startswith("Delik başına ped")
         finally:
             _close(window)
@@ -16879,6 +16881,7 @@ def test_the_boards_features_are_one_line_until_asked_for(monkeypatch, tmp_path)
     try:
         window.scene.clearSelection()
         window._refresh_properties()
+        window.inspector.open_board_settings()  # nothing selected shows the step
         features = window.inspector.board_editor.features
         assert not features.is_open() and features.body.isHidden()
         assert features.summary.text() == "1 mounting hole  ·  1 edge connector"
@@ -16912,6 +16915,7 @@ def test_a_board_with_no_features_says_so_in_one_line() -> None:
         features = window.inspector.board_editor.features
         window.scene.clearSelection()
         window._refresh_properties()
+        window.inspector.open_board_settings()  # nothing selected shows the step
         assert features.summary.text() == "No mounting holes or edge connectors"
     finally:
         _close(window)
@@ -17384,6 +17388,9 @@ def test_an_unnamed_boards_name_field_says_untitled_in_the_windows_language() ->
     set_language("tr")
     try:
         window = _window_on(unnamed)
+        # With nothing selected Properties says the step; the board's editor is built
+        # when it is opened, in the window's language.
+        window.inspector.open_board_settings()
     finally:
         set_language(before)
     try:
