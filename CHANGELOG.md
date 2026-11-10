@@ -290,6 +290,11 @@ closed without a bump.
   that itself now, instead of a check on every event the application handles. Measured on
   the frozen build, fifteen starts each, interleaved: the window's median 885 ms to 806 ms,
   and the process's CPU time 859 ms to 797 ms.
+- **The installers carry the walkthrough example.** `ne555-blinker`, the circuit drawn and
+  not yet built, is a project folder, and the installers packed only the files directly in
+  `examples/`: from Windows, macOS and Linux alike, Home had no walkthrough to offer first and
+  the tour said this copy had no examples. A source install was never affected. Every
+  installer is now checked for every example, file for file, as it is for the 3D meshes.
 
 ## [0.23.0] - 2026-11-09
 

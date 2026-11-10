@@ -261,6 +261,7 @@ jobs:
           grep -q "nothing committed, 2 worker processes" headless.log
           test -f ./headless_out/out_2d.png
           bash packaging/check-bundle-models.sh ./dist
+          bash packaging/check-bundle-examples.sh ./dist
           # What an MCP client is pointed at on Windows: a whole session through the frozen
           # launcher and the window's main, and nothing on stdout that is not the protocol.
           python packaging/check-mcp-stdio.py ./dist/perfboard-studio/perfboard-studio-cli.exe --mcp
@@ -418,6 +419,7 @@ jobs:
           test ! -e ./dist/perfboard-studio/perfboard-studio-cli
           ./dist/perfboard-studio/perfboard-studio --version
           bash packaging/check-bundle-models.sh ./dist
+          bash packaging/check-bundle-examples.sh ./dist
 
       # Through `bash` rather than as `packaging/appimage.sh`. The executable bit is in
       # the index, but this repository is developed on Windows, where git's core.filemode
@@ -515,6 +517,7 @@ jobs:
             ./dist/PerfboardStudio.app/Contents/Info.plist
           ./dist/PerfboardStudio.app/Contents/MacOS/perfboard-studio --version
           bash packaging/check-bundle-models.sh ./dist/PerfboardStudio.app
+          bash packaging/check-bundle-examples.sh ./dist/PerfboardStudio.app
           # The bundle's VTK, imported and asked for one offscreen frame. The spec packs
           # only the VTK modules the 3D view imports, and the window no longer imports
           # that view at start, so nothing else this job runs would notice a module the

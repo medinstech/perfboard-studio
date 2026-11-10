@@ -93,12 +93,22 @@ datas += [(str(p), "perfboard_studio/ui/models") for p in _models.iterdir() if p
 # The examples travel with the build.  They are 50 KB in total and they are the answer to
 # "it installed, now what" -- a first run with nothing to open is a worse introduction
 # than the download was worth.
+#
+# Walked, not listed one level deep: `ne555-blinker` is a PROJECT folder (a board file, its
+# netlist and its README), and it is the example Home opens first and the tour runs on.
+# Listing `examples/` alone left it out of every installer from the day it was added, and
+# nothing noticed, because Home quietly offers what it finds -- the frozen window simply
+# had no walkthrough and the tour said "This copy has no examples to tour."
+# `packaging/check-bundle-examples.sh` now holds the bundle to the source, file for file.
+# A project's `outputs/` is what the tool wrote from it, never the example itself.
 _examples = Path("examples")
 if _examples.is_dir():
     datas += [
-        (str(p), "examples")
-        for p in _examples.iterdir()
-        if p.suffix in {".perf", ".net"} or p.name == "README.md"
+        (str(p), str(Path("examples") / p.parent.relative_to(_examples)))
+        for p in sorted(_examples.rglob("*"))
+        if p.is_file()
+        and "outputs" not in p.relative_to(_examples).parts
+        and (p.suffix in {".perf", ".net"} or p.name == "README.md")
     ]
 
 # Stamp the version into the executable, read from the one place it is written (see
