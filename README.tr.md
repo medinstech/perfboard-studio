@@ -364,7 +364,7 @@ bu sıradan çıkıyor — bkz. [`tools/screenshots.py`](./tools/screenshots.py)
 
 ### Ya da hazır bir kart açın
 
-[Altı örnek](./examples/README.md) hem netlist hem de bitmiş kart olarak geliyor:
+[Yedi örnek](./examples/README.md) hem netlist hem de bitmiş kart olarak geliyor:
 
 ```sh
 perfboard-studio examples/lm317-supply.perf
@@ -378,8 +378,9 @@ perfboard-studio examples/lm317-supply.perf
 | `arduino-io-shield` | iki header; bir shield zaten büyük ölçüde budur |
 | `atmega328-relay` | ölçek: yirmi dört parça, ve bütün kurallar bir arada |
 | `nano-relay` | KiCad netlist'inden gerçek parçalar — başlıklarındaki bir Nano, katalogdan BC547 ve 7805, pinlerde adlar, kartta etiketler |
+| `relay-and-supply` | birden çok kart: röle sürücüsü ve besleme kartı iki kartta, bir kabloyla bağlı, tek sistem olarak denetlenir |
 
-Altısı da eksiksiz kablolanıyor, LVS'te şemalarıyla örtüşüyor ve hiçbir DRC hatası
+Yedisi de eksiksiz kablolanıyor, LVS'te şemalarıyla örtüşüyor ve hiçbir DRC hatası
 taşımıyor — `tests/test_examples.py` bunu her commit'te doğruluyor.
 
 ### Bir ajandan

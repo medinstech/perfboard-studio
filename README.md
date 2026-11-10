@@ -363,7 +363,7 @@ sequence the screenshots above come out of — see
 
 ### Or open one that is already built
 
-[Six examples](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) ship as both the netlist and the finished board:
+[Seven examples](https://github.com/medinstech/perfboard-studio/blob/main/examples/README.md) ship as both the netlist and the finished board:
 
 ```sh
 perfboard-studio examples/lm317-supply.perf
@@ -377,8 +377,9 @@ perfboard-studio examples/lm317-supply.perf
 | `arduino-io-shield` | two headers, which is what a shield mostly is |
 | `atmega328-relay` | scale: twenty-four parts, and every rule at once |
 | `nano-relay` | real parts from a KiCad netlist — a Nano on header strips, the catalog's BC547 and 7805, names on the pins, labels on the board |
+| `relay-and-supply` | several boards: the relay driver and its supply on two boards, joined by a cable, checked as one system |
 
-All six route to completion, match their schematics under LVS and carry no DRC error —
+All seven route to completion, match their schematics under LVS and carry no DRC error —
 `tests/test_examples.py` asserts it on every commit.
 
 ### From an agent
