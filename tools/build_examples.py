@@ -751,8 +751,9 @@ class SystemExample:
     ``boards`` is, for each board in order, its name, the references that go on it, and the
     ``Example`` that says what those parts are -- the board question, Place on the Board and
     Ctrl+R are each that board's own, as they are with it in front in the window, and the
-    design and the netlist are the system's. ``cables`` names each cable and the connector
-    at either end; its wires are paired by net, as Add Cable pairs them.
+    design and the netlist are the system's. ``cables`` names each cable, the connector
+    at either end, and the length it is cut to in millimetres; its wires are paired by net, as
+    Add Cable pairs them.
     """
 
     def __init__(
@@ -760,7 +761,7 @@ class SystemExample:
         stem: str,
         title: str,
         boards: tuple[tuple[str, tuple[str, ...], Example], ...],
-        cables: tuple[tuple[str, str, str], ...],
+        cables: tuple[tuple[str, str, str, float], ...],
     ) -> None:
         self.stem = stem
         self.title = title
@@ -809,8 +810,9 @@ SYSTEMS: tuple[SystemExample, ...] = (
                 ),
             ),
         ),
-        # The supply's 12 V out to the relay driver's 12 V in: +12V and GND, two wires.
-        cables=(("W1", "J102", "J1"),),
+        # The supply's 12 V out to the relay driver's 12 V in: +12V and GND, two wires, cut to
+        # 300 mm -- the boards sit about 10 cm apart on the bench, and a cable has to reach.
+        cables=(("W1", "J102", "J1", 300.0),),
     ),
 )
 
@@ -904,7 +906,7 @@ def build_system(system: SystemExample, lookup, *, write: bool) -> bool:
             return False
         plans.append(plan)
 
-    for ref, a_ref, b_ref in system.cables:
+    for ref, a_ref, b_ref, length_mm in system.cables:
         whole = bus.system_document
         ends = []
         for end_ref in (a_ref, b_ref):
@@ -917,7 +919,9 @@ def build_system(system: SystemExample, lookup, *, write: bool) -> bool:
         if pairing.unpaired or not pairing.wires:
             print(f"  {system.stem}: cable {ref} does not pair: {list(pairing.unpaired)}")
             return False
-        cable = Cable(id="", ref=ref, a=ends[0], b=ends[1], wires=pairing.wires)
+        cable = Cable(
+            id="", ref=ref, a=ends[0], b=ends[1], wires=pairing.wires, length_mm=length_mm
+        )
         result = bus.dispatch("cable.add", AddCablePayload(cable=cable))
         if not result.ok:
             print(f"  {system.stem}: cable {ref} refused [{result.code}] {result.message}")

@@ -3,8 +3,10 @@ cables between them.
 
 Behind the board strip's first entry (``ui.boardstrip``). Each board is the 2D scene's own
 drawing of that board alone (``system.board_document``), so a board looks here exactly as it
-does when opened; the cables are drawn over them, one curve per wire in the wire's colour --
-the colour the harness cuts it in -- from its pin on one connector to its pin on the other.
+does when opened; the cables are drawn over them, one line per wire in the wire's colour --
+the colour the harness cuts it in -- from its pin on one connector to its pin on the other:
+out of the board by the edge nearest the connector, then round the boards rather than over
+them (:func:`cable_route`), as the cable runs in the System's 3D.
 Click a board or a cable to pick it -- Properties shows it (``inspector._SystemBoardEditor``,
 ``_CableEditor``), and a click on the bare bench shows the system itself -- and double-click a
 board to open it. The pick is the window's, handed back by ``set_selected``, so it outlives a
@@ -13,6 +15,12 @@ too; where a person may move them is a later decision, and nothing here is saved
 """
 
 from __future__ import annotations
+
+import heapq
+import itertools
+import math
+from collections.abc import Sequence
+from typing import Literal
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
@@ -67,6 +75,180 @@ GAP_MM = BOARD_GAP_MM
 _BOARD_ROLE = 0  # QGraphicsItem.data key holding a board's id
 _CABLE_ROLE = 1  # ...and a cable's
 _TEXT_OVERSIZE = 10.0  # text is laid out this much larger and scaled back (``_text``)
+
+#: How far outside a board's frame a cable runs, in millimetres: clear of the frame and its
+#: title, and under half the bench between two frames, so a cable fits between two boards.
+CABLE_CLEARANCE_MM = 3.0
+#: How far apart the wires of one cable run beside one another.
+WIRE_SPACING_MM = 0.8
+#: The radius a cable's corners are rounded to.
+CABLE_BEND_MM = 3.0
+
+Point = tuple[float, float]
+#: left, top, right, bottom -- y grows downward, as in the scene.
+Rect = tuple[float, float, float, float]
+Side = Literal["left", "top", "right", "bottom"]
+
+
+def nearest_side(point: Point, rect: Rect) -> Side:
+    """The edge of ``rect`` nearest ``point`` -- the way out of a board for a cable from a
+    connector there. Ties go left, top, right, bottom, in that order."""
+    x, y = point
+    left, top, right, bottom = rect
+    distances: list[tuple[float, Side]] = [
+        (x - left, "left"), (y - top, "top"), (right - x, "right"), (bottom - y, "bottom")
+    ]
+    return min(distances, key=lambda d: d[0])[1]
+
+
+def _outside(point: Point, rect: Rect, side: Side, clearance: float) -> Point:
+    x, y = point
+    left, top, right, bottom = rect
+    return {
+        "left": (left - clearance, y),
+        "top": (x, top - clearance),
+        "right": (right + clearance, y),
+        "bottom": (x, bottom + clearance),
+    }[side]
+
+
+def _grown(rect: Rect, by: float) -> Rect:
+    return (rect[0] - by, rect[1] - by, rect[2] + by, rect[3] + by)
+
+
+def _crosses(a: Point, b: Point, rect: Rect) -> bool:
+    """Whether the segment ``a``-``b`` passes through the inside of ``rect`` (its edges do
+    not count): Liang-Barsky clipping, with the clipped part required to have length."""
+    (x0, y0), (x1, y1) = a, b
+    dx, dy = x1 - x0, y1 - y0
+    low, high = 0.0, 1.0
+    for p, q in ((-dx, x0 - rect[0]), (dx, rect[2] - x0), (-dy, y0 - rect[1]), (dy, rect[3] - y0)):
+        if p == 0:
+            if q <= 0:
+                return False
+            continue
+        r = q / p
+        if p < 0:
+            low = max(low, r)
+        else:
+            high = min(high, r)
+        if low >= high:
+            return False
+    inside_x = x0 + dx * (low + high) / 2
+    inside_y = y0 + dy * (low + high) / 2
+    return rect[0] < inside_x < rect[2] and rect[1] < inside_y < rect[3]
+
+
+def cable_route(
+    start: Point,
+    start_out: tuple[Rect, Side],
+    end: Point,
+    end_out: tuple[Rect, Side],
+    boards: Sequence[Rect],
+    clearance: float = CABLE_CLEARANCE_MM,
+) -> list[Point]:
+    """A wire's way from ``start`` to ``end``: straight out of its board by ``start_out``'s
+    side to ``clearance`` beyond it, the shortest way round every board in ``boards`` at that
+    clearance, and straight in to ``end`` by its side -- so the wire crosses a board only
+    between its own pin and that board's edge.
+
+    The way round is the shortest path over the corners of the boards grown by ``clearance``
+    (a visibility graph: a corner joins another where the line between them goes through no
+    board). Two connectors facing each other across the bench are joined straight. Where no
+    way round exists -- a board inside another, which a row never has -- the two exits are
+    joined straight, so a wire is never lost.
+    """
+    a = _outside(start, start_out[0], start_out[1], clearance)
+    b = _outside(end, end_out[0], end_out[1], clearance)
+    # Grown by a hair less than the corners stand off, so a run along a grown edge is clear.
+    walls = [_grown(rect, clearance - 1e-6) for rect in boards]
+    nodes: list[Point] = [a, b]
+    for rect in boards:
+        left, top, right, bottom = _grown(rect, clearance)
+        nodes += [(left, top), (right, top), (right, bottom), (left, bottom)]
+    nodes = nodes[:2] + [
+        n for n in nodes[2:] if not any(w[0] < n[0] < w[2] and w[1] < n[1] < w[3] for w in walls)
+    ]
+
+    def clear(p: Point, q: Point) -> bool:
+        return not any(_crosses(p, q, wall) for wall in walls)
+
+    best = {0: 0.0}
+    came: dict[int, int] = {}
+    queue = [(0.0, 0)]
+    while queue:
+        cost, i = heapq.heappop(queue)
+        if i == 1:
+            break
+        if cost > best.get(i, math.inf):
+            continue
+        for j in range(len(nodes)):
+            if j == i:
+                continue
+            step = cost + math.dist(nodes[i], nodes[j])
+            if step < best.get(j, math.inf) and clear(nodes[i], nodes[j]):
+                best[j] = step
+                came[j] = i
+                heapq.heappush(queue, (step, j))
+    way = [b]
+    if 1 in came:
+        at = 1
+        while at in came:
+            at = came[at]
+            way.append(nodes[at])
+    else:
+        way.append(a)
+    way.reverse()
+    return [start, *way, end]
+
+
+def offset_route(points: Sequence[Point], distance: float) -> list[Point]:
+    """A line beside ``points``, ``distance`` millimetres to its right as the scene shows it
+    (left for a negative distance), its corners mitred: one wire of a cable running beside
+    another. Lines offset from one route never cross, however it bends -- which a wire given
+    its own clearance round each board does, the first time the cable turns the other way."""
+    kept = [p for i, p in enumerate(points) if i == 0 or math.dist(p, points[i - 1]) > 1e-9]
+    if len(kept) < 2:
+        return list(points)
+    normals: list[Point] = []
+    for (x0, y0), (x1, y1) in itertools.pairwise(kept):
+        length = math.hypot(x1 - x0, y1 - y0)
+        normals.append(((y0 - y1) / length, (x1 - x0) / length))
+    beside: list[Point] = []
+    for index, (x, y) in enumerate(kept):
+        if index == 0:
+            nx, ny = normals[0]
+        elif index == len(kept) - 1:
+            nx, ny = normals[-1]
+        else:
+            (ax, ay), (bx, by) = normals[index - 1], normals[index]
+            dot = ax * bx + ay * by
+            # A mitre is the sum of the two normals, stretched to keep its distance from
+            # both runs; a hairpin has no mitre worth drawing, and takes the second run's.
+            nx, ny = (bx, by) if dot < -0.9 else ((ax + bx) / (1 + dot), (ay + by) / (1 + dot))
+        beside.append((x + nx * distance, y + ny * distance))
+    return beside
+
+
+def rounded_path(points: Sequence[Point], radius: float = CABLE_BEND_MM) -> QPainterPath:
+    """``points`` as one line with each corner rounded, as a cable bends."""
+    path = QPainterPath(QPointF(*points[0]))
+    for u, v, w in zip(points, points[1:], points[2:], strict=False):
+        first, second = math.dist(u, v), math.dist(v, w)
+        if first < 1e-9 or second < 1e-9:
+            continue
+        r = min(radius, first / 2, second / 2)
+        into = (v[0] - (v[0] - u[0]) * r / first, v[1] - (v[1] - u[1]) * r / first)
+        out = (v[0] + (w[0] - v[0]) * r / second, v[1] + (w[1] - v[1]) * r / second)
+        path.lineTo(QPointF(*into))
+        path.quadTo(QPointF(*v), QPointF(*out))
+    path.lineTo(QPointF(*points[-1]))
+    return path
+
+
+def _frame_rect(at: QPointF, rect: QRectF) -> Rect:
+    """A board's frame in the scene, title included: what a cable keeps clear of."""
+    return (at.x() - 3, at.y() - 9, at.x() + rect.width() + 3, at.y() + rect.height() + 3)
 
 
 class SystemView(QGraphicsView):
@@ -200,7 +382,8 @@ class SystemView(QGraphicsView):
         return QPixmap.fromImage(image), rect
 
     def _frame(self, at: QPointF, rect: QRectF, title: str, board_id: BoardId) -> None:
-        frame = QGraphicsRectItem(QRectF(at.x() - 3, at.y() - 9, rect.width() + 6, rect.height() + 12))
+        left, top, right, bottom = _frame_rect(at, rect)
+        frame = QGraphicsRectItem(QRectF(left, top, right - left, bottom - top))
         frame.setPen(QPen(QColor(theme.ACTIVE.border), 0.4))
         frame.setBrush(Qt.BrushStyle.NoBrush)
         frame.setZValue(-1)
@@ -244,20 +427,50 @@ class SystemView(QGraphicsView):
         a_part = connector_of(doc, a_end)
         b_part = connector_of(doc, b_end)
         wrong = a_part is not None and b_part is not None and {a_part.ref, b_part.ref} <= crossed
-        for wire in cable.wires:
-            p, q = a_pins.get(wire.a_pin), b_pins.get(wire.b_pin)
-            if p is None or q is None:
-                continue
+        if not a_pins or not b_pins:
+            return
+        frames = {board_id: _frame_rect(at, rect) for board_id, (at, _view, rect) in origins.items()}
+        # A cable leaves by the edge nearest its connector as a whole, and is routed once,
+        # down its middle; each wire gathers into it from its own pin on the way out and runs
+        # beside the others (``offset_route``) until it leaves the bundle for its pin.
+        a_out = (frames[a_end.board], nearest_side(_middle(a_pins), frames[a_end.board]))
+        b_out = (frames[b_end.board], nearest_side(_middle(b_pins), frames[b_end.board]))
+        drawn = [w for w in cable.wires if w.a_pin in a_pins and w.b_pin in b_pins]
+        half = (len(drawn) - 1) / 2 * WIRE_SPACING_MM
+        start, end = _middle(a_pins), _middle(b_pins)
+        # Clear of the boards by the bundle's half-width too, so its outermost wire is.
+        centre = cable_route(
+            start, a_out, end, b_out, list(frames.values()), CABLE_CLEARANCE_MM + half
+        )
+        # The wires take their places in the bundle in the order their pins stand across the
+        # way out, so none crosses another leaving the first connector; the other order is
+        # taken when that is the one that crosses fewer at the second.
+        nx, ny = offset_route(centre[:2], 1.0)[0]
+        nx, ny = nx - start[0], ny - start[1]
+        across = sorted(
+            range(len(drawn)),
+            key=lambda i: (a_pins[drawn[i].a_pin].x() - start[0]) * nx
+            + (a_pins[drawn[i].a_pin].y() - start[1]) * ny,
+        )
+
+        def ways_for(order: list[int]) -> list[list[Point]]:
+            place = {wire: rank for rank, wire in enumerate(order)}
+            ways: list[list[Point]] = []
+            for index, wire in enumerate(drawn):
+                beside = offset_route(centre, place[index] * WIRE_SPACING_MM - half)
+                p, q = a_pins[wire.a_pin], b_pins[wire.b_pin]
+                ways.append([(p.x(), p.y()), *beside[1:-1], (q.x(), q.y())])
+            return ways
+
+        ways = min((ways_for(across), ways_for(across[::-1])), key=_crossings)
+        for wire, way in zip(drawn, ways, strict=True):
             # The harness's choice (``harness._cable``): its own colour, else its net's
             # -- the net at either end -- else grey.
             net = (net_of.get((a_part.ref, wire.a_pin)) if a_part is not None else None) or (
                 net_of.get((b_part.ref, wire.b_pin)) if b_part is not None else None
             )
             colour_id = wire.colour or (colours.get(net.id, "grey") if net is not None else "grey")
-            sag = max(p.y(), q.y()) + 18
-            path = QPainterPath(p)
-            mid = (p.x() + q.x()) / 2
-            path.cubicTo(QPointF(mid, sag), QPointF(mid, sag), q)
+            path = rounded_path(way)
             # The wire in the colour the board's own wires take for that name (the 2D
             # view's insulation table), over an outline in the window's background.
             colour = named_insulation(colour_id)
@@ -270,6 +483,18 @@ class SystemView(QGraphicsView):
             line = self._scene.addPath(path, QPen(colour, 1.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             line.setZValue(3)
             line.setData(_CABLE_ROLE, cable.id)
+
+    def cable_paths(self, cable_id: str) -> list[QPainterPath]:
+        """The lines a cable is drawn as, one per wire, in scene millimetres."""
+        return [item.path() for item, _pen in self._outlines.get(cable_id, [])]
+
+    def board_frames(self) -> dict[BoardId, Rect]:
+        """Each board's frame in the scene, as a cable keeps clear of it."""
+        frames: dict[BoardId, Rect] = {}
+        for board_id, item in self._frames.items():
+            box = item.rect()
+            frames[board_id] = (box.left(), box.top(), box.right(), box.bottom())
+        return frames
 
     def _fit(self) -> None:
         bounds = self._scene.itemsBoundingRect().adjusted(-GAP_MM / 2, -GAP_MM / 2, GAP_MM / 2, GAP_MM / 2)
@@ -284,8 +509,8 @@ class SystemView(QGraphicsView):
         """What a click at ``point`` (in the view) picks: a cable over a board, since a cable
         is drawn over the boards it joins; ("board" | "cable", id), or None."""
         found: tuple[str, str] | None = None
-        # A wire is a hairline at this scale: within a few pixels of the curve is on it. Not
-        # the item's own shape, which for an open curve is also the area under its sag --
+        # A wire is a hairline at this scale: within a few pixels of the line is on it. Not
+        # the item's own shape, which for an open path is also the area it bends round --
         # and that lies over the boards the cable joins.
         at = self.mapToScene(point.toPoint())
         stroker = QPainterPathStroker()
@@ -317,3 +542,28 @@ class SystemView(QGraphicsView):
             self.board_opened.emit(board_id)
             return
         super().mouseDoubleClickEvent(event)
+
+
+def _middle(points: dict[str, QPointF]) -> Point:
+    xs = [p.x() for p in points.values()]
+    ys = [p.y() for p in points.values()]
+    return (sum(xs) / len(xs), sum(ys) / len(ys))
+
+
+def _crossings(ways: Sequence[Sequence[Point]]) -> int:
+    """How many times the wires of one cable cross one another, counted segment by segment."""
+    def side(o: Point, a: Point, b: Point) -> float:
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    def cross(p: Point, q: Point, r: Point, s: Point) -> bool:
+        return side(p, q, r) * side(p, q, s) < 0 and side(r, s, p) * side(r, s, q) < 0
+
+    count = 0
+    for i, one in enumerate(ways):
+        for other in ways[i + 1 :]:
+            count += sum(
+                cross(p, q, r, s)
+                for p, q in itertools.pairwise(one)
+                for r, s in itertools.pairwise(other)
+            )
+    return count

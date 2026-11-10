@@ -3150,6 +3150,20 @@ there, and a board chosen from the title was a dropdown nobody would find. Syste
 first entry, is the boards drawn as the Board panel draws them and the cables between them in
 their wires' colours (`ui.systemview`); double-clicking a board opens it.
 
+**A cable in the System view runs round the boards, as it does in 3D.** It was first one curve
+from pin to pin, which in the two-board example ran across the whole relay board and its Nano to
+reach the supply while the 3D drew the same cable going round. `cable_route` takes it out of its
+board by the edge nearest the connector, the shortest way round every board's frame at
+`CABLE_CLEARANCE_MM` (a visibility graph over the corners of the grown frames), and into the
+other board by its nearest edge; two connectors facing each other are joined straight. The cable
+is routed once, down its middle, and each wire is a parallel offset of that route
+(`offset_route`). Giving each wire its own clearance round each board was the first attempt, and
+it crossed the wires the first time the cable turned the other way round a second board. Where
+the two connectors put their pins in opposite orders the wires change sides once, as they gather
+into the connector -- the half-twist the real cable has there. `tests/test_system_view.py` holds
+a cable to a board only between that board's connector and its edge, and its wires to crossing
+nowhere else.
+
 **System has editors, and a click on it is a selection.** With System in front, Properties is
 the system's -- the document's name, its boards and cables, Add Board and Add Cable -- and a
 click on System picks a board (its own name through `board.rename`, its size, Open, Remove

@@ -52,13 +52,14 @@ closed without a bump.
   render acts on the board in front; the circuit, the sheet, the Parts list, ERC and LVS
   read every board. A board nobody named is called by its place ("Board 2"). The window
   reopens a file on the board it was left on.
-- **System view.** Every board side by side with the cables between them, each wire in
-  the colour it is cut in; a double-click opens a board. With System in front the 3D panel
-  shows every board in the same row, and the cables run from pin to pin, out of a DuPont
-  shell over a pin header and out of a side-entry terminal's mouth. A cable hangs under its
-  own weight and is drawn as long as it is; one shorter than its ends are apart in the row is
-  drawn taut, and the status line says so -- as information, since the row is not where
-  the boards will sit.
+- **System view.** Every board side by side with the cables between them, each wire in the
+  colour it is cut in. A cable leaves each board by the edge nearest its connector and
+  runs round the boards, never over them, its wires side by side; a double-click opens a
+  board. With System in front the 3D panel shows every board in the same row, and the
+  cables run from pin to pin, out of a DuPont shell over a pin header and out of a
+  side-entry terminal's mouth. A cable hangs under its own weight and is drawn as long as
+  it is; one shorter than its ends are apart in the row is drawn taut, and the status line
+  says so -- as information, since the row is not where the boards will sit.
 - **System's own editors in Properties.** With System in front, Properties shows the
   system: its name, its boards and cables, Add Board and Add Cable. A click on a board there
   shows its name, size and contents, with Open and Remove Board; a click on a cable shows

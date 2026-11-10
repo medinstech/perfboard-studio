@@ -203,7 +203,7 @@ def test_the_system_example_is_two_boards_and_the_cable_between_them() -> None:
     whole proven against one schematic -- every net that crosses carried by the cable."""
     from perfboard_studio.harness import build_harness
     from perfboard_studio.lvs import run_system_lvs
-    from perfboard_studio.system import board_title, every_component
+    from perfboard_studio.system import board_title, cable_span_mm, every_component
 
     document = persist.deserialize_document(SYSTEM_PERF.read_text(encoding="utf-8")).document
     lookup = footprint_lookup()
@@ -227,6 +227,12 @@ def test_the_system_example_is_two_boards_and_the_cable_between_them() -> None:
     assert harness.ref == "W1"
     assert sorted(wire.net_name for wire in harness.wires) == ["+12V", "GND"]
     assert harness.checkpoints, "the cable is checked before the system is powered"
+    # A real cable, cut to a length that reaches: the cut list says how long, and the 3D
+    # hangs it rather than pulling it taut.
+    span = cable_span_mm(document, cable, lookup)
+    assert cable.length_mm is not None and span is not None and cable.length_mm > span
+    assert harness.length_mm == cable.length_mm
+    assert harness.steps[0].startswith("Cut 2 wires for W1, ") and "mm each" in harness.steps[0]
 
 
 def test_a_boards_guide_measures_only_what_is_on_it() -> None:
