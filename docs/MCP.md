@@ -292,8 +292,10 @@ lists every conductor as `{id, kind, net, side, path}`, and a `run_drc` violatio
 the `components` and `conductor_ids` it is about. `delete_conductors` takes any of those
 ids off the board as one undo step, all or none: before it, `undo` was the only way back
 from a wire an agent had laid. `set_component_side(ref, "bottom")` puts a part on the
-solder side, turned over: its body below the board and its pins reflected, one undo step,
-refused on a solderless breadboard. `place_component` and each `place_parts` entry take
+solder side, turned over in its own holes: its body below the board, every pin of a part
+whose pins lie in a line still in its hole, and a two-row part's rows swapped, which the
+result's `description` says needs its wiring redone; one undo step, refused on a solderless
+breadboard. `place_component` and each `place_parts` entry take
 `side` too, and `get_component` says each part's `side`. It replaced `mirror_component`
 in 0.24, which reflected the pins and left the body on the component side: `mirrored`
 alone, still accepted by the place tools, is that old meaning. A placed part's

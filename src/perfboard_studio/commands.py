@@ -50,8 +50,10 @@ from .command import (
     NextId,
     create_id_generator,
 )
+from .footprints import get_footprint
 from .geometry import (
     OUTSIDE_FINGER_MIN_MM,
+    all_pin_holes,
     board_edge_margin_mm,
     board_text_problem,
     default_finger_length_mm,
@@ -63,6 +65,7 @@ from .geometry import (
     legend_problem,
     outside_finger_room_mm,
     substrate_edges_mm,
+    transform_pin_offset,
     validate_orthogonal_chain,
 )
 from .model import (
@@ -1465,6 +1468,69 @@ def checked_side(
     return face, True
 
 
+def turned_over(component: ComponentInstance) -> ComponentInstance:
+    """``component`` turned over in its own holes: its reflection flipped, and its rotation
+    and anchor chosen so the part comes back through the same holes from the other face.
+
+    It turns about the centre line of the holes its pins take, running along the pin rows:
+    along x when the pins take fewer distinct rows than columns, along y when fewer columns,
+    and on a tie along the longer side of their span, x first. For a part whose pins lie on
+    one line -- a resistor, a 1xN header, a TO-92, a terminal block -- that line IS the axis,
+    so every pin keeps its hole and its net and only the body changes face. A part with two
+    rows (a DIP, a relay, a module) has no such turn: its rows swap, the holes it takes stay
+    the ones it took when the pattern is symmetric, and its wiring needs redoing, which
+    ``component.setSide`` says.
+
+    The axis depends only on the holes, which the turn keeps, so turning back picks the same
+    axis and lands exactly where the part started. A reflection in the board's frame is one
+    more mirror and a rotation run backwards: about a vertical line ``M R_r M^m`` is
+    ``R_-r M^(m+1)``, and about a horizontal one (``R_180 M``) it is ``R_(180-r) M^(m+1)``.
+    A footprint the registry does not know is only reflected in place, as before."""
+    mirrored = not component.mirrored
+    footprint = get_footprint(component.footprint_id)
+    if footprint is None or not footprint.pins:
+        return dataclasses.replace(component, mirrored=mirrored)
+    holes = [hole for _pin, hole in all_pin_holes(component, footprint)]
+    cols = [hole.col for hole in holes]
+    rows = [hole.row for hole in holes]
+    distinct_cols, distinct_rows = len(set(cols)), len(set(rows))
+    along_x = distinct_rows < distinct_cols or (
+        distinct_rows == distinct_cols and max(cols) - min(cols) >= max(rows) - min(rows)
+    )
+    turn = 180 if along_x else 0
+    rotation = cast(Rotation, (turn - component.rotation) % 360)
+    first = holes[0]
+    target = (
+        HoleCoord(first.col, min(rows) + max(rows) - first.row)
+        if along_x
+        else HoleCoord(min(cols) + max(cols) - first.col, first.row)
+    )
+    pin = footprint.pins[0]
+    d_col, d_row = transform_pin_offset(pin.d_col, pin.d_row, rotation, mirrored)
+    return dataclasses.replace(
+        component,
+        rotation=rotation,
+        mirrored=mirrored,
+        anchor=HoleCoord(target.col - d_col, target.row - d_row),
+    )
+
+
+def _turn_clause(before: ComponentInstance, after: ComponentInstance) -> str:
+    """What a turn did to the wiring, said after the command's name: nothing when every pin
+    kept its hole; otherwise whether the part still takes the same holes (its rows swapped)
+    or other ones."""
+    footprint = get_footprint(before.footprint_id)
+    if footprint is None:
+        return ""
+    was = [hole for _pin, hole in all_pin_holes(before, footprint)]
+    now = [hole for _pin, hole in all_pin_holes(after, footprint)]
+    if was == now:
+        return ""
+    if sorted(was) == sorted(now):
+        return ": its rows of pins swapped sides, so its wiring needs redoing"
+    return ": its pins moved to other holes, so its wiring needs redoing"
+
+
 def _prepare_component(
     doc: PerfDocument,
     p: PlaceComponentPayload,
@@ -1704,13 +1770,21 @@ class _SetComponentSide:
 
     Setting, not toggling, both of them: "bottom" leaves a part mirrored however it was,
     so a board drawn before parts had a side -- a part mirrored there to mean "from the
-    solder side" -- moves there with its holes where they were; "top" clears it."""
+    solder side" -- moves there with its holes where they were; "top" clears it. Whenever
+    the reflection changes, the part is ``turned_over`` in its own holes rather than
+    reflected about its anchor, so a two-lead part keeps its wiring."""
 
     type = "component.setSide"
 
     def apply(
         self, doc: PerfDocument, p: SetComponentSidePayload, ctx: CommandContext
     ) -> PerfDocument:
+        moved = self._moved(doc, p)
+        components = tuple(moved if c.id == p.id else c for c in doc.components)
+        return dataclasses.replace(doc, components=components)
+
+    @staticmethod
+    def _moved(doc: PerfDocument, p: SetComponentSidePayload) -> ComponentInstance:
         existing = require_component(doc, p.id)
         if existing.locked:
             raise CommandError("component-locked", f"{existing.ref} is locked.")
@@ -1723,16 +1797,20 @@ class _SetComponentSide:
                 f"{existing.ref} is already on the "
                 f"{'solder' if side == 'bottom' else 'component'} side.",
             )
-        components = tuple(
-            dataclasses.replace(c, side=side, mirrored=mirrored) if c.id == p.id else c
-            for c in doc.components
-        )
-        return dataclasses.replace(doc, components=components)
+        turned = turned_over(existing) if mirrored != existing.mirrored else existing
+        return dataclasses.replace(turned, side=side, mirrored=mirrored)
 
     def describe(self, p: SetComponentSidePayload, doc: PerfDocument) -> str:
         c = next((x for x in doc.components if x.id == p.id), None)
         ref = c.ref if c is not None else p.id
-        return f"Move {ref} to {'Solder' if p.side == 'bottom' else 'Component'} Side"
+        name = f"Move {ref} to {'Solder' if p.side == 'bottom' else 'Component'} Side"
+        if c is None:
+            return name
+        try:
+            moved = self._moved(doc, p)
+        except CommandError:
+            return name
+        return name + _turn_clause(c, moved)
 
 
 class _UpdateComponent:

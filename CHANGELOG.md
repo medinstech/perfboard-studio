@@ -223,7 +223,10 @@ closed without a bump.
   joint hidden under a body on its face, and `joint-under-body` names a part on the solder
   side of a single-sided board whose joints are under its own body -- an error for a part
   seated on the board, such as a chip, and a warning for one standing on its leads, saying
-  to leave them long. A solderless breadboard has no solder side, and refuses it. Saved
+  to leave them long. A part is turned over in its own holes: one whose pins lie in a
+  line -- a resistor, a header, a TO-92, a terminal block -- keeps every pin where it was,
+  and a two-row part such as a DIP swaps its rows, which the status line says needs its
+  wiring redone. A solderless breadboard has no solder side, and refuses it. Saved
   files keep their bytes: the face is written only for a part on the solder side, and 0.23
   opens such a file with the part mirrored on the component side.
   In the window, Edit > Move to Solder Side (Shift+M) turns the selected parts over, and

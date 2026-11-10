@@ -1527,8 +1527,9 @@ class BoardSession:
     def set_component_side(self, ref: str, side: str = "bottom") -> dict[str, Any]:
         """Put a part on the solder side, or back on the component side: ``side`` is
         absolute, as ``rotate_component``'s rotation is. Dispatches ``component.setSide``,
-        which turns the part over -- its body below the board and its pins reflected, so
-        the holes it takes change with it -- in one undo step. Refused on a locked part and
+        which turns the part over in its own holes (``commands.turned_over``) -- its body
+        below the board, a part whose pins lie in a line keeping every hole, a two-row part
+        swapping its rows -- in one undo step. Refused on a locked part and
         on a solderless breadboard, which has no underside.
 
         Its own verb and not a flag on ``rotate_component``: one call would then be two

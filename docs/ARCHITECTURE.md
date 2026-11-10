@@ -3345,7 +3345,25 @@ keeps `mirrored`, so the holes stay right and only the body's face is lost.
 unreflected is not a part anyone can hold, and two commands would leave the board between them
 for an undo step. Setting rather than toggling is what lets a board drawn before this, with a
 part mirrored to mean "from the solder side", be moved there without its holes moving.
-`component.setSideMany` is the group's one step, as `rotateMany` is. `component.mirror` refuses
+`component.setSideMany` is the group's one step, as `rotateMany` is.
+
+**It turns in its own holes.** The first version reflected the pins about the part's anchor,
+which is what `mirrored` does on its own: R1 on `ne555-astable`, at half a turn, went from
+T6/Q6 to T6/W6 and its second lead left its net. A part pushed through from the other face
+goes through the same holes, so `commands.turned_over` turns it about the centre line of the
+holes its pins take, running along the pin rows: along x when the pins take fewer distinct
+rows than columns, along y when fewer columns, the longer span on a tie. The new rotation and
+anchor are closed-form -- a reflection in the board's frame is one more mirror and the
+rotation run backwards -- and since the axis depends only on the holes, which the turn
+keeps, turning back lands exactly where the part started. For every footprint whose pins lie
+on one line, the axis is that line and no pin moves
+(`test_a_part_with_its_pins_in_a_line_turns_over_in_its_own_holes`, over the registry and
+every catalogue part). A two-row part has no such turn: a DIP's rows swap in the holes it
+took, and a relay's pins land in others. That is said in the command's description, so the
+undo label, the status line and the MCP result all carry it ("Move U1 to Solder Side: its
+rows of pins swapped sides, so its wiring needs redoing"), and DRC and LVS show what to
+re-route. A part already mirrored on the component side is the exception that moves no hole:
+it was drawn as seen from below, so only its face changes. `component.mirror` refuses
 to unmirror a part on the solder side (it is mirrored by being there; move it back instead),
 and so does every place command asked for "bottom" with `mirrored` false. A file that says so
 anyway is not refused: `persist` mirrors the part and says it did, because the file has only

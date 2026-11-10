@@ -16,6 +16,7 @@ import pytest
 
 from perfboard_studio import persist
 from perfboard_studio.breadboard import breadboard, solderable_breadboard
+from perfboard_studio.catalog import CATALOG
 from perfboard_studio.command import CommandBus, CommandContext, create_id_generator
 from perfboard_studio.commands import (
     MirrorComponentPayload,
@@ -26,7 +27,7 @@ from perfboard_studio.commands import (
     create_standard_registry,
 )
 from perfboard_studio.drc import SOLDER_SIDE_LEAD_MM, joint_face, run_drc
-from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.footprints import footprint_lookup, standard_footprints
 from perfboard_studio.geometry import all_pin_holes, same_hole
 from perfboard_studio.mcp.session import new_board
 from perfboard_studio.model import (
@@ -143,6 +144,113 @@ def test_moving_to_the_solder_side_mirrors_and_back_unmirrors() -> None:
     [r1] = bus.document.components
     assert (r1.side, r1.mirrored) == ("top", False)
     assert bus.history()[-1] == "Move R1 to Component Side"
+
+
+def _collinear(footprint_id: str) -> bool:
+    footprint = REGISTRY(footprint_id)
+    if footprint is None or not footprint.pins:
+        return False
+    return len({p.d_col for p in footprint.pins}) == 1 or len({p.d_row for p in footprint.pins}) == 1
+
+
+#: Every footprint a part can have -- the registry's and every catalogue part's generated
+#: one (a terminal block, a JST header, a sensor, ``wire-<n>``) -- whose pins lie on a line.
+COLLINEAR = sorted(
+    i for i in set(standard_footprints()) | {p.footprint_id for p in CATALOG} if _collinear(i)
+)
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_a_part_with_its_pins_in_a_line_turns_over_in_its_own_holes(rotation: int) -> None:
+    """Pushed through the same holes from the other face: turned about the line its pins
+    lie on, every pin keeps its hole and its net, and only the body changes face."""
+    assert {"r-axial-3", "hdr-1x4", "to92", "screw-terminal-2", "led-5mm"} <= set(COLLINEAR)
+    moved = []
+    for footprint_id in COLLINEAR:
+        part = _part("P1", footprint_id, 20, 20, rotation)
+        bus = _bus(_doc(part))
+        result = bus.dispatch("component.setSide", SetComponentSidePayload(id="c-P1", side="bottom"))
+        assert result.ok, (footprint_id, result)
+        [turned] = bus.document.components
+        assert (turned.side, turned.mirrored) == ("bottom", True)
+        if _pins(turned) != _pins(part):
+            moved.append(footprint_id)
+        assert result.description == "Move P1 to Solder Side", footprint_id
+    assert moved == []
+
+
+def test_r1_on_the_ne555_board_keeps_its_net() -> None:
+    """The board the issue was found on: R1 at half a turn, which used to land on W6."""
+    r1 = _part("R1", "r-axial-3", 19, 5, 180)
+    bus = _bus(_doc(r1))
+    assert bus.dispatch("component.setSide", SetComponentSidePayload(id="c-R1", side="bottom")).ok
+    [turned] = bus.document.components
+    assert _pins(turned) == _pins(r1) == [HoleCoord(19, 5), HoleCoord(16, 5)]
+    assert (turned.rotation, turned.mirrored) == (0, True)
+
+
+@pytest.mark.parametrize("footprint_id", ["r-axial-3", "to92", "dip-8", "hdr-2x5", "relay-spdt"])
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_over_and_back_lands_where_it_started(footprint_id: str, rotation: int) -> None:
+    part = _part("P1", footprint_id, 20, 20, rotation)
+    bus = _bus(_doc(part))
+    assert bus.dispatch("component.setSide", SetComponentSidePayload(id="c-P1", side="bottom")).ok
+    assert bus.dispatch("component.setSide", SetComponentSidePayload(id="c-P1", side="top")).ok
+    assert bus.document.components == (part,)
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_a_dip_turned_over_keeps_its_holes_and_swaps_its_rows(rotation: int) -> None:
+    """No turn keeps a two-row part's pins on their nets: its rows swap, in the holes it
+    took, and the command says the wiring needs redoing."""
+    dip = _part("U1", "dip-8", 20, 20, rotation)
+    bus = _bus(_doc(dip))
+    result = bus.dispatch("component.setSide", SetComponentSidePayload(id="c-U1", side="bottom"))
+    assert result.ok
+    [turned] = bus.document.components
+    before, after = _pins(dip), _pins(turned)
+    assert sorted(after) == sorted(before) and after != before
+    # Pin 1 and pin 8 face each other across the package; turned over, they trade holes.
+    assert (after[0], after[7]) == (before[7], before[0])
+    assert result.description == (
+        "Move U1 to Solder Side: its rows of pins swapped sides, so its wiring needs redoing"
+    )
+    assert bus.history() == (result.description,)
+
+
+def test_what_a_turn_did_to_the_wiring_is_said_in_turkish() -> None:
+    from perfboard_studio.ui.engine_text import say
+    from perfboard_studio.ui.i18n import language, set_language
+
+    bus = _bus(_doc(_part("U1", "dip-8", 20, 20)))
+    over = bus.dispatch("component.setSide", SetComponentSidePayload(id="c-U1", side="bottom"))
+    back = bus.dispatch("component.setSide", SetComponentSidePayload(id="c-U1", side="top"))
+    assert over.ok and back.ok
+    before = language()
+    set_language("tr")
+    try:
+        said = [say(over.description), say(back.description)]
+    finally:
+        set_language(before)
+    assert said == [
+        "U1 parçasını lehim yüzüne taşı: bacak sıraları yer değiştirdi, "
+        "kablolamasını yeniden yapmanız gerekir",
+        "U1 parçasını parça yüzüne taşı: bacak sıraları yer değiştirdi, "
+        "kablolamasını yeniden yapmanız gerekir",
+    ]
+
+
+def test_a_relay_whose_pins_are_not_symmetric_says_they_moved() -> None:
+    relay = _part("K1", "relay-spdt", 20, 20)
+    bus = _bus(_doc(relay))
+    result = bus.dispatch("component.setSide", SetComponentSidePayload(id="c-K1", side="bottom"))
+    assert result.ok
+    [turned] = bus.document.components
+    if sorted(_pins(turned)) == sorted(_pins(relay)):
+        pytest.skip("relay-spdt's pins are symmetric about the turn")
+    assert result.description == (
+        "Move K1 to Solder Side: its pins moved to other holes, so its wiring needs redoing"
+    )
 
 
 def test_a_part_mirrored_on_the_component_side_moves_over_without_its_holes_moving() -> None:

@@ -635,9 +635,11 @@ def rotate_component(ref: str, rotation: int) -> dict[str, Any]:
 @mcp.tool()
 def set_component_side(ref: str, side: str = "bottom") -> dict[str, Any]:
     """Put a part on the solder side (side="bottom") or back on the component side
-    ("top"). Absolute, like rotate_component. The part is turned over: its body below the
-    board and its pins reflected, so the holes it takes change. Refused on a locked part
-    and on a solderless breadboard."""
+    ("top"). Absolute, like rotate_component. The part is turned over in its own holes,
+    its body below the board: a part whose pins lie in a line (a resistor, a 1xN header, a
+    TO-92, a terminal block) keeps every pin in its hole and on its net; a two-row part (a
+    DIP, a relay, a module) swaps its rows, and the description says its wiring needs
+    redoing. Refused on a locked part and on a solderless breadboard."""
     return session.set_component_side(ref, side)
 
 

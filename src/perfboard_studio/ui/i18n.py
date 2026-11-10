@@ -4433,6 +4433,14 @@ TURKISH: Mapping[str, str] = {
     "Move {ref} on the sheet": "{ref} sembolünü şemada taşı",
     "Add {ref} to the sheet at ({x}, {y})": "{ref} sembolünü şemaya ekle ({x}, {y})",
     "Move {ref} to {hole}": "{ref} parçasını {hole} deliğine taşı",
+    "Move {ref} to Solder Side: its rows of pins swapped sides, so its wiring needs redoing":
+        "{ref} parçasını lehim yüzüne taşı: bacak sıraları yer değiştirdi, kablolamasını yeniden yapmanız gerekir",
+    "Move {ref} to Solder Side: its pins moved to other holes, so its wiring needs redoing":
+        "{ref} parçasını lehim yüzüne taşı: bacakları başka deliklere geçti, kablolamasını yeniden yapmanız gerekir",
+    "Move {ref} to Component Side: its rows of pins swapped sides, so its wiring needs redoing":
+        "{ref} parçasını parça yüzüne taşı: bacak sıraları yer değiştirdi, kablolamasını yeniden yapmanız gerekir",
+    "Move {ref} to Component Side: its pins moved to other holes, so its wiring needs redoing":
+        "{ref} parçasını parça yüzüne taşı: bacakları başka deliklere geçti, kablolamasını yeniden yapmanız gerekir",
     "Move {ref} to Solder Side": "{ref} parçasını lehim yüzüne taşı",
     "Move {ref} to Component Side": "{ref} parçasını parça yüzüne taşı",
     "Move {count} component(s) to another side": "{count} parçayı öbür yüze taşı",

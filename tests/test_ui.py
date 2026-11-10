@@ -18144,7 +18144,10 @@ def test_shift_m_turns_a_part_over_onto_the_solder_side_and_back() -> None:
         window.act_side.trigger()
         moved = next(c for c in window.bus.document.components if c.id == part.id)
         assert (moved.side, moved.mirrored) == ("bottom", True)
-        assert window.bus.history()[-1] == "Move U1 to Solder Side"
+        # A DIP has no turn that keeps its pins on their nets, and the label says so.
+        assert window.bus.history()[-1] == (
+            "Move U1 to Solder Side: its rows of pins swapped sides, so its wiring needs redoing"
+        )
         window.scene.select_components([part.id])
         window._refresh_selection_state()
         assert window.act_side.text() == "Move to Component &Side"
