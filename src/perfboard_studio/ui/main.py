@@ -3248,13 +3248,21 @@ class MainWindow(QMainWindow):
         placing them asks (``_offer_a_board_size``) -- every stock size with the circuit
         actually laid out on it. Otherwise it is the board's own setup. Either way, a board
         somebody picked is marked chosen, so the step is done and placing does not ask again.
+
+        A board chosen is shown. The window used to stay on the sheet the circuit was drawn
+        on, so the board somebody had just picked was first seen at Place, a step later --
+        the newcomer walkthrough's second stall.
         """
         document = self.bus.document
+        chosen = False
         if document.parts and not document.components:
-            if self._offer_a_board_size(document, always=True):
-                self._board_chosen = True
-        elif self.on_design_board():
+            chosen = self._offer_a_board_size(document, always=True)
+        else:
+            chosen = self.on_design_board()
+        if chosen:
             self._board_chosen = True
+            self.show_board()
+            self.view.fit_board()
         self._refresh_workflow()
 
     def _build_update_strip(self) -> None:

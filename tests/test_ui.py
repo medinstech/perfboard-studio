@@ -8638,15 +8638,36 @@ def test_placing_after_choosing_a_board_does_not_ask_again(monkeypatch) -> None:
             return True
 
         monkeypatch.setattr(main_module.MainWindow, "_offer_a_board_size", offer)
+        window.show_schematic()
         window.on_choose_board()
         assert asked == [True]
         assert window._board_chosen
+        # The board just chosen is shown, not left behind the sheet until Place.
+        assert window.board_is_showing() and not window.schematic_is_showing()
 
         monkeypatch.setattr(
             main_module.MainWindow, "_run_planner", lambda self, label, work: None
         )
         window.on_schematic_place_all()
         assert asked == [True], "placing asked about the board a second time"
+    finally:
+        _close(window)
+
+
+def test_cancelling_the_board_question_leaves_the_sheet_in_front(monkeypatch) -> None:
+    """Only a board actually chosen brings the board in front; Cancel changes nothing."""
+    from perfboard_studio.ui import main as main_module
+
+    window = _blank_window()
+    try:
+        _add(window, "R1", "r-axial-3")
+        monkeypatch.setattr(
+            main_module.MainWindow, "_offer_a_board_size", lambda self, document, always=False: False
+        )
+        window.show_schematic()
+        window.on_choose_board()
+        assert not window._board_chosen
+        assert window.schematic_is_showing()
     finally:
         _close(window)
 
