@@ -18253,3 +18253,44 @@ def main_module_step_line(step, language):
     from perfboard_studio.ui.main import _step_line
 
     return _step_line(step, language)
+
+
+def test_a_board_that_is_no_stock_board_is_said_in_holes() -> None:
+    """A board not on a preset was "60 × 40" with no unit in the step bar, the status bar,
+    the board question and the board strip -- beside "5 x 7 cm" it read as millimetres."""
+    from perfboard_studio.ui.i18n import hole_grid, language, set_language
+    from perfboard_studio.ui.main import _board_size_name
+
+    document = _blank_document()
+    document = dataclasses.replace(
+        document, board=dataclasses.replace(document.board, cols=60, rows=40)
+    )
+    assert _board_size_name(document.board) == "60 × 40 holes"
+    window = _window_on(document)
+    try:
+        assert window.workflow_facts().board_label == "60 × 40 holes"
+    finally:
+        _close(window)
+    before = language()
+    set_language("tr")
+    try:
+        assert hole_grid(60, 40) == "60 × 40 delik"
+    finally:
+        set_language(before)
+
+
+def test_a_long_name_shows_its_start() -> None:
+    """System's Name field showed "lay Driver and Its Supply": setText leaves the cursor at
+    the end, so a name longer than the field scrolled its start away."""
+    from perfboard_studio.ui.main import example_boards
+
+    path = next(path for path, _line in example_boards() if path.stem == "relay-and-supply")
+    window = _blank_window()
+    try:
+        window.on_open_example(path)
+        assert window._system_in_front()
+        name = window.inspector.system_editor.name
+        assert name.text() == "Relay Driver and Its Supply"
+        assert name.cursorPosition() == 0
+    finally:
+        _close(window)

@@ -371,7 +371,7 @@ from .export_schematic import SchematicRenderError, svg_to_pdf, svg_to_png
 from .export_step import export_step
 from .header import HeaderBar
 from .home import WALKTHROUGH, Home, HomeExample
-from .i18n import counted, set_language, t
+from .i18n import counted, hole_grid, set_language, t
 from .i18n import language as current_language
 from .inspector import NET_CLASSES, Inspector, InspectorActions, InspectorHooks, StepNote
 from .numberbox import NumberBox
@@ -1967,8 +1967,7 @@ def example_boards() -> list[tuple[Path, str]]:
         boards = [board_document(document, board_id).board for board_id in board_ids(document)]
         sizes = []
         for board in boards:
-            preset = _matching_preset(board)
-            sizes.append(preset.name if preset is not None else f"{board.cols} × {board.rows}")
+            sizes.append(_board_size_name(board))
         size = sizes[0]
         if placed and len(boards) > 1:
             line = (
@@ -1977,8 +1976,8 @@ def example_boards() -> list[tuple[Path, str]]:
             ).format(parts=parts, boards=len(boards), size=size)
         elif placed:
             line = (
-                t("{parts} part on a {size} board") if parts == 1
-                else t("{parts} parts on a {size} board")
+                t("{parts} part on a board of {size}") if parts == 1
+                else t("{parts} parts on a board of {size}")
             ).format(parts=parts, size=size)
         else:
             line = (
@@ -2078,8 +2077,8 @@ class BoardSizeDialog(QDialog):
             assert lookup is not None
             return QIcon(render_board(board_document, lookup, self.THUMBNAIL))
 
-        keep_text = t("Keep the board I have  ·  {cols} × {rows}").format(
-            cols=current.cols, rows=current.rows
+        keep_text = t("Keep the board I have  ·  {size}").format(
+            size=hole_grid(current.cols, current.rows)
         )
         keep = QListWidgetItem(keep_text.replace("  ·  ", "\n") if pictures else keep_text)
         keep.setData(Qt.ItemDataRole.UserRole, -1)
@@ -2122,16 +2121,16 @@ class BoardSizeDialog(QDialog):
                 )
             suggested = recommended is not None and suggestion.preset is recommended.preset
             if pictures:
-                label = f"{preset.name}\n{preset.cols} × {preset.rows} · {note}"
+                label = f"{preset.name}\n{hole_grid(preset.cols, preset.rows)} · {note}"
                 if suggested:
                     label = "★ " + t("Suggested:  ").strip() + " " + label
             else:
-                label = f"{preset.name}  ·  {preset.cols} × {preset.rows}  ·  {note}"
+                label = f"{preset.name}  ·  {hole_grid(preset.cols, preset.rows)}  ·  {note}"
                 if suggested:
                     label = t("Suggested:  ") + label
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, index)
-            item.setToolTip(f"{preset.name}  ·  {preset.cols} × {preset.rows}  ·  {note}")
+            item.setToolTip(f"{preset.name}  ·  {hole_grid(preset.cols, preset.rows)}  ·  {note}")
             if pictures:
                 assert document is not None
                 if verdict is not None and verdict.trial.placed is not None:
@@ -2243,6 +2242,12 @@ def _board_label(board: Board) -> str:
     if points is not None:
         return f"Use a {points}-point solderable breadboard"
     return f"Use a {board.cols}x{board.rows} {board.material} board"
+
+
+def _board_size_name(board: Board) -> str:
+    """The stock board's name when the board is one, else its size in holes."""
+    preset = _matching_preset(board)
+    return preset.name if preset is not None else hole_grid(board.cols, board.rows)
 
 
 def _matching_preset(board: Board) -> BoardPreset | None:
@@ -3177,18 +3182,14 @@ class MainWindow(QMainWindow):
         document = self.bus.system_document
         board = document.board
         preset = _matching_preset(board)
-        grid = f"{board.cols} × {board.rows}"
+        grid = hole_grid(board.cols, board.rows)
         label = f"{preset.name} · {grid}" if preset is not None else grid
         ids = board_ids(document)
         violations, unrouted = self._every_boards_checks(document, ids)
         if len(ids) > 1:
             sizes: set[str] = set()
             for board_id in ids:
-                each = board_document(document, board_id).board
-                each_preset = _matching_preset(each)
-                sizes.add(
-                    each_preset.name if each_preset is not None else f"{each.cols} × {each.rows}"
-                )
+                sizes.add(_board_size_name(board_document(document, board_id).board))
             label = counted(len(ids), t("{count} board"), t("{count} boards"))
             if len(sizes) == 1:
                 label = f"{label} · {next(iter(sizes))}"
@@ -9836,9 +9837,7 @@ class MainWindow(QMainWindow):
             nets=nets,
             to_check=bench,
         )
-        board = self.bus.document.board
-        preset = _matching_preset(board)
-        size = preset.name if preset is not None else f"{board.cols} × {board.rows}"
+        size = _board_size_name(self.bus.document.board)
         side = t("parts side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
         if self._system_in_front():
             system_doc = self.bus.system_document
@@ -11812,9 +11811,7 @@ class MainWindow(QMainWindow):
         language = current_language()
 
         def label(board_id: str) -> str:
-            board = board_document(document, board_id).board
-            preset = _matching_preset(board)
-            size = preset.name if preset is not None else f"{board.cols} × {board.rows}"
+            size = _board_size_name(board_document(document, board_id).board)
             return f"{board_title(document, board_id, language)}  ·  {size}"
 
         current = SYSTEM_ENTRY if self._system_in_front() else self.bus.board_id

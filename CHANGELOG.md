@@ -241,6 +241,11 @@ closed without a bump.
 
 ### Fixed
 
+- **A board that is no stock board is said in holes.** Its size was "60 × 40" with no unit
+  in the step bar, the status bar, the board question and the board strip, and beside
+  "5 x 7 cm" it read as millimetres. It is now "60 × 40 holes" everywhere.
+- **A long name shows its start.** The Name field of a system, a board or a cable showed the
+  end of a name longer than the panel ("lay Driver and Its Supply"); it now shows the start.
 - **With nothing selected, Properties says what to do next.** It opened on the board's
   settings -- a height limit, the clearance between bodies, pads per hole, mounting holes --
   while somebody new was about to draw their first circuit. It now shows the step the work

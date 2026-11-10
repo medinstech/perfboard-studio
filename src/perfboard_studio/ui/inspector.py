@@ -108,7 +108,7 @@ from perfboard_studio.wirecolour import net_colours
 from . import theme
 from .boardfeatures import FeatureEditor, FeaturesGroup
 from .engine_text import say
-from .i18n import counted, language, t
+from .i18n import counted, hole_grid, language, t
 from .numberbox import NumberBox
 from .partfields import PinoutEditor, note_editor, pinout_for_retyped_value
 from .partnames import footprint_label
@@ -235,6 +235,11 @@ class CommitLine(QLineEdit):
             return
         if self.text() != value:
             self.setText(value)
+            if not self.hasFocus():
+                # setText leaves the cursor at the end, and a name longer than the panel
+                # then showed its tail: "lay Driver and Its Supply". The start is what
+                # names it. Not while it is being typed in.
+                self.setCursorPosition(0)
         self.problem.show_problem("")
 
     def _finish(self) -> None:
@@ -510,7 +515,7 @@ class _BoardEditor(QWidget):
             words = [kind] if kind is not None else []
             # The size is one thing to read, so it wraps whole after the board's kind:
             # the narrow panel broke it as "28 ×" over "6 holes".
-            size = t("{cols} × {rows} holes").format(cols=board.cols, rows=board.rows)
+            size = hole_grid(board.cols, board.rows)
             words.append(size.replace(" ", "\u00a0"))
             self.summary.setText(",  ".join(words))
             if not self.height_limit.hasFocus():
@@ -688,7 +693,7 @@ class _SystemBoardEditor(QWidget):
         view = board_document(system, board_id)
         board = view.board
         kind = _BoardEditor.kind_name(board.type)
-        size = t("{cols} × {rows} holes").format(cols=board.cols, rows=board.rows)
+        size = hole_grid(board.cols, board.rows)
         words = [kind] if kind is not None else []
         words.append(size.replace(" ", "\u00a0"))
         self.summary.setText(",  ".join(words))

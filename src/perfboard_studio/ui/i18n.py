@@ -1400,7 +1400,7 @@ TURKISH: Mapping[str, str] = {
     "not tried · a quick layout had no room for {count} parts": (
         "denenmedi · hızlı yerleşimde {count} parçaya yer çıkmadı"
     ),
-    "Keep the board I have  ·  {cols} × {rows}": "Mevcut kartım kalsın  ·  {cols} × {rows}",
+    "Keep the board I have  ·  {size}": "Mevcut kartım kalsın  ·  {size}",
     "fits, {percent}% full": "sığıyor, %{percent} dolu",
     "too small — {count} part will not fit": "çok küçük — {count} parça sığmıyor",
     "too small — {count} parts will not fit": "çok küçük — {count} parça sığmıyor",
@@ -4310,8 +4310,8 @@ TURKISH: Mapping[str, str] = {
     "Take It to Perfboard…": "Perfboard'a Taşı…",
     "no parts yet": "henüz parça yok",
     # Real plurals (i18n.counted): English has two forms, Turkish the singular after a number.
-    "{parts} part on a {size} board": "{size} kart üzerinde {parts} parça",
-    "{parts} parts on a {size} board": "{size} kart üzerinde {parts} parça",
+    "{parts} part on a board of {size}": "{size} kart üzerinde {parts} parça",
+    "{parts} parts on a board of {size}": "{size} kart üzerinde {parts} parça",
     "{parts} parts on {boards} boards, {size} each": "{boards} kart üzerinde {parts} parça, her biri {size}",
     "{parts} parts on {boards} boards": "{boards} kart üzerinde {parts} parça",
     "{parts} part, drawn and not yet placed": "{parts} parça, çizilmiş ama henüz yerleşmemiş",
@@ -4912,6 +4912,15 @@ def _detect() -> str | None:
     except ValueError:  # pragma: no cover - malformed locale on the host
         return None
     return code
+
+
+def hole_grid(cols: int, rows: int) -> str:
+    """A board's size in holes, said the one way everywhere: "60 × 40 holes".
+
+    A bare "60 × 40" beside a stock board's "5 x 7 cm" read as millimetres -- in the step
+    bar, the status bar, the board question and the board strip alike.
+    """
+    return t("{cols} × {rows} holes").format(cols=cols, rows=rows)
 
 
 def counted(count: int, one: str, many: str) -> str:
