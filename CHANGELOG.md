@@ -259,6 +259,9 @@ closed without a bump.
 - **The board question says what it did in one line**: the smallest stock board your parts
   fit on was picked, and another can be. The paragraph on how that board was judged is
   the line's tooltip.
+- **The step bar counts every board of a system.** It said the first board's size and the
+  connections and findings of the board in front, so a second board with nothing wired
+  read "all wired". It now says "2 boards" and counts them all.
 - **A board saved on Windows is the same file it is everywhere else.** Saving, autosave and
   its `.bak`, the crash-recovery record, a project folder's board and the MCP server's
   `save_document` wrote every line ending as CRLF on Windows, so a board saved on two

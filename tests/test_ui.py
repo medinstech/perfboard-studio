@@ -8640,6 +8640,39 @@ def test_after_the_guide_the_bar_says_ready_and_a_cancelled_save_is_not_asked_ag
         _close(window)
 
 
+def test_the_step_bar_counts_every_board_of_a_system() -> None:
+    """The bar said the first board's size and the board in front's connections and
+    findings: on a system it is every board's, and a board not in front is checked once
+    and not again until it changes."""
+    from perfboard_studio.drc import run_drc
+    from perfboard_studio.ratsnest import ratsnest, summarize
+    from perfboard_studio.system import board_document, board_ids
+
+    example = pathlib.Path(__file__).resolve().parent.parent / "examples" / "relay-and-supply.perf"
+    result = persist.deserialize_document(example.read_text(encoding="utf-8"))
+    document = result.document
+    ids = board_ids(document)
+    assert len(ids) == 2
+    window = _window_on(document)
+    try:
+        system = window.bus.system_document
+        boards = [board_document(system, board_id) for board_id in ids]
+        links = sum(summarize(ratsnest(b, window.lookup)).links for b in boards)
+        errors = sum(
+            1 for b in boards for v in run_drc(b, window.lookup) if v.severity == "error"
+        )
+        facts = window.workflow_facts()
+        assert facts.board_label.startswith("2 boards"), facts.board_label
+        assert facts.unrouted == links
+        assert facts.drc_errors == errors
+        other = next(b for b in ids if b != window._shown_board)
+        checked = window._other_boards_checked[other]
+        window.workflow_facts()
+        assert window._other_boards_checked[other] is checked, "checked again unchanged"
+    finally:
+        _close(window)
+
+
 def test_a_pin_with_an_error_and_a_warning_is_an_error_and_says_both() -> None:
     from perfboard_studio.erc import ErcFinding
     from perfboard_studio.model import NetNode

@@ -2702,6 +2702,11 @@ class MainWindow(QMainWindow):
         #: ``save_declined``. Not stored, like ``_board_chosen``.
         self._guide_opened = False
         self._save_declined = False
+        #: Each board not in front, as it was last checked for the step bar, with its DRC
+        #: findings and connections left to wire (``_every_boards_checks``).
+        self._other_boards_checked: dict[
+            BoardId, tuple[PerfDocument, tuple[DrcViolation, ...], int]
+        ] = {}
         #: The board question's answer for the design it was worked out for, and the
         #: placement the chosen board was judged by -- both keyed on
         #: ``placer.placement_inputs``, so an edit makes them miss rather than go stale.
@@ -3157,12 +3162,30 @@ class MainWindow(QMainWindow):
         self.header.open_menu()
 
     def workflow_facts(self) -> WorkflowFacts:
-        """What the step bar is measured against, from what the last refresh computed."""
+        """What the step bar is measured against, from what the last refresh computed.
+
+        On a system it is EVERY board's: the bar said the first board's size and the
+        board in front's connections and findings, so a system whose second board had
+        nothing wired read "all wired" from the first.
+        """
         document = self.bus.system_document
         board = document.board
         preset = _matching_preset(board)
         grid = f"{board.cols} × {board.rows}"
         label = f"{preset.name} · {grid}" if preset is not None else grid
+        ids = board_ids(document)
+        violations, unrouted = self._every_boards_checks(document, ids)
+        if len(ids) > 1:
+            sizes: set[str] = set()
+            for board_id in ids:
+                each = board_document(document, board_id).board
+                each_preset = _matching_preset(each)
+                sizes.add(
+                    each_preset.name if each_preset is not None else f"{each.cols} × {each.rows}"
+                )
+            label = counted(len(ids), t("{count} board"), t("{count} boards"))
+            if len(sizes) == 1:
+                label = f"{label} · {next(iter(sizes))}"
         lvs = self._last_lvs
         problems = lvs.summary.opens + lvs.summary.shorts if lvs is not None else 0
         return WorkflowFacts(
@@ -3173,14 +3196,14 @@ class MainWindow(QMainWindow):
             nets=sum(1 for net in document.nets if len(net.nodes) >= 2),
             board_label=label,
             board_chosen=self._board_chosen,
-            unrouted=summarize(self._last_ratsnest).links,
-            drc_errors=sum(1 for v in self._last_violations if v.severity == "error"),
+            unrouted=unrouted,
+            drc_errors=sum(1 for v in violations if v.severity == "error"),
             # Not a check the guide makes at the bench: the Check step says what is wrong.
             drc_warnings=sum(
-                1 for v in self._last_violations
+                1 for v in violations
                 if v.severity == "warning" and not is_bench_check(v)
             ),
-            drc_unwired=sum(1 for v in self._last_violations if v.rule in UNWIRED_RULES),
+            drc_unwired=sum(1 for v in violations if v.rule in UNWIRED_RULES),
             lvs_problems=problems,
             erc_errors=sum(1 for f in self._last_erc if f.severity == "error"),
             erc_warnings=sum(1 for f in self._last_erc if f.severity == "warning"),
@@ -3193,6 +3216,37 @@ class MainWindow(QMainWindow):
             solderless_breadboard=is_breadboard(board),
             problems_showing=self.problems_bar.expanded if hasattr(self, "problems_bar") else False,
         )
+
+    def _every_boards_checks(
+        self, document: PerfDocument, ids: tuple[BoardId, ...]
+    ) -> tuple[tuple[DrcViolation, ...], int]:
+        """DRC's findings and the connections left to wire, on every board of the system.
+
+        The board in front's are what the last refresh computed. Another board's are
+        worked out here and kept against the board as it was seen (``board_document``), so
+        an edit to the board in front costs nothing more: the others compare equal and are
+        not checked again.
+        """
+        found = list(self._last_violations)
+        unrouted = summarize(self._last_ratsnest).links
+        if len(ids) < 2:
+            return tuple(found), unrouted
+        shown = self._shown_board
+        for board_id in ids:
+            if board_id == shown:
+                continue
+            seen = board_document(document, board_id)
+            cached = self._other_boards_checked.get(board_id)
+            if cached is None or cached[0] != seen:
+                cached = (
+                    seen,
+                    tuple(run_drc(seen, self.lookup)),
+                    summarize(ratsnest(seen, self.lookup)).links,
+                )
+                self._other_boards_checked[board_id] = cached
+            found.extend(cached[1])
+            unrouted += cached[2]
+        return tuple(found), unrouted
 
     def _refresh_workflow(self) -> None:
         bar = getattr(self, "workflow_bar", None)
@@ -12888,6 +12942,7 @@ class MainWindow(QMainWindow):
         self._board_chosen = False
         self._guide_opened = False
         self._save_declined = False
+        self._other_boards_checked.clear()
         self._judged = None
         self._placement_ready = None
         self._unsaved_progress = set()
