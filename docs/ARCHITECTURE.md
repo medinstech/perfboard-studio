@@ -2717,7 +2717,7 @@ is sold".
 
 **Everything else that is only appearance is still a view setting.** Ask of a new visual
 option whether it describes the object being built or how the window shows it: the theme,
-the net colours, values printed on parts, hatching are the window's; the mask and the
+the net colours, values printed on parts, the copper on the far side are the window's; the mask and the
 finish are the board's. Ask that before adding a model field.
 
 Three colour tables exist and answer different questions: `ui/theme.py` colours the

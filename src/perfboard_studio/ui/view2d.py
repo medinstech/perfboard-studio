@@ -314,8 +314,11 @@ CONTACT_SHADOW_ALPHA = 85
 CONTACT_SHADOW_MM = (0.28, 0.55)
 BODY_LIGHT_ALPHA = 40
 #: Copper on the face away from the viewer, drawn at this opacity on screen: at full
-#: strength its hatch fought the pads in front of it.
+#: strength it fought the pads in front of it.
 FAR_SIDE_OPACITY = 0.55
+#: The edge round far-side copper on screen (``ConductorItem._paint_back_layer``): what
+#: makes a silver wire readable across the pale pads it passes over.
+FAR_SIDE_EDGE = QColor(20, 26, 34, 210)
 SELECTED = QColor(CANVAS_SELECTED)
 ERROR_OUTLINE = QColor(CANVAS_ERROR)
 #: The part on the far side, seen through the board. Dim on purpose: on the solder side
@@ -2118,7 +2121,7 @@ class ConductorItem(QGraphicsItem):
         side: BoardSide,
         net_class: NetClass | None = None,
         signal_index: int = 0,
-        hatch_far_side: bool = True,
+        show_far_side: bool = True,
         stack: int = 0,
         net_name: str | None = None,
     ) -> None:
@@ -2128,7 +2131,8 @@ class ConductorItem(QGraphicsItem):
         self.side = side
         self.net_class = net_class
         self.signal_index = signal_index
-        self.hatch_far_side = hatch_far_side
+        #: View > Copper on the Far Side: off, far-side copper is not drawn on screen.
+        self.show_far_side = show_far_side
         self.stack = stack
         #: On the net selected in the Nets panel -- see BoardScene.set_highlighted_nets.
         self.net_lit = False
@@ -2205,8 +2209,11 @@ class ConductorItem(QGraphicsItem):
 
         A stroked path rather than the bounding rect: two wires crossing at an angle share
         a bounding rect the size of the board between them, and picking one would select
-        whichever happened to be on top.
+        whichever happened to be on top. Nothing at all while it is hidden: copper nobody
+        can see is not something a click lands on.
         """
+        if self.is_hidden_on_screen():
+            return QPainterPath()
         pts = self._points()
         line = QPainterPath(pts[0])
         for p in pts[1:]:
@@ -2230,7 +2237,8 @@ class ConductorItem(QGraphicsItem):
     def _paint_through_the_board(
         self, painter: QPainter, path: QPainterPath, width: float, colour: QColor
     ) -> None:
-        """A conductor on the far face: hatched, the way a part on the far face already is.
+        """A conductor on the far face, on the 1:1 print: hatched, the way a part on the far
+        face already is. The screen draws a back layer instead (``_paint_back_layer``).
 
         The board is opaque. Drawing a solder-side trace solid while looking at the
         component side says "this is in front of you", which is the same misreading
@@ -2267,24 +2275,70 @@ class ConductorItem(QGraphicsItem):
         painter.setBrush(brush)
         painter.setPen(QPen(SELECTED if self.isSelected() else faded, 0.1))
         painter.drawPath(body)
+        self._paint_far_joints(painter, width, colour)
 
-        # The joints stay solid. Where a conductor is soldered down is the one fact that
-        # does not change with the face you are looking from -- the hole goes through the
-        # board -- and it is what someone counts pads against.
+    def _paint_back_layer(
+        self, painter: QPainter, path: QPainterPath, width: float, colour: QColor
+    ) -> None:
+        """A conductor on the far face, on screen: a dimmed band with a dark edge, the way a
+        PCB tool draws its back layer.
+
+        THE HATCH LEFT THE SCREEN BECAUSE NOBODY COULD SEE IT. Auto-wire lays bare wire on
+        the solder side, and from the component side -- where the window opens -- a hatched
+        band of silver over white pads at half opacity was nothing at all: the newcomer
+        walkthrough's first stall was a board that looked exactly the same before and after
+        Auto-wire. Rendered against three other looks (hatch with an edge, a stronger
+        underlay), this one read on both the newcomer's board and the dense one, and Sinan
+        picked it. The far side is still told apart: it is dimmed (FAR_SIDE_OPACITY), its
+        joints are smaller than the beads of copper in front, and it sits under the parts.
+        Paper keeps the hatch (``_paint_through_the_board``).
+        """
+        casing = QPen(SELECTED if self.isSelected() else FAR_SIDE_EDGE, width + 0.24)
+        casing.setCapStyle(Qt.PenCapStyle.RoundCap)
+        casing.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(casing)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(path)
+        band_colour = QColor(colour)
+        band_colour.setAlphaF(0.75)
+        band = QPen(band_colour, width)
+        band.setCapStyle(Qt.PenCapStyle.RoundCap)
+        band.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(band)
+        painter.drawPath(path)
+        self._paint_far_joints(painter, width, colour)
+
+    def _paint_far_joints(self, painter: QPainter, width: float, colour: QColor) -> None:
+        """The joints stay solid. Where a conductor is soldered down is the one fact that
+        does not change with the face you are looking from -- the hole goes through the
+        board -- and it is what someone counts pads against."""
         painter.setPen(QPen(colour.darker(140), 0.08))
         painter.setBrush(QBrush(colour))
         radius = min(width * 0.62, self.board.pad_diameter * 0.32)
         for point in self.contact_points():
             painter.drawEllipse(point, radius, radius)
 
+    def is_hidden_on_screen(self) -> bool:
+        """Far-side copper with View > Copper on the Far Side turned off -- unless it is
+        selected or its net is lit, which is somebody looking for exactly this."""
+        return (
+            not self.show_far_side
+            and self.is_far_side()
+            and not self.isSelected()
+            and not self.net_lit
+        )
+
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        on_paper = _on_paper(painter)
+        if not on_paper and self.is_hidden_on_screen():
+            return
         # Copper on the far face, quieter on screen (FAR_SIDE_OPACITY) -- but never what is
         # selected or lit, which is being looked for, and never on paper.
         if (
             self.is_far_side()
             and not self.isSelected()
             and not self.net_lit
-            and not _on_paper(painter)
+            and not on_paper
         ):
             painter.save()
             painter.setOpacity(painter.opacity() * FAR_SIDE_OPACITY)
@@ -2316,8 +2370,12 @@ class ConductorItem(QGraphicsItem):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(path)
 
-        if self.hatch_far_side and self.is_far_side():
-            self._paint_through_the_board(painter, path, width, colour)
+        if self.is_far_side():
+            # The 1:1 print and the exports keep the hatch; the screen draws a back layer.
+            if _on_paper(painter):
+                self._paint_through_the_board(painter, path, width, colour)
+            else:
+                self._paint_back_layer(painter, path, width, colour)
             return
 
         # Insulated wire and top jumpers get a dark casing line under the colour, so a
@@ -4438,7 +4496,7 @@ class BoardScene(QGraphicsScene):
         bus: CommandBus | None = None,
         show_ratsnest: bool = True,
         show_rulers: bool = True,
-        hatch_far_side: bool = True,
+        show_far_side: bool = True,
         show_pin_names: bool = True,
         show_references: bool = True,
         show_values: bool = False,
@@ -4452,7 +4510,7 @@ class BoardScene(QGraphicsScene):
         self.show_values = show_values
         self.side = side
         self.bus = bus
-        self.hatch_far_side = hatch_far_side
+        self.show_far_side = show_far_side
         self.document = document
         self.violations: tuple[DrcViolation, ...] = ()
         self.component_items: dict[str, ComponentItem] = {}
@@ -4569,15 +4627,15 @@ class BoardScene(QGraphicsScene):
             self.show_ratsnest = show
             self._rebuild_ratsnest()
 
-    def set_hatch_far_side(self, hatch: bool) -> None:
-        """Whether copper on the face away from the viewer is hatched or drawn solid.
+    def set_show_far_side(self, show: bool) -> None:
+        """Whether copper on the face away from the viewer is drawn through the board.
 
         A full rebuild rather than an item-by-item update: the flag is read when each
         ConductorItem is built, and one source of truth for "what is in this scene" is worth
         more than saving a rebuild nobody is waiting on.
         """
-        if hatch != self.hatch_far_side:
-            self.hatch_far_side = hatch
+        if show != self.show_far_side:
+            self.show_far_side = show
             self._build()
 
     def set_show_board_notes(self, show: bool) -> None:
@@ -4880,7 +4938,7 @@ class BoardScene(QGraphicsScene):
                 self.side,
                 net_class=net_class_by_id.get(conductor.net_id or ""),
                 signal_index=signal_index.get(conductor.net_id or "", 0),
-                hatch_far_side=self.hatch_far_side,
+                show_far_side=self.show_far_side,
                 stack=conductor_layers.get(conductor.id, conductor.layer_z),
                 net_name=net_name_by_id.get(conductor.net_id or ""),
             )

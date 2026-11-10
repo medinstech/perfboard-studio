@@ -6214,7 +6214,7 @@ def test_a_closed_window_hands_its_layout_to_the_next_one() -> None:
 
     first = _window_on(_load_dense())
     first.act_ratsnest.setChecked(False)
-    first.act_hatch.setChecked(False)
+    first.act_far_side.setChecked(False)
     first.act_values.setChecked(True)
     first.on_board_colour("blue")
     first.on_routing_style("solder")
@@ -6230,7 +6230,8 @@ def test_a_closed_window_hands_its_layout_to_the_next_one() -> None:
     second = _window_on(_load_dense())
     assert second.act_ratsnest.isChecked() is False
     assert second.scene.show_ratsnest is False
-    assert second.act_hatch.isChecked() is False
+    assert second.act_far_side.isChecked() is False
+    assert second.scene.show_far_side is False
     assert second.act_values.isChecked() is True
     assert second.scene.show_values is True
     assert chosen_key() == "blue"
@@ -7366,18 +7367,53 @@ def test_a_conductor_knows_which_face_it_is_on_relative_to_the_view() -> None:
     assert far(top) & far(bottom) == set()
 
 
-def test_hatching_the_far_side_can_be_turned_off() -> None:
-    """A fixed rule would be wrong: someone tracing a dense solder side may want to see it
-    plainly. On by default because the default has to be the reading that cannot mislead."""
+def test_auto_wire_says_when_what_it_laid_is_on_the_face_not_in_view() -> None:
+    """"3 connections wired" over a board that looked the same as before, because the
+    wires went under it: the status line says where they are and how to see them."""
+    from perfboard_studio.commands import AddConductorPayload, NewWireConductor
+
+    window = _blank_window()
+    try:
+        assert window.scene.side == "top"
+        assert window._far_side_note(set()) == ""
+        assert window.bus.dispatch(
+            "conductor.add",
+            AddConductorPayload(
+                conductor=NewWireConductor(path=(HoleCoord(1, 1), HoleCoord(4, 1)))
+            ),
+        ).ok
+        note = window._far_side_note(set())
+        assert "1 on the solder side" in note and "Ctrl+F" in note
+        assert window._far_side_note({c.id for c in window.bus.document.conductors}) == ""
+        window.on_flip_board()
+        assert window._far_side_note(set()) == "", "seen from the solder side, it is in view"
+    finally:
+        _close(window)
+
+
+def test_the_far_side_can_be_turned_off_but_not_what_is_being_looked_for() -> None:
+    """On by default: Auto-wire lays its wires on the solder side, and a component side
+    that hides them looks the same before and after it. Off, the far face is out of the way
+    -- drawn nowhere and clicked nowhere -- except a wire selected or a net lit, which is
+    somebody looking for exactly that copper."""
     doc = _load_dense()
     scene = BoardScene(doc, footprint_lookup(), side="top")
-    assert scene.hatch_far_side is True
+    assert scene.show_far_side is True
+    far = [i for i in scene.conductor_items.values() if i.is_far_side()]
+    near = [i for i in scene.conductor_items.values() if not i.is_far_side()]
+    assert far and near
+    assert not any(item.is_hidden_on_screen() for item in far)
 
-    scene.set_hatch_far_side(False)
+    scene.set_show_far_side(False)
 
-    items = [item for item in scene.items() if isinstance(item, ConductorItem)]
-    assert items
-    assert all(item.hatch_far_side is False for item in items)
+    far = [i for i in scene.conductor_items.values() if i.is_far_side()]
+    near = [i for i in scene.conductor_items.values() if not i.is_far_side()]
+    assert all(item.is_hidden_on_screen() and item.shape().isEmpty() for item in far)
+    assert not any(item.is_hidden_on_screen() for item in near)
+    far[0].set_net_lit(True)
+    assert not far[0].is_hidden_on_screen()
+    far[1].setSelected(True)
+    assert not far[1].is_hidden_on_screen() and not far[1].shape().isEmpty()
 
 
 def test_a_hatched_conductor_still_marks_every_joint() -> None:
@@ -7444,8 +7480,8 @@ def test_selecting_a_net_lights_its_copper_not_only_its_ratsnest() -> None:
 def test_far_side_copper_reads_as_a_band_not_just_hatch_strokes() -> None:
     """Hatch alone is thin strokes over a busy grid of pads, and zoomed out -- where
     somebody looks to see what joins what -- it thinned to nothing on the component side,
-    which is the side the editor opens on. A faint solid band goes under it: nearly every
-    pixel along the run is now tinted, where the strokes alone left most of them bare."""
+    which is the side the editor opens on. The screen draws a solid dimmed band with a dark
+    edge: every pixel along the run is tinted."""
     from PySide6.QtCore import QPointF
     from PySide6.QtGui import QColor, QImage, QPainter
 

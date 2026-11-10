@@ -349,7 +349,7 @@ TURKISH: Mapping[str, str] = {
     "Zoom &Out": "&Uzaklaştır",
     "Show &Missing Connections": "Eksik &Bağlantıları Göster",
     "Show Hole &Addresses": "Delik &Adreslerini Göster",
-    "&Hatch Copper on the Far Side": "Karşı Yüzdeki Bakırı &Taralı Göster",
+    "&Copper on the Far Side": "Karşı &Yüzdeki Bakır",
     "Measure &Distance": "&Mesafe Ölç",
     "&Go to Part…": "Parçaya G&it…",
     "Filter parts…  (R37, 10k, TO-220, C7)": "Parçaları süz…  (R37, 10k, TO-220, C7)",
@@ -1704,10 +1704,10 @@ TURKISH: Mapping[str, str] = {
         "Otomatik Kablola yalnızca ekler, dolayısıyla eski konumlar için döşenmiş bakırı "
         "yerinde bırakır. Neti olmayan elle çizilmiş bakıra asla dokunulmaz."
     ),
-    "Draw conductors on the face you are NOT looking at as hatched, the way a part "
-    "on the far side already is. Turn it off to see them solid.": (
-        "Bakmadığınız yüzdeki iletkenleri, karşı yüzdeki bir parçanın çizildiği gibi "
-        "taralı çizer. Dolu görmek için kapatın."
+    "Draw the copper on the face you are NOT looking at through the board, dimmed. "
+    "Turned off, only a selected wire or a lit net's shows.": (
+        "Bakmadığınız yüzdeki bakırı kartın içinden, soluk olarak çizer. Kapatıldığında "
+        "yalnızca seçili bir tel ya da vurgulanan bir netinki görünür."
     ),
     "Click two holes. Says how many holes across they are, how far apart in mm, "
     "and how many steps of solder trace it would take to join them — three "
@@ -4817,6 +4817,12 @@ TURKISH: Mapping[str, str] = {
     'wiring cost {cost}': 'kablolama maliyeti {cost}',
     '{made} connection wired across {closed}/{considered} nets': '{closed}/{considered} nette {made} bağlantı kablolandı',
     '{made} connections wired across {closed}/{considered} nets': '{closed}/{considered} nette {made} bağlantı kablolandı',
+    "{count} on the solder side, under the board: Ctrl+F turns it over": (
+        "{count} tanesi lehim yüzünde, kartın altında: Ctrl+F kartı çevirir"
+    ),
+    "{count} on the parts side: Ctrl+F turns the board over": (
+        "{count} tanesi parça yüzünde: Ctrl+F kartı çevirir"
+    ),
     '{count} could not be wired': '{count} tanesi kablolanamadı',
     "{count} needed an insulated wire or jumper": "{count} tanesi izoleli tel ya da jumper istedi",
     '{count} pad to measure for isolation': 'yalıtımı ölçülecek {count} ped',

@@ -245,6 +245,13 @@ closed without a bump.
   on the sheet is no longer left selected and described as if it were what had just been
   done. In Choose a Board, the board chosen is now shown at once, rather than first at
   Place.
+- **The copper on the far side shows through the board.** Auto-wire lays its wires on
+  the solder side, under the board, and from the parts side they were drawn hatched at
+  half strength over white pads -- a first board looked as if nothing had happened. On
+  screen the far side is now a dimmed solid band with a dark edge, the way a PCB tool
+  shows its back layer, and Auto-wire's status line says how many went to the face not in
+  view and that Ctrl+F turns the board over. View > Show on the Board > Copper on the Far
+  Side turns it off, except a selected wire and a lit net. The 1:1 PDF keeps the hatch.
 - **A board saved on Windows is the same file it is everywhere else.** Saving, autosave and
   its `.bak`, the crash-recovery record, a project folder's board and the MCP server's
   `save_document` wrote every line ending as CRLF on Windows, so a board saved on two

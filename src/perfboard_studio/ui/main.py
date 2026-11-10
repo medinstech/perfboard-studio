@@ -714,7 +714,9 @@ WINDOW_STATE_VERSION = 10
 BOARD_COLOUR_KEY = "session/boardColour"
 RATSNEST_KEY = "session/showRatsnest"
 RULERS_KEY = "session/showRulers"
-HATCH_KEY = "session/hatchFarSide"
+#: Not the old ``session/hatchFarSide``: that switched hatching off to see the far side
+#: plainly, and read as this it would hide the far side from exactly those people.
+FAR_SIDE_KEY = "session/showFarSide"
 VALUES_KEY = "session/showValues"
 #: Whether the canvas wheel pans rather than zooms (View > Mouse Wheel).
 WHEEL_SCROLLS_KEY = "session/wheelScrolls"
@@ -5416,20 +5418,21 @@ class MainWindow(QMainWindow):
             t("Show the labels written on the board, on the board and in 3D.")
         )
         self.act_board_labels.toggled.connect(self._on_toggle_board_labels)
-        # ON by default, because the board is opaque: copper on the far face drawn solid
-        # reads as copper in front of you, and that is how a board gets soldered on the
-        # wrong side. A toggle rather than a fixed rule because someone tracing a dense
-        # solder side may simply want to see it plainly.
-        self.act_hatch = shown_menu.addAction(t("&Hatch Copper on the Far Side"))
-        self.act_hatch.setCheckable(True)
-        self.act_hatch.setChecked(True)
-        self.act_hatch.setToolTip(
+        # ON by default: Auto-wire lays its wires on the solder side, and from the
+        # component side, where the window opens, a board with them hidden looks the same
+        # before and after it -- the newcomer walkthrough's first stall. Drawn dimmed with a
+        # dark edge, a PCB tool's back layer (``ConductorItem._paint_back_layer``). Off, for
+        # somebody placing parts on a busy board who wants the far face out of the way.
+        self.act_far_side = shown_menu.addAction(t("&Copper on the Far Side"))
+        self.act_far_side.setCheckable(True)
+        self.act_far_side.setChecked(True)
+        self.act_far_side.setToolTip(
             t(
-                "Draw conductors on the face you are NOT looking at as hatched, the way a part "
-                "on the far side already is. Turn it off to see them solid."
+                "Draw the copper on the face you are NOT looking at through the board, dimmed. "
+                "Turned off, only a selected wire or a lit net's shows."
             )
         )
-        self.act_hatch.toggled.connect(self.scene.set_hatch_far_side)
+        self.act_far_side.toggled.connect(self.scene.set_show_far_side)
 
         # Perfboard work is full of distances that have to be right before anything is
         # soldered -- how far apart to bend a resistor's legs, whether a TO-220 clears
@@ -10994,6 +10997,7 @@ class MainWindow(QMainWindow):
         # styles remain pickable by hand for when they do disagree.
         self.statusBar().setToolTip(describe_best(best) if best is not None else "")
 
+        before = {c.id for c in self.bus.document.conductors}
         result = self.bus.dispatch("conductor.addMany", plan.payload())
         if not result.ok:
             QMessageBox.warning(
@@ -11006,9 +11010,26 @@ class MainWindow(QMainWindow):
         # miss (PLAN.md Sec 13), so they go in the status line and, if there are any, into a
         # dialog that names each one.
         self.statusBar().showMessage(
-            f"{say(describe_plan(plan))}{cleared_note}{style_note}", 0
+            f"{say(describe_plan(plan))}{cleared_note}{style_note}{self._far_side_note(before)}",
+            0,
         )
         self._report_unrouted(plan)
+
+    def _far_side_note(self, before: set[str]) -> str:
+        """Where the copper Auto-wire just laid went, when it is on the face not in view.
+
+        From the component side, where the window opens, a board wired on the solder side
+        looked the same before Auto-wire as after it, and "3 connections wired" did not say
+        where to look (the newcomer walkthrough's first stall)."""
+        laid = [c for c in self.bus.document.conductors if c.id not in before]
+        far = sum(1 for c in laid if c.side != self.scene.side)
+        if not far:
+            return ""
+        if self.scene.side == "top":
+            note = t("{count} on the solder side, under the board: Ctrl+F turns it over")
+        else:
+            note = t("{count} on the parts side: Ctrl+F turns the board over")
+        return "  ·  " + note.format(count=far)
 
     def _route_stripboard(self, only_net_ids: tuple[NetId, ...] | None, cleared: int = 0) -> None:
         """Cut the tracks this board needs cutting, and link what is left apart.
@@ -13660,7 +13681,7 @@ class MainWindow(QMainWindow):
         settings.setValue(BOARD_COLOUR_KEY, chosen_board_colour() or "")
         settings.setValue(RATSNEST_KEY, self.act_ratsnest.isChecked())
         settings.setValue(RULERS_KEY, self.act_rulers.isChecked())
-        settings.setValue(HATCH_KEY, self.act_hatch.isChecked())
+        settings.setValue(FAR_SIDE_KEY, self.act_far_side.isChecked())
         settings.setValue(VALUES_KEY, self.act_values.isChecked())
         settings.setValue(WHEEL_SCROLLS_KEY, self.view.wheel_scrolls)
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
@@ -13712,7 +13733,7 @@ class MainWindow(QMainWindow):
             self.on_board_colour(colour or None)
         self.act_ratsnest.setChecked(_stored_bool(settings, RATSNEST_KEY, True))
         self.act_rulers.setChecked(_stored_bool(settings, RULERS_KEY, True))
-        self.act_hatch.setChecked(_stored_bool(settings, HATCH_KEY, True))
+        self.act_far_side.setChecked(_stored_bool(settings, FAR_SIDE_KEY, True))
         self.act_values.setChecked(_stored_bool(settings, VALUES_KEY, False))
         self.on_wheel_scrolls(_stored_bool(settings, WHEEL_SCROLLS_KEY, False))
 

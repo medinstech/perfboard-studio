@@ -406,7 +406,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                  "Reset 3D Ca&mera", "Lan&guage", "&Theme", "Board &Colour"],
         "show on the board": ["Show &Missing Connections", "Show Hole &Addresses",
                               "Sho&w Pin Names", "Show Part Val&ues",
-                              "Show Labels on &the Board", "&Hatch Copper on the Far Side"],
+                              "Show Labels on &the Board", "&Copper on the Far Side"],
         "theme": ["&Dark", "&Light"],
         # Route ▸ Preferred Connection. Five items in one submenu, and the one place in the
         # application where a user picks between whole routing strategies -- so an
