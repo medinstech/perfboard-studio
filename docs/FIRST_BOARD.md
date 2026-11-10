@@ -163,7 +163,8 @@ as itself, drawn in red on System, with its swapped wires named by their colours
 
 Each board's guide measures only its own pins, and ends with the same last phase, **Harness**,
 because a cable is fitted to connectors that are already soldered. It has a step for every
-cable: the wires to cut (to the cable's length, or "cut to fit" if none was given), each wire's
+cable: the wires to cut (a little longer than the cable's length: 310 mm for W1's 300 mm, or "cut to
+fit" if no length was given), each wire's
 colour and gauge, how much to strip at both ends, which connector and pin each end goes to,
 and the checks: each wire end to end, and neighbouring wires on different nets kept apart. They
 are the last thing before the system sees power. The exported guide has the same section and
