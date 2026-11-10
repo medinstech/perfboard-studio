@@ -4321,6 +4321,7 @@ TURKISH: Mapping[str, str] = {
     "{count} warning": "{count} uyarı",
     "{count} warnings": "{count} uyarı",
     "guide ready": "rehber hazır",
+    "ready to build": "montaja hazır",
     "What the board is: its parts and what joins them. Drawn on the sheet, or by placing "
     "parts on the board and connecting their pins. The circuit check (ERC) runs as it is "
     "drawn: a chip with no supply is an error before any board is chosen.": (

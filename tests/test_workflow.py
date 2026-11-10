@@ -227,6 +227,34 @@ def test_after_the_guide_the_button_saves_the_board_then_moves_it_on() -> None:
     assert label(showing) == "Export the Guide…"
 
 
+def test_once_the_guide_has_been_opened_the_board_is_ready_to_build() -> None:
+    """The walk ends: the last step was never done, so the bar stayed on "current" for
+    ever after the guide had been read. Opened once, on a board with nothing wrong, it is
+    done and says so -- and a problem found afterwards still undoes it."""
+    ready = dataclasses.replace(EMPTY, parts_on_board=8, nets=7)
+    assert statuses(ready)["build"] == "current"
+    opened = dataclasses.replace(ready, guide_opened=True)
+    assert statuses(opened)["build"] == "done"
+    build = next(step for step in workflow_steps(opened) if step.key == "build")
+    assert build.summary == "ready to build"
+    assert next_step(workflow_steps(opened)) == "build"
+    broken = dataclasses.replace(opened, drc_errors=1)
+    assert statuses(broken)["build"] == "todo"
+    assert statuses(broken)["check"] == "problem"
+
+
+def test_a_cancelled_save_is_not_offered_again() -> None:
+    """Next offered Save the Board… again after every cancel; saving stays in the File
+    menu and on Ctrl+S, and Next goes on to the guide's export."""
+    from perfboard_studio.ui.workflow import build_action
+
+    showing = dataclasses.replace(
+        EMPTY, parts_on_board=8, nets=7, guide_showing=True, untitled=True
+    )
+    assert build_action(showing) == "save"
+    assert build_action(dataclasses.replace(showing, save_declined=True)) == "export-guide"
+
+
 
 def test_pins_nothing_is_wired_to_yet_are_the_wirings_news() -> None:
     """A board just placed has every pin of every net touching nothing, and DRC says so pin

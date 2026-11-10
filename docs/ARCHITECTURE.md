@@ -1754,6 +1754,13 @@ about the document. Four things about it:
   makes Check the step Next does, whatever else is left -- but not before anything is placed,
   when LVS reports every net unplaced and that is Placement's news. An OPEN counts only once
   the wiring is done: between placing and routing every net is open, and that is Wiring's.
+- **The walk ends.** Build was never done, so the bar stayed on "current" after the guide
+  had been read. Once the guide has been in front on this document
+  (`WorkflowFacts.guide_opened`) and nothing before it is wrong, Build is done and the bar
+  says "ready to build"; the step Next does is said in full even then (`WorkflowBar._label`).
+  Next still goes on past the guide (`build_action`), but a Save it offered and somebody
+  cancelled is not offered again (`save_declined`): saving is the File menu's and Ctrl+S's.
+  Both are session state, like `_board_chosen`.
 
 A netlist import feeds the same order: its parts go into the DESIGN in one `part.addMany`
 and the sheet comes forward; nothing lands on the board until a board is chosen.

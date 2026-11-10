@@ -8606,6 +8606,40 @@ def test_the_next_button_goes_on_past_the_open_guide(tmp_path, monkeypatch) -> N
         _close(window)
 
 
+def test_after_the_guide_the_bar_says_ready_and_a_cancelled_save_is_not_asked_again(
+    monkeypatch,
+) -> None:
+    from perfboard_studio.ui import main as main_module
+
+    example = pathlib.Path(__file__).resolve().parent.parent / "examples" / "ne555-astable.perf"
+    result = persist.deserialize_document(example.read_text(encoding="utf-8"))
+    window = _window_on(result.document)
+    try:
+        def build_status() -> str:
+            facts = window.workflow_facts()
+            return next(s.status for s in main_module.workflow_steps(facts) if s.key == "build")
+
+        assert build_status() == "current"
+        window._raise_view(window.dock_guide)
+        window._on_guide_visibility_changed(True)
+        assert build_status() == "done"
+        bar = window.workflow_bar
+        build = next(step for step in bar.steps if step.key == "build")
+        assert bar._label(build, "full") == "Build · ready to build"
+        assert window.workflow_bar.next_button.text().startswith("Save the Board…")
+
+        monkeypatch.setattr(main_module.MainWindow, "on_save", lambda self: False)
+        window.on_workflow_next("build")
+        assert window.current_path is None
+        assert window.workflow_bar.next_button.text().startswith("Export the Guide…")
+        # Away from the guide and back, it is still ready, and still not asking.
+        window.show_board()
+        window._on_guide_visibility_changed(False)
+        assert build_status() == "done"
+    finally:
+        _close(window)
+
+
 def test_a_pin_with_an_error_and_a_warning_is_an_error_and_says_both() -> None:
     from perfboard_studio.erc import ErcFinding
     from perfboard_studio.model import NetNode

@@ -2692,6 +2692,11 @@ class MainWindow(QMainWindow):
         #: ``workflow.WorkflowFacts.board_chosen``. Not stored: a board with parts on it
         #: has been chosen by definition, and one without has been chosen by nobody yet.
         self._board_chosen = False
+        #: Whether the build guide has been in front on this document, and whether the
+        #: Save the last step offered was cancelled -- ``WorkflowFacts.guide_opened`` and
+        #: ``save_declined``. Not stored, like ``_board_chosen``.
+        self._guide_opened = False
+        self._save_declined = False
         #: The board question's answer for the design it was worked out for, and the
         #: placement the chosen board was judged by -- both keyed on
         #: ``placer.placement_inputs``, so an edit makes them miss rather than go stale.
@@ -3177,6 +3182,8 @@ class MainWindow(QMainWindow):
             lvs_shorts=lvs.summary.shorts if lvs is not None else 0,
             shorts_wait_for_wiring=is_stripboard(board),
             guide_showing=self._is_in_front(getattr(self, "dock_guide", None)),
+            guide_opened=self._guide_opened,
+            save_declined=self._save_declined,
             untitled=self.current_path is None,
             solderless_breadboard=is_breadboard(board),
             problems_showing=self.problems_bar.expanded if hasattr(self, "problems_bar") else False,
@@ -3254,7 +3261,9 @@ class MainWindow(QMainWindow):
             self.show_board()
             self._go_to_next_problem()
         elif after == "save":
-            self.on_save()
+            # Cancelled, it is not asked again: the board is ready to build either way,
+            # and Save is still in the menu and on Ctrl+S.
+            self._save_declined = not self.on_save()
         elif after == "to-perfboard":
             self.on_board_from_design()
         elif after == "export-guide":
@@ -8139,6 +8148,7 @@ class MainWindow(QMainWindow):
         # it is in front only when Qt says so, and without this the Next button went on
         # offering to open the guide that was already showing.
         if visible:
+            self._guide_opened = True
             self._note_in_front(self.dock_guide)
             # On screen is the last moment for the panel to be made (``_build_guide_dock``).
             self._guide_panel()
@@ -12871,6 +12881,8 @@ class MainWindow(QMainWindow):
         # Nobody has chosen the NEW document's board -- unless it has parts on it, which
         # ``workflow_steps`` already counts as chosen.
         self._board_chosen = False
+        self._guide_opened = False
+        self._save_declined = False
         self._judged = None
         self._placement_ready = None
         self._unsaved_progress = set()

@@ -252,6 +252,10 @@ closed without a bump.
   shows its back layer, and Auto-wire's status line says how many went to the face not in
   view and that Ctrl+F turns the board over. View > Show on the Board > Copper on the Far
   Side turns it off, except a selected wire and a lit net. The 1:1 PDF keeps the hatch.
+- **The step bar ends.** Build was never done, so the last step stayed the one to do after
+  the guide had been read. Once the guide has been opened on a board with nothing wrong,
+  the bar says it is ready to build. Next no longer offers Save the Board… again after it
+  was cancelled; saving is still in the File menu and on Ctrl+S.
 - **A board saved on Windows is the same file it is everywhere else.** Saving, autosave and
   its `.bak`, the crash-recovery record, a project folder's board and the MCP server's
   `save_document` wrote every line ending as CRLF on Windows, so a board saved on two

@@ -88,6 +88,13 @@ class WorkflowFacts:
     #: Whether the build guide is in front of the user -- once it is, opening it again is
     #: not a next step (``build_action``).
     guide_showing: bool = False
+    #: Whether the build guide has been opened on this document at all. Once it has, and
+    #: everything before it is done, the board is ready to build: the walk ends there,
+    #: rather than the last step staying "current" for ever.
+    guide_opened: bool = False
+    #: Whether somebody cancelled the Save the last step offered. Saving is then theirs to
+    #: do from the File menu and Ctrl+S; Next stops asking.
+    save_declined: bool = False
     #: Whether the board has no file yet.
     untitled: bool = False
     #: A solderless breadboard, which is tried out before it is soldered on something else.
@@ -118,7 +125,7 @@ def build_action(facts: WorkflowFacts) -> BuildAction:
     # (``on_board_from_design`` -> ``_offer_to_save``), so nothing is lost by it.
     if facts.solderless_breadboard:
         return "to-perfboard"
-    if facts.untitled:
+    if facts.untitled and not facts.save_declined:
         return "save"
     return "export-guide"
 
@@ -265,6 +272,7 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
         lvs_errors = 0 if facts.shorts_wait_for_wiring else facts.lvs_shorts
     check_bad = facts.parts_on_board > 0 and (facts.drc_errors > 0 or lvs_errors > 0)
     check_done = route_done and not check_bad
+    build_done = check_done and facts.guide_opened
 
     # Counted in words -- "1 part", "10 parts" -- where it said "10 part(s)": the bar is
     # on screen the whole time, and nobody writes "(s)". Two keys rather than one with a
@@ -306,7 +314,7 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
         "place": place_done,
         "route": route_done,
         "check": check_done,
-        "build": False,
+        "build": build_done,
     }
     summaries: dict[StepKey, str] = {
         "circuit": circuit,
@@ -314,7 +322,7 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
         "place": placed,
         "route": wired,
         "check": checked,
-        "build": t("guide ready"),
+        "build": t("ready to build") if build_done else t("guide ready"),
     }
     current = next((key for key in STEP_ORDER if not done[key]), "build")
     steps: list[StepState] = []
@@ -479,7 +487,10 @@ class WorkflowBar(QWidget):
     def _label(self, step: StepState, mode: str) -> str:
         if mode == "tiny":
             return ""
-        doing = step.status in ("current", "problem")
+        # The step Next does is said in full even when it is done: the last one, once the
+        # guide has been opened, is where the walk ends, and "Build · ready to build" is
+        # the one place that says so.
+        doing = step.status in ("current", "problem") or step.key == self._next
         if mode == "current" and not doing:
             return ""
         if mode == "full" and doing:
@@ -526,6 +537,7 @@ class WorkflowBar(QWidget):
 
     def set_steps(self, steps: tuple[StepState, ...]) -> None:
         self.steps = steps
+        self._next = next_step(steps)
         for number, step in enumerate(steps, start=1):
             button = self.buttons[step.key]
             button.setIcon(_step_dot(number, step.status))
@@ -537,7 +549,6 @@ class WorkflowBar(QWidget):
             # Its look is the sheet's, by status (``#workflowBar QToolButton[status=...]``).
             button.setProperty("status", step.status)
             theme.restyle(button)
-        self._next = next_step(steps)
         label = next(step.action for step in steps if step.key == self._next)
         problem = any(step.status == "problem" for step in steps)
         self.next_button.setText(("⚠ " if problem else "") + label)
