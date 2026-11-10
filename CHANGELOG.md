@@ -211,6 +211,7 @@ closed without a bump.
 - **The DS1307 Tiny RTC board**, as a 7-pin header from iarduino's datasheet photo: SQ DS SCL SDA VCC GND BAT, with DS said to be the main supply's plus through 3.3 kOhm, not a signal.
 - **TP4056 charger (with protection), MT3608 boost and AMS1117-3.3 modules**, off the board on their pads' wires, each pad named as its source prints it: the TP4056's OUT pair is the protected one and is not the same wire as B-, the MT3608's output must stay above its input, and the AMS1117's reversed input shorts it.
 - **The 1.8 in ST7735 TFT, Nokia 5110 LCD and TTP223 touch boards**, as 8-, 8- and 3-pin headers from LCDWiki, microcontrollerslab.com and AZ-Delivery, each with its supply and logic levels as the page gives them.
+- **The 9 V battery clip and the AA holder are drawn as cells on the schematic.** A part can now declare itself a `battery` (leads named + and -), and the sheet draws two cells with the long plate on the plus and a mark over each lead, instead of a box with two tiny pin names; a battery with unnamed leads stays a box and the sheet's notes say why.
 
 ### Fixed
 

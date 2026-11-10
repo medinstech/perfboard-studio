@@ -228,6 +228,7 @@ SymbolKind: TypeAlias = Literal[  # noqa: UP040
     # in the registry asks for them, because no package knows which of its legs is which.
     "zener",
     "fuse",
+    "battery",
     "npn",
     "pnp",
     "nmos",
@@ -1804,6 +1805,8 @@ DECLARED_SYMBOL_PINS: dict[PartSymbol, frozenset[str]] = {
     "potentiometer": frozenset(),
     # Which leg is the anode is the one thing an LED symbol says, so it has to be named.
     "led": frozenset({"A", "K"}),
+    # Which lead the long plate is on is what a cell symbol says, so the leads must be named.
+    "battery": frozenset({"+", "-"}),
 }
 
 #: How many leads a declared symbol with no names to check must have.
@@ -1897,6 +1900,60 @@ def _fuse_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _Symb
     )
     return _SymbolBody(
         shapes=shapes, pins=_two_terminal_pins(pins, None), width=_TWO_W, height=_TWO_H
+    )
+
+
+def _battery_body(pins: tuple[_PinSpec, ...], footprint: Footprint | None) -> _SymbolBody:
+    """Two cells in a row: long plate positive, short plate negative, and a mark over each lead.
+
+    The long plate is what says "this end is the plus", and the mark is what is moulded on a
+    real cell, so the sheet and the clip in the hand agree about which lead is which. A
+    battery here has its plus on the left whichever pin that is, as an electrolytic does.
+    """
+    positive = _positive_pin_number(pins, True)
+    long_half, short_half = 1.3 * GRID_MM, 0.7 * GRID_MM
+    plate = 0.22 * GRID_MM
+    long_xs = (3.0 * GRID_MM, 4.6 * GRID_MM)
+    short_xs = (3.8 * GRID_MM, 5.4 * GRID_MM)
+    shapes: list[SymbolShape] = [
+        SymbolShape(kind="polyline", points=(_p(0.0, _AXIS), _p(long_xs[0], _AXIS))),
+        SymbolShape(kind="polyline", points=(_p(short_xs[0], _AXIS), _p(long_xs[1], _AXIS))),
+        SymbolShape(kind="polyline", points=(_p(short_xs[1], _AXIS), _p(_TWO_W, _AXIS))),
+    ]
+    for x in long_xs:
+        shapes.append(
+            SymbolShape(kind="polyline", points=(_p(x, _AXIS - long_half), _p(x, _AXIS + long_half)))
+        )
+    for x in short_xs:
+        shapes.append(
+            SymbolShape(
+                kind="polygon",
+                points=(
+                    _p(x - plate / 2, _AXIS - short_half),
+                    _p(x + plate / 2, _AXIS - short_half),
+                    _p(x + plate / 2, _AXIS + short_half),
+                    _p(x - plate / 2, _AXIS + short_half),
+                ),
+                filled=True,
+            )
+        )
+    arm = 0.35 * GRID_MM
+    mark_y = _AXIS - 1.9 * GRID_MM
+    plus_x, minus_x = 1.8 * GRID_MM, 6.6 * GRID_MM
+    shapes.append(
+        SymbolShape(kind="polyline", points=(_p(plus_x - arm, mark_y), _p(plus_x + arm, mark_y)))
+    )
+    shapes.append(
+        SymbolShape(kind="polyline", points=(_p(plus_x, mark_y - arm), _p(plus_x, mark_y + arm)))
+    )
+    shapes.append(
+        SymbolShape(kind="polyline", points=(_p(minus_x - arm, mark_y), _p(minus_x + arm, mark_y)))
+    )
+    return _SymbolBody(
+        shapes=tuple(shapes),
+        pins=_two_terminal_pins(pins, positive),
+        width=_TWO_W,
+        height=_TWO_H,
     )
 
 
@@ -2108,6 +2165,7 @@ _SYMBOL_BUILDERS: dict[
     "box": _box_body,
     "zener": _zener_body,
     "fuse": _fuse_body,
+    "battery": _battery_body,
     "npn": _npn_body,
     "pnp": _pnp_body,
     "nmos": _nmos_body,

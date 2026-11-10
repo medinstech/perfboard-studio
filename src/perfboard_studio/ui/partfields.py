@@ -107,6 +107,7 @@ class PinoutEditor(QWidget):
             ("fuse", t("Fuse or PTC")),
             ("potentiometer", t("Potentiometer (three leads, the middle one the wiper)")),
             ("led", t("LED (names A, K)")),
+            ("battery", t("Battery (names + and -)")),
         )
         for value, label in choices:
             self.symbol.addItem(label, value)

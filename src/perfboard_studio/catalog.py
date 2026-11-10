@@ -497,7 +497,7 @@ CATALOG: tuple[CatalogPart, ...] = (
     # -- power in ---------------------------------------------------------------------
     CatalogPart("battery-9v-clip", "9 V battery clip", "power", "wire-2",
                 "PP3 snap on two leads, for a 9 V battery",
-                _legs("+", "-"), value="9V", ref_prefix="BT",
+                _legs("+", "-"), value="9V", ref_prefix="BT", symbol="battery",
                 source="Keystone 233 9 V battery snap: red and black 26 AWG leads, 6 in",
                 check=(
                     "Red is +. If both leads of yours are one colour, find + with a meter on "
@@ -506,7 +506,7 @@ CATALOG: tuple[CatalogPart, ...] = (
                 aliases=(*_POWER_WORDS, "batarya", "PP3", "9V")),
     CatalogPart("battery-aa-holder", "AA battery holder", "power", "wire-2",
                 "Two to four AA or AAA cells in series, on two leads",
-                _legs("+", "-"), value="AA holder", ref_prefix="BT",
+                _legs("+", "-"), value="AA holder", ref_prefix="BT", symbol="battery",
                 source="Keystone 2463 2 x AA holder: red and black 26 AWG leads, 150 mm",
                 check=(
                     "Red is + and black is -. With no colours, measure across it with the "

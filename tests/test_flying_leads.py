@@ -443,6 +443,39 @@ def test_a_declared_led_with_no_anode_named_stays_a_box_and_says_why() -> None:
     assert any("a potentiometer has three leads" in note for note in notes)
 
 
+def test_a_declared_battery_draws_its_plus_on_the_left_whichever_pin_it_is() -> None:
+    """The long plate is the plus. A clip whose pin 1 is the minus is drawn with pin 2 on the
+    left, as an electrolytic is, rather than relabelled."""
+    plus_first = _sheet_symbol(
+        "wire-2", symbol="battery", pin_names=(("1", "+"), ("2", "-"))
+    )[0]
+    assert plus_first.kind == "battery"
+    assert {pin.name: pin.side for pin in plus_first.pins} == {"+": "left", "-": "right"}
+    minus_first = _sheet_symbol(
+        "wire-2", symbol="battery", pin_names=(("1", "-"), ("2", "+"))
+    )[0]
+    assert minus_first.kind == "battery"
+    assert {pin.name: pin.side for pin in minus_first.pins} == {"+": "left", "-": "right"}
+
+
+def test_a_declared_battery_with_unnamed_leads_stays_a_box_and_says_why() -> None:
+    drawn, notes = _sheet_symbol("wire-2", symbol="battery")
+    assert drawn.kind == "box"
+    assert any("X1: declared battery" in note and "+, -" in note for note in notes)
+
+
+def test_the_catalog_s_battery_clip_and_holder_are_drawn_as_cells() -> None:
+    from perfboard_studio.catalog import catalog_part
+
+    for part_id in ("battery-9v-clip", "battery-aa-holder"):
+        part = catalog_part(part_id)
+        assert part is not None and part.symbol == "battery", part_id
+        drawn, _ = _sheet_symbol(
+            part.footprint_id, symbol=part.symbol, pin_names=part.pin_names
+        )
+        assert drawn.kind == "battery", part_id
+
+
 # ---------------------------------------------------------------------------
 # Which edge
 # ---------------------------------------------------------------------------

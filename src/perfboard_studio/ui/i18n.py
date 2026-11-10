@@ -1997,6 +1997,7 @@ TURKISH: Mapping[str, str] = {
     "P-channel MOSFET (names G, D, S)": "P kanallı MOSFET (adlar G, D, S)",
     "Zener diode": "Zener diyot",
     "Fuse or PTC": "Sigorta ya da PTC",
+    "Battery (names + and -)": "Pil (adlar + ve -)",
     "What this part is, when its package cannot say. A transistor symbol is "
     "drawn only once its leads are named below, because which leg is the gate "
     "is a fact about the part, not the package.": (

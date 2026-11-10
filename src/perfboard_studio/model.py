@@ -559,6 +559,10 @@ type ComponentId = str
 #: signal diode and a PTC fuse is a disc, so the package draws them as a diode and as a
 #: capacitor; the declaration is the only thing that can say otherwise.
 #:
+#: A ``battery`` is the same shape of claim for a part off the board: a snap or a holder
+#: is two flying leads, which draw as a box, and the leads' names (+ and -) are what the
+#: cell symbol puts its long plate on.
+#:
 #: The last two are the same shape of claim for a part that is not on the board at all. A
 #: pot on the panel is three ``flying-leads`` pads here, which draw as a box; the part
 #: declaring itself a potentiometer -- or an LED, once its leads are named A and K -- is
@@ -575,6 +579,7 @@ PartSymbol: TypeAlias = Literal[  # noqa: UP040
     "fuse",
     "potentiometer",
     "led",
+    "battery",
 ]
 
 #: Pin number -> the name the part's datasheet gives that lead, in pin order.
