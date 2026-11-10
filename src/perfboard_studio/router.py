@@ -1319,6 +1319,12 @@ def _traversable(ctx: _RouteContext, hole: HoleCoord) -> bool:
     # produce what the checker rejects.
     if _key(hole) in ctx.swept_blocked_holes:
         return False
+    # A part on the solder side stands on whatever copper is under it, and a trace laid
+    # there is hidden for good once it is fitted (``copper-under-body``). As the top jumper
+    # keeps from under a component-side body, a trace keeps from under this one; the search
+    # reaches the trace's own ends whatever covers them.
+    if ctx.occupancy.body_covers(hole, "bottom") is not None:
+        return False
     # A solder trace is soldered down at EVERY pad it crosses, so a hole with no pad
     # breaks the run part-way along. Exactly the set drc.py calls an error, read from the
     # one function both of them share.
@@ -1492,7 +1498,15 @@ def _straight_wire_candidate(
     if kind == "top-jumper":
         # A top jumper must not have to run underneath a component body.
         for hole in crossed:
-            if ctx.occupancy.body_covers(hole):
+            if ctx.occupancy.body_covers(hole, "top"):
+                return None
+    else:
+        # ...and a wire on the solder side not under a part put on that side
+        # (``copper-under-body``), its ends excepted as the jumper's are.
+        for hole in crossed:
+            if same_hole(hole, from_) or same_hole(hole, to):
+                continue
+            if ctx.occupancy.body_covers(hole, "bottom"):
                 return None
 
     length_mm = path_length_mm((from_, to), ctx.doc.board)

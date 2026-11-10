@@ -36,7 +36,14 @@ from perfboard_studio.footprints import (
 from perfboard_studio.geometry import all_pin_holes, boxes_overlap
 from perfboard_studio.guide import GuideOptions, PartStep, build_guide
 from perfboard_studio.mcp.session import new_board
-from perfboard_studio.model import ComponentInstance, HoleCoord, Net, NetNode, PerfDocument
+from perfboard_studio.model import (
+    BoardSide,
+    ComponentInstance,
+    HoleCoord,
+    Net,
+    NetNode,
+    PerfDocument,
+)
 from perfboard_studio.placer import (
     DEFAULT_PLACEMENT_OPTIONS,
     PlacementOptions,
@@ -75,6 +82,7 @@ def _part(
     *,
     mirrored: bool = False,
     locked: bool = False,
+    side: BoardSide = "top",
 ) -> ComponentInstance:
     return ComponentInstance(
         id=f"c-{ref}",
@@ -83,8 +91,9 @@ def _part(
         footprint_id=footprint_id,
         anchor=HoleCoord(col, row),
         rotation=rotation,  # type: ignore[arg-type]
-        mirrored=mirrored,
+        mirrored=mirrored or side == "bottom",
         locked=locked,
+        side=side,
     )
 
 
@@ -143,12 +152,21 @@ def test_the_finding_is_said_in_a_turkish_window() -> None:
         ("soldered", _doc(_module(NANO_SOLDERED), _part("R1", "r-axial-3", 13, 8, 90))),
         # Lying across the left header row: its body is on the moulding, however low.
         ("on a header", _doc(_module(), _part("R1", "r-axial-3", 8, 10))),
-        # On the solder side it is the other side of the board, and rule 1 is as it was.
-        ("other face", _doc(_module(), _part("R1", "r-axial-3", 13, 8, 90, mirrored=True))),
     ],
 )
 def test_what_does_not_fit_under_is_still_an_overlap(why: str, doc: PerfDocument) -> None:
     assert _rules(doc) == ["component-body-overlap"], why
+
+
+def test_the_module_asks_the_face_not_the_mirror() -> None:
+    """Mirrored on the component side, the resistor is still on the module's face -- a
+    mirrored part is its pins reflected, not the part turned over -- and still fits under
+    it. On the solder side it is on the other face, under neither the module's board nor
+    its courtyard, and neither rule has anything to say."""
+    mirrored = _doc(_module(), _part("R1", "r-axial-3", 13, 8, 90, mirrored=True))
+    beneath = _doc(_module(), _part("R1", "r-axial-3", 13, 8, 90, side="bottom"))
+    assert _rules(mirrored) == ["under-module"]
+    assert _rules(beneath) == []
 
 
 def test_beside_the_board_inside_its_margin_is_no_finding() -> None:
@@ -214,10 +232,10 @@ def _walk(module: ComponentInstance) -> list[tuple[int, int]]:
     ]
 
 
-@pytest.mark.parametrize("mirrored", (False, True))
+@pytest.mark.parametrize("side", ("top", "bottom"))
 @pytest.mark.parametrize("module_rotation", (0, 90))
 def test_the_placer_and_drc_agree_on_every_body_under_a_module(
-    mirrored: bool, module_rotation: int
+    side: BoardSide, module_rotation: int
 ) -> None:
     """One fact, two consumers, over the whole library -- the module twin of the screw-head
     walk in ``test_placer``.
@@ -227,8 +245,13 @@ def test_the_placer_and_drc_agree_on_every_body_under_a_module(
     across its header rows: the placer's count of parts under the board must be the number
     of ``under-module`` findings, and its count of overlapping pairs the number of rule 1's,
     every time. Both read the same boxes and ask the same two predicates in ``geometry``,
-    and this is what would notice one of them growing a second opinion. Mirrored as well,
-    where the part is on the other face from the module and nothing fits under it.
+    and this is what would notice one of them growing a second opinion.
+
+    On the solder side as well, where the part is on the other face from the module: nothing
+    is under it and rule 1 compares no pair across faces, while the placer still keeps the
+    two courtyards apart (``_Scorer._pair_terms``, face-blind on purpose) -- so its count is
+    at least every pair the same part, mirrored on the component side, would have been named
+    in, overlap or under the board, and also the pairs whose courtyards only touch.
     """
     module = _part("U1", NANO, WALK_AT.col, WALK_AT.row, module_rotation)
     anchors = _walk(module)
@@ -236,19 +259,29 @@ def test_the_placer_and_drc_agree_on_every_body_under_a_module(
     for footprint_id in sorted(standard_footprints()):
         for rotation in (0, 90, 180, 270):
             for col, row in anchors:
-                doc = _doc(module, _part("X1", footprint_id, col, row, rotation, mirrored=mirrored))
+                doc = _doc(module, _part("X1", footprint_id, col, row, rotation, side=side))
                 state, scorer = _scorer_for(doc, REGISTRY, PlacementWeights())
                 cost = scorer.full(state)
                 drc_under = len(_check_under_module(doc, REGISTRY))
                 drc_overlaps = len(_check_component_body_overlap(doc, REGISTRY))
-                assert cost.under_module == drc_under, (footprint_id, rotation, col, row)
-                assert cost.overlap_pairs == drc_overlaps, (footprint_id, rotation, col, row)
+                at = (footprint_id, rotation, col, row)
+                assert cost.under_module == drc_under, at
+                if side == "top":
+                    assert cost.overlap_pairs == drc_overlaps, at
+                else:
+                    assert drc_overlaps == 0, at
+                    on_top = _doc(module, _part("X1", footprint_id, col, row, rotation, mirrored=True))
+                    named = len(_check_under_module(on_top, REGISTRY)) + len(
+                        _check_component_body_overlap(on_top, REGISTRY)
+                    )
+                    assert cost.overlap_pairs >= named, at
+                    drc_overlaps = cost.overlap_pairs
                 checked += 1
                 under += drc_under
                 overlaps += drc_overlaps
     # Not vacuous: parts in its way at every turn, and parts under the board on its own face.
     assert 0 < overlaps < checked
-    assert (under == 0) if mirrored else (0 < under < checked)
+    assert (under == 0) if side == "bottom" else (0 < under < checked)
 
 
 def test_local_delta_matches_a_full_recompute_around_a_module() -> None:

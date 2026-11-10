@@ -14,6 +14,7 @@ orientation instead of mirroring it.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import math
 import os
@@ -4146,7 +4147,22 @@ def build_component(
 
     ``lead_rgbs`` colours the wires of a part off the board, pin by pin -- its nets' colours,
     which only the caller holding the document knows.
+
+    A part on the solder side is the same part TURNED OVER: built as it stands on the
+    component side, unmirrored, and given half a turn about the line through its anchor, in
+    the board's middle plane, that runs along its own rows. That reflects its pins as
+    ``mirrored`` does and puts its body below the board, leads up through it -- and it is a
+    rotation, so the mesh keeps its winding and is lit from outside, which a reflection of
+    the actor is not (see ``_reflected_x``). Applied as each actor's user transform, last,
+    so an exploded view's lift turns over with it and drops the part away from the board.
     """
+    if getattr(comp, "side", "top") == "bottom":
+        upright = dataclasses.replace(comp, mirrored=False, side="top")
+        turned = build_component(lookup, upright, board, lead_rgbs)
+        over = turned_over(comp, board)
+        for actor in turned:
+            actor.SetUserTransform(over)
+        return turned
     body = _world_body(lookup, comp, board)
     if body is None:
         return []
@@ -4158,6 +4174,22 @@ def build_component(
         return actors + _flying_lead_markers(body, footprint, comp, board)
     pieces = _pieces_for(body, footprint, comp, board)
     return [_actor_for(piece) for piece in pieces]
+
+
+def turned_over(comp: Any, board: Board) -> vtk.vtkTransform:
+    """Half a turn about the line through ``comp``'s anchor, in the board's middle plane,
+    along the part's own rows (``build_component``): what puts a part built on the component
+    side onto the solder side."""
+    x, y = _xy(board, comp.anchor)
+    angle = math.radians(comp.rotation)
+    over = vtk.vtkTransform()
+    over.PostMultiply()
+    over.Translate(-x, -y, board.thickness / 2)
+    # A quarter turn of the part is minus a quarter turn about world z (``_model_pieces``),
+    # which carries the world's y axis -- its rows, upwards -- to (sin, cos).
+    over.RotateWXYZ(180.0, math.sin(angle), math.cos(angle), 0.0)
+    over.Translate(x, y, -board.thickness / 2)
+    return over
 
 
 #: How high a part off the board's wires rise before turning for the edge, and how far past

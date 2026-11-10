@@ -341,6 +341,45 @@ def _part_solids(
     lead_radius: float,
     palette: Palette,
 ) -> tuple[Solid, ...]:
+    """One part's solids: its body, the envelope DRC measured, and its leads.
+
+    A part on the solder side is the same solids reflected in the board's middle plane: the
+    pins are already where ``mirrored`` puts them, and the body hangs from the underside
+    instead of standing on the top -- a half turn about an axis in the board's plane is
+    exactly those two reflections."""
+    solids = _upright_part_solids(comp, footprint, doc, place, top, drilled, lead_radius, palette)
+    if comp.side != "bottom":
+        return solids
+    return tuple(Solid(_reflected_z(solid.shape, top), solid.rgb) for solid in solids)
+
+
+def _reflected_z(shape: Shape, top: float) -> Shape:
+    """``shape`` reflected in the plane half way through a board ``top`` thick."""
+    if isinstance(shape, Box):
+        return Box(
+            (shape.low[0], shape.low[1], top - shape.high[2]),
+            (shape.high[0], shape.high[1], top - shape.low[2]),
+        )
+    if isinstance(shape, Cylinder):
+        return Cylinder(
+            (shape.base[0], shape.base[1], top - shape.base[2]),
+            (shape.axis[0], shape.axis[1], -shape.axis[2]),
+            shape.length,
+            shape.radius,
+        )
+    raise TypeError(f"a part is boxes and cylinders, not {type(shape).__name__}")
+
+
+def _upright_part_solids(
+    comp: ComponentInstance,
+    footprint: Footprint,
+    doc: PerfDocument,
+    place: Callable[[float, float], tuple[float, float]],
+    top: float,
+    drilled: set[str],
+    lead_radius: float,
+    palette: Palette,
+) -> tuple[Solid, ...]:
     board = doc.board
     min_x, max_x, min_y, max_y = placed_body_box(comp, footprint, board)
     x0, y1 = place(min_x, min_y)

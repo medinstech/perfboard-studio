@@ -140,7 +140,7 @@ conductor at a time.
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
 | **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `update_net` · `delete_net` |
 | **The board** | `set_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `update_board_feature` · `remove_board_feature` |
-| **Editing** | `place_component` · `move_component` · `rotate_component` · `mirror_component` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` · `set_body_clearance` |
+| **Editing** | `place_component` · `move_component` · `rotate_component` · `set_component_side` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` · `set_body_clearance` |
 | **Planning** | `autoroute` · `reroute` · `optimize_placement` |
 | **Verifying** | `run_erc` · `run_drc` · `run_lvs` · `check_heights` |
 | **Output** | `generate_guide` · `export_pdf` · `export_step` |
@@ -291,8 +291,12 @@ side -- on the default bottom it was `not-on-breadboard` the moment it was laid.
 lists every conductor as `{id, kind, net, side, path}`, and a `run_drc` violation names
 the `components` and `conductor_ids` it is about. `delete_conductors` takes any of those
 ids off the board as one undo step, all or none: before it, `undo` was the only way back
-from a wire an agent had laid. `mirror_component` puts a part on the solder side, and
-`place_component` and each `place_parts` entry take `mirrored` too. A placed part's
+from a wire an agent had laid. `set_component_side(ref, "bottom")` puts a part on the
+solder side, turned over: its body below the board and its pins reflected, one undo step,
+refused on a solderless breadboard. `place_component` and each `place_parts` entry take
+`side` too, and `get_component` says each part's `side`. It replaced `mirror_component`
+in 0.24, which reflected the pins and left the body on the component side: `mirrored`
+alone, still accepted by the place tools, is that old meaning. A placed part's
 VALUE needs no tool of its own: `update_part(ref, value=...)` reaches parts on the
 board. Nor does its NOTE, the builder's reason for the part, shown on hover and in the
 build guide: `update_part(ref, note=...)` sets it, `""` clears it and leaving it out keeps

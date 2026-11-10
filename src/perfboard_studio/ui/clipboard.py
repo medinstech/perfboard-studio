@@ -41,6 +41,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, TypeGuard, cast, get_args
 
+from perfboard_studio.breadboard import is_breadboard
 from perfboard_studio.commands import (
     NewConductor,
     NewLeadBendConductor,
@@ -200,6 +201,8 @@ def block_to_json(
                 "at": _relative(c.anchor, origin),
                 "rotation": c.rotation,
                 "mirrored": c.mirrored,
+                # Only on the solder side, as in a .perf.
+                **({"side": c.side} if c.side == "bottom" else {}),
                 # Only when declared, as in a .perf: a copied MOSFET pastes as a MOSFET.
                 **({"pinNames": dict(c.pin_names)} if c.pin_names else {}),
                 **({"symbol": c.symbol} if c.symbol is not None else {}),
@@ -314,6 +317,8 @@ def _component_from_json(item: Any, index: int) -> ComponentInstance | None:
         pin_names = ()
     symbol = item.get("symbol")
     note = item.get("note")
+    # A part on the solder side is mirrored by being there, whatever the text says.
+    bottom = item.get("side") == "bottom"
     return ComponentInstance(
         # The id is the block's own, and is thrown away on paste: it exists so a lead
         # bend inside the block has something to point at before the document does.
@@ -323,7 +328,8 @@ def _component_from_json(item: Any, index: int) -> ComponentInstance | None:
         footprint_id=footprint_id,
         anchor=at,
         rotation=cast(Rotation, rotation),
-        mirrored=bool(item.get("mirrored")),
+        mirrored=bottom or bool(item.get("mirrored")),
+        side="bottom" if bottom else "top",
         locked=False,
         pin_names=pin_names,
         symbol=cast(PartSymbol, symbol) if symbol in get_args(PartSymbol) else None,
@@ -563,6 +569,13 @@ def paste_payload(
                 anchor=placed.anchor,
                 rotation=component.rotation,
                 mirrored=component.mirrored,
+                # A solderless breadboard has no solder side to paste onto: the part lands
+                # on top, its pins still reflected, rather than the whole paste refused.
+                side=(
+                    "bottom"
+                    if component.side == "bottom" and not is_breadboard(doc.board)
+                    else None
+                ),
                 id=id_,
                 pin_names=component.pin_names,
                 symbol=component.symbol,

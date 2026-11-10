@@ -271,6 +271,11 @@ def _standing_phase(height_mm: Mm) -> PhaseNumber:
             return phase
     return 5
 
+#: The phase a part on the solder side is fitted in: last in it, after its wires, lowest
+#: first. See docs/ARCHITECTURE.md, "A part on the solder side is turned over, not
+#: reflected".
+SOLDER_SIDE_PHASE: PhaseNumber = 7
+
 #: Conductor kinds done on the solder side in phase 6, and in phase 7.
 PHASE_BY_CONDUCTOR: dict[ConductorKind, PhaseNumber] = {
     "lead-bend": 6,
@@ -490,6 +495,11 @@ class PartStep:
     #: False (``JSON_OMITTED_AT_DEFAULT``), as ``language`` is: every guide without one is
     #: byte for byte what it was.
     cabled: bool = dataclasses.field(default=False, metadata={JSON_OMITTED_AT_DEFAULT: True})
+    #: The face the part's body is on (``ComponentInstance.side``). A part on the solder side
+    #: is fitted at the end of phase 7, over the copper already laid there. Left out of the
+    #: JSON on the component side (``JSON_OMITTED_AT_DEFAULT``), so every guide without one
+    #: keeps its bytes.
+    side: BoardSide = dataclasses.field(default="top", metadata={JSON_OMITTED_AT_DEFAULT: True})
 
     @property
     def title(self) -> str:
@@ -764,16 +774,24 @@ def build_guide(
     late_parts = {
         step.ref: phase
         for step, phase in part_steps
-        if breadboard or step.archetype == "flying-leads"
+        if breadboard or step.archetype == "flying-leads" or step.side == "bottom"
     }
+    solder_side = [(step, phase) for step, phase in part_steps if step.side == "bottom"]
 
     adapters = _adapters(doc, lookup)
     titles = BREADBOARD_PHASE_TITLES if breadboard else PHASE_TITLES
     by_phase: dict[PhaseNumber, list[GuideStep]] = {n: [] for n in PHASE_TITLES}
     # The jumpers ahead of the flat parts that share phase 1 with them on a breadboard,
     # which is the whole reason they are in it.
+    # The parts on the solder side after phase 7's wires, which they would stand over.
     ordered: list[tuple[GuideStep, PhaseNumber]] = (
-        [*conductor_steps, *part_steps] if breadboard else [*part_steps, *conductor_steps]
+        [*conductor_steps, *part_steps]
+        if breadboard
+        else [
+            *(entry for entry in part_steps if entry[0].side != "bottom"),
+            *conductor_steps,
+            *solder_side,
+        ]
     )
     for step_in_order, step_phase in ordered:
         by_phase[step_phase].append(step_in_order)
@@ -787,9 +805,20 @@ def build_guide(
     phases = tuple(
         GuidePhase(
             number=number,
-            title=say(titles[number]),
+            # Phase 7 says it fits the solder side's parts only on a board that has some, so
+            # every other board's guide keeps its words.
+            title=(
+                say("Long insulated wires, then the solder-side parts")
+                if solder_side and number == SOLDER_SIDE_PHASE
+                else say(titles[number])
+            ),
             summary=_phase_summary(
-                number, doc, say, off_board=bool(lead_list), adapters=adapters
+                number,
+                doc,
+                say,
+                off_board=bool(lead_list),
+                adapters=adapters,
+                solder_side=bool(solder_side),
             ),
             steps=tuple(by_phase[number]),
             checkpoints=tuple(checkpoints.get(number, ())),
@@ -898,10 +927,12 @@ def _phase_summary(
     say: Phrasebook,
     off_board: bool = False,
     adapters: tuple[tuple[str, str, int], ...] = (),
+    solder_side: bool = False,
 ) -> str:
     """The phase's standing summary, with what the BOARD changes about it folded in.
 
-    Phase 7 gains a sentence when parts off the board are wired in it (``off_board``).
+    Phase 7 gains a sentence when parts off the board are wired in it (``off_board``), and
+    one when parts on the solder side are fitted at its end (``solder_side``).
     Phase 0 varies for a reason worth stating: every hole
     address in this guide is counted from a corner unless the board says otherwise, so
     "mark hole A1" is the step the whole document depends on. A board that prints its own
@@ -911,11 +942,19 @@ def _phase_summary(
     """
     if is_breadboard(doc.board):
         return _breadboard_phase_summary(number, doc, say, adapters)
-    if number == 7 and off_board:
-        return say(PHASE_SUMMARIES[7]) + " " + say(
-            "Then the wires to the parts off the board: into their pads here first, then "
-            "to the parts themselves once they are mounted."
-        )
+    if number == 7 and (off_board or solder_side):
+        said = [say(PHASE_SUMMARIES[7])]
+        if off_board:
+            said.append(say(
+                "Then the wires to the parts off the board: into their pads here first, then "
+                "to the parts themselves once they are mounted."
+            ))
+        if solder_side:
+            said.append(say(
+                "Then the parts that go on the solder side, lowest first: each over copper "
+                "that is already laid and checked, since it hides what is under it."
+            ))
+        return " ".join(said)
     if number != 0:
         return say(PHASE_SUMMARIES[number])
 
@@ -1094,6 +1133,11 @@ def _part_steps(
             phase = _standing_phase(footprint.body_height)
         if is_breadboard(doc.board):
             phase = BREADBOARD_PHASE_BY_ARCHETYPE.get(footprint.body.archetype, phase)
+        if component.side == "bottom":
+            # Over the solder side's copper, which is all laid by the end of phase 7, and
+            # in the way of the iron for any of it laid after. ``build_guide`` puts these
+            # after phase 7's wires.
+            phase = SOLDER_SIDE_PHASE
         entries.append((phase, footprint.body_height, component.ref, step))
 
     entries.sort(key=lambda entry: (entry[0], entry[1], entry[2]))
@@ -1248,7 +1292,18 @@ def _part_step(
     if stood is not None:
         notes.append(_standing_note(component, footprint, holes, stood, board, say))
     notes.extend(_fitting_notes(footprint, say))
-    if component.mirrored and not breadboard:
+    if component.side == "bottom":
+        # Turned over, not reflected: the body below the board, the leads through to the
+        # component side -- and soldered there, unless there is no copper there to solder.
+        notes.append(say(
+            "This part goes on the SOLDER side: push it in from underneath, its body below "
+            "the board, and solder its leads on the solder side, beside the body. The board "
+            "has no copper on the component side."
+        ) if board.single_sided else say(
+            "This part goes on the SOLDER side: push it in from underneath, its body below "
+            "the board, and solder its leads on the component side."
+        ))
+    elif component.mirrored and not breadboard:
         notes.append(say(
             "This part is mirrored: it goes in from the SOLDER side, not the component "
             "side. Check the pin order against the board before soldering."
@@ -1345,6 +1400,7 @@ def _part_step(
         polarity=None if cabled else _polarity_note(footprint, pin_holes, component, say, board=board),
         notes=tuple(notes),
         cabled=cabled,
+        side=component.side,
     )
 
 

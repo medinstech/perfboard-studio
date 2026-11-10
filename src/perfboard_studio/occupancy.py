@@ -77,9 +77,10 @@ class OccupancyIndex:
         """
         return _node_key(hole, side) in self._blocked_nodes
 
-    def body_covers(self, hole: HoleCoord) -> ComponentId | None:
-        """Component whose body covers this hole on the component side, if any."""
-        return self._body_by_hole.get(hole_key(hole))
+    def body_covers(self, hole: HoleCoord, side: BoardSide = "top") -> ComponentId | None:
+        """Component whose body covers this hole on ``side``, if any: the component side
+        unless asked, where every body was before a part could be put on the solder side."""
+        return self._body_by_hole.get(_node_key(hole, side))
 
     def occupied_holes(self) -> tuple[HoleCoord, ...]:
         """Every hole that has anything at all on it, for quick iteration."""
@@ -123,7 +124,7 @@ def build_occupancy(doc: PerfDocument, lookup: FootprintLookup) -> OccupancyInde
 
         for hole in _body_footprint_holes(component, footprint, doc):
             remember(hole)
-            body_by_hole[hole_key(hole)] = component.id
+            body_by_hole[_node_key(hole, component.side)] = component.id
 
     # --- Conductors: every hole on the path is physically occupied, contact or not. ---
     #
@@ -170,7 +171,7 @@ def _body_footprint_holes(
     footprint: Footprint,
     doc: PerfDocument,
 ) -> list[HoleCoord]:
-    """Holes covered by a component's body outline on the component side.
+    """Holes covered by a component's body outline, on the face it is on.
 
     Uses the outline's axis-aligned bounding box, which is what DRC's overlap check
     uses too -- good enough for deciding whether a top-side jumper would have to run

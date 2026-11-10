@@ -287,29 +287,39 @@ def test_conductors_are_deleted_by_id_all_or_none_in_one_undo_step(loaded: Board
 
 def test_a_part_goes_to_the_solder_side_and_a_locked_one_refuses(session: BoardSession) -> None:
     session.place_component(ref="R1", footprint_id="r-axial-4", hole="C3")
-    assert session.mirror_component("R1")["ok"]
-    assert session.get_component("R1")["mirrored"] is True
-    assert session.mirror_component("R1", mirrored=False)["ok"]
-    assert session.get_component("R1")["mirrored"] is False
+    assert session.set_component_side("R1")["ok"]
+    r1 = session.get_component("R1")
+    assert (r1["side"], r1["mirrored"]) == ("bottom", True)
+    assert session.set_component_side("R1", "top")["ok"]
+    r1 = session.get_component("R1")
+    assert (r1["side"], r1["mirrored"]) == ("top", False)
+    with pytest.raises(SessionError):
+        session.set_component_side("R1", "under")
 
     session.set_component_locked("R1", True)
-    refused = session.mirror_component("R1")
+    refused = session.set_component_side("R1")
     assert refused["ok"] is False and refused["code"] == "component-locked"
-    assert session.get_component("R1")["mirrored"] is False
+    assert session.get_component("R1")["side"] == "top"
 
 
 def test_parts_can_be_placed_on_the_solder_side(session: BoardSession) -> None:
-    assert session.place_component(ref="R1", footprint_id="r-axial-4", hole="C3", mirrored=True)["ok"]
-    assert session.get_component("R1")["mirrored"] is True
+    assert session.place_component(ref="R1", footprint_id="r-axial-4", hole="C3", side="bottom")["ok"]
+    r1 = session.get_component("R1")
+    assert (r1["side"], r1["mirrored"]) == ("bottom", True)
+    # Mirrored alone is the original engine's meaning: the pins reflected, the body on top.
+    assert session.place_component(ref="R5", footprint_id="r-axial-4", hole="C16", mirrored=True)["ok"]
+    r5 = session.get_component("R5")
+    assert (r5["side"], r5["mirrored"]) == ("top", True)
 
     session.add_part("R2", "r-axial-4")
     session.add_part("R3", "r-axial-4")
     placed = session.place_parts(
-        [{"ref": "R2", "at": "C8", "mirrored": True}, {"ref": "R3", "at": "C12"}]
+        [{"ref": "R2", "at": "C8", "side": "bottom"}, {"ref": "R3", "at": "C12"}]
     )
     assert placed["ok"], placed
-    assert session.get_component("R2")["mirrored"] is True
-    assert session.get_component("R3")["mirrored"] is False
+    r2, r3 = session.get_component("R2"), session.get_component("R3")
+    assert (r2["side"], r2["mirrored"]) == ("bottom", True)
+    assert (r3["side"], r3["mirrored"]) == ("top", False)
 
     session.add_part("R4", "r-axial-4")
     with pytest.raises(SessionError):
@@ -988,7 +998,9 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # mirror_component: the solder side, one key for a person and unreachable for an agent;
     # not a flag on rotate_component, which would make one call two undo steps. Everything
     # else the issue asked for was a parameter -- add_wire's via, mirrored on the two place
-    # tools -- or already there: update_part sets a placed part's value.
+    # tools -- or already there: update_part sets a placed part's value. In 0.24
+    # set_component_side replaced mirror_component one for one: it reflected the pins and
+    # left the body on the component side.
     #
     # And 58, for set_body_clearance (#12), on set_height_limit's argument: a document
     # setting two DRC consumers read -- rule 1 and the placer -- that an agent could

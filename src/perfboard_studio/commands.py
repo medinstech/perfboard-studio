@@ -751,6 +751,9 @@ class PlaceComponentPayload:
     pin_names: PinNames = ()
     symbol: PartSymbol | None = None
     note: str = ""
+    #: The face the part goes on; None is the component side. "bottom" mirrors it too
+    #: (``mirrored`` left None), as ``component.setSide`` does.
+    side: BoardSide | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -878,6 +881,25 @@ class MirrorComponentPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class SetComponentSidePayload:
+    """A part put on the solder side, or back on the component side: turned over, so its
+    pins are reflected with it -- ``mirrored`` set on the solder side, cleared on the
+    component side. See docs/ARCHITECTURE.md, "A part on the solder side is turned over,
+    not reflected"."""
+
+    id: ComponentId
+    side: BoardSide
+
+
+@dataclass(frozen=True, slots=True)
+class SetComponentSidesPayload:
+    """Several parts moved to one face as ONE command. See ``RotateComponentsPayload``."""
+
+    sides: tuple[SetComponentSidePayload, ...]
+    label: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class UpdateComponentPayload:
     id: ComponentId
     ref: str | None = None
@@ -968,6 +990,8 @@ class PartPlacement:
     anchor: HoleCoord
     rotation: Rotation | None = None
     mirrored: bool | None = None
+    #: As ``PlaceComponentPayload.side``.
+    side: BoardSide | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1410,6 +1434,37 @@ class UpdateEdgeConnectorPayload:
 # ---------------------------------------------------------------------------
 
 
+def checked_side(
+    side: BoardSide | None, mirrored: bool | None, board: Board, ref: str
+) -> tuple[BoardSide, bool]:
+    """The face a part goes on and whether its pins are reflected, from what a placement
+    asked for: the component side unless it says otherwise, and the solder side always
+    mirrored -- a part is put there by being turned over. Refused: a face that is not one,
+    the solder side unmirrored, and the solder side of a breadboard, which has none to put
+    a part on (its holes are in the plastic; a solderable breadboard is a board like any
+    other)."""
+    face: BoardSide = "top" if side is None else side
+    if face not in ("top", "bottom"):
+        raise CommandError(
+            "invalid-side", f'{ref} goes on the "top" or the "bottom", not "{face}".'
+        )
+    if face == "top":
+        return face, bool(mirrored)
+    if mirrored is False:
+        raise CommandError(
+            "solder-side-unmirrored",
+            f"{ref} cannot be on the solder side unmirrored: a part put in from underneath "
+            "is turned over, which reflects its pins.",
+        )
+    if is_breadboard(board):
+        raise CommandError(
+            "no-solder-side",
+            f"{ref} cannot go on the solder side of a breadboard: a breadboard has no "
+            "underside to put a part on.",
+        )
+    return face, True
+
+
 def _prepare_component(
     doc: PerfDocument,
     p: PlaceComponentPayload,
@@ -1450,6 +1505,7 @@ def _prepare_component(
         raise CommandError("duplicate-id", f'A component with id "{id_}" already exists.')
     taken_ids.add(id_)
 
+    side, mirrored = checked_side(p.side, p.mirrored, doc.board, p.ref)
     return ComponentInstance(
         id=id_,
         ref=p.ref,
@@ -1457,11 +1513,12 @@ def _prepare_component(
         footprint_id=p.footprint_id,
         anchor=p.anchor,
         rotation=rotation,
-        mirrored=p.mirrored if p.mirrored is not None else False,
+        mirrored=mirrored,
         locked=False,
         pin_names=checked_pin_names(p.pin_names, p.ref),
         symbol=checked_part_symbol(p.symbol, p.ref),
         note=checked_note(p.note, p.ref),
+        side=side,
     )
 
 
@@ -1624,6 +1681,12 @@ class _MirrorComponent:
         existing = require_component(doc, p.id)
         if existing.locked:
             raise CommandError("component-locked", f"{existing.ref} is locked.")
+        if existing.side == "bottom" and not p.mirrored:
+            raise CommandError(
+                "solder-side-unmirrored",
+                f"{existing.ref} is on the solder side, which is what mirrors it; move it to "
+                "the component side instead.",
+            )
         components = tuple(
             dataclasses.replace(c, mirrored=p.mirrored) if c.id == p.id else c
             for c in doc.components
@@ -1634,6 +1697,42 @@ class _MirrorComponent:
         c = next((x for x in doc.components if x.id == p.id), None)
         ref = c.ref if c is not None else p.id
         return f"{'Mirror' if p.mirrored else 'Unmirror'} {ref}"
+
+
+class _SetComponentSide:
+    """A part turned over onto the other face: its side and its reflection in one step.
+
+    Setting, not toggling, both of them: "bottom" leaves a part mirrored however it was,
+    so a board drawn before parts had a side -- a part mirrored there to mean "from the
+    solder side" -- moves there with its holes where they were; "top" clears it."""
+
+    type = "component.setSide"
+
+    def apply(
+        self, doc: PerfDocument, p: SetComponentSidePayload, ctx: CommandContext
+    ) -> PerfDocument:
+        existing = require_component(doc, p.id)
+        if existing.locked:
+            raise CommandError("component-locked", f"{existing.ref} is locked.")
+        side, mirrored = checked_side(
+            p.side, p.side == "bottom", doc.board, existing.ref
+        )
+        if side == existing.side and mirrored == existing.mirrored:
+            raise CommandError(
+                "nothing-to-do",
+                f"{existing.ref} is already on the "
+                f"{'solder' if side == 'bottom' else 'component'} side.",
+            )
+        components = tuple(
+            dataclasses.replace(c, side=side, mirrored=mirrored) if c.id == p.id else c
+            for c in doc.components
+        )
+        return dataclasses.replace(doc, components=components)
+
+    def describe(self, p: SetComponentSidePayload, doc: PerfDocument) -> str:
+        c = next((x for x in doc.components if x.id == p.id), None)
+        ref = c.ref if c is not None else p.id
+        return f"Move {ref} to {'Solder' if p.side == 'bottom' else 'Component'} Side"
 
 
 class _UpdateComponent:
@@ -1749,6 +1848,18 @@ class _MirrorComponents:
 
     def describe(self, p: MirrorComponentsPayload, doc: PerfDocument) -> str:
         return p.label or f"Mirror {len(p.mirrors)} component(s)"
+
+
+class _SetComponentSides:
+    type = "component.setSideMany"
+
+    def apply(
+        self, doc: PerfDocument, p: SetComponentSidesPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        return _each_component(doc, p.sides, set_component_side, ctx, self.type)
+
+    def describe(self, p: SetComponentSidesPayload, doc: PerfDocument) -> str:
+        return p.label or f"Move {len(p.sides)} component(s) to another side"
 
 
 class _UpdateComponents:
@@ -1983,6 +2094,7 @@ def _placed_from(part: SchematicPart, spec: PartPlacement, doc: PerfDocument) ->
     # The SAME id, deliberately. Nothing outside this document refers to it, but the
     # journal and the undo history do, and a part that changed identity when it was
     # placed would make a replayed journal describe two different things.
+    side, mirrored = checked_side(spec.side, spec.mirrored, doc.board, part.ref)
     return ComponentInstance(
         id=part.id,
         ref=part.ref,
@@ -1990,7 +2102,8 @@ def _placed_from(part: SchematicPart, spec: PartPlacement, doc: PerfDocument) ->
         footprint_id=part.footprint_id,
         anchor=spec.anchor,
         rotation=rotation,
-        mirrored=spec.mirrored if spec.mirrored is not None else False,
+        mirrored=mirrored,
+        side=side,
         locked=False,
         # What the part says about itself goes with it. It is the same part on the board
         # as on the sheet, and a placement that dropped its pinout would turn a MOSFET
@@ -4260,6 +4373,8 @@ update_component: CommandDefinition[UpdateComponentPayload] = _UpdateComponent()
 delete_component: CommandDefinition[DeleteComponentPayload] = _DeleteComponent()
 rotate_components: CommandDefinition[RotateComponentsPayload] = _RotateComponents()
 mirror_components: CommandDefinition[MirrorComponentsPayload] = _MirrorComponents()
+set_component_side: CommandDefinition[SetComponentSidePayload] = _SetComponentSide()
+set_component_sides: CommandDefinition[SetComponentSidesPayload] = _SetComponentSides()
 update_components: CommandDefinition[UpdateComponentsPayload] = _UpdateComponents()
 lock_components: CommandDefinition[LockComponentsPayload] = _LockComponents()
 delete_components: CommandDefinition[DeleteComponentsPayload] = _DeleteComponents()
@@ -4329,6 +4444,8 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     delete_component,
     rotate_components,
     mirror_components,
+    set_component_side,
+    set_component_sides,
     update_components,
     lock_components,
     delete_components,

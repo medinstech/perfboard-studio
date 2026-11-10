@@ -849,6 +849,8 @@ TURKISH: Mapping[str, str] = {
     "Pin on an edge finger": "Kenar konnektörü parmağında pin",
     "Heat source too close": "Isı kaynağı fazla yakın",
     "Jumper under a part": "Parçanın altında jumper",
+    "Copper hidden under a part": "Parçanın altında kalan bakır",
+    "Joint under its own part": "Lehim noktası parçanın altında",
     "Bent leg too long": "Bükülen bacak fazla uzun",
     "Too close to a mounting hole": "Montaj deliğine fazla yakın",
     "Pin on a mounting hole": "Montaj deliğinde pin",
@@ -4365,6 +4367,9 @@ TURKISH: Mapping[str, str] = {
     "Move {ref} on the sheet": "{ref} sembolünü şemada taşı",
     "Add {ref} to the sheet at ({x}, {y})": "{ref} sembolünü şemaya ekle ({x}, {y})",
     "Move {ref} to {hole}": "{ref} parçasını {hole} deliğine taşı",
+    "Move {ref} to Solder Side": "{ref} parçasını lehim yüzüne taşı",
+    "Move {ref} to Component Side": "{ref} parçasını parça yüzüne taşı",
+    "Move {count} component(s) to another side": "{count} parçayı öbür yüze taşı",
     "Rotate {ref} to {degrees} degrees": "{ref} parçasını {degrees} dereceye döndür",
     "Unmirror {ref}": "{ref} parçasının aynalamasını kaldır",
     "Mirror {ref}": "{ref} parçasını aynala",
@@ -4604,6 +4609,11 @@ TURKISH: Mapping[str, str] = {
                                                                                                                                                                      "örtüyor. Jumper'ı {ref_b} takılmadan "
                                                                                                                                                                      "önce lehimleyin, yoksa ona ulaşmak için "
                                                                                                                                                                      "parçayı sökmek gerekir.",
+    "{wirekind} {wire} runs under {ref}, which is on the solder side and covers {hole}. Lay it before fitting {ref_b}, or the part has to come off to reach it.": "{wirekind} {wire}, {ref} altından geçiyor; parça lehim yüzünde ve {hole} deliğini örtüyor. Onu {ref_b} takılmadan önce döşeyin, yoksa ona ulaşmak için parçayı sökmek gerekir.",
+    "{ref}'s joint at {hole} is under {ref_b}, on the solder side. Solder {ref_c} before fitting {ref_d}, or the joint cannot be reached or reworked.": "{ref} parçasının {hole} deliğindeki lehim noktası, lehim yüzündeki {ref_b} altında kalıyor. {ref_c} parçasını {ref_d} takılmadan önce lehimleyin, yoksa o noktaya ulaşılamaz ve düzeltilemez.",
+    "{ref}'s joint at {hole} is under {ref_b}, on the component side. Solder {ref_c} before fitting {ref_d}, or the joint cannot be reached or reworked.": "{ref} parçasının {hole} deliğindeki lehim noktası, parça yüzündeki {ref_b} altında kalıyor. {ref_c} parçasını {ref_d} takılmadan önce lehimleyin, yoksa o noktaya ulaşılamaz ve düzeltilemez.",
+    "{ref} is on the solder side of a single-sided board, so its leads are soldered on the solder side, and its body sits on the board over its joints ({holes}): the iron cannot reach them. Put it on the component side, or use a double-sided board.": "{ref} tek yüzlü bir kartın lehim yüzünde; bu yüzden bacakları lehim yüzünde lehimlenir ve gövdesi kartın üstüne, lehim noktalarının üzerine oturur ({holes}): havya onlara ulaşamaz. Onu parça yüzüne koyun ya da çift yüzlü bir kart kullanın.",
+    "{ref} is on the solder side of a single-sided board, so its leads are soldered on the solder side, under its own body ({holes}). Leave the leads about {mm} mm long so the iron reaches the pads, or use a double-sided board.": "{ref} tek yüzlü bir kartın lehim yüzünde; bu yüzden bacakları lehim yüzünde, kendi gövdesinin altında lehimlenir ({holes}). Havyanın pedlere ulaşması için bacakları yaklaşık {mm} mm uzun bırakın ya da çift yüzlü bir kart kullanın.",
     '{wirekind} {wire} lies across {hole}, where {soldered} is soldered on another net. The netlist joins a wire only at its ends, but bare copper resting on a solder joint is a short at the bench. Route it clear of {hole_b}, or use insulated wire, which may pass over.': "{wirekind} {wire}, {hole} deliğinin "
                                                                                                                                                                                                                                                                                 "üstünden geçiyor; orada başka bir nette "
                                                                                                                                                                                                                                                                                 "{soldered} lehimli. Netlist bir teli "
@@ -4693,6 +4703,11 @@ TURKISH: Mapping[str, str] = {
     'is AWG {awg},': 'AWG {awg},',
     'would be cut in AWG {awg}, the heaviest gauge this tool names,': 'bu aracın bildiği en kalın kalınlık olan AWG {awg} ile kesilirdi,',
     '{ref} is locked.': '{ref} kilitli.',
+    "{ref} is on the solder side, which is what mirrors it; move it to the component side instead.": "{ref} lehim yüzünde ve onu aynalayan da bu; bunun yerine onu parça yüzüne taşıyın.",
+    "{ref} cannot go on the solder side of a breadboard: a breadboard has no underside to put a part on.": "{ref} bir breadboard'ın lehim yüzüne konamaz: breadboard'ın altında parça takılacak bir yüz yok.",
+    "{ref} cannot be on the solder side unmirrored: a part put in from underneath is turned over, which reflects its pins.": "{ref} lehim yüzünde aynalanmadan duramaz: alttan takılan parça ters çevrilir ve bu, bacaklarını aynalar.",
+    "{ref} is already on the solder side.": "{ref} zaten lehim yüzünde.",
+    "{ref} is already on the component side.": "{ref} zaten parça yüzünde.",
     'A component with ref "{ref}" is on the board.': '"{ref}" referanslı bir parça zaten kartta.',
     'A schematic part with ref "{ref}" is already in the design. Place that one instead, or give this a different reference.': '"{ref}" referanslı bir parça tasarımda zaten var. Onu yerleştirin ya da buna başka bir referans verin.',
     'A component with ref "{ref}" already exists.': '"{ref}" referanslı bir parça zaten var.',

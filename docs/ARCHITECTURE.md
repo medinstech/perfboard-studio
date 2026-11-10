@@ -3315,3 +3315,101 @@ first three, since every other test process has imported everything. The Schemat
 left as it is: a blank start puts the sheet in front, so it is filled while the window is
 built and building it later would save nothing on the start that matters most.
 
+## A part on the solder side is turned over, not reflected
+
+A part goes on the solder side by being turned over: half a turn about an axis in the board's
+plane, which reflects its pin pattern seen from above AND puts its body below the board.
+`ComponentInstance.mirrored` was only the first half -- the pins reflected, the body still
+standing on the component side in 3D, in DRC, in STEP and in the guide -- and twelve of the
+fifteen golden fixtures carry a mirrored part, dumped by the original engine with exactly that
+meaning. So the face is its own field, `ComponentInstance.side` (`BoardSide`, "top" or
+"bottom"), left out of the file at "top" (the `stripAxis` rule): every fixture, example and
+saved board keeps its bytes and its findings, and a mirrored part on the component side stays
+legal. `DOCUMENT_FORMAT_VERSION` does not move (see "Two version numbers"): no older file needs
+migrating, and 0.23 opening a newer file ignores `side` with its "Unknown property" warning and
+keeps `mirrored`, so the holes stay right and only the body's face is lost.
+
+**One command sets both.** `component.setSide` sets the face and the reflection together --
+"bottom" sets `mirrored`, "top" clears it -- because a part below the board with its pins
+unreflected is not a part anyone can hold, and two commands would leave the board between them
+for an undo step. Setting rather than toggling is what lets a board drawn before this, with a
+part mirrored to mean "from the solder side", be moved there without its holes moving.
+`component.setSideMany` is the group's one step, as `rotateMany` is. `component.mirror` refuses
+to unmirror a part on the solder side (it is mirrored by being there; move it back instead),
+and so does every place command asked for "bottom" with `mirrored` false. A file that says so
+anyway is not refused: `persist` mirrors the part and says it did, because the file has only
+one meaning and refusing it would lock somebody out of their own board. A solderless breadboard
+refuses the solder side (`no-solder-side`): its holes are in plastic with clips under them, and
+there is no underside to put a part on. A solderable breadboard is copper, soldered like any
+board, and allows it.
+
+**Bodies meet only on their own face.** Rule 1 (`component-body-overlap` and the body
+clearance), `under-module`, `jumper-under-body` and `terminal-entry-blocked` compare a pair
+only when both parts are on one face; `fits_under` and `_check_under_module` read `side`, which
+`mirrored` was standing in for. `occupancy.body_covers(hole, side)` takes the face, and the top
+jumper asks "top". `component-too-tall` measures the component side only: `height_limit_mm` is
+the case's room above the board. `heat-proximity`, `component-overhangs-edge` and the
+mounting-hole clearance stay face-blind on purpose: a hot part heats the board through its pads
+on both faces, and an edge or a screw head is in the way whichever face a body is on.
+
+**Two rules only a solder-side part has**, both in `PYTHON_ONLY_RULES`, with
+`test_no_fixture_has_a_part_on_the_solder_side` saying why no fixture can fire them:
+
+- `copper-under-body` (warning): `jumper-under-body` turned over. Copper on a face under a body
+  on that face that is not its own: a solder trace, a bare or insulated wire or a lead bend on
+  the solder side under a part there, measured like the jumper on the holes strictly between its
+  ends, so copper ending at the part's own pin is how that pin is wired. And another part's
+  JOINT under a body on the face it is soldered on (`drc.joint_face`): a component-side part's
+  joints are on the solder side, and a solder-side part's are on the component side, where a
+  body standing over one hides it the same way.
+- `joint-under-body` (single-sided boards only): a solder-side part's leads come out on the
+  component side, where a single-sided board has no copper, so each joint is made on the solder
+  side beside its own body. A body SEATED on the board (`SEATED_ARCHETYPES`: a chip, a relay, a
+  header's moulding) over its own pins leaves the iron no way in, and that is an error. A part
+  standing on its leads -- an LED, a sensor -- is built with its leads left long
+  (`SOLDER_SIDE_LEAD_MM`), and that is a warning saying so. This is decided by archetype, not by
+  plan view: two footprints with the same outline over their pins are one buildable and one not.
+
+**The router refuses, where DRC only warns.** The trace search and every wire candidate keep
+from under a solder-side body, as top jumpers keep from under a component-side one; the ends
+are exempt, so a trace reaches a solder-side DIP's pin. It refuses rather than prices it,
+deliberately: copper under a fitted part is hidden for good, an autorouter has no reason to lay
+it when there is a way round, and a refusal moves no cost, so `DEFAULT_ROUTER_COSTS` and every
+golden route stayed as they were. DRC warns rather than errs because a person may lay it by
+hand on purpose, and the guide's order -- that copper first, the part last -- makes it
+buildable.
+
+**The placer stays face-blind about overlap, deliberately.** `_beneath` reads `side`, as
+`fits_under` does, so a part is under a module only on the module's face. But
+`_Scorer._pair_terms` still keeps two courtyards apart across faces, where rule 1 lets them be:
+two courtyards overlapping on two faces nearly always put one part's joint under the other's
+body, which `copper-under-body` names, and the placer has no term for that. Keeping them apart
+costs density on a board crowded on both faces, not correctness. The under-module walk in
+`test_under_module.py` pins it: on the solder side the placer counts at least every pair the
+same part mirrored on the component side would have been named in.
+
+**3D and STEP turn the body over.** A half turn about the board's y axis is x -> -x (the pins
+`mirrored` already reflects) and z -> -z. `view3d.build_component` builds the part as it stands
+on the component side, unmirrored, and gives every actor the same user transform
+(`turned_over`): half a turn about the line through the anchor, in the board's middle plane,
+along the part's rows. It is a rotation, so the mesh keeps its winding and is lit from outside,
+which a reflected actor is not (see `_reflected_x`), and it is applied last, so the exploded
+view's lift turns over with the part and drops it away from the board.
+`step_export._part_solids` reflects the same solids in the board's middle plane, so STEP is
+still the bodies DRC measured. `test_solder_side.py` holds both to the mirrored part on the
+component side: the same footprint, the height on the other side of the board.
+
+**The guide fits solder-side parts last in phase 7.** Phase 6 turns the board over for its
+traces and bare wire, and phase 7 lays the insulated wire; a body on that face would stand over
+copper it hides, so the solder-side parts come after phase 7's wires, lowest first, and a check
+on a net they finish waits for them (`late_parts`). Phase 7's title and summary say so only
+when the board has one, so every golden guide keeps its words. Their step says to push the part
+in from underneath, and where to solder it: on the component side, or beside the body on a
+single-sided board. A part mirrored on the component side keeps the old note. `PartStep.side`
+carries the face, out of the JSON at "top".
+
+**MCP.** `set_component_side(ref, side)` dispatches `component.setSide`, and `place_component`
+and `place_parts` take `side`. It replaced `mirror_component` one for one, so the tool count
+did not move: `mirror_component`'s only documented use was "put a part on the solder side",
+and after this it would have produced a part reflected on the component side -- exactly the
+wrong part, from a tool an agent had every reason to trust.

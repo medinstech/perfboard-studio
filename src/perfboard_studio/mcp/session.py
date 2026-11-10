@@ -85,7 +85,6 @@ from perfboard_studio.commands import (
     DeletePartPayload,
     DisconnectPinsPayload,
     ImportNetlistPayload,
-    MirrorComponentPayload,
     MoveComponentPayload,
     MoveToBoardPayload,
     NewConductor,
@@ -100,6 +99,7 @@ from perfboard_studio.commands import (
     RotateComponentPayload,
     SetBoardPayload,
     SetBodyClearancePayload,
+    SetComponentSidePayload,
     SetHeightLimitPayload,
     UnplaceComponentPayload,
     UpdateComponentPayload,
@@ -607,6 +607,7 @@ class BoardSession:
             "anchor": format_hole(component.anchor, self.document.board),
             "rotation": component.rotation,
             "mirrored": component.mirrored,
+            "side": component.side,
             "locked": component.locked,
             # Only when declared, like the file: a summary of forty parts that said
             # "symbol: null" forty times would bury the one that says "pmos".
@@ -1118,8 +1119,8 @@ class BoardSession:
         """Move parts from the design onto the board, all as ONE undo step.
 
         Each placement is ``{"ref": "R1", "at": "C7", "rotation": 90}``; rotation is
-        optional and defaults to 0, and ``"mirrored": true`` puts the part on the solder
-        side. One command however many parts, because laying out a
+        optional and defaults to 0, and ``"side": "bottom"`` puts the part on the solder
+        side, turned over (which mirrors it). One command however many parts, because laying out a
         drawn circuit is one decision — dispatched one at a time it takes one undo press
         per part, each leaving a board that is half laid out.
         """
@@ -1139,6 +1140,7 @@ class BoardSession:
                     anchor=_hole(at, self.document.board),
                     rotation=_rotation(int(entry.get("rotation", 0))),
                     mirrored=_mirrored(entry.get("mirrored", False)),
+                    side=_side(entry.get("side", "top")),
                 )
             )
         return self._dispatch("part.place", PlacePartsPayload(placements=tuple(specs)))
@@ -1487,6 +1489,7 @@ class BoardSession:
         symbol: str | None = None,
         part: str = "",
         mirrored: bool = False,
+        side: str = "top",
     ) -> dict[str, Any]:
         ref, footprint_id, value, names, symbol = self._from_catalog(
             part, ref, footprint_id, value, pin_names, symbol
@@ -1504,6 +1507,7 @@ class BoardSession:
                 mirrored=_mirrored(mirrored),
                 pin_names=names,
                 symbol=cast(PartSymbol | None, symbol or None),
+                side=_side(side),
             ),
         )
 
@@ -1520,17 +1524,24 @@ class BoardSession:
             RotateComponentPayload(id=component.id, rotation=_rotation(rotation)),
         )
 
-    def mirror_component(self, ref: str, mirrored: bool = True) -> dict[str, Any]:
-        """Put a part on the solder side, or back: ``mirrored`` is absolute, as
-        ``rotate_component``'s rotation is. A mirrored part's pins are reflected, so the
-        holes it takes change with it. Refused on a locked part, as the window refuses it.
+    def set_component_side(self, ref: str, side: str = "bottom") -> dict[str, Any]:
+        """Put a part on the solder side, or back on the component side: ``side`` is
+        absolute, as ``rotate_component``'s rotation is. Dispatches ``component.setSide``,
+        which turns the part over -- its body below the board and its pins reflected, so
+        the holes it takes change with it -- in one undo step. Refused on a locked part and
+        on a solderless breadboard, which has no underside.
 
         Its own verb and not a flag on ``rotate_component``: one call would then be two
-        decisions and two undo steps.
+        decisions and two undo steps. It replaced ``mirror_component`` (0.24), which
+        reflected the pins and left the body standing on the component side -- the original
+        engine's meaning of ``mirrored``, and the wrong part for an agent that asked for the
+        solder side.
         """
         component = self._require_component(ref)
+        face = _side(side)
         return self._dispatch(
-            "component.mirror", MirrorComponentPayload(id=component.id, mirrored=mirrored)
+            "component.setSide",
+            SetComponentSidePayload(id=component.id, side="top" if face is None else face),
         )
 
     def set_component_locked(self, ref: str, locked: bool) -> dict[str, Any]:
@@ -2704,6 +2715,15 @@ def _mirrored(value: object) -> bool | None:
     if not isinstance(value, bool):
         raise SessionError(f"mirrored must be true or false, not {value!r}.")
     return True if value else None
+
+
+def _side(value: object) -> BoardSide | None:
+    """A placement's ``side``: ``None`` on the component side, so a placement that says
+    nothing about it dispatches exactly the payload it always did, and with
+    ``mirrored`` left out, ``"bottom"`` mirrors the part as turning it over does."""
+    if value not in ("top", "bottom"):
+        raise SessionError(f'side must be "top" or "bottom", not {value!r}.')
+    return None if value == "top" else "bottom"
 
 
 def _rotation(value: int) -> Rotation:

@@ -212,6 +212,27 @@ closed without a bump.
 - **TP4056 charger (with protection), MT3608 boost and AMS1117-3.3 modules**, off the board on their pads' wires, each pad named as its source prints it: the TP4056's OUT pair is the protected one and is not the same wire as B-, the MT3608's output must stay above its input, and the AMS1117's reversed input shorts it.
 - **The 1.8 in ST7735 TFT, Nokia 5110 LCD and TTP223 touch boards**, as 8-, 8- and 3-pin headers from LCDWiki, microcontrollerslab.com and AZ-Delivery, each with its supply and logic levels as the page gives them.
 - **The 9 V battery clip and the AA holder are drawn as cells on the schematic.** A part can now declare itself a `battery` (leads named + and -), and the sheet draws two cells with the long plate on the plus and a mark over each lead, instead of a box with two tiny pin names; a battery with unnamed leads stays a box and the sheet's notes say why.
+- **A part can go on the solder side, turned over.** A part has a face, and on the solder
+  side its body is below the board and its pins are reflected, both set by one command and
+  one undo step (`component.setSide`, and `component.setSideMany` for a group). Before
+  this, mirroring a part reflected its pins and left its body standing on the component side
+  in 3D, in DRC, in the STEP export and in the guide. Now bodies are compared only with bodies
+  on their own face, the 3D view and the STEP model hang the part below the board, the router
+  lays no copper under it, and the guide fits it at the end of phase 7, over copper already
+  laid. Two new DRC rules: `copper-under-body` warns of a trace, a wire or another part's
+  joint hidden under a body on its face, and `joint-under-body` names a part on the solder
+  side of a single-sided board whose joints are under its own body -- an error for a part
+  seated on the board, such as a chip, and a warning for one standing on its leads, saying
+  to leave them long. A solderless breadboard has no solder side, and refuses it. Saved
+  files keep their bytes: the face is written only for a part on the solder side, and 0.23
+  opens such a file with the part mirrored on the component side.
+
+### Changed
+
+- **The MCP tool `mirror_component` is replaced by `set_component_side`.**
+  `mirror_component` left a part's body on the component side; `set_component_side(ref,
+  "bottom")` turns the part over. `place_component` and `place_parts` take `side`, and a
+  component's summary says it. The tool count stays at 67.
 
 ### Fixed
 

@@ -320,6 +320,7 @@ COMPONENT_KEY_ORDER: tuple[str, ...] = (
     "anchor",
     "rotation",
     "mirrored",
+    "side",
     "locked",
     "pinNames",
     "symbol",
@@ -525,6 +526,9 @@ def _ordered_component(c: ComponentInstance, index: int) -> JsonObj:
             "anchor": _ordered_hole(c.anchor, _field_path(path, "anchor")),
             "rotation": _num(_field_path(path, "rotation"), c.rotation),
             "mirrored": c.mirrored,
+            # Left out on the component side (the ``stripAxis`` rule), so every file saved
+            # before a part could go on the solder side keeps its bytes.
+            **({"side": c.side} if c.side != "top" else {}),
             "locked": c.locked,
             **_declared_fields(c),
         },
@@ -1532,6 +1536,17 @@ def _parse_edge_connector(raw: object, path: str, warnings: list[str]) -> EdgeCo
 def _parse_component(raw: object, path: str, warnings: list[str]) -> ComponentInstance:
     obj = _expect_object(raw, path)
     _check_unknown_keys(obj, COMPONENT_KEY_ORDER, path, warnings)
+    side = cast(BoardSide, _expect_enum(obj.get("side", "top"), _field_path(path, "side"), BOARD_SIDES))
+    mirrored = _expect_boolean(_require_field(obj, "mirrored", path), _field_path(path, "mirrored"))
+    if side == "bottom" and not mirrored:
+        # A part turned over onto the solder side has its pins reflected; one that says
+        # otherwise has one meaning, so it is given it and the load says so, where
+        # ``component.setSide`` would refuse to make it.
+        warnings.append(
+            f'"{path}" is on the solder side but not mirrored; it was mirrored, since a part '
+            "put in from underneath has its pins reflected."
+        )
+        mirrored = True
     return ComponentInstance(
         id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
         ref=_expect_string(_require_field(obj, "ref", path), _field_path(path, "ref")),
@@ -1539,11 +1554,12 @@ def _parse_component(raw: object, path: str, warnings: list[str]) -> ComponentIn
         footprint_id=_expect_string(_require_field(obj, "footprintId", path), _field_path(path, "footprintId")),
         anchor=_parse_hole(_require_field(obj, "anchor", path), _field_path(path, "anchor"), warnings),
         rotation=_parse_rotation(_require_field(obj, "rotation", path), _field_path(path, "rotation")),
-        mirrored=_expect_boolean(_require_field(obj, "mirrored", path), _field_path(path, "mirrored")),
+        mirrored=mirrored,
         locked=_expect_boolean(_require_field(obj, "locked", path), _field_path(path, "locked")),
         pin_names=_parse_pin_names(obj, path),
         symbol=_parse_part_symbol(obj, path),
         note=_parse_note(obj, path),
+        side=side,
     )
 
 

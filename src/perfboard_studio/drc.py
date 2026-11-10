@@ -101,6 +101,7 @@ from .geometry import (
 from .model import (
     HEAT_CLEARANCE_MM,
     HEAT_SOURCE_ARCHETYPES,
+    SEATED_ARCHETYPES,
     Board,
     BoardMaterial,
     BoardSide,
@@ -526,6 +527,10 @@ def _check_component_body_overlap(doc: PerfDocument, lookup: FootprintLookup) ->
     for (a_component, a_footprint, a_yard), (b_component, b_footprint, b_yard) in (
         itertools.combinations(courtyards, 2)
     ):
+        if a_component.side != b_component.side:
+            # The board is between them. What one on the solder side does to the joints
+            # and the copper on that face is ``copper-under-body``'s.
+            continue
         if not _courtyards_overlap(a_yard, b_yard):
             continue
         if fits_under(a_component, a_footprint, b_component, b_footprint, doc.board) or (
@@ -594,6 +599,8 @@ def _check_body_clearance(
     ]
     violations: list[DrcViolation] = []
     for a, b in itertools.combinations(bodies, 2):
+        if a.component.side != b.component.side:
+            continue
         if not bodies_clash(a.box, a.round, a.pins, b.box, b.round, b.pins, clearance):
             continue
         if fits_under(a.component, a.footprint, b.component, b.footprint, doc.board) or (
@@ -679,7 +686,7 @@ def fits_under(
     the other side of the board from it, and left to rule 1 as it always was. The placer
     asks the same of the same pairs (``placer._Scorer`` in ``_pair_terms``).
     """
-    if part.mirrored != module.mirrored:
+    if part.side != module.side:
         return False
     raised = placed_raised_board(module, module_footprint, board)
     if raised is None:
@@ -715,7 +722,7 @@ def _check_under_module(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcV
     violations: list[DrcViolation] = []
     for module, raised in modules:
         for part, footprint in placed:
-            if part.id == module.id or part.mirrored != module.mirrored:
+            if part.id == module.id or part.side != module.side:
                 continue
             if not stands_under_raised_board(
                 placed_body_box(part, footprint, doc.board),
@@ -1083,7 +1090,9 @@ def _check_wire_entries(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcV
             (
                 other
                 for other, _footprint in placed
-                if other.id != component.id and entry_blocked_by(corridor, bodies[other.id])
+                if other.id != component.id
+                and other.side == component.side
+                and entry_blocked_by(corridor, bodies[other.id])
             ),
             key=lambda other: other.ref,
         )
@@ -2437,6 +2446,10 @@ def _check_component_height(doc: PerfDocument, lookup: FootprintLookup) -> list[
 
     violations: list[DrcViolation] = []
     for component in doc.components:
+        if component.side != "top":
+            # The limit is the case's clear height above the board; below it, a part has
+            # the stand-offs, which no board says the height of yet.
+            continue
         footprint = lookup(component.footprint_id)
         if footprint is None:
             continue
@@ -2513,7 +2526,7 @@ def _check_jumper_under_body(doc: PerfDocument, lookup: FootprintLookup) -> list
             for hole in holes_under_line(from_, to):
                 if hole_key(hole) in ends:
                     continue
-                component_id = occupancy.body_covers(hole)
+                component_id = occupancy.body_covers(hole, "top")
                 if component_id is not None and component_id not in first_hole:
                     first_hole[component_id] = hole
 
@@ -2540,6 +2553,187 @@ def _check_jumper_under_body(doc: PerfDocument, lookup: FootprintLookup) -> list
                 )
             )
     return violations
+
+
+# ---------------------------------------------------------------------------
+# A part on the solder side (docs/ARCHITECTURE.md, "A part on the solder side is turned
+# over, not reflected")
+# ---------------------------------------------------------------------------
+
+#: How long to leave the leads of a part on the solder side of a single-sided board, so
+#: the iron reaches the pad past its body: the joint is made on the same face as the body.
+SOLDER_SIDE_LEAD_MM = 5
+
+
+def joint_face(component: ComponentInstance, board: Board) -> BoardSide:
+    """The face a part's leads are soldered on. A part on the component side comes through
+    to the solder side, as always; one on the solder side comes through to the component
+    side -- unless the board is single-sided, with no copper there, and then its joints
+    are on its own face, beside its own body."""
+    if component.side == "top" or board.single_sided:
+        return "bottom"
+    return "top"
+
+
+def _check_copper_under_body(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    """Copper on a face, under a body on that face that is not its own.
+
+    ``jumper-under-body`` turned over. A part on the solder side stands on whatever is on
+    that face under it: a solder trace, a bare or insulated wire, a lead bend, another
+    part's joint. The guide lays the copper first, so the board can be built; once the part
+    is fitted it is hidden, and has to come off to rework it. And a part put in from
+    underneath on a double-sided board is soldered on the COMPONENT side, so a body there
+    over its joint is the same thing from above.
+
+    Conductors are measured as ``jumper-under-body`` measures a jumper: on the holes
+    strictly between their ends, so copper that ENDS at a part's pin is not named -- the
+    body's box covers its own pin holes. The router lays none of it (its trace search and
+    its wires keep from under a solder-side body), so this names copper drawn by hand or a
+    part moved over copper already laid. A warning, one per (copper, part) pair. A
+    stripboard's strips are not counted: they are the board, there before any part is, and
+    a part on the solder side of a stripboard stands on them by definition.
+    """
+    if not any(component.side == "bottom" for component in doc.components):
+        return []
+    occupancy = build_occupancy(doc, lookup)
+    by_id = {component.id: component for component in doc.components}
+    violations: list[DrcViolation] = []
+
+    for conductor in doc.conductors:
+        if conductor.side != "bottom" or conductor.kind == "strip" or len(conductor.path) < 2:
+            continue
+        ends = {hole_key(conductor.path[0]), hole_key(conductor.path[-1])}
+        holes = (
+            list(conductor.path)
+            if contacts_every_path_hole(conductor)
+            else [h for p, q in itertools.pairwise(conductor.path) for h in holes_under_line(p, q)]
+        )
+        first: dict[ComponentId, HoleCoord] = {}
+        for hole in holes:
+            if hole_key(hole) in ends:
+                continue
+            under = occupancy.body_covers(hole, "bottom")
+            if under is not None and under not in first:
+                first[under] = hole
+        for component_id, hole in first.items():
+            part = by_id[component_id]
+            violations.append(
+                DrcViolation(
+                    rule="copper-under-body",
+                    severity="warning",
+                    message=(
+                        f"{_conductor_words(conductor.kind)} {conductor.id} "
+                        f"({_safe_hole(conductor.path[0], doc.board)} to "
+                        f"{_safe_hole(conductor.path[-1], doc.board)}) runs under "
+                        f"{part.ref}, which is on the solder side and covers "
+                        f"{_safe_hole(hole, doc.board)}. Lay it before fitting {part.ref}, or "
+                        f"the part has to come off to reach it."
+                    ),
+                    holes=(hole, part.anchor),
+                    component_ids=(part.id,),
+                    conductor_ids=(conductor.id,),
+                )
+            )
+
+    for component in doc.components:
+        footprint = lookup(component.footprint_id)
+        if footprint is None:
+            continue
+        face = joint_face(component, doc.board)
+        named: set[ComponentId] = set()
+        for _pin, hole in all_pin_holes(component, footprint):
+            under = occupancy.body_covers(hole, face)
+            if under is None or under == component.id or under in named:
+                continue
+            body = by_id[under]
+            if body.side != "bottom" and component.side != "bottom":
+                continue
+            named.add(under)
+            violations.append(
+                DrcViolation(
+                    rule="copper-under-body",
+                    severity="warning",
+                    message=(
+                        f"{component.ref}'s joint at {_safe_hole(hole, doc.board)} is under "
+                        f"{body.ref}, on the {_face_words(face)} side. Solder {component.ref} "
+                        f"before fitting {body.ref}, or the joint cannot be reached or "
+                        f"reworked."
+                    ),
+                    holes=(hole, body.anchor),
+                    component_ids=(component.id, body.id),
+                )
+            )
+    return violations
+
+
+def _check_joint_under_body(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    """A part on the solder side of a single-sided board, its joints under its own body.
+
+    Its leads come out on the component side, where a single-sided board has no copper, so
+    each joint is made on the solder side, on the body's own face. Where the body covers
+    its own pins the iron has to reach under it. A body SEATED on the board
+    (``model.SEATED_ARCHETYPES``: a chip, a relay, a header's plastic) leaves no way at all,
+    and that is an error. A part standing on its leads -- the LED or the sensor the issue
+    asking for this was about -- is built with its leads left long, and that is a warning
+    saying so. A part off the board (``flying-leads``) has no body here.
+    """
+    if not doc.board.single_sided:
+        return []
+    violations: list[DrcViolation] = []
+    for component in doc.components:
+        if component.side != "bottom":
+            continue
+        footprint = lookup(component.footprint_id)
+        if footprint is None or not footprint.body_outline:
+            continue
+        if footprint.body.archetype == "flying-leads":
+            continue
+        placed = _placed_body(component, footprint, doc.board)
+        under = [
+            hole
+            for (_pin, hole), (x, y) in zip(
+                all_pin_holes(component, footprint), placed.pins, strict=True
+            )
+            if point_under_body(x, y, placed.box, placed.round)
+        ]
+        if not under:
+            continue
+        seated = footprint.body.archetype in SEATED_ARCHETYPES
+        where = ", ".join(_safe_hole(hole, doc.board) for hole in under)
+        violations.append(
+            DrcViolation(
+                rule="joint-under-body",
+                severity="error" if seated else "warning",
+                message=(
+                    f"{component.ref} is on the solder side of a single-sided board, so its "
+                    f"leads are soldered on the solder side, and its body sits on the board "
+                    f"over its joints ({where}): the iron cannot reach them. Put it on the "
+                    f"component side, or use a double-sided board."
+                    if seated
+                    else f"{component.ref} is on the solder side of a single-sided board, so "
+                    f"its leads are soldered on the solder side, under its own body "
+                    f"({where}). Leave the leads about {SOLDER_SIDE_LEAD_MM} mm long so the "
+                    f"iron reaches the pads, or use a double-sided board."
+                ),
+                holes=tuple(under),
+                component_ids=(component.id,),
+            )
+        )
+    return violations
+
+
+def _face_words(face: BoardSide) -> str:
+    return "solder" if face == "bottom" else "component"
+
+
+def _conductor_words(kind: str) -> str:
+    return {
+        "solder-trace": "Solder trace",
+        "solder-trace-wired": "Solder trace",
+        "bare-wire": "Bare wire",
+        "insulated-wire": "Insulated wire",
+        "lead-bend": "Bent lead",
+    }.get(kind, "Conductor")
 
 
 # ---------------------------------------------------------------------------
@@ -2616,6 +2810,8 @@ def run_drc(
         *_check_heat_proximity(doc, lookup, options),
         *_check_component_height(doc, lookup),
         *_check_jumper_under_body(doc, lookup),
+        *_check_copper_under_body(doc, lookup),
+        *_check_joint_under_body(doc, lookup),
     ]
 
     violations.sort(key=_violation_sort_key)

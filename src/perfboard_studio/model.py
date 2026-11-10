@@ -656,6 +656,14 @@ class ComponentInstance:
     #: guide. Months later the reason is the first thing anybody has forgotten. Empty is
     #: no note -- and the field is left out of the file.
     note: str = ""
+    #: The face the BODY is on: "top", the component side, or "bottom", the solder side,
+    #: the part put in from underneath with its body below the board. A part goes there by
+    #: being turned over, which reflects its pins too, so a part on the solder side is
+    #: always ``mirrored`` (``component.setSide`` sets both; see docs/ARCHITECTURE.md, "A
+    #: part on the solder side is turned over, not reflected"). A part mirrored on the
+    #: component side is the original engine's meaning of ``mirrored`` and stays legal.
+    #: Left out of the file at "top".
+    side: BoardSide = "top"
 
 
 @dataclass(frozen=True, slots=True)

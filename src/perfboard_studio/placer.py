@@ -139,6 +139,7 @@ from .model import (
     HEAT_SOURCE_ARCHETYPES,
     VALID_ROTATIONS,
     Board,
+    BoardSide,
     BodyArchetype,
     ComponentId,
     ComponentInstance,
@@ -823,11 +824,11 @@ class _Part:
     edge_seeking: bool
     heat_source: bool
     heat_sensitive: bool
-    #: How tall the part stands, ``footprint.body_height``, and whether it is on the solder
-    #: side: the two facts that decide whether it fits under a module's raised board, which
-    #: it can only be on the module's own face.
+    #: How tall the part stands, ``footprint.body_height``, and the face it is on: the two
+    #: facts that decide whether it fits under a module's raised board, which it can only be
+    #: on the module's own face.
     height: float
-    mirrored: bool
+    side: BoardSide
     #: For a module, the tallest part that fits under its board (``footprints.raised_board``)
     #: and, per rotation index, the board and its header mouldings relative to the anchor in
     #: mm. ``None``, ``None`` at every index and no mouldings for every other part.
@@ -962,7 +963,7 @@ def _build_parts(doc: PerfDocument, lookup: FootprintLookup) -> list[_Part]:
                 heat_source=archetype in HEAT_SOURCE_ARCHETYPES,
                 heat_sensitive=archetype in HEAT_SENSITIVE_ARCHETYPES,
                 height=footprint.body_height,
-                mirrored=component.mirrored,
+                side=component.side,
                 headroom=None if raised is None else raised.headroom,
                 rel_raised=tuple(raised_boxes),
                 rel_headers=tuple(headers),
@@ -1776,7 +1777,7 @@ class _Scorer:
         """
         part_low, part_high = state.parts[low], state.parts[high]
         headroom = part_high.headroom
-        if headroom is None or part_low.mirrored != part_high.mirrored:
+        if headroom is None or part_low.side != part_high.side:
             return False
         if part_low.height > headroom:
             return False  # The predicate's first answer, before any box is built.
@@ -1842,7 +1843,12 @@ class _Scorer:
         return known
 
     def _pair_terms(self, state: _State, a: int, b: int) -> tuple[int, float, float]:
-        """:meth:`pair_terms`, worked out."""
+        """:meth:`pair_terms`, worked out.
+
+        Face-blind on purpose, where rule 1 is not: two courtyards that overlap on two faces
+        nearly always put one part's joints under the other's body, which DRC names as
+        ``copper-under-body``, so keeping them apart is the cheaper truth.
+        """
         part_a, part_b = state.parts[a], state.parts[b]
         box_a = part_a.rel_box[state.rot[a]]
         box_b = part_b.rel_box[state.rot[b]]

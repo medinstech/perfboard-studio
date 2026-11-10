@@ -242,6 +242,9 @@ TURKISH: dict[str, str] = {
     "Tall and mechanical": "Uzun ve mekanik parçalar",
     "Solder side: traces and bare wire": "Lehim yüzü: lehim yolları ve çıplak tel",
     "Long insulated wires": "Uzun izoleli teller",
+    "Long insulated wires, then the solder-side parts": (
+        "Uzun izoleli teller, ardından lehim yüzündeki parçalar"
+    ),
     # -- a solderless breadboard (guide.BREADBOARD_PHASE_TITLES and the steps on one) --
     "Jumpers, then what lies flat": "Önce jumper'lar, sonra yatık parçalar",
     "ICs across the groove": "Oluğun üstüne entegreler",
@@ -390,6 +393,11 @@ TURKISH: dict[str, str] = {
     "Insulated wire, which may cross anything already on the solder side.": (
         "Lehim yüzünde zaten olan her şeyin üzerinden geçebilen izoleli tel."
     ),
+    "Then the parts that go on the solder side, lowest first: each over copper that is "
+    "already laid and checked, since it hides what is under it.": (
+        "Ardından lehim yüzüne giden parçalar, en alçaktan başlayarak: her biri altındakini "
+        "kapattığı için, zaten döşenmiş ve kontrol edilmiş bakırın üzerine takılır."
+    ),
     "Then the wires to the parts off the board: into their pads here first, then to the "
     "parts themselves once they are mounted.": (
         "Ardından kart dışındaki parçaların telleri: önce buradaki pedlerine, sonra parçalar "
@@ -488,6 +496,17 @@ TURKISH: dict[str, str] = {
         "Varsa buraya bir soket takın — bu aşama soketlerin aşaması. Entegrenin kendisi, "
         "soket olsun olmasın, 8. aşamadaki kapanış kontrollerine kadar takılmaz: kartta "
         "havyayla karşılaşması gereken son şey odur."
+    ),
+    "This part goes on the SOLDER side: push it in from underneath, its body below the "
+    "board, and solder its leads on the component side.": (
+        "Bu parça LEHİM yüzüne gelir: alttan takın, gövdesi kartın altında kalsın, bacaklarını "
+        "parça yüzünde lehimleyin."
+    ),
+    "This part goes on the SOLDER side: push it in from underneath, its body below the "
+    "board, and solder its leads on the solder side, beside the body. The board has no "
+    "copper on the component side.": (
+        "Bu parça LEHİM yüzüne gelir: alttan takın, gövdesi kartın altında kalsın, bacaklarını "
+        "lehim yüzünde, gövdenin yanında lehimleyin. Kartın parça yüzünde bakır yok."
     ),
     "This part is mirrored: it goes in from the SOLDER side, not the component side. Check "
     "the pin order against the board before soldering.": (

@@ -302,6 +302,12 @@ def _violation_to_jsonable(v: DrcViolation) -> dict[str, Any]:
 #: called an overlap because it judged every pair by courtyards seen from above. No fixture
 #: carries a module, so none can fire it, and rule 1's findings on them are the ones they
 #: were -- see test_under_module.py.
+#:
+#: ``copper-under-body`` and ``joint-under-body`` are a part on the solder side, which the
+#: original could not put there: it had ``mirrored`` and no face. No fixture carries a part
+#: on the solder side, so neither can fire on one -- pinned by
+#: test_no_fixture_has_a_part_on_the_solder_side, and the rules themselves by
+#: test_solder_side.py.
 PYTHON_ONLY_RULES = frozenset(
     {
         "conductor-crossing",
@@ -318,6 +324,8 @@ PYTHON_ONLY_RULES = frozenset(
         "wrong-rail",
         "under-module",
         "superseded-footprint",
+        "copper-under-body",
+        "joint-under-body",
     }
 )
 
@@ -1514,6 +1522,21 @@ def test_the_python_only_crossing_rule_fires_where_typescript_was_blind() -> Non
             fired[case_name] = count
 
     assert fired == {"random-01": 1, "random-04": 1}
+
+
+def test_no_fixture_has_a_part_on_the_solder_side() -> None:
+    """The two solder-side rules are in PYTHON_ONLY_RULES because no fixture can fire them:
+    every part on all fifteen is on the component side -- twelve carry a MIRRORED part,
+    which is the original's meaning of the word and stays on its face -- and neither rule
+    names anything on them."""
+    for case_name in GOLDEN_CASE_NAMES:
+        doc, _expected = _load_golden(case_name)
+        assert all(c.side == "top" for c in doc.components), case_name
+        assert not [
+            v
+            for v in run_drc(doc, _FOOTPRINT_LOOKUP)
+            if v.rule in ("copper-under-body", "joint-under-body")
+        ], case_name
 
 
 def test_the_python_only_jumper_rule_fires_where_typescript_had_no_rule_at_all() -> None:

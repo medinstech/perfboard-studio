@@ -47,12 +47,13 @@ gauge are silent without.
 The newest two are inverses that were missing. ``delete_conductors`` is the only way an
 agent can take back a wire it laid other than ``undo``, which reaches the last step only;
 ``reroute`` and ``remove_stale_conductors`` take only copper that claims a net or no longer
-serves one. ``mirror_component`` is the solder side, which a person reaches with one key
-and an agent could not reach at all. Mirroring is not a flag on ``rotate_component``,
-because one call would then be two decisions and two undo steps. The rest of what was
-asked for in the same issue were parameters, not tools: ``add_wire(via=...)`` for a bent
-wire, ``mirrored`` on the two place tools, and a placed part's value, which
-``update_part`` already set.
+serves one. ``set_component_side`` is the solder side, which a person reaches with one
+key and an agent could not reach at all. Turning a part over is not a flag on
+``rotate_component``, because one call would then be two decisions and two undo steps. It
+replaced ``mirror_component`` one for one, which reflected the pins and left the body on
+the component side. The rest of what was asked for in the same issue were parameters, not
+tools: ``add_wire(via=...)`` for a bent wire, ``side`` on the two place tools, and a placed
+part's value, which ``update_part`` already set.
 
 ``set_body_clearance`` is ``set_height_limit``'s argument again (#12). A document may ask
 for its parts to be judged by their real bodies instead of their courtyards, and DRC's
@@ -503,8 +504,8 @@ def list_parts() -> dict[str, Any]:
 @mcp.tool()
 def place_parts(placements: list[dict[str, Any]]) -> dict[str, Any]:
     """Move parts from the design onto the board, all as ONE undo step. Each placement is
-    {"ref": "R1", "at": "C7", "rotation": 90}; rotation is optional, and "mirrored": true
-    puts a part on the solder side. Laying out a drawn
+    {"ref": "R1", "at": "C7", "rotation": 90}; rotation is optional, and "side": "bottom"
+    puts a part on the solder side, turned over. Laying out a drawn
     circuit is one decision, and one command per part means one undo press per part, each
     leaving a board half laid out. optimize_placement arranges them afterwards."""
     return session.place_parts(placements)
@@ -596,9 +597,12 @@ def place_component(
     symbol: str | None = None,
     part: str = "",
     mirrored: bool = False,
+    side: str = "top",
 ) -> dict[str, Any]:
     """Put a part on the board. `hole` is where pin 1 goes ("C7"); rotation is 0, 90,
-    180 or 270; mirrored=true puts it on the solder side. Use list_footprints to find a
+    180 or 270; side="bottom" puts it on the solder side, turned over, which mirrors its
+    pins (mirrored=true alone reflects them and leaves the body on top). Use
+    list_footprints to find a
     footprint_id. pin_names and symbol are as on add_part. part="irf9540n" (see
     list_catalog) fills the footprint, value, names and symbol in, under anything given;
     with it, ref and footprint_id may be left empty."""
@@ -612,6 +616,7 @@ def place_component(
         symbol=symbol,
         part=part,
         mirrored=mirrored,
+        side=side,
     )
 
 
@@ -628,11 +633,12 @@ def rotate_component(ref: str, rotation: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-def mirror_component(ref: str, mirrored: bool = True) -> dict[str, Any]:
-    """Put a part on the solder side (mirrored=true) or back on the component side
-    (false). Absolute, like rotate_component. Its pins are reflected, so the holes it
-    takes change. Refused on a locked part."""
-    return session.mirror_component(ref, mirrored)
+def set_component_side(ref: str, side: str = "bottom") -> dict[str, Any]:
+    """Put a part on the solder side (side="bottom") or back on the component side
+    ("top"). Absolute, like rotate_component. The part is turned over: its body below the
+    board and its pins reflected, so the holes it takes change. Refused on a locked part
+    and on a solderless breadboard."""
+    return session.set_component_side(ref, side)
 
 
 @mcp.tool()
