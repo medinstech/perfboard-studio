@@ -493,3 +493,44 @@ def test_a_long_list_of_supplies_is_cut_short() -> None:
     )
     (finding,) = checked(doc, power_entry=True)
     assert "is wired to VCC, GND, +5V and 2 more." in finding.message
+
+
+def test_the_power_modules_on_wires_are_not_chips_and_a_wired_supply_chain_is_quiet() -> None:
+    """A charger, a boost converter and a 3.3 V regulator module are ``wire-<n>`` parts, which ERC
+    treats as connectors (``flying-leads``): the pads their wires land in, not chips with a
+    supply pin to be left open. Wired as they are
+    meant to be -- the TP4056 between a terminal, a cell holder and a load; the MT3608 from a
+    cell holder to a load; the AMS1117 from a terminal to a devkit's 3V3 -- ERC says nothing,
+    on nets named for what they carry and on nets named for the pad they are wired to.
+    Their pin names are therefore never read as supplies."""
+    tp4056 = [cat("U1", "tp4056-module"), plain("J1", "screw-terminal-2"),
+              cat("BT1", "battery-aa-holder"), plain("J2", "hdr-1x2")]
+    mt3608 = [cat("U1", "mt3608-boost"), cat("BT1", "battery-aa-holder"), plain("J2", "hdr-1x2")]
+    ams1117 = [cat("U1", "ams1117-33-module"), plain("J1", "screw-terminal-2"),
+               cat("A1", "esp32-devkitc")]
+    docs = [
+        circuit(tp4056, {"5V": ("J1.1", "U1.1"), "GND": ("J1.2", "U1.2"),
+                         "BAT+": ("U1.5", "BT1.1"), "BAT-": ("U1.6", "BT1.2"),
+                         "VOUT": ("U1.3", "J2.1"), "GND2": ("U1.4", "J2.2")}),
+        circuit(tp4056, {"VCC": ("J1.1", "U1.1"),
+                         "GND": ("J1.2", "U1.2", "U1.6", "BT1.2", "U1.4", "J2.2"),
+                         "VBAT": ("U1.5", "BT1.1"), "VOUT": ("U1.3", "J2.1")}),
+        circuit(mt3608, {"VIN": ("BT1.1", "U1.1"), "GND": ("BT1.2", "U1.2", "U1.4", "J2.2"),
+                         "VOUT": ("U1.3", "J2.1")}),
+        circuit(mt3608, {"+3V": ("BT1.1", "U1.1"), "GND": ("BT1.2", "U1.2", "U1.4", "J2.2"),
+                         "+5V": ("U1.3", "J2.1")}),
+        circuit(ams1117, {"+5V": ("J1.1", "U1.1"), "GND": ("J1.2", "U1.2", "A1.14"),
+                          "+3V3": ("U1.3", "A1.1")}),
+        circuit(ams1117, {"VIN": ("J1.1", "U1.1"), "GND": ("J1.2", "U1.2", "A1.14"),
+                          "OUT": ("U1.3", "A1.1")}),
+    ]
+    for doc in docs:
+        assert checked(doc, power_entry=True) == ()
+    # Not quiet because ERC looks at nothing: the same devkit with its ground left off the
+    # regulator's is still a module that needs one.
+    (finding, *_) = checked(
+        circuit(ams1117, {"+5V": ("J1.1", "U1.1"), "GND": ("J1.2", "U1.2"),
+                          "+3V3": ("U1.3", "A1.1")}),
+        power_entry=True,
+    )
+    assert finding.refs == ("A1",)
