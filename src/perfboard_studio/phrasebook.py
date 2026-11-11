@@ -245,6 +245,12 @@ TURKISH: dict[str, str] = {
     "Long insulated wires, then the solder-side parts": (
         "Uzun izoleli teller, ardından lehim yüzündeki parçalar"
     ),
+    "Component-side solder, then long insulated wires": (
+        "Parça yüzündeki lehim, ardından uzun izoleli teller"
+    ),
+    "Component-side solder, long insulated wires, then the solder-side parts": (
+        "Parça yüzündeki lehim, uzun izoleli teller, ardından lehim yüzündeki parçalar"
+    ),
     # -- a solderless breadboard (guide.BREADBOARD_PHASE_TITLES and the steps on one) --
     "Jumpers, then what lies flat": "Önce jumper'lar, sonra yatık parçalar",
     "ICs across the groove": "Oluğun üstüne entegreler",
@@ -392,6 +398,12 @@ TURKISH: dict[str, str] = {
     ),
     "Insulated wire, which may cross anything already on the solder side.": (
         "Lehim yüzünde zaten olan her şeyin üzerinden geçebilen izoleli tel."
+    ),
+    "Turn the board back to the component side and lay its solder runs first, now that "
+    "every part is in: solder put into a hole before its lead would have kept the lead out.": (
+        "Önce kartı yeniden parça yüzüne çevirin ve oradaki lehim hatlarını döşeyin; artık "
+        "bütün parçalar takılı: bacağından önce bir deliğe konan lehim, bacağı dışarıda "
+        "bırakırdı."
     ),
     "Then the parts that go on the solder side, lowest first: each over copper that is "
     "already laid and checked, since it hides what is under it.": (
@@ -698,6 +710,16 @@ TURKISH: dict[str, str] = {
         "bacak artığı yatırmayı düşünün: direnci kabaca on kat düşürür ve aynı kalitede "
         "tekrarlamak çok daha kolaydır."
     ),
+    "This run is on the COMPONENT side, among the fitted parts' leads: solder it from "
+    "above, and keep the iron off the parts' bodies.": (
+        "Bu hat PARÇA yüzündedir, takılı parçaların bacakları arasında: yukarıdan "
+        "lehimleyin ve havyayı parçaların gövdelerinden uzak tutun."
+    ),
+    "{hole} is a via: this run meets the solder on the component side through that hole. "
+    "Let the solder run into it until it shows on the component side.": (
+        "{hole} deliği bir via: bu hat, parça yüzündeki lehimle o deliğin içinden buluşur. "
+        "Lehimi, parça yüzünde görünene kadar deliğe akıtın."
+    ),
     "Tin each pad lightly first, then join them.": (
         "Önce her pedi hafifçe kalaylayın, sonra birleştirin."
     ),
@@ -749,6 +771,13 @@ TURKISH: dict[str, str] = {
     ),
     "Probe {a} and {b}.": "{a} ile {b} arasını ölçün.",
     "Continuous — they are both on net {net}.": "Sürekli — ikisi de {net} netinde.",
+    "{via} ↔ {other} through the via": "{via} ↔ {other}, via üzerinden",
+    "With the component side's solder laid, probe {via} on the component side and {other} "
+    "on the solder side.": (
+        "Parça yüzündeki lehim döşendikten sonra {via} deliğini parça yüzünden, {other} "
+        "deliğini lehim yüzünden ölçün."
+    ),
+    "Continuous — the via joins the two faces.": "Sürekli — via iki yüzü birleştirir.",
     "{net} run {span}: about {milliohm:.1f} mΩ end to end": (
         "{net} hattı {span}: uçtan uca yaklaşık {milliohm:.1f} mΩ"
     ),

@@ -111,7 +111,7 @@ from .model import (
     declared_pin_name,
     pin_name_of,
 )
-from .occupancy import stacking_layers
+from .occupancy import build_occupancy, stacking_layers
 from .phrasebook import ENGLISH, GuideLanguage, Phrasebook, phrasebook
 from .stripboard import is_stripboard, strip_axis
 
@@ -122,6 +122,7 @@ from .wirecolour import SIGNAL_COLORS as SIGNAL_COLORS
 from .wirecolour import net_colours as net_colours
 from .wirecolour import signal_colour_index as signal_colour_index
 from .wiregauge import awg_diameter_mm, cut_gauge_awg, fits_hole
+from .wiringstats import vias
 
 if TYPE_CHECKING:  # harness.py builds on this module, so only the type crosses back
     from .harness import HarnessCable
@@ -764,6 +765,13 @@ def build_guide(
         doc, lookup, nets_by_id, color_by_net, violations, options, say
     )
     lead_list = _lead_cuts(doc, lookup, color_by_net, options, say)
+    # Solder on the component side (0.25, #14): its runs open phase 7, and every pinless
+    # hole where it meets the solder side's copper is filled when that copper is laid and
+    # probed once both faces are done. A board with no such solder -- every board before
+    # 0.25 -- gets none of this, and its guide keeps every word.
+    component_side = any(_is_component_side_copper(step) for step, _ in conductor_steps)
+    via_holes = vias(doc, build_occupancy(doc, lookup)) if component_side else ()
+    conductor_steps, via_checks = _vias(doc, conductor_steps, via_holes, say)
     # A part off the board is wired after the copper, so a net reaching it is not finished
     # until its wires are in -- and a continuity check asked for before then fails for a
     # reason that is not a fault.
@@ -802,15 +810,18 @@ def build_guide(
     )
     track_cuts = _track_cuts(doc, say)
     checkpoints[0].extend(_cut_checks(track_cuts, say, board=doc.board))
+    # Ahead of phase 7's net checks: a via that did not take explains the net that fails.
+    checkpoints[7][:0] = via_checks
 
     phases = tuple(
         GuidePhase(
             number=number,
-            # Phase 7 says it fits the solder side's parts only on a board that has some, so
-            # every other board's guide keeps its words.
+            # Phase 7 says it fits the solder side's parts, or lays the component side's
+            # solder, only on a board that has some, so every other board's guide keeps
+            # its words.
             title=(
-                say("Long insulated wires, then the solder-side parts")
-                if solder_side and number == SOLDER_SIDE_PHASE
+                _phase_7_title(say, solder_side=bool(solder_side), component_side=component_side)
+                if number == SOLDER_SIDE_PHASE
                 else say(titles[number])
             ),
             summary=_phase_summary(
@@ -820,6 +831,7 @@ def build_guide(
                 off_board=bool(lead_list),
                 adapters=adapters,
                 solder_side=bool(solder_side),
+                component_side=component_side,
             ),
             steps=tuple(by_phase[number]),
             checkpoints=tuple(checkpoints.get(number, ())),
@@ -850,6 +862,111 @@ def build_guide(
         language=options.language,
         lead_list=tuple(lead_list),
     )
+
+
+def _is_component_side_copper(step: GuideStep) -> bool:
+    """A solder run on the component side: laid at the start of phase 7."""
+    return (
+        isinstance(step, ConductorStep)
+        and step.side == "top"
+        and step.conductor_kind in ("solder-trace", "solder-trace-wired")
+    )
+
+
+def _phase_7_title(say: Phrasebook, *, solder_side: bool, component_side: bool) -> str:
+    """Phase 7's title, naming what the board adds to the long wires: solder on the
+    component side before them, parts on the solder side after them."""
+    if component_side and solder_side:
+        return say("Component-side solder, long insulated wires, then the solder-side parts")
+    if component_side:
+        return say("Component-side solder, then long insulated wires")
+    if solder_side:
+        return say("Long insulated wires, then the solder-side parts")
+    return say(PHASE_TITLES[SOLDER_SIDE_PHASE])
+
+
+def _vias(
+    doc: PerfDocument,
+    conductor_steps: list[tuple[ConductorStep, PhaseNumber]],
+    via_holes: tuple[HoleCoord, ...],
+    say: Phrasebook,
+) -> tuple[list[tuple[ConductorStep, PhaseNumber]], list[Checkpoint]]:
+    """Where the faces meet through a pinless hole (``wiringstats.vias``): one line on
+    the first step that lays the solder side's copper into it, and one probe after phase 7.
+
+    The plating already joins a hole's two pads; the line asks for the hole to be FILLED
+    from underneath, so the component side's run is soldered onto solder that is already
+    there rather than onto a barrel nobody can see into. The probe goes across the via,
+    from its component-side pad to the next hole of that solder-side copper, so a hole
+    whose plating did not take is found by itself instead of as a net that fails.
+    """
+    if not via_holes:
+        return conductor_steps, []
+    by_id = {conductor.id: conductor for conductor in doc.conductors}
+    steps = list(conductor_steps)
+    checks: list[Checkpoint] = []
+    for via in via_holes:
+        for index, (step, phase) in enumerate(steps):
+            conductor = by_id.get(step.conductor_id)
+            if conductor is None or _is_component_side_copper(step):
+                continue
+            touched = (
+                conductor.path
+                if contacts_every_path_hole(conductor)
+                else conductor.path[:1] + conductor.path[-1:]
+            )
+            if via not in touched:
+                continue
+            steps[index] = (
+                dataclasses.replace(
+                    step,
+                    notes=(
+                        *step.notes,
+                        say(
+                            "{hole} is a via: this run meets the solder on the component "
+                            "side through that hole. Let the solder run into it until it "
+                            "shows on the component side.",
+                            hole=format_hole(via, doc.board),
+                        ),
+                    ),
+                ),
+                phase,
+            )
+            other = _next_hole(conductor, via)
+            if other is not None:
+                checks.append(
+                    Checkpoint(
+                        kind="continuity",
+                        title=say(
+                            "{via} ↔ {other} through the via",
+                            via=format_hole(via, doc.board),
+                            other=format_hole(other, doc.board),
+                        ),
+                        instruction=say(
+                            "With the component side's solder laid, probe {via} on the "
+                            "component side and {other} on the solder side.",
+                            via=format_hole(via, doc.board),
+                            other=format_hole(other, doc.board),
+                        ),
+                        expected=say("Continuous — the via joins the two faces."),
+                        holes=(via, other),
+                    )
+                )
+            break
+    return steps, checks
+
+
+def _next_hole(conductor: Conductor, via: HoleCoord) -> HoleCoord | None:
+    """The hole the solder-side ``conductor`` is next soldered at after ``via``: the
+    neighbouring pad of a run, the other end of a wire. None for a run of one hole."""
+    path = conductor.path
+    if not contacts_every_path_hole(conductor):
+        ends = [hole for hole in (path[0], path[-1]) if hole != via]
+        return ends[0] if ends else None
+    index = path.index(via)
+    if index + 1 < len(path):
+        return path[index + 1]
+    return path[index - 1] if index > 0 else None
 
 
 def _adapters(doc: PerfDocument, lookup: FootprintLookup) -> tuple[tuple[str, str, int], ...]:
@@ -929,11 +1046,14 @@ def _phase_summary(
     off_board: bool = False,
     adapters: tuple[tuple[str, str, int], ...] = (),
     solder_side: bool = False,
+    component_side: bool = False,
 ) -> str:
     """The phase's standing summary, with what the BOARD changes about it folded in.
 
-    Phase 7 gains a sentence when parts off the board are wired in it (``off_board``), and
-    one when parts on the solder side are fitted at its end (``solder_side``).
+    Phase 7 opens with a sentence when solder is laid on the component side in it
+    (``component_side``), gains one when parts off the board are wired in it
+    (``off_board``), and one when parts on the solder side are fitted at its end
+    (``solder_side``).
     Phase 0 varies for a reason worth stating: every hole
     address in this guide is counted from a corner unless the board says otherwise, so
     "mark hole A1" is the step the whole document depends on. A board that prints its own
@@ -943,8 +1063,16 @@ def _phase_summary(
     """
     if is_breadboard(doc.board):
         return _breadboard_phase_summary(number, doc, say, adapters)
-    if number == 7 and (off_board or solder_side):
+    if number == 7 and (off_board or solder_side or component_side):
         said = [say(PHASE_SUMMARIES[7])]
+        if component_side:
+            # After the parts and not before them: solder in a hole before its lead goes in
+            # closes the hole to the lead.
+            said.insert(0, say(
+                "Turn the board back to the component side and lay its solder runs first, "
+                "now that every part is in: solder put into a hole before its lead would "
+                "have kept the lead out."
+            ))
         if off_board:
             said.append(say(
                 "Then the wires to the parts off the board: into their pads here first, then "
@@ -1897,7 +2025,7 @@ def _conductor_steps(
     class_order: dict[NetClass, int] = {"ground": 0, "power": 1, "signal": 2}
 
     levels = stacking_layers(doc, lookup=lookup)
-    entries: list[tuple[PhaseNumber, int, int, str, str, ConductorStep]] = []
+    entries: list[tuple[PhaseNumber, int, int, int, str, str, ConductorStep]] = []
     cut_list: list[WireCut] = []
     spine_list: list[SpineCut] = []
 
@@ -1924,6 +2052,11 @@ def _conductor_steps(
             spine_list.append(step.spine)
 
         phase = PHASE_BY_CONDUCTOR.get(conductor.kind, 6)
+        # Solder on the component side goes in after the parts and ahead of the long
+        # wires: see ``_phase_summary``.
+        top_copper = _is_component_side_copper(step)
+        if top_copper:
+            phase = SOLDER_SIDE_PHASE
         if is_breadboard(doc.board):
             phase = 1  # Flat on the plastic before any part: see BREADBOARD_PHASE_TITLES.
         elif conductor.id in trapped:
@@ -1934,12 +2067,22 @@ def _conductor_steps(
             # and the rest stay where soldering to a fitted pin is easier.
             phase = 1
         entries.append(
-            (phase, levels[conductor.id], class_order[net_class], net_name, conductor.id, step)
+            (
+                phase,
+                0 if top_copper else 1,
+                levels[conductor.id],
+                class_order[net_class],
+                net_name,
+                conductor.id,
+                step,
+            )
         )
 
-    entries.sort(key=lambda entry: entry[:5])
+    # The component side's runs first in their phase, so the board is turned once; every
+    # other step has the same face key, so a board with none keeps its order.
+    entries.sort(key=lambda entry: entry[:6])
     return (
-        [(step, phase) for phase, _level, _order, _name, _id, step in entries],
+        [(step, phase) for phase, _face, _level, _order, _name, _id, step in entries],
         cut_list,
         spine_list,
     )
@@ -1999,6 +2142,11 @@ def _conductor_step(
         # Tinning applies to every run; the flux sentence says "on a run this long" and
         # was appended to two-pad joints as well. Same threshold as the spine suggestion
         # above, so one run is either long or it is not.
+        if conductor.side == "top":
+            notes.append(say(
+                "This run is on the COMPONENT side, among the fitted parts' leads: solder it "
+                "from above, and keep the iron off the parts' bodies."
+            ))
         notes.append(say("Tin each pad lightly first, then join them."))
         if pads >= 3:
             notes.append(say("Flux is not optional on a run this long."))

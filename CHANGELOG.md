@@ -84,6 +84,13 @@ closed without a bump.
   ends and wires. On arduino-io-shield one wire goes over and the tallest stack of wires
   underneath drops from 2 to 1. The auto-wire scoreboard gains `--faces`,
   `--prefer NET=top|bottom` and a `via` column.
+- **The build guide says when to lay the component side's solder and where its vias are.**
+  Its runs open phase 7, after the parts, since solder in a hole before its lead keeps the
+  lead out, and before the long wires; phase 7's title says so, in both languages, only on
+  a board that has some. Each via gets one line on the step that lays the solder side's
+  copper into it (fill the hole until the solder shows on top), and one continuity probe
+  across it after phase 7, so a hole whose plating did not take is found by itself rather
+  than as a net that fails.
 
 ### Changed
 

@@ -27,7 +27,13 @@ from perfboard_studio.commands import (
 from perfboard_studio.connectivity import extract_physical_nets
 from perfboard_studio.drc import run_drc
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.geometry import all_pin_holes, holes_under_line, is_adjacent4
+from perfboard_studio.geometry import (
+    all_pin_holes,
+    format_hole,
+    holes_under_line,
+    is_adjacent4,
+)
+from perfboard_studio.guide import ConductorStep, GuideOptions, build_guide
 from perfboard_studio.lvs import run_lvs
 from perfboard_studio.model import (
     BoardSide,
@@ -426,3 +432,55 @@ def test_a_short_through_the_plating_is_found_not_only_avoided() -> None:
     # hole it crosses, on whichever face it lies.
     assert run_lvs(through, LOOKUP).summary.shorts > before
     assert run_lvs(clear, LOOKUP).summary.shorts == before
+
+
+def test_the_guide_lays_the_component_side_after_the_parts_and_probes_each_via() -> None:
+    """Solder on the component side opens phase 7: after the parts, whose leads a filled
+    hole would keep out, and before the long wires. Every via gets one line on the first
+    step that lays the solder side's copper into it, and one probe across it after phase
+    7, from its component-side pad to the next hole of that copper. Turkish says the same."""
+    wired = _solder_plan(_doc(), "both", GND="top").document
+    via_holes = wiring_stats(wired, LOOKUP).vias
+    assert via_holes, "GND no longer changes face on the ne555"
+    top_runs = {
+        c.id for c in wired.conductors if isinstance(c, SolderTraceConductor) and c.side == "top"
+    }
+
+    for language, title, via_word in (
+        ("en", "Component-side solder, then long insulated wires", "is a via"),
+        ("tr", "Parça yüzündeki lehim, ardından uzun izoleli teller", "bir via"),
+    ):
+        guide = build_guide(wired, LOOKUP, GuideOptions(language=language))
+        phases = {phase.number: phase for phase in guide.phases}
+        seventh = phases[7]
+        assert seventh.title == title
+        conductor_steps = [s for s in seventh.steps if isinstance(s, ConductorStep)]
+        # The component side's runs, all of them and nothing else, at the head of phase 7.
+        head = conductor_steps[: len(top_runs)]
+        assert {s.conductor_id for s in head} == top_runs
+        assert not any(
+            s.conductor_id in top_runs for phase in guide.phases if phase.number != 7
+            for s in phase.steps if isinstance(s, ConductorStep)
+        )
+        for via in via_holes:
+            said = format_hole(via, wired.board)
+            noted = [
+                s
+                for phase in guide.phases
+                for s in phase.steps
+                if isinstance(s, ConductorStep)
+                and any(note.startswith(said) and via_word in note for note in s.notes)
+            ]
+            assert len(noted) == 1 and noted[0].side == "bottom" and via in noted[0].path
+            probes = [
+                c for c in seventh.checkpoints if c.kind == "continuity" and c.holes[:1] == (via,)
+            ]
+            assert len(probes) == 1
+            assert is_adjacent4(via, probes[0].holes[1]) or probes[0].holes[1] in noted[0].path
+
+
+def test_a_guide_with_no_component_side_copper_keeps_phase_7_as_it_was() -> None:
+    guide = build_guide(_doc(), LOOKUP)
+
+    assert {p.number: p.title for p in guide.phases}[7] == "Long insulated wires"
+    assert not any("via" in c.title for p in guide.phases for c in p.checkpoints)
