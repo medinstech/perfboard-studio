@@ -18995,3 +18995,42 @@ def test_redo_wiring_says_how_much_of_the_copper_it_actually_changes() -> None:
     assert _copper_change(old, new) == (2, 1, 1)
     assert _copper_change(old, old) == (3, 0, 0)
     assert _copper_change(old, []) == (0, 3, 0)
+
+
+def test_the_wiring_before_a_redo_is_drawn_over_todays_and_survives_a_flip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ctrl+Z was the only way to see what a route changed, and it took the new wiring
+    away to show it. Compare With Before draws the copper as it was, dashed, over the
+    copper now -- through a flip, which rebuilds the scene -- and a new document has
+    nothing to compare with."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        assert not window.act_compare_before.isEnabled()
+        thresh = next(net.id for net in window.bus.document.nets if net.name == "THRESH")
+        was = window.bus.document.conductors
+        monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: True)
+        window.on_reroute((thresh,), style="solder")
+        assert window.bus.document.conductors != was
+        assert window.act_compare_before.isEnabled()
+        assert not window.scene.showing_before
+
+        window.act_compare_before.trigger()
+        assert window.scene.showing_before
+        assert window.scene._before_item is not None
+        assert "Dashed" in window.statusBar().currentMessage()
+        window.act_flip.trigger()
+        assert window.scene._before_item is not None
+        assert window.scene._before_item.scene() is window.scene
+
+        window.act_compare_before.trigger()
+        assert not window.scene.showing_before
+        assert window.scene._before_item is None
+
+        window.act_compare_before.trigger()
+        window._new_bus(window.bus.system_document)
+        assert not window.act_compare_before.isEnabled()
+        assert not window.act_compare_before.isChecked()
+        assert not window.scene.showing_before
+    finally:
+        _close(window)

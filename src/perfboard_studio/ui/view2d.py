@@ -56,6 +56,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QGraphicsItem,
+    QGraphicsPathItem,
     QGraphicsScene,
     QGraphicsView,
     QLabel,
@@ -345,6 +346,10 @@ BENCH_RING = QColor(THEME_TOKENS.text_secondary)
 BENCH_RING_Z = -80
 #: Over every part: where a finding's rings go while it is a problem, or picked.
 RISK_RING_Z = 60
+#: The wiring before the last route, while it is compared with today's: over the copper
+#: and under the rings, in a colour no copper is drawn in.
+BEFORE_COPPER = QColor(236, 112, 255, 210)
+BEFORE_COPPER_Z = RISK_RING_Z - 1
 #: The ruler is drawn on the canvas, outside the board, so it is the theme's too.
 RULER_TEXT = QColor(THEME_TOKENS.canvas_ruler)
 RULER_TEXT_MAJOR = QColor(THEME_TOKENS.canvas_ruler_major)
@@ -4930,6 +4935,10 @@ class BoardScene(QGraphicsScene):
         self._risk_item: RiskRingsItem | None = None
         self._bench_item: RiskRingsItem | None = None
         self._focus_item: RiskRingsItem | None = None
+        #: The copper as it was before the last Auto-wire or Redo Wiring, shown dashed over
+        #: today's while the window compares them; empty when it does not.
+        self._before_copper: tuple[Conductor, ...] = ()
+        self._before_item: QGraphicsPathItem | None = None
         #: The holes of the finding picked or hovered in the drawer, and the holes a bench
         #: check rings -- see ``set_focused_holes``.
         self._focused_holes: tuple[HoleCoord, ...] = ()
@@ -5227,6 +5236,7 @@ class BoardScene(QGraphicsScene):
         self._risk_item = None
         self._bench_item = None
         self._focus_item = None
+        self._before_item = None
         self._ratsnest_item = None
         self._ghost = None
         # Destroyed with the rest and not re-created: the next drag move draws it again.
@@ -5469,6 +5479,48 @@ class BoardScene(QGraphicsScene):
             self._connect_item = PickedPinsItem(board, self.side)
             self._connect_item.set_holes([self._connect_hole])
             self.addItem(self._connect_item)
+        # Re-created, as the markers above are: clear() destroyed the last one.
+        self._refresh_before()
+
+    # -- the wiring before --------------------------------------------------
+
+    def set_before_copper(self, conductors: Sequence[Conductor]) -> None:
+        """Draw ``conductors`` -- the copper before the last Auto-wire or Redo Wiring --
+        dashed over the copper there now; nothing to stop. Ctrl+Z was the only way to see
+        what a route had changed, and it took the new wiring away to show it."""
+        self._before_copper = tuple(conductors)
+        self._refresh_before()
+
+    @property
+    def showing_before(self) -> bool:
+        return bool(self._before_copper)
+
+    def _refresh_before(self) -> None:
+        if self._before_item is not None:
+            self.removeItem(self._before_item)
+            self._before_item = None
+        if not self._before_copper or self.document is None:
+            return
+        board = self.document.board
+        outline = QPainterPath()
+        for conductor in self._before_copper:
+            points = [hole_to_screen(hole, board, self.side) for hole in conductor.path]
+            if len(points) < 2:
+                continue
+            outline.moveTo(points[0])
+            for point in points[1:]:
+                outline.lineTo(point)
+        item = QGraphicsPathItem(outline)
+        pen = QPen(BEFORE_COPPER, board.pitch * 0.14)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        item.setPen(pen)
+        item.setZValue(BEFORE_COPPER_Z)
+        item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        item.setAcceptHoverEvents(False)
+        self.addItem(item)
+        self._before_item = item
 
     # -- ratsnest -----------------------------------------------------------
 

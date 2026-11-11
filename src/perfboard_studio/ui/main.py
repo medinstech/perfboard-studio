@@ -284,6 +284,7 @@ from perfboard_studio.model import (
     Cable,
     CableEnd,
     ComponentInstance,
+    Conductor,
     ConductorKind,
     DocumentMeta,
     EdgeConnector,
@@ -2656,6 +2657,8 @@ class MainWindow(QMainWindow):
         self._last_erc: tuple[ErcFinding, ...] = ()
         self._last_violations: tuple[DrcViolation, ...] = ()
         self._last_wiring: tuple[WiringNote, ...] = ()
+        #: The board's copper before the last Auto-wire or Redo Wiring (Compare With Before).
+        self._wiring_before: tuple[Conductor, ...] | None = None
         self._last_lvs: LvsResult | None = None
         self._last_ratsnest: tuple[NetRatsnest, ...] = ()
         self._vtk_renderer: Any = None
@@ -3034,6 +3037,12 @@ class MainWindow(QMainWindow):
         duplicate id. Every bus this window makes has to be seeded from the document it is
         given -- see ``commands.create_document_id_generator``.
         """
+        # Another document: the wiring before a route on the last one is nothing to
+        # compare this one with.
+        self._wiring_before = None
+        if hasattr(self, "act_compare_before"):
+            self.act_compare_before.setChecked(False)
+            self.act_compare_before.setEnabled(False)
         bus = BoardBus(
             document,
             create_standard_registry(),
@@ -5432,6 +5441,17 @@ class MainWindow(QMainWindow):
         route_menu.addSeparator()
         self.act_clear_strays = route_menu.addAction(t("Remove Ou&t-of-Date Wiring"))
         self.act_clear_strays.triggered.connect(self.on_clear_strays)
+        route_menu.addSeparator()
+        # What the last route changed, without taking it away to see: Ctrl+Z was the only
+        # comparison there was.
+        self.act_compare_before = route_menu.addAction(t("Co&mpare With Before"))
+        self.act_compare_before.setCheckable(True)
+        self.act_compare_before.setEnabled(False)
+        self.act_compare_before.setToolTip(
+            t("Draw the wiring as it was before the last Auto-wire or Redo Wiring, dashed, "
+              "over the wiring there now.")
+        )
+        self.act_compare_before.toggled.connect(self._on_compare_before)
 
         # THE FOUR VIEWS OF THE DESIGN FIRST, AND THEY ARE NUMBERED IN THAT ORDER.
         # Board, schematic, 3D, guide -- the things this application is FOR -- then the
@@ -11239,6 +11259,7 @@ class MainWindow(QMainWindow):
                 self,
                 t("Redoing the wiring was refused"), refused(result))
             return
+        self._remember_wiring_before(document.conductors)
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
         self._nets_from_old_layout -= rerouted
@@ -11427,7 +11448,10 @@ class MainWindow(QMainWindow):
         self.statusBar().setToolTip(describe_best(best) if best is not None else "")
 
         before = {c.id for c in self.bus.document.conductors}
+        was = self.bus.document.conductors
         result = self.bus.dispatch("conductor.addMany", plan.payload())
+        if result.ok:
+            self._remember_wiring_before(was)
         if not result.ok:
             QMessageBox.warning(
                 self,
@@ -11443,6 +11467,24 @@ class MainWindow(QMainWindow):
             0,
         )
         self._report_unrouted(plan)
+
+    def _remember_wiring_before(self, conductors: tuple[Conductor, ...]) -> None:
+        """The copper a route started from, for Compare With Before; shown again at once
+        when the comparison is already on, so it compares with THIS route."""
+        self._wiring_before = conductors
+        self.act_compare_before.setEnabled(True)
+        if self.act_compare_before.isChecked():
+            self.scene.set_before_copper(conductors)
+
+    def _on_compare_before(self, on: bool) -> None:
+        before = self._wiring_before if on else None
+        self.scene.set_before_copper(before or ())
+        if on and before is not None:
+            self.statusBar().showMessage(
+                t("Dashed: the wiring before the last Auto-wire or Redo Wiring. "
+                  "Wiring ▸ Compare With Before again hides it."),
+                0,
+            )
 
     def _far_side_note(self, before: set[str]) -> str:
         """Where the copper Auto-wire just laid went, when it is on the face not in view.

@@ -3964,6 +3964,17 @@ TURKISH: Mapping[str, str] = {
     ),
     "No problems": "Sorun yok",
     "Wiring to review": "Gözden geçirilecek kablolama",
+    "Co&mpare With Before": "Ö&ncesiyle Karşılaştır",
+    "Draw the wiring as it was before the last Auto-wire or Redo Wiring, dashed, over the "
+    "wiring there now.": (
+        "Son Otomatik Kablolama ya da Kablolamayı Yeniden Yap öncesindeki kablolamayı, şimdiki "
+        "kablolamanın üzerine kesikli çizer."
+    ),
+    "Dashed: the wiring before the last Auto-wire or Redo Wiring. Wiring ▸ Compare With "
+    "Before again hides it.": (
+        "Kesikli çizgiler: son Otomatik Kablolama ya da Kablolamayı Yeniden Yap öncesindeki "
+        "kablolama. Kablolama ▸ Öncesiyle Karşılaştır yeniden seçilince gizlenir."
+    ),
     "Of that, {kept} stay exactly where they are; {gone} are taken up and {laid} laid in "
     "their place. Copper with no net assigned is left alone.": (
         "Bunlardan {kept} tanesi olduğu yerde kalır; {gone} tanesi sökülür, yerine {laid} "
