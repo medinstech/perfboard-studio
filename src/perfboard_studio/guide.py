@@ -111,6 +111,7 @@ from .model import (
     declared_pin_name,
     pin_name_of,
 )
+from .occupancy import stacking_layers
 from .phrasebook import ENGLISH, GuideLanguage, Phrasebook, phrasebook
 from .stripboard import is_stripboard, strip_axis
 
@@ -1883,12 +1884,19 @@ def _conductor_steps(
     The same criticality order the router works in (PLAN.md Sec 6.2), for the same
     reason turned around: the rails are the connections everything else is measured
     against, so they want to exist and be verified first.
+
+    Within a phase, LOWEST STACKING LEVEL FIRST (``occupancy.stacking_layers``), and the
+    criticality order within a level. A wire drawn above another passes over it or lies
+    across the hole it ends in, so it can only go in once that one is soldered: the guide
+    that said "ground first" laid a ground wire across a signal wire's pad and then asked
+    for the signal wire to be soldered into the pad underneath it.
     """
     risks_by_conductor = _risks_by_conductor(violations, say, board=doc.board)
     trapped = trapped_jumper_ids(violations)
     class_order: dict[NetClass, int] = {"ground": 0, "power": 1, "signal": 2}
 
-    entries: list[tuple[PhaseNumber, int, str, str, ConductorStep]] = []
+    levels = stacking_layers(doc)
+    entries: list[tuple[PhaseNumber, int, int, str, str, ConductorStep]] = []
     cut_list: list[WireCut] = []
     spine_list: list[SpineCut] = []
 
@@ -1924,11 +1932,13 @@ def _conductor_steps(
             # 1, which is where PLAN.md Sec 7.1 puts top-side jumpers in the first place,
             # and the rest stay where soldering to a fitted pin is easier.
             phase = 1
-        entries.append((phase, class_order[net_class], net_name, conductor.id, step))
+        entries.append(
+            (phase, levels[conductor.id], class_order[net_class], net_name, conductor.id, step)
+        )
 
-    entries.sort(key=lambda entry: (entry[0], entry[1], entry[2], entry[3]))
+    entries.sort(key=lambda entry: entry[:5])
     return (
-        [(step, phase) for phase, _order, _name, _id, step in entries],
+        [(step, phase) for phase, _level, _order, _name, _id, step in entries],
         cut_list,
         spine_list,
     )

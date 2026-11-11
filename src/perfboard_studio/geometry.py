@@ -1991,6 +1991,41 @@ def segments_touch(a1: HoleCoord, a2: HoleCoord, b1: HoleCoord, b2: HoleCoord) -
     return False
 
 
+def segments_overlap(a1: HoleCoord, a2: HoleCoord, b1: HoleCoord, b2: HoleCoord) -> bool:
+    """True when two straight runs lie along one line and share a stretch of it.
+
+    ``segments_touch`` reads one shared endpoint as a junction and stops there, which is
+    right for two runs meeting at a pad and wrong for two that then go on down the same
+    line: a wire bending at a hole where another wire ends, and running back along it, lies
+    ON that wire for the whole stretch they share. A stretch of length zero (two runs
+    meeting end to end and carrying on in opposite directions) is not an overlap.
+    """
+    if not (
+        _orientation(a1, a2, b1) == 0
+        and _orientation(a1, a2, b2) == 0
+        and _orientation(b1, b2, a1) == 0
+        and _orientation(b1, b2, a2) == 0
+    ):
+        return False
+    # Project onto the line's major axis; collinear runs on a lattice share one.
+    if a1.col != a2.col or b1.col != b2.col:
+        lo_a, hi_a = sorted((a1.col, a2.col))
+        lo_b, hi_b = sorted((b1.col, b2.col))
+    else:
+        lo_a, hi_a = sorted((a1.row, a2.row))
+        lo_b, hi_b = sorted((b1.row, b2.row))
+    return min(hi_a, hi_b) > max(lo_a, lo_b)
+
+
+def paths_overlap(a: tuple[HoleCoord, ...], b: tuple[HoleCoord, ...]) -> bool:
+    """Whether two paths share a stretch of one line anywhere (``segments_overlap``)."""
+    return any(
+        segments_overlap(a[i], a[i + 1], b[j], b[j + 1])
+        for i in range(len(a) - 1)
+        for j in range(len(b) - 1)
+    )
+
+
 def paths_cross(a: tuple[HoleCoord, ...], b: tuple[HoleCoord, ...]) -> HoleCoord | None:
     """The first segment pair of two paths that touch, reported as the crossing's start hole.
 

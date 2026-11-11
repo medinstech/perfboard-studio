@@ -54,6 +54,13 @@ closed without a bump.
   limit and solders a bare-wire spine into a longer run, and the comparison between styles
   counts the warnings and errors each plan would add: a plan that adds an error never
   wins, and each warning weighs half a wire.
+- **Wires no longer come down through one another in 3D.** A wire lying across the hole
+  another wire ends in was often drawn below it, so the other one came down to its pad
+  straight through it: 14 places on atmega328-relay once auto-wired. A wire lying across
+  another's end is now always drawn above it, two wires sharing a stretch of one line are
+  never drawn at one height, and a board stacks the same before Save and after Open (it
+  used to depend on the order the wires were made in). The build guide lays a face's wires
+  lowest first, so the one underneath goes in before the one lying over it.
 
 ## [0.24.0] - 2026-11-10
 

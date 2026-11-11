@@ -19,7 +19,15 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from .connectivity import FootprintLookup
-from .geometry import all_pin_holes, hole_key, hole_to_mm, paths_cross, transform_offset
+from .geometry import (
+    all_pin_holes,
+    hole_key,
+    hole_to_mm,
+    holes_under_line,
+    paths_cross,
+    paths_overlap,
+    transform_offset,
+)
 from .model import (
     BoardSide,
     ComponentId,
@@ -248,42 +256,135 @@ def stacking_layers(doc: PerfDocument) -> dict[ConductorId, int]:
     the same height and drawn straight through each other. Four of the fifteen golden
     fixtures had exactly that pair.
 
-    Greedy in document order, taking the lowest free level at or above that floor:
-    deterministic, and a board where nothing crosses comes back entirely flat, which is
-    what such a board looks like.
+    * **A wire lying across the hole another conductor ENDS in is above it.** The other
+      one is soldered into that hole, so it comes down to the pad there; drawn below the
+      wire lying across, it comes down straight through it. Crossing alone only said "not
+      at one level", and the stacker put whichever came later on top: on the auto-wired
+      atmega328-relay that was 14 wires coming down through another. Physically it is the
+      order they go in -- the one whose end is under the other is soldered first -- which
+      is why the build guide lays a face's wires lowest first.
+    * **Two wires sharing a stretch of one line touch**, even from a hole one of them ends
+      in (``geometry.paths_overlap``): a shared endpoint is a junction only while the two
+      then go their separate ways.
+
+    IN ID ORDER, NOT DOCUMENT ORDER, taking the lowest free level at or above the floor and
+    above everything the conductor lies across the end of. ``persist`` writes conductors
+    sorted by id, so in document order a board stacked one way as auto-wire left it and
+    another after Save and Open. A board where nothing crosses comes back entirely flat,
+    which is what such a board looks like. Two wires that each lie across the other's end
+    cannot both be above; :func:`stacking_loops` names them, and the one first in id order
+    is placed first.
 
     Pure, so both renderers can read it and neither can drift: a wire drawn passing over
     another in 3D is the one drawn over it in 2D.
     """
+    return _stack(doc)[0]
+
+
+def stacking_loops(doc: PerfDocument) -> tuple[tuple[ConductorId, ...], ...]:
+    """Wires no stacking can draw apart: each lies, directly or through the others, across
+    the hole another of them ends in, so none of them can go in first. Each loop once, its
+    members in id order."""
+    return _stack(doc)[1]
+
+
+def _stack(
+    doc: PerfDocument,
+) -> tuple[dict[ConductorId, int], tuple[tuple[ConductorId, ...], ...]]:
+    conductors = sorted(doc.conductors, key=lambda c: c.id)
     layers: dict[ConductorId, int] = {}
     placed: list[tuple[Conductor, int]] = []
 
     # The traces first, ALL of them, before any wire is placed. They cannot move, so a wire
     # has to be judged against every one of them and not merely against the ones that
-    # happen to come earlier in the document -- which is how a wire written before the run
-    # it crosses ended up buried in it.
-    for conductor in doc.conductors:
+    # happen to come earlier -- which is how a wire written before the run it crosses ended
+    # up buried in it.
+    for conductor in conductors:
         if contacts_every_path_hole(conductor) or len(conductor.path) < 2:
             layers[conductor.id] = conductor.layer_z
             placed.append((conductor, conductor.layer_z))
+    wires = [c for c in conductors if c.id not in layers]
 
-    for conductor in doc.conductors:
-        if conductor.id in layers:
-            continue
+    # Which wire ends where, per face, and which wires each one has to be above.
+    ending: dict[tuple[str, BoardSide], list[int]] = {}
+    for index, wire in enumerate(wires):
+        for end in {hole_key(wire.path[0]), hole_key(wire.path[-1])}:
+            ending.setdefault((end, wire.side), []).append(index)
+    above: list[set[int]] = [set() for _ in wires]
+    for index, wire in enumerate(wires):
+        ends = {hole_key(wire.path[0]), hole_key(wire.path[-1])}
+        for start, stop in zip(wire.path, wire.path[1:], strict=False):
+            for hole in holes_under_line(start, stop):
+                key = hole_key(hole)
+                if key in ends:
+                    continue
+                for other in ending.get((key, wire.side), ()):
+                    if other != index:
+                        above[index].add(other)
+
+    # A loop is every wire that is, through others, above itself: the wires mutually
+    # reachable along "lies above". Within one, nothing can satisfy every constraint, so its
+    # members go in id order; every constraint from outside it still holds.
+    reach: list[set[int]] = []
+    for index in range(len(wires)):
+        seen: set[int] = set()
+        stack = list(above[index])
+        while stack:
+            other = stack.pop()
+            if other not in seen:
+                seen.add(other)
+                stack.extend(above[other])
+        reach.append(seen)
+    loop_of = [
+        frozenset({index} | {o for o in reach[index] if index in reach[o]})
+        for index in range(len(wires))
+    ]
+    loops = sorted(
+        {
+            tuple(wires[i].id for i in sorted(members))
+            for members in loop_of
+            if len(members) > 1
+        }
+    )
+
+    # Ready once everything it lies above, outside its own loop, is placed; the earliest in
+    # id order whenever several are.
+    order: list[int] = []
+    done: set[int] = set()
+    while len(order) < len(wires):
+        index = min(
+            i
+            for i in range(len(wires))
+            if i not in done and above[i] - loop_of[i] <= done
+        )
+        done.add(index)
+        order.append(index)
+
+    for index in order:
+        conductor = wires[index]
+        # Above every wire whose end it lies across that is already placed -- all of them,
+        # unless the two are a loop.
+        floor = max(
+            [conductor.layer_z]
+            + [layers[wires[o].id] + 1 for o in above[index] if wires[o].id in layers]
+        )
         taken = {
             level
             for other, level in placed
             if other.side == conductor.side
             and _paths_may_meet(conductor.path, other.path)
-            and paths_cross(conductor.path, other.path) is not None
+            and (
+                paths_cross(conductor.path, other.path) is not None
+                or paths_overlap(conductor.path, other.path)
+            )
         }
-        level = conductor.layer_z
+        level = floor
         while level in taken:
             level += 1
         layers[conductor.id] = level
         placed.append((conductor, level))
 
-    return layers
+    return layers, tuple(loops)
 
 
 def _paths_may_meet(a: tuple[HoleCoord, ...], b: tuple[HoleCoord, ...]) -> bool:

@@ -1401,55 +1401,6 @@
         },
         {
           "kind": "conductor",
-          "conductor_id": "cond-3",
-          "conductor_kind": "insulated-wire",
-          "side": "bottom",
-          "net_name": "GND",
-          "net_class": "ground",
-          "span": "D11 → B3",
-          "path": [
-            {
-              "col": 3,
-              "row": 10,
-              "ref": "D11"
-            },
-            {
-              "col": 1,
-              "row": 2,
-              "ref": "B3"
-            }
-          ],
-          "pads": 2,
-          "length_mm": 20.945376578137715,
-          "resistance_ohm": null,
-          "drop_mv": null,
-          "loss_mw": null,
-          "spine": null,
-          "cut": {
-            "conductor_id": "cond-3",
-            "net_name": "GND",
-            "from_hole": {
-              "col": 3,
-              "row": 10,
-              "ref": "D11"
-            },
-            "to_hole": {
-              "col": 1,
-              "row": 2,
-              "ref": "B3"
-            },
-            "path_mm": 20.945376578137715,
-            "cut_mm": 40.145376578137714,
-            "strip_mm": 5.0,
-            "awg": 24,
-            "colour": "black",
-            "insulated": true
-          },
-          "risks": [],
-          "notes": []
-        },
-        {
-          "kind": "conductor",
           "conductor_id": "cond-11",
           "conductor_kind": "insulated-wire",
           "side": "bottom",
@@ -1590,6 +1541,55 @@
             "strip_mm": 5.0,
             "awg": 24,
             "colour": "blue",
+            "insulated": true
+          },
+          "risks": [],
+          "notes": []
+        },
+        {
+          "kind": "conductor",
+          "conductor_id": "cond-3",
+          "conductor_kind": "insulated-wire",
+          "side": "bottom",
+          "net_name": "GND",
+          "net_class": "ground",
+          "span": "D11 → B3",
+          "path": [
+            {
+              "col": 3,
+              "row": 10,
+              "ref": "D11"
+            },
+            {
+              "col": 1,
+              "row": 2,
+              "ref": "B3"
+            }
+          ],
+          "pads": 2,
+          "length_mm": 20.945376578137715,
+          "resistance_ohm": null,
+          "drop_mv": null,
+          "loss_mw": null,
+          "spine": null,
+          "cut": {
+            "conductor_id": "cond-3",
+            "net_name": "GND",
+            "from_hole": {
+              "col": 3,
+              "row": 10,
+              "ref": "D11"
+            },
+            "to_hole": {
+              "col": 1,
+              "row": 2,
+              "ref": "B3"
+            },
+            "path_mm": 20.945376578137715,
+            "cut_mm": 40.145376578137714,
+            "strip_mm": 5.0,
+            "awg": 24,
+            "colour": "black",
             "insulated": true
           },
           "risks": [],

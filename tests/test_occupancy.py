@@ -442,14 +442,15 @@ def test_only_what_crosses_is_lifted_and_only_past_what_it_crosses() -> None:
 
     layers = stacking_layers(doc)
 
-    assert layers["base"] == 0
-    assert layers["a"] == 1 and layers["b"] == 1, "each clears the base, not each other"
+    assert layers["a"] == layers["b"], "each clears the base, not each other"
+    assert layers["base"] != layers["a"]
+    assert max(layers.values()) == 1, "one crossing is one step, however many cross it"
     assert layers["far"] == 0, "it crosses nothing, so it is not lifted"
 
 
 def test_the_same_board_stacks_the_same_way_twice() -> None:
-    """Greedy in document order and nothing else, so the picture does not shuffle between
-    two renders of one board."""
+    """Greedy in id order and nothing else, so the picture does not shuffle between two
+    renders of one board."""
     doc = make_doc(
         conductors=(
             wire("w1", (hole(1, 1), hole(8, 8))),
@@ -459,3 +460,92 @@ def test_the_same_board_stacks_the_same_way_twice() -> None:
     )
 
     assert stacking_layers(doc) == stacking_layers(doc)
+
+
+def test_a_wire_lying_across_the_hole_another_ends_in_is_above_it() -> None:
+    """The one wire comes down to its pad there; drawn below the wire lying across, it came
+    down straight through it -- 14 times on the auto-wired atmega328-relay. Whichever id
+    comes first: the order is physical, not alphabetical."""
+    for lying, ending in (("a", "b"), ("b", "a")):
+        doc = make_doc(
+            conductors=(
+                wire(lying, (hole(1, 4), hole(9, 4))),
+                wire(ending, (hole(5, 4), hole(5, 9))),
+            )
+        )
+        layers = stacking_layers(doc)
+        assert layers[lying] > layers[ending], (lying, ending)
+
+
+def test_two_wires_along_one_line_from_a_shared_hole_are_not_at_one_level() -> None:
+    """A shared end is a junction only while the two go their separate ways. One bending at
+    the hole the other ends in and running back along it lies ON it, which
+    ``segments_touch`` never saw: the atmega had two nets drawn in one tube."""
+    doc = make_doc(
+        conductors=(
+            wire("w1", (hole(1, 5), hole(5, 5), hole(5, 4))),
+            wire("w2", (hole(5, 5), hole(5, 2))),
+        )
+    )
+
+    layers = stacking_layers(doc)
+
+    assert layers["w1"] != layers["w2"]
+
+
+def test_two_wires_meeting_end_to_end_and_carrying_on_stay_level() -> None:
+    doc = make_doc(
+        conductors=(wire("w1", (hole(1, 5), hole(5, 5))), wire("w2", (hole(5, 5), hole(9, 5)))),
+    )
+
+    assert set(stacking_layers(doc).values()) == {0}
+
+
+def test_wires_that_each_lie_across_the_others_end_are_named_as_a_loop() -> None:
+    """Neither can go in first, so no stacking draws both clear; the router has to not lay
+    them, and until it does the pair is said out loud rather than hidden."""
+    from perfboard_studio.occupancy import stacking_loops
+
+    doc = make_doc(
+        conductors=(
+            wire("w1", (hole(1, 4), hole(9, 4), hole(9, 6))),
+            wire("w2", (hole(5, 4), hole(5, 6), hole(12, 6))),
+            wire("w3", (hole(1, 9), hole(9, 9))),
+        )
+    )
+
+    assert stacking_loops(doc) == (("w1", "w2"),)
+    assert stacking_loops(make_doc(conductors=(wire("w3", (hole(1, 9), hole(9, 9))),))) == ()
+
+
+def test_a_loop_does_not_break_the_constraints_around_it() -> None:
+    """A wire under a loop member stays under it: breaking the loop must not place its
+    members before what they lie across outside it."""
+    doc = make_doc(
+        conductors=(
+            wire("a1", (hole(1, 4), hole(9, 4), hole(9, 6))),
+            wire("a2", (hole(5, 4), hole(5, 6), hole(12, 6))),
+            wire("z", (hole(3, 4), hole(3, 1))),
+        )
+    )
+
+    layers = stacking_layers(doc)
+
+    assert layers["a1"] > layers["z"]
+
+
+def test_the_order_of_the_document_does_not_change_the_stack() -> None:
+    """``persist`` writes conductors sorted by id; auto-wire appends them in the order it
+    made them. In document order the same board stacked one way before Save and another
+    after Open."""
+    conductors = (
+        wire("cond-8", (hole(1, 4), hole(9, 4))),
+        wire("cond-10", (hole(5, 4), hole(5, 9))),
+        wire("cond-9", (hole(2, 1), hole(2, 8))),
+        wire("cond-11", (hole(1, 6), hole(9, 6))),
+    )
+
+    first = stacking_layers(make_doc(conductors=conductors))
+
+    assert stacking_layers(make_doc(conductors=tuple(reversed(conductors)))) == first
+    assert stacking_layers(make_doc(conductors=conductors[1:] + conductors[:1])) == first
