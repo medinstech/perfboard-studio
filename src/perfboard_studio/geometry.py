@@ -1714,6 +1714,18 @@ def finger_cells(doc: PerfDocument) -> dict[str, FingerCell]:
     return cells
 
 
+def strip_cells(doc: PerfDocument, connector_id: str) -> tuple[FingerCell, ...]:
+    """One outside strip's cells in order along its edge (top to bottom, left to right):
+    what a rail on it can start, end and be bridged at. A finger a mounting bore took is not
+    among them, and a strip that is not outside -- or a board of joined holes -- has none."""
+    return tuple(
+        sorted(
+            (c for c in finger_cells(doc).values() if c.connector.id == connector_id),
+            key=lambda c: (c.cell.col, c.cell.row),
+        )
+    )
+
+
 def finger_cell_mm(cell: FingerCell, board: Board) -> Point2:
     """Where solder on a finger is: the middle of its copper (``edge_finger_rect``), which is
     where a renderer puts a cell that ``hole_to_mm`` would put in the border."""

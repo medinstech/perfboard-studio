@@ -160,6 +160,38 @@ def test_a_path_point_is_on_the_finger_for_a_cell_and_the_hole_for_the_rest() ->
         assert path_point_mm(cell.cell, board, {}) == hole_to_mm(cell.cell, board)
 
 
+def test_the_window_and_an_agent_build_a_rail_from_one_function() -> None:
+    """``commands.rail_payload`` is what the window's "make this strip a rail" and MCP's
+    ``add_rail`` both dispatch, from the cells ``strip_cells`` lists in order."""
+    from perfboard_studio.command import CommandError
+    from perfboard_studio.commands import rail_payload
+    from perfboard_studio.geometry import strip_cells
+    from perfboard_studio.mcp.session import BoardSession
+
+    doc = _stock()
+    strip = strip_cells(doc, "ec-left")
+    assert [c.cell.row for c in strip] == sorted(c.cell.row for c in strip)
+    assert all(c.connector.id == "ec-left" for c in strip)
+    assert {hole_key(c.cell) for c in strip} <= set(finger_cells(doc))
+    assert strip_cells(doc, "no-such-strip") == ()
+    first, last = strip[2], strip[10]
+    payload = rail_payload(doc, first.cell, last.cell, bridges=[first.beside, last.beside])
+    assert payload.label == f"Lay a rail {format_hole(first.cell, doc.board)}–{format_hole(last.cell, doc.board)}"
+    bus = _bus(doc)
+    assert bus.dispatch("conductor.addMany", payload).ok
+    session = BoardSession(document=doc)
+    assert session.add_rail(
+        format_hole(first.cell, doc.board),
+        format_hole(last.cell, doc.board),
+        bridges=[format_hole(first.beside, doc.board), format_hole(last.beside, doc.board)],
+    )["ok"]
+    shape = [(c.kind, c.path, c.side) for c in bus.document.conductors]
+    assert shape == [(c.kind, c.path, c.side) for c in session.document.conductors]
+    with pytest.raises(CommandError) as refused:
+        rail_payload(doc, first.cell, H(doc.board.cols, 5))
+    assert refused.value.code == "not-a-rail"
+
+
 def test_a_board_of_joined_holes_has_no_cells() -> None:
     doc = _stock()
     striped = dataclasses.replace(doc, board=dataclasses.replace(doc.board, type="stripboard"))

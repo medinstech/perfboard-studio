@@ -61,14 +61,13 @@ from perfboard_studio.catalog import (
     free_reference,
     search_catalog,
 )
-from perfboard_studio.command import CommandContext
+from perfboard_studio.command import CommandContext, CommandError
 from perfboard_studio.commands import (
     KEEP,
     AddBoardNotePayload,
     AddBoardPayload,
     AddCablePayload,
     AddConductorPayload,
-    AddConductorsPayload,
     AddCutPayload,
     AddEdgeConnectorPayload,
     AddMountingHolePayload,
@@ -113,6 +112,7 @@ from perfboard_studio.commands import (
     create_document_id_generator,
     create_empty_document,
     create_standard_registry,
+    rail_payload,
     wire_side,
 )
 from perfboard_studio.connectivity import extract_physical_nets
@@ -128,9 +128,7 @@ from perfboard_studio.geometry import (
     all_pin_holes,
     board_finish,
     board_mask,
-    bridge_needs_spine,
     consumed_holes,
-    edge_beside,
     edge_connector_holes,
     finger_cells,
     format_hole,
@@ -1691,54 +1689,19 @@ class BoardSession:
         if face is None:
             raise SessionError('A rail lies on side "bottom" or "top".')
         board = self.document.board
-        first, last = _hole(start, board), _hole(end, board)
-        a, b = edge_beside(first, board), edge_beside(last, board)
-        if a is None or b is None or a[1] != b[1]:
-            raise SessionError(
-                f"{start!r} and {end!r} are not two fingers on one edge: a rail runs along one "
-                f"strip, from the finger beside an outermost hole ('A2/L') to another."
+        try:
+            payload = rail_payload(
+                self.document,
+                _hole(start, board),
+                _hole(end, board),
+                bridges=[_hole(ref, board) for ref in bridges or []],
+                net_id=self._net_id(net),
+                side=face,
             )
-        edge = a[1]
-        if edge in ("left", "right"):
-            step = 1 if last.row >= first.row else -1
-            path = tuple(HoleCoord(first.col, r) for r in range(first.row, last.row + step, step))
-        else:
-            step = 1 if last.col >= first.col else -1
-            path = tuple(HoleCoord(c, first.row) for c in range(first.col, last.col + step, step))
-        net_id = self._net_id(net)
-        conductors: list[NewConductor] = []
-        if len(path) >= 2:
-            conductors.append(
-                NewSolderTraceConductor(path=path, net_id=net_id, side=face)
-            )
-        cells = finger_cells(self.document)
-        for ref in bridges or []:
-            hole = _hole(ref, board)
-            cell = next(
-                (c for c in cells.values() if c.beside == hole and c.connector.edge == edge), None
-            )
-            if cell is None or cell.cell not in path:
-                raise SessionError(
-                    f"{ref!r} is not beside this rail: a bridge joins an outermost hole to the "
-                    f"finger beside it, and that finger has to be one the rail is laid on."
-                )
-            wired = bridge_needs_spine(cell, board)
-            conductors.append(
-                NewSolderTraceConductor(
-                    path=(hole, cell.cell),
-                    kind="solder-trace-wired" if wired else "solder-trace",
-                    spine=SpineSpec(material="tinned-copper", gauge=0.6) if wired else None,
-                    net_id=net_id,
-                    side=face,
-                )
-            )
-        if not conductors:
-            raise SessionError("A rail needs two fingers, or at least one bridge.")
+        except CommandError as err:
+            raise SessionError(err.message) from err
         before = {c.id for c in self.document.conductors}
-        result = self._dispatch(
-            "conductor.addMany",
-            AddConductorsPayload(conductors=tuple(conductors), label=f"Lay a rail {start}–{end}"),
-        )
+        result = self._dispatch("conductor.addMany", payload)
         if result["ok"]:
             result["ids"] = [c.id for c in self.document.conductors if c.id not in before]
         return result

@@ -57,8 +57,10 @@ from .geometry import (
     all_pin_holes,
     board_edge_margin_mm,
     board_text_problem,
+    bridge_needs_spine,
     default_finger_length_mm,
     edge_axis,
+    edge_beside,
     edge_connector_holes,
     finger_cells,
     finger_holds,
@@ -1195,6 +1197,78 @@ class AddConductorsPayload:
     #: "Autoroute 6 nets" is a far better thing to read on the undo stack than
     #: "Add 14 conductors", so the caller that knows says so.
     label: str | None = None
+
+
+def rail_payload(
+    doc: PerfDocument,
+    start: HoleCoord,
+    end: HoleCoord,
+    *,
+    bridges: Sequence[HoleCoord] = (),
+    net_id: NetId | None = None,
+    side: BoardSide = "bottom",
+    label: str | None = None,
+) -> AddConductorsPayload:
+    """A rail as ONE ``conductor.addMany``: solder along a stock board's outside finger
+    strip from the finger ``start`` to the finger ``end`` (two cells on one edge, as
+    ``geometry.finger_cells`` names them), and a bridge from each hole in ``bridges`` -- an
+    outermost hole beside the rail -- onto its finger, wired where the gap is wider than
+    solder spans (``geometry.bridge_needs_spine``), which it is on every stock board.
+
+    The window's "make this strip a rail" and the MCP server's ``add_rail`` both build
+    their command here, so the two lay the same copper. Only the SHAPE is checked here
+    (one edge, bridges beside the rail); whether every cell is a finger the face can hold
+    is the command's own check, so a payload built from a stale document is refused at
+    dispatch like any other.
+
+    Raises ``CommandError("not-a-rail")`` naming what is wrong."""
+    board = doc.board
+    a, b = edge_beside(start, board), edge_beside(end, board)
+    if a is None or b is None or a[1] != b[1]:
+        raise CommandError(
+            "not-a-rail",
+            f"{format_hole(start, board)} and {format_hole(end, board)} are not two fingers on "
+            f"one edge: a rail runs along one strip, from the finger beside an outermost hole "
+            f"('A2/L') to another.",
+        )
+    edge = a[1]
+    if edge in ("left", "right"):
+        step = 1 if end.row >= start.row else -1
+        path = tuple(HoleCoord(start.col, r) for r in range(start.row, end.row + step, step))
+    else:
+        step = 1 if end.col >= start.col else -1
+        path = tuple(HoleCoord(c, start.row) for c in range(start.col, end.col + step, step))
+    conductors: list[NewConductor] = []
+    if len(path) >= 2:
+        conductors.append(NewSolderTraceConductor(path=path, net_id=net_id, side=side))
+    cells = finger_cells(doc)
+    for hole in bridges:
+        cell = next(
+            (c for c in cells.values() if c.beside == hole and c.connector.edge == edge), None
+        )
+        if cell is None or cell.cell not in path:
+            raise CommandError(
+                "not-a-rail",
+                f"{format_hole(hole, board)} is not beside this rail: a bridge joins an "
+                f"outermost hole to the finger beside it, and that finger has to be one the "
+                f"rail is laid on.",
+            )
+        wired = bridge_needs_spine(cell, board)
+        conductors.append(
+            NewSolderTraceConductor(
+                path=(hole, cell.cell),
+                kind="solder-trace-wired" if wired else "solder-trace",
+                spine=SpineSpec(material="tinned-copper", gauge=0.6) if wired else None,
+                net_id=net_id,
+                side=side,
+            )
+        )
+    if not conductors:
+        raise CommandError("not-a-rail", "A rail needs two fingers, or at least one bridge.")
+    return AddConductorsPayload(
+        conductors=tuple(conductors),
+        label=label or f"Lay a rail {format_hole(start, board)}–{format_hole(end, board)}",
+    )
 
 
 @dataclass(frozen=True, slots=True)

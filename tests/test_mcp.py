@@ -1030,7 +1030,13 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # component.moveToBoard). move_to_board is not delete + place: that loses the part's id,
     # leaves its copper ending in empty holes, and drops the cable fitted to it. There is no
     # update_cable, because remove_cable and add_cable compose into it.
-    assert len(tools) <= 67, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 68, for add_rail: solder along a stock board's outside finger strip with its
+    # bridges, as one step. add_solder_trace reaches a finger by its "A7/L" address too,
+    # but a rail and its bridges are several conductors whose spines depend on the board's
+    # gaps, and the window's "make this strip a rail" builds the same payload
+    # (commands.rail_payload) -- an agent should not have to rebuild it by hand.
+    assert len(tools) <= 68, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"
