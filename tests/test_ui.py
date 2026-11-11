@@ -19634,3 +19634,61 @@ def test_vias_are_counted_on_the_card_in_the_status_line_and_on_the_copper() -> 
         assert format_hole(via, window.bus.document.board) in editor.joins_other_face.text()
     finally:
         _close(window)
+
+
+def test_solder_on_an_outside_finger_is_drawn_on_the_finger_in_2d() -> None:
+    """A rail's cells are addresses one step past the grid; the finger is wherever its strip
+    was made -- on the 9 x 15 cm board nearly 6 mm from that point. The 2D view draws every
+    cell of the path on the finger's copper, on both faces, mirrored for the solder side
+    about the hole span as every hole is, and leaves the bridge's hole where the hole is."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.commands import (
+        create_empty_document,
+        document_on_preset,
+        rail_payload,
+    )
+    from perfboard_studio.geometry import (
+        finger_cell_mm,
+        finger_cells,
+        hole_key,
+        hole_span_mm,
+        hole_to_mm,
+        strip_cells,
+    )
+    from perfboard_studio.model import DocumentMeta
+
+    preset = next(
+        p for p in STANDARD_PRESETS if p.name == "9 x 15 cm" and p.family == "double-sided-fr4"
+    )
+    document = document_on_preset(
+        create_empty_document(DocumentMeta(name="rails", created="", modified="")), preset
+    )
+    strip = strip_cells(document, "ec-left")
+    first, last = strip[0], strip[-1]
+    window = _window_on(document)
+    try:
+        result = window.bus.dispatch(
+            "conductor.addMany",
+            rail_payload(window.bus.document, first.cell, last.cell, bridges=[first.beside]),
+        )
+        assert result.ok, result.message
+        board = window.bus.document.board
+        cells = finger_cells(window.bus.document)
+        span_w, _span_h = hole_span_mm(board)
+        for side in ("top", "bottom"):
+            if window.scene.side != side:
+                window.on_flip_board()
+            drawn = 0
+            for conductor in window.bus.document.conductors:
+                points = window.scene.conductor_items[conductor.id]._points()
+                for hole, point in zip(conductor.path, points, strict=True):
+                    cell = cells.get(hole_key(hole))
+                    at = finger_cell_mm(cell, board) if cell else hole_to_mm(hole, board)
+                    x = span_w - at.x if side == "bottom" else at.x
+                    assert (point.x(), point.y()) == pytest.approx((x, at.y)), (side, hole)
+                    drawn += cell is not None
+            assert drawn >= len(strip)
+        # Where the cell would be, one pitch past the grid, is not where it is drawn.
+        assert abs(finger_cell_mm(first, board).x - hole_to_mm(first.cell, board).x) > 2
+    finally:
+        _close(window)

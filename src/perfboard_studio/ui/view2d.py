@@ -25,7 +25,7 @@ from __future__ import annotations
 import contextlib
 import math
 from collections import Counter
-from collections.abc import Collection, Iterator, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import replace
 from functools import lru_cache
 from typing import Any, cast
@@ -101,6 +101,7 @@ from perfboard_studio.drc import DrcViolation
 from perfboard_studio.footprints import wire_entry
 from perfboard_studio.geometry import (
     FLYING_LEAD_MARKER_MM,
+    FingerCell,
     all_pin_holes,
     board_note_anchor,
     board_note_centre_mm,
@@ -109,6 +110,7 @@ from perfboard_studio.geometry import (
     column_label,
     consumed_holes,
     edge_finger_rect,
+    finger_cells,
     finger_corner_radius_mm,
     flying_lead_routes,
     format_hole,
@@ -123,6 +125,7 @@ from perfboard_studio.geometry import (
     mounting_hole_centre_mm,
     pad_extent_mm,
     path_length_mm,
+    path_point_mm,
     printed_label,
     printed_label_is_clear,
     row_label,
@@ -570,6 +573,28 @@ def hole_to_screen(hole: HoleCoord, board: Board, side: BoardSide) -> QPointF:
         span_w, _span_h = hole_span_mm(board)
         x = span_w - x
     return QPointF(x, y)
+
+
+def path_point_to_screen(
+    hole: HoleCoord, board: Board, side: BoardSide, cells: Mapping[str, FingerCell]
+) -> QPointF:
+    """One point of a conductor's path -> scene position (mm), for the side being VIEWED.
+
+    :func:`hole_to_screen` for every hole of the grid. A finger cell -- the place one step
+    outside the grid where solder lies on a stock board's outside finger -- is drawn on the
+    finger's copper (``geometry.path_point_mm``), which on most stock boards is not where a
+    hole one pitch further out would be: on the 6 x 8 cm board that is the gap between two
+    fingers. Mirrored for the solder side about the hole span, as every hole is. With no
+    cells this is exactly ``hole_to_screen``.
+    """
+    if not cells:
+        return hole_to_screen(hole, board, side)
+    point = path_point_mm(hole, board, cells)
+    x = point.x
+    if side == "bottom":
+        span_w, _span_h = hole_span_mm(board)
+        x = span_w - x
+    return QPointF(x, point.y)
 
 
 def screen_to_hole(point: QPointF, board: Board, side: BoardSide) -> HoleCoord:
@@ -2398,11 +2423,15 @@ class ConductorItem(QGraphicsItem):
         show_far_side: bool = True,
         stack: int = 0,
         net_name: str | None = None,
+        cells: Mapping[str, FingerCell] | None = None,
     ) -> None:
         super().__init__()
         self.conductor = conductor
         self.board = board
         self.side = side
+        #: The document's finger cells (``geometry.finger_cells``), so solder on an outside
+        #: finger is drawn on the finger. Empty on every board without an outside strip.
+        self.cells: Mapping[str, FingerCell] = cells or {}
         self.net_class = net_class
         self.signal_index = signal_index
         #: View > Copper on the Far Side: off, far-side copper is not drawn on screen.
@@ -2436,7 +2465,10 @@ class ConductorItem(QGraphicsItem):
         )
 
     def _points(self) -> list[QPointF]:
-        return [hole_to_screen(h, self.board, self.side) for h in self.conductor.path]
+        return [
+            path_point_to_screen(h, self.board, self.side, self.cells)
+            for h in self.conductor.path
+        ]
 
     def is_far_side(self) -> bool:
         """True when this conductor is on the face away from the one being viewed.
@@ -4914,6 +4946,9 @@ class BoardScene(QGraphicsScene):
         self.component_items: dict[str, ComponentItem] = {}
         self.mount_items: dict[str, MountingHoleItem] = {}
         self.connector_items: dict[str, EdgeConnectorItem] = {}
+        #: ``geometry.finger_cells`` of the document, once per build: where solder on an
+        #: outside finger is drawn, for every conductor item and every zoom to a hole.
+        self.finger_cells: dict[str, FingerCell] = {}
         #: Every part's reference, over every part -- see ``ReferenceLayerItem``.
         self.reference_layer: ReferenceLayerItem | None = None
         #: The solder side's lead ends, over the copper; None on the component side.
@@ -5233,6 +5268,7 @@ class BoardScene(QGraphicsScene):
             | cut_holes(self.document)
             | holeless_positions(self.document.board)
         )
+        self.finger_cells = finger_cells(self.document)
         self.clear()
         self._risk_item = None
         self._bench_item = None
@@ -5375,6 +5411,7 @@ class BoardScene(QGraphicsScene):
                 show_far_side=self.show_far_side,
                 stack=conductor_layers.get(conductor.id, conductor.layer_z),
                 net_name=net_name_by_id.get(conductor.net_id or ""),
+                cells=self.finger_cells,
             )
             self.addItem(conductor_item)
             self.conductor_items[conductor.id] = conductor_item
@@ -7845,11 +7882,18 @@ class BoardView(QGraphicsView):
         else:
             self.viewport().unsetCursor()
 
-    @staticmethod
     def _holes_rect(
-        holes: Sequence[HoleCoord], board: Board, side: BoardSide, margin: float
+        self, holes: Sequence[HoleCoord], board: Board, side: BoardSide, margin: float
     ) -> QRectF:
-        pts = [hole_to_screen(h, board, side) for h in holes]
+        # A finding about a rail names a finger's cell, drawn on the finger rather than in
+        # the border; the cells are the scene's, so only for the board the scene shows.
+        scene = self.scene()
+        cells = (
+            scene.finger_cells
+            if isinstance(scene, BoardScene) and scene.document.board == board
+            else {}
+        )
+        pts = [path_point_to_screen(h, board, side, cells) for h in holes]
         xs = [p.x() for p in pts]
         ys = [p.y() for p in pts]
         return QRectF(
