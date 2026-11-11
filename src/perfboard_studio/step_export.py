@@ -65,10 +65,12 @@ from .footprints import LEAD_RADIUS_MM, LEAD_TRIM_MM, MIN_BODY_MM, body_extent
 from .geometry import (
     all_pin_holes,
     board_outline_mm,
+    finger_cells,
     hole_key,
     hole_to_mm,
     holeless_positions,
     mounting_hole_centre_mm,
+    path_point_mm,
     undrilled_holes,
 )
 from .model import (
@@ -297,10 +299,15 @@ def _wire_solids(
     rather than through it; a lifted wire then gets a post down to the board at each end,
     where it is soldered. Each run is lengthened by its radius at every corner, so the two
     meet in a solid elbow rather than leaving a notch on the outside of the bend.
+
+    A path point is placed where the 3D view draws it (``geometry.path_point_mm``): a hole's
+    centre, or the copper of an outside finger for a cell. ``conductor.add`` refuses a wire a
+    finger, but a file can still hold one, and the export must not put it in the border.
     """
     wires = [c for c in doc.conductors if not contacts_every_path_hole(c) and len(c.path) > 1]
     if not wires:
         return ()
+    cells = finger_cells(doc)
     radii = {c.id: wire_radius_mm(doc, c) for c in wires}
     step = 2 * max(radii.values()) + WIRE_STACK_GAP_MM
     layers = stacking_layers(doc, lookup=lookup)
@@ -311,7 +318,9 @@ def _wire_solids(
         z = top + radius + lift if cond.side == "top" else -(radius + lift)
         rgb = palette.wire_rgb(cond)
         points = [
-            place(centre.x, centre.y) for hole in cond.path for centre in [hole_to_mm(hole, doc.board)]
+            place(centre.x, centre.y)
+            for hole in cond.path
+            for centre in [path_point_mm(hole, doc.board, cells)]
         ]
         last = len(points) - 2
         for index, ((ax, ay), (bx, by)) in enumerate(pairwise(points)):

@@ -527,3 +527,61 @@ def test_opencascade_reads_every_solid_as_valid_and_the_board_to_its_volume(
     assert isinstance(plate, Plate)
     area = plate.high[0] * plate.high[1] - sum(math.pi * r * r for _x, _y, r in plate.holes)
     assert volumes[0] == pytest.approx(area * plate.high[2], rel=1e-6)
+
+
+def _railed_stock() -> PerfDocument:
+    """The 5 x 7 cm double-sided board as sold, a rail of solder along its left fingers
+    bridged to A5, and a wire from C5 ending on the finger beside A9."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.command import CommandBus, CommandContext
+    from perfboard_studio.commands import (
+        AddConductorsPayload,
+        create_document_id_generator,
+        create_empty_document,
+        create_standard_registry,
+        document_on_preset,
+        rail_payload,
+    )
+    from perfboard_studio.model import DocumentMeta, WireConductor
+
+    preset = next(p for p in STANDARD_PRESETS if p.name == "5 x 7 cm" and p.family == "double-sided-fr4")
+    doc = document_on_preset(create_empty_document(DocumentMeta(name="rail", created="", modified="")), preset)
+    payload: AddConductorsPayload = rail_payload(
+        doc, HoleCoord(-1, 4), HoleCoord(-1, 8), bridges=(HoleCoord(0, 4),)
+    )
+    bus = CommandBus(doc, create_standard_registry(), CommandContext(next_id=create_document_id_generator(doc)))
+    result = bus.dispatch("conductor.addMany", payload)
+    assert result.ok, result.message
+    # A wire on a finger cannot be drawn (conductor.add refuses it) but a file can hold one.
+    wire = WireConductor(id="w-finger", path=(HoleCoord(2, 8), HoleCoord(-1, 8)), kind="bare-wire")
+    return replace(bus.document, conductors=(*bus.document.conductors, wire))
+
+
+def test_a_rail_leaves_no_solid_and_a_wire_onto_a_finger_ends_on_its_copper() -> None:
+    """Solder is left out of the file like all copper, so a rail adds nothing to it -- the
+    day it does, it is drawn through ``path_point_mm`` like the wire here. The wire's end on
+    the finger is on the finger's copper (``finger_cell_mm``), not one pitch past the grid in
+    the border, which is where ``hole_to_mm`` puts a cell."""
+    from perfboard_studio.geometry import Point2, finger_cell_mm, finger_cells
+
+    doc = _railed_stock()
+    board = doc.board
+    bare = replace(doc, conductors=tuple(c for c in doc.conductors if contacts_every_path_hole(c)))
+    plain = replace(doc, conductors=())
+    assert [part.name for part in board_model(bare, footprint_lookup())] == [
+        part.name for part in board_model(plain, footprint_lookup())
+    ]
+    outline = board_outline_mm(board)
+
+    def frame(point: Point2) -> tuple[float, float]:
+        return point.x - outline.x, outline.y + outline.height - point.y
+
+    [run] = _wire_runs(doc)
+    cell = finger_cells(doc)[hole_key(HoleCoord(-1, 8))]
+    on_copper = frame(finger_cell_mm(cell, board))
+    start = frame(hole_to_mm(HoleCoord(2, 8), board))
+    end = (run.base[0] + run.axis[0] * run.length, run.base[1] + run.axis[1] * run.length)
+    assert math.dist(end, on_copper) == pytest.approx(0, abs=1e-9)
+    assert math.dist((run.base[0], run.base[1]), start) == pytest.approx(0, abs=1e-9)
+    in_the_border = frame(hole_to_mm(HoleCoord(-1, 8), board))
+    assert math.dist(on_copper, in_the_border) > 0.1, "the case shows nothing on this board"
