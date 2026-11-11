@@ -3783,7 +3783,7 @@ def test_a_run_is_in_the_surface_and_a_wire_is_on_it() -> None:
     clear, which is why a joint drawn at the run's own height sat behind the pad it was
     made on and slid off it from any oblique angle.
     """
-    from perfboard_studio.ui.view3d import conductor_radius, conductor_z, pad_z
+    from perfboard_studio.ui.view3d import WIRE_LIFT_MM, conductor_radius, conductor_z, pad_z
 
     board = _load_dense().board
     run = SolderTraceConductor(id="t1", path=(HoleCoord(2, 2), HoleCoord(6, 2)))
@@ -3791,7 +3791,8 @@ def test_a_run_is_in_the_surface_and_a_wire_is_on_it() -> None:
     copper = pad_z(board, "bottom")
 
     assert conductor_z(run, board, 0) == pytest.approx(copper)
-    assert conductor_z(wire, board, 0) == pytest.approx(copper - conductor_radius(wire))
+    # A wire stands WIRE_LIFT_MM clear of the copper as well as its own radius off it.
+    assert conductor_z(wire, board, 0) == pytest.approx(copper - conductor_radius(wire) - WIRE_LIFT_MM)
 
 
 def test_a_wire_goes_down_into_the_holes_it_is_soldered_into() -> None:
@@ -3813,7 +3814,11 @@ def test_a_wire_goes_down_into_the_holes_it_is_soldered_into() -> None:
     line = _conductor_centreline(wire, board, run_z, copper, is_trace=False)
     assert line[0][2] == pytest.approx(copper), "the wire has to reach its pad"
     assert line[-1][2] == pytest.approx(copper)
-    assert any(point[2] == pytest.approx(run_z) for point in line), "and clear it in between"
+    # ...and rise to the height it runs at (a hand-bent wire bows a little higher in the
+    # middle, so "at least", never "exactly").
+    assert max(abs(point[2] - copper) for point in line) >= abs(run_z - copper) - 1e-9, (
+        "and clear it in between"
+    )
     assert len(line) > len(wire.path), "a drop with no run-in is a staple, not a bend"
 
     trace = SolderTraceConductor(id="t1", path=tuple(HoleCoord(c, 2) for c in range(2, 6)))

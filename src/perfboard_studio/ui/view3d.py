@@ -20,7 +20,7 @@ import math
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from itertools import pairwise
@@ -927,8 +927,8 @@ INK = (0.0, 0.88)
 MASK = (0.0, 0.36)
 #: The cut edge of the laminate and the wall of a drilled hole: raw glass-epoxy.
 LAMINATE = (0.0, 0.74)
-#: PVC insulation on a hook-up wire.
-INSULATION = (0.0, 0.40)
+#: PVC insulation on a hook-up wire: glossy, like the wire you buy on a reel.
+INSULATION = (0.0, 0.13)
 #: An LED's epoxy lens: smoother than anything else on the board, because it is cast rather
 #: than moulded and it is transmitting rather than reflecting.
 LENS = (0.0, 0.06)
@@ -1079,20 +1079,58 @@ TRACE_SAMPLES_PER_STEP = 8
 SOLDER_FILLET_BASE_MM = 0.90
 SOLDER_FILLET_HEIGHT_MM = 0.62
 
-#: How much insulation is stripped off each end of an insulated wire, and the tinned core
+#: How much insulation is stripped off each end of an insulated wire, and the copper core
 #: that shows there and goes down into the hole. A sleeve running right into the joint was
-#: a coloured capsule sitting on two pads.
-WIRE_STRIP_MM = 1.1
-WIRE_CORE_RADIUS_MM = 0.24
+#: a coloured capsule sitting on two pads. Stripped long, like a wire somebody cut and
+#: stripped by hand, and never more than a third of a short wire, which would otherwise be
+#: all copper.
+WIRE_STRIP_MM = 2.0
+WIRE_STRIP_SHARE = 0.3
+WIRE_CORE_RADIUS_MM = 0.26
+WIRE_CORE_RGB = (0.80, 0.47, 0.27)
+WIRE_CORE_MAT = (1.0, 0.30)
+#: How far the core goes down into its hole, below the pad: it passes through the board,
+#: and the solder is where it meets the copper.
+WIRE_IN_HOLE_MM = 0.9
 
 #: The radius a wire is bent round, at every corner of its run and where it turns down
 #: into its hole. Wire is bent over a finger or a pair of pliers, not folded: a 90-degree
 #: mitre in a tube reads as plumbing, which is what an insulated wire looked like.
 WIRE_BEND_RADIUS_MM = 0.9
 
-#: 24 AWG hookup wire over the sleeve, and tinned copper for a bare link or a spine.
-BARE_WIRE_RADIUS_MM = 0.30
+#: A hookup wire on the board is bent wider than that along its run and tighter where it
+#: turns down into its hole: wire is bent by hand over a finger along the way and over
+#: pliers at the end, and a tight corner on a long run is what made it look like plumbing.
+#: The turn into the hole stays inside a third of a pitch so a wire coming down from a
+#: stacking level does not sweep across its neighbours.
+WIRE_BEND_MID_MM = 2.6
+WIRE_BEND_END_MM = 0.85
+
+#: A wire does not lie on the board, it stands a little off it: lifted by this much beyond
+#: resting on the copper, which is also what leaves room under it for the contact shadow
+#: and for the solder joint of a neighbour. Everything stacks from here, so a stacking
+#: step is measured from a lifted wire, not from one on the board.
+WIRE_LIFT_MM = 0.38
+
+#: Dressed by hand a wire is not a ruler: a long run bows up a little, by this share of its
+#: length up to a limit, and a top jumper -- which goes OVER parts -- more so. The limits
+#: are in ``STACK_STEP_MM``: two wires crossing differ by that much at worst and still clear
+#: each other, which is what ``test_no_two_conductors_are_drawn_in_the_same_place`` holds.
+WIRE_ARC = 0.03
+WIRE_ARC_MAX_MM = 0.35
+JUMPER_ARC = 0.05
+JUMPER_ARC_MAX_MM = 0.7
+
+#: 24 AWG tinned wire for a bare link, and the PVC jacket of a hookup wire on the board
+#: (the cables between boards keep ``INSULATED_RADIUS_MM``, a thicker jacket).
+BARE_WIRE_RADIUS_MM = 0.28
+HOOKUP_RADIUS_MM = 0.44
 INSULATED_RADIUS_MM = 0.55
+
+#: The contact shadow under a wire: how dark, and how far the sun throws it per mm of height.
+WIRE_SHADOW_OPACITY = 0.27
+WIRE_SHADOW_THROW_X = 0.34
+WIRE_SHADOW_THROW_Y = -0.43
 
 #: A wire's two ends get a solder fillet and its length gets none, which is the distinction
 #: ``contacts_every_path_hole`` draws and the single most important thing this view says.
@@ -1123,12 +1161,14 @@ BEAD_RESOLUTION = 20
 #: off a board 1.6 mm thick. It bought levitation and no clearance.
 #: ``occupancy.stacking_layers`` now lifts only what actually crosses something, which is
 #: what makes a step this size affordable.
-#: How far each stands off its centreline UPWARD -- a run squashed by TRACE_FLATTEN -- and
-#: the step is twice the tallest: two of the same kind can cross, and since runs were
-#: squashed the tallest pair is two insulated wires, not a wire over a run.
+#: Two wires of one kind can cross, and they clear each other by this step MINUS how much
+#: one is bowed up more than the other where they cross -- so the step is two radii, a
+#: margin, and the highest arc. A wire over the heaviest run needs less than that (the run
+#: does not bow), so the arcs decide it.
 _RUN_STANDS_MM = max(w * h for w, h in TRACE_BUILDUP.values()) * TRACE_JOINT_RADIUS_MM * TRACE_FLATTEN
-STACK_STEP_MM = (
-    2 * max(INSULATED_RADIUS_MM, _RUN_STANDS_MM, BARE_WIRE_RADIUS_MM) + 0.15
+STACK_STEP_MM = max(
+    2 * max(HOOKUP_RADIUS_MM, BARE_WIRE_RADIUS_MM) + 0.15 + max(WIRE_ARC_MAX_MM, JUMPER_ARC_MAX_MM),
+    _RUN_STANDS_MM + HOOKUP_RADIUS_MM + 0.15,
 )
 
 
@@ -1141,7 +1181,7 @@ def conductor_radius(cond: Conductor) -> float:
         # carries.
         return TRACE_JOINT_RADIUS_MM * _buildup(cond)[0]
     if cond.kind in ("insulated-wire", "top-jumper"):
-        return INSULATED_RADIUS_MM
+        return HOOKUP_RADIUS_MM
     return BARE_WIRE_RADIUS_MM
 
 
@@ -1188,7 +1228,7 @@ def conductor_z(cond: Conductor, board: Board, stack: int = 0) -> float:
     #
     # The distinction is the one this view exists to make (PLAN.md Sec 8.3), and it is now
     # in the geometry rather than only in the colour.
-    standoff = 0.0 if contacts_every_path_hole(cond) else conductor_radius(cond)
+    standoff = 0.0 if contacts_every_path_hole(cond) else conductor_radius(cond) + WIRE_LIFT_MM
     if cond.side == "bottom":
         return pad_z(board, "bottom") - standoff - lift
     return pad_z(board, "top") + standoff + lift
@@ -6719,32 +6759,62 @@ def _conductor_centreline(
     if len(flat) < 2:
         return flat
 
-    drop = abs(run_z - joint_z)
-    out: list[tuple[float, float, float]] = []
-    for end, inward in ((0, 1), (-1, -2)):
-        x, y, _ = flat[end]
-        ix, iy, _ = flat[inward]
-        span = math.hypot(ix - x, iy - y)
-        # SHORT, and kept near the pad. A bend as long as it is deep reads nicely and
-        # sweeps a long way: a wire coming down from two stacking levels ramped almost
-        # four millimetres across the board, through whatever was lying under it -- which
-        # is two of the fifteen golden fixtures. Held inside a third of a pitch, the
-        # descent stays over its own pad and its neighbours, where the only other thing
-        # is something soldered to the same hole. Never longer than the drop either, or a
-        # wire lying flat on the board acquires a bend it does not need.
-        run_in = min(drop, board.pitch / 3, span * 0.35)
-        t = (run_in / span) if span else 0.0
-        elbow = (x + (ix - x) * t, y + (iy - y) * t, run_z)
-        out = (
-            [(x, y, joint_z), elbow, *flat[1:-1]]
-            if end == 0
-            else [*out, elbow, (x, y, joint_z)]
-        )
-    return _rounded(out, WIRE_BEND_RADIUS_MM)
+    # Straight down out of each hole to the height the wire runs at, round the corner at
+    # the top (tight: over pliers) and along the path (wide: over a finger).
+    first, last = flat[0], flat[-1]
+    waypoints = [
+        (first[0], first[1], joint_z),
+        *flat,
+        (last[0], last[1], joint_z),
+    ]
+    radii = [0.0, WIRE_BEND_END_MM, *([WIRE_BEND_MID_MM] * (len(flat) - 2)), WIRE_BEND_END_MM, 0.0]
+    line = _densify(_rounded(waypoints, radii), WIRE_SAMPLE_MM)
+    return _bowed(cond, line)
+
+
+#: Spacing of the points on a hand-bent wire, so a gentle arc is a curve and not a few
+#: straight facets.
+WIRE_SAMPLE_MM = 0.8
+
+
+def _densify(
+    points: list[tuple[float, float, float]], step: float
+) -> list[tuple[float, float, float]]:
+    """``points`` with extra points on any leg longer than ``step``."""
+    out = [points[0]]
+    for a, b in pairwise(points):
+        count = max(1, int(math.dist(a, b) / step))
+        for index in range(1, count + 1):
+            t = index / count
+            out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t))
+    return out
+
+
+def _bowed(cond: Conductor, line: list[tuple[float, float, float]]) -> list[tuple[float, float, float]]:
+    """A wire's centreline bowed up off the face it is on: zero at each end, highest in
+    the middle, by a share of its length -- more for a top jumper, which goes over things.
+    The heights at the ends are untouched, so it still reaches its pad."""
+    share, limit = (
+        (JUMPER_ARC, JUMPER_ARC_MAX_MM) if cond.kind == "top-jumper" else (WIRE_ARC, WIRE_ARC_MAX_MM)
+    )
+    along = [0.0]
+    for a, b in pairwise(line):
+        along.append(along[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+    total = along[-1]
+    if total <= 0.0:
+        return line
+    rise = min(limit, share * total)
+    up = -1.0 if cond.side == "bottom" else 1.0
+    return [
+        (x, y, z + up * rise * math.sin(math.pi * s / total))
+        for (x, y, z), s in zip(line, along, strict=True)
+    ]
 
 
 def _rounded(
-    points: list[tuple[float, float, float]], radius: float, steps: int = 5
+    points: list[tuple[float, float, float]],
+    radius: float | Sequence[float],
+    steps: int = 5,
 ) -> list[tuple[float, float, float]]:
     """A polyline with every corner bent round, as wire is: each corner replaced by a curve
     from ``radius`` before it to ``radius`` after it -- less where a leg is too short to
@@ -6753,7 +6823,8 @@ def _rounded(
     if len(points) < 3:
         return points
     out = [points[0]]
-    for a, corner, b in zip(points, points[1:], points[2:], strict=False):
+    for index, (a, corner, b) in enumerate(zip(points, points[1:], points[2:], strict=False), 1):
+        bend = radius if isinstance(radius, int | float) else radius[index]
         into = [corner[i] - a[i] for i in range(3)]
         out_of = [b[i] - corner[i] for i in range(3)]
         len_in, len_out = math.hypot(*into), math.hypot(*out_of)
@@ -6763,7 +6834,7 @@ def _rounded(
         if cos > 0.999:
             out.append(corner)
             continue
-        reach = min(radius, len_in / 2, len_out / 2)
+        reach = min(bend, len_in / 2, len_out / 2)
         start = tuple(corner[i] - into[i] / len_in * reach for i in range(3))
         end = tuple(corner[i] + out_of[i] / len_out * reach for i in range(3))
         for step in range(steps + 1):
@@ -6822,14 +6893,26 @@ def build_conductor(
 
     insulated = cond.kind in ("insulated-wire", "top-jumper")
     radius = conductor_radius(cond)
+    # A wire's core goes on down into its holes, through the board, past the pad where the
+    # solder is: the line it is bent along stops at the copper.
+    into_hole = centreline
+    if not is_trace and len(centreline) > 1:
+        down = 1.0 if cond.side == "bottom" else -1.0
+        (x0, y0, _z0), (x1, y1, _z1) = centreline[0], centreline[-1]
+        into_hole = [
+            (x0, y0, joint_z + down * WIRE_IN_HOLE_MM),
+            *centreline,
+            (x1, y1, joint_z + down * WIRE_IN_HOLE_MM),
+        ]
     if insulated:
-        # The sleeve stops short of each end and the tinned core runs on into the hole:
+        # The sleeve stops short of each end and the copper core runs on into the hole:
         # the sleeve along the trimmed centreline, the core along all of it.
-        sleeve = _trimmed(centreline, WIRE_STRIP_MM)
+        length = sum(math.dist(a, b) for a, b in pairwise(centreline))
+        sleeve = _trimmed(centreline, min(WIRE_STRIP_MM, WIRE_STRIP_SHARE * length))
         body = _tube_actor(sleeve, radius) if len(sleeve) > 1 else None
-        core = _tube_actor(centreline, WIRE_CORE_RADIUS_MM)
-        core.GetProperty().SetColor(*BARE_RGB)
-        _finish(core.GetProperty(), BRIGHT_TIN)
+        core = _tube_actor(into_hole, WIRE_CORE_RADIUS_MM)
+        core.GetProperty().SetColor(*WIRE_CORE_RGB)
+        _finish(core.GetProperty(), WIRE_CORE_MAT)
         actors = [core]
         if body is not None:
             rgb = wire_rgb(cond, net_class, signal_index)
@@ -6837,7 +6920,7 @@ def build_conductor(
             _finish(body.GetProperty(), INSULATION)
             actors.append(body)
     else:
-        actor = _tube_actor(centreline, radius, swell)
+        actor = _tube_actor(centreline if is_trace else into_hole, radius, swell)
         if swell is not None:
             # Squashed about the copper, for TRACE_FLATTEN's reason.
             _flatten_about(actor, joint_z, _buildup(cond)[1])
@@ -6929,6 +7012,90 @@ def _spine_actor(cond: Conductor, board: Board, joint_z: float) -> vtk.vtkActor 
     actor.GetProperty().SetColor(*SPINE_RGB)
     _finish(actor.GetProperty(), SPINE_MAT)
     return actor
+
+
+def build_wire_shadows(
+    doc: PerfDocument, layers: dict[str, int] | None = None
+) -> vtk.vtkActor | None:
+    """The contact shadow of every wire on the board, as ONE actor: a flat, dark, unlit
+    ribbon on each face under each wire, thrown a little way from the sun. A wire stands
+    off the board, and without something under it it reads as floating in the air rather
+    than lying on the board. One actor and not one per wire, because it belongs to no wire
+    (it is not picked, tinted or dimmed with one) and a board has hundreds of them.
+
+    Not under a solder run: that is on the copper and throws nothing.
+    """
+    board = doc.board
+    levels = layers if layers is not None else {}
+    parts = vtk.vtkAppendPolyData()
+    count = 0
+    for cond in doc.conductors:
+        if contacts_every_path_hole(cond) or len(cond.path) < 2:
+            continue
+        joint_z = pad_z(board, cond.side)
+        up = -1.0 if cond.side == "bottom" else 1.0
+        line = _conductor_centreline(
+            cond, board, conductor_z(cond, board, levels.get(cond.id, cond.layer_z)), joint_z, False
+        )
+        radius = conductor_radius(cond)
+        shadow = []
+        for x, y, z in line:
+            height = abs(z - joint_z)
+            if height > 6.0:
+                continue
+            shadow.append(
+                (
+                    x + WIRE_SHADOW_THROW_X * height * 1.6,
+                    y + WIRE_SHADOW_THROW_Y * height * 1.6,
+                    joint_z + up * 0.025,
+                )
+            )
+        if len(shadow) < 2:
+            continue
+        tube = vtk.vtkTubeFilter()
+        tube.SetInputData(_polyline(shadow))
+        tube.SetRadius(radius * 1.25)
+        tube.SetNumberOfSides(8)
+        squash = vtk.vtkTransform()
+        squash.Translate(0.0, 0.0, joint_z)
+        squash.Scale(1.0, 1.0, 0.02)
+        squash.Translate(0.0, 0.0, -joint_z)
+        flat = vtk.vtkTransformPolyDataFilter()
+        flat.SetInputConnection(tube.GetOutputPort())
+        flat.SetTransform(squash)
+        flat.Update()
+        parts.AddInputData(flat.GetOutput())
+        count += 1
+    if count == 0:
+        return None
+    parts.Update()
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(parts.GetOutputPort())
+    mapper.ScalarVisibilityOff()
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    prop = actor.GetProperty()
+    prop.SetColor(0.0, 0.0, 0.0)
+    prop.SetOpacity(WIRE_SHADOW_OPACITY)
+    prop.LightingOff()
+    actor.PickableOff()
+    return actor
+
+
+def _polyline(points: list[tuple[float, float, float]]) -> vtk.vtkPolyData:
+    """A single polyline through ``points``, as polydata."""
+    vtk_points = vtk.vtkPoints()
+    line = vtk.vtkPolyLine()
+    line.GetPointIds().SetNumberOfIds(len(points))
+    for index, (x, y, z) in enumerate(points):
+        vtk_points.InsertNextPoint(x, y, z)
+        line.GetPointIds().SetId(index, index)
+    cells = vtk.vtkCellArray()
+    cells.InsertNextCell(line)
+    poly = vtk.vtkPolyData()
+    poly.SetPoints(vtk_points)
+    poly.SetLines(cells)
+    return poly
 
 
 def _tube_actor(
@@ -7422,6 +7589,9 @@ def populate_renderer(
             if owners is not None:
                 owners[actor] = ("conductor", cond.id)
             ren.AddActor(actor)
+    shadows = build_wire_shadows(doc, layers)
+    if shadows is not None:
+        ren.AddActor(shadows)
 
     ren.ResetCameraClippingRange()
     return {"actors": ren.GetActors().GetNumberOfItems(), "pads": board.cols * board.rows}

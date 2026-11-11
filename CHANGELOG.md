@@ -61,6 +61,12 @@ closed without a bump.
   never drawn at one height, and a board stacks the same before Save and after Open (it
   used to depend on the order the wires were made in). The build guide lays a face's wires
   lowest first, so the one underneath goes in before the one lying over it.
+- **Wires are hookup wire in the 3D view.** An insulated wire is a glossy sleeve over a copper
+  core stripped two millimetres at each end and bent down into its hole; it stands a little off
+  the board with a soft shadow under it, bows up slightly along a long run (a top jumper a
+  little more, as a low arc over the parts), and bends wide along its path and tight where it
+  turns into the hole. A bare wire is tinned silver. Wires that cross are lifted further apart
+  to make room for the bow.
 
 ## [0.24.0] - 2026-11-10
 
