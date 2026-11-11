@@ -2632,15 +2632,39 @@ is what somebody following the guide does. Sizes live in `view3d`'s constants an
 they measure; the two end pads get a solid at exactly the tube's radius there, so a flat
 cap never shows.
 
-**Solder is squashed, joints are cones, and wire bends.** A run is that tube squashed about
-the copper (`TRACE_FLATTEN`) with a cosine swell between pads (`TRACE_SAMPLES_PER_STEP`) --
-round, it read as grey plumbing. Every lead on the solder side gets a fillet
+**Solder is squashed, joints are cones, and wire is hookup wire.** A run is that tube squashed
+about the copper (`TRACE_FLATTEN`, 0.62) with a cosine swell between pads
+(`TRACE_SAMPLES_PER_STEP`) -- round, it read as grey plumbing. Its width and height follow
+`SolderTraceConductor.buildup` (`TRACE_BUILDUP`: light 0.8 x 0.9, normal 1 x 1, heavy
+1.28 x 1.25 -- mild, and a heavy joint is still narrower than its pad), and a wired run draws
+its spine as a tube of its own (`_spine_actor`) sized against THAT run's joint and bridge, so
+it shows in the waists and past each end and never stands above a joint. Solder is wet tin
+(`SOLDER_MAT` roughness 0.24, a lighter grey than the wire's tin): the matte 0.44 it was
+could not be told from plastic, and what keeps solder and wire apart is now the section and
+the joints along it as well as the colour. The spine is a shade warmer and duller than the
+solder (`SPINE_RGB`, and the 2D view's `SPINE_CORE` is the same colour) because a spine in
+the solder's own grey is invisible. Every lead on the solder side gets a fillet
 (`build_joints`, one instanced actor, not in an exploded view) and trimmed leads stand
-`LEAD_TRIM_MM` proud of it; a wire's two ends are the same fillet. An insulated wire is
-stripped `WIRE_STRIP_MM` at each end over a tinned core, and every wire corner is bent
-round `WIRE_BEND_RADIUS_MM` (`_rounded`). `STACK_STEP_MM` is twice the tallest UPWARD
-extent -- since runs were squashed that is two insulated wires crossing, not a wire over a
-run -- and `test_no_two_conductors_are_drawn_in_the_same_place` is what said so.
+`LEAD_TRIM_MM` proud of it; a wire's two ends are the same fillet.
+
+An insulated wire is a glossy PVC sleeve (`HOOKUP_RADIUS_MM`, 0.44; the cables between boards
+keep the thicker `INSULATED_RADIUS_MM`) over a copper core (`WIRE_CORE_RGB`) stripped
+`WIRE_STRIP_MM` at each end -- at most `WIRE_STRIP_SHARE` of a short wire -- whose core
+carries on `WIRE_IN_HOLE_MM` into its hole. A wire is not laid on the board but stands
+`WIRE_LIFT_MM` off it, with a contact shadow under it (`build_wire_shadows`, ONE unpickable
+actor per board: it belongs to no wire, so it is not picked, tinted or dimmed with one). Its
+corners are bent wide along the run and tight into the hole (`WIRE_BEND_MID_MM`,
+`WIRE_BEND_END_MM`, via `_rounded` with a radius per corner), and a long wire bows up a
+little (`_bowed`: `WIRE_ARC`, at most `WIRE_ARC_MAX_MM`; a top jumper `JUMPER_ARC`, at most
+`JUMPER_ARC_MAX_MM`, a low arc over the parts). `STACK_STEP_MM` is derived from all of that:
+two wires of one kind cross, and they clear each other by the step MINUS how much one is
+bowed more than the other where they cross, so the step is two radii, a margin and the
+highest arc (1.73 mm) -- or a wire over the heaviest run, whichever is more. A bowed wire is
+why `test_no_two_conductors_are_drawn_in_the_same_place` reads the centreline
+`_conductor_centreline` returns and not a straight line between the holes. The step is paid at
+every level, so a board whose router stacks eight wires draws the top one 14 mm up; the fix for
+that is fewer levels (`occupancy.stacking_layers`), not a smaller step. The STEP export is
+untouched by all of it: it reads only `wire_rgb` and `LEAD_RGB`.
 
 **How high a conductor sits is `occupancy.stacking_layers` — the WHOLE answer, not
 something to add `layer_z` back onto.** The document's own `layer_z` is that function's
