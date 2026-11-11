@@ -1055,9 +1055,15 @@ TRACE_BUILDUP: dict[str, tuple[float, float]] = {
 
 #: The tinned or lead-offcut wire a wired run is laid over, drawn as its own tube through
 #: the pads. It shows in the waists and a little past each end -- which is how a wired
-#: run differs from plain solder on the bench, and what the 2D view's brass line says.
-SPINE_RGB = (0.80, 0.53, 0.28)
-SPINE_LIFT_MM = 0.26
+#: run differs from plain solder on the bench, and what the 2D view's spine line says.
+#: Tinned wire is silver, but a spine that is the solder's own grey vanishes into it: a
+#: shade warmer and duller than the solder, so it reads as a different metal in the waists.
+SPINE_RGB = (0.62, 0.52, 0.42)
+SPINE_MAT = (1.0, 0.42)
+#: How far up between the bridge and the joint's dome the spine's top reaches: enough to
+#: show in every waist, never as high as the joint -- a wired run is solder OVER a wire, so
+#: the wire must not stand out of the solder along its length.
+SPINE_SHOWS = 0.45
 SPINE_PAST_END_MM = 0.9
 SPINE_DEFAULT_RADIUS_MM = 0.30
 
@@ -6895,14 +6901,22 @@ def build_conductor(
 
 
 def _spine_actor(cond: Conductor, board: Board, joint_z: float) -> vtk.vtkActor | None:
-    """The wire a wired run is laid over: a brass-coloured tube along its pads, standing
-    out of the copper on the face the run is on, and carried a little past each end --
-    where it shows in the run's waists and beyond its last joint."""
+    """The wire a wired run is laid over: a tube along its pads, lying in the solder on the
+    face the run is on and carried a little past each end -- where it shows in the run's
+    waists and beyond its last joint, and nowhere else."""
     if len(cond.path) < 2:
         return None
     spec = getattr(cond, "spine", None)
     radius = min(max(spec.gauge / 2, 0.2), 0.4) if spec is not None else SPINE_DEFAULT_RADIUS_MM
-    z = joint_z + (-SPINE_LIFT_MM if cond.side == "bottom" else SPINE_LIFT_MM)
+    # Sized against THIS run's own joint and bridge, so a light run's thin solder does not
+    # leave the wire standing proud and a heavy run's buries it to the same degree.
+    width, height = _buildup(cond)
+    dome = TRACE_JOINT_RADIUS_MM * width * TRACE_FLATTEN * height
+    bridge = dome * TRACE_WAIST_RATIO
+    top = bridge + SPINE_SHOWS * (dome - bridge)
+    radius = min(radius, top)
+    up = -1.0 if cond.side == "bottom" else 1.0
+    z = joint_z + up * (top - radius)
     pads = [_xy(board, hole) for hole in cond.path]
 
     def beyond(inner: tuple[float, float], end: tuple[float, float]) -> tuple[float, float, float]:
@@ -6913,7 +6927,7 @@ def _spine_actor(cond: Conductor, board: Board, joint_z: float) -> vtk.vtkActor 
     line = [beyond(pads[1], pads[0]), *((x, y, z) for x, y in pads), beyond(pads[-2], pads[-1])]
     actor = _tube_actor(line, radius)
     actor.GetProperty().SetColor(*SPINE_RGB)
-    _finish(actor.GetProperty(), TINNED)
+    _finish(actor.GetProperty(), SPINE_MAT)
     return actor
 
 

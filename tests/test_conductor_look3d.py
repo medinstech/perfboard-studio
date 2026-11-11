@@ -72,3 +72,18 @@ def test_a_spine_stands_out_of_the_face_its_run_is_on(side: str) -> None:
     x0, x1 = spine.GetBounds()[0:2]
     first, last = (view3d._xy(board, h)[0] for h in (run.path[0], run.path[-1]))
     assert x0 < min(first, last) and x1 > max(first, last)
+
+
+@pytest.mark.parametrize("buildup", ["light", "normal", "heavy"])
+def test_a_spine_shows_in_the_waists_and_never_stands_above_a_joint(buildup: str) -> None:
+    """Solder over a wire: the wire is above the bridge between two pads, so it shows
+    there, and below the dome on a pad, so it does not run along the top of the solder."""
+    board = _board()
+    run = _run(buildup, wired=True)
+    spine = view3d.build_conductor(run, board)[-1]
+    pad = view3d.pad_z(board, "bottom")
+    reaches = pad - spine.GetBounds()[4]  # how far below the pad the spine's far side is
+    width, height = view3d.TRACE_BUILDUP[buildup]
+    dome = view3d.TRACE_JOINT_RADIUS_MM * width * view3d.TRACE_FLATTEN * height
+    bridge = dome * view3d.TRACE_WAIST_RATIO
+    assert bridge < reaches < dome
