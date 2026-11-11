@@ -24,7 +24,7 @@ closed without a bump.
 
 - **Solder and wire have a surface in the 2D view.** Chosen from candidates rendered on both
   faces: a solder run is a lit ridge with a domed joint on every pad, its width following the
-  run's buildup (light, normal, heavy); a wired run shows its brass spine through the solder
+  run's buildup (light, normal, heavy); a wired run shows its tinned spine through the solder
   and a stub past each end. A bare wire is a tinned round, an insulated wire a sleeve over a
   tinned core stripped back at each end, and a top jumper is lifted off the board by a shadow
   where it used to be dashed. Copper on the far face keeps its band, now with the spine.

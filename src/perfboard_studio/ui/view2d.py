@@ -415,8 +415,9 @@ _INSULATION_SCREEN = {
     "brown": QColor("#a5764f"),
 }
 
-#: The copper spine inside a wired solder trace, drawn as a core through the solder.
-SPINE_CORE = QColor("#c08a4a")
+#: The tinned spine inside a wired solder trace, drawn as a core through the solder: a shade
+#: warmer and duller than the solder, the same colour as the 3D view's (`view3d.SPINE_RGB`).
+SPINE_CORE = QColor("#9e856b")
 
 #: What a solder run looks like on screen (not on the 1:1 print, which stays flat): a lit
 #: ridge -- a dark casing, the run's colour, a thin highlight off the top-left, a domed
