@@ -163,6 +163,33 @@ def test_the_contact_shadows_are_one_unpickable_actor_and_a_run_throws_none() ->
     assert view3d.build_wire_shadows(runs_only) is None
 
 
+@pytest.mark.parametrize("preset", ["5 x 7 cm", "6 x 8 cm", "9 x 15 cm"])
+def test_solder_on_an_outside_finger_is_drawn_on_the_fingers_copper(preset: str) -> None:
+    """A finger is a place one step past the grid, and that address is on its copper on one
+    stock board, in the gap beside it on another and 4 mm short on a third. The run is drawn
+    where ``geometry.path_point_mm`` says -- the middle of the copper -- and not at the address."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.commands import create_empty_document, document_on_preset
+    from perfboard_studio.geometry import edge_finger_rect, finger_cells
+    from perfboard_studio.model import DocumentMeta
+
+    doc = document_on_preset(
+        create_empty_document(DocumentMeta(name="rails", created="", modified="")),
+        next(p for p in STANDARD_PRESETS if p.name == preset and p.family == "double-sided-fr4"),
+    )
+    cells = finger_cells(doc)
+    left = sorted((c for c in cells.values() if c.connector.edge == "left"), key=lambda c: c.cell.row)[:3]
+    assert len(left) == 3
+    run = SolderTraceConductor(id="rail", path=tuple(c.cell for c in left))
+    board = doc.board
+    rect = edge_finger_rect(left[0].connector, left[0].beside, board)
+    for actor in view3d.build_conductor(run, board, cells=cells):
+        x0, x1 = actor.GetBounds()[0:2]
+        # the run stands over the finger's copper, not out in the border beside it
+        assert x0 > rect.x - 0.7 * board.pitch and x1 < rect.x + rect.width + 0.7 * board.pitch
+        assert x0 < rect.x + rect.width / 2 < x1
+
+
 def _load_doc():  # type: ignore[no-untyped-def]
     from .test_ui import _load_dense
 

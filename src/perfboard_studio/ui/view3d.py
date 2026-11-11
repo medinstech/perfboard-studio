@@ -20,7 +20,7 @@ import math
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from itertools import pairwise
@@ -68,6 +68,7 @@ from perfboard_studio.footprints import (
 )
 from perfboard_studio.geometry import (
     FLYING_LEAD_MARKER_MM,
+    FingerCell,
     RectMm,
     all_pin_holes,
     board_note_centre_mm,
@@ -75,6 +76,7 @@ from perfboard_studio.geometry import (
     board_size_mm,
     board_text_placement,
     edge_finger_rect,
+    finger_cells,
     finger_corner_radius_mm,
     flying_lead_routes,
     hole_key,
@@ -84,6 +86,7 @@ from perfboard_studio.geometry import (
     legend_layout,
     mounting_hole_centre_mm,
     pad_extent_mm,
+    path_point_mm,
     printed_label,
     printed_label_is_clear,
     surviving_finger_holes,
@@ -254,6 +257,21 @@ def _rgb(value: str) -> tuple[float, float, float]:
 
 def _xy(board: Board, hole: HoleCoord) -> tuple[float, float]:
     return hole.col * board.pitch, -hole.row * board.pitch
+
+
+def _place_xy(
+    board: Board, hole: HoleCoord, cells: Mapping[str, FingerCell] | None = None
+) -> tuple[float, float]:
+    """Where a conductor's path point is, in world mm: a hole's centre, or -- for the place
+    one step past the grid where an outside finger stands -- the middle of that finger's
+    copper (``geometry.path_point_mm``, which 2D and STEP ask too). A cell's own address is one pitch outside the
+    grid, which is on the copper of one stock board, in the gap on another and 4 mm short
+    of it on a third, so solder drawn at the address floated beside its finger. The same
+    flip ``_xy`` and ``finger_outline`` apply: board y grows down, the world's grows up."""
+    if cells:
+        at = path_point_mm(hole, board, cells)
+        return at.x, -at.y
+    return _xy(board, hole)
 
 
 def _board_size_mm(board: Board) -> tuple[float, float]:
@@ -6718,6 +6736,7 @@ def _conductor_centreline(
     run_z: float,
     joint_z: float,
     is_trace: bool,
+    cells: Mapping[str, FingerCell] | None = None,
 ) -> list[tuple[float, float, float]]:
     """The path a conductor's tube actually follows, in board mm.
 
@@ -6735,7 +6754,7 @@ def _conductor_centreline(
     This is also what keeps a wire lifted over an obstacle attached to the board at all --
     at one stacking level its ends are more than a bead's width above the pads.
     """
-    flat = [(*_xy(board, hole), run_z) for hole in cond.path]
+    flat = [(*_place_xy(board, hole, cells), run_z) for hole in cond.path]
     if is_trace:
         # A point at every pad and TRACE_SAMPLES_PER_STEP - 1 between each pair, so
         # `_trace_swell` can bring the radius down and back up smoothly. Nothing else about
@@ -6876,6 +6895,7 @@ def build_conductor(
     stack: int = 0,
     net_class: NetClass | None = None,
     signal_index: int = 0,
+    cells: Mapping[str, FingerCell] | None = None,
 ) -> list[vtk.vtkActor]:
     """One conductor's solids.
 
@@ -6888,7 +6908,7 @@ def build_conductor(
     is_trace = contacts_every_path_hole(cond)
     z = conductor_z(cond, board, stack)
     joint_z = pad_z(board, cond.side)
-    centreline = _conductor_centreline(cond, board, z, joint_z, is_trace)
+    centreline = _conductor_centreline(cond, board, z, joint_z, is_trace, cells)
     swell = _trace_swell(cond, centreline) if is_trace else None
 
     insulated = cond.kind in ("insulated-wire", "top-jumper")
@@ -6946,7 +6966,7 @@ def build_conductor(
     # cone of it round each end is how you see where a wire is actually attached.
     ends = vtk.vtkPoints()
     for hole in (cond.path[0], cond.path[-1]):
-        x, y = _xy(board, hole)
+        x, y = _place_xy(board, hole, cells)
         # AT THE PAD, not at the conductor. A fillet is centred on the copper and wicks
         # into the hole; drawn at a lifted wire's own height it would hang in the air above
         # the pad it is supposedly made on.
@@ -6977,13 +6997,18 @@ def build_conductor(
     _finish(beads.GetProperty(), SOLDER_MAT)
     actors.append(beads)
     if cond.kind == "solder-trace-wired":
-        spine = _spine_actor(cond, board, joint_z)
+        spine = _spine_actor(cond, board, joint_z, cells)
         if spine is not None:
             actors.append(spine)
     return actors
 
 
-def _spine_actor(cond: Conductor, board: Board, joint_z: float) -> vtk.vtkActor | None:
+def _spine_actor(
+    cond: Conductor,
+    board: Board,
+    joint_z: float,
+    cells: Mapping[str, FingerCell] | None = None,
+) -> vtk.vtkActor | None:
     """The wire a wired run is laid over: a tube along its pads, lying in the solder on the
     face the run is on and carried a little past each end -- where it shows in the run's
     waists and beyond its last joint, and nowhere else."""
@@ -7000,7 +7025,7 @@ def _spine_actor(cond: Conductor, board: Board, joint_z: float) -> vtk.vtkActor 
     radius = min(radius, top)
     up = -1.0 if cond.side == "bottom" else 1.0
     z = joint_z + up * (top - radius)
-    pads = [_xy(board, hole) for hole in cond.path]
+    pads = [_place_xy(board, hole, cells) for hole in cond.path]
 
     def beyond(inner: tuple[float, float], end: tuple[float, float]) -> tuple[float, float, float]:
         dx, dy = end[0] - inner[0], end[1] - inner[1]
@@ -7573,6 +7598,7 @@ def populate_renderer(
     # 2D and 3D cannot disagree about which wire passes over which. Not a running index:
     # see occupancy.stacking_layers.
     layers = stacking_layers(doc, lookup=lookup)
+    cells = finger_cells(doc)
     for cond in doc.conductors:
         subject = highlight is not None and cond.id == highlight
         for actor in build_conductor(
@@ -7581,6 +7607,7 @@ def populate_renderer(
             stack=layers.get(cond.id, cond.layer_z),
             net_class=net_class_by_id.get(cond.net_id or ""),
             signal_index=signal_index.get(cond.net_id or "", 0),
+            cells=cells,
         ):
             if highlight is not None:
                 (_pick_out if subject else _dim)(actor)
