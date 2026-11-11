@@ -379,9 +379,10 @@ _FIELDS: dict[str, str] = {
     "sign": r"[+-]",
     "shape": r"line|rectangle|circle|text",
     "edge": r"left|right|top|bottom",
-    # A perfboard address, a breadboard's own ("e12", "T+12" -- geometry.format_hole), a
-    # breadboard position with no hole, or an off-board coordinate.
-    "hole": r"[A-Z]+\d+|[a-j]\d+|[TB][+-]\d+|column \d+ \(no hole\)|\(col -?\d+, row -?\d+\)",
+    # A perfboard address, an edge-connector finger's cell one step off the grid ("N1/T"),
+    # a breadboard's own ("e12", "T+12" -- geometry.format_hole), a breadboard position
+    # with no hole, or an off-board coordinate.
+    "hole": r"[A-Z]+\d+/[LRTB]|[A-Z]+\d+|[a-j]\d+|[TB][+-]\d+|column \d+ \(no hole\)|\(col -?\d+, row -?\d+\)",
     "what": r"Paste|Duplicate",
     "ref": r"[^\s]+",
     "pin": r"[^\s]+\.[^\s]+",
