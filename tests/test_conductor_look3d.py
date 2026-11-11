@@ -190,6 +190,39 @@ def test_solder_on_an_outside_finger_is_drawn_on_the_fingers_copper(preset: str)
         assert x0 < rect.x + rect.width / 2 < x1
 
 
+@pytest.mark.parametrize("buildup", ["light", "normal", "heavy"])
+def test_a_run_on_the_component_side_is_the_solder_side_run_turned_over(buildup: str) -> None:
+    """A trace on the component side of a double-sided board (``SolderTraceConductor.side``
+    "top") is the same wet tin: the same solids, standing out of the top face as far as the
+    solder-side one stands out of the bottom face, buildup included."""
+    board = _board()
+    height = {}
+    for side in ("bottom", "top"):
+        run = dataclasses.replace(_run(buildup, wired=True), side=side)  # type: ignore[type-var]
+        actors = view3d.build_conductor(run, board)
+        pad = view3d.pad_z(board, side)  # type: ignore[arg-type]
+        up = -1.0 if side == "bottom" else 1.0
+        stands = 0.0
+        for actor in actors:
+            zmin, zmax = actor.GetBounds()[4:6]
+            stands = max(stands, up * (zmax - pad), up * (zmin - pad))
+        assert stands > 0.0  # it stands OUT of its own face
+        height[side] = (len(actors), round(stands, 3))
+    assert height["top"] == height["bottom"]
+
+
+def test_a_wire_beside_a_component_side_run_stands_on_the_same_face_and_above_it() -> None:
+    board = _board()
+    run = dataclasses.replace(_run(), side="top")  # type: ignore[type-var]
+    wire = _wire(side="top")
+    pad = view3d.pad_z(board, "top")
+    run_top = max(a.GetBounds()[5] for a in view3d.build_conductor(run, board))
+    wire_actors = view3d.build_conductor(wire, board)
+    # the wire is bent up over the run's solder, and both are on the top face
+    wire_top = max(a.GetBounds()[5] for a in wire_actors)
+    assert wire_top > run_top > pad
+
+
 def _load_doc():  # type: ignore[no-untyped-def]
     from .test_ui import _load_dense
 
