@@ -163,6 +163,7 @@ from perfboard_studio.model import (
     Rotation,
     TrackCut,
     contacts_every_path_hole,
+    has_component_side_copper,
     pin_name_of,
 )
 from perfboard_studio.occupancy import stacking_layers
@@ -261,6 +262,9 @@ from .theme import (
     NET_COLOURS,
 )
 from .topview import TopView, top_view
+
+#: Qt's QWIDGETSIZE_MAX: what ``setMaximumWidth`` takes to mean "no limit".
+QWIDGETSIZE_MAX = (1 << 24) - 1
 
 # --------------------------------------------------------------------------- theme
 
@@ -4946,6 +4950,10 @@ class BoardScene(QGraphicsScene):
         self.component_items: dict[str, ComponentItem] = {}
         self.mount_items: dict[str, MountingHoleItem] = {}
         self.connector_items: dict[str, EdgeConnectorItem] = {}
+        #: The face the hand solder tools lay copper on: the window's Draw on choice, for
+        #: this session only. Read through ``solder_draw_face``, which is the solder side
+        #: on every board with no pads on the component side.
+        self.draw_face: BoardSide = "bottom"
         #: ``geometry.finger_cells`` of the document, once per build: where solder on an
         #: outside finger is drawn, for every conductor item and every zoom to a hole.
         self.finger_cells: dict[str, FingerCell] = {}
@@ -5770,6 +5778,25 @@ class BoardScene(QGraphicsScene):
         return self._draw_kind
 
     @property
+    def solder_draw_face(self) -> BoardSide:
+        """The face a hand-drawn solder run goes on: the Draw on choice where the board has
+        pads on the component side, the solder side everywhere else. NOT the face being
+        looked at: the window opens on the component side, and a run that followed the view
+        would have gone on top of every double-sided board unasked."""
+        if has_component_side_copper(self.document.board):
+            return self.draw_face
+        return "bottom"
+
+    def set_draw_face(self, face: BoardSide) -> None:
+        """Choose the face the solder tools draw on. A run half drawn is started again: its
+        pads were checked against the other face's copper."""
+        if face == self.draw_face:
+            return
+        self.draw_face = face
+        if self._draw_kind in self._RUN_KINDS and self._draw_path:
+            self.arm_drawing(self._draw_kind)
+
+    @property
     def drawn_path(self) -> tuple[HoleCoord, ...]:
         """The holes of the conductor being drawn, clicked so far."""
         return tuple(self._draw_path)
@@ -5795,7 +5822,9 @@ class BoardScene(QGraphicsScene):
         predicates (``drawcheck``); None with nothing armed or under two holes."""
         if self._draw_kind is None or len(path) < 2:
             return None
-        kind, holes = f"{self._draw_kind}|{self._draw_continuing or ''}", tuple(path)
+        face = self.solder_draw_face
+        kind = f"{self._draw_kind}|{self._draw_continuing or ''}|{face}"
+        holes = tuple(path)
         cached = self._draw_checked
         if (
             cached is not None
@@ -5805,7 +5834,12 @@ class BoardScene(QGraphicsScene):
         ):
             return cached[3]
         checked = check_drawn(
-            self.document, self.lookup, self._draw_kind, holes, ignoring=self._draw_continuing
+            self.document,
+            self.lookup,
+            self._draw_kind,
+            holes,
+            ignoring=self._draw_continuing,
+            side=face,
         )
         self._draw_checked = (self.document, kind, holes, checked)
         return checked
@@ -5887,10 +5921,16 @@ class BoardScene(QGraphicsScene):
         """
         if self._draw_kind not in self._RUN_KINDS:
             return False
+        # Only a run on the face being drawn on: one on the other face ends at the same pad
+        # and is joined to it by the hole, not continued by solder across the board.
+        face = self.solder_draw_face
         ends = [
             c
             for c in self.document.conductors
-            if c.kind == self._draw_kind and len(c.path) >= 2 and at in (c.path[0], c.path[-1])
+            if c.kind == self._draw_kind
+            and c.side == face
+            and len(c.path) >= 2
+            and at in (c.path[0], c.path[-1])
         ]
         if len(ends) != 1:
             return False
@@ -5975,7 +6015,9 @@ class BoardScene(QGraphicsScene):
         net_id = checked.net_id if checked is not None else None
         spec: NewConductor
         if kind in ("solder-trace", "solder-trace-wired"):
-            spec = NewSolderTraceConductor(path=path, kind=cast(Any, kind), net_id=net_id)
+            spec = NewSolderTraceConductor(
+                path=path, kind=cast(Any, kind), net_id=net_id, side=self.solder_draw_face
+            )
         else:
             spec = NewWireConductor(
                 path=path,
@@ -6504,7 +6546,14 @@ class BoardScene(QGraphicsScene):
             else self._reshape_path
         )
         checked = (
-            check_drawn(self.document, self.lookup, conductor.kind, asked, ignoring=conductor_id)
+            check_drawn(
+                self.document,
+                self.lookup,
+                conductor.kind,
+                asked,
+                ignoring=conductor_id,
+                side=conductor.side,
+            )
             if asked is not None
             else None
         )
@@ -7558,9 +7607,17 @@ class BoardView(QGraphicsView):
             # One line if it fits, because the banner is a label rather than a paragraph
             # and a two-line label reads as a warning. Only a viewport too narrow for the
             # sentence makes it wrap.
+            # Measured afresh every time: a banner fixed to the room on one pass came back
+            # at exactly that width on the next, never wider than the room, so it was never
+            # wrapped again and a longer line was cut off at both ends.
             banner.setWordWrap(False)
+            banner.setMinimumWidth(0)
+            banner.setMaximumWidth(QWIDGETSIZE_MAX)
             banner.adjustSize()
-            widest = max(area.width() - 2 * self.BANNER_MARGIN_PX, 120)
+            # Clear of the tool rail down the left, and as far in from the right, so it is
+            # still centred: over the rail it hid the tools and the rail hid its first words.
+            across, _down = self._overlay_room(area)
+            widest = max(area.width() - 2 * max(self.BANNER_MARGIN_PX, across), 120)
             if banner.width() > widest:
                 banner.setWordWrap(True)
                 banner.setFixedWidth(widest)

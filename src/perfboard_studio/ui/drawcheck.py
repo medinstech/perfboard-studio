@@ -43,6 +43,7 @@ from perfboard_studio.geometry import (
     segments_overlap,
 )
 from perfboard_studio.model import (
+    BoardSide,
     Conductor,
     ConductorKind,
     HoleCoord,
@@ -93,10 +94,16 @@ class DrawCheck:
         return self.problems[0] if self.problems else None
 
 
-def candidate(document: PerfDocument, kind: ConductorKind, path: tuple[HoleCoord, ...]) -> Conductor:
-    """The conductor the tool would lay, as the document would hold it."""
+def candidate(
+    document: PerfDocument,
+    kind: ConductorKind,
+    path: tuple[HoleCoord, ...],
+    side: BoardSide = "bottom",
+) -> Conductor:
+    """The conductor the tool would lay, as the document would hold it. ``side`` is the face
+    a solder run goes on (the window's Draw on choice); a wire's face is its kind's."""
     if kind in ("solder-trace", "solder-trace-wired"):
-        return SolderTraceConductor(id=_CANDIDATE, path=path, kind=kind)
+        return SolderTraceConductor(id=_CANDIDATE, path=path, kind=kind, side=side)
     return WireConductor(
         id=_CANDIDATE,
         path=path,
@@ -157,15 +164,18 @@ def check_drawn(
     path: tuple[HoleCoord, ...],
     *,
     ignoring: str | None = None,
+    side: BoardSide = "bottom",
 ) -> DrawCheck:
     """What laying ``kind`` along ``path`` on ``document``'s board would join and touch.
 
     ``ignoring`` is a conductor the new path REPLACES -- a run being extended, an end being
-    dragged -- which is not something the new path can cross or lie along.
+    dragged -- which is not something the new path can cross or lie along. ``side`` is the
+    face a solder run is drawn on: a run on the component side neither crosses nor lies
+    along the copper underneath.
     """
     if len(path) < 2:
         return DrawCheck(net_id=None, problems=())
-    drawn = candidate(document, kind, path)
+    drawn = candidate(document, kind, path, side)
     names = {net.id: net.name for net in document.nets}
 
     # Which schematic nets each hole's copper is on now, by its physical net: the nets of

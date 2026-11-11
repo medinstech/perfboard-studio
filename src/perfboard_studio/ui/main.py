@@ -6031,6 +6031,63 @@ class MainWindow(QMainWindow):
         self.selection_bar = bar
         # It stands over the parts, so it moves whenever the view does.
         bar.track(self._selection_bar_rect, self.view.viewport())
+        self._build_draw_face_bar()
+
+    def _build_draw_face_bar(self) -> None:
+        """Draw on: Solder Side | Component Side, under the banner while a solder tool is
+        armed on a board with pads on both faces.
+
+        AN EXPLICIT CHOICE, NOT THE VIEW. The window opens looking at the component side, so
+        copper that followed the view went on top of every double-sided board unasked, and
+        a builder who turned the board over to look would have changed where the next run
+        went. One choice for both solder tools, kept for the session only and the solder
+        side at every start: the wires keep their kind's face (``commands.wire_side``)."""
+        self.draw_face_group = QActionGroup(self)
+        self.draw_face_group.setExclusive(True)
+        self.act_draw_face: dict[BoardSide, QAction] = {}
+        faces: tuple[tuple[BoardSide, str, str], ...] = (
+            ("bottom", t("Solder Side"),
+             t("Hand-drawn solder goes on the solder side, under the board.")),
+            ("top", t("Component Side"),
+             t("Hand-drawn solder goes on the component side, among the parts' pins, "
+               "changing face only at a pad.")),
+        )
+        for face, label, tip in faces:
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setToolTip(tip)
+            action.setChecked(face == "bottom")
+            action.triggered.connect(lambda _checked=False, f=face: self.on_draw_face(f))
+            self.draw_face_group.addAction(action)
+            self.act_draw_face[face] = action
+        bar = FloatingBar(self.view, None, vertical=False, name="drawFaceBar")
+        title = QLabel(t("Draw on:"))
+        title.setContentsMargins(6, 0, 2, 0)
+        bar.add_widget(title)
+        for action in self.act_draw_face.values():
+            button = bar.add_action(action)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        bar.hide()
+        self.draw_face_bar = bar
+        bar.track(self._draw_face_bar_rect, self.view.viewport())
+
+    def _draw_face_bar_rect(self) -> QRect | None:
+        """Under the banner while a solder tool is armed where both faces have pads, and
+        nowhere otherwise: on any other board there is one face to draw on."""
+        if self.scene.armed_draw_kind not in ("solder-trace", "solder-trace-wired"):
+            return None
+        if not has_component_side_copper(self.bus.document.board):
+            return None
+        banner = self.view.mode_banner
+        if banner.isHidden():
+            return None
+        return banner.geometry().translated(self.view.viewport().pos())
+
+    def on_draw_face(self, face: BoardSide) -> None:
+        """The Draw on choice, for both solder tools."""
+        self.scene.set_draw_face(face)
+        self.act_draw_face[face].setChecked(True)
+        self._refresh_mode_banner()
 
     def _build_sheet_tools(self) -> None:
         """The sheet's tools on the sheet, as the board's are on the board: the tools down
@@ -6395,6 +6452,9 @@ class MainWindow(QMainWindow):
         self.view.show_mode(text)
         self._sync_select_tool()
         self._place_selection_bar()
+        face_bar = getattr(self, "draw_face_bar", None)
+        if face_bar is not None:
+            face_bar.follow(self._draw_face_bar_rect())
         # The cursor says it too. Only placing changed it, so drawing, connecting, cutting
         # and measuring all left the ordinary arrow over a board where a click no longer
         # selected anything.
@@ -6444,6 +6504,16 @@ class MainWindow(QMainWindow):
                 else t("click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels")
             )
             word = conductor_word(kind, self._guide_language())
+            if (
+                kind in ("solder-trace", "solder-trace-wired")
+                and self.scene.side == "bottom"
+                and self.scene.solder_draw_face == "top"
+            ):
+                # Turned over to the solder side with Draw on naming the component side:
+                # the run goes on the face the builder is not looking at, and nothing on
+                # the screen but this says so.
+                far = t("the copper goes on the far face: Ctrl+F turns the board over")
+                word = f"{word}  ·  {far}"
             # What the next click or Enter would do wrong takes the hint's place while it
             # holds: the preview turns red at the hole, and this says why.
             # What the next click or Enter would do wrong takes the hint's place while it

@@ -30,6 +30,14 @@ closed without a bump.
   the window rather than the board, and greyed out where there is only one face. The step
   card and Auto-wire's status line count the vias ("3 vias"), and a piece of copper's
   Properties says where it joins the other face.
+- **Draw on: Solder Side | Component Side.** On a board with pads on both faces, the two
+  solder tools show this choice under the banner while they are armed, and lay the run on
+  the face it names. It is the solder side at every start and is not kept: it never follows
+  the face being looked at, because the window opens on the component side. Turned over to
+  the solder side with the component side chosen, the banner says the copper goes on the
+  far face. A run is carried on from its end only on its own face, and a run made
+  reinforced in its Properties stays on the face it was on. The wires keep their own face:
+  a top jumper on top, a bare or insulated wire underneath.
 - **The step card offers "Try every wiring style…"** under the counts of what is worth a
   look in the wiring. Balanced stays the default: measured in the window, trying every
   style took 15 s on atmega328-relay to find the same wiring Balanced lays in 2.5 s. Taken,
@@ -196,6 +204,9 @@ closed without a bump.
 
 ### Fixed
 
+- **A long banner over the board wraps every time, clear of the tool rail.** Once wrapped
+  to the room it came back on the next mouse move as one line cut off at both ends, and it
+  lay over the tools down the left.
 - **The Bare Wire and Insulated Wire tools say how they draw.** Their tooltips still said
   "Click both ends." from before a wire could turn; they now say to click where it starts and
   wherever it turns, and that Enter, a right-click or a double-click finishes.

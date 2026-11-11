@@ -2333,6 +2333,13 @@ class _ConductorEditor(QWidget):
                 kind="solder-trace-wired" if kind == "solder-trace-wired" else "solder-trace",
                 net_id=conductor.net_id,
                 layer_z=conductor.layer_z,
+                # On the face it was on: a run on the component side made a reinforced one
+                # stays there, and so does a jumper made solder where there are pads on top.
+                side=(
+                    conductor.side
+                    if has_component_side_copper(document.board)
+                    else "bottom"
+                ),
             )
         else:
             wire_kind: Literal["bare-wire", "insulated-wire", "top-jumper"] = (

@@ -19692,3 +19692,123 @@ def test_solder_on_an_outside_finger_is_drawn_on_the_finger_in_2d() -> None:
         assert abs(finger_cell_mm(first, board).x - hole_to_mm(first.cell, board).x) > 2
     finally:
         _close(window)
+
+
+def test_hand_solder_is_drawn_on_the_face_draw_on_names_never_the_one_in_view() -> None:
+    """Draw on: Solder Side | Component Side, under the banner while a solder tool is armed
+    on a board with pads on both faces. The solder side at every start, whichever face the
+    window looks at; one choice for both solder tools; a run on the other face is not
+    carried on from its end; and turned over to the solder side with the component side
+    chosen, the banner says the copper goes on the far face. Wires keep their kind's face,
+    and a board with pads on one face has no choice to make."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.commands import create_empty_document, document_on_preset
+    from perfboard_studio.model import DocumentMeta, HoleCoord
+    from perfboard_studio.ui.i18n import t
+
+    def board(family: str) -> PerfDocument:
+        preset = next(p for p in STANDARD_PRESETS if p.name == "5 x 7 cm" and p.family == family)
+        return document_on_preset(
+            create_empty_document(DocumentMeta(name="faces", created="", modified="")), preset
+        )
+
+    def draw(window, kind: str, *holes: HoleCoord):  # type: ignore[no-untyped-def]
+        window.on_draw_mode(kind, True)
+        result = None
+        for hole in holes:
+            result = window.scene.draw_click(hole)
+        if result is None:  # A jumper is laid by its second click.
+            result = window.scene.commit_drawing()
+        assert result is not None and result.ok, result
+        return next(c for c in window.bus.document.conductors if c.path[0] == holes[0])
+
+    far = t("the copper goes on the far face: Ctrl+F turns the board over")
+    window = _window_on(board("double-sided-fr4"))
+    try:
+        assert window.scene.side == "top"
+        assert window.draw_face_bar.isHidden()
+        window.on_draw_mode("solder-trace", True)
+        assert not window.draw_face_bar.isHidden()
+        assert window.act_draw_face["bottom"].isChecked()
+        # Looking at the component side, a run still goes underneath unless asked.
+        assert draw(window, "solder-trace", HoleCoord(2, 2), HoleCoord(5, 2)).side == "bottom"
+        window.act_draw_face["top"].trigger()
+        assert window.scene.solder_draw_face == "top"
+        top_run = draw(window, "solder-trace", HoleCoord(2, 4), HoleCoord(5, 4))
+        assert top_run.side == "top"
+        # Made a reinforced run in its Properties, it stays on the face it was on.
+        window.on_draw_mode("solder-trace", False)
+        _select_conductor(window, top_run.id)
+        window._refresh_properties()
+        window.inspector.conductor_editor._commit_kind("solder-trace-wired")
+        remade = next(
+            c for c in window.bus.document.conductors if c.path[0] == HoleCoord(2, 4)
+        )
+        assert (remade.kind, remade.side) == ("solder-trace-wired", "top")
+        # One choice for both solder tools.
+        assert draw(
+            window, "solder-trace-wired", HoleCoord(2, 6), HoleCoord(6, 6)
+        ).side == "top"
+        # A run underneath ends at C3, but it is on the other face: a new run starts there.
+        window.on_draw_mode("solder-trace", True)
+        window.scene.draw_click(HoleCoord(5, 2))
+        assert window.scene.continuing is None
+        window.on_draw_mode("solder-trace", False)
+        # Turned over: the far-face note, for the component side only.
+        window.on_draw_mode("solder-trace", True)
+        assert far not in window._mode_text()
+        window.on_flip_board()
+        assert window.scene.side == "bottom"
+        assert far in window._mode_text()
+        window.act_draw_face["bottom"].trigger()
+        assert far not in window._mode_text()
+        # The wires are not on the choice, and the bar is not there for them.
+        window.act_draw_face["top"].trigger()
+        window.on_draw_mode("bare-wire", True)
+        assert window.draw_face_bar.isHidden()
+        assert draw(window, "bare-wire", HoleCoord(8, 2), HoleCoord(8, 6)).side == "bottom"
+        assert draw(window, "top-jumper", HoleCoord(10, 2), HoleCoord(10, 6)).side == "top"
+        window.on_draw_mode("bare-wire", False)
+        assert window.draw_face_bar.isHidden()
+    finally:
+        _close(window)
+
+    # For the session only: the next window starts on the solder side.
+    window = _window_on(board("double-sided-fr4"))
+    try:
+        assert window.scene.solder_draw_face == "bottom"
+        assert window.act_draw_face["bottom"].isChecked()
+    finally:
+        _close(window)
+
+    window = _window_on(board("single-sided-phenolic"))
+    try:
+        window.on_draw_mode("solder-trace", True)
+        assert window.draw_face_bar.isHidden()
+        window.scene.draw_face = "top"
+        assert draw(window, "solder-trace", HoleCoord(2, 2), HoleCoord(5, 2)).side == "bottom"
+    finally:
+        _close(window)
+
+
+def test_a_banner_too_long_for_the_board_is_wrapped_every_time_it_is_placed() -> None:
+    """The banner is one line when it fits and wraps to the room when it does not. Fixed
+    to the room on one pass, it came back on the next at exactly that width -- never wider
+    than the room -- so it was left unwrapped and cut off at both ends: every mouse move
+    while drawing places it again."""
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        view = window.view
+        text = "a long line of what the armed tool does " * 12
+        for _ in range(3):
+            view.show_mode(text)
+            banner = view.mode_banner
+            assert banner.wordWrap()
+            assert banner.width() <= view.viewport().width()
+            assert banner.height() > banner.fontMetrics().height() * 2
+        # And a short one goes back to one line, at its own width.
+        view.show_mode("Measuring")
+        assert not view.mode_banner.wordWrap()
+        assert view.mode_banner.width() < view.viewport().width() // 2
+    finally:
+        _close(window)

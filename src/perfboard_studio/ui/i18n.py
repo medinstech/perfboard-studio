@@ -1352,6 +1352,17 @@ TURKISH: Mapping[str, str] = {
     "&Component Side": "&Parça Yüzü",
     "Solder Side": "Lehim Yüzü",
     "&Solder Side": "&Lehim Yüzü",
+    "Draw on:": "Çizilen yüz:",
+    "Hand-drawn solder goes on the solder side, under the board.": (
+        "Elle çizilen lehim, kartın altındaki lehim yüzüne gider."
+    ),
+    "Hand-drawn solder goes on the component side, among the parts' pins, changing face only at a pad.": (
+        "Elle çizilen lehim, parçaların bacakları arasındaki parça yüzüne gider; yüz "
+        "yalnızca bir pedde değişir."
+    ),
+    "the copper goes on the far face: Ctrl+F turns the board over": (
+        "bakır arka yüze döşenir: kartı Ctrl+F ile çevirebilirsiniz"
+    ),
     "Auto-wire decides: the solder side, or either face when Wiring ▸ Wire on Both Faces is on.": (
         "Otomatik Kablolama karar verir: lehim yüzü ya da Kablolama ▸ İki Yüzde Kablola "
         "açıksa iki yüzden biri."
