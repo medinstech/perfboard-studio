@@ -1260,7 +1260,9 @@ def _starting_orders(
     -- which is also what keeps every golden route and the guide's own golden where it is.
     """
     critical = _criticality_order(doc, wanted)
-    if options.router.faces == "both" and has_component_side_copper(doc.board):
+    if has_component_side_copper(doc.board) and (
+        options.router.faces == "both" or any(net.preferred_side == "top" for net in doc.nets)
+    ):
         critical = _preferring_first(doc, critical)
     if not _committed_to_solder(options):
         return (critical,)

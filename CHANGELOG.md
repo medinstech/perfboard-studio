@@ -76,7 +76,9 @@ closed without a bump.
   on a double-sided board a solder trace may run on either face, changing face through a pin
   of its net for free or through an empty hole, a via, at the price of one more joint to
   fill and check. A net's preferred face is a price on every step off it, not a rule, so a
-  blocked face is still left. A plated hole is one piece of copper, so solder on top closes
+  blocked face is still left; a net that prefers the component side has both faces even
+  with `faces` left at `"solder"`, and it alone, since that choice is the more explicit
+  one. A plated hole is one piece of copper, so solder on top closes
   the hole underneath too, and two traces cannot cross on opposite faces any more than on
   one: a trace goes on top only for a net that prefers it. What the second face does give
   everyone is room for wire: a wire may go over the component side, along the grid, where it

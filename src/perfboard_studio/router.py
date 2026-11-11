@@ -241,10 +241,13 @@ WIRE_PATHS: tuple[WirePath, ...] = ("straight", "grid")
 #: Which faces the router may lay solder on.
 #:
 #:   "solder"  The solder side only: what the router always did and what every golden route
-#:             records, so it stays the engine's default.
+#:             records, so it stays the engine's default. Except for a net whose
+#:             ``preferred_side`` is "top": that net is routed as under "both", and only it.
+#:             The per-net choice is the more explicit intent, and a builder who set it and
+#:             saw nothing happen until they also found a global switch had been trapped.
 #:   "both"    Either face of a board with pads on the component side
 #:             (``model.has_component_side_copper``), changing face through a pin of the net
-#:             or a via. Read as "solder" on any other board.
+#:             or a via, for every net. Read as "solder" on any other board.
 type RouterFaces = Literal["solder", "both"]
 
 #: Every :data:`RouterFaces`, spelled out for the reason :data:`WIRE_PATHS` is.
@@ -365,7 +368,8 @@ class RouterOptions:
     #: checked on every candidate's whole path, so no strategy can take one. Empty by
     #: default, which is every route the goldens record.
     avoid_holes: tuple[HoleCoord, ...] = ()
-    #: See :data:`RouterFaces`. A net's ``preferred_side`` is read only with "both".
+    #: See :data:`RouterFaces`. A net preferring the component side has both faces under
+    #: either value.
     faces: RouterFaces = "solder"
 
 
@@ -612,7 +616,7 @@ def route_connection(
         bend = _lead_bend_candidate(ctx, from_, to)
         if bend is not None:
             candidates.append(bend)
-    two_faces = _two_faces(options, doc.board)
+    two_faces = _two_faces(options, doc, request.net_id)
     trace = (
         _two_face_trace_candidate(ctx, from_, to, buildup)
         if two_faces
@@ -737,7 +741,7 @@ def _route_context(
     occupancy = build_occupancy(doc, lookup)
     net_at = _build_net_index(doc, lookup)
     blocked_segments = _blocked_segments(doc)
-    two_faces = _two_faces(options, doc.board)
+    two_faces = _two_faces(options, doc, request.net_id)
     return _RouteContext(
         doc=doc,
         occupancy=occupancy,
@@ -1598,9 +1602,13 @@ _FACES: tuple[BoardSide, BoardSide] = ("bottom", "top")
 _FaceState = tuple[int, int, int, int, int]
 
 
-def _two_faces(options: RouterOptions, board: Board) -> bool:
-    """Whether this connection may lay copper on the component side."""
-    return options.faces == "both" and has_component_side_copper(board)
+def _two_faces(options: RouterOptions, doc: PerfDocument, net_id: NetId | None) -> bool:
+    """Whether this connection may lay copper on the component side: every net's with
+    ``faces`` "both", and with "solder" a net that prefers the component side, alone. Never
+    on a board with no pads there."""
+    if not has_component_side_copper(doc.board):
+        return False
+    return options.faces == "both" or _net_preferred_side(doc, net_id) == "top"
 
 
 def _net_preferred_side(doc: PerfDocument, net_id: NetId | None) -> BoardSide | None:

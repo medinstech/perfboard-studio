@@ -329,12 +329,25 @@ def test_the_faces_meet_in_a_via_and_the_plan_counts_it() -> None:
     assert score_plan(plan, _doc(), LOOKUP).face_changes == len(vias)
 
 
-def test_a_preference_is_ignored_on_one_face_and_on_a_board_with_no_pads_on_top() -> None:
+def test_a_net_that_prefers_the_component_side_has_both_faces_under_solder_and_only_it() -> None:
+    """The per-net choice is the more explicit intent: a builder who set GND to the
+    component side and saw nothing happen until they found a global switch was trapped.
+    So with ``faces`` "solder", the net that prefers the top is routed as under "both", and
+    every other net stays on the solder side -- no trace and no wire of theirs goes on top.
+    A board with no pads on top still has one face, whatever the preference."""
     doc = _doc()
+    gnd = next(n.id for n in doc.nets if n.name == "GND")
     single = dataclasses.replace(doc, board=dataclasses.replace(doc.board, single_sided=True))
 
-    assert not any(c.side == "top" for c in _solder_plan(doc, "solder", GND="top").conductors)
+    plan = _solder_plan(doc, "solder", GND="top")
+
+    on_top = [c for c in plan.conductors if c.side == "top"]
+    assert on_top and all(c.net_id == gnd for c in on_top)
+    assert run_lvs(plan.document, LOOKUP).summary.shorts == 0
     assert not any(c.side == "top" for c in _solder_plan(single, "both", GND="top").conductors)
+    # A preference for the solder side asks for nothing the default does not do.
+    bottom = _solder_plan(doc, "solder", GND="bottom")
+    assert not any(c.side == "top" for c in bottom.conductors)
 
 
 def test_solder_on_the_component_side_closes_its_holes_underneath() -> None:
