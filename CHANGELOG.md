@@ -131,6 +131,10 @@ closed without a bump.
 
 ### Fixed
 
+- **A finished run no longer says it is stopping.** Closing the progress dialog counted as
+  pressing its Cancel, so every Auto-wire, Auto-place and board trial long enough to show it
+  said "Stopping, and keeping the best found so far…" as it closed.
+
 - **A line no longer cuts through the Problems list.** A separator handle Qt kept from the
   window's first layout stayed where the views' column ended, and the open drawer's third
   row, "Board check (DRC)", was drawn with a line through it.

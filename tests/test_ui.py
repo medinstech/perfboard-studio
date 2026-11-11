@@ -19340,3 +19340,60 @@ def test_trying_every_style_says_which_it_is_wiring_and_stops_between_them(
         assert f"stopped after 1 of {total} styles" in window.statusBar().currentMessage()
     finally:
         _close(window)
+
+
+def test_a_planner_nobody_cancels_never_says_it_is_stopping(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A finished run's dialog said "Stopping, and keeping the best found so far…" as it
+    closed: ``QProgressDialog.close`` emits ``canceled``, and the window's Cancel handler
+    took that for a press. A run nobody stopped says nothing about stopping; one that is
+    stopped still does."""
+    import time
+
+    from PySide6.QtWidgets import QProgressDialog
+
+    from perfboard_studio.ui.main import MainWindow
+
+    said: list[str] = []
+    original = QProgressDialog.setLabelText
+
+    def spy(self, text):
+        said.append(text)
+        original(self, text)
+
+    monkeypatch.setattr(QProgressDialog, "setLabelText", spy)
+    monkeypatch.setattr(MainWindow, "PLANNER_GRACE_S", 0.0)
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        def work(should_stop):
+            time.sleep(0.3)
+            return "done"
+
+        assert window._run_planner("Working on it…", work) == "done"
+        assert not [text for text in said if "Stopping" in text], said
+
+        # Pressed, it is said.
+        said.clear()
+
+        def stopped_work(should_stop):
+            deadline = time.perf_counter() + 5
+            while not should_stop() and time.perf_counter() < deadline:
+                time.sleep(0.02)
+            return "kept"
+
+        from PySide6.QtCore import QTimer
+
+        def press() -> None:
+            dialog = next(
+                (d for d in window.findChildren(QProgressDialog) if d.isVisible()), None
+            )
+            if dialog is None:
+                QTimer.singleShot(20, press)
+            else:
+                # What its Cancel button does: emit ``canceled`` (``cancel()`` does not).
+                dialog.canceled.emit()
+
+        QTimer.singleShot(50, press)
+        assert window._run_planner("Working on it…", stopped_work) == "kept"
+        assert [text for text in said if "Stopping" in text], said
+    finally:
+        _close(window)

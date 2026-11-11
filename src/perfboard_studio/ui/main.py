@@ -11058,6 +11058,10 @@ class MainWindow(QMainWindow):
                 gc.enable()
                 gc.collect()
             if progress is not None:
+                # Let go of Cancel first: QProgressDialog's closeEvent emits ``canceled``,
+                # and every finished run's dialog said "Stopping, and keeping the best
+                # found so far…" as it closed.
+                progress.canceled.disconnect()
                 progress.close()
             self.setEnabled(True)
 
