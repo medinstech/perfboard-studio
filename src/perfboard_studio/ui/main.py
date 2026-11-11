@@ -127,6 +127,7 @@ from perfboard_studio.autoroute import (
     UnroutedLink,
     describe_best,
     describe_reroute,
+    holes_to_avoid,
     plan_autoroute,
     plan_best_autoroute,
     plan_reroute,
@@ -8981,6 +8982,7 @@ class MainWindow(QMainWindow):
                 add_cable=lambda: self.on_add_cable(),
                 next_step=lambda: self.on_workflow_next(self.workflow_bar.next_key),
                 net_wiring=lambda what, net_id: self._on_net_wiring(what, net_id),
+                can_redo_without=lambda conductor_id: self._can_redo_without(conductor_id),
                 lies_across=lambda conductor_id: self._lies_across(conductor_id),
                 wiring_styles=lambda: self.wiring_styles(),
                 current_style=lambda: self._routing_style,
@@ -9244,6 +9246,20 @@ class MainWindow(QMainWindow):
                     lambda _checked=False, n=net_id: self._select_net_copper(n)
                 )
                 menu.addMenu(self._redo_net_menu(net_id, menu))
+                picked = self.scene.selected_conductor_ids()
+                if len(picked) == 1 and self._can_redo_without(picked[0]):
+                    without = menu.addAction(t("Redo Wiring Without This Wire"))
+                    without.setToolTip(
+                        t(
+                            "Wires this net again, keeping clear of the holes this wire "
+                            "lies across, so the same wire cannot come back."
+                        )
+                    )
+                    without.triggered.connect(
+                        lambda _checked=False, n=net_id, c=picked[0]: self._on_net_wiring(
+                            f"without:{c}", n
+                        )
+                    )
                 remove = menu.addAction(t("Remove Wiring of {net}").format(net=name))
                 remove.triggered.connect(
                     lambda _checked=False, n=net_id: self._remove_wiring((n,))
@@ -9641,8 +9657,31 @@ class MainWindow(QMainWindow):
         elif what.startswith("redo:"):
             style = what.removeprefix("redo:")
             self.on_reroute((net_id,), style=None if style == self._routing_style else style)
+        elif what.startswith("without:"):
+            self.on_reroute((net_id,), avoiding=what.removeprefix("without:"))
         elif what == "remove":
             self._remove_wiring((net_id,))
+
+    def _can_redo_without(self, conductor_id: str) -> bool:
+        """Whether a piece of copper can have its net wired again without it: a wire on a
+        net, lying across holes a new plan can keep clear of, on a board that is wired.
+
+        A board whose holes are joined already (stripboard, breadboard) is cut and linked
+        rather than wired, so there is nothing for a plan to keep clear of; a wire on no net
+        is hand-drawn, which a redo never touches; and a wire between two neighbouring holes
+        lies across nothing.
+        """
+        document = self.bus.document
+        conductor = next((c for c in document.conductors if c.id == conductor_id), None)
+        if conductor is None or conductor.net_id is None:
+            return False
+        if board_joins_holes(document.board):
+            return False
+        stats = self._last_wiring_stats
+        entry = stats.of(conductor_id) if stats is not None else None
+        if entry is None or not entry.is_wire:
+            return False
+        return bool(holes_to_avoid(document, self.lookup, conductor_id))
 
     def _lies_across(self, conductor_id: str) -> str:
         """What a wire passes over between its ends, for its Properties: the pins by name,
@@ -11282,8 +11321,14 @@ class MainWindow(QMainWindow):
         *,
         asked: bool = False,
         style: str | None = None,
+        avoiding: str | None = None,
     ) -> None:
         """Rip up and route again, as one undoable command.
+
+        ``avoiding`` is a wire the new plan keeps off: the holes it lies across are kept
+        clear (``autoroute.holes_to_avoid``), because planning is deterministic and the same
+        net redone in the same style lays the same bad wire back. Always asked, and the
+        question says what could not be wired without it.
 
         Asked before it happens, because it DISCARDS routing -- which autoroute never
         does. The dialog says how much copper goes and what replaces it, since "14
@@ -11309,10 +11354,25 @@ class MainWindow(QMainWindow):
 
         document = self.bus.document
         options = self._autoroute_options(style)
+        avoid: tuple[HoleCoord, ...] = ()
+        without = ""
+        if avoiding is not None:
+            wire = next((c for c in document.conductors if c.id == avoiding), None)
+            if wire is None:
+                return
+            avoid = holes_to_avoid(document, self.lookup, avoiding)
+            without = t(
+                "Without the wire {start} → {end}: nothing new lies across its holes."
+            ).format(
+                start=format_hole(wire.path[0], document.board),
+                end=format_hole(wire.path[-1], document.board),
+            )
+            asked = False
         plan = self._run_planner(
             t("Removing the wiring and laying it again…"),
             lambda _should_stop: plan_reroute(
                 document, self.lookup, only_net_ids=only_net_ids, options=options,
+                avoid_holes=avoid,
             ),
         )
         if plan is None:
@@ -11348,11 +11408,23 @@ class MainWindow(QMainWindow):
         kept, gone, laid = _copper_change(
             [c for c in document.conductors if c.id in removing], plan.conductors
         )
+        # Kept off a wire, a net may not close: said in the question, never applied quietly.
+        unwired = (
+            counted(
+                plan.summary.links_unrouted,
+                t("{count} connection could not be wired without it."),
+                t("{count} connections could not be wired without it."),
+            )
+            if avoiding is not None and plan.summary.links_unrouted
+            else ""
+        )
         if plan.remove_ids and not asked:
             # Through _confirm: it rips up copper, and Yes under Enter made that a reflex.
             body = (
                 (f"<p>{why}</p>" if why else "")
                 + (f"<p>{in_style}</p>" if in_style else "")
+                + (f"<p>{without}</p>" if without else "")
+                + (f"<p><b>{unwired}</b></p>" if unwired else "")
                 + f"<b>{say(describe_reroute(plan))}</b><p>"
                 + t(
                     "Of the copper on these nets: {kept} left exactly as it is, {gone} taken "
@@ -11384,6 +11456,8 @@ class MainWindow(QMainWindow):
             )
         if in_style:
             said.append(in_style)
+        if without:
+            said.append(without)
         self.statusBar().showMessage("  ·  ".join(said), 0)
         self._report_unrouted_items(
             [item for outcome in plan.nets for item in outcome.unrouted]

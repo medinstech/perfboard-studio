@@ -19227,3 +19227,76 @@ def test_no_dock_separator_is_left_lying_over_the_problems_list(monkeypatch) -> 
         assert any(rect.height() > rect.width() for rect in stray)
     finally:
         _close(window)
+
+
+def test_a_wires_net_is_wired_again_without_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redone in any style, a net came back with the same bad wire: planning is
+    deterministic. Redo Wiring Without This Wire, on the wire's right-click menu and in its
+    Properties, keeps the new plan off the holes it lay across, says so in the question and
+    the status, and is one undo step. A solder trace has no such entry."""
+    from perfboard_studio.autoroute import holes_to_avoid
+    from perfboard_studio.geometry import hole_key, holes_under_line
+
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        stats = window._last_wiring_stats
+        assert stats is not None
+        entry = max(
+            (e for e in stats.conductors if e.is_wire), key=lambda e: len(e.over_pins)
+        )
+        document = window.bus.document
+        wire = next(c for c in document.conductors if c.id == entry.conductor_id)
+        assert wire.net_id is not None
+        avoid = {hole_key(h) for h in holes_to_avoid(document, window.lookup, wire.id)}
+        assert avoid
+
+        window.scene.clearSelection()
+        _select_conductor(window, wire.id)
+        window._refresh_properties()
+        editor = window.inspector.conductor_editor
+        assert not editor.redo_without.isHidden()
+        # A point on the wire with no part under it: a part under the pointer gets the menu.
+        outline = window.scene.conductor_items[wire.id].shape()
+        on_wire = next(
+            point
+            for point in (outline.pointAtPercent(i / 200) for i in range(201))
+            if window.scene.component_at(point) is None
+            and window.scene.conductor_at(point) is window.scene.conductor_items[wire.id]
+        )
+        menu = window.board_menu(window.view.mapFromScene(on_wire))
+        assert "Redo Wiring Without This Wire" in [a.text() for a in menu.actions()]
+
+        bodies: list[str] = []
+
+        def answer(self, title, body, verb):
+            bodies.append(body)
+            return True
+
+        monkeypatch.setattr(type(window), "_confirm", answer)
+        steps = len(window.bus.history())
+        editor.redo_without.click()
+        assert bodies and "Without the wire " in bodies[-1]
+        after = window.bus.document
+        assert wire.id not in {c.id for c in after.conductors}
+        assert len(window.bus.history()) == steps + 1
+        assert "Without the wire " in window.statusBar().currentMessage()
+        laid = [c for c in after.conductors if c.net_id == wire.net_id]
+        for conductor in laid:
+            ends = {hole_key(conductor.path[0]), hole_key(conductor.path[-1])}
+            for start, stop in zip(conductor.path, conductor.path[1:], strict=False):
+                for hole in holes_under_line(start, stop):
+                    key = hole_key(hole)
+                    assert key in ends or key not in avoid, (conductor.id, key)
+
+        # A solder trace is soldered to what it passes: nothing to keep clear of.
+        window.act_undo.trigger()
+        stats = window._last_wiring_stats
+        assert stats is not None
+        trace = next(e for e in stats.conductors if e.pads)
+        assert not window._can_redo_without(trace.conductor_id)
+        window.scene.clearSelection()
+        _select_conductor(window, trace.conductor_id)
+        window._refresh_properties()
+        assert window.inspector.conductor_editor.redo_without.isHidden()
+    finally:
+        _close(window)

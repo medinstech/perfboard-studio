@@ -3997,6 +3997,16 @@ TURKISH: Mapping[str, str] = {
     "stacked over {count} wire": "{count} telin üstünde",
     "stacked over {count} wires": "{count} telin üstünde",
     "Select these wires on the board.": "Bu telleri kartta seçer.",
+    "Redo Wiring Without This Wire": "Bu Tel Olmadan Yeniden Kablola",
+    "Wires this net again, keeping clear of the holes this wire lies across, so the same wire cannot come back.": (
+        "Bu neti yeniden kablolar ve bu telin üzerinden geçtiği deliklerden uzak durur; "
+        "böylece aynı tel geri gelemez."
+    ),
+    "Without the wire {start} → {end}: nothing new lies across its holes.": (
+        "{start} → {end} teli olmadan: yeni bakırın hiçbiri onun deliklerinin üzerinden geçmez."
+    ),
+    "{count} connection could not be wired without it.": "Bu tel olmadan {count} bağlantı kablolanamadı.",
+    "{count} connections could not be wired without it.": "Bu tel olmadan {count} bağlantı kablolanamadı.",
     "Wire every connection not wired yet, in the Wiring Style. The copper already there "
     "stays, and one Ctrl+Z takes back what it lays. When everything is wired, it offers to "
     "wire it all again.": (

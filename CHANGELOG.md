@@ -22,6 +22,16 @@ closed without a bump.
 
 ### Added
 
+- **Redo Wiring Without This Wire**, on a wire's right-click menu and in its Properties.
+  Redone in any style, a net came back with the same bad wire, because planning is
+  deterministic; this wires the net again keeping clear of the holes that wire lay
+  across, says so in the question and the status, and says what could not be wired
+  without it before anything is applied. One Ctrl+Z puts it back.
+
+- **An agent can wire a net again without one of its wires.** Wiring a net again with the
+  same settings lays the same copper back. MCP's `reroute(without=<conductor id>)` wires
+  that conductor's net again keeping clear of every hole it ran through or lay across, its
+  ends and its net's pins excepted, and returns those holes as `kept_clear`.
 - **The wiring says what it costs to build, and where.** Auto-wire used to finish on "No
   problems" and jump to Build over a board with a wire lying across 44 pins. With nothing
   selected, Properties now keeps the wiring in a line ("53 wires, 1.3 m, 85 bends · 5 solder

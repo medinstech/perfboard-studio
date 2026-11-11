@@ -156,6 +156,8 @@ class InspectorHooks:
     #: What a conductor lies across on its way, in a sentence ("" when nothing): the
     #: holes a wire passes over between its ends, and what is in them.
     lies_across: Callable[[str], str] = lambda _conductor: ""
+    #: Whether this wire's net can be wired again without it (Redo Wiring Without This Wire).
+    can_redo_without: Callable[[str], bool] = lambda _conductor: False
     #: The styles one net's wiring can be redone in, (id, name), and the window's own.
     wiring_styles: Callable[[], tuple[tuple[str, str], ...]] = lambda: ()
     current_style: Callable[[], str] = lambda: ""
@@ -2110,9 +2112,21 @@ class _ConductorEditor(QWidget):
         column.setSpacing(0)
         self.select_net = QToolButton()
         self.redo_net = QToolButton()
+        # The one wire a redo in any style lays back, kept off: the bad wire, found.
+        self.redo_without = QToolButton()
+        self.redo_without.setText(t("Redo Wiring Without This Wire"))
+        self.redo_without.setToolTip(
+                    t(
+                        "Wires this net again, keeping clear of the holes this wire lies "
+                        "across, so the same wire cannot come back."
+                    )
+                    )
         self.remove_net = QToolButton()
         for what, button in (
-            ("select", self.select_net), ("redo", self.redo_net), ("remove", self.remove_net)
+            ("select", self.select_net),
+            ("redo", self.redo_net),
+            ("without", self.redo_without),
+            ("remove", self.remove_net),
         ):
             button.setAutoRaise(True)
             button.clicked.connect(lambda _checked=False, w=what: self._on_net_action(w))
@@ -2179,13 +2193,21 @@ class _ConductorEditor(QWidget):
             self.select_net.setText(t("Select All of {net}").format(net=net.name))
             self.redo_net.setText(t("Redo Wiring of {net}").format(net=net.name))
             self.remove_net.setText(t("Remove Wiring of {net}").format(net=net.name))
+        self.redo_without.setVisible(
+            net is not None and self._inspector.hooks.can_redo_without(conductor.id)
+        )
         across = self._inspector.hooks.lies_across(conductor.id)
         self.lies_across.setText(across)
         self._form.setRowVisible(self.lies_across, bool(across))
 
     def _on_net_action(self, what: str) -> None:
-        if self._net_id is not None:
-            self._inspector.hooks.net_wiring(what, self._net_id)
+        if self._net_id is None:
+            return
+        if what == "without":
+            if self._conductor is None:
+                return
+            what = f"without:{self._conductor.id}"
+        self._inspector.hooks.net_wiring(what, self._net_id)
 
     def _fill_redo_styles(self) -> None:
         self.redo_styles.clear()
