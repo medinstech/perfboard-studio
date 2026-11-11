@@ -775,6 +775,7 @@ def build_guide(
     via_holes = vias(doc, build_occupancy(doc, lookup)) if component_side else ()
     conductor_steps, via_checks = _vias(doc, conductor_steps, via_holes, say)
     conductor_steps = _finger_note(doc, conductor_steps, say)
+    conductor_steps = _covered_pin_note(doc, lookup, conductor_steps, say)
     # A part off the board is wired after the copper, so a net reaching it is not finished
     # until its wires are in -- and a continuity check asked for before then fails for a
     # reason that is not a fault.
@@ -932,6 +933,60 @@ def _railed_connectors(doc: PerfDocument) -> frozenset[str]:
         for h in conductor.path
         if hole_key(h) in cells
     )
+
+
+def _covered_pin_note(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    conductor_steps: list[tuple[ConductorStep, PhaseNumber]],
+    say: Phrasebook,
+) -> list[tuple[ConductorStep, PhaseNumber]]:
+    """Put first on a step that lays copper on the component side at a pin its own part's
+    body covers there (``OccupancyIndex.covered_pin``) what DRC's ``copper-at-covered-pin``
+    says: under a seated body the joint cannot be made, so the step is not to be built as
+    drawn; under a part on its leads, the leads are left long. The router lays none of it,
+    so this is copper drawn by hand -- and the guide must not read as if it could be soldered."""
+    if not any(conductor.side == "top" for conductor in doc.conductors):
+        return conductor_steps
+    occupancy = build_occupancy(doc, lookup)
+    refs = {component.id: component.ref for component in doc.components}
+    by_id = {conductor.id: conductor for conductor in doc.conductors}
+    steps = list(conductor_steps)
+    for index, (step, phase) in enumerate(steps):
+        conductor = by_id.get(step.conductor_id)
+        if conductor is None or conductor.side != "top" or not conductor.path:
+            continue
+        touched = (
+            conductor.path
+            if contacts_every_path_hole(conductor)
+            else (conductor.path[0], conductor.path[-1])
+        )
+        notes: list[str] = []
+        for hole in dict.fromkeys(touched):
+            covered = occupancy.covered_pin(hole, "top")
+            if covered is None:
+                continue
+            component_id, seated = covered
+            ref = refs.get(component_id, component_id)
+            notes.append(
+                say(
+                    "Do not build this step as drawn: {hole} is {ref}'s pin, and {ref}'s body "
+                    "sits on the board over it on this side, so no joint can be made there. "
+                    "Lay this run on the solder side instead.",
+                    hole=format_hole(hole, doc.board),
+                    ref=ref,
+                )
+                if seated
+                else say(
+                    "{hole} is {ref}'s pin, under {ref}'s body on this side: fit {ref} with "
+                    "its leads left long so the iron reaches the pad.",
+                    hole=format_hole(hole, doc.board),
+                    ref=ref,
+                )
+            )
+        if notes:
+            steps[index] = (dataclasses.replace(step, notes=(*notes, *step.notes)), phase)
+    return steps
 
 
 def _vias(

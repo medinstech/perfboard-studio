@@ -1839,9 +1839,22 @@ def _traversable_on_face(ctx: _RouteContext, hole: HoleCoord, face: BoardSide) -
         return False
     if occupancy.body_covers(hole, face) is not None:
         return False
+    if not _pad_open(ctx, hole, _FACES.index(face)):
+        return False
     if key in ctx.wire_joint_holes and key not in ctx.net_holes:
         return False
     return not (occupancy.pin_at(hole) and key not in ctx.net_holes)
+
+
+def _pad_open(ctx: _RouteContext, hole: HoleCoord, face: int) -> bool:
+    """Whether copper on ``face`` may touch this hole's pad: not on the component side at a
+    pin under its own SEATED body (``OccupancyIndex.covered_pin``) -- a header's plastic, a
+    chip -- where the joint cannot be made. A part on its leads leaves it open, and DRC's
+    ``copper-at-covered-pin`` says to keep its leads long."""
+    if _FACES[face] != "top":
+        return True
+    covered = ctx.occupancy.covered_pin(hole, "top")
+    return covered is None or not covered[1]
 
 
 def _face_change_cost(ctx: _RouteContext, hole: HoleCoord) -> float | None:
@@ -1891,7 +1904,9 @@ def _find_two_face_trace_path(
     board = ctx.doc.board
     floor = costs.solder_trace_step + min(_face_step_cost(costs, f, preferred) for f in _FACES)
     goal = _key(to)
-    starts: list[_FaceState] = [(from_.col, from_.row, face, 0, 0) for face in range(2)]
+    starts: list[_FaceState] = [
+        (from_.col, from_.row, face, 0, 0) for face in range(2) if _pad_open(ctx, from_, face)
+    ]
     g_score: dict[_FaceState, float] = {
         state: _endpoint_face_cost(ctx, from_, _FACES[state[2]]) for state in starts
     }
@@ -1932,6 +1947,8 @@ def _find_two_face_trace_path(
             is_goal = _key(step) == goal
             if not is_goal and not _traversable_on(ctx, step, face):
                 continue
+            if is_goal and not _pad_open(ctx, step, face):
+                continue
             d_col, d_row = step.col - col, step.row - row
             cost = costs.solder_trace_step + _face_step_cost(costs, _FACES[face], preferred)
             if _has_foreign_neighbour(ctx, step, from_, to):
@@ -1943,7 +1960,7 @@ def _find_two_face_trace_path(
             moves.append(((step.col, step.row, face, d_col, d_row), cost))
         if not same_hole(here, from_):
             change = _face_change_cost(ctx, here)
-            if change is not None:
+            if change is not None and _pad_open(ctx, here, 1 - face):
                 moves.append(((col, row, 1 - face, 0, 0), change))
         for nxt, cost in moves:
             if nxt in closed:
@@ -2101,6 +2118,8 @@ def _component_side_wire_candidate(
     underneath, as every jumper's are.
     """
     occupancy = ctx.occupancy
+    if not _pad_open(ctx, from_, 1) or not _pad_open(ctx, to, 1):
+        return None
     top = dataclasses.replace(
         ctx,
         wire_face="top",

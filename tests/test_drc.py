@@ -329,6 +329,7 @@ PYTHON_ONLY_RULES = frozenset(
         "no-copper-on-face",
         "rail-without-bridge",
         "solder-gap-needs-spine",
+        "copper-at-covered-pin",
     }
 )
 

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from .connectivity import FootprintLookup
+from .footprints import body_extent, body_is_round
 from .geometry import (
     all_pin_holes,
     hole_key,
@@ -26,9 +27,13 @@ from .geometry import (
     holes_under_line,
     paths_cross,
     paths_overlap,
+    point_under_body,
     transform_offset,
+    turned_box,
 )
 from .model import (
+    SEATED_ARCHETYPES,
+    Board,
     BoardSide,
     ComponentId,
     ComponentInstance,
@@ -68,6 +73,9 @@ class OccupancyIndex:
     _pins_by_hole: Mapping[str, OccupyingPin]
     _body_by_hole: Mapping[str, ComponentId]
     _sorted_holes: tuple[HoleCoord, ...]
+    #: (hole, side) -> (the part, whether its body is seated) for a pin its OWN body covers
+    #: on the face the part is on. See :meth:`covered_pin`.
+    _covered_pins: Mapping[str, tuple[ComponentId, bool]] = MappingProxyType({})
 
     def conductors_at(self, hole: HoleCoord, side: BoardSide) -> tuple[ConductorId, ...]:
         """Conductors whose path runs across this hole on this side, contact or not."""
@@ -90,6 +98,17 @@ class OccupancyIndex:
         unless asked, where every body was before a part could be put on the solder side."""
         return self._body_by_hole.get(_node_key(hole, side))
 
+    def covered_pin(self, hole: HoleCoord, side: BoardSide) -> tuple[ComponentId, bool] | None:
+        """The part whose pin is in this hole when its OWN body covers the pad on ``side``,
+        and whether that body is seated (``model.SEATED_ARCHETYPES``); None otherwise.
+
+        A seated body -- a header's plastic, a chip, a terminal block -- sits on the board
+        over the pad, so no joint can be made there on that face: no copper may end at it
+        or pass it. A part standing on its leads clears it if the leads are left long.
+        ``drc``'s ``joint-under-body`` and ``copper-at-covered-pin``, the router's two-face
+        search and the guide all read this one answer."""
+        return self._covered_pins.get(_node_key(hole, side))
+
     def occupied_holes(self) -> tuple[HoleCoord, ...]:
         """Every hole that has anything at all on it, for quick iteration."""
         return self._sorted_holes
@@ -109,6 +128,7 @@ def build_occupancy(doc: PerfDocument, lookup: FootprintLookup) -> OccupancyInde
     blocked_nodes: set[str] = set()
     pins_by_hole: dict[str, OccupyingPin] = {}
     body_by_hole: dict[str, ComponentId] = {}
+    covered_pins: dict[str, tuple[ComponentId, bool]] = {}
     holes: dict[str, HoleCoord] = {}
 
     def remember(hole: HoleCoord) -> None:
@@ -133,6 +153,10 @@ def build_occupancy(doc: PerfDocument, lookup: FootprintLookup) -> OccupancyInde
         for hole in _body_footprint_holes(component, footprint, doc):
             remember(hole)
             body_by_hole[_node_key(hole, component.side)] = component.id
+
+        seated = footprint.body.archetype in SEATED_ARCHETYPES
+        for hole in pins_under_own_body(component, footprint, doc.board):
+            covered_pins[_node_key(hole, component.side)] = (component.id, seated)
 
     # --- Conductors: every hole on the path is physically occupied, contact or not. ---
     #
@@ -177,7 +201,37 @@ def build_occupancy(doc: PerfDocument, lookup: FootprintLookup) -> OccupancyInde
         _pins_by_hole=MappingProxyType(pins_by_hole),
         _body_by_hole=MappingProxyType(body_by_hole),
         _sorted_holes=sorted_holes,
+        _covered_pins=MappingProxyType(covered_pins),
     )
+
+
+def placed_body_box(
+    component: ComponentInstance, footprint: Footprint, board: Board
+) -> tuple[float, float, float, float]:
+    """A component's real body as a board-space box, in the millimetre frame of the holes."""
+    min_x, max_x, min_y, max_y = turned_box(
+        body_extent(footprint, board.pitch).box, component.rotation, component.mirrored
+    )
+    anchor = hole_to_mm(component.anchor, board)
+    return anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y
+
+
+def pins_under_own_body(
+    component: ComponentInstance, footprint: Footprint, board: Board
+) -> tuple[HoleCoord, ...]:
+    """The holes of a part's pins its own body covers, measured on the real body
+    (:func:`placed_body_box`, round where the package is), in pin order. Nothing for a part
+    with no outline, or one off the board (``flying-leads``), which has no body here."""
+    if not footprint.body_outline or footprint.body.archetype == "flying-leads":
+        return ()
+    box = placed_body_box(component, footprint, board)
+    round_body = body_is_round(footprint)
+    under: list[HoleCoord] = []
+    for _pin, hole in all_pin_holes(component, footprint):
+        at = hole_to_mm(hole, board)
+        if point_under_body(at.x, at.y, box, round_body):
+            under.append(hole)
+    return tuple(under)
 
 
 def _body_footprint_holes(

@@ -910,6 +910,18 @@ TURKISH: dict[str, str] = {
     "{count} fingers on the {edge} edge from {hole}": (
         "{edge} kenarda {hole} deliğinden başlayan {count} parmak"
     ),
+    "Do not build this step as drawn: {hole} is {ref}'s pin, and {ref}'s body sits on the "
+    "board over it on this side, so no joint can be made there. Lay this run on the solder "
+    "side instead.": (
+        "Bu adımı çizildiği gibi yapmayın: {hole}, {ref} parçasının pinidir ve {ref} gövdesi bu "
+        "yüzde onun üstünde karta oturur, bu yüzden orada lehim noktası yapılamaz. Bu hattı "
+        "onun yerine lehim yüzüne döşeyin."
+    ),
+    "{hole} is {ref}'s pin, under {ref}'s body on this side: fit {ref} with its leads left "
+    "long so the iron reaches the pad.": (
+        "{hole}, {ref} parçasının pinidir ve bu yüzde {ref} gövdesinin altında kalır: havya "
+        "pede ulaşsın diye {ref} parçasını bacaklarını uzun bırakarak takın."
+    ),
     "{finger} is the finger on the {edge} edge beside {hole}, the strip of copper outside "
     "the grid: the solder lies on it as on a pad, with no hole to go through.": (
         "{finger}, {edge} kenarda {hole} deliğinin yanındaki parmaktır, ızgaranın dışındaki "

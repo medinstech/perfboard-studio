@@ -856,6 +856,7 @@ TURKISH: Mapping[str, str] = {
     "Solder where the board has no pads": "Pedi olmayan yüzde lehim",
     "Rail with no bridge to the board": "Karta köprüsü olmayan ray",
     "Gap too wide for plain solder": "Telsiz lehim yolu için fazla geniş boşluk",
+    "Copper at a pin under its own part": "Gövdesinin altında kalan pinde bakır",
     "Joint under its own part": "Lehim noktası parçanın altında",
     "Bent leg too long": "Bükülen bacak fazla uzun",
     "Too close to a mounting hole": "Montaj deliğine fazla yakın",

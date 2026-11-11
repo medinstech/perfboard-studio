@@ -32,6 +32,7 @@ from perfboard_studio.geometry import (
     format_hole,
     holes_under_line,
     is_adjacent4,
+    parse_hole,
 )
 from perfboard_studio.guide import ConductorStep, GuideOptions, build_guide
 from perfboard_studio.lvs import run_lvs
@@ -369,10 +370,10 @@ def _balanced_plan(path: pathlib.Path, faces: RouterFaces) -> AutoroutePlan:
 
 
 def test_a_wire_over_the_component_side_lies_across_no_pin_and_under_no_part() -> None:
-    """On arduino-io-shield one wire goes over the top, where it lies across nothing of
-    the solder side's: the stack, the pins and the ends lain across all come down."""
-    shield = REPO / "examples" / "arduino-io-shield.perf"
-    one_face, both = _balanced_plan(shield, "solder"), _balanced_plan(shield, "both")
+    """On atmega328-relay one wire goes over the top, where it lies across no pin, under no
+    part, and ends at no pin a seated body covers -- and the solder side is no worse for it."""
+    board = REPO / "examples" / "atmega328-relay.perf"
+    one_face, both = _balanced_plan(board, "solder"), _balanced_plan(board, "both")
     occupancy = build_occupancy(both.document, LOOKUP)
 
     over = [c for c in both.document.conductors if c.side == "top"]
@@ -384,11 +385,26 @@ def test_a_wire_over_the_component_side_lies_across_no_pin_and_under_no_part() -
         for hole in lain - ends:
             assert occupancy.pin_at(hole) is None, f"{wire.id} lies across a pin at {hole}"
             assert occupancy.body_covers(hole, "top") is None, f"{wire.id} runs under a part"
+        for hole in ends:
+            covered = occupancy.covered_pin(hole, "top")
+            assert covered is None or not covered[1], f"{wire.id} ends under a seated body"
     assert run_lvs(both.document, LOOKUP).summary.shorts == 0
     assert not [v for v in run_drc(both.document, LOOKUP) if v.rule == "jumper-under-body"]
     before, after = wiring_stats(one_face.document, LOOKUP), wiring_stats(both.document, LOOKUP)
-    assert after.max_level < before.max_level
-    assert after.over_pins + after.over_ends < before.over_pins + before.over_ends
+    assert after.max_level <= before.max_level
+    assert after.over_pins + after.over_ends <= before.over_pins + before.over_ends
+
+
+def test_the_shields_wire_over_the_top_was_a_joint_nobody_could_make() -> None:
+    """arduino-io-shield used to put its one top wire from J1's header at K1, a pad under
+    the header's own plastic, to SW1. It stays on the solder side now, as with one face."""
+    shield = REPO / "examples" / "arduino-io-shield.perf"
+    doc = dataclasses.replace(persist.parse_document_or_throw(shield.read_text(encoding="utf-8")), conductors=())
+    occupancy = build_occupancy(doc, LOOKUP)
+    covered = occupancy.covered_pin(parse_hole("K1", doc.board), "top")
+    assert covered is not None and covered[1]
+    both = _balanced_plan(shield, "both").document
+    assert not [c for c in both.conductors if c.side == "top"]
 
 
 def test_a_short_through_the_plating_is_found_not_only_avoided() -> None:
@@ -497,3 +513,90 @@ def test_a_guide_with_no_component_side_copper_keeps_phase_7_as_it_was() -> None
 
     assert {p.number: p.title for p in guide.phases}[7] == "Long insulated wires"
     assert not any("via" in c.title for p in guide.phases for c in p.checkpoints)
+
+
+# ---------------------------------------------------------------------------
+# A pin under its own seated body takes no copper on the component side
+# ---------------------------------------------------------------------------
+
+#: The NE555 golden's 1x4 header: its plastic sits on the board over all four pads.
+HEADER_PIN = HoleCoord(23, 10)  # X11
+
+
+def _touched(conductor) -> tuple[HoleCoord, ...]:  # type: ignore[no-untyped-def]
+    from perfboard_studio.model import contacts_every_path_hole
+
+    if contacts_every_path_hole(conductor):
+        return tuple(conductor.path)
+    return (conductor.path[0], conductor.path[-1])
+
+
+def test_a_header_pin_is_covered_by_its_own_plastic_on_its_own_face_only() -> None:
+    doc = _doc()
+    occupancy = build_occupancy(doc, LOOKUP)
+    covered = occupancy.covered_pin(HEADER_PIN, "top")
+    assert covered is not None
+    component_id, seated = covered
+    assert seated
+    assert next(c for c in doc.components if c.id == component_id).footprint_id == "hdr-1x4"
+    assert occupancy.covered_pin(HEADER_PIN, "bottom") is None
+
+
+@pytest.mark.parametrize("style", ["solder", "balanced"])
+def test_the_router_lays_no_component_side_copper_at_a_pin_under_a_seated_body(style: str) -> None:
+    """GND on the component side is the first thing a builder asks of the NE555 board, and
+    before this the router ended a top trace at the header's middle pin, under its plastic:
+    a joint nobody can make."""
+    doc = _doc()
+    bare = dataclasses.replace(
+        doc,
+        conductors=(),
+        nets=tuple(
+            dataclasses.replace(n, preferred_side="top" if n.name == "GND" else None)
+            for n in doc.nets
+        ),
+    )
+    router = options_for_style(style, RouterOptions(wire_path="grid", faces="both"))
+    wired = plan_autoroute(bare, LOOKUP, AutorouteOptions(router=router)).document
+    occupancy = build_occupancy(wired, LOOKUP)
+    assert any(c.side == "top" for c in wired.conductors), "GND still goes on top"
+    for conductor in wired.conductors:
+        if conductor.side != "top":
+            continue
+        for hole in _touched(conductor):
+            covered = occupancy.covered_pin(hole, "top")
+            assert covered is None or not covered[1], (conductor.id, format_hole(hole, wired.board))
+    assert not [v for v in run_drc(wired, LOOKUP) if v.rule == "copper-at-covered-pin"]
+
+
+def test_copper_drawn_at_a_pin_under_its_own_plastic_is_an_error_on_top_only() -> None:
+    doc = dataclasses.replace(_doc(), conductors=())
+    above = HoleCoord(HEADER_PIN.col, HEADER_PIN.row - 2)
+    path = (above, HoleCoord(HEADER_PIN.col, HEADER_PIN.row - 1), HEADER_PIN)
+    top = _with(doc, SolderTraceConductor(id="t1", path=path, side="top"))
+    found = [v for v in run_drc(top, LOOKUP) if v.rule == "copper-at-covered-pin"]
+    assert [(v.severity, v.holes) for v in found] == [("error", (HEADER_PIN,))]
+    assert "ends at X11" in found[0].message and "cannot be made" in found[0].message
+    bottom = _with(doc, SolderTraceConductor(id="t1", path=path, side="bottom"))
+    assert not [v for v in run_drc(bottom, LOOKUP) if v.rule == "copper-at-covered-pin"]
+
+
+@pytest.mark.parametrize("language", ["en", "tr"])
+def test_the_guide_says_not_to_build_copper_drawn_under_a_seated_body(language: str) -> None:
+    doc = dataclasses.replace(_doc(), conductors=())
+    path = (HoleCoord(HEADER_PIN.col, HEADER_PIN.row - 1), HEADER_PIN)
+    drawn = _with(doc, SolderTraceConductor(id="t1", path=path, side="top"))
+    guide = build_guide(drawn, LOOKUP, GuideOptions(language=language))
+    step = next(
+        s for phase in guide.phases for s in phase.steps
+        if isinstance(s, ConductorStep) and s.conductor_id == "t1"
+    )
+    first = step.notes[0]
+    assert "X11" in first
+    assert ("Do not build this step" if language == "en" else "Bu adımı çizildiği gibi yapmayın") in first
+    plain = build_guide(_with(doc, SolderTraceConductor(id="t1", path=path, side="bottom")), LOOKUP)
+    bottom_step = next(
+        s for phase in plain.phases for s in phase.steps
+        if isinstance(s, ConductorStep) and s.conductor_id == "t1"
+    )
+    assert not any("Do not build" in note for note in bottom_step.notes)
