@@ -217,6 +217,13 @@ class RouterCosts:
     #: past them. Its gain is everything it does NOT lie across -- the solder side's joints,
     #: ends and wires -- which the solder-side wire it competes with is charged for.
     component_face_wire: float = 4
+    #: On top of ``proximity_risk``, per risky hole a trace on the component side passes
+    #: or ends in. That copper is laid after the parts are fitted (the guide's phase 7):
+    #: the iron reaches between bodies to a pad beside another net's pin, and a bridge
+    #: there is found last and reworked with the part in the way. Without it a net that
+    #: prefers the component side ran a trace into the NE555 board's header, between two
+    #: pins of other nets, rather than lay a jumper over the top for 1.6 more.
+    component_face_risk: float = 6
 
 
 DEFAULT_ROUTER_COSTS = RouterCosts()
@@ -1928,7 +1935,7 @@ def _find_two_face_trace_path(
             d_col, d_row = step.col - col, step.row - row
             cost = costs.solder_trace_step + _face_step_cost(costs, _FACES[face], preferred)
             if _has_foreign_neighbour(ctx, step, from_, to):
-                cost += costs.proximity_risk
+                cost += costs.proximity_risk + (costs.component_face_risk if face == 1 else 0.0)
             if (heading_col, heading_row) not in ((0, 0), (d_col, d_row)):
                 cost += costs.trace_bend
             if is_goal:
@@ -1982,6 +1989,10 @@ def _two_face_trace_candidate(
     )
     vias = [run[0] for _face, run in runs[1:]]
     cost = len(risk_holes) * costs.proximity_risk
+    risky = {_key(hole) for hole in risk_holes}
+    cost += costs.component_face_risk * len(
+        {_key(hole) for face, run in runs if face == "top" for hole in run if _key(hole) in risky}
+    )
     cost += _endpoint_face_cost(ctx, from_, runs[0][0]) + _endpoint_face_cost(ctx, to, runs[-1][0])
     cost += sum(_face_change_cost(ctx, hole) or 0.0 for hole in vias)
     conductors: list[NewConductor] = []
