@@ -370,3 +370,59 @@ def test_a_wire_over_the_component_side_lies_across_no_pin_and_under_no_part() -
     before, after = wiring_stats(one_face.document, LOOKUP), wiring_stats(both.document, LOOKUP)
     assert after.max_level < before.max_level
     assert after.over_pins + after.over_ends < before.over_pins + before.over_ends
+
+
+def test_a_short_through_the_plating_is_found_not_only_avoided() -> None:
+    """The router keeps a top trace's holes closed underneath; this is the same physics
+    seen from outside the router. Two nets' traces on opposite faces, soldered into one
+    pinless hole, are one piece of copper: LVS finds the short. With the solder-side
+    trace kept out of that hole, the faces are separate copper and there is none."""
+    doc = dataclasses.replace(_doc(), conductors=())
+    occupancy = build_occupancy(doc, LOOKUP)
+    net_of = {(node.component_ref, node.pin): net.id for net in doc.nets for node in net.nodes}
+    pins = {
+        (hole.col, hole.row): net_of[(component.ref, pin.number)]
+        for component in doc.components
+        for footprint in (LOOKUP(component.footprint_id),)
+        if footprint is not None
+        for pin, hole in all_pin_holes(component, footprint)
+        if (component.ref, pin.number) in net_of
+    }
+
+    def free(col: int, row: int) -> bool:
+        return (
+            0 <= col < doc.board.cols
+            and 0 <= row < doc.board.rows
+            and occupancy.pin_at(HoleCoord(col, row)) is None
+        )
+
+    # A pinless hole with a pin of one net beside it on one side and a pin of another
+    # net beside it on another, and a second pinless hole beside it to move to.
+    p, q, via, aside = next(
+        (HoleCoord(*a), HoleCoord(*b), HoleCoord(col, row), HoleCoord(*c))
+        for col in range(doc.board.cols)
+        for row in range(doc.board.rows)
+        if free(col, row)
+        for a in ((col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1))
+        for b in ((col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1))
+        if a in pins and b in pins and pins[a] != pins[b]
+        for c in ((col - 1, row), (col + 1, row), (col, row - 1), (col, row + 1))
+        if c not in (a, b) and free(*c)
+    )
+    top = SolderTraceConductor(id="top", path=(p, via), side="top")
+    before = run_lvs(_with(doc, top), LOOKUP).summary.shorts
+
+    shorted = _with(doc, top, SolderTraceConductor(id="under", path=(q, via), side="bottom"))
+    through = _with(
+        doc,
+        top,
+        SolderTraceConductor(id="under", path=(q, via, aside), side="bottom"),
+    )
+    clear = _with(doc, top, SolderTraceConductor(id="under", path=(q,), side="bottom"))
+
+    assert run_lvs(shorted, LOOKUP).summary.shorts > before
+    assert _net_of(shorted, "top") == _net_of(shorted, "under")
+    # Through the hole and on past it is the same short: a trace is soldered at every
+    # hole it crosses, on whichever face it lies.
+    assert run_lvs(through, LOOKUP).summary.shorts > before
+    assert run_lvs(clear, LOOKUP).summary.shorts == before
