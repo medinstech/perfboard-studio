@@ -104,6 +104,17 @@ A solder run has no such line, since it is soldered to everything it passes.
   selected parts or nets. A redo asks first, and says how much of the copper stays exactly
   where it is, how much is taken up and how much is laid new (the status line afterwards says it in counts, for example "3 taken up, 3 laid, 9
   unchanged"); one Ctrl+Z puts it all back.
+- **Redo it without this wire.** When one wire is the trouble, pick it and use **Redo Wiring
+  Without This Wire**, in its right-click menu or in Properties. The net is wired again,
+  keeping clear of the holes that wire lay across, so the same wire cannot come back. It is
+  offered for a wire on a net, on a board that is wired (not a stripboard or a breadboard).
+- **Try every wiring style.** When the wiring has something worth a look and the Wiring Style
+  is not already "Try each and keep the best", the step card offers **Try every wiring
+  style…**. It wires the board once in each style, says which one it is on while it works, and
+  offers the one that is easiest to build, asking before it takes any copper up (one Ctrl+Z
+  puts it back). It takes several times as long as Auto-wire; Cancel stops between styles and
+  keeps the best found so far. If the best is the wiring you already have, it says so and
+  changes nothing.
 - **Compare With Before.** After an Auto-wire or a redo, **Wiring ▸ Compare With Before**
   draws the copper that was there before and is gone now, dashed, over the wiring that
   replaced it. The same item hides it again.
