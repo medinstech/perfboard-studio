@@ -1052,6 +1052,7 @@ TURKISH: Mapping[str, str] = {
         "Parçanın ne olduğunu yazın; Enter onu şemaya koyar."
     ),
     "Holes": "Delikler",
+    "Lies across": "Üzerinden geçtiği",
     "Bent lead": "Bükülmüş bacak",
     "Copper strip": "Bakır şerit",
     "{start} → {end}, {count} holes": "{start} → {end}, {count} delik",
@@ -3962,6 +3963,13 @@ TURKISH: Mapping[str, str] = {
         "Üç denetimin bulduğu her şey, en ciddisi önce (Ctrl+7)."
     ),
     "No problems": "Sorun yok",
+    "Wiring to review": "Gözden geçirilecek kablolama",
+    "{count} wire to look at": "bakılacak {count} tel",
+    "{count} wires to look at": "bakılacak {count} tel",
+    "Not wrong: wiring that works and is harder to build than it has to be. Click a row to select its wires.": (
+        "Yanlış değil: çalışan ama gerektiğinden zor kurulan kablolama. Tellerini seçmek "
+        "için bir satıra tıklayın."
+    ),
     "{count} to wire": "{count} kablolanacak",
     "Matches the circuit: {matched} of {total} nets": "Devreyle uyuşan net: {matched}/{total}",
     "Select and move parts. Esc comes back to it from any tool.": (
@@ -4496,6 +4504,16 @@ TURKISH: Mapping[str, str] = {
     "time.": (
         "Kart yapılmaya hazır. Montaj rehberi size her seferinde bir parça olmak üzere yol "
         "gösterir."
+    ),
+    "The board can be built. {count} wire is worth a look first: Show Problems, then "
+    "Wiring, selects it.": (
+        "Kart yapılabilir. Önce {count} tele bakmakta yarar var: Sorunları Göster, ardından "
+        "Kablolama onu seçer."
+    ),
+    "The board can be built. {count} wires are worth a look first: Show Problems, then "
+    "Wiring, selects them.": (
+        "Kart yapılabilir. Önce {count} tele bakmakta yarar var: Sorunları Göster, ardından "
+        "Kablolama onları seçer."
     ),
     # -- what the engine says it did (ui/engine_text.py) ---------------------------
     "Place {parts} part(s) and {links} connection(s)": "{parts} parça ve {links} bağlantı yerleştir",

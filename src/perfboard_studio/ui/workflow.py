@@ -106,6 +106,10 @@ class WorkflowFacts:
     #: circuit can be placed with a board still empty -- one added and not yet filled -- and
     #: the bar said "25/25 on the board · ready to build" over a board nobody can build.
     empty_board: str = ""
+    #: Wires worth a look before building (``wiringreview``): never a problem and never
+    #: holding a step back, but not "ready to build" without a word either -- Auto-wire
+    #: finished there over a wire lying across 44 pins.
+    wiring_to_review: int = 0
 
 
 #: What the Next button does once everything before Build is done.
@@ -255,6 +259,14 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
         )
     if key == "check":
         return t("Something on the board needs a look. Show Problems lists each one and where it is.")
+    if facts.wiring_to_review:
+        return _counted(
+            facts.wiring_to_review,
+            t("The board can be built. {count} wire is worth a look first: Show Problems, "
+              "then Wiring, selects it."),
+            t("The board can be built. {count} wires are worth a look first: Show Problems, "
+              "then Wiring, selects them."),
+        )
     return t("The board is ready to build. The build guide takes you through it one part at a time.")
 
 

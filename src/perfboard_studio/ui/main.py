@@ -405,6 +405,7 @@ from .view2d import (
     picture_beside_the_pointer,
 )
 from .viewsch import SchematicView, SheetTool
+from .wiringreview import WiringNote, wiring_notes
 from .workflow import (
     STEP_ORDER,
     StepKey,
@@ -774,6 +775,9 @@ ROLE_PIN = int(Qt.ItemDataRole.UserRole) + 5
 #: The references an ERC finding is about. By reference rather than component id, because
 #: a circuit finding is as often about a part in the design, which has no place to select.
 ROLE_REFS = int(Qt.ItemDataRole.UserRole) + 10
+#: The copper a finding is about, selected on the board when it is clicked: the way from
+#: "something is wrong with the wiring" to the wire.
+ROLE_CONDUCTOR_IDS = int(Qt.ItemDataRole.UserRole) + 11
 
 
 def _now_iso() -> str:
@@ -2635,6 +2639,7 @@ class MainWindow(QMainWindow):
         self._last_drc_ms = 0.0
         self._last_erc: tuple[ErcFinding, ...] = ()
         self._last_violations: tuple[DrcViolation, ...] = ()
+        self._last_wiring: tuple[WiringNote, ...] = ()
         self._last_lvs: LvsResult | None = None
         self._last_ratsnest: tuple[NetRatsnest, ...] = ()
         self._vtk_renderer: Any = None
@@ -3294,6 +3299,9 @@ class MainWindow(QMainWindow):
                 board_title(document, empty, current_language())
                 if (empty := self._empty_board()) is not None
                 else ""
+            ),
+            wiring_to_review=len(
+                {cid for note in self._last_wiring for cid in note.conductor_ids}
             ),
         )
 
@@ -8878,6 +8886,8 @@ class MainWindow(QMainWindow):
                 add_board=lambda: self.on_add_board(),
                 add_cable=lambda: self.on_add_cable(),
                 next_step=lambda: self.on_workflow_next(self.workflow_bar.next_key),
+                net_wiring=lambda what, net_id: self._on_net_wiring(what, net_id),
+                lies_across=lambda conductor_id: self._lies_across(conductor_id),
                 shows_steps=True,
             ),
             InspectorActions(
@@ -9500,6 +9510,21 @@ class MainWindow(QMainWindow):
             )
         )
 
+    def _on_net_wiring(self, what: str, net_id: NetId) -> None:
+        """A net's copper, from one piece of it in Properties: what its right-click menu
+        offers, through the same three doors."""
+        if what == "select":
+            self._select_net_copper(net_id)
+        elif what == "redo":
+            self.on_reroute((net_id,))
+        elif what == "remove":
+            self._remove_wiring((net_id,))
+
+    def _lies_across(self, conductor_id: str) -> str:
+        """What a conductor passes over between its ends, for its Properties. Nothing yet:
+        the count comes from the engine's wiring cost, the one the summary reads."""
+        return ""
+
     def _select_net_copper(self, net_id: NetId) -> None:
         """Every conductor on the board that claims ``net_id``, selected."""
         self.scene.select_conductors(
@@ -9798,6 +9823,7 @@ class MainWindow(QMainWindow):
 
         self._last_lvs = run_lvs(document, self.lookup)
         self._last_ratsnest = ratsnest(shown, self.lookup)
+        self._last_wiring = wiring_notes(shown, self.lookup)
         self._refresh_drc_panel(self._last_violations, self._last_lvs)
         self._refresh_nets_panel(self._last_ratsnest)
         self._refresh_part_list()
@@ -10018,6 +10044,9 @@ class MainWindow(QMainWindow):
             matched=matched,
             nets=nets,
             to_check=bench,
+            to_review=len(
+                {cid for note in self._last_wiring for cid in note.conductor_ids}
+            ),
         )
         size = _board_size_name(self.bus.document.board)
         side = t("parts side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
@@ -10091,6 +10120,7 @@ class MainWindow(QMainWindow):
 
         self._add_erc_findings(needle, expanded)
         self._add_not_wired(needle)
+        self._add_wiring_notes(needle, expanded)
 
         # The pins nothing is wired to yet, while there are connections left to route, are
         # the next step rather than anything wrong: the status bar and the step bar leave
@@ -10317,6 +10347,7 @@ class MainWindow(QMainWindow):
             span = f"{format_hole(group[0].holes[0], self.bus.document.board)}–{format_hole(group[-1].holes[0], self.bus.document.board)}"
             node = QTreeWidgetItem([span, f"{len(group)} {t('pads')}"])
             node.setData(0, ROLE_HOLES, holes)
+            node.setData(0, ROLE_CONDUCTOR_IDS, (key,))
             node.setData(0, ROLE_FINDING_KEY, f"drc:{rule}:{key}")
             for violation in group:
                 node.addChild(self._drc_leaf(violation))
@@ -10327,7 +10358,39 @@ class MainWindow(QMainWindow):
         leaf = QTreeWidgetItem(["", self._finding_text(violation.message, violation.conductor_ids)])
         leaf.setData(0, ROLE_HOLES, violation.holes)
         leaf.setData(0, ROLE_COMPONENT_IDS, violation.component_ids)
+        leaf.setData(0, ROLE_CONDUCTOR_IDS, violation.conductor_ids)
         return leaf
+
+    def _add_wiring_notes(self, needle: str, expanded: set[str]) -> None:
+        """The Wiring group: what is worth a look in the copper, each row selecting the
+        wires it is about. Not DRC, and never counted as a problem (``wiringreview``)."""
+        notes = [
+            note for note in self._last_wiring
+            if not needle or needle in _folded(note.title)
+        ]
+        if not notes:
+            return
+        wires = {cid for note in notes for cid in note.conductor_ids}
+        root = QTreeWidgetItem([
+            t("Wiring"),
+            counted(len(wires), t("{count} wire to look at"), t("{count} wires to look at")),
+        ])
+        root.setToolTip(
+            1,
+            t("Not wrong: wiring that works and is harder to build than it has to be. "
+              "Click a row to select its wires."),
+        )
+        root.setData(0, ROLE_FINDING_KEY, "wiring")
+        root.setData(0, ROLE_CONDUCTOR_IDS, tuple(sorted(wires)))
+        root.setForeground(0, QColor(theme.colour("warning")))
+        self.drc_tree.addTopLevelItem(root)
+        for note in notes:
+            row = QTreeWidgetItem(["", note.title])
+            row.setData(0, ROLE_FINDING_KEY, f"wiring:{note.key}")
+            row.setData(0, ROLE_CONDUCTOR_IDS, note.conductor_ids)
+            row.setData(0, ROLE_HOLES, note.holes)
+            root.addChild(row)
+        root.setExpanded("wiring" in expanded or not expanded)
 
     def _expanded_drc_keys(self) -> set[str]:
         """Which groups are open, by NAME rather than by position.
@@ -10361,8 +10424,13 @@ class MainWindow(QMainWindow):
         component_ids = item.data(0, ROLE_COMPONENT_IDS)
         if holes:
             self.view.center_on_holes(holes, self.bus.document.board, self.side)
+        conductor_ids = item.data(0, ROLE_CONDUCTOR_IDS)
         if component_ids:
             self.scene.select_components(component_ids)
+        elif conductor_ids:
+            # About copper and no part: the copper, selected, so Properties says what it
+            # is and the Delete key and its net's Redo Wiring are one step away.
+            self.scene.select_conductors(conductor_ids)
         # A circuit finding is about parts that may not be on the board yet, so it points
         # at the first of them on the sheet the way clicking its symbol would -- and at its
         # net, which the Nets dock then lights on the board and the sheet alike.

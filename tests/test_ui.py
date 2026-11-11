@@ -18841,3 +18841,99 @@ def test_copper_drawn_exactly_over_copper_is_not_laid_and_says_what_is_there() -
         assert window.scene.armed_draw_kind == "solder-trace"
     finally:
         _close(window)
+
+
+def test_a_wire_in_properties_offers_its_nets_wiring(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Select All, Redo Wiring and Remove Wiring of a wire's net were on its right-click
+    menu only; Properties, where a picked wire is shown, offered Auto-wire and Delete."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        document = window.bus.document
+        wire = next(c for c in document.conductors if c.net_id is not None)
+        net = next(n for n in document.nets if n.id == wire.net_id)
+        window.scene.clearSelection()
+        _select_conductor(window, wire.id)
+        window._refresh_properties()
+        editor = window.inspector.conductor_editor
+        assert window.inspector.shown is editor
+        assert not editor.net_buttons.isHidden()
+        assert editor.redo_net.text() == f"Redo Wiring of {net.name}"
+        # Nothing to say about what it lies across, and no empty row saying it.
+        assert not editor._form.isRowVisible(editor.lies_across)
+
+        editor.select_net.click()
+        on_net = {c.id for c in window.bus.document.conductors if c.net_id == net.id}
+        assert set(window.scene.selected_conductor_ids()) == on_net
+
+        window.scene.clearSelection()
+        _select_conductor(window, wire.id)
+        window._refresh_properties()
+        steps = len(window.bus.history())
+        editor.remove_net.click()
+        assert not any(c.net_id == net.id for c in window.bus.document.conductors)
+        assert len(window.bus.history()) == steps + 1
+
+        window.act_undo.trigger()
+        # Redo goes through the same question the menu's does; declined, nothing moves.
+        monkeypatch.setattr(type(window), "_confirm", lambda self, title, body, verb: False)
+        window.scene.clearSelection()
+        _select_conductor(window, wire.id)
+        window._refresh_properties()
+        window.inspector.conductor_editor.redo_net.click()
+        assert window.bus.document.conductors == document.conductors
+    finally:
+        _close(window)
+
+
+def test_wiring_worth_a_look_is_a_group_that_selects_its_wires_and_is_not_no_problems() -> None:
+    """Auto-wire finished on "No problems" over a wire lying across 44 pins. What the
+    engine says is worth a look is its own group in the drawer, each row selecting its
+    wires, and the bar says there is wiring to review rather than that all is well --
+    without counting it as a problem."""
+    from perfboard_studio.ui.wiringreview import WiringNote
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        assert window.problems_bar.badge.isHidden()
+        assert "No problems" in window.problems_bar.title.text()
+        wires = tuple(c.id for c in window.bus.document.conductors[:2])
+        window._last_wiring = (
+            WiringNote(key="over-pins", title="2 places a wire lies over a pin", conductor_ids=wires),
+        )
+        window._refresh_drc_panel(window._last_violations, window._last_lvs)
+        window._refresh_problems_bar()
+
+        assert "Wiring to review" in window.problems_bar.title.text()
+        assert window.problems_bar.badge.isHidden()
+        assert "2 wires to look at" in window.problems_bar.facts.text()
+        tree = window.drc_tree
+        group = next(
+            tree.topLevelItem(i) for i in range(tree.topLevelItemCount())
+            if tree.topLevelItem(i).text(0) == "Wiring"
+        )
+        assert group.text(1) == "2 wires to look at"
+        row = group.child(0)
+        assert row.text(1) == "2 places a wire lies over a pin"
+        window._on_drc_item_clicked(row, 1)
+        assert set(window.scene.selected_conductor_ids()) == set(wires)
+    finally:
+        _close(window)
+
+
+def test_a_finding_about_copper_alone_selects_the_copper() -> None:
+    """Clicking a finding showed its holes and selected its parts; one about a wire and
+    no part selected nothing, so the wire it named was still a hunt."""
+    from perfboard_studio.drc import DrcViolation
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        wire = window.bus.document.conductors[0]
+        finding = DrcViolation(
+            rule="conductor-crossing", severity="warning", message="m",
+            holes=(wire.path[0],), component_ids=(), conductor_ids=(wire.id,),
+        )
+        window.scene.clearSelection()
+        window._on_drc_item_clicked(window._drc_leaf(finding), 1)
+        assert set(window.scene.selected_conductor_ids()) == {wire.id}
+    finally:
+        _close(window)

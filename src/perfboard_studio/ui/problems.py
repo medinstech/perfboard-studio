@@ -108,11 +108,14 @@ class ProblemsBar(QWidget):
         matched: int | None,
         nets: int,
         to_check: int = 0,
+        to_review: int = 0,
     ) -> None:
         """What the bar says. ``matched`` is None while there is nothing on the board to
         compare with the circuit. ``to_check`` is the findings the build guide makes a check
         at the bench of (``guide.is_bench_check``): counted beside what is left to wire,
-        never in the badge, which is what is wrong."""
+        never in the badge, which is what is wrong. ``to_review`` is the wires worth a look
+        (``wiringreview``): not wrong either, so not in the badge -- but not "No problems"
+        over them, which is what Auto-wire finished on over a wire lying across 44 pins."""
         self.errors, self.warnings = errors, warnings
         total = errors + warnings
         if total:
@@ -125,6 +128,9 @@ class ProblemsBar(QWidget):
                 + counted(warnings, t("{count} warning"), t("{count} warnings"))
             )
             self.badge.show()
+        elif to_review:
+            self.title.setText(theme.ink("●", "warning") + f" <b>{t('Wiring to review')}</b>")
+            self.badge.hide()
         else:
             self.title.setText(theme.ink("✓", "success") + f" <b>{t('No problems')}</b>")
             self.badge.hide()
@@ -132,6 +138,11 @@ class ProblemsBar(QWidget):
         if to_wire:
             facts.append(
                 theme.ink("●", "warning") + " " + t("{count} to wire").format(count=to_wire)
+            )
+        if to_review:
+            facts.append(
+                theme.ink("●", "warning") + " "
+                + counted(to_review, t("{count} wire to look at"), t("{count} wires to look at"))
             )
         if to_check:
             facts.append(

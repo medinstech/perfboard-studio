@@ -148,6 +148,12 @@ class InspectorHooks:
     add_cable: Callable[[], object] = lambda: None
     #: The step bar's Next, as the step card's button does it.
     next_step: Callable[[], object] = lambda: None
+    #: Something done to a whole net's copper from one piece of it -- "select", "redo" or
+    #: "remove" -- as the piece's right-click menu does it.
+    net_wiring: Callable[[str, str], object] = lambda _what, _net: None
+    #: What a conductor lies across on its way, in a sentence ("" when nothing): the
+    #: holes a wire passes over between its ends, and what is in them.
+    lies_across: Callable[[str], str] = lambda _conductor: ""
     #: Whether the window says where the work stands (``Inspector.set_step``): nothing
     #: selected is then the step, and the board's editor waits for Board Settings. Left out,
     #: nothing selected is the board, as it always was.
@@ -2040,6 +2046,11 @@ class _ConductorEditor(QWidget):
         form.addRow(t("Holes"), self.ends)
         self.net = _fact()
         form.addRow(t("Net"), self.net)
+        # What a wire passes over between its ends. "N1 → D1, 2 holes" was all a selected
+        # wire said, about a wire lying over ten holes with pins in them.
+        self.lies_across = _fact()
+        form.addRow(t("Lies across"), self.lies_across)
+        self._form = form
         layout.addLayout(form)
         buttons = QHBoxLayout()
         buttons.setContentsMargins(0, 0, 0, 0)
@@ -2047,6 +2058,23 @@ class _ConductorEditor(QWidget):
         buttons.addStretch(1)
         buttons.addWidget(_action_button(actions.delete))
         layout.addLayout(buttons)
+        # The piece's net, which is usually why a piece of copper was picked: the rest of
+        # it, laid again, or taken up. Only the right-click menu offered these.
+        self._net_id: str | None = None
+        self.net_buttons = QWidget()
+        column = QVBoxLayout(self.net_buttons)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        self.select_net = QToolButton()
+        self.redo_net = QToolButton()
+        self.remove_net = QToolButton()
+        for what, button in (
+            ("select", self.select_net), ("redo", self.redo_net), ("remove", self.remove_net)
+        ):
+            button.setAutoRaise(True)
+            button.clicked.connect(lambda _checked=False, w=what: self._on_net_action(w))
+            column.addWidget(button)
+        layout.addWidget(self.net_buttons)
 
     @staticmethod
     def kind_of(conductor: Conductor) -> str:
@@ -2095,6 +2123,19 @@ class _ConductorEditor(QWidget):
         )
         net = next((n for n in document.nets if n.id == conductor.net_id), None)
         self.net.setText(net.name if net is not None else "—")
+        self._net_id = net.id if net is not None else None
+        self.net_buttons.setVisible(net is not None)
+        if net is not None:
+            self.select_net.setText(t("Select All of {net}").format(net=net.name))
+            self.redo_net.setText(t("Redo Wiring of {net}").format(net=net.name))
+            self.remove_net.setText(t("Remove Wiring of {net}").format(net=net.name))
+        across = self._inspector.hooks.lies_across(conductor.id)
+        self.lies_across.setText(across)
+        self._form.setRowVisible(self.lies_across, bool(across))
+
+    def _on_net_action(self, what: str) -> None:
+        if self._net_id is not None:
+            self._inspector.hooks.net_wiring(what, self._net_id)
 
     def _on_kind_chosen(self, index: int) -> None:
         chosen = self.kind.itemData(index)

@@ -15,6 +15,7 @@ from perfboard_studio.ui.workflow import (
     WorkflowFacts,
     next_step,
     step_action,
+    step_hint,
     workflow_steps,
 )
 
@@ -309,3 +310,17 @@ def test_an_empty_board_of_a_system_holds_the_placing_back() -> None:
     # Filled, the same system is ready to build.
     filled = dataclasses.replace(built, empty_board="")
     assert {s.key: s.status for s in workflow_steps(filled)}["build"] == "done"
+
+
+def test_wiring_worth_a_look_is_said_on_the_last_step_and_holds_nothing_back() -> None:
+    """Auto-wire finished on "ready to build" over a wire lying across 44 pins. Wires worth
+    a look never stop a step, but the last step's sentence says how many and where."""
+    facts = dataclasses.replace(EMPTY, parts_on_board=8, nets=7, wiring_to_review=3)
+    steps = statuses(facts)
+    assert steps["check"] == "done"
+    assert next_step(workflow_steps(facts)) == "build"
+    hint = step_hint("build", facts)
+    assert "3 wires are worth a look" in hint and "Wiring" in hint
+    one = step_hint("build", dataclasses.replace(facts, wiring_to_review=1))
+    assert "1 wire is worth a look" in one
+    assert "ready to build" in step_hint("build", dataclasses.replace(facts, wiring_to_review=0))
