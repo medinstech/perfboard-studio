@@ -163,6 +163,8 @@ class InspectorHooks:
     current_style: Callable[[], str] = lambda: ""
     #: One of the step card's wiring counts clicked, by its key: select what it counts.
     select_wiring: Callable[[str], object] = lambda _key: None
+    #: The step card's "Try every wiring style" clicked.
+    try_every_style: Callable[[], object] = lambda: None
     #: Whether the window says where the work stands (``Inspector.set_step``): nothing
     #: selected is then the step, and the board's editor waits for Board Settings. Left out,
     #: nothing selected is the board, as it always was.
@@ -188,6 +190,8 @@ class StepNote:
     wiring: str = ""
     #: What is worth a look in it, (key, said): each a link selecting the wires it counts.
     wiring_notes: tuple[tuple[str, str], ...] = ()
+    #: Offer to wire the board in every style and keep the best, under the counts.
+    try_styles: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,7 +430,26 @@ class _StepCard(QWidget):
             link.setToolTip(t("Select these wires on the board."))
             link.linkActivated.connect(self._inspector.hooks.select_wiring)
             self._links.addWidget(link)
-        self.wiring_links.setVisible(bool(note.wiring_notes))
+        if note.try_styles:
+            # The other way at a bad wire, beside the counts that say there is one: the
+            # board's style is one answer of four, and the sweep that tries them all is
+            # not the default because on most boards it costs seconds and finds the same.
+            offer = QLabel(f'<a href="try">{escape(t("Try every wiring style…"))}</a>')
+            offer.setTextFormat(Qt.TextFormat.RichText)
+            offer.setWordWrap(True)
+            offer.setTextInteractionFlags(Qt.TextInteractionFlag.LinksAccessibleByMouse)
+            # Set apart from the counts above it: it is not one of them.
+            offer.setContentsMargins(0, 6, 0, 0)
+            offer.setToolTip(
+                t(
+                    "Wires the board once in each style and offers the one easiest to "
+                    "build. It takes several times as long as Auto-wire; Cancel keeps the "
+                    "best found so far."
+                )
+            )
+            offer.linkActivated.connect(lambda _href: self._inspector.hooks.try_every_style())
+            self._links.addWidget(offer)
+        self.wiring_links.setVisible(bool(note.wiring_notes) or note.try_styles)
 
 
 # -- nothing selected: the board ----------------------------------------------------------

@@ -3998,6 +3998,17 @@ TURKISH: Mapping[str, str] = {
     "stacked over {count} wires": "{count} telin üstünde",
     "Select these wires on the board.": "Bu telleri kartta seçer.",
     "Redo Wiring Without This Wire": "Bu Tel Olmadan Yeniden Kablola",
+    "Try every wiring style…": "Her kablolama tarzını deneyin…",
+    "Wires the board once in each style and offers the one easiest to build. It takes several times as long as Auto-wire; Cancel keeps the best found so far.": (
+        "Kartı her tarzda bir kez kablolar ve yapması en kolay olanı önerir. Otomatik "
+        "Kablolamadan birkaç kat uzun sürer; İptal o ana kadar bulunan en iyisini tutar."
+    ),
+    "It is the wiring already on the board, so nothing changed.": (
+        "Bu, kartta zaten olan kablolama; hiçbir şey değişmedi."
+    ),
+    "Wire the board in “{style}”?": "Kart “{style}” tarzında kablolansın mı?",
+    "Use This Wiring": "Bu Kablolamayı Kullan",
+    "Wiring in “{style}”": "“{style}” tarzında kablolama",
     "Wiring in “{style}” ({number} of {total})…": "“{style}” tarzında kablolanıyor ({number}/{total})…",
     "stopped after {count} of {total} styles": "{total} tarzın {count} tanesinden sonra durduruldu",
     "Wires this net again, keeping clear of the holes this wire lies across, so the same wire cannot come back.": (

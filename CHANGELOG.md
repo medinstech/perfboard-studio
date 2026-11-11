@@ -22,6 +22,12 @@ closed without a bump.
 
 ### Added
 
+- **The step card offers "Try every wiring style…"** under the counts of what is worth a
+  look in the wiring. Balanced stays the default: measured in the window, trying every
+  style took 15 s on atmega328-relay to find the same wiring Balanced lays in 2.5 s. Taken,
+  the best style's wiring is offered in place of the nets' copper, as one undo step, or
+  it is said that the wiring there is already the best of them.
+
 - **Redo Wiring Without This Wire**, on a wire's right-click menu and in its Properties.
   Redone in any style, a net came back with the same bad wire, because planning is
   deterministic; this wires the net again keeping clear of the holes that wire lay

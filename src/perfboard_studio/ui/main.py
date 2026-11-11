@@ -125,6 +125,7 @@ from perfboard_studio.autoroute import (
     ALL_ROUTING_STYLES,
     AutorouteOptions,
     AutoroutePlan,
+    BestAutoroute,
     UnroutedLink,
     describe_best,
     describe_reroute,
@@ -200,6 +201,7 @@ from perfboard_studio.commands import (
     PartPlacement,
     PlacePartsPayload,
     RenameDocumentPayload,
+    ReplaceConductorsPayload,
     RotateComponentPayload,
     RotateComponentsPayload,
     SetComponentSidePayload,
@@ -3403,6 +3405,12 @@ class MainWindow(QMainWindow):
                         tuple((note.key, note.title) for note in self._last_wiring)
                         if key in ("route", "check", "build")
                         else ()
+                    ),
+                    try_styles=(
+                        key in ("route", "check", "build")
+                        and bool(self._last_wiring)
+                        and self._routing_style != "best"
+                        and not board_joins_holes(self.bus.document.board)
                     ),
                 )
             )
@@ -8988,6 +8996,7 @@ class MainWindow(QMainWindow):
                 wiring_styles=lambda: self.wiring_styles(),
                 current_style=lambda: self._routing_style,
                 select_wiring=lambda key: self._select_wiring(key),
+                try_every_style=lambda: self.on_try_every_style(),
                 shows_steps=True,
             ),
             InspectorActions(
@@ -11251,6 +11260,8 @@ class MainWindow(QMainWindow):
             f" — {t("applies the next time you auto-wire")}",
             8000,
         )
+        # The step card offers every style only while the board's style is one of them.
+        self._refresh_workflow()
 
     def on_crossing_policy(self, policy: str) -> None:
         """Choose what a trace does where it may not cross. Like the style, it is recorded
@@ -11291,6 +11302,112 @@ class MainWindow(QMainWindow):
         if chosen == "best":
             return AutorouteOptions(router=base)
         return AutorouteOptions(router=options_for_style(cast(RoutingStyle, chosen), base))
+
+    def _sweep_styles(
+        self,
+        document: PerfDocument,
+        options: AutorouteOptions,
+        only_net_ids: tuple[NetId, ...] | None = None,
+    ) -> BestAutoroute | None:
+        """Wire ``document`` once in every style and keep the best (``plan_best_autoroute``),
+        saying which style is being wired while it is: four styles one after another read
+        as a hang under one label. The style is set on the worker thread by a plain
+        assignment and only read here (``_run_planner``). Cancel stops between styles and
+        keeps the best of those already wired; None if nothing was."""
+        wiring: dict[str, tuple[str, int, int]] = {}
+        style_names = dict(self.wiring_styles())
+
+        def label() -> str:
+            now = wiring.get("style")
+            if now is None:
+                return t("Wiring with every style…")
+            style, number, total = now
+            return t("Wiring in “{style}” ({number} of {total})…").format(
+                style=style_names.get(style, style), number=number, total=total
+            )
+
+        best = self._run_planner(
+            label,
+            lambda should_stop: plan_best_autoroute(
+                document,
+                self.lookup,
+                options,
+                only_net_ids=only_net_ids,
+                on_style=lambda style, number, total: wiring.__setitem__(
+                    "style", (style, number, total)
+                ),
+                should_stop=should_stop,
+            ),
+        )
+        return best if isinstance(best, BestAutoroute) else None
+
+    def on_try_every_style(self) -> None:
+        """The board's wiring planned again in every style, the best offered in place of it.
+
+        Offered on the step card when the wiring has something worth a look, because the
+        sweep is not the default: measured in the window it took 15 s on atmega328-relay
+        to pick the 2.5 s Balanced answer, and 1.3 s against 0.5 s on arduino-io-shield to
+        save one pad to measure. Planned from the board with every net's copper taken up --
+        the sweep only adds -- and committed as one replace, asked first, since it takes up
+        copper. Copper with no net is hand-drawn and stays. When the best of them is the
+        wiring already there, that is said and nothing is asked.
+        """
+        document = self.bus.document
+        if not document.nets or board_joins_holes(document.board):
+            return
+        old = [c for c in document.conductors if c.net_id is not None]
+        bare = dataclasses.replace(
+            document, conductors=tuple(c for c in document.conductors if c.net_id is None)
+        )
+        best = self._sweep_styles(bare, self._autoroute_options("best"))
+        if best is None:
+            return
+        name = _plain(self.act_style[best.style].text())
+        beat = t("“{style}” beat {count} other style(s)").format(
+            style=name, count=best.considered - 1
+        )
+        plan = best.plan
+        if _same_copper(old, plan.conductors):
+            self.statusBar().showMessage(
+                beat + "  ·  " + t("It is the wiring already on the board, so nothing changed."),
+                0,
+            )
+            return
+        kept, gone, laid = _copper_change(old, plan.conductors)
+        body = (
+            f"<p>{beat}.</p><b>"
+            + wiring_summary(wiring_stats(plan.document, self.lookup))
+            + "</b><p>"
+            + t(
+                "Of the copper on these nets: {kept} left exactly as it is, {gone} taken "
+                "up, {laid} laid new. Copper with no net assigned is left alone."
+            ).format(kept=kept, gone=gone, laid=laid)
+            + "</p><p>"
+            + t("One Ctrl+Z puts it all back.")
+            + "</p>"
+        )
+        if not self._confirm(t("Wire the board in “{style}”?").format(style=name), body,
+                             t("Use This Wiring")):
+            return
+        result = self.bus.dispatch(
+            "conductor.replace",
+            ReplaceConductorsPayload(
+                remove_ids=tuple(c.id for c in old),
+                conductors=plan.conductors,
+                label=t("Wiring in “{style}”").format(style=name),
+            ),
+        )
+        if not result.ok:
+            QMessageBox.warning(self, t("Redoing the wiring was refused"), refused(result))
+            return
+        self._remember_wiring_before(document.conductors)
+        self.statusBar().showMessage(
+            beat + "  ·  " + t("{gone} taken up, {laid} laid, {kept} unchanged").format(
+                gone=gone, laid=laid, kept=kept
+            ),
+            0,
+        )
+        self._report_unrouted(plan)
 
     def wiring_styles(self) -> tuple[tuple[str, str], ...]:
         """The styles one net can be wired again in, each with its name as the Wiring
@@ -11577,35 +11694,7 @@ class MainWindow(QMainWindow):
         options = self._autoroute_options()
         sweep = self._routing_style == "best"
         if sweep:
-            # Which style is being wired, said while it is: four styles one after another
-            # read as a hang under one label. Set on the worker thread by a plain assignment
-            # and only read here (``_run_planner``). Cancel stops between styles and keeps
-            # the best of those already wired.
-            wiring: dict[str, tuple[str, int, int]] = {}
-            style_names = dict(self.wiring_styles())
-
-            def label() -> str:
-                now = wiring.get("style")
-                if now is None:
-                    return t("Wiring with every style…")
-                style, number, total = now
-                return t("Wiring in “{style}” ({number} of {total})…").format(
-                    style=style_names.get(style, style), number=number, total=total
-                )
-
-            best = self._run_planner(
-                label,
-                lambda should_stop: plan_best_autoroute(
-                    document,
-                    self.lookup,
-                    options,
-                    only_net_ids=only_net_ids,
-                    on_style=lambda style, number, total: wiring.__setitem__(
-                        "style", (style, number, total)
-                    ),
-                    should_stop=should_stop,
-                ),
-            )
+            best = self._sweep_styles(document, options, only_net_ids)
             plan = best.plan if best is not None else None
         else:
             best = None

@@ -19397,3 +19397,61 @@ def test_a_planner_nobody_cancels_never_says_it_is_stopping(monkeypatch: pytest.
         assert [text for text in said if "Stopping" in text], said
     finally:
         _close(window)
+
+
+def test_the_step_card_offers_every_style_when_the_wiring_has_something_worth_a_look(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Trying every style is not the default -- on most boards it costs seconds and finds
+    what Balanced found -- so the card offers it where it can matter: under the counts of
+    what is worth a look. Taken, the best of them replaces the nets' copper as one undo
+    step, asked first; taken again, it says the wiring is already the best and asks
+    nothing."""
+    from perfboard_studio.commands import DeleteConductorsPayload
+
+    asked: list[str] = []
+
+    def answer(self, title, body, verb):
+        asked.append(title)
+        return True
+
+    window = _window_on(_example_document("arduino-io-shield"))
+    monkeypatch.setattr(type(window), "_confirm", answer)
+    try:
+        ids = tuple(c.id for c in window.bus.document.conductors)
+        assert window.bus.dispatch("conductor.deleteMany", DeleteConductorsPayload(ids=ids)).ok
+        assert window._routing_style == "balanced"
+        window.on_autoroute_all()
+        assert window._last_wiring, "the board this was measured on has wires worth a look"
+        window.scene.clearSelection()
+        window._refresh_properties()
+        card = window.inspector.step_card
+        offers = [
+            card._links.itemAt(i).widget()
+            for i in range(card._links.count())
+            if 'href="try"' in card._links.itemAt(i).widget().text()
+        ]
+        assert len(offers) == 1 and "Try every wiring style" in offers[0].text()
+
+        steps = len(window.bus.history())
+        offers[0].linkActivated.emit("try")
+        assert asked and asked[-1].startswith("Wire the board in “")
+        assert len(window.bus.history()) == steps + 1
+        assert "beat 3 other style(s)" in window.statusBar().currentMessage()
+
+        asked.clear()
+        window.on_try_every_style()
+        assert not asked
+        assert "nothing changed" in window.statusBar().currentMessage()
+
+        # Trying every style already: nothing to offer.
+        window.act_style["best"].trigger()
+        window.scene.clearSelection()
+        window._refresh_properties()
+        card = window.inspector.step_card
+        assert not any(
+            'href="try"' in card._links.itemAt(i).widget().text()
+            for i in range(card._links.count())
+        )
+    finally:
+        _close(window)
