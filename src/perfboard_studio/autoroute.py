@@ -52,6 +52,7 @@ Pure and deterministic: no I/O, no clock, no randomness. Same board, same plan.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from .command import CommandContext, CommandError
@@ -64,6 +65,7 @@ from .commands import (
     create_document_id_generator,
 )
 from .connectivity import FootprintLookup, PhysicalPinRef
+from .drc import run_drc
 from .geometry import format_hole, path_length_mm
 from .model import Board, ConductorId, HoleCoord, NetClass, NetId, PerfDocument
 from .ratsnest import NetRatsnest, RatsnestLink, net_ratsnest, ratsnest
@@ -334,6 +336,16 @@ TRACE_CONDUCTOR_EFFORT = 3.0
 WIRE_CONDUCTOR_EFFORT = 10.0
 WIRE_MM_EFFORT = 0.08
 RISK_HOLE_EFFORT = 3.0
+#:   A DRC WARNING the plan adds is something the builder has to read, judge and usually
+#:   act on -- a pure run past the length solder holds, a phenolic pad that will lift --
+#:   so it is charged half a wire. R5' (``solder-trace-proximity``) is left out of the
+#:   count: every one of those is already a risk hole above, and charging it twice would
+#:   make the proximity weight the one number this comparison turns on twice over. An
+#:   ERROR a plan adds is not effort at all: see :meth:`VariantScore.key`.
+DRC_WARNING_EFFORT = 5.0
+
+#: DRC rules a plan's score does not count again, because the score already counts them.
+_SCORED_ELSEWHERE = frozenset({"solder-trace-proximity"})
 
 _WIRE_KINDS = frozenset({"bare-wire", "insulated-wire", "top-jumper"})
 
@@ -350,6 +362,11 @@ class VariantScore:
     traces: int
     wires: int
     wire_mm: float
+    #: DRC findings the plan ADDS to the board it was planned on, counted per rule -- the
+    #: board's own findings are not the plan's doing -- and without the rules counted above.
+    #: Zero when the plan was scored without a footprint lookup to run DRC with.
+    drc_errors: int = 0
+    drc_warnings: int = 0
 
     @property
     def conductors(self) -> int:
@@ -363,16 +380,18 @@ class VariantScore:
             + self.wires * WIRE_CONDUCTOR_EFFORT
             + self.wire_mm * WIRE_MM_EFFORT
             + self.risk_holes * RISK_HOLE_EFFORT
+            + self.drc_warnings * DRC_WARNING_EFFORT
         )
 
-    def key(self) -> tuple[int, float]:
+    def key(self) -> tuple[int, int, float]:
         """Comparison key. Unrouted connections come FIRST and alone, as a gate rather than
         a term in the sum: a connection the user has to finish by hand is not something to
         be traded against a tidier board elsewhere, and PLAN.md Sec 13 names routing most
         of a board and leaving four impossible connections as the trap every previous
-        perfboard autorouter fell into. Below that gate, effort decides.
+        perfboard autorouter fell into. DRC errors the plan adds come next, as a gate too:
+        a board that cannot work is not a cheaper board. Below both, effort decides.
         """
-        return (self.unrouted, self.effort)
+        return (self.unrouted, self.drc_errors, self.effort)
 
 
 @dataclass(frozen=True, slots=True)
@@ -402,19 +421,49 @@ class BestAutoroute:
         return len(self.variants)
 
 
-def score_plan(plan: AutoroutePlan, doc: PerfDocument) -> VariantScore:
+def score_plan(
+    plan: AutoroutePlan,
+    doc: PerfDocument,
+    lookup: FootprintLookup | None = None,
+    baseline: Mapping[tuple[str, str], int] | None = None,
+) -> VariantScore:
     """Measure a plan in style-independent terms.
 
-    ``doc`` supplies the board, since a length in millimetres depends on its pitch.
+    ``doc`` supplies the board, since a length in millimetres depends on its pitch, and is
+    the board the plan was made from. With ``lookup``, DRC is run on the plan's preview and
+    what it finds beyond ``doc``'s own findings is counted; ``baseline`` is those, from
+    :func:`drc_counts`, when the caller scores several plans of one board.
     """
     wires = [c for c in plan.conductors if c.kind in _WIRE_KINDS]
+    errors = warnings = 0
+    if lookup is not None and plan.conductors:
+        before = drc_counts(doc, lookup) if baseline is None else baseline
+        for (rule, severity), count in drc_counts(plan.document, lookup).items():
+            added = count - before.get((rule, severity), 0)
+            if added <= 0 or rule in _SCORED_ELSEWHERE:
+                continue
+            if severity == "error":
+                errors += added
+            elif severity == "warning":
+                warnings += added
     return VariantScore(
         unrouted=plan.summary.links_unrouted,
         risk_holes=plan.summary.risk_holes,
         traces=len(plan.conductors) - len(wires),
         wires=len(wires),
         wire_mm=sum(path_length_mm(c.path, doc.board) for c in wires),
+        drc_errors=errors,
+        drc_warnings=warnings,
     )
+
+
+def drc_counts(doc: PerfDocument, lookup: FootprintLookup) -> dict[tuple[str, str], int]:
+    """How many DRC findings ``doc`` has, by (rule, severity)."""
+    counts: dict[tuple[str, str], int] = {}
+    for finding in run_drc(doc, lookup):
+        key = (finding.rule, finding.severity)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def plan_best_autoroute(
@@ -441,13 +490,16 @@ def plan_best_autoroute(
     beats it.
     """
     variants: list[AutorouteVariant] = []
+    baseline = drc_counts(doc, lookup)
     for style in styles or ALL_ROUTING_STYLES:
         router = options_for_style(style, options.router)
         plan = plan_autoroute(
             doc, lookup, dataclasses.replace(options, router=router), only_net_ids
         )
         variants.append(
-            AutorouteVariant(style=style, plan=plan, score=score_plan(plan, doc))
+            AutorouteVariant(
+                style=style, plan=plan, score=score_plan(plan, doc, lookup, baseline)
+            )
         )
 
     # min() is stable, so an exact tie keeps the earliest style tried.
@@ -481,9 +533,21 @@ def describe_best(best: BestAutoroute) -> str:
             # code page raises UnicodeEncodeError on a character it cannot map rather than
             # dropping it -- which turns a report into a crash.
             f"{score.risk_holes} risk hole{'' if score.risk_holes == 1 else 's'}"
-            f"  -> effort {score.effort:.0f}"
+            + _drc_added(score)
+            + f"  -> effort {score.effort:.0f}"
         )
     return "\n".join(lines)
+
+
+def _drc_added(score: VariantScore) -> str:
+    """", 2 DRC warnings" for a plan that adds some, and nothing for one that adds none, so
+    a report on a plan DRC is content with reads as it always did."""
+    parts = []
+    if score.drc_errors:
+        parts.append(f"{score.drc_errors} DRC error{'' if score.drc_errors == 1 else 's'}")
+    if score.drc_warnings:
+        parts.append(f"{score.drc_warnings} DRC warning{'' if score.drc_warnings == 1 else 's'}")
+    return "".join(", " + part for part in parts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1056,7 +1120,7 @@ def _another_order_could_help(attempt: _Attempt) -> bool:
     )
 
 
-def _build_key(attempt: _Attempt, doc: PerfDocument) -> tuple[int, float]:
+def _build_key(attempt: _Attempt, doc: PerfDocument) -> tuple[int, int, float]:
     """``VariantScore.key`` for an attempt: unrouted connections first, then what the board
     costs a person to build.
 

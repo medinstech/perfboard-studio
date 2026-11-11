@@ -1372,3 +1372,94 @@ def test_a_first_pass_with_nothing_to_improve_is_not_routed_again() -> None:
     plan = plan_autoroute(doc, LOOKUP_STD, AutorouteOptions(router=options_for_style("solder")))
     assert _jumpers(plan) == 0 and plan.summary.links_unrouted == 0
     assert plan.summary.passes == 1
+
+
+# ---------------------------------------------------------------------------
+# The sweep's winner passes the board's own DRC
+# ---------------------------------------------------------------------------
+
+
+def test_every_style_keeps_drc_pure_trace_limit() -> None:
+    """The solder and lead-bend styles used to raise the pure-trace limit to 20 pads, so
+    the plan the sweep picked on four of the seven examples came back with runs DRC called
+    too long and, on phenolic, a risk to the pads. The router and DRC read one number."""
+    from perfboard_studio.drc import DEFAULT_DRC_OPTIONS
+
+    for style in ALL_ROUTING_STYLES:
+        limit = options_for_style(style).max_pure_solder_trace_pads
+        assert limit <= DEFAULT_DRC_OPTIONS.solder_trace_feasibility_max_pads, style
+        assert limit <= DEFAULT_DRC_OPTIONS.pad_lifting_max_solder_trace_pads, style
+
+
+@pytest.mark.parametrize("name", ["ne555-astable", "lpb1-booster"])
+def test_auto_wire_adds_no_trace_drc_calls_too_long(name: str) -> None:
+    """Pressing Auto-wire on the NE555 example gave a board with 17 DRC warnings, and on
+    the phenolic booster 33: the winner was never shown to DRC."""
+    path = Path(__file__).resolve().parents[1] / "examples" / f"{name}.perf"
+    doc = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    bare = dataclasses.replace(doc, conductors=())
+
+    best = plan_best_autoroute(bare, LOOKUP_STD)
+
+    rules = {f.rule for f in run_drc(best.plan.document, LOOKUP_STD)}
+    assert best.plan.summary.links_unrouted == 0
+    assert "solder-trace-too-long" not in rules
+    assert "pad-lifting-risk" not in rules
+
+
+def test_a_plan_that_adds_a_drc_error_loses_to_one_that_does_not() -> None:
+    """An error is a gate, like an unrouted connection: a board that cannot work is not a
+    cheaper board, however few wires it has."""
+    broken = VariantScore(
+        unrouted=0, risk_holes=0, traces=1, wires=0, wire_mm=0.0, drc_errors=1
+    )
+    laborious = VariantScore(
+        unrouted=0, risk_holes=50, traces=50, wires=50, wire_mm=5_000.0
+    )
+    unrouted = VariantScore(unrouted=1, risk_holes=0, traces=0, wires=0, wire_mm=0.0)
+
+    assert laborious.key() < broken.key() < unrouted.key()
+
+
+def test_a_drc_warning_a_plan_adds_is_effort() -> None:
+    clean = VariantScore(unrouted=0, risk_holes=0, traces=3, wires=0, wire_mm=0.0)
+    warned = dataclasses.replace(clean, drc_warnings=2)
+
+    assert warned.effort == clean.effort + 2 * autoroute.DRC_WARNING_EFFORT
+    assert clean.key() < warned.key()
+
+
+def test_score_plan_counts_only_what_the_plan_adds() -> None:
+    """The board's own findings (an overlap the user placed) are not the plan's doing, and
+    every style would be charged them alike -- but the report would then blame auto-wire."""
+    doc = dataclasses.replace(_load_golden_document("ne555"), conductors=())
+    plan = plan_autoroute(doc, LOOKUP_STD)
+
+    without = score_plan(plan, doc)
+    measured = score_plan(plan, doc, LOOKUP_STD)
+    baseline = autoroute.drc_counts(doc, LOOKUP_STD)
+    whole = autoroute.drc_counts(plan.document, LOOKUP_STD)
+
+    assert (without.drc_errors, without.drc_warnings) == (0, 0)
+    added = sum(
+        max(0, n - baseline.get(key, 0))
+        for key, n in whole.items()
+        if key[0] != "solder-trace-proximity" and key[1] in ("error", "warning")
+    )
+    assert measured.drc_errors + measured.drc_warnings == added
+    assert score_plan(plan, doc, LOOKUP_STD, baseline) == measured
+
+
+def test_proximity_is_not_charged_twice() -> None:
+    """Every R5' finding is already a risk hole in the score."""
+    assert "solder-trace-proximity" in autoroute._SCORED_ELSEWHERE
+
+
+def test_the_report_names_the_drc_findings_a_plan_adds() -> None:
+    clean = VariantScore(unrouted=0, risk_holes=0, traces=1, wires=0, wire_mm=0.0)
+    assert autoroute._drc_added(clean) == ""
+    assert autoroute._drc_added(dataclasses.replace(clean, drc_warnings=1)) == ", 1 DRC warning"
+    assert (
+        autoroute._drc_added(dataclasses.replace(clean, drc_errors=2, drc_warnings=3))
+        == ", 2 DRC errors, 3 DRC warnings"
+    )

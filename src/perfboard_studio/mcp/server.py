@@ -744,8 +744,10 @@ def autoroute(
     connections for optimize_placement or for them to finish.
 
     Under "best" the result carries `comparison`: every style's traces, wires, wire length,
-    risk holes and effort score, cheapest first. Report that trade rather than only the
-    winner -- fewer wires against more bridging risk is the user's call to overrule.
+    risk holes, the DRC errors and warnings it would add, and effort score, cheapest first.
+    A plan that adds a DRC error never wins over one that adds none. Report that trade
+    rather than only the winner -- fewer wires against more bridging risk is the user's call
+    to overrule.
 
     Reports every connection it could NOT make, with the router's reason. Do not treat a
     partial result as a finished board: unroutable connections usually mean the parts

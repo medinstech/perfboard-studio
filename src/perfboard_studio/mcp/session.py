@@ -1715,6 +1715,8 @@ class BoardSession:
                     "wires": variant.score.wires,
                     "wire_mm": round(variant.score.wire_mm, 1),
                     "risk_holes": variant.score.risk_holes,
+                    "drc_errors_added": variant.score.drc_errors,
+                    "drc_warnings_added": variant.score.drc_warnings,
                     "effort": round(variant.score.effort, 1),
                 }
                 for variant in sorted(best.variants, key=lambda v: v.score.key())

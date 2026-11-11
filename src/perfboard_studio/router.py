@@ -415,21 +415,23 @@ def options_for_style(
     """
     costs = costs_for_style(style)
     if style == "solder":
-        # Solder-first means a long run stays a trace instead of turning into a wire at
-        # six pads. It gets a spine, which is what a long rail wants anyway (Sec 6.2).
+        # Solder-first means a long run stays a trace instead of turning into a wire. Past
+        # ``max_pure_solder_trace_pads`` it gets a spine, which is what a long rail wants
+        # anyway (Sec 6.2) and what DRC asks for at the same length. These two styles used
+        # to raise the limit to 20, so the sweep's favourite plan on four of the seven
+        # example boards came back with pure runs DRC then called too long (and, on
+        # phenolic, a risk to the pads): 17 warnings on the NE555 from pressing Auto-wire.
+        # The limit is DRC's, in every style (``test_every_style_keeps_drc_pure_trace_limit``).
         #
         # `prefer` is what makes the menu item mean what it says. Without it this was
         # "solder trace where it happens to be cheapest", and the costs below only tilted
         # the odds -- so a single pad next to another net could still turn the run somebody
         # asked to be solder into a wire. With it, a trace loses only to being impossible.
-        return dataclasses.replace(
-            base, costs=costs, max_pure_solder_trace_pads=20, prefer="solder"
-        )
+        return dataclasses.replace(base, costs=costs, prefer="solder")
     if style == "lead-bend":
         return dataclasses.replace(
             base,
             costs=costs,
-            max_pure_solder_trace_pads=20,
             allow_lead_bend=True,
             prefer="lead-bend",
         )

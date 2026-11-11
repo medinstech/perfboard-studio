@@ -47,6 +47,13 @@ closed without a bump.
   a broad matte grey, the same shape as before with a slightly fuller joint; a run's width and
   height follow its buildup, and a wired run shows its spine in the waists and past each end,
   as it does in 2D.
+- **Auto-wire no longer hands back a board its own checks complain about.** The solder and
+  lead-bend styles laid plain solder runs up to 20 pads long where the checks call anything
+  past 6 too long (and, on phenolic board, a risk of lifting pads), and the style it picked
+  on four of the seven examples was one of those two. Every style now keeps the checks'
+  limit and solders a bare-wire spine into a longer run, and the comparison between styles
+  counts the warnings and errors each plan would add: a plan that adds an error never
+  wins, and each warning weighs half a wire.
 
 ## [0.24.0] - 2026-11-10
 
