@@ -43,6 +43,7 @@ from perfboard_studio.autoroute import (
     describe,
     describe_best,
     describe_reroute,
+    holes_to_avoid,
     plan_autoroute,
     plan_best_autoroute,
     plan_reroute,
@@ -56,7 +57,7 @@ from perfboard_studio.commands import create_document_id_generator, create_stand
 from perfboard_studio.connectivity import FootprintLookup, PhysicalPinRef, are_pins_connected
 from perfboard_studio.drc import run_drc
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.geometry import path_length_mm
+from perfboard_studio.geometry import holes_under_line, path_length_mm
 from perfboard_studio.lvs import run_lvs, stale_conductor_ids
 from perfboard_studio.model import (
     Board,
@@ -85,6 +86,7 @@ from perfboard_studio.router import (
     WirePath,
     options_for_style,
     relay_grid_wire,
+    route_connection,
 )
 from perfboard_studio.wiringstats import wiring_stats
 
@@ -923,6 +925,93 @@ def test_reroute_on_an_unrouted_board_removes_nothing() -> None:
     assert plan.remove_ids == ()
     assert plan.conductors
     assert "removed" in describe_reroute(plan)
+
+
+def _holes_touched(conductors: tuple[object, ...]) -> set[tuple[int, int]]:
+    """Every hole the conductors run through, lie across or end in."""
+    return {
+        (h.col, h.row)
+        for conductor in conductors
+        for start, stop in itertools.pairwise(conductor.path)  # type: ignore[attr-defined]
+        for h in holes_under_line(start, stop)
+    }
+
+
+def test_a_route_keeps_clear_of_the_holes_it_is_asked_to_but_not_of_its_own_ends() -> None:
+    """The straight run along row 2 is the cheapest there is; with its holes to be kept
+    clear the router goes round them -- and the two ends, in the list too, are still where
+    it arrives, because they are where the connection is."""
+    components = (component("R1", "fp1", hole(2, 2)), component("R2", "fp1", hole(9, 2)))
+    nets = (net("n1", "SIG", "signal", (("R1", "1"), ("R2", "1"))),)
+    doc = make_doc(components=components, nets=nets)
+    request = RouteRequest(from_=hole(2, 2), to=hole(9, 2), net_id="n1")
+    plain = route_connection(doc, LOOKUP, request)
+    assert plain.best is not None
+    row = tuple(hole(col, 2) for col in range(2, 10))
+    assert _holes_touched(plain.best.conductors) == {(h.col, h.row) for h in row}
+
+    kept = route_connection(
+        doc, LOOKUP, request, dataclasses.replace(DEFAULT_ROUTER_OPTIONS, avoid_holes=row)
+    )
+
+    assert kept.ok and kept.alternatives
+    inner = {(h.col, h.row) for h in row[1:-1]}
+    for candidate in kept.alternatives:
+        assert _holes_touched(candidate.conductors) & inner == set()
+    assert kept.best is not None
+    assert kept.best.conductors[0].path[0] == hole(2, 2)
+    assert kept.best.conductors[-1].path[-1] == hole(9, 2)
+
+
+def test_holes_to_avoid_leaves_out_the_ends_and_the_nets_own_pins() -> None:
+    components = (
+        component("R1", "fp1", hole(2, 2)),
+        component("R2", "fp1", hole(5, 2)),
+        component("R3", "fp1", hole(9, 2)),
+    )
+    nets = (net("n1", "SIG", "signal", (("R1", "1"), ("R2", "1"), ("R3", "1"))),)
+    doc = dataclasses.replace(
+        make_doc(components=components, nets=nets),
+        conductors=(WireConductor(id="w", path=(hole(2, 2), hole(9, 2)), net_id="n1"),),
+    )
+
+    avoid = holes_to_avoid(doc, LOOKUP, "w")
+
+    assert {(h.col, h.row) for h in avoid} == {(c, 2) for c in (3, 4, 6, 7, 8)}
+    with pytest.raises(KeyError):
+        holes_to_avoid(doc, LOOKUP, "no-such-wire")
+
+
+@pytest.mark.parametrize("wire_path", ["straight", "grid"])
+def test_wiring_a_net_again_without_a_wire_lays_none_of_it_back(wire_path: WirePath) -> None:
+    """"Redo without this wire": plan_reroute keeps every hole the wire ran through or lay
+    across clear, in every pass -- the grid's re-lay of finished wires included, which builds
+    its own context -- and the net is still joined."""
+    doc = _load_golden_document("ne555")
+    options = dataclasses.replace(
+        DEFAULT_AUTOROUTE_OPTIONS,
+        router=dataclasses.replace(DEFAULT_ROUTER_OPTIONS, wire_path=wire_path),
+    )
+    routed = commit(doc, plan_autoroute(doc, LOOKUP_STD, options).payload())
+    sizes = {
+        c.id: len(holes_to_avoid(routed, LOOKUP_STD, c.id))
+        for c in routed.conductors
+        if c.net_id is not None
+    }
+    target = next(c for c in routed.conductors if c.id == max(sizes, key=lambda i: sizes[i]))
+    assert sizes[target.id] >= 2 and target.net_id is not None
+    avoid = holes_to_avoid(routed, LOOKUP_STD, target.id)
+
+    plan = plan_reroute(
+        routed, LOOKUP_STD, only_net_ids=(target.net_id,), options=options, avoid_holes=avoid
+    )
+
+    assert _holes_touched(plan.conductors) & {(h.col, h.row) for h in avoid} == set()
+    assert plan.summary.links_unrouted == 0
+    after = _commit_replace(routed, plan.payload())
+    assert run_lvs(after, LOOKUP_STD).summary.opens == 0
+    same = plan_reroute(routed, LOOKUP_STD, only_net_ids=(target.net_id,), options=options)
+    assert same.conductors != plan.conductors, "without the holes kept clear it is the old copper"
 
 
 def _commit_replace(doc: PerfDocument, payload: object) -> PerfDocument:

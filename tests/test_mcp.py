@@ -35,6 +35,8 @@ from pathlib import Path
 
 import pytest
 
+from perfboard_studio.autoroute import holes_to_avoid
+from perfboard_studio.geometry import holes_under_line, parse_hole
 from perfboard_studio.mcp.session import BoardSession, SessionError, new_board
 from perfboard_studio.model import ComponentInstance, HoleCoord, WireConductor
 
@@ -1177,6 +1179,45 @@ def test_reroute_is_one_undo_step(loaded: BoardSession) -> None:
     assert len(loaded.history()) == depth + 1
     loaded.undo()
     assert loaded.get_status()["conductors"] == before
+
+
+def test_reroute_without_a_conductor_wires_its_net_round_the_holes_it_used(
+    loaded: BoardSession,
+) -> None:
+    """`without`: the net of one conductor is wired again, and nothing new runs through or
+    lies across the holes it did. The holes come back by address, and the rest of the
+    board's copper is not touched."""
+    loaded.autoroute()
+    board = loaded.document.board
+    longest = max(
+        (c for c in loaded.document.conductors if c.net_id is not None),
+        key=lambda c: len(holes_to_avoid(loaded.document, loaded.lookup, c.id)),
+    )
+    others = {c.id for c in loaded.document.conductors if c.net_id != longest.net_id}
+
+    result = loaded.reroute(without=longest.id)
+
+    assert result["ok"] and result["committed"], result
+    kept = {parse_hole(ref, board) for ref in result["kept_clear"]}
+    assert kept
+    new = [c for c in loaded.document.conductors if c.net_id == longest.net_id]
+    touched = {
+        hole
+        for conductor in new
+        for start, stop in itertools.pairwise(conductor.path)
+        for hole in holes_under_line(start, stop)
+    }
+    assert not touched & kept
+    assert others <= {c.id for c in loaded.document.conductors}
+    assert loaded.run_lvs()["opens"] == 0
+
+
+def test_reroute_without_names_what_it_cannot_use(loaded: BoardSession) -> None:
+    with pytest.raises(SessionError, match="No conductor 'nope'"):
+        loaded.reroute(without="nope")
+    added = loaded.add_wire("A1", "A5")
+    with pytest.raises(SessionError, match="claims no net"):
+        loaded.reroute(without=added["id"])
 
 
 def test_reroute_without_a_netlist_is_refused(session: BoardSession) -> None:

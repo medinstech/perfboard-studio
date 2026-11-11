@@ -33,6 +33,7 @@ from perfboard_studio import persist
 from perfboard_studio.autoroute import (
     AutorouteOptions,
     describe_reroute,
+    holes_to_avoid,
     plan_autoroute,
     plan_best_autoroute,
     plan_reroute,
@@ -1835,6 +1836,7 @@ class BoardSession:
         style: str = "balanced",
         wires: str = "grid",
         crossings: str = "hop",
+        without: str | None = None,
     ) -> dict[str, Any]:
         """Rip up the existing routing and plan it again, as one undoable command.
 
@@ -1844,10 +1846,38 @@ class BoardSession:
         conductors routed fresh, 19 after moving one resistor and autorouting again, and
         after this the 15 that routing the moved board from bare lays. Removes only
         conductors that claim one of these nets; copper with no net is left alone.
+
+        ``without`` names one conductor whose net is wired again keeping clear of every
+        hole it ran through or lay across, its ends and its net's pins excepted
+        (``autoroute.holes_to_avoid``): planning again with the same settings lays the
+        same copper back, and this is how to ask for different copper. Its net is added to
+        ``nets``; the holes kept clear come back as ``kept_clear``.
         """
         if not self.document.nets:
             return _refused("no-netlist", "Nothing to route: no netlist has been imported.")
         only = tuple(self._net_id_strict(name) for name in nets) if nets else None
+        avoid: tuple[HoleCoord, ...] = ()
+        if without is not None:
+            old = next((c for c in self.document.conductors if c.id == without), None)
+            if old is None:
+                raise SessionError(
+                    f"No conductor {without!r} on this board; get_board_info lists them."
+                )
+            if old.net_id is None:
+                raise SessionError(
+                    f"{without} claims no net, so there is no net to wire again without it. "
+                    "delete_conductors takes it off."
+                )
+            if board_joins_holes(self.document.board):
+                raise SessionError(
+                    "without is for wiring laid on a perfboard; this board joins its holes "
+                    "in strips, and its planner keeps no hole clear."
+                )
+            if only is not None and old.net_id not in only:
+                only = (*only, old.net_id)
+            elif only is None:
+                only = (old.net_id,)
+            avoid = holes_to_avoid(self.document, self.lookup, without)
         if board_joins_holes(self.document.board):
             # Its own planner, as autoroute's: the perfboard router laid solder traces on a
             # breadboard and traces along a stripboard's joined strips. The options are
@@ -1883,9 +1913,15 @@ class BoardSession:
             self.lookup,
             only_net_ids=only,
             options=_route_options(style, wires, crossings),
+            avoid_holes=avoid,
         )
+        kept_clear = [format_hole(hole, self.document.board) for hole in avoid]
         if plan.is_empty:
-            return _ok(committed=False, summary=describe_reroute(plan))
+            return _ok(
+                committed=False,
+                summary=describe_reroute(plan),
+                **({"kept_clear": kept_clear} if without is not None else {}),
+            )
 
         result = self._dispatch("conductor.replace", plan.payload())
         if not result["ok"]:
@@ -1907,6 +1943,8 @@ class BoardSession:
                 for item in outcome.unrouted
             ],
         )
+        if without is not None:
+            result["kept_clear"] = kept_clear
         return result
 
     def optimize_placement(self, seed: int = 0, apply: bool = True) -> dict[str, Any]:

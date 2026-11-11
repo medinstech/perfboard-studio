@@ -281,6 +281,14 @@ which is the only safe verb after `move_component` or `optimize_placement`. On a
 or a breadboard it plans with that board's own planner, as `autoroute` does: the links or
 jumpers are taken up and laid again, and the cuts stay where they are.
 
+Planning is deterministic, so `reroute` with the same settings lays the same copper back.
+`reroute(without=<conductor id>)` is how to ask for different copper: that conductor's net
+is wired again, and nothing new runs through, lies across or ends in a hole the old one
+used -- its two ends and its net's pins excepted, since those are where the net has to
+arrive (`autoroute.holes_to_avoid`). The answer lists those holes as `kept_clear`; a
+connection that cannot be made without them is in `unrouted_detail` like any other. It is
+for a perfboard: a stripboard or breadboard planner keeps no hole clear, and says so.
+
 The editing group lays copper and takes it back by ID. `add_wire` bends at each hole
 in `via` on its way, in order -- a wire is joined at its two ends and only lies over
 the holes between, so `via` is where it turns, the corners `autoroute(wires="grid")`

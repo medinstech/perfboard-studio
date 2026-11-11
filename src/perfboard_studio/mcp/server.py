@@ -765,6 +765,7 @@ def reroute(
     style: str = "balanced",
     wires: str = "grid",
     crossings: str = "hop",
+    without: str | None = None,
 ) -> dict[str, Any]:
     """Rip up the existing routing and plan it again from nothing.
 
@@ -773,8 +774,14 @@ def reroute(
     puts more copper beside it — the board grows every time. This throws that away and
     re-plans. Conductors with no net assigned are left alone. `style`, `wires` and
     `crossings` mean what they mean for autoroute.
+
+    `without` is a conductor id (from get_board_info or run_drc) whose net to wire again
+    a different way: nothing new runs through or lies across the holes it did, except its
+    ends and its net's pins. Re-routing with the same settings lays the same copper back;
+    this is how to ask for other copper. The holes kept clear come back as `kept_clear`,
+    and a connection that cannot be made without them is in `unrouted_detail`.
     """
-    return session.reroute(nets, style, wires, crossings)
+    return session.reroute(nets, style, wires, crossings, without)
 
 
 @mcp.tool()

@@ -324,6 +324,12 @@ class RouterOptions:
     #: See :data:`WirePath`. Top jumpers stay straight either way: a component-side link is
     #: a straight piece of wire between two holes by definition, and a hop is already square.
     wire_path: WirePath = "straight"
+    #: Holes no new conductor may run through, lie across or end in, except where a
+    #: connection itself starts or ends: what "wire it again without this wire" keeps clear
+    #: (``autoroute.holes_to_avoid``). Walked round exactly like a hole with no pad, and then
+    #: checked on every candidate's whole path, so no strategy can take one. Empty by
+    #: default, which is every route the goldens record.
+    avoid_holes: tuple[HoleCoord, ...] = ()
 
 
 DEFAULT_ROUTER_OPTIONS = RouterOptions()
@@ -560,7 +566,8 @@ def route_connection(
     if same_hole(from_, to):
         return RouteResult(ok=False, alternatives=(), reason="Start and end are the same hole.")
 
-    ctx = _route_context(doc, lookup, request, options, dead)
+    avoided = _avoided_keys(options, from_, to)
+    ctx = _route_context(doc, lookup, request, options, dead | avoided)
 
     candidates: list[RouteCandidate] = []
     buildup: SolderBuildup = request.buildup if request.buildup is not None else "normal"
@@ -596,6 +603,8 @@ def route_connection(
     # been (every rank is 0); with one, the family the builder committed to wins outright
     # and cost only decides within it. See StrategyPreference for why a cost table alone
     # cannot express "I am assembling this board with solder traces".
+    if avoided:
+        candidates = [c for c in candidates if not _touches(c, avoided)]
     candidates.sort(key=lambda c: (_preference_rank(c.strategy, options.prefer), c.cost, c.strategy))
     if not candidates:
         refused = (
@@ -630,13 +639,41 @@ def relay_grid_wire(
     as ``route_connection``. None unless the new path is strictly cheaper than ``path``
     priced on the same board, so a tie never moves a wire and a pass always ends.
     """
-    ctx = _route_context(doc, lookup, request, options, _dead_hole_keys(doc))
+    avoided = _avoided_keys(options, request.from_, request.to)
+    ctx = _route_context(doc, lookup, request, options, _dead_hole_keys(doc) | avoided)
     bare = kind == "bare-wire"
     per_mm = ctx.opts.costs.bare_wire_per_mm if bare else ctx.opts.costs.insulated_wire_per_mm
     found = _find_grid_wire_path(ctx, request.from_, request.to, bare=bare, per_mm=per_mm)
     if found is None or found[1] >= _grid_path_cost(ctx, path, bare=bare, per_mm=per_mm):
         return None
-    return _grid_wire_candidate(ctx, request.from_, request.to, kind)
+    candidate = _grid_wire_candidate(ctx, request.from_, request.to, kind)
+    if candidate is not None and avoided and _touches(candidate, avoided):
+        return None
+    return candidate
+
+
+def _avoided_keys(
+    options: RouterOptions, from_: HoleCoord, to: HoleCoord
+) -> frozenset[tuple[int, int]]:
+    """``RouterOptions.avoid_holes`` in this module's key, less the connection's own ends.
+
+    The ends are excepted because they are where the connection has to arrive: a pin the
+    wire being replaced was soldered to is still a pin of the net, and keeping clear of it
+    would leave nothing to wire to.
+    """
+    if not options.avoid_holes:
+        return frozenset()
+    return frozenset(_key(hole) for hole in options.avoid_holes) - {_key(from_), _key(to)}
+
+
+def _touches(candidate: RouteCandidate, keys: frozenset[tuple[int, int]]) -> bool:
+    """Whether any conductor of ``candidate`` runs through, lies across or ends in ``keys``."""
+    return any(
+        key in keys
+        for conductor in candidate.conductors
+        for start, stop in zip(conductor.path, conductor.path[1:], strict=False)
+        for key in _keys_under_line(start, stop)
+    )
 
 
 def _route_context(

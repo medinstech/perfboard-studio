@@ -46,6 +46,10 @@ closed without a bump.
   Redo Wiring, dashed, over today's. Ctrl+Z used to be the only way to compare, and it took
   the new wiring away to do it. Every item in the Wiring menu now has a tooltip saying what it
   does.
+- **An agent can wire a net again without one of its wires.** Wiring a net again with the
+  same settings lays the same copper back. MCP's `reroute(without=<conductor id>)` wires
+  that conductor's net again keeping clear of every hole it ran through or lay across, its
+  ends and its net's pins excepted, and returns those holes as `kept_clear`.
 
 ### Changed
 

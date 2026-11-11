@@ -67,7 +67,7 @@ from .commands import (
 )
 from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import run_drc
-from .geometry import format_hole, path_length_mm
+from .geometry import format_hole, hole_key, holes_under_line, path_length_mm
 from .model import Board, ConductorId, HoleCoord, NetClass, NetId, PerfDocument
 from .ratsnest import NetRatsnest, RatsnestLink, net_ratsnest, ratsnest
 from .router import (
@@ -666,8 +666,22 @@ def plan_reroute(
     lookup: FootprintLookup,
     only_net_ids: tuple[NetId, ...] | None = None,
     options: AutorouteOptions = DEFAULT_AUTOROUTE_OPTIONS,
+    avoid_holes: tuple[HoleCoord, ...] = (),
 ) -> ReroutePlan:
-    """Rip up the routing of every net (or just ``only_net_ids``) and plan it again."""
+    """Rip up the routing of every net (or just ``only_net_ids``) and plan it again.
+
+    ``avoid_holes`` are kept clear by everything the new plan lays, where a connection does
+    not start or end (``RouterOptions.avoid_holes``): with :func:`holes_to_avoid` it is
+    "wire this again without that wire", where planning again with the same settings
+    would lay the same copper back.
+    """
+    if avoid_holes:
+        options = dataclasses.replace(
+            options,
+            router=dataclasses.replace(
+                options.router, avoid_holes=options.router.avoid_holes + avoid_holes
+            ),
+        )
     targets = {net.id for net in doc.nets}
     if only_net_ids is not None:
         targets &= set(only_net_ids)
@@ -694,6 +708,34 @@ def plan_reroute(
         summary=plan.summary,
         label=label,
     )
+
+
+def holes_to_avoid(
+    doc: PerfDocument, lookup: FootprintLookup, conductor_id: ConductorId
+) -> tuple[HoleCoord, ...]:
+    """The holes a conductor runs through or lies across, for wiring its net again without it.
+
+    Its two ends are left out, and so is every pin of its own net: those are where the
+    net has to arrive, and a plan kept off them could wire nothing. Everything else under
+    its path -- a trace's pads, the holes a wire lies over, a corner -- is what a new plan
+    passed to :func:`plan_reroute` keeps clear of, so it cannot lay the same copper back.
+    Raises ``KeyError`` for an id the document does not have.
+    """
+    conductor = next((c for c in doc.conductors if c.id == conductor_id), None)
+    if conductor is None:
+        raise KeyError(conductor_id)
+    keep: set[str] = {hole_key(conductor.path[0]), hole_key(conductor.path[-1])}
+    if conductor.net_id is not None:
+        entry = net_ratsnest(doc, lookup, conductor.net_id)
+        if entry is not None:
+            keep.update(hole_key(hole) for hole in entry.pin_holes)
+    seen: dict[str, HoleCoord] = {}
+    for start, stop in zip(conductor.path, conductor.path[1:], strict=False):
+        for hole in holes_under_line(start, stop):
+            key = hole_key(hole)
+            if key not in keep:
+                seen.setdefault(key, hole)
+    return tuple(seen.values())
 
 
 def _count(count: int, one: str, many: str) -> str:
