@@ -5042,6 +5042,9 @@ TURKISH: Mapping[str, str] = {
         "{count} tanesi parça yüzünde: Ctrl+F kartı çevirir"
     ),
     '{count} could not be wired': '{count} tanesi kablolanamadı',
+    "{closed} of {considered} nets wired": "{considered} netin {closed} tanesi kablolandı",
+    "{count} connection could not be wired": "{count} bağlantı kablolanamadı",
+    "{count} connections could not be wired": "{count} bağlantı kablolanamadı",
     "{count} needed an insulated wire or jumper": "{count} tanesi izoleli tel ya da jumper istedi",
     '{count} pad to measure for isolation': 'yalıtımı ölçülecek {count} ped',
     '{count} pads to measure for isolation': 'yalıtımı ölçülecek {count} ped',

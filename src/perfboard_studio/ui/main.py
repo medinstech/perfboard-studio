@@ -11556,7 +11556,8 @@ class MainWindow(QMainWindow):
         # miss (PLAN.md Sec 13), so they go in the status line and, if there are any, into a
         # dialog that names each one.
         self.statusBar().showMessage(
-            f"{say(describe_plan(plan))}{cleared_note}{style_note}{self._far_side_note(before)}",
+            f"{self._wired_said(plan, before)}{cleared_note}{style_note}"
+            f"{self._far_side_note(before)}",
             0,
         )
         self._report_unrouted(plan)
@@ -11578,6 +11579,39 @@ class MainWindow(QMainWindow):
                   "Wiring ▸ Compare With Before again hides it."),
                 0,
             )
+
+    def _wired_said(self, plan: AutoroutePlan, before: set[str]) -> str:
+        """What one Auto-wire laid, in the step card's words and counts.
+
+        The line was the planner's own report: "55 connections wired across 24/24 nets, 24
+        needed an insulated wire or jumper, 2 wiring orders tried", beside a card saying
+        "53 wires · 5 solder traces" of the same board -- two counts of one thing in two
+        vocabularies, and one that was the planner's working. This counts the copper just
+        laid as the card counts the board (``wiring_summary``), and keeps what the builder
+        must act on: connections left unwired, and pads to measure.
+        """
+        summary = plan.summary
+        said = t("{closed} of {considered} nets wired").format(
+            closed=summary.nets_closed, considered=summary.nets_considered
+        )
+        stats = self._last_wiring_stats
+        laid = {c.id for c in self.bus.document.conductors if c.id not in before}
+        wiring = wiring_summary(stats, only=laid) if stats is not None and laid else ""
+        if wiring:
+            said += f": {wiring}"
+        if summary.links_unrouted:
+            said += "  ·  " + counted(
+                summary.links_unrouted,
+                t("{count} connection could not be wired"),
+                t("{count} connections could not be wired"),
+            )
+        if summary.risk_holes:
+            said += "  ·  " + counted(
+                summary.risk_holes,
+                t("{count} pad to measure for isolation"),
+                t("{count} pads to measure for isolation"),
+            )
+        return said
 
     def _far_side_note(self, before: set[str]) -> str:
         """Where the copper Auto-wire just laid went, when it is on the face not in view.

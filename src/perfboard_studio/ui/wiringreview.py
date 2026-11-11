@@ -15,6 +15,7 @@ that total is summed from, so the two cannot disagree.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from perfboard_studio.model import HoleCoord
@@ -105,19 +106,27 @@ def wiring_notes(stats: WiringStats) -> tuple[WiringNote, ...]:
     return tuple(notes)
 
 
-def wiring_summary(stats: WiringStats) -> str:
+def wiring_summary(stats: WiringStats, only: Collection[str] | None = None) -> str:
     """The wiring in one line, "53 wires, 1.2 m, 77 bends · 12 solder traces"; "" with no
-    copper on the board."""
-    wires = sum(1 for entry in stats.conductors if entry.is_wire)
-    runs = sum(1 for entry in stats.conductors if entry.pads)
+    copper on the board.
+
+    ``only`` narrows it to those conductors: what one Auto-wire just laid, said in the
+    step card's words, so the status line and the card count the same things."""
+    entries = [
+        entry for entry in stats.conductors if only is None or entry.conductor_id in only
+    ]
+    wires = [entry for entry in entries if entry.is_wire]
+    runs = sum(1 for entry in entries if entry.pads)
     said: list[str] = []
     if wires:
         said.append(
             ", ".join(
                 (
-                    counted(wires, t("{count} wire"), t("{count} wires")),
-                    length_said(stats.wire_mm),
-                    counted(stats.bends, t("{count} bend"), t("{count} bends")),
+                    counted(len(wires), t("{count} wire"), t("{count} wires")),
+                    length_said(sum(entry.length_mm for entry in wires)),
+                    counted(
+                        sum(entry.bends for entry in wires), t("{count} bend"), t("{count} bends")
+                    ),
                 )
             )
         )

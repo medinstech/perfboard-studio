@@ -53,6 +53,11 @@ closed without a bump.
 
 ### Changed
 
+- **Auto-wire's status line counts what the step card counts.** It said "55 connections
+  wired across 24/24 nets, 24 needed an insulated wire or jumper, 2 wiring orders tried"
+  beside a card saying "53 wires · 5 solder traces"; it now says the copper just laid in
+  the card's words, and keeps the connections left unwired and the pads to measure.
+
 - **Solder and wire have a surface in the 2D view.** Chosen from candidates rendered on both
   faces: a solder run is a lit ridge with a domed joint on every pad, its width following the
   run's buildup (light, normal, heavy); a wired run shows its tinned spine through the solder

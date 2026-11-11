@@ -19161,3 +19161,40 @@ def test_the_step_card_keeps_the_wiring_and_a_count_selects_its_wires() -> None:
         assert card.wiring.isHidden() and card.wiring_links.isHidden()
     finally:
         _close(window)
+
+
+def test_auto_wires_status_line_counts_what_the_step_card_counts() -> None:
+    """"55 connections wired across 24/24 nets, 24 needed an insulated wire or jumper, 2
+    wiring orders tried" sat under a card saying "53 wires · 5 solder traces" of the same
+    board: two counts of one thing in two vocabularies, one of them the planner's working.
+    The line says what was laid in the card's words, and keeps what is left to act on."""
+    from perfboard_studio.autoroute import AutoroutePlan, AutorouteSummary
+
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        plan = AutoroutePlan(
+            document=window.bus.document,
+            conductors=(),
+            nets=(),
+            summary=AutorouteSummary(
+                nets_considered=24, nets_closed=23, links_routed=55, links_unrouted=1,
+                total_cost=0.0, fallback_links=24, risk_holes=2, passes=2,
+            ),
+            label="",
+        )
+        window.scene.clearSelection()
+        window._refresh_properties()
+        card = window.inspector.step_card.wiring.text()
+        assert card.startswith("53 wires, ")
+        # Everything on the board counts as just laid when nothing was there before.
+        said = window._wired_said(plan, set())
+        assert said == (
+            f"23 of 24 nets wired: {card}  ·  1 connection could not be wired"
+            "  ·  2 pads to measure for isolation"
+        )
+        assert "orders" not in said and "insulated" not in said
+        # Only what this run laid is counted: nothing new, no wiring said.
+        everything = {c.id for c in window.bus.document.conductors}
+        assert window._wired_said(plan, everything).startswith("23 of 24 nets wired  ·  ")
+    finally:
+        _close(window)
