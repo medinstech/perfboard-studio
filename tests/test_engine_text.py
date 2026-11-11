@@ -53,6 +53,7 @@ from perfboard_studio.commands import (
     RotateComponentPayload,
     RotateComponentsPayload,
     SetBoardPayload,
+    SetConductorPathPayload,
     SetHeightLimitPayload,
     UnplaceComponentPayload,
     UpdateComponentPayload,
@@ -139,6 +140,15 @@ def test_a_conductor_is_named_in_the_guides_own_words(turkish: None) -> None:
     assert "C7" in said and "C11" in said
 
 
+def test_copper_reshaped_or_deleted_is_named_by_its_ends_not_its_id(turkish: None) -> None:
+    """"Undo Reroute conductor cond-8" named an id no person had seen; the menu now says
+    which copper by where it runs, as Add always did, and the more specific template wins
+    over the id one and over a part's "Delete {ref}"."""
+    assert say("Reshape bare-wire C7 to C11") == "C7 → C11 iletkenini (çıplak tel) yeniden biçimlendir"
+    assert say("Delete solder-trace C7 to C11").startswith("C7 → C11 iletkenini (")
+    assert say("Delete bare-wire cond-3") == "Cond-3 iletkenini (çıplak tel) sil"
+
+
 def test_a_summary_is_translated_clause_by_clause(turkish: None) -> None:
     said = say("14 connections wired across 7/7 nets, 2 needed an insulated wire or jumper")
     assert said == "7/7 nette 14 bağlantı kablolandı, 2 tanesi izoleli tel ya da jumper istedi"
@@ -186,7 +196,9 @@ def _session() -> list[str]:
     said.append(describe_route(routed))
     first = routed.conductors[0]
     run("conductor.add", AddConductorPayload(conductor=first))
-    run("conductor.delete", DeleteConductorPayload(id=bus.document.conductors[-1].id))
+    laid = bus.document.conductors[-1]
+    run("conductor.setPath", SetConductorPathPayload(id=laid.id, path=tuple(reversed(laid.path))))
+    run("conductor.delete", DeleteConductorPayload(id=laid.id))
     run("conductor.addMany", routed.payload())
     rerouted = plan_reroute(bus.document, LOOKUP)
     said.append(describe_reroute(rerouted))

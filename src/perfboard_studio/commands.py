@@ -2354,7 +2354,15 @@ class _SetConductorPath:
         return dataclasses.replace(doc, conductors=conductors)
 
     def describe(self, p: SetConductorPathPayload, doc: PerfDocument) -> str:
-        return f"Reroute conductor {p.id}"
+        # By its kind and the new path's ends, as Add names it: "Reroute conductor cond-8"
+        # was an id no person had seen, and an agent that reshapes one has just passed it.
+        c = next((x for x in doc.conductors if x.id == p.id), None)
+        if c is None or len(p.path) < 2:
+            return f"Reroute conductor {p.id}"
+        return (
+            f"Reshape {c.kind} {format_hole(p.path[0], doc.board)} "
+            f"to {format_hole(p.path[-1], doc.board)}"
+        )
 
 
 class _DeleteConductor:
@@ -2370,8 +2378,13 @@ class _DeleteConductor:
 
     def describe(self, p: DeleteConductorPayload, doc: PerfDocument) -> str:
         c = next((x for x in doc.conductors if x.id == p.id), None)
-        kind = c.kind if c is not None else "conductor"
-        return f"Delete {kind} {p.id}"
+        if c is None or len(c.path) < 2:
+            return f"Delete {c.kind if c is not None else 'conductor'} {p.id}"
+        # By its ends, as Add names it, rather than an id no person had seen.
+        return (
+            f"Delete {c.kind} {format_hole(c.path[0], doc.board)} "
+            f"to {format_hole(c.path[-1], doc.board)}"
+        )
 
 
 class _DeleteConductors:

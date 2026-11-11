@@ -69,6 +69,10 @@ closed without a bump.
 
 ### Fixed
 
+- **Undo names copper by where it runs.** "Undo Reroute conductor cond-8" and "Undo Delete
+  bare-wire cond-3" named an id nobody had seen; they now say "Reshape solder-trace I6 to L5"
+  and "Delete bare-wire G6 to F2", the way adding copper always did (in Turkish with the
+  guide's words for each kind).
 - **Picking a net in the Nets panel clears the board's selection.** The selection stayed out
   of sight while Properties showed the net, and Delete removed a run picked a minute before.
 - **Redo Wiring of the Selection takes a selected conductor's net.** It asked for a net or a
