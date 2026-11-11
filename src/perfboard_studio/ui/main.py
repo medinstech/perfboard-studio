@@ -34,6 +34,7 @@ import os
 import re
 import sys
 import time
+from collections import Counter
 from collections.abc import Callable, Sequence
 from functools import partial
 from html import escape
@@ -541,15 +542,30 @@ def _distance_to_segment(point: Point2, start: Point2, end: Point2) -> float:
     return math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
 
 
+def _copper_shape(conductor: Any) -> tuple[str, str, tuple[tuple[int, int], ...]]:
+    """A piece of copper as what it is on the board: its kind on these holes on this face,
+    whichever end it was drawn from."""
+    holes = tuple((hole.col, hole.row) for hole in conductor.path)
+    return (conductor.kind, getattr(conductor, "side", "bottom"), min(holes, holes[::-1]))
+
+
 def _same_copper(removed: Sequence[Any], planned: Sequence[Any]) -> bool:
     """Whether a re-route would lay back exactly the copper it rips up: the same kinds on
     the same holes, on the same faces, whichever end each run was drawn from."""
+    return sorted(map(_copper_shape, removed)) == sorted(map(_copper_shape, planned))
 
-    def shape(conductor: Any) -> tuple[str, str, tuple[tuple[int, int], ...]]:
-        holes = tuple((hole.col, hole.row) for hole in conductor.path)
-        return (conductor.kind, getattr(conductor, "side", "bottom"), min(holes, holes[::-1]))
 
-    return sorted(map(shape, removed)) == sorted(map(shape, planned))
+def _copper_change(removed: Sequence[Any], planned: Sequence[Any]) -> tuple[int, int, int]:
+    """(kept, taken up, laid): of the copper a re-route rips up, how much it lays back
+    exactly where it was, how much goes, and how much new copper takes its place.
+
+    "15 old conductors removed, 15 conductors now" was the whole of what Redo Wiring said
+    about a plan that moved ONE wire's corner, and left every other piece where it was.
+    """
+    left = Counter(map(_copper_shape, removed))
+    new = Counter(map(_copper_shape, planned))
+    kept = sum((left & new).values())
+    return kept, len(removed) - kept, len(planned) - kept
 
 
 def _turned(rotation: Rotation, quarter_turns: int) -> Rotation:
@@ -11197,6 +11213,9 @@ class MainWindow(QMainWindow):
             if style is not None
             else ""
         )
+        kept, gone, laid = _copper_change(
+            [c for c in document.conductors if c.id in removing], plan.conductors
+        )
         if plan.remove_ids and not asked:
             # Through _confirm: it rips up copper, and Yes under Enter made that a reflex.
             body = (
@@ -11204,9 +11223,9 @@ class MainWindow(QMainWindow):
                 + (f"<p>{in_style}</p>" if in_style else "")
                 + f"<b>{say(describe_reroute(plan))}</b><p>"
                 + t(
-                    "Conductors to remove: {removed}; to plan in their place: {planned}. "
-                    "Copper with no net assigned is left alone."
-                ).format(removed=len(plan.remove_ids), planned=len(plan.conductors))
+                    "Of that, {kept} stay exactly where they are; {gone} are taken up and "
+                    "{laid} laid in their place. Copper with no net assigned is left alone."
+                ).format(kept=kept, gone=gone, laid=laid)
                 + "</p><p>"
                 + t("One Ctrl+Z puts it all back.")
                 + "</p>"
@@ -11223,8 +11242,16 @@ class MainWindow(QMainWindow):
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
         self._nets_from_old_layout -= rerouted
-        said_plan = say(describe_reroute(plan))
-        self.statusBar().showMessage(f"{said_plan}  ·  {in_style}" if in_style else said_plan, 0)
+        said = [say(describe_reroute(plan))]
+        if kept:
+            said.append(
+                t("{gone} taken up, {laid} laid, {kept} left as they were").format(
+                    gone=gone, laid=laid, kept=kept
+                )
+            )
+        if in_style:
+            said.append(in_style)
+        self.statusBar().showMessage("  ·  ".join(said), 0)
         self._report_unrouted_items(
             [item for outcome in plan.nets for item in outcome.unrouted]
         )

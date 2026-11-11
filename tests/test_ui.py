@@ -18977,3 +18977,21 @@ def test_one_nets_wiring_is_redone_in_a_style_of_its_own(monkeypatch: pytest.Mon
         ]
     finally:
         _close(window)
+
+
+def test_redo_wiring_says_how_much_of_the_copper_it_actually_changes() -> None:
+    """"15 old conductors removed, 15 conductors now" was all the question said about a
+    plan that moved one wire's corner and laid every other piece back where it was."""
+    from types import SimpleNamespace
+
+    from perfboard_studio.model import HoleCoord
+    from perfboard_studio.ui.main import _copper_change
+
+    def piece(kind: str, *holes: tuple[int, int]) -> SimpleNamespace:
+        return SimpleNamespace(kind=kind, side="bottom", path=tuple(HoleCoord(c, r) for c, r in holes))
+
+    old = [piece("bare-wire", (1, 1), (5, 1)), piece("bare-wire", (5, 1), (5, 4)), piece("solder-trace", (1, 2), (2, 2))]
+    new = [piece("bare-wire", (5, 1), (1, 1)), piece("bare-wire", (5, 1), (6, 1), (6, 4)), piece("solder-trace", (1, 2), (2, 2))]
+    assert _copper_change(old, new) == (2, 1, 1)
+    assert _copper_change(old, old) == (3, 0, 0)
+    assert _copper_change(old, []) == (0, 3, 0)

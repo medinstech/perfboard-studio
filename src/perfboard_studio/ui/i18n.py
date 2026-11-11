@@ -3964,6 +3964,14 @@ TURKISH: Mapping[str, str] = {
     ),
     "No problems": "Sorun yok",
     "Wiring to review": "Gözden geçirilecek kablolama",
+    "Of that, {kept} stay exactly where they are; {gone} are taken up and {laid} laid in "
+    "their place. Copper with no net assigned is left alone.": (
+        "Bunlardan {kept} tanesi olduğu yerde kalır; {gone} tanesi sökülür, yerine {laid} "
+        "tane döşenir. Neti atanmamış bakıra dokunulmaz."
+    ),
+    "{gone} taken up, {laid} laid, {kept} left as they were": (
+        "{gone} söküldü, {laid} döşendi, {kept} olduğu gibi kaldı"
+    ),
     "In “{style}”, for these nets only.": "“{style}” tarzında, yalnızca bu netler için.",
     "The style the whole board is wired in.": "Bütün kartın kablolandığı tarz.",
     "This net only. The Wiring Style menu stays as it is.": (
