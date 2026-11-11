@@ -181,147 +181,28 @@
       "kind": "bare-wire",
       "path": [
         {
-          "col": 6,
-          "row": 4
+          "col": 10,
+          "row": 0
         },
         {
-          "col": 7,
-          "row": 4
+          "col": 10,
+          "row": 1
         },
         {
-          "col": 7,
-          "row": 5
+          "col": 15,
+          "row": 1
+        },
+        {
+          "col": 15,
+          "row": 2
         }
       ],
       "side": "bottom",
-      "netId": "net-1",
+      "netId": "net-6",
       "layerZ": 0
     },
     {
       "id": "cond-10",
-      "kind": "insulated-wire",
-      "path": [
-        {
-          "col": 13,
-          "row": 0
-        },
-        {
-          "col": 16,
-          "row": 0
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-3",
-      "layerZ": 1
-    },
-    {
-      "id": "cond-11",
-      "kind": "solder-trace",
-      "path": [
-        {
-          "col": 16,
-          "row": 0
-        },
-        {
-          "col": 17,
-          "row": 0
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-3",
-      "layerZ": 0,
-      "buildup": "normal"
-    },
-    {
-      "id": "cond-12",
-      "kind": "insulated-wire",
-      "path": [
-        {
-          "col": 12,
-          "row": 0
-        },
-        {
-          "col": 12,
-          "row": 2
-        },
-        {
-          "col": 18,
-          "row": 2
-        },
-        {
-          "col": 18,
-          "row": 0
-        },
-        {
-          "col": 20,
-          "row": 0
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-4",
-      "layerZ": 1
-    },
-    {
-      "id": "cond-13",
-      "kind": "insulated-wire",
-      "path": [
-        {
-          "col": 11,
-          "row": 0
-        },
-        {
-          "col": 11,
-          "row": 2
-        },
-        {
-          "col": 8,
-          "row": 2
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-5",
-      "layerZ": 1
-    },
-    {
-      "id": "cond-14",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 19,
-          "row": 5
-        },
-        {
-          "col": 17,
-          "row": 5
-        },
-        {
-          "col": 17,
-          "row": 3
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-7",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-15",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 23,
-          "row": 3
-        },
-        {
-          "col": 23,
-          "row": 0
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-8",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-16",
       "kind": "insulated-wire",
       "path": [
         {
@@ -338,95 +219,7 @@
       "layerZ": 1
     },
     {
-      "id": "cond-2",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 7,
-          "row": 5
-        },
-        {
-          "col": 10,
-          "row": 5
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-1",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-3",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 20,
-          "row": 5
-        },
-        {
-          "col": 23,
-          "row": 5
-        },
-        {
-          "col": 23,
-          "row": 4
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-1",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-4",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 10,
-          "row": 5
-        },
-        {
-          "col": 10,
-          "row": 3
-        },
-        {
-          "col": 13,
-          "row": 3
-        },
-        {
-          "col": 13,
-          "row": 2
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-1",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-5",
-      "kind": "bare-wire",
-      "path": [
-        {
-          "col": 13,
-          "row": 2
-        },
-        {
-          "col": 13,
-          "row": 1
-        },
-        {
-          "col": 20,
-          "row": 1
-        },
-        {
-          "col": 20,
-          "row": 5
-        }
-      ],
-      "side": "bottom",
-      "netId": "net-1",
-      "layerZ": 0
-    },
-    {
-      "id": "cond-6",
+      "id": "cond-11",
       "kind": "solder-trace",
       "path": [
         {
@@ -448,7 +241,7 @@
       "buildup": "normal"
     },
     {
-      "id": "cond-7",
+      "id": "cond-12",
       "kind": "bare-wire",
       "path": [
         {
@@ -473,7 +266,80 @@
       "layerZ": 0
     },
     {
-      "id": "cond-8",
+      "id": "cond-13",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 13,
+          "row": 0
+        },
+        {
+          "col": 16,
+          "row": 0
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-3",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-14",
+      "kind": "solder-trace",
+      "path": [
+        {
+          "col": 16,
+          "row": 0
+        },
+        {
+          "col": 17,
+          "row": 0
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-3",
+      "layerZ": 0,
+      "buildup": "normal"
+    },
+    {
+      "id": "cond-15",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 19,
+          "row": 5
+        },
+        {
+          "col": 17,
+          "row": 5
+        },
+        {
+          "col": 17,
+          "row": 3
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-7",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-16",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 23,
+          "row": 3
+        },
+        {
+          "col": 23,
+          "row": 0
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-8",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-2",
       "kind": "insulated-wire",
       "path": [
         {
@@ -481,11 +347,19 @@
           "row": 0
         },
         {
-          "col": 15,
+          "col": 9,
           "row": 0
         },
         {
-          "col": 15,
+          "col": 9,
+          "row": 1
+        },
+        {
+          "col": 1,
+          "row": 1
+        },
+        {
+          "col": 1,
           "row": 2
         }
       ],
@@ -494,28 +368,178 @@
       "layerZ": 1
     },
     {
-      "id": "cond-9",
-      "kind": "bare-wire",
+      "id": "cond-3",
+      "kind": "insulated-wire",
       "path": [
         {
-          "col": 10,
+          "col": 12,
           "row": 0
         },
         {
-          "col": 10,
-          "row": 1
+          "col": 12,
+          "row": 4
         },
         {
-          "col": 1,
-          "row": 1
+          "col": 20,
+          "row": 4
         },
         {
-          "col": 1,
+          "col": 20,
+          "row": 0
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-4",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-4",
+      "kind": "insulated-wire",
+      "path": [
+        {
+          "col": 11,
+          "row": 0
+        },
+        {
+          "col": 11,
+          "row": 2
+        },
+        {
+          "col": 8,
           "row": 2
         }
       ],
       "side": "bottom",
-      "netId": "net-6",
+      "netId": "net-5",
+      "layerZ": 1
+    },
+    {
+      "id": "cond-5",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 6,
+          "row": 4
+        },
+        {
+          "col": 7,
+          "row": 4
+        },
+        {
+          "col": 7,
+          "row": 5
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-6",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 7,
+          "row": 5
+        },
+        {
+          "col": 10,
+          "row": 5
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-7",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 20,
+          "row": 5
+        },
+        {
+          "col": 23,
+          "row": 5
+        },
+        {
+          "col": 23,
+          "row": 4
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-8",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 10,
+          "row": 5
+        },
+        {
+          "col": 10,
+          "row": 3
+        },
+        {
+          "col": 13,
+          "row": 3
+        },
+        {
+          "col": 13,
+          "row": 2
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
+      "layerZ": 0
+    },
+    {
+      "id": "cond-9",
+      "kind": "bare-wire",
+      "path": [
+        {
+          "col": 13,
+          "row": 2
+        },
+        {
+          "col": 14,
+          "row": 2
+        },
+        {
+          "col": 14,
+          "row": 3
+        },
+        {
+          "col": 16,
+          "row": 3
+        },
+        {
+          "col": 16,
+          "row": 2
+        },
+        {
+          "col": 21,
+          "row": 2
+        },
+        {
+          "col": 21,
+          "row": 4
+        },
+        {
+          "col": 20,
+          "row": 4
+        },
+        {
+          "col": 20,
+          "row": 5
+        }
+      ],
+      "side": "bottom",
+      "netId": "net-1",
       "layerZ": 0
     }
   ],

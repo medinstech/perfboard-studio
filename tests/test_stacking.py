@@ -91,8 +91,11 @@ CASES = [
 
 @pytest.mark.parametrize(("path", "board_id"), CASES)
 def test_no_two_conductors_are_stacked_into_each_other_as_shipped(path: Path, board_id: str) -> None:
+    """With no loop exempt: the examples were auto-wired again once the router stopped
+    making them (three, on arduino-io-shield and atmega328-relay, drawn through each other)."""
     doc = dict(_boards(path))[board_id]
     assert _faults(doc) == []
+    assert stacking_loops(doc) == ()
 
 
 @pytest.mark.parametrize(("path", "board_id"), CASES)
