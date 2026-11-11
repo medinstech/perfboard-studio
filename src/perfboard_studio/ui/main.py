@@ -2245,6 +2245,45 @@ def _board_label(board: Board) -> str:
     return f"Use a {board.cols}x{board.rows} {board.material} board"
 
 
+def _example_names() -> dict[str, str]:
+    """The names the shipped examples carry -- the document's and its boards' -- in the
+    window's language. Asked when one is opened, so ``t()`` reads the language chosen."""
+    return {
+        "Arduino I/O Shield": t("Arduino I/O Shield"),
+        "ATmega328 Relay Board": t("ATmega328 Relay Board"),
+        "LM317 Adjustable Supply": t("LM317 Adjustable Supply"),
+        "One-Transistor Guitar Booster": t("One-Transistor Guitar Booster"),
+        "Arduino Nano Relay Driver": t("Arduino Nano Relay Driver"),
+        "NE555 Astable": t("NE555 Astable"),
+        "NE555 Blinker": t("NE555 Blinker"),
+        "Relay Driver and Its Supply": t("Relay Driver and Its Supply"),
+        "Relay driver": t("Relay driver"),
+        "Supply": t("Supply"),
+    }
+
+
+def _named_in_the_windows_language(document: PerfDocument) -> PerfDocument:
+    """An example as opened: its own names said in the window's language.
+
+    An example opens as an untitled copy (``on_open_example``), so what it is called is the
+    application's to say, like its card on Home -- and a Turkish window opened the two-board
+    example on boards called "Relay driver" and "Supply". The copy carries the translated
+    names, so the strip, System, the guide and anything saved from it agree. A name the
+    table does not know is kept as it is.
+    """
+    names = _example_names()
+
+    def said(name: str) -> str:
+        return names.get(name, name)
+
+    return dataclasses.replace(
+        document,
+        meta=dataclasses.replace(document.meta, name=said(document.meta.name)),
+        board_name=said(document.board_name),
+        boards=tuple(dataclasses.replace(b, name=said(b.name)) for b in document.boards),
+    )
+
+
 def _board_size_name(board: Board) -> str:
     """The stock board's name when the board is one, else its size in holes."""
     preset = _matching_preset(board)
@@ -3223,7 +3262,21 @@ class MainWindow(QMainWindow):
             untitled=self.current_path is None,
             solderless_breadboard=is_breadboard(board),
             problems_showing=self.problems_bar.expanded if hasattr(self, "problems_bar") else False,
+            empty_board=(
+                board_title(document, empty, current_language())
+                if (empty := self._empty_board()) is not None
+                else ""
+            ),
         )
+
+    def _empty_board(self) -> BoardId | None:
+        """The first board of a system with no part on it, or None: a single board with
+        nothing on it is the Place step's own news, and is not this."""
+        document = self.bus.system_document
+        ids = board_ids(document)
+        if len(ids) < 2:
+            return None
+        return next((b for b in ids if not board_document(document, b).components), None)
 
     def _every_boards_checks(
         self, document: PerfDocument, ids: tuple[BoardId, ...]
@@ -3315,6 +3368,14 @@ class MainWindow(QMainWindow):
                 self.on_schematic_add_part()
         elif step == "board":
             self.on_choose_board()
+        elif step == "place" and not self.bus.system_document.parts and (
+            empty := self._empty_board()
+        ) is not None:
+            # Everything is placed and a board is still bare: it is shown, and its empty
+            # hint says how parts get there.
+            self._on_board_picked(empty)
+            self.show_board()
+            self._select_nothing()
         elif step == "place":
             self.show_board()
             self.on_schematic_place_all()
@@ -8315,10 +8376,16 @@ class MainWindow(QMainWindow):
         # things and one of them is wrong.
         assert index == len(steps), f"{index} steps in phases, {len(steps)} in the flat list"
         items = bench_items(guide, list(steps), self._cable_ends_here())
+        # A guide already on the bench is being REBUILT -- an edit made it stale -- and its
+        # step is not news: shown on the board, it took the selection off the part just
+        # turned over with Shift+M and Properties described the guide's part instead.
+        rebuilt = bool(self.bench.items)
+        quiet = self.bench.blockSignals(rebuilt)
         self.bench.set_items(
             items, bench_phases(guide, items), done,
             len(guide.cut_list), len(guide.track_cuts),
         )
+        self.bench.blockSignals(quiet)
 
     def _cable_ends_here(self) -> dict[str, str]:
         """Each cable's connector on the board in front, by cable id: where the bench
@@ -12589,7 +12656,7 @@ class MainWindow(QMainWindow):
         self.current_path = None
         self._disk_text = None
         self._watch_current_path()
-        self.bus = self._new_bus(result.document)
+        self.bus = self._new_bus(_named_in_the_windows_language(result.document))
         self._subscribe_bus()
         self.scene.bus = self.bus
         self._forget_the_previous_document()
@@ -13039,6 +13106,10 @@ class MainWindow(QMainWindow):
         self._judged = None
         self._placement_ready = None
         self._unsaved_progress = set()
+        # A search typed over the last document -- "9V" -- is not what the next one needs,
+        # and the Library opened on the new one showing two parts out of hundreds.
+        if hasattr(self, "library_filter"):
+            self.library_filter.clear()
 
     # -- nets, entered by hand -----------------------------------------------
     #

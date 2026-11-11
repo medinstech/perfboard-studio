@@ -102,6 +102,10 @@ class WorkflowFacts:
     #: Whether the Problems drawer is open to its list -- then Check's Next goes to the
     #: next problem in it, rather than opening what is already open.
     problems_showing: bool = False
+    #: The name of a board of a system that has nothing on it, or "". Every part of the
+    #: circuit can be placed with a board still empty -- one added and not yet filled -- and
+    #: the bar said "25/25 on the board · ready to build" over a board nobody can build.
+    empty_board: str = ""
 
 
 #: What the Next button does once everything before Build is done.
@@ -166,6 +170,8 @@ def step_action(key: StepKey, facts: WorkflowFacts | None = None) -> str:
         return t("Connect the Pins")
     if key == "check" and facts is not None and facts.problems_showing:
         return t("Next Problem")
+    if key == "place" and facts is not None and facts.empty_board and not facts.parts_off_board:
+        return t("Show the Empty Board")
     return {
         "circuit": t("Add a Part…"),
         "board": t("Choose a Board…"),
@@ -235,6 +241,11 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
             "Pick the perfboard it goes on. Every stock size is tried with your circuit on "
             "it, and the smallest that fits is suggested."
         )
+    if key == "place" and facts.empty_board and not facts.parts_off_board:
+        return t(
+            "{board} has nothing on it. Move parts to it: right-click a part on another "
+            "board, Move to Board. Or remove it in its Properties."
+        ).format(board=facts.empty_board)
     if key == "place":
         return t("Put the parts on the board. They are arranged for you; drag any of them afterwards.")
     if key == "route":
@@ -260,7 +271,9 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
     circuit_bad = parts > 0 and facts.erc_errors > 0
     circuit_done = parts > 0 and facts.nets > 0 and not circuit_bad
     board_done = facts.board_chosen or facts.parts_on_board > 0
-    place_done = facts.parts_on_board > 0 and facts.parts_off_board == 0
+    place_done = (
+        facts.parts_on_board > 0 and facts.parts_off_board == 0 and not facts.empty_board
+    )
     route_done = place_done and facts.unrouted == 0 and facts.nets > 0
     # Between placing the parts and routing them every net is open, and that is the Wiring
     # step's news: counted as a fault it turned Check red the moment a placement landed and
@@ -287,6 +300,8 @@ def workflow_steps(facts: WorkflowFacts) -> tuple[StepState, ...]:
         circuit = f"{part_count} · {_counted(facts.nets, t('{count} net'), t('{count} nets'))}"
     if parts == 0:
         placed = t("nothing to place")
+    elif facts.empty_board and not facts.parts_off_board:
+        placed = t("{board} is empty").format(board=facts.empty_board)
     else:
         placed = t("{placed}/{total} on the board").format(
             placed=facts.parts_on_board, total=parts

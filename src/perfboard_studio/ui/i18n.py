@@ -4317,6 +4317,26 @@ TURKISH: Mapping[str, str] = {
     "Arduino Nano relay switch": "Arduino Nano röle anahtarı",
     "ATmega328 relay controller": "ATmega328 röle kontrolcüsü",
     "Relay driver and its supply, two boards": "Röle sürücüsü ve beslemesi, iki kart",
+    # The shipped examples' own names, said in the window's language when one is opened
+    # (``main._example_names``).
+    "Arduino I/O Shield": "Arduino Giriş/Çıkış Kartı",
+    "ATmega328 Relay Board": "ATmega328 Röle Kartı",
+    "LM317 Adjustable Supply": "LM317 Ayarlı Güç Kaynağı",
+    "One-Transistor Guitar Booster": "Tek Transistörlü Gitar Booster'ı",
+    "Arduino Nano Relay Driver": "Arduino Nano Röle Sürücüsü",
+    "NE555 Astable": "NE555 Astabil",
+    "NE555 Blinker": "NE555 Flaşör",
+    "Relay Driver and Its Supply": "Röle Sürücüsü ve Beslemesi",
+    "Relay driver": "Röle sürücüsü",
+    "Supply": "Besleme",
+    # An empty board of a system (``workflow.WorkflowFacts.empty_board``).
+    "Show the Empty Board": "Boş Kartı Göster",
+    "{board} is empty": "{board} boş",
+    "{board} has nothing on it. Move parts to it: right-click a part on another board, Move "
+    "to Board. Or remove it in its Properties.": (
+        "{board} üzerinde hiçbir şey yok. Ona parça taşıyın: başka bir karttaki parçaya sağ "
+        "tıklayın, Karta Taşı. Ya da Özellikler'den kaldırın."
+    ),
     # -- the welcome dialog --------------------------------------------------------
     "Examples": "Örnekler",
     "Start on the sheet: add parts and join their pins. The board comes after.": (

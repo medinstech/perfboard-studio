@@ -18323,3 +18323,87 @@ def test_a_group_turned_over_says_how_many_need_rewiring() -> None:
         assert "Moved 3 part(s) to the solder side" in message
     finally:
         _close(window)
+
+
+def _relay_and_supply():
+    from perfboard_studio.ui.main import example_boards
+
+    return next(path for path, _line in example_boards() if path.stem == "relay-and-supply")
+
+
+def test_the_library_search_is_cleared_when_another_document_opens() -> None:
+    window = _blank_window()
+    try:
+        window.library_filter.setText("9V")
+        window.on_open_example(_relay_and_supply())
+        assert window.library_filter.text() == ""
+    finally:
+        _close(window)
+
+
+def test_an_empty_board_of_a_system_is_said_and_next_shows_it() -> None:
+    from perfboard_studio.system import board_ids
+
+    window = _blank_window()
+    try:
+        window.on_open_example(_relay_and_supply())
+        assert window.workflow_facts().empty_board == ""
+        window.on_add_board()
+        third = window.bus.board_id
+        facts = window.workflow_facts()
+        assert facts.empty_board == "Board 3"
+        window._on_board_picked(board_ids(window.bus.system_document)[0])
+        assert window.workflow_bar.next_key == "place"
+        window.on_workflow_next("place")
+        assert window.bus.board_id == third
+    finally:
+        _close(window)
+
+
+def test_turning_a_part_over_with_the_guide_in_front_keeps_it_selected() -> None:
+    """The guide rebuilt by the edit put its own step's part on the board, and Properties
+    described D1 while R1 had just been turned over."""
+    window = _window_on(_ne555())
+    try:
+        window._raise_view(window.dock_guide)
+        assert window.bench.items
+        part = next(c for c in window.bus.document.components if c.ref == "R1")
+        window.scene.select_components([part.id])
+        window._refresh_selection_state()
+        window.act_side.trigger()
+        assert [c.ref for c in window._selected_components()] == ["R1"]
+    finally:
+        _close(window)
+
+
+def test_an_example_opens_with_its_names_in_the_windows_language() -> None:
+    """A Turkish window opened the two-board example on boards called "Relay driver" and
+    "Supply"; an English one keeps the names the file has."""
+    from perfboard_studio.system import board_ids, board_title
+    from perfboard_studio.ui.i18n import language, set_language
+
+    window = _blank_window()
+    try:
+        window.on_open_example(_relay_and_supply())
+        document = window.bus.system_document
+        assert document.meta.name == "Relay Driver and Its Supply"
+        assert [board_title(document, b) for b in board_ids(document)] == ["Relay driver", "Supply"]
+    finally:
+        _close(window)
+    before = language()
+    set_language("tr")
+    try:
+        window = _blank_window()
+        try:
+            window.on_open_example(_relay_and_supply())
+            document = window.bus.system_document
+            assert document.meta.name == "Röle Sürücüsü ve Beslemesi"
+            assert [board_title(document, b) for b in board_ids(document)] == [
+                "Röle sürücüsü",
+                "Besleme",
+            ]
+            assert not window.is_modified
+        finally:
+            _close(window)
+    finally:
+        set_language(before)

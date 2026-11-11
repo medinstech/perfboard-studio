@@ -286,3 +286,26 @@ def test_the_bar_counts_one_of_a_thing_as_one() -> None:
     assert summaries["circuit"] == "2 parts · 3 nets"
     assert summaries["route"] == "4 connections to wire"
     assert all("(s)" not in summary for summary in summaries.values())
+
+
+def test_an_empty_board_of_a_system_holds_the_placing_back() -> None:
+    """Every part of a two-board example placed and a third board added and left bare: the
+    bar said "25/25 on the board" and "ready to build" over a board nobody can build. It
+    now says which board is empty, Next shows it, and nothing after Place is done."""
+    built = dataclasses.replace(
+        EMPTY,
+        parts_on_board=25,
+        nets=15,
+        board_chosen=True,
+        guide_opened=True,
+        empty_board="Board 3",
+    )
+    steps = {step.key: step for step in workflow_steps(built)}
+    assert steps["place"].status == "current"
+    assert steps["place"].summary == "Board 3 is empty"
+    assert steps["place"].action == "Show the Empty Board"
+    assert steps["build"].status == "todo" and steps["build"].summary == "guide ready"
+    assert next_step(workflow_steps(built)) == "place"
+    # Filled, the same system is ready to build.
+    filled = dataclasses.replace(built, empty_board="")
+    assert {s.key: s.status for s in workflow_steps(filled)}["build"] == "done"

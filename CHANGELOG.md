@@ -29,6 +29,20 @@ closed without a bump.
   tinned core stripped back at each end, and a top jumper is lifted off the board by a shadow
   where it used to be dashed. Copper on the far face keeps its band, now with the spine.
   The 1:1 print is unchanged: flat copper, a dashed jumper, hatching through the board.
+### Fixed
+
+- **A board of a system with nothing on it is no longer "ready to build".** With every part
+  placed and a board still empty, the step bar said "N/N placed · ready to build" over it. Place
+  now says the board is empty, its hint says how parts reach it (Move to Board from another
+  board's part, or remove it in Properties), and Next shows that board.
+- **The Library's search is cleared when another document opens.** A search typed over the
+  last document ("9V") stayed, and the Library opened on the next one showing two parts.
+- **Shift+M with the build guide in front keeps the part selected.** The guide rebuilt after
+  the edit and showed its current step on the board, which selected that step's part, so
+  Properties described a different part from the one just turned over.
+- **An example opens with its names in the window's language.** A Turkish window opened the
+  two-board example on boards called "Relay driver" and "Supply"; the copy opened now carries
+  the names translated, in the strip, the System view, the guide and anything saved from it.
 
 ## [0.24.0] - 2026-11-10
 
