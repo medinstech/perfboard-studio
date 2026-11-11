@@ -78,8 +78,12 @@ closed without a bump.
   fill and check. A net's preferred face is a price on every step off it, not a rule, so a
   blocked face is still left. A plated hole is one piece of copper, so solder on top closes
   the hole underneath too, and two traces cannot cross on opposite faces any more than on
-  one: with no net preferring a face, the plan stays on the solder side. The auto-wire
-  scoreboard gains `--faces`, `--prefer NET=top|bottom` and a `via` column.
+  one: a trace goes on top only for a net that prefers it. What the second face does give
+  everyone is room for wire: a wire may go over the component side, along the grid, where it
+  lies across no pin and under no part, and so across none of the solder side's joints,
+  ends and wires. On arduino-io-shield one wire goes over and the tallest stack of wires
+  underneath drops from 2 to 1. The auto-wire scoreboard gains `--faces`,
+  `--prefer NET=top|bottom` and a `via` column.
 
 ### Changed
 

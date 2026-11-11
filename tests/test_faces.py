@@ -27,7 +27,7 @@ from perfboard_studio.commands import (
 from perfboard_studio.connectivity import extract_physical_nets
 from perfboard_studio.drc import run_drc
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.geometry import all_pin_holes, is_adjacent4
+from perfboard_studio.geometry import all_pin_holes, holes_under_line, is_adjacent4
 from perfboard_studio.lvs import run_lvs
 from perfboard_studio.model import (
     BoardSide,
@@ -286,9 +286,10 @@ def _solder_plan(doc: PerfDocument, faces: RouterFaces, **prefer: BoardSide) -> 
 
 def test_one_face_is_the_default_and_both_faces_with_no_preference_stays_underneath() -> None:
     """``faces`` is "solder" unless asked, which is every golden route. Asked for both with
-    no net preferring a face, the plan is the solder side's to the conductor: two traces
-    cannot cross on opposite faces of a plated board any more than on one, so the
-    component side only costs more."""
+    no net preferring a face, the NE555's solder-style plan is the solder side's to the
+    conductor: two traces cannot cross on opposite faces of a plated board any more than
+    on one, so a trace only costs more on top -- and on this board no wire is better off
+    over the parts either."""
     assert RouterOptions().faces == "solder"
     doc = _doc()
 
@@ -341,3 +342,31 @@ def test_solder_on_the_component_side_closes_its_holes_underneath() -> None:
 
     assert all(occupancy.is_copper_blocked(hole, "bottom") for hole in run)
     assert not any(build_occupancy(doc, LOOKUP).is_copper_blocked(hole, "bottom") for hole in run)
+
+
+def _balanced_plan(path: pathlib.Path, faces: RouterFaces) -> AutoroutePlan:
+    doc = dataclasses.replace(persist.parse_document_or_throw(path.read_text(encoding="utf-8")), conductors=())
+    return plan_autoroute(doc, LOOKUP, AutorouteOptions(router=RouterOptions(wire_path="grid", faces=faces)))
+
+
+def test_a_wire_over_the_component_side_lies_across_no_pin_and_under_no_part() -> None:
+    """On arduino-io-shield one wire goes over the top, where it lies across nothing of
+    the solder side's: the stack, the pins and the ends lain across all come down."""
+    shield = REPO / "examples" / "arduino-io-shield.perf"
+    one_face, both = _balanced_plan(shield, "solder"), _balanced_plan(shield, "both")
+    occupancy = build_occupancy(both.document, LOOKUP)
+
+    over = [c for c in both.document.conductors if c.side == "top"]
+
+    assert over and all(c.kind == "top-jumper" for c in over), "no wire goes over the top"
+    for wire in over:
+        ends = {wire.path[0], wire.path[-1]}
+        lain = {h for a, b in zip(wire.path, wire.path[1:], strict=False) for h in holes_under_line(a, b)}
+        for hole in lain - ends:
+            assert occupancy.pin_at(hole) is None, f"{wire.id} lies across a pin at {hole}"
+            assert occupancy.body_covers(hole, "top") is None, f"{wire.id} runs under a part"
+    assert run_lvs(both.document, LOOKUP).summary.shorts == 0
+    assert not [v for v in run_drc(both.document, LOOKUP) if v.rule == "jumper-under-body"]
+    before, after = wiring_stats(one_face.document, LOOKUP), wiring_stats(both.document, LOOKUP)
+    assert after.max_level < before.max_level
+    assert after.over_pins + after.over_ends < before.over_pins + before.over_ends

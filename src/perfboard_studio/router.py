@@ -208,6 +208,11 @@ class RouterCosts:
     #: Per trace step on the component side for a net with no preference: that copper is
     #: laid among the fitted parts, with the iron reaching between them.
     component_face_step: float = 0.5
+    #: Once per wire laid along the grid on the component side (a ``top-jumper``), on top of
+    #: an insulated wire's price: it is dressed between fitted parts, with the iron reaching
+    #: past them. Its gain is everything it does NOT lie across -- the solder side's joints,
+    #: ends and wires -- which the solder-side wire it competes with is charged for.
+    component_face_wire: float = 4
 
 
 DEFAULT_ROUTER_COSTS = RouterCosts()
@@ -622,7 +627,7 @@ def route_connection(
     if policy == "hop":
         hopped = _hopping_trace_candidate(ctx, from_, to, buildup)
         if hopped is not None:
-            candidates.append(_off_face(ctx, hopped) if two_faces else hopped)
+            candidates.append(hopped)
     if policy != "refuse":
         wire = _grid_wire_candidate if options.wire_path == "grid" else _straight_wire_candidate
         bare = wire(ctx, from_, to, "bare-wire")
@@ -631,11 +636,17 @@ def route_connection(
         insulated = wire(ctx, from_, to, "insulated-wire")
         if insulated is not None:
             candidates.append(insulated)
+        if two_faces and options.wire_path == "grid":
+            over = _component_side_wire_candidate(doc, ctx, from_, to)
+            if over is not None:
+                candidates.append(over)
         if options.allow_top_jumper:
             jumper = _straight_wire_candidate(ctx, from_, to, "top-jumper")
             if jumper is not None:
                 candidates.append(jumper)
 
+    if two_faces:
+        candidates = [_off_face(ctx, c) for c in candidates]
     # PREFERENCE RANKS BEFORE COST. With no preference this is the cost sort it has always
     # been (every rank is 0); with one, the family the builder committed to wins outright
     # and cost only decides within it. See StrategyPreference for why a cost table alone
@@ -861,6 +872,10 @@ class _RouteContext:
     #: holes a bare conductor of EITHER face lies across, and the two-face search's memo of
     #: :func:`_traversable_on_face` by (col, row, face). Unused on one face.
     preferred_side: BoardSide | None = None
+    #: The face the grid-wire search lays on: "top" only in the context
+    #: :func:`_component_side_wire_candidate` makes, where the sets above are the
+    #: component side's.
+    wire_face: BoardSide = "bottom"
     swept_any_face: frozenset[tuple[int, int]] = frozenset()
     face_traversable: dict[tuple[int, int, int], bool] = field(default_factory=dict)
 
@@ -1844,18 +1859,90 @@ def _two_face_trace_candidate(
 
 
 def _off_face(ctx: _RouteContext, candidate: RouteCandidate) -> RouteCandidate:
-    """``candidate``, all on the solder side, charged for every trace step off the face
-    its net prefers -- so with both faces in play it is weighed on the same bill as the
-    two-face trace it competes with."""
-    if ctx.preferred_side != "top":
+    """``candidate`` charged ``off_face_step`` for every hole its copper runs off the face
+    its net prefers, so every candidate is weighed on the bill the two-face trace search
+    pays. A trace's own steps are already on its bill, so only the others are charged
+    here: a solder-side trace from a single-face strategy (a hop's runs), and every wire.
+    Nothing without a preference."""
+    preferred = ctx.preferred_side
+    if preferred is None:
         return candidate
-    steps = sum(
-        len(c.path) - 1
-        for c in candidate.conductors
-        if c.kind in ("solder-trace", "solder-trace-wired")
-    )
+    two_face_trace = candidate.strategy in ("solder-trace", "solder-trace-wired")
+    steps = 0
+    for conductor in candidate.conductors:
+        if conductor.side == preferred:
+            continue
+        if two_face_trace and conductor.kind in ("solder-trace", "solder-trace-wired"):
+            continue
+        steps += sum(
+            abs(b.col - a.col) + abs(b.row - a.row)
+            for a, b in itertools.pairwise(conductor.path)
+        )
+    if not steps:
+        return candidate
     return dataclasses.replace(
         candidate, cost=candidate.cost + steps * ctx.opts.costs.off_face_step
+    )
+
+
+def _component_side_wire_candidate(
+    doc: PerfDocument,
+    ctx: _RouteContext,
+    from_: HoleCoord,
+    to: HoleCoord,
+) -> RouteCandidate | None:
+    """A jumper over the component side, laid along the grid like a solder-side wire.
+
+    The same search, on the component side's sets: what lies across and ends on that face,
+    the joints there, the loops its wires could close. It lies across no pin -- the lead
+    stands there -- and under no body, so it is never squeezed under a part however high
+    the part stands. It does not lie across the solder side's joints, ends and wires,
+    which is the whole of its gain: two wires on opposite faces do not stack. A
+    ``top-jumper``, the kind the guide, DRC and both views already know as wire over the
+    parts, priced as an insulated wire plus ``component_face_wire``. Its ends are soldered
+    underneath, as every jumper's are.
+    """
+    occupancy = ctx.occupancy
+    top = dataclasses.replace(
+        ctx,
+        wire_face="top",
+        covered_holes=_covered_holes(doc, "top"),
+        covered_steps=_covered_steps(doc, "top"),
+        joint_holes=_joint_holes(doc, occupancy, "top"),
+        loop_holes=_loop_holes(doc, from_, to, "top"),
+        traversable={},
+        blocked_edges={},
+        risky_holes={},
+        endpoint_own_nets={},
+        face_traversable={},
+    )
+    costs = ctx.opts.costs
+    found = _find_grid_wire_path(top, from_, to, bare=False, per_mm=costs.insulated_wire_per_mm)
+    if found is None:
+        return None
+    holes, laying = found
+    path = _corners(holes)
+    length_mm = path_length_mm(path, doc.board)
+    return RouteCandidate(
+        strategy="top-jumper",
+        conductors=(
+            NewWireConductor(
+                path=path,
+                kind="top-jumper",
+                side="top",
+                gauge_awg=ctx.wire_gauge_awg,
+                color=None,
+                net_id=ctx.own_net_id,
+                layer_z=0,
+            ),
+        ),
+        cost=costs.insulated_wire_fixed + costs.component_face_wire + laying,
+        explanation=(
+            f"Top jumper: {length_mm:.1f} mm from {format_hole(from_, doc.board)} to "
+            f"{format_hole(to, doc.board)} with {len(path) - 2} bend(s) — along the grid over "
+            "the component side, clear of every part, so it lies across nothing underneath."
+        ),
+        risk_holes=(),
     )
 
 
@@ -2215,9 +2302,14 @@ def _wire_may_lie_over(ctx: _RouteContext, key: tuple[int, int], *, bare: bool) 
     """
     if key in ctx.unusable_holes:
         return False
+    hole = HoleCoord(col=key[0], row=key[1])
+    if ctx.wire_face == "top":
+        # On the component side a pin's lead stands up out of its hole into the part, and
+        # a body stands over the holes it covers: a wire lies across neither. That keeps
+        # it out from under every part (``jumper-under-body``), whatever its height.
+        return not (ctx.occupancy.pin_at(hole) or ctx.occupancy.body_covers(hole, "top"))
     if not bare:
         return True
-    hole = HoleCoord(col=key[0], row=key[1])
     return not (
         ctx.occupancy.is_copper_blocked(hole, "bottom")
         or ctx.occupancy.pin_at(hole)
@@ -2249,32 +2341,41 @@ def _step_crosses_copper(ctx: _RouteContext, a: tuple[int, int], b: tuple[int, i
     return crosses
 
 
-def _covered_holes(doc: PerfDocument) -> frozenset[tuple[int, int]]:
-    """Every hole a solder-side conductor lies across or ends on -- see ``wire_over_copper``."""
+def _covered_holes(doc: PerfDocument, face: BoardSide = "bottom") -> frozenset[tuple[int, int]]:
+    """Every hole a conductor on ``face`` lies across or ends on -- see ``wire_over_copper``."""
     keys: set[tuple[int, int]] = set()
     for conductor in doc.conductors:
-        if conductor.side != "bottom":
+        if conductor.side != face:
             continue
         for start, stop in itertools.pairwise(conductor.path):
             keys.update(_keys_under_line(start, stop))
     return frozenset(keys)
 
 
-def _joint_holes(doc: PerfDocument, occupancy: OccupancyIndex) -> frozenset[tuple[int, int]]:
-    """Every hole where something is soldered on the solder side -- see ``wire_over_joint``.
+def _joint_holes(
+    doc: PerfDocument, occupancy: OccupancyIndex, face: BoardSide = "bottom"
+) -> frozenset[tuple[int, int]]:
+    """Every hole where something is soldered on ``face`` -- see ``wire_over_joint``.
 
-    Every pin (a through-hole lead is soldered underneath, and its trimmed stub stands
-    below the pad), and both ends of every solder-side conductor.
+    On the solder side every pin (a through-hole lead is soldered underneath, and its
+    trimmed stub stands below the pad); on either, both ends of every conductor on it. A
+    wire on the component side may not lie across a pin at all (``_wire_may_lie_over``).
     """
-    keys = {_key(hole) for hole in occupancy.occupied_holes() if occupancy.pin_at(hole)}
+    keys = (
+        {_key(hole) for hole in occupancy.occupied_holes() if occupancy.pin_at(hole)}
+        if face == "bottom"
+        else set()
+    )
     for conductor in doc.conductors:
-        if conductor.side == "bottom" and conductor.path:
+        if conductor.side == face and conductor.path:
             keys.add(_key(conductor.path[0]))
             keys.add(_key(conductor.path[-1]))
     return frozenset(keys)
 
 
-def _loop_holes(doc: PerfDocument, from_: HoleCoord, to: HoleCoord) -> frozenset[tuple[int, int]]:
+def _loop_holes(
+    doc: PerfDocument, from_: HoleCoord, to: HoleCoord, face: BoardSide = "bottom"
+) -> frozenset[tuple[int, int]]:
     """Where the wires end that a new wire from ``from_`` to ``to`` would have to lie under.
 
     ``occupancy.stacking_layers`` puts a wire lying across the hole another one ends in
@@ -2286,7 +2387,7 @@ def _loop_holes(doc: PerfDocument, from_: HoleCoord, to: HoleCoord) -> frozenset
     wires = [
         conductor
         for conductor in doc.conductors
-        if conductor.side == "bottom"
+        if conductor.side == face
         and len(conductor.path) >= 2
         and not contacts_every_path_hole(conductor)
     ]
@@ -2314,15 +2415,17 @@ def _loop_holes(doc: PerfDocument, from_: HoleCoord, to: HoleCoord) -> frozenset
     ) - {_key(from_), _key(to)}
 
 
-def _covered_steps(doc: PerfDocument) -> frozenset[tuple[tuple[int, int], tuple[int, int]]]:
-    """Every step between neighbouring holes a solder-side conductor runs along.
+def _covered_steps(
+    doc: PerfDocument, face: BoardSide = "bottom"
+) -> frozenset[tuple[tuple[int, int], tuple[int, int]]]:
+    """Every step between neighbouring holes a conductor on ``face`` runs along.
 
     Only a run square to the grid has any: a diagonal one crosses a grid step, which is
     ``wire_over_copper``'s business, and never lies along one.
     """
     steps: set[tuple[tuple[int, int], tuple[int, int]]] = set()
     for conductor in doc.conductors:
-        if conductor.side != "bottom":
+        if conductor.side != face:
             continue
         for a, b in itertools.pairwise(conductor.path):
             if a.col != b.col and a.row != b.row:
