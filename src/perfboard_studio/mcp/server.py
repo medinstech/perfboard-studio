@@ -535,12 +535,16 @@ def create_net(
     pins: list[str] | None = None,
     current_a: float | None = None,
     voltage_v: float | None = None,
+    preferred_side: str | None = None,
 ) -> dict[str, Any]:
     """Declare a net: a name, a class ("signal", "ground" or "power"), and optionally the
     pins on it as "U1.8" addresses. Ground and power are routed first and get a rail, so
     the class is a routing decision rather than a label. current_a and voltage_v are what
-    wake DRC's capacity and creepage rules — no netlist format carries them."""
-    return session.create_net(name, net_class, pins, current_a, voltage_v)
+    wake DRC's capacity and creepage rules — no netlist format carries them.
+    preferred_side "top" or "bottom" is the face autoroute keeps the net's solder on where
+    it can: a price on every step off it, never a rule. "top" gives that net both faces of a
+    board with pads on top even under autoroute's default faces="solder"."""
+    return session.create_net(name, net_class, pins, current_a, voltage_v, preferred_side)
 
 
 @mcp.tool()
@@ -565,12 +569,23 @@ def update_net(
     voltage_v: float | None = None,
     clear_current: bool = False,
     clear_voltage: bool = False,
+    preferred_side: str | None = None,
+    clear_preferred_side: bool = False,
 ) -> dict[str, Any]:
-    """Rename a net, reclassify it, or state the current and voltage it carries. Anything
-    left out is left alone — passing null never erases a value; clear_current and
-    clear_voltage do that explicitly."""
+    """Rename a net, reclassify it, state the current and voltage it carries, or the face
+    ("top" or "bottom") autoroute keeps its solder on. Anything left out is
+    left alone — passing null never erases a value; clear_current, clear_voltage and
+    clear_preferred_side do that explicitly."""
     return session.update_net(
-        name, new_name, net_class, current_a, voltage_v, clear_current, clear_voltage
+        name,
+        new_name,
+        net_class,
+        current_a,
+        voltage_v,
+        clear_current,
+        clear_voltage,
+        preferred_side,
+        clear_preferred_side,
     )
 
 
@@ -676,7 +691,10 @@ def add_wire(
 
 @mcp.tool()
 def add_solder_trace(
-    holes: list[str], spine_gauge_mm: float | None = None, net: str | None = None
+    holes: list[str],
+    spine_gauge_mm: float | None = None,
+    net: str | None = None,
+    side: str = "bottom",
 ) -> dict[str, Any]:
     """Join a chain of adjacent pads with solder — the cheapest connection there is.
 
@@ -686,8 +704,12 @@ def add_solder_trace(
     resistance by roughly a factor of ten and is what you want for a power or ground
     rail longer than five or six pads. A two-hole trace is a solder bridge. Returns the new
     conductor's `id`.
+
+    side="top" lays it on the component side, on a board with pads there. A plated hole is
+    one piece of copper, so solder on either face joins whatever the other face has in that
+    hole: traces on opposite faces still cannot cross.
     """
-    return session.add_solder_trace(holes, spine_gauge_mm=spine_gauge_mm, net=net)
+    return session.add_solder_trace(holes, spine_gauge_mm=spine_gauge_mm, net=net, side=side)
 
 
 @mcp.tool()
@@ -717,6 +739,7 @@ def autoroute(
     style: str = "balanced",
     wires: str = "grid",
     crossings: str = "hop",
+    faces: str = "solder",
 ) -> dict[str, Any]:
     """Route the board, or just the named nets, and commit it as one undoable step.
 
@@ -743,10 +766,20 @@ def autoroute(
     when the user has said they want no wire at all -- on a crowded board it leaves several
     connections for optimize_placement or for them to finish.
 
+    `faces` is where solder may go: "solder" (the default) lays it all on the solder side;
+    "both", on a board with pads on the component side, lets a trace run on either face and
+    change face through a pin of its net or an empty hole (a via), and lets a wire go over
+    the component side clear of every part. A net's preferred_side (create_net,
+    update_net) keeps its solder on that face where it can, and a net preferring "top" has
+    both faces under "solder" too -- it alone. With no net preferring one, "both" lays traces
+    where "solder" does and gains only those wires over the top. Where either is in play
+    the result lists `vias`, the holes where the faces meet.
+
     Under "best" the result carries `comparison`: every style's traces, wires, wire length,
     risk holes, the DRC errors and warnings it would add, its wires' bends, the holes they
     lie across where a pin is (over_pins) and where another wire ends (over_ends), stacking
-    loops, the tallest stack (max_level), and effort score, cheapest first.
+    loops, the tallest stack (max_level), vias (face_changes), and effort score, cheapest
+    first.
     A plan that adds a DRC error never wins over one that adds none. Report that trade
     rather than only the winner -- fewer wires against more bridging risk is the user's call
     to overrule.
@@ -756,7 +789,7 @@ def autoroute(
     are in the wrong places, and optimize_placement is the answer rather than more
     routing.
     """
-    return session.autoroute(nets, style, wires, crossings)
+    return session.autoroute(nets, style, wires, crossings, faces)
 
 
 @mcp.tool()
@@ -766,14 +799,15 @@ def reroute(
     wires: str = "grid",
     crossings: str = "hop",
     without: str | None = None,
+    faces: str = "solder",
 ) -> dict[str, Any]:
     """Rip up the existing routing and plan it again from nothing.
 
     Use this after moving parts. `autoroute` only ADDS: the copper laid out for a part's
     old position still joins the right pins, so nothing flags it, and routing again just
     puts more copper beside it — the board grows every time. This throws that away and
-    re-plans. Conductors with no net assigned are left alone. `style`, `wires` and
-    `crossings` mean what they mean for autoroute.
+    re-plans. Conductors with no net assigned are left alone. `style`, `wires`,
+    `crossings` and `faces` mean what they mean for autoroute.
 
     `without` is a conductor id (from get_board_info or run_drc) whose net to wire again
     a different way: nothing new runs through or lies across the holes it did, except its
@@ -781,7 +815,7 @@ def reroute(
     this is how to ask for other copper. The holes kept clear come back as `kept_clear`,
     and a connection that cannot be made without them is in `unrouted_detail`.
     """
-    return session.reroute(nets, style, wires, crossings, without)
+    return session.reroute(nets, style, wires, crossings, without, faces)
 
 
 @mcp.tool()

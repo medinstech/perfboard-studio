@@ -438,6 +438,20 @@ connection one insulated wire; `"refuse"` allows no wire of any kind, whatever t
 and reports what a trace alone cannot reach as unrouted. That last is for a user who has
 said they want no wire at all, and on a crowded board it leaves connections to finish.
 
+**Solder may go on either face of a double-sided board.** `add_solder_trace` takes
+`side`: `"bottom"` (the solder side, the default) or `"top"`, which the board refuses
+(`no-copper-on-face`) where it has no pads on the component side. `create_net` and
+`update_net` take `preferred_side`, and `update_net` drops it only on
+`clear_preferred_side`, as it does a current. `autoroute` and `reroute` take `faces`:
+`"solder"` (the default, as in the engine and the window) keeps every net underneath
+except one that prefers `"top"`, which has both faces; `"both"` gives both to every net.
+A trace changes face through a pin of its net or through an empty hole, a via, and with
+both faces a wire may go over the component side, clear of every part. A preference is a
+price on every step off that face, not a rule. A plated hole is one piece of copper, so
+traces on opposite faces still cannot cross: what the second face buys is a net kept where
+it was asked to be, and room for wire over the top. Where a face can change, the result
+lists `vias`, and under `"best"` each style's `face_changes` is in `comparison`.
+
 **Unrouted connections are never summarised away.** PLAN.md §13 names "it routed most of
 it and left four connections" as the trap every previous perfboard autorouter fell into.
 `autoroute` returns each failure with the router's own reason. Usually the answer is

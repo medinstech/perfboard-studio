@@ -36,7 +36,7 @@ from pathlib import Path
 import pytest
 
 from perfboard_studio.autoroute import holes_to_avoid
-from perfboard_studio.geometry import holes_under_line, parse_hole
+from perfboard_studio.geometry import format_hole, holes_under_line, parse_hole
 from perfboard_studio.mcp.session import BoardSession, SessionError, new_board
 from perfboard_studio.model import ComponentInstance, HoleCoord, WireConductor
 
@@ -1637,3 +1637,67 @@ def test_an_agent_changes_a_board_feature_in_place(session: BoardSession) -> Non
     with pytest.raises(SessionError):
         session.update_board_feature(hole_id, edge="left")
     assert session.update_board_feature("nope")["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# Copper on both faces (0.25)
+# ---------------------------------------------------------------------------
+
+
+def test_a_nets_face_is_declared_kept_by_omission_and_cleared_explicitly(
+    session: BoardSession,
+) -> None:
+    session.create_net("GND", "ground", preferred_side="top")
+    assert session.get_nets()[0]["preferred_side"] == "top"
+
+    session.update_net("GND", current_a=1.0)
+    assert session.get_nets()[0]["preferred_side"] == "top"
+
+    session.update_net("GND", preferred_side="bottom")
+    assert session.get_nets()[0]["preferred_side"] == "bottom"
+
+    session.update_net("GND", clear_preferred_side=True)
+    assert session.get_nets()[0]["preferred_side"] is None
+
+    with pytest.raises(SessionError, match="not a face"):
+        session.update_net("GND", preferred_side="up")
+
+
+def test_a_solder_trace_goes_on_the_face_asked_for_where_the_board_has_pads(
+    loaded: BoardSession,
+) -> None:
+    board = loaded.document.board
+    row = board.rows - 1
+    holes = [format_hole(HoleCoord(col, row), board) for col in range(board.cols - 3, board.cols)]
+
+    result = loaded.add_solder_trace(holes, side="top")
+
+    assert result["ok"]
+    laid = next(c for c in loaded.document.conductors if c.id == result["id"])
+    assert laid.side == "top"
+    with pytest.raises(SessionError, match="not a face"):
+        loaded.add_solder_trace(holes, side="middle")
+
+    loaded.undo()
+    assert loaded.set_board(single_sided=True)["ok"]
+    refused = loaded.add_solder_trace(holes, side="top")
+    assert not refused["ok"] and refused["code"] == "no-copper-on-face"
+
+
+def test_autoroute_takes_the_faces_and_names_the_vias(loaded: BoardSession) -> None:
+    with pytest.raises(SessionError, match="not a choice of faces"):
+        loaded.autoroute(faces="all")
+    if loaded.document.conductors:
+        loaded.delete_conductors([c.id for c in loaded.document.conductors])
+    loaded.update_net("GND", preferred_side="top")
+
+    result = loaded.autoroute(style="solder")
+
+    assert result["ok"] and result["committed"]
+    on_top = [c for c in loaded.document.conductors if c.side == "top"]
+    gnd = next(n.id for n in loaded.document.nets if n.name == "GND")
+    assert on_top and {c.net_id for c in on_top} == {gnd}
+    assert result["vias"]
+    for address in result["vias"]:
+        hole = parse_hole(address, loaded.document.board)
+        assert {c.side for c in loaded.document.conductors if hole in c.path} == {"top", "bottom"}

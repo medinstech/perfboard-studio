@@ -93,6 +93,10 @@ closed without a bump.
   copper into it (fill the hole until the solder shows on top), and one continuity probe
   across it after phase 7, so a hole whose plating did not take is found by itself rather
   than as a net that fails.
+- **Agents can wire both faces too.** MCP's `add_solder_trace` takes `side`, `create_net`
+  and `update_net` take `preferred_side` (and `clear_preferred_side`), and `autoroute` and
+  `reroute` take `faces`; the result names the `vias`, and the `"best"` comparison counts
+  each style's `face_changes`.
 
 ### Changed
 

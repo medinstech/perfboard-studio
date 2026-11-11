@@ -108,6 +108,7 @@ from perfboard_studio.commands import (
     UpdateMountingHolePayload,
     UpdateNetPayload,
     UpdatePartPayload,
+    _Keep,
     create_document_id_generator,
     create_empty_document,
     create_standard_registry,
@@ -166,13 +167,14 @@ from perfboard_studio.model import (
     SpineSpec,
     pin_name_of,
 )
-from perfboard_studio.occupancy import conductors_touching
+from perfboard_studio.occupancy import build_occupancy, conductors_touching
 from perfboard_studio.phrasebook import GUIDE_LANGUAGES
 from perfboard_studio.placer import PlacementOptions, plan_placement
 from perfboard_studio.placer import describe as describe_placement
 from perfboard_studio.ratsnest import ratsnest, summarize
 from perfboard_studio.router import (
     CROSSING_POLICIES,
+    ROUTER_FACES,
     WIRE_PATHS,
     RouterOptions,
     RoutingStyle,
@@ -191,6 +193,7 @@ from perfboard_studio.system import (
     placed_components,
 )
 from perfboard_studio.version import __version__
+from perfboard_studio.wiringstats import vias
 
 # ---------------------------------------------------------------------------
 # Errors and results
@@ -646,6 +649,7 @@ class BoardSession:
                 "pins": [f"{node.component_ref}.{node.pin}" for node in net.nodes],
                 "current_a": net.current_a,
                 "voltage_v": net.voltage_v,
+                "preferred_side": net.preferred_side,
             }
             for net in self.document.nets
         ]
@@ -896,6 +900,7 @@ class BoardSession:
         pins: list[str] | None = None,
         current_a: float | None = None,
         voltage_v: float | None = None,
+        preferred_side: str | None = None,
     ) -> dict[str, Any]:
         """Declare a net. ``pins`` are ``"U1.8"`` addresses and may be given later."""
         nodes = tuple(_pin(spec) for spec in (pins or []))
@@ -907,6 +912,7 @@ class BoardSession:
                 nodes=nodes,
                 current_a=current_a,
                 voltage_v=voltage_v,
+                preferred_side=_side_or_none(preferred_side),
             ),
         )
         if result["ok"]:
@@ -922,8 +928,10 @@ class BoardSession:
         voltage_v: float | None = None,
         clear_current: bool = False,
         clear_voltage: bool = False,
+        preferred_side: str | None = None,
+        clear_preferred_side: bool = False,
     ) -> dict[str, Any]:
-        """Rename a net, reclassify it, or state what it carries.
+        """Rename a net, reclassify it, or state what it carries, or the face it prefers.
 
         A field left out is left ALONE. ``current_a: null`` therefore means "this call
         says nothing about the current", never "erase what the net declares" -- an agent
@@ -933,7 +941,15 @@ class BoardSession:
         The two numbers matter more than they look: DRC's current-capacity rule, its
         creepage rule and the wire gauge on the build guide's cut list are all silent
         until a net declares them, and no netlist format carries them.
+
+        ``preferred_side`` follows the same rule: left out, the net keeps its face;
+        ``clear_preferred_side`` lets it go back to having none.
         """
+        side: BoardSide | _Keep | None = (
+            None
+            if clear_preferred_side
+            else (KEEP if preferred_side is None else _side_or_none(preferred_side))
+        )
         return self._dispatch(
             "net.update",
             UpdateNetPayload(
@@ -942,6 +958,7 @@ class BoardSession:
                 net_class=cast(NetClass, net_class) if net_class is not None else None,
                 current_a=None if clear_current else (KEEP if current_a is None else current_a),
                 voltage_v=None if clear_voltage else (KEEP if voltage_v is None else voltage_v),
+                preferred_side=side,
             ),
         )
 
@@ -1600,7 +1617,11 @@ class BoardSession:
         )
 
     def add_solder_trace(
-        self, holes: list[str], spine_gauge_mm: float | None = None, net: str | None = None
+        self,
+        holes: list[str],
+        spine_gauge_mm: float | None = None,
+        net: str | None = None,
+        side: str = "bottom",
     ) -> dict[str, Any]:
         """Join adjacent pads with solder (PLAN.md D8).
 
@@ -1608,7 +1629,13 @@ class BoardSession:
         step, because solder does not reliably span the 1.7 mm diagonal gap the way it
         spans the 0.6 mm orthogonal one. A two-hole trace is what other tools call a
         solder bridge -- one concept, one rule set, so there is no separate tool for it.
+
+        ``side`` "top" lays it on the component side, which the command refuses on a board
+        with no pads there (``model.has_component_side_copper``).
         """
+        face = _side_or_none(side)
+        if face is None:
+            raise SessionError('A solder trace lies on side "bottom" or "top".')
         if len(holes) < 2:
             raise SessionError("A solder trace needs at least two holes.")
         spine = (
@@ -1622,8 +1649,18 @@ class BoardSession:
                 kind="solder-trace-wired" if spine is not None else "solder-trace",
                 spine=spine,
                 net_id=self._net_id(net),
+                side=face,
             )
         )
+
+    def _vias(self) -> list[str]:
+        """The pinless holes the board's copper changes face through
+        (``wiringstats.vias``), by address."""
+        board = self.document.board
+        return [
+            format_hole(hole, board)
+            for hole in vias(self.document, build_occupancy(self.document, self.lookup))
+        ]
 
     def _add_conductor(self, conductor: NewConductor) -> dict[str, Any]:
         """One ``conductor.add``, answered with the id it was given.
@@ -1663,6 +1700,7 @@ class BoardSession:
         style: str = "balanced",
         wires: str = "grid",
         crossings: str = "hop",
+        faces: str = "solder",
     ) -> dict[str, Any]:
         """Plan and commit the routing, as one undoable command."""
         if not self.document.nets:
@@ -1680,7 +1718,7 @@ class BoardSession:
         joined = board_joins_holes(self.document.board)
         if joined:
             # Checked here, before anything is cleared, as _route_options checks it below.
-            _route_options(style, wires, crossings)
+            _route_options(style, wires, crossings, faces)
 
         # Cleared BEFORE planning, exactly as the GUI does it, so the plan is made
         # against the board as it will be rather than around copper that is about to go.
@@ -1695,7 +1733,7 @@ class BoardSession:
         if joined:
             return self._autoroute_stripboard(only, wires, stale_removed=len(cleared))
 
-        options = _route_options(style, wires, crossings)
+        options = _route_options(style, wires, crossings, faces)
         # Every variant's measurements travel with the result, not just the winner's. An
         # agent that is told only "solder won" cannot judge whether to accept it, and the
         # trade it was decided on -- wires against bridging risk -- is exactly the kind a
@@ -1723,6 +1761,7 @@ class BoardSession:
                     "over_ends": variant.score.over_ends,
                     "loops": variant.score.loops,
                     "max_level": variant.score.max_level,
+                    "face_changes": variant.score.face_changes,
                     "effort": round(variant.score.effort, 1),
                 }
                 for variant in sorted(best.variants, key=lambda v: v.score.key())
@@ -1744,6 +1783,8 @@ class BoardSession:
         result = self._dispatch("conductor.addMany", plan.payload())
         if not result["ok"]:
             return result
+        if faces == "both" or any(net.preferred_side == "top" for net in self.document.nets):
+            result["vias"] = self._vias()
         result.update(
             committed=True,
             summary=describe_route(plan),
@@ -1837,6 +1878,7 @@ class BoardSession:
         wires: str = "grid",
         crossings: str = "hop",
         without: str | None = None,
+        faces: str = "solder",
     ) -> dict[str, Any]:
         """Rip up the existing routing and plan it again, as one undoable command.
 
@@ -1882,7 +1924,7 @@ class BoardSession:
             # Its own planner, as autoroute's: the perfboard router laid solder traces on a
             # breadboard and traces along a stripboard's joined strips. The options are
             # checked all the same, and ``wires`` shapes a breadboard's jumpers.
-            wire_path = _route_options(style, wires, crossings).router.wire_path
+            wire_path = _route_options(style, wires, crossings, faces).router.wire_path
             joined = plan_joined_reroute(self.document, self.lookup, only, wire_path)
             if joined.is_empty:
                 return _ok(committed=False, summary=describe_strip_plan(joined))
@@ -1912,7 +1954,7 @@ class BoardSession:
             self.document,
             self.lookup,
             only_net_ids=only,
-            options=_route_options(style, wires, crossings),
+            options=_route_options(style, wires, crossings, faces),
             avoid_holes=avoid,
         )
         kept_clear = [format_hole(hole, self.document.board) for hole in avoid]
@@ -2684,7 +2726,18 @@ def _route_styles() -> str:
     return ", ".join((*get_args(RoutingStyle), BEST_STYLE))
 
 
-def _route_options(style: str, wires: str = "grid", crossings: str = "hop") -> AutorouteOptions:
+def _side_or_none(side: str | None) -> BoardSide | None:
+    """A face an agent named, or None for none. Anything else is refused by name."""
+    if side is None:
+        return None
+    if side not in ("top", "bottom"):
+        raise SessionError(f'{side!r} is not a face. Use "bottom" (solder side) or "top".')
+    return "top" if side == "top" else "bottom"
+
+
+def _route_options(
+    style: str, wires: str = "grid", crossings: str = "hop", faces: str = "solder"
+) -> AutorouteOptions:
     """Turn a style name into router options, or say what the names are.
 
     ``wires`` is how a wire is laid (``router.WirePath``), and it is ``"grid"`` here as it is
@@ -2701,6 +2754,10 @@ def _route_options(style: str, wires: str = "grid", crossings: str = "hop") -> A
 
     ``"best"`` returns the UNSTYLED defaults: the sweep applies each style itself, and
     priming it with one style's cost table would bias every variant.
+
+    ``faces`` is where solder may be laid (``router.RouterFaces``): ``"solder"``, the
+    default here as in the window, or ``"both"`` on a board with pads on the component
+    side. Like the wire path it is not part of a style.
     """
     if wires not in WIRE_PATHS:
         raise SessionError(
@@ -2711,7 +2768,11 @@ def _route_options(style: str, wires: str = "grid", crossings: str = "hop") -> A
             f"{crossings!r} is not a way to handle a crossing. "
             f"Use one of: {', '.join(CROSSING_POLICIES)}."
         )
-    base = RouterOptions(wire_path=wires, crossing_policy=crossings)
+    if faces not in ROUTER_FACES:
+        raise SessionError(
+            f"{faces!r} is not a choice of faces. Use one of: {', '.join(ROUTER_FACES)}."
+        )
+    base = RouterOptions(wire_path=wires, crossing_policy=crossings, faces=faces)
     if style == BEST_STYLE:
         return AutorouteOptions(router=base)
     if style not in get_args(RoutingStyle):
