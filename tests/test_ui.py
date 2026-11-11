@@ -18937,3 +18937,43 @@ def test_a_finding_about_copper_alone_selects_the_copper() -> None:
         assert set(window.scene.selected_conductor_ids()) == {wire.id}
     finally:
         _close(window)
+
+
+def test_one_nets_wiring_is_redone_in_a_style_of_its_own(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redone in the board's style, a net came back with the same bad wire: the only way to
+    another answer was to change the style for everything. Redo Wiring of {net} is a menu
+    of the styles, the board's checked; another applies to that net alone, is said in the
+    question and the status, and leaves the Wiring Style menu as it was."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        document = window.bus.document
+        thresh = next(net.id for net in document.nets if net.name == "THRESH")
+        _select_conductor(window, "cond-8")
+        menu = window.board_menu(
+            window.view.mapFromScene(window.scene.conductor_items["cond-8"].boundingRect().center())
+        )
+        redo = next(a for a in menu.actions() if a.text() == "Redo Wiring of THRESH")
+        styles = redo.menu()
+        assert styles is not None
+        names = [a.text() for a in styles.actions()]
+        assert len(names) == 4 and "Solder trace where possible" in names
+        assert [a.text() for a in styles.actions() if a.isChecked()] == ["Balanced"]
+
+        bodies: list[str] = []
+        monkeypatch.setattr(
+            type(window), "_confirm", lambda self, title, body, verb: bodies.append(body) or True
+        )
+        solder = next(a for a in styles.actions() if a.text() == "Solder trace where possible")
+        solder.trigger()
+        assert window._routing_style == "balanced"
+        assert window.act_style["balanced"].isChecked()
+        assert bodies and "“Solder trace where possible”, for these nets only" in bodies[0]
+        assert "for these nets only" in window.statusBar().currentMessage()
+        others = [c for c in document.conductors if c.net_id != thresh]
+        now = window.bus.document.conductors
+        assert [c for c in now if c.net_id != thresh] == others
+        assert [c for c in now if c.net_id == thresh] != [
+            c for c in document.conductors if c.net_id == thresh
+        ]
+    finally:
+        _close(window)

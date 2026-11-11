@@ -3964,6 +3964,11 @@ TURKISH: Mapping[str, str] = {
     ),
     "No problems": "Sorun yok",
     "Wiring to review": "Gözden geçirilecek kablolama",
+    "In “{style}”, for these nets only.": "“{style}” tarzında, yalnızca bu netler için.",
+    "The style the whole board is wired in.": "Bütün kartın kablolandığı tarz.",
+    "This net only. The Wiring Style menu stays as it is.": (
+        "Yalnızca bu net. Kablolama Tarzı menüsü olduğu gibi kalır."
+    ),
     "{count} wire to look at": "bakılacak {count} tel",
     "{count} wires to look at": "bakılacak {count} tel",
     "Not wrong: wiring that works and is harder to build than it has to be. Click a row to select its wires.": (

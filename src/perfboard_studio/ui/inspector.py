@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QToolButton,
@@ -154,6 +155,9 @@ class InspectorHooks:
     #: What a conductor lies across on its way, in a sentence ("" when nothing): the
     #: holes a wire passes over between its ends, and what is in them.
     lies_across: Callable[[str], str] = lambda _conductor: ""
+    #: The styles one net's wiring can be redone in, (id, name), and the window's own.
+    wiring_styles: Callable[[], tuple[tuple[str, str], ...]] = lambda: ()
+    current_style: Callable[[], str] = lambda: ""
     #: Whether the window says where the work stands (``Inspector.set_step``): nothing
     #: selected is then the step, and the board's editor waits for Board Settings. Left out,
     #: nothing selected is the board, as it always was.
@@ -2075,6 +2079,13 @@ class _ConductorEditor(QWidget):
             button.clicked.connect(lambda _checked=False, w=what: self._on_net_action(w))
             column.addWidget(button)
         layout.addWidget(self.net_buttons)
+        # Redo in the window's style on a click, or in another from its arrow, for this
+        # net only: the same choice its right-click menu offers.
+        self.redo_styles = QMenu(self.redo_net)
+        self.redo_styles.setToolTipsVisible(True)
+        self.redo_styles.aboutToShow.connect(self._fill_redo_styles)
+        self.redo_net.setMenu(self.redo_styles)
+        self.redo_net.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
 
     @staticmethod
     def kind_of(conductor: Conductor) -> str:
@@ -2136,6 +2147,17 @@ class _ConductorEditor(QWidget):
     def _on_net_action(self, what: str) -> None:
         if self._net_id is not None:
             self._inspector.hooks.net_wiring(what, self._net_id)
+
+    def _fill_redo_styles(self) -> None:
+        self.redo_styles.clear()
+        current = self._inspector.hooks.current_style()
+        for style, label in self._inspector.hooks.wiring_styles():
+            action = self.redo_styles.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(style == current)
+            action.triggered.connect(
+                lambda _checked=False, s=style: self._on_net_action(f"redo:{s}")
+            )
 
     def _on_kind_chosen(self, index: int) -> None:
         chosen = self.kind.itemData(index)

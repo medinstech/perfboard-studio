@@ -8888,6 +8888,8 @@ class MainWindow(QMainWindow):
                 next_step=lambda: self.on_workflow_next(self.workflow_bar.next_key),
                 net_wiring=lambda what, net_id: self._on_net_wiring(what, net_id),
                 lies_across=lambda conductor_id: self._lies_across(conductor_id),
+                wiring_styles=lambda: self.wiring_styles(),
+                current_style=lambda: self._routing_style,
                 shows_steps=True,
             ),
             InspectorActions(
@@ -9146,8 +9148,7 @@ class MainWindow(QMainWindow):
                 select_all.triggered.connect(
                     lambda _checked=False, n=net_id: self._select_net_copper(n)
                 )
-                redo = menu.addAction(t("Redo Wiring of {net}").format(net=name))
-                redo.triggered.connect(lambda _checked=False, n=net_id: self.on_reroute((n,)))
+                menu.addMenu(self._redo_net_menu(net_id, menu))
                 remove = menu.addAction(t("Remove Wiring of {net}").format(net=name))
                 remove.triggered.connect(
                     lambda _checked=False, n=net_id: self._remove_wiring((n,))
@@ -9510,13 +9511,41 @@ class MainWindow(QMainWindow):
             )
         )
 
+    def _redo_net_menu(self, net_id: NetId, parent: QWidget) -> QMenu:
+        """Redo Wiring of {net}, in the window's style or in one of its own.
+
+        The window's style is the whole board's, and planning is deterministic: redone in
+        it, a net with a bad wire came back with the same bad wire, and the only way to get
+        another answer was to change the style for everything.
+        """
+        menu = QMenu(t("Redo Wiring of {net}").format(net=self._net_name(net_id)), parent)
+        menu.setToolTipsVisible(True)
+        current = self._routing_style
+        for style, label in self.wiring_styles():
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(style == current)
+            if style == current:
+                action.setToolTip(t("The style the whole board is wired in."))
+            else:
+                action.setToolTip(
+                    t("This net only. The Wiring Style menu stays as it is.")
+                )
+            action.triggered.connect(
+                lambda _checked=False, n=net_id, s=style: self._on_net_wiring(f"redo:{s}", n)
+            )
+        return menu
+
     def _on_net_wiring(self, what: str, net_id: NetId) -> None:
-        """A net's copper, from one piece of it in Properties: what its right-click menu
-        offers, through the same three doors."""
+        """A net's copper, from one piece of it in Properties or its right-click menu:
+        "select", "remove", "redo" in the window's style, or "redo:<style>" in another."""
         if what == "select":
             self._select_net_copper(net_id)
         elif what == "redo":
             self.on_reroute((net_id,))
+        elif what.startswith("redo:"):
+            style = what.removeprefix("redo:")
+            self.on_reroute((net_id,), style=None if style == self._routing_style else style)
         elif what == "remove":
             self._remove_wiring((net_id,))
 
@@ -11052,8 +11081,9 @@ class MainWindow(QMainWindow):
             8000,
         )
 
-    def _autoroute_options(self) -> AutorouteOptions:
-        """Options for a single planned route.
+    def _autoroute_options(self, style: str | None = None) -> AutorouteOptions:
+        """Options for a single planned route, in ``style`` when one is named (one net's
+        Redo Wiring in a style of its own), else in the window's.
 
         Under "best" the sweep applies each style itself, so this hands it the UNSTYLED
         defaults -- picking one here would prime every variant with another's cost table.
@@ -11065,9 +11095,19 @@ class MainWindow(QMainWindow):
             wire_path="grid" if self._grid_wires else "straight",
             crossing_policy=self._crossing_policy,
         )
-        if self._routing_style == "best":
+        chosen = style or self._routing_style
+        if chosen == "best":
             return AutorouteOptions(router=base)
-        return AutorouteOptions(router=options_for_style(self._routing_style, base))
+        return AutorouteOptions(router=options_for_style(cast(RoutingStyle, chosen), base))
+
+    def wiring_styles(self) -> tuple[tuple[str, str], ...]:
+        """The styles one net can be wired again in, each with its name as the Wiring
+        Style menu says it: every style but trying them all, which is the whole board's."""
+        return tuple(
+            (style, _plain(action.text()))
+            for style, action in self.act_style.items()
+            if style != "best"
+        )
 
     def on_reroute_selection(self) -> None:
         net_ids = self._selected_net_ids() or self._selected_conductor_net_ids()
@@ -11088,7 +11128,12 @@ class MainWindow(QMainWindow):
         self.on_reroute(net_ids)
 
     def on_reroute(
-        self, only_net_ids: tuple[NetId, ...] | None, why: str = "", *, asked: bool = False
+        self,
+        only_net_ids: tuple[NetId, ...] | None,
+        why: str = "",
+        *,
+        asked: bool = False,
+        style: str | None = None,
     ) -> None:
         """Rip up and route again, as one undoable command.
 
@@ -11115,11 +11160,11 @@ class MainWindow(QMainWindow):
             return
 
         document = self.bus.document
+        options = self._autoroute_options(style)
         plan = self._run_planner(
             t("Removing the wiring and laying it again…"),
             lambda _should_stop: plan_reroute(
-                document, self.lookup, only_net_ids=only_net_ids,
-                options=self._autoroute_options(),
+                document, self.lookup, only_net_ids=only_net_ids, options=options,
             ),
         )
         if plan is None:
@@ -11144,10 +11189,19 @@ class MainWindow(QMainWindow):
             )
             return
 
+        # Said wherever it is said what happened: in which style, when not the window's.
+        in_style = (
+            t("In “{style}”, for these nets only.").format(
+                style=dict(self.wiring_styles()).get(style, style)
+            )
+            if style is not None
+            else ""
+        )
         if plan.remove_ids and not asked:
             # Through _confirm: it rips up copper, and Yes under Enter made that a reflex.
             body = (
                 (f"<p>{why}</p>" if why else "")
+                + (f"<p>{in_style}</p>" if in_style else "")
                 + f"<b>{say(describe_reroute(plan))}</b><p>"
                 + t(
                     "Conductors to remove: {removed}; to plan in their place: {planned}. "
@@ -11169,7 +11223,8 @@ class MainWindow(QMainWindow):
 
         rerouted = set(only_net_ids) if only_net_ids else {n.id for n in self.bus.document.nets}
         self._nets_from_old_layout -= rerouted
-        self.statusBar().showMessage(say(describe_reroute(plan)), 0)
+        said_plan = say(describe_reroute(plan))
+        self.statusBar().showMessage(f"{said_plan}  ·  {in_style}" if in_style else said_plan, 0)
         self._report_unrouted_items(
             [item for outcome in plan.nets for item in outcome.unrouted]
         )
