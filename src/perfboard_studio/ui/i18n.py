@@ -1353,6 +1353,33 @@ TURKISH: Mapping[str, str] = {
     "Solder Side": "Lehim Yüzü",
     "&Solder Side": "&Lehim Yüzü",
     "Draw on:": "Çizilen yüz:",
+    "Make This Strip a Rail": "Bu Şeridi Ray Yap",
+    "Make This Strip a Rail…": "Bu Şeridi Ray Yap…",
+    "Solder along these fingers, bridged to the holes beside them: one net down the side of the board, the way ground and power are run.": (
+        "Bu parmaklar boyunca lehim; yanlarındaki deliklere köprülerle bağlanır: kartın "
+        "kenarı boyunca tek bir net, toprak ve beslemenin döşendiği gibi."
+    ),
+    "Solder along the outside fingers, joined to the holes beside them by bridges: how ground and power are run on a stock board.": (
+        "Dıştaki parmaklar boyunca lehim, yanlarındaki deliklere köprülerle bağlanır: hazır "
+        "kartlarda toprak ve besleme böyle döşenir."
+    ),
+    "No net": "Net yok",
+    "Bridges": "Köprüler",
+    "Each bridge is laid over a wire: the gap to the finger is wider than solder spans.": (
+        "Her köprü bir telin üzerine döşenir: parmağa olan boşluk, lehimin aşabileceğinden "
+        "geniştir."
+    ),
+    "A rail with no bridge carries nothing.": "Köprüsü olmayan ray hiçbir şey taşımaz.",
+    "Lay the Rail": "Rayı Döşe",
+    "{hole} to {finger}": "{hole} deliğinden {finger} parmağına",
+    "Lay a rail {start}–{end}": "{start}–{end} rayını döşe",
+    "A rail needs two fingers, or at least one bridge.": (
+        "Bir ray için iki parmak ya da en az bir köprü gerekir."
+    ),
+    "The rail was not laid: {why}": "Ray döşenmedi: {why}",
+    "The rail {span} is laid. One Ctrl+Z takes it up.": (
+        "{span} rayı döşendi. Tek bir Ctrl+Z ile geri alabilirsiniz."
+    ),
     "Hand-drawn solder goes on the solder side, under the board.": (
         "Elle çizilen lehim, kartın altındaki lehim yüzüne gider."
     ),

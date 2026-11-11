@@ -19812,3 +19812,90 @@ def test_a_banner_too_long_for_the_board_is_wrapped_every_time_it_is_placed() ->
         assert view.mode_banner.width() < view.viewport().width() // 2
     finally:
         _close(window)
+
+
+def test_make_this_strip_a_rail_from_the_strips_own_menu() -> None:
+    """Right-click an outside finger strip: Make This Strip a Rail… opens a dialog with the
+    net (ground first), the two fingers and the bridges -- ticked where the net already
+    reaches the hole beside -- and lays the rail and its bridges as ONE undo step, through
+    the same ``rail_payload`` MCP's ``add_rail`` dispatches. No bridge is allowed but said."""
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.commands import (
+        AddConductorPayload,
+        AddNetPayload,
+        NewSolderTraceConductor,
+        create_empty_document,
+        document_on_preset,
+    )
+    from perfboard_studio.geometry import finger_cells, strip_cells
+    from perfboard_studio.model import DocumentMeta, HoleCoord
+    from perfboard_studio.ui.i18n import t
+    from perfboard_studio.ui.raildialog import RailDialog
+    from perfboard_studio.ui.view2d import path_point_to_screen
+
+    preset = next(
+        p for p in STANDARD_PRESETS if p.name == "5 x 7 cm" and p.family == "double-sided-fr4"
+    )
+    document = document_on_preset(
+        create_empty_document(DocumentMeta(name="rail", created="", modified="")), preset
+    )
+    window = _window_on(document)
+    try:
+        bus = window.bus
+        assert bus.dispatch("net.add", AddNetPayload(name="SIG")).ok
+        assert bus.dispatch("net.add", AddNetPayload(name="GND", net_class="ground")).ok
+        gnd = next(n for n in bus.document.nets if n.name == "GND")
+        strip = strip_cells(bus.document, "ec-left")
+        second = strip[1]
+        # Ground copper already at the hole beside the second finger.
+        beside = second.beside
+        assert bus.dispatch(
+            "conductor.add",
+            AddConductorPayload(
+                conductor=NewSolderTraceConductor(
+                    path=(beside, HoleCoord(beside.col + 1, beside.row)), net_id=gnd.id
+                )
+            ),
+        ).ok
+
+        # The strip's own right-click menu offers it; the bare board beside it does not.
+        board = bus.document.board
+        on_finger = path_point_to_screen(
+            second.cell, board, window.scene.side, finger_cells(bus.document)
+        )
+        menu = window.board_menu(window.view.mapFromScene(on_finger))
+        assert t("Make This Strip a Rail…") in [a.text() for a in menu.actions()]
+        middle = window.view.mapFromScene(window.scene.sceneRect().center())
+        assert t("Make This Strip a Rail…") not in [
+            a.text() for a in window.board_menu(middle).actions()
+        ]
+
+        dialog = RailDialog(bus.document, window.lookup, "ec-left", face="bottom")
+        assert dialog.net.currentData() == gnd.id
+        assert (dialog.start.currentIndex(), dialog.end.currentIndex()) == (0, len(strip) - 1)
+        assert dialog.bridge_holes() == [(beside.col, beside.row)]
+        assert not dialog.warning.isVisibleTo(dialog)
+        dialog.set_bridges([])
+        assert dialog.warning.text() == t("A rail with no bridge carries nothing.")
+        assert dialog.ok.isEnabled()
+        # One finger and no bridge is not a rail at all.
+        dialog.end.setCurrentIndex(0)
+        assert not dialog.ok.isEnabled()
+        dialog.end.setCurrentIndex(len(strip) - 1)
+        first, last = strip[0], strip[-1]
+        dialog.set_bridges([(first.beside.col, first.beside.row), (beside.col, beside.row)])
+
+        steps = len(bus.history())
+        before = len(bus.document.conductors)
+        window._ask_rail = lambda _c: (dialog.payload(), dialog.span_said())  # type: ignore[method-assign]
+        window.on_make_rail("ec-left")
+        laid = bus.document.conductors[before:]
+        assert len(bus.history()) == steps + 1
+        assert len(laid) == 3  # The rail and two bridges.
+        assert all(c.net_id == gnd.id and c.side == "bottom" for c in laid)
+        assert {laid[0].path[0], laid[0].path[-1]} == {first.cell, last.cell}
+        assert dialog.span_said() in window.statusBar().currentMessage()
+        window.act_undo.trigger()
+        assert len(bus.document.conductors) == before
+    finally:
+        _close(window)

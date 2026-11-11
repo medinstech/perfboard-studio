@@ -7112,6 +7112,14 @@ class BoardScene(QGraphicsScene):
                 return None
         return best
 
+    def connector_at(self, pos: QPointF) -> str | None:
+        """The id of the edge connector whose finger is under a scene position, or None --
+        by the fingers' own shape, never the board-sized bounding rectangle."""
+        for connector_id, item in self.connector_items.items():
+            if item.shape().contains(item.mapFromScene(pos)):
+                return connector_id
+        return None
+
     def conductor_at(self, pos: QPointF) -> ConductorItem | None:
         """The topmost conductor under a scene position, or None -- by its clickable band,
         ties to the highest z, as :meth:`component_at` does for parts."""

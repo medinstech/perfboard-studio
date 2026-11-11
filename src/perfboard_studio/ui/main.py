@@ -168,11 +168,12 @@ from perfboard_studio.catalog import (
     part_rank,
     search_rank,
 )
-from perfboard_studio.command import CommandContext, DispatchResult, HistoryEntry
+from perfboard_studio.command import CommandContext, CommandError, DispatchResult, HistoryEntry
 from perfboard_studio.commands import (
     AddBoardNotePayload,
     AddBoardPayload,
     AddCablePayload,
+    AddConductorsPayload,
     AddNetPayload,
     AddPartPayload,
     AddPartsPayload,
@@ -260,6 +261,7 @@ from perfboard_studio.geometry import (
     legend_label,
     path_length_mm,
     pin_hole,
+    strip_cells,
 )
 from perfboard_studio.guide import (
     Checkpoint,
@@ -409,6 +411,7 @@ from .problems import ProblemsBar
 from .project import write_project
 from .properties import PANEL_WIDTH as PROPERTIES_WIDTH
 from .properties import PropertiesPanel
+from .raildialog import RailDialog, rail_refusal
 from .selection import NOTHING, Selection, SelectionKind
 from .systemview import SystemView
 from .tour import Spotlight, Tour
@@ -9423,6 +9426,18 @@ class MainWindow(QMainWindow):
             # Bare board. Paste lands under the pointer, which is the reason this entry is
             # worth having at all: the keyboard version pastes wherever the pointer happens
             # to be, and here the pointer is demonstrably where the user just clicked.
+            strip = self.scene.connector_at(where)
+            if strip is not None and strip_cells(self.bus.document, strip):
+                # A finger strip outside the grid: what it is for, on the strip itself.
+                rail = menu.addAction(t("Make This Strip a Rail…"))
+                rail.setToolTip(
+                    t(
+                        "Solder along these fingers, bridged to the holes beside them: one "
+                        "net down the side of the board, the way ground and power are run."
+                    )
+                )
+                rail.triggered.connect(lambda _checked=False, c=strip: self.on_make_rail(c))
+                menu.addSeparator()
             menu.addAction(self.act_paste)
             add_label = menu.addAction(t("Add Label Here…"))
             add_label.triggered.connect(lambda: self.on_add_board_label(where))
@@ -9435,6 +9450,43 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
             menu.addAction(self.act_design_board)
         return menu
+
+    def _ask_rail(self, connector_id: str) -> tuple[AddConductorsPayload, str] | None:
+        """The rail the builder chose on this strip, and how to name it; None on Cancel.
+        Its own method so a test can answer it without a modal dialog."""
+        dialog = RailDialog(
+            self.bus.document,
+            self.lookup,
+            connector_id,
+            face=self.scene.solder_draw_face,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        try:
+            payload = dialog.payload()
+        except CommandError as error:
+            self.statusBar().showMessage(
+                t("The rail was not laid: {why}").format(why=rail_refusal(error)), 8000
+            )
+            return None
+        return payload, dialog.span_said()
+
+    def on_make_rail(self, connector_id: str) -> None:
+        """Make This Strip a Rail…: the rail and its bridges as one ``conductor.addMany``."""
+        asked = self._ask_rail(connector_id)
+        if asked is None:
+            return
+        payload, span = asked
+        result = self.bus.dispatch("conductor.addMany", payload)
+        if not result.ok:
+            self.statusBar().showMessage(
+                t("The rail was not laid: {why}").format(why=result.message), 8000
+            )
+            return
+        self.statusBar().showMessage(
+            t("The rail {span} is laid. One Ctrl+Z takes it up.").format(span=span), 8000
+        )
 
     def _on_sheet_context_menu(self, pos: QPoint) -> None:
         self.sheet_menu(pos).exec(self.schematic_view.viewport().mapToGlobal(pos))

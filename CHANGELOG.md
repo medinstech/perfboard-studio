@@ -141,7 +141,11 @@ closed without a bump.
   on a face it has copper on; a wire still needs a hole. A bridge crosses more bare board
   than solder spans, so it is laid over a wire spine, and DRC warns of one that is not and of
   a rail joined to nothing. Auto-wire reaches a rail of the net it is wiring as it reaches a
-  pin, and never another net's. Agents lay one with MCP's new `add_rail`. The 2D and 3D
+  pin, and never another net's. In the window, a right-click on the strip offers Make This
+  Strip a Rail…: the net (ground first), the two fingers it runs between and the bridges,
+  ticked where the net already reaches the hole beside, laid as one undo step; a rail with
+  no bridge is allowed and said to carry nothing. Agents lay one with MCP's new `add_rail`,
+  built by the same code. The 2D and 3D
   views draw a rail on its finger's copper, which on most stock boards is not one pitch past
   the last hole: on the 6 x 8 cm board that point is the gap between two fingers.
 
