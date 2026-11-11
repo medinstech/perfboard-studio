@@ -19034,3 +19034,22 @@ def test_the_wiring_before_a_redo_is_drawn_over_todays_and_survives_a_flip(
         assert not window.scene.showing_before
     finally:
         _close(window)
+
+
+def test_every_wiring_menu_item_says_what_it_does() -> None:
+    """Auto-wire Everything, Auto-wire the Selection, the two style menus, Redo Wiring of
+    the Selection and Remove Out-of-Date Wiring had no tooltip but their own names, in a
+    menu that did not show tooltips anyway."""
+    from PySide6.QtWidgets import QMenu
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        menu = window.act_autoroute.parent()
+        assert isinstance(menu, QMenu) and menu.toolTipsVisible()
+        for action in menu.actions():
+            if action.isSeparator():
+                continue
+            name = action.text().replace("&", "")
+            assert action.toolTip() and action.toolTip() != name, name
+    finally:
+        _close(window)

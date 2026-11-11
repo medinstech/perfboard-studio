@@ -4796,6 +4796,8 @@ class MainWindow(QMainWindow):
         circuit_menu = menu.addMenu(t("&Circuit"))
         board_menu = menu.addMenu(t("&Board"))
         route_menu = menu.addMenu(t("&Wiring"))
+        # Shown: Auto-wire and its neighbours had no word on them but their own names.
+        route_menu.setToolTipsVisible(True)
         view_menu = menu.addMenu(t("&View"))
         help_menu = menu.addMenu(t("&Help"))
         for each in (file_menu, edit_menu, circuit_menu, board_menu, route_menu, view_menu,
@@ -5338,9 +5340,17 @@ class MainWindow(QMainWindow):
         route_menu.addSeparator()
         self.act_autoroute = route_menu.addAction(t("&Auto-wire Everything"))
         self.act_autoroute.setShortcut(QKeySequence("Ctrl+R"))
+        self.act_autoroute.setToolTip(
+            t("Wire every connection not wired yet, in the Wiring Style. The copper already "
+              "there stays, and one Ctrl+Z takes back what it lays. When everything is "
+              "wired, it offers to wire it all again.")
+        )
         self.act_autoroute.triggered.connect(self.on_autoroute_all)
         self.act_route_selected = route_menu.addAction(t("Auto-wire the S&election"))
         self.act_route_selected.setShortcut(QKeySequence("Ctrl+Shift+R"))
+        self.act_route_selected.setToolTip(
+            t("Wire only the connections of the parts or nets selected, and leave the rest.")
+        )
         self.act_route_selected.triggered.connect(self.on_route_selection)
         # HOW the board gets built is the builder's call, not the tool's. The default cost
         # table encodes one opinion and on a populated board it comes out as wire almost
@@ -5349,6 +5359,14 @@ class MainWindow(QMainWindow):
         # See router.RoutingStyle for the measurements.
         style_menu = route_menu.addMenu(t("Wiring St&yle"))
         style_menu.setToolTipsVisible(True)
+        #: What each of the two style menus is for, said again when a board with its own
+        #: planner has said what it is not for (``_refresh_actions``).
+        self._style_menu_tips = {
+            "style": t("What Auto-wire reaches for first: solder traces, wires, bent legs, or a "
+                       "balance of them."),
+            "crossing": t("What a solder trace does where it meets copper it may not cross."),
+        }
+        style_menu.menuAction().setToolTip(self._style_menu_tips["style"])
         self.style_menu = style_menu
         self.act_style: dict[str, QAction] = {}
         for style, label, tip in (
@@ -5384,6 +5402,7 @@ class MainWindow(QMainWindow):
         # take a jumper over a crossing, or may take no wire at all. See router.CrossingPolicy.
         crossing_menu = route_menu.addMenu(t("When a Trace Must &Cross"))
         crossing_menu.setToolTipsVisible(True)
+        crossing_menu.menuAction().setToolTip(self._style_menu_tips["crossing"])
         self.crossing_menu = crossing_menu
         self.act_crossing: dict[str, QAction] = {}
         for policy, label, tip in (
@@ -5437,9 +5456,17 @@ class MainWindow(QMainWindow):
         self.act_reroute_all.triggered.connect(lambda: self.on_reroute(None))
         self.act_reroute_selected = route_menu.addAction(t("Redo Wiring of the Se&lection"))
         self.act_reroute_selected.setShortcut(QKeySequence("Ctrl+Alt+R"))
+        self.act_reroute_selected.setToolTip(
+            t("Take up the wiring of the selected parts or nets and lay it again. Asked "
+              "first; one Ctrl+Z puts it back.")
+        )
         self.act_reroute_selected.triggered.connect(self.on_reroute_selection)
         route_menu.addSeparator()
         self.act_clear_strays = route_menu.addAction(t("Remove Ou&t-of-Date Wiring"))
+        self.act_clear_strays.setToolTip(
+            t("Take up copper joined to nothing: what a moved part leaves behind at its old "
+              "pins.")
+        )
         self.act_clear_strays.triggered.connect(self.on_clear_strays)
         route_menu.addSeparator()
         # What the last route changed, without taking it away to see: Ctrl+Z was the only
@@ -10028,9 +10055,9 @@ class MainWindow(QMainWindow):
                 "This board is wired by its own planner — cuts and links on stripboard, "
                 "jumpers on a breadboard — so this does not apply to it."
             )
-            for menu in (self.style_menu, self.crossing_menu):
+            for key, menu in (("style", self.style_menu), ("crossing", self.crossing_menu)):
                 menu.menuAction().setEnabled(not joined)
-                menu.menuAction().setToolTip(own_planner if joined else "")
+                menu.menuAction().setToolTip(own_planner if joined else self._style_menu_tips[key])
             self.act_grid_wires.setEnabled(not joined or jumpers)
             self.act_grid_wires.setToolTip(
                 t(

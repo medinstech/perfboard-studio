@@ -3964,6 +3964,33 @@ TURKISH: Mapping[str, str] = {
     ),
     "No problems": "Sorun yok",
     "Wiring to review": "Gözden geçirilecek kablolama",
+    "Wire every connection not wired yet, in the Wiring Style. The copper already there "
+    "stays, and one Ctrl+Z takes back what it lays. When everything is wired, it offers to "
+    "wire it all again.": (
+        "Henüz kablolanmamış her bağlantıyı Kablolama Tarzı'na göre kablolar. Var olan bakır "
+        "yerinde kalır; döşediğini tek bir Ctrl+Z geri alır. Her şey zaten kabloluysa hepsini "
+        "yeniden kablolamayı önerir."
+    ),
+    "Wire only the connections of the parts or nets selected, and leave the rest.": (
+        "Yalnızca seçili parçaların ya da netlerin bağlantılarını kablolar, gerisine dokunmaz."
+    ),
+    "What Auto-wire reaches for first: solder traces, wires, bent legs, or a balance of "
+    "them.": (
+        "Otomatik kablolamanın önce neye başvurduğu: lehim yolları, teller, bükülmüş bacaklar "
+        "ya da bunların dengesi."
+    ),
+    "What a solder trace does where it meets copper it may not cross.": (
+        "Lehim yolunun geçemeyeceği bir bakırla karşılaştığında ne yaptığı."
+    ),
+    "Take up the wiring of the selected parts or nets and lay it again. Asked first; one "
+    "Ctrl+Z puts it back.": (
+        "Seçili parçaların ya da netlerin kablolamasını söküp yeniden döşer. Önce sorar; tek "
+        "bir Ctrl+Z geri getirir."
+    ),
+    "Take up copper joined to nothing: what a moved part leaves behind at its old pins.": (
+        "Hiçbir şeye bağlı olmayan bakırı söker: taşınan bir parçanın eski pinlerinde "
+        "bıraktığı bakır."
+    ),
     "Co&mpare With Before": "Ö&ncesiyle Karşılaştır",
     "Draw the wiring as it was before the last Auto-wire or Redo Wiring, dashed, over the "
     "wiring there now.": (
