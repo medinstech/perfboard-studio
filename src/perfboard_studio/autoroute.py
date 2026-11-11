@@ -78,10 +78,12 @@ from .router import (
     RouteStrategy,
     RoutingStyle,
     StrategyPreference,
+    costs_for_style,
     options_for_style,
     relay_grid_wire,
     route_connection,
 )
+from .wiringstats import wiring_stats
 
 # ---------------------------------------------------------------------------
 # Options
@@ -329,16 +331,36 @@ ALL_ROUTING_STYLES: tuple[RoutingStyle, ...] = ("balanced", "solder", "wire", "l
 #:   more to dress and more to go wrong than a 10 mm hop. Trace length is deliberately NOT
 #:   charged at all -- length is exactly what a trace is good at.
 #:
-#:   RISK is DRC rule R5', a trace running 0.6 mm from a pad of another net and the
-#:   commonest way a hand-built board fails. Charged well below the 12 the balanced search
-#:   uses, because by comparison time the route already succeeded and every risky hole has
-#:   become a measurement step in the guide: it is a managed cost, not a veto. Set against
-#:   the wire weight, this says one risky gap is worth about a third of a wire -- which is
-#:   the exchange rate this whole comparison turns on, so it is the number to argue with.
 TRACE_CONDUCTOR_EFFORT = 3.0
 WIRE_CONDUCTOR_EFFORT = 10.0
 WIRE_MM_EFFORT = 0.08
-RISK_HOLE_EFFORT = 3.0
+#:   EVERYTHING ELSE IS PRICED AT THE SEARCH'S OWN RATE. The balanced search already says
+#:   what a risky gap, a bend, a hole lain across and a stacking loop are worth against an
+#:   insulated wire (``RouterCosts``: 12, 1, 3 and 30 to the wire's 18), and it steers by
+#:   those numbers; the comparison converts them at that rate into a wire's 10 here. One
+#:   table for all four variants -- the balanced one, never the variant's own -- so this is
+#:   still one currency, not the trap above.
+#:
+#:   RISK is DRC rule R5', a trace running 0.6 mm from a pad of another net and the
+#:   commonest way a hand-built board fails: 6.7, two thirds of a wire. It was 3, "a third
+#:   of a wire", on the argument that a risky hole is a measurement step in the guide by
+#:   comparison time -- which let the comparison overrule the search with a cheaper price
+#:   for the very thing the search had gone round. On the NE555 example that picked
+#:   lead-bend, 15 DRC warnings and 17 holes to measure, over balanced's 0 and 0, to save
+#:   nine wires. At the search's rate risk costs what the search said it does.
+#:
+#:   BENDS, PINS and ENDS lain across, and LOOPS, are the auto-wire scoreboard's columns
+#:   (``wiringstats``), counted on the plan's board: a corner formed with pliers, a joint
+#:   hidden under a wire or a wire stacked above another's end, a wire nobody can solder in
+#:   order. The comparison did not see them at all, so between two plans of wires it chose
+#:   on length alone. The stack's height is not a term: it is made of the ends lain across,
+#:   which are, and charging the tallest pile again would count them twice.
+_SEARCH_COSTS = costs_for_style("balanced")
+_PER_SEARCH_COST = WIRE_CONDUCTOR_EFFORT / _SEARCH_COSTS.insulated_wire_fixed
+RISK_HOLE_EFFORT = _SEARCH_COSTS.proximity_risk * _PER_SEARCH_COST
+BEND_EFFORT = _SEARCH_COSTS.wire_bend * _PER_SEARCH_COST
+OVER_JOINT_EFFORT = _SEARCH_COSTS.wire_over_joint * _PER_SEARCH_COST
+LOOP_EFFORT = _SEARCH_COSTS.wire_into_loop * _PER_SEARCH_COST
 #:   A DRC WARNING the plan adds is something the builder has to read, judge and usually
 #:   act on -- a pure run past the length solder holds, a phenolic pad that will lift --
 #:   so it is charged half a wire. R5' (``solder-trace-proximity``) is left out of the
@@ -370,6 +392,18 @@ class VariantScore:
     #: Zero when the plan was scored without a footprint lookup to run DRC with.
     drc_errors: int = 0
     drc_warnings: int = 0
+    #: The scoreboard's columns (``wiringstats.wiring_stats``) on the board the plan makes:
+    #: corners in its wires, holes a wire lies across where a pin is and where another
+    #: conductor ends, stacking loops, the tallest stack and the pads its runs are soldered
+    #: along. Counted on the whole board, so a cost new copper puts on old -- an end under a
+    #: wire already there -- is the plan's; the board's own is the same in every variant.
+    #: Zero, like the DRC counts, when the plan was scored without a footprint lookup.
+    bends: int = 0
+    over_pins: int = 0
+    over_ends: int = 0
+    loops: int = 0
+    max_level: int = 0
+    trace_pads: int = 0
 
     @property
     def conductors(self) -> int:
@@ -384,6 +418,9 @@ class VariantScore:
             + self.wire_mm * WIRE_MM_EFFORT
             + self.risk_holes * RISK_HOLE_EFFORT
             + self.drc_warnings * DRC_WARNING_EFFORT
+            + self.bends * BEND_EFFORT
+            + (self.over_pins + self.over_ends) * OVER_JOINT_EFFORT
+            + self.loops * LOOP_EFFORT
         )
 
     def key(self) -> tuple[int, int, float]:
@@ -435,7 +472,8 @@ def score_plan(
     ``doc`` supplies the board, since a length in millimetres depends on its pitch, and is
     the board the plan was made from. With ``lookup``, DRC is run on the plan's preview and
     what it finds beyond ``doc``'s own findings is counted; ``baseline`` is those, from
-    :func:`drc_counts`, when the caller scores several plans of one board.
+    :func:`drc_counts`, when the caller scores several plans of one board. The scoreboard's
+    columns are measured on the preview too, and need the lookup for the same reason.
     """
     wires = [c for c in plan.conductors if c.kind in _WIRE_KINDS]
     errors = warnings = 0
@@ -449,6 +487,7 @@ def score_plan(
                 errors += added
             elif severity == "warning":
                 warnings += added
+    stats = wiring_stats(plan.document, lookup) if lookup is not None else None
     return VariantScore(
         unrouted=plan.summary.links_unrouted,
         risk_holes=plan.summary.risk_holes,
@@ -457,6 +496,12 @@ def score_plan(
         wire_mm=sum(path_length_mm(c.path, doc.board) for c in wires),
         drc_errors=errors,
         drc_warnings=warnings,
+        bends=stats.bends if stats else 0,
+        over_pins=stats.over_pins if stats else 0,
+        over_ends=stats.over_ends if stats else 0,
+        loops=len(stats.loops) if stats else 0,
+        max_level=stats.max_level if stats else 0,
+        trace_pads=stats.trace_pads if stats else 0,
     )
 
 
@@ -537,9 +582,26 @@ def describe_best(best: BestAutoroute) -> str:
             # dropping it -- which turns a report into a crash.
             f"{score.risk_holes} risk hole{'' if score.risk_holes == 1 else 's'}"
             + _drc_added(score)
+            + _lain_across(score)
             + f"  -> effort {score.effort:.0f}"
         )
     return "\n".join(lines)
+
+
+def _lain_across(score: VariantScore) -> str:
+    """", 12 bends, 3 over pins, 1 over ends" -- the scoreboard's columns a plan has, and
+    nothing for one with none of them."""
+    parts = [
+        f"{count} {name}"
+        for count, name in (
+            (score.bends, "bend" if score.bends == 1 else "bends"),
+            (score.over_pins, "over pins"),
+            (score.over_ends, "over ends"),
+            (score.loops, "LOOP" if score.loops == 1 else "LOOPS"),
+        )
+        if count
+    ]
+    return "".join(", " + part for part in parts)
 
 
 def _drc_added(score: VariantScore) -> str:
@@ -1123,17 +1185,27 @@ def _another_order_could_help(attempt: _Attempt) -> bool:
     )
 
 
-def _build_key(attempt: _Attempt, doc: PerfDocument) -> tuple[int, int, float]:
-    """``VariantScore.key`` for an attempt: unrouted connections first, then what the board
-    costs a person to build.
+def _build_key(attempt: _Attempt, doc: PerfDocument) -> tuple[int, int, int, float]:
+    """``VariantScore.key`` for an attempt, with the wires before the effort: unrouted
+    connections first, then the wires on a board meant to be built without one, then what
+    the board costs a person to build.
 
     Two starting orders are compared on this rather than on ``_rank``'s router cost for the
     reason ``plan_best_autoroute`` compares styles on it. A style's cost table is a lever
     that steers the search, and under the solder table two hops can come out cheaper than
     one because the traces around them are shorter -- on ``dense`` the router's cost picks
     the plan with two jumpers where the builder is better off with one.
+
+    The wires come before the effort because taking them off is what the other orders are
+    for (:func:`_another_order_could_help`), and only a builder committed to solder is given
+    them. What a risky gap is worth against a wire is the exchange rate the sweep argues
+    between styles, at the balanced search's rate; this builder settled it by choosing
+    solder, whose table prices a risky gap at 2 and a hop at 16. Ranked on the effort alone,
+    the golden NE555 went back to four jumpers over the ground rail to save eight risky
+    holes.
     """
-    return score_plan(_to_plan(attempt, attempt.pass_number), doc).key()
+    score = score_plan(_to_plan(attempt, attempt.pass_number), doc)
+    return (score.unrouted, score.drc_errors, score.wires, score.effort)
 
 
 def _nets_to_promote(attempt: _Attempt) -> tuple[NetId, ...]:

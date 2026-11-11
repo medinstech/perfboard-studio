@@ -1717,6 +1717,11 @@ class BoardSession:
                     "risk_holes": variant.score.risk_holes,
                     "drc_errors_added": variant.score.drc_errors,
                     "drc_warnings_added": variant.score.drc_warnings,
+                    "bends": variant.score.bends,
+                    "over_pins": variant.score.over_pins,
+                    "over_ends": variant.score.over_ends,
+                    "loops": variant.score.loops,
+                    "max_level": variant.score.max_level,
                     "effort": round(variant.score.effort, 1),
                 }
                 for variant in sorted(best.variants, key=lambda v: v.score.key())

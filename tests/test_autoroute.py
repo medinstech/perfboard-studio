@@ -86,6 +86,7 @@ from perfboard_studio.router import (
     options_for_style,
     relay_grid_wire,
 )
+from perfboard_studio.wiringstats import wiring_stats
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -1373,8 +1374,9 @@ def test_the_other_orders_never_leave_a_board_worse(
     name: str, commitment: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """They are tried AFTER the usual rip-up from criticality and replace its plan only when
-    it is cheaper to build, so no board may come back with more left unrouted or more work
-    in it than criticality alone gave -- measured as ``plan_best_autoroute`` measures."""
+    it is better to build, so no board may come back with more left unrouted, more wires
+    on a board meant to have none, or as many and more work in it than criticality alone
+    gave -- measured as ``plan_best_autoroute`` measures, wires first (``_build_key``)."""
     doc = dataclasses.replace(_load_golden_document(name), conductors=())
     options = AutorouteOptions(router=SOLDER_COMMITMENTS[commitment])
 
@@ -1385,7 +1387,11 @@ def test_the_other_orders_never_leave_a_board_worse(
     )
     before = plan_autoroute(doc, LOOKUP_STD, options)
 
-    assert score_plan(plan, doc).key() <= score_plan(before, doc).key()
+    def key(scored: AutoroutePlan) -> tuple[int, int, int, float]:
+        score = score_plan(scored, doc)
+        return (score.unrouted, score.drc_errors, score.wires, score.effort)
+
+    assert key(plan) <= key(before)
 
 
 def test_with_no_wire_allowed_fewer_connections_are_left_unrouted(
@@ -1512,3 +1518,74 @@ def test_the_report_names_the_drc_findings_a_plan_adds() -> None:
         autoroute._drc_added(dataclasses.replace(clean, drc_errors=2, drc_warnings=3))
         == ", 2 DRC errors, 3 DRC warnings"
     )
+
+
+def test_what_the_search_steers_by_is_charged_at_the_searchs_own_rate() -> None:
+    """The comparison priced a risky gap at a third of a wire while the balanced search,
+    which had gone round it, priced it at two thirds -- so the sweep picked the plan that
+    took the risk. Each of these is the balanced table's price converted at its own rate
+    against an insulated wire, not a number of the comparison's own."""
+    costs = DEFAULT_ROUTER_COSTS
+    rate = autoroute.WIRE_CONDUCTOR_EFFORT / costs.insulated_wire_fixed
+
+    charged = (
+        autoroute.RISK_HOLE_EFFORT,
+        autoroute.BEND_EFFORT,
+        autoroute.OVER_JOINT_EFFORT,
+        autoroute.LOOP_EFFORT,
+    )
+    searched = (costs.proximity_risk, costs.wire_bend, costs.wire_over_joint, costs.wire_into_loop)
+
+    assert charged == pytest.approx(tuple(cost * rate for cost in searched))
+
+
+def test_a_score_counts_the_scoreboards_columns() -> None:
+    """Between two plans of wires the comparison used to see length alone: not the bends,
+    nor the joints and the ends the wires lie across, which are what auto-wire is held to."""
+    doc = dataclasses.replace(_load_golden_document("ne555"), conductors=())
+    plan = plan_autoroute(
+        doc, LOOKUP_STD, AutorouteOptions(router=RouterOptions(wire_path="grid"))
+    )
+
+    score = score_plan(plan, doc, LOOKUP_STD)
+    stats = wiring_stats(plan.document, LOOKUP_STD)
+
+    assert score.bends == stats.bends > 0
+    assert (score.over_pins, score.over_ends, score.loops) == (
+        stats.over_pins, stats.over_ends, len(stats.loops),
+    )
+    assert (score.max_level, score.trace_pads) == (stats.max_level, stats.trace_pads)
+    plain = dataclasses.replace(score, bends=0, over_pins=0, over_ends=0, loops=0)
+    assert score.effort == pytest.approx(
+        plain.effort
+        + score.bends * autoroute.BEND_EFFORT
+        + (score.over_pins + score.over_ends) * autoroute.OVER_JOINT_EFFORT
+        + score.loops * autoroute.LOOP_EFFORT
+    )
+    assert f"{score.bends} bends" in describe_best(
+        autoroute.BestAutoroute(
+            style="balanced",
+            plan=plan,
+            variants=(autoroute.AutorouteVariant(style="balanced", plan=plan, score=score),),
+        )
+    )
+    # The stack is made of the ends lain across: the tallest one is reported, not charged.
+    assert dataclasses.replace(score, max_level=9).effort == score.effort
+
+
+def test_the_ne555_example_is_not_wired_with_fifteen_warnings_to_save_nine_wires() -> None:
+    """What the sweep used to pick on the NE555 example: lead-bend, 15 DRC warnings and 17
+    holes to measure for a bridge, over balanced's none, because a risky gap cost a third of
+    a wire. Wired as the window wires it, from bare, along the grid."""
+    path = Path(__file__).resolve().parents[1] / "examples" / "ne555-astable.perf"
+    doc = persist.deserialize_document(path.read_text(encoding="utf-8")).document
+    bare = dataclasses.replace(doc, conductors=())
+
+    best = plan_best_autoroute(
+        bare, LOOKUP_STD, AutorouteOptions(router=RouterOptions(wire_path="grid"))
+    )
+
+    by_style = {variant.style: variant.score for variant in best.variants}
+    assert by_style["lead-bend"].risk_holes > 10
+    assert best.style == "balanced"
+    assert by_style["balanced"].risk_holes == 0

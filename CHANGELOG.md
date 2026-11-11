@@ -137,6 +137,15 @@ closed without a bump.
   joint fell from 44 to 37 and across another wire's end from 29 to 20, and the 555 timer's
   wires cross no joint at all. Auto-wire takes no longer: the router now remembers which
   holes each run of copper lies over instead of working it out again for every wire.
+- **"Try every style, keep the best" no longer picks a board with more to measure.** It
+  priced a place where solder runs close to another net's pad at a third of a wire, though
+  the router itself steers round one as if it were two thirds, and it did not look at bends
+  or at what a wire lies across at all. On the NE555 example it chose bent leads with 15 DRC
+  warnings over a board with none, to save nine wires. Every one of those is now priced as
+  the router prices it. Over the example and test boards the boards it picks carry 24
+  warnings where they carried 97 and half the pads soldered along (470 where 955), for more
+  wire (192 wires where 144, 4.4 m where 3.3 m). The report and the agent's comparison say
+  each style's bends and the joints and wire ends its wires lie across.
 
 ## [0.24.0] - 2026-11-10
 

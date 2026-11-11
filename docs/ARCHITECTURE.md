@@ -2999,6 +2999,22 @@ bends and less wire there, and over the sweep `pin` 44 -> 37 and `end` 29 -> 20.
 ceiling may rise, and the commit that raises it quotes both runs and says why the column that
 rose costs less than what was bought.
 
+**The sweep picks its style in the same terms.** `plan_best_autoroute` wires the board once
+per style and keeps the plan `VariantScore.effort` says is least work, and that effort used
+to see conductors, wire length, risk holes and DRC warnings, but not one of the columns
+above. Between two plans of wires it chose on length alone. It also priced a risky gap at a
+third of a wire while the balanced search, which had gone round the gap, priced it at two
+thirds, so on the NE555 example the sweep picked lead-bend with 15 DRC warnings and 17 holes
+to measure over balanced's none, to save nine wires. Now the effort charges bends, holes
+lain across (pins and ends alike, as the search prices them) and loops, and every price the
+search also steers by (those, and the risky gap) is the balanced table's price converted at
+that table's own rate against an insulated wire (`autoroute._PER_SEARCH_COST`). They are
+not numbers of the comparison's own. The stack's height is reported and not charged,
+because it is built from the ends lain across, which are charged already.
+`test_what_the_search_steers_by_is_charged_at_the_searchs_own_rate` holds the conversion,
+and `test_the_ne555_example_is_not_wired_with_fifteen_warnings_to_save_nine_wires` holds the
+case.
+
 ## What the window remembers
 
 `main.app_settings()` is the one `QSettings` store — recent files, the session
