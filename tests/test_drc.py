@@ -326,6 +326,7 @@ PYTHON_ONLY_RULES = frozenset(
         "superseded-footprint",
         "copper-under-body",
         "joint-under-body",
+        "no-copper-on-face",
     }
 )
 

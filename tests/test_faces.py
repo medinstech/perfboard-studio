@@ -23,13 +23,21 @@ from perfboard_studio.commands import (
     create_document_id_generator,
     create_standard_registry,
 )
+from perfboard_studio.connectivity import extract_physical_nets
+from perfboard_studio.drc import run_drc
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import all_pin_holes, is_adjacent4
+from perfboard_studio.lvs import run_lvs
 from perfboard_studio.model import (
     HoleCoord,
     PerfDocument,
     SolderTraceConductor,
     has_component_side_copper,
 )
+from perfboard_studio.occupancy import build_occupancy
 from perfboard_studio.ui.clipboard import _new_conductor
+
+LOOKUP = footprint_lookup()
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 GOLDEN_DIR = REPO / "tools" / "diffcheck" / "golden"
@@ -155,3 +163,101 @@ def test_a_copied_trace_keeps_its_face() -> None:
     spec = _new_conductor(trace, trace.path, {})
 
     assert isinstance(spec, NewSolderTraceConductor) and spec.side == "top"
+
+
+# ---------------------------------------------------------------------------
+# What the board joins, and what DRC says about it
+# ---------------------------------------------------------------------------
+
+
+def _with(doc: PerfDocument, *conductors: SolderTraceConductor) -> PerfDocument:
+    return dataclasses.replace(doc, conductors=(*doc.conductors, *conductors))
+
+
+def _net_of(doc: PerfDocument, conductor_id: str) -> str:
+    return next(n.id for n in extract_physical_nets(doc, LOOKUP) if conductor_id in n.conductor_ids)
+
+
+def test_a_pinless_hole_both_faces_reach_is_a_via() -> None:
+    """A trace on each face, meeting in a hole with no pin: one net, through the plating
+    (connectivity's pass 2b). Apart, they are two."""
+    doc = dataclasses.replace(_doc(), conductors=())
+    a, b, c = _free_run(doc)
+    top = SolderTraceConductor(id="top", path=(a, b), side="top")
+    under = SolderTraceConductor(id="under", path=(b, c), side="bottom")
+    apart = SolderTraceConductor(id="under", path=(c,), side="bottom")
+
+    assert _net_of(_with(doc, top, under), "top") == _net_of(_with(doc, top, under), "under")
+    assert _net_of(_with(doc, top, apart), "top") != _net_of(_with(doc, top, apart), "under")
+
+
+def test_a_trace_on_the_component_side_through_two_nets_pins_is_a_short() -> None:
+    """A pin joins its hole's two faces, so solder on the component side shorts two pins
+    exactly as it would underneath."""
+    doc = dataclasses.replace(_doc(), conductors=())
+    pins = [
+        (component.ref, pin.number, hole)
+        for component in doc.components
+        for footprint in (LOOKUP(component.footprint_id),)
+        if footprint is not None
+        for pin, hole in all_pin_holes(component, footprint)
+    ]
+    net_of = {
+        (node.component_ref, node.pin): net.id for net in doc.nets for node in net.nodes
+    }
+    first, second = next(
+        (p, q)
+        for p in pins
+        for q in pins
+        if is_adjacent4(p[2], q[2])
+        and (p[0], p[1]) in net_of
+        and (q[0], q[1]) in net_of
+        and net_of[(p[0], p[1])] != net_of[(q[0], q[1])]
+    )
+    before = run_lvs(doc, LOOKUP).summary.shorts
+
+    bridged = _with(doc, SolderTraceConductor(id="t", path=(first[2], second[2]), side="top"))
+
+    assert run_lvs(bridged, LOOKUP).summary.shorts > before
+
+
+def test_solder_on_a_face_with_no_pads_is_an_error_and_not_on_one_with_pads() -> None:
+    doc = _doc()
+    trace = SolderTraceConductor(id="t", path=_free_run(doc), side="top")
+    single = dataclasses.replace(
+        _with(doc, trace), board=dataclasses.replace(doc.board, single_sided=True)
+    )
+
+    found = [v for v in run_drc(single, LOOKUP) if v.rule == "no-copper-on-face"]
+
+    assert [(v.severity, v.conductor_ids) for v in found] == [("error", ("t",))]
+    assert "component side" in found[0].message
+    assert not [v for v in run_drc(_with(doc, trace), LOOKUP) if v.rule == "no-copper-on-face"]
+    underneath = dataclasses.replace(trace, side="bottom")
+    assert not [
+        v
+        for v in run_drc(dataclasses.replace(single, conductors=(*doc.conductors, underneath)), LOOKUP)
+        if v.rule == "no-copper-on-face"
+    ]
+
+
+def test_a_component_side_trace_under_a_parts_body_is_named() -> None:
+    """Component-side copper is laid after the parts, so under one it cannot be laid at
+    all: copper-under-body names it, on the component side. The same run underneath, with
+    every part on the component side, is not under anything."""
+    doc = dataclasses.replace(_doc(), conductors=())
+    occupancy = build_occupancy(doc, LOOKUP)
+    run = next(
+        (HoleCoord(col, row), HoleCoord(col + 1, row), HoleCoord(col + 2, row))
+        for row in range(doc.board.rows)
+        for col in range(doc.board.cols - 2)
+        if occupancy.body_covers(HoleCoord(col + 1, row), "top") is not None
+    )
+    trace = SolderTraceConductor(id="t", path=run, side="top")
+
+    found = [v for v in run_drc(_with(doc, trace), LOOKUP) if v.rule == "copper-under-body"]
+
+    assert found and all(v.conductor_ids == ("t",) for v in found)
+    assert "on the component side" in found[0].message
+    under = dataclasses.replace(trace, side="bottom")
+    assert not [v for v in run_drc(_with(doc, under), LOOKUP) if v.rule == "copper-under-body"]

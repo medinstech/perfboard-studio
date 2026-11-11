@@ -850,6 +850,7 @@ TURKISH: Mapping[str, str] = {
     "Heat source too close": "Isı kaynağı fazla yakın",
     "Jumper under a part": "Parçanın altında jumper",
     "Copper hidden under a part": "Parçanın altında kalan bakır",
+    "Solder where the board has no pads": "Pedi olmayan yüzde lehim",
     "Joint under its own part": "Lehim noktası parçanın altında",
     "Bent leg too long": "Bükülen bacak fazla uzun",
     "Too close to a mounting hole": "Montaj deliğine fazla yakın",
@@ -4870,6 +4871,8 @@ TURKISH: Mapping[str, str] = {
                                                                                                                                                                      "önce lehimleyin, yoksa ona ulaşmak için "
                                                                                                                                                                      "parçayı sökmek gerekir.",
     "{wirekind} {wire} runs under {ref}, which is on the solder side and covers {hole}. Lay it before fitting {ref_b}, or the part has to come off to reach it.": "{wirekind} {wire}, {ref} altından geçiyor; parça lehim yüzünde ve {hole} deliğini örtüyor. Onu {ref_b} takılmadan önce döşeyin, yoksa ona ulaşmak için parçayı sökmek gerekir.",
+    "{wirekind} {wire} runs under {ref} on the component side and covers {hole}. Copper on the component side is laid after the parts, so it cannot be laid there once {ref_b} is fitted: route it clear of {ref_c}.": "{wirekind} {wire}, parça yüzünde {ref} altından geçiyor ve {hole} deliğini örtüyor. Parça yüzündeki bakır parçalardan sonra döşenir; {ref_b} takıldıktan sonra oraya döşenemez. Onu {ref_c} parçasından uzak geçirin.",
+    "{wirekind} {wire} is on the component side, where this board has no pads to solder to. Lay it on the solder side.": "{wirekind} {wire} parça yüzünde, ama bu kartın o yüzde lehimlenecek pedi yok. Lehim yüzüne döşeyin.",
     "{ref}'s joint at {hole} is under {ref_b}, on the solder side. Solder {ref_c} before fitting {ref_d}, or the joint cannot be reached or reworked.": "{ref} parçasının {hole} deliğindeki lehim noktası, lehim yüzündeki {ref_b} altında kalıyor. {ref_c} parçasını {ref_d} takılmadan önce lehimleyin, yoksa o noktaya ulaşılamaz ve düzeltilemez.",
     "{ref}'s joint at {hole} is under {ref_b}, on the component side. Solder {ref_c} before fitting {ref_d}, or the joint cannot be reached or reworked.": "{ref} parçasının {hole} deliğindeki lehim noktası, parça yüzündeki {ref_b} altında kalıyor. {ref_c} parçasını {ref_d} takılmadan önce lehimleyin, yoksa o noktaya ulaşılamaz ve düzeltilemez.",
     "{ref} is on the solder side of a single-sided board, so its leads are soldered on the solder side, and its body sits on the board over its joints ({holes}): the iron cannot reach them. Put it on the component side, or use a double-sided board.": "{ref} tek yüzlü bir kartın lehim yüzünde; bu yüzden bacakları lehim yüzünde lehimlenir ve gövdesi kartın üstüne, lehim noktalarının üzerine oturur ({holes}): havya onlara ulaşamaz. Onu parça yüzüne koyun ya da çift yüzlü bir kart kullanın.",

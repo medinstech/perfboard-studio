@@ -2411,6 +2411,7 @@ def _rule_title(rule: str) -> str:
         "conductor-crossing": t("Wires or traces cross"),
         "conductor-off-board": t("Wire or trace off the board"),
         "copper-under-body": t("Copper hidden under a part"),
+        "no-copper-on-face": t("Solder where the board has no pads"),
         "creepage-clearance": t("Too close for the voltage"),
         "crossing-conductors": t("Two nets in one hole"),
         "current-capacity": t("Too thin for the current"),

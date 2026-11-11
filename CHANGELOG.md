@@ -57,6 +57,10 @@ closed without a bump.
   **A file holding a component-side trace does not open in 0.24 or earlier**: they stop
   with `Conductors of kind "solder-trace" must have side "bottom", got "top".` A net's
   preferred face alone is only ignored there, with an "Unknown property" warning.
+- **The checks know which face solder is on.** A trace on the component side of a board
+  with no pads there is an error (`no-copper-on-face`), and a file holding one still opens
+  to say so. A component-side trace under a part's body is reported as copper hidden under a
+  part: copper on that face goes in after the parts, so under one it cannot be laid.
 
 ### Changed
 

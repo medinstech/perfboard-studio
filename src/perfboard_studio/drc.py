@@ -120,6 +120,7 @@ from .model import (
     SolderTraceConductor,
     WireConductor,
     contacts_every_path_hole,
+    has_component_side_copper,
     is_crossing_blocked,
     is_heat_pair,
     is_solder_trace,
@@ -824,6 +825,34 @@ def _check_conductors_off_board(doc: PerfDocument) -> list[DrcViolation]:
             )
         )
     return violations
+
+
+def _check_copper_on_padless_face(doc: PerfDocument) -> list[DrcViolation]:
+    """Solder laid on the component side of a board with no pads there (Python only).
+
+    ``conductor.add`` refuses it (``model.has_component_side_copper``), so this fires only
+    on a file written by hand or by another tool, or on a board made single-sided after
+    the copper was laid: the file still opens, and is told what is wrong, as a conductor
+    off the board is. Solder only: a wire on such a face is soldered where its ends come
+    through, which is what a top jumper is.
+    """
+    if has_component_side_copper(doc.board):
+        return []
+    return [
+        DrcViolation(
+            rule="no-copper-on-face",
+            severity="error",
+            message=(
+                f"{_conductor_words(conductor.kind)} {conductor.id} "
+                f"{_conductor_ends(conductor.path, board=doc.board)} is on the component side, "
+                f"where this board has no pads to solder to. Lay it on the solder side."
+            ),
+            holes=tuple(conductor.path[:1]),
+            conductor_ids=(conductor.id,),
+        )
+        for conductor in doc.conductors
+        if is_solder_trace(conductor) and conductor.side == "top" and conductor.path
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -2593,15 +2622,23 @@ def _check_copper_under_body(doc: PerfDocument, lookup: FootprintLookup) -> list
     stripboard's strips are not counted: they are the board, there before any part is, and
     a part on the solder side of a stripboard stands on them by definition.
     """
-    if not any(component.side == "bottom" for component in doc.components):
+    if not any(component.side == "bottom" for component in doc.components) and not any(
+        is_solder_trace(c) and c.side == "top" for c in doc.conductors
+    ):
         return []
     occupancy = build_occupancy(doc, lookup)
     by_id = {component.id: component for component in doc.components}
     violations: list[DrcViolation] = []
 
     for conductor in doc.conductors:
-        if conductor.side != "bottom" or conductor.kind == "strip" or len(conductor.path) < 2:
+        if conductor.kind == "strip" or len(conductor.path) < 2:
             continue
+        # The component side holds solder only since 0.25. A wire there is a top jumper,
+        # whose body rule is jumper-under-body; a trace there is laid among the fitted
+        # parts, after them (the guide's phase 7), so under one it cannot be laid at all.
+        if conductor.side == "top" and not is_solder_trace(conductor):
+            continue
+        face: BoardSide = conductor.side
         ends = {hole_key(conductor.path[0]), hole_key(conductor.path[-1])}
         holes = (
             list(conductor.path)
@@ -2612,22 +2649,29 @@ def _check_copper_under_body(doc: PerfDocument, lookup: FootprintLookup) -> list
         for hole in holes:
             if hole_key(hole) in ends:
                 continue
-            under = occupancy.body_covers(hole, "bottom")
+            under = occupancy.body_covers(hole, face)
             if under is not None and under not in first:
                 first[under] = hole
         for component_id, hole in first.items():
             part = by_id[component_id]
+            what = (
+                f"{_conductor_words(conductor.kind)} {conductor.id} "
+                f"({_safe_hole(conductor.path[0], doc.board)} to "
+                f"{_safe_hole(conductor.path[-1], doc.board)})"
+            )
             violations.append(
                 DrcViolation(
                     rule="copper-under-body",
                     severity="warning",
                     message=(
-                        f"{_conductor_words(conductor.kind)} {conductor.id} "
-                        f"({_safe_hole(conductor.path[0], doc.board)} to "
-                        f"{_safe_hole(conductor.path[-1], doc.board)}) runs under "
-                        f"{part.ref}, which is on the solder side and covers "
-                        f"{_safe_hole(hole, doc.board)}. Lay it before fitting {part.ref}, or "
-                        f"the part has to come off to reach it."
+                        f"{what} runs under {part.ref}, which is on the solder side and "
+                        f"covers {_safe_hole(hole, doc.board)}. Lay it before fitting "
+                        f"{part.ref}, or the part has to come off to reach it."
+                        if face == "bottom"
+                        else f"{what} runs under {part.ref} on the component side and covers "
+                        f"{_safe_hole(hole, doc.board)}. Copper on the component side is laid "
+                        f"after the parts, so it cannot be laid there once {part.ref} is "
+                        f"fitted: route it clear of {part.ref}."
                     ),
                     holes=(hole, part.anchor),
                     component_ids=(part.id,),
@@ -2811,6 +2855,7 @@ def run_drc(
         *_check_component_height(doc, lookup),
         *_check_jumper_under_body(doc, lookup),
         *_check_copper_under_body(doc, lookup),
+        *_check_copper_on_padless_face(doc),
         *_check_joint_under_body(doc, lookup),
     ]
 

@@ -328,6 +328,8 @@ FINDING_TEMPLATES: tuple[str, ...] = (
     'Conductor {wire} is soldered at {hole}, where the track has been cut and the pad is gone.',
     'Top jumper {wire} passes under {ref}, which is {height} and covers {hole}. Solder the jumper before fitting {ref_b}, or the part has to come off to reach it.',
     "{wirekind} {wire} runs under {ref}, which is on the solder side and covers {hole}. Lay it before fitting {ref_b}, or the part has to come off to reach it.",
+    "{wirekind} {wire} runs under {ref} on the component side and covers {hole}. Copper on the component side is laid after the parts, so it cannot be laid there once {ref_b} is fitted: route it clear of {ref_c}.",
+    "{wirekind} {wire} is on the component side, where this board has no pads to solder to. Lay it on the solder side.",
     "{ref}'s joint at {hole} is under {ref_b}, on the solder side. Solder {ref_c} before fitting {ref_d}, or the joint cannot be reached or reworked.",
     "{ref}'s joint at {hole} is under {ref_b}, on the component side. Solder {ref_c} before fitting {ref_d}, or the joint cannot be reached or reworked.",
     "{ref} is on the solder side of a single-sided board, so its leads are soldered on the solder side, and its body sits on the board over its joints ({holes}): the iron cannot reach them. Put it on the component side, or use a double-sided board.",
