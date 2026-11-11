@@ -1036,7 +1036,14 @@ def test_the_tool_surface_is_registered_and_stays_narrow() -> None:
     # but a rail and its bridges are several conductors whose spines depend on the board's
     # gaps, and the window's "make this strip a rail" builds the same payload
     # (commands.rail_payload) -- an agent should not have to rebuild it by hand.
-    assert len(tools) <= 68, f"{len(tools)} tools; see the note in server.py before adding more"
+    #
+    # And 69, for use_stock_board, which add_rail turned out to need: a rail goes on a
+    # stock board's outside strip, the strip stands in the board's border, and set_board
+    # sets no border, so an agent could lay a rail only on a board someone else had made in
+    # the window. One board.applyPreset, as the board chooser dispatches it -- not a
+    # parameter on set_board, because a stock board is a product, not a size (the strips and
+    # screws arrive with it), and the window keeps the two apart for the same reason.
+    assert len(tools) <= 69, f"{len(tools)} tools; see the note in server.py before adding more"
     for critical in ("render_2d_view", "render_3d_view", "snapshot", "restore"):
         assert critical in names, f"{critical} is named in PLAN.md Sec 9.2 as load-bearing"
     assert all(tool.description for tool in tools), "a tool with no description is unusable"
@@ -1741,3 +1748,152 @@ def test_autoroute_says_nothing_of_faces_where_every_net_kept_its_own(loaded: Bo
     loaded.update_net("GND", preferred_side="top")
     result = loaded.autoroute(style="solder")
     assert result["ok"] and "face_notes" not in result
+
+
+def test_an_agent_can_put_on_a_stock_board_and_lay_a_rail_on_it(session) -> None:
+    """``set_board`` sets no border, and a stock board's strips stand in it: without
+    ``use_stock_board`` a rail could be read about and never laid on a board an agent made."""
+    refused = session.add_rail("A3/L", "A9/L")
+    assert refused["ok"] is False
+
+    result = session.use_stock_board("5x7")
+    assert result["ok"], result
+    board = session.document.board
+    assert (board.cols, board.rows) == (24, 18)
+    assert {c.edge for c in session.document.edge_connectors} == {"left", "right"}
+    assert len(session.document.mounting_holes) == 4
+    fingers = [f for strip in session.get_board_info()["edge_connectors"] for f in strip["fingers"]]
+    assert "A3/L" in fingers
+
+    assert session.add_rail("A3/L", "A9/L", bridges=["A3"])["ok"]
+    session.undo()
+    session.undo()
+    assert session.document.edge_connectors == ()
+
+
+def test_a_stock_board_names_the_sizes_it_is_sold_in() -> None:
+    session = BoardSession(document=new_board())
+    with pytest.raises(SessionError, match="5 x 7 cm"):
+        session.use_stock_board("6 x 6 cm")
+    with pytest.raises(SessionError, match="double-sided-fr4"):
+        session.use_stock_board("5 x 7 cm", family="plywood")
+
+
+def test_an_edge_connector_may_have_copper_on_both_faces(session) -> None:
+    """The stock boards' strips are plated on both faces; an agent can say so too."""
+    session.set_board(single_sided=False)
+    assert session.add_edge_connector("bottom", start=2, count=4, face="both")["ok"]
+    assert session.document.edge_connectors[0].face == "both"
+
+
+def test_one_board_with_every_face_and_rail_feature_goes_through_every_output(tmp_path) -> None:
+    """The seam: a stock board an agent puts on, a net kept on the component side, Auto-wire
+    on both faces, a hand-drawn component-side trace changing face at an empty hole, a rail
+    with a bridge, and a header turned onto the solder side -- through every reading and
+    every file. Each piece has its own tests; this is the one board that holds them all,
+    and it is where a rail's ends were found printed as "(col -1, row 2)" and so shown in
+    English in the Turkish window."""
+    from perfboard_studio.drc import run_drc
+    from perfboard_studio.ui.engine_text import finding_text, names_in
+    from perfboard_studio.ui.i18n import language, set_language
+
+    session = BoardSession(document=new_board(name="seam"))
+    assert session.use_stock_board("7 x 9 cm")["ok"]
+    for ref, footprint, hole, value in (
+        ("U1", "dip-8", "J8", "NE555"),
+        ("R1", "r-axial-3", "P4", "10k"),
+        ("R2", "r-axial-3", "P11", "47k"),
+        ("C1", "c-elec-d8-p3", "T15", "10u"),
+        ("D1", "led-5mm", "X8", "red"),
+        ("J1", "hdr-1x4", "E16", "PWR"),
+    ):
+        assert session.place_component(ref, footprint, hole, value=value)["ok"]
+    assert session.set_component_side("J1", "bottom")["ok"]
+    for name, pins, extra in (
+        ("VCC", ["U1.8", "U1.4", "R1.1", "J1.1"], {"net_class": "power"}),
+        ("GND", ["U1.1", "C1.2", "J1.2", "D1.2"], {"net_class": "ground", "preferred_side": "top"}),
+        ("TRIG", ["U1.2", "U1.6", "C1.1", "R2.2"], {}),
+        ("DIS", ["U1.7", "R1.2", "R2.1"], {}),
+        ("OUT", ["U1.3", "J1.3", "D1.1"], {}),
+    ):
+        assert session.create_net(name, pins=pins, **extra)["ok"]
+    routed = session.autoroute(faces="both")
+    assert routed["ok"] and not routed.get("failed"), routed
+    assert session.add_rail("A3/L", "A9/L", net="VCC", bridges=["A3"])["ok"]
+    assert session.add_wire("A3", "C3", kind="insulated-wire", net="VCC")["ok"]
+    assert session.add_solder_trace(["Z15", "Z16", "Z17"], side="top")["ok"]
+    assert session.add_solder_trace(["Z17", "AA17", "AB17"], side="bottom")["ok"]
+
+    doc = session.document
+    assert any(c.side == "top" and c.kind.startswith("solder-trace") for c in doc.conductors)
+    assert "Z17" in session._vias()
+    lvs = session.run_lvs()
+    assert (lvs["shorts"], lvs["opens"]) == (0, 0), lvs
+    drc = session.run_drc()
+    assert drc["errors"] == 0, drc
+    findings = run_drc(doc, session.lookup)
+    assert not [v.message for v in findings if "(col " in v.message]
+    before = language()
+    try:
+        for v in findings:
+            names = names_in(doc, v.message, v.conductor_ids)
+            set_language("en")
+            english = finding_text(v.message, names)
+            set_language("tr")
+            assert finding_text(v.message, names) != english, english
+    finally:
+        set_language(before)
+
+    for lang in ("en", "tr"):
+        assert session.generate_guide(str(tmp_path / lang), language=lang)["ok"]
+    turkish = (tmp_path / "tr" / "guide.html").read_text(encoding="utf-8")
+    assert "Z17 deliği bir via" in turkish
+    assert "A3/L, sol kenarda A3 deliğinin yanındaki parmaktır" in turkish
+    assert session.export_step(str(tmp_path / "seam.step"))["ok"]
+    assert session.export_pdf(str(tmp_path / "pdf"))["ok"]
+    for side in ("top", "bottom"):
+        png, _meta = session.render_2d(side=side)
+        assert png[:4] == PNG_MAGIC
+
+
+def test_a_stock_board_is_the_one_the_window_puts_on(loaded: BoardSession) -> None:
+    """The same command, payload and document as the window's board chooser, which puts on
+    ``suggest_boards``' board through ``preset_payload`` (``MainWindow._use_board``): byte for
+    byte, in one undo step -- on a document with parts on it, as the chooser's always has."""
+    from perfboard_studio.command import CommandBus, CommandContext
+    from perfboard_studio.commands import (
+        create_document_id_generator,
+        create_standard_registry,
+        preset_payload,
+    )
+    from perfboard_studio.persist import serialize_document
+    from perfboard_studio.placer import suggest_boards
+
+    start = loaded.document
+    [chosen] = [
+        s
+        for s in suggest_boards(start.board, [], start.nets, loaded.lookup)
+        if s.preset.name == "9 x 15 cm"
+    ]
+    window = CommandBus(
+        start, create_standard_registry(), CommandContext(next_id=create_document_id_generator(start))
+    )
+    assert window.dispatch("board.applyPreset", preset_payload(chosen.preset, chosen.board)).ok
+
+    depth = len(loaded.bus.history())
+    assert loaded.use_stock_board("9 x 15 cm")["ok"]
+    assert len(loaded.bus.history()) == depth + 1
+    assert serialize_document(loaded.document) == serialize_document(window.document)
+
+
+def test_the_tool_lists_every_stock_board() -> None:
+    """An agent learns the catalogue from the description, so it names every size."""
+    import asyncio
+
+    from perfboard_studio.boardfamily import STANDARD_PRESETS
+    from perfboard_studio.mcp import server
+
+    [tool] = [t for t in asyncio.run(server.mcp.list_tools()) if t.name == "use_stock_board"]
+    for preset in STANDARD_PRESETS:
+        assert f"{preset.family}: " in tool.description
+        assert preset.name in tool.description

@@ -160,6 +160,10 @@ closed without a bump.
   built by the same code. The 2D and 3D
   views draw a rail on its finger's copper, which on most stock boards is not one pitch past
   the last hole: on the 6 x 8 cm board that point is the gap between two fingers.
+  pin, and never another net's. Agents lay one with MCP's new `add_rail`, on a board put on
+  with the new `use_stock_board`: a stock board as it is sold, its border, strips and corner
+  screws in one undo step, as the window's board chooser puts it on (69 tools). Drawing a rail on
+  its finger in the 2D and 3D views is still to come.
 
 ### Changed
 
@@ -233,6 +237,10 @@ closed without a bump.
 - **A wired solder run that bends on the far face is a line again.** Seen through the board,
   its spine was drawn with the joints' fill still set, so a run turning a corner on the other
   face showed as a solid triangle over every hole inside the bend.
+- **A long rail is named by its fingers.** `solder-trace-too-long` named a rail's ends as
+  "(col -1, row 2) to (col -1, row 8)" rather than "A3/L to A9/L", and so was shown in
+  English in the Turkish window. MCP's `add_edge_connector` takes `face="both"`, which the
+  stock boards' strips are and which it used to refuse.
 - **The Bare Wire and Insulated Wire tools say how they draw.** Their tooltips still said
   "Click both ends." from before a wire could turn; they now say to click where it starts and
   wherever it turns, and that Enter, a right-click or a double-click finishes.

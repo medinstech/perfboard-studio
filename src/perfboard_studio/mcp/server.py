@@ -337,6 +337,21 @@ def set_board(
     )
 
 
+_USE_STOCK_BOARD = """Put the design on a perfboard as it is sold, in one undo step: `size` as
+the listing quotes it ("5 x 7 cm", "7x9") in a `family` ("double-sided-fr4", the green
+plated boards, or "single-sided-phenolic", the brown ones). The grid, the border that size
+leaves, and the finger strips and corner screw holes the board arrives with -- what the
+window's board chooser puts on. It replaces what set_board set (size, material, sides) and
+every strip and mounting hole the board had. set_board cannot make one, because it sets no
+border, and the strips a rail is laid on stand in it. A size or family not in this list is
+refused with the ones there are. The stock boards: """
+
+
+@mcp.tool(description=_USE_STOCK_BOARD + BoardSession.stock_boards() + ".")
+def use_stock_board(size: str, family: str = "double-sided-fr4") -> dict[str, Any]:
+    return session.use_stock_board(size, family)
+
+
 @mcp.tool()
 def add_mounting_hole(
     hole: str, diameter: float = 3.2, head_diameter: float = 6.0
@@ -360,7 +375,8 @@ def add_edge_connector(
     connector fingers, starting at index `start` and `count` wide. A finger IS the pad
     there, rather than something over it. With `outside`, the fingers stand in the border
     beside that run instead and every grid pad stays -- which is where the stock boards'
-    edge strips are; refused on a board whose border has no room for them."""
+    edge strips are; refused on a board whose border has no room for them. `face` is the
+    side with the fingers' copper: "bottom", "top" or "both", as on a plated board."""
     return session.add_edge_connector(edge, start, count, finger_width, face, outside)
 
 

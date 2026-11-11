@@ -660,3 +660,14 @@ def test_both_rail_warnings_are_said_in_turkish() -> None:
             assert "A5/L" in turkish or "A4" in turkish
     finally:
         set_language(before)
+
+
+def test_a_long_rail_is_named_by_its_fingers() -> None:
+    """``solder-trace-too-long`` names a conductor by its ends, and a rail's ends are fingers:
+    "A3/L", which the guide and every other rule print, not the coordinate past the grid."""
+    railed = _with(
+        _stock(), NewSolderTraceConductor(path=tuple(H(-1, row) for row in range(2, 9)))
+    )
+    [long] = [v for v in run_drc(railed, LOOKUP) if v.rule == "solder-trace-too-long"]
+    assert "(A3/L to A9/L)" in long.message, long.message
+    assert "col -1" not in long.message

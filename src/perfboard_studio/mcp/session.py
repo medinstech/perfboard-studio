@@ -41,6 +41,7 @@ from perfboard_studio.autoroute import (
 )
 from perfboard_studio.autoroute import describe as describe_route
 from perfboard_studio.boardbus import BoardBus
+from perfboard_studio.boardfamily import STANDARD_PRESETS, board_from_preset
 from perfboard_studio.breadboard import (
     MAX_CHANNEL,
     PATTERN_TYPES,
@@ -113,6 +114,7 @@ from perfboard_studio.commands import (
     create_document_id_generator,
     create_empty_document,
     create_standard_registry,
+    preset_payload,
     rail_payload,
     wire_side,
 )
@@ -147,7 +149,6 @@ from perfboard_studio.model import (
     UNTITLED_NAME,
     Board,
     BoardEdge,
-    BoardFace,
     BoardFinish,
     BoardMask,
     BoardMaterial,
@@ -1362,6 +1363,47 @@ class BoardSession:
         )
         return self._dispatch("board.set", SetBoardPayload(board=updated))
 
+    @staticmethod
+    def stock_boards() -> str:
+        """Every stock board ``use_stock_board`` takes, family by family, from
+        ``boardfamily.STANDARD_PRESETS``: an agent has no other way to learn the catalogue,
+        so the tool's own description carries it, and it cannot drift from the table."""
+        families: dict[str, list[str]] = {}
+        for preset in STANDARD_PRESETS:
+            families.setdefault(preset.family, []).append(preset.name)
+        return "; ".join(f"{family}: {', '.join(sizes)}" for family, sizes in families.items())
+
+    def use_stock_board(self, size: str, family: str = "double-sided-fr4") -> dict[str, Any]:
+        """Put the design on a board as it is sold: ``size`` as the listing quotes it
+        ("5 x 7 cm", "5x7") in a catalogue ``family``. One ``board.applyPreset``, what the
+        window's board chooser dispatches: the grid, the border the size leaves, and the
+        finger strips and corner screws the board arrives with, in one undo step.
+
+        ``set_board`` cannot make one: it sets no border, and a stock board's strips stand
+        in its border, outside the grid. Without this an agent could read about rails and
+        never lay one on a board it made. The board TYPE and pad details stay the board's
+        (``boardfamily.board_from_preset``), as they do in the window. It replaces what
+        ``set_board`` set -- size, material, sides, border -- and every strip and mounting
+        hole the board had, as choosing a board in the window does.
+        """
+        def key(text: str) -> str:
+            return text.lower().replace("cm", "").replace(" ", "")
+
+        presets = [p for p in STANDARD_PRESETS if p.family == family]
+        if not presets:
+            families = sorted({p.family for p in STANDARD_PRESETS})
+            raise SessionError(
+                f"{family!r} is not a stock board family. Use one of: {', '.join(families)}."
+            )
+        preset = next((p for p in presets if key(p.name) == key(size)), None)
+        if preset is None:
+            raise SessionError(
+                f"{size!r} is not a size {family} is sold in. Use one of: "
+                f"{', '.join(p.name for p in presets)}."
+            )
+        board = board_from_preset(preset, self.document.board)
+        return self._dispatch("board.applyPreset", preset_payload(preset, board))
+
     def add_mounting_hole(
         self, hole: str, diameter: float = 3.2, head_diameter: float = 6.0
     ) -> dict[str, Any]:
@@ -1388,8 +1430,10 @@ class BoardSession:
             raise SessionError(
                 f"{edge!r} is not a board edge. Use one of: {', '.join(get_args(BoardEdge))}."
             )
-        if face not in ("top", "bottom"):
-            raise SessionError(f"{face!r} is not a face. Use 'top' or 'bottom'.")
+        if face not in persist.BOARD_FACES:
+            raise SessionError(
+                f"{face!r} is not a face. Use one of: {', '.join(persist.BOARD_FACES)}."
+            )
         return self._dispatch(
             "edge-connector.add",
             AddEdgeConnectorPayload(
@@ -1397,7 +1441,7 @@ class BoardSession:
                 start=start,
                 count=count,
                 finger_width=finger_width,
-                face=cast(BoardFace, face),
+                face=face,
                 outside=outside,
             ),
         )

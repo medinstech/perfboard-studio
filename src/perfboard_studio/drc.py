@@ -294,7 +294,7 @@ def _conductor_ends(path: Sequence[HoleCoord], *, board: Board | None) -> str:
     """
     if not path:
         return "(no path)"
-    return f"({_safe_hole(path[0])} to {_safe_hole(path[-1])})"
+    return f"({_safe_hole(path[0], board)} to {_safe_hole(path[-1], board)})"
 
 
 def _node_side_key(hole: HoleCoord, side: BoardSide) -> str:

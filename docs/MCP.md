@@ -139,7 +139,7 @@ conductor at a time.
 | **Seeing** | `render_2d_view` · `render_3d_view` · `render_schematic` |
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
 | **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `update_net` · `delete_net` |
-| **The board** | `set_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `update_board_feature` · `remove_board_feature` |
+| **The board** | `set_board` · `use_stock_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `update_board_feature` · `remove_board_feature` |
 | **Editing** | `place_component` · `move_component` · `rotate_component` · `set_component_side` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `add_rail` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` · `set_body_clearance` |
 | **Planning** | `autoroute` · `reroute` · `optimize_placement` |
 | **Verifying** | `run_erc` · `run_drc` · `run_lvs` · `check_heights` |
@@ -147,7 +147,7 @@ conductor at a time.
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 | **Several boards** | `select_board` · `add_board` · `rename_board` · `remove_board` · `move_to_board` · `add_cable` · `remove_cable` · `get_system_info` |
 
-68 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+69 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -461,6 +461,14 @@ preference working.
 **A rail is solder on a stock board's finger strip.** The strip down a stock board's long
 sides stands OUTSIDE the grid, a finger beside each outermost hole, and a finger is named
 by that hole and its edge: `A7/L` is left of A7, and `/R`, `/T`, `/B` are the others.
+`use_stock_board` puts such a board on, as the window's board chooser does: the size as the
+listing quotes it ("5 x 7 cm") in a family, its border, strips and corner screws, in one
+undo step. It replaces what `set_board` set -- size, material, sides -- and every strip and
+mounting hole the board had, exactly as the window's chooser does (a test holds the two
+documents byte for byte). Its description lists every stock board, from the same table the
+chooser reads, and a size or family not there is refused with the ones there are.
+`set_board` sets no border, so before it an agent could read this paragraph and never lay a
+rail on a board it made.
 `get_board_info` lists each strip's `fingers`. `add_rail` lays solder along them from one
 finger to another, with a bridge from each hole you name beside the rail onto its finger,
 as one undo step; `add_solder_trace` takes the same addresses. Only solder goes on a
