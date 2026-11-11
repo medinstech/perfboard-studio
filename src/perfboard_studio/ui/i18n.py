@@ -935,10 +935,39 @@ TURKISH: Mapping[str, str] = {
     "without its pictures": "görselleri olmadan",
     "Cancel": "İptal",
     "Delete parts": "Parçaları sil",
-    "Delete conductors": "İletkenleri sil",
     "Apply this placement?": "Bu yerleşim uygulansın mı?",
     "Redo the wiring?": "Kablolama yeniden yapılsın mı?",
     "Redo Wiring": "Kablolamayı Yeniden Yap",
+    # Hand copper: what the step being drawn would do, what was drawn, what went.
+    "{hole}: this would join {a} to {b}, a short": "{hole}: bu, {a} ile {b} netlerini birleştirir; kısa devre",
+    "{hole}: this would cross {other}, and they would touch": "{hole}: bu, {other} ile kesişir ve birbirlerine değerler",
+    "{hole}: this would lie on {joint}, another net's joint": "{hole}: bu, başka bir netin lehim noktası olan {joint} üzerine yatar",
+    "{hole}: this runs along {other}": "{hole}: bu, {other} boyunca uzanır",
+    "Drew {what} on {net}": "{what} çizildi: {net} netinde",
+    "Drew {what}: not on any net yet": "{what} çizildi: henüz hiçbir nette değil",
+    "Drew {what}: it joins {a} to {b} at {hole}, a short. Ctrl+Z takes it back.": (
+        "{what} çizildi: {hole} deliğinde {a} ile {b} netlerini birleştiriyor, bu bir kısa "
+        "devre. Ctrl+Z ile geri alabilirsiniz."
+    ),
+    "Drew {what}: it crosses {other} near {hole}, and they would touch. Ctrl+Z takes it back.": (
+        "{what} çizildi: {hole} deliği yakınında {other} ile kesişiyor ve birbirlerine "
+        "değerler. Ctrl+Z ile geri alabilirsiniz."
+    ),
+    "Drew {what}: it lies on {joint} at {hole}, another net's joint. Ctrl+Z takes it back.": (
+        "{what} çizildi: {hole} deliğinde başka bir netin lehim noktası olan {joint} "
+        "üzerine yatıyor. Ctrl+Z ile geri alabilirsiniz."
+    ),
+    "Drew {what}: it runs along {other} from {hole}.": (
+        "{what} çizildi: {hole} deliğinden itibaren {other} boyunca uzanıyor."
+    ),
+    "Deleted {what} · Ctrl+Z brings it back": "{what} silindi · Ctrl+Z ile geri getirebilirsiniz",
+    "Deleted {count} conductors · Ctrl+Z brings them back": "{count} iletken silindi · Ctrl+Z ile geri getirebilirsiniz",
+    "Select All of {net}": "{net} Netinin Tümünü Seç",
+    "Redo Wiring of {net}": "{net} Kablolamasını Yeniden Yap",
+    "Remove Wiring of {net}": "{net} Kablolamasını Kaldır",
+    "Remove Wiring of {count} Nets": "{count} Netin Kablolamasını Kaldır",
+    "{net} has no wiring to remove.": "{net} için kaldırılacak kablolama yok.",
+    "Removed the wiring of {net} · Ctrl+Z brings it back": "{net} kablolaması kaldırıldı · Ctrl+Z ile geri getirebilirsiniz",
     "Conductors to remove: {removed}; to plan in their place: {planned}. Copper with no net "
     "assigned is left alone.": (
         "Kaldırılacak iletken: {removed}; yerlerine planlanacak: {planned}. Neti atanmamış "
@@ -1876,8 +1905,6 @@ TURKISH: Mapping[str, str] = {
     "Deleted {count} part(s)": "{count} parça silindi",
     "Disconnected {count} pin(s)": "{count} pin ayrıldı",
     # -- confirmations, with the verb on the button ------------------------------------
-    "Delete {count} conductor?": "{count} iletken silinsin mi?",
-    "Delete {count} conductors?": "{count} iletken silinsin mi?",
     "Delete {refs}?": "{refs} silinsin mi?",
     "The selected conductor goes with them.": "Seçili iletken de onlarla birlikte silinir.",
     "The {count} selected conductors go with them.": (
@@ -4532,6 +4559,7 @@ TURKISH: Mapping[str, str] = {
     "Reroute conductor {id}": "{id} iletkenini yeniden döşe",
     "Delete {kind} {id}": "{id} iletkenini ({kind}) sil",
     "Delete {count} conductor(s)": "{count} iletkeni sil",
+    "Remove the wiring of {name}": "{name} netinin kablolamasını kaldır",
     "Remove {count} stale conductor(s)": "Eskimiş {count} iletkeni kaldır",
     "Replace {removed} conductor(s) with {added}": "{removed} iletkeni {added} iletkenle değiştir",
     "Route {net} ({count} connection)": "{net} netini kablola ({count} bağlantı)",

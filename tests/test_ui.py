@@ -3099,7 +3099,9 @@ def test_a_wire_is_two_clicks_and_commits_itself() -> None:
     assert conductor.kind == "insulated-wire"
     assert conductor.path == (view2d.HoleCoord(2, 2), view2d.HoleCoord(9, 6))
     assert conductor.side == "bottom"
-    assert scene.armed_draw_kind is None  # Disarmed once committed.
+    # Still armed for the next wire, with nothing drawn: copper is laid in a series.
+    assert scene.armed_draw_kind == "insulated-wire"
+    assert scene.drawn_path == ()
 
 
 def test_a_top_jumper_drawn_by_hand_runs_over_the_component_side() -> None:
@@ -5961,7 +5963,8 @@ def test_a_right_click_that_finished_a_trace_does_not_also_open_a_menu() -> None
 
     scene.mousePressEvent(_press_at(QPointF(0, 0), Qt.MouseButton.RightButton))
 
-    assert scene.armed_draw_kind is None, "the right-click should have finished the trace"
+    assert len(bus.document.conductors) == 1, "the right-click should have finished the trace"
+    assert scene.drawn_path == () and scene.armed_draw_kind == "solder-trace"
     assert scene.take_consumed_right_click() is True
     assert scene.take_consumed_right_click() is False, "the answer is spent once read"
 
@@ -18415,3 +18418,151 @@ def test_an_example_opens_with_its_names_in_the_windows_language() -> None:
             _close(window)
     finally:
         set_language(before)
+
+
+# -- copper drawn by hand: what it would do, said before and after -----------------------------
+
+
+def _hole(window, ref: str):
+    from perfboard_studio.geometry import parse_hole
+
+    hole = parse_hole(ref, window.bus.document.board)
+    assert hole is not None, ref
+    return hole
+
+
+def _hover_hole(window, ref: str) -> None:
+    window.scene.hover_at(hole_to_screen(_hole(window, ref), window.bus.document.board, window.scene.side))
+
+
+def test_a_run_through_another_nets_pad_turns_red_and_the_banner_says_why() -> None:
+    """F1 → F3 on ne555 runs through F2, LED1's GND leg. It used to be a thin grey line to
+    the click and "Done" after it; the short was the Problems count going up by one."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.on_draw_mode("solder-trace", True)
+        window.scene.draw_click(_hole(window, "F1"))
+        _hover_hole(window, "F3")
+
+        preview = window.scene._draw_preview
+        assert preview is not None and preview.problem is not None
+        assert preview.problem.severity == "error"
+        assert format_hole(preview.problem.hole, window.bus.document.board) == "F2"
+        banner = window.view.mode_banner.text()
+        assert "F2" in banner and "LED_A" in banner and "GND" in banner and "short" in banner
+
+        window.scene.draw_click(_hole(window, "F3"))
+        assert window.scene.commit_drawing() is not None
+        status = window.statusBar().currentMessage()
+        assert "short" in status and "F2" in status and "Ctrl+Z" in status, status
+        # The tool stays for the next piece, and the banner is back to how to use it.
+        assert window.scene.armed_draw_kind == "solder-trace"
+        assert "short" not in window.view.mode_banner.text()
+    finally:
+        _close(window)
+
+
+def test_copper_drawn_on_from_a_wires_end_joins_that_wires_net_and_says_so() -> None:
+    """G6 is the end of a GND wire, not a pin. The old rule claimed a net only between two
+    pins of it, so this wire went in on no net -- skipped by Redo Wiring, and never said."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.on_draw_mode("bare-wire", True)
+        window.scene.draw_click(_hole(window, "G6"))
+        result = window.scene.draw_click(_hole(window, "F2"))
+
+        assert result is not None and result.ok
+        drawn = window.bus.document.conductors[-1]
+        gnd = next(net.id for net in window.bus.document.nets if net.name == "GND")
+        assert drawn.net_id == gnd
+        assert window.statusBar().currentMessage().endswith("G6 → F2 on GND")
+        assert window.scene.armed_draw_kind == "bare-wire"
+    finally:
+        _close(window)
+
+
+def test_the_drawing_hint_goes_with_the_tool() -> None:
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.on_draw_mode("solder-trace", True)
+        assert window.statusBar().currentMessage().startswith("Drawing")
+        window.scene.leave_mode()
+        assert window.statusBar().currentMessage() == ""
+    finally:
+        _close(window)
+
+
+def test_copper_is_deleted_without_a_question_and_the_status_offers_it_back() -> None:
+    window = _window_on(_example_document("ne555-astable"))
+    asked: list[str] = []
+    original = type(window)._confirm
+    type(window)._confirm = lambda self, title, body, verb: asked.append(title) or False
+    try:
+        _select_conductor(window, "cond-13")
+        window.on_delete_selection()
+
+        assert asked == []
+        assert "cond-13" not in {c.id for c in window.bus.document.conductors}
+        status = window.statusBar().currentMessage()
+        assert "F1 → I1" in status and "Ctrl+Z" in status, status
+    finally:
+        type(window)._confirm = original
+        _close(window)
+
+
+def test_picking_a_net_in_the_panel_puts_the_boards_selection_down() -> None:
+    """Delete took a run picked on the board a minute before, while Properties showed the
+    net picked in the panel since."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        _select_conductor(window, "cond-8")
+        thresh = next(net.id for net in window.bus.document.nets if net.name == "THRESH")
+        row = next(
+            item
+            for i in range(window.nets_tree.topLevelItemCount())
+            if (item := window.nets_tree.topLevelItem(i)) is not None
+            and item.data(0, ROLE_NET_ID) == thresh
+        )
+        window.nets_tree.setCurrentItem(row)
+
+        assert window.scene.selected_conductor_ids() == ()
+        assert window._selected_net_ids() == (thresh,)
+    finally:
+        _close(window)
+
+
+def test_remove_wiring_takes_up_one_nets_copper_as_one_step() -> None:
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        document = window.bus.document
+        thresh = next(net.id for net in document.nets if net.name == "THRESH")
+        claimed = {c.id for c in document.conductors if c.net_id == thresh}
+        assert claimed
+        _select_conductor(window, "cond-8")
+
+        menu = window.board_menu(
+            window.view.mapFromScene(window.scene.conductor_items["cond-8"].boundingRect().center())
+        )
+        texts = [a.text() for a in menu.actions()]
+        assert {"Select All of THRESH", "Redo Wiring of THRESH", "Remove Wiring of THRESH"} <= set(texts)
+
+        window._remove_wiring((thresh,))
+        left = {c.id for c in window.bus.document.conductors}
+        assert not claimed & left
+        assert window.bus.history()[-1] == "Remove the wiring of THRESH"
+    finally:
+        _close(window)
+
+
+def test_redo_wiring_of_the_selection_takes_a_selected_conductors_net() -> None:
+    window = _window_on(_example_document("ne555-astable"))
+    asked: list[tuple[str, ...] | None] = []
+    try:
+        window.on_reroute = lambda net_ids, *a, **k: asked.append(net_ids)
+        _select_conductor(window, "cond-8")
+        window.on_reroute_selection()
+
+        thresh = next(net.id for net in window.bus.document.nets if net.name == "THRESH")
+        assert asked == [(thresh,)]
+    finally:
+        _close(window)

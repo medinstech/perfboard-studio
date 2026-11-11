@@ -133,6 +133,7 @@ TEMPLATES: tuple[str, ...] = (
     "Reroute conductor {id}",
     "Delete {kind} {id}",
     "Delete {count} conductor(s)",
+    "Remove the wiring of {name}",
     "Remove {count} stale conductor(s)",
     "Replace {removed} conductor(s) with {added}",
     "Route {net} ({count} connection)",

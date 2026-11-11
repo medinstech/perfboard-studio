@@ -201,6 +201,7 @@ from .bodies import (
     surface_for,
 )
 from .canvasinput import wheel_intent
+from .drawcheck import DrawCheck, DrawProblem, check_drawn
 from .i18n import language as current_language
 from .i18n import t
 from .moduleart import (
@@ -250,6 +251,7 @@ from .theme import (
     CANVAS_HOVER,
     CANVAS_HOVER_WIDTH_PX,
     CANVAS_SELECTED,
+    CANVAS_WARNING,
     NET_COLOURS,
 )
 from .topview import TopView, top_view
@@ -323,6 +325,7 @@ FAR_SIDE_OPACITY = 0.55
 FAR_SIDE_EDGE = QColor(20, 26, 34, 210)
 SELECTED = QColor(CANVAS_SELECTED)
 ERROR_OUTLINE = QColor(CANVAS_ERROR)
+WARNING_OUTLINE = QColor(CANVAS_WARNING)
 #: The part on the far side, seen through the board. Dim on purpose: on the solder side
 #: the pads are the subject, and anything that competes with them for attention is a way
 #: to solder the wrong pad.
@@ -2070,6 +2073,9 @@ class DrawPreviewItem(QGraphicsItem):
         #: The pads a click on ``next_hole`` would add, in order: one for a wire's end, the
         #: whole run to the pointer for a solder trace.
         self.run: list[HoleCoord] = []
+        #: What laying it here would do wrong (``drawcheck``), marked at its hole: a short
+        #: or a crossing in the error colour, a wire along another in amber.
+        self.problem: DrawProblem | None = None
         self.setZValue(120)
 
     def boundingRect(self) -> QRectF:
@@ -2089,8 +2095,23 @@ class DrawPreviewItem(QGraphicsItem):
         self.run = list(run)
         self.update()
 
+    def set_problem(self, problem: DrawProblem | None) -> None:
+        if problem != self.problem:
+            self.problem = problem
+            self.update()
+
+    def _problem_tint(self) -> QColor | None:
+        if self.problem is None:
+            return None
+        return ERROR_OUTLINE if self.problem.severity == "error" else WARNING_OUTLINE
+
     def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
         colour, width, _dashed = CONDUCTOR_STYLE.get(self.kind, (QColor("#888"), 0.6, False))
+        trouble = self._problem_tint()
+        if trouble is not None:
+            # The whole conductor takes the colour, not only the step: a short made three
+            # clicks back is still what Enter would lay.
+            colour = trouble
         points = [hole_to_screen(h, self.board, self.side) for h in self.path]
 
         if len(points) >= 2:
@@ -2130,6 +2151,15 @@ class DrawPreviewItem(QGraphicsItem):
             painter.setPen(QPen(tint, 0.22))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(end, self.board.pad_diameter * 0.62, self.board.pad_diameter * 0.62)
+
+        if self.problem is not None and trouble is not None:
+            # A double ring on the hole itself, which is where the eye has to go.
+            at = hole_to_screen(self.problem.hole, self.board, self.side)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            for scale, pen_width in ((0.75, 0.3), (1.05, 0.16)):
+                painter.setPen(QPen(trouble, pen_width))
+                radius = self.board.pad_diameter * scale
+                painter.drawEllipse(at, radius, radius)
 
 
 def _stroke_pen(colour: QColor, width: float) -> QPen:
@@ -4677,6 +4707,9 @@ class BoardScene(QGraphicsScene):
     drawArmed = Signal(str)
     #: Emitted with the DispatchResult of a hand-drawn conductor.
     conductorDrawn = Signal(object)
+    #: Emitted with what the conductor being drawn would do (``drawcheck.DrawCheck``) as
+    #: the pointer moves, or None when there is nothing to check yet.
+    drawChecked = Signal(object)
     #: Emitted with the id of the net being filled by clicking pins, or "" when that ends.
     netPinsArmed = Signal(str)
     #: Emitted with the "U1.8" labels picked so far, after every pick.
@@ -4773,6 +4806,15 @@ class BoardScene(QGraphicsScene):
         #: Whether a solder run goes down the column before along the row (``/`` flips it).
         self._draw_column_first = False
         self._draw_preview: DrawPreviewItem | None = None
+        #: The last ``check_drawn`` asked, by (document, kind, path): the pointer moves far
+        #: more often than it changes holes.
+        self._draw_checked: (
+            tuple[PerfDocument, str, tuple[HoleCoord, ...], DrawCheck] | None
+        ) = None
+        #: What the conductor just laid was found to do, and its kind and holes, for the
+        #: host's status line.
+        self.last_draw_check: DrawCheck | None = None
+        self.last_drawn: tuple[ConductorKind, tuple[HoleCoord, ...]] | None = None
         self._net_pin_target: str | None = None
         self._net_pin_picks: list[tuple[str, str]] = []
         self._net_pin_holes: list[HoleCoord] = []
@@ -5455,6 +5497,29 @@ class BoardScene(QGraphicsScene):
     def armed_draw_kind(self) -> ConductorKind | None:
         return self._draw_kind
 
+    @property
+    def drawn_path(self) -> tuple[HoleCoord, ...]:
+        """The holes of the conductor being drawn, clicked so far."""
+        return tuple(self._draw_path)
+
+    def check_drawing(self, path: Sequence[HoleCoord]) -> DrawCheck | None:
+        """What laying the armed kind along ``path`` would do, from the engine's own
+        predicates (``drawcheck``); None with nothing armed or under two holes."""
+        if self._draw_kind is None or len(path) < 2:
+            return None
+        kind, holes = str(self._draw_kind), tuple(path)
+        cached = self._draw_checked
+        if (
+            cached is not None
+            and cached[0] is self.document
+            and cached[1] == kind
+            and cached[2] == holes
+        ):
+            return cached[3]
+        checked = check_drawn(self.document, self.lookup, self._draw_kind, holes)
+        self._draw_checked = (self.document, kind, holes, checked)
+        return checked
+
     def _clear_draw(self) -> None:
         if self._draw_preview is not None:
             self.removeItem(self._draw_preview)
@@ -5543,59 +5608,54 @@ class BoardScene(QGraphicsScene):
         return None
 
     def commit_drawing(self) -> DispatchResult | None:
-        """Dispatch the drawn conductor. Fewer than two holes is a cancel, not an error."""
+        """Dispatch the drawn conductor, and stay armed for the next one.
+
+        THE TOOL KEEPS ITS KIND after a conductor goes in: copper is laid in a series, and it
+        let go after every piece -- ten wires were W pressed ten times. Esc, another tool or
+        Enter on nothing drawn leaves it. Under two holes is a cancel, not an error: of the
+        run alone when one hole was clicked, of the tool when none was.
+        """
         if self.bus is None or self._draw_kind is None or len(self._draw_path) < 2:
+            if self._draw_kind is not None and self._draw_path:
+                self._start_next_conductor()
+                return None
             self._clear_draw()
             self.drawArmed.emit("")
             return None
 
         kind = self._draw_kind
         path = tuple(self._draw_path)
+        # The net is the one the copper's contacts meet -- a pin's or a conductor's -- so a
+        # run drawn on from another run's end, or from a pin to its own net's copper, joins
+        # that net. Copper that meets two nets (a short) or none stays unclaimed, which is
+        # not a failure: copper with no net claim is what rip-up-and-reroute and the
+        # stale-conductor cleanup both promise never to touch.
+        checked = self.check_drawing(path)
+        net_id = checked.net_id if checked is not None else None
         spec: NewConductor
         if kind in ("solder-trace", "solder-trace-wired"):
-            spec = NewSolderTraceConductor(
-                path=path, kind=cast(Any, kind), net_id=self._net_for(path)
-            )
+            spec = NewSolderTraceConductor(path=path, kind=cast(Any, kind), net_id=net_id)
         else:
             spec = NewWireConductor(
                 path=path,
                 kind=cast(Any, kind),
                 side=wire_side(kind, self.document.board),
-                net_id=self._net_for(path),
+                net_id=net_id,
             )
 
         result = self.bus.dispatch("conductor.add", AddConductorPayload(conductor=spec))
-        self._clear_draw()
-        self.drawArmed.emit("")
+        self.last_draw_check = checked
+        self.last_drawn = (kind, path)
+        self._start_next_conductor()
         self.conductorDrawn.emit(result)
         return result
 
-    def _net_for(self, path: tuple[HoleCoord, ...]) -> str | None:
-        """The schematic net this conductor evidently belongs to, or None.
-
-        Assigned only when both ends land on pins that share exactly one net -- an
-        unambiguous case. Anything else stays unassigned, which is not a failure: copper
-        with no net claim is what rip-up-and-reroute and the stale-conductor cleanup both
-        promise never to touch, so a hand-drawn connection the tool cannot interpret is
-        also one it will never quietly remove.
-        """
-        pins_at: dict[tuple[int, int], set[tuple[str, str]]] = {}
-        for comp in self.document.components:
-            for pin, hole in _pin_holes_of(comp, self.lookup):
-                pins_at.setdefault((hole.col, hole.row), set()).add((comp.ref, pin.number))
-
-        ends = [pins_at.get((path[0].col, path[0].row), set()),
-                pins_at.get((path[-1].col, path[-1].row), set())]
-        if not all(ends):
-            return None
-        candidates = [
-            net.id
-            for net in self.document.nets
-            if all(
-                any((node.component_ref, node.pin) in end for node in net.nodes) for end in ends
-            )
-        ]
-        return candidates[0] if len(candidates) == 1 else None
+    def _start_next_conductor(self) -> None:
+        """Forget the conductor being drawn and keep the tool."""
+        self._draw_path = []
+        self._draw_column_first = False
+        self._refresh_draw_preview(self._last_hole)
+        self.drawArmed.emit(self._draw_kind or "")
 
     def _refresh_draw_preview(self, cursor: HoleCoord | None) -> None:
         if self._draw_preview is None:
@@ -5607,6 +5667,14 @@ class BoardScene(QGraphicsScene):
             else []
         )
         self._draw_preview.set_path(list(self._draw_path), cursor, ok, run)
+        # What Enter or the next click would lay: the path so far and the step to the
+        # pointer, when that step is one the tool would take.
+        ahead = list(self._draw_path)
+        if cursor is not None and ok and self._draw_path:
+            ahead += run if self._draw_kind in self._RUN_KINDS else [cursor]
+        checked = self.check_drawing(ahead)
+        self._draw_preview.set_problem(checked.worst if checked is not None else None)
+        self.drawChecked.emit(checked)
 
     # -- naming a net by clicking its pins -----------------------------------
     #
@@ -6019,6 +6087,14 @@ class BoardScene(QGraphicsScene):
             for item in self.items()
             if isinstance(item, ConductorItem) and item.isSelected()
         )
+
+    def select_conductors(self, conductor_ids: Collection[str]) -> None:
+        """Exactly these conductors, and nothing else, selected."""
+        wanted = set(conductor_ids)
+        self.clearSelection()
+        for conductor_id, item in self.conductor_items.items():
+            if conductor_id in wanted:
+                item.setSelected(True)
 
     def arm_placement(self, footprint_id: str | None) -> None:
         """Arm (or, with None, disarm) placing a footprint on the next board click."""

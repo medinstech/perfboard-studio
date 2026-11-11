@@ -365,6 +365,7 @@ from .boardstrip import SYSTEM_ENTRY, BoardStrip
 from .cabledialog import CableDialog
 from .canvastools import FloatingBar
 from .clipboard import block_from_json, block_to_json, paste_payload, paste_position
+from .drawcheck import DrawCheck, DrawProblem
 from .emptystate import EmptyOverlay, EmptyState
 from .engine_text import finding_text, names_in, net_class_word, say
 from .export_pdf import export_pdf
@@ -428,6 +429,16 @@ SHEET_PICK_MM = 1.6
 #: a pin of a net with nothing touching it. Kept out of the step bar's Verify count and the
 #: status bar's while connections are left to route.
 UNWIRED_RULES = frozenset({"pin-not-connected"})
+
+
+def _sentence(text: str) -> str:
+    """A status sentence starts with a capital, whatever the translation starts with: the
+    Turkish ones open on the conductor's name ("lehim yolu F1 → F3 çizildi"), and i's
+    capital is İ."""
+    first = text[:1]
+    if not first.islower():
+        return text
+    return ("İ" if first == "i" else first.upper()) + text[1:]
 
 
 def _rules_at_the_bench(violations: Sequence[DrcViolation]) -> frozenset[str]:
@@ -2797,8 +2808,14 @@ class MainWindow(QMainWindow):
         self.scene.moveCommitted.connect(self.on_move_committed)
         self.scene.selectionNetsChanged.connect(self._on_selection_nets_changed)
         self.scene.placementArmed.connect(self._on_placement_armed)
+        #: What the conductor being drawn would do wrong, said in the banner ("" for
+        #: nothing), and the status hint arming a drawing tool put up, which goes when the
+        #: tool does.
+        self._draw_problem = ""
+        self._draw_hint = ""
         self.scene.drawArmed.connect(self._on_draw_armed)
         self.scene.conductorDrawn.connect(self._on_conductor_drawn)
+        self.scene.drawChecked.connect(self._on_draw_checked)
         self.scene.netPinsArmed.connect(self._on_net_pins_armed)
         self.scene.netPinsChanged.connect(self._on_net_pins_changed)
         self.scene.netPinRejected.connect(self._on_net_pin_rejected)
@@ -6269,7 +6286,9 @@ class MainWindow(QMainWindow):
                 else t("click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels")
             )
             word = conductor_word(kind, self._guide_language())
-            return f"{t('Drawing')} {word}  ·  {how}"
+            # What the next click or Enter would do wrong takes the hint's place while it
+            # holds: the preview turns red at the hole, and this says why.
+            return f"{t('Drawing')} {word}  ·  {self._draw_problem or how}"
 
         if self.scene.cut_armed:
             return f"{t('Cutting tracks')}  ·  {t('click a hole, Esc ends')}"
@@ -9086,6 +9105,23 @@ class MainWindow(QMainWindow):
             menu.addAction(self.act_copy)
             menu.addAction(self.act_duplicate)
             menu.addAction(self.act_delete)
+            # The copper's net, which is what a piece of it is usually picked to get at:
+            # the rest of it, laid again, or taken up.
+            nets = self._selected_conductor_net_ids()
+            if len(nets) == 1:
+                net_id = nets[0]
+                name = self._net_name(net_id)
+                menu.addSeparator()
+                select_all = menu.addAction(t("Select All of {net}").format(net=name))
+                select_all.triggered.connect(
+                    lambda _checked=False, n=net_id: self._select_net_copper(n)
+                )
+                redo = menu.addAction(t("Redo Wiring of {net}").format(net=name))
+                redo.triggered.connect(lambda _checked=False, n=net_id: self.on_reroute((n,)))
+                remove = menu.addAction(t("Remove Wiring of {net}").format(net=name))
+                remove.triggered.connect(
+                    lambda _checked=False, n=net_id: self._remove_wiring((n,))
+                )
         else:
             # Bare board. Paste lands under the pointer, which is the reason this entry is
             # worth having at all: the keyboard version pastes wherever the pointer happens
@@ -9420,7 +9456,65 @@ class MainWindow(QMainWindow):
             menu.addAction(action)
         menu.addSeparator()
         menu.addAction(self.act_route_selected)
+        # Taking one net's copper up without laying it again: there was Auto-wire and Redo
+        # Wiring, and no verb for "this net's wiring is wrong, I will draw it myself".
+        net_ids = self._selected_net_ids()
+        if net_ids:
+            text = (
+                t("Remove Wiring of {net}").format(net=self._net_name(net_ids[0]))
+                if len(net_ids) == 1
+                else t("Remove Wiring of {count} Nets").format(count=len(net_ids))
+            )
+            remove = menu.addAction(text)
+            remove.triggered.connect(lambda _checked=False, n=net_ids: self._remove_wiring(n))
         return menu
+
+    def _selected_conductor_net_ids(self) -> tuple[NetId, ...]:
+        """The nets the copper selected on the board claims, each once."""
+        wanted = set(self.scene.selected_conductor_ids())
+        return tuple(
+            dict.fromkeys(
+                c.net_id
+                for c in self.bus.document.conductors
+                if c.id in wanted and c.net_id is not None
+            )
+        )
+
+    def _select_net_copper(self, net_id: NetId) -> None:
+        """Every conductor on the board that claims ``net_id``, selected."""
+        self.scene.select_conductors(
+            [c.id for c in self.bus.document.conductors if c.net_id == net_id]
+        )
+
+    def _remove_wiring(self, net_ids: tuple[NetId, ...]) -> None:
+        """Take up the copper these nets claim, as one undo step, and lay nothing back.
+
+        The copper that CLAIMS the net, as Redo Wiring and Remove Out-of-Date Wiring take:
+        copper with no claim is the hand-drawn kind the tool could not place on a net, and
+        nothing promises more about it than to leave it alone.
+        """
+        wanted = set(net_ids)
+        ids = tuple(c.id for c in self.bus.document.conductors if c.net_id in wanted)
+        names = ", ".join(self._net_name(n) for n in net_ids)
+        if not ids:
+            self.statusBar().showMessage(
+                t("{net} has no wiring to remove.").format(net=names), 6000
+            )
+            return
+        label = (
+            f"Remove the wiring of {self._net_name(net_ids[0])}"
+            if len(net_ids) == 1
+            else f"Delete {len(ids)} conductor(s)"
+        )
+        result = self.bus.dispatch(
+            "conductor.deleteMany", DeleteConductorsPayload(ids=ids, label=label)
+        )
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        self.statusBar().showMessage(
+            t("Removed the wiring of {net} · Ctrl+Z brings it back").format(net=names), 8000
+        )
 
     def _on_drc_context_menu(self, pos: QPoint) -> None:
         self.drc_menu(pos).exec(self.drc_tree.viewport().mapToGlobal(pos))
@@ -10389,6 +10483,15 @@ class MainWindow(QMainWindow):
         # Picked in the panel: Properties shows the net. The board's selection lighting
         # its nets here is done with the panel's signals blocked, so it does not land here.
         self._selection_from = "nets"
+        if net_ids and self.scene.selectedItems():
+            # And the board's selection is put down. It stayed, out of sight behind the
+            # net Properties was showing, and Delete took IT: a run picked a minute before,
+            # while the person was looking at THRESH.
+            self._putting_board_selection_down = True
+            try:
+                self.scene.clearSelection()
+            finally:
+                self._putting_board_selection_down = False
         self._refresh_properties()
         self.scene.set_highlighted_nets(net_ids)
         self._sync_schematic_highlight()
@@ -10412,6 +10515,9 @@ class MainWindow(QMainWindow):
     def _on_selection_nets_changed(self, net_ids: list[str]) -> None:
         """Selecting a part on the board highlights its nets in the dock too, so the two
         views never disagree about what is selected."""
+        if getattr(self, "_putting_board_selection_down", False):
+            # The panel's pick put the board's selection down; the panel keeps its net.
+            return
         # The board's selection changed, so it is the one Properties describes now.
         self._selection_from = "board"
         wanted = set(net_ids)
@@ -10876,7 +10982,7 @@ class MainWindow(QMainWindow):
         return AutorouteOptions(router=options_for_style(self._routing_style, base))
 
     def on_reroute_selection(self) -> None:
-        net_ids = self._selected_net_ids()
+        net_ids = self._selected_net_ids() or self._selected_conductor_net_ids()
         if not net_ids:
             selected_refs = {
                 item.comp.ref for item in self.scene.component_items.values() if item.isSelected()
@@ -12068,23 +12174,119 @@ class MainWindow(QMainWindow):
                 if two_point
                 else t("click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels")
             )
-            self.statusBar().showMessage(
+            self._draw_hint = (
                 f"{t('Drawing')} "
-                f"{conductor_word(cast(ConductorKind, wanted), self._guide_language())} — {how}",
-                0,
+                f"{conductor_word(cast(ConductorKind, wanted), self._guide_language())} — {how}"
             )
+            self.statusBar().showMessage(self._draw_hint, 0)
         else:
             self.statusBar().clearMessage()
 
     def _on_draw_armed(self, kind: str) -> None:
-        """Keep the menu in step when the scene ends drawing by itself (Esc, or commit)."""
+        """Keep the menu in step when the scene ends drawing by itself (Esc, or Enter on
+        nothing drawn) -- and the status line: the hint arming put up outlived the tool,
+        saying "Drawing solder trace" through the clicks and selections after it."""
         for name, action in self.act_draw.items():
             action.setChecked(name == kind)
+        if not kind:
+            self._draw_problem = ""
+            if self._draw_hint and self.statusBar().currentMessage() == self._draw_hint:
+                self.statusBar().clearMessage()
+            self._draw_hint = ""
         self._refresh_mode_banner()
 
+    def _copper_phrase(self, kind: ConductorKind, path: Sequence[HoleCoord]) -> str:
+        """"solder trace F1 → F3": a conductor as a person points at it."""
+        board = self.bus.document.board
+        return (
+            f"{conductor_word(kind, self._guide_language())} "
+            f"{format_hole(path[0], board)} → {format_hole(path[-1], board)}"
+        )
+
+    def _draw_problem_text(self, problem: DrawProblem) -> str:
+        """What the step being drawn would do wrong, for the banner."""
+        hole = format_hole(problem.hole, self.bus.document.board)
+        other = (
+            self._copper_phrase(problem.other.kind, problem.other.path)
+            if problem.other is not None
+            else ""
+        )
+        if problem.kind == "short":
+            return t("{hole}: this would join {a} to {b}, a short").format(
+                hole=hole, a=problem.nets[0], b=problem.nets[1]
+            )
+        if problem.kind == "cross":
+            return t("{hole}: this would cross {other}, and they would touch").format(
+                hole=hole, other=other
+            )
+        if problem.kind == "joint":
+            return t("{hole}: this would lie on {joint}, another net's joint").format(
+                hole=hole, joint=problem.joint
+            )
+        return t("{hole}: this runs along {other}").format(hole=hole, other=other)
+
+    def _on_draw_checked(self, check: DrawCheck | None) -> None:
+        """The pointer moved while drawing. The banner changes only when what it says does:
+        this arrives on every mouse move."""
+        problem = check.worst if check is not None else None
+        text = self._draw_problem_text(problem) if problem is not None else ""
+        if text != self._draw_problem:
+            self._draw_problem = text
+            self._refresh_mode_banner()
+
     def _on_conductor_drawn(self, result: Any) -> None:
-        if result is not None and not result.ok:
+        """Say what the copper just laid joined, or what it did wrong.
+
+        It used to say "Done: Add solder-trace F1 to F3" for a run straight through
+        another net's pad, and the only sign was the Problems count going up by one. The
+        command is right to take it -- a short is DRC's to report -- but the person who
+        drew it hears about it now, with the way back.
+        """
+        if result is None:
+            return
+        if not result.ok:
             self.statusBar().showMessage(refused(result), 8000)
+            return
+        drawn = self.scene.last_drawn
+        if drawn is None:
+            return
+        what = self._copper_phrase(*drawn)
+        check = self.scene.last_draw_check
+        problem = check.worst if check is not None else None
+        board = self.bus.document.board
+        if problem is None:
+            if check is not None and check.net_id is not None:
+                message = t("Drew {what} on {net}").format(
+                    what=what, net=self._net_name(check.net_id)
+                )
+            else:
+                message = t("Drew {what}: not on any net yet").format(what=what)
+        else:
+            hole = format_hole(problem.hole, board)
+            other = (
+                self._copper_phrase(problem.other.kind, problem.other.path)
+                if problem.other is not None
+                else ""
+            )
+            if problem.kind == "short":
+                message = t(
+                    "Drew {what}: it joins {a} to {b} at {hole}, a short. Ctrl+Z takes it back."
+                ).format(what=what, a=problem.nets[0], b=problem.nets[1], hole=hole)
+            elif problem.kind == "cross":
+                message = t(
+                    "Drew {what}: it crosses {other} near {hole}, and they would touch. "
+                    "Ctrl+Z takes it back."
+                ).format(what=what, other=other, hole=hole)
+            elif problem.kind == "joint":
+                message = t(
+                    "Drew {what}: it lies on {joint} at {hole}, another net's joint. "
+                    "Ctrl+Z takes it back."
+                ).format(what=what, joint=problem.joint, hole=hole)
+            else:
+                message = t("Drew {what}: it runs along {other} from {hole}.").format(
+                    what=what, other=other, hole=hole
+                )
+        self.statusBar().showMessage(_sentence(message), 12000)
 
     def on_delete_selection(self) -> None:
         """Delete whatever is selected -- parts, conductors, or both.
@@ -12114,23 +12316,31 @@ class MainWindow(QMainWindow):
             if not conductor_ids and not components:
                 return
         if conductor_ids and not components:
+            # COPPER GOES WITHOUT A QUESTION, as labels do. Editing copper by hand is mostly
+            # deleting a piece and drawing it again, and a dialog in front of every piece
+            # was in the way every time; Ctrl+Z is one key away, and the status line says
+            # so. Parts keep theirs.
+            wanted = set(conductor_ids)
+            going = [c for c in self.bus.document.conductors if c.id in wanted]
             label = f"Delete {len(conductor_ids)} conductor(s)"
-            if not self._confirm(
-                t("Delete conductors"),
-                counted(
-                    len(conductor_ids),
-                    t("Delete {count} conductor?"),
-                    t("Delete {count} conductors?"),
-                ),
-                t("Delete"),
-            ):
-                return
             result = self.bus.dispatch(
                 "conductor.deleteMany",
                 DeleteConductorsPayload(ids=conductor_ids, label=label),
             )
             if not result.ok:
                 self.statusBar().showMessage(refused(result), 8000)
+                return
+            if len(going) == 1:
+                message = _sentence(
+                    t("Deleted {what} · Ctrl+Z brings it back").format(
+                        what=self._copper_phrase(going[0].kind, going[0].path)
+                    )
+                )
+            else:
+                message = t("Deleted {count} conductors · Ctrl+Z brings them back").format(
+                    count=len(conductor_ids)
+                )
+            self.statusBar().showMessage(message, 8000)
             return
 
         components = self._require_selection(t("delete it"))

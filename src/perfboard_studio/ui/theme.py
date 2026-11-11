@@ -247,6 +247,8 @@ CANVAS_HOVER = CANVAS_SELECTED
 CANVAS_GHOST_VALID = CANVAS_SELECTED
 CANVAS_ERROR = "#e5484d"
 CANVAS_GHOST_INVALID = CANVAS_ERROR
+#: Something allowed that deserves a look before the click: a wire drawn along another.
+CANVAS_WARNING = "#e5a840"
 #: How heavy those marks are: COSMETIC pixels, the same on screen at every zoom. In
 #: millimetres a 0.22 mm outline was 0.4 px zoomed out and 6 px zoomed in, and never the
 #: same weight twice. Hover is the lighter of the two, so the two never read alike.

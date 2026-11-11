@@ -786,7 +786,9 @@ def test_a_click_on_the_last_pad_again_finishes_the_trace() -> None:
 
     assert result is not None and result.ok, result
     assert len(bus.document.conductors[0].path) == 3
-    assert scene.armed_draw_kind is None
+    # The tool stays for the next run; the run itself is done.
+    assert scene.armed_draw_kind == "solder-trace"
+    assert scene.drawn_path == ()
 
 
 def test_a_run_back_over_the_traces_own_pads_is_refused_and_shown_red() -> None:
@@ -851,7 +853,7 @@ def test_a_double_click_finishes_the_trace() -> None:
         _mouse(port, QEvent.Type.MouseButtonRelease, end, NONE)
         assert bus.document.conductors, "the double-click should have finished the trace"
         assert bus.document.conductors[0].path == _holes(*((col, 2) for col in range(2, 7)))
-        assert scene.armed_draw_kind is None
+        assert scene.armed_draw_kind == "solder-trace" and scene.drawn_path == ()
     finally:
         view.close()
 

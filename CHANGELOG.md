@@ -29,8 +29,33 @@ closed without a bump.
   tinned core stripped back at each end, and a top jumper is lifted off the board by a shadow
   where it used to be dashed. Copper on the far face keeps its band, now with the spine.
   The 1:1 print is unchanged: flat copper, a dashed jumper, hatching through the board.
+- **Copper drawn by hand says what it would do before the click.** The preview turns red at
+  the hole where a run would join another net's pad or a wire would cross bare copper, and
+  amber where a wire would lie along another wire. The banner names it ("F2: this would join
+  LED_A to GND, a short"). The click is still taken, because a short is the checks' to report
+  and not the command's to refuse. After the click the status line says what the copper
+  joined ("Drew bare wire G6 → F2 on GND", or "not on any net yet") or what it did wrong, with
+  Ctrl+Z. The answers come from the predicates DRC and LVS use, so the preview and the checks
+  agree.
+- **A drawing tool stays armed after each piece of copper.** It used to let go after every
+  run and wire, so ten wires took ten presses of W. Esc, another tool, or Enter with nothing
+  drawn leaves it.
+- **Hand-drawn copper joins the net it meets.** A net used to be claimed only when both ends
+  were pins of one net, so a run drawn on from another run's end, or a wire to its own net's
+  copper, went in on no net. Redo Wiring then skipped that copper.
+- **Copper is deleted without a question,** as labels are. The status line says what went and
+  that Ctrl+Z brings it back. Parts still ask.
+- **Remove Wiring of a net.** In the Nets panel's menu and on a conductor's right-click menu,
+  next to Redo Wiring and Select All of the net: it takes up that net's copper as one undo
+  step and lays nothing back.
 ### Fixed
 
+- **Picking a net in the Nets panel clears the board's selection.** The selection stayed out
+  of sight while Properties showed the net, and Delete removed a run picked a minute before.
+- **Redo Wiring of the Selection takes a selected conductor's net.** It asked for a net or a
+  part instead.
+- **The "Drawing…" hint leaves the status line with the tool.** It used to stay through the
+  clicks and selections after a cancel.
 - **A board of a system with nothing on it is no longer "ready to build".** With every part
   placed and a board still empty, the step bar said "N/N placed · ready to build" over it. Place
   now says the board is empty, its hint says how parts reach it (Move to Board from another
