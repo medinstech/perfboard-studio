@@ -188,6 +188,14 @@ closed without a bump.
   window's first layout stayed where the views' column ended, and the open drawer's third
   row, "Board check (DRC)", was drawn with a line through it.
 
+- **Copper is no longer asked for under a part turned onto the solder side.** On a
+  double-sided board, a header or a chip turned over onto the solder side sits on its own
+  pins there, and its leads are soldered on the component side; solder-side copper drawn to
+  one of those pins was reported by no check, and the build guide asked for a joint under
+  the plastic. `copper-at-covered-pin` now reports it on either face, the guide says not to
+  build the step as drawn, and Auto-wire reaches such a pin from the component side. Three
+  checks that were shown in English in the Turkish window -- this one and the two rail
+  warnings -- are now said in Turkish.
 - **joint-under-body no longer flags a DIP's own pins at random.** On a single-sided board,
   a DIP turned onto the solder side was reported as sitting over one row of its own pins at
   some places and turns and not at others, by a rounding error: the edge of its body runs

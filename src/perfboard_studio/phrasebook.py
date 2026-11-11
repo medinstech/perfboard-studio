@@ -917,6 +917,13 @@ TURKISH: dict[str, str] = {
         "yüzde onun üstünde karta oturur, bu yüzden orada lehim noktası yapılamaz. Bu hattı "
         "onun yerine lehim yüzüne döşeyin."
     ),
+    "Do not build this step as drawn: {hole} is {ref}'s pin, and {ref} is on the solder "
+    "side with its body on the board over it, so no joint can be made there. Lay this run on "
+    "the component side instead.": (
+        "Bu adımı çizildiği gibi yapmayın: {hole}, {ref} parçasının pinidir ve {ref} lehim "
+        "yüzündedir, gövdesi onun üstünde karta oturur, bu yüzden orada lehim noktası "
+        "yapılamaz. Bu hattı onun yerine parça yüzüne döşeyin."
+    ),
     "{hole} is {ref}'s pin, under {ref}'s body on this side: fit {ref} with its leads left "
     "long so the iron reaches the pad.": (
         "{hole}, {ref} parçasının pinidir ve bu yüzde {ref} gövdesinin altında kalır: havya "

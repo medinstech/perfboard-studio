@@ -631,3 +631,32 @@ def test_an_agent_lays_a_rail_with_its_bridges_as_one_step() -> None:
     ):
         with pytest.raises(SessionError):
             session.add_rail(start, end, bridges=bridges_)
+
+
+def test_both_rail_warnings_are_said_in_turkish() -> None:
+    """Neither rule fires on a board in the repository, so the every-board test never meets
+    them: each is produced here and said through the panel's own path."""
+    from perfboard_studio.ui.engine_text import finding_text, names_in
+    from perfboard_studio.ui.i18n import language, set_language
+
+    stock = _stock()
+    alone = _with(stock, NewSolderTraceConductor(path=(H(-1, 4), H(-1, 5), H(-1, 6))))
+    plain = _left_rail(stock, range(4, 9))
+    found = [
+        (doc, v)
+        for doc, rule in ((alone, "rail-without-bridge"), (plain, "solder-gap-needs-spine"))
+        for v in _rules(doc, rule)
+    ]
+    assert len(found) == 2
+    before = language()
+    try:
+        for doc, v in found:
+            names = names_in(doc, v.message, v.conductor_ids)
+            set_language("en")
+            english = finding_text(v.message, names)
+            set_language("tr")
+            turkish = finding_text(v.message, names)
+            assert turkish != english, english
+            assert "A5/L" in turkish or "A4" in turkish
+    finally:
+        set_language(before)

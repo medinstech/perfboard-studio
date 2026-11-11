@@ -576,7 +576,7 @@ def test_copper_drawn_at_a_pin_under_its_own_plastic_is_an_error_on_top_only() -
     top = _with(doc, SolderTraceConductor(id="t1", path=path, side="top"))
     found = [v for v in run_drc(top, LOOKUP) if v.rule == "copper-at-covered-pin"]
     assert [(v.severity, v.holes) for v in found] == [("error", (HEADER_PIN,))]
-    assert "ends at X11" in found[0].message and "cannot be made" in found[0].message
+    assert "soldered at X11" in found[0].message and "cannot be made" in found[0].message
     bottom = _with(doc, SolderTraceConductor(id="t1", path=path, side="bottom"))
     assert not [v for v in run_drc(bottom, LOOKUP) if v.rule == "copper-at-covered-pin"]
 

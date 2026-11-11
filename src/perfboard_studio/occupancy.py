@@ -44,6 +44,7 @@ from .model import (
     HoleCoord,
     PerfDocument,
     contacts_every_path_hole,
+    has_component_side_copper,
     is_crossing_blocked,
 )
 
@@ -105,8 +106,11 @@ class OccupancyIndex:
         A seated body -- a header's plastic, a chip, a terminal block -- sits on the board
         over the pad, so no joint can be made there on that face: no copper may end at it
         or pass it. A part standing on its leads clears it if the leads are left long.
-        ``drc``'s ``joint-under-body`` and ``copper-at-covered-pin``, the router's two-face
-        search and the guide all read this one answer."""
+        A part on the solder side covers its pins on the solder side, where its joints are
+        made on the component side; on a board with no component-side copper it has no
+        other face, and ``joint-under-body`` names the part instead, so nothing is recorded.
+        ``drc``'s ``copper-at-covered-pin``, the router and the guide all read this one
+        answer."""
         return self._covered_pins.get(_node_key(hole, side))
 
     def occupied_holes(self) -> tuple[HoleCoord, ...]:
@@ -155,8 +159,13 @@ def build_occupancy(doc: PerfDocument, lookup: FootprintLookup) -> OccupancyInde
             body_by_hole[_node_key(hole, component.side)] = component.id
 
         seated = footprint.body.archetype in SEATED_ARCHETYPES
-        for hole in pins_under_own_body(component, footprint, doc.board):
-            covered_pins[_node_key(hole, component.side)] = (component.id, seated)
+        # A part on the solder side of a board with no component-side copper has nowhere
+        # else to be soldered: that is the PART's fault, and ``joint-under-body`` names it.
+        # Anywhere else its joints are made on the other face, and copper on its own face at
+        # its covered pin is the copper's fault -- which is what this records.
+        if component.side == "top" or has_component_side_copper(doc.board):
+            for hole in pins_under_own_body(component, footprint, doc.board):
+                covered_pins[_node_key(hole, component.side)] = (component.id, seated)
 
     # --- Conductors: every hole on the path is physically occupied, contact or not. ---
     #

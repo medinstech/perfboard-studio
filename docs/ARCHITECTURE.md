@@ -3615,7 +3615,14 @@ terminal block, a switch -- not a part on its leads). The router's two-face sear
 starts, ends, passes or changes face onto such a pad on top (`_pad_open`), the wire-over-the-top
 candidate refuses an end there, DRC's `copper-at-covered-pin` reports hand-drawn copper there
 (an error under a seated body, a warning for a part on its leads, which can be fitted with
-them long), and the guide puts the same words first on the step. A pin ON a body's edge is
+them long), and the guide puts the same words first on the step. The same holds on the
+solder side for a part turned over onto it, whose joints are made on the component side:
+0.24 let solder-side copper at such a pin through, because `joint-under-body` asks only of a
+single-sided board and `copper-under-body` leaves out copper that ENDS at a part's pin. There
+the connection is given both faces whatever `faces` says, and every candidate a single-face
+strategy found is dropped if it touches a closed pad (`_lands_on_a_closed_pad`). On a board
+with no component-side copper nothing is recorded, since the part has no other face and
+`joint-under-body` names the part. A pin ON a body's edge is
 beside it: a DIP's box runs along its pin rows and lands a few ulps either side of them once
 placed, and measured strictly one row of a DIP was "under" it at some anchors and not at others
 (`PIN_UNDER_BODY_MARGIN_MM`, `test_a_dips_pins_are_never_under_its_own_body`). Measured

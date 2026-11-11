@@ -660,7 +660,13 @@ def _candidates(
         bend = _lead_bend_candidate(ctx, from_, to)
         if bend is not None:
             candidates.append(bend)
-    two_faces = _two_faces(options, doc, request.net_id)
+    # An end under its own part's body on the solder side -- a part turned over onto it,
+    # on a board with copper on both -- can be reached only from the component side, so the
+    # connection is given both faces whatever the options say.
+    two_faces = _two_faces(options, doc, request.net_id) or (
+        has_component_side_copper(doc.board)
+        and not (_pad_open(ctx, from_, 0) and _pad_open(ctx, to, 0))
+    )
     trace = (
         _two_face_trace_candidate(ctx, from_, to, buildup)
         if two_faces
@@ -693,6 +699,7 @@ def _candidates(
             if jumper is not None:
                 candidates.append(jumper)
 
+    candidates = [c for c in candidates if not _lands_on_a_closed_pad(ctx, c)]
     if two_faces:
         candidates = [_off_face(ctx, c) for c in candidates]
     if avoided:
@@ -1849,14 +1856,32 @@ def _traversable_on_face(ctx: _RouteContext, hole: HoleCoord, face: BoardSide) -
 
 
 def _pad_open(ctx: _RouteContext, hole: HoleCoord, face: int) -> bool:
-    """Whether copper on ``face`` may touch this hole's pad: not on the component side at a
-    pin under its own SEATED body (``OccupancyIndex.covered_pin``) -- a header's plastic, a
-    chip -- where the joint cannot be made. A part on its leads leaves it open, and DRC's
+    """Whether copper on ``face`` may touch this hole's pad: not at a pin under its own
+    SEATED body on that face (``OccupancyIndex.covered_pin``) -- a header's plastic, a chip,
+    on the component side, or on the solder side when the part is turned over onto it --
+    where the joint cannot be made. A part on its leads leaves it open, and DRC's
     ``copper-at-covered-pin`` says to keep its leads long."""
-    if _FACES[face] != "top":
-        return True
-    covered = ctx.occupancy.covered_pin(hole, "top")
+    covered = ctx.occupancy.covered_pin(hole, _FACES[face])
     return covered is None or not covered[1]
+
+
+def _lands_on_a_closed_pad(ctx: _RouteContext, candidate: RouteCandidate) -> bool:
+    """Whether any of ``candidate``'s copper touches a pad :func:`_pad_open` closes on its
+    face: a trace at every hole of its path, anything else at its two ends. The two-face
+    search never lays one; the single-face strategies are searched without asking, so
+    they are asked here."""
+    for conductor in candidate.conductors:
+        if not conductor.path:
+            continue
+        face = _FACES.index(getattr(conductor, "side", "bottom"))
+        touched = (
+            conductor.path
+            if conductor.kind in ("solder-trace", "solder-trace-wired")
+            else (conductor.path[0], conductor.path[-1])
+        )
+        if any(not _pad_open(ctx, hole, face) for hole in touched):
+            return True
+    return False
 
 
 def _face_change_cost(ctx: _RouteContext, hole: HoleCoord) -> float | None:

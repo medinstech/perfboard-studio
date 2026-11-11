@@ -96,7 +96,6 @@ from .geometry import (
     paths_cross,
     pin_hole,
     point_under_body,
-    same_hole,
     stands_under_raised_board,
     substrate_edges_mm,
     transform_offset,
@@ -2854,45 +2853,46 @@ def _check_joint_under_body(doc: PerfDocument, lookup: FootprintLookup) -> list[
 def _check_copper_at_covered_pins(
     doc: PerfDocument, lookup: FootprintLookup
 ) -> list[DrcViolation]:
-    """Copper on the component side at a pin its own part's body covers there
-    (``OccupancyIndex.covered_pin``): a trace that touches the pad, or a top wire that ends
-    on it. A seated body -- a header's plastic, a chip, a terminal block -- sits on the board
-    over the pad, so the joint cannot be made, and that is an error; a part standing on its
-    leads clears it with the leads left long, and that is a warning saying so. The router's
-    two-face search lays none of it; this names copper drawn by hand, or a part fitted over
-    copper already laid. ``joint-under-body`` is the solder side's form of the same fact."""
-    if not any(c.side == "top" for c in doc.conductors):
-        return []
+    """Copper on a face at a pin its own part's body covers on that face
+    (``OccupancyIndex.covered_pin``): a trace that touches the pad, or a wire that ends on
+    it. On the component side that is a part fitted the usual way; on the solder side, a part
+    turned over onto it, whose joints are made on the component side. A seated body -- a
+    header's plastic, a chip, a terminal block -- sits on the board over the pad, so the
+    joint cannot be made, and that is an error; a part standing on its leads clears it with
+    the leads left long, and that is a warning saying so. The router lays none of it; this
+    names copper drawn by hand, or a part fitted over copper already laid. On a board with no
+    component-side copper a part on the solder side is named by ``joint-under-body`` instead."""
     occupancy = build_occupancy(doc, lookup)
     refs = {component.id: component.ref for component in doc.components}
     violations: list[DrcViolation] = []
     for conductor in doc.conductors:
-        if conductor.side != "top" or not conductor.path:
+        if not conductor.path:
             continue
+        face = conductor.side
+        other = _face_words("top" if face == "bottom" else "bottom")
         ends = (conductor.path[0], conductor.path[-1])
         touched = conductor.path if contacts_every_path_hole(conductor) else ends
         for hole in dict.fromkeys(touched):
-            covered = occupancy.covered_pin(hole, "top")
+            covered = occupancy.covered_pin(hole, face)
             if covered is None:
                 continue
             component_id, seated = covered
             ref = refs.get(component_id, component_id)
-            verb = "ends at" if any(same_hole(hole, end) for end in ends) else "passes through"
             where = _safe_hole(hole, doc.board)
+            said = f"{_conductor_words(conductor.kind)} {conductor.id} is soldered at {where}"
             violations.append(
                 DrcViolation(
                     rule="copper-at-covered-pin",
                     severity="error" if seated else "warning",
                     message=(
-                        f"{_conductor_words(conductor.kind)} {conductor.id} {verb} {where}, "
-                        f"{ref}'s pin, on the component side, where {ref}'s body sits on the "
-                        f"board over the pad: the joint cannot be made. Lay it on the solder "
-                        f"side."
+                        f"{said}, {ref}'s pin, on the {_face_words(face)} side, where {ref}'s "
+                        f"body sits on the board over the pad: the joint cannot be made. Lay it "
+                        f"on the {other} side."
                         if seated
-                        else f"{_conductor_words(conductor.kind)} {conductor.id} {verb} "
-                        f"{where}, {ref}'s pin, on the component side, under {ref}'s body. "
-                        f"Fit {ref} with its leads left about {SOLDER_SIDE_LEAD_MM} mm long so "
-                        f"the iron reaches the pad, or lay it on the solder side."
+                        else f"{said}, {ref}'s pin, on the {_face_words(face)} side, under "
+                        f"{ref}'s body. Fit {ref} with its leads left about "
+                        f"{SOLDER_SIDE_LEAD_MM} mm long so the iron reaches the pad, or lay it "
+                        f"on the {other} side."
                     ),
                     holes=(hole,),
                     conductor_ids=(conductor.id,),
@@ -2913,6 +2913,7 @@ def _conductor_words(kind: str) -> str:
         "bare-wire": "Bare wire",
         "insulated-wire": "Insulated wire",
         "lead-bend": "Bent lead",
+        "top-jumper": "Top jumper",
     }.get(kind, "Conductor")
 
 

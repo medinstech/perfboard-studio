@@ -767,3 +767,112 @@ def test_a_dips_pins_are_never_under_its_own_body(
     header_footprint = REGISTRY("hdr-1x4")
     assert header_footprint is not None
     assert len(pins_under_own_body(header, header_footprint, board)) == 4
+
+
+# --- copper at a pin its own solder-side part covers ---------------------------------------
+
+#: J1, a 1x4 header turned onto the solder side at K11: its plastic covers all four pins there.
+_TURNED_HEADER = _part("J1", "hdr-1x4", 10, 10, side="bottom")
+_HEADER_PIN = HoleCoord(10, 10)  # K11
+
+
+def _trace_to_header(side: BoardSide) -> SolderTraceConductor:
+    return SolderTraceConductor(
+        id="cond-1", path=(HoleCoord(10, 7), HoleCoord(10, 8), HoleCoord(10, 9), _HEADER_PIN), side=side
+    )
+
+
+def test_a_header_turned_over_covers_its_pins_on_the_solder_side_only_where_there_is_another() -> None:
+    double = build_occupancy(_doc(_TURNED_HEADER), REGISTRY)
+    covered = double.covered_pin(_HEADER_PIN, "bottom")
+    assert covered == ("c-J1", True)
+    assert double.covered_pin(_HEADER_PIN, "top") is None
+    # On a single-sided board the part has no other face: joint-under-body names IT.
+    single = build_occupancy(_doc(_TURNED_HEADER, board=_single_sided()), REGISTRY)
+    assert single.covered_pin(_HEADER_PIN, "bottom") is None
+
+
+def test_solder_side_copper_at_a_turned_parts_own_pin_is_an_error() -> None:
+    """In 0.24 nothing said a word: joint-under-body asks only of single-sided boards, and
+    copper-under-body leaves out copper that ENDS at a part's pin, so the guide asked for a
+    joint under the header's plastic."""
+    bottom = _doc(_TURNED_HEADER, conductors=(_trace_to_header("bottom"),))
+    found = [v for v in run_drc(bottom, REGISTRY) if v.rule == "copper-at-covered-pin"]
+    assert [(v.severity, v.holes, v.component_ids) for v in found] == [("error", (_HEADER_PIN,), ("c-J1",))]
+    assert "on the solder side" in found[0].message
+    assert found[0].message.endswith("Lay it on the component side.")
+    top = _doc(_TURNED_HEADER, conductors=(_trace_to_header("top"),))
+    assert _rules(top, "copper-at-covered-pin") == []
+    single = _doc(_TURNED_HEADER, conductors=(_trace_to_header("bottom"),), board=_single_sided())
+    assert _rules(single, "copper-at-covered-pin") == []
+    assert [r for r, _s, _c in _rules(single, "joint-under-body")] == ["joint-under-body"]
+
+
+@pytest.mark.parametrize("language", ["en", "tr"])
+def test_the_guide_says_not_to_build_solder_side_copper_at_a_turned_parts_pin(language: str) -> None:
+    from perfboard_studio.guide import ConductorStep, GuideOptions, build_guide
+
+    doc = _doc(_TURNED_HEADER, conductors=(_trace_to_header("bottom"),))
+    guide = build_guide(doc, REGISTRY, GuideOptions(language=language))
+    [step] = [
+        s for phase in guide.phases for s in phase.steps
+        if isinstance(s, ConductorStep) and s.conductor_id == "cond-1"
+    ]
+    first = step.notes[0]
+    assert "K11" in first
+    if language == "en":
+        assert first.startswith("Do not build this step as drawn") and first.endswith("on the component side instead.")
+    else:
+        assert first.startswith("Bu adımı çizildiği gibi yapmayın") and "parça yüzüne" in first
+
+
+def test_the_router_reaches_a_turned_parts_covered_pin_from_the_component_side() -> None:
+    """With the router on one face, the only way to K11 was solder-side copper under the
+    plastic. The connection is given both faces, and nothing it offers touches the pad
+    underneath."""
+    doc = _doc(_TURNED_HEADER)
+    request = RouteRequest(from_=HoleCoord(10, 4), to=_HEADER_PIN)
+    routed = route_connection(doc, REGISTRY, request)
+    assert routed.ok and routed.best is not None
+    occupancy = build_occupancy(doc, REGISTRY)
+    for candidate in (routed.best, *routed.alternatives):
+        for conductor in candidate.conductors:
+            touched = (
+                conductor.path
+                if conductor.kind in ("solder-trace", "solder-trace-wired")
+                else (conductor.path[0], conductor.path[-1])
+            )
+            for hole in touched:
+                covered = occupancy.covered_pin(hole, conductor.side)
+                assert covered is None or not covered[1], (candidate.strategy, conductor.side, hole)
+    laid = tuple(_finalize_conductor(c, f"cond-{i}") for i, c in enumerate(routed.best.conductors))
+    assert _rules(dataclasses.replace(doc, conductors=laid), "copper-at-covered-pin") == []
+
+
+def test_copper_at_a_covered_pin_is_said_in_turkish_on_either_face() -> None:
+    """Every form of ``copper-at-covered-pin`` -- either face, seated or on its leads -- matches a
+    template and comes out Turkish; no board in the repository holds one."""
+    from perfboard_studio.ui.engine_text import names_in
+
+    led = _part("D1", "led-5mm", 20, 20, side="bottom")
+    led_pin = _pins(led)[0]
+    on_leads = SolderTraceConductor(
+        id="cond-2", path=(HoleCoord(led_pin.col, led_pin.row - 3), HoleCoord(led_pin.col, led_pin.row - 2),
+                           HoleCoord(led_pin.col, led_pin.row - 1), led_pin), side="bottom"
+    )
+    upright = dataclasses.replace(_TURNED_HEADER, side="top", mirrored=False)
+    docs = [
+        _doc(_TURNED_HEADER, conductors=(_trace_to_header("bottom"),)),
+        _doc(upright, conductors=(_trace_to_header("top"),)),
+        _doc(led, conductors=(on_leads,)),
+        _doc(dataclasses.replace(led, side="top", mirrored=False), conductors=(dataclasses.replace(on_leads, side="top"),)),
+    ]
+    said = [
+        _said_both_ways(v.message, names_in(doc, v.message, v.conductor_ids))
+        for doc in docs
+        for v in run_drc(doc, REGISTRY)
+        if v.rule == "copper-at-covered-pin"
+    ]
+    assert len(said) == 4
+    assert [english for english, turkish in said if turkish == english] == []
+    assert sum("parça yüzüne" in turkish for _english, turkish in said) == 2
