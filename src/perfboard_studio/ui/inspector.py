@@ -27,6 +27,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 from dataclasses import dataclass
+from html import escape
 from typing import Literal, TypeVar, cast
 
 from PySide6.QtCore import QEvent, QObject, Qt
@@ -408,15 +409,21 @@ class _StepCard(QWidget):
             item = self._links.takeAt(0)
             gone = item.widget() if item is not None else None
             if gone is not None:
+                # Hidden now: out of the layout it is still drawn, at the width it was
+                # last given, until the event loop gets round to deleting it.
+                gone.hide()
                 gone.deleteLater()
         for key, said in note.wiring_notes:
-            link = QPushButton(said)
-            theme.variant(link, "link")
+            # A label, not a link-styled button: a button does not wrap, and the longest
+            # count ("14 places a wire lies over where other copper ends") widened the
+            # whole panel, and the board beside it shifted.
+            link = QLabel(f'<a href="{escape(key)}">{escape(said)}</a>')
+            link.setTextFormat(Qt.TextFormat.RichText)
+            link.setWordWrap(True)
+            link.setTextInteractionFlags(Qt.TextInteractionFlag.LinksAccessibleByMouse)
             link.setToolTip(t("Select these wires on the board."))
-            link.clicked.connect(
-                lambda _checked=False, k=key: self._inspector.hooks.select_wiring(k)
-            )
-            self._links.addWidget(link, 0, Qt.AlignmentFlag.AlignLeft)
+            link.linkActivated.connect(self._inspector.hooks.select_wiring)
+            self._links.addWidget(link)
         self.wiring_links.setVisible(bool(note.wiring_notes))
 
 

@@ -3993,8 +3993,8 @@ TURKISH: Mapping[str, str] = {
     "{count} ends of other copper": "başka bakırın {count} ucu",
     "{count} crossing": "{count} kesişme",
     "{count} crossings": "{count} kesişme",
-    "{count} wire up": "{count} tel yukarıda",
-    "{count} wires up": "{count} tel yukarıda",
+    "stacked over {count} wire": "{count} telin üstünde",
+    "stacked over {count} wires": "{count} telin üstünde",
     "Select these wires on the board.": "Bu telleri kartta seçer.",
     "Wire every connection not wired yet, in the Wiring Style. The copper already there "
     "stays, and one Ctrl+Z takes back what it lays. When everything is wired, it offers to "
@@ -4034,13 +4034,13 @@ TURKISH: Mapping[str, str] = {
         "Kesikli çizgiler: son Otomatik Kablolama ya da Kablolamayı Yeniden Yap öncesindeki "
         "kablolama. Kablolama ▸ Öncesiyle Karşılaştır yeniden seçilince gizlenir."
     ),
-    "Of that, {kept} stay exactly where they are; {gone} are taken up and {laid} laid in "
-    "their place. Copper with no net assigned is left alone.": (
-        "Bunlardan {kept} tanesi olduğu yerde kalır; {gone} tanesi sökülür, yerine {laid} "
-        "tane döşenir. Neti atanmamış bakıra dokunulmaz."
+    "Of the copper on these nets: {kept} left exactly as it is, {gone} taken up, {laid} "
+    "laid new. Copper with no net assigned is left alone.": (
+        "Bu netlerin bakırından {kept} parça olduğu gibi kalır, {gone} parça sökülür, {laid} "
+        "parça yeniden döşenir. Neti atanmamış bakıra dokunulmaz."
     ),
-    "{gone} taken up, {laid} laid, {kept} left as they were": (
-        "{gone} söküldü, {laid} döşendi, {kept} olduğu gibi kaldı"
+    "{gone} taken up, {laid} laid, {kept} unchanged": (
+        "{gone} söküldü, {laid} döşendi, {kept} değişmedi"
     ),
     "In “{style}”, for these nets only.": "“{style}” tarzında, yalnızca bu netler için.",
     "The style the whole board is wired in.": "Bütün kartın kablolandığı tarz.",
@@ -4588,15 +4588,15 @@ TURKISH: Mapping[str, str] = {
         "Kart yapılmaya hazır. Montaj rehberi size her seferinde bir parça olmak üzere yol "
         "gösterir."
     ),
-    "The board can be built. {count} wire is worth a look first: Show Problems, then "
-    "Wiring, selects it.": (
-        "Kart yapılabilir. Önce {count} tele bakmakta yarar var: Sorunları Göster, ardından "
-        "Kablolama onu seçer."
+    "The board can be built. {count} wire is worth a look first: a count below selects "
+    "it.": (
+        "Kart yapılabilir. Önce {count} tele bakmakta yarar var: aşağıdaki sayıya tıklamak "
+        "onu seçer."
     ),
-    "The board can be built. {count} wires are worth a look first: Show Problems, then "
-    "Wiring, selects them.": (
-        "Kart yapılabilir. Önce {count} tele bakmakta yarar var: Sorunları Göster, ardından "
-        "Kablolama onları seçer."
+    "The board can be built. {count} wires are worth a look first: each count below selects "
+    "its wires.": (
+        "Kart yapılabilir. Önce {count} tele bakmakta yarar var: aşağıdaki her sayı kendi "
+        "tellerini seçer."
     ),
     # -- what the engine says it did (ui/engine_text.py) ---------------------------
     "Place {parts} part(s) and {links} connection(s)": "{parts} parça ve {links} bağlantı yerleştir",

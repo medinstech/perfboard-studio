@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import contextlib
 import math
+from collections import Counter
 from collections.abc import Collection, Iterator, Sequence
 from dataclasses import replace
 from functools import lru_cache
@@ -5502,8 +5503,15 @@ class BoardScene(QGraphicsScene):
         if not self._before_copper or self.document is None:
             return
         board = self.document.board
+        # Only what is gone: copper laid back exactly where it was is today's copper too,
+        # and drawing all of it dashed after one net was redone hid the one that moved.
+        now = Counter(copper_shape(c) for c in self.document.conductors)
         outline = QPainterPath()
         for conductor in self._before_copper:
+            shape = copper_shape(conductor)
+            if now[shape]:
+                now[shape] -= 1
+                continue
             points = [hole_to_screen(hole, board, self.side) for hole in conductor.path]
             if len(points) < 2:
                 continue
@@ -7879,3 +7887,11 @@ class BoardView(QGraphicsView):
         if not viewport.contains(rect):
             self._navigated()
             self.centerOn(rect.center())
+
+
+def copper_shape(conductor: Conductor) -> tuple[str, str, tuple[tuple[int, int], ...]]:
+    """A piece of copper as what it is on the board: its kind on these holes on this face,
+    whichever end it was drawn from. What the comparison with the wiring before leaves
+    out, and what Redo Wiring counts as kept (``main._copper_change``)."""
+    holes = tuple((hole.col, hole.row) for hole in conductor.path)
+    return (conductor.kind, conductor.side, min(holes, holes[::-1]))

@@ -33,7 +33,7 @@ closed without a bump.
   or holds a step back. The numbers are the ones the autowire scoreboard holds the router to
   (`wiringstats`), so a count and the wires it selects cannot disagree.
 - **A wire's Properties says what it lies across**, with the pins by name ("3 pins: U1.3, U1.4,
-  C2.1 · 2 ends of other copper · 4 crossings · 2 wires up"). It also offers its net's
+  C2.1 · 2 ends of other copper · 4 crossings · stacked over 2 wires"). It also offers its net's
   wiring: Select All, Redo Wiring and Remove Wiring of the net, as the right-click menu does.
   A finding about copper alone now selects that copper when clicked.
 - **One net's wiring can be redone in a style of its own**, from its right-click menu or the

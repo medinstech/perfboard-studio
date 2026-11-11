@@ -403,6 +403,7 @@ from .view2d import (
     FOOTPRINT_MIME,
     BoardScene,
     BoardView,
+    copper_shape,
     hole_to_screen,
     next_reference,
     picture_beside_the_pointer,
@@ -544,17 +545,10 @@ def _distance_to_segment(point: Point2, start: Point2, end: Point2) -> float:
     return math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
 
 
-def _copper_shape(conductor: Any) -> tuple[str, str, tuple[tuple[int, int], ...]]:
-    """A piece of copper as what it is on the board: its kind on these holes on this face,
-    whichever end it was drawn from."""
-    holes = tuple((hole.col, hole.row) for hole in conductor.path)
-    return (conductor.kind, getattr(conductor, "side", "bottom"), min(holes, holes[::-1]))
-
-
 def _same_copper(removed: Sequence[Any], planned: Sequence[Any]) -> bool:
     """Whether a re-route would lay back exactly the copper it rips up: the same kinds on
     the same holes, on the same faces, whichever end each run was drawn from."""
-    return sorted(map(_copper_shape, removed)) == sorted(map(_copper_shape, planned))
+    return sorted(map(copper_shape, removed)) == sorted(map(copper_shape, planned))
 
 
 def _copper_change(removed: Sequence[Any], planned: Sequence[Any]) -> tuple[int, int, int]:
@@ -564,8 +558,8 @@ def _copper_change(removed: Sequence[Any], planned: Sequence[Any]) -> tuple[int,
     "15 old conductors removed, 15 conductors now" was the whole of what Redo Wiring said
     about a plan that moved ONE wire's corner, and left every other piece where it was.
     """
-    left = Counter(map(_copper_shape, removed))
-    new = Counter(map(_copper_shape, planned))
+    left = Counter(map(copper_shape, removed))
+    new = Counter(map(copper_shape, planned))
     kept = sum((left & new).values())
     return kept, len(removed) - kept, len(planned) - kept
 
@@ -9637,7 +9631,7 @@ class MainWindow(QMainWindow):
         solder run, which is soldered to everything it passes.
 
         Properties said "Insulated Wire · N1 → D1, 2 holes" of the worst wire on a board,
-        one lying across ten holes nine wires up. The numbers are the engine's entry for
+        one lying across ten holes, stacked over nine wires. The numbers are the engine's entry for
         this wire (``wiringstats``), the ones the drawer's counts are summed from.
         """
         stats = self._last_wiring_stats
@@ -9671,9 +9665,10 @@ class MainWindow(QMainWindow):
             said.append(
                 counted(len(entry.crosses), t("{count} crossing"), t("{count} crossings"))
             )
-        if entry.level:
+        # One step up is any wire over a lead's stub; it is worth saying from two.
+        if entry.level >= 2:
             said.append(
-                counted(entry.level, t("{count} wire up"), t("{count} wires up"))
+                counted(entry.level, t("stacked over {count} wire"), t("stacked over {count} wires"))
             )
         return "  ·  ".join(said)
 
@@ -11341,8 +11336,8 @@ class MainWindow(QMainWindow):
                 + (f"<p>{in_style}</p>" if in_style else "")
                 + f"<b>{say(describe_reroute(plan))}</b><p>"
                 + t(
-                    "Of that, {kept} stay exactly where they are; {gone} are taken up and "
-                    "{laid} laid in their place. Copper with no net assigned is left alone."
+                    "Of the copper on these nets: {kept} left exactly as it is, {gone} taken "
+                    "up, {laid} laid new. Copper with no net assigned is left alone."
                 ).format(kept=kept, gone=gone, laid=laid)
                 + "</p><p>"
                 + t("One Ctrl+Z puts it all back.")
@@ -11364,7 +11359,7 @@ class MainWindow(QMainWindow):
         said = [say(describe_reroute(plan))]
         if kept:
             said.append(
-                t("{gone} taken up, {laid} laid, {kept} left as they were").format(
+                t("{gone} taken up, {laid} laid, {kept} unchanged").format(
                     gone=gone, laid=laid, kept=kept
                 )
             )

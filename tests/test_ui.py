@@ -18892,6 +18892,10 @@ def test_wiring_worth_a_look_is_a_group_that_selects_its_wires_and_is_not_no_pro
 
     window = _window_on(_example_document("ne555-astable"))
     try:
+        # With nothing worth a look, the bar says so plainly.
+        window._last_wiring = ()
+        window._refresh_drc_panel(window._last_violations, window._last_lvs)
+        window._refresh_problems_bar()
         assert window.problems_bar.badge.isHidden()
         assert "No problems" in window.problems_bar.title.text()
         wires = tuple(c.id for c in window.bus.document.conductors[:2])
@@ -19137,8 +19141,8 @@ def test_the_step_card_keeps_the_wiring_and_a_count_selects_its_wires() -> None:
             card._links.itemAt(i).widget() for i in range(card._links.count())
         ]
         over_pins = next(n for n in window._last_wiring if n.key == "over-pins")
-        link = next(w for w in links if w.text() == over_pins.title)
-        link.click()
+        link = next(w for w in links if over_pins.title in w.text())
+        link.linkActivated.emit(over_pins.key)
         assert set(window.scene.selected_conductor_ids()) == set(over_pins.conductor_ids)
         assert window.statusBar().currentMessage() == over_pins.title
     finally:

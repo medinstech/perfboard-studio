@@ -262,10 +262,10 @@ def step_hint(key: StepKey, facts: WorkflowFacts) -> str:
     if facts.wiring_to_review:
         return _counted(
             facts.wiring_to_review,
-            t("The board can be built. {count} wire is worth a look first: Show Problems, "
-              "then Wiring, selects it."),
-            t("The board can be built. {count} wires are worth a look first: Show Problems, "
-              "then Wiring, selects them."),
+            t("The board can be built. {count} wire is worth a look first: a count below "
+              "selects it."),
+            t("The board can be built. {count} wires are worth a look first: each count below "
+              "selects its wires."),
         )
     return t("The board is ready to build. The build guide takes you through it one part at a time.")
 
