@@ -52,7 +52,7 @@ Pure and deterministic: no I/O, no clock, no randomness. Same board, same plan.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from .command import CommandContext, CommandError
@@ -520,6 +520,9 @@ def plan_best_autoroute(
     options: AutorouteOptions = DEFAULT_AUTOROUTE_OPTIONS,
     only_net_ids: tuple[NetId, ...] | None = None,
     styles: tuple[RoutingStyle, ...] = ALL_ROUTING_STYLES,
+    *,
+    on_style: Callable[[RoutingStyle, int, int], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> BestAutoroute:
     """Route the board once per style and keep the plan that is best to build.
 
@@ -536,10 +539,26 @@ def plan_best_autoroute(
     Deterministic: fixed style order, and ties fall to the earlier style in that order --
     so ``balanced`` wins a dead heat and this reduces to today's behaviour when nothing
     beats it.
+
+    ``on_style(style, index, total)`` is told each style just before it is wired, ``index``
+    counting from 1, for a progress label: four plans of a large board are seconds each,
+    and "the solder style, 2 of 4" is what makes them read as progress. It is called on
+    whatever thread runs this, so a window's callback is a plain assignment its label
+    reads back, as ``boardfit.choose_board``'s ``on_trial`` is. ``should_stop`` is asked
+    between styles, never during one -- a plan has no stop of its own -- and once it says
+    so the best of the styles already wired is kept; the first is always wired, so there is
+    always a plan. Styles run one after another in this process: the four plans are not
+    put on the placer's worker pool, whose mapper hands results back only when every job
+    is done, which is the progress this exists to show.
     """
     variants: list[AutorouteVariant] = []
     baseline = drc_counts(doc, lookup)
-    for style in styles or ALL_ROUTING_STYLES:
+    tried = styles or ALL_ROUTING_STYLES
+    for index, style in enumerate(tried, 1):
+        if variants and should_stop is not None and should_stop():
+            break
+        if on_style is not None:
+            on_style(style, index, len(tried))
         router = options_for_style(style, options.router)
         plan = plan_autoroute(
             doc, lookup, dataclasses.replace(options, router=router), only_net_ids

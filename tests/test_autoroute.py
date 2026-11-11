@@ -1220,6 +1220,43 @@ def test_the_sweep_is_deterministic() -> None:
     assert [v.score for v in first.variants] == [v.score for v in second.variants]
 
 
+def test_the_sweep_names_each_style_before_wiring_it() -> None:
+    """For a progress label: told in order, counted from one, before the plan is made --
+    and telling it changes nothing about the answer."""
+    doc = dataclasses.replace(_load_golden_document("ne555"), conductors=())
+    told: list[tuple[str, int, int]] = []
+
+    best = plan_best_autoroute(
+        doc, LOOKUP_STD, on_style=lambda style, i, n: told.append((style, i, n))
+    )
+
+    total = len(ALL_ROUTING_STYLES)
+    assert told == [(style, i, total) for i, style in enumerate(ALL_ROUTING_STYLES, 1)]
+    plain = plan_best_autoroute(doc, LOOKUP_STD)
+    assert best.style == plain.style
+    assert [v.score for v in best.variants] == [v.score for v in plain.variants]
+
+
+def test_a_stopped_sweep_keeps_the_best_of_the_styles_it_wired() -> None:
+    """Asked between styles, never before the first, so a stop still leaves a plan: the
+    one style wired, exactly as wiring that style alone gives it."""
+    doc = dataclasses.replace(_load_golden_document("ne555"), conductors=())
+    told: list[str] = []
+
+    best = plan_best_autoroute(
+        doc,
+        LOOKUP_STD,
+        on_style=lambda style, _i, _n: told.append(style),
+        should_stop=lambda: True,
+    )
+
+    first = ALL_ROUTING_STYLES[0]
+    assert told == [first]
+    assert [v.style for v in best.variants] == [first]
+    alone = plan_best_autoroute(doc, LOOKUP_STD, styles=(first,))
+    assert best.style == first and best.plan == alone.plan
+
+
 def test_a_tie_falls_to_the_earlier_style_so_balanced_keeps_its_place() -> None:
     """Ties are common -- on dense.perf `balanced` and `wire` route identically. Falling to
     the first style tried makes the sweep reduce to today's behaviour when nothing beats
