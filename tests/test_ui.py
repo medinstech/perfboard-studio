@@ -19300,3 +19300,43 @@ def test_a_wires_net_is_wired_again_without_it(monkeypatch: pytest.MonkeyPatch) 
         assert window.inspector.conductor_editor.redo_without.isHidden()
     finally:
         _close(window)
+
+
+def test_trying_every_style_says_which_it_is_wiring_and_stops_between_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """"Wiring with every style…" sat over four styles wired one after another, and Cancel
+    did nothing until the last. The label names the style being wired, Cancel stops between
+    styles and keeps the best of those wired, and the status says how many it chose from."""
+    from perfboard_studio.commands import DeleteConductorsPayload
+    from perfboard_studio.ui.main import MainWindow
+
+    labels: list[str] = []
+
+    def run(self, label, work, stopped=None, aside=None):
+        labels.append(label() if callable(label) else label)
+
+        def should_stop() -> bool:
+            labels.append(label() if callable(label) else label)
+            return True  # Cancel pressed while the first style was wired.
+
+        return work(should_stop)
+
+    monkeypatch.setattr(MainWindow, "_run_planner", run)
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        ids = tuple(c.id for c in window.bus.document.conductors)
+        assert window.bus.dispatch("conductor.deleteMany", DeleteConductorsPayload(ids=ids)).ok
+        window.act_style["best"].trigger()
+        assert window._routing_style == "best"
+        window.on_autoroute_all()
+        from perfboard_studio.autoroute import ALL_ROUTING_STYLES
+
+        first = dict(window.wiring_styles())[ALL_ROUTING_STYLES[0]]
+        total = len(ALL_ROUTING_STYLES)
+        assert labels[0] == "Wiring with every style…"
+        assert labels[1] == f"Wiring in “{first}” (1 of {total})…", labels
+        assert window.bus.document.conductors, "the best of what was wired is kept"
+        assert f"stopped after 1 of {total} styles" in window.statusBar().currentMessage()
+    finally:
+        _close(window)

@@ -122,6 +122,7 @@ from PySide6.QtWidgets import (
 
 from perfboard_studio import persist
 from perfboard_studio.autoroute import (
+    ALL_ROUTING_STYLES,
     AutorouteOptions,
     AutoroutePlan,
     UnroutedLink,
@@ -11572,10 +11573,33 @@ class MainWindow(QMainWindow):
         options = self._autoroute_options()
         sweep = self._routing_style == "best"
         if sweep:
+            # Which style is being wired, said while it is: four styles one after another
+            # read as a hang under one label. Set on the worker thread by a plain assignment
+            # and only read here (``_run_planner``). Cancel stops between styles and keeps
+            # the best of those already wired.
+            wiring: dict[str, tuple[str, int, int]] = {}
+            style_names = dict(self.wiring_styles())
+
+            def label() -> str:
+                now = wiring.get("style")
+                if now is None:
+                    return t("Wiring with every style…")
+                style, number, total = now
+                return t("Wiring in “{style}” ({number} of {total})…").format(
+                    style=style_names.get(style, style), number=number, total=total
+                )
+
             best = self._run_planner(
-                t("Wiring with every style…"),
-                lambda _should_stop: plan_best_autoroute(
-                    document, self.lookup, options, only_net_ids=only_net_ids
+                label,
+                lambda should_stop: plan_best_autoroute(
+                    document,
+                    self.lookup,
+                    options,
+                    only_net_ids=only_net_ids,
+                    on_style=lambda style, number, total: wiring.__setitem__(
+                        "style", (style, number, total)
+                    ),
+                    should_stop=should_stop,
                 ),
             )
             plan = best.plan if best is not None else None
@@ -11606,6 +11630,11 @@ class MainWindow(QMainWindow):
             if best is not None
             else ""
         )
+        if best is not None and best.considered < len(ALL_ROUTING_STYLES):
+            # Stopped between styles: what it was chosen from is said, not hidden.
+            style_note += "  ·  " + t("stopped after {count} of {total} styles").format(
+                count=best.considered, total=len(ALL_ROUTING_STYLES)
+            )
 
         if plan.is_empty:
             # Nothing left to ADD, and pressing it again has to mean something: the routing

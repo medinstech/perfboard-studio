@@ -74,6 +74,11 @@ closed without a bump.
 
 ### Changed
 
+- **Trying every wiring style says which one it is wiring, and Cancel stops it.** The
+  progress label names the style ("Wiring in “Balanced” (1 of 4)…"); Cancel stops
+  between styles and keeps the best of those already wired, and the status line says how
+  many it chose from. Cancel used to do nothing until the last style was done.
+
 - **Auto-wire's status line counts what the step card counts.** It said "55 connections
   wired across 24/24 nets, 24 needed an insulated wire or jumper, 2 wiring orders tried"
   beside a card saying "53 wires · 5 solder traces"; it now says the copper just laid in

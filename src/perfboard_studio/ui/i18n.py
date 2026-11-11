@@ -3998,6 +3998,8 @@ TURKISH: Mapping[str, str] = {
     "stacked over {count} wires": "{count} telin üstünde",
     "Select these wires on the board.": "Bu telleri kartta seçer.",
     "Redo Wiring Without This Wire": "Bu Tel Olmadan Yeniden Kablola",
+    "Wiring in “{style}” ({number} of {total})…": "“{style}” tarzında kablolanıyor ({number}/{total})…",
+    "stopped after {count} of {total} styles": "{total} tarzın {count} tanesinden sonra durduruldu",
     "Wires this net again, keeping clear of the holes this wire lies across, so the same wire cannot come back.": (
         "Bu neti yeniden kablolar ve bu telin üzerinden geçtiği deliklerden uzak durur; "
         "böylece aynı tel geri gelemez."
