@@ -78,6 +78,50 @@ The Problems drawer under the board has the verdict: no problems, and "Matches t
 7 of 7 nets", which is the board's real connectivity extracted and compared with the
 circuit you drew.
 
+### What Auto-wire left, and what is worth a look
+
+Properties keeps the wiring in one line from the Wiring step on, where the status line was
+overwritten by the next message: "53 wires, 1.2 m, 77 bends · 12 solder traces" is the
+kind of line, with this board's own numbers. Under it, when there is something to say, are
+counts that are links: "14 places a wire lies over where other copper ends", "3 wires stacked
+three or more deep", "1 place a wire lies over a pin", "1 ring of wires, each over another's
+end: none can go in first". A click selects the wires the count is about, on the board.
+
+The same counts are the **Wiring** group in the Problems drawer ("N wires to look at"). They
+are not problems: the wiring works and is only harder to build than it has to be, so they never
+count in the problems badge and never stop the Build step, which says instead that the board
+can be built and how many wires are worth a look first. A wire you pick says the same of
+itself in Properties: **Lies across** names the pins it passes over (`U1.4`), the ends of
+other copper, the crossings, and how many wires it is stacked over, which it says from two up.
+A solder run has no such line, since it is soldered to everything it passes.
+
+### Redo it, or draw it yourself
+
+- **Redo one net.** Right-click any piece of a net's copper, or pick it and use Properties:
+  **Redo Wiring of** the net offers every style, and the one you choose is for that net only;
+  the Wiring Style menu stays as it was. **Remove Wiring of** the net takes its copper up and
+  lays nothing back. **Wiring ▸ Redo Wiring of the Selection** (Ctrl+Alt+R) does it for the
+  selected parts or nets. A redo asks first, and says how much of the copper stays exactly
+  where it is, how much is taken up and how much is laid new (the status line afterwards says it in counts, for example "3 taken up, 3 laid, 9
+  unchanged"); one Ctrl+Z puts it all back.
+- **Compare With Before.** After an Auto-wire or a redo, **Wiring ▸ Compare With Before**
+  draws the copper that was there before and is gone now, dashed, over the wiring that
+  replaced it. The same item hides it again.
+- **Copper by hand.** Pick a tool from the Wiring menu: **Solder Trace** (T), **Reinforced Solder
+  Trace** (Shift+T), **Bare Wire** (W), **Insulated Wire** (Shift+W) or **Jumper Over the
+  Parts** (J). A solder trace and a wire go in runs: a click is where it turns, a wire's
+  corners lie on the grid like a routed one's, and Enter, a right-click or a double-click ends
+  it. Before you click, the hole where the copper would go wrong is marked: red where it
+  would join two nets, cross copper it may not cross or lie on another net's joint, amber where
+  a wire would run along another wire. The banner over the board says what the click would
+  do, and while you draw it counts the ends, the pads or millimetres, and the net.
+  Drawing on from the end of a run lengthens that run rather than starting another, and the
+  copper lands on the net it meets. Copper drawn exactly over copper already there is not laid: the banner says it is already
+  there, and Enter adds nothing and says what joins it. A selected piece has handles on its
+  ends and corners to reshape it, and a click on copper stacked on copper takes the next one
+  down each time. The tool stays armed, and Ctrl+Z names what it took back by its kind and
+  ends.
+
 ## 6. Open the build guide
 
 ![The build guide's first step: R1, 10k, from I2 to I5, with the holes and the part's height](images/first-board/6-guide.png)
