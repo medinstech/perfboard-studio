@@ -13,6 +13,7 @@ import pathlib
 import pytest
 
 from perfboard_studio import persist
+from perfboard_studio.autoroute import AutorouteOptions, AutoroutePlan, plan_autoroute, score_plan
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import (
     KEEP,
@@ -29,13 +30,16 @@ from perfboard_studio.footprints import footprint_lookup
 from perfboard_studio.geometry import all_pin_holes, is_adjacent4
 from perfboard_studio.lvs import run_lvs
 from perfboard_studio.model import (
+    BoardSide,
     HoleCoord,
     PerfDocument,
     SolderTraceConductor,
     has_component_side_copper,
 )
 from perfboard_studio.occupancy import build_occupancy
+from perfboard_studio.router import RouterFaces, RouterOptions, options_for_style
 from perfboard_studio.ui.clipboard import _new_conductor
+from perfboard_studio.wiringstats import wiring_stats
 
 LOOKUP = footprint_lookup()
 
@@ -261,3 +265,79 @@ def test_a_component_side_trace_under_a_parts_body_is_named() -> None:
     assert "on the component side" in found[0].message
     under = dataclasses.replace(trace, side="bottom")
     assert not [v for v in run_drc(_with(doc, under), LOOKUP) if v.rule == "copper-under-body"]
+
+
+# ---------------------------------------------------------------------------
+# The router on both faces (RouterOptions.faces)
+# ---------------------------------------------------------------------------
+
+
+def _solder_plan(doc: PerfDocument, faces: RouterFaces, **prefer: BoardSide) -> AutoroutePlan:
+    """``doc`` stripped of its copper and wired in the solder style, the nets named in
+    ``prefer`` given that face."""
+    bare = dataclasses.replace(
+        doc,
+        conductors=(),
+        nets=tuple(dataclasses.replace(n, preferred_side=prefer.get(n.name)) for n in doc.nets),
+    )
+    router = options_for_style("solder", RouterOptions(wire_path="grid", faces=faces))
+    return plan_autoroute(bare, LOOKUP, AutorouteOptions(router=router))
+
+
+def test_one_face_is_the_default_and_both_faces_with_no_preference_stays_underneath() -> None:
+    """``faces`` is "solder" unless asked, which is every golden route. Asked for both with
+    no net preferring a face, the plan is the solder side's to the conductor: two traces
+    cannot cross on opposite faces of a plated board any more than on one, so the
+    component side only costs more."""
+    assert RouterOptions().faces == "solder"
+    doc = _doc()
+
+    assert _solder_plan(doc, "both").conductors == _solder_plan(doc, "solder").conductors
+
+
+def test_a_net_that_prefers_the_component_side_is_wired_there_without_a_short() -> None:
+    doc = _doc()
+    gnd = next(n.id for n in doc.nets if n.name == "GND")
+
+    plan = _solder_plan(doc, "both", GND="top")
+
+    on_top = [c for c in plan.conductors if c.side == "top"]
+    assert on_top and all(c.net_id == gnd for c in on_top)
+    assert run_lvs(plan.document, LOOKUP).summary.shorts == 0
+    rules = {v.rule for v in run_drc(plan.document, LOOKUP)}
+    assert not rules & {"no-copper-on-face", "copper-under-body", "conductor-crossing"}
+
+
+def test_the_faces_meet_in_a_via_and_the_plan_counts_it() -> None:
+    plan = _solder_plan(_doc(), "both", GND="top")
+    occupancy = build_occupancy(plan.document, LOOKUP)
+
+    vias = wiring_stats(plan.document, LOOKUP).vias
+
+    assert vias, "GND no longer changes face on the ne555"
+    for hole in vias:
+        assert occupancy.pin_at(hole) is None
+        sides = {c.side for c in plan.document.conductors if hole in c.path}
+        assert sides == {"top", "bottom"}
+    assert score_plan(plan, _doc(), LOOKUP).face_changes == len(vias)
+
+
+def test_a_preference_is_ignored_on_one_face_and_on_a_board_with_no_pads_on_top() -> None:
+    doc = _doc()
+    single = dataclasses.replace(doc, board=dataclasses.replace(doc.board, single_sided=True))
+
+    assert not any(c.side == "top" for c in _solder_plan(doc, "solder", GND="top").conductors)
+    assert not any(c.side == "top" for c in _solder_plan(single, "both", GND="top").conductors)
+
+
+def test_solder_on_the_component_side_closes_its_holes_underneath() -> None:
+    """A plated hole is one piece of copper: what is soldered on top of it is on its pad
+    underneath, so nothing on the solder side may pass through it."""
+    doc = dataclasses.replace(_doc(), conductors=())
+    run = _free_run(doc)
+    top = _with(doc, SolderTraceConductor(id="t", path=run, side="top"))
+
+    occupancy = build_occupancy(top, LOOKUP)
+
+    assert all(occupancy.is_copper_blocked(hole, "bottom") for hole in run)
+    assert not any(build_occupancy(doc, LOOKUP).is_copper_blocked(hole, "bottom") for hole in run)

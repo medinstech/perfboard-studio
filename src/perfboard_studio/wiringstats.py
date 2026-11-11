@@ -16,6 +16,8 @@ scoreboard" in docs/ARCHITECTURE.md. In short:
   down to its pad: each one stacks the wire above that one.
 * ``crosses`` -- conductors on the same face sharing a hole with it where the two are not
   soldered together: what it passes over or under.
+* ``vias`` -- pinless holes where solder on the component side meets copper of the other
+  face: each is filled so the solder shows on both, and checked.
 
 Only a wire -- soldered at its ends alone (``model.contacts_every_path_hole`` False: a wire, a
 jumper, a bent lead) -- lies ACROSS anything; a solder run is soldered at every hole it
@@ -41,7 +43,7 @@ from .model import (
     PerfDocument,
     contacts_every_path_hole,
 )
-from .occupancy import build_occupancy, stacking_layers, stacking_loops
+from .occupancy import OccupancyIndex, build_occupancy, stacking_layers, stacking_loops
 from .ratsnest import ratsnest, summarize
 
 
@@ -91,6 +93,8 @@ class WiringStats:
     trace_pads: int
     #: ``occupancy.stacking_loops``: wires each lying across another's end.
     loops: tuple[tuple[ConductorId, ...], ...]
+    #: :func:`vias`. Empty on every board with no solder on the component side.
+    vias: tuple[HoleCoord, ...] = ()
 
     def of(self, conductor_id: ConductorId) -> ConductorStats | None:
         """The entry for one conductor, or None when there is no such conductor."""
@@ -152,7 +156,33 @@ def wiring_stats(doc: PerfDocument, lookup: FootprintLookup) -> WiringStats:
         max_level=max((entry.level for entry in wires), default=0),
         trace_pads=sum(entry.pads for entry in entries),
         loops=stacking_loops(doc),
+        vias=vias(doc, occupancy),
     )
+
+
+def vias(doc: PerfDocument, occupancy: OccupancyIndex) -> tuple[HoleCoord, ...]:
+    """Pinless holes where a solder run on the component side meets other copper: a run
+    on the solder side, or a wire's soldered end. Through a pin the lead joins the faces
+    already, so a pin hole is not one. In board order (row, then column)."""
+    top: dict[str, HoleCoord] = {}
+    other: set[str] = set()
+    for conductor in doc.conductors:
+        on_top = conductor.side == "top" and conductor.kind in ("solder-trace", "solder-trace-wired")
+        if contacts_every_path_hole(conductor):
+            touched = conductor.path
+        elif conductor.path:
+            touched = (conductor.path[0], conductor.path[-1])
+        else:
+            touched = ()
+        for hole in touched:
+            if on_top:
+                top[hole_key(hole)] = hole
+            else:
+                other.add(hole_key(hole))
+    found = [
+        hole for key, hole in top.items() if key in other and occupancy.pin_at(hole) is None
+    ]
+    return tuple(sorted(found, key=lambda hole: (hole.row, hole.col)))
 
 
 def _holes_under(conductor: Conductor) -> dict[str, HoleCoord]:

@@ -4,6 +4,7 @@
     python tools/autowire_scoreboard.py atmega nano      # boards whose file name has one of these
     python tools/autowire_scoreboard.py --json out.json  # ...and keep the rows
     python tools/autowire_scoreboard.py --before old.json  # before -> after, per board
+    python tools/autowire_scoreboard.py --faces both --prefer GND=top  # wire on both faces
 
 Each board of a system is wired on its own (``system.board_document``), stripped of its
 copper and wired the way the window's Auto-wire does it: the best of the style sweep, wires
@@ -24,6 +25,8 @@ The columns, per board:
   end      holes a wire lies across where another conductor ends and comes down to its pad
   loops    groups of wires each lying across another's end (``occupancy.stacking_loops``):
            soldered in no order, drawn apart by no stacking
+  via      pinless holes the copper changes face through (``wiringstats.vias``): 0 unless
+           ``--faces both`` lets it, on a board with pads on the component side
   drawn    pairs of conductors whose 3D tubes go through each other away from a shared pad,
            measured on the centrelines and radii ``ui/view3d`` draws ("-" without the UI)
   s        seconds auto-wire took
@@ -41,7 +44,7 @@ import json
 import math
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -58,11 +61,19 @@ from perfboard_studio.connectivity import FootprintLookup  # noqa: E402
 from perfboard_studio.drc import run_drc  # noqa: E402
 from perfboard_studio.footprints import footprint_lookup  # noqa: E402
 from perfboard_studio.geometry import hole_key  # noqa: E402
-from perfboard_studio.model import Conductor, PerfDocument, contacts_every_path_hole  # noqa: E402
-from perfboard_studio.router import RouterOptions  # noqa: E402
+from perfboard_studio.model import (  # noqa: E402
+    BoardSide,
+    Conductor,
+    PerfDocument,
+    contacts_every_path_hole,
+)
+from perfboard_studio.router import ROUTER_FACES, RouterFaces, RouterOptions  # noqa: E402
 from perfboard_studio.wiringstats import wiring_stats  # noqa: E402
 
-COLUMNS = ("unr", "err", "warn", "wire", "bends", "trace", "level", "pin", "end", "loops", "drawn", "s")
+COLUMNS = (
+    "unr", "err", "warn", "wire", "bends", "trace", "level", "pin", "end", "loops", "via", "drawn",
+    "s",
+)
 
 
 def boards(names: tuple[str, ...] = ()) -> Iterator[tuple[str, str, PerfDocument]]:
@@ -81,11 +92,26 @@ def boards(names: tuple[str, ...] = ()) -> Iterator[tuple[str, str, PerfDocument
 
 
 def autowire(
-    doc: PerfDocument, lookup: FootprintLookup, *, plain: bool = False
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    *,
+    plain: bool = False,
+    faces: RouterFaces = "solder",
+    prefer: Mapping[str, BoardSide] | None = None,
 ) -> tuple[PerfDocument, int, str, float]:
-    """The board wired from bare: (document, unrouted, style, seconds)."""
-    bare = dataclasses.replace(doc, conductors=())
-    options = AutorouteOptions(router=RouterOptions(wire_path="grid"))
+    """The board wired from bare: (document, unrouted, style, seconds). ``prefer`` gives a
+    face to the nets of those names, as ``Net.preferred_side`` does."""
+    bare = dataclasses.replace(
+        doc,
+        conductors=(),
+        nets=tuple(
+            dataclasses.replace(net, preferred_side=prefer[net.name])
+            if prefer and net.name in prefer
+            else net
+            for net in doc.nets
+        ),
+    )
+    options = AutorouteOptions(router=RouterOptions(wire_path="grid", faces=faces))
     start = time.perf_counter()
     if plain:
         plan, style = plan_autoroute(bare, lookup, options), "balanced"
@@ -112,6 +138,7 @@ def measure(
         "pin": stats.over_pins,
         "end": stats.over_ends,
         "loops": len(stats.loops),
+        "via": len(stats.vias),
         "drawn": (
             len(drawn_collisions(doc, {c.conductor_id: c.level for c in stats.conductors}))
             if drawn
@@ -232,6 +259,8 @@ def score(
     plain: bool = False,
     drawn: bool = True,
     progress: Callable[[dict[str, Any]], None] | None = None,
+    faces: RouterFaces = "solder",
+    prefer: Mapping[str, BoardSide] | None = None,
 ) -> list[dict[str, Any]]:
     """One row per board with parts: where it is, the style auto-wire chose, every column."""
     lookup = footprint_lookup()
@@ -239,7 +268,9 @@ def score(
     for rel, board_id, doc in boards(names):
         if not doc.components:
             continue
-        wired, unrouted, style, seconds = autowire(doc, lookup, plain=plain)
+        wired, unrouted, style, seconds = autowire(
+            doc, lookup, plain=plain, faces=faces, prefer=prefer
+        )
         row = {
             "file": rel,
             "board": board_id,
@@ -280,7 +311,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-drawn", action="store_true", help="skip the 3D measurement")
     parser.add_argument("--json", type=Path, help="write the rows here")
     parser.add_argument("--before", type=Path, help="rows from an earlier run, to compare")
+    parser.add_argument(
+        "--faces", choices=ROUTER_FACES, default="solder", help="faces solder may be laid on"
+    )
+    parser.add_argument(
+        "--prefer",
+        action="append",
+        default=[],
+        metavar="NET=top|bottom",
+        help="give the nets of this name a face (repeatable)",
+    )
     args = parser.parse_args(argv)
+    prefer: dict[str, BoardSide] = {}
+    for item in args.prefer:
+        name, _, side = item.partition("=")
+        if side not in ("top", "bottom"):
+            parser.error(f"--prefer {item}: the face is top or bottom")
+        prefer[name] = "top" if side == "top" else "bottom"
 
     before: dict[tuple[str, str], dict[str, Any]] = {}
     if args.before:
@@ -290,7 +337,14 @@ def main(argv: list[str] | None = None) -> int:
     def show(row: dict[str, Any]) -> None:
         print(_line(row, before.get((row["file"], row["board"])) if before else None), flush=True)
 
-    rows = score(tuple(args.names), plain=args.plain, drawn=not args.no_drawn, progress=show)
+    rows = score(
+        tuple(args.names),
+        plain=args.plain,
+        drawn=not args.no_drawn,
+        progress=show,
+        faces=args.faces,
+        prefer=prefer,
+    )
     totals = {
         c: round(sum(r[c] for r in rows if r[c] is not None), 2)
         for c in COLUMNS

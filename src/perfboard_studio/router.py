@@ -98,12 +98,14 @@ from .geometry import (
 )
 from .model import (
     Board,
+    BoardSide,
     HoleCoord,
     NetId,
     PerfDocument,
     SolderBuildup,
     SpineSpec,
     contacts_every_path_hole,
+    has_component_side_copper,
     is_crossing_blocked,
 )
 from .occupancy import OccupancyIndex, build_occupancy
@@ -191,6 +193,21 @@ class RouterCosts:
     #: row of extra bridges to make and inspect. Above zero the searches run over (hole,
     #: heading) so a bend can be priced -- see ``_find_turning_trace_path``.
     trace_bend: float = 0
+    #: The three below are read only with ``RouterOptions.faces`` "both", on a board with
+    #: pads on the component side; every route on one face is priced without them.
+    #:
+    #: Carrying a trace to the other face through a pinless hole: a via, one more hole to
+    #: fill and check. Through a pin of the net it is free -- the lead is soldered on both
+    #: faces anyway.
+    face_change: float = 3
+    #: Per trace step on the face the net does not prefer (``Net.preferred_side``). Past a
+    #: hole or two a step costs more than a change, so a route changes face early and
+    #: rarely, which is what "GND on the component side" asks for (#14) -- and the face is
+    #: still a preference: where it is blocked the route takes the other one.
+    off_face_step: float = 2
+    #: Per trace step on the component side for a net with no preference: that copper is
+    #: laid among the fitted parts, with the iron reaching between them.
+    component_face_step: float = 0.5
 
 
 DEFAULT_ROUTER_COSTS = RouterCosts()
@@ -214,6 +231,19 @@ type WirePath = Literal["straight", "grid"]
 #: Every :data:`WirePath`, for a caller that has to check a name it was handed. Spelled out
 #: rather than read with ``get_args``, which answers an empty tuple for a ``type`` alias.
 WIRE_PATHS: tuple[WirePath, ...] = ("straight", "grid")
+
+
+#: Which faces the router may lay solder on.
+#:
+#:   "solder"  The solder side only: what the router always did and what every golden route
+#:             records, so it stays the engine's default.
+#:   "both"    Either face of a board with pads on the component side
+#:             (``model.has_component_side_copper``), changing face through a pin of the net
+#:             or a via. Read as "solder" on any other board.
+type RouterFaces = Literal["solder", "both"]
+
+#: Every :data:`RouterFaces`, spelled out for the reason :data:`WIRE_PATHS` is.
+ROUTER_FACES: tuple[RouterFaces, ...] = ("solder", "both")
 
 
 #: What the router may do when a connection cannot be made without crossing something that
@@ -330,6 +360,8 @@ class RouterOptions:
     #: checked on every candidate's whole path, so no strategy can take one. Empty by
     #: default, which is every route the goldens record.
     avoid_holes: tuple[HoleCoord, ...] = ()
+    #: See :data:`RouterFaces`. A net's ``preferred_side`` is read only with "both".
+    faces: RouterFaces = "solder"
 
 
 DEFAULT_ROUTER_OPTIONS = RouterOptions()
@@ -575,7 +607,12 @@ def route_connection(
         bend = _lead_bend_candidate(ctx, from_, to)
         if bend is not None:
             candidates.append(bend)
-    trace = _solder_trace_candidate(ctx, from_, to, buildup)
+    two_faces = _two_faces(options, doc.board)
+    trace = (
+        _two_face_trace_candidate(ctx, from_, to, buildup)
+        if two_faces
+        else _solder_trace_candidate(ctx, from_, to, buildup)
+    )
     if trace is not None:
         candidates.append(trace)
 
@@ -585,7 +622,7 @@ def route_connection(
     if policy == "hop":
         hopped = _hopping_trace_candidate(ctx, from_, to, buildup)
         if hopped is not None:
-            candidates.append(hopped)
+            candidates.append(_off_face(ctx, hopped) if two_faces else hopped)
     if policy != "refuse":
         wire = _grid_wire_candidate if options.wire_path == "grid" else _straight_wire_candidate
         bare = wire(ctx, from_, to, "bare-wire")
@@ -689,6 +726,7 @@ def _route_context(
     occupancy = build_occupancy(doc, lookup)
     net_at = _build_net_index(doc, lookup)
     blocked_segments = _blocked_segments(doc)
+    two_faces = _two_faces(options, doc.board)
     return _RouteContext(
         doc=doc,
         occupancy=occupancy,
@@ -714,6 +752,8 @@ def _route_context(
             _joint_holes(doc, occupancy) if options.wire_path == "grid" else frozenset()
         ),
         loop_holes=_loop_holes(doc, from_, to) if options.wire_path == "grid" else frozenset(),
+        preferred_side=_net_preferred_side(doc, request.net_id) if two_faces else None,
+        swept_any_face=_trace_blocked_holes(doc, any_face=True) if two_faces else frozenset(),
     )
 
 
@@ -817,6 +857,12 @@ class _RouteContext:
     blocked_edges: dict[tuple[tuple[int, int], tuple[int, int]], bool] = field(
         default_factory=dict
     )
+    #: With both faces in play: the face the net prefers (``Net.preferred_side``), the
+    #: holes a bare conductor of EITHER face lies across, and the two-face search's memo of
+    #: :func:`_traversable_on_face` by (col, row, face). Unused on one face.
+    preferred_side: BoardSide | None = None
+    swept_any_face: frozenset[tuple[int, int]] = frozenset()
+    face_traversable: dict[tuple[int, int, int], bool] = field(default_factory=dict)
 
 
 def _dead_hole_keys(doc: PerfDocument) -> frozenset[tuple[int, int]]:
@@ -874,7 +920,9 @@ def _blocked_segments(doc: PerfDocument) -> tuple[tuple[HoleCoord, HoleCoord], .
     return tuple(segments)
 
 
-def _trace_blocked_holes(doc: PerfDocument) -> frozenset[tuple[int, int]]:
+def _trace_blocked_holes(
+    doc: PerfDocument, *, any_face: bool = False
+) -> frozenset[tuple[int, int]]:
     """Holes a new solder trace may not use because existing copper lies across them.
 
     The holes a conductor's `path` LISTS are already blocked by the occupancy index; these are
@@ -882,10 +930,13 @@ def _trace_blocked_holes(doc: PerfDocument) -> frozenset[tuple[int, int]]:
     here rather than folded into occupancy because that index's golden output is part of the
     differential proof against the TypeScript engine, and widening it moves three suites at
     once -- see the note in occupancy.build_occupancy.
+
+    With ``any_face``, conductors on either face: on a plated board solder in a hole comes
+    out on both pads, so a hole is closed to a trace under a bare wire on either face.
     """
     keys: set[tuple[int, int]] = set()
     for conductor in doc.conductors:
-        if conductor.side != "bottom" or not is_crossing_blocked(conductor):
+        if (not any_face and conductor.side != "bottom") or not is_crossing_blocked(conductor):
             continue
         for start, stop in itertools.pairwise(conductor.path):
             keys.update(_keys_under_line(start, stop))
@@ -1519,6 +1570,293 @@ def _reconstruct(
         cursor = prev
     path.reverse()
     return path
+
+
+# ---------------------------------------------------------------------------
+# Strategy 1c: a solder trace on either face of a plated board (RouterOptions.faces)
+# ---------------------------------------------------------------------------
+
+_FACES: tuple[BoardSide, BoardSide] = ("bottom", "top")
+
+#: A trace's state in the two-face search: (col, row, face, d_col, d_row), the face an
+#: index into ``_FACES`` and the heading the one ``_find_turning_trace_path`` keeps.
+_FaceState = tuple[int, int, int, int, int]
+
+
+def _two_faces(options: RouterOptions, board: Board) -> bool:
+    """Whether this connection may lay copper on the component side."""
+    return options.faces == "both" and has_component_side_copper(board)
+
+
+def _net_preferred_side(doc: PerfDocument, net_id: NetId | None) -> BoardSide | None:
+    """``Net.preferred_side`` of the net being routed, or None."""
+    if net_id is None:
+        return None
+    return next((net.preferred_side for net in doc.nets if net.id == net_id), None)
+
+
+def _face_step_cost(costs: RouterCosts, face: BoardSide, preferred: BoardSide | None) -> float:
+    """What one step on ``face`` costs beyond the step itself."""
+    if preferred is None:
+        return costs.component_face_step if face == "top" else 0.0
+    return 0.0 if face == preferred else costs.off_face_step
+
+
+def _traversable_on(ctx: _RouteContext, hole: HoleCoord, face: int) -> bool:
+    """:func:`_traversable_on_face`, remembered per (hole, face)."""
+    key = (hole.col, hole.row, face)
+    remembered = ctx.face_traversable.get(key)
+    if remembered is None:
+        remembered = ctx.face_traversable[key] = _traversable_on_face(ctx, hole, _FACES[face])
+    return remembered
+
+
+def _traversable_on_face(ctx: _RouteContext, hole: HoleCoord, face: BoardSide) -> bool:
+    """:func:`_traversable` for a trace on either face of a plated board.
+
+    A plated hole is one piece of copper through the board, so whatever claims a hole on
+    one face claims it on both: copper of either face, a pin, a wire's joint, and the holes
+    a bare conductor lies across on either face -- solder put into a plated hole comes out
+    on the far pad, under the wire lying there. Two traces on opposite faces therefore
+    cannot cross any more than two on one face can: on the grid they meet in a hole. Only
+    the bodies are a face's own, and a trace on the component side keeps from under them,
+    because it is laid after the parts are fitted (the guide's phase 7).
+    """
+    key = _key(hole)
+    occupancy = ctx.occupancy
+    if occupancy.is_copper_blocked(hole, "bottom") or occupancy.is_copper_blocked(hole, "top"):
+        return False
+    if key in ctx.swept_any_face or key in ctx.unusable_holes:
+        return False
+    if occupancy.body_covers(hole, face) is not None:
+        return False
+    if key in ctx.wire_joint_holes and key not in ctx.net_holes:
+        return False
+    return not (occupancy.pin_at(hole) and key not in ctx.net_holes)
+
+
+def _face_change_cost(ctx: _RouteContext, hole: HoleCoord) -> float | None:
+    """What it costs to carry a trace from one face to the other in ``hole``, or None
+    where it cannot be done.
+
+    Free through a pin of the net: its lead is soldered on both faces anyway. At a pinless
+    hole clear on both faces, ``RouterCosts.face_change``: a via, which the builder fills so
+    the solder shows on both faces, and checks. Never at another net's pin, which no trace
+    may enter at all.
+    """
+    key = _key(hole)
+    if ctx.occupancy.pin_at(hole) is not None:
+        return 0.0 if key in ctx.net_holes else None
+    if _traversable_on(ctx, hole, 0) and _traversable_on(ctx, hole, 1):
+        return ctx.opts.costs.face_change
+    return None
+
+
+def _endpoint_face_cost(ctx: _RouteContext, hole: HoleCoord, face: BoardSide) -> float:
+    """What it costs for a run on ``face`` to start or end in ``hole``.
+
+    Nothing at a pin, at a hole of the net, or at a hole nothing is soldered in yet. A
+    pinless hole whose copper is on the OTHER face becomes a via when the run arrives on
+    this one, and is priced as one.
+    """
+    if ctx.occupancy.pin_at(hole) is not None or _key(hole) in ctx.net_holes:
+        return 0.0
+    native = [side for side in _FACES if ctx.occupancy.is_copper_blocked(hole, side)]
+    return 0.0 if not native or face in native else ctx.opts.costs.face_change
+
+
+def _find_two_face_trace_path(
+    ctx: _RouteContext, from_: HoleCoord, to: HoleCoord
+) -> list[tuple[HoleCoord, int]] | None:
+    """A* over (hole, face, heading): ``_find_turning_trace_path``'s moves on each face, and a
+    move to the other face in the same hole where :func:`_face_change_cost` allows one.
+
+    Only reached with ``RouterOptions.faces`` "both" on a board with pads on the component
+    side, so the single-face searches keep reproducing the goldens byte for byte. The heap
+    is on (f, push order), so it is deterministic. Given twice the turning search's node
+    ceiling, a state per face; a search that cannot finish returns None, and the caller
+    falls back to the solder side alone.
+    """
+    costs = ctx.opts.costs
+    preferred = ctx.preferred_side
+    board = ctx.doc.board
+    floor = costs.solder_trace_step + min(_face_step_cost(costs, f, preferred) for f in _FACES)
+    goal = _key(to)
+    starts: list[_FaceState] = [(from_.col, from_.row, face, 0, 0) for face in range(2)]
+    g_score: dict[_FaceState, float] = {
+        state: _endpoint_face_cost(ctx, from_, _FACES[state[2]]) for state in starts
+    }
+    came_from: dict[_FaceState, _FaceState] = {}
+    heap: list[tuple[float, int, _FaceState]] = [
+        (g_score[state] + manhattan(from_, to) * floor, order, state)
+        for order, state in enumerate(starts)
+    ]
+    heapq.heapify(heap)
+    pushed = len(heap)
+    closed: set[_FaceState] = set()
+    expanded = 0
+    ceiling = ctx.opts.max_expanded_nodes * 8
+
+    while heap:
+        _f, _order, state = heapq.heappop(heap)
+        col, row, face, heading_col, heading_row = state
+        if (col, row) == goal:
+            path: list[tuple[HoleCoord, int]] = []
+            cursor = state
+            while True:
+                path.append((HoleCoord(col=cursor[0], row=cursor[1]), cursor[2]))
+                if cursor not in came_from:
+                    break
+                cursor = came_from[cursor]
+            path.reverse()
+            return path
+        if state in closed:
+            continue
+        closed.add(state)
+        expanded += 1
+        if expanded > ceiling:
+            return None
+        g = g_score[state]
+        here = HoleCoord(col=col, row=row)
+        moves: list[tuple[_FaceState, float]] = []
+        for step in neighbors4(here, board):
+            is_goal = _key(step) == goal
+            if not is_goal and not _traversable_on(ctx, step, face):
+                continue
+            d_col, d_row = step.col - col, step.row - row
+            cost = costs.solder_trace_step + _face_step_cost(costs, _FACES[face], preferred)
+            if _has_foreign_neighbour(ctx, step, from_, to):
+                cost += costs.proximity_risk
+            if (heading_col, heading_row) not in ((0, 0), (d_col, d_row)):
+                cost += costs.trace_bend
+            if is_goal:
+                cost += _endpoint_face_cost(ctx, to, _FACES[face])
+            moves.append(((step.col, step.row, face, d_col, d_row), cost))
+        if not same_hole(here, from_):
+            change = _face_change_cost(ctx, here)
+            if change is not None:
+                moves.append(((col, row, 1 - face, 0, 0), change))
+        for nxt, cost in moves:
+            if nxt in closed:
+                continue
+            tentative = g + cost
+            if tentative >= g_score.get(nxt, math.inf):
+                continue
+            g_score[nxt] = tentative
+            came_from[nxt] = state
+            landing = HoleCoord(col=nxt[0], row=nxt[1])
+            heapq.heappush(heap, (tentative + manhattan(landing, to) * floor, pushed, nxt))
+            pushed += 1
+    return None
+
+
+def _two_face_trace_candidate(
+    ctx: _RouteContext, from_: HoleCoord, to: HoleCoord, buildup: SolderBuildup
+) -> RouteCandidate | None:
+    """A solder trace that may run on either face and change face on the way: one
+    conductor per face run, as a hopped trace is several.
+
+    Priced on the bill the search used -- the steps, their face, the risk, the bends, the
+    face changes -- with each run's spine added after, as :func:`_solder_trace_candidate`
+    adds its one. A search that cannot finish falls back to the solder side alone.
+    """
+    found = _find_two_face_trace_path(ctx, from_, to)
+    if found is None:
+        return _solder_trace_candidate(ctx, from_, to, buildup)
+
+    costs = ctx.opts.costs
+    preferred = ctx.preferred_side
+    runs: list[tuple[BoardSide, list[HoleCoord]]] = []
+    for hole, index in found:
+        if runs and runs[-1][0] == _FACES[index]:
+            runs[-1][1].append(hole)
+        else:
+            runs.append((_FACES[index], [hole]))
+
+    risk_holes = tuple(
+        dict.fromkeys(
+            hole for _face, run in runs for hole in run if _has_foreign_neighbour(ctx, hole, from_, to)
+        )
+    )
+    vias = [run[0] for _face, run in runs[1:]]
+    cost = len(risk_holes) * costs.proximity_risk
+    cost += _endpoint_face_cost(ctx, from_, runs[0][0]) + _endpoint_face_cost(ctx, to, runs[-1][0])
+    cost += sum(_face_change_cost(ctx, hole) or 0.0 for hole in vias)
+    conductors: list[NewConductor] = []
+    wired = False
+    for face, run in runs:
+        if len(run) < 2:
+            continue
+        needs_spine = len(run) > ctx.opts.max_pure_solder_trace_pads
+        wired = wired or needs_spine
+        cost += (len(run) - 1) * (costs.solder_trace_step + _face_step_cost(costs, face, preferred))
+        cost += _bends_of(run) * costs.trace_bend
+        cost += costs.solder_trace_spine_fixed if needs_spine else 0.0
+        conductors.append(
+            NewSolderTraceConductor(
+                path=tuple(run),
+                buildup=buildup,
+                spine=SpineSpec(material="tinned-copper", gauge=0.6) if needs_spine else None,
+                net_id=ctx.own_net_id,
+                layer_z=0,
+                kind="solder-trace-wired" if needs_spine else "solder-trace",
+                side=face,
+            )
+        )
+    if not conductors:
+        return None
+
+    board = ctx.doc.board
+    pads = sum(len(run) for _face, run in runs) - len(vias)
+    parts = [f"{pads} pads from {format_hole(from_, board)} to {format_hole(to, board)}"]
+    faces = {face for face, run in runs if len(run) > 1}
+    if faces == {"top"}:
+        parts.append("on the component side")
+    elif len(faces) > 1:
+        parts.append(
+            "changing face at "
+            + ", ".join(format_hole(hole, board) for hole in vias)
+            + " — fill each so the solder shows on both faces"
+        )
+    if preferred is not None and any(face != preferred for face in faces):
+        parts.append(
+            f"off the {'component' if preferred == 'top' else 'solder'} side it prefers, "
+            "where that side is blocked"
+        )
+    if wired:
+        parts.append(
+            f"a run longer than {ctx.opts.max_pure_solder_trace_pads} pads gets a "
+            "tinned-copper spine"
+        )
+    if risk_holes:
+        holes_text = ", ".join(format_hole(hole, board) for hole in risk_holes)
+        parts.append(
+            f"{len(risk_holes)} pad(s) sit next to a different net ({holes_text}) — check "
+            "isolation there after soldering"
+        )
+    return RouteCandidate(
+        strategy="solder-trace-wired" if wired else "solder-trace",
+        conductors=tuple(conductors),
+        cost=cost,
+        explanation=f"Solder trace: {'; '.join(parts)}.",
+        risk_holes=risk_holes,
+    )
+
+
+def _off_face(ctx: _RouteContext, candidate: RouteCandidate) -> RouteCandidate:
+    """``candidate``, all on the solder side, charged for every trace step off the face
+    its net prefers -- so with both faces in play it is weighed on the same bill as the
+    two-face trace it competes with."""
+    if ctx.preferred_side != "top":
+        return candidate
+    steps = sum(
+        len(c.path) - 1
+        for c in candidate.conductors
+        if c.kind in ("solder-trace", "solder-trace-wired")
+    )
+    return dataclasses.replace(
+        candidate, cost=candidate.cost + steps * ctx.opts.costs.off_face_step
+    )
 
 
 # ---------------------------------------------------------------------------

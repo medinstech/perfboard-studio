@@ -160,6 +160,12 @@ def build_occupancy(doc: PerfDocument, lookup: FootprintLookup) -> OccupancyInde
                 bucket.append(conductor.id)
             if blocks:
                 blocked_nodes.add(k)
+                if conductor.side == "top" and contacts_every_path_hole(conductor):
+                    # Solder on the component side fills a plated hole and comes out on
+                    # the solder-side pad, so the hole is copper underneath too: no trace,
+                    # bare wire or bent lead there may pass through it. Only since 0.25,
+                    # when a trace could first be laid on top, so no golden moves.
+                    blocked_nodes.add(_node_key(hole, "bottom"))
 
     sorted_holes = tuple(sorted(holes.values(), key=lambda h: (h.col, h.row)))
 

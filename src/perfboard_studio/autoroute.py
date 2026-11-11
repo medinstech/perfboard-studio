@@ -68,7 +68,15 @@ from .commands import (
 from .connectivity import FootprintLookup, PhysicalPinRef
 from .drc import run_drc
 from .geometry import format_hole, hole_key, holes_under_line, path_length_mm
-from .model import Board, ConductorId, HoleCoord, NetClass, NetId, PerfDocument
+from .model import (
+    Board,
+    ConductorId,
+    HoleCoord,
+    NetClass,
+    NetId,
+    PerfDocument,
+    has_component_side_copper,
+)
 from .ratsnest import NetRatsnest, RatsnestLink, net_ratsnest, ratsnest
 from .router import (
     DEFAULT_ROUTER_OPTIONS,
@@ -361,6 +369,9 @@ RISK_HOLE_EFFORT = _SEARCH_COSTS.proximity_risk * _PER_SEARCH_COST
 BEND_EFFORT = _SEARCH_COSTS.wire_bend * _PER_SEARCH_COST
 OVER_JOINT_EFFORT = _SEARCH_COSTS.wire_over_joint * _PER_SEARCH_COST
 LOOP_EFFORT = _SEARCH_COSTS.wire_into_loop * _PER_SEARCH_COST
+#:   A FACE CHANGE through a pinless hole is a via to fill and check, at the search's rate
+#:   too. Zero on every plan laid on one face, so no comparison made before 0.25 moves.
+FACE_CHANGE_EFFORT = _SEARCH_COSTS.face_change * _PER_SEARCH_COST
 #:   A DRC WARNING the plan adds is something the builder has to read, judge and usually
 #:   act on -- a pure run past the length solder holds, a phenolic pad that will lift --
 #:   so it is charged half a wire. R5' (``solder-trace-proximity``) is left out of the
@@ -404,6 +415,8 @@ class VariantScore:
     loops: int = 0
     max_level: int = 0
     trace_pads: int = 0
+    #: Holes the plan's copper changes face through (``wiringstats.vias``): zero on one face.
+    face_changes: int = 0
 
     @property
     def conductors(self) -> int:
@@ -421,6 +434,7 @@ class VariantScore:
             + self.bends * BEND_EFFORT
             + (self.over_pins + self.over_ends) * OVER_JOINT_EFFORT
             + self.loops * LOOP_EFFORT
+            + self.face_changes * FACE_CHANGE_EFFORT
         )
 
     def key(self) -> tuple[int, int, float]:
@@ -502,6 +516,7 @@ def score_plan(
         loops=len(stats.loops) if stats else 0,
         max_level=stats.max_level if stats else 0,
         trace_pads=stats.trace_pads if stats else 0,
+        face_changes=len(stats.vias) if stats else 0,
     )
 
 
@@ -1194,6 +1209,21 @@ def _criticality_order(doc: PerfDocument, wanted: tuple[NetId, ...]) -> tuple[Ne
     )
 
 
+def _preferring_first(doc: PerfDocument, order: tuple[NetId, ...]) -> tuple[NetId, ...]:
+    """``order`` with the nets that prefer a face moved up behind ground, keeping their
+    order otherwise: a preference is easiest to keep while the board is still empty.
+    Ground stays first, preferring a face or not, because everything else connects to it."""
+    by_id = {net.id: net for net in doc.nets}
+
+    def rank(net_id: NetId) -> int:
+        net = by_id[net_id]
+        if net.net_class == "ground":
+            return 0
+        return 1 if net.preferred_side is not None else 2
+
+    return tuple(sorted(order, key=rank))
+
+
 def _committed_to_solder(options: AutorouteOptions) -> bool:
     """Whether every connection has to be a trace, or wants to be one badly enough that a
     wire is a failure rather than a price: a solder or lead-bend preference, or a crossing
@@ -1230,6 +1260,8 @@ def _starting_orders(
     -- which is also what keeps every golden route and the guide's own golden where it is.
     """
     critical = _criticality_order(doc, wanted)
+    if options.router.faces == "both" and has_component_side_copper(doc.board):
+        critical = _preferring_first(doc, critical)
     if not _committed_to_solder(options):
         return (critical,)
     position = {net_id: index for index, net_id in enumerate(critical)}

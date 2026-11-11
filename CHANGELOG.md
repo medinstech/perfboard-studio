@@ -71,6 +71,15 @@ closed without a bump.
   with no pads there is an error (`no-copper-on-face`), and a file holding one still opens
   to say so. A component-side trace under a part's body is reported as copper hidden under a
   part: copper on that face goes in after the parts, so under one it cannot be laid.
+- **Auto-wire can lay solder on both faces, and keeps a net on the face it prefers.** The
+  engine's router takes `faces="both"` (off by default; the window's switch comes later):
+  on a double-sided board a solder trace may run on either face, changing face through a pin
+  of its net for free or through an empty hole, a via, at the price of one more joint to
+  fill and check. A net's preferred face is a price on every step off it, not a rule, so a
+  blocked face is still left. A plated hole is one piece of copper, so solder on top closes
+  the hole underneath too, and two traces cannot cross on opposite faces any more than on
+  one: with no net preferring a face, the plan stays on the solder side. The auto-wire
+  scoreboard gains `--faces`, `--prefer NET=top|bottom` and a `via` column.
 
 ### Changed
 
