@@ -116,10 +116,11 @@ from perfboard_studio.model import (
     contacts_every_path_hole,
     pin_name_of,
 )
-from perfboard_studio.occupancy import stacking_layers
+from perfboard_studio.occupancy import build_occupancy, stacking_layers
 from perfboard_studio.stripboard import cut_holes, segments
 from perfboard_studio.system import board_document, board_ids, board_row, connector_of
 from perfboard_studio.wirecolour import net_colours
+from perfboard_studio.wiringstats import vias as board_vias
 
 from .boardcolors import BREADBOARD, scheme_for
 from .bodies import (
@@ -7039,6 +7040,97 @@ def _spine_actor(
     return actor
 
 
+#: A via, the way 3D draws it: a solder plug standing in the bore and a copper rim round it,
+#: on each face. Round numbers from the candidates Sinan chose between (2026-11-11): the
+#: plug a little under the pad's radius, the rim just outside it, both small enough that a
+#: run arriving at the hole still reads as a run.
+VIA_PLUG_RADIUS_MM = 0.60
+VIA_PLUG_HEIGHT_MM = 0.42
+#: The rim is a tube along a circle of this radius, so its OUTER edge is the radius plus
+#: the tube's.
+VIA_RIM_RADIUS_MM = 0.78
+VIA_RIM_TUBE_MM = 0.15
+VIA_RIM_RGB = (0.78, 0.47, 0.20)
+VIA_RIM_SEGMENTS = 72
+
+
+def _via_glyph_actor(source: vtk.vtkPolyData, points: list[tuple[float, float, float]]) -> vtk.vtkActor:
+    data = vtk.vtkPolyData()
+    pts = vtk.vtkPoints()
+    for point in points:
+        pts.InsertNextPoint(*point)
+    data.SetPoints(pts)
+    glyph = vtk.vtkGlyph3DMapper()
+    glyph.SetInputData(data)
+    glyph.SetSourceData(source)
+    glyph.SetOrient(False)
+    glyph.SetScaling(False)
+    actor = vtk.vtkActor()
+    actor.SetMapper(glyph)
+    return actor
+
+
+def build_via_marks(
+    board: Board,
+    holes: Sequence[HoleCoord],
+    cells: Mapping[str, FingerCell] | None = None,
+) -> list[vtk.vtkActor]:
+    """The mark of every via, on both faces: ONE actor for the plugs and one for the rims.
+
+    A via is a pinless hole where a component-side run meets other copper, so the hole has
+    solder in it from both sides. ``holes`` comes from ``wiringstats.vias`` -- the guide and
+    2D ask the same function, so what is marked is what the engine calls a via, and a run
+    that merely ends at a pad gets no mark. Nothing here decides what a via is.
+    """
+    if not holes:
+        return []
+    plug = vtk.vtkCylinderSource()
+    plug.SetRadius(VIA_PLUG_RADIUS_MM)
+    plug.SetHeight(VIA_PLUG_HEIGHT_MM)
+    plug.SetResolution(BEAD_RESOLUTION * 2)
+    # A cylinder source stands along y; the board's thickness is z.
+    turn = vtk.vtkTransform()
+    turn.RotateX(90)
+    standing = vtk.vtkTransformPolyDataFilter()
+    standing.SetInputConnection(plug.GetOutputPort())
+    standing.SetTransform(turn)
+    standing.Update()
+    circle = vtk.vtkPoints()
+    for i in range(VIA_RIM_SEGMENTS + 1):
+        angle = 2 * math.pi * i / VIA_RIM_SEGMENTS
+        circle.InsertNextPoint(VIA_RIM_RADIUS_MM * math.cos(angle), VIA_RIM_RADIUS_MM * math.sin(angle), 0.0)
+    line = vtk.vtkPolyLine()
+    line.GetPointIds().SetNumberOfIds(VIA_RIM_SEGMENTS + 1)
+    for i in range(VIA_RIM_SEGMENTS + 1):
+        line.GetPointIds().SetId(i, i)
+    lines = vtk.vtkCellArray()
+    lines.InsertNextCell(line)
+    ring = vtk.vtkPolyData()
+    ring.SetPoints(circle)
+    ring.SetLines(lines)
+    tube = vtk.vtkTubeFilter()
+    tube.SetInputData(ring)
+    tube.SetRadius(VIA_RIM_TUBE_MM)
+    tube.SetNumberOfSides(16)
+    tube.Update()
+    plugs: list[tuple[float, float, float]] = []
+    rims: list[tuple[float, float, float]] = []
+    for hole in holes:
+        x, y = _place_xy(board, hole, cells)
+        for side in ("top", "bottom"):
+            face = 0.0 if side == "top" else -board.thickness
+            up = 1.0 if side == "top" else -1.0
+            plugs.append((x, y, face + up * VIA_PLUG_HEIGHT_MM / 2))
+            rims.append((x, y, pad_z(board, side)))
+    plug_actor = _via_glyph_actor(standing.GetOutput(), plugs)
+    plug_actor.GetProperty().SetColor(*SOLDER_RGB)
+    _finish(plug_actor.GetProperty(), SOLDER_MAT)
+    rim_actor = _via_glyph_actor(tube.GetOutput(), rims)
+    rim_actor.GetProperty().SetColor(*VIA_RIM_RGB)
+    _finish(rim_actor.GetProperty(), PLATED)
+    return [plug_actor, rim_actor]
+
+
 def build_wire_shadows(
     doc: PerfDocument, layers: dict[str, int] | None = None
 ) -> vtk.vtkActor | None:
@@ -7616,6 +7708,10 @@ def populate_renderer(
             if owners is not None:
                 owners[actor] = ("conductor", cond.id)
             ren.AddActor(actor)
+    for actor in build_via_marks(board, board_vias(doc, build_occupancy(doc, lookup)), cells):
+        if highlight is not None:
+            _dim(actor)
+        ren.AddActor(actor)
     shadows = build_wire_shadows(doc, layers)
     if shadows is not None:
         ren.AddActor(shadows)

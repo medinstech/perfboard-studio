@@ -194,3 +194,72 @@ def _load_doc():  # type: ignore[no-untyped-def]
     from .test_ui import _load_dense
 
     return _load_dense()
+
+
+def _via_scene():  # type: ignore[no-untyped-def]
+    """A run that only ENDS at a hole (``plain``) and a component-side run meeting a
+    solder-side run in a pinless hole (``via``), on a blank board."""
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
+
+    h = HoleCoord
+    plain, via = h(col=3, row=4), h(col=9, row=4)
+    doc = create_empty_document(DocumentMeta(name="via", created="", modified=""))
+    doc = dataclasses.replace(
+        doc,
+        conductors=(
+            SolderTraceConductor(id="a", path=(h(col=3, row=2), h(col=3, row=3), plain), side="top"),
+            SolderTraceConductor(id="b", path=(h(col=9, row=2), h(col=9, row=3), via), side="top"),
+            SolderTraceConductor(id="c", path=(via, h(col=10, row=4), h(col=11, row=4)), side="bottom"),
+        ),
+    )
+    return doc, plain, via
+
+
+def _glyph_points(actor):  # type: ignore[no-untyped-def]
+    points = actor.GetMapper().GetInputDataObject(0, 0).GetPoints()
+    return [points.GetPoint(i) for i in range(points.GetNumberOfPoints())]
+
+
+def test_a_via_gets_a_plug_and_a_rim_on_each_face_and_a_plain_run_end_gets_none() -> None:
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.occupancy import build_occupancy
+    from perfboard_studio.wiringstats import vias
+
+    doc, plain, via = _via_scene()
+    board = doc.board
+    found = vias(doc, build_occupancy(doc, footprint_lookup()))
+    assert found == (via,)
+
+    plug, rim = view3d.build_via_marks(board, found)
+    here = (round(via.col * board.pitch, 3), round(-via.row * board.pitch, 3))
+    there = (round(plain.col * board.pitch, 3), round(-plain.row * board.pitch, 3))
+    for actor in (plug, rim):
+        points = _glyph_points(actor)
+        assert len(points) == 2  # one per face, for the one via
+        assert {(round(x, 3), round(y, 3)) for x, y, _ in points} == {here}
+        # One on each face: the plug's centre stands out of its face, the rim lies on the copper.
+        assert sorted(z > -board.thickness / 2 for _, _, z in points) == [False, True]
+        assert there not in {(round(x, 3), round(y, 3)) for x, y, _ in points}
+
+
+def test_a_board_with_no_via_gets_no_marks() -> None:
+    doc, _plain, _via = _via_scene()
+    assert view3d.build_via_marks(doc.board, ()) == []
+
+
+def test_the_scene_marks_the_engines_vias_and_only_those() -> None:
+    import vtk
+
+    from perfboard_studio.footprints import footprint_lookup
+
+    doc, _plain, _via = _via_scene()
+    lookup = footprint_lookup()
+    # Without the solder-side run, the same hole is only where a run ends.
+    without = dataclasses.replace(doc, conductors=doc.conductors[:2])
+    marked, unmarked = vtk.vtkRenderer(), vtk.vtkRenderer()
+    view3d.populate_renderer(marked, doc, lookup)
+    view3d.populate_renderer(unmarked, without, lookup)
+    from_run = len(view3d.build_conductor(doc.conductors[2], doc.board))
+    # The plug and the rim, besides the solder-side run's own actors.
+    assert marked.GetActors().GetNumberOfItems() - unmarked.GetActors().GetNumberOfItems() == 2 + from_run
