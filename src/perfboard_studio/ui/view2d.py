@@ -26,6 +26,7 @@ import contextlib
 import math
 from collections.abc import Collection, Iterator, Sequence
 from dataclasses import replace
+from functools import lru_cache
 from typing import Any, cast
 
 from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRect, QRectF, Qt, Signal
@@ -49,6 +50,7 @@ from PySide6.QtGui import (
     QPen,
     QPixmap,
     QPolygonF,
+    QRadialGradient,
     QResizeEvent,
     QTransform,
 )
@@ -415,6 +417,30 @@ _INSULATION_SCREEN = {
 
 #: The copper spine inside a wired solder trace, drawn as a core through the solder.
 SPINE_CORE = QColor("#c08a4a")
+
+#: What a solder run looks like on screen (not on the 1:1 print, which stays flat): a lit
+#: ridge -- a dark casing, the run's colour, a thin highlight off the top-left, a domed
+#: joint at every pad. One colour for both run kinds: the brass spine, not a slightly
+#: different grey, is what tells a wired run apart. Darker than the paper's silver because
+#: the highlight has to have somewhere to go; a run as bright as a pad read as a white bar.
+RUN_SCREEN_COLOUR = QColor("#a9afba")
+
+#: A run's width on screen follows its ``buildup``, the way the 3D view's bead is built up:
+#: light solder is a thin ridge, heavy a fat one. The paper keeps ``CONDUCTOR_STYLE``'s
+#: single width, which is what the print was drawn at.
+RUN_BUILDUP_WIDTH = {"light": 0.72, "normal": 1.0, "heavy": 1.3}
+
+#: A tinned wire's end, where the sleeve is stripped back and the solder holds it.
+WIRE_END_TIN = QColor("#c9ced6")
+
+#: How far the sleeve is stripped back from each end of an insulated wire, and how far the
+#: spine of a wired run sticks out past its last pad -- both measured on the 3D view.
+SLEEVE_STRIP_MM = 0.9
+SPINE_STUB_MM = 0.85
+
+#: Below this scale (screen pixels per mm) the highlights and gradients are noise: a stray
+#: pixel per pad that costs a gradient fill each.
+LIT_MIN_SCALE = 6.0
 
 
 def insulation_color(net_class: NetClass | None, signal_index: int) -> QColor:
@@ -2105,6 +2131,80 @@ class DrawPreviewItem(QGraphicsItem):
             painter.drawEllipse(end, self.board.pad_diameter * 0.62, self.board.pad_diameter * 0.62)
 
 
+def _stroke_pen(colour: QColor, width: float) -> QPen:
+    pen = QPen(colour, width)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    return pen
+
+
+def _polyline(points: Sequence[QPointF]) -> QPainterPath:
+    path = QPainterPath(points[0])
+    for point in points[1:]:
+        path.lineTo(point)
+    return path
+
+
+def _trimmed(points: Sequence[QPointF], distance: float) -> list[QPointF]:
+    """The polyline with ``distance`` mm taken off each end; empty when it is shorter than
+    twice that, which is a wire with no sleeve left."""
+
+    def cut(pts: Sequence[QPointF]) -> list[QPointF]:
+        remaining = distance
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            length = math.hypot(b.x() - a.x(), b.y() - a.y())
+            if length > remaining:
+                t = remaining / length
+                return [QPointF(a.x() + (b.x() - a.x()) * t, a.y() + (b.y() - a.y()) * t), *pts[i + 1 :]]
+            remaining -= length
+        return []
+
+    front = cut(points)
+    if not front:
+        return []
+    back = cut(front[::-1])
+    return back[::-1] if back else []
+
+
+def _past(a: QPointF, b: QPointF, distance: float) -> QPointF:
+    """The point ``distance`` beyond ``b``, on the line from ``a`` through ``b``."""
+    dx, dy = b.x() - a.x(), b.y() - a.y()
+    length = math.hypot(dx, dy) or 1.0
+    return QPointF(b.x() + dx / length * distance, b.y() + dy / length * distance)
+
+
+@lru_cache(maxsize=64)
+def _dome_brush(rgba: int) -> QBrush:
+    """A radial gradient that lights a joint from the top-left, in the item's OWN bounding
+    box, so one brush serves every joint of that colour at any size and the painter never
+    builds a gradient per pad -- the cost that mattered, on a board with a few hundred."""
+    colour = QColor.fromRgba(rgba)
+    gradient = QRadialGradient(0.5, 0.5, 0.5, 0.31, 0.30)
+    gradient.setCoordinateMode(QRadialGradient.CoordinateMode.ObjectBoundingMode)
+    gradient.setColorAt(0.0, colour.lighter(190))
+    gradient.setColorAt(0.45, colour.lighter(112))
+    gradient.setColorAt(1.0, colour.darker(135))
+    return QBrush(gradient)
+
+
+@lru_cache(maxsize=64)
+def _dome_rim(rgba: int) -> QPen:
+    return QPen(QColor.fromRgba(rgba).darker(165), 0.07)
+
+
+def _paint_domes(painter: QPainter, centres: Sequence[QPointF], radius: float, colour: QColor) -> None:
+    """A domed joint at each point. Zoomed out it is a flat disc, which is all it can be."""
+    rgba = colour.rgba()
+    if painter.transform().m11() >= LIT_MIN_SCALE:
+        painter.setBrush(_dome_brush(rgba))
+    else:
+        painter.setBrush(QBrush(colour.lighter(112)))
+    painter.setPen(_dome_rim(rgba))
+    for centre in centres:
+        painter.drawEllipse(centre, radius, radius)
+
+
 class ConductorItem(QGraphicsItem):
     """Each conductor kind has to be tellable apart at a glance.
 
@@ -2370,12 +2470,25 @@ class ConductorItem(QGraphicsItem):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(path)
 
+        on_screen = not _on_paper(painter)
+        if on_screen and contacts_every_path_hole(self.conductor):
+            # Screen only: a run's colour and width are its own, and its buildup shows.
+            colour = RUN_SCREEN_COLOUR
+            width *= RUN_BUILDUP_WIDTH.get(getattr(self.conductor, "buildup", "normal"), 1.0)
+
         if self.is_far_side():
             # The 1:1 print and the exports keep the hatch; the screen draws a back layer.
-            if _on_paper(painter):
+            if not on_screen:
                 self._paint_through_the_board(painter, path, width, colour)
             else:
                 self._paint_back_layer(painter, path, width, colour)
+                if kind == "solder-trace-wired":
+                    painter.setPen(_stroke_pen(SPINE_CORE, 0.3))
+                    painter.drawPath(path)
+            return
+
+        if on_screen:
+            self._paint_lit(painter, pts, path, width, colour)
             return
 
         # Insulated wire and top jumpers get a dark casing line under the colour, so a
@@ -2457,6 +2570,74 @@ class ConductorItem(QGraphicsItem):
                 painter.drawEllipse(
                     QPointF(p.x() - radius * 0.28, p.y() - radius * 0.28), spot, spot
                 )
+
+
+    def _paint_lit(
+        self, painter: QPainter, pts: list[QPointF], path: QPainterPath, width: float, colour: QColor
+    ) -> None:
+        """The face being looked at, on screen: copper that has a surface.
+
+        A run is a ridge -- a dark casing, the colour, a thin highlight off the top-left --
+        with a domed joint on every pad; a wired run adds its brass spine through the solder
+        and a stub of it past each end, which is what a wired run IS. A bare wire is a
+        tinned round; an insulated one is a sleeve over a tinned core, stripped back at each
+        end; a top jumper is the same lifted off the board by a drop shadow, which is the
+        word a dash used to say on screen (the print keeps the dash: a shadow cannot be
+        printed). Picked from candidates rendered side by side, on both faces.
+
+        Highlights and gradients stop below ``LIT_MIN_SCALE``: at that size they are one
+        stray pixel per pad. The casing stays, so a run still reads at every zoom.
+        """
+        kind = self.conductor.kind
+        zoomed = painter.transform().m11() >= LIT_MIN_SCALE
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        if self.isSelected():
+            painter.setPen(_stroke_pen(SELECTED, width + 0.7))
+            painter.drawPath(path)
+
+        if contacts_every_path_hole(self.conductor):
+            painter.setPen(_stroke_pen(QColor(34, 38, 46, 205), width + 0.22))
+            painter.drawPath(path)
+            painter.setPen(_stroke_pen(colour, width))
+            painter.drawPath(path)
+            if zoomed:
+                painter.setPen(_stroke_pen(colour.lighter(128), width * 0.30))
+                painter.drawPath(path.translated(-0.07, -0.10))
+            if kind == "solder-trace-wired":
+                painter.setPen(_stroke_pen(SPINE_CORE, 0.3))
+                painter.drawPath(path)
+                for inner, end in ((pts[1], pts[0]), (pts[-2], pts[-1])):
+                    painter.drawLine(end, _past(inner, end, SPINE_STUB_MM))
+            _paint_domes(painter, pts, min(width * 0.85, self.board.pad_diameter * 0.42), colour)
+            return
+
+        # A wire, a lead bend or a jumper: a joint at each end only.
+        sleeved = kind in ("insulated-wire", "top-jumper")
+        if kind == "top-jumper":
+            painter.setPen(_stroke_pen(QColor(0, 0, 0, 80), width + 0.25))
+            painter.drawPath(path.translated(0.20, 0.30))
+        if sleeved:
+            painter.setPen(_stroke_pen(WIRE_END_TIN.darker(120), 0.36))
+            painter.drawPath(path)
+            sleeve = _trimmed(pts, SLEEVE_STRIP_MM)
+            if len(sleeve) > 1:
+                body = _polyline(sleeve)
+                painter.setPen(_stroke_pen(QColor(0, 0, 0, 150), width + 0.2))
+                painter.drawPath(body)
+                painter.setPen(_stroke_pen(colour, width))
+                painter.drawPath(body)
+                if zoomed:
+                    painter.setPen(_stroke_pen(colour.lighter(150), width * 0.3))
+                    painter.drawPath(body.translated(-0.05, -0.08))
+        else:
+            painter.setPen(_stroke_pen(QColor(30, 34, 42, 120), width + 0.14))
+            painter.drawPath(path)
+            painter.setPen(_stroke_pen(colour, width))
+            painter.drawPath(path)
+            if zoomed:
+                painter.setPen(_stroke_pen(QColor(255, 255, 255, 190), width * 0.28))
+                painter.drawPath(path.translated(-0.05, -0.07))
+        _paint_domes(painter, [pts[0], pts[-1]], min(width * 0.95, self.board.pad_diameter * 0.40), WIRE_END_TIN)
 
 
 # --------------------------------------------------------------- component bodies

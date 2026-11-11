@@ -167,3 +167,120 @@ def test_references_are_outlined_on_screen_and_plated_on_paper(monkeypatch, tmp_
     outlined.clear()
     _on_paper(doc, view2d.BoardScene(doc, LOOKUP, side="top"), tmp_path)
     assert set(printed) == refs and not outlined
+
+
+# ------------------------------------------------------------------ solder and wire, lit
+#
+# Chosen on 2026-11-11 from rendered candidates, on both faces ("lit ridge"): a run is a
+# ridge with a domed joint on every pad, a wire is a tinned round or a sleeve over one. All
+# of it is for the eye, so the print keeps the flat copper it always had.
+
+
+def _with_conductors(name: str, conductors) -> PerfDocument:  # type: ignore[no-untyped-def]
+    import dataclasses
+
+    return dataclasses.replace(_example(name), conductors=tuple(conductors))
+
+
+def _run(cid: str, row: int, **fields):  # type: ignore[no-untyped-def]
+    from perfboard_studio.model import HoleCoord, SolderTraceConductor
+
+    path = tuple(HoleCoord(col=c, row=row) for c in range(2, 8))
+    return SolderTraceConductor(id=cid, path=path, **fields)
+
+
+def test_lit_copper_is_for_the_screen_only(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    calls: list[str] = []
+    real = view2d.ConductorItem._paint_lit
+
+    def record(item, *args):  # type: ignore[no-untyped-def]
+        calls.append(item.conductor.id)
+        real(item, *args)
+
+    monkeypatch.setattr(view2d.ConductorItem, "_paint_lit", record)
+    doc = _with_conductors("ne555-astable", [_run("a", 1, side="bottom")])
+
+    _on_screen(view2d.BoardScene(doc, LOOKUP, side="bottom"))
+    assert calls == ["a"]
+
+    calls.clear()
+    _on_screen(view2d.BoardScene(doc, LOOKUP, side="top"))
+    assert not calls, "copper on the far face is a band, not a ridge"
+
+    _on_paper(doc, view2d.BoardScene(doc, LOOKUP, side="bottom"), tmp_path)
+    assert not calls, "the 1:1 print drew a ridge"
+
+
+def test_a_runs_width_follows_its_buildup_on_screen(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    widths: dict[str, float] = {}
+    real = view2d._stroke_pen
+    current: list[str] = []
+    real_paint = view2d.ConductorItem._paint_lit
+
+    def paint(item, *args):  # type: ignore[no-untyped-def]
+        current[:] = [item.conductor.id]
+        real_paint(item, *args)
+
+    def pen(colour, width):  # type: ignore[no-untyped-def]
+        if colour == view2d.RUN_SCREEN_COLOUR:
+            widths[current[0]] = width
+        return real(colour, width)
+
+    monkeypatch.setattr(view2d.ConductorItem, "_paint_lit", paint)
+    monkeypatch.setattr(view2d, "_stroke_pen", pen)
+    doc = _with_conductors(
+        "ne555-astable",
+        [
+            _run("light", 1, side="bottom", buildup="light"),
+            _run("normal", 3, side="bottom", buildup="normal"),
+            _run("heavy", 5, side="bottom", buildup="heavy"),
+        ],
+    )
+    _on_screen(view2d.BoardScene(doc, LOOKUP, side="bottom"))
+    base = view2d.CONDUCTOR_STYLE["solder-trace"][1]
+    assert widths["light"] < widths["normal"] < widths["heavy"]
+    assert widths["normal"] == pytest.approx(base)
+    assert widths["heavy"] == pytest.approx(base * view2d.RUN_BUILDUP_WIDTH["heavy"])
+
+
+def test_a_wired_run_shows_its_spine_through_the_solder_on_screen() -> None:
+    from perfboard_studio.model import SpineSpec
+
+    plain = _run("p", 1, side="bottom")
+    wired = _run(
+        "w", 1, side="bottom", kind="solder-trace-wired", spine=SpineSpec(material="tinned-copper", gauge=0.6)
+    )
+    spine = view2d.SPINE_CORE
+    middle = {}
+    for name, conductor in (("plain", plain), ("wired", wired)):
+        doc = _with_conductors("ne555-astable", [conductor])
+        scene = view2d.BoardScene(doc, LOOKUP, side="bottom", show_ratsnest=False, show_rulers=False)
+        item = next(i for i in scene.items() if isinstance(i, view2d.ConductorItem))
+        pts = item._points()
+        rect = scene.sceneRect()
+        scale = 20
+        image = QImage(round(rect.width() * scale), round(rect.height() * scale), QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        scene.render(painter, QRectF(0, 0, image.width(), image.height()), rect)
+        painter.end()
+        # halfway between two pads, where only the run itself is under the pixel
+        a, b = pts[2], pts[3]
+        x = (a.x() + b.x()) / 2 - rect.x()
+        y = (a.y() + b.y()) / 2 - rect.y()
+        middle[name] = image.pixelColor(round(x * scale), round(y * scale))
+
+    def distance(c) -> int:  # type: ignore[no-untyped-def]
+        return abs(c.red() - spine.red()) + abs(c.green() - spine.green()) + abs(c.blue() - spine.blue())
+
+    assert distance(middle["wired"]) < 40
+    assert distance(middle["plain"]) > 120
+
+
+def test_a_sleeve_is_stripped_back_at_both_ends() -> None:
+    from PySide6.QtCore import QPointF
+
+    line = [QPointF(0, 0), QPointF(5, 0), QPointF(5, 4)]
+    sleeve = view2d._trimmed(line, 0.9)
+    assert sleeve[0] == QPointF(0.9, 0)
+    assert sleeve[-1] == QPointF(5, 3.1)
+    assert view2d._trimmed([QPointF(0, 0), QPointF(1.5, 0)], 0.9) == [], "no sleeve left"
