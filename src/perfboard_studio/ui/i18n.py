@@ -3964,6 +3964,38 @@ TURKISH: Mapping[str, str] = {
     ),
     "No problems": "Sorun yok",
     "Wiring to review": "Gözden geçirilecek kablolama",
+    "{count} ring of wires, each over another's end: none can go in first": (
+        "her biri bir başkasının ucunun üzerinden geçen {count} tel halkası: hiçbiri önce "
+        "döşenemez"
+    ),
+    "{count} rings of wires, each over another's end: none can go in first": (
+        "her biri bir başkasının ucunun üzerinden geçen {count} tel halkası: hiçbiri önce "
+        "döşenemez"
+    ),
+    "{count} place a wire lies over a pin": "bir telin bir pinin üzerinden geçtiği {count} yer",
+    "{count} places a wire lies over a pin": "bir telin bir pinin üzerinden geçtiği {count} yer",
+    "{count} place a wire lies over where other copper ends": (
+        "bir telin başka bir bakırın bittiği yerin üzerinden geçtiği {count} yer"
+    ),
+    "{count} places a wire lies over where other copper ends": (
+        "bir telin başka bir bakırın bittiği yerin üzerinden geçtiği {count} yer"
+    ),
+    "{count} wire stacked three or more deep": "üç ya da daha çok kat üst üste binen {count} tel",
+    "{count} wires stacked three or more deep": "üç ya da daha çok kat üst üste binen {count} tel",
+    "{count} wire": "{count} tel",
+    "{count} wires": "{count} tel",
+    "{count} bend": "{count} büküm",
+    "{count} bends": "{count} büküm",
+    "{count} solder trace": "{count} lehim yolu",
+    "{count} solder traces": "{count} lehim yolu",
+    "{count} pin": "{count} pin",
+    "{count} end of other copper": "başka bakırın {count} ucu",
+    "{count} ends of other copper": "başka bakırın {count} ucu",
+    "{count} crossing": "{count} kesişme",
+    "{count} crossings": "{count} kesişme",
+    "{count} wire up": "{count} tel yukarıda",
+    "{count} wires up": "{count} tel yukarıda",
+    "Select these wires on the board.": "Bu telleri kartta seçer.",
     "Wire every connection not wired yet, in the Wiring Style. The copper already there "
     "stays, and one Ctrl+Z takes back what it lays. When everything is wired, it offers to "
     "wire it all again.": (

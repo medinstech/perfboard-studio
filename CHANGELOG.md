@@ -20,6 +20,33 @@ closed without a bump.
 
 ## [Unreleased]
 
+### Added
+
+- **The wiring says what it costs to build, and where.** Auto-wire used to finish on "No
+  problems" and jump to Build over a board with a wire lying across 44 pins. With nothing
+  selected, Properties now keeps the wiring in a line ("53 wires, 1.3 m, 85 bends · 5 solder
+  traces"), followed by what is worth a look: places a wire lies over a pin, places it lies
+  over where other copper ends, wires stacked three or more deep, and rings of wires that no
+  order can lay. Each count is a link that selects its wires. The Problems drawer has the same
+  counts as a Wiring group, and the bar reads "Wiring to review" instead of "No problems".
+  The Build step says how many wires are worth a look first. None of this counts as a problem
+  or holds a step back. The numbers are the ones the autowire scoreboard holds the router to
+  (`wiringstats`), so a count and the wires it selects cannot disagree.
+- **A wire's Properties says what it lies across**, with the pins by name ("3 pins: U1.3, U1.4,
+  C2.1 · 2 ends of other copper · 4 crossings · 2 wires up"). It also offers its net's
+  wiring: Select All, Redo Wiring and Remove Wiring of the net, as the right-click menu does.
+  A finding about copper alone now selects that copper when clicked.
+- **One net's wiring can be redone in a style of its own**, from its right-click menu or the
+  arrow beside Redo Wiring in Properties. The Wiring Style menu stays as it is. Planning is
+  deterministic, so redoing a bad wire in the board's style brought back the same wire. The
+  question and the status line now say how much actually changes: how many pieces stay
+  exactly where they are, how many are taken up and how many are laid. It used to say only
+  "15 removed, 15 planned" over a plan that moved one corner.
+- **Wiring ▸ Compare With Before** draws the wiring as it was before the last Auto-wire or
+  Redo Wiring, dashed, over today's. Ctrl+Z used to be the only way to compare, and it took
+  the new wiring away to do it. Every item in the Wiring menu now has a tooltip saying what it
+  does.
+
 ### Changed
 
 - **Solder and wire have a surface in the 2D view.** Chosen from candidates rendered on both

@@ -344,8 +344,11 @@ def test_every_catalogue_translates_to_something_different() -> None:
         # "3D" -- one view, two names. "1 net" is "1 net" in Turkish too. "ERC / DRC / LVS" was
         # here until the panel was called Problems. File ▸ Export ▸ "3D Model (STEP)" is
         # the same words in Turkish under a submenu that already says "Dışa Aktar". "1
-        # jumper" is "1 jumper" too, now that the planners count instead of saying "(s)".
-        assert same == ["3D", "3D &Model (STEP)…", "LED", "{count} jumper", "{count} net"], (
+        # jumper" is "1 jumper" too, now that the planners count instead of saying "(s)",
+        # and "1 pin" is "1 pin", as the wire's Properties counts the pins it lies over.
+        assert same == [
+            "3D", "3D &Model (STEP)…", "LED", "{count} jumper", "{count} net", "{count} pin"
+        ], (
             f"{code} has untranslated entries: {same}"
         )
 

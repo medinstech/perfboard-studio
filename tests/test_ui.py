@@ -18858,8 +18858,6 @@ def test_a_wire_in_properties_offers_its_nets_wiring(monkeypatch: pytest.MonkeyP
         assert window.inspector.shown is editor
         assert not editor.net_buttons.isHidden()
         assert editor.redo_net.text() == f"Redo Wiring of {net.name}"
-        # Nothing to say about what it lies across, and no empty row saying it.
-        assert not editor._form.isRowVisible(editor.lies_across)
 
         editor.select_net.click()
         on_net = {c.id for c in window.bus.document.conductors if c.net_id == net.id}
@@ -19051,5 +19049,111 @@ def test_every_wiring_menu_item_says_what_it_does() -> None:
                 continue
             name = action.text().replace("&", "")
             assert action.toolTip() and action.toolTip() != name, name
+    finally:
+        _close(window)
+
+
+@pytest.mark.parametrize("stem", ["atmega328-relay", "nano-relay", "ne555-astable"])
+def test_the_wiring_notes_are_the_engines_counts_over_the_wires_they_are_summed_from(
+    stem: str,
+) -> None:
+    """The drawer's Wiring group counts what the autowire scoreboard counts, and selects
+    exactly the wires the count is summed from: one fact, several askers."""
+    from perfboard_studio.footprints import footprint_lookup
+    from perfboard_studio.ui.wiringreview import DEEP_STACK, wiring_notes, wiring_summary
+    from perfboard_studio.wiringstats import wiring_stats
+
+    stats = wiring_stats(_example_document(stem), footprint_lookup())
+    notes = {note.key: note for note in wiring_notes(stats)}
+    wires = [entry for entry in stats.conductors if entry.is_wire]
+    expected = {
+        "over-pins": (stats.over_pins, [e.conductor_id for e in wires if e.over_pins]),
+        "over-ends": (stats.over_ends, [e.conductor_id for e in wires if e.over_ends]),
+        "stacked": (
+            sum(1 for e in wires if e.level >= DEEP_STACK),
+            [e.conductor_id for e in wires if e.level >= DEEP_STACK],
+        ),
+        "loops": (len(stats.loops), [cid for loop in stats.loops for cid in loop]),
+    }
+    for key, (count, ids) in expected.items():
+        if not count:
+            assert key not in notes, key
+            continue
+        assert notes[key].title.startswith(f"{count} "), notes[key].title
+        assert list(notes[key].conductor_ids) == list(dict.fromkeys(ids))
+    assert wiring_summary(stats).startswith(f"{len(wires)} wires, ")
+    if stem == "atmega328-relay":
+        assert {"over-pins", "over-ends"} <= notes.keys(), "the board the friction was found on"
+
+
+def test_a_wire_in_properties_says_what_it_lies_across() -> None:
+    """Properties said "Insulated Wire · N1 → D1, 2 holes" of a wire lying across ten holes
+    nine wires up. It names the pins it lies over, as the guide names them, and the rest in
+    counts -- the engine's entry for that wire. A solder trace is soldered to all it passes,
+    and has no such row."""
+    import re
+
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        stats = window._last_wiring_stats
+        assert stats is not None
+        entry = max(
+            (e for e in stats.conductors if e.is_wire), key=lambda e: len(e.over_pins)
+        )
+        assert entry.over_pins
+        window.scene.clearSelection()
+        _select_conductor(window, entry.conductor_id)
+        window._refresh_properties()
+        editor = window.inspector.conductor_editor
+        assert editor._form.isRowVisible(editor.lies_across)
+        said = editor.lies_across.text()
+        assert said.startswith(f"{len(entry.over_pins)} pin")
+        assert re.search(r"\b[A-Z]+\d+\.\w+", said), said  # U1.3, not a hole address
+        if entry.crosses:
+            assert f"{len(entry.crosses)} crossing" in said
+
+        trace = next(e for e in stats.conductors if e.pads)
+        window.scene.clearSelection()
+        _select_conductor(window, trace.conductor_id)
+        window._refresh_properties()
+        assert not editor._form.isRowVisible(editor.lies_across)
+    finally:
+        _close(window)
+
+
+def test_the_step_card_keeps_the_wiring_and_a_count_selects_its_wires() -> None:
+    """After Auto-wire the only account of the wiring was one status line the next message
+    overwrote. With nothing selected Properties keeps it -- wires, length, bends -- and each
+    count worth a look is a link that selects the wires it counts."""
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        window.scene.clearSelection()
+        window._refresh_properties()
+        card = window.inspector.step_card
+        assert window.inspector.shown is card
+        assert not card.wiring.isHidden()
+        assert card.wiring.text().startswith("53 wires, ")
+        links = [
+            card._links.itemAt(i).widget() for i in range(card._links.count())
+        ]
+        over_pins = next(n for n in window._last_wiring if n.key == "over-pins")
+        link = next(w for w in links if w.text() == over_pins.title)
+        link.click()
+        assert set(window.scene.selected_conductor_ids()) == set(over_pins.conductor_ids)
+        assert window.statusBar().currentMessage() == over_pins.title
+    finally:
+        _close(window)
+
+    # Nothing wired yet, nothing said.
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        from perfboard_studio.commands import DeleteConductorsPayload
+
+        ids = tuple(c.id for c in window.bus.document.conductors)
+        assert window.bus.dispatch("conductor.deleteMany", DeleteConductorsPayload(ids=ids)).ok
+        window.scene.clearSelection()
+        window._refresh_properties()
+        card = window.inspector.step_card
+        assert card.wiring.isHidden() and card.wiring_links.isHidden()
     finally:
         _close(window)

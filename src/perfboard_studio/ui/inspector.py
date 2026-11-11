@@ -158,6 +158,8 @@ class InspectorHooks:
     #: The styles one net's wiring can be redone in, (id, name), and the window's own.
     wiring_styles: Callable[[], tuple[tuple[str, str], ...]] = lambda: ()
     current_style: Callable[[], str] = lambda: ""
+    #: One of the step card's wiring counts clicked, by its key: select what it counts.
+    select_wiring: Callable[[str], object] = lambda _key: None
     #: Whether the window says where the work stands (``Inspector.set_step``): nothing
     #: selected is then the step, and the board's editor waits for Board Settings. Left out,
     #: nothing selected is the board, as it always was.
@@ -179,6 +181,10 @@ class StepNote:
     hint: str
     #: What the Next button says.
     action: str
+    #: The wiring as it stands, once there is some: "53 wires, 1.2 m, 77 bends". "" before.
+    wiring: str = ""
+    #: What is worth a look in it, (key, said): each a link selecting the wires it counts.
+    wiring_notes: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -365,6 +371,14 @@ class _StepCard(QWidget):
         self.hint = QLabel()
         self.hint.setWordWrap(True)
         self.hint.setTextFormat(Qt.TextFormat.PlainText)
+        # The wiring as Auto-wire left it, and what is worth a look in it, each count a
+        # link to the wires it counts: said where it stays, not in one status line.
+        self._inspector = inspector
+        self.wiring = _fact()
+        self.wiring_links = QWidget()
+        self._links = QVBoxLayout(self.wiring_links)
+        self._links.setContentsMargins(0, 0, 0, 0)
+        self._links.setSpacing(0)
         self.next = QPushButton()
         theme.variant(self.next, "primary")
         self.next.clicked.connect(lambda: inspector.hooks.next_step())
@@ -374,7 +388,9 @@ class _StepCard(QWidget):
             t("The board's name, its size and type, and what a case asks of it.")
         )
         self.board_settings.clicked.connect(inspector.open_board_settings)
-        for widget in (self.step, self.title, self.summary, self.hint):
+        for widget in (
+            self.step, self.title, self.summary, self.hint, self.wiring, self.wiring_links
+        ):
             layout.addWidget(widget)
         layout.addWidget(self.next, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.board_settings, 0, Qt.AlignmentFlag.AlignLeft)
@@ -386,6 +402,22 @@ class _StepCard(QWidget):
         self.summary.setText(note.summary)
         self.hint.setText(note.hint)
         self.next.setText(note.action)
+        self.wiring.setText(note.wiring)
+        self.wiring.setVisible(bool(note.wiring))
+        while self._links.count():
+            item = self._links.takeAt(0)
+            gone = item.widget() if item is not None else None
+            if gone is not None:
+                gone.deleteLater()
+        for key, said in note.wiring_notes:
+            link = QPushButton(said)
+            theme.variant(link, "link")
+            link.setToolTip(t("Select these wires on the board."))
+            link.clicked.connect(
+                lambda _checked=False, k=key: self._inspector.hooks.select_wiring(k)
+            )
+            self._links.addWidget(link, 0, Qt.AlignmentFlag.AlignLeft)
+        self.wiring_links.setVisible(bool(note.wiring_notes))
 
 
 # -- nothing selected: the board ----------------------------------------------------------

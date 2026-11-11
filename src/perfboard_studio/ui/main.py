@@ -304,7 +304,7 @@ from perfboard_studio.model import (
     SheetWire,
     SymbolPlacement,
 )
-from perfboard_studio.occupancy import conductors_touching
+from perfboard_studio.occupancy import build_occupancy, conductors_touching
 from perfboard_studio.parsers.kicad import infer_net_class, parse_kicad_netlist
 from perfboard_studio.parsers.kicad_parts import (  # noqa: F401 - guess_footprint_id re-exported
     NetlistPlan,
@@ -360,6 +360,7 @@ from perfboard_studio.system import (
 from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
+from perfboard_studio.wiringstats import WiringStats, wiring_stats
 
 from . import icons, planner_pool, theme, updater, whatsnew
 from .autosave import INTERVAL_MS as AUTOSAVE_INTERVAL_MS
@@ -407,7 +408,7 @@ from .view2d import (
     picture_beside_the_pointer,
 )
 from .viewsch import SchematicView, SheetTool
-from .wiringreview import WiringNote, wiring_notes
+from .wiringreview import WiringNote, wiring_notes, wiring_summary
 from .workflow import (
     STEP_ORDER,
     StepKey,
@@ -2657,6 +2658,9 @@ class MainWindow(QMainWindow):
         self._last_erc: tuple[ErcFinding, ...] = ()
         self._last_violations: tuple[DrcViolation, ...] = ()
         self._last_wiring: tuple[WiringNote, ...] = ()
+        #: The engine's count of the shown board's wiring (``wiringstats``), from the last
+        #: change; None before the first.
+        self._last_wiring_stats: WiringStats | None = None
         #: The board's copper before the last Auto-wire or Redo Wiring (Compare With Before).
         self._wiring_before: tuple[Conductor, ...] | None = None
         self._last_lvs: LvsResult | None = None
@@ -3389,6 +3393,20 @@ class MainWindow(QMainWindow):
                     summary=state.summary,
                     hint=step_hint(key, facts),
                     action=state.action,
+                    # The wiring once there is some, on the steps that come after it: what
+                    # Auto-wire laid stays said, where its one status line was overwritten
+                    # by the next message.
+                    wiring=(
+                        wiring_summary(self._last_wiring_stats)
+                        if key in ("route", "check", "build")
+                        and self._last_wiring_stats is not None
+                        else ""
+                    ),
+                    wiring_notes=(
+                        tuple((note.key, note.title) for note in self._last_wiring)
+                        if key in ("route", "check", "build")
+                        else ()
+                    ),
                 )
             )
 
@@ -8953,6 +8971,7 @@ class MainWindow(QMainWindow):
                 lies_across=lambda conductor_id: self._lies_across(conductor_id),
                 wiring_styles=lambda: self.wiring_styles(),
                 current_style=lambda: self._routing_style,
+                select_wiring=lambda key: self._select_wiring(key),
                 shows_steps=True,
             ),
             InspectorActions(
@@ -9613,9 +9632,58 @@ class MainWindow(QMainWindow):
             self._remove_wiring((net_id,))
 
     def _lies_across(self, conductor_id: str) -> str:
-        """What a conductor passes over between its ends, for its Properties. Nothing yet:
-        the count comes from the engine's wiring cost, the one the summary reads."""
-        return ""
+        """What a wire passes over between its ends, for its Properties: the pins by name,
+        the ends of other copper, what it crosses and how high it is stacked. "" for a
+        solder run, which is soldered to everything it passes.
+
+        Properties said "Insulated Wire · N1 → D1, 2 holes" of the worst wire on a board,
+        one lying across ten holes nine wires up. The numbers are the engine's entry for
+        this wire (``wiringstats``), the ones the drawer's counts are summed from.
+        """
+        stats = self._last_wiring_stats
+        entry = stats.of(conductor_id) if stats is not None else None
+        if entry is None or not entry.is_wire:
+            return ""
+        said: list[str] = []
+        if entry.over_pins:
+            shown = board_document(self.bus.document, self._shown_board)
+            occupancy = build_occupancy(shown, self.lookup)
+            names = []
+            for hole in entry.over_pins:
+                pin = occupancy.pin_at(hole)
+                names.append(
+                    f"{pin.component_ref}.{pin.pin}" if pin is not None
+                    else format_hole(hole, shown.board)
+                )
+            listed = ", ".join(names[:4]) + (f" (+{len(names) - 4})" if len(names) > 4 else "")
+            said.append(
+                counted(len(names), t("{count} pin"), t("{count} pins")) + f": {listed}"
+            )
+        if entry.over_ends:
+            said.append(
+                counted(
+                    len(entry.over_ends),
+                    t("{count} end of other copper"),
+                    t("{count} ends of other copper"),
+                )
+            )
+        if entry.crosses:
+            said.append(
+                counted(len(entry.crosses), t("{count} crossing"), t("{count} crossings"))
+            )
+        if entry.level:
+            said.append(
+                counted(entry.level, t("{count} wire up"), t("{count} wires up"))
+            )
+        return "  ·  ".join(said)
+
+    def _select_wiring(self, key: str) -> None:
+        """A count on the step card clicked: the wires it counts, selected on the board."""
+        note = next((note for note in self._last_wiring if note.key == key), None)
+        if note is None:
+            return
+        self.scene.select_conductors(note.conductor_ids)
+        self.statusBar().showMessage(note.title, 0)
 
     def _select_net_copper(self, net_id: NetId) -> None:
         """Every conductor on the board that claims ``net_id``, selected."""
@@ -9915,7 +9983,10 @@ class MainWindow(QMainWindow):
 
         self._last_lvs = run_lvs(document, self.lookup)
         self._last_ratsnest = ratsnest(shown, self.lookup)
-        self._last_wiring = wiring_notes(shown, self.lookup)
+        # One fact, several askers: the drawer's Wiring group, the step card's counts and a
+        # wire's Lies across all read this, as the autowire scoreboard does.
+        self._last_wiring_stats = wiring_stats(shown, self.lookup)
+        self._last_wiring = wiring_notes(self._last_wiring_stats)
         self._refresh_drc_panel(self._last_violations, self._last_lvs)
         self._refresh_nets_panel(self._last_ratsnest)
         self._refresh_part_list()
