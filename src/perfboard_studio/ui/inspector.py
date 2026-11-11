@@ -94,6 +94,7 @@ from perfboard_studio.model import (
     Rotation,
     SchematicPart,
     SheetNote,
+    has_component_side_copper,
 )
 from perfboard_studio.parsers.kicad import infer_net_class
 from perfboard_studio.phrasebook import guide_language, phrasebook
@@ -156,6 +157,8 @@ class InspectorHooks:
     #: What a conductor lies across on its way, in a sentence ("" when nothing): the
     #: holes a wire passes over between its ends, and what is in them.
     lies_across: Callable[[str], str] = lambda _conductor: ""
+    #: Where this copper joins the other face through a via ("" where it does not).
+    joins_other_face: Callable[[str], str] = lambda _conductor: ""
     #: Whether this wire's net can be wired again without it (Redo Wiring Without This Wire).
     can_redo_without: Callable[[str], bool] = lambda _conductor: False
     #: The styles one net's wiring can be redone in, (id, name), and the window's own.
@@ -217,6 +220,34 @@ NET_CLASSES: tuple[tuple[NetClass, str, str], ...] = (
     ("signal", "Signal", "&Signal"),
     ("ground", "Ground — wired first, and wants a rail", "&Ground"),
     ("power", "Power — wired after ground, same reason", "&Power"),
+)
+
+#: The faces a net's copper may prefer (``Net.preferred_side``): the value, the label a form
+#: shows, the accelerated one a menu shows, and what it does. One table for the net editor
+#: and every Net Face menu, like :data:`NET_CLASSES`. A preference, not a rule: where the
+#: face is blocked the router takes the other one, and a net preferring the component side
+#: is wired on both faces without Wire on Both Faces (``router.RouterFaces``).
+NET_FACES: tuple[tuple[BoardSide | None, str, str, str], ...] = (
+    (
+        None,
+        "Either",
+        "&Either",
+        "Auto-wire decides: the solder side, or either face when Wiring ▸ Wire on Both "
+        "Faces is on.",
+    ),
+    (
+        "top",
+        "Component Side",
+        "&Component Side",
+        "Auto-wire lays this net on the component side where it can, changing face through "
+        "a pad with no pin where it must. It does not need Wire on Both Faces.",
+    ),
+    (
+        "bottom",
+        "Solder Side",
+        "&Solder Side",
+        "Auto-wire keeps this net underneath where it can, even with Wire on Both Faces on.",
+    ),
 )
 
 
@@ -1723,6 +1754,30 @@ class _NetEditor(QWidget):
         self.class_problem = _Problem()
         _add_field(form, t("Class"), classes, self.class_problem)
 
+        # Which face Auto-wire lays the net on: shown only on a board with pads on the
+        # component side, since anywhere else there is one face and nothing to choose.
+        faces = QWidget()
+        face_row = QHBoxLayout(faces)
+        face_row.setContentsMargins(0, 0, 0, 0)
+        face_row.setSpacing(2)
+        self.net_face = QButtonGroup(self)
+        self.net_face.setExclusive(True)
+        self._face_buttons: dict[BoardSide | None, QToolButton] = {}
+        for side, label, _accelerated, description in NET_FACES:
+            button = QToolButton()
+            button.setText(t(label))
+            button.setToolTip(t(description))
+            button.setCheckable(True)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda _checked=False, v=side: self._commit_face(v))
+            self.net_face.addButton(button)
+            self._face_buttons[side] = button
+            face_row.addWidget(button)
+        self.face_problem = _Problem()
+        self._form = form
+        self._face_row = form.rowCount()
+        _add_field(form, t("Face"), faces, self.face_problem)
+
         # Blank is "not stated", which is a different thing from zero.
         self.current = NumberBox()
         self.current.setRange(0.0, 100.0)
@@ -1781,6 +1836,10 @@ class _NetEditor(QWidget):
             self.title.setText(theme.heading(net.name))
             self.name.show_value(net.name)
             self._class_buttons[net.net_class].setChecked(True)
+            self._face_buttons[net.preferred_side].setChecked(True)
+            self._form.setRowVisible(
+                self._face_row, has_component_side_copper(document.board)
+            )
             if not self.current.hasFocus():
                 self.current.setValue(net.current_a if net.current_a is not None else 0.0)
             self.voltage_stated.setChecked(net.voltage_v is not None)
@@ -1791,7 +1850,7 @@ class _NetEditor(QWidget):
                 ", ".join(f"{node.component_ref}.{node.pin}" for node in net.nodes) or "—"
             )
             if another:
-                for problem in (self.class_problem, self.current_problem,
+                for problem in (self.class_problem, self.face_problem, self.current_problem,
                                 self.voltage_problem):
                     problem.show_problem("")
         finally:
@@ -1823,6 +1882,14 @@ class _NetEditor(QWidget):
             return
         self.class_problem.show_problem(
             self._update(UpdateNetPayload(id=net.id, net_class=value)) or ""
+        )
+
+    def _commit_face(self, side: BoardSide | None) -> None:
+        net = self._net
+        if self._loading or net is None or side == net.preferred_side:
+            return
+        self.face_problem.show_problem(
+            self._update(UpdateNetPayload(id=net.id, preferred_side=side)) or ""
         )
 
     def _commit_current(self) -> None:
@@ -2118,6 +2185,8 @@ class _ConductorEditor(QWidget):
         # wire said, about a wire lying over ten holes with pins in them.
         self.lies_across = _fact()
         form.addRow(t("Lies across"), self.lies_across)
+        self.joins_other_face = _fact()
+        form.addRow(t("Via"), self.joins_other_face)
         self._form = form
         layout.addLayout(form)
         buttons = QHBoxLayout()
@@ -2222,6 +2291,9 @@ class _ConductorEditor(QWidget):
         across = self._inspector.hooks.lies_across(conductor.id)
         self.lies_across.setText(across)
         self._form.setRowVisible(self.lies_across, bool(across))
+        via = self._inspector.hooks.joins_other_face(conductor.id)
+        self.joins_other_face.setText(via)
+        self._form.setRowVisible(self.joins_other_face, bool(via))
 
     def _on_net_action(self, what: str) -> None:
         if self._net_id is None:

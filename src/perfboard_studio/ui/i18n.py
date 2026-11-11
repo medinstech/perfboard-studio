@@ -306,6 +306,18 @@ TURKISH: Mapping[str, str] = {
     "Wiring style": "Kablolama tarzı",
     "applies the next time you auto-wire": "bir sonraki otomatik kablolamada geçerli olur",
     "Lay Wires Along the &Grid": "Telleri &Izgara Boyunca Döşe",
+    "Wire on Both &Faces": "İki Y&üzde Kablola",
+    "{count} via": "{count} via",
+    "{count} vias": "{count} via",
+    "Via": "Via",
+    "Joins the other face at {holes}": "{holes} deliğinde öbür yüze bağlanır",
+    "Joins the other face at the holes {holes}": "{holes} deliklerinde öbür yüze bağlanır",
+    "Every net may use the component side too, changing face through a pad with no pin where that is shorter. Off, the wiring stays on the solder side, except a net whose Face is the component side.": (
+        "Her net parça yüzünü de kullanabilir; daha kısaysa pimsiz bir pedden yüz "
+        "değiştirir. Kapalıyken kablolama lehim yüzünde kalır; Yüzü parça yüzü olan netler "
+        "bunun dışındadır."
+    ),
+    "This board has no copper on the component side.": "Bu kartın parça yüzünde bakır yok.",
     "When a Trace Must &Cross": "Lehim Yolu Kesi&şirse",
     "When a trace must cross": "Lehim yolu kesişirse",
     "&Hop over it with a short jumper": "Kısa bir &atlama teliyle üstünden geç",
@@ -1333,6 +1345,24 @@ TURKISH: Mapping[str, str] = {
         "Yeni bir ad. Üzerindeki pinler ve onun için döşenmiş bakır yerinde kalır."
     ),
     "Net &Class": "Net &Sınıfı",
+    "Net &Face": "Net &Yüzü",
+    "Either": "Fark Etmez",
+    "&Either": "&Fark Etmez",
+    "Component Side": "Parça Yüzü",
+    "&Component Side": "&Parça Yüzü",
+    "Solder Side": "Lehim Yüzü",
+    "&Solder Side": "&Lehim Yüzü",
+    "Auto-wire decides: the solder side, or either face when Wiring ▸ Wire on Both Faces is on.": (
+        "Otomatik Kablolama karar verir: lehim yüzü ya da Kablolama ▸ İki Yüzde Kablola "
+        "açıksa iki yüzden biri."
+    ),
+    "Auto-wire lays this net on the component side where it can, changing face through a pad with no pin where it must. It does not need Wire on Both Faces.": (
+        "Otomatik Kablolama bu neti olabildiğince parça yüzüne döşer; gerektiğinde pimsiz "
+        "bir pedden yüz değiştirir. İki Yüzde Kablola'nın açık olması gerekmez."
+    ),
+    "Auto-wire keeps this net underneath where it can, even with Wire on Both Faces on.": (
+        "Otomatik Kablolama, İki Yüzde Kablola açıkken bile bu neti olabildiğince altta tutar."
+    ),
     "&Signal": "&Sinyal",
     "&Ground": "&Toprak",
     "&Power": "&Güç",

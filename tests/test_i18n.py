@@ -98,6 +98,11 @@ def loop_built_labels() -> set[str]:
         )
         for raw in row
     }
+    # inspector.NET_FACES, whose rows span lines and start with a face or None: imported
+    # rather than matched, since it is the table itself that the menus and the form read.
+    from perfboard_studio.ui.inspector import NET_FACES
+
+    pairs |= {text for row in NET_FACES for text in row[1:]}
     # Every sentence the engine's descriptions are recognised by (ui/engine_text.py): data,
     # read through ``t(template)`` when one is shown.
     from perfboard_studio.ui.engine_text import FINDING_TEMPLATES, TEMPLATES
@@ -346,8 +351,10 @@ def test_every_catalogue_translates_to_something_different() -> None:
         # the same words in Turkish under a submenu that already says "Dışa Aktar". "1
         # jumper" is "1 jumper" too, now that the planners count instead of saying "(s)",
         # and "1 pin" is "1 pin", as the wire's Properties counts the pins it lies over.
+        # "Via" stays "via", as the build guide says it: one word per concept.
         assert same == [
-            "3D", "3D &Model (STEP)…", "LED", "{count} jumper", "{count} net", "{count} pin"
+            "3D", "3D &Model (STEP)…", "LED", "Via", "{count} jumper", "{count} net",
+            "{count} pin", "{count} via",
         ], (
             f"{code} has untranslated entries: {same}"
         )
@@ -399,6 +406,7 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
                    "&Insulated Wire", "&Jumper Over the Parts", "C&ut Strip",
                    "Sto&p the Current Tool", "&Auto-wire Everything", "Auto-wire the S&election",
                    "Wiring St&yle", "When a Trace Must &Cross", "Lay Wires Along the &Grid",
+                   "Wire on Both &Faces",
                    "Redo All &Wiring", "Redo Wiring of the Se&lection",
                    "Remove Ou&t-of-Date Wiring", "Co&mpare With Before"],
         # View is the longest menu and the one the three panel toggles joined; it had a
@@ -429,8 +437,9 @@ def test_no_two_entries_in_a_menu_claim_the_same_accelerator() -> None:
         "sheet symbol": ["&Disconnect {pin} from {net}", "&Properties…", "Re&name…",
                          "D&uplicate", "&Arrange This Symbol", "&Mount on the Panel",
                          "Take &off the Board", "&Remove from the Design"],
-        "sheet net": ["Re&name Net…", "Net &Class", "&Edit Net…", "De&lete Net"],
+        "sheet net": ["Re&name Net…", "Net &Class", "Net &Face", "&Edit Net…", "De&lete Net"],
         "sheet net class": ["&Signal", "&Ground", "&Power"],
+        "net face": ["&Either", "&Component Side", "&Solder Side"],
         "sheet": ["&Add Part…", "Arran&ge the Sheet", "Fit the S&heet"],
         "mouse wheel": ["&Zooms", "&Scrolls (Ctrl+Wheel Zooms)"],
     }

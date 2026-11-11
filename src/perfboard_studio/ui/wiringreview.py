@@ -107,11 +107,13 @@ def wiring_notes(stats: WiringStats) -> tuple[WiringNote, ...]:
 
 
 def wiring_summary(stats: WiringStats, only: Collection[str] | None = None) -> str:
-    """The wiring in one line, "53 wires, 1.2 m, 77 bends · 12 solder traces"; "" with no
-    copper on the board.
+    """The wiring in one line, "53 wires, 1.2 m, 77 bends · 12 solder traces · 3 vias"; ""
+    with no copper on the board.
 
     ``only`` narrows it to those conductors: what one Auto-wire just laid, said in the
-    step card's words, so the status line and the card count the same things."""
+    step card's words, so the status line and the card count the same things. The vias are
+    the board's (``WiringStats.vias``) and are left out of a narrowed line, which counts
+    them itself from the copper it narrows to (``vias_said``)."""
     entries = [
         entry for entry in stats.conductors if only is None or entry.conductor_id in only
     ]
@@ -132,7 +134,16 @@ def wiring_summary(stats: WiringStats, only: Collection[str] | None = None) -> s
         )
     if runs:
         said.append(counted(runs, t("{count} solder trace"), t("{count} solder traces")))
+    if only is None and stats.vias:
+        said.append(vias_said(len(stats.vias)))
     return "  ·  ".join(said)
+
+
+def vias_said(count: int) -> str:
+    """"3 vias": pinless holes where the component side's solder meets other copper, each
+    one more hole to fill and check (``wiringstats.vias``). The word stays "via" in
+    Turkish, as the build guide says it."""
+    return counted(count, t("{count} via"), t("{count} vias"))
 
 
 def length_said(mm: float) -> str:

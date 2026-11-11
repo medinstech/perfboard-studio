@@ -19455,3 +19455,182 @@ def test_the_step_card_offers_every_style_when_the_wiring_has_something_worth_a_
         )
     finally:
         _close(window)
+
+
+def _single_sided(document):
+    return dataclasses.replace(
+        document, board=dataclasses.replace(document.board, single_sided=True)
+    )
+
+
+def test_a_nets_face_is_chosen_in_its_properties_and_its_menus() -> None:
+    """Which face Auto-wire lays a net on (``Net.preferred_side``): three buttons in the
+    net's Properties and a Net Face submenu wherever the net's own menu is, each one undo
+    step, and none of it on a board with no pads on the component side."""
+    from PySide6.QtWidgets import QMenu
+
+    from perfboard_studio.ui.i18n import t
+    from perfboard_studio.ui.inspector import NET_FACES
+
+    document = _example_document("atmega328-relay")
+    window = _window_on(document)
+    try:
+        gnd = next(n for n in window.bus.document.nets if n.net_class == "ground")
+        editor = _inspect_net(window, gnd.id)
+        assert window.inspector.net_editor._form.isRowVisible(editor._face_row)
+        assert editor._face_buttons[None].isChecked()
+        steps = len(window.bus.history())
+        editor._face_buttons["top"].click()
+        net = next(n for n in window.bus.document.nets if n.id == gnd.id)
+        assert net.preferred_side == "top"
+        assert len(window.bus.history()) == steps + 1
+        assert editor._face_buttons["top"].isChecked()
+
+        menu = QMenu()
+        faces = window._net_face_menu(gnd.id, menu)
+        assert faces is not None
+        labels = [a.text() for a in faces.actions()]
+        assert labels == [t(row[2]) for row in NET_FACES]
+        checked = [a.text() for a in faces.actions() if a.isChecked()]
+        assert checked == [t("&Component Side")]
+        faces.actions()[2].trigger()
+        net = next(n for n in window.bus.document.nets if n.id == gnd.id)
+        assert net.preferred_side == "bottom"
+        assert "applies the next time you auto-wire" in window.statusBar().currentMessage()
+        # The sheet's net menu has it too, beside Net Class.
+        entries = QMenu()
+        window._add_net_entries(entries, gnd.id)
+        assert t("Net &Face") in [a.text() for a in entries.actions()]
+        window.act_undo.trigger()
+        window.act_undo.trigger()
+        net = next(n for n in window.bus.document.nets if n.id == gnd.id)
+        assert net.preferred_side is None
+    finally:
+        _close(window)
+
+    window = _window_on(_single_sided(document))
+    try:
+        gnd = next(n for n in window.bus.document.nets if n.net_class == "ground")
+        editor = _inspect_net(window, gnd.id)
+        assert not window.inspector.net_editor._form.isRowVisible(editor._face_row)
+        assert window._net_face_menu(gnd.id, QMenu()) is None
+    finally:
+        _close(window)
+
+
+def test_a_net_on_the_component_side_is_wired_there_without_both_faces() -> None:
+    """The seam: the Face the window sets reaches the router through the window's own
+    options. atmega328-relay's GND preferring the component side lays copper there and
+    changes face through vias with Wire on Both Faces off -- the per-net choice is the more
+    explicit intent and does not wait for the global one."""
+    from perfboard_studio.autoroute import plan_reroute
+    from perfboard_studio.commands import UpdateNetPayload
+    from perfboard_studio.wiringstats import wiring_stats
+
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        assert not window.act_both_faces.isChecked()
+        assert window._autoroute_options().router.faces == "solder"
+        gnd = next(n for n in window.bus.document.nets if n.net_class == "ground")
+
+        def sides() -> list[str]:
+            plan = plan_reroute(
+                window.bus.document, window.lookup, only_net_ids=(gnd.id,),
+                options=window._autoroute_options(),
+            )
+            return [c.side for c in plan.document.conductors if c.net_id == gnd.id]
+
+        assert "top" not in sides()
+        window.bus.dispatch("net.update", UpdateNetPayload(id=gnd.id, preferred_side="top"))
+        assert "top" in sides()
+        plan = plan_reroute(
+            window.bus.document, window.lookup, only_net_ids=(gnd.id,),
+            options=window._autoroute_options(),
+        )
+        assert wiring_stats(plan.document, window.lookup).vias
+    finally:
+        _close(window)
+
+
+def test_wire_on_both_faces_reaches_the_router_and_is_remembered() -> None:
+    """Wiring ▸ Wire on Both Faces: off by default, as the engine's default and every golden
+    route are; a setting of the window, never of the document; it reaches the "best" sweep
+    like the grid setting; and greyed out on a board with nothing on the component side."""
+    from perfboard_studio.ui.i18n import t
+
+    document = _example_document("atmega328-relay")
+    first = _window_on(document)
+    try:
+        assert first.act_both_faces.isEnabled()
+        assert not first.act_both_faces.isChecked()
+        first.act_both_faces.setChecked(True)
+        assert first._autoroute_options().router.faces == "both"
+        first.on_routing_style("best")
+        assert first._autoroute_options().router.faces == "both"
+        # Nothing of it is written into the board.
+        assert first.bus.document.nets == document.nets
+    finally:
+        _close(first)
+
+    second = _window_on(document)
+    try:
+        assert second.act_both_faces.isChecked()
+        assert second._autoroute_options().router.faces == "both"
+        second.act_both_faces.setChecked(False)
+        assert second._autoroute_options().router.faces == "solder"
+    finally:
+        _close(second)
+
+    single = _window_on(_single_sided(document))
+    try:
+        assert not single.act_both_faces.isEnabled()
+        assert single.act_both_faces.toolTip() == t(
+            "This board has no copper on the component side."
+        )
+    finally:
+        _close(single)
+
+
+def test_vias_are_counted_on_the_card_in_the_status_line_and_on_the_copper() -> None:
+    """A via is one more hole to fill and check, so the wiring says how many there are:
+    the step card's line, Auto-wire's status line (the ones it just made) and the
+    Properties of every piece of copper that meets the other face at one."""
+    from perfboard_studio.commands import DeleteConductorsPayload, UpdateNetPayload
+    from perfboard_studio.ui.i18n import counted, t
+    from perfboard_studio.ui.wiringreview import wiring_summary
+
+    window = _window_on(_example_document("atmega328-relay"))
+    try:
+        gnd = next(n for n in window.bus.document.nets if n.net_class == "ground")
+        window.bus.dispatch("net.update", UpdateNetPayload(id=gnd.id, preferred_side="top"))
+        window.bus.dispatch(
+            "conductor.deleteMany",
+            DeleteConductorsPayload(
+                ids=tuple(c.id for c in window.bus.document.conductors if c.net_id == gnd.id)
+            ),
+        )
+        before = {c.id for c in window.bus.document.conductors}
+        window._route(only_net_ids=(gnd.id,))
+        stats = window._last_wiring_stats
+        assert stats is not None and stats.vias
+        assert wiring_summary(stats).endswith(
+            counted(len(stats.vias), t("{count} via"), t("{count} vias"))
+        )
+        assert t("{count} via").format(count=1).split()[-1] in window.statusBar().currentMessage()
+
+        via = stats.vias[0]
+        meets = [
+            c for c in window.bus.document.conductors
+            if c.id not in before and c.side == "top" and any(
+                (h.col, h.row) == (via.col, via.row) for h in c.path
+            )
+        ]
+        assert meets
+        window.scene.clearSelection()
+        _select_conductor(window, meets[0].id)
+        window._refresh_properties()
+        editor = window.inspector.conductor_editor
+        assert editor._form.isRowVisible(editor.joins_other_face)
+        assert format_hole(via, window.bus.document.board) in editor.joins_other_face.text()
+    finally:
+        _close(window)

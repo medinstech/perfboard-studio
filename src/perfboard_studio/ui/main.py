@@ -255,6 +255,7 @@ from perfboard_studio.footprints import (
 from perfboard_studio.geometry import (
     all_pin_holes,
     format_hole,
+    hole_key,
     hole_span_mm,
     legend_label,
     path_length_mm,
@@ -307,6 +308,8 @@ from perfboard_studio.model import (
     SheetNoteKind,
     SheetWire,
     SymbolPlacement,
+    contacts_every_path_hole,
+    has_component_side_copper,
 )
 from perfboard_studio.occupancy import build_occupancy, conductors_touching
 from perfboard_studio.parsers.kicad import infer_net_class, parse_kicad_netlist
@@ -388,7 +391,14 @@ from .header import HeaderBar
 from .home import WALKTHROUGH, Home, HomeExample
 from .i18n import counted, hole_grid, set_language, t
 from .i18n import language as current_language
-from .inspector import NET_CLASSES, Inspector, InspectorActions, InspectorHooks, StepNote
+from .inspector import (
+    NET_CLASSES,
+    NET_FACES,
+    Inspector,
+    InspectorActions,
+    InspectorHooks,
+    StepNote,
+)
 from .numberbox import NumberBox
 from .palette import ALSO as PALETTE_ALSO
 from .palette import CommandPalette, Entry
@@ -413,7 +423,7 @@ from .view2d import (
     picture_beside_the_pointer,
 )
 from .viewsch import SchematicView, SheetTool
-from .wiringreview import WiringNote, wiring_notes, wiring_summary
+from .wiringreview import WiringNote, vias_said, wiring_notes, wiring_summary
 from .workflow import (
     STEP_ORDER,
     StepKey,
@@ -759,6 +769,8 @@ VALUES_KEY = "session/showValues"
 WHEEL_SCROLLS_KEY = "session/wheelScrolls"
 ROUTING_STYLE_KEY = "session/routingStyle"
 GRID_WIRES_KEY = "session/gridWires"
+#: Wire on Both Faces: a view setting like the grid one, never written to the document.
+BOTH_FACES_KEY = "session/wireBothFaces"
 CROSSINGS_KEY = "session/crossings"
 EXPORT_DIR_KEY = "session/exportDirectory"
 LANGUAGE_KEY = "session/language"
@@ -2733,6 +2745,11 @@ class MainWindow(QMainWindow):
         #: off in the engine: the engine's default is what every golden route records, and
         #: this is what somebody building the board wants to be handed.
         self._grid_wires = True
+        #: Wire on Both Faces (router.RouterFaces "both"): every net may lay copper on the
+        #: component side. Off by default, which is the engine's default and every golden
+        #: route's -- one face is what most builders mean, and a net that wants the other
+        #: one says so itself (its Face).
+        self._both_faces = False
         #: What a trace does where it meets something it may not cross (router.CrossingPolicy).
         #: The engine's default, "hop": a short jumper over the obstacle.
         self._crossing_policy: CrossingPolicy = "hop"
@@ -5487,6 +5504,19 @@ class MainWindow(QMainWindow):
         self.act_grid_wires.setToolTip(self._grid_wires_tip)
         self.act_grid_wires.toggled.connect(self.on_grid_wires)
 
+        # Which faces: a separate question from how a wire is laid, and like it a setting of
+        # the window, not of the board.
+        self.act_both_faces = route_menu.addAction(t("Wire on Both &Faces"))
+        self.act_both_faces.setCheckable(True)
+        self.act_both_faces.setChecked(self._both_faces)
+        self._both_faces_tip = t(
+            "Every net may use the component side too, changing face through a pad with no "
+            "pin where that is shorter. Off, the wiring stays on the solder side, except a "
+            "net whose Face is the component side."
+        )
+        self.act_both_faces.setToolTip(self._both_faces_tip)
+        self.act_both_faces.toggled.connect(self.on_both_faces)
+
         route_menu.addSeparator()
         # Rip-up and re-route is a SEPARATE verb from autoroute, and deliberately not what
         # Ctrl+R does: autoroute completes a board, this one discards work to rebuild it.
@@ -8042,6 +8072,42 @@ class MainWindow(QMainWindow):
             did(result.description) if result.ok else refused(result), 6000
         )
 
+    def _net_face_menu(self, net_id: NetId, parent: QWidget) -> QMenu | None:
+        """Net Face: which face Auto-wire lays the net on, checked at the one it prefers.
+
+        None on a board with no pads on the component side, where there is one face and
+        nothing to choose. Built with its parent, for the reason Net Class is.
+        """
+        if not has_component_side_copper(self.bus.document.board):
+            return None
+        net = next((n for n in self.bus.system_document.nets if n.id == net_id), None)
+        if net is None:
+            return None
+        faces = QMenu(t("Net &Face"), parent)
+        faces.setToolTipsVisible(True)
+        for side, _label, accelerated, description in NET_FACES:
+            action = faces.addAction(t(accelerated))
+            action.setToolTip(t(description))
+            action.setCheckable(True)
+            action.setChecked(net.preferred_side == side)
+            action.triggered.connect(
+                lambda _checked=False, i=net_id, v=side: self._set_net_face(i, v)
+            )
+        return faces
+
+    def _set_net_face(self, net_id: NetId, side: BoardSide | None) -> None:
+        """The face a net's copper prefers. It changes no copper: it is read the next time
+        the net is wired, which the status line says."""
+        result = self.bus.dispatch(
+            "net.update", UpdateNetPayload(id=net_id, preferred_side=side)
+        )
+        self.statusBar().showMessage(
+            f"{did(result.description)} — {t('applies the next time you auto-wire')}"
+            if result.ok
+            else refused(result),
+            8000,
+        )
+
     def on_schematic_place_all(self) -> None:
         """Move the whole design onto the board, arranged. The step this panel exists to
         lead to.
@@ -8997,6 +9063,7 @@ class MainWindow(QMainWindow):
                 next_step=lambda: self.on_workflow_next(self.workflow_bar.next_key),
                 net_wiring=lambda what, net_id: self._on_net_wiring(what, net_id),
                 can_redo_without=lambda conductor_id: self._can_redo_without(conductor_id),
+                joins_other_face=lambda conductor_id: self._joins_other_face(conductor_id),
                 lies_across=lambda conductor_id: self._lies_across(conductor_id),
                 wiring_styles=lambda: self.wiring_styles(),
                 current_style=lambda: self._routing_style,
@@ -9261,6 +9328,9 @@ class MainWindow(QMainWindow):
                     lambda _checked=False, n=net_id: self._select_net_copper(n)
                 )
                 menu.addMenu(self._redo_net_menu(net_id, menu))
+                faces = self._net_face_menu(net_id, menu)
+                if faces is not None:
+                    menu.addMenu(faces)
                 picked = self.scene.selected_conductor_ids()
                 if len(picked) == 1 and self._can_redo_without(picked[0]):
                     without = menu.addAction(t("Redo Wiring Without This Wire"))
@@ -9590,6 +9660,9 @@ class MainWindow(QMainWindow):
             action.triggered.connect(
                 lambda _checked=False, i=net_id, v=value: self._set_net_class(i, v)
             )
+        faces = self._net_face_menu(net_id, menu)
+        if faces is not None:
+            menu.addMenu(faces)
 
         edit = menu.addAction(t("&Edit Net…"))
         edit.setToolTip(
@@ -9697,6 +9770,36 @@ class MainWindow(QMainWindow):
         if entry is None or not entry.is_wire:
             return False
         return bool(holes_to_avoid(document, self.lookup, conductor_id))
+
+    def _joins_other_face(self, conductor_id: str) -> str:
+        """Where a piece of copper joins the other face through a via, for its Properties:
+        "Joins the other face at C7, F3". "" where it does not, which is every piece of
+        copper on a board wired on one face.
+
+        Said of both sides of a via -- the component side's run and the copper underneath
+        it meets -- since either is the one somebody clicks to ask why a hole is filled."""
+        stats = self._last_wiring_stats
+        if stats is None or not stats.vias:
+            return ""
+        document = self.bus.document
+        conductor = next((c for c in document.conductors if c.id == conductor_id), None)
+        if conductor is None:
+            return ""
+        touched = (
+            conductor.path
+            if contacts_every_path_hole(conductor)
+            else (conductor.path[0], conductor.path[-1])
+            if conductor.path
+            else ()
+        )
+        keys = {hole_key(hole) for hole in touched}
+        at = [hole for hole in stats.vias if hole_key(hole) in keys]
+        if not at:
+            return ""
+        holes = ", ".join(format_hole(hole, document.board) for hole in at)
+        if len(at) == 1:
+            return t("Joins the other face at {holes}").format(holes=holes)
+        return t("Joins the other face at the holes {holes}").format(holes=holes)
 
     def _lies_across(self, conductor_id: str) -> str:
         """What a wire passes over between its ends, for its Properties: the pins by name,
@@ -10198,6 +10301,13 @@ class MainWindow(QMainWindow):
                 menu.menuAction().setEnabled(not joined)
                 menu.menuAction().setToolTip(own_planner if joined else self._style_menu_tips[key])
             self.act_grid_wires.setEnabled(not joined or jumpers)
+            two_faced = has_component_side_copper(self.bus.document.board)
+            self.act_both_faces.setEnabled(two_faced)
+            self.act_both_faces.setToolTip(
+                self._both_faces_tip
+                if two_faced
+                else t("This board has no copper on the component side.")
+            )
             self.act_grid_wires.setToolTip(
                 t(
                     "On a breadboard this shapes the jumpers: along a row and down a column, "
@@ -11289,6 +11399,15 @@ class MainWindow(QMainWindow):
             8000,
         )
 
+    def on_both_faces(self, checked: bool) -> None:
+        """Wire every net on both faces, or on the solder side. Applies to the next route."""
+        self._both_faces = checked
+        self.statusBar().showMessage(
+            f"{_plain(self.act_both_faces.text())}: "
+            f"{t('on') if checked else t('off')} — {t("applies the next time you auto-wire")}",
+            8000,
+        )
+
     def _autoroute_options(self, style: str | None = None) -> AutorouteOptions:
         """Options for a single planned route, in ``style`` when one is named (one net's
         Redo Wiring in a style of its own), else in the window's.
@@ -11302,6 +11421,7 @@ class MainWindow(QMainWindow):
         base = RouterOptions(
             wire_path="grid" if self._grid_wires else "straight",
             crossing_policy=self._crossing_policy,
+            faces="both" if self._both_faces else "solder",
         )
         chosen = style or self._routing_style
         if chosen == "best":
@@ -11819,6 +11939,23 @@ class MainWindow(QMainWindow):
         wiring = wiring_summary(stats, only=laid) if stats is not None and laid else ""
         if wiring:
             said += f": {wiring}"
+        if stats is not None and stats.vias and laid:
+            # The vias the copper just laid made, counted from it as the line counts it.
+            touched = {
+                hole_key(hole)
+                for c in self.bus.document.conductors
+                if c.id in laid
+                for hole in (
+                    c.path
+                    if contacts_every_path_hole(c)
+                    else (c.path[0], c.path[-1])
+                    if c.path
+                    else ()
+                )
+            }
+            made = sum(1 for hole in stats.vias if hole_key(hole) in touched)
+            if made:
+                said += "  ·  " + vias_said(made)
         if summary.links_unrouted:
             said += "  ·  " + counted(
                 summary.links_unrouted,
@@ -14748,6 +14885,7 @@ class MainWindow(QMainWindow):
         settings.setValue(WHEEL_SCROLLS_KEY, self.view.wheel_scrolls)
         settings.setValue(ROUTING_STYLE_KEY, self._routing_style)
         settings.setValue(GRID_WIRES_KEY, self._grid_wires)
+        settings.setValue(BOTH_FACES_KEY, self._both_faces)
         settings.setValue(CROSSINGS_KEY, self._crossing_policy)
 
     def _restore_session(self) -> None:
@@ -14805,6 +14943,7 @@ class MainWindow(QMainWindow):
             for name, action in self.act_style.items():
                 action.setChecked(name == style)
         self.act_grid_wires.setChecked(_stored_bool(settings, GRID_WIRES_KEY, True))
+        self.act_both_faces.setChecked(_stored_bool(settings, BOTH_FACES_KEY, False))
         policy = settings.value(CROSSINGS_KEY, self._crossing_policy)
         if isinstance(policy, str) and policy in self.act_crossing:
             self._crossing_policy = cast("CrossingPolicy", policy)

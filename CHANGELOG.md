@@ -22,6 +22,14 @@ closed without a bump.
 
 ### Added
 
+- **Two-sided wiring in the window.** On a board with pads on the component side, a net's
+  Properties has a Face row (Either, Component Side, Solder Side), and its right-click
+  menus have the same three under Net Face. A net set to the component side is wired there
+  where it can, changing face through a pad with no pin, without any other switch.
+  Wiring ▸ Wire on Both Faces lets every net do the same; it is off by default, kept with
+  the window rather than the board, and greyed out where there is only one face. The step
+  card and Auto-wire's status line count the vias ("3 vias"), and a piece of copper's
+  Properties says where it joins the other face.
 - **The step card offers "Try every wiring style…"** under the counts of what is worth a
   look in the wiring. Balanced stays the default: measured in the window, trying every
   style took 15 s on atmega328-relay to find the same wiring Balanced lays in 2.5 s. Taken,
