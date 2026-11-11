@@ -33,8 +33,8 @@ closed without a bump.
   across, says so in the question and the status, and says what could not be wired
   without it before anything is applied. One Ctrl+Z puts it back.
 - **The wiring says what it costs to build, and where.** Auto-wire used to finish on "No
-  problems" and jump to Build over a board with a wire lying across 44 pins. With nothing
-  selected, Properties now keeps the wiring in a line ("53 wires, 1.3 m, 85 bends · 5 solder
+  problems" and jump to Build over a board whose wires lay across pins 44 times
+  (atmega328-relay, auto-wired). With nothing selected, Properties now keeps the wiring in a line ("53 wires, 1.3 m, 85 bends · 5 solder
   traces"), followed by what is worth a look: places a wire lies over a pin, places it lies
   over where other copper ends, wires stacked three or more deep, and rings of wires that no
   order can lay. Each count is a link that selects its wires. The Problems drawer has the same
