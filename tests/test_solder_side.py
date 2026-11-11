@@ -472,8 +472,10 @@ def test_where_a_part_on_the_solder_side_is_soldered() -> None:
 @pytest.mark.parametrize(
     ("footprint_id", "severity"),
     [
-        # A DIP sits on the board over its pins: no iron reaches them. An error.
-        ("dip-8", "error"),
+        # A header's plastic sits on the board over its pins: no iron reaches them. An error.
+        ("hdr-1x4", "error"),
+        # A DIP's pins are beside its body, on the edge of it: nothing to say.
+        ("dip-8", None),
         # An LED stands on its leads over its pins: left long, it can be soldered. A warning.
         ("led-5mm", "warning"),
         # An axial resistor's pins are past the ends of its body: nothing to say.
@@ -661,7 +663,7 @@ def test_every_solder_side_finding_is_said_in_turkish() -> None:
         _doc(resistor, conductors=(trace,)),
         _doc(resistor, conductors=(wire,)),
         _doc(dip, _part("R1", "r-axial-6", inside.col, inside.row, 90)),
-        _doc(dip, board=_single_sided()),
+        _doc(_part("J1", "hdr-1x4", 10, 10, side="bottom"), board=_single_sided()),
         _doc(_part("D1", "led-5mm", 10, 10, side="bottom"), board=_single_sided()),
     ]
     said: list[tuple[str, str]] = []
@@ -740,3 +742,28 @@ def test_a_copied_part_keeps_its_face_and_a_breadboard_takes_it_on_top() -> None
         assert bus.dispatch("block.place", paste_payload(target, block, HoleCoord(10, 2)).payload).ok
         r1 = next(c for c in bus.document.components if c.footprint_id == "r-axial-3" and c.mirrored)
         assert (r1.side, r1.mirrored) == (face, True)
+
+
+@pytest.mark.parametrize("side", ["top", "bottom"])
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+@pytest.mark.parametrize("anchor", [(10, 10), (3, 7), (20, 5), (31, 22)])
+def test_a_dips_pins_are_never_under_its_own_body(
+    anchor: tuple[int, int], rotation: int, side: BoardSide
+) -> None:
+    """A DIP's body box runs along its pin rows, and placed it lands a few ulps either side of
+    the pin centres (17.779999999999998 against 17.78 at K11 on the solder side). Measured
+    strictly, one row counted as under the body at (10, 10) and not at (10, 10) turned 180,
+    so joint-under-body flagged a DIP at random. Every anchor here once said yes or no by
+    that noise alone; a pin on the edge is beside the body, every time."""
+    from perfboard_studio.occupancy import pins_under_own_body
+
+    dip = _part("U1", "dip-8", *anchor, rotation, side=side)
+    footprint = REGISTRY("dip-8")
+    assert footprint is not None
+    board = _doc(dip).board
+    assert pins_under_own_body(dip, footprint, board) == ()
+    assert _rules(_doc(dip, board=_single_sided()), "joint-under-body") == []
+    header = _part("J1", "hdr-1x4", *anchor, rotation, side=side)
+    header_footprint = REGISTRY("hdr-1x4")
+    assert header_footprint is not None
+    assert len(pins_under_own_body(header, header_footprint, board)) == 4

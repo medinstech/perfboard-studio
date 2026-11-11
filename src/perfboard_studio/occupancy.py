@@ -216,15 +216,27 @@ def placed_body_box(
     return anchor.x + min_x, anchor.x + max_x, anchor.y + min_y, anchor.y + max_y
 
 
+#: How far inside a body's edge a pin must be to count as under it. A DIP's body box runs
+#: exactly along its two pin rows, and the turned, mirrored and offset box lands a few ulps
+#: either side of the pin centres: 17.779999999999998 against a pin at 17.78. Measured
+#: strictly, one row of a DIP was under its body at some anchors and rotations and neither
+#: row at the rest, so ``joint-under-body`` flagged a DIP on the solder side at random. A
+#: pin ON the edge is beside the body, which is where a DIP's pins are.
+PIN_UNDER_BODY_MARGIN_MM = 1e-6
+
+
 def pins_under_own_body(
     component: ComponentInstance, footprint: Footprint, board: Board
 ) -> tuple[HoleCoord, ...]:
     """The holes of a part's pins its own body covers, measured on the real body
     (:func:`placed_body_box`, round where the package is), in pin order. Nothing for a part
-    with no outline, or one off the board (``flying-leads``), which has no body here."""
+    with no outline, or one off the board (``flying-leads``), which has no body here. A pin
+    on the body's edge is not under it (:data:`PIN_UNDER_BODY_MARGIN_MM`)."""
     if not footprint.body_outline or footprint.body.archetype == "flying-leads":
         return ()
-    box = placed_body_box(component, footprint, board)
+    min_x, max_x, min_y, max_y = placed_body_box(component, footprint, board)
+    margin = PIN_UNDER_BODY_MARGIN_MM
+    box = (min_x + margin, max_x - margin, min_y + margin, max_y - margin)
     round_body = body_is_round(footprint)
     under: list[HoleCoord] = []
     for _pin, hole in all_pin_holes(component, footprint):

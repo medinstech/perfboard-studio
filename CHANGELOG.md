@@ -178,6 +178,11 @@ closed without a bump.
   window's first layout stayed where the views' column ended, and the open drawer's third
   row, "Board check (DRC)", was drawn with a line through it.
 
+- **joint-under-body no longer flags a DIP's own pins at random.** On a single-sided board,
+  a DIP turned onto the solder side was reported as sitting over one row of its own pins at
+  some places and turns and not at others, by a rounding error: the edge of its body runs
+  exactly along its pin rows. A DIP's pins are beside its body, so it is never flagged; a
+  pin header, whose plastic really does sit over its pins, still is.
 - **Copper drawn exactly over copper is not laid twice.** A run over pads a run already
   solders, or a wire along exactly another wire's line, went in as a second identical piece
   without a word. The banner now says the copper is already there before Enter, and Enter
