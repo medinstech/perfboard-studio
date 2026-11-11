@@ -10087,7 +10087,8 @@ def test_a_right_click_on_a_wire_offers_the_net() -> None:
 
     labels = _labels(window.sheet_menu(_sheet_at(window, middle.x, middle.y)))
 
-    assert labels == ["Re&name Net…", "Net &Class", "&Edit Net…", "De&lete Net"]
+    # Net Face only where the board has pads on the component side, as the blank board does.
+    assert labels == ["Re&name Net…", "Net &Class", "Net &Face", "&Edit Net…", "De&lete Net"]
     _close(window)
 
 
