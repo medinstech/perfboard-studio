@@ -2939,9 +2939,13 @@ found on a board that passed every test. Its columns are the ones that went wron
 - `level` -- the tallest stack of wires. `occupancy.stacking_layers` puts a wire lying across
   another's end above it, which is right, and the auto-wired atmega328-relay came out eight
   wires tall: nobody solders that.
-- `pin`, `end` -- holes a wire lies across where a lead or another wire comes down to its pad.
-  Each one is a reason for the wire to be stacked higher, so `RouterCosts.wire_over_joint`
-  prices them.
+- `pin`, `end` -- holes a wire lies across where a lead or another wire comes down to its pad,
+  priced by `RouterCosts.wire_over_joint`. Not the same cost: lying across another wire's end
+  stacks the wire above it, but the stub floor (`stacking_layers` lifts a wire lying across a
+  lead's stub to level 1, where an insulated wire already is) means lying across a pin stacks
+  nothing -- it is a joint hidden under a wire, to inspect or rework. The pin is still priced,
+  because it is also where a wire laid LATER will end: priced at nothing, the bends fell and
+  the stacks grew.
 - `loops` -- wires each lying across another's end (`occupancy.stacking_loops`), which can be
   soldered in no order and drawn apart by no stacking. `RouterCosts.wire_into_loop` prices
   laying one like a wire of its own.
@@ -2953,6 +2957,18 @@ found on a board that passed every test. Its columns are the ones that went wron
 A commit that changes the router quotes its before and after rows (`--json` one run,
 `--before` it on the next).
 
+**A wire is laid against the plan, then against the finished plan.** Routing is in order,
+and a wire laid early never saw the wires after it; the later ones paid for every crossing
+from their side. `autoroute._relay_wires` lays each grid wire once more with all the others
+on the board, and it moves only to a strictly cheaper path (`router.relay_grid_wire`, which
+prices the old path with `_grid_path_cost`, term for term the search's own), so a tie never
+moves a wire and the pass settles -- in two sweeps on every board measured, and
+`test_laying_the_wires_again_leaves_no_wire_a_cheaper_path` holds random boards to it. The
+same wires between the same holes, in the same order: the ids the preview holds are still the
+ones the bus assigns. Its cost was a full routing context per wire, two thirds of it working
+out the holes every segment lies across, which `router._keys_under_line` now remembers; with
+it the pass costs nothing measurable.
+
 **`tests/test_autowire_scoreboard.py` holds four boards to CEILINGS, not to values.** The
 densest example, the two whose wires made loops, and the golden NE555, wired with the balanced
 style alone so the four cost about three seconds rather than the sweep's half minute.
@@ -2963,6 +2979,14 @@ improvement passes, and the commit that makes it lowers the ceiling to match. A 
 naming the board and the column. Wire length and bends are left out on purpose: they trade
 against the stack (step 3 bought `level` 8 -> 6 and no loops with 4.7 % more wire), and which
 way that trade goes is a judgement for the commit body, not a threshold.
+
+**A ceiling goes up only with the sweep shown improving and the reason in the commit body.**
+The four boards are wired with one style; what a builder gets is the window's sweep, and a
+change that trades one column for another can lose a little on the four and win on the
+sweep. The re-lay did: `pin` +1 on atmega328-relay and nano-relay, wired balanced, for fewer
+bends and less wire there, and over the sweep `pin` 44 -> 37 and `end` 29 -> 20. So the
+ceiling may rise, and the commit that raises it quotes both runs and says why the column that
+rose costs less than what was bought.
 
 ## What the window remembers
 

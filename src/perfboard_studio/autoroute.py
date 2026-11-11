@@ -60,6 +60,7 @@ from .commands import (
     AddConductorPayload,
     AddConductorsPayload,
     NewConductor,
+    NewWireConductor,
     ReplaceConductorsPayload,
     add_conductor,
     create_document_id_generator,
@@ -71,12 +72,14 @@ from .model import Board, ConductorId, HoleCoord, NetClass, NetId, PerfDocument
 from .ratsnest import NetRatsnest, RatsnestLink, net_ratsnest, ratsnest
 from .router import (
     DEFAULT_ROUTER_OPTIONS,
+    RouteCandidate,
     RouteRequest,
     RouterOptions,
     RouteStrategy,
     RoutingStyle,
     StrategyPreference,
     options_for_style,
+    relay_grid_wire,
     route_connection,
 )
 
@@ -272,7 +275,7 @@ def plan_autoroute(
         if _build_key(attempt, doc) < _build_key(best, doc):
             best = attempt
 
-    return _to_plan(best, passes_run)
+    return _to_plan(_relay_wires(best, doc, lookup, options), passes_run)
 
 
 def plan_route_net(
@@ -1161,6 +1164,99 @@ def _rank(attempt: _Attempt) -> tuple[int, float, int]:
     unrouted = sum(len(outcome.unrouted) for outcome in attempt.outcomes)
     cost = sum(routed.cost for outcome in attempt.outcomes for routed in outcome.routed)
     return (unrouted, cost, attempt.pass_number)
+
+
+#: Times the plan's wires are laid again at most (``_relay_wires``). Every board measured
+#: settles in two: the second sweep moves nothing, and
+#: ``test_laying_the_wires_again_leaves_no_wire_a_cheaper_path`` holds random boards to that.
+RELAY_SWEEPS = 2
+
+
+def _relay_wires(
+    attempt: _Attempt, doc: PerfDocument, lookup: FootprintLookup, options: AutorouteOptions
+) -> _Attempt:
+    """Every wire laid along the grid laid again, in plan order, against the finished plan.
+
+    A wire is routed against the board as it was when its turn came. The wires laid after
+    it were not there: the holes they lie across and along, and the loops their paths would
+    close, were priced on THEM, from the far side, with this wire already in the way. Laid
+    again with the whole plan on the board, the first wire gets the same say. A wire moves
+    only when the same search finds it a strictly cheaper path against all the others
+    (``router.relay_grid_wire``), and nothing else in the plan changes: the same wires
+    between the same holes, of the same kinds and in the same order, so the ids the bus will
+    assign are the ones the preview holds. A link that moved carries its new price -- on the
+    finished board, which counts what the first price could not see -- and its new
+    explanation.
+    """
+    if options.router.wire_path != "grid" or not attempt.conductors:
+        return attempt
+    base = len(doc.conductors)
+    preview = attempt.document
+    if len(preview.conductors) != base + len(attempt.conductors):
+        return attempt
+    specs = list(attempt.conductors)
+    relaid: dict[int, RouteCandidate] = {}
+    for _sweep in range(RELAY_SWEEPS):
+        moved = False
+        for index, spec in enumerate(specs):
+            if not isinstance(spec, NewWireConductor) or spec.kind == "top-jumper":
+                continue
+            if spec.side != "bottom":
+                continue
+            at = base + index
+            without = dataclasses.replace(
+                preview, conductors=preview.conductors[:at] + preview.conductors[at + 1 :]
+            )
+            candidate = relay_grid_wire(
+                without,
+                lookup,
+                RouteRequest(from_=spec.path[0], to=spec.path[-1], net_id=spec.net_id),
+                spec.kind,
+                spec.path,
+                options.router,
+            )
+            if candidate is None:
+                continue
+            path = candidate.conductors[0].path
+            specs[index] = dataclasses.replace(spec, path=path)
+            placed = preview.conductors[at]
+            preview = dataclasses.replace(
+                preview,
+                conductors=(
+                    *preview.conductors[:at],
+                    dataclasses.replace(placed, path=path),
+                    *preview.conductors[at + 1 :],
+                ),
+            )
+            relaid[index] = candidate
+            moved = True
+        if not moved:
+            break
+    if not relaid:
+        return attempt
+    where = {id(spec): index for index, spec in enumerate(attempt.conductors)}
+
+    def again(routed: RoutedLink) -> RoutedLink:
+        if len(routed.conductors) != 1:
+            return routed
+        index = where.get(id(routed.conductors[0]))
+        if index is None or index not in relaid:
+            return routed
+        candidate = relaid[index]
+        return dataclasses.replace(
+            routed,
+            cost=candidate.cost,
+            explanation=candidate.explanation,
+            conductors=(specs[index],),
+        )
+
+    outcomes = tuple(
+        dataclasses.replace(outcome, routed=tuple(again(routed) for routed in outcome.routed))
+        for outcome in attempt.outcomes
+    )
+    return dataclasses.replace(
+        attempt, document=preview, conductors=tuple(specs), outcomes=outcomes
+    )
 
 
 # ---------------------------------------------------------------------------

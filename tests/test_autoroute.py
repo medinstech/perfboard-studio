@@ -56,6 +56,7 @@ from perfboard_studio.commands import create_document_id_generator, create_stand
 from perfboard_studio.connectivity import FootprintLookup, PhysicalPinRef, are_pins_connected
 from perfboard_studio.drc import run_drc
 from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import path_length_mm
 from perfboard_studio.lvs import run_lvs, stale_conductor_ids
 from perfboard_studio.model import (
     Board,
@@ -78,10 +79,12 @@ from perfboard_studio.router import (
     DEFAULT_ROUTER_COSTS,
     DEFAULT_ROUTER_OPTIONS,
     RouterCosts,
+    RouteRequest,
     RouterOptions,
     RoutingStyle,
     WirePath,
     options_for_style,
+    relay_grid_wire,
 )
 
 # ---------------------------------------------------------------------------
@@ -533,6 +536,52 @@ def test_committing_the_plan_reproduces_the_preview_document() -> None:
     committed = commit(doc, plan.payload())
 
     assert committed.conductors == plan.document.conductors
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_laying_the_wires_again_leaves_no_wire_a_cheaper_path(
+    seed: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``_relay_wires`` lays every grid wire again against the finished plan, until none of
+    them has a cheaper path against all the others. It moves nothing but a wire's path, and
+    committing the plan still reproduces the preview -- ids, paths and all. A link it moved
+    says its new length and bends, not the old ones."""
+    doc = _random_board_and_netlist(seed)
+    if not doc.nets:
+        pytest.skip("degenerate generated case: no nets")
+    options = dataclasses.replace(
+        DEFAULT_AUTOROUTE_OPTIONS, router=RouterOptions(wire_path="grid")
+    )
+
+    relaid = plan_autoroute(doc, LOOKUP, options)
+    monkeypatch.setattr(autoroute, "RELAY_SWEEPS", 0)
+    first = plan_autoroute(doc, LOOKUP, options)
+
+    base = len(doc.conductors)
+    for index, conductor in enumerate(relaid.conductors):
+        if conductor.kind not in ("bare-wire", "insulated-wire") or conductor.side != "bottom":
+            continue
+        at = base + index
+        others = relaid.document.conductors[:at] + relaid.document.conductors[at + 1 :]
+        again = relay_grid_wire(
+            dataclasses.replace(relaid.document, conductors=others),
+            LOOKUP,
+            RouteRequest(from_=conductor.path[0], to=conductor.path[-1], net_id=conductor.net_id),
+            conductor.kind,
+            conductor.path,
+            options.router,
+        )
+        assert again is None, (seed, index, conductor.path, again.conductors[0].path)
+    assert [(c.kind, c.path[0], c.path[-1]) for c in relaid.conductors] == [
+        (c.kind, c.path[0], c.path[-1]) for c in first.conductors
+    ]
+    assert commit(doc, relaid.payload()).conductors == relaid.document.conductors
+    for outcome in relaid.nets:
+        for routed in outcome.routed:
+            if routed.strategy in ("bare-wire", "insulated-wire") and len(routed.conductors) == 1:
+                path = routed.conductors[0].path
+                assert f"{path_length_mm(path, doc.board):.1f} mm" in routed.explanation
+                assert f"with {len(path) - 2} bend(s)" in routed.explanation
 
 
 def test_planning_a_net_that_is_not_in_the_document_is_an_empty_plan() -> None:

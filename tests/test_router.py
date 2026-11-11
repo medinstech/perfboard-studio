@@ -28,6 +28,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -66,7 +67,11 @@ from perfboard_studio.router import (
     DEFAULT_ROUTER_COSTS,
     RouteRequest,
     RouterOptions,
+    _dead_hole_keys,
+    _grid_path_cost,
     _loop_holes,
+    _route_context,
+    relay_grid_wire,
     route_connection,
 )
 
@@ -899,6 +904,82 @@ def test_the_wires_that_must_lie_above_a_new_one_are_followed_through() -> None:
     holes = _loop_holes(board, h(3, 4), h(9, 4))
 
     assert holes == frozenset({(3, 2), (3, 6), (1, 6), (5, 6)})
+
+
+def _busy_grid_boards() -> list[tuple[PerfDocument, HoleCoord, HoleCoord]]:
+    """Boards where every term of a grid wire's price is in play: pins on the way, a wire
+    already lying across it and along it, a wire's end, a loop to keep out of."""
+    joints = doc(
+        (
+            comp("a", "A", h(2, 4)),
+            comp("b", "B", h(8, 4)),
+            *(comp(f"x{col}", f"X{col}", h(col, 4)) for col in (4, 5, 6)),
+        )
+    )
+    lying = WireConductor(
+        id="w-lying", path=(h(3, 4), h(7, 4), h(7, 7), h(5, 7)), kind="insulated-wire", side="bottom"
+    )
+    loop = doc((comp("a", "A", h(5, 4)), comp("b", "B", h(5, 9))), (lying,))
+    along = WireConductor(id="w-along", path=(h(1, 4), h(9, 4)), kind="insulated-wire", side="bottom")
+    crossing = WireConductor(id="w-cross", path=(h(5, 1), h(5, 9)), kind="bare-wire", side="bottom")
+    covered = doc((comp("a", "A", h(2, 5)), comp("b", "B", h(8, 3))), (along, crossing))
+    return [
+        (joints, h(2, 4), h(8, 4)),
+        (loop, h(5, 4), h(5, 9)),
+        (covered, h(2, 5), h(8, 3)),
+        (_board_with_a_wire_joint_on_the_direct_row(), h(2, 4), h(6, 4)),
+    ]
+
+
+def test_a_grid_paths_price_is_what_the_search_paid_for_it() -> None:
+    """``_grid_path_cost`` prices a path the way ``_find_grid_wire_path`` does, term for term:
+    re-laying a wire compares the two, and a price that disagreed with the search would move
+    wires for nothing, or keep the worse one."""
+    for board, a, b in _busy_grid_boards():
+        request = RouteRequest(from_=a, to=b)
+        result = route_connection(board, _lookup, request, GRID)
+        ctx = _route_context(board, _lookup, request, GRID, _dead_hole_keys(board))
+        for kind, fixed, per_mm in (
+            ("bare-wire", DEFAULT_ROUTER_COSTS.bare_wire_fixed, DEFAULT_ROUTER_COSTS.bare_wire_per_mm),
+            (
+                "insulated-wire",
+                DEFAULT_ROUTER_COSTS.insulated_wire_fixed,
+                DEFAULT_ROUTER_COSTS.insulated_wire_per_mm,
+            ),
+        ):
+            candidate = next((c for c in result.alternatives if c.strategy == kind), None)
+            if candidate is None:
+                continue
+            (conductor,) = candidate.conductors
+            priced = _grid_path_cost(
+                ctx, conductor.path, bare=kind == "bare-wire", per_mm=per_mm
+            )
+            assert fixed + priced == pytest.approx(candidate.cost), (kind, conductor.path)
+
+
+def test_a_path_the_search_could_not_lay_is_priced_as_impossible() -> None:
+    """A bare wire across a foreign pin, and a path that is not square to the grid."""
+    board = doc((comp("a", "A", h(2, 4)), comp("b", "B", h(8, 4)), comp("x", "X", h(5, 4))))
+    request = RouteRequest(from_=h(2, 4), to=h(8, 4))
+    ctx = _route_context(board, _lookup, request, GRID, _dead_hole_keys(board))
+    per_mm = DEFAULT_ROUTER_COSTS.bare_wire_per_mm
+
+    assert _grid_path_cost(ctx, (h(2, 4), h(8, 4)), bare=True, per_mm=per_mm) == math.inf
+    assert _grid_path_cost(ctx, (h(2, 4), h(8, 6)), bare=False, per_mm=per_mm) == math.inf
+
+
+def test_a_wire_is_laid_again_only_where_that_is_cheaper() -> None:
+    """The path the search would lay itself is left where it is -- a tie never moves a wire
+    -- and a dog-leg the direct row beats is laid again straight."""
+    board = doc((comp("a", "A", h(2, 4)), comp("b", "B", h(8, 4))))
+    request = RouteRequest(from_=h(2, 4), to=h(8, 4))
+    straight = (h(2, 4), h(8, 4))
+    dog_leg = (h(2, 4), h(2, 6), h(8, 6), h(8, 4))
+
+    assert relay_grid_wire(board, _lookup, request, "insulated-wire", straight, GRID) is None
+    relaid = relay_grid_wire(board, _lookup, request, "insulated-wire", dog_leg, GRID)
+    assert relaid is not None
+    assert relaid.conductors[0].path == straight
 
 
 def test_a_bend_is_priced() -> None:

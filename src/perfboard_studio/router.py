@@ -68,6 +68,7 @@ of route quality, and a caller who needs the shorter route can already pick it o
 from __future__ import annotations
 
 import dataclasses
+import functools
 import heapq
 import itertools
 import math
@@ -559,35 +560,7 @@ def route_connection(
     if same_hole(from_, to):
         return RouteResult(ok=False, alternatives=(), reason="Start and end are the same hole.")
 
-    occupancy = build_occupancy(doc, lookup)
-    net_at = _build_net_index(doc, lookup)
-    blocked_segments = _blocked_segments(doc)
-    ctx = _RouteContext(
-        doc=doc,
-        occupancy=occupancy,
-        net_at=net_at,
-        opts=options,
-        own_net_id=request.net_id,
-        net_holes=frozenset(_key(hole) for hole in request.net_holes),
-        declared_own_nets=frozenset(
-            net_id for net_id in (net_at(hole) for hole in request.net_holes) if net_id is not None
-        ),
-        blocked_segments=blocked_segments,
-        swept_blocked_holes=_trace_blocked_holes(doc),
-        wire_joint_holes=_wire_joint_holes(doc),
-        unusable_holes=dead,
-        opts_from_pin=request.from_pin,
-        wire_gauge_awg=_declared_wire_gauge(doc, request.net_id),
-        segment_cells=(
-            _segment_cells(blocked_segments) if options.wire_path == "grid" else {}
-        ),
-        covered_holes=_covered_holes(doc) if options.wire_path == "grid" else frozenset(),
-        covered_steps=_covered_steps(doc) if options.wire_path == "grid" else frozenset(),
-        joint_holes=(
-            _joint_holes(doc, occupancy) if options.wire_path == "grid" else frozenset()
-        ),
-        loop_holes=_loop_holes(doc, from_, to) if options.wire_path == "grid" else frozenset(),
-    )
+    ctx = _route_context(doc, lookup, request, options, dead)
 
     candidates: list[RouteCandidate] = []
     buildup: SolderBuildup = request.buildup if request.buildup is not None else "normal"
@@ -638,6 +611,74 @@ def route_connection(
         )
     best = candidates[0]
     return RouteResult(ok=True, best=best, alternatives=tuple(candidates))
+
+def relay_grid_wire(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    request: RouteRequest,
+    kind: Literal["bare-wire", "insulated-wire"],
+    path: tuple[HoleCoord, ...],
+    options: RouterOptions,
+) -> RouteCandidate | None:
+    """The same wire laid again on ``doc``, when that is cheaper than ``path`` is there.
+
+    ``doc`` is the board WITHOUT the wire, holding everything laid after it. A wire laid
+    early in a plan was priced against the board as it was then, and the ends of the wires
+    laid after it -- the joints it should have kept clear of, the loops lying across them
+    would close -- did not exist yet; laid again against the finished plan it is priced on
+    what is really there (``autoroute._relay_wires``). The same search and the same prices
+    as ``route_connection``. None unless the new path is strictly cheaper than ``path``
+    priced on the same board, so a tie never moves a wire and a pass always ends.
+    """
+    ctx = _route_context(doc, lookup, request, options, _dead_hole_keys(doc))
+    bare = kind == "bare-wire"
+    per_mm = ctx.opts.costs.bare_wire_per_mm if bare else ctx.opts.costs.insulated_wire_per_mm
+    found = _find_grid_wire_path(ctx, request.from_, request.to, bare=bare, per_mm=per_mm)
+    if found is None or found[1] >= _grid_path_cost(ctx, path, bare=bare, per_mm=per_mm):
+        return None
+    return _grid_wire_candidate(ctx, request.from_, request.to, kind)
+
+
+def _route_context(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    request: RouteRequest,
+    options: RouterOptions,
+    dead: frozenset[tuple[int, int]],
+) -> _RouteContext:
+    """Everything one connection's searches ask of the board, worked out once."""
+    from_ = request.from_
+    to = request.to
+    occupancy = build_occupancy(doc, lookup)
+    net_at = _build_net_index(doc, lookup)
+    blocked_segments = _blocked_segments(doc)
+    return _RouteContext(
+        doc=doc,
+        occupancy=occupancy,
+        net_at=net_at,
+        opts=options,
+        own_net_id=request.net_id,
+        net_holes=frozenset(_key(hole) for hole in request.net_holes),
+        declared_own_nets=frozenset(
+            net_id for net_id in (net_at(hole) for hole in request.net_holes) if net_id is not None
+        ),
+        blocked_segments=blocked_segments,
+        swept_blocked_holes=_trace_blocked_holes(doc),
+        wire_joint_holes=_wire_joint_holes(doc),
+        unusable_holes=dead,
+        opts_from_pin=request.from_pin,
+        wire_gauge_awg=_declared_wire_gauge(doc, request.net_id),
+        segment_cells=(
+            _segment_cells(blocked_segments) if options.wire_path == "grid" else {}
+        ),
+        covered_holes=_covered_holes(doc) if options.wire_path == "grid" else frozenset(),
+        covered_steps=_covered_steps(doc) if options.wire_path == "grid" else frozenset(),
+        joint_holes=(
+            _joint_holes(doc, occupancy) if options.wire_path == "grid" else frozenset()
+        ),
+        loop_holes=_loop_holes(doc, from_, to) if options.wire_path == "grid" else frozenset(),
+    )
+
 
 
 def _declared_wire_gauge(doc: PerfDocument, net_id: NetId | None) -> int | None:
@@ -755,6 +796,19 @@ def _dead_hole_keys(doc: PerfDocument) -> frozenset[tuple[int, int]]:
     )
 
 
+@functools.lru_cache(maxsize=1 << 16)
+def _keys_under_line(start: HoleCoord, stop: HoleCoord) -> tuple[tuple[int, int], ...]:
+    """``holes_under_line`` in this module's key, remembered.
+
+    MEASURED. Every route works out which holes the board's conductors already lie across
+    -- ``_trace_blocked_holes``, ``_covered_holes``, ``_loop_holes`` -- from the same few
+    hundred segments, and re-laying a plan's wires (``relay_grid_wire``) does it once per
+    wire: on atmega328-relay that was 40 000 calls and two thirds of the pass. A segment's
+    holes depend on its two ends alone, so they are asked once.
+    """
+    return tuple(_key(hole) for hole in holes_under_line(start, stop))
+
+
 def _key(hole: HoleCoord) -> tuple[int, int]:
     """This module's hole key, and deliberately NOT ``geometry.hole_key``.
 
@@ -796,9 +850,8 @@ def _trace_blocked_holes(doc: PerfDocument) -> frozenset[tuple[int, int]]:
     for conductor in doc.conductors:
         if conductor.side != "bottom" or not is_crossing_blocked(conductor):
             continue
-        for index in range(len(conductor.path) - 1):
-            for hole in holes_under_line(conductor.path[index], conductor.path[index + 1]):
-                keys.add(_key(hole))
+        for start, stop in itertools.pairwise(conductor.path):
+            keys.update(_keys_under_line(start, stop))
     return frozenset(keys)
 
 
@@ -1733,6 +1786,50 @@ def _find_grid_wire_path(
     return None
 
 
+def _grid_path_cost(
+    ctx: _RouteContext, path: tuple[HoleCoord, ...], *, bare: bool, per_mm: float
+) -> float:
+    """What ``_find_grid_wire_path`` would have paid for the wire along ``path``: the same
+    terms, step for step. Infinite where the search could not have laid it, so a path the
+    board has since closed is always worth laying again. ``path`` is a wire's corners, each
+    run square to the grid."""
+    costs = ctx.opts.costs
+    step = ctx.doc.board.pitch * per_mm
+    goal = _key(path[-1])
+    total = 0.0
+    heading = -1
+    here = _key(path[0])
+    for corner in path[1:]:
+        target = _key(corner)
+        d_col, d_row = target[0] - here[0], target[1] - here[1]
+        if (d_col and d_row) or not (d_col or d_row):
+            return math.inf
+        turn = _GRID_STEPS.index((_sign(d_col), _sign(d_row)))
+        while here != target:
+            nxt = (here[0] + _GRID_STEPS[turn][0], here[1] + _GRID_STEPS[turn][1])
+            if nxt != goal and not _wire_may_lie_over(ctx, nxt, bare=bare):
+                return math.inf
+            if bare and _step_crosses_copper(ctx, here, nxt):
+                return math.inf
+            total += step + (costs.wire_bend if heading not in (-1, turn) else 0.0)
+            if nxt != goal:
+                if nxt in ctx.covered_holes:
+                    total += costs.wire_over_copper
+                if nxt in ctx.joint_holes:
+                    total += costs.wire_over_joint
+                if nxt in ctx.loop_holes:
+                    total += costs.wire_into_loop
+            if (min(here, nxt), max(here, nxt)) in ctx.covered_steps:
+                total += costs.wire_along_copper
+            heading = turn
+            here = nxt
+    return total
+
+
+def _sign(value: int) -> int:
+    return (value > 0) - (value < 0)
+
+
 def _wire_may_lie_over(ctx: _RouteContext, key: tuple[int, int], *, bare: bool) -> bool:
     """Whether a wire may pass over this hole on its way somewhere else.
 
@@ -1783,9 +1880,8 @@ def _covered_holes(doc: PerfDocument) -> frozenset[tuple[int, int]]:
     for conductor in doc.conductors:
         if conductor.side != "bottom":
             continue
-        for index in range(len(conductor.path) - 1):
-            for hole in holes_under_line(conductor.path[index], conductor.path[index + 1]):
-                keys.add(_key(hole))
+        for start, stop in itertools.pairwise(conductor.path):
+            keys.update(_keys_under_line(start, stop))
     return frozenset(keys)
 
 
@@ -1823,9 +1919,7 @@ def _loop_holes(doc: PerfDocument, from_: HoleCoord, to: HoleCoord) -> frozenset
     for wire in wires:
         ends = {_key(wire.path[0]), _key(wire.path[-1])}
         under = {
-            _key(hole)
-            for start, stop in itertools.pairwise(wire.path)
-            for hole in holes_under_line(start, stop)
+            key for start, stop in itertools.pairwise(wire.path) for key in _keys_under_line(start, stop)
         }
         across.append(under - ends)
     below = {_key(from_), _key(to)}

@@ -130,6 +130,13 @@ closed without a bump.
   millimetre past its joint, and a bare wire or a jumper drawn across that hole lay flat
   through it in 3D and in the STEP model. It is now lifted one level clear, on the face the
   lead comes out of.
+- **Auto-wire looks at its wires again once they are all laid.** Each wire was routed
+  against the board as it stood when its turn came, before the wires after it existed; now
+  each is laid once more against all the others and moves where that is cheaper. On the
+  example boards, auto-wired the way the window does it, wires lying across a soldered
+  joint fell from 44 to 37 and across another wire's end from 29 to 20, and the 555 timer's
+  wires cross no joint at all. Auto-wire takes no longer: the router now remembers which
+  holes each run of copper lies over instead of working it out again for every wire.
 
 ## [0.24.0] - 2026-11-10
 
