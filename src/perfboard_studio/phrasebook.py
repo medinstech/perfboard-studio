@@ -292,7 +292,7 @@ TURKISH: dict[str, str] = {
     "If yours is, bridge the two halves of every rail with a short jumper before "
     "anything else.": (
         "Bazı kartlarda her ray ortada kesiktir — kırmızı ya da mavi çizgisinde bir boşluk "
-        "olur. Seninki öyleyse, her şeyden önce her rayın iki yarısını kısa bir jumper'la "
+        "olur. Sizinki öyleyse, her şeyden önce her rayın iki yarısını kısa bir jumper'la "
         "birleştirin."
     ),
     "A solderless breadboard, {points} points. Nothing on it is cut, drilled or soldered: "

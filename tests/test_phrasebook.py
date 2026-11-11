@@ -164,6 +164,18 @@ def test_no_template_carries_markup() -> None:
     assert offending == []
 
 
+#: The second person singular, as a word of its own: the pronoun in every case and its
+#: possessive. The guide speaks to the builder as "siz", so none of these belongs in it.
+#: An imperative cannot be caught this way -- a command's bare form is a heading's form
+#: too -- but a pronoun can, and "Seninki öyleyse" in the breadboard rail note was one.
+_SEN = re.compile(r"\b(sen|seni|sana|sende|senden|senin|seninki|seninle|senle)\b", re.IGNORECASE)
+
+
+def test_the_turkish_guide_says_siz_not_sen() -> None:
+    offending = [value for value in TURKISH.values() if _SEN.search(value)]
+    assert not offending, offending
+
+
 def test_the_progress_counter_is_safe_inside_a_script() -> None:
     """Its two words are spliced into the page's JavaScript as string literals."""
     for key in (" of ", " done"):
