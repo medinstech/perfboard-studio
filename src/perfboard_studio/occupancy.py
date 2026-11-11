@@ -225,7 +225,9 @@ def can_cross_copper(kind: ConductorKind) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def stacking_layers(doc: PerfDocument) -> dict[ConductorId, int]:
+def stacking_layers(
+    doc: PerfDocument, *, lookup: FootprintLookup | None
+) -> dict[ConductorId, int]:
     """How many steps clear of the board each conductor has to be drawn, per side.
 
     A wire that crosses another has to pass OVER it. They cannot occupy the same space,
@@ -266,6 +268,13 @@ def stacking_layers(doc: PerfDocument) -> dict[ConductorId, int]:
     * **Two wires sharing a stretch of one line touch**, even from a hole one of them ends
       in (``geometry.paths_overlap``): a shared endpoint is a junction only while the two
       then go their separate ways.
+    * **A wire lying across a pin's hole on the face its lead comes out of is at least
+      level 1.** A lead is trimmed about a millimetre past its joint, and a wire laid flat
+      across that hole is laid through the stub: seven of them on the golden fixtures, bare
+      wires and top jumpers on the solder side, every one at level 0. An insulated wire's
+      ``layer_z`` floor is already 1. ``lookup`` is REQUIRED, like ``format_hole``'s board,
+      so a caller that forgets it is a type error rather than a view quietly drawing wires
+      through leads; None says there are no parts to ask about.
 
     IN ID ORDER, NOT DOCUMENT ORDER, taking the lowest free level at or above the floor and
     above everything the conductor lies across the end of. ``persist`` writes conductors
@@ -278,18 +287,18 @@ def stacking_layers(doc: PerfDocument) -> dict[ConductorId, int]:
     Pure, so both renderers can read it and neither can drift: a wire drawn passing over
     another in 3D is the one drawn over it in 2D.
     """
-    return _stack(doc)[0]
+    return _stack(doc, lookup)[0]
 
 
 def stacking_loops(doc: PerfDocument) -> tuple[tuple[ConductorId, ...], ...]:
     """Wires no stacking can draw apart: each lies, directly or through the others, across
     the hole another of them ends in, so none of them can go in first. Each loop once, its
     members in id order."""
-    return _stack(doc)[1]
+    return _stack(doc, None)[1]
 
 
 def _stack(
-    doc: PerfDocument,
+    doc: PerfDocument, lookup: FootprintLookup | None
 ) -> tuple[dict[ConductorId, int], tuple[tuple[ConductorId, ...], ...]]:
     conductors = sorted(doc.conductors, key=lambda c: c.id)
     layers: dict[ConductorId, int] = {}
@@ -310,7 +319,17 @@ def _stack(
     for index, wire in enumerate(wires):
         for end in {hole_key(wire.path[0]), hole_key(wire.path[-1])}:
             ending.setdefault((end, wire.side), []).append(index)
+    # Where a lead comes out, per face: the face opposite the part it belongs to.
+    stubs: set[tuple[str, BoardSide]] = set()
+    for component in doc.components if lookup is not None else ():
+        footprint = lookup(component.footprint_id) if lookup is not None else None
+        if footprint is None:
+            continue
+        face: BoardSide = "bottom" if component.side == "top" else "top"
+        for _pin, hole in all_pin_holes(component, footprint):
+            stubs.add((hole_key(hole), face))
     above: list[set[int]] = [set() for _ in wires]
+    over_stub = [False] * len(wires)
     for index, wire in enumerate(wires):
         ends = {hole_key(wire.path[0]), hole_key(wire.path[-1])}
         for start, stop in zip(wire.path, wire.path[1:], strict=False):
@@ -318,6 +337,8 @@ def _stack(
                 key = hole_key(hole)
                 if key in ends:
                     continue
+                if (key, wire.side) in stubs:
+                    over_stub[index] = True
                 for other in ending.get((key, wire.side), ()):
                     if other != index:
                         above[index].add(other)
@@ -365,7 +386,7 @@ def _stack(
         # Above every wire whose end it lies across that is already placed -- all of them,
         # unless the two are a loop.
         floor = max(
-            [conductor.layer_z]
+            [conductor.layer_z, 1 if over_stub[index] else 0]
             + [layers[wires[o].id] + 1 for o in above[index] if wires[o].id in layers]
         )
         taken = {

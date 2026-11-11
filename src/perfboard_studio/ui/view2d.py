@@ -5353,7 +5353,7 @@ class BoardScene(QGraphicsScene):
         signal_index = signal_colour_index(self.document)
         # From the engine, so the wire drawn passing over another here is the one drawn
         # passing over it in 3D. See occupancy.stacking_layers.
-        conductor_layers = stacking_layers(self.document)
+        conductor_layers = stacking_layers(self.document, lookup=self.lookup)
         for conductor in self.document.conductors:
             conductor_item = ConductorItem(
                 conductor,

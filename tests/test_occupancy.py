@@ -14,6 +14,8 @@ to know those holes are physically full.
 
 from __future__ import annotations
 
+import dataclasses
+
 from perfboard_studio.model import (
     Board,
     BoardSide,
@@ -372,7 +374,7 @@ def test_a_board_where_nothing_crosses_lies_completely_flat() -> None:
         )
     )
 
-    assert set(stacking_layers(doc).values()) == {0}
+    assert set(stacking_layers(doc, lookup=None).values()) == {0}
 
 
 def test_two_wires_crossing_are_not_left_in_the_same_space() -> None:
@@ -380,7 +382,7 @@ def test_two_wires_crossing_are_not_left_in_the_same_space() -> None:
         conductors=(wire("w1", (hole(1, 1), hole(8, 8))), wire("w2", (hole(8, 1), hole(1, 8)))),
     )
 
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=None)
 
     assert layers["w1"] != layers["w2"]
 
@@ -394,7 +396,7 @@ def test_two_wires_meeting_at_a_pad_stay_level_with_each_other() -> None:
         conductors=(wire("w1", (hole(1, 1), hole(5, 5))), wire("w2", (hole(5, 5), hole(9, 1)))),
     )
 
-    assert set(stacking_layers(doc).values()) == {0}
+    assert set(stacking_layers(doc, lookup=None).values()) == {0}
 
 
 def test_a_solder_trace_never_leaves_the_pads_and_the_wire_goes_over_it() -> None:
@@ -409,7 +411,7 @@ def test_a_solder_trace_never_leaves_the_pads_and_the_wire_goes_over_it() -> Non
         )
     )
 
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=None)
 
     assert layers["t1"] == 0 and layers["t2"] == 0
     assert layers["w1"] > 0, "the wire crosses both runs, so it has to clear them"
@@ -425,7 +427,7 @@ def test_the_two_faces_are_stacked_independently() -> None:
         )
     )
 
-    assert set(stacking_layers(doc).values()) == {0}
+    assert set(stacking_layers(doc, lookup=None).values()) == {0}
 
 
 def test_only_what_crosses_is_lifted_and_only_past_what_it_crosses() -> None:
@@ -440,7 +442,7 @@ def test_only_what_crosses_is_lifted_and_only_past_what_it_crosses() -> None:
         )
     )
 
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=None)
 
     assert layers["a"] == layers["b"], "each clears the base, not each other"
     assert layers["base"] != layers["a"]
@@ -459,7 +461,7 @@ def test_the_same_board_stacks_the_same_way_twice() -> None:
         )
     )
 
-    assert stacking_layers(doc) == stacking_layers(doc)
+    assert stacking_layers(doc, lookup=None) == stacking_layers(doc, lookup=None)
 
 
 def test_a_wire_lying_across_the_hole_another_ends_in_is_above_it() -> None:
@@ -473,7 +475,7 @@ def test_a_wire_lying_across_the_hole_another_ends_in_is_above_it() -> None:
                 wire(ending, (hole(5, 4), hole(5, 9))),
             )
         )
-        layers = stacking_layers(doc)
+        layers = stacking_layers(doc, lookup=None)
         assert layers[lying] > layers[ending], (lying, ending)
 
 
@@ -488,7 +490,7 @@ def test_two_wires_along_one_line_from_a_shared_hole_are_not_at_one_level() -> N
         )
     )
 
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=None)
 
     assert layers["w1"] != layers["w2"]
 
@@ -498,7 +500,7 @@ def test_two_wires_meeting_end_to_end_and_carrying_on_stay_level() -> None:
         conductors=(wire("w1", (hole(1, 5), hole(5, 5))), wire("w2", (hole(5, 5), hole(9, 5)))),
     )
 
-    assert set(stacking_layers(doc).values()) == {0}
+    assert set(stacking_layers(doc, lookup=None).values()) == {0}
 
 
 def test_wires_that_each_lie_across_the_others_end_are_named_as_a_loop() -> None:
@@ -529,7 +531,7 @@ def test_a_loop_does_not_break_the_constraints_around_it() -> None:
         )
     )
 
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=None)
 
     assert layers["a1"] > layers["z"]
 
@@ -545,7 +547,44 @@ def test_the_order_of_the_document_does_not_change_the_stack() -> None:
         wire("cond-11", (hole(1, 6), hole(9, 6))),
     )
 
-    first = stacking_layers(make_doc(conductors=conductors))
+    first = stacking_layers(make_doc(conductors=conductors), lookup=None)
 
-    assert stacking_layers(make_doc(conductors=tuple(reversed(conductors)))) == first
-    assert stacking_layers(make_doc(conductors=conductors[1:] + conductors[:1])) == first
+    assert stacking_layers(make_doc(conductors=tuple(reversed(conductors))), lookup=None) == first
+    assert stacking_layers(make_doc(conductors=conductors[1:] + conductors[:1]), lookup=None) == first
+
+
+def test_a_wire_lying_across_a_leads_stub_is_lifted_off_it() -> None:
+    """A lead is trimmed about a millimetre past its joint on the solder side, so a bare wire
+    laid flat across that hole goes through the stub: it is lifted one level. Ending in the
+    hole is being soldered to it, not lying across it, and stays flat."""
+    fp = one_pin_footprint("fp1")
+    doc = make_doc(
+        components=(make_component("c1", "U1", "fp1", hole(5, 4)),),
+        conductors=(
+            bare_wire("across", (hole(1, 4), hole(9, 4))),
+            bare_wire("into", (hole(5, 4), hole(5, 9))),
+        ),
+    )
+
+    layers = stacking_layers(doc, lookup=make_lookup((fp,)))
+
+    assert layers == {"across": 1, "into": 0}
+    alone = dataclasses.replace(doc, conductors=doc.conductors[:1])
+    assert stacking_layers(alone, lookup=make_lookup((fp,))) == {"across": 1}
+    assert stacking_layers(alone, lookup=None) == {"across": 0}
+
+
+def test_a_stub_is_on_the_face_opposite_its_part() -> None:
+    """A part turned over onto the solder side puts its leads out through the component
+    side, so the solder-side wire under it has nothing to clear and the top jumper does."""
+    fp = one_pin_footprint("fp1")
+    turned = dataclasses.replace(make_component("c1", "U1", "fp1", hole(5, 4)), side="bottom")
+    doc = make_doc(
+        components=(turned,),
+        conductors=(
+            bare_wire("under", (hole(1, 4), hole(9, 4))),
+            top_jumper("over", (hole(5, 1), hole(5, 7))),
+        ),
+    )
+
+    assert stacking_layers(doc, lookup=make_lookup((fp,))) == {"under": 0, "over": 1}

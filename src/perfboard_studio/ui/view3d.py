@@ -7572,7 +7572,7 @@ def populate_renderer(
     # How high each conductor has to sit to clear what it crosses -- from the engine, so
     # 2D and 3D cannot disagree about which wire passes over which. Not a running index:
     # see occupancy.stacking_layers.
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=lookup)
     for cond in doc.conductors:
         subject = highlight is not None and cond.id == highlight
         for actor in build_conductor(

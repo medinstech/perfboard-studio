@@ -4059,7 +4059,7 @@ def test_no_two_conductors_are_drawn_in_the_same_place(case: str) -> None:
     doc = _golden_document(case)
     if len(doc.conductors) < 2:
         pytest.skip(f"{case} has nothing to collide")
-    levels = stacking_layers(doc)
+    levels = stacking_layers(doc, lookup=footprint_lookup())
     drawn = {c.id: _as_drawn(c, doc.board, levels[c.id]) for c in doc.conductors}
 
     for first, second in itertools.combinations(doc.conductors, 2):
@@ -4149,7 +4149,7 @@ def test_the_two_views_agree_about_which_wire_passes_over_which() -> None:
     from perfboard_studio.ui.view2d import BoardScene, ConductorItem
 
     doc = _load_dense()
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=footprint_lookup())
     scene = BoardScene(doc, footprint_lookup())
 
     drawn = {

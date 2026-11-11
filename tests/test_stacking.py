@@ -8,7 +8,9 @@ and golden board as it is shipped and as auto-wire lays it again:
 * two conductors on one face that touch -- cross, or share a stretch of one line -- are not
   at one level;
 * a wire lying across the hole another conductor ends in is above it, because that one
-  comes down to its pad there. A loop (``stacking_loops``) is exempt: no order satisfies it.
+  comes down to its pad there. A loop (``stacking_loops``) is exempt: no order satisfies it;
+* a wire lying across a pin's hole on the face its lead comes out of is off level 0, clear
+  of the trimmed stub.
 
 They ask the engine rather than the drawn tubes, so they hold whatever the views do with
 the levels (``tests/test_ui.py::test_no_two_conductors_are_drawn_in_the_same_place``
@@ -26,7 +28,13 @@ import pytest
 from perfboard_studio import persist, system
 from perfboard_studio.autoroute import AutorouteOptions, plan_autoroute
 from perfboard_studio.footprints import footprint_lookup
-from perfboard_studio.geometry import hole_key, holes_under_line, paths_cross, paths_overlap
+from perfboard_studio.geometry import (
+    all_pin_holes,
+    hole_key,
+    holes_under_line,
+    paths_cross,
+    paths_overlap,
+)
 from perfboard_studio.model import Conductor, PerfDocument, contacts_every_path_hole
 from perfboard_studio.occupancy import stacking_layers, stacking_loops
 from perfboard_studio.router import RouterOptions
@@ -58,9 +66,20 @@ def _lies_across(conductor: Conductor) -> set[str]:
 
 
 def _faults(doc: PerfDocument) -> list[str]:
-    levels = stacking_layers(doc)
+    levels = stacking_layers(doc, lookup=LOOKUP)
     looped = {member: loop for loop in stacking_loops(doc) for member in loop}
     faults: list[str] = []
+    stubs = {
+        (hole_key(hole), "bottom" if component.side == "top" else "top")
+        for component in doc.components
+        if (footprint := LOOKUP(component.footprint_id)) is not None
+        for _pin, hole in all_pin_holes(component, footprint)
+    }
+    for conductor in doc.conductors:
+        if _is_wire(conductor) and levels[conductor.id] == 0:
+            over = sorted(k for k in _lies_across(conductor) if (k, conductor.side) in stubs)
+            if over:
+                faults.append(f"{conductor.id} lies at level 0 across the leads at {over}")
     drawn = [c for c in doc.conductors if len(c.path) >= 2]
     for a, b in itertools.combinations(drawn, 2):
         if a.side != b.side or not (_is_wire(a) or _is_wire(b)):
@@ -123,9 +142,9 @@ def test_a_board_stacks_the_same_before_save_and_after_open(path: Path, board_id
     plan = plan_autoroute(bare, LOOKUP, AutorouteOptions(router=RouterOptions(wire_path="grid")))
     reopened = persist.deserialize_document(persist.serialize_document(plan.document)).document
 
-    assert stacking_layers(reopened) == stacking_layers(plan.document)
-    assert stacking_layers(doc) == stacking_layers(
-        dataclasses.replace(doc, conductors=tuple(reversed(doc.conductors)))
+    assert stacking_layers(reopened, lookup=LOOKUP) == stacking_layers(plan.document, lookup=LOOKUP)
+    assert stacking_layers(doc, lookup=LOOKUP) == stacking_layers(
+        dataclasses.replace(doc, conductors=tuple(reversed(doc.conductors))), lookup=LOOKUP
     )
 
 

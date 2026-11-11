@@ -111,7 +111,7 @@ def measure(
     doc: PerfDocument, lookup: FootprintLookup, *, drawn: bool = True
 ) -> dict[str, Any]:
     """Every column but ``unr`` and ``s``, on a wired board."""
-    levels = stacking_layers(doc)
+    levels = stacking_layers(doc, lookup=lookup)
     occupancy = build_occupancy(doc, lookup)
     ends: dict[tuple[str, str], int] = {}
     for conductor in doc.conductors:
@@ -157,7 +157,7 @@ def measure(
 
 
 def drawn_collisions(
-    doc: PerfDocument, levels: dict[str, int] | None = None
+    doc: PerfDocument, levels: dict[str, int]
 ) -> list[tuple[str, str]]:
     """Pairs of conductors on one face whose tubes, as ``ui/view3d`` builds them, are closer
     than their two radii away from any hole both are soldered into -- the measurement of
@@ -171,8 +171,6 @@ def drawn_collisions(
         conductor_z,
         pad_z,
     )
-
-    levels = stacking_layers(doc) if levels is None else levels
 
     def as_drawn(conductor: Conductor) -> tuple[list[Any], list[float]]:
         is_trace = contacts_every_path_hole(conductor)

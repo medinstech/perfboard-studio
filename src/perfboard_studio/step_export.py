@@ -265,7 +265,7 @@ def board_model(
             comp, footprint, doc, place, top, drilled, lead_radius, palette
         )
         parts.append(ModelPart(comp.ref or comp.id, solids))
-    wires = _wire_solids(doc, place, top, palette)
+    wires = _wire_solids(doc, lookup, place, top, palette)
     if wires:
         parts.append(ModelPart(WIRES_NAME, wires))
     return tuple(parts)
@@ -285,6 +285,7 @@ def wire_radius_mm(doc: PerfDocument, conductor: Conductor) -> float:
 
 def _wire_solids(
     doc: PerfDocument,
+    lookup: FootprintLookup,
     place: Callable[[float, float], tuple[float, float]],
     top: float,
     palette: Palette,
@@ -302,7 +303,7 @@ def _wire_solids(
         return ()
     radii = {c.id: wire_radius_mm(doc, c) for c in wires}
     step = 2 * max(radii.values()) + WIRE_STACK_GAP_MM
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=lookup)
     solids: list[Solid] = []
     for cond in wires:
         radius = radii[cond.id]

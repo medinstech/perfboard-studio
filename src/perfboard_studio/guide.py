@@ -761,7 +761,7 @@ def build_guide(
 
     part_steps = _part_steps(doc, lookup, violations, options, say)
     conductor_steps, cut_list, spine_list = _conductor_steps(
-        doc, nets_by_id, color_by_net, violations, options, say
+        doc, lookup, nets_by_id, color_by_net, violations, options, say
     )
     lead_list = _lead_cuts(doc, lookup, color_by_net, options, say)
     # A part off the board is wired after the copper, so a net reaching it is not finished
@@ -1873,6 +1873,7 @@ def _polarity_note(
 
 def _conductor_steps(
     doc: PerfDocument,
+    lookup: FootprintLookup,
     nets_by_id: dict[str, Net],
     color_by_net: dict[str, str],
     violations: list[DrcViolation],
@@ -1895,7 +1896,7 @@ def _conductor_steps(
     trapped = trapped_jumper_ids(violations)
     class_order: dict[NetClass, int] = {"ground": 0, "power": 1, "signal": 2}
 
-    levels = stacking_layers(doc)
+    levels = stacking_layers(doc, lookup=lookup)
     entries: list[tuple[PhaseNumber, int, int, str, str, ConductorStep]] = []
     cut_list: list[WireCut] = []
     spine_list: list[SpineCut] = []

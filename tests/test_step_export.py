@@ -396,7 +396,7 @@ def test_every_wire_lies_along_its_path_on_its_own_face_and_no_trace_is_drawn() 
     doc = _example("nano-relay")
     board = doc.board
     outline = board_outline_mm(board)
-    layers = stacking_layers(doc)
+    layers = stacking_layers(doc, lookup=footprint_lookup())
     wires = [c for c in doc.conductors if not contacts_every_path_hole(c)]
     assert wires and len(wires) < len(doc.conductors), "the fixture should have both"
     runs = _wire_runs(doc)

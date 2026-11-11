@@ -126,6 +126,10 @@ closed without a bump.
   soldered in neither order, and on atmega328-relay and arduino-io-shield they were drawn
   through each other. On every example board, auto-wired, the wires lying across a pin
   fell from 110 to 44 and the tallest stack of wires from 8 to 6.
+- **A wire laid across a soldered lead is drawn over its stub.** A lead is trimmed about a
+  millimetre past its joint, and a bare wire or a jumper drawn across that hole lay flat
+  through it in 3D and in the STEP model. It is now lifted one level clear, on the face the
+  lead comes out of.
 
 ## [0.24.0] - 2026-11-10
 
