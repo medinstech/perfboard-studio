@@ -57,18 +57,10 @@ from perfboard_studio.autoroute import (  # noqa: E402
 from perfboard_studio.connectivity import FootprintLookup  # noqa: E402
 from perfboard_studio.drc import run_drc  # noqa: E402
 from perfboard_studio.footprints import footprint_lookup  # noqa: E402
-from perfboard_studio.geometry import hole_key, holes_under_line, path_length_mm  # noqa: E402
-from perfboard_studio.model import (  # noqa: E402
-    Conductor,
-    PerfDocument,
-    contacts_every_path_hole,
-)
-from perfboard_studio.occupancy import (  # noqa: E402
-    build_occupancy,
-    stacking_layers,
-    stacking_loops,
-)
+from perfboard_studio.geometry import hole_key  # noqa: E402
+from perfboard_studio.model import Conductor, PerfDocument, contacts_every_path_hole  # noqa: E402
 from perfboard_studio.router import RouterOptions  # noqa: E402
+from perfboard_studio.wiringstats import wiring_stats  # noqa: E402
 
 COLUMNS = ("unr", "err", "warn", "wire", "bends", "trace", "level", "pin", "end", "loops", "drawn", "s")
 
@@ -103,56 +95,28 @@ def autowire(
     return plan.document, plan.summary.links_unrouted, style, time.perf_counter() - start
 
 
-def _is_wire(conductor: Conductor) -> bool:
-    return not contacts_every_path_hole(conductor) and len(conductor.path) >= 2
-
-
 def measure(
     doc: PerfDocument, lookup: FootprintLookup, *, drawn: bool = True
 ) -> dict[str, Any]:
-    """Every column but ``unr`` and ``s``, on a wired board."""
-    levels = stacking_layers(doc, lookup=lookup)
-    occupancy = build_occupancy(doc, lookup)
-    ends: dict[tuple[str, str], int] = {}
-    for conductor in doc.conductors:
-        if conductor.path:
-            for end in {hole_key(conductor.path[0]), hole_key(conductor.path[-1])}:
-                ends[(end, conductor.side)] = ends.get((end, conductor.side), 0) + 1
-    pin = end = 0
-    wire_mm = 0.0
-    bends = trace = 0
-    for conductor in doc.conductors:
-        if contacts_every_path_hole(conductor):
-            trace += len(conductor.path)
-            continue
-        if len(conductor.path) < 2:
-            continue
-        wire_mm += path_length_mm(conductor.path, doc.board)
-        bends += max(0, len(conductor.path) - 2)
-        own = {hole_key(conductor.path[0]), hole_key(conductor.path[-1])}
-        across = {
-            hole_key(hole): hole
-            for start, stop in itertools.pairwise(conductor.path)
-            for hole in holes_under_line(start, stop)
-        }
-        for key, hole in across.items():
-            if key in own:
-                continue
-            pin += occupancy.pin_at(hole) is not None
-            end += ends.get((key, conductor.side), 0) > 0
+    """Every column but ``unr`` and ``s``, on a wired board: ``wiringstats.wiring_stats``,
+    the numbers the window shows, and DRC."""
+    stats = wiring_stats(doc, lookup)
     findings = run_drc(doc, lookup)
-    wires = [c for c in doc.conductors if _is_wire(c)]
     return {
         "err": sum(1 for f in findings if f.severity == "error"),
         "warn": sum(1 for f in findings if f.severity == "warning"),
-        "wire": round(wire_mm, 1),
-        "bends": bends,
-        "trace": trace,
-        "level": max((levels[c.id] for c in wires), default=0),
-        "pin": pin,
-        "end": end,
-        "loops": len(stacking_loops(doc)),
-        "drawn": len(drawn_collisions(doc, levels)) if drawn else None,
+        "wire": round(stats.wire_mm, 1),
+        "bends": stats.bends,
+        "trace": stats.trace_pads,
+        "level": stats.max_level,
+        "pin": stats.over_pins,
+        "end": stats.over_ends,
+        "loops": len(stats.loops),
+        "drawn": (
+            len(drawn_collisions(doc, {c.conductor_id: c.level for c in stats.conductors}))
+            if drawn
+            else None
+        ),
     }
 
 

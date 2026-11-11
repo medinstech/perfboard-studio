@@ -2957,6 +2957,17 @@ found on a board that passed every test. Its columns are the ones that went wron
 A commit that changes the router quotes its before and after rows (`--json` one run,
 `--before` it on the next).
 
+**The columns are counted in the engine, per conductor** -- `wiringstats.wiring_stats(doc,
+lookup)`, a pure function over `occupancy` and `ratsnest`. The scoreboard reads it; so do
+the window's wiring summary and a selected wire's Properties, which name the holes and wires
+a count is made of. Each entry says what one conductor lies across (`over_pins`,
+`over_ends`), what it crosses on its face, its level, length and bends, and every total is
+the sum of the entries -- the stack, their maximum -- which `tests/test_wiringstats.py` checks
+on every board in the repository. Before it, the tool counted in a loop of its own and the
+window would have needed a third; a summary saying "44 places a wire lies over a pin" that
+selects 43 wires is worse than none. `err`, `warn` and `drawn` stay in the tool: DRC is its
+own answer, and `drawn` measures the 3D view's tubes.
+
 **A wire is laid against the plan, then against the finished plan.** Routing is in order,
 and a wire laid early never saw the wires after it; the later ones paid for every crossing
 from their side. `autoroute._relay_wires` lays each grid wire once more with all the others
