@@ -3087,17 +3087,20 @@ def _drawing_scene():
     return scene, bus
 
 
-def test_a_wire_is_two_clicks_and_commits_itself() -> None:
+def test_a_wire_finishes_on_enter_and_keeps_the_tool() -> None:
     scene, bus = _drawing_scene()
     scene.arm_drawing("insulated-wire")
 
     assert scene.draw_click(view2d.HoleCoord(2, 2)) is None  # First click starts it.
-    result = scene.draw_click(view2d.HoleCoord(9, 6))
+    assert scene.draw_click(view2d.HoleCoord(9, 6)) is None  # ...and it takes a corner.
+    result = scene.commit_drawing()
 
     assert result is not None and result.ok, result
     conductor = bus.document.conductors[0]
     assert conductor.kind == "insulated-wire"
-    assert conductor.path == (view2d.HoleCoord(2, 2), view2d.HoleCoord(9, 6))
+    assert conductor.path == (
+        view2d.HoleCoord(2, 2), view2d.HoleCoord(9, 2), view2d.HoleCoord(9, 6)
+    )
     assert conductor.side == "bottom"
     # Still armed for the next wire, with nothing drawn: copper is laid in a series.
     assert scene.armed_draw_kind == "insulated-wire"
@@ -3156,13 +3159,27 @@ def test_a_diagonal_click_is_a_run_round_the_corner_never_a_diagonal_step() -> N
     assert validate_orthogonal_chain(path).ok
 
 
-def test_a_wire_may_go_diagonally_because_a_wire_physically_can() -> None:
+def test_a_drawn_wire_turns_its_corner_the_other_way_on_slash() -> None:
+    """Off a row, a wire is an L along the grid -- row first, or column first after ``/``
+    -- because that is how a wire is laid on a board and how the router lays one."""
     scene, bus = _drawing_scene()
     scene.arm_drawing("bare-wire")
     scene.draw_click(view2d.HoleCoord(4, 4))
-    result = scene.draw_click(view2d.HoleCoord(7, 9))
+    scene.flip_draw_corner()
+    scene.draw_click(view2d.HoleCoord(7, 9))
+    result = scene.commit_drawing()
     assert result is not None and result.ok
-    assert bus.document.conductors[0].path[-1] == view2d.HoleCoord(7, 9)
+    assert bus.document.conductors[0].path == (
+        view2d.HoleCoord(4, 4), view2d.HoleCoord(4, 9), view2d.HoleCoord(7, 9)
+    )
+
+
+def test_a_wire_may_still_go_diagonally_where_its_corner_is_dragged() -> None:
+    """A wire physically can: a corner put down off the grid's lines stays there."""
+    path = (view2d.HoleCoord(4, 4), view2d.HoleCoord(7, 4), view2d.HoleCoord(7, 9))
+    assert view2d.reshaped_path("bare-wire", path, 1, view2d.HoleCoord(5, 6)) == (
+        view2d.HoleCoord(4, 4), view2d.HoleCoord(5, 6), view2d.HoleCoord(7, 9)
+    )
 
 
 def test_escape_abandons_a_half_drawn_trace() -> None:
@@ -3212,6 +3229,7 @@ def test_a_hand_drawn_conductor_takes_a_net_only_when_it_is_unambiguous() -> Non
     scene.arm_drawing("bare-wire")
     scene.draw_click(view2d.HoleCoord(2, 2))
     scene.draw_click(view2d.HoleCoord(9, 2))
+    scene.commit_drawing()
     assert bus.document.conductors[-1].net_id == "n1"
 
     # ...and an end on no pin at all leaves it unassigned rather than guessing.
@@ -3219,6 +3237,7 @@ def test_a_hand_drawn_conductor_takes_a_net_only_when_it_is_unambiguous() -> Non
     scene.arm_drawing("bare-wire")
     scene.draw_click(view2d.HoleCoord(4, 10))
     scene.draw_click(view2d.HoleCoord(8, 10))
+    scene.commit_drawing()
     assert bus.document.conductors[-1].net_id is None
 
 
@@ -3227,6 +3246,7 @@ def test_conductors_can_be_selected_and_deleted() -> None:
     scene.arm_drawing("bare-wire")
     scene.draw_click(view2d.HoleCoord(2, 2))
     scene.draw_click(view2d.HoleCoord(8, 2))
+    scene.commit_drawing()
     scene.set_document(bus.document)
 
     items = [i for i in scene.items() if isinstance(i, view2d.ConductorItem)]
@@ -3237,17 +3257,18 @@ def test_conductors_can_be_selected_and_deleted() -> None:
 
 
 def test_a_conductor_is_pickable_along_its_length_not_by_its_bounding_box() -> None:
-    """Two wires crossing at an angle share a bounding rect the size of the board between
-    them; picking by that rect would select whichever happened to be on top."""
+    """A wire with a corner has a bounding rect the size of the board between its ends;
+    picking by that rect would select whichever happened to be on top."""
     scene, bus = _drawing_scene()
     scene.arm_drawing("bare-wire")
     scene.draw_click(view2d.HoleCoord(2, 2))
     scene.draw_click(view2d.HoleCoord(20, 20))
+    scene.commit_drawing()
     scene.set_document(bus.document)
 
     item = next(i for i in scene.items() if isinstance(i, view2d.ConductorItem))
-    on_the_wire = view2d.hole_to_screen(view2d.HoleCoord(11, 11), bus.document.board, "top")
-    off_the_wire = view2d.hole_to_screen(view2d.HoleCoord(20, 2), bus.document.board, "top")
+    on_the_wire = view2d.hole_to_screen(view2d.HoleCoord(20, 11), bus.document.board, "top")
+    off_the_wire = view2d.hole_to_screen(view2d.HoleCoord(11, 11), bus.document.board, "top")
 
     assert item.shape().contains(item.mapFromScene(on_the_wire))
     assert not item.shape().contains(item.mapFromScene(off_the_wire))
@@ -18469,13 +18490,14 @@ def test_copper_drawn_on_from_a_wires_end_joins_that_wires_net_and_says_so() -> 
     try:
         window.on_draw_mode("bare-wire", True)
         window.scene.draw_click(_hole(window, "G6"))
-        result = window.scene.draw_click(_hole(window, "F2"))
+        window.scene.draw_click(_hole(window, "F2"))
+        result = window.scene.commit_drawing()
 
         assert result is not None and result.ok
         drawn = window.bus.document.conductors[-1]
         gnd = next(net.id for net in window.bus.document.nets if net.name == "GND")
         assert drawn.net_id == gnd
-        assert window.statusBar().currentMessage().endswith("G6 → F2 on GND")
+        assert window.statusBar().currentMessage().endswith("G6 → F2: on GND")
         assert window.scene.armed_draw_kind == "bare-wire"
     finally:
         _close(window)
@@ -18566,3 +18588,229 @@ def test_redo_wiring_of_the_selection_takes_a_selected_conductors_net() -> None:
         assert asked == [(thresh,)]
     finally:
         _close(window)
+
+
+# -- copper drawn by hand: corners, carrying a run on, handles, picking, progress ----------------
+
+
+def test_a_wires_path_keeps_only_the_corners_that_are_corners() -> None:
+    H = view2d.HoleCoord
+    assert view2d._straightened([H(2, 2), H(3, 2), H(3, 2), H(5, 2), H(5, 4)]) == (
+        H(2, 2), H(5, 2), H(5, 4)
+    )
+
+
+def test_a_dragged_end_reshapes_each_kind_by_its_own_rule() -> None:
+    """A run's end shortens to a pad it has or runs on along the grid, and its middle has
+    no handle; a wire's end lays its last leg again, and its corner goes where it is put."""
+    H = view2d.HoleCoord
+    run = (H(5, 0), H(6, 0), H(7, 0), H(8, 0))
+    assert view2d.reshaped_path("solder-trace", run, 3, H(6, 0)) == (H(5, 0), H(6, 0))
+    assert view2d.reshaped_path("solder-trace", run, 3, H(8, 2)) == (*run, H(8, 1), H(8, 2))
+    assert view2d.reshaped_path("solder-trace", run, 1, H(6, 3)) is None
+    assert view2d.reshaped_path("solder-trace", run, 0, H(8, 0)) is None, "a run ends on itself"
+
+    wire = (H(2, 2), H(6, 2), H(6, 5))
+    assert view2d.reshaped_path("bare-wire", wire, 2, H(9, 7)) == (H(2, 2), H(9, 2), H(9, 7))
+    assert view2d.reshaped_path("bare-wire", wire, 0, H(2, 4)) == (H(2, 4), H(2, 2), H(6, 2), H(6, 5))
+    assert view2d.reshaped_path("top-jumper", (H(2, 2), H(6, 2)), 1, H(7, 4)) == (H(2, 2), H(7, 4))
+
+
+def test_a_run_drawn_on_from_its_end_is_the_same_run_longer() -> None:
+    """THRESH's run ends at L6. Drawing on from there made a second, separate run on no
+    net; now it is the same run longer, in one setPath, one undo step."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        before = len(window.bus.document.conductors)
+        window.on_draw_mode("solder-trace", True)
+        window.scene.draw_click(_hole(window, "L6"))
+        assert window.scene.continuing == "cond-8"
+        window.scene.draw_click(_hole(window, "L5"))
+        result = window.scene.commit_drawing()
+
+        assert result is not None and result.ok, result
+        document = window.bus.document
+        assert len(document.conductors) == before
+        run = next(c for c in document.conductors if c.id == "cond-8")
+        assert [format_hole(h, document.board) for h in run.path] == ["I6", "J6", "K6", "L6", "L5"]
+        assert window.statusBar().currentMessage().startswith("Extended solder trace I6 → L5: on THRESH")
+
+        window.bus.undo()
+        run = next(c for c in window.bus.document.conductors if c.id == "cond-8")
+        assert [format_hole(h, document.board) for h in run.path] == ["I6", "J6", "K6", "L6"]
+    finally:
+        _close(window)
+
+
+def test_a_wire_is_never_carried_on_from_its_end() -> None:
+    """A wire touches only its ends: carried on, its old end would become a corner lying
+    over the hole, and whatever was soldered there would come off it."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        window.on_draw_mode("bare-wire", True)
+        window.scene.draw_click(_hole(window, "N4"))
+        assert window.scene.continuing is None
+        assert window.scene.drawn_path == (_hole(window, "N4"),)
+    finally:
+        _close(window)
+
+
+def test_a_selected_wire_has_a_handle_on_every_corner_and_a_run_on_its_ends() -> None:
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        _select_conductor(window, "cond-2")
+        assert [h.index for h in window.scene._handles] == [0, 1, 2]
+        window.scene.clearSelection()
+        _select_conductor(window, "cond-8")
+        assert [h.index for h in window.scene._handles] == [0, 3]
+        window.scene.clearSelection()
+        assert window.scene._handles == []
+    finally:
+        _close(window)
+
+
+def test_a_handle_dragged_is_one_setpath_checked_as_it_moves() -> None:
+    """Put down, a handle is one step Ctrl+Z takes back."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        _select_conductor(window, "cond-8")
+        steps = len(window.bus.history())
+        assert window.scene.begin_reshape(3)
+        window.scene.reshape_to(_hole(window, "L5"))
+        assert window.scene.reshaping
+
+        result = window.scene.finish_reshape()
+        assert result is not None and result.ok, result
+        assert not window.scene.reshaping
+        document = window.bus.document
+        run = next(c for c in document.conductors if c.id == "cond-8")
+        assert [format_hole(h, document.board) for h in run.path] == ["I6", "J6", "K6", "L6", "L5"]
+        assert len(window.bus.history()) == steps + 1
+        assert window.statusBar().currentMessage().startswith("Reshaped solder trace I6 → L5")
+    finally:
+        _close(window)
+
+
+def test_a_handle_over_a_short_says_so_in_the_drag_banner() -> None:
+    """LED_A's run, F1 → I1, dragged down from F1 through F2 -- GND's wire end -- says what
+    it would do where a part's drag says it, and Esc leaves the copper where it was."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        _select_conductor(window, "cond-13")
+        assert window.scene.begin_reshape(0)
+        window.scene.reshape_to(_hole(window, "F3"))
+        banner = window.view.drag_banner
+        assert banner.isVisibleTo(window.view) and "short" in banner.text(), banner.text()
+        # At F2, the pad the drag brought in -- not F1, the run's own end it was moved from.
+        assert banner.text().startswith("F2"), banner.text()
+        assert window.scene.cancel_reshape()
+        assert not banner.isVisibleTo(window.view)
+        run = next(c for c in window.bus.document.conductors if c.id == "cond-13")
+        assert len(run.path) == 4
+    finally:
+        _close(window)
+
+
+def test_a_click_where_copper_lies_on_copper_takes_the_next_one_each_time() -> None:
+    """A run and a wire along one row: the one on top was all a click could reach, and
+    Delete then took the wrong one."""
+    scene, bus = _drawing_scene()
+    for kind in ("solder-trace", "bare-wire"):
+        scene.arm_drawing(kind)
+        scene.draw_click(view2d.HoleCoord(2, 2))
+        scene.draw_click(view2d.HoleCoord(6, 2))
+        assert scene.commit_drawing() is not None
+    scene.arm_drawing(None)
+    scene.set_document(bus.document)
+    told: list[tuple[int, int]] = []
+    scene.pickCycled.connect(lambda which, count: told.append((which, count)))
+
+    at = view2d.hole_to_screen(view2d.HoleCoord(4, 2), bus.document.board, "top")
+    picks = []
+    for _ in range(3):
+        assert scene.cycle_pick(at)
+        picks.append(scene.selected_conductor_ids())
+    assert picks[0] != picks[1] and picks[2] == picks[0]
+    assert {p[0] for p in picks} == {c.id for c in bus.document.conductors}
+    assert told == [(1, 2), (2, 2), (1, 2)]
+
+    # Nothing, or one conductor, under the click is an ordinary click, left to Qt.
+    lone = view2d.hole_to_screen(view2d.HoleCoord(2, 8), bus.document.board, "top")
+    assert not scene.cycle_pick(lone)
+
+
+def test_the_banner_says_where_the_copper_has_got_to_and_how_to_finish() -> None:
+    import dataclasses
+
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
+
+    doc = create_empty_document(
+        DocumentMeta(name="t", created="2024-01-01T00:00:00.000Z", modified="2024-01-01T00:00:00.000Z")
+    )
+    doc = dataclasses.replace(doc, board=dataclasses.replace(doc.board, material="FR2"))
+    window = _window_on(doc)
+    try:
+        window.on_draw_mode("solder-trace", True)
+        window.scene.draw_click(view2d.HoleCoord(1, 1))
+        window.scene.hover_at(view2d.hole_to_screen(view2d.HoleCoord(4, 1), doc.board, "top"))
+        banner = window.view.mode_banner.text()
+        assert "B2 → E2" in banner and "4 pads" in banner and "Enter" in banner, banner
+        assert "Shift+T" not in banner
+
+        window.scene.hover_at(view2d.hole_to_screen(view2d.HoleCoord(9, 1), doc.board, "top"))
+        banner = window.view.mode_banner.text()
+        assert "9 pads" in banner and "Shift+T" in banner, banner
+
+        window.on_draw_mode("bare-wire", True)
+        window.scene.draw_click(view2d.HoleCoord(1, 4))
+        window.scene.hover_at(view2d.hole_to_screen(view2d.HoleCoord(5, 4), doc.board, "top"))
+        assert "mm" in window.view.mode_banner.text()
+    finally:
+        _close(window)
+
+
+def test_a_wire_finishes_on_a_second_click_on_its_last_hole() -> None:
+    scene, bus = _drawing_scene()
+    scene.arm_drawing("bare-wire")
+    scene.draw_click(view2d.HoleCoord(2, 2))
+    scene.draw_click(view2d.HoleCoord(6, 5))
+    result = scene.draw_click(view2d.HoleCoord(6, 5))
+    assert result is not None and result.ok
+    assert bus.document.conductors[0].path[-1] == view2d.HoleCoord(6, 5)
+
+
+def test_a_step_with_a_corner_is_drawn_as_a_line_not_filled() -> None:
+    """The dashed step to the pointer was drawn with the joints' brush still set, so a step
+    with a corner -- every wire off a row -- filled its triangle white."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QImage, QPainter
+
+    scene, bus = _drawing_scene()
+    board = bus.document.board
+    scene.arm_drawing("bare-wire")
+    scene.draw_click(view2d.HoleCoord(2, 8))
+    scene.hover_at(view2d.hole_to_screen(view2d.HoleCoord(8, 2), board, "top"))
+    preview = scene._draw_preview
+    assert preview is not None and preview.run == [view2d.HoleCoord(8, 8), view2d.HoleCoord(8, 2)]
+
+    area = QRectF(
+        view2d.hole_to_screen(view2d.HoleCoord(1, 1), board, "top"),
+        view2d.hole_to_screen(view2d.HoleCoord(9, 9), board, "top"),
+    )
+    image = QImage(400, 400, QImage.Format.Format_ARGB32)
+    image.fill(0)
+    painter = QPainter(image)
+    painter.scale(400 / area.width(), 400 / area.height())
+    painter.translate(-area.topLeft())
+    preview.paint(painter, None)
+    painter.end()
+
+    def at(col: int, row: int) -> int:
+        p = view2d.hole_to_screen(view2d.HoleCoord(col, row), board, "top") - area.topLeft()
+        return image.pixelColor(
+            int(p.x() * 400 / area.width()), int(p.y() * 400 / area.height())
+        ).alpha()
+
+    assert at(8, 5) > 0, "the leg is drawn"
+    assert at(6, 6) == 0, "inside the L is not"

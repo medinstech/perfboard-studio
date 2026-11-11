@@ -943,22 +943,31 @@ TURKISH: Mapping[str, str] = {
     "{hole}: this would cross {other}, and they would touch": "{hole}: bu, {other} ile kesişir ve birbirlerine değerler",
     "{hole}: this would lie on {joint}, another net's joint": "{hole}: bu, başka bir netin lehim noktası olan {joint} üzerine yatar",
     "{hole}: this runs along {other}": "{hole}: bu, {other} boyunca uzanır",
-    "Drew {what} on {net}": "{what} çizildi: {net} netinde",
-    "Drew {what}: not on any net yet": "{what} çizildi: henüz hiçbir nette değil",
-    "Drew {what}: it joins {a} to {b} at {hole}, a short. Ctrl+Z takes it back.": (
-        "{what} çizildi: {hole} deliğinde {a} ile {b} netlerini birleştiriyor, bu bir kısa "
-        "devre. Ctrl+Z ile geri alabilirsiniz."
+    "Drew {what}": "{what} çizildi",
+    "Extended {what}": "{what} uzatıldı",
+    "Reshaped {what}": "{what} yeniden biçimlendirildi",
+    "on {net}": "{net} netinde",
+    "not on any net yet": "henüz hiçbir nette değil",
+    "it joins {a} to {b} at {hole}, a short. Ctrl+Z takes it back.": (
+        "{hole} deliğinde {a} ile {b} netlerini birleştiriyor, bu bir kısa devre. Ctrl+Z ile "
+        "geri alabilirsiniz."
     ),
-    "Drew {what}: it crosses {other} near {hole}, and they would touch. Ctrl+Z takes it back.": (
-        "{what} çizildi: {hole} deliği yakınında {other} ile kesişiyor ve birbirlerine "
-        "değerler. Ctrl+Z ile geri alabilirsiniz."
+    "it crosses {other} near {hole}, and they would touch. Ctrl+Z takes it back.": (
+        "{hole} deliği yakınında {other} ile kesişiyor ve birbirlerine değerler. Ctrl+Z ile "
+        "geri alabilirsiniz."
     ),
-    "Drew {what}: it lies on {joint} at {hole}, another net's joint. Ctrl+Z takes it back.": (
-        "{what} çizildi: {hole} deliğinde başka bir netin lehim noktası olan {joint} "
-        "üzerine yatıyor. Ctrl+Z ile geri alabilirsiniz."
+    "it lies on {joint} at {hole}, another net's joint. Ctrl+Z takes it back.": (
+        "{hole} deliğinde başka bir netin lehim noktası olan {joint} üzerine yatıyor. Ctrl+Z "
+        "ile geri alabilirsiniz."
     ),
-    "Drew {what}: it runs along {other} from {hole}.": (
-        "{what} çizildi: {hole} deliğinden itibaren {other} boyunca uzanıyor."
+    "it runs along {other} from {hole}.": "{hole} deliğinden itibaren {other} boyunca uzanıyor.",
+    "{count} pad": "{count} ped",
+    "{count} pads": "{count} ped",
+    "past {limit} pads Shift+T lays it with a wire in it": (
+        "{limit} pedden uzun: Shift+T içine tel koyarak döşer"
+    ),
+    "{which} of {count} here · click again for the next": (
+        "Üst üste {count} iletken: seçili olan {which}. · Sıradaki için yeniden tıklayın"
     ),
     "Deleted {what} · Ctrl+Z brings it back": "{what} silindi · Ctrl+Z ile geri getirebilirsiniz",
     "Deleted {count} conductors · Ctrl+Z brings them back": "{count} iletken silindi · Ctrl+Z ile geri getirebilirsiniz",

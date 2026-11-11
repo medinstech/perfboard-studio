@@ -819,15 +819,18 @@ def test_the_preview_shows_every_pad_the_next_click_would_solder() -> None:
     assert preview.run == list(_holes((3, 2), (4, 2), (4, 3)))
 
 
-def test_a_wire_is_still_its_two_ends() -> None:
+def test_a_wire_turns_one_corner_on_the_grid_and_enter_lays_it() -> None:
+    """A wire is laid along the grid, the way the router lays one: two clicks off a row
+    give an L, not a diagonal, and the wire waits for Enter like a run does."""
     from perfboard_studio.model import HoleCoord
 
     scene, bus = _trace_scene()
     scene.arm_drawing("bare-wire")
     scene.draw_click(HoleCoord(2, 2))
-    result = scene.draw_click(HoleCoord(6, 5))
+    assert scene.draw_click(HoleCoord(6, 5)) is None
+    result = scene.commit_drawing()
     assert result is not None and result.ok
-    assert bus.document.conductors[0].path == _holes((2, 2), (6, 5))
+    assert bus.document.conductors[0].path == _holes((2, 2), (6, 2), (6, 5))
 
 
 def test_a_double_click_finishes_the_trace() -> None:

@@ -215,7 +215,12 @@ from perfboard_studio.commands import (
     preset_payload,
 )
 from perfboard_studio.connectivity import FootprintLookup, extract_physical_nets
-from perfboard_studio.drc import BREADBOARD_CONDUCTOR_KINDS, DrcViolation, run_drc
+from perfboard_studio.drc import (
+    BREADBOARD_CONDUCTOR_KINDS,
+    DEFAULT_DRC_OPTIONS,
+    DrcViolation,
+    run_drc,
+)
 from perfboard_studio.erc import SEVERITY as ERC_SEVERITY
 from perfboard_studio.erc import ErcFinding, run_erc
 from perfboard_studio.footprints import (
@@ -247,6 +252,7 @@ from perfboard_studio.geometry import (
     format_hole,
     hole_span_mm,
     legend_label,
+    path_length_mm,
     pin_hole,
 )
 from perfboard_studio.guide import (
@@ -2813,9 +2819,13 @@ class MainWindow(QMainWindow):
         #: tool does.
         self._draw_problem = ""
         self._draw_hint = ""
+        #: Where the conductor being drawn has got to ("F1 → F3 · 3 pads · LED_A"), "" for
+        #: nothing drawn yet.
+        self._draw_progress = ""
         self.scene.drawArmed.connect(self._on_draw_armed)
         self.scene.conductorDrawn.connect(self._on_conductor_drawn)
         self.scene.drawChecked.connect(self._on_draw_checked)
+        self.scene.pickCycled.connect(self._on_pick_cycled)
         self.scene.netPinsArmed.connect(self._on_net_pins_armed)
         self.scene.netPinsChanged.connect(self._on_net_pins_changed)
         self.scene.netPinRejected.connect(self._on_net_pin_rejected)
@@ -6279,7 +6289,7 @@ class MainWindow(QMainWindow):
 
         kind = self.scene.armed_draw_kind
         if kind:
-            two_point = kind in ("bare-wire", "insulated-wire", "top-jumper")
+            two_point = kind == "top-jumper"
             how = (
                 t("click both ends, Esc cancels")
                 if two_point
@@ -6288,7 +6298,16 @@ class MainWindow(QMainWindow):
             word = conductor_word(kind, self._guide_language())
             # What the next click or Enter would do wrong takes the hint's place while it
             # holds: the preview turns red at the hole, and this says why.
-            return f"{t('Drawing')} {word}  ·  {self._draw_problem or how}"
+            # What the next click or Enter would do wrong takes the hint's place while it
+            # holds; once something is drawn, where it has got to does, and how to finish.
+            if self._draw_problem:
+                return f"{t('Drawing')} {word}  ·  {self._draw_problem}"
+            if self._draw_progress:
+                return (
+                    f"{t('Drawing')} {word}  ·  {self._draw_progress}  ·  "
+                    f"{t('Enter or right-click finishes, Esc cancels')}"
+                )
+            return f"{t('Drawing')} {word}  ·  {how}"
 
         if self.scene.cut_armed:
             return f"{t('Cutting tracks')}  ·  {t('click a hole, Esc ends')}"
@@ -12168,7 +12187,7 @@ class MainWindow(QMainWindow):
             # The banner over the board already says all of this, in the same words. The
             # status line repeats it because the banner is not where a reader of the bar
             # is looking -- and it used to repeat it in English under a Turkish banner.
-            two_point = wanted in ("bare-wire", "insulated-wire", "top-jumper")
+            two_point = wanted == "top-jumper"
             how = (
                 t("click both ends, Esc cancels")
                 if two_point
@@ -12190,6 +12209,7 @@ class MainWindow(QMainWindow):
             action.setChecked(name == kind)
         if not kind:
             self._draw_problem = ""
+            self._draw_progress = ""
             if self._draw_hint and self.statusBar().currentMessage() == self._draw_hint:
                 self.statusBar().clearMessage()
             self._draw_hint = ""
@@ -12226,13 +12246,49 @@ class MainWindow(QMainWindow):
         return t("{hole}: this runs along {other}").format(hole=hole, other=other)
 
     def _on_draw_checked(self, check: DrawCheck | None) -> None:
-        """The pointer moved while drawing. The banner changes only when what it says does:
-        this arrives on every mouse move."""
+        """The pointer moved while drawing, or while a handle is held. The banner changes
+        only when what it says does: this arrives on every mouse move."""
         problem = check.worst if check is not None else None
         text = self._draw_problem_text(problem) if problem is not None else ""
-        if text != self._draw_problem:
+        if self.scene.reshaping or (check is None and not self.scene.armed_draw_kind):
+            # A handle's drag is a drag, and says so where a part's drag does.
+            self.view.show_drag(text)
+            return
+        progress = self._draw_progress_text(check)
+        if text != self._draw_problem or progress != self._draw_progress:
             self._draw_problem = text
+            self._draw_progress = progress
             self._refresh_mode_banner()
+
+    def _draw_progress_text(self, check: DrawCheck | None) -> str:
+        """Where the conductor being drawn has got to: its ends, how many pads a run
+        solders or how long a wire is, and its net -- and, past the length DRC warns a
+        pure run lifts its pads on phenolic board at, that Shift+T lays it with a wire in.
+        That was said only after the click, by DRC, in English."""
+        ahead = self.scene.drawn_ahead
+        kind = self.scene.armed_draw_kind
+        if len(ahead) < 2 or kind is None:
+            return ""
+        board = self.bus.document.board
+        parts = [f"{format_hole(ahead[0], board)} → {format_hole(ahead[-1], board)}"]
+        if kind in ("solder-trace", "solder-trace-wired"):
+            parts.append(counted(len(ahead), t("{count} pad"), t("{count} pads")))
+        else:
+            parts.append(f"{path_length_mm(ahead, board):.0f} mm")
+        if check is not None and check.net_id is not None:
+            parts.append(self._net_name(check.net_id))
+        limit = DEFAULT_DRC_OPTIONS.pad_lifting_max_solder_trace_pads
+        if kind == "solder-trace" and board.material in ("FR1", "FR2") and len(ahead) > limit:
+            parts.append(t("past {limit} pads Shift+T lays it with a wire in it").format(limit=limit))
+        return "  ·  ".join(parts)
+
+    def _on_pick_cycled(self, which: int, count: int) -> None:
+        self.statusBar().showMessage(
+            t("{which} of {count} here · click again for the next").format(
+                which=which, count=count
+            ),
+            6000,
+        )
 
     def _on_conductor_drawn(self, result: Any) -> None:
         """Say what the copper just laid joined, or what it did wrong.
@@ -12251,16 +12307,23 @@ class MainWindow(QMainWindow):
         if drawn is None:
             return
         what = self._copper_phrase(*drawn)
+        # What happened to it, then what it joined or did wrong: "Drew bare wire G6 → F2: on
+        # GND". Three heads by one set of tails, rather than every sentence three times.
+        verb = self.scene.last_draw_verb
+        if verb == "extended":
+            head = t("Extended {what}").format(what=what)
+        elif verb == "reshaped":
+            head = t("Reshaped {what}").format(what=what)
+        else:
+            head = t("Drew {what}").format(what=what)
         check = self.scene.last_draw_check
         problem = check.worst if check is not None else None
         board = self.bus.document.board
         if problem is None:
             if check is not None and check.net_id is not None:
-                message = t("Drew {what} on {net}").format(
-                    what=what, net=self._net_name(check.net_id)
-                )
+                tail = t("on {net}").format(net=self._net_name(check.net_id))
             else:
-                message = t("Drew {what}: not on any net yet").format(what=what)
+                tail = t("not on any net yet")
         else:
             hole = format_hole(problem.hole, board)
             other = (
@@ -12269,24 +12332,20 @@ class MainWindow(QMainWindow):
                 else ""
             )
             if problem.kind == "short":
-                message = t(
-                    "Drew {what}: it joins {a} to {b} at {hole}, a short. Ctrl+Z takes it back."
-                ).format(what=what, a=problem.nets[0], b=problem.nets[1], hole=hole)
-            elif problem.kind == "cross":
-                message = t(
-                    "Drew {what}: it crosses {other} near {hole}, and they would touch. "
-                    "Ctrl+Z takes it back."
-                ).format(what=what, other=other, hole=hole)
-            elif problem.kind == "joint":
-                message = t(
-                    "Drew {what}: it lies on {joint} at {hole}, another net's joint. "
-                    "Ctrl+Z takes it back."
-                ).format(what=what, joint=problem.joint, hole=hole)
-            else:
-                message = t("Drew {what}: it runs along {other} from {hole}.").format(
-                    what=what, other=other, hole=hole
+                tail = t("it joins {a} to {b} at {hole}, a short. Ctrl+Z takes it back.").format(
+                    a=problem.nets[0], b=problem.nets[1], hole=hole
                 )
-        self.statusBar().showMessage(_sentence(message), 12000)
+            elif problem.kind == "cross":
+                tail = t(
+                    "it crosses {other} near {hole}, and they would touch. Ctrl+Z takes it back."
+                ).format(other=other, hole=hole)
+            elif problem.kind == "joint":
+                tail = t(
+                    "it lies on {joint} at {hole}, another net's joint. Ctrl+Z takes it back."
+                ).format(joint=problem.joint, hole=hole)
+            else:
+                tail = t("it runs along {other} from {hole}.").format(other=other, hole=hole)
+        self.statusBar().showMessage(_sentence(f"{head}: {tail}"), 12000)
 
     def on_delete_selection(self) -> None:
         """Delete whatever is selected -- parts, conductors, or both.

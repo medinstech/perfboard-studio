@@ -34,7 +34,7 @@ closed without a bump.
   amber where a wire would lie along another wire. The banner names it ("F2: this would join
   LED_A to GND, a short"). The click is still taken, because a short is the checks' to report
   and not the command's to refuse. After the click the status line says what the copper
-  joined ("Drew bare wire G6 → F2 on GND", or "not on any net yet") or what it did wrong, with
+  joined ("Drew bare wire G6 → F2: on GND", or "not on any net yet") or what it did wrong, with
   Ctrl+Z. The answers come from the predicates DRC and LVS use, so the preview and the checks
   agree.
 - **A drawing tool stays armed after each piece of copper.** It used to let go after every
@@ -48,6 +48,25 @@ closed without a bump.
 - **Remove Wiring of a net.** In the Nets panel's menu and on a conductor's right-click menu,
   next to Redo Wiring and Select All of the net: it takes up that net's copper as one undo
   step and lays nothing back.
+- **A wire is drawn along the grid.** Two clicks off a row give an L with one corner, the way
+  the router lays a wire, where they used to give a diagonal; `/` turns the corner the other
+  way. A wire now takes as many corners as it is clicked, like a run, and finishes on Enter, a
+  right-click, a double-click or a second click on its last hole. A top jumper is still two
+  clicks and straight.
+- **A run drawn on from its own end is the same run, longer.** It used to start a second,
+  separate run on no net. Extending it is one undo step, and the status line says "Extended".
+  Only runs: a wire touches only its ends, so a new wire is started from a wire's end.
+- **Copper is reshaped by its handles.** The one conductor selected shows a square on each end,
+  and a wire on each corner too. Dragging one moves that end or corner, checked as it moves
+  the way a drawn conductor is, and putting it down is one undo step. A run's end dragged back
+  over the run shortens it. Esc puts the handle back.
+- **A click where copper lies on copper takes the next one each time.** Where a run and a wire
+  follow one row, only the top one could be selected, and Delete took the wrong one. The status
+  line says "1 of 2 here".
+- **The banner counts while copper is drawn.** It shows the ends, the pads a run will solder or
+  the length of a wire, the net, and how to finish. On FR-1 and FR-2 a plain run past the
+  length the checks warn at adds that Shift+T lays it with a wire inside.
+
 ### Fixed
 
 - **Picking a net in the Nets panel clears the board's selection.** The selection stayed out

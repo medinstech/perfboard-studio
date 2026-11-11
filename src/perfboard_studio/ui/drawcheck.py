@@ -108,8 +108,14 @@ def check_drawn(
     lookup: FootprintLookup,
     kind: ConductorKind,
     path: tuple[HoleCoord, ...],
+    *,
+    ignoring: str | None = None,
 ) -> DrawCheck:
-    """What laying ``kind`` along ``path`` on ``document``'s board would join and touch."""
+    """What laying ``kind`` along ``path`` on ``document``'s board would join and touch.
+
+    ``ignoring`` is a conductor the new path REPLACES -- a run being extended, an end being
+    dragged -- which is not something the new path can cross or lie along.
+    """
     if len(path) < 2:
         return DrawCheck(net_id=None, problems=())
     drawn = candidate(document, kind, path)
@@ -168,6 +174,8 @@ def check_drawn(
 
     duplicate: Conductor | None = None
     for other in document.conductors:
+        if other.id == ignoring:
+            continue
         if other.kind == drawn.kind and tuple(other.path) in (path, path[::-1]):
             duplicate = other
         if other.side != drawn.side or len(other.path) < 2:

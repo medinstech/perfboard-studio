@@ -88,6 +88,7 @@ from perfboard_studio.commands import (
     NewSolderTraceConductor,
     NewWireConductor,
     PlaceComponentPayload,
+    SetConductorPathPayload,
     UpdateBoardNotePayload,
     next_net_name,
     plan_pin_join,
@@ -2050,6 +2051,125 @@ class PinHoverItem(QGraphicsItem):
 # ------------------------------------------------------------------ conductor item
 
 
+_SOLDER_RUNS = ("solder-trace", "solder-trace-wired")
+
+
+def _orthogonal_run(from_: HoleCoord, to: HoleCoord, column_first: bool) -> list[HoleCoord]:
+    """Every pad a solder run from ``from_`` to ``to`` crosses, ``to`` last: along the row
+    first and then down the column, or the other way round."""
+    col, row = from_.col, from_.row
+    run: list[HoleCoord] = []
+    for along_the_row in ((False, True) if column_first else (True, False)):
+        if along_the_row:
+            while col != to.col:
+                col += 1 if to.col > col else -1
+                run.append(HoleCoord(col, row))
+        else:
+            while row != to.row:
+                row += 1 if to.row > row else -1
+                run.append(HoleCoord(col, row))
+    return run
+
+
+def _elbow(from_: HoleCoord, to: HoleCoord, column_first: bool) -> list[HoleCoord]:
+    """A wire's leg from ``from_`` to ``to`` along the grid, ``to`` last: straight when they
+    share a row or a column, else one corner -- the way the router lays a wire."""
+    if from_.col == to.col or from_.row == to.row:
+        return [to]
+    corner = HoleCoord(from_.col, to.row) if column_first else HoleCoord(to.col, from_.row)
+    return [corner, to]
+
+
+def _straightened(path: Sequence[HoleCoord]) -> tuple[HoleCoord, ...]:
+    """A wire's path without the corners that are not corners: a hole named twice in a row,
+    or a point in the middle of a straight leg. A wire touches only its ends, so neither
+    is anything on the board -- and the command refuses the first."""
+    out: list[HoleCoord] = []
+    for hole in path:
+        if out and out[-1] == hole:
+            continue
+        if len(out) >= 2:
+            a, b = out[-2], out[-1]
+            ab = (b.col - a.col, b.row - a.row)
+            bc = (hole.col - b.col, hole.row - b.row)
+            straight = ab[0] * bc[1] == ab[1] * bc[0] and ab[0] * bc[0] + ab[1] * bc[1] > 0
+            if straight:
+                out[-1] = hole
+                continue
+        out.append(hole)
+    return tuple(out)
+
+
+def reshaped_path(
+    kind: ConductorKind, path: Sequence[HoleCoord], index: int, to: HoleCoord
+) -> tuple[HoleCoord, ...] | None:
+    """``path`` with its hole ``index`` dragged to ``to``, or None where that cannot be.
+
+    - A solder run's END: back to a pad it already has shortens it there; anywhere else
+      runs on to it along the grid, as the drawing tool does. Its middle has no handle --
+      every pad of it is a joint.
+    - A wire's end: its last leg is laid again from the corner before it, along the grid.
+    - A wire's corner: moved where it is dropped.
+    - A top jumper's end: straight, as it is drawn.
+    """
+    holes = list(path)
+    if not 0 <= index < len(holes):
+        return None
+    if to == holes[index]:
+        return tuple(holes)
+    last = len(holes) - 1
+    if index not in (0, last):
+        if kind in _SOLDER_RUNS:
+            return None
+        holes[index] = to
+        shaped = _straightened(holes)
+        return shaped if len(shaped) >= 2 else None
+    oriented = holes if index == last else holes[::-1]
+    if kind in _SOLDER_RUNS:
+        if to in oriented:
+            new = oriented[: oriented.index(to) + 1]
+        else:
+            step = _orthogonal_run(oriented[-1], to, False)
+            if any(hole in oriented for hole in step):
+                return None
+            new = oriented + step
+    elif kind == "top-jumper":
+        new = [*oriented[:-1], to]
+    else:
+        new = list(_straightened([*oriented[:-1], *_elbow(oriented[-2], to, False)]))
+    if len(new) < 2 or new[0] == new[-1]:
+        return None
+    return tuple(new if index == last else new[::-1])
+
+
+class CopperHandleItem(QGraphicsItem):
+    """A square on an end -- or a wire's corner -- of the one conductor selected. Dragged to
+    another hole, it is ONE ``conductor.setPath``: copper used to be deleted and drawn again
+    to move an end by one hole."""
+
+    def __init__(self, index: int, at: HoleCoord, board: Board, side: BoardSide) -> None:
+        super().__init__()
+        self.index = index
+        self.at = at
+        self.board = board
+        self.setPos(hole_to_screen(at, board, side))
+        self.setZValue(130)
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+
+    def _half(self) -> float:
+        return self.board.pad_diameter * 0.42
+
+    def boundingRect(self) -> QRectF:
+        half = self._half() + 0.2
+        return QRectF(-half, -half, half * 2, half * 2)
+
+    def paint(self, painter: QPainter, option: Any, widget: Any = None) -> None:
+        half = self._half()
+        painter.setPen(QPen(QColor(CANVAS_SELECTED), 0.22))
+        painter.setBrush(QBrush(QColor("#ffffff")))
+        painter.drawRect(QRectF(-half, -half, half * 2, half * 2))
+
+
 class DrawPreviewItem(QGraphicsItem):
     """The conductor being drawn, before it exists.
 
@@ -2113,8 +2233,22 @@ class DrawPreviewItem(QGraphicsItem):
             # clicks back is still what Enter would lay.
             colour = trouble
         points = [hole_to_screen(h, self.board, self.side) for h in self.path]
+        # Joints are where a run is soldered -- every pad of it -- and where a wire is: its
+        # two ends. A wire's corner lies over its hole and is not one.
+        solders = self.kind in _SOLDER_RUNS
+        joints = points if solders else points[:1] + points[-1:] if len(points) > 1 else points
 
         if len(points) >= 2:
+            # A dark edge under it first: the preview is the kind's own colour, and over
+            # copper of the same kind it was grey on grey.
+            halo = QPen(QColor(0, 0, 0, 130), width * 1.9)
+            halo.setCapStyle(Qt.PenCapStyle.RoundCap)
+            halo.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(halo)
+            outline = QPainterPath(points[0])
+            for p in points[1:]:
+                outline.lineTo(p)
+            painter.drawPath(outline)
             pen = QPen(colour, width)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
@@ -2126,7 +2260,7 @@ class DrawPreviewItem(QGraphicsItem):
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(colour.lighter(130)))
-        for p in points:
+        for p in joints:
             painter.drawEllipse(p, width * 0.7, width * 0.7)
 
         if self.next_hole is not None:
@@ -2138,6 +2272,9 @@ class DrawPreviewItem(QGraphicsItem):
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
                 painter.setPen(pen)
+                # No fill: the joints' brush is still set, and a step with a corner in it
+                # is a path that encloses an area -- it filled as a white triangle.
+                painter.setBrush(Qt.BrushStyle.NoBrush)
                 # Through every pad of the run, so its corner is where it will be.
                 ahead = QPainterPath(points[-1])
                 for hole in self.run or [self.next_hole]:
@@ -2146,7 +2283,7 @@ class DrawPreviewItem(QGraphicsItem):
                 # And a dot on each pad it would solder, because those are the joints.
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QBrush(tint))
-                for hole in self.run[:-1]:
+                for hole in self.run[:-1] if solders else ():
                     painter.drawEllipse(hole_to_screen(hole, self.board, self.side), width * 0.45, width * 0.45)
             painter.setPen(QPen(tint, 0.22))
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -4710,6 +4847,8 @@ class BoardScene(QGraphicsScene):
     #: Emitted with what the conductor being drawn would do (``drawcheck.DrawCheck``) as
     #: the pointer moves, or None when there is nothing to check yet.
     drawChecked = Signal(object)
+    #: A click where several conductors lie took the next one: (which, of how many).
+    pickCycled = Signal(int, int)
     #: Emitted with the id of the net being filled by clicking pins, or "" when that ends.
     netPinsArmed = Signal(str)
     #: Emitted with the "U1.8" labels picked so far, after every pick.
@@ -4815,6 +4954,22 @@ class BoardScene(QGraphicsScene):
         #: host's status line.
         self.last_draw_check: DrawCheck | None = None
         self.last_drawn: tuple[ConductorKind, tuple[HoleCoord, ...]] | None = None
+        #: How the copper just laid came to be: "drew" a new conductor, "extended" a run
+        #: from its end, or "reshaped" one by a handle.
+        self.last_draw_verb = "drew"
+        #: The run being drawn on from its end (``_continue_from``), and how many of the
+        #: path's holes were already its own.
+        self._draw_continuing: str | None = None
+        self._draw_base = 0
+        #: The path so far and the step to the pointer: what Enter or the next click lays.
+        self._draw_ahead: tuple[HoleCoord, ...] = ()
+        #: The squares on the one conductor selected (``CopperHandleItem``), and the drag of
+        #: one: (conductor id, index in its path), the path it would get, its preview.
+        self._handles: list[CopperHandleItem] = []
+        self._reshape: tuple[str, int] | None = None
+        self._reshape_path: tuple[HoleCoord, ...] | None = None
+        self._reshape_preview: DrawPreviewItem | None = None
+        self._reshape_check: DrawCheck | None = None
         self._net_pin_target: str | None = None
         self._net_pin_picks: list[tuple[str, str]] = []
         self._net_pin_holes: list[HoleCoord] = []
@@ -5042,6 +5197,12 @@ class BoardScene(QGraphicsScene):
         # Emptying first means the handler sees an empty selection, which is the truth.
         self.component_items = {}
         self.conductor_items = {}
+        # Handles and a handle's drag go with the items clear() destroys; the handles are
+        # made again below from the selection, and a drag the rebuild interrupted is over.
+        self._handles = []
+        self._reshape = None
+        self._reshape_path = None
+        self._reshape_preview = None
         # Dropped with the dict, for the same reason: a part selected while clear() runs
         # tells the layer to repaint, and the layer is one of the items being destroyed.
         self.reference_layer = None
@@ -5292,6 +5453,7 @@ class BoardScene(QGraphicsScene):
             self._draw_preview = DrawPreviewItem(self._draw_kind, board, self.side)
             self.addItem(self._draw_preview)
             self._refresh_draw_preview(self._last_hole)
+        self._sync_handles()
         if self._measure_from is not None:
             self._measure_item = PickedPinsItem(board, self.side)
             self._measure_item.set_holes([self._measure_from])
@@ -5420,10 +5582,13 @@ class BoardScene(QGraphicsScene):
     def _on_selection_changed(self) -> None:
         """Selecting a part highlights every net it belongs to.
 
+        And one conductor selected gets its handles (``_sync_handles``).
+
         This is the question a user asks constantly while placing -- "what is this still
         supposed to reach?" -- and the ratsnest already knows. The scene only reports the
         net ids; what to do with them is the host's business.
         """
+        self._sync_handles()
         selected_refs = {
             item.comp.ref for item in self.component_items.values() if item.isSelected()
         }
@@ -5470,14 +5635,21 @@ class BoardScene(QGraphicsScene):
     # solder trace yourself -- only to accept whatever the router produced or throw the
     # whole thing away.
 
-    #: Kinds that are exactly two holes: click a start, click an end, done.
-    _TWO_POINT_KINDS: frozenset[ConductorKind] = frozenset(
-        {"bare-wire", "insulated-wire", "top-jumper"}
-    )
+    #: Kinds that are exactly two holes: click a start, click an end, done. A top jumper is
+    #: one straight piece of wire bent over the parts.
+    _TWO_POINT_KINDS: frozenset[ConductorKind] = frozenset({"top-jumper"})
     #: Kinds drawn in RUNS: a click is where the copper turns, and every pad between it
     #: and the last click is soldered on the way. A trace had to be clicked pad by pad --
     #: seven clicks for seven holes -- and a click two holes away was silently ignored.
     _RUN_KINDS: frozenset[ConductorKind] = frozenset({"solder-trace", "solder-trace-wired"})
+    #: Wires under the board, drawn with CORNERS ON THE GRID as the router lays them: a
+    #: click is where it turns, and Enter, a right-click or a double-click ends it. They
+    #: were two clicks and one straight line at any angle, so a hand wire could not follow
+    #: the path a routed one does, and a third click for a bend was lost.
+    _WIRE_KINDS: frozenset[ConductorKind] = frozenset({"bare-wire", "insulated-wire"})
+    #: Everything that turns corners: ``/`` flips the next one, and a click on the last hole
+    #: again finishes.
+    _CORNER_KINDS: frozenset[ConductorKind] = _RUN_KINDS | _WIRE_KINDS
 
     def arm_drawing(self, kind: ConductorKind | None) -> None:
         """Arm (or, with None, disarm) drawing a conductor of this kind."""
@@ -5502,12 +5674,28 @@ class BoardScene(QGraphicsScene):
         """The holes of the conductor being drawn, clicked so far."""
         return tuple(self._draw_path)
 
+    @property
+    def drawn_ahead(self) -> tuple[HoleCoord, ...]:
+        """The holes Enter or the next click would lay: the path and the step to the
+        pointer, when that step is one the tool would take."""
+        return self._draw_ahead
+
+    @property
+    def continuing(self) -> str | None:
+        """The id of the run being drawn on from its end, or None."""
+        return self._draw_continuing
+
+    @property
+    def reshaping(self) -> bool:
+        """Whether a handle of the selected conductor is being dragged."""
+        return self._reshape is not None
+
     def check_drawing(self, path: Sequence[HoleCoord]) -> DrawCheck | None:
         """What laying the armed kind along ``path`` would do, from the engine's own
         predicates (``drawcheck``); None with nothing armed or under two holes."""
         if self._draw_kind is None or len(path) < 2:
             return None
-        kind, holes = str(self._draw_kind), tuple(path)
+        kind, holes = f"{self._draw_kind}|{self._draw_continuing or ''}", tuple(path)
         cached = self._draw_checked
         if (
             cached is not None
@@ -5516,7 +5704,9 @@ class BoardScene(QGraphicsScene):
             and cached[2] == holes
         ):
             return cached[3]
-        checked = check_drawn(self.document, self.lookup, self._draw_kind, holes)
+        checked = check_drawn(
+            self.document, self.lookup, self._draw_kind, holes, ignoring=self._draw_continuing
+        )
         self._draw_checked = (self.document, kind, holes, checked)
         return checked
 
@@ -5529,6 +5719,9 @@ class BoardScene(QGraphicsScene):
         self._draw_path = []
         self._draw_kind = None
         self._draw_column_first = False
+        self._draw_continuing = None
+        self._draw_base = 0
+        self._draw_ahead = ()
 
     def _run_to(self, at: HoleCoord) -> list[HoleCoord]:
         """The pads an orthogonal run from the last hole drawn to ``at`` takes, ``at`` last.
@@ -5541,22 +5734,22 @@ class BoardScene(QGraphicsScene):
         """
         if not self._draw_path:
             return [at]
-        col, row = self._draw_path[-1].col, self._draw_path[-1].row
-        run: list[HoleCoord] = []
-        for along_the_row in ((False, True) if self._draw_column_first else (True, False)):
-            if along_the_row:
-                while col != at.col:
-                    col += 1 if at.col > col else -1
-                    run.append(HoleCoord(col, row))
-            else:
-                while row != at.row:
-                    row += 1 if at.row > row else -1
-                    run.append(HoleCoord(col, row))
-        return run
+        return _orthogonal_run(self._draw_path[-1], at, self._draw_column_first)
+
+    def _step_to(self, at: HoleCoord) -> list[HoleCoord]:
+        """The holes a click on ``at`` adds, ``at`` last: a run's every pad, a wire's corner
+        if it needs one, a jumper's end."""
+        if not self._draw_path:
+            return [at]
+        if self._draw_kind in self._RUN_KINDS:
+            return self._run_to(at)
+        if self._draw_kind in self._WIRE_KINDS:
+            return _elbow(self._draw_path[-1], at, self._draw_column_first)
+        return [at]
 
     def flip_draw_corner(self) -> None:
-        """Turn the corner of the run being drawn the other way (``/``)."""
-        if self._draw_kind not in self._RUN_KINDS:
+        """Turn the corner of the run or wire being drawn the other way (``/``)."""
+        if self._draw_kind not in self._CORNER_KINDS:
             return
         self._draw_column_first = not self._draw_column_first
         self._refresh_draw_preview(self._last_hole)
@@ -5574,16 +5767,38 @@ class BoardScene(QGraphicsScene):
             return False
         if not self._draw_path:
             return True
-        if self._draw_kind in self._RUN_KINDS:
-            # The whole run, pad by pad: on the board, and never back over the trace's
-            # own pads, which a chain cannot visit twice.
-            run = self._run_to(at)
-            return bool(run) and all(
-                is_inside_board(hole, board) and hole not in self._draw_path for hole in run
-            )
-        if at in self._draw_path:
+        # The whole step, hole by hole: on the board, and never back over the conductor's
+        # own holes, which a chain cannot visit twice.
+        step = self._step_to(at)
+        return (
+            bool(step)
+            and at != self._draw_path[-1]
+            and all(is_inside_board(hole, board) and hole not in self._draw_path for hole in step)
+        )
+
+    def _continue_from(self, at: HoleCoord) -> bool:
+        """Start on the run of the armed kind that ends at ``at``, if exactly one does.
+
+        Drawing on from a run's end made a second, separate run with no net, where the
+        person had plainly meant the same one longer. ONLY RUNS: a run is soldered at every
+        pad, so its old end stays joined in the middle of the longer one. A wire touches
+        only its ends -- carried on, its old end would become a corner lying over the hole,
+        and whatever was soldered there would come off it.
+        """
+        if self._draw_kind not in self._RUN_KINDS:
             return False
-        return at != self._draw_path[-1]
+        ends = [
+            c
+            for c in self.document.conductors
+            if c.kind == self._draw_kind and len(c.path) >= 2 and at in (c.path[0], c.path[-1])
+        ]
+        if len(ends) != 1:
+            return False
+        run = ends[0]
+        self._draw_path = list(run.path) if run.path[-1] == at else list(reversed(run.path))
+        self._draw_continuing = run.id
+        self._draw_base = len(run.path)
+        return True
 
     def draw_click(self, at: HoleCoord) -> DispatchResult | None:
         """Extend the conductor being drawn, committing it when it is complete.
@@ -5593,15 +5808,15 @@ class BoardScene(QGraphicsScene):
         """
         if self._draw_kind is None:
             return None
-        runs = self._draw_kind in self._RUN_KINDS
-        if runs and self._draw_path and at == self._draw_path[-1]:
+        if not self._draw_path and self._continue_from(at):
+            self._refresh_draw_preview(at)
+            return None
+        corners = self._draw_kind in self._CORNER_KINDS
+        if corners and self._draw_path and at == self._draw_path[-1]:
             return self.commit_drawing()
         if not self._step_is_legal(at):
             return None
-        if runs:
-            self._draw_path.extend(self._run_to(at))
-        else:
-            self._draw_path.append(at)
+        self._draw_path.extend(self._step_to(at))
         if self._draw_kind in self._TWO_POINT_KINDS and len(self._draw_path) == 2:
             return self.commit_drawing()
         self._refresh_draw_preview(at)
@@ -5615,7 +5830,8 @@ class BoardScene(QGraphicsScene):
         Enter on nothing drawn leaves it. Under two holes is a cancel, not an error: of the
         run alone when one hole was clicked, of the tool when none was.
         """
-        if self.bus is None or self._draw_kind is None or len(self._draw_path) < 2:
+        nothing_new = self._draw_continuing is not None and len(self._draw_path) <= self._draw_base
+        if self.bus is None or self._draw_kind is None or len(self._draw_path) < 2 or nothing_new:
             if self._draw_kind is not None and self._draw_path:
                 self._start_next_conductor()
                 return None
@@ -5624,13 +5840,30 @@ class BoardScene(QGraphicsScene):
             return None
 
         kind = self._draw_kind
-        path = tuple(self._draw_path)
+        path = (
+            _straightened(self._draw_path)
+            if kind in self._WIRE_KINDS
+            else tuple(self._draw_path)
+        )
         # The net is the one the copper's contacts meet -- a pin's or a conductor's -- so a
         # run drawn on from another run's end, or from a pin to its own net's copper, joins
         # that net. Copper that meets two nets (a short) or none stays unclaimed, which is
         # not a failure: copper with no net claim is what rip-up-and-reroute and the
         # stale-conductor cleanup both promise never to touch.
         checked = self.check_drawing(path)
+        if self._draw_continuing is not None:
+            # The run drawn on from its end is the same run, longer: one setPath, its net
+            # as it was.
+            result = self.bus.dispatch(
+                "conductor.setPath",
+                SetConductorPathPayload(id=self._draw_continuing, path=path),
+            )
+            self.last_draw_check = checked
+            self.last_drawn = (kind, path)
+            self.last_draw_verb = "extended"
+            self._start_next_conductor()
+            self.conductorDrawn.emit(result)
+            return result
         net_id = checked.net_id if checked is not None else None
         spec: NewConductor
         if kind in ("solder-trace", "solder-trace-wired"):
@@ -5646,6 +5879,7 @@ class BoardScene(QGraphicsScene):
         result = self.bus.dispatch("conductor.add", AddConductorPayload(conductor=spec))
         self.last_draw_check = checked
         self.last_drawn = (kind, path)
+        self.last_draw_verb = "drew"
         self._start_next_conductor()
         self.conductorDrawn.emit(result)
         return result
@@ -5654,6 +5888,8 @@ class BoardScene(QGraphicsScene):
         """Forget the conductor being drawn and keep the tool."""
         self._draw_path = []
         self._draw_column_first = False
+        self._draw_continuing = None
+        self._draw_base = 0
         self._refresh_draw_preview(self._last_hole)
         self.drawArmed.emit(self._draw_kind or "")
 
@@ -5662,8 +5898,8 @@ class BoardScene(QGraphicsScene):
             return
         ok = cursor is None or self._step_is_legal(cursor)
         run = (
-            self._run_to(cursor)
-            if cursor is not None and self._draw_path and self._draw_kind in self._RUN_KINDS
+            self._step_to(cursor)
+            if cursor is not None and self._draw_path and self._draw_kind in self._CORNER_KINDS
             else []
         )
         self._draw_preview.set_path(list(self._draw_path), cursor, ok, run)
@@ -5671,7 +5907,8 @@ class BoardScene(QGraphicsScene):
         # pointer, when that step is one the tool would take.
         ahead = list(self._draw_path)
         if cursor is not None and ok and self._draw_path:
-            ahead += run if self._draw_kind in self._RUN_KINDS else [cursor]
+            ahead += run if self._draw_kind in self._CORNER_KINDS else [cursor]
+        self._draw_ahead = tuple(ahead)
         checked = self.check_drawing(ahead)
         self._draw_preview.set_problem(checked.worst if checked is not None else None)
         self.drawChecked.emit(checked)
@@ -6088,6 +6325,147 @@ class BoardScene(QGraphicsScene):
             if isinstance(item, ConductorItem) and item.isSelected()
         )
 
+    def _sync_handles(self) -> None:
+        """Handles on the one conductor selected, and on nothing otherwise.
+
+        From the dicts, never ``items()``: this runs from ``selectionChanged``, which Qt
+        emits while ``clear()`` is destroying the items, and the dicts are emptied first.
+        """
+        for handle in self._handles:
+            with contextlib.suppress(RuntimeError):
+                if handle.scene() is self:
+                    self.removeItem(handle)
+        self._handles = []
+        chosen = [cid for cid, item in self.conductor_items.items() if item.isSelected()]
+        if len(chosen) != 1 or any(i.isSelected() for i in self.component_items.values()):
+            return
+        conductor = next((c for c in self.document.conductors if c.id == chosen[0]), None)
+        if conductor is None or conductor.kind not in self._CORNER_KINDS | self._TWO_POINT_KINDS:
+            return
+        last = len(conductor.path) - 1
+        indices = range(len(conductor.path)) if conductor.kind in self._WIRE_KINDS else (0, last)
+        for index in indices:
+            handle = CopperHandleItem(index, conductor.path[index], self.document.board, self.side)
+            self.addItem(handle)
+            self._handles.append(handle)
+
+    def handle_at(self, pos: QPointF) -> int | None:
+        """The index in its path of the selected conductor's handle under ``pos``, or None."""
+        reach = self.document.board.pad_diameter * 0.6
+        for handle in self._handles:
+            offset = handle.pos() - pos
+            if math.hypot(offset.x(), offset.y()) <= reach:
+                return handle.index
+        return None
+
+    def begin_reshape(self, index: int) -> bool:
+        """Pick up the selected conductor's handle ``index``. Also the seam tests drive."""
+        chosen = self.selected_conductor_ids()
+        conductor = next((c for c in self.document.conductors if c.id in chosen), None)
+        if len(chosen) != 1 or conductor is None:
+            return False
+        self._reshape = (conductor.id, index)
+        self._reshape_path = None
+        self._reshape_check = None
+        self._reshape_preview = DrawPreviewItem(conductor.kind, self.document.board, self.side)
+        self._reshape_preview.set_path(list(conductor.path), None, True)
+        self.addItem(self._reshape_preview)
+        return True
+
+    def reshape_to(self, at: HoleCoord) -> None:
+        """The handle held is over ``at``: preview the path it would give, checked as a
+        drawn one is."""
+        if self._reshape is None or self._reshape_preview is None:
+            return
+        conductor_id, index = self._reshape
+        conductor = next((c for c in self.document.conductors if c.id == conductor_id), None)
+        if conductor is None:
+            return
+        board = self.document.board
+        path = reshaped_path(conductor.kind, conductor.path, index, at)
+        legal = path is not None and all(is_inside_board(hole, board) for hole in path)
+        self._reshape_path = path if legal and path != conductor.path else None
+        shown = path if legal and path is not None else conductor.path
+        self._reshape_preview.set_path(list(shown), None if legal else at, legal)
+        # Asked from the end that stays put, as if drawn from there to the handle: the check
+        # names the hole where the copper meets a second net, and walked from the moved end
+        # that was a pad the run already had, not the one the drag brought in.
+        asked = (
+            self._reshape_path[::-1]
+            if self._reshape_path is not None and index == 0
+            else self._reshape_path
+        )
+        checked = (
+            check_drawn(self.document, self.lookup, conductor.kind, asked, ignoring=conductor_id)
+            if asked is not None
+            else None
+        )
+        self._reshape_check = checked
+        self._reshape_preview.set_problem(checked.worst if checked is not None else None)
+        self.drawChecked.emit(checked)
+
+    def finish_reshape(self) -> DispatchResult | None:
+        """Put the handle down: one ``conductor.setPath``, or nothing if it is where it was."""
+        if self._reshape is None:
+            return None
+        conductor_id, _index = self._reshape
+        path, checked = self._reshape_path, self._reshape_check
+        self.cancel_reshape()
+        conductor = next((c for c in self.document.conductors if c.id == conductor_id), None)
+        if self.bus is None or path is None or conductor is None:
+            return None
+        result = self.bus.dispatch(
+            "conductor.setPath", SetConductorPathPayload(id=conductor_id, path=path)
+        )
+        self.last_draw_check = checked
+        self.last_drawn = (conductor.kind, path)
+        self.last_draw_verb = "reshaped"
+        self.conductorDrawn.emit(result)
+        return result
+
+    def cancel_reshape(self) -> bool:
+        """Drop a handle's drag without changing anything. True if there was one."""
+        if self._reshape is None:
+            return False
+        if self._reshape_preview is not None:
+            with contextlib.suppress(RuntimeError):
+                self.removeItem(self._reshape_preview)
+        self._reshape = None
+        self._reshape_path = None
+        self._reshape_preview = None
+        self._reshape_check = None
+        self.drawChecked.emit(None)
+        return True
+
+    # -- several conductors under one click ----------------------------------------------
+
+    def conductors_at(self, pos: QPointF) -> list[ConductorItem]:
+        """Every conductor under a scene position, the one on top first."""
+        found = [
+            item for item in self.conductor_items.values() if item.contains(item.mapFromScene(pos))
+        ]
+        return sorted(found, key=lambda item: (-item.zValue(), item.conductor_id))
+
+    def cycle_pick(self, pos: QPointF) -> bool:
+        """Select the next of several conductors under ``pos``. True if it did.
+
+        Where a run and a wire lie along the same row, the one on top was all a click could
+        reach, and Delete then took the wrong one. The first click takes the top one, the
+        next click on the same spot the one under it, round and round.
+        """
+        here = self.conductors_at(pos)
+        if len(here) < 2 or self.component_at(pos) is not None:
+            return False
+        ids = [item.conductor_id for item in here]
+        chosen = self.selected_conductor_ids()
+        if len(chosen) == 1 and chosen[0] in ids and not self.selected_component_ids():
+            pick = ids[(ids.index(chosen[0]) + 1) % len(ids)]
+        else:
+            pick = ids[0]
+        self.select_conductors([pick])
+        self.pickCycled.emit(ids.index(pick) + 1, len(ids))
+        return True
+
     def select_conductors(self, conductor_ids: Collection[str]) -> None:
         """Exactly these conductors, and nothing else, selected."""
         wanted = set(conductor_ids)
@@ -6294,6 +6672,10 @@ class BoardScene(QGraphicsScene):
 
     def mouseMoveEvent(self, event: Any) -> None:
         self.hover_at(event.scenePos())
+        if self._reshape is not None:
+            self.reshape_to(screen_to_hole(event.scenePos(), self.document.board, self.side))
+            event.accept()
+            return
         super().mouseMoveEvent(event)
         if isinstance(self.mouseGrabberItem(), ComponentItem):
             self.report_drag()
@@ -6421,6 +6803,14 @@ class BoardScene(QGraphicsScene):
             self.arm_placement(None)  # Right-click cancels, as it does in every editor.
             event.accept()
             return
+        if event.button() == Qt.MouseButton.LeftButton and not event.modifiers():
+            index = self.handle_at(event.scenePos())
+            if index is not None and self.begin_reshape(index):
+                event.accept()
+                return
+            if self.cycle_pick(event.scenePos()):
+                event.accept()
+                return
         super().mousePressEvent(event)
 
     def placing_face(self) -> BoardSide:
@@ -6471,6 +6861,15 @@ class BoardScene(QGraphicsScene):
         return result
 
     def mouseReleaseEvent(self, event: Any) -> None:
+        if self._reshape is not None:
+            moved = self._reshape_path is not None
+            self.finish_reshape()
+            if not moved:
+                # A handle pressed and let go where it was is a click, and a click where
+                # copper lies over copper takes the next one.
+                self.cycle_pick(event.scenePos())
+            event.accept()
+            return
         super().mouseReleaseEvent(event)
         self._say_drag("")
         self.commit_pending_moves()
@@ -6575,7 +6974,7 @@ class BoardScene(QGraphicsScene):
         steps of a trace -- so opening a dialog on top of that would interrupt the tool
         with a window the user did not ask for.
         """
-        if self._draw_kind in self._RUN_KINDS and event.button() == Qt.MouseButton.LeftButton:
+        if self._draw_kind in self._CORNER_KINDS and event.button() == Qt.MouseButton.LeftButton:
             # The second half of a double-click is a click on the pad the first half just
             # reached, which is what finishes a solder run (``draw_click``). Said here because
             # Qt's own double-click handler never calls ``mousePressEvent``.
@@ -6616,7 +7015,7 @@ class BoardScene(QGraphicsScene):
             Qt.Key.Key_Up: (0, -1),
             Qt.Key.Key_Down: (0, 1),
         }
-        if event.key() == Qt.Key.Key_Escape and self.cancel_drag():
+        if event.key() == Qt.Key.Key_Escape and (self.cancel_reshape() or self.cancel_drag()):
             event.accept()
             return
         if event.key() == Qt.Key.Key_Escape and self.in_a_mode:
@@ -6637,7 +7036,7 @@ class BoardScene(QGraphicsScene):
             self.commit_drawing()
             event.accept()
             return
-        if self._draw_kind in self._RUN_KINDS and event.key() == Qt.Key.Key_Slash:
+        if self._draw_kind in self._CORNER_KINDS and event.key() == Qt.Key.Key_Slash:
             self.flip_draw_corner()
             event.accept()
             return
