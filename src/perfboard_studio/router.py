@@ -89,7 +89,6 @@ from .geometry import (
     bridge_needs_spine,
     finger_cells,
     format_hole,
-    hole_key,
     hole_to_mm,
     holes_under_line,
     is_inside_board,
@@ -785,15 +784,18 @@ def _rail_ends(
     def net_of(hole: HoleCoord) -> PhysicalNet | None:
         return next((n for n in nets if any(same_hole(node.hole, hole) for node in n.nodes)), None)
 
+    # ``finger_cells`` speaks geometry's ``hole_key`` across the module boundary; this
+    # module's sets are keyed on coordinates (``_key``), so the cells are too, once.
+    by_hole = {_key(cell.cell): cell for cell in cells.values()}
     ends: list[_RailEnd] = []
     near, far = net_of(request.from_), net_of(request.to)
     for railed, start, from_pin in ((far, request.from_, request.from_pin), (near, request.to, None)):
         if railed is None or (near is not None and far is not None and near.id == far.id):
             continue
         fingers = tuple(
-            (cells[hole_key(node.hole)], node.side)
+            (by_hole[_key(node.hole)], node.side)
             for node in railed.nodes
-            if hole_key(node.hole) in cells
+            if _key(node.hole) in by_hole
         )
         if fingers:
             ends.append(
