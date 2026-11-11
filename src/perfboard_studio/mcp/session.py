@@ -1835,10 +1835,10 @@ class BoardSession:
 
         Different from ``autoroute``, which only ADDS: after a part moves, the copper
         laid for its old position still joins the right pins, so nothing reports it and
-        autoroute simply puts more copper beside it. Measured on the NE555 fixture:
-        14 conductors routed fresh, 16 after moving one resistor and autorouting again,
-        14 again after this. Removes only conductors that claim one of these nets;
-        copper with no net is left alone.
+        autoroute simply puts more copper beside it. Measured on the NE555 fixture: 14
+        conductors routed fresh, 19 after moving one resistor and autorouting again, and
+        after this the 15 that routing the moved board from bare lays. Removes only
+        conductors that claim one of these nets; copper with no net is left alone.
         """
         if not self.document.nets:
             return _refused("no-netlist", "Nothing to route: no netlist has been imported.")

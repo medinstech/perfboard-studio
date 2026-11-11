@@ -119,6 +119,13 @@ closed without a bump.
   little more, as a low arc over the parts), and bends wide along its path and tight where it
   turns into the hole. A bare wire is tinned silver. Wires that cross are lifted further apart
   to make room for the bow.
+- **Auto-wire no longer lays wires that would have to lie under each other.** A wire laid
+  along the grid now goes round the holes where something is soldered -- a pin, or another
+  wire's end -- where a free row costs little more, and goes almost any way round rather
+  than lie across the end of a wire that already has to lie over it: two such wires can be
+  soldered in neither order, and on atmega328-relay and arduino-io-shield they were drawn
+  through each other. On every example board, auto-wired, the wires lying across a pin
+  fell from 110 to 44 and the tallest stack of wires from 8 to 6.
 
 ## [0.24.0] - 2026-11-10
 

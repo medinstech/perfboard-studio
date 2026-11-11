@@ -102,6 +102,7 @@ from .model import (
     PerfDocument,
     SolderBuildup,
     SpineSpec,
+    contacts_every_path_hole,
     is_crossing_blocked,
 )
 from .occupancy import OccupancyIndex, build_occupancy
@@ -164,6 +165,23 @@ class RouterCosts:
     #: measured on atmega328-relay, where two insulated wires shared three holes of row 18
     #: at the crossing price alone. Unused when straight.
     wire_along_copper: float = 3
+    #: Per hole a wire laid along the grid passes over where something is SOLDERED on the
+    #: solder side: a pin, or the end of another conductor. Whatever is soldered there comes
+    #: down to its pad -- a lead's trimmed stub, a joint's fillet, the other wire bending
+    #: into its hole -- so the wire lying across has to be stacked above it
+    #: (``occupancy.stacking_layers``), and the more of them it lies across the taller the
+    #: stack gets. Priced at about a one-row detour (two bends and two holes): one joint on
+    #: the direct row is still passed over, two are gone round. Measured on every example
+    #: and golden board auto-wired: wires lying across a pin 110 -> 44, across another
+    #: wire's end 64 -> 29. Unused when straight.
+    wire_over_joint: float = 3
+    #: Per hole a wire laid along the grid passes over where a wire ENDS that has to be
+    #: above this one -- because it, or a wire that has to be above it, lies across one of
+    #: this wire's own ends. Each would then have to be above the other: a loop
+    #: (``occupancy.stacking_loops``) that no stacking draws apart and nobody can solder
+    #: in any order. Priced like a wire of its own, so the search takes almost any detour
+    #: first. Unused when straight.
+    wire_into_loop: float = 30
     #: One bend in a SOLDER TRACE. Zero -- which is every golden route, and "balanced" -- is
     #: the original search, to which a run that goes one hole across and one hole down in a
     #: staircase costs exactly what an L of the same length does, so it drew staircases:
@@ -565,6 +583,10 @@ def route_connection(
         ),
         covered_holes=_covered_holes(doc) if options.wire_path == "grid" else frozenset(),
         covered_steps=_covered_steps(doc) if options.wire_path == "grid" else frozenset(),
+        joint_holes=(
+            _joint_holes(doc, occupancy) if options.wire_path == "grid" else frozenset()
+        ),
+        loop_holes=_loop_holes(doc, from_, to) if options.wire_path == "grid" else frozenset(),
     )
 
     candidates: list[RouteCandidate] = []
@@ -706,6 +728,12 @@ class _RouteContext:
     #: ...and every step between two neighbouring holes that one of them already runs along,
     #: smaller hole first -- see ``RouterCosts.wire_along_copper``.
     covered_steps: frozenset[tuple[tuple[int, int], tuple[int, int]]] = frozenset()
+    #: For a wire laid along the grid: every hole where something is soldered on the solder
+    #: side, a pin or a conductor's end -- see ``RouterCosts.wire_over_joint``.
+    joint_holes: frozenset[tuple[int, int]] = frozenset()
+    #: For a wire laid along the grid: where the wires end that have to be above this one
+    #: -- see ``RouterCosts.wire_into_loop`` and :func:`_loop_holes`.
+    loop_holes: frozenset[tuple[int, int]] = frozenset()
     #: Whether a step between two neighbouring holes lies across blocked copper, asked once
     #: per step and remembered -- the search asks about the same step from several states.
     blocked_edges: dict[tuple[tuple[int, int], tuple[int, int]], bool] = field(
@@ -1640,6 +1668,8 @@ def _find_grid_wire_path(
     bend = ctx.opts.costs.wire_bend
     over = ctx.opts.costs.wire_over_copper
     along = ctx.opts.costs.wire_along_copper
+    over_joint = ctx.opts.costs.wire_over_joint
+    into_loop = ctx.opts.costs.wire_into_loop
     start = _key(from_)
     goal = _key(to)
 
@@ -1684,8 +1714,13 @@ def _find_grid_wire_path(
             if bare and _step_crosses_copper(ctx, (col, row), nxt):
                 continue
             cost = g + step + (bend if heading not in (-1, turn) else 0.0)
-            if nxt != goal and nxt in ctx.covered_holes:
-                cost += over
+            if nxt != goal:
+                if nxt in ctx.covered_holes:
+                    cost += over
+                if nxt in ctx.joint_holes:
+                    cost += over_joint
+                if nxt in ctx.loop_holes:
+                    cost += into_loop
             if (min((col, row), nxt), max((col, row), nxt)) in ctx.covered_steps:
                 cost += along
             next_state = (nxt[0], nxt[1], turn)
@@ -1752,6 +1787,62 @@ def _covered_holes(doc: PerfDocument) -> frozenset[tuple[int, int]]:
             for hole in holes_under_line(conductor.path[index], conductor.path[index + 1]):
                 keys.add(_key(hole))
     return frozenset(keys)
+
+
+def _joint_holes(doc: PerfDocument, occupancy: OccupancyIndex) -> frozenset[tuple[int, int]]:
+    """Every hole where something is soldered on the solder side -- see ``wire_over_joint``.
+
+    Every pin (a through-hole lead is soldered underneath, and its trimmed stub stands
+    below the pad), and both ends of every solder-side conductor.
+    """
+    keys = {_key(hole) for hole in occupancy.occupied_holes() if occupancy.pin_at(hole)}
+    for conductor in doc.conductors:
+        if conductor.side == "bottom" and conductor.path:
+            keys.add(_key(conductor.path[0]))
+            keys.add(_key(conductor.path[-1]))
+    return frozenset(keys)
+
+
+def _loop_holes(doc: PerfDocument, from_: HoleCoord, to: HoleCoord) -> frozenset[tuple[int, int]]:
+    """Where the wires end that a new wire from ``from_`` to ``to`` would have to lie under.
+
+    ``occupancy.stacking_layers`` puts a wire lying across the hole another one ends in
+    above it. So every solder-side wire lying across ``from_`` or ``to`` has to be above
+    the new one, and so does every wire lying across the end of one of those, and so on.
+    The new wire lying across the end of any of them would make each of the two have to be
+    above the other -- see ``wire_into_loop``.
+    """
+    wires = [
+        conductor
+        for conductor in doc.conductors
+        if conductor.side == "bottom"
+        and len(conductor.path) >= 2
+        and not contacts_every_path_hole(conductor)
+    ]
+    across: list[set[tuple[int, int]]] = []
+    for wire in wires:
+        ends = {_key(wire.path[0]), _key(wire.path[-1])}
+        under = {
+            _key(hole)
+            for start, stop in itertools.pairwise(wire.path)
+            for hole in holes_under_line(start, stop)
+        }
+        across.append(under - ends)
+    below = {_key(from_), _key(to)}
+    above: set[int] = set()
+    grew = True
+    while grew:
+        grew = False
+        for index, holes in enumerate(across):
+            if index not in above and holes & below:
+                above.add(index)
+                below |= {_key(wires[index].path[0]), _key(wires[index].path[-1])}
+                grew = True
+    return frozenset(
+        key
+        for index in above
+        for key in (_key(wires[index].path[0]), _key(wires[index].path[-1]))
+    ) - {_key(from_), _key(to)}
 
 
 def _covered_steps(doc: PerfDocument) -> frozenset[tuple[tuple[int, int], tuple[int, int]]]:

@@ -1144,19 +1144,26 @@ def test_nothing_in_the_mcp_package_writes_to_stdout() -> None:
 
 def test_reroute_replaces_the_routing_rather_than_adding_to_it(loaded: BoardSession) -> None:
     """autoroute ADDS; after a part moves that grows the board every time, because the
-    copper laid for the old position still joins the right pins and nothing flags it."""
+    copper laid for the old position still joins the right pins and nothing flags it.
+    Rerouted, the board holds what routing the moved board from bare lays -- which need not
+    be what the first position took, so it is compared with that, not with the first."""
     loaded.autoroute()
     fresh = loaded.get_status()["conductors"]
 
     loaded.move_component("R1", "A15")
     loaded.autoroute()
-    assert loaded.get_status()["conductors"] > fresh
+    grown = loaded.get_status()["conductors"]
+    assert grown > fresh
 
     result = loaded.reroute()
 
+    moved = BoardSession()
+    assert moved.open_document(str(GOLDEN))["ok"]
+    moved.move_component("R1", "A15")
+    moved.autoroute()
     assert result["ok"] and result["committed"]
     assert result["ripped_up"] > 0
-    assert loaded.get_status()["conductors"] == fresh
+    assert loaded.get_status()["conductors"] == moved.get_status()["conductors"] < grown
     assert loaded.run_lvs()["opens"] == 0
 
 

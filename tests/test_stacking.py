@@ -124,3 +124,17 @@ def test_a_board_stacks_the_same_before_save_and_after_open(path: Path, board_id
     assert stacking_layers(doc) == stacking_layers(
         dataclasses.replace(doc, conductors=tuple(reversed(doc.conductors)))
     )
+
+
+@pytest.mark.parametrize(("path", "board_id"), CASES)
+def test_auto_wire_makes_no_stacking_loop(path: Path, board_id: str) -> None:
+    """Two wires each lying across the other's end can be soldered in neither order, and no
+    stacking draws them apart. The router prices lying across the end of a wire that has to
+    be above the new one (``RouterCosts.wire_into_loop``); the auto-wired atmega328-relay
+    and arduino-io-shield each made one before it did."""
+    doc = dict(_boards(path))[board_id]
+    if not doc.components:
+        pytest.skip("nothing to wire")
+    bare = dataclasses.replace(doc, conductors=())
+    plan = plan_autoroute(bare, LOOKUP, AutorouteOptions(router=RouterOptions(wire_path="grid")))
+    assert stacking_loops(plan.document) == ()

@@ -61,11 +61,12 @@ from perfboard_studio.model import (
     StripConductor,
     WireConductor,
 )
-from perfboard_studio.occupancy import build_occupancy
+from perfboard_studio.occupancy import build_occupancy, stacking_loops
 from perfboard_studio.router import (
     DEFAULT_ROUTER_COSTS,
     RouteRequest,
     RouterOptions,
+    _loop_holes,
     route_connection,
 )
 
@@ -843,6 +844,61 @@ def test_an_insulated_wire_on_the_grid_may_pass_over_a_pin() -> None:
     result = route_connection(board, _lookup, RouteRequest(from_=h(2, 4), to=h(8, 4)), GRID)
 
     assert _wire(result, "insulated-wire").path == (h(2, 4), h(8, 4))
+
+
+def test_an_insulated_wire_on_the_grid_goes_round_a_row_of_joints() -> None:
+    """Three pins on the direct row: each comes down to its pad with a trimmed stub below it,
+    so a wire lying across them is stacked above all three. A free row costs two bends."""
+    board = doc(
+        (
+            comp("a", "A", h(2, 4)),
+            comp("b", "B", h(8, 4)),
+            *(comp(f"x{col}", f"X{col}", h(col, 4)) for col in (4, 5, 6)),
+        )
+    )
+
+    result = route_connection(board, _lookup, RouteRequest(from_=h(2, 4), to=h(8, 4)), GRID)
+
+    wire_ = _wire(result, "insulated-wire")
+    lies_on = {
+        hole for a, b in itertools.pairwise(wire_.path) for hole in holes_under_line(a, b)
+    }
+    assert not lies_on & {h(4, 4), h(5, 4), h(6, 4)}, wire_.path
+
+
+def test_a_wire_on_the_grid_does_not_lie_across_the_end_of_one_lying_across_its_own() -> None:
+    """W lies across A, where the new wire starts, so W has to be stacked above it. W comes
+    round and ends at (5, 7), straight down the new wire's way: lying across that would put
+    the new wire above W as well -- a loop nobody can solder in either order. Priced at
+    nothing, the straight column is taken and the two make a loop; the wire goes round."""
+    lying = WireConductor(
+        id="w-lying",
+        path=(h(3, 4), h(7, 4), h(7, 7), h(5, 7)),
+        kind="insulated-wire",
+        side="bottom",
+    )
+    board = doc((comp("a", "A", h(5, 4)), comp("b", "B", h(5, 9))), (lying,))
+
+    result = route_connection(board, _lookup, RouteRequest(from_=h(5, 4), to=h(5, 9)), GRID)
+
+    new = _wire(result, "insulated-wire")
+    lies_on = {hole for a, b in itertools.pairwise(new.path) for hole in holes_under_line(a, b)}
+    assert h(5, 7) not in lies_on - {new.path[0], new.path[-1]}, new.path
+    placed = WireConductor(id="w-new", path=new.path, kind=new.kind, side="bottom")
+    assert stacking_loops(dataclasses.replace(board, conductors=(lying, placed))) == ()
+
+
+def test_the_wires_that_must_lie_above_a_new_one_are_followed_through() -> None:
+    """W1 lies across the new wire's end, so it is above; W2 lies across W1's end, so it is
+    above W1 and therefore above the new wire too. Both their ends are loop holes."""
+    w1 = WireConductor(id="w1", path=(h(3, 2), h(3, 6)), kind="insulated-wire", side="bottom")
+    w2 = WireConductor(id="w2", path=(h(1, 6), h(5, 6)), kind="insulated-wire", side="bottom")
+    far = WireConductor(id="w3", path=(h(8, 1), h(8, 9)), kind="insulated-wire", side="bottom")
+    board = doc((), (w1, w2, far))
+
+    holes = _loop_holes(board, h(3, 4), h(9, 4))
+
+    assert holes == frozenset({(3, 2), (3, 6), (1, 6), (5, 6)})
 
 
 def test_a_bend_is_priced() -> None:
