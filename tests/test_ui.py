@@ -3727,7 +3727,10 @@ def test_solder_and_wire_are_not_the_same_grey() -> None:
     from perfboard_studio.ui.view3d import BARE_RGB, SOLDER_RGB
 
     difference = sum(abs(a - b) for a, b in zip(SOLDER_RGB, BARE_RGB, strict=True))
-    assert difference > 0.5, "solder and tinned wire are still indistinguishable"
+    # Wet tin made solder a lighter grey (0.68 -> 0.80) and the gap with the wire's tin
+    # 0.68 -> 0.32; what keeps them apart is now also the section (a squashed run with a
+    # joint at every pad against a round wire) and the sheen (0.24 against 0.12).
+    assert difference > 0.3, "solder and tinned wire are still indistinguishable"
 
 
 def test_a_solder_run_is_the_size_of_a_solder_run() -> None:

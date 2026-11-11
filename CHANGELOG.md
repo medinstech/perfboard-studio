@@ -43,6 +43,10 @@ closed without a bump.
 - **An example opens with its names in the window's language.** A Turkish window opened the
   two-board example on boards called "Relay driver" and "Supply"; the copy opened now carries
   the names translated, in the strip, the System view, the guide and anything saved from it.
+- **Solder is wet tin in the 3D view.** A bright, smooth metal with a sharp highlight instead of
+  a broad matte grey, the same shape as before with a slightly fuller joint; a run's width and
+  height follow its buildup, and a wired run shows its brass spine in the waists and past each
+  end, as it does in 2D.
 
 ## [0.24.0] - 2026-11-10
 

@@ -220,7 +220,7 @@ PAD_RGB = (0.80, 0.66, 0.32)
 #: Solder: dull pewter, and rough. Solder is NOT shiny wire, and PLAN.md Sec 8.3 makes
 #: telling the two apart at a glance a requirement of this view rather than a nicety --
 #: these two used to be (0.72,0.74,0.77) and (0.85,0.87,0.89), which is the same grey.
-SOLDER_RGB = (0.68, 0.69, 0.72)
+SOLDER_RGB = (0.80, 0.81, 0.84)
 #: Tinned copper wire: brighter, and specular enough to read as metal.
 BARE_RGB = (0.90, 0.92, 0.95)
 #: An insulated wire with no net colour of its own.
@@ -908,10 +908,13 @@ SLEEVE = (0.0, 0.28)
 TINNED = (1.0, 0.34)
 #: Bright tinned wire, which is what a bare-wire link is. Tighter than a pad because it is
 #: drawn wire rather than plated foil.
-BRIGHT_TIN = (1.0, 0.18)
-#: Solder, and it is ROUGH metal. Making it smooth is what once made a run look like wire,
-#: which is the one thing it must not look like.
-SOLDER_MAT = (1.0, 0.44)
+BRIGHT_TIN = (1.0, 0.12)
+#: Solder, WET TIN: freshly flowed solder is a bright, low-roughness metal with a sharp
+#: highlight, and that is what makes a joint read as made rather than as grey plastic. It
+#: was a broad matte sheen (0.44) so that a run could not be mistaken for wire; what keeps
+#: the two apart now is the colour (a cooler, lighter grey than the wire's tin), the
+#: squashed section and the joints along it, which the tests below hold.
+SOLDER_MAT = (1.0, 0.24)
 #: Bare steel and aluminium: a TO-220 tab, a screw head, an electrolytic's crimped rim.
 STEEL = (1.0, 0.30)
 #: A plated pin. The one part of a board with a mirror finish on it.
@@ -1031,14 +1034,32 @@ def bore_span_z(board: Board) -> tuple[float, float]:
 #: rather than a length of solder. It is one varying-radius surface now; see
 #: ``_trace_swell``.
 TRACE_JOINT_RADIUS_MM = 0.72
-TRACE_WAIST_RATIO = 0.52
+TRACE_WAIST_RATIO = 0.46
 
 #: How tall a run stands against how wide it is. Solder WETS copper and spreads: a run is a
 #: low bright ridge and a dome on each pad, not a pipe -- and a round tube, however its
 #: radius swells, read as grey plumbing laid on the board. Squashed about the copper it is
 #: fused to, so the joints and the bridges keep their silhouette from above and lose the
 #: height that made them tubes.
-TRACE_FLATTEN = 0.5
+TRACE_FLATTEN = 0.62
+
+#: What ``SolderTraceConductor.buildup`` does to a run: its width (a multiple of the
+#: radius) and its height (a multiple of the flatten), "normal" being exactly the run
+#: above. Mild on purpose -- a heavy run is the same shape, fatter, and never wider than
+#: the pad it sits on, or it hides the copper that says which pads it is soldered to.
+TRACE_BUILDUP: dict[str, tuple[float, float]] = {
+    "light": (0.8, 0.9),
+    "normal": (1.0, 1.0),
+    "heavy": (1.28, 1.25),
+}
+
+#: The tinned or lead-offcut wire a wired run is laid over, drawn as its own tube through
+#: the pads. It shows in the waists and a little past each end -- which is how a wired
+#: run differs from plain solder on the bench, and what the 2D view's brass line says.
+SPINE_RGB = (0.80, 0.53, 0.28)
+SPINE_LIFT_MM = 0.26
+SPINE_PAST_END_MM = 0.9
+SPINE_DEFAULT_RADIUS_MM = 0.30
 
 #: Points along a run per step from one pad to the next. Two -- a pad and a midpoint --
 #: made the radius change in straight lines, and a run's outline came out as a row of
@@ -1049,8 +1070,8 @@ TRACE_SAMPLES_PER_STEP = 8
 #: this radius on the copper, up the lead this far. A joint is a cone with a concave flank
 #: -- a meniscus -- and it is what makes a board look soldered at all: without it a lead
 #: came out of a bare ring, which is a board nobody has finished.
-SOLDER_FILLET_BASE_MM = 0.80
-SOLDER_FILLET_HEIGHT_MM = 0.55
+SOLDER_FILLET_BASE_MM = 0.90
+SOLDER_FILLET_HEIGHT_MM = 0.62
 
 #: How much insulation is stripped off each end of an insulated wire, and the tinned core
 #: that shows there and goes down into the hole. A sleeve running right into the joint was
@@ -1099,9 +1120,9 @@ BEAD_RESOLUTION = 20
 #: How far each stands off its centreline UPWARD -- a run squashed by TRACE_FLATTEN -- and
 #: the step is twice the tallest: two of the same kind can cross, and since runs were
 #: squashed the tallest pair is two insulated wires, not a wire over a run.
+_RUN_STANDS_MM = max(w * h for w, h in TRACE_BUILDUP.values()) * TRACE_JOINT_RADIUS_MM * TRACE_FLATTEN
 STACK_STEP_MM = (
-    2 * max(INSULATED_RADIUS_MM, TRACE_JOINT_RADIUS_MM * TRACE_FLATTEN, BARE_WIRE_RADIUS_MM)
-    + 0.15
+    2 * max(INSULATED_RADIUS_MM, _RUN_STANDS_MM, BARE_WIRE_RADIUS_MM) + 0.15
 )
 
 
@@ -1110,10 +1131,17 @@ def conductor_radius(cond: Conductor) -> float:
     :func:`conductor_z`, which needs it to rest the tube ON the copper rather than near
     it."""
     if contacts_every_path_hole(cond):
-        return TRACE_JOINT_RADIUS_MM  # the widest it gets, which is what has to clear
+        # The widest it gets, which is what has to clear -- scaled by how much solder it
+        # carries.
+        return TRACE_JOINT_RADIUS_MM * _buildup(cond)[0]
     if cond.kind in ("insulated-wire", "top-jumper"):
         return INSULATED_RADIUS_MM
     return BARE_WIRE_RADIUS_MM
+
+
+def _buildup(cond: Conductor) -> tuple[float, float]:
+    """(width, height) multiples of a solder run's ``buildup``; (1, 1) for a wire."""
+    return TRACE_BUILDUP.get(getattr(cond, "buildup", "normal"), (1.0, 1.0))
 
 
 def conductor_z(cond: Conductor, board: Board, stack: int = 0) -> float:
@@ -6806,7 +6834,7 @@ def build_conductor(
         actor = _tube_actor(centreline, radius, swell)
         if swell is not None:
             # Squashed about the copper, for TRACE_FLATTEN's reason.
-            _flatten_about(actor, joint_z)
+            _flatten_about(actor, joint_z, _buildup(cond)[1])
         rgb = (_own_rgb(cond) or SOLDER_RGB) if is_trace else wire_rgb(cond, net_class, signal_index)
         actor.GetProperty().SetColor(*rgb)
         # Solder is metal and it is ROUGH metal -- a broad soft sheen rather than the tight
@@ -6853,13 +6881,40 @@ def build_conductor(
     beads = vtk.vtkActor()
     beads.SetMapper(glyph)
     if is_trace:
-        _flatten_about(beads, joint_z)
+        _flatten_about(beads, joint_z, _buildup(cond)[1])
     beads.GetProperty().SetColor(*SOLDER_RGB)
     # The same material as the run it swells out of -- a joint and the solder leading into
     # it are one piece of metal, and two finishes would draw a seam that is not there.
     _finish(beads.GetProperty(), SOLDER_MAT)
     actors.append(beads)
+    if cond.kind == "solder-trace-wired":
+        spine = _spine_actor(cond, board, joint_z)
+        if spine is not None:
+            actors.append(spine)
     return actors
+
+
+def _spine_actor(cond: Conductor, board: Board, joint_z: float) -> vtk.vtkActor | None:
+    """The wire a wired run is laid over: a brass-coloured tube along its pads, standing
+    out of the copper on the face the run is on, and carried a little past each end --
+    where it shows in the run's waists and beyond its last joint."""
+    if len(cond.path) < 2:
+        return None
+    spec = getattr(cond, "spine", None)
+    radius = min(max(spec.gauge / 2, 0.2), 0.4) if spec is not None else SPINE_DEFAULT_RADIUS_MM
+    z = joint_z + (-SPINE_LIFT_MM if cond.side == "bottom" else SPINE_LIFT_MM)
+    pads = [_xy(board, hole) for hole in cond.path]
+
+    def beyond(inner: tuple[float, float], end: tuple[float, float]) -> tuple[float, float, float]:
+        dx, dy = end[0] - inner[0], end[1] - inner[1]
+        length = math.hypot(dx, dy) or 1.0
+        return (end[0] + dx / length * SPINE_PAST_END_MM, end[1] + dy / length * SPINE_PAST_END_MM, z)
+
+    line = [beyond(pads[1], pads[0]), *((x, y, z) for x, y in pads), beyond(pads[-2], pads[-1])]
+    actor = _tube_actor(line, radius)
+    actor.GetProperty().SetColor(*SPINE_RGB)
+    _finish(actor.GetProperty(), TINNED)
+    return actor
 
 
 def _tube_actor(
@@ -6911,11 +6966,12 @@ def _tube_actor(
     return actor
 
 
-def _flatten_about(actor: vtk.vtkActor, plane_z: float) -> None:
-    """Squash an actor by ``TRACE_FLATTEN`` towards the plane ``z = plane_z`` -- the copper
-    a run of solder is fused to -- leaving it where it is in x and y."""
+def _flatten_about(actor: vtk.vtkActor, plane_z: float, height: float = 1.0) -> None:
+    """Squash an actor by ``TRACE_FLATTEN`` (times ``height``, a run's buildup) towards the
+    plane ``z = plane_z`` -- the copper a run of solder is fused to -- leaving it where it
+    is in x and y."""
     actor.SetOrigin(0.0, 0.0, plane_z)
-    actor.SetScale(1.0, 1.0, TRACE_FLATTEN)
+    actor.SetScale(1.0, 1.0, TRACE_FLATTEN * height)
 
 
 def _trimmed(
