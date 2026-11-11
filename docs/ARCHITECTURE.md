@@ -3626,3 +3626,55 @@ there rather than onto a barrel nobody can see into -- and one continuity probe 
 ahead of phase 7's net checks, so a hole whose plating did not take is found by itself and
 not as a net that fails. Phase 7's title says so only on a board that has some, which is why
 every guide golden, English and Turkish, kept its bytes.
+
+## A finger is a place on the grid, not a part, and a rail is solder laid along it
+
+Every stock board in `boardfamily` that has a strip has it OUTSIDE the grid
+(`EdgeConnector.outside`): a solid finger in the border beside each outermost hole, with no
+hole of its own. A rail is solder run along those fingers, and a bridge is the run from one
+finger to the grid hole beside it. Both are ordinary `SolderTraceConductor`s, because the
+finger is a CELL: the coordinate one step past the hole it stands beside -- col -1, col
+`cols`, row -1 or row `rows` (`geometry.step_outside`, `finger_cells`).
+
+**Why a cell and not an object.** Everything that reads copper already speaks hole
+coordinates: connectivity joins along a path, occupancy blocks the holes a path lists, the
+router keys its sets on them, DRC, the guide, `wiringstats`, stacking, undo, persist and the
+MCP server name them. A rail object would have needed a second vocabulary in each of those,
+and every one would have had to learn what a rail is. As a cell, a rail is a solder trace and
+every one of them already knows that. Nothing is added to the file format either: a rail is
+a solder trace whose path has a hole at col -1, so `DOCUMENT_FORMAT_VERSION` stays 1 and no
+golden moves -- no fixture has an outside strip.
+
+**What it costs, and what pins it.** For the first time a document a command accepts holds
+negative coordinates, and anything that keeps the grid as a list reads `cells[-1]` as the
+far column without a word. Nothing in the engine does: everything is keyed on `hole_key` or
+`(col, row)` tuples, and `tests/test_rails.py` holds a rail on col -1 and one on row -1 to
+leaving the last column and the last row exactly as they were in occupancy, in the router's
+blocked and dead sets and its routes, in DRC, and in the holes the 2D pad grid is drawn
+without.
+
+**Off the board stays off the board.** One predicate, `geometry.finger_holds`, answers for
+both doors: `commands.assert_valid_path` (refused, `not-on-finger` or `off-board`) and DRC's
+`conductor-off-board` (reported, for a file written by hand). Solder only -- a wire has no
+hole to go through -- and only on a face the finger has copper on. Where no finger stands --
+a board without a strip, the bare rows a strip leaves at its ends, the corner, two steps out,
+a finger a corner bore took, stripboard and both breadboards, whose patterns decide what is
+joined -- the place is off the board as it always was. A command that takes a finger away
+from under a rail is refused after the fact (`_assert_rails_stand`, in `_OnTheSystem`):
+deleting the strip, drilling into it, or growing the board by a row, which would make the
+bottom fingers' row a row of the grid and the rail on it a run nobody laid.
+
+**No hole, so no plating.** Connectivity's pass 2b joins a pinless hole's two faces through
+its plating; a finger has none, so solder on its two faces is two pieces of copper.
+
+**The cell is an address, not a position.** `hole_to_mm` of a cell is one pitch past the
+grid, which is on the copper on the 5 x 7 cm double-sided board, in the gap between copper and
+pad on the 6 x 8 cm, and 4 mm short of the copper on the 9 x 15 cm. So `hole_to_mm` is
+unchanged and a cell exists wherever a finger does; anything that DRAWS solder on a finger
+asks `finger_cell_mm`, the middle of its copper.
+
+**Its name.** `format_hole` prints any place one step past an edge beside an outermost hole as
+that hole and the edge -- "A7/L", "E1/T", "X7/R", "E18/B" -- and `parse_hole` reads it back
+in either case; a corner and anything further out keep "(col -1, row -1)", and a breadboard
+keeps its own names. The guide says it in words where it first uses it, and in Turkish the
+suffix goes on the word beside the address, never on it: "A7 deliğinin yanındaki parmak".

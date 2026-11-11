@@ -35,6 +35,7 @@ from .model import (
     BoardSide,
     BoardText,
     ComponentInstance,
+    ConductorKind,
     EdgeConnector,
     FingerShape,
     Footprint,
@@ -57,6 +58,12 @@ from .model import (
 #: One or more uppercase letters (the column, in bijective base-26) followed by a
 #: 1-indexed row with no leading zero. Anchored so trailing garbage is rejected.
 _HOLE_REF_PATTERN = re.compile(r"^([A-Z]+)([1-9][0-9]*)$")
+#: The place one step past the grid's edge, beside an outermost hole: that hole's address,
+#: a slash, and the edge -- "A7/L" is left of A7. It is where an outside finger stands
+#: (:func:`finger_cells`), and the only off-grid place with a name of its own.
+_EDGE_REF_PATTERN = re.compile(r"^([A-Z]+[1-9][0-9]*)/([LRTB])$")
+_EDGE_LETTERS: dict[BoardEdge, str] = {"left": "L", "right": "R", "top": "T", "bottom": "B"}
+_LETTER_EDGES: dict[str, BoardEdge] = {letter: edge for edge, letter in _EDGE_LETTERS.items()}
 
 
 def _column_letters(col: int) -> str:
@@ -317,6 +324,16 @@ def parse_hole(text: str, board: Board | None = None) -> HoleCoord:
     other board it is :func:`hole_ref_to_coord`, in either case. Raises ValueError.
     """
     stripped = text.strip()
+    edge_ref = _EDGE_REF_PATTERN.match(stripped.upper())
+    if edge_ref is not None and board is not None and not has_breadboard_pattern(board):
+        beside = hole_ref_to_coord(edge_ref.group(1))
+        edge = _LETTER_EDGES[edge_ref.group(2)]
+        if not is_inside_board(beside, board) or not _on_edge(beside, edge, board):
+            raise ValueError(
+                f"{text!r} names the place past the {edge} edge beside {edge_ref.group(1)}, "
+                f"which is not a hole on that edge of this {board.cols}x{board.rows} board."
+            )
+        return step_outside(beside, edge)
     if board is not None and has_breadboard_pattern(board):
         for spelling in (stripped, stripped.lower(), stripped.upper()):
             found = parse_hole_name(board, spelling)
@@ -355,10 +372,53 @@ def format_hole(c: HoleCoord, board: Board | None = None) -> str:
             return name
         if 0 <= c.col < board.cols and 0 <= c.row < board.rows:
             return f"column {c.col + 1} (no hole)"
+    elif board is not None and (outside := edge_beside(c, board)) is not None:
+        # One step past the grid beside an outermost hole, where an outside finger stands:
+        # "A7/L", which parse_hole reads back. A breadboard keeps its own words above.
+        beside, edge = outside
+        return f"{coord_to_hole_ref(beside)}/{_EDGE_LETTERS[edge]}"
     try:
         return coord_to_hole_ref(c)
     except ValueError:
         return f"(col {c.col}, row {c.row})"
+
+
+def step_outside(hole: HoleCoord, edge: BoardEdge) -> HoleCoord:
+    """The place one step past ``edge`` from ``hole``: where an outside finger beside an
+    outermost hole stands, as a coordinate (col -1, col cols, row -1 or row rows)."""
+    if edge == "left":
+        return HoleCoord(hole.col - 1, hole.row)
+    if edge == "right":
+        return HoleCoord(hole.col + 1, hole.row)
+    if edge == "top":
+        return HoleCoord(hole.col, hole.row - 1)
+    return HoleCoord(hole.col, hole.row + 1)
+
+
+def edge_beside(c: HoleCoord, board: Board) -> tuple[HoleCoord, BoardEdge] | None:
+    """The outermost hole a place one step past the grid is beside, and which edge it is
+    past -- or None for a hole on the grid, a corner, or anything further out."""
+    in_cols = 0 <= c.col < board.cols
+    in_rows = 0 <= c.row < board.rows
+    if in_rows and c.col == -1:
+        return HoleCoord(0, c.row), "left"
+    if in_rows and c.col == board.cols:
+        return HoleCoord(board.cols - 1, c.row), "right"
+    if in_cols and c.row == -1:
+        return HoleCoord(c.col, 0), "top"
+    if in_cols and c.row == board.rows:
+        return HoleCoord(c.col, board.rows - 1), "bottom"
+    return None
+
+
+def _on_edge(hole: HoleCoord, edge: BoardEdge, board: Board) -> bool:
+    if edge == "left":
+        return hole.col == 0
+    if edge == "right":
+        return hole.col == board.cols - 1
+    if edge == "top":
+        return hole.row == 0
+    return hole.row == board.rows - 1
 
 
 # ---------------------------------------------------------------------------
@@ -1601,6 +1661,70 @@ def _outside_finger_rect(
         return RectMm(outline.x + inset, centre.y - half_width, length, 2 * half_width)
     right = outline.x + outline.width - inset
     return RectMm(right - length, centre.y - half_width, length, 2 * half_width)
+
+
+# ---------------------------------------------------------------------------
+# Rails: solder along the outside fingers
+#
+# An outside finger is a CELL, a place one step past the grid, and not an object a rail is
+# made of: a rail is an ordinary solder run laid along the cells, and the run from a cell to
+# the hole beside it is the bridge. See "A rail is solder on the fingers" in
+# docs/ARCHITECTURE.md.
+# ---------------------------------------------------------------------------
+
+
+#: What holds to a finger: solder. A finger has no hole, so a wire has nothing to go
+#: through and nothing to be soldered in.
+RAIL_KINDS: frozenset[ConductorKind] = frozenset({"solder-trace", "solder-trace-wired"})
+
+
+@dataclass(frozen=True, slots=True)
+class FingerCell:
+    """One outside finger as a place on the grid: ``cell`` is one step past ``beside``,
+    the outermost hole the finger stands beside, on ``connector``'s edge."""
+
+    cell: HoleCoord
+    beside: HoleCoord
+    connector: EdgeConnector
+
+
+def finger_cells(doc: PerfDocument) -> dict[str, FingerCell]:
+    """Every place solder may lie off the grid, keyed by ``hole_key``: each outside finger
+    a bore has not taken, at the place one step past the hole it stands beside.
+
+    The cell is an ADDRESS, not a position. ``hole_to_mm`` of it is one pitch past the
+    grid, and the finger is wherever its strip was made: on the 5 x 7 cm double-sided board
+    that point is on the copper, on the 6 x 8 cm it is in the gap between the copper and the
+    pad, on the 9 x 15 cm 4 mm short of the copper. Anything that DRAWS solder on a finger
+    draws it at :func:`finger_cell_mm`. A board of joined holes -- stripboard, a breadboard
+    of either kind -- has no cells: its pattern decides what is joined, not solder."""
+    board = doc.board
+    if board.type == "stripboard" or has_breadboard_pattern(board):
+        return {}
+    cells: dict[str, FingerCell] = {}
+    for connector in doc.edge_connectors:
+        if not connector.outside:
+            continue
+        for beside in surviving_finger_holes(doc, connector):
+            rect = edge_finger_rect(connector, beside, board)
+            if rect.width <= 0 or rect.height <= 0:
+                continue
+            cell = step_outside(beside, connector.edge)
+            cells.setdefault(hole_key(cell), FingerCell(cell, beside, connector))
+    return cells
+
+
+def finger_cell_mm(cell: FingerCell, board: Board) -> Point2:
+    """Where solder on a finger is: the middle of its copper (``edge_finger_rect``), which is
+    where a renderer puts a cell that ``hole_to_mm`` would put in the border."""
+    rect = edge_finger_rect(cell.connector, cell.beside, board)
+    return Point2(rect.x + rect.width / 2, rect.y + rect.height / 2)
+
+
+def finger_holds(cell: FingerCell, kind: ConductorKind, side: BoardSide) -> bool:
+    """Whether a conductor of this kind on this face may lie on the finger: solder, on a
+    face the finger has copper on."""
+    return kind in RAIL_KINDS and cell.connector.face in ("both", side)
 
 
 # ---------------------------------------------------------------------------

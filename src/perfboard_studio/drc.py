@@ -61,6 +61,7 @@ from .footprints import (
 )
 from .geometry import (
     BODY_OVERHANG_TOLERANCE_MM,
+    FingerCell,
     all_pin_holes,
     bodies_clash,
     body_gap_mm,
@@ -73,6 +74,8 @@ from .geometry import (
     entry_blocked_by,
     entry_faces_away,
     entry_side,
+    finger_cells,
+    finger_holds,
     fits_under_raised_board,
     format_hole,
     hangs_over_edge,
@@ -800,11 +803,24 @@ def _check_conductors_off_board(doc: PerfDocument) -> list[DrcViolation]:
     how much of it is outside, and one address to look at.
     """
     violations: list[DrcViolation] = []
+    cells: dict[str, FingerCell] | None = None
     for conductor in doc.conductors:
         path = conductor.path
         if not path:
             continue
         off_board = [h for h in path if not is_inside_board(h, doc.board)]
+        if not off_board:
+            continue
+        # Solder on an outside finger is a rail, not copper off the board -- on a face the
+        # finger has copper on. A wire there is still off the board: it needs a hole.
+        if cells is None:
+            cells = finger_cells(doc)
+        off_board = [
+            h
+            for h in off_board
+            if (cell := cells.get(hole_key(h))) is None
+            or not finger_holds(cell, conductor.kind, conductor.side)
+        ]
         if not off_board:
             continue
 

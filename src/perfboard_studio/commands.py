@@ -53,13 +53,17 @@ from .command import (
 from .footprints import get_footprint
 from .geometry import (
     OUTSIDE_FINGER_MIN_MM,
+    FingerCell,
     all_pin_holes,
     board_edge_margin_mm,
     board_text_problem,
     default_finger_length_mm,
     edge_axis,
     edge_connector_holes,
+    finger_cells,
+    finger_holds,
     format_hole,
+    hole_key,
     hole_to_mm,
     is_inside_board,
     legend_problem,
@@ -530,13 +534,34 @@ def assert_hole_on_board(hole: HoleCoord, board: Board, what: str) -> None:
         )
 
 
-def assert_valid_path(path: tuple[HoleCoord, ...], kind: ConductorKind, board: Board) -> None:
+def assert_valid_path(
+    path: tuple[HoleCoord, ...], kind: ConductorKind, doc: PerfDocument, side: BoardSide
+) -> None:
     """Path checks common to every conductor: on the board, non-empty, and -- for
     solder traces -- an unbroken chain of orthogonal neighbours, since solder cannot
-    reliably span a diagonal gap (model.py conductor path invariant, PLAN.md Sec 4.6)."""
+    reliably span a diagonal gap (model.py conductor path invariant, PLAN.md Sec 4.6).
+
+    On the board means on the grid, or -- for solder only, on a face with copper there --
+    on an outside finger (``geometry.finger_cells``): that is what a rail is. A wire is
+    refused a finger, which has no hole to take it."""
+    board = doc.board
     if len(path) < 2:
         raise CommandError("path-too-short", "A conductor path needs at least 2 holes.")
+    cells: dict[str, FingerCell] | None = None
     for hole in path:
+        if _is_plain_int(hole.col) and _is_plain_int(hole.row) and not is_inside_board(hole, board):
+            if cells is None:
+                cells = finger_cells(doc)
+            cell = cells.get(hole_key(hole))
+            if cell is not None:
+                if finger_holds(cell, kind, side):
+                    continue
+                raise CommandError(
+                    "not-on-finger",
+                    f"{format_hole(hole, board)} is a finger with no hole: only solder goes "
+                    f"on it, and only on a face it has copper on"
+                    + (f" (this one is on the {cell.connector.face})." if cell.connector.face != "both" else "."),
+                )
         assert_hole_on_board(hole, board, "Conductor path hole")
     # A hole named twice in a row is a segment of no length: nothing a wire or a run can
     # be, and a corner an agent's `via` repeated by mistake rather than a bend.
@@ -2287,7 +2312,7 @@ def _prepare_conductor(
     to skip validation. ``taken_ids`` accumulates across a batch, which is what catches a
     caller supplying the same id twice within one payload.
     """
-    assert_valid_path(spec.path, spec.kind, doc.board)
+    assert_valid_path(spec.path, spec.kind, doc, spec.side)
 
     if isinstance(spec, NewLeadBendConductor):
         require_component(doc, spec.component_id)
@@ -2371,7 +2396,7 @@ class _SetConductorPath:
         self, doc: PerfDocument, p: SetConductorPathPayload, ctx: CommandContext
     ) -> PerfDocument:
         existing = require_conductor(doc, p.id)
-        assert_valid_path(p.path, existing.kind, doc.board)
+        assert_valid_path(p.path, existing.kind, doc, existing.side)
         conductors = tuple(
             dataclasses.replace(c, path=p.path) if c.id == p.id else c for c in doc.conductors
         )
@@ -2554,7 +2579,12 @@ class _SetBoard:
                 f"{listed}{more} would fall outside a {b.cols}x{b.rows} board.",
             )
         for cond in doc.conductors:
-            stranded = next((h for h in cond.path if not is_inside_board(h, b)), None)
+            # A hole off the old grid is a finger (or already off the board), and whether
+            # the new board keeps it is _assert_rails_stand's to say, afterwards.
+            stranded = next(
+                (h for h in cond.path if is_inside_board(h, doc.board) and not is_inside_board(h, b)),
+                None,
+            )
             if stranded is not None:
                 raise CommandError(
                     "would-strand-conductor",
@@ -4211,12 +4241,57 @@ class _OnTheSystem:
 
     def apply(self, doc: PerfDocument, payload: Any, ctx: CommandContext) -> PerfDocument:
         after = self._inner.apply(doc, payload, ctx)
+        _assert_rails_stand(doc, after)
         if doc.boards or doc.cables or after.boards or after.cables:
             _assert_one_system(doc, after)
         return after
 
     def describe(self, payload: Any, doc: PerfDocument) -> str:
         return self._inner.describe(payload, doc)
+
+
+def _assert_rails_stand(before: PerfDocument, after: PerfDocument) -> None:
+    """Refuse a change that takes a finger out from under the solder laid on it.
+
+    Every command that can do so -- a resized or retyped board, a connector edited or
+    deleted, a bore drilled into a finger, a preset applied -- is checked here, after the
+    fact, rather than each one learning about rails: a rail stood on a finger that was
+    there before, and must stand on one that is there after, off the grid. Grown by a row,
+    the bottom fingers' row would be a row of the grid, and the rail a run nobody laid.
+    Solder already off the board before (a hand-edited file) is DRC's to report and does
+    not block anything else."""
+    if (
+        after.board is before.board
+        and after.edge_connectors is before.edge_connectors
+        and after.mounting_holes is before.mounting_holes
+    ):
+        return
+    railed = [
+        (cond, hole)
+        for cond in after.conductors
+        for hole in cond.path
+        if not is_inside_board(hole, before.board)
+    ]
+    if not railed:
+        return
+    was = finger_cells(before)
+    now = finger_cells(after)
+    for cond, hole in railed:
+        key = hole_key(hole)
+        if key not in was:
+            continue
+        cell = now.get(key)
+        if (
+            cell is not None
+            and not is_inside_board(hole, after.board)
+            and finger_holds(cell, cond.kind, cond.side)
+        ):
+            continue
+        raise CommandError(
+            "would-strand-conductor",
+            f"Conductor {cond.id} is laid on the finger at {format_hole(hole, before.board)}, "
+            f"which this change takes away. Delete the solder on it first.",
+        )
 
 
 class _OnBoard:

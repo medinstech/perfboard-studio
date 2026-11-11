@@ -1,0 +1,416 @@
+"""Rails: solder laid along a stock board's outside finger strip (0.25).
+
+An outside finger is a CELL, a place one step past the grid (col -1, col cols, row -1,
+row rows), and a rail is an ordinary solder run along the cells. That makes the grid's
+coordinates negative for the first time in a document a command accepts, so this file
+pins what that must not disturb as much as what it adds: a negative index into anything
+kept as a list reads the far edge, silently.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+
+import pytest
+
+from perfboard_studio.boardfamily import STANDARD_PRESETS
+from perfboard_studio.command import CommandBus, CommandContext
+from perfboard_studio.commands import (
+    AddConductorPayload,
+    AddEdgeConnectorPayload,
+    DeleteEdgeConnectorPayload,
+    NewSolderTraceConductor,
+    NewWireConductor,
+    SetBoardPayload,
+    create_document_id_generator,
+    create_empty_document,
+    create_standard_registry,
+    document_on_preset,
+)
+from perfboard_studio.connectivity import extract_physical_nets
+from perfboard_studio.drc import run_drc
+from perfboard_studio.footprints import footprint_lookup
+from perfboard_studio.geometry import (
+    edge_beside,
+    finger_cell_mm,
+    finger_cells,
+    format_hole,
+    hole_key,
+    holeless_positions,
+    holes_without_grid_pad,
+    parse_hole,
+    undrilled_holes,
+)
+from perfboard_studio.model import (
+    Board,
+    DocumentMeta,
+    HoleCoord,
+    PerfDocument,
+    SolderTraceConductor,
+    WireConductor,
+)
+from perfboard_studio.occupancy import build_occupancy
+from perfboard_studio.router import (
+    RouteRequest,
+    _dead_hole_keys,
+    _trace_blocked_holes,
+    route_connection,
+)
+from perfboard_studio.stripboard import cut_holes
+
+LOOKUP = footprint_lookup()
+META = DocumentMeta(name="rails", created="", modified="")
+
+
+def _preset(name: str, family: str):  # type: ignore[no-untyped-def]
+    return next(p for p in STANDARD_PRESETS if p.name == name and p.family == family)
+
+
+def _bus(doc: PerfDocument) -> CommandBus:
+    return CommandBus(
+        doc, create_standard_registry(), CommandContext(next_id=create_document_id_generator(doc))
+    )
+
+
+def _stock() -> PerfDocument:
+    """The 5 x 7 cm double-sided board as sold, finger strips down both long sides, plus
+    a strip along the top and the bottom so that row -1 and row ``rows`` have fingers too."""
+    doc = document_on_preset(create_empty_document(META), _preset("5 x 7 cm", "double-sided-fr4"))
+    bus = _bus(doc)
+    for edge in ("top", "bottom"):
+        result = bus.dispatch(
+            "edge-connector.add",
+            AddEdgeConnectorPayload(
+                edge=edge, start=3, count=doc.board.cols - 6, finger_width=1.7,
+                face="both", outside=True, id=f"ec-x-{edge}",
+            ),
+        )
+        assert result.ok, result.message
+    return bus.document
+
+
+def _with(doc: PerfDocument, *specs: NewSolderTraceConductor | NewWireConductor) -> PerfDocument:
+    bus = _bus(doc)
+    for spec in specs:
+        result = bus.dispatch("conductor.add", AddConductorPayload(conductor=spec))
+        assert result.ok, result.message
+    return bus.document
+
+
+def _refusal(doc: PerfDocument, spec: NewSolderTraceConductor | NewWireConductor) -> str:
+    result = _bus(doc).dispatch("conductor.add", AddConductorPayload(conductor=spec))
+    assert not result.ok
+    return result.code or ""
+
+
+def H(col: int, row: int) -> HoleCoord:
+    return HoleCoord(col, row)
+
+
+# ---------------------------------------------------------------------------
+# Which places are cells
+# ---------------------------------------------------------------------------
+
+
+def test_every_surviving_outside_finger_is_a_cell_one_step_past_its_hole() -> None:
+    doc = _stock()
+    cells = finger_cells(doc)
+    board = doc.board
+    assert cells, "the stock board's strips give cells"
+    for key, cell in cells.items():
+        assert key == hole_key(cell.cell)
+        assert edge_beside(cell.cell, board) == (cell.beside, cell.connector.edge)
+    # Down the long sides: every row but the ones the strip skips at the ends.
+    left = sorted(c.cell.row for c in cells.values() if c.connector.edge == "left")
+    strip = next(c for c in doc.edge_connectors if c.edge == "left")
+    assert left == list(range(strip.start, strip.start + strip.count))
+
+
+def test_a_cell_is_drawn_on_its_fingers_copper_wherever_the_strip_was_made() -> None:
+    """The cell is an address: on the 9 x 15 cm board one pitch past the grid is 4 mm short
+    of the copper, so a renderer asks ``finger_cell_mm``, never ``hole_to_mm``."""
+    from perfboard_studio.geometry import edge_finger_rect
+
+    for name in ("5 x 7 cm", "6 x 8 cm", "9 x 15 cm"):
+        doc = document_on_preset(create_empty_document(META), _preset(name, "double-sided-fr4"))
+        for cell in finger_cells(doc).values():
+            at = finger_cell_mm(cell, doc.board)
+            rect = edge_finger_rect(cell.connector, cell.beside, doc.board)
+            assert rect.x < at.x < rect.x + rect.width
+            assert rect.y < at.y < rect.y + rect.height
+
+
+def test_a_board_of_joined_holes_has_no_cells() -> None:
+    doc = _stock()
+    striped = dataclasses.replace(doc, board=dataclasses.replace(doc.board, type="stripboard"))
+    assert finger_cells(striped) == {}
+
+
+def test_a_finger_a_bore_took_is_not_a_cell() -> None:
+    doc = _stock()
+    assert doc.mounting_holes, "the stock board has its corner screws"
+    without = dataclasses.replace(doc, mounting_holes=())
+    assert set(finger_cells(doc)) <= set(finger_cells(without))
+
+
+# ---------------------------------------------------------------------------
+# Condition 4: what format_hole prints, parse_hole reads back
+# ---------------------------------------------------------------------------
+
+
+def test_a_finger_is_named_by_the_hole_beside_it_and_read_back() -> None:
+    doc = _stock()
+    board = doc.board
+    assert format_hole(H(-1, 6), board) == "A7/L"
+    assert format_hole(H(board.cols, 6), board).endswith("7/R")
+    assert format_hole(H(4, -1), board) == "E1/T"
+    assert format_hole(H(4, board.rows), board) == f"E{board.rows}/B"
+    for cell in finger_cells(doc).values():
+        text = format_hole(cell.cell, board)
+        assert parse_hole(text, board) == cell.cell
+        assert parse_hole(text.lower(), board) == cell.cell
+
+
+@pytest.mark.parametrize("preset", [p for p in STANDARD_PRESETS], ids=lambda p: f"{p.family}-{p.name}")
+def test_every_place_one_step_past_any_stock_grid_round_trips(preset) -> None:  # type: ignore[no-untyped-def]
+    board = document_on_preset(create_empty_document(META), preset).board
+    places = [H(-1, r) for r in range(board.rows)] + [H(board.cols, r) for r in range(board.rows)]
+    places += [H(c, -1) for c in range(board.cols)] + [H(c, board.rows) for c in range(board.cols)]
+    for place in places:
+        assert parse_hole(format_hole(place, board), board) == place
+
+
+def test_a_name_past_an_edge_must_be_beside_that_edge() -> None:
+    board = _stock().board
+    for text in ("B7/L", "A7/R", "E2/T", "E1/B", f"A{board.rows + 1}/L"):
+        with pytest.raises(ValueError):
+            parse_hole(text, board)
+
+
+def test_a_corner_and_anything_further_out_keep_the_plain_coordinates() -> None:
+    board = _stock().board
+    assert format_hole(H(-1, -1), board) == "(col -1, row -1)"
+    assert format_hole(H(-2, 3), board) == "(col -2, row 3)"
+    assert format_hole(H(-1, 3)) == "(col -1, row 3)", "no board, no edge to name"
+
+
+# ---------------------------------------------------------------------------
+# Condition 2: off the board stays off the board
+# ---------------------------------------------------------------------------
+
+
+def test_solder_lies_on_a_finger_on_either_face_it_has_copper_on() -> None:
+    doc = _stock()
+    for side in ("bottom", "top"):
+        railed = _with(
+            doc,
+            NewSolderTraceConductor(path=(H(0, 6), H(-1, 6), H(-1, 7), H(-1, 8)), side=side),
+        )
+        assert not [v for v in run_drc(railed, LOOKUP) if v.rule == "conductor-off-board"]
+
+
+@pytest.mark.parametrize(
+    ("kind", "side"),
+    [("bare-wire", "bottom"), ("insulated-wire", "bottom"), ("top-jumper", "top")],
+)
+def test_a_wire_is_refused_a_finger_even_where_one_stands(kind: str, side: str) -> None:
+    doc = _stock()
+    spec = NewWireConductor(path=(H(0, 6), H(-1, 6)), kind=kind, side=side)  # type: ignore[arg-type]
+    assert _refusal(doc, spec) == "not-on-finger"
+
+
+def test_solder_is_refused_where_no_finger_stands() -> None:
+    stock = _stock()
+    strip = next(c for c in stock.edge_connectors if c.edge == "left")
+    assert strip.start > 0, "the strip leaves the corner rows bare"
+    blank = create_empty_document(META, stock.board)
+    for doc, path in (
+        (blank, (H(0, 6), H(-1, 6))),  # no strip on this board at all
+        (stock, (H(0, 0), H(-1, 0))),  # beside the strip's end
+        (stock, (H(-1, 0), H(-1, -1))),  # the corner
+        (stock, (H(0, 6), H(-1, 6), H(-2, 6))),  # past the finger
+    ):
+        assert _refusal(doc, NewSolderTraceConductor(path=path)) == "off-board"
+
+
+def test_solder_is_refused_a_face_the_finger_has_no_copper_on() -> None:
+    stock = _stock()
+    underneath = dataclasses.replace(
+        stock,
+        edge_connectors=tuple(dataclasses.replace(c, face="bottom") for c in stock.edge_connectors),
+    )
+    spec = NewSolderTraceConductor(path=(H(0, 6), H(-1, 6)), side="top")
+    assert _refusal(underneath, spec) == "not-on-finger"
+    _with(underneath, dataclasses.replace(spec, side="bottom"))
+
+
+def test_drc_reports_a_wire_on_a_finger_and_solder_off_it_but_not_a_rail() -> None:
+    """The other door: a file that holds them anyway still opens and is told."""
+    stock = _stock()
+    rail = SolderTraceConductor(id="rail", path=(H(0, 6), H(-1, 6), H(-1, 7)))
+    wire = WireConductor(id="wire", path=(H(0, 9), H(-1, 9)))
+    stray = SolderTraceConductor(id="stray", path=(H(0, 0), H(-1, 0)))
+    doc = dataclasses.replace(stock, conductors=(rail, wire, stray))
+    off = {v.conductor_ids[0]: v for v in run_drc(doc, LOOKUP) if v.rule == "conductor-off-board"}
+    assert set(off) == {"wire", "stray"}
+    assert off["wire"].holes == (H(-1, 9),)
+
+
+# ---------------------------------------------------------------------------
+# A finger has no hole, so no plating
+# ---------------------------------------------------------------------------
+
+
+def _net_of(doc: PerfDocument, conductor_id: str) -> int:
+    nets = extract_physical_nets(doc, LOOKUP)
+    return next(i for i, net in enumerate(nets) if conductor_id in net.conductor_ids)
+
+
+def test_solder_on_a_fingers_two_faces_is_two_pieces_of_copper() -> None:
+    stock = _stock()
+    under = SolderTraceConductor(id="under", path=(H(0, 6), H(-1, 6)), side="bottom")
+    over = SolderTraceConductor(id="over", path=(H(-1, 6), H(-1, 7)), side="top")
+    doc = dataclasses.replace(stock, conductors=(under, over))
+    assert _net_of(doc, "under") != _net_of(doc, "over")
+    # ...where the same pair in a pinless grid hole is joined through its plating.
+    under_grid = dataclasses.replace(under, path=(H(4, 6), H(5, 6)))
+    over_grid = dataclasses.replace(over, path=(H(5, 6), H(5, 7)))
+    joined = dataclasses.replace(stock, conductors=(under_grid, over_grid))
+    assert _net_of(joined, "under") == _net_of(joined, "over")
+
+
+# ---------------------------------------------------------------------------
+# Condition 1: col -1 and row -1 are not the far edge
+# ---------------------------------------------------------------------------
+
+
+def _railed() -> tuple[PerfDocument, PerfDocument]:
+    """The stock board, and the same board with a rail on col -1 and one on row -1."""
+    stock = _stock()
+    railed = _with(
+        stock,
+        NewSolderTraceConductor(path=(H(0, 6), H(-1, 6), H(-1, 7), H(-1, 8), H(-1, 9))),
+        NewSolderTraceConductor(path=(H(5, 0), H(5, -1), H(6, -1), H(7, -1), H(8, -1))),
+    )
+    return stock, railed
+
+
+def _far(board: Board) -> list[HoleCoord]:
+    """The last column and the last row: what col -1 and row -1 index in a list."""
+    return [H(board.cols - 1, r) for r in range(board.rows)] + [
+        H(c, board.rows - 1) for c in range(board.cols)
+    ]
+
+
+def test_a_rail_off_the_near_edges_leaves_the_far_edges_occupancy_as_it_was() -> None:
+    stock, railed = _railed()
+    before = build_occupancy(stock, LOOKUP)
+    after = build_occupancy(railed, LOOKUP)
+    for hole in _far(stock.board):
+        for side in ("top", "bottom"):
+            assert after.conductors_at(hole, side) == before.conductors_at(hole, side)  # type: ignore[arg-type]
+            assert after.is_copper_blocked(hole, side) == before.is_copper_blocked(hole, side)  # type: ignore[arg-type]
+    # ...and the rails' own cells are occupied where they are.
+    assert after.is_copper_blocked(H(-1, 7), "bottom")
+    assert after.is_copper_blocked(H(6, -1), "bottom")
+
+
+def test_a_rail_off_the_near_edges_leaves_the_routers_far_edges_as_they_were() -> None:
+    stock, railed = _railed()
+    far = {(h.col, h.row) for h in _far(stock.board)}
+    far_keys = {hole_key(h) for h in _far(stock.board)}
+    assert _trace_blocked_holes(railed) & far == _trace_blocked_holes(stock) & far
+    assert _dead_hole_keys(railed) & far_keys == _dead_hole_keys(stock) & far_keys
+    board = stock.board
+    for request in (
+        RouteRequest(from_=H(board.cols - 1, 4), to=H(board.cols - 1, 12)),
+        RouteRequest(from_=H(3, board.rows - 1), to=H(14, board.rows - 1)),
+    ):
+        a = route_connection(stock, LOOKUP, request)
+        b = route_connection(railed, LOOKUP, request)
+        assert a.ok and b.ok
+        assert a.best is not None and b.best is not None
+        assert b.best.conductors == a.best.conductors
+
+
+def test_a_rail_off_the_near_edges_leaves_drc_at_the_far_edges_as_it_was() -> None:
+    stock, railed = _railed()
+    far = set(_far(stock.board))
+
+    def at_far(doc: PerfDocument) -> list[tuple[str, tuple[HoleCoord, ...]]]:
+        return sorted(
+            (v.rule, v.holes) for v in run_drc(doc, LOOKUP) if far & set(v.holes)
+        )
+
+    assert at_far(railed) == at_far(stock)
+    assert not [v for v in run_drc(railed, LOOKUP) if v.rule == "conductor-off-board"]
+
+
+def test_a_rail_off_the_near_edges_leaves_the_2d_pad_grid_as_it_was() -> None:
+    """What ``view2d`` hands ``PadGridItem``: the holes drawn with no round pad."""
+    stock, railed = _railed()
+
+    def padless(doc: PerfDocument, side: str) -> frozenset[str]:
+        return (
+            holes_without_grid_pad(doc, side)  # type: ignore[arg-type]
+            | undrilled_holes(doc)
+            | cut_holes(doc)
+            | holeless_positions(doc.board)
+        )
+
+    for side in ("top", "bottom"):
+        assert padless(railed, side) == padless(stock, side)
+
+
+# ---------------------------------------------------------------------------
+# A change that takes a finger away from under a rail is refused
+# ---------------------------------------------------------------------------
+
+
+def test_a_strip_with_a_rail_on_it_cannot_be_deleted_from_under_it() -> None:
+    _, railed = _railed()
+    result = _bus(railed).dispatch("edge-connector.delete", DeleteEdgeConnectorPayload(id="ec-left"))
+    assert not result.ok
+    assert result.code == "would-strand-conductor"
+    assert "A7/L" in (result.message or "")
+    # The strip with no rail on it goes.
+    result = _bus(railed).dispatch("edge-connector.delete", DeleteEdgeConnectorPayload(id="ec-right"))
+    assert result.ok, result.message
+
+
+def test_a_board_grown_past_a_rail_is_refused_and_one_grown_away_from_it_is_not() -> None:
+    """Grown by a row, the bottom fingers' row would be a row of the grid and the rail on it
+    a run nobody laid."""
+    stock = _stock()
+    bottom = _with(
+        stock,
+        NewSolderTraceConductor(
+            path=(H(5, stock.board.rows - 1), H(5, stock.board.rows), H(6, stock.board.rows))
+        ),
+    )
+    taller = dataclasses.replace(stock.board, rows=stock.board.rows + 1)
+    result = _bus(bottom).dispatch("board.set", SetBoardPayload(board=taller))
+    assert not result.ok
+    assert result.code == "would-strand-conductor"
+    assert f"F{stock.board.rows}/B" in (result.message or "")
+
+    _, railed = _railed()
+    wider = dataclasses.replace(railed.board, cols=railed.board.cols + 1)
+    result = _bus(railed).dispatch("board.set", SetBoardPayload(board=wider))
+    assert result.ok, result.message
+
+
+def test_a_bore_drilled_into_a_railed_finger_is_refused_and_one_beside_the_rail_is_not() -> None:
+    from perfboard_studio.commands import AddMountingHolePayload
+
+    _, railed = _railed()
+
+    def drill(row: int) -> tuple[bool, str]:
+        result = _bus(railed).dispatch(
+            "mounting-hole.add",
+            AddMountingHolePayload(at=H(0, row), offset_x_mm=-2.54, diameter=2.2, head_diameter=4.0),
+        )
+        return result.ok, result.code or ""
+
+    assert drill(8) == (False, "would-strand-conductor")
+    assert drill(12) == (True, "")

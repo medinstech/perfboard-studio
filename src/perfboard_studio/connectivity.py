@@ -54,7 +54,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from itertools import pairwise
 
-from .geometry import all_pin_holes, hole_key, unusable_holes
+from .geometry import all_pin_holes, hole_key, is_inside_board, unusable_holes
 from .model import (
     BoardSide,
     ConductorId,
@@ -288,6 +288,9 @@ def _extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[P
     # through it. Where the hole has no copper left (a bore took its pad, it is an undrilled
     # finger, a cut took the strip there) nothing joins, as nothing would.
     #
+    # A finger off the grid (a rail's cell, geometry.finger_cells) has no hole at all, so
+    # no plating: solder on its two faces is two pieces of copper.
+    #
     # No node is ADDED, only two that are already here joined, which is why the fifteen
     # golden fixtures -- none of which has such a hole -- keep every node they had. The
     # TypeScript engine did not join them; see JOINED_BEYOND_TYPESCRIPT in
@@ -303,7 +306,7 @@ def _extract_physical_nets(doc: PerfDocument, lookup: FootprintLookup) -> list[P
         no_copper = unusable_holes(doc) | cut_holes(doc)
         for key in meeting:
             hole = node_info[key].hole
-            if hole_key(hole) not in no_copper:
+            if hole_key(hole) not in no_copper and is_inside_board(hole, doc.board):
                 ds.union(key, _node_key(hole, "bottom"))
 
     # --- Pass 3: the board's own joins (stripboard and breadboard only). ---
