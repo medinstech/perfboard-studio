@@ -115,7 +115,7 @@ class ProblemsBar(QWidget):
         at the bench of (``guide.is_bench_check``): counted beside what is left to wire,
         never in the badge, which is what is wrong. ``to_review`` is the wires worth a look
         (``wiringreview``): not wrong either, so not in the badge -- but not "No problems"
-        over them, which is what Auto-wire finished on over a wire lying across 44 pins."""
+        over them, which is what Auto-wire finished on over wires lying across pins 44 times."""
         self.errors, self.warnings = errors, warnings
         total = errors + warnings
         if total:

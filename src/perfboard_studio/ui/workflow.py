@@ -108,7 +108,7 @@ class WorkflowFacts:
     empty_board: str = ""
     #: Wires worth a look before building (``wiringreview``): never a problem and never
     #: holding a step back, but not "ready to build" without a word either -- Auto-wire
-    #: finished there over a wire lying across 44 pins.
+    #: finished there over wires lying across pins 44 times.
     wiring_to_review: int = 0
 
 

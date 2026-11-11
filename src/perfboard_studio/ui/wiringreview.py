@@ -5,7 +5,7 @@ Not DRC. A wire lying over a pin, or over where other copper ends, or stacked ov
 others, is a board that works and is harder to build than it has to be -- a cost, not a
 defect -- so it never counts as a problem, never blocks the Build step and never moves a
 golden. It is said so the one bad wire can be found: Auto-wire used to finish on "No
-problems" over a board with a wire lying across 44 pins.
+problems" over atmega328-relay with its wires lying across pins 44 times.
 
 The counts are the engine's (``wiringstats``, the numbers the autowire scoreboard holds the
 router to), never a second computation here: one fact, several askers, like the wire

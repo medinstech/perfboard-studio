@@ -18884,7 +18884,7 @@ def test_a_wire_in_properties_offers_its_nets_wiring(monkeypatch: pytest.MonkeyP
 
 
 def test_wiring_worth_a_look_is_a_group_that_selects_its_wires_and_is_not_no_problems() -> None:
-    """Auto-wire finished on "No problems" over a wire lying across 44 pins. What the
+    """Auto-wire finished on "No problems" over wires lying across pins 44 times. What the
     engine says is worth a look is its own group in the drawer, each row selecting its
     wires, and the bar says there is wiring to review rather than that all is well --
     without counting it as a problem."""
