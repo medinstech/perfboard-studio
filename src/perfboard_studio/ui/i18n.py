@@ -219,12 +219,15 @@ TURKISH: Mapping[str, str] = {
         "Kalaylı bir telin üzerine çekilen lehim yolu: yaklaşık on kat düşük direnç; beş "
         "altı pedden uzun bir güç ya da toprak rayının istediği de budur."
     ),
-    "Tinned wire on the solder side. Cannot cross other copper. Click both "
-    "ends.": (
-        "Lehim yüzünde kalaylı tel. Başka bakırın üzerinden geçemez. İki ucuna da tıklayın."
+    "Tinned wire on the solder side. Cannot cross other copper. Click where it starts "
+    "and wherever it turns; Enter, right-click or a double-click finishes.": (
+        "Lehim yüzünde kalaylı tel. Başka bakırın üzerinden geçemez. Başladığı ve döndüğü "
+        "yerlere tıklayın; Enter, sağ tık ya da çift tık bitirir."
     ),
-    "May cross anything, at the cost of stripping it. Click both ends.": (
-        "Her şeyin üzerinden geçebilir; bedeli uçlarını soymaktır. İki ucuna da tıklayın."
+    "May cross anything, at the cost of stripping it. Click where it starts and wherever "
+    "it turns; Enter, right-click or a double-click finishes.": (
+        "Her şeyin üzerinden geçebilir; bedeli uçlarını soymaktır. Başladığı ve döndüğü "
+        "yerlere tıklayın; Enter, sağ tık ya da çift tık bitirir."
     ),
     "An insulated wire on the parts' side, hopping over everything below. It takes room "
     "the parts would use.": (

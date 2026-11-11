@@ -137,6 +137,9 @@ closed without a bump.
 
 ### Fixed
 
+- **The Bare Wire and Insulated Wire tools say how they draw.** Their tooltips still said
+  "Click both ends." from before a wire could turn; they now say to click where it starts and
+  wherever it turns, and that Enter, a right-click or a double-click finishes.
 - **A finished run no longer says it is stopping.** Closing the progress dialog counted as
   pressing its Cancel, so every Auto-wire, Auto-place and board trial long enough to show it
   said "Stopping, and keeping the best found so far…" as it closed.

@@ -5207,10 +5207,12 @@ class MainWindow(QMainWindow):
              t("A solder trace laid over a tinned wire: about ten times lower resistance, "
                "and what a power or ground rail longer than five or six pads wants.")),
             ("bare-wire", "&Bare Wire", "W",
-             t("Tinned wire on the solder side. Cannot cross other copper. Click both "
-               "ends.")),
+             t("Tinned wire on the solder side. Cannot cross other copper. Click where "
+               "it starts and wherever it turns; Enter, right-click or a double-click "
+               "finishes.")),
             ("insulated-wire", "&Insulated Wire", "Shift+W",
-             t("May cross anything, at the cost of stripping it. Click both ends.")),
+             t("May cross anything, at the cost of stripping it. Click where it starts "
+               "and wherever it turns; Enter, right-click or a double-click finishes.")),
             ("top-jumper", "&Jumper Over the Parts", "J",
              t("An insulated wire on the parts' side, hopping over everything below. It "
                "takes room the parts would use.")),
