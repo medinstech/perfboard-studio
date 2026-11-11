@@ -74,8 +74,10 @@ from .geometry import (
     column_label,
     edge_connector_holes,
     entry_side,
+    finger_cells,
     flying_lead_side,
     format_hole,
+    hole_key,
     hole_to_mm,
     holeless_positions,
     is_inside_board,
@@ -772,6 +774,7 @@ def build_guide(
     component_side = any(_is_component_side_copper(step) for step, _ in conductor_steps)
     via_holes = vias(doc, build_occupancy(doc, lookup)) if component_side else ()
     conductor_steps, via_checks = _vias(doc, conductor_steps, via_holes, say)
+    conductor_steps = _finger_note(doc, conductor_steps, say)
     # A part off the board is wired after the copper, so a net reaching it is not finished
     # until its wires are in -- and a continuity check asked for before then fails for a
     # reason that is not a fault.
@@ -883,6 +886,52 @@ def _phase_7_title(say: Phrasebook, *, solder_side: bool, component_side: bool) 
     if solder_side:
         return say("Long insulated wires, then the solder-side parts")
     return say(PHASE_TITLES[SOLDER_SIDE_PHASE])
+
+
+def _finger_note(
+    doc: PerfDocument,
+    conductor_steps: list[tuple[ConductorStep, PhaseNumber]],
+    say: Phrasebook,
+) -> list[tuple[ConductorStep, PhaseNumber]]:
+    """Say once, on the first step that lays solder on an outside finger, what an address
+    like "A7/L" is: the finger beside A7, on the left edge. Every later step and message
+    names fingers that way, and none of them says it again. Nothing on a board with no
+    solder on a finger."""
+    cells = finger_cells(doc)
+    if not cells:
+        return conductor_steps
+    by_id = {conductor.id: conductor for conductor in doc.conductors}
+    steps = list(conductor_steps)
+    for index, (step, phase) in enumerate(steps):
+        conductor = by_id.get(step.conductor_id)
+        if conductor is None:
+            continue
+        cell = next((cells[hole_key(h)] for h in conductor.path if hole_key(h) in cells), None)
+        if cell is None:
+            continue
+        note = say(
+            "{finger} is the finger on the {edge} edge beside {hole}, the strip of copper "
+            "outside the grid: the solder lies on it as on a pad, with no hole to go through.",
+            finger=format_hole(cell.cell, doc.board),
+            edge=say(cell.connector.edge),
+            hole=format_hole(cell.beside, doc.board),
+        )
+        steps[index] = (dataclasses.replace(step, notes=(note, *step.notes)), phase)
+        break
+    return steps
+
+
+def _railed_connectors(doc: PerfDocument) -> frozenset[str]:
+    """The strips with solder on any of their fingers: rails, not connectors."""
+    cells = finger_cells(doc)
+    if not cells:
+        return frozenset()
+    return frozenset(
+        cells[hole_key(h)].connector.id
+        for conductor in doc.conductors
+        for h in conductor.path
+        if hole_key(h) in cells
+    )
 
 
 def _vias(
@@ -3086,7 +3135,11 @@ def _warnings(
             )
         )
 
-    if doc.edge_connectors:
+    # A strip with solder on it is a rail, laid by the steps like any run: it is not a
+    # connector to keep the iron off, so it is not in this list.
+    railed = _railed_connectors(doc)
+    connectors = [c for c in doc.edge_connectors if c.id not in railed]
+    if connectors:
         # Said out loud because nothing else in the guide will mention it. The fingers
         # are copper the board came with, so they generate no step -- and a builder who
         # never reads that they are there is a builder who solders a connector to the
@@ -3098,7 +3151,7 @@ def _warnings(
                 edge=say(connector.edge),
                 hole=format_hole(edge_connector_holes(connector, doc.board)[0], doc.board),
             )
-            for connector in doc.edge_connectors
+            for connector in connectors
             if edge_connector_holes(connector, doc.board)
         )
         warnings.append(

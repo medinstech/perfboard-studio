@@ -398,7 +398,7 @@ claude mcp add perfboard-studio -- uvx --from "perfboard-studio[mcp]" perfboard-
 uygulama da Python'suz olarak aynı sunucu: Windows'ta `perfboard-studio-cli.exe --mcp`;
 her platformdaki yolu docs/MCP.md'de.
 
-67 tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
+68 tool, ve her delik insanların perfboard'dan bahsederken kullandığı adresle
 (`A1`, `C7`, `AC12`) — breadboard'da ise tahtanın bastığı gibi (`e12`, `T+12`) — hiçbir
 yerde ham koordinat yok; bitmiş kartı kutusunun çizildiği CAD
 programına teslim eden `export_step` de dahil. Tool listesi, diğer istemcilerin
@@ -506,7 +506,7 @@ Sırada, proje planının koyduğu sırayla:
 
 | | |
 |---|---|
-| [docs/MCP.md](./docs/MCP.md) | 67 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
+| [docs/MCP.md](./docs/MCP.md) | 68 MCP tool'u, her birinin neden var olduğu gerekçesiyle gruplanmış hâlde, ve Claude Code, Claude Desktop, Cursor ile Antigravity için istemci ayarları (yalnızca İngilizce) |
 | [docs/FIRST_BOARD.md](./docs/FIRST_BOARD.md) | ilk kartınız: 555 flaşör, Ana Sayfa'dan montaj rehberine, her adım için bir resimle (yalnızca İngilizce) |
 | [examples/README.md](./examples/README.md) | her örnek kartın neyi göstermek için orada olduğu (yalnızca İngilizce) |
 | [CHANGELOG.md](./CHANGELOG.md) | her sürüm, ve yayınlanmamış bir yapının bir sonrakine doğru ne biriktirdiği (yalnızca İngilizce) |

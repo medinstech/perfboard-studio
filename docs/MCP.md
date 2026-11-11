@@ -140,14 +140,14 @@ conductor at a time.
 | **Documents** | `new_document` · `open_document` · `save_document` · `import_netlist` |
 | **Netlist** | `create_net` · `connect_pins` · `disconnect_pins` · `update_net` · `delete_net` |
 | **The board** | `set_board` · `add_mounting_hole` · `add_edge_connector` · `cut_track` · `add_board_label` · `update_board_feature` · `remove_board_feature` |
-| **Editing** | `place_component` · `move_component` · `rotate_component` · `set_component_side` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` · `set_body_clearance` |
+| **Editing** | `place_component` · `move_component` · `rotate_component` · `set_component_side` · `set_component_locked` · `delete_component` · `add_wire` · `add_solder_trace` · `add_rail` · `delete_conductors` · `remove_stale_conductors` · `set_height_limit` · `set_body_clearance` |
 | **Planning** | `autoroute` · `reroute` · `optimize_placement` |
 | **Verifying** | `run_erc` · `run_drc` · `run_lvs` · `check_heights` |
 | **Output** | `generate_guide` · `export_pdf` · `export_step` |
 | **State** | `snapshot` · `restore` · `undo` · `redo` |
 | **Several boards** | `select_board` · `add_board` · `rename_board` · `remove_board` · `move_to_board` · `add_cable` · `remove_cable` · `get_system_info` |
 
-67 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
+68 tools, against PLAN.md §2's "~25, deliberately narrow". Each is a verb that cannot
 be composed from the others, and the surface was trimmed rather than grown where it
 could be: the history listing folded into `get_status`, there is no separate "add solder
 bridge" because a bridge is a two-pad solder trace and one concept should not have two
@@ -451,6 +451,19 @@ price on every step off that face, not a rule. A plated hole is one piece of cop
 traces on opposite faces still cannot cross: what the second face buys is a net kept where
 it was asked to be, and room for wire over the top. Where a face can change, the result
 lists `vias`, and under `"best"` each style's `face_changes` is in `comparison`.
+
+**A rail is solder on a stock board's finger strip.** The strip down a stock board's long
+sides stands OUTSIDE the grid, a finger beside each outermost hole, and a finger is named
+by that hole and its edge: `A7/L` is left of A7, and `/R`, `/T`, `/B` are the others.
+`get_board_info` lists each strip's `fingers`. `add_rail` lays solder along them from one
+finger to another, with a bridge from each hole you name beside the rail onto its finger,
+as one undo step; `add_solder_trace` takes the same addresses. Only solder goes on a
+finger, only on a face it has copper on: a wire is refused (`not-on-finger`), and a place
+with no finger is off the board as before. A bridge crosses more bare board than solder
+spans, so it goes over a wire spine, and DRC warns of one that does not
+(`solder-gap-needs-spine`) and of a rail no bridge joins to the board
+(`rail-without-bridge`). The router reaches a rail of the net it is wiring as it reaches a
+pin, and never another net's.
 
 **Unrouted connections are never summarised away.** PLAN.md §13 names "it routed most of
 it and left four connections" as the trap every previous perfboard autorouter fell into.

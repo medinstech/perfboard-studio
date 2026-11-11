@@ -61,11 +61,13 @@ from .footprints import (
 )
 from .geometry import (
     BODY_OVERHANG_TOLERANCE_MM,
+    PLAIN_SOLDER_SPAN_MM,
     FingerCell,
     all_pin_holes,
     bodies_clash,
     body_gap_mm,
     box_centre_distance_mm,
+    bridge_gap_mm,
     consumed_holes,
     convex_polygons_overlap,
     copper_gap_mm,
@@ -869,6 +871,89 @@ def _check_copper_on_padless_face(doc: PerfDocument) -> list[DrcViolation]:
         for conductor in doc.conductors
         if is_solder_trace(conductor) and conductor.side == "top" and conductor.path
     ]
+
+
+# ---------------------------------------------------------------------------
+# Rails on the outside fingers (warnings) -- Python only
+# ---------------------------------------------------------------------------
+
+
+def _check_rails(doc: PerfDocument, lookup: FootprintLookup) -> list[DrcViolation]:
+    """Solder on a stock board's outside fingers (``geometry.finger_cells``) that does no
+    good: a rail no bridge joins to a hole of the board carries nothing
+    (``rail-without-bridge``), and plain solder laid across a gap wider than solder spans --
+    every finger-to-pad bridge on a stock board -- is a blob that cracks
+    (``solder-gap-needs-spine``). Warnings: the document is a document either way, and the
+    builder may know their finger better than the table does."""
+    cells = finger_cells(doc)
+    if not cells:
+        return []
+    on_fingers = [
+        c
+        for c in doc.conductors
+        if is_solder_trace(c) and any(hole_key(h) in cells for h in c.path)
+    ]
+    if not on_fingers:
+        return []
+    board = doc.board
+    violations: list[DrcViolation] = []
+    for net in extract_physical_nets(doc, lookup):
+        fingers = sorted(
+            (n.hole for n in net.nodes if hole_key(n.hole) in cells),
+            key=lambda h: (h.col, h.row),
+        )
+        if not fingers or any(is_inside_board(n.hole, board) for n in net.nodes):
+            continue
+        violations.append(
+            DrcViolation(
+                rule="rail-without-bridge",
+                severity="warning",
+                message=(
+                    f"The solder on the fingers {format_hole(fingers[0], board)} to "
+                    f"{format_hole(fingers[-1], board)} is joined to no hole of the board, so it "
+                    f"carries nothing. Bridge a finger to the hole beside it."
+                ),
+                holes=tuple(fingers),
+                conductor_ids=tuple(sorted(net.conductor_ids)),
+            )
+        )
+    for conductor in on_fingers:
+        if conductor.kind != "solder-trace":
+            continue
+        for a, b in itertools.pairwise(conductor.path):
+            gap = _finger_step_gap_mm(a, b, cells, board)
+            if gap is None or gap <= PLAIN_SOLDER_SPAN_MM:
+                continue
+            violations.append(
+                DrcViolation(
+                    rule="solder-gap-needs-spine",
+                    severity="warning",
+                    message=(
+                        f"Solder trace {conductor.id} crosses {gap:.1f} mm of bare board between "
+                        f"{format_hole(a, board)} and {format_hole(b, board)}, wider than solder "
+                        f"spans ({PLAIN_SOLDER_SPAN_MM:g} mm). Lay it over a wire spine "
+                        f"('solder-trace-wired')."
+                    ),
+                    holes=(a, b),
+                    conductor_ids=(conductor.id,),
+                )
+            )
+            break
+    return violations
+
+
+def _finger_step_gap_mm(
+    a: HoleCoord, b: HoleCoord, cells: Mapping[str, FingerCell], board: Board
+) -> float | None:
+    """The bare board a solder step touching a finger is laid across: finger to the pad
+    beside it, or finger to the next finger. None for a step between two grid holes."""
+    fa, fb = cells.get(hole_key(a)), cells.get(hole_key(b))
+    if fa is not None and fb is not None:
+        return board.pitch - (fa.connector.finger_width + fb.connector.finger_width) / 2
+    cell = fa if fa is not None else fb
+    if cell is None:
+        return None
+    return bridge_gap_mm(cell, board)
 
 
 # ---------------------------------------------------------------------------
@@ -2872,6 +2957,7 @@ def run_drc(
         *_check_jumper_under_body(doc, lookup),
         *_check_copper_under_body(doc, lookup),
         *_check_copper_on_padless_face(doc),
+        *_check_rails(doc, lookup),
         *_check_joint_under_body(doc, lookup),
     ]
 

@@ -68,6 +68,7 @@ from perfboard_studio.commands import (
     AddBoardPayload,
     AddCablePayload,
     AddConductorPayload,
+    AddConductorsPayload,
     AddCutPayload,
     AddEdgeConnectorPayload,
     AddMountingHolePayload,
@@ -127,8 +128,11 @@ from perfboard_studio.geometry import (
     all_pin_holes,
     board_finish,
     board_mask,
+    bridge_needs_spine,
     consumed_holes,
+    edge_beside,
     edge_connector_holes,
+    finger_cells,
     format_hole,
     hole_key,
     legend_runs_text,
@@ -511,6 +515,7 @@ class BoardSession:
                 for note in self.document.board_notes
             ]
         if self.document.edge_connectors:
+            cells = finger_cells(self.document)
             info["edge_connectors"] = [
                 {
                     "id": connector.id,
@@ -522,6 +527,18 @@ class BoardSession:
                     "face": connector.face,
                     # The holes are the run it stands BESIDE, not ones it replaced.
                     **({"outside": True} if connector.outside else {}),
+                    # Where solder may lie on it: add_rail's places, by their "A7/L" names.
+                    **(
+                        {"fingers": fingers}
+                        if (
+                            fingers := [
+                                format_hole(cell.cell, board)
+                                for cell in cells.values()
+                                if cell.connector.id == connector.id
+                            ]
+                        )
+                        else {}
+                    ),
                 }
                 for connector in self.document.edge_connectors
             ]
@@ -1652,6 +1669,79 @@ class BoardSession:
                 side=face,
             )
         )
+
+    def add_rail(
+        self,
+        start: str,
+        end: str,
+        net: str | None = None,
+        bridges: list[str] | None = None,
+        side: str = "bottom",
+    ) -> dict[str, Any]:
+        """Solder along a stock board's outside finger strip, and bridges onto it, as ONE
+        undo step.
+
+        ``start`` and ``end`` name the two ends of the rail by their fingers ("A2/L",
+        "A17/L", as get_board_info's ``fingers`` lists them), on one edge. Each hole in
+        ``bridges`` is an outermost hole beside the rail, joined to its finger -- over a
+        wire spine where the gap is wider than solder spans, which it is on every stock
+        board. A rail no bridge reaches carries nothing, and DRC says so.
+        """
+        face = _side_or_none(side)
+        if face is None:
+            raise SessionError('A rail lies on side "bottom" or "top".')
+        board = self.document.board
+        first, last = _hole(start, board), _hole(end, board)
+        a, b = edge_beside(first, board), edge_beside(last, board)
+        if a is None or b is None or a[1] != b[1]:
+            raise SessionError(
+                f"{start!r} and {end!r} are not two fingers on one edge: a rail runs along one "
+                f"strip, from the finger beside an outermost hole ('A2/L') to another."
+            )
+        edge = a[1]
+        if edge in ("left", "right"):
+            step = 1 if last.row >= first.row else -1
+            path = tuple(HoleCoord(first.col, r) for r in range(first.row, last.row + step, step))
+        else:
+            step = 1 if last.col >= first.col else -1
+            path = tuple(HoleCoord(c, first.row) for c in range(first.col, last.col + step, step))
+        net_id = self._net_id(net)
+        conductors: list[NewConductor] = []
+        if len(path) >= 2:
+            conductors.append(
+                NewSolderTraceConductor(path=path, net_id=net_id, side=face)
+            )
+        cells = finger_cells(self.document)
+        for ref in bridges or []:
+            hole = _hole(ref, board)
+            cell = next(
+                (c for c in cells.values() if c.beside == hole and c.connector.edge == edge), None
+            )
+            if cell is None or cell.cell not in path:
+                raise SessionError(
+                    f"{ref!r} is not beside this rail: a bridge joins an outermost hole to the "
+                    f"finger beside it, and that finger has to be one the rail is laid on."
+                )
+            wired = bridge_needs_spine(cell, board)
+            conductors.append(
+                NewSolderTraceConductor(
+                    path=(hole, cell.cell),
+                    kind="solder-trace-wired" if wired else "solder-trace",
+                    spine=SpineSpec(material="tinned-copper", gauge=0.6) if wired else None,
+                    net_id=net_id,
+                    side=face,
+                )
+            )
+        if not conductors:
+            raise SessionError("A rail needs two fingers, or at least one bridge.")
+        before = {c.id for c in self.document.conductors}
+        result = self._dispatch(
+            "conductor.addMany",
+            AddConductorsPayload(conductors=tuple(conductors), label=f"Lay a rail {start}–{end}"),
+        )
+        if result["ok"]:
+            result["ids"] = [c.id for c in self.document.conductors if c.id not in before]
+        return result
 
     def _vias(self) -> list[str]:
         """The pinless holes the board's copper changes face through

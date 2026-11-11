@@ -493,3 +493,89 @@ def test_a_rail_on_the_component_side_is_bridged_on_its_own_face() -> None:
     assert result.ok and result.best is not None
     bridge = result.best.conductors[-1]
     assert bridge.path[-1] == H(-1, 15) and bridge.side == "top"
+
+
+# ---------------------------------------------------------------------------
+# What DRC, the guide and an agent are told
+# ---------------------------------------------------------------------------
+
+
+def _rules(doc: PerfDocument, rule: str) -> list:  # type: ignore[type-arg]
+    return [v for v in run_drc(doc, LOOKUP) if v.rule == rule]
+
+
+def test_a_rail_no_bridge_joins_to_the_board_carries_nothing() -> None:
+    stock = _stock()
+    alone = _with(stock, NewSolderTraceConductor(path=(H(-1, 4), H(-1, 5), H(-1, 6))))
+    found = _rules(alone, "rail-without-bridge")
+    assert len(found) == 1 and found[0].severity == "warning"
+    assert found[0].holes == (H(-1, 4), H(-1, 5), H(-1, 6))
+    assert "A5/L" in found[0].message and "A7/L" in found[0].message
+    assert not _rules(_left_rail(stock, range(4, 7)), "rail-without-bridge")
+
+
+def test_plain_solder_across_a_gap_wider_than_it_spans_is_warned_and_a_spine_is_not() -> None:
+    from perfboard_studio.model import SpineSpec
+
+    stock = _stock()
+    plain = _left_rail(stock, range(4, 9))  # bridged with plain solder: 1.4 mm
+    found = _rules(plain, "solder-gap-needs-spine")
+    assert len(found) == 1 and found[0].holes == (H(0, 4), H(-1, 4))
+    wired = _with(
+        stock,
+        NewSolderTraceConductor(path=tuple(H(-1, r) for r in range(4, 9))),
+        NewSolderTraceConductor(
+            path=(H(0, 4), H(-1, 4)), kind="solder-trace-wired",
+            spine=SpineSpec(material="tinned-copper", gauge=0.6),
+        ),
+    )
+    # Finger to finger is 0.84 mm on this strip: plain solder spans it.
+    assert not _rules(wired, "solder-gap-needs-spine")
+
+
+def test_the_guide_says_once_what_a_fingers_address_is_and_keeps_its_suffix_off_it() -> None:
+    from perfboard_studio.guide import ConductorStep, GuideOptions, build_guide
+
+    railed = _left_rail(_stock(), range(4, 9))
+    for language, said in (
+        ("en", "A5/L is the finger on the left edge beside A5"),
+        ("tr", "A5/L, sol kenarda A5 deliğinin yanındaki parmaktır"),
+    ):
+        guide = build_guide(railed, LOOKUP, GuideOptions(language=language))
+        notes = [
+            note
+            for phase in guide.phases
+            for step in phase.steps
+            if isinstance(step, ConductorStep)
+            for note in step.notes
+            if said in note
+        ]
+        assert len(notes) == 1, (language, notes)
+        # The railed strip is laid by a step; the other is still a connector to keep clear.
+        connector = next(w for w in guide.warnings if w.code == "edge-connector")
+        assert ("sol" if language == "tr" else "left") not in connector.message.split("(")[1]
+
+
+def test_an_agent_lays_a_rail_with_its_bridges_as_one_step() -> None:
+    from perfboard_studio.mcp.session import BoardSession, SessionError
+
+    session = BoardSession(document=_stock())
+    info = {c["id"]: c for c in session.get_board_info()["edge_connectors"]}
+    assert "A2/L" in info["ec-left"]["fingers"]
+    result = session.add_rail("A4/L", "A12/L", bridges=["A4", "A12"])
+    assert result["ok"], result
+    assert len(result["ids"]) == 3
+    laid = {c.id: c for c in session.document.conductors}
+    bridges = [laid[i] for i in result["ids"] if len(laid[i].path) == 2]
+    assert {b.kind for b in bridges} == {"solder-trace-wired"}
+    assert not _rules(session.document, "rail-without-bridge")
+    assert not _rules(session.document, "solder-gap-needs-spine")
+    assert _joined(session.document, H(0, 3), H(0, 11))
+    for start, end, bridges_ in (
+        ("A4/L", "X4/R", None),  # two edges
+        ("A4", "A12", None),  # grid holes, not fingers
+        ("A4/L", "A12/L", ["B5"]),  # not beside the rail
+        ("A4/L", "A8/L", ["A12"]),  # beside the strip, not this rail
+    ):
+        with pytest.raises(SessionError):
+            session.add_rail(start, end, bridges=bridges_)

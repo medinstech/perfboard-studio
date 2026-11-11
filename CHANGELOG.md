@@ -97,6 +97,16 @@ closed without a bump.
   and `update_net` take `preferred_side` (and `clear_preferred_side`), and `autoroute` and
   `reroute` take `faces`; the result names the `vias`, and the `"best"` comparison counts
   each style's `face_changes`.
+- **Rails on a stock board's finger strip.** The copper strip down the long sides of the
+  stock boards, outside the grid, takes solder now: a rail along it, and a bridge from a hole
+  beside it onto its finger, the way ground and power are run on those boards. A finger is
+  named by the hole it stands beside and its edge -- `A7/L` is left of A7 -- in every message,
+  and the build guide says so in words the first time. Only solder goes on a finger, and only
+  on a face it has copper on; a wire still needs a hole. A bridge crosses more bare board
+  than solder spans, so it is laid over a wire spine, and DRC warns of one that is not and of
+  a rail joined to nothing. Auto-wire reaches a rail of the net it is wiring as it reaches a
+  pin, and never another net's. Agents lay one with MCP's new `add_rail`. Drawing a rail on
+  its finger in the 2D and 3D views is still to come.
 
 ### Changed
 

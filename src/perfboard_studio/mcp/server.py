@@ -713,6 +713,26 @@ def add_solder_trace(
 
 
 @mcp.tool()
+def add_rail(
+    start: str,
+    end: str,
+    net: str | None = None,
+    bridges: list[str] | None = None,
+    side: str = "bottom",
+) -> dict[str, Any]:
+    """Lay a rail: solder along a stock board's outside finger strip, the copper outside
+    the grid, with bridges from holes beside it -- ONE undo step. Returns the new `ids`.
+
+    A finger is named by the outermost hole it stands beside and its edge: "A7/L" is left
+    of A7 ("/R", "/T", "/B" for the others), as get_board_info's edge_connectors list it
+    under `fingers`. start and end are the rail's two end fingers, on one edge. Each hole
+    in bridges is an outermost hole beside the rail, joined to its finger over a wire spine
+    where the gap is too wide for solder alone. add_solder_trace takes the same addresses.
+    The router reaches a rail of the net it is wiring as it reaches a pin."""
+    return session.add_rail(start, end, net=net, bridges=bridges, side=side)
+
+
+@mcp.tool()
 def delete_conductors(ids: list[str]) -> dict[str, Any]:
     """Take wires, traces or jumpers off the board by id, all of them as ONE undo step.
     The ids are in get_board_info's `conductors`, in run_drc's violations and in what

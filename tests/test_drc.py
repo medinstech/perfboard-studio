@@ -327,6 +327,8 @@ PYTHON_ONLY_RULES = frozenset(
         "copper-under-body",
         "joint-under-body",
         "no-copper-on-face",
+        "rail-without-bridge",
+        "solder-gap-needs-spine",
     }
 )
 

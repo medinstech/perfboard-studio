@@ -910,6 +910,12 @@ TURKISH: dict[str, str] = {
     "{count} fingers on the {edge} edge from {hole}": (
         "{edge} kenarda {hole} deliğinden başlayan {count} parmak"
     ),
+    "{finger} is the finger on the {edge} edge beside {hole}, the strip of copper outside "
+    "the grid: the solder lies on it as on a pad, with no hole to go through.": (
+        "{finger}, {edge} kenarda {hole} deliğinin yanındaki parmaktır, ızgaranın dışındaki "
+        "bakır şerit: lehim bir pedde olduğu gibi üstüne yatar, içinden geçeceği bir delik "
+        "yoktur."
+    ),
     "This board has edge-connector fingers ({runs}). No step below covers them: they are "
     "part of the board, not something to make. Fit whatever mates with them last, and "
     "keep the iron off them until then — a tinned finger no longer fits a connector.": (
