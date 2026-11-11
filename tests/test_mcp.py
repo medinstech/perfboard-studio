@@ -1707,3 +1707,37 @@ def test_autoroute_takes_the_faces_and_names_the_vias(loaded: BoardSession) -> N
     for address in result["vias"]:
         hole = parse_hole(address, loaded.document.board)
         assert {c.side for c in loaded.document.conductors if hole in c.path} == {"top", "bottom"}
+
+
+def test_autoroute_says_when_a_net_is_wired_off_the_face_it_prefers() -> None:
+    """Issue #14: the shield's GND pins on top are all under J2, so GND set to the
+    component side is wired underneath, and the agent is told so, and why."""
+    board = BoardSession()
+    assert board.open_document(str(REPO_ROOT / "examples" / "arduino-io-shield.perf"))["ok"]
+    if board.document.conductors:
+        board.delete_conductors([c.id for c in board.document.conductors])
+    board.update_net("GND", preferred_side="top")
+
+    result = board.autoroute(faces="both")
+
+    assert result["ok"] and result["committed"]
+    assert result["face_notes"] == [
+        {
+            "net": "GND",
+            "preferred_side": "top",
+            "off_face": result["face_notes"][0]["connections"],
+            "connections": result["face_notes"][0]["connections"],
+            "reason": "covered",
+            "covered_by": ["J2"],
+            "message": "GND prefers the component side, but its pins there are under J2, "
+            "so it is wired on the solder side.",
+        }
+    ]
+
+
+def test_autoroute_says_nothing_of_faces_where_every_net_kept_its_own(loaded: BoardSession) -> None:
+    if loaded.document.conductors:
+        loaded.delete_conductors([c.id for c in loaded.document.conductors])
+    loaded.update_net("GND", preferred_side="top")
+    result = loaded.autoroute(style="solder")
+    assert result["ok"] and "face_notes" not in result

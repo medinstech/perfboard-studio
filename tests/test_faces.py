@@ -13,7 +13,14 @@ import pathlib
 import pytest
 
 from perfboard_studio import persist
-from perfboard_studio.autoroute import AutorouteOptions, AutoroutePlan, plan_autoroute, score_plan
+from perfboard_studio.autoroute import (
+    AutorouteOptions,
+    AutoroutePlan,
+    _face_note_message,
+    face_notes,
+    plan_autoroute,
+    score_plan,
+)
 from perfboard_studio.command import CommandBus, CommandContext
 from perfboard_studio.commands import (
     KEEP,
@@ -600,3 +607,114 @@ def test_the_guide_says_not_to_build_copper_drawn_under_a_seated_body(language: 
         if isinstance(s, ConductorStep) and s.conductor_id == "t1"
     )
     assert not any("Do not build" in note for note in bottom_step.notes)
+
+
+# ---------------------------------------------------------------------------
+# Saying so when a net is wired off the face it prefers (issue #14)
+# ---------------------------------------------------------------------------
+
+EXAMPLES = REPO / "examples"
+
+
+def _preferring(doc: PerfDocument, style: str, **prefer: BoardSide) -> tuple[PerfDocument, AutoroutePlan]:
+    bare = dataclasses.replace(
+        doc,
+        conductors=(),
+        nets=tuple(dataclasses.replace(n, preferred_side=prefer.get(n.name)) for n in doc.nets),
+    )
+    router = options_for_style(style, RouterOptions(wire_path="grid", faces="both"))
+    return bare, plan_autoroute(bare, LOOKUP, AutorouteOptions(router=router))
+
+
+def _example(name: str) -> PerfDocument:
+    return persist.parse_document_or_throw((EXAMPLES / name).read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("style", ["solder", "balanced"])
+def test_a_net_wired_wholly_off_its_face_says_whose_body_covers_its_pins(style: str) -> None:
+    """The shield's GND set to the component side came back wired entirely underneath with
+    not a word: every GND pin on top is under J2's plastic. The setting looked ignored."""
+    doc, plan = _preferring(_example("arduino-io-shield.perf"), style, GND="top")
+
+    [note] = face_notes(doc, plan, LOOKUP)
+
+    assert (note.net_name, note.preferred, note.reason, note.covered_by) == ("GND", "top", "covered", ("J2",))
+    assert note.off_face == note.total
+    assert note.message == (
+        "GND prefers the component side, but its pins there are under J2, "
+        "so it is wired on the solder side."
+    )
+    assert not any(c.side == "top" for c in plan.conductors if c.net_id == note.net_id)
+
+
+def test_a_net_wired_mostly_off_its_face_counts_what_it_kept() -> None:
+    doc, plan = _preferring(_example("atmega328-relay.perf"), "balanced", GND="top")
+
+    [note] = face_notes(doc, plan, LOOKUP)
+
+    assert note.reason == "covered" and 2 * note.off_face > note.total > note.off_face
+    assert note.message.startswith(
+        f"GND prefers the component side, but {note.off_face} of its {note.total} connections "
+        "are wired on the solder side: its pins there are under "
+    )
+    assert note.message.endswith(f" and {note.covered_by[-1]}.")
+    gnd_on_top = [c for c in plan.conductors if c.net_id == note.net_id and c.side == "top"]
+    assert gnd_on_top, "what it kept is on top"
+
+
+def test_a_net_kept_on_its_face_but_for_a_via_is_not_a_note() -> None:
+    """The NE555's GND runs on top and drops through a via to reach J1's pin from below: the
+    preference working, and the via is said where vias are."""
+    doc, plan = _preferring(_doc(), "solder", GND="top")
+
+    assert any(c.side == "top" for c in plan.conductors)
+    assert face_notes(doc, plan, LOOKUP) == ()
+
+
+def test_no_net_preferring_a_face_is_no_note() -> None:
+    doc, plan = _preferring(_example("arduino-io-shield.perf"), "balanced")
+    assert face_notes(doc, plan, LOOKUP) == ()
+
+
+def test_a_net_preferring_a_face_the_board_has_no_pads_on_is_told_so() -> None:
+    single = dataclasses.replace(_doc(), board=dataclasses.replace(_doc().board, single_sided=True))
+    assert not has_component_side_copper(single.board)
+    doc, plan = _preferring(single, "solder", GND="top")
+
+    [note] = face_notes(doc, plan, LOOKUP)
+
+    assert (note.reason, note.covered_by) == ("no-pads", ())
+    assert note.message == (
+        "GND prefers the component side, but this board has no pads there, "
+        "so it is wired on the solder side."
+    )
+
+
+@pytest.mark.parametrize("reason", ["no-pads", "covered", "no-way"])
+@pytest.mark.parametrize(("off", "total"), [(4, 4), (3, 5)])
+def test_every_face_note_is_said_in_turkish(reason: str, off: int, total: int) -> None:
+    """Each of the six sentences, wholly and mostly, through the window's ``say``: the
+    face in Turkish, the list joined with "ve", the address and the net left as they are."""
+    from perfboard_studio.ui.engine_text import say
+    from perfboard_studio.ui.i18n import language, set_language
+
+    covered = ("J4", "C6", "RV1") if reason == "covered" else ()
+    message = _face_note_message("GND", "top", off, total, reason, covered)  # type: ignore[arg-type]
+    before = language()
+    set_language("tr")
+    try:
+        said = say(message)
+    finally:
+        set_language(before)
+    assert said != message
+    assert said.startswith("GND parça yüzünü tercih ediyor, ama ")
+    assert "lehim yüzünde kablolandı" in said
+    assert ("J4, C6 ve RV1 gövdelerinin altında" in said) == (reason == "covered")
+    if reason == "covered":
+        one = _face_note_message("GND", "top", off, total, "covered", ("J2",))
+        set_language("tr")
+        try:
+            assert "pinleri J2 gövdesinin altında" in say(one)
+        finally:
+            set_language(before)
+    assert (f"{total} bağlantısından {off} tanesi" in said) == (off != total)

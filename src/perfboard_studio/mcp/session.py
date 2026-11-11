@@ -33,6 +33,7 @@ from perfboard_studio import persist
 from perfboard_studio.autoroute import (
     AutorouteOptions,
     describe_reroute,
+    face_notes,
     holes_to_avoid,
     plan_autoroute,
     plan_best_autoroute,
@@ -1833,11 +1834,28 @@ class BoardSession:
                 comparison=comparison,
             )
 
+        planned_on = self.document
         result = self._dispatch("conductor.addMany", plan.payload())
         if not result["ok"]:
             return result
         if faces == "both" or any(net.preferred_side == "top" for net in self.document.nets):
             result["vias"] = self._vias()
+        # A net wired mostly off the face it prefers, and why (issue #14): a preference is
+        # a price, so the router gives the face up where it must, and says so.
+        notes = face_notes(planned_on, plan, self.lookup)
+        if notes:
+            result["face_notes"] = [
+                {
+                    "net": note.net_name,
+                    "preferred_side": note.preferred,
+                    "off_face": note.off_face,
+                    "connections": note.total,
+                    "reason": note.reason,
+                    "covered_by": list(note.covered_by),
+                    "message": note.message,
+                }
+                for note in notes
+            ]
         result.update(
             committed=True,
             summary=describe_route(plan),

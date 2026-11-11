@@ -206,6 +206,14 @@ TEMPLATES: tuple[str, ...] = (
     "{made} connection wired across {closed}/{considered} nets",
     "{made} connections wired across {closed}/{considered} nets",
     "{count} could not be wired",
+    # -- a net wired off the face it prefers (autoroute.face_notes), mostly first: its
+    # count is what tells it from the whole one
+    "{net} prefers the {faceside} side, but {count} of its {total} connections are wired on the {faceside_b} side: this board has no pads there.",
+    "{net} prefers the {faceside} side, but {count} of its {total} connections are wired on the {faceside_b} side: its pins there are under {refs}.",
+    "{net} prefers the {faceside} side, but {count} of its {total} connections are wired on the {faceside_b} side: no clear way was found for them there.",
+    "{net} prefers the {faceside} side, but this board has no pads there, so it is wired on the {faceside_b} side.",
+    "{net} prefers the {faceside} side, but its pins there are under {refs}, so it is wired on the {faceside_b} side.",
+    "{net} prefers the {faceside} side, but no clear way was found there, so it is wired on the {faceside_b} side.",
     "{count} needed an insulated wire or jumper",
     "{count} pad to measure for isolation",
     "{count} pads to measure for isolation",
@@ -426,6 +434,10 @@ _FIELDS: dict[str, str] = {
     "wirelabel": r"insulated wire|bare wire|top jumper",
     "stated": r"is AWG \d+,|would be cut in AWG \d+, the heaviest gauge this tool names,",
     "gauge_advice": r"(?: .+)?",
+    # -- a net wired off the face it prefers (autoroute.face_notes) ----------------------
+    "faceside": r"component|solder",
+    "faceside_b": r"component|solder",
+    "refs": r"\S+(?:, \S+)*(?: and \S+)?",
 }
 
 
@@ -480,6 +492,14 @@ def _word(field: str, value: str) -> str:
         ]
     if field == "what":
         return {"Paste": t("paste"), "Duplicate": t("duplicate")}[value]
+    if field.startswith("faceside"):
+        return {"component": t("component"), "solder": t("solder")}[value]
+    if field == "refs":
+        # The parts whose bodies cover a net's pins: Turkish says body or bodies on the
+        # word after the list ("J2 gövdesinin", "J4, C6 ve RV1 gövdelerinin").
+        joined = value.replace(" and ", f" {t('and')} ")
+        several = ", " in value or " and " in value
+        return (t("the bodies of {refs}") if several else t("the body of {refs}")).format(refs=joined)
     if field == "board":
         # A board nobody named is called by its place, which the engine says in English.
         numbered = re.fullmatch(r"Board (\d+)", value)

@@ -52,8 +52,9 @@ Pure and deterministic: no I/O, no clock, no randomness. Same board, same plan.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from .command import CommandContext, CommandError
 from .commands import (
@@ -70,6 +71,7 @@ from .drc import run_drc
 from .geometry import format_hole, hole_key, holes_under_line, path_length_mm
 from .model import (
     Board,
+    BoardSide,
     ConductorId,
     HoleCoord,
     NetClass,
@@ -77,6 +79,7 @@ from .model import (
     PerfDocument,
     has_component_side_copper,
 )
+from .occupancy import build_occupancy
 from .ratsnest import NetRatsnest, RatsnestLink, net_ratsnest, ratsnest
 from .router import (
     DEFAULT_ROUTER_OPTIONS,
@@ -1516,6 +1519,125 @@ def describe(plan: AutoroutePlan) -> str:
 def unrouted_links(plan: AutoroutePlan) -> tuple[UnroutedLink, ...]:
     """Every connection the planner could not make, flattened."""
     return tuple(item for outcome in plan.nets for item in outcome.unrouted)
+
+
+#: Why a net that prefers a face was wired off it: the face has no pads on this board, its
+#: pins there are under their own seated bodies (``OccupancyIndex.covered_pin``), or the
+#: search found no way there that cost less than leaving it.
+type FaceNoteReason = Literal["no-pads", "covered", "no-way"]
+
+
+@dataclass(frozen=True, slots=True)
+class FaceNote:
+    """A net that prefers a face and was wired mostly or wholly off it, and why.
+
+    A preference is a price, never a rule (``Net.preferred_side``), so the router keeps
+    every connection and gives up the face where it must. Issue #14 asked for the other
+    half: that it SAYS so. Without this a net set to the component side on a shield, whose
+    header pins sit under their own plastic there, came back wired entirely underneath and
+    nothing said a word -- the setting looked ignored.
+    """
+
+    net_id: NetId
+    net_name: str
+    preferred: BoardSide
+    #: Connections wired with none of their copper on the preferred face, of ``total``.
+    off_face: int
+    total: int
+    reason: FaceNoteReason
+    #: The parts whose seated bodies cover the net's pins on the preferred face, where
+    #: ``reason`` is "covered": by reference, in board order.
+    covered_by: tuple[str, ...]
+    message: str
+
+
+def _face_word(side: BoardSide) -> str:
+    return "component" if side == "top" else "solder"
+
+
+def _and_list(names: Sequence[str]) -> str:
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def face_notes(
+    doc: PerfDocument, plan: AutoroutePlan, lookup: FootprintLookup
+) -> tuple[FaceNote, ...]:
+    """What the plan did with each net's preferred face, where it mostly did not keep it.
+
+    ``doc`` is the document the plan was made FROM. A connection counts as off its face
+    when none of its copper is on it: one that runs on its face and drops through a via to
+    reach a pin is the preference working, and the via is said where vias are. Said only
+    when more than half are off, because a note on every board is one nobody reads.
+    """
+    preferring = {net.id: net.preferred_side for net in doc.nets if net.preferred_side}
+    if not preferring:
+        return ()
+    occupancy = None
+    refs = {component.id: component.ref for component in doc.components}
+    notes: list[FaceNote] = []
+    for outcome in plan.nets:
+        preferred = preferring.get(outcome.net_id)
+        if preferred is None:
+            continue
+        links = [routed for routed in outcome.routed if routed.conductors]
+        off = [
+            routed
+            for routed in links
+            if all(conductor.side != preferred for conductor in routed.conductors)
+        ]
+        if not links or len(off) * 2 <= len(links):
+            continue
+        covered: list[str] = []
+        if preferred == "top" and not has_component_side_copper(doc.board):
+            reason: FaceNoteReason = "no-pads"
+        else:
+            if occupancy is None:
+                occupancy = build_occupancy(doc, lookup)
+            for routed in off:
+                for hole in (routed.link.from_, routed.link.to):
+                    found = occupancy.covered_pin(hole, preferred)
+                    if found is not None and found[1]:
+                        ref = refs.get(found[0], found[0])
+                        if ref not in covered:
+                            covered.append(ref)
+            reason = "covered" if covered else "no-way"
+        notes.append(
+            FaceNote(
+                net_id=outcome.net_id,
+                net_name=outcome.net_name,
+                preferred=preferred,
+                off_face=len(off),
+                total=len(links),
+                reason=reason,
+                covered_by=tuple(covered),
+                message=_face_note_message(
+                    outcome.net_name, preferred, len(off), len(links), reason, covered
+                ),
+            )
+        )
+    return tuple(notes)
+
+
+def _face_note_message(
+    net: str,
+    preferred: BoardSide,
+    off: int,
+    total: int,
+    reason: FaceNoteReason,
+    covered: Sequence[str],
+) -> str:
+    face = _face_word(preferred)
+    other = _face_word("bottom" if preferred == "top" else "top")
+    said = f"{net} prefers the {face} side, but "
+    if reason == "no-pads":
+        why = "this board has no pads there"
+    elif reason == "covered":
+        why = f"its pins there are under {_and_list(covered)}"
+    else:
+        why = "no clear way was found there" if off == total else "no clear way was found for them there"
+    if off == total:
+        return said + f"{why}, so it is wired on the {other} side."
+    return said + f"{off} of its {total} connections are wired on the {other} side: {why}."
 
 
 def risk_holes(plan: AutoroutePlan) -> tuple[HoleCoord, ...]:

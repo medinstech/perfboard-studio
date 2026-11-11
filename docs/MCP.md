@@ -450,7 +450,13 @@ both faces a wire may go over the component side, clear of every part. A prefere
 price on every step off that face, not a rule. A plated hole is one piece of copper, so
 traces on opposite faces still cannot cross: what the second face buys is a net kept where
 it was asked to be, and room for wire over the top. Where a face can change, the result
-lists `vias`, and under `"best"` each style's `face_changes` is in `comparison`.
+lists `vias`, and under `"best"` each style's `face_changes` is in `comparison`. A net that
+prefers a face and had more than half of its connections wired with no copper on it is
+named in `face_notes`, with the count, the reason (`"no-pads"`: the board has none on that
+face; `"covered"`: its pins there are under the parts in `covered_by`, their own seated
+bodies; `"no-way"`: nothing cheaper was found) and a `message` a person can read. A net
+that runs on its face and drops through a via to reach a pin is not one: that is the
+preference working.
 
 **A rail is solder on a stock board's finger strip.** The strip down a stock board's long
 sides stands OUTSIDE the grid, a finger beside each outermost hole, and a finger is named

@@ -87,6 +87,15 @@ closed without a bump.
   atmega328-relay one wire of 58 goes over; on arduino-io-shield the one that did ended
   under a header's plastic, so none does. The auto-wire scoreboard gains `--faces`,
   `--prefer NET=top|bottom` and a `via` column.
+- **Auto-wire says so when a net is wired off the face it prefers, and why.** A preference
+  is a price, so a blocked face is left, and before this nothing said a word: the shield's
+  GND set to the component side came back wired entirely underneath, because every GND pin
+  on top is under J2's plastic, and the setting looked ignored. Now, when more than half of
+  a net's connections have no copper on its face, the plan says "GND prefers the component
+  side, but its pins there are under J2, so it is wired on the solder side" (or how many of
+  how many, or that the board has no pads there, or that no clear way was found), in
+  English and Turkish. A net kept on its face but for a via is the preference working, so
+  the NE555's GND gets no note.
 - **No copper is laid, or asked for, where a part sits on its own pin.** A header's plastic,
   a chip, a terminal block or a switch sits on the board over its pads on the component side,
   so no joint can be made there once it is fitted. Auto-wire never ends or runs copper on the
@@ -106,7 +115,8 @@ closed without a bump.
 - **Agents can wire both faces too.** MCP's `add_solder_trace` takes `side`, `create_net`
   and `update_net` take `preferred_side` (and `clear_preferred_side`), and `autoroute` and
   `reroute` take `faces`; the result names the `vias`, and the `"best"` comparison counts
-  each style's `face_changes`.
+  each style's `face_changes`. `autoroute`'s `face_notes` names a net wired mostly off the
+  face it prefers, with the reason and the parts covering its pins.
 - **Rails on a stock board's finger strip.** The copper strip down the long sides of the
   stock boards, outside the grid, takes solder now: a rail along it, and a bridge from a hole
   beside it onto its finger, the way ground and power are run on those boards. A finger is
