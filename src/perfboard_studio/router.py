@@ -85,7 +85,11 @@ from .commands import (
 )
 from .connectivity import FootprintLookup, PhysicalNet, extract_physical_nets
 from .geometry import (
+    FingerCell,
+    bridge_needs_spine,
+    finger_cells,
     format_hole,
+    hole_key,
     hole_to_mm,
     holes_under_line,
     is_inside_board,
@@ -607,6 +611,40 @@ def route_connection(
     if same_hole(from_, to):
         return RouteResult(ok=False, alternatives=(), reason="Start and end are the same hole.")
 
+    candidates = _candidates(doc, lookup, request, options, dead)
+    candidates.extend(_rail_candidates(doc, lookup, request, options, dead))
+    policy = options.crossing_policy
+    # PREFERENCE RANKS BEFORE COST. With no preference this is the cost sort it has always
+    # been (every rank is 0); with one, the family the builder committed to wins outright
+    # and cost only decides within it. See StrategyPreference for why a cost table alone
+    # cannot express "I am assembling this board with solder traces".
+    candidates.sort(key=lambda c: (_preference_rank(c.strategy, options.prefer), c.cost, c.strategy))
+    if not candidates:
+        refused = (
+            " No wire is allowed by the current crossing policy, so only a solder trace was "
+            "tried."
+            if policy == "refuse"
+            else " Every strategy was blocked — try moving a part, or allow a top jumper."
+        )
+        return RouteResult(
+            ok=False,
+            alternatives=(),
+            reason=f"No route found from {format_hole(from_, doc.board)} to {format_hole(to, doc.board)}.{refused}",
+        )
+    best = candidates[0]
+    return RouteResult(ok=True, best=best, alternatives=tuple(candidates))
+
+
+def _candidates(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    request: RouteRequest,
+    options: RouterOptions,
+    dead: frozenset[tuple[int, int]],
+) -> list[RouteCandidate]:
+    """Every strategy's way from ``request.from_`` to ``request.to``, unsorted."""
+    from_ = request.from_
+    to = request.to
     avoided = _avoided_keys(options, from_, to)
     ctx = _route_context(doc, lookup, request, options, dead | avoided)
 
@@ -651,27 +689,168 @@ def route_connection(
 
     if two_faces:
         candidates = [_off_face(ctx, c) for c in candidates]
-    # PREFERENCE RANKS BEFORE COST. With no preference this is the cost sort it has always
-    # been (every rank is 0); with one, the family the builder committed to wins outright
-    # and cost only decides within it. See StrategyPreference for why a cost table alone
-    # cannot express "I am assembling this board with solder traces".
     if avoided:
         candidates = [c for c in candidates if not _touches(c, avoided)]
-    candidates.sort(key=lambda c: (_preference_rank(c.strategy, options.prefer), c.cost, c.strategy))
-    if not candidates:
-        refused = (
-            " No wire is allowed by the current crossing policy, so only a solder trace was "
-            "tried."
-            if policy == "refuse"
-            else " Every strategy was blocked — try moving a part, or allow a top jumper."
+    return candidates
+
+
+#: How many of a rail's fingers a connection tries to reach, nearest first. Each is a whole
+#: route search, and past the nearest few a farther finger is a longer route to the same
+#: copper.
+RAIL_TARGETS = 3
+
+
+@dataclass(frozen=True, slots=True)
+class _RailEnd:
+    """One end of a connection whose copper already holds solder on outside fingers: the
+    fingers it can be reached at, and the other end, which goes to them."""
+
+    start: HoleCoord
+    from_pin: tuple[str, str] | None
+    #: Each finger of that copper, and the face its solder is on.
+    fingers: tuple[tuple[FingerCell, BoardSide], ...]
+    #: Every hole that copper already holds, by this module's key.
+    holes: frozenset[tuple[int, int]]
+
+
+def _rail_candidates(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    request: RouteRequest,
+    options: RouterOptions,
+    dead: frozenset[tuple[int, int]],
+) -> list[RouteCandidate]:
+    """Ways to reach the rail an end of this connection is already joined to, the way a
+    pin of it would be reached: a route from the other end to the hole beside one of its
+    fingers, and the bridge from that hole onto the finger -- or no bridge where the hole is
+    already on the rail's copper. Never another net's rail: only the copper the end is
+    physically on counts, so a rail of the net nothing has joined yet is not this one.
+
+    Nothing on a board without solder on a finger, which is every golden route."""
+    cells = finger_cells(doc)
+    if not cells:
+        return []
+    out: list[RouteCandidate] = []
+    for end in _rail_ends(doc, lookup, request, cells):
+        tried: set[tuple[int, int]] = set()
+        for cell, side in sorted(
+            end.fingers,
+            key=lambda f: (manhattan(end.start, f[0].beside), f[0].cell.col, f[0].cell.row, f[1]),
+        ):
+            beside = cell.beside
+            if _key(beside) in tried:
+                continue
+            if len(tried) == RAIL_TARGETS:
+                break
+            tried.add(_key(beside))
+            if _key(beside) in dead:
+                continue
+            bridge = (
+                None
+                if _key(beside) in end.holes
+                else _bridge(doc, options, cell, side, request.net_id)
+            )
+            if same_hole(end.start, beside):
+                if bridge is not None:
+                    out.append(_bridged(_bare_bridge(cell, doc), bridge, cell, doc))
+                continue
+            sub = RouteRequest(
+                from_=end.start,
+                to=beside,
+                net_id=request.net_id,
+                buildup=request.buildup,
+                net_holes=request.net_holes,
+                from_pin=end.from_pin,
+            )
+            out.extend(
+                _bridged(c, bridge, cell, doc) if bridge is not None else c
+                for c in _candidates(doc, lookup, sub, options, dead)
+            )
+    return out
+
+
+def _rail_ends(
+    doc: PerfDocument, lookup: FootprintLookup, request: RouteRequest, cells: dict[str, FingerCell]
+) -> list[_RailEnd]:
+    """The ends of this connection that are on copper with solder on a finger."""
+    nets = extract_physical_nets(doc, lookup)
+
+    def net_of(hole: HoleCoord) -> PhysicalNet | None:
+        return next((n for n in nets if any(same_hole(node.hole, hole) for node in n.nodes)), None)
+
+    ends: list[_RailEnd] = []
+    near, far = net_of(request.from_), net_of(request.to)
+    for railed, start, from_pin in ((far, request.from_, request.from_pin), (near, request.to, None)):
+        if railed is None or (near is not None and far is not None and near.id == far.id):
+            continue
+        fingers = tuple(
+            (cells[hole_key(node.hole)], node.side)
+            for node in railed.nodes
+            if hole_key(node.hole) in cells
         )
-        return RouteResult(
-            ok=False,
-            alternatives=(),
-            reason=f"No route found from {format_hole(from_, doc.board)} to {format_hole(to, doc.board)}.{refused}",
-        )
-    best = candidates[0]
-    return RouteResult(ok=True, best=best, alternatives=tuple(candidates))
+        if fingers:
+            ends.append(
+                _RailEnd(
+                    start=start,
+                    from_pin=from_pin,
+                    fingers=fingers,
+                    holes=frozenset(_key(node.hole) for node in railed.nodes),
+                )
+            )
+    return ends
+
+
+def _bridge(
+    doc: PerfDocument, options: RouterOptions, cell: FingerCell, side: BoardSide, net_id: NetId | None
+) -> tuple[NewSolderTraceConductor, float]:
+    """The run from the hole beside a finger onto it, on the rail's face, and its price: a
+    solder step, and a spine where the gap is wider than solder spans
+    (``geometry.bridge_needs_spine``) -- which it is on every stock board."""
+    costs = options.costs
+    needs_spine = bridge_needs_spine(cell, doc.board)
+    conductor = NewSolderTraceConductor(
+        path=(cell.beside, cell.cell),
+        spine=SpineSpec(material="tinned-copper", gauge=0.6) if needs_spine else None,
+        net_id=net_id,
+        kind="solder-trace-wired" if needs_spine else "solder-trace",
+        side=side,
+    )
+    cost = costs.solder_trace_step + (costs.solder_trace_spine_fixed if needs_spine else 0.0)
+    return conductor, cost
+
+
+def _bare_bridge(cell: FingerCell, doc: PerfDocument) -> RouteCandidate:
+    """A connection whose end is the very hole beside the finger: nothing to route."""
+    return RouteCandidate(
+        strategy="solder-trace",
+        conductors=(),
+        cost=0.0,
+        explanation=f"{format_hole(cell.beside, doc.board)} is beside the rail.",
+        risk_holes=(),
+    )
+
+
+def _bridged(
+    candidate: RouteCandidate,
+    bridge: tuple[NewSolderTraceConductor, float],
+    cell: FingerCell,
+    doc: PerfDocument,
+) -> RouteCandidate:
+    conductor, cost = bridge
+    strategy = candidate.strategy
+    if not candidate.conductors:
+        strategy = conductor.kind
+    return dataclasses.replace(
+        candidate,
+        strategy=strategy,
+        conductors=(*candidate.conductors, conductor),
+        cost=candidate.cost + cost,
+        explanation=(
+            f"{candidate.explanation} Then bridged onto the rail at "
+            f"{format_hole(cell.cell, doc.board)}"
+            + (" over a wire spine, across the gap to the finger." if conductor.spine else ".")
+        ),
+    )
 
 def relay_grid_wire(
     doc: PerfDocument,

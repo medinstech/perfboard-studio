@@ -1721,6 +1721,35 @@ def finger_cell_mm(cell: FingerCell, board: Board) -> Point2:
     return Point2(rect.x + rect.width / 2, rect.y + rect.height / 2)
 
 
+#: The widest bare gap plain solder is laid across. A 2.54 mm grid of 1.6-1.9 mm pads
+#: leaves 0.6-0.9 mm, which every solder trace on a perfboard spans, and so does the gap
+#: between two stock fingers; past a millimetre a bridge is a blob that cracks, and the
+#: joint is a wire -- a lead offcut -- soldered at both ends.
+PLAIN_SOLDER_SPAN_MM: Mm = 1.0
+
+
+def bridge_gap_mm(cell: FingerCell, board: Board) -> Mm:
+    """Bare substrate between a finger's copper and the pad of the hole beside it: what a
+    bridge from the one to the other is laid across. 1.4 mm on the 5 x 7 cm double-sided
+    board, 5.9 mm on the 9 x 15 cm."""
+    rect = edge_finger_rect(cell.connector, cell.beside, board)
+    centre = hole_to_mm(cell.beside, board)
+    extent_x, extent_y = pad_extent_mm(board)
+    edge = cell.connector.edge
+    if edge == "left":
+        return (centre.x - extent_x / 2) - (rect.x + rect.width)
+    if edge == "right":
+        return rect.x - (centre.x + extent_x / 2)
+    if edge == "top":
+        return (centre.y - extent_y / 2) - (rect.y + rect.height)
+    return rect.y - (centre.y + extent_y / 2)
+
+
+def bridge_needs_spine(cell: FingerCell, board: Board) -> bool:
+    """Whether a bridge onto this finger has to be a wired solder trace."""
+    return bridge_gap_mm(cell, board) > PLAIN_SOLDER_SPAN_MM
+
+
 def finger_holds(cell: FingerCell, kind: ConductorKind, side: BoardSide) -> bool:
     """Whether a conductor of this kind on this face may lie on the finger: solder, on a
     face the finger has copper on."""

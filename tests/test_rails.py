@@ -414,3 +414,82 @@ def test_a_bore_drilled_into_a_railed_finger_is_refused_and_one_beside_the_rail_
 
     assert drill(8) == (False, "would-strand-conductor")
     assert drill(12) == (True, "")
+
+
+# ---------------------------------------------------------------------------
+# The router reaches a rail as it reaches a pin
+# ---------------------------------------------------------------------------
+
+
+def _left_rail(stock: PerfDocument, rows: range, side: str = "bottom") -> PerfDocument:
+    """A rail down the left strip over ``rows``, bridged at its first row to A<first+1>."""
+    first = rows[0]
+    return _with(
+        stock,
+        NewSolderTraceConductor(
+            path=(H(0, first), *(H(-1, r) for r in rows)), side=side  # type: ignore[arg-type]
+        ),
+    )
+
+
+def _joined(doc: PerfDocument, a: HoleCoord, b: HoleCoord) -> bool:
+    for net in extract_physical_nets(doc, LOOKUP):
+        holes = {node.hole for node in net.nodes}
+        if a in holes and b in holes:
+            return True
+    return False
+
+
+def test_a_connection_to_a_railed_end_goes_to_the_nearest_finger_and_bridges_onto_it() -> None:
+    from perfboard_studio.commands import AddConductorsPayload
+    from perfboard_studio.geometry import bridge_needs_spine
+
+    stock = _stock()
+    strip = next(c for c in stock.edge_connectors if c.edge == "left")
+    rows = range(strip.start, strip.start + strip.count)
+    railed = _left_rail(stock, rows)
+    start, end = H(2, rows[-1]), H(0, rows[0])
+
+    result = route_connection(railed, LOOKUP, RouteRequest(from_=start, to=end))
+    assert result.ok and result.best is not None
+    bridge = result.best.conductors[-1]
+    assert bridge.path == (H(0, rows[-1]), H(-1, rows[-1]))
+    cell = finger_cells(railed)[hole_key(H(-1, rows[-1]))]
+    assert bridge_needs_spine(cell, railed.board), "1.4 mm on this board: wider than solder spans"
+    assert bridge.kind == "solder-trace-wired"
+    assert "bridged onto the rail at A" in result.best.explanation
+
+    bus = _bus(railed)
+    applied = bus.dispatch("conductor.addMany", AddConductorsPayload(conductors=result.best.conductors))
+    assert applied.ok, applied.message
+    assert _joined(bus.document, start, end)
+
+
+def test_a_pin_beside_the_rail_is_just_a_bridge() -> None:
+    stock = _stock()
+    railed = _left_rail(stock, range(3, 17))
+    result = route_connection(railed, LOOKUP, RouteRequest(from_=H(0, 16), to=H(0, 3)))
+    assert result.ok and result.best is not None
+    assert [c.path for c in result.best.conductors] == [(H(0, 16), H(-1, 16))]
+    # Five holes away, the trace down the column is cheaper than a wired bridge, and taken.
+    near = route_connection(railed, LOOKUP, RouteRequest(from_=H(0, 8), to=H(0, 3)))
+    assert near.best is not None and all(c.path[-1].col == 0 for c in near.best.conductors)
+
+
+def test_a_rail_nothing_joins_to_the_connection_is_not_reached() -> None:
+    """Never another net's rail: only the copper an end is physically on counts."""
+    stock = _stock()
+    railed = _left_rail(stock, range(3, 16))
+    result = route_connection(railed, LOOKUP, RouteRequest(from_=H(2, 15), to=H(6, 2)))
+    assert result.ok and result.best is not None
+    assert all(c.path[-1].col >= 0 for c in result.best.conductors)
+
+
+def test_a_rail_on_the_component_side_is_bridged_on_its_own_face() -> None:
+    stock = _stock()
+    rows = range(3, 16)
+    railed = _left_rail(stock, rows, side="top")
+    result = route_connection(railed, LOOKUP, RouteRequest(from_=H(2, 15), to=H(0, 3)))
+    assert result.ok and result.best is not None
+    bridge = result.best.conductors[-1]
+    assert bridge.path[-1] == H(-1, 15) and bridge.side == "top"
