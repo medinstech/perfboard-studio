@@ -345,7 +345,9 @@ CONDUCTOR_KEY_ORDER: tuple[str, ...] = (
 )
 SPINE_KEY_ORDER: tuple[str, ...] = ("material", "gauge")
 CUT_KEY_ORDER: tuple[str, ...] = ("id", "at")
-NET_KEY_ORDER: tuple[str, ...] = ("id", "name", "nodes", "class", "currentA", "voltageV")
+NET_KEY_ORDER: tuple[str, ...] = (
+    "id", "name", "nodes", "class", "currentA", "voltageV", "preferredSide"
+)
 NET_NODE_KEY_ORDER: tuple[str, ...] = ("componentRef", "pin")
 
 # ---------------------------------------------------------------------------
@@ -708,6 +710,10 @@ def _ordered_net(n: Net, index: int) -> JsonObj:
         values["currentA"] = _num(_field_path(path, "currentA"), n.current_a)
     if n.voltage_v is not None:
         values["voltageV"] = _num(_field_path(path, "voltageV"), n.voltage_v)
+    # Left out when the net has no preference, as every net before 0.25 had, so those
+    # files keep their bytes (the stripAxis rule).
+    if n.preferred_side is not None:
+        values["preferredSide"] = n.preferred_side
     return _build_ordered(NET_KEY_ORDER, values)
 
 
@@ -1739,12 +1745,9 @@ def _parse_conductor(raw: object, path: str, warnings: list[str]) -> Conductor:
     layer_z = _expect_integer(_require_field(obj, "layerZ", path), _field_path(path, "layerZ"))
 
     if kind in ("solder-trace", "solder-trace-wired"):
-        if side != "bottom":
-            raise ValidationError(
-                "invalid-value",
-                f'Conductors of kind "{kind}" must have side "bottom", got "{side}".',
-                _field_path(path, "side"),
-            )
+        # Either face since 0.25. A trace on the component side of a board with no pads
+        # there still loads, as a conductor off the board does: DRC reports it
+        # (no-copper-on-face), and the builder is not locked out of their own file.
         buildup = _expect_enum(_require_field(obj, "buildup", path), _field_path(path, "buildup"), SOLDER_BUILDUPS)
         spine_raw = obj.get("spine")
         spine: SpineSpec | None = None
@@ -1762,7 +1765,7 @@ def _parse_conductor(raw: object, path: str, warnings: list[str]) -> Conductor:
             id=conductor_id,
             kind=kind,  # type: ignore[arg-type]
             path=hole_path,
-            side="bottom",
+            side=side,  # type: ignore[arg-type]
             layer_z=layer_z,
             buildup=buildup,  # type: ignore[arg-type]
             spine=spine,
@@ -1845,6 +1848,12 @@ def _parse_net(raw: object, path: str, warnings: list[str]) -> Net:
     current_a = None if current_a_raw is None else _expect_number(current_a_raw, _field_path(path, "currentA"))
     voltage_v_raw = obj.get("voltageV")
     voltage_v = None if voltage_v_raw is None else _expect_number(voltage_v_raw, _field_path(path, "voltageV"))
+    preferred_raw = obj.get("preferredSide")
+    preferred_side = (
+        None
+        if preferred_raw is None
+        else _expect_enum(preferred_raw, _field_path(path, "preferredSide"), BOARD_SIDES)
+    )
     return Net(
         id=_expect_string(_require_field(obj, "id", path), _field_path(path, "id")),
         name=_expect_string(_require_field(obj, "name", path), _field_path(path, "name")),
@@ -1852,6 +1861,7 @@ def _parse_net(raw: object, path: str, warnings: list[str]) -> Net:
         net_class=_expect_enum(_require_field(obj, "class", path), _field_path(path, "class"), NET_CLASSES),  # type: ignore[arg-type]
         current_a=current_a,
         voltage_v=voltage_v,
+        preferred_side=preferred_side,  # type: ignore[arg-type]
     )
 
 

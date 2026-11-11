@@ -623,7 +623,11 @@ def _new_conductor(
     """The clipboard's conductor as a new one, translated, and with no net claim."""
     if isinstance(conductor, SolderTraceConductor):
         return NewSolderTraceConductor(
-            path=path, kind=conductor.kind, buildup=conductor.buildup, spine=conductor.spine
+            path=path,
+            kind=conductor.kind,
+            buildup=conductor.buildup,
+            spine=conductor.spine,
+            side=conductor.side,
         )
     if isinstance(conductor, WireConductor):
         return NewWireConductor(

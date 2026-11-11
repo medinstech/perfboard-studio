@@ -119,6 +119,7 @@ from .model import (
     WireConductor,
     body_clearance_problem,
     declared_pin_name,
+    has_component_side_copper,
     normalized_pin_names,
     supply_net_class,
 )
@@ -569,6 +570,14 @@ def assert_net_name_free(doc: PerfDocument, name: str, ignoring: NetId | None = 
     return cleaned
 
 
+def assert_preferred_side(side: object) -> None:
+    """A net prefers the "top", the "bottom" or neither (None)."""
+    if side not in (None, "top", "bottom"):
+        raise CommandError(
+            "invalid-side", f'A net prefers the "top", the "bottom" or neither; got "{side}".'
+        )
+
+
 def assert_electrical(current_a: float | None, voltage_v: float | None) -> None:
     """The two numbers a net may declare about itself.
 
@@ -656,7 +665,7 @@ class NewSolderTraceConductor:
     net_id: str | None = None
     layer_z: int = 0
     kind: Literal["solder-trace", "solder-trace-wired"] = "solder-trace"
-    side: Literal["bottom"] = "bottom"
+    side: BoardSide = "bottom"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1271,6 +1280,8 @@ class AddNetPayload:
     #: Nominal voltage, which is what wakes the creepage rule.
     voltage_v: float | None = None
     id: NetId | None = None
+    #: See ``Net.preferred_side``.
+    preferred_side: BoardSide | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1286,6 +1297,8 @@ class UpdateNetPayload:
     net_class: NetClass | None = None
     current_a: float | _Keep | None = KEEP
     voltage_v: float | _Keep | None = KEEP
+    #: A face, or None for either; ``KEEP`` leaves it as it is.
+    preferred_side: BoardSide | _Keep | None = KEEP
 
 
 @dataclass(frozen=True, slots=True)
@@ -2278,8 +2291,19 @@ def _prepare_conductor(
 
     if isinstance(spec, NewLeadBendConductor):
         require_component(doc, spec.component_id)
-    if spec.kind in ("solder-trace", "solder-trace-wired") and spec.side != "bottom":
-        raise CommandError("invalid-side", "Solder traces exist on the solder side only.")
+    if spec.kind in ("solder-trace", "solder-trace-wired"):
+        if spec.side not in ("top", "bottom"):
+            raise CommandError(
+                "invalid-side", f'A solder trace is on the "top" or the "bottom"; got "{spec.side}".'
+            )
+        if spec.side == "top" and not has_component_side_copper(doc.board):
+            # Refused, not reported: a board loaded with one is DRC's (no-copper-on-face),
+            # but laying solder where there is no pad to hold it is not a design at all.
+            raise CommandError(
+                "no-copper-on-face",
+                "This board has no pads on the component side, so solder can only be laid "
+                "underneath.",
+            )
 
     if id_ in taken_ids:
         raise CommandError("duplicate-id", f'A conductor with id "{id_}" already exists.')
@@ -3303,6 +3327,7 @@ class _AddNet:
                 f'A net is "power", "ground" or "signal"; got "{p.net_class}".',
             )
         assert_electrical(p.current_a, p.voltage_v)
+        assert_preferred_side(p.preferred_side)
         nodes = assert_pins_free(doc, p.nodes, joining=None)
 
         id_ = p.id if p.id is not None else ctx.next_id("net")
@@ -3316,6 +3341,7 @@ class _AddNet:
             net_class=p.net_class,
             current_a=p.current_a,
             voltage_v=p.voltage_v,
+            preferred_side=p.preferred_side,
         )
         return dataclasses.replace(doc, nets=(*doc.nets, net))
 
@@ -3338,6 +3364,10 @@ class _UpdateNet:
         current_a = existing.current_a if isinstance(p.current_a, _Keep) else p.current_a
         voltage_v = existing.voltage_v if isinstance(p.voltage_v, _Keep) else p.voltage_v
         assert_electrical(current_a, voltage_v)
+        preferred_side = (
+            existing.preferred_side if isinstance(p.preferred_side, _Keep) else p.preferred_side
+        )
+        assert_preferred_side(preferred_side)
 
         nets = tuple(
             dataclasses.replace(
@@ -3346,6 +3376,7 @@ class _UpdateNet:
                 net_class=net_class,
                 current_a=current_a,
                 voltage_v=voltage_v,
+                preferred_side=preferred_side,
             )
             if net.id == p.id
             else net

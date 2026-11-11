@@ -50,6 +50,13 @@ closed without a bump.
   same settings lays the same copper back. MCP's `reroute(without=<conductor id>)` wires
   that conductor's net again keeping clear of every hole it ran through or lay across, its
   ends and its net's pins excepted, and returns those holes as `kept_clear`.
+- **A solder trace may run on the component side of a double-sided board, and a net may
+  say which face it prefers.** This is the document's half of wiring on both faces; the
+  checks, auto-wire, the build guide and the window follow. A board with no pads on the
+  component side (single-sided, stripboard, a plain or solderless board) refuses one.
+  **A file holding a component-side trace does not open in 0.24 or earlier**: they stop
+  with `Conductors of kind "solder-trace" must have side "bottom", got "top".` A net's
+  preferred face alone is only ignored there, with an "Unknown property" warning.
 
 ### Changed
 

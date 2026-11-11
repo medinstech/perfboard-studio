@@ -988,7 +988,13 @@ class SolderTraceConductor:
     net_id: NetId | None = None
     layer_z: int = 0
     kind: Literal["solder-trace", "solder-trace-wired"] = "solder-trace"
-    side: Literal["bottom"] = "bottom"
+    #: The face the solder is on. The component side only on a board with pads there
+    #: (:func:`has_component_side_copper`), where a trace is laid among the fitted parts;
+    #: a pinless hole the net's copper reaches from both faces is a via, joined through
+    #: its plating (connectivity's pass 2b). Written on every conductor, as it always was,
+    #: and a reader before 0.25 refuses "top" on a trace -- there is no field it could
+    #: merely ignore.
+    side: BoardSide = "bottom"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1075,6 +1081,11 @@ class Net:
     current_a: float | None = None
     #: Nominal voltage, if supplied. Drives creepage DRC.
     voltage_v: float | None = None
+    #: The face this net's copper should run on, when the builder has a preference: a cost
+    #: the router pays for every step off it, never a rule, so a route the preferred face
+    #: cannot carry still gets made. None means either face, which is every net before 0.25,
+    #: and is then left out of the file.
+    preferred_side: BoardSide | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1252,6 +1263,18 @@ def body_clearance_problem(clearance_mm: float) -> str | None:
         f"the pitch the courtyards already keep between two bodies; got {clearance_mm:g}. "
         f"Pass null to measure parts by their courtyards instead."
     )
+
+
+def has_component_side_copper(board: Board) -> bool:
+    """Whether the component side has pads that copper can be soldered to.
+
+    A pad-per-hole board unless it is single-sided, and a solderable breadboard, both
+    plated through. Not a stripboard, whose strips are on the solder side only, a plain
+    board, which has no copper at all, or a solderless breadboard, which has none to
+    solder. A wire may still lie on a face with no pads -- a top jumper does -- because it
+    is soldered where its ends come through, not where it lies.
+    """
+    return board.type in ("pad-per-hole", "solderable-breadboard") and not board.single_sided
 
 
 def is_solder_trace(c: Conductor) -> bool:
