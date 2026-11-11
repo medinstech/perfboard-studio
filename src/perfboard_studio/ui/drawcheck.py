@@ -83,7 +83,9 @@ class DrawCheck:
     net_id: NetId | None
     #: Errors first, then warnings, each in the order met along the path.
     problems: tuple[DrawProblem, ...]
-    #: A conductor of the same kind on exactly this path already, or None.
+    #: Copper already lying exactly where this would, or None: a run whose pads include
+    #: these in this order, or a wire or jumper along these very corners. Laid, the new
+    #: copper would add nothing but a second piece in the same place.
     duplicate: Conductor | None = None
 
     @property
@@ -101,6 +103,51 @@ def candidate(document: PerfDocument, kind: ConductorKind, path: tuple[HoleCoord
         kind=kind,  # type: ignore[arg-type]
         side=wire_side(kind, document.board),
     )
+
+
+_RUNS = frozenset({"solder-trace", "solder-trace-wired"})
+
+
+def _corners(path: tuple[HoleCoord, ...]) -> tuple[HoleCoord, ...]:
+    """A wire's path as the line it is: no hole twice in a row, no point mid-leg."""
+    out: list[HoleCoord] = []
+    for hole in path:
+        if out and out[-1] == hole:
+            continue
+        if len(out) >= 2:
+            a, b = out[-2], out[-1]
+            ab = (b.col - a.col, b.row - a.row)
+            bc = (hole.col - b.col, hole.row - b.row)
+            if ab[0] * bc[1] == ab[1] * bc[0] and ab[0] * bc[0] + ab[1] * bc[1] > 0:
+                out[-1] = hole
+                continue
+        out.append(hole)
+    return tuple(out)
+
+
+def _already_there(drawn: Conductor, other: Conductor) -> bool:
+    """Whether ``other`` is already exactly the copper ``drawn`` would lay.
+
+    A run over pads a run already solders in that order -- the whole of it or a stretch of
+    it, plain or wired -- joins nothing new. A wire or a jumper along exactly another's
+    line, ends and corners, is a second wire in the same place. Anything partly over other
+    copper is NOT this: it is a run carried on, a wire along a wire (the amber warning),
+    or a short.
+    """
+    if other.side != drawn.side or len(other.path) < 2:
+        return False
+    if drawn.kind in _RUNS:
+        if other.kind not in _RUNS:
+            return False
+        mine, theirs = tuple(drawn.path), tuple(other.path)
+        n = len(mine)
+        return any(
+            theirs[i : i + n] in (mine, mine[::-1]) for i in range(len(theirs) - n + 1)
+        )
+    if other.kind in _RUNS or other.kind in ("lead-bend", "strip"):
+        return False
+    mine = _corners(tuple(drawn.path))
+    return _corners(tuple(other.path)) in (mine, mine[::-1])
 
 
 def check_drawn(
@@ -176,7 +223,7 @@ def check_drawn(
     for other in document.conductors:
         if other.id == ignoring:
             continue
-        if other.kind == drawn.kind and tuple(other.path) in (path, path[::-1]):
+        if duplicate is None and _already_there(drawn, other):
             duplicate = other
         if other.side != drawn.side or len(other.path) < 2:
             continue

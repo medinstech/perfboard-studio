@@ -156,3 +156,25 @@ def test_a_crossing_the_preview_marks_is_the_crossing_drc_finds_once_it_is_laid(
         for conductor_id in v.conductor_ids
     }
     assert crossed and crossed <= found, (crossed, found)
+
+
+@pytest.mark.parametrize(
+    ("kind", "refs", "found"),
+    [
+        ("solder-trace", ("G1", "H1"), "cond-13"),
+        ("solder-trace", ("I1", "H1", "G1"), "cond-13"),
+        ("solder-trace-wired", ("F1", "G1", "H1", "I1"), "cond-13"),
+        ("solder-trace", ("H1", "I1", "J1"), None),
+        ("bare-wire", ("G6", "G4", "G2", "F2"), "cond-2"),
+        ("insulated-wire", ("F2", "G2", "G6"), "cond-2"),
+        ("bare-wire", ("G6", "F6", "F2"), None),
+    ],
+)
+def test_copper_exactly_over_copper_is_found_and_partly_over_is_not(
+    ne555: PerfDocument, kind: ConductorKind, refs: tuple[str, ...], found: str | None
+) -> None:
+    """A run over a stretch of a run's pads, plain or wired, and a wire along exactly
+    another's line -- a point mid-leg is not a corner -- add nothing. A run carried past
+    the end, or a wire between the same ends by another corner, is new copper."""
+    checked = check_drawn(ne555, footprint_lookup(), kind, _path(ne555, *refs))
+    assert (checked.duplicate.id if checked.duplicate else None) == found

@@ -961,6 +961,10 @@ TURKISH: Mapping[str, str] = {
         "ile geri alabilirsiniz."
     ),
     "it runs along {other} from {hole}.": "{hole} deliğinden itibaren {other} boyunca uzanıyor.",
+    "{other} already lies here: Enter adds nothing": (
+        "{other} zaten burada: Enter hiçbir şey eklemez"
+    ),
+    "Already joined by {other}: nothing added": "Zaten {other} ile bağlı: hiçbir şey eklenmedi",
     "{count} pad": "{count} ped",
     "{count} pads": "{count} ped",
     "past {limit} pads Shift+T lays it with a wire in it": (

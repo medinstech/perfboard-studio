@@ -69,6 +69,10 @@ closed without a bump.
 
 ### Fixed
 
+- **Copper drawn exactly over copper is not laid twice.** A run over pads a run already
+  solders, or a wire along exactly another wire's line, went in as a second identical piece
+  without a word. The banner now says the copper is already there before Enter, and Enter
+  adds nothing and says what it is joined by.
 - **Undo names copper by where it runs.** "Undo Reroute conductor cond-8" and "Undo Delete
   bare-wire cond-3" named an id nobody had seen; they now say "Reshape solder-trace I6 to L5"
   and "Delete bare-wire G6 to F2", the way adding copper always did (in Turkish with the

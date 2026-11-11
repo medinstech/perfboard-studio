@@ -4847,6 +4847,9 @@ class BoardScene(QGraphicsScene):
     #: Emitted with what the conductor being drawn would do (``drawcheck.DrawCheck``) as
     #: the pointer moves, or None when there is nothing to check yet.
     drawChecked = Signal(object)
+    #: Emitted with the conductor already lying exactly where the one just finished would
+    #: have gone, which was therefore not laid.
+    drawnAlready = Signal(object)
     #: A click where several conductors lie took the next one: (which, of how many).
     pickCycled = Signal(int, int)
     #: Emitted with the id of the net being filled by clicking pins, or "" when that ends.
@@ -5851,6 +5854,14 @@ class BoardScene(QGraphicsScene):
         # not a failure: copper with no net claim is what rip-up-and-reroute and the
         # stale-conductor cleanup both promise never to touch.
         checked = self.check_drawing(path)
+        if checked is not None and checked.duplicate is not None and self._draw_continuing is None:
+            # Copper already lying exactly there: a second piece in the same place joins
+            # nothing and is one more thing to solder, and it was laid without a word.
+            self.last_draw_check = checked
+            self.last_drawn = (kind, path)
+            self._start_next_conductor()
+            self.drawnAlready.emit(checked.duplicate)
+            return None
         if self._draw_continuing is not None:
             # The run drawn on from its end is the same run, longer: one setPath, its net
             # as it was.

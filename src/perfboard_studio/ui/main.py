@@ -2825,6 +2825,7 @@ class MainWindow(QMainWindow):
         self.scene.drawArmed.connect(self._on_draw_armed)
         self.scene.conductorDrawn.connect(self._on_conductor_drawn)
         self.scene.drawChecked.connect(self._on_draw_checked)
+        self.scene.drawnAlready.connect(self._on_drawn_already)
         self.scene.pickCycled.connect(self._on_pick_cycled)
         self.scene.netPinsArmed.connect(self._on_net_pins_armed)
         self.scene.netPinsChanged.connect(self._on_net_pins_changed)
@@ -12250,6 +12251,15 @@ class MainWindow(QMainWindow):
         only when what it says does: this arrives on every mouse move."""
         problem = check.worst if check is not None else None
         text = self._draw_problem_text(problem) if problem is not None else ""
+        if (
+            check is not None
+            and check.duplicate is not None
+            and not self.scene.reshaping
+            and self.scene.continuing is None
+        ):
+            # Laid, it would add nothing -- so nothing it would do wrong is the point either.
+            other = self._copper_phrase(check.duplicate.kind, check.duplicate.path)
+            text = t("{other} already lies here: Enter adds nothing").format(other=other)
         if self.scene.reshaping or (check is None and not self.scene.armed_draw_kind):
             # A handle's drag is a drag, and says so where a part's drag does.
             self.view.show_drag(text)
@@ -12281,6 +12291,14 @@ class MainWindow(QMainWindow):
         if kind == "solder-trace" and board.material in ("FR1", "FR2") and len(ahead) > limit:
             parts.append(t("past {limit} pads Shift+T lays it with a wire in it").format(limit=limit))
         return "  ·  ".join(parts)
+
+    def _on_drawn_already(self, other: Any) -> None:
+        """The copper just finished lies exactly over copper already there, so none was
+        added. Two identical runs used to go in without a word."""
+        phrase = self._copper_phrase(other.kind, other.path)
+        self.statusBar().showMessage(
+            _sentence(t("Already joined by {other}: nothing added").format(other=phrase)), 8000
+        )
 
     def _on_pick_cycled(self, which: int, count: int) -> None:
         self.statusBar().showMessage(

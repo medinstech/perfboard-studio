@@ -18814,3 +18814,30 @@ def test_a_step_with_a_corner_is_drawn_as_a_line_not_filled() -> None:
 
     assert at(8, 5) > 0, "the leg is drawn"
     assert at(6, 6) == 0, "inside the L is not"
+
+
+
+def test_copper_drawn_exactly_over_copper_is_not_laid_and_says_what_is_there() -> None:
+    """F1 → I1 drawn again over LED_A's run gave two identical runs, and nothing was said.
+    From its end, the tool now carries that run on; from its middle, G1 → H1 is a stretch
+    of pads it already solders."""
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        before = window.bus.document.conductors
+        steps = len(window.bus.history())
+        window.on_draw_mode("solder-trace", True)
+        window.scene.draw_click(_hole(window, "G1"))
+        assert window.scene.continuing is None
+        _hover_hole(window, "H1")
+        assert "already lies here" in window.view.mode_banner.text(), window.view.mode_banner.text()
+
+        window.scene.draw_click(_hole(window, "H1"))
+        assert window.scene.commit_drawing() is None
+        assert window.bus.document.conductors == before
+        assert len(window.bus.history()) == steps
+        assert window.statusBar().currentMessage() == (
+            "Already joined by solder trace F1 → I1: nothing added"
+        )
+        assert window.scene.armed_draw_kind == "solder-trace"
+    finally:
+        _close(window)
