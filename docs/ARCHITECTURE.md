@@ -3556,3 +3556,73 @@ and `place_parts` take `side`. It replaced `mirror_component` one for one, so th
 did not move: `mirror_component`'s only documented use was "put a part on the solder side",
 and after this it would have produced a part reflected on the component side -- exactly the
 wrong part, from a tool an agent had every reason to trust.
+
+## A plated hole is one piece of copper, so the second face is mostly for wire
+
+Wiring on both faces (#14) came in four steps -- the document, the checks, the router, the
+guide -- and MCP after them, each landed on its own and each keeping every golden's bytes:
+no fixture holds solder on the component side or a net that prefers a face
+(`test_no_golden_fixture_has_copper_on_the_component_side`).
+
+**The document.** `SolderTraceConductor.side` is a `BoardSide` where it was only "bottom", and
+`Net.preferred_side` is None, "top" or "bottom", written as `preferredSide` only when it is not
+None (the `stripAxis` rule). `conductor.add` accepts a top trace where
+`model.has_component_side_copper` says the component side has pads -- a pad-per-hole board
+that is not single-sided, or a solderable breadboard -- and refuses it elsewhere as
+`no-copper-on-face`. A file holding one on such a board still opens, as a conductor off the
+board does, and DRC reports it (`no-copper-on-face`, in `PYTHON_ONLY_RULES`). Solder only: a
+wire on top is a `top-jumper`, its kind says its face (`commands.wire_side`), and its ends are
+soldered underneath, so no board refuses one. `DOCUMENT_FORMAT_VERSION` stays 1: 0.24 stops
+on a top trace with its own `must have side "bottom"` message and ignores a preferred face
+with an "Unknown property" warning, which the CHANGELOG says.
+
+**The physics, which sets what the router can buy.** A plated hole is one piece of copper:
+solder on either face of it is on both pads, and two orthogonal grid traces can only meet in
+a hole. So traces on opposite faces cannot cross any more than traces on one face can, and the
+"second routing layer" a printed board has is not there. What does differ by face is the
+bodies -- component-side copper goes in after the parts, so `copper-under-body` measures a
+top trace against the bodies on its face -- and the wires: a wire on top lies across none of
+the solder side's joints, ends and wires. The first router run put GND on top of the ne555
+and laid a signal's bottom trace through GND's holes; LVS found the short, because the hop,
+plain and wire searches asked only about the bottom face's copper. `occupancy` now blocks a
+top trace's holes on the bottom as well, and
+`test_a_short_through_the_plating_is_found_not_only_avoided` pins the same physics from
+outside the router: two nets' traces soldered into one pinless hole from opposite faces are an
+LVS short.
+
+**The router.** `RouterOptions.faces` is "solder" (every golden route) or "both". With both
+faces in play the trace comes from an A* over (hole, face, heading): the turning search's
+moves on each face, plus a move to the other face in the same hole -- free through a pin of
+the net, `RouterCosts.face_change` through an empty hole (a via), never through another
+net's pin. A net's preference is a PRICE, `off_face_step` on every step off its face, never a
+rule, so a blocked face is still left; a net with none pays `component_face_step` on top, so
+it stays underneath. Measured: with no net preferring a face, "both" lays the solder plan to
+the conductor (`test_one_face_is_the_default_and_both_faces_with_no_preference_stays_underneath`),
+which is the physics above showing through. The face's real gain is the second candidate, a
+wire along the grid on the component side: the grid-wire search run on that face's sets, lying
+across no pin (the lead stands there) and under no body, so it is never squeezed under a part
+however tall. On arduino-io-shield one wire goes over and the tallest stack underneath drops
+from 2 to 1; on atmega328-relay 2 of 53 do, and its tallest stack drops from 6 to 5. A bare
+wire over the top was tried and never chosen, so it is not offered, and `component_face_wire`
+from 0 to 4 gave the same plans.
+
+**A net that prefers the top has both faces even under "solder".** The first version read a
+preference only with "both", and a builder who set GND to the component side and ran Auto-wire
+saw nothing happen until they found a global switch. The per-net choice is the more explicit
+intent, so `_two_faces` is true for that net alone; "both" opens both faces to every net.
+`test_a_net_that_prefers_the_component_side_has_both_faces_under_solder_and_only_it`.
+
+**Around it.** `autoroute` moves nets that prefer a face up behind ground, where a preference
+is easiest to keep. `wiringstats.vias` are the pinless holes where top solder meets other
+copper; `score_plan` counts them as `face_changes`, priced at the search's rate like its
+other columns and zero on one face, and the scoreboard has a `via` column, `--faces` and
+`--prefer NET=top|bottom`.
+
+**The guide.** Component-side solder opens phase 7: after the parts, because solder in a hole
+before its lead goes in keeps the lead out, and before the long wires, so the board is turned
+once. Each via gets one line on the first step that lays the solder side's copper into it --
+fill the hole until the solder shows on top, so the top run is soldered onto solder that is
+there rather than onto a barrel nobody can see into -- and one continuity probe across it,
+ahead of phase 7's net checks, so a hole whose plating did not take is found by itself and
+not as a net that fails. Phase 7's title says so only on a board that has some, which is why
+every guide golden, English and Turkish, kept its bytes.
