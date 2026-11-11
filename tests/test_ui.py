@@ -19198,3 +19198,32 @@ def test_auto_wires_status_line_counts_what_the_step_card_counts() -> None:
         assert window._wired_said(plan, everything).startswith("23 of 24 nets wired  ·  ")
     finally:
         _close(window)
+
+
+def test_no_dock_separator_is_left_lying_over_the_problems_list(monkeypatch) -> None:
+    """A line cut through the drawer's third row, "Board check (DRC)", whatever was in it.
+    It was a separator handle of Qt's own: the window's panels are tabbed together before
+    their layout is restored, and ``restoreState`` keeps one handle of that first layout,
+    visible, where the column's edge was. The drawer opened over it and the handle, which
+    nothing moves any more, painted itself across the list."""
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    window = _shown_window_without_3d(monkeypatch, width=1440)
+    try:
+        window.set_problems_open(True)
+        _settle_events(QApplication)
+        viewport = window.drc_tree.viewport()
+        assert viewport.isVisible() and viewport.height() > 40
+        listed = QRect(viewport.mapTo(window, QPoint(0, 0)), viewport.size())
+        stray = [
+            QRect(handle.mapTo(window, QPoint(0, 0)), handle.size())
+            for handle in window.findChildren(QWidget, "qt_qmainwindow_extended_splitter")
+            if handle.isVisible()
+        ]
+        assert not [rect for rect in stray if rect.intersects(listed)], stray
+        # The handles that ARE the layout's are still there to be dragged.
+        assert any(rect.width() > rect.height() for rect in stray)
+        assert any(rect.height() > rect.width() for rect in stray)
+    finally:
+        _close(window)

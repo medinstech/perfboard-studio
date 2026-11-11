@@ -3611,7 +3611,7 @@ class MainWindow(QMainWindow):
         self.header_strip.show()
         self.statusBar().show()
         if self._layout_before_home is not None:
-            self.restoreState(self._layout_before_home, WINDOW_STATE_VERSION)
+            self._restore_layout(self._layout_before_home)
             self._layout_before_home = None
         # Not ``_keep_3d_behind``: that is for a start, where a 3D view left in front would
         # build VTK for nobody. Here the view in front is the one somebody left there.
@@ -4024,9 +4024,27 @@ class MainWindow(QMainWindow):
         """
         state = self.saveState(WINDOW_STATE_VERSION)
         self._cap_for_default_sizes(False)
-        self.restoreState(state, WINDOW_STATE_VERSION)
+        self._restore_layout(state)
         self._sync_dock_titlebars()
         self._sync_central_hint()
+
+    def _restore_layout(self, state: QByteArray) -> bool:
+        """``restoreState``, without the separator handle it leaves behind.
+
+        The panels are tabbed together while the window is built, which gives that first
+        layout its separator handles, and ``restoreState`` lays out afresh with new ones
+        and keeps one of the old: visible, never moved again, where the views' column
+        ended. The Problems drawer opened over it, and it painted a line through the third
+        row of the list. Qt shows every handle the layout still uses on each pass, so all
+        are hidden here and the next pass brings back exactly the live ones.
+        """
+        restored = self.restoreState(state, WINDOW_STATE_VERSION)
+        for handle in self.findChildren(QWidget, "qt_qmainwindow_extended_splitter"):
+            handle.hide()
+        layout = self.layout()
+        if layout is not None:
+            layout.invalidate()
+        return restored
 
     def _cap_for_default_sizes(self, on: bool) -> None:
         # The guide is not here: it is shut on a first run, and a cap on a closed panel
@@ -14546,7 +14564,7 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(geometry)
         state = settings.value(WINDOW_STATE_KEY)
         if state is not None:
-            self._restored_layout = self.restoreState(state, WINDOW_STATE_VERSION)
+            self._restored_layout = self._restore_layout(state)
         # ...and then never with the 3D panel in FRONT. Restoring it in front would build
         # VTK's whole pipeline during startup -- an OpenGL context and a few thousand
         # actors -- to show a board the user has not looked at yet (see _build_3d_dock for

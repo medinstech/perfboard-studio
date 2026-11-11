@@ -105,6 +105,10 @@ closed without a bump.
 
 ### Fixed
 
+- **A line no longer cuts through the Problems list.** A separator handle Qt kept from the
+  window's first layout stayed where the views' column ended, and the open drawer's third
+  row, "Board check (DRC)", was drawn with a line through it.
+
 - **Copper drawn exactly over copper is not laid twice.** A run over pads a run already
   solders, or a wire along exactly another wire's line, went in as a second identical piece
   without a word. The banner now says the copper is already there before Enter, and Enter
