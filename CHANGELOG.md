@@ -83,9 +83,19 @@ closed without a bump.
   one: a trace goes on top only for a net that prefers it. What the second face does give
   everyone is room for wire: a wire may go over the component side, along the grid, where it
   lies across no pin and under no part, and so across none of the solder side's joints,
-  ends and wires. On arduino-io-shield one wire goes over and the tallest stack of wires
-  underneath drops from 2 to 1. The auto-wire scoreboard gains `--faces`,
+  ends and wires, and never ends at a pin its own part's body covers on top. On
+  atmega328-relay one wire of 58 goes over; on arduino-io-shield the one that did ended
+  under a header's plastic, so none does. The auto-wire scoreboard gains `--faces`,
   `--prefer NET=top|bottom` and a `via` column.
+- **No copper is laid, or asked for, where a part sits on its own pin.** A header's plastic,
+  a chip, a terminal block or a switch sits on the board over its pads on the component side,
+  so no joint can be made there once it is fitted. Auto-wire never ends or runs copper on the
+  component side at such a pin; copper drawn there by hand is reported by the new
+  `copper-at-covered-pin` check (an error, or a warning saying to leave the leads long for a
+  part that stands on them), and the build guide's step says not to build it as drawn. A
+  trace on the component side also pays more for passing beside another net's pin, since it
+  is soldered after the parts are in: with GND preferring the component side, the example
+  boards' warnings come to 11 rather than 14.
 - **The build guide says when to lay the component side's solder and where its vias are.**
   Its runs open phase 7, after the parts, since solder in a hole before its lead keeps the
   lead out, and before the long wires; phase 7's title says so, in both languages, only on

@@ -3601,10 +3601,36 @@ the conductor (`test_one_face_is_the_default_and_both_faces_with_no_preference_s
 which is the physics above showing through. The face's real gain is the second candidate, a
 wire along the grid on the component side: the grid-wire search run on that face's sets, lying
 across no pin (the lead stands there) and under no body, so it is never squeezed under a part
-however tall. On arduino-io-shield one wire goes over and the tallest stack underneath drops
-from 2 to 1; on atmega328-relay 2 of 53 do, and its tallest stack drops from 6 to 5. A bare
-wire over the top was tried and never chosen, so it is not offered, and `component_face_wire`
-from 0 to 4 gave the same plans.
+however tall. A bare wire over the top was tried and never chosen, so it is not offered, and
+`component_face_wire` from 0 to 4 gave the same plans.
+
+**No copper on the component side at a pin its own seated body covers.** The first showcase
+was arduino-io-shield, where one wire went over the top and the tallest stack underneath
+dropped from 2 to 1 -- and that wire ended at K1, a pin of J1's header under the header's
+own plastic, which no iron reaches once the header is in. The NE555 board did the
+same with a trace into its header's middle pin when GND preferred the top. One answer serves
+everyone: `OccupancyIndex.covered_pin(hole, side)` is the part whose OWN body covers its pin on
+that face, and whether the body is seated (`model.SEATED_ARCHETYPES`: a chip, a header, a
+terminal block, a switch -- not a part on its leads). The router's two-face search never
+starts, ends, passes or changes face onto such a pad on top (`_pad_open`), the wire-over-the-top
+candidate refuses an end there, DRC's `copper-at-covered-pin` reports hand-drawn copper there
+(an error under a seated body, a warning for a part on its leads, which can be fitted with
+them long), and the guide puts the same words first on the step. A pin ON a body's edge is
+beside it: a DIP's box runs along its pin rows and lands a few ulps either side of them once
+placed, and measured strictly one row of a DIP was "under" it at some anchors and not at others
+(`PIN_UNDER_BODY_MARGIN_MM`, `test_a_dips_pins_are_never_under_its_own_body`). Measured
+afterwards, the second face buys arduino-io-shield nothing -- every wire it might lay over the
+top ends under a header's plastic -- and on atmega328-relay 1 of 58 goes over, for 5 mm and 2 bends less
+and no change in the stacks (`test_the_shields_wire_over_the_top_was_a_joint_nobody_could_make`,
+`test_a_wire_over_the_component_side_lies_across_no_pin_and_under_no_part`).
+
+**A trace on the component side pays more for a pin of another net beside it.**
+`RouterCosts.component_face_risk` (6) is charged on top of `proximity_risk` for each such hole
+a top trace passes or ends in, in the search and in pricing the candidates alike. Top copper
+goes on after the parts (the guide's phase 7), so the iron reaches between bodies and a bridge
+there is found last; without it, GND preferring the top on the NE555 board ran a trace between
+two header pins of other nets rather than lay a wire over the top for 1.6 more, and the sweep's
+24 warnings with GND on top came to 14; with this price and the rule above, 11.
 
 **A net that prefers the top has both faces even under "solder".** The first version read a
 preference only with "both", and a builder who set GND to the component side and ran Auto-wire
