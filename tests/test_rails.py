@@ -140,6 +140,26 @@ def test_a_cell_is_drawn_on_its_fingers_copper_wherever_the_strip_was_made() -> 
             assert rect.y < at.y < rect.y + rect.height
 
 
+def test_a_path_point_is_on_the_finger_for_a_cell_and_the_hole_for_the_rest() -> None:
+    """``path_point_mm`` is the one function 2D, 3D and the STEP export ask: a cell goes to
+    its finger's copper, every other hole -- the bridge's other end, a hole one step past
+    an edge with no finger beside it -- stays where ``hole_to_mm`` puts it."""
+    from perfboard_studio.geometry import hole_to_mm, path_point_mm
+
+    for name in ("5 x 7 cm", "9 x 15 cm"):
+        doc = document_on_preset(create_empty_document(META), _preset(name, "double-sided-fr4"))
+        board = doc.board
+        cells = finger_cells(doc)
+        cell = next(iter(cells.values()))
+        assert path_point_mm(cell.cell, board, cells) == finger_cell_mm(cell, board)
+        assert path_point_mm(cell.beside, board, cells) == hole_to_mm(cell.beside, board)
+        # Off the grid with no finger there: the address's own point, as before.
+        corner = H(-1, -1)
+        assert hole_key(corner) not in cells
+        assert path_point_mm(corner, board, cells) == hole_to_mm(corner, board)
+        assert path_point_mm(cell.cell, board, {}) == hole_to_mm(cell.cell, board)
+
+
 def test_a_board_of_joined_holes_has_no_cells() -> None:
     doc = _stock()
     striped = dataclasses.replace(doc, board=dataclasses.replace(doc.board, type="stripboard"))

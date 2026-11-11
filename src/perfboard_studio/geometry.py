@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
 from typing import Literal
@@ -1719,6 +1719,20 @@ def finger_cell_mm(cell: FingerCell, board: Board) -> Point2:
     where a renderer puts a cell that ``hole_to_mm`` would put in the border."""
     rect = edge_finger_rect(cell.connector, cell.beside, board)
     return Point2(rect.x + rect.width / 2, rect.y + rect.height / 2)
+
+
+def path_point_mm(hole: HoleCoord, board: Board, cells: Mapping[str, FingerCell]) -> Point2:
+    """Where a renderer draws one point of a conductor's path: on the finger's copper for a
+    cell (:func:`finger_cell_mm`), at the hole's centre (:func:`hole_to_mm`) for every other.
+
+    ``cells`` is :func:`finger_cells` of the document, computed once per build and handed
+    to whatever draws, because a finger is the document's edge connector and not the
+    board's: the board alone cannot say where one is. With no cells -- every board without
+    an outside strip -- this is exactly ``hole_to_mm``."""
+    cell = cells.get(hole_key(hole)) if cells else None
+    if cell is not None:
+        return finger_cell_mm(cell, board)
+    return hole_to_mm(hole, board)
 
 
 #: The widest bare gap plain solder is laid across. A 2.54 mm grid of 1.6-1.9 mm pads
