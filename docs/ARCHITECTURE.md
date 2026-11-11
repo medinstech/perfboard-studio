@@ -2925,6 +2925,45 @@ trace would be compared with a hop on a different bill from the one that chose i
 bends alone bought straightness with jumpers, so those styles also price a hop at 16
 (`HOP_FOR_SOLDER_STYLES`) -- the middle of a measured trade the user chose.
 
+## Auto-wire is held to a scoreboard
+
+**A router change is judged on what auto-wire makes of real boards, in numbers, before and
+after** -- `tools/autowire_scoreboard.py`, one row per example and golden board, wired from
+bare the way the window does it. The golden routes prove the port; they say nothing about
+whether a board auto-wire lays is one somebody can build, and every fault in this section was
+found on a board that passed every test. Its columns are the ones that went wrong:
+
+- `unr`, `err`, `warn` -- what was not connected, and what DRC says about what was.
+- `wire`, `bends`, `trace` -- what it costs a person: millimetres to cut, corners to bend,
+  holes to solder along.
+- `level` -- the tallest stack of wires. `occupancy.stacking_layers` puts a wire lying across
+  another's end above it, which is right, and the auto-wired atmega328-relay came out eight
+  wires tall: nobody solders that.
+- `pin`, `end` -- holes a wire lies across where a lead or another wire comes down to its pad.
+  Each one is a reason for the wire to be stacked higher, so `RouterCosts.wire_over_joint`
+  prices them.
+- `loops` -- wires each lying across another's end (`occupancy.stacking_loops`), which can be
+  soldered in no order and drawn apart by no stacking. `RouterCosts.wire_into_loop` prices
+  laying one like a wire of its own.
+- `drawn` -- pairs of tubes the 3D view draws through each other, measured on the
+  centrelines and radii `ui/view3d` builds, as `test_no_two_conductors_are_drawn_in_the_same_place`
+  does on the goldens. The census that found wires coming down through one another (14 on
+  atmega328-relay) is where the scoreboard came from.
+
+A commit that changes the router quotes its before and after rows (`--json` one run,
+`--before` it on the next).
+
+**`tests/test_autowire_scoreboard.py` holds four boards to CEILINGS, not to values.** The
+densest example, the two whose wires made loops, and the golden NE555, wired with the balanced
+style alone so the four cost about three seconds rather than the sweep's half minute.
+`unr`, `loops` and `drawn` are zero and stay so; `level`, `pin` and `end` are what the router
+made of the board when the ceiling was set. A value would fail every improvement, and a test
+that fails when the router gets better teaches people to re-bless it without looking -- so an
+improvement passes, and the commit that makes it lowers the ceiling to match. A regression fails
+naming the board and the column. Wire length and bends are left out on purpose: they trade
+against the stack (step 3 bought `level` 8 -> 6 and no loops with 4.7 % more wire), and which
+way that trade goes is a judgement for the commit body, not a threshold.
+
 ## What the window remembers
 
 `main.app_settings()` is the one `QSettings` store — recent files, the session
