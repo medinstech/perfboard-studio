@@ -22,6 +22,11 @@ closed without a bump.
 
 ### Added
 
+- **Copper is drawn by dragging, pad to pad.** With a drawing tool armed, press on a hole,
+  drag, and let go on another: a run, a wire or a jumper in one gesture, a corner wherever
+  the drag turns, previewed and checked as it goes exactly as clicks are. A press let go
+  where it went down is still a click, so drawing corner by corner and finishing with Enter
+  works as before, and a press on a part's pad never moves the part.
 - **Auto-wire says, in the window, when a net was wired off the face it prefers.** The
   status line names how many, the Problems bar says "1 net off its face" in its neutral
   colour with the drawer closed, and a Faces group in the Problems drawer gives each net's

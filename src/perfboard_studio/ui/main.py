@@ -6648,9 +6648,9 @@ class MainWindow(QMainWindow):
         if kind:
             two_point = kind == "top-jumper"
             how = (
-                t("click both ends, Esc cancels")
+                t("click both ends or drag from one to the other, Esc cancels")
                 if two_point
-                else t("click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels")
+                else t("click where it turns or drag pad to pad, Enter or right-click finishes, / flips the corner, Esc cancels")
             )
             laid, face = self.scene.drawing_as(kind)
             word = conductor_word(laid, self._guide_language())
@@ -13398,9 +13398,9 @@ class MainWindow(QMainWindow):
             # is looking -- and it used to repeat it in English under a Turkish banner.
             two_point = wanted == "top-jumper"
             how = (
-                t("click both ends, Esc cancels")
+                t("click both ends or drag from one to the other, Esc cancels")
                 if two_point
-                else t("click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels")
+                else t("click where it turns or drag pad to pad, Enter or right-click finishes, / flips the corner, Esc cancels")
             )
             self._draw_hint = (
                 f"{t('Drawing')} "

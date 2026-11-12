@@ -542,9 +542,13 @@ TURKISH: Mapping[str, str] = {
     "Placing": "Yerleştiriliyor:",
     "click a hole, Esc cancels": "bir deliğe tıklayın, Esc iptal eder",
     "Drawing": "Çiziliyor:",
-    "click both ends, Esc cancels": "iki ucu da tıklayın, Esc iptal eder",
-    "click where it turns, Enter or right-click finishes, / flips the corner, Esc cancels":
-        "döndüğü yere tıklayın, Enter veya sağ tık bitirir, / köşeyi çevirir, Esc iptal eder",
+    "click both ends or drag from one to the other, Esc cancels": (
+        "iki ucu da tıklayın ya da birinden ötekine sürükleyin, Esc iptal eder"
+    ),
+    "click where it turns or drag pad to pad, Enter or right-click finishes, / flips the corner, Esc cancels": (
+        "döndüğü yere tıklayın ya da pedden pede sürükleyin, Enter veya sağ tık bitirir, / "
+        "köşeyi çevirir, Esc iptal eder"
+    ),
     "Cutting tracks": "Şerit kesiliyor",
     "click a hole, Esc ends": "bir deliğe tıklayın, Esc bitirir",
     "Measuring": "Ölçülüyor",

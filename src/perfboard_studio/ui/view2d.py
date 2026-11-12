@@ -56,6 +56,7 @@ from PySide6.QtGui import (
     QTransform,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QGraphicsItem,
     QGraphicsPathItem,
     QGraphicsScene,
@@ -2116,6 +2117,12 @@ def _orthogonal_run(from_: HoleCoord, to: HoleCoord, column_first: bool) -> list
                 row += 1 if to.row > row else -1
                 run.append(HoleCoord(col, row))
     return run
+
+
+def _in_line(a: HoleCoord, b: HoleCoord, c: HoleCoord) -> bool:
+    """Whether three holes lie on one row or one column: a drag from ``a`` through ``b`` to
+    ``c`` has not turned."""
+    return (a.row == b.row == c.row) or (a.col == b.col == c.col)
 
 
 def _elbow(from_: HoleCoord, to: HoleCoord, column_first: bool) -> list[HoleCoord]:
@@ -5102,6 +5109,10 @@ class BoardScene(QGraphicsScene):
         self._draw_base = 0
         #: The path so far and the step to the pointer: what Enter or the next click lays.
         self._draw_ahead: tuple[HoleCoord, ...] = ()
+        #: A drawing press still held: the hole it went down on and the last hole the
+        #: pointer was in (``draw_press``), and whether it has become a drag.
+        self._draw_drag: tuple[HoleCoord, HoleCoord] | None = None
+        self._draw_dragged = False
         #: The squares on the one conductor selected (``CopperHandleItem``), and the drag of
         #: one: (conductor id, index in its path), the path it would get, its preview.
         self._handles: list[CopperHandleItem] = []
@@ -5954,6 +5965,8 @@ class BoardScene(QGraphicsScene):
         self._draw_continuing = None
         self._draw_base = 0
         self._draw_ahead = ()
+        self._draw_drag = None
+        self._draw_dragged = False
 
     def _run_to(self, at: HoleCoord) -> list[HoleCoord]:
         """The pads an orthogonal run from the last hole drawn to ``at`` takes, ``at`` last.
@@ -6060,6 +6073,65 @@ class BoardScene(QGraphicsScene):
         self._refresh_draw_preview(at)
         return None
 
+    # -- drawing by dragging ------------------------------------------------
+    #
+    # Every tool was click by click: a click where the copper turns, Enter or a right-click
+    # to finish. Pressing on a pad, dragging to another and letting go -- what every
+    # drawing program does -- laid one hole and waited. A drag is now that gesture, made
+    # of the same clicks: the press is the first, each turn of the drag is a corner, and
+    # the release is the last and finishes. So the preview, ``drawcheck`` and every rule a
+    # click obeys hold for a drag without a second path through them, and a press let go
+    # where it went down is still a click.
+
+    def draw_press(self, at: HoleCoord) -> DispatchResult | None:
+        """The button goes down on ``at`` while drawing: a click, which a drag may follow."""
+        result = self.draw_click(at)
+        # Only while something is being drawn: a click that laid the copper -- a jumper's
+        # second end, a run's last pad clicked again -- leaves nothing to drag.
+        self._draw_drag = (at, at) if self._draw_path else None
+        self._draw_dragged = False
+        return result
+
+    def draw_drag(self, at: HoleCoord) -> None:
+        """The held press has moved to ``at``. Where the drag turns -- leaves the line it
+        was on from the last corner -- the hole it turned at becomes a corner, as a click
+        there would have made it."""
+        if self._draw_drag is None or not self._draw_path:
+            return
+        pressed, last = self._draw_drag
+        if at == last:
+            return
+        self._draw_dragged = True
+        anchor = self._draw_path[-1]
+        if self._draw_kind in self._CORNER_KINDS and last != anchor and not _in_line(anchor, last, at):
+            self.draw_click(last)
+            self._refresh_draw_preview(at)
+        self._draw_drag = (pressed, at)
+
+    def draw_release(self, at: HoleCoord) -> DispatchResult | None:
+        """The held press is let go over ``at``. After a drag that is the last click, and the
+        conductor is laid; a press let go where it went down was a click, and drawing goes on.
+        A last step the tool refuses leaves the drawing where it was, the banner saying why,
+        to be finished with clicks."""
+        drag, dragged = self._draw_drag, self._draw_dragged
+        self._draw_drag = None
+        self._draw_dragged = False
+        if drag is None or not dragged or not self._draw_path:
+            return None
+        self._draw_drag = drag
+        self.draw_drag(at)
+        self._draw_drag = None
+        if at != self._draw_path[-1]:
+            result = self.draw_click(at)
+            if result is not None or not self._draw_path or self._draw_path[-1] != at:
+                return result
+        return self.commit_drawing() if len(self._draw_path) >= 2 else None
+
+    @property
+    def drawing_by_drag(self) -> bool:
+        """Whether a drawing press is held and has moved off the hole it went down on."""
+        return self._draw_drag is not None and self._draw_dragged
+
     def commit_drawing(self) -> DispatchResult | None:
         """Dispatch the drawn conductor, and stay armed for the next one.
 
@@ -6120,7 +6192,9 @@ class BoardScene(QGraphicsScene):
 
         result = self.bus.dispatch("conductor.add", AddConductorPayload(conductor=spec))
         self.last_draw_check = checked
-        self.last_drawn = (kind, path)
+        # What was laid, which the status line names: an insulated wire drawn on the
+        # component side went in as a top jumper, and the banner already said so.
+        self.last_drawn = (laid, path)
         self.last_draw_verb = "drew"
         self._start_next_conductor()
         self.conductorDrawn.emit(result)
@@ -6921,6 +6995,14 @@ class BoardScene(QGraphicsScene):
 
     def mouseMoveEvent(self, event: Any) -> None:
         self.hover_at(event.scenePos())
+        if self._draw_drag is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            # A drag only once the pointer has moved as far as a drag is anywhere on this
+            # desktop: a click whose hand slipped one hole was not meant to finish anything.
+            moved = event.screenPos() - event.buttonDownScreenPos(Qt.MouseButton.LeftButton)
+            if self._draw_dragged or moved.manhattanLength() >= QApplication.startDragDistance():
+                self.draw_drag(screen_to_hole(event.scenePos(), self.document.board, self.side))
+            event.accept()
+            return
         if self._reshape is not None:
             self.reshape_to(screen_to_hole(event.scenePos(), self.document.board, self.side))
             event.accept()
@@ -7036,7 +7118,7 @@ class BoardScene(QGraphicsScene):
         if self._draw_kind is not None:
             at = screen_to_hole(event.scenePos(), self.document.board, self.side)
             if event.button() == Qt.MouseButton.LeftButton:
-                self.draw_click(at)
+                self.draw_press(at)
             elif event.button() == Qt.MouseButton.RightButton:
                 # Right-click ends a trace where it is, which is what a chain-drawing tool
                 # in any editor does. Under two holes it cancels instead.
@@ -7110,6 +7192,10 @@ class BoardScene(QGraphicsScene):
         return result
 
     def mouseReleaseEvent(self, event: Any) -> None:
+        if self._draw_drag is not None and event.button() == Qt.MouseButton.LeftButton:
+            self.draw_release(screen_to_hole(event.scenePos(), self.document.board, self.side))
+            event.accept()
+            return
         if self._reshape is not None:
             moved = self._reshape_path is not None
             self.finish_reshape()

@@ -3110,6 +3110,199 @@ def test_a_wire_finishes_on_enter_and_keeps_the_tool() -> None:
     assert scene.drawn_path == ()
 
 
+def _drag_draw(scene, kind: str, *holes):  # type: ignore[no-untyped-def]
+    """Press on the first hole, drag through the rest, let go on the last."""
+    scene.arm_drawing(kind)
+    scene.draw_press(holes[0])
+    for hole in holes[1:]:
+        scene.draw_drag(hole)
+    return scene.draw_release(holes[-1])
+
+
+def test_a_run_is_drawn_by_pressing_on_a_pad_dragging_and_letting_go() -> None:
+    """Press, drag, let go: one run, every pad on the way, the tool still armed for the
+    next. It was click by click, and a drag laid one hole and waited."""
+    H = view2d.HoleCoord
+    scene, bus = _drawing_scene()
+    result = _drag_draw(
+        scene, "solder-trace", H(2, 2), H(3, 2), H(4, 2), H(5, 2), H(5, 3), H(5, 4)
+    )
+    assert result is not None and result.ok, result
+    [run] = bus.document.conductors
+    assert run.kind == "solder-trace"
+    assert run.path == (H(2, 2), H(3, 2), H(4, 2), H(5, 2), H(5, 3), H(5, 4))
+    assert scene.armed_draw_kind == "solder-trace" and scene.drawn_path == ()
+
+
+def test_a_dragged_wire_takes_a_corner_where_the_drag_turns() -> None:
+    """The corner is where the hand turned, not the tool's default elbow: the drag goes
+    down first here, which an L drawn by clicks would have put the other way round."""
+    H = view2d.HoleCoord
+    scene, bus = _drawing_scene()
+    result = _drag_draw(
+        scene, "insulated-wire", H(2, 2), H(2, 3), H(2, 4), H(2, 5), H(3, 5), H(4, 5), H(6, 5)
+    )
+    assert result is not None and result.ok, result
+    [wire] = bus.document.conductors
+    assert (wire.kind, wire.path) == ("insulated-wire", (H(2, 2), H(2, 5), H(6, 5)))
+    # Two turns, two corners.
+    result = _drag_draw(
+        scene, "bare-wire", H(9, 2), H(10, 2), H(11, 2), H(11, 3), H(11, 4), H(12, 4), H(13, 4)
+    )
+    assert result is not None and result.ok, result
+    bare = next(c for c in bus.document.conductors if c.kind == "bare-wire")
+    assert bare.path == (H(9, 2), H(11, 2), H(11, 4), H(13, 4))
+
+
+def test_a_jumper_is_dragged_from_one_end_to_the_other() -> None:
+    H = view2d.HoleCoord
+    scene, bus = _drawing_scene()
+    result = _drag_draw(scene, "top-jumper", H(2, 2), H(4, 3), H(6, 6), H(7, 7))
+    assert result is not None and result.ok, result
+    [jumper] = bus.document.conductors
+    assert (jumper.kind, jumper.path) == ("top-jumper", (H(2, 2), H(7, 7)))
+
+
+def test_a_press_let_go_where_it_went_down_is_still_a_click() -> None:
+    """Clicking corner by corner keeps working: a press and release on one hole lays
+    nothing, and the drawing goes on from it."""
+    H = view2d.HoleCoord
+    scene, bus = _drawing_scene()
+    scene.arm_drawing("insulated-wire")
+    assert scene.draw_press(H(2, 2)) is None
+    assert scene.draw_release(H(2, 2)) is None
+    assert scene.drawn_path == (H(2, 2),)
+    assert scene.draw_press(H(6, 2)) is None
+    assert scene.draw_release(H(6, 2)) is None
+    assert scene.drawn_path == (H(2, 2), H(6, 2))
+    assert bus.document.conductors == ()
+    # ...and a drag can finish what clicks began: pressed on the next corner, let go on
+    # the end. (Pressed on the last hole it is a click there, which finishes the wire.)
+    scene.draw_press(H(6, 4))
+    scene.draw_drag(H(7, 4))
+    result = scene.draw_release(H(8, 4))
+    assert result is not None and result.ok, result
+    [wire] = bus.document.conductors
+    assert wire.path == (H(2, 2), H(6, 2), H(6, 4), H(8, 4))
+
+
+def test_a_drag_let_go_on_its_own_copper_leaves_the_drawing_to_finish() -> None:
+    """A last step the tool refuses -- a loop back to the run's own first pad -- lays
+    nothing and keeps what was drawn, to be finished with clicks, as a refused click does."""
+    H = view2d.HoleCoord
+    scene, bus = _drawing_scene()
+    scene.arm_drawing("solder-trace")
+    scene.draw_press(H(2, 2))
+    for hole in (H(3, 2), H(4, 2), H(4, 3), H(3, 3), H(2, 3)):
+        scene.draw_drag(hole)
+    assert scene.draw_release(H(2, 2)) is None
+    assert bus.document.conductors == ()
+    assert scene.drawn_path == (H(2, 2), H(3, 2), H(4, 2), H(4, 3), H(3, 3), H(2, 3))
+    assert scene.armed_draw_kind == "solder-trace"
+
+
+def test_a_drag_from_a_parts_pad_with_a_drawing_tool_draws_and_never_moves_the_part() -> None:
+    """With a drawing tool armed, a press on a pin is the copper's first hole, never a grip
+    on the part: the drag lays a wire, and every part is where it was."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    from perfboard_studio.geometry import all_pin_holes
+
+    window = _window_on(_example_document("ne555-astable"))
+    try:
+        view = window.view
+        document = window.bus.document
+        board = document.board
+        u1 = next(c for c in document.components if c.ref == "U1")
+        lookup = window.lookup
+        footprint = lookup(u1.footprint_id)
+        assert footprint is not None
+        start = all_pin_holes(u1, footprint)[0][1]
+        anchors = {c.id: (c.anchor, c.rotation) for c in document.components}
+
+        def at(hole):  # type: ignore[no-untyped-def]
+            return QPointF(view.mapFromScene(hole_to_screen(hole, board, window.scene.side)))
+
+        def mouse(kind, pos, buttons=Qt.MouseButton.LeftButton):  # type: ignore[no-untyped-def]
+            return QMouseEvent(
+                kind, pos, view.viewport().mapToGlobal(pos), Qt.MouseButton.LeftButton,
+                buttons, Qt.KeyboardModifier.NoModifier,
+            )
+
+        window.on_draw_mode("insulated-wire", True)
+        view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, at(start)))
+        H = view2d.HoleCoord
+        # Away from the chip's own pins, on the board.
+        way = -1 if start.row >= 3 else 1
+        path = [H(start.col - step, start.row) for step in (1, 2, 3)] if start.col >= 3 else [
+            H(start.col, start.row + way * step) for step in (1, 2, 3)
+        ]
+        for hole in path:
+            view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, at(hole)))
+            assert window.scene.mouseGrabberItem() is None
+        view.mouseReleaseEvent(
+            mouse(QEvent.Type.MouseButtonRelease, at(path[-1]), Qt.MouseButton.NoButton)
+        )
+        after = window.bus.document
+        assert {c.id: (c.anchor, c.rotation) for c in after.components} == anchors
+        drawn = [c for c in after.conductors if c not in document.conductors]
+        assert [c.path for c in drawn] == [(start, path[-1])]
+        assert not any(label.startswith("Move") for label in window.bus.history())
+    finally:
+        _close(window)
+
+
+def test_a_drag_through_the_board_view_draws_and_a_slip_inside_one_hole_does_not() -> None:
+    """The seam: mouse events on the view reach the drawing as a press, a drag and a
+    release; a press that moves less than a drag's distance is a click."""
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta
+
+    H = view2d.HoleCoord
+    window = _window_on(
+        create_empty_document(DocumentMeta(name="drag", created="", modified=""))
+    )
+    try:
+        view = window.view
+        board = window.bus.document.board
+
+        def at(hole):  # type: ignore[no-untyped-def]
+            return QPointF(view.mapFromScene(hole_to_screen(hole, board, window.scene.side)))
+
+        def mouse(kind, pos, buttons=Qt.MouseButton.LeftButton):  # type: ignore[no-untyped-def]
+            return QMouseEvent(
+                kind, pos, view.viewport().mapToGlobal(pos), Qt.MouseButton.LeftButton,
+                buttons, Qt.KeyboardModifier.NoModifier,
+            )
+
+        window.on_draw_mode("bare-wire", True)
+        view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, at(H(2, 2))))
+        for hole in (H(3, 2), H(4, 2), H(5, 2), H(5, 3), H(5, 4)):
+            view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, at(hole)))
+        view.mouseReleaseEvent(
+            mouse(QEvent.Type.MouseButtonRelease, at(H(5, 4)), Qt.MouseButton.NoButton)
+        )
+        [wire] = window.bus.document.conductors
+        assert wire.path == (H(2, 2), H(5, 2), H(5, 4))
+        assert window.scene.armed_draw_kind == "bare-wire"
+
+        # A hand that slips a pixel while clicking does not finish anything.
+        start = at(H(8, 2))
+        view.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, start))
+        view.mouseMoveEvent(mouse(QEvent.Type.MouseMove, start + QPointF(1, 0)))
+        view.mouseReleaseEvent(
+            mouse(QEvent.Type.MouseButtonRelease, start + QPointF(1, 0), Qt.MouseButton.NoButton)
+        )
+        assert window.scene.drawn_path == (H(8, 2),)
+        assert len(window.bus.document.conductors) == 1
+    finally:
+        _close(window)
+
+
 def test_a_top_jumper_drawn_by_hand_runs_over_the_component_side() -> None:
     """The kind says where it goes. The window left a hand-drawn top jumper at the
     payload's default, the solder side, so 3D drew it under the board and DRC judged it
