@@ -207,6 +207,7 @@ SOLD_AS = {
     "ds1307-tiny-rtc": "Tiny RTC",
     "st7735-tft-18": "ST7735 TFT",
     "nokia-5110": "Nokia 5110",
+    "adafruit-rfm9x-lora": "RFM9x",
     "ttp223-touch": "TTP223",
     "ftdi-basic": "FTDI BASIC",
     "pca9685-servo-driver": "PCA9685",

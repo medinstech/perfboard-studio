@@ -3521,6 +3521,36 @@ TURKISH: Mapping[str, str] = {
         "yerine göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
         "kartları aynı sırayla bağlanmamıştır."
     ),
+    "Adafruit RFM9x LoRa radio breakout (on a header)": (
+        "Adafruit RFM9x LoRa radyo kartı (header üzerinde)"
+    ),
+    "LoRa packet radio (RFM95W, 868 or 915 MHz) on SPI. Its cable plugs into this 9-pin"
+    " header: VIN GND EN G0 SCK MISO MOSI CS RST from pin 1": (
+        "SPI üzerinden LoRa paket radyosu (RFM95W, 868 ya da 915 MHz). Kablosu bu 9 "
+        "pinli header'a takılır: 1. pinden VIN GND EN G0 SCK MISO MOSI CS RST"
+    ),
+    "VIN takes 3.3 to 5.5 V by the board's silkscreen: a 3.3 V regulator makes the "
+    "radio's supply, and EN is its enable, pulled up to VIN by a resistor on the board,"
+    " so leave it unwired to keep the radio on. SCK, MOSI, CS and RST go through a "
+    "level shifter on the board, so the silkscreen calls the SPI logic 3 to 5 V safe, "
+    "and CS and RST are held high by resistors to VIN. MISO and G0 come straight from "
+    "the radio at 3 V; G0 is its DIO0 line. The radio needs an antenna for its band: at"
+    " 868 or 915 MHz a quarter-wave wire is about 8 cm. The same board is sold with an "
+    "RFM69HCW radio, with this header, so check what is printed on yours. Match each "
+    "lead to the name printed beside the module's pins, not to its place: sellers' "
+    "boards are not all wired in the same order.": (
+        "VIN, kartın baskısına göre 3,3 ile 5,5 V alır: kartın üzerindeki 3,3 V'luk bir"
+        " regülatör radyonun beslemesini üretir, EN de onun etkinleştirme ucudur ve "
+        "kartın üzerindeki bir dirençle VIN'e çekilmiştir; radyo açık kalsın diye boş "
+        "bırakın. SCK, MOSI, CS ve RST kartın üzerindeki bir seviye çeviriciden geçer, "
+        "bu yüzden baskı SPI mantığına 3 ile 5 V'ta güvenli der; CS ile RST de "
+        "dirençlerle VIN'e çekilerek yüksek tutulur. MISO ve G0 doğrudan radyodan 3 "
+        "V'luk olarak gelir; G0 onun DIO0 hattıdır. Radyonun bandına uygun bir anten "
+        "gerekir: 868 ya da 915 MHz'de çeyrek dalga tel yaklaşık 8 cm'dir. Aynı kart bu"
+        " header'la bir RFM69HCW radyosuyla da satılır, bu yüzden sizinkinin üzerinde "
+        "ne yazdığına bakın. Her kabloyu yerine göre değil, modülün pinlerinin yanında "
+        "yazan ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
     "Nokia 5110 LCD module (on a header)": "Nokia 5110 LCD modülü (header üzerinde)",
     "84 x 48 monochrome LCD (PCD8544) on SPI. Its cable plugs into this 8-pin header: RST "
     "CE DC DIN CLK VCC LIGHT GND from pin 1": (

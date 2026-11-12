@@ -1097,6 +1097,20 @@ def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> No
     assert nokia is not None and "Espruino wires it to GND" in nokia.check
 
 
+def test_the_rfm9x_radio_is_its_nine_pin_header_in_the_silkscreens_order() -> None:
+    """Read off Adafruit's own Eagle board: the 9-pin SPI edge, pad 1 at VIN. The second,
+    5-pin header (G1 to G5) is left out, and the part says so."""
+    part = catalog_part("adafruit-rfm9x-lora")
+    assert part is not None
+    assert [name for _, name in part.pin_names] == [
+        "VIN", "GND", "EN", "G0", "SCK", "MISO", "MOSI", "CS", "RST",
+    ]
+    assert "Adafruit-RFM-LoRa-Radio-Breakout-PCB" in part.source
+    assert "G1 to G5" in part.source
+    for words in ("RFM95", "LoRa", "RFM9x"):
+        assert "adafruit-rfm9x-lora" in {found.id for found in search_catalog(words)}, words
+
+
 def test_the_keystone_coin_holder_is_two_pins_three_pitches_apart_and_says_what_it_left_out() -> None:
     part = catalog_part("coin-holder-keystone-1067")
     assert part is not None and part.symbol == "battery" and part.reference_prefix == "BT"

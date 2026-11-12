@@ -2646,6 +2646,35 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("HX711", "load cell", "loadcell", "scale", "weight", "yük hücresi",
                          "terazi")),
+    CatalogPart("adafruit-rfm9x-lora", "Adafruit RFM9x LoRa radio breakout (on a header)",
+                "connector", "hdr-1x9",
+                "LoRa packet radio (RFM95W, 868 or 915 MHz) on SPI. Its cable plugs into this "
+                "9-pin header: VIN GND EN G0 SCK MISO MOSI CS RST from pin 1",
+                _legs("VIN", "GND", "EN", "G0", "SCK", "MISO", "MOSI", "CS", "RST"),
+                value="RFM9x", ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its RFM69 and LoRa radio breakouts "
+                    "(github.com/adafruit/Adafruit-RFM-LoRa-Radio-Breakout-PCB, products "
+                    "3070 to 3073, one board for the RFM69HCW and RFM95W radios), the 9-pin "
+                    "header JP3 along the long edge: pad 1 at VIN and every name read off "
+                    "the silkscreen, each pad's net checked against the board's nets. The "
+                    "board's second header, a 5-pin one for the radio's G1 to G5, is not "
+                    "this part, and neither is the antenna's u.FL or SMA pad"
+                ),
+                check=(
+                    "VIN takes 3.3 to 5.5 V by the board's silkscreen: a 3.3 V regulator "
+                    "makes the radio's supply, and EN is its enable, pulled up to VIN by a "
+                    "resistor on the board, so leave it unwired to keep the radio on. SCK, "
+                    "MOSI, CS and RST go through a level shifter on the board, so the "
+                    "silkscreen calls the SPI logic 3 to 5 V safe, and CS and RST are held "
+                    "high by resistors to VIN. MISO and G0 come straight from the radio at 3 V; "
+                    "G0 is its DIO0 line. The radio needs an antenna for its band: at "
+                    "868 or 915 MHz a quarter-wave wire is about 8 cm. The same board is "
+                    "sold with an RFM69HCW radio, with this header, so check what is "
+                    "printed on yours. " + _CABLED_CHECK
+                ),
+                aliases=("RFM95", "RFM9x", "RFM95W", "LoRa", "LoRa radio", "packet radio",
+                         "uzun menzilli radyo")),
     CatalogPart("pololu-a4988", "Pololu A4988 carrier", "module",
                 "mod-2x8-p5-r1-15.24x20.32x2-s8.5",
                 "Stepper motor driver, 8-35 V, 1 A per coil (2 A with cooling), rows 12.7 mm apart",
