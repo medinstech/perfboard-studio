@@ -1096,6 +1096,27 @@ def test_adafruits_sensor_breakouts_are_headers_in_the_silkscreens_order() -> No
         }, part_id
 
 
+def test_adafruits_gesture_and_second_distance_breakouts_are_headers_in_the_silkscreens_order() -> None:
+    expected = {
+        "adafruit-apds9960": (
+            ["VIN", "3Vo", "GND", "SCL", "SDA", "INT"],
+            "Adafruit-APDS9960-Breakout-PCB",
+        ),
+        "adafruit-vl53l1x": (
+            ["VIN", "GND", "SCL", "SDA", "GPIO", "XSHUT"],
+            "Adafruit-VL53L1X-PCB",
+        ),
+    }
+    for part_id, (names, repo) in expected.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        assert [name for _, name in part.pin_names] == names, part_id
+        assert repo in part.source, part_id
+        assert part.value is not None and part_id in {
+            found.id for found in search_catalog(part.value)
+        }, part_id
+
+
 def test_adafruits_motion_and_humidity_breakouts_are_headers_in_the_silkscreens_order() -> None:
     expected = {
         "adafruit-adxl345": (

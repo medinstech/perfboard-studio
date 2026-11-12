@@ -210,6 +210,8 @@ SOLD_AS = {
     "adafruit-bh1750": "BH1750",
     "adafruit-aht20": "AHT20",
     "adafruit-vl53l0x": "VL53L0X",
+    "adafruit-apds9960": "APDS9960",
+    "adafruit-vl53l1x": "VL53L1X",
     "adafruit-adxl345": "ADXL345",
     "adafruit-sht31": "SHT31",
     "sparkfun-max30105": "MAX30105",

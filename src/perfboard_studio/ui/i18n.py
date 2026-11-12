@@ -3236,6 +3236,67 @@ TURKISH: Mapping[str, str] = {
         "karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan"
         " ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
+    "Adafruit APDS9960 gesture and colour sensor (on a header)": (
+        "Adafruit APDS9960 hareket ve renk sensörü (header üzerinde)"
+    ),
+    "Proximity, gesture, colour and ambient light sensor, on I2C. Its cable plugs "
+    "into this 6-pin header: VIN 3Vo GND SCL SDA INT from pin 1": (
+        "I2C üzerinden yakınlık, hareket, renk ve ortam ışığı sensörü. Kablosu bu 6 "
+        "pinli header'a takılır: 1. pinden VIN 3Vo GND SCL SDA INT"
+    ),
+    "VIN takes 3 to 5 V: a 3.3 V regulator makes the sensor's supply, and 3Vo is "
+    "its output, not a second input. SCL and SDA go through level-shifting "
+    "transistors with 10k pull-ups on both sides, so the bus idles at VIN's level. "
+    "INT is the sensor's open-drain interrupt, pulled up to VIN by a 10k: it goes "
+    "low on a gesture or a threshold, and can stay unwired when the sensor is "
+    "polled. The address is 0x39 and cannot be changed. Other APDS9960 boards carry"
+    " a different header, so compare the names printed on yours with these. Match "
+    "each lead to the name printed beside the module's pins, not to its place: "
+    "sellers' boards are not all wired in the same order.": (
+        "VIN 3 ile 5 V alır: 3,3 V'luk bir regülatör sensörün beslemesini üretir ve "
+        "3Vo onun çıkışıdır, ikinci bir giriş değildir. SCL ile SDA seviye çeviren "
+        "transistörlerden geçer ve iki yanında da 10k'lık yukarı çekme dirençleri "
+        "vardır, bu yüzden hat VIN seviyesinde bekler. INT sensörün açık savaklı "
+        "kesme çıkışıdır ve 10k ile VIN'e çekilir: bir harekette ya da eşikte düşer, "
+        "sensör sorgulanıyorsa boş kalabilir. Adres 0x39'dur ve değiştirilemez. Başka"
+        " APDS9960 kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları "
+        "bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin "
+        "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "Adafruit VL53L1X time-of-flight distance sensor (on a header)": (
+        "Adafruit VL53L1X uçuş süresi mesafe sensörü (header üzerinde)"
+    ),
+    "Laser distance sensor, up to about 4 m, on I2C. Its cable plugs into this "
+    "6-pin header: VIN GND SCL SDA GPIO XSHUT from pin 1": (
+        "I2C üzerinden lazerli mesafe sensörü, yaklaşık 4 m'ye kadar. Kablosu bu 6 "
+        "pinli header'a takılır: 1. pinden VIN GND SCL SDA GPIO XSHUT"
+    ),
+    "VIN takes 3 to 5 V: a 2.8 V regulator makes the sensor's supply and stays on "
+    "the board. SCL and SDA go through level-shifting transistors, so the bus may "
+    "run at VIN's level. XSHUT is held high by a 10k on the sensor's side of a "
+    "diode: pull it low to switch the sensor off. The diode keeps a high from the "
+    "controller off the sensor, so it can stay unwired. GPIO is the sensor's "
+    "interrupt output, pulled up to 2.8 V and not to VIN, so a 5 V controller may "
+    "not read it as high: it can stay unwired. The address is 0x29 until the "
+    "software changes it, and the range is about 4 m in the dark and less in "
+    "daylight. Other VL53L1X boards carry a different header, so compare the names "
+    "printed on yours with these. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same"
+    " order.": (
+        "VIN 3 ile 5 V alır: 2,8 V'luk bir regülatör sensörün beslemesini üretir ve "
+        "kartın üzerinde kalır. SCL ile SDA seviye çeviren transistörlerden geçer, bu"
+        " yüzden hat VIN seviyesinde çalışabilir. XSHUT, bir diyodun sensör tarafında"
+        " 10k ile yüksek tutulur: sensörü kapatmak için düşük çekin. Diyot "
+        "denetleyicinin yüksek seviyesini sensörden uzak tutar, bu yüzden boş "
+        "bırakılabilir. GPIO sensörün kesme çıkışıdır ve VIN'e değil 2,8 V'a çekilir,"
+        " bu yüzden 5 V'luk bir denetleyici onu yüksek okumayabilir: boş kalabilir. "
+        "Adres yazılım değiştirene kadar 0x29'dur, menzil karanlıkta yaklaşık 4 m, "
+        "gün ışığında daha azdır. Başka VL53L1X kartlarının header'ı farklıdır: "
+        "sizinkinin üzerinde yazan adları bunlarla karşılaştırın. Her kabloyu yerine "
+        "göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
     "Adafruit ADXL345 accelerometer (on a header)": (
         "Adafruit ADXL345 ivmeölçer (header üzerinde)"
     ),

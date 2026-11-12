@@ -1939,6 +1939,58 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("VL53L0X", "ToF", "time of flight", "laser distance", "distance sensor",
                          "mesafe sensörü")),
+    CatalogPart("adafruit-apds9960", "Adafruit APDS9960 gesture and colour sensor (on a header)",
+                "sensor", "hdr-1x6",
+                "Proximity, gesture, colour and ambient light sensor, on I2C. Its cable plugs "
+                "into this 6-pin header: VIN 3Vo GND SCL SDA INT from pin 1",
+                _legs("VIN", "3Vo", "GND", "SCL", "SDA", "INT"), value="APDS9960",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its APDS9960 breakout "
+                    "(github.com/adafruit/Adafruit-APDS9960-Breakout-PCB, 'Adafruit APDS9960 "
+                    "Proximity Sensor'), the 6-pin header JP1: pad 1 at VIN and every name read "
+                    "off its silkscreen, each pad's net checked against the board's nets; the "
+                    "address from Broadcom's APDS-9960 datasheet"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V: a 3.3 V regulator makes the sensor's supply, and 3Vo "
+                    "is its output, not a second input. SCL and SDA go through level-shifting "
+                    "transistors with 10k pull-ups on both sides, so the bus idles at VIN's "
+                    "level. INT is the sensor's open-drain interrupt, pulled up to VIN by a "
+                    "10k: it goes low on a gesture or a threshold, and can stay unwired when the "
+                    "sensor is polled. The address is 0x39 and cannot be changed. Other "
+                    "APDS9960 boards carry a different header, so compare the names printed on "
+                    "yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("APDS9960", "APDS-9960", "gesture sensor", "gesture", "colour sensor",
+                         "proximity sensor", "jest sensörü", "renk sensörü")),
+    CatalogPart("adafruit-vl53l1x", "Adafruit VL53L1X time-of-flight distance sensor (on a header)",
+                "sensor", "hdr-1x6",
+                "Laser distance sensor, up to about 4 m, on I2C. Its cable plugs into this "
+                "6-pin header: VIN GND SCL SDA GPIO XSHUT from pin 1",
+                _legs("VIN", "GND", "SCL", "SDA", "GPIO", "XSHUT"), value="VL53L1X",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its VL53L1X breakout "
+                    "(github.com/adafruit/Adafruit-VL53L1X-PCB, 'Adafruit VL53L1X'), the 6-pin "
+                    "header JP2: pad 1 at VIN and every name read off its silkscreen, each pad's "
+                    "net checked against the board's nets; the range and the address from ST's "
+                    "VL53L1X datasheet"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V: a 2.8 V regulator makes the sensor's supply and stays "
+                    "on the board. SCL and SDA go through level-shifting transistors, so the "
+                    "bus may run at VIN's level. XSHUT is held high by a 10k on the sensor's "
+                    "side of a diode: pull it low to switch the sensor off. The diode keeps a "
+                    "high from the controller off the sensor, so it can stay unwired. GPIO is "
+                    "the sensor's interrupt output, pulled up to 2.8 V and not to VIN, so a "
+                    "5 V controller may not read it as high: it can stay unwired. The address "
+                    "is 0x29 until the software changes it, and the range is about 4 m in the "
+                    "dark and less in daylight. Other VL53L1X boards carry a different header, "
+                    "so compare the names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("VL53L1X", "VL53L1", "ToF", "time of flight", "laser distance",
+                         "distance sensor", "mesafe sensörü", "lazer mesafe")),
     CatalogPart("adafruit-adxl345", "Adafruit ADXL345 accelerometer (on a header)", "sensor",
                 "hdr-1x9",
                 "3-axis accelerometer, on I2C or SPI. Its cable plugs into this 9-pin header: "
