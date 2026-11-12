@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, get_args
 
 # ---------------------------------------------------------------------------
 # Units
@@ -959,6 +959,16 @@ ConductorKind: TypeAlias = Literal[  # noqa: UP040
     "top-jumper",  # insulated jumper routed over the component side
     "strip",  # stripboard's pre-existing copper strip (v2)
 ]
+
+#: What each conductor kind is called where a person reads it. The id read aloud, except
+#: the wired trace: "solder trace wired" was the id with its hyphens taken out, and the
+#: toolbar called the same thing "Spine", a word nobody outside the code used. It is a
+#: solder trace reinforced with a wire, so that is what it is called, in the guide, the
+#: window and the undo list. Here, beside the kind, so a command's description says it in
+#: the same words as the guide without reaching up into it.
+CONDUCTOR_WORDS: dict[ConductorKind, str] = {
+    kind: kind.replace("-", " ") for kind in get_args(ConductorKind)
+} | {"solder-trace-wired": "reinforced solder trace"}
 
 type ConductorId = str
 

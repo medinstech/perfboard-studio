@@ -55,7 +55,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache, partial
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 from .breadboard import has_breadboard_pattern, has_rails, is_breadboard
 from .connectivity import FootprintLookup, PhysicalPinRef
@@ -88,6 +88,7 @@ from .geometry import (
     transform_offset,
 )
 from .lvs import continuity_checks, isolation_checks, run_lvs
+from .model import CONDUCTOR_WORDS as MODEL_CONDUCTOR_WORDS
 from .model import (
     AxisLegend,
     Board,
@@ -3367,13 +3368,9 @@ def describe(guide: Guide) -> str:
     return ", ".join(parts)
 
 
-#: What each conductor kind is called where a person reads it. The id read aloud, except
-#: the wired trace: "solder trace wired" was the id with its hyphens taken out, and the
-#: toolbar called the same thing "Spine", a word nobody outside the code used. It is a
-#: solder trace reinforced with a wire, so that is what it is called, here and in the window.
-CONDUCTOR_WORDS: dict[ConductorKind, str] = {
-    kind: kind.replace("-", " ") for kind in get_args(ConductorKind)
-} | {"solder-trace-wired": "reinforced solder trace"}
+#: What each conductor kind is called where a person reads it: ``model.CONDUCTOR_WORDS``,
+#: kept under this name for every reader that found it here.
+CONDUCTOR_WORDS = MODEL_CONDUCTOR_WORDS
 
 
 def conductor_word(kind: ConductorKind, language: GuideLanguage = "en") -> str:

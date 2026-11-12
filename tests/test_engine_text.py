@@ -146,6 +146,10 @@ def test_copper_reshaped_or_deleted_is_named_by_its_ends_not_its_id(turkish: Non
     which copper by where it runs, as Add always did, and the more specific template wins
     over the id one and over a part's "Delete {ref}"."""
     assert say("Reshape bare-wire C7 to C11") == "C7 → C11 iletkenini (çıplak tel) yeniden biçimlendir"
+    # As the commands say it now, in words; the reinforced trace is not read as a trace.
+    assert say("Reshape bare wire C7 to C11") == "C7 → C11 iletkenini (çıplak tel) yeniden biçimlendir"
+    assert say("Add reinforced solder trace C7 to C11") == say("Add solder-trace-wired C7 to C11")
+    assert say("Add reinforced solder trace C7 to C11") != say("Add solder-trace C7 to C11")
     assert say("Delete solder-trace C7 to C11").startswith("C7 → C11 iletkenini (")
     assert say("Delete bare-wire cond-3") == "Cond-3 iletkenini (çıplak tel) sil"
 

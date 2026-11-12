@@ -38,7 +38,7 @@ from functools import cache
 
 from perfboard_studio.geometry import format_hole
 from perfboard_studio.guide import conductor_word
-from perfboard_studio.model import PerfDocument
+from perfboard_studio.model import CONDUCTOR_WORDS, PerfDocument
 from perfboard_studio.phrasebook import guide_language
 
 from .i18n import language, t
@@ -402,6 +402,16 @@ _CONDUCTOR_KINDS = (
     "lead-bend",
 )
 
+#: A kind as a command's description says it -- in words (``model.CONDUCTOR_WORDS``) -- and
+#: the kind it is. A finding still names the id, and the field takes either, the longer
+#: first so "reinforced solder trace" is not read as "solder trace" with text before it.
+_KIND_OF_WORD: dict[str, str] = {
+    word: kind for kind, word in CONDUCTOR_WORDS.items() if kind in _CONDUCTOR_KINDS
+}
+_KIND_PATTERN = "|".join(
+    sorted((*_CONDUCTOR_KINDS, *_KIND_OF_WORD), key=len, reverse=True)
+)
+
 #: What each field may be. Anything not named here is any text at all, shortest first.
 _FIELDS: dict[str, str] = {
     **{
@@ -415,7 +425,7 @@ _FIELDS: dict[str, str] = {
     "mm": r"-?\d+(?:\.\d+)?",
     # A board's name stops at a comma: the clause after it is its own sentence.
     "board": r"[^,]+",
-    "kind": "|".join(_CONDUCTOR_KINDS),
+    "kind": _KIND_PATTERN,
     "netclass": r"signal|ground|power",
     "netclass_b": r"signal|ground|power",
     "sign": r"[+-]",
@@ -506,7 +516,8 @@ def net_class_word(net_class: str) -> str:
 def _word(field: str, value: str) -> str:
     """A field's value, said in the window's language where it is a word and not a name."""
     if field == "kind":
-        return conductor_word(value, guide_language(language()))  # type: ignore[arg-type]
+        kind = _KIND_OF_WORD.get(value, value)
+        return conductor_word(kind, guide_language(language()))  # type: ignore[arg-type]
     if field.startswith("netclass"):
         return net_class_word(value)
     if field == "shape":

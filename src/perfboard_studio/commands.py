@@ -75,6 +75,7 @@ from .geometry import (
     validate_orthogonal_chain,
 )
 from .model import (
+    CONDUCTOR_WORDS,
     DEFAULT_BOARD_NOTE_SIZE_MM,
     DEFAULT_NOTE_SIZE_MM,
     DOCUMENT_FORMAT_VERSION,
@@ -2445,7 +2446,7 @@ class _AddConductor:
     def describe(self, p: AddConductorPayload, doc: PerfDocument) -> str:
         path = p.conductor.path
         span = f" {format_hole(path[0], doc.board)} to {format_hole(path[-1], doc.board)}" if path else ""
-        return f"Add {p.conductor.kind}{span}"
+        return f"Add {CONDUCTOR_WORDS.get(p.conductor.kind, p.conductor.kind)}{span}"
 
 
 class _AddConductors:
@@ -2501,8 +2502,9 @@ class _SetConductorPath:
         c = next((x for x in doc.conductors if x.id == p.id), None)
         if c is None or len(p.path) < 2:
             return f"Reroute conductor {p.id}"
+        # The kind in words, as the guide says it: "Reshape bare-wire I12 to G14" read as an id.
         return (
-            f"Reshape {c.kind} {format_hole(p.path[0], doc.board)} "
+            f"Reshape {CONDUCTOR_WORDS.get(c.kind, c.kind)} {format_hole(p.path[0], doc.board)} "
             f"to {format_hole(p.path[-1], doc.board)}"
         )
 
@@ -2521,10 +2523,10 @@ class _DeleteConductor:
     def describe(self, p: DeleteConductorPayload, doc: PerfDocument) -> str:
         c = next((x for x in doc.conductors if x.id == p.id), None)
         if c is None or len(c.path) < 2:
-            return f"Delete {c.kind if c is not None else 'conductor'} {p.id}"
+            return f"Delete {CONDUCTOR_WORDS.get(c.kind, c.kind) if c is not None else 'conductor'} {p.id}"
         # By its ends, as Add names it, rather than an id no person had seen.
         return (
-            f"Delete {c.kind} {format_hole(c.path[0], doc.board)} "
+            f"Delete {CONDUCTOR_WORDS.get(c.kind, c.kind)} {format_hole(c.path[0], doc.board)} "
             f"to {format_hole(c.path[-1], doc.board)}"
         )
 
