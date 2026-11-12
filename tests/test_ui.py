@@ -15523,6 +15523,18 @@ def test_a_tool_on_the_rail_says_its_name_and_key_at_once_and_no_tooltip_after(m
         window.on_stop_tool()
         QApplication.sendEvent(window.wire_tools, QEvent(QEvent.Type.Enter))
         assert "Shift+W" in pill.text()
+        # And the sheet's rail, the same way: one behaviour on every canvas rail.
+        sheet = window.sheet_tools
+        assert sheet.name_pill is not None
+        for button in sheet.buttons:
+            QApplication.sendEvent(button, QEvent(QEvent.Type.Enter))
+            assert button.defaultAction().text().replace("&", "") in sheet.name_pill.text()
+            QApplication.sendEvent(
+                button, QHelpEvent(QEvent.Type.ToolTip, QPoint(2, 2), button.mapToGlobal(QPoint(2, 2)))
+            )
+            QApplication.sendEvent(button, QEvent(QEvent.Type.Leave))
+        assert "Esc" in sheet.pill_text(sheet.buttons[0])
+        assert shown == []
     finally:
         _close(window)
 

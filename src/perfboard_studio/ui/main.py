@@ -6293,9 +6293,15 @@ class MainWindow(QMainWindow):
         the left (the shape button holds the three shapes), Arrange and the sheet's own zoom
         and Fit in the corner, and a bar over the selected symbols."""
         sheet = self.schematic_view
-        tools = FloatingBar(sheet, Qt.Corner.TopLeftCorner, vertical=True, name="sheetTools")
+        # Named at once, as the board's rail is: one behaviour on every canvas rail. The
+        # pointer comes back on Escape, and the wire is C on the sheet (``on_connect_tool``).
+        tools = FloatingBar(
+            sheet, Qt.Corner.TopLeftCorner, vertical=True, name="sheetTools", names=True
+        )
         for name in ("select", "wire", "label", "text", "rectangle"):
-            tools.add_action(self.act_sheet_tool[name])
+            tools.add_action(
+                self.act_sheet_tool[name], key={"select": "Esc", "wire": "C"}.get(name, "")
+            )
         self.sheet_tools = tools
 
         # The sheet's own zoom: the View menu's zooms whichever view has the keyboard, and

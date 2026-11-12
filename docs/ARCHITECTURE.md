@@ -1954,13 +1954,13 @@ lines of different weights between the same two pads -- and the only way to tell
 apart was a tooltip a second later, on each in turn. Chosen from three rendered rails, the
 pictures are now what each thing looks like on a board (`icons.py`): beads flowed along a
 row of pads for solder, a wire bent up out of one hole and into another, the same in a
-sleeve, an arch over a part, and Connect a DASHED link, because it lays no copper. With the
-board's rail built `names=True`, the pointer on a button puts its name and key in a pill
+sleeve, an arch over a part, and Connect a DASHED link, because it lays no copper. With
+both canvases' rails built `names=True`, the pointer on a button puts its name and key in a pill
 beside it at once and the tooltip is not shown as well: one label, not two saying one name
 a second apart. And the first time a tool is armed in a session, the banner says what it
 lays in place of its name (`TOOL_INTRODUCTIONS`), until the first click -- Connect that it
-lays nothing, being the tool most often taken for a wire. The sheet's rail keeps its
-tooltips: its five tools were never the ones that could not be told apart.
+lays nothing, being the tool most often taken for a wire. The sheet's rail names itself
+the same way: what a tool is was the question, and it is asked on either canvas.
 
 `ui/boardpreview.py` draws a board as a picture through `BoardScene` itself -- the board
 dialogs' previews and the stock-size grid -- so a picture cannot disagree with the board OK

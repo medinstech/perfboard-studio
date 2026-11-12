@@ -196,8 +196,9 @@ closed without a bump.
 - **The board's tools can be told apart at a glance.** Connect, Solder Trace, Bare Wire and
   Insulated Wire were each a line between two dots. Now solder is beads along a row of
   pads, a wire is bent from hole to hole, an insulated wire wears a sleeve, a jumper arches
-  over a part, and Connect is a dashed link, because it lays no copper. Pointing at a tool
-  names it and its key at once, instead of a tooltip a second later. The chevron beside the
+  over a part, and Connect is a dashed link, because it lays no copper. Pointing at a tool,
+  on the board or the schematic, names it and its key at once, instead of a tooltip a
+  second later. The chevron beside the
   solder and wire buttons lists their tools, each with its key and a line on what it lays.
   The first time a tool is picked, the banner over the board says what it lays.
 
