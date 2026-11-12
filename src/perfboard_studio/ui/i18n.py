@@ -3481,6 +3481,118 @@ TURKISH: Mapping[str, str] = {
         "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
         "bağlanmamıştır."
     ),
+    "SparkFun TEMT6000 ambient light sensor (on a header)": (
+        "SparkFun TEMT6000 ortam ışığı sensörü (header üzerinde)"
+    ),
+    "Analog ambient light sensor, a phototransistor with its resistor. Its cable plugs "
+    "into this 3-pin header: VCC GND SIG from pin 1": (
+        "Analog ortam ışığı sensörü, direnciyle birlikte bir fototransistör. Kablosu bu"
+        " 3 pinli header'a takılır: 1. pinden VCC GND SIG"
+    ),
+    "The phototransistor's collector is on VCC and its emitter is SIG, with a 10k "
+    "resistor from SIG to GND on the board, so SIG is a voltage that rises with the "
+    "light, for an analog input. The board prints no supply range: read the one on the "
+    "maker's page for the revision you hold. Other TEMT6000 boards carry a different "
+    "header, so compare the names printed on yours with these. Match each lead to the "
+    "name printed beside the module's pins, not to its place: sellers' boards are not "
+    "all wired in the same order.": (
+        "Fototransistörün kolektörü VCC'de, emiteri SIG'dedir; kartın üzerinde SIG'den "
+        "GND'ye 10k bir direnç vardır. Böylece SIG, ışıkla birlikte yükselen bir "
+        "gerilimdir ve bir analog girişe bağlanır. Kart bir besleme aralığı yazmaz: "
+        "elinizdeki revizyon için üreticinin sayfasındakine bakın. Başka TEMT6000 "
+        "kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları bunlarla "
+        "karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan"
+        " ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "Adafruit MAX98357 I2S amplifier (on a header)": (
+        "Adafruit MAX98357 I2S yükselteç (header üzerinde)"
+    ),
+    "I2S class D mono amplifier, 3 W into 4 to 8 ohm. Its cable plugs into this 7-pin "
+    "header: Vin GND SD GAIN DIN BCLK LRC from pin 1": (
+        "I2S girişli, D sınıfı mono ses yükseltici, 4 ile 8 ohm'a 3 W. Kablosu bu 7 "
+        "pinli header'a takılır: 1. pinden Vin GND SD GAIN DIN BCLK LRC"
+    ),
+    "Vin takes 2.5 to 5.5 V by the board's silkscreen and is the chip's supply itself, "
+    "with no regulator between. SD is the chip's SD_MODE, held high through a 1 megohm "
+    "resistor on the board, so left unwired the amplifier plays, as (L+R)/2 by the "
+    "silkscreen; GAIN left open is the 9 dB the silkscreen gives as default. DIN, BCLK "
+    "and LRC are the I2S data, bit clock and word select. The speaker goes to the "
+    "board's 2-pin screw terminal, not drawn here: both of its terminals are driven by "
+    "the chip, so neither goes to GND. Other MAX98357 boards carry a different header, "
+    "so compare the names printed on yours with these. Match each lead to the name "
+    "printed beside the module's pins, not to its place: sellers' boards are not all "
+    "wired in the same order.": (
+        "Vin, kartın baskısına göre 2,5 ile 5,5 V alır ve aradan regülatör geçmeden "
+        "çipin beslemesinin kendisidir. SD çipin SD_MODE pinidir ve kartta 1 megohm'luk"
+        " bir dirençle yüksek tutulur; bu yüzden boş bırakılırsa yükseltici çalışır ve "
+        "baskıya göre (L+R)/2 çıkış verir. GAIN boş bırakılırsa baskının varsayılan "
+        "diye yazdığı 9 dB olur. DIN, BCLK ve LRC I2S'in veri, bit saati ve kelime "
+        "seçme hatlarıdır. Hoparlör kartın 2 pinli vidalı terminaline gider, burada "
+        "çizilmemiştir: terminalin iki ucunu da çip sürer, bu yüzden hiçbiri GND'ye "
+        "bağlanmaz. Başka MAX98357 kartlarının header'ı farklıdır: sizinkinin üzerinde "
+        "yazan adları bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün "
+        "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "Adafruit TMC2209 stepper driver (on a header)": (
+        "Adafruit TMC2209 step motor sürücüsü (header üzerinde)"
+    ),
+    "Stepper motor driver with step and direction pins and a serial UART. Its cable "
+    "plugs into this 10-pin header: VDD GND DIR STEP MS1 MS2 DIAG INDEX UART EN from "
+    "pin 1": (
+        "Adım ve yön pinli, seri UART'lı step motor sürücüsü. Kablosu bu 10 pinli "
+        "header'a takılır: 1. pinden VDD GND DIR STEP MS1 MS2 DIAG INDEX UART EN"
+    ),
+    "VDD is the logic supply, 3 to 5 V by the silkscreen. The motor's supply, 5 to 29 V"
+    " by the silkscreen, and the four coil outputs are on the board's 6-pin terminal, "
+    "not drawn here: its ground and this header's GND must be joined. STEP and DIR move"
+    " the motor; EN is the chip's enable, which the datasheet makes active low; MS1 and"
+    " MS2 pick the microstep, 8, 16, 32 or 64 by the silkscreen. UART is the chip's "
+    "single-wire serial, for the advanced settings. DIAG and INDEX are outputs from the"
+    " chip and can stay unwired. The board's trimmer sets the current limit, 0 to 2 A "
+    "by its silkscreen. Other TMC2209 boards carry a different header, so compare the "
+    "names printed on yours with these. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "VDD mantık beslemesidir, baskıya göre 3 ile 5 V. Motorun beslemesi, baskıya "
+        "göre 5 ile 29 V, ve dört bobin çıkışı kartın 6 pinli terminalindedir, burada "
+        "çizilmemiştir: onun toprağı ile bu header'ın GND'si birleştirilmelidir. STEP "
+        "ile DIR motoru döndürür; EN çipin etkinleştirme pinidir ve veri sayfasına göre"
+        " düşükte etkindir; MS1 ile MS2 mikro adımı seçer, baskıya göre 8, 16, 32 ya da"
+        " 64. UART çipin tek telli seri hattıdır, gelişmiş ayarlar içindir. DIAG ile "
+        "INDEX çipten çıkan çıkışlardır ve boş kalabilir. Kartın trimeri akım sınırını "
+        "ayarlar, baskıya göre 0 ile 2 A. Başka TMC2209 kartlarının header'ı farklıdır:"
+        " sizinkinin üzerinde yazan adları bunlarla karşılaştırın. Her kabloyu yerine "
+        "göre değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
+    "SparkFun AD8232 heart rate monitor (on a header)": (
+        "SparkFun AD8232 kalp ritmi monitörü (header üzerinde)"
+    ),
+    "Single-lead ECG front end with an analog output. Its cable plugs into this 6-pin "
+    "header: GND 3.3V OUTPUT LO- LO+ !SDN from pin 1": (
+        "Analog çıkışlı, tek derivasyonlu EKG ön katı. Kablosu bu 6 pinli header'a "
+        "takılır: 1. pinden GND 3.3V OUTPUT LO- LO+ !SDN"
+    ),
+    "3.3V feeds the chip directly, with no regulator on the board, and the AD8232 is a "
+    "2.0 to 3.5 V part by its datasheet: never feed it 5 V. OUTPUT is the analog "
+    "signal. LO- and LO+ are the leads-off detection outputs. !SDN is the shutdown pin,"
+    " held high by a 10k resistor on the board, so left unwired the chip runs and "
+    "pulling it low shuts it down. The electrodes, RL, LA and RA, go to the board's "
+    "separate 3-pin header or its 3.5 mm jack, not drawn here. Other AD8232 boards "
+    "carry a different header, so compare the names printed on yours with these. Match "
+    "each lead to the name printed beside the module's pins, not to its place: sellers'"
+    " boards are not all wired in the same order.": (
+        "3.3V çipi doğrudan besler, kartta regülatör yoktur ve AD8232 veri sayfasına "
+        "göre 2,0 ile 3,5 V'luk bir parçadır: ona asla 5 V vermeyin. OUTPUT analog "
+        "sinyaldir. LO- ile LO+ elektrot kopma algılama çıkışlarıdır. !SDN kapatma "
+        "pinidir ve kartta 10k bir dirençle yüksek tutulur; boş bırakılırsa çip "
+        "çalışır, düşük çekmek onu kapatır. Elektrotlar, RL, LA ve RA, kartın ayrı 3 "
+        "pinli header'ına ya da 3,5 mm jakına gider, burada çizilmemiştir. Başka AD8232"
+        " kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları bunlarla "
+        "karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan"
+        " ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
     "HC-05 Bluetooth module, ZS-040 (on a header)": (
         "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
     ),

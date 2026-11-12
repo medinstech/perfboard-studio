@@ -2233,6 +2233,102 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("QMC5883P", "QMC5883", "compass", "magnetometer", "pusula",
                          "manyetometre")),
+    CatalogPart("sparkfun-temt6000", "SparkFun TEMT6000 ambient light sensor (on a header)",
+                "sensor", "hdr-1x3",
+                "Analog ambient light sensor, a phototransistor with its resistor. Its cable "
+                "plugs into this 3-pin header: VCC GND SIG from pin 1",
+                _legs("VCC", "GND", "SIG"), value="TEMT6000", ref_prefix="J",
+                source=(
+                    "SparkFun's own Eagle board for its TEMT6000 breakout "
+                    "(github.com/sparkfun/Ambient_Light_Sensor_Breakout-TEMT6000), the 3-pin "
+                    "header JP4: pad 1 at VCC and every name read off its silkscreen, each "
+                    "pad's net checked against the board's nets"
+                ),
+                check=(
+                    "The phototransistor's collector is on VCC and its emitter is SIG, with a "
+                    "10k resistor from SIG to GND on the board, so SIG is a voltage that rises "
+                    "with the light, for an analog input. The board prints no supply range: "
+                    "read the one on the maker's page for the revision you hold. Other TEMT6000 "
+                    "boards carry a different header, so compare the names printed on yours "
+                    "with these. " + _CABLED_CHECK
+                ),
+                aliases=("TEMT6000", "analog light sensor", "ışık sensörü")),
+    CatalogPart("adafruit-max98357", "Adafruit MAX98357 I2S amplifier (on a header)",
+                "connector", "hdr-1x7",
+                "I2S class D mono amplifier, 3 W into 4 to 8 ohm. Its cable plugs into this "
+                "7-pin header: Vin GND SD GAIN DIN BCLK LRC from pin 1",
+                _legs("Vin", "GND", "SD", "GAIN", "DIN", "BCLK", "LRC"), value="MAX98357",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its MAX98357A breakout "
+                    "(github.com/adafruit/Adafruit-MAX98357-I2S-Amp-Breakout), the 7-pin "
+                    "header JP1: pad 1 at Vin and every name read off its silkscreen, each "
+                    "pad's net checked against the board's nets. The silkscreen reads Vin "
+                    "2.5-5.5V, Default 9db Gain & (L+R)/2 out and 4-8 ohm 3W"
+                ),
+                check=(
+                    "Vin takes 2.5 to 5.5 V by the board's silkscreen and is the chip's supply "
+                    "itself, with no regulator between. SD is the chip's SD_MODE, held high "
+                    "through a 1 megohm resistor on the board, so left unwired the amplifier "
+                    "plays, as (L+R)/2 by the silkscreen; GAIN left open is the 9 dB the "
+                    "silkscreen gives as default. DIN, BCLK and LRC are the I2S data, bit clock "
+                    "and word select. The speaker goes to the board's 2-pin screw terminal, not "
+                    "drawn here: both of its terminals are driven by the chip, so neither goes "
+                    "to GND. Other MAX98357 boards carry a different header, so compare the "
+                    "names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("MAX98357", "MAX98357A", "I2S amp", "I2S amplifier", "I2S ses yükseltici")),
+    CatalogPart("adafruit-tmc2209", "Adafruit TMC2209 stepper driver (on a header)", "connector",
+                "hdr-1x10",
+                "Stepper motor driver with step and direction pins and a serial UART. Its cable "
+                "plugs into this 10-pin header: VDD GND DIR STEP MS1 MS2 DIAG INDEX UART EN "
+                "from pin 1",
+                _legs("VDD", "GND", "DIR", "STEP", "MS1", "MS2", "DIAG", "INDEX", "UART", "EN"),
+                value="TMC2209", ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its TMC2209 breakout "
+                    "(github.com/adafruit/Adafruit-TMC2209-Breakout-PCB), the 10-pin header "
+                    "JP4: pad 1 at VDD and every name read off its silkscreen, each pad's net "
+                    "checked against the board's nets. The silkscreen reads Vdd/Vlogic 3~5VDC "
+                    "and VMotor 5-29VDC. Its 6-pin motor terminal JP1 is not on this part"
+                ),
+                check=(
+                    "VDD is the logic supply, 3 to 5 V by the silkscreen. The motor's supply, "
+                    "5 to 29 V by the silkscreen, and the four coil outputs are on the board's "
+                    "6-pin terminal, not drawn here: its ground and this header's GND must be "
+                    "joined. STEP and DIR move the motor; EN is the chip's enable, which the "
+                    "datasheet makes active low; MS1 and MS2 pick the microstep, 8, 16, 32 or "
+                    "64 by the silkscreen. UART is the chip's single-wire serial, for the "
+                    "advanced settings. DIAG and INDEX are outputs from the chip and can stay "
+                    "unwired. The board's trimmer sets the current limit, 0 to 2 A by its "
+                    "silkscreen. Other TMC2209 boards carry a different header, so compare the "
+                    "names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("TMC2209", "silent stepper driver", "stepper driver")),
+    CatalogPart("sparkfun-ad8232", "SparkFun AD8232 heart rate monitor (on a header)", "sensor",
+                "hdr-1x6",
+                "Single-lead ECG front end with an analog output. Its cable plugs into this "
+                "6-pin header: GND 3.3V OUTPUT LO- LO+ !SDN from pin 1",
+                _legs("GND", "3.3V", "OUTPUT", "LO-", "LO+", "!SDN"), value="AD8232",
+                ref_prefix="J",
+                source=(
+                    "SparkFun's own Eagle board for its AD8232 heart rate monitor "
+                    "(github.com/sparkfun/AD8232_Heart_Rate_Monitor), the 6-pin header JP3: "
+                    "pad 1 at GND and every name read off its silkscreen, each pad's net "
+                    "checked against the board's nets. Its 3-pin electrode header JP1 (RL LA "
+                    "RA) and 3.5 mm jack are not on this part"
+                ),
+                check=(
+                    "3.3V feeds the chip directly, with no regulator on the board, and the "
+                    "AD8232 is a 2.0 to 3.5 V part by its datasheet: never feed it 5 V. OUTPUT "
+                    "is the analog signal. LO- and LO+ are the leads-off detection outputs. "
+                    "!SDN is the shutdown pin, held high by a 10k resistor on the board, so "
+                    "left unwired the chip runs and pulling it low shuts it down. The "
+                    "electrodes, RL, LA and RA, go to the board's separate 3-pin header or its "
+                    "3.5 mm jack, not drawn here. Other AD8232 boards carry a different "
+                    "header, so compare the names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("AD8232", "ECG", "EKG", "heart rate monitor", "kalp ritmi", "EKG sensörü")),
     CatalogPart("hc-05","HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
                 "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
                 "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",

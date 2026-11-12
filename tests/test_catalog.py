@@ -1199,6 +1199,35 @@ def test_the_imu_air_and_angle_boards_are_headers_in_the_silkscreens_order() -> 
         }, part_id
 
 
+def test_the_light_audio_motor_and_ecg_boards_are_headers_in_the_silkscreens_order() -> None:
+    expected = {
+        "sparkfun-temt6000": (
+            ["VCC", "GND", "SIG"],
+            "Ambient_Light_Sensor_Breakout-TEMT6000",
+        ),
+        "adafruit-max98357": (
+            ["Vin", "GND", "SD", "GAIN", "DIN", "BCLK", "LRC"],
+            "Adafruit-MAX98357-I2S-Amp-Breakout",
+        ),
+        "adafruit-tmc2209": (
+            ["VDD", "GND", "DIR", "STEP", "MS1", "MS2", "DIAG", "INDEX", "UART", "EN"],
+            "Adafruit-TMC2209-Breakout-PCB",
+        ),
+        "sparkfun-ad8232": (
+            ["GND", "3.3V", "OUTPUT", "LO-", "LO+", "!SDN"],
+            "AD8232_Heart_Rate_Monitor",
+        ),
+    }
+    for part_id, (names, repo) in expected.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        assert [name for _, name in part.pin_names] == names, part_id
+        assert repo in part.source, part_id
+        assert part.value is not None and part_id in {
+            found.id for found in search_catalog(part.value)
+        }, part_id
+
+
 def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> None:
     expected = {
         "st7735-tft-18": (
