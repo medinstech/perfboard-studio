@@ -232,6 +232,8 @@ def _face_notes(notes: tuple[FaceNote, ...]) -> dict[str, Any]:
                 "connections": note.total,
                 "reason": note.reason,
                 "covered_by": list(note.covered_by),
+                "off_covered": note.off_covered,
+                "reached_beside": list(note.beside),
                 "message": note.message,
             }
             for note in notes

@@ -454,9 +454,13 @@ lists `vias`, and under `"best"` each style's `face_changes` is in `comparison`.
 prefers a face and had more than half of its connections wired with no copper on it is
 named in `face_notes`, with the count, the reason (`"no-pads"`: the board has none on that
 face; `"covered"`: its pins there are under the parts in `covered_by`, their own seated
-bodies; `"no-way"`: nothing cheaper was found) and a `message` a person can read. A net
-that runs on its face and drops through a via to reach a pin is not one: that is the
-preference working. `reroute` says the same of the nets it wires again.
+bodies; `"no-way"`: nothing cheaper was found; `"mixed"`: `off_covered` of them for the
+first, the rest for the second) and a `message` a person can read. A part is named only for
+a connection whose own pin it covers. `reached_beside` names the parts with a pin under them
+that a connection kept on the face reached anyway, from a free hole beside it with a
+one-pitch offcut of bare wire underneath; a net that kept its face and did that is named
+too, with the reason `"kept"`, because the offcut is copper on the other face. `reroute`
+says the same of the nets it wires again.
 
 **A rail is solder on a stock board's finger strip.** The strip down a stock board's long
 sides stands OUTSIDE the grid, a finger beside each outermost hole, and a finger is named

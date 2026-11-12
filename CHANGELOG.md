@@ -189,8 +189,23 @@ closed without a bump.
   a net's connections have no copper on its face, the plan says "GND prefers the component
   side, but its pins there are under J2, so it is wired on the solder side" (or how many of
   how many, or that the board has no pads there, or that no clear way was found), in
-  English and Turkish. A net kept on its face but for a via is the preference working, so
-  the NE555's GND gets no note.
+  English and Turkish. A part is named only for the connections whose pins it covers, and
+  the rest are counted apart ("1 because its pins there are under J2, 3 because no clear way
+  was found for them there"). A pin under a body that was reached from the hole beside it is
+  said too ("Its pins under J1 are reached through a via beside them"), even when the net
+  kept its face, since that is copper on the other side.
+- **A net set to a face stays there wherever it can, and the setting costs no warning.**
+  Auto-wire ranks a connection kept on its net's face ahead of any other, unless it would put
+  a pad beside another net's; the style it picks has no more warnings than the others, then
+  the fewest connections off the face. A wire over the parts may end in a free hole beside a
+  pin its body covers and reach it with a short offcut of bare wire underneath, the way
+  ground is run over the parts to a header. On the examples, GND set to the component side
+  is on top on 16 of its 54 connections instead of 5, for 64 mm more wire and no warning (2
+  before); over every example and test board, with both faces open, 3 warnings instead of
+  11, for 429 mm more wire and 185 fewer pads of solder. A board where no net has a face is
+  wired exactly as before, which the scoreboard confirms row for row. For the window and
+  agents, `autoroute.nets_off_their_face` names a net whose copper is all on the other face,
+  as one wired before its face was set is, since Auto-wire keeps the copper it finds.
 - **No copper is laid, or asked for, where a part sits on its own pin.** A header's plastic,
   a chip, a terminal block or a switch sits on the board over its pads on the component side,
   so no joint can be made there once it is fitted. Auto-wire never ends or runs copper on the
@@ -201,7 +216,8 @@ closed without a bump.
   is soldered after the parts are in. Auto-wire's style sweep over every example and test
   board, with both faces open and GND preferring the component side, leaves 11 DRC warnings
   (14 before this price, 24 with everything on the solder side); on the example boards
-  alone, 2 (13 on the solder side).
+  alone, 2 (13 on the solder side). With the preference made strong (below), 3, and none on
+  the examples.
 - **The build guide says when to lay the component side's solder and where its vias are.**
   Its runs open phase 7, after the parts, since solder in a hole before its lead keeps the
   lead out, and before the long wires; phase 7's title says so, in both languages, only on
@@ -213,7 +229,9 @@ closed without a bump.
   and `update_net` take `preferred_side` (and `clear_preferred_side`), and `autoroute` and
   `reroute` take `faces`; the result names the `vias`, and the `"best"` comparison counts
   each style's `face_changes`. `autoroute`'s and `reroute`'s `face_notes` name a net wired
-  mostly off the face it prefers, with the reason and the parts covering its pins.
+  mostly off the face it prefers, with the reason and the parts covering its pins, how many
+  connections those parts account for (`off_covered`) and the parts whose pins were reached
+  from beside them (`reached_beside`).
 - **Rails on a stock board's finger strip.** The copper strip down the long sides of the
   stock boards, outside the grid, takes solder now: a rail along it, and a bridge from a hole
   beside it onto its finger, the way ground and power are run on those boards. A finger is

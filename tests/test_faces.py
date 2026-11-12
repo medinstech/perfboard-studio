@@ -16,8 +16,11 @@ from perfboard_studio import persist
 from perfboard_studio.autoroute import (
     AutorouteOptions,
     AutoroutePlan,
+    OffFaceNet,
+    VariantScore,
     _face_note_message,
     face_notes,
+    nets_off_their_face,
     plan_autoroute,
     plan_reroute,
     score_plan,
@@ -324,18 +327,76 @@ def test_a_net_that_prefers_the_component_side_is_wired_there_without_a_short() 
     assert not rules & {"no-copper-on-face", "copper-under-body", "conductor-crossing"}
 
 
+def _via_board() -> PerfDocument:
+    """lm317-supply, whose GND set to the component side changes face through vias in the
+    solder style: the NE555's goes over on jumpers since #14."""
+    return _example("lm317-supply.perf")
+
+
 def test_the_faces_meet_in_a_via_and_the_plan_counts_it() -> None:
-    plan = _solder_plan(_doc(), "both", GND="top")
+    plan = _solder_plan(_via_board(), "both", GND="top")
     occupancy = build_occupancy(plan.document, LOOKUP)
 
     vias = wiring_stats(plan.document, LOOKUP).vias
 
-    assert vias, "GND no longer changes face on the ne555"
+    assert vias, "GND no longer changes face on lm317-supply"
     for hole in vias:
         assert occupancy.pin_at(hole) is None
         sides = {c.side for c in plan.document.conductors if hole in c.path}
         assert sides == {"top", "bottom"}
-    assert score_plan(plan, _doc(), LOOKUP).face_changes == len(vias)
+    assert score_plan(plan, _via_board(), LOOKUP).face_changes == len(vias)
+
+
+def test_a_preference_keeps_every_link_it_can_on_its_face_and_buys_no_warning() -> None:
+    """#14: a preference is a strong one. On the NE555 every GND connection has copper on
+    the component side, in the solder style and with the default one face -- and the board
+    has no more warnings than the same style with no preference at all."""
+    doc = _doc()
+    gnd = next(n.id for n in doc.nets if n.name == "GND")
+
+    plan = _solder_plan(doc, "solder", GND="top")
+    plain = _solder_plan(doc, "solder")
+
+    [outcome] = [o for o in plan.nets if o.net_id == gnd]
+    assert outcome.routed and not outcome.unrouted
+    assert all(any(c.side == "top" for c in r.conductors) for r in outcome.routed)
+    warnings = [v for v in run_drc(plan.document, LOOKUP) if v.severity == "warning"]
+    before = [v for v in run_drc(plain.document, LOOKUP) if v.severity == "warning"]
+    assert len(warnings) <= len(before)
+    assert run_lvs(plan.document, LOOKUP).summary.shorts == 0
+
+
+def test_a_jumper_reaches_a_pin_under_a_body_through_the_hole_beside_it() -> None:
+    """J1's GND pin is under its own plastic on top. The jumper ends in a free hole beside
+    it and a one-pitch offcut of bare wire joins the two underneath: a wire, not a bridge of
+    solder, which beside a header pin would be a pad beside another net's every time."""
+    doc = _doc()
+    gnd = next(n.id for n in doc.nets if n.name == "GND")
+    occupancy = build_occupancy(doc, LOOKUP)
+
+    plan = _solder_plan(doc, "solder", GND="top")
+
+    wired = plan.document
+    stubs = [
+        c for c in wired.conductors
+        if c.net_id == gnd and c.side == "bottom" and c.kind == "bare-wire" and len(c.path) == 2
+    ]
+    assert stubs, "no GND pin is reached beside its body"
+    jumper_ends = {
+        h for c in wired.conductors if c.net_id == gnd and c.kind == "top-jumper"
+        for h in (c.path[0], c.path[-1])
+    }
+    for stub in stubs:
+        pin, beside = (
+            stub.path if occupancy.covered_pin(stub.path[0], "top") is not None else stub.path[::-1]
+        )
+        assert occupancy.covered_pin(pin, "top") is not None
+        assert is_adjacent4(pin, beside)
+        assert occupancy.pin_at(beside) is None and beside in jumper_ends
+    rules = {v.rule for v in run_drc(wired, LOOKUP)}
+    assert not rules & {"copper-at-covered-pin", "jumper-under-body", "conductor-crossing"}
+    summary = run_lvs(wired, LOOKUP).summary
+    assert summary.shorts == 0 and summary.opens == 0
 
 
 def test_a_net_that_prefers_the_component_side_has_both_faces_under_solder_and_only_it() -> None:
@@ -476,9 +537,9 @@ def test_the_guide_lays_the_component_side_after_the_parts_and_probes_each_via()
     hole would keep out, and before the long wires. Every via gets one line on the first
     step that lays the solder side's copper into it, and one probe across it after phase
     7, from its component-side pad to the next hole of that copper. Turkish says the same."""
-    wired = _solder_plan(_doc(), "both", GND="top").document
+    wired = _solder_plan(_via_board(), "both", GND="top").document
     via_holes = wiring_stats(wired, LOOKUP).vias
-    assert via_holes, "GND no longer changes face on the ne555"
+    assert via_holes, "GND no longer changes face on lm317-supply"
     top_runs = {
         c.id for c in wired.conductors if isinstance(c, SolderTraceConductor) and c.side == "top"
     }
@@ -631,21 +692,48 @@ def _example(name: str) -> PerfDocument:
     return persist.parse_document_or_throw((EXAMPLES / name).read_text(encoding="utf-8"))
 
 
+def _blamed_fairly(doc: PerfDocument, plan: AutoroutePlan, note) -> None:  # type: ignore[no-untyped-def]
+    """Every part a note blames covers, with its seated body, a pin of a connection wired
+    off the face -- and ``off_covered`` counts exactly those connections (#14: a note once
+    named J2 for four connections when one of them ended under it)."""
+    occupancy = build_occupancy(doc, LOOKUP)
+    refs = {c.id: c.ref for c in doc.components}
+    [outcome] = [o for o in plan.nets if o.net_id == note.net_id]
+    blamed: set[str] = set()
+    off_covered = 0
+    for routed in outcome.routed:
+        if any(c.side == note.preferred for c in routed.conductors):
+            continue
+        under = {
+            refs[found[0]]
+            for hole in (routed.link.from_, routed.link.to)
+            if (found := occupancy.covered_pin(hole, note.preferred)) is not None and found[1]
+        }
+        blamed |= under
+        off_covered += bool(under)
+    assert set(note.covered_by) == blamed
+    assert note.off_covered == off_covered
+
+
 @pytest.mark.parametrize("style", ["solder", "balanced"])
-def test_a_net_wired_wholly_off_its_face_says_whose_body_covers_its_pins(style: str) -> None:
+def test_a_net_wired_off_its_face_blames_a_part_only_for_the_connections_it_covers(style: str) -> None:
     """The shield's GND set to the component side came back wired entirely underneath with
-    not a word: every GND pin on top is under J2's plastic. The setting looked ignored."""
+    not a word, and then with a note blaming J2 for all of it. One connection ends under J2's
+    plastic; three found no clear way over the parts; one is on top, down beside J2."""
     doc, plan = _preferring(_example("arduino-io-shield.perf"), style, GND="top")
 
     [note] = face_notes(doc, plan, LOOKUP)
 
-    assert (note.net_name, note.preferred, note.reason, note.covered_by) == ("GND", "top", "covered", ("J2",))
-    assert note.off_face == note.total
+    assert (note.net_name, note.preferred, note.reason) == ("GND", "top", "mixed")
+    assert (note.off_face, note.total, note.off_covered) == (4, 5, 1)
+    assert (note.covered_by, note.beside) == (("J2",), ("J2",))
     assert note.message == (
-        "GND prefers the component side, but its pins there are under J2, "
-        "so it is wired on the solder side."
+        "GND prefers the component side, but 4 of its 5 connections are wired on the solder "
+        "side: 1 because its pins there are under J2, 3 because no clear way was found for "
+        "them there. Its pins under J2 are reached through a via beside them."
     )
-    assert not any(c.side == "top" for c in plan.conductors if c.net_id == note.net_id)
+    _blamed_fairly(doc, plan, note)
+    assert any(c.side == "top" for c in plan.conductors if c.net_id == note.net_id)
 
 
 def test_a_net_wired_mostly_off_its_face_counts_what_it_kept() -> None:
@@ -653,23 +741,42 @@ def test_a_net_wired_mostly_off_its_face_counts_what_it_kept() -> None:
 
     [note] = face_notes(doc, plan, LOOKUP)
 
-    assert note.reason == "covered" and 2 * note.off_face > note.total > note.off_face
+    assert note.reason == "mixed" and 2 * note.off_face > note.total > note.off_face
+    assert 0 < note.off_covered < note.off_face
     assert note.message.startswith(
         f"GND prefers the component side, but {note.off_face} of its {note.total} connections "
-        "are wired on the solder side: its pins there are under "
+        f"are wired on the solder side: {note.off_covered} because its pins there are under "
     )
-    assert note.message.endswith(f" and {note.covered_by[-1]}.")
+    assert f", {note.off_face - note.off_covered} because no clear way was found" in note.message
+    assert note.beside and note.message.endswith(" are reached through a via beside them.")
+    _blamed_fairly(doc, plan, note)
     gnd_on_top = [c for c in plan.conductors if c.net_id == note.net_id and c.side == "top"]
     assert gnd_on_top, "what it kept is on top"
 
 
-def test_a_net_kept_on_its_face_but_for_a_via_is_not_a_note() -> None:
-    """The NE555's GND runs on top and drops through a via to reach J1's pin from below: the
-    preference working, and the via is said where vias are."""
+def test_a_net_kept_on_its_face_says_which_pins_it_reached_beside_their_body() -> None:
+    """The NE555's GND keeps the component side on every connection and reaches J1's pin,
+    under the header's plastic, from the hole beside it: the one note about a preference
+    working, because the offcut it says is copper on the other face."""
     doc, plan = _preferring(_doc(), "solder", GND="top")
 
-    assert any(c.side == "top" for c in plan.conductors)
-    assert face_notes(doc, plan, LOOKUP) == ()
+    [note] = face_notes(doc, plan, LOOKUP)
+
+    assert (note.reason, note.off_face, note.covered_by, note.beside) == ("kept", 0, (), ("J1",))
+    assert note.message == (
+        "GND is wired on the component side; its pins under J1 are reached through a via "
+        "beside them."
+    )
+
+
+def test_a_note_says_no_pin_was_reached_beside_a_body_where_none_was() -> None:
+    """lm317-supply's GND reaches none of its pins under J2, C3 and RV1 from beside them:
+    its note says why it is off the face and adds nothing; no other net has a note."""
+    doc, plan = _preferring(_via_board(), "solder", GND="top")
+    notes = face_notes(doc, plan, LOOKUP)
+    assert [note.net_name for note in notes] == ["GND"]
+    assert notes[0].beside == ()
+    assert not notes[0].message.endswith("beside them.")
 
 
 def test_no_net_preferring_a_face_is_no_note() -> None:
@@ -691,34 +798,58 @@ def test_a_net_preferring_a_face_the_board_has_no_pads_on_is_told_so() -> None:
     )
 
 
-@pytest.mark.parametrize("reason", ["no-pads", "covered", "no-way"])
-@pytest.mark.parametrize(("off", "total"), [(4, 4), (3, 5)])
-def test_every_face_note_is_said_in_turkish(reason: str, off: int, total: int) -> None:
-    """Each of the six sentences, wholly and mostly, through the window's ``say``: the
-    face in Turkish, the list joined with "ve", the address and the net left as they are."""
+def _said_in_turkish(message: str) -> str:
     from perfboard_studio.ui.engine_text import say
     from perfboard_studio.ui.i18n import language, set_language
 
-    covered = ("J4", "C6", "RV1") if reason == "covered" else ()
-    message = _face_note_message("GND", "top", off, total, reason, covered)  # type: ignore[arg-type]
     before = language()
     set_language("tr")
     try:
-        said = say(message)
+        return say(message)
     finally:
         set_language(before)
+
+
+@pytest.mark.parametrize("beside", [(), ("J1",)])
+@pytest.mark.parametrize("reason", ["no-pads", "covered", "no-way", "mixed"])
+@pytest.mark.parametrize(("off", "total"), [(4, 4), (3, 5)])
+def test_every_face_note_is_said_in_turkish(
+    reason: str, off: int, total: int, beside: tuple[str, ...]
+) -> None:
+    """Each of the sentences, wholly and mostly, with and without the pins reached beside
+    a body, through the window's ``say``: the face in Turkish, the list joined with "ve",
+    the address and the net left as they are."""
+    if reason == "no-pads" and beside:
+        pytest.skip("a board with no pads on top reaches no pin beside a body there")
+    covered = ("J4", "C6", "RV1") if reason in ("covered", "mixed") else ()
+    off_covered = {"covered": off, "mixed": 2}.get(reason, 0)
+    message = _face_note_message("GND", "top", off, total, reason, covered, off_covered, beside)  # type: ignore[arg-type]
+
+    said = _said_in_turkish(message)
+
     assert said != message
     assert said.startswith("GND parça yüzünü tercih ediyor, ama ")
     assert "lehim yüzünde kablolandı" in said
-    assert ("J4, C6 ve RV1 gövdelerinin altında" in said) == (reason == "covered")
+    assert ("J4, C6 ve RV1 gövdelerinin altında" in said) == bool(covered)
     if reason == "covered":
-        one = _face_note_message("GND", "top", off, total, "covered", ("J2",))
-        set_language("tr")
-        try:
-            assert "pinleri J2 gövdesinin altında" in say(one)
-        finally:
-            set_language(before)
+        one = _face_note_message("GND", "top", off, total, "covered", ("J2",), off, ())
+        assert "pinleri J2 gövdesinin altında" in _said_in_turkish(one)
+    if reason == "mixed":
+        assert "2 tanesi oradaki pinleri" in said
+        assert f"{off - 2} tanesi orada açık bir yol bulunamadığı için" in said
     assert (f"{total} bağlantısından {off} tanesi" in said) == (off != total)
+    assert said.endswith("J1 gövdesinin altındaki pinlerine yanlarındaki bir via ile ulaşıldı.") == bool(beside)
+
+
+@pytest.mark.parametrize(("off", "total"), [(0, 4), (1, 4)])
+def test_a_note_about_a_face_kept_is_said_in_turkish(off: int, total: int) -> None:
+    message = _face_note_message("GND", "top", off, total, "kept", (), 0, ("J1", "C2"))
+
+    said = _said_in_turkish(message)
+
+    assert said.startswith("GND ")
+    assert said.endswith("J1 ve C2 gövdelerinin altındaki pinlerine yanlarındaki bir via ile ulaşıldı.")
+    assert ("4 bağlantısından 3 tanesinde" in said) == bool(off)
 
 
 def test_wiring_one_net_again_says_the_same_as_wiring_the_board() -> None:
@@ -735,11 +866,79 @@ def test_wiring_one_net_again_says_the_same_as_wiring_the_board() -> None:
 
     [note] = face_notes(wired, again, LOOKUP)
     assert [outcome.net_id for outcome in again.nets] == [gnd]
-    assert (note.net_name, note.reason, note.covered_by, note.message) == (
+    assert (note.net_name, note.reason, note.covered_by, note.beside, note.message) == (
         wired_note.net_name,
         wired_note.reason,
         wired_note.covered_by,
+        wired_note.beside,
         wired_note.message,
     )
-    assert note.off_face == note.total
+    assert (note.off_face, note.total) == (wired_note.off_face, wired_note.total)
+
+
+# ---------------------------------------------------------------------------
+# A net wired off its face before its preference was set (nets_off_their_face)
+# ---------------------------------------------------------------------------
+
+
+def _gnd_prefers(doc: PerfDocument, side: BoardSide | None) -> PerfDocument:
+    return dataclasses.replace(
+        doc,
+        nets=tuple(
+            dataclasses.replace(n, preferred_side=side if n.name == "GND" else n.preferred_side)
+            for n in doc.nets
+        ),
+    )
+
+
+def test_a_net_whose_copper_is_all_off_its_face_is_found_on_the_document() -> None:
+    """The NE555 wired underneath with no preference; GND set to the component side
+    afterwards stays there, since Auto-wire keeps the copper it finds. The window marks it
+    from this. A conductor belongs to a net by its ``net_id``, as the router writes it."""
+    doc = _gnd_prefers(_solder_plan(_doc(), "solder").document, "top")
+    gnd = next(n for n in doc.nets if n.name == "GND")
+    copper = [c for c in doc.conductors if c.net_id == gnd.id]
+    assert copper and not any(c.side == "top" for c in copper)
+
+    assert nets_off_their_face(doc) == (OffFaceNet(gnd.id, "GND", "top", len(copper)),)
+
+
+def test_a_net_with_any_copper_on_its_face_or_none_at_all_is_not_off_it() -> None:
+    wired = _solder_plan(_doc(), "solder").document
+    doc = _gnd_prefers(wired, "top")
+    gnd = next(n.id for n in doc.nets if n.name == "GND")
+    single = dataclasses.replace(doc, board=dataclasses.replace(doc.board, single_sided=True))
+    assert nets_off_their_face(doc), "the cases below would pass on nothing"
+
+    assert nets_off_their_face(wired) == ()
+    assert nets_off_their_face(_gnd_prefers(wired, "bottom")) == ()
+    assert nets_off_their_face(dataclasses.replace(doc, conductors=())) == ()
+    assert nets_off_their_face(single) == (), "a face with no pads is face_notes' to say"
+    on_top = _with(doc, SolderTraceConductor(id="t", path=_free_run(doc), side="top", net_id=gnd))
+    assert nets_off_their_face(on_top) == ()
+
+
+# ---------------------------------------------------------------------------
+# The style sweep with a preference (VariantScore.key)
+# ---------------------------------------------------------------------------
+
+
+def test_with_a_preference_the_sweep_takes_no_warning_for_the_face_or_for_less_work() -> None:
+    """A plan that keeps the face beats one that does not only where it adds no warning,
+    and a pad beside another net's counts as one; with no net preferring a face neither is
+    asked and effort decides, as it always has."""
+    clean_off = VariantScore(unrouted=0, risk_holes=0, traces=9, wires=9, wire_mm=900.0, off_face=3)
+    risky_on = VariantScore(unrouted=0, risk_holes=1, traces=2, wires=2, wire_mm=100.0)
+    warned_on = VariantScore(unrouted=0, risk_holes=0, traces=2, wires=2, wire_mm=100.0, drc_warnings=1)
+    clean_on = VariantScore(unrouted=0, risk_holes=0, traces=9, wires=9, wire_mm=990.0)
+
+    def best(*scores: VariantScore, preferred: bool) -> VariantScore:
+        return min(
+            (dataclasses.replace(s, face_preferred=preferred) for s in scores),
+            key=VariantScore.key,
+        )
+
+    assert best(clean_off, risky_on, warned_on, preferred=True).wire_mm == 900.0
+    assert best(clean_off, clean_on, preferred=True).wire_mm == 990.0
+    assert best(clean_off, risky_on, warned_on, clean_on, preferred=False).wire_mm == 100.0
 

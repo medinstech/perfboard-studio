@@ -247,6 +247,11 @@ TEMPLATES: tuple[str, ...] = (
     "{net} prefers the {faceside} side, but this board has no pads there, so it is wired on the {faceside_b} side.",
     "{net} prefers the {faceside} side, but its pins there are under {refs}, so it is wired on the {faceside_b} side.",
     "{net} prefers the {faceside} side, but no clear way was found there, so it is wired on the {faceside_b} side.",
+    "{net} prefers the {faceside} side, but {count} of its {total} connections are wired on the {faceside_b} side: {covered} because its pins there are under {refs}, {open} because no clear way was found for them there.",
+    "{net} prefers the {faceside} side, but it is wired on the {faceside_b} side: {covered} of its connections because its pins there are under {refs}, {open} because no clear way was found for them there.",
+    "{net} is wired on the {faceside} side; its pins under {refs} are reached through a via beside them.",
+    "{net} is wired on the {faceside} side on {count} of its {total} connections; its pins under {refs} are reached through a via beside them.",
+    "Its pins under {refs} are reached through a via beside them.",
     "{count} needed an insulated wire or jumper",
     "{count} pad to measure for isolation",
     "{count} pads to measure for isolation",
@@ -481,6 +486,8 @@ _FIELDS: dict[str, str] = {
     "faceside": r"component|solder",
     "faceside_b": r"component|solder",
     "refs": r"\S+(?:, \S+)*(?: and \S+)?",
+    "covered": r"\d+",
+    "open": r"\d+",
 }
 
 
@@ -813,6 +820,14 @@ def say(text: str) -> str:
         if what is not None:
             board = _word("board", on_board["board"])
             return _capitalised(t("{what} on {board}").format(what=what, board=board))
+    if ". " in text:
+        # Two sentences, each a template of its own: a face note and what it adds about the
+        # pins reached beside a body. Said only when every one is recognised.
+        parts = text.split(". ")
+        sentences = [part + "." for part in parts[:-1]] + [parts[-1]]
+        each = [_one(sentence) for sentence in sentences]
+        if all(each):
+            return " ".join(_capitalised(s) for s in each if s is not None)
     if ", " not in text:
         return text
     clauses = text.split(", ")

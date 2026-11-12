@@ -220,6 +220,11 @@ class RouterCosts:
     #: rarely, which is what "GND on the component side" asks for (#14) -- and the face is
     #: still a preference: where it is blocked the route takes the other one.
     off_face_step: float = 2
+    #: Once per connection laid with none of its copper on the face its net prefers, on top
+    #: of ``off_face_step``. The preference already ranks first among a connection's
+    #: candidates (``route_connection``); this carries it into the choices made between
+    #: whole plans of a net -- a chain of links against a rail -- which compare prices.
+    off_face_link: float = 40
     #: Per trace step on the component side for a net with no preference: that copper is
     #: laid among the fitted parts, with the iron reaching between them.
     component_face_step: float = 0.5
@@ -331,6 +336,22 @@ _STRATEGY_FAMILY: dict[RouteStrategy, StrategyPreference] = {
     "insulated-wire": "wire",
     "top-jumper": "wire",
 }
+
+
+def _face_rank(candidate: RouteCandidate, preferred: BoardSide | None) -> int:
+    """For a net that prefers a face: 0 for a candidate with copper on that face and no pad
+    beside another net's (``risk_holes``), 1 for one off the face with none, 2 for any with
+    one. 0 for every candidate of a net with no preference, which is every golden route.
+
+    A preference ranks ahead of the style and of price (#14: "a strong preference"), but it
+    never buys a warning: a candidate on the face that runs a pad beside another net's ranks
+    behind a clean one off it.
+    """
+    if preferred is None:
+        return 0
+    if candidate.risk_holes:
+        return 2
+    return 0 if any(conductor.side == preferred for conductor in candidate.conductors) else 1
 
 
 def _preference_rank(strategy: RouteStrategy, prefer: StrategyPreference | None) -> int:
@@ -636,7 +657,15 @@ def route_connection(
     # been (every rank is 0); with one, the family the builder committed to wins outright
     # and cost only decides within it. See StrategyPreference for why a cost table alone
     # cannot express "I am assembling this board with solder traces".
-    candidates.sort(key=lambda c: (_preference_rank(c.strategy, options.prefer), c.cost, c.strategy))
+    preferred = _net_preferred_side(doc, request.net_id)
+    candidates.sort(
+        key=lambda c: (
+            _face_rank(c, preferred),
+            _preference_rank(c.strategy, options.prefer),
+            c.cost,
+            c.strategy,
+        )
+    )
     if not candidates:
         refused = (
             " No wire is allowed by the current crossing policy, so only a solder trace was "
@@ -2138,10 +2167,14 @@ def _off_face(ctx: _RouteContext, candidate: RouteCandidate) -> RouteCandidate:
             abs(b.col - a.col) + abs(b.row - a.row)
             for a, b in itertools.pairwise(conductor.path)
         )
-    if not steps:
+    given_up = not any(conductor.side == preferred for conductor in candidate.conductors)
+    if not steps and not given_up:
         return candidate
     return dataclasses.replace(
-        candidate, cost=candidate.cost + steps * ctx.opts.costs.off_face_step
+        candidate,
+        cost=candidate.cost
+        + steps * ctx.opts.costs.off_face_step
+        + (ctx.opts.costs.off_face_link if given_up else 0.0),
     )
 
 
@@ -2164,49 +2197,134 @@ def _component_side_wire_candidate(
     underneath, as every jumper's are.
     """
     occupancy = ctx.occupancy
-    if not _pad_open(ctx, from_, 1) or not _pad_open(ctx, to, 1):
+    starts = _jumper_landings(ctx, from_)
+    ends = _jumper_landings(ctx, to)
+    if not starts or not ends:
         return None
-    top = dataclasses.replace(
-        ctx,
-        wire_face="top",
-        covered_holes=_covered_holes(doc, "top"),
-        covered_steps=_covered_steps(doc, "top"),
-        joint_holes=_joint_holes(doc, occupancy, "top"),
-        loop_holes=_loop_holes(doc, from_, to, "top"),
-        end_levels=_end_levels(doc, lookup, "top") if ctx.opts.costs.wire_over_stack else {},
-        traversable={},
-        blocked_edges={},
-        risky_holes={},
-        endpoint_own_nets={},
-        face_traversable={},
-    )
     costs = ctx.opts.costs
-    found = _find_grid_wire_path(top, from_, to, bare=False, per_mm=costs.insulated_wire_per_mm)
-    if found is None:
+    covered_holes = _covered_holes(doc, "top")
+    covered_steps = _covered_steps(doc, "top")
+    joint_holes = _joint_holes(doc, occupancy, "top")
+    end_levels = _end_levels(doc, lookup, "top") if costs.wire_over_stack else {}
+    best: tuple[float, HoleCoord, HoleCoord, list[HoleCoord]] | None = None
+    for start in starts:
+        for end in ends:
+            if same_hole(start, end):
+                continue
+            top = dataclasses.replace(
+                ctx,
+                wire_face="top",
+                covered_holes=covered_holes,
+                covered_steps=covered_steps,
+                joint_holes=joint_holes,
+                loop_holes=_loop_holes(doc, start, end, "top"),
+                end_levels=end_levels,
+                traversable={},
+                blocked_edges={},
+                risky_holes={},
+                endpoint_own_nets={},
+                face_traversable={},
+            )
+            found = _find_grid_wire_path(
+                top, start, end, bare=False, per_mm=costs.insulated_wire_per_mm
+            )
+            if found is None:
+                continue
+            holes, laying = found
+            stubs = sum(
+                1 for pin, landing in ((from_, start), (to, end)) if not same_hole(pin, landing)
+            )
+            cost = (
+                costs.insulated_wire_fixed
+                + costs.component_face_wire
+                + laying
+                + stubs * (costs.bare_wire_fixed + doc.board.pitch * costs.bare_wire_per_mm)
+            )
+            if best is None or cost < best[0]:
+                best = (cost, start, end, holes)
+    if best is None:
         return None
-    holes, laying = found
+    cost, start, end, holes = best
     path = _corners(holes)
     length_mm = path_length_mm(path, doc.board)
+    jumper = NewWireConductor(
+        path=path,
+        kind="top-jumper",
+        side="top",
+        gauge_awg=ctx.wire_gauge_awg,
+        color=None,
+        net_id=ctx.own_net_id,
+        layer_z=0,
+    )
+    conductors: list[NewConductor] = []
+    beside: list[str] = []
+    if not same_hole(from_, start):
+        conductors.append(_stub(ctx, from_, start))
+        beside.append(f"{format_hole(from_, doc.board)} through {format_hole(start, doc.board)}")
+    conductors.append(jumper)
+    if not same_hole(to, end):
+        conductors.append(_stub(ctx, end, to))
+        beside.append(f"{format_hole(to, doc.board)} through {format_hole(end, doc.board)}")
+    explanation = (
+        f"Top jumper: {length_mm:.1f} mm from {format_hole(start, doc.board)} to "
+        f"{format_hole(end, doc.board)} with {len(path) - 2} bend(s) — along the grid over "
+        "the component side, clear of every part, so it lies across nothing underneath"
+    )
+    if beside:
+        explanation += (
+            "; down beside the covered pin "
+            + " and ".join(beside)
+            + ", joined to it by an offcut of bare wire underneath"
+        )
     return RouteCandidate(
         strategy="top-jumper",
-        conductors=(
-            NewWireConductor(
-                path=path,
-                kind="top-jumper",
-                side="top",
-                gauge_awg=ctx.wire_gauge_awg,
-                color=None,
-                net_id=ctx.own_net_id,
-                layer_z=0,
-            ),
-        ),
-        cost=costs.insulated_wire_fixed + costs.component_face_wire + laying,
-        explanation=(
-            f"Top jumper: {length_mm:.1f} mm from {format_hole(from_, doc.board)} to "
-            f"{format_hole(to, doc.board)} with {len(path) - 2} bend(s) — along the grid over "
-            "the component side, clear of every part, so it lies across nothing underneath."
-        ),
+        conductors=tuple(conductors),
+        cost=cost,
+        explanation=explanation + ".",
         risk_holes=(),
+    )
+
+
+def _jumper_landings(ctx: _RouteContext, end: HoleCoord) -> list[HoleCoord]:
+    """Where a component-side jumper may end to reach ``end``.
+
+    The hole itself where no body covers its pad on the component side. Else, for a net
+    that prefers that side, each free hole beside it -- no pin, no copper, under no body on
+    either face, its pad open on both -- from which an offcut of bare wire on the solder
+    side reaches the pin (#14). A builder running GND over the parts to a header does
+    exactly this: down through the hole beside the plastic, and an offcut across to the
+    pin underneath. That goes for a part standing on its leads too, whose pad DRC's
+    ``copper-at-covered-pin`` would otherwise ask to be reached with the leads left long.
+    For any other net, the hole itself where its pad is open, as before. Empty where
+    nothing will do."""
+    covered = ctx.occupancy.covered_pin(end, "top")
+    if covered is None:
+        return [end]
+    if ctx.preferred_side != "top" or not _pad_open(ctx, end, 0):
+        # A part standing on its leads leaves its pad open, and DRC asks for long leads.
+        return [end] if _pad_open(ctx, end, 1) else []
+    return [
+        hole
+        for hole in neighbors4(end, ctx.doc.board)
+        if ctx.occupancy.pin_at(hole) is None
+        and _traversable_on_face(ctx, hole, "top")
+        and _traversable_on_face(ctx, hole, "bottom")
+    ]
+
+
+def _stub(ctx: _RouteContext, first: HoleCoord, second: HoleCoord) -> NewWireConductor:
+    """The offcut of bare wire on the solder side between a covered pin and the hole beside
+    it that a component-side jumper ends in: one pitch, soldered at its two ends and dragged
+    along nothing, so it puts no run beside another net's pin (R5') the way a two-hole
+    solder bridge from a header's pin always would."""
+    return NewWireConductor(
+        path=(first, second),
+        kind="bare-wire",
+        side="bottom",
+        gauge_awg=ctx.wire_gauge_awg,
+        color=None,
+        net_id=ctx.own_net_id,
+        layer_z=0,
     )
 
 

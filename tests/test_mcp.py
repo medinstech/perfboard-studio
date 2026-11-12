@@ -1719,8 +1719,11 @@ def test_a_solder_trace_goes_on_the_face_asked_for_where_the_board_has_pads(
 
 
 def test_autoroute_takes_the_faces_and_names_the_vias(loaded: BoardSession) -> None:
+    """On lm317-supply GND set to the component side changes face through vias; the NE555's
+    goes over on jumpers since #14."""
     with pytest.raises(SessionError, match="not a choice of faces"):
         loaded.autoroute(faces="all")
+    assert loaded.open_document(str(REPO_ROOT / "examples" / "lm317-supply.perf"))["ok"]
     if loaded.document.conductors:
         loaded.delete_conductors([c.id for c in loaded.document.conductors])
     loaded.update_net("GND", preferred_side="top")
@@ -1738,8 +1741,9 @@ def test_autoroute_takes_the_faces_and_names_the_vias(loaded: BoardSession) -> N
 
 
 def test_autoroute_says_when_a_net_is_wired_off_the_face_it_prefers() -> None:
-    """Issue #14: the shield's GND pins on top are all under J2, so GND set to the
-    component side is wired underneath, and the agent is told so, and why."""
+    """Issue #14: GND set to the component side on the shield is wired mostly underneath,
+    and the agent is told so, and why: one connection for a pin under J2, three for want of
+    a way over the parts -- and that another of J2's pins is reached from the hole beside."""
     board = BoardSession()
     assert board.open_document(str(REPO_ROOT / "examples" / "arduino-io-shield.perf"))["ok"]
     if board.document.conductors:
@@ -1753,12 +1757,15 @@ def test_autoroute_says_when_a_net_is_wired_off_the_face_it_prefers() -> None:
         {
             "net": "GND",
             "preferred_side": "top",
-            "off_face": result["face_notes"][0]["connections"],
-            "connections": result["face_notes"][0]["connections"],
-            "reason": "covered",
+            "off_face": 4,
+            "connections": 5,
+            "reason": "mixed",
             "covered_by": ["J2"],
-            "message": "GND prefers the component side, but its pins there are under J2, "
-            "so it is wired on the solder side.",
+            "off_covered": 1,
+            "reached_beside": ["J2"],
+            "message": "GND prefers the component side, but 4 of its 5 connections are wired "
+            "on the solder side: 1 because its pins there are under J2, 3 because no clear way "
+            "was found for them there. Its pins under J2 are reached through a via beside them.",
         }
     ]
 
@@ -1766,9 +1773,28 @@ def test_autoroute_says_when_a_net_is_wired_off_the_face_it_prefers() -> None:
 def test_autoroute_says_nothing_of_faces_where_every_net_kept_its_own(loaded: BoardSession) -> None:
     if loaded.document.conductors:
         loaded.delete_conductors([c.id for c in loaded.document.conductors])
-    loaded.update_net("GND", preferred_side="top")
+    loaded.update_net("GND", preferred_side="bottom")
     result = loaded.autoroute(style="solder")
     assert result["ok"] and "face_notes" not in result
+
+
+def test_autoroute_says_which_pins_a_net_kept_on_its_face_reached_beside_a_body(
+    loaded: BoardSession,
+) -> None:
+    if loaded.document.conductors:
+        loaded.delete_conductors([c.id for c in loaded.document.conductors])
+    loaded.update_net("GND", preferred_side="top")
+
+    result = loaded.autoroute(style="solder")
+
+    [note] = result["face_notes"]
+    assert (note["reason"], note["off_face"], note["covered_by"], note["reached_beside"]) == (
+        "kept", 0, [], ["J1"],
+    )
+    assert note["message"] == (
+        "GND is wired on the component side; its pins under J1 are reached through a via "
+        "beside them."
+    )
 
 
 def test_an_agent_can_put_on_a_stock_board_and_lay_a_rail_on_it(session) -> None:

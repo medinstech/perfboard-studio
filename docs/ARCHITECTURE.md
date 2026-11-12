@@ -3735,7 +3735,8 @@ faces in play the trace comes from an A* over (hole, face, heading): the turning
 moves on each face, plus a move to the other face in the same hole -- free through a pin of
 the net, `RouterCosts.face_change` through an empty hole (a via), never through another
 net's pin. A net's preference is a PRICE, `off_face_step` on every step off its face, never a
-rule, so a blocked face is still left; a net with none pays `component_face_step` on top, so
+rule, so a blocked face is still left (and, since the follow-up below, a RANK among a
+connection's candidates); a net with none pays `component_face_step` on top, so
 it stays underneath. Measured: with no net preferring a face, "both" lays the solder plan to
 the conductor (`test_one_face_is_the_default_and_both_faces_with_no_preference_stays_underneath`),
 which is the physics above showing through. The face's real gain is the second candidate, a
@@ -3777,13 +3778,47 @@ a top trace passes or ends in, in the search and in pricing the candidates alike
 goes on after the parts (the guide's phase 7), so the iron reaches between bodies and a bridge
 there is found last; without it, GND preferring the top on the NE555 board ran a trace between
 two header pins of other nets rather than lay a wire over the top for 1.6 more, and the sweep's
-24 warnings with GND on top came to 14; with this price and the rule above, 11.
+24 warnings with GND on top came to 14; with this price and the rule above, 11; since the
+follow-up below, 3.
 
 **A net that prefers the top has both faces even under "solder".** The first version read a
 preference only with "both", and a builder who set GND to the component side and ran Auto-wire
 saw nothing happen until they found a global switch. The per-net choice is the more explicit
 intent, so `_two_faces` is true for that net alone; "both" opens both faces to every net.
 `test_a_net_that_prefers_the_component_side_has_both_faces_under_solder_and_only_it`.
+
+**A preference is strong, but it buys no warning.** The reporter of #14 set GND to the
+component side and still got most of it underneath, because a price only tips choices that
+were close: the style families ranked ahead of cost, and the sweep picked the plan with the
+least effort whatever face it used. Ranking the preference first in `route_connection` was
+tried and put 29 of the examples' 54 GND connections on top -- with 38 vias and 41 DRC
+warnings, mostly the solder-side traces of the styles it shifted, run beside header pins.
+What stayed is three things. `_face_rank` sorts a connection's candidates as on the face
+and clean, off it and clean, then any with a pad beside another net's (`risk_holes`), ahead
+of the style and the price; a connection given up costs `off_face_link` (40) on top, which
+carries the choice into the comparisons made between whole plans of a net. `VariantScore.key`
+gates on the warnings and risk holes a plan adds, then on the connections it laid off their
+face, before effort -- only where some net prefers a face, so a board that asks for nothing
+is chosen as it always was, and so is every golden route. And the wire over the top may end
+in a free hole BESIDE a pin its body covers (`_jumper_landings`) and reach the pin with a
+one-pitch offcut of bare wire underneath (`_stub`), which is how a builder runs ground over
+the parts to a header. It is a wire and not a two-hole bridge of solder because R5' measures
+every hole of a solder run, its ends too, against the pins around it, and beside a header
+pin there is always one: as solder the stubs were ten warnings on the examples, as wire none. On the
+examples, wired from bare as the window does, GND on top went from 5 of 54 connections to 16,
+with 5 vias, 14 offcuts, 64 mm more wire and no warning (2 before; 13 with no preference at
+all). Over the whole scoreboard with both faces open the warnings went from 11 to 3, for
+429 mm more wire, and atmega328-relay's tallest stack from 4 to 5 -- the price of a gate
+that puts warnings ahead of effort; with no preference every row is what it was.
+`face_notes` blames a part only for a connection whose own pin it covers -- the
+shield's note once named J2 for four connections when one ended under it -- says the rest
+found no clear way (`"mixed"`), and names the parts reached beside, which is a note of its
+own (`"kept"`) when the net kept its face, since the offcut is copper on the other side.
+`nets_off_their_face` reads the document alone, for the window to mark a net wired before it
+was given a face: Auto-wire keeps the copper it finds, so setting a face moves nothing.
+`test_a_preference_keeps_every_link_it_can_on_its_face_and_buys_no_warning`,
+`test_a_jumper_reaches_a_pin_under_a_body_through_the_hole_beside_it`,
+`test_a_net_wired_off_its_face_blames_a_part_only_for_the_connections_it_covers`.
 
 **Around it.** `autoroute` moves nets that prefer a face up behind ground, where a preference
 is easiest to keep. `wiringstats.vias` are the pinless holes where top solder meets other
