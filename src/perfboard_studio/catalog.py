@@ -179,6 +179,14 @@ _KK_WORDS = ("Molex", "KK", "KK254", "KK 254", "KF2510", "2510", "wire-to-board"
 _PRO_MINI_LEFT = ("TXO", "RXI", "RST", "GND", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9")
 _PRO_MINI_RIGHT = ("RAW", "GND", "RST", "VCC", "A3", "A2", "A1", "A0", "D13", "D12", "D11", "D10")
 
+# Adafruit's TCA9548A I2C multiplexer, its silkscreen read off its Eagle board, the VIN end
+# up: the controller's side (VIN, bus, reset, address) and channels 0 and 1 down one row,
+# channels 7 down to 2 down the other.
+_TCA9548A_LEFT = ("VIN", "GND", "SDA", "SCL", "RST", "A0", "A1", "A2",
+                  "SD0", "SC0", "SD1", "SC1")
+_TCA9548A_RIGHT = ("SC7", "SD7", "SC6", "SD6", "SC5", "SD5", "SC4", "SD4",
+                   "SC3", "SD3", "SC2", "SD2")
+
 
 def _legs(*names: str) -> PinNames:
     """Pin names in pin order: ``_legs("C", "B", "E")`` is 1=C, 2=B, 3=E."""
@@ -2834,6 +2842,32 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("Pro Mini", "Arduino Pro Mini", "DEV-11113", "DEV-11114",
                          "ATmega328P", "Arduino")),
+    CatalogPart("adafruit-tca9548a", "Adafruit TCA9548A I2C multiplexer", "module",
+                "mod-2x12-p6-r1-17.78x30.48x1.6-s8.5",
+                "One I2C bus to eight, one at a time: 24 pins, rows 15.24 mm apart",
+                _two_columns(_TCA9548A_LEFT, _TCA9548A_RIGHT), ref_prefix="U",
+                value="TCA9548A",
+                source=(
+                    "Adafruit's own Eagle board for its TCA9548A breakout "
+                    "(github.com/adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB, 'Adafruit "
+                    "TCA9548A'): its two 12-pin headers at x = 1.27 and 16.51 mm, 0.6 inch "
+                    "apart, and every name read off its silkscreen, each pad's net checked "
+                    "against the board's nets. The silkscreen reads VIN 1.8-5V; the tallest "
+                    "thing is the header pins' tips, 1.6 mm up, over the 1.2 mm TSSOP-24"
+                ),
+                check=(
+                    "VIN takes 1.8 to 5 V by the board's silkscreen. SDA and SCL are the "
+                    "controller's side, and each has a 10k pull-up to VIN through a solder "
+                    "jumper the board ships closed: cut it if another board already pulls the "
+                    "bus up. None of the eight channels has a pull-up, so each bus needs its "
+                    "own. A0, A1 and A2 are held low by 10k resistors, which makes the I2C "
+                    "address 0x70; a solder jumper beside each ties it to VIN instead. RST is "
+                    "held high by a 10k resistor: pull it low to reset the chip. Both rows "
+                    "are 12-pin headers the board ships without, so the pins and the rows "
+                    "are what to check against the board in your hand. " + _MODULE_TOP
+                ),
+                aliases=("TCA9548A", "TCA9548", "PCA9548", "I2C multiplexer", "I2C mux",
+                         "I2C çoklayıcı")),
     CatalogPart("sparkfun-logic-level-converter",
                 "SparkFun Logic Level Converter - Bi-Directional", "module",
                 "mod-6x2-p1-r4-15.24x12.7x1.6-s8.5",

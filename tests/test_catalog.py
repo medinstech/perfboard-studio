@@ -109,6 +109,8 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "sparkfun-tb6612fng": 15.24,
         # SparkFun's Eagle board: its rows at x = 1.27 and 16.51 mm, 0.6 inch apart.
         "sparkfun-pro-mini": 15.24,
+        # Adafruit's Eagle board: its headers at x = 1.27 and 16.51 mm, 0.6 inch apart.
+        "adafruit-tca9548a": 15.24,
         # SparkFun's Eagle board: its rows at y = 1.27 and 11.43 mm, 0.4 inch apart.
         "sparkfun-logic-level-converter": 10.16,
         # NodeMCU's Gerbers: its rows at x = +-11.43 mm, 0.9 inch apart.
@@ -1148,6 +1150,20 @@ def test_the_colour_thermocouple_and_compass_boards_are_headers_in_the_silkscree
         assert part.value is not None and part_id in {
             found.id for found in search_catalog(part.value)
         }, part_id
+
+
+def test_the_tca9548a_is_one_board_on_two_rows_of_twelve() -> None:
+    """Both headers on the Eagle board sit on the one 0.1 inch grid, 6 pitches apart, so the
+    multiplexer is one module with one reference rather than two headers."""
+    part = catalog_part("adafruit-tca9548a")
+    assert part is not None
+    names = dict(part.pin_names)
+    assert len(names) == 24
+    # Rows read top to bottom, left then right: VIN and SC7 at the top, SC1 and SD2 at the bottom.
+    assert (names["1"], names["2"], names["23"], names["24"]) == ("VIN", "SC7", "SC1", "SD2")
+    assert [names[str(n)] for n in (5, 9, 13, 17)] == ["SDA", "RST", "A1", "SD0"]
+    assert "Adafruit-TCA9548A-I2C-Multiplexer-PCB" in part.source
+    assert "tca9548a" in {found.id.replace("adafruit-", "") for found in search_catalog("PCA9548")}
 
 
 def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> None:

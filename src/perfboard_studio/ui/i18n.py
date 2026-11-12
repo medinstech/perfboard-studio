@@ -3311,6 +3311,34 @@ TURKISH: Mapping[str, str] = {
         "pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
         "bağlanmamıştır."
     ),
+    "Adafruit TCA9548A I2C multiplexer": (
+        "Adafruit TCA9548A I2C çoklayıcı"
+    ),
+    "One I2C bus to eight, one at a time: 24 pins, rows 15.24 mm apart": (
+        "Tek I2C hattını sekize böler, birer birer: 24 pin, sıralar 15,24 mm arayla"
+    ),
+    "VIN takes 1.8 to 5 V by the board's silkscreen. SDA and SCL are the controller's "
+    "side, and each has a 10k pull-up to VIN through a solder jumper the board ships "
+    "closed: cut it if another board already pulls the bus up. None of the eight "
+    "channels has a pull-up, so each bus needs its own. A0, A1 and A2 are held low by "
+    "10k resistors, which makes the I2C address 0x70; a solder jumper beside each ties "
+    "it to VIN instead. RST is held high by a 10k resistor: pull it low to reset the "
+    "chip. Both rows are 12-pin headers the board ships without, so the pins and the "
+    "rows are what to check against the board in your hand. The height of what is on "
+    "the board is an estimate, and so is its colour; the pins, the rows and the board "
+    "outline are measured.": (
+        "VIN, kartın baskısına göre 1,8 ile 5 V alır. SDA ile SCL denetleyici tarafıdır"
+        " ve her birinin VIN'e, kartın kapalı gönderdiği bir lehim köprüsü üzerinden "
+        "10k yukarı çekme direnci vardır: hattı başka bir kart zaten yukarı çekiyorsa "
+        "köprüyü kesin. Sekiz kanalın hiçbirinde yukarı çekme direnci yoktur, bu yüzden"
+        " her hat kendi direncini ister. A0, A1 ve A2 10k dirençlerle düşük tutulur, bu"
+        " da I2C adresini 0x70 yapar; her birinin yanındaki lehim köprüsü onu bunun "
+        "yerine VIN'e bağlar. RST 10k dirençle yüksek tutulur: çipi sıfırlamak için "
+        "düşük çekin. İki sıra da kartın pinsiz gönderdiği 12 pinli header'lardır, bu "
+        "yüzden elinizdeki kartta pinleri ve sıraları kontrol edin. Kartın "
+        "üstündekilerin yüksekliği tahmindir, rengi de öyle; pinler, sıralar ve kart "
+        "çevresi ölçülmüştür."
+    ),
     "HC-05 Bluetooth module, ZS-040 (on a header)": (
         "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
     ),

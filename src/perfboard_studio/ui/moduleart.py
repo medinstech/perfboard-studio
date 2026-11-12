@@ -127,6 +127,9 @@ ArtKind = Literal[
     # A 24-leg SSOP (Toshiba's SSOP24-P-300-0.65A, 7.8 x 5.6 mm, legs 0.65 mm apart): the
     # TB6612FNG's. Drawn as the TSSOP is, from ``GULL_WING_LEGS``.
     "ssop24",
+    # A 24-leg TSSOP (TI's PW outline, 7.8 x 4.4 mm body, 6.4 mm over the legs, legs 0.65 mm
+    # apart): the TCA9548A's. Drawn as the TSSOP is, from ``GULL_WING_LEGS``.
+    "tssop24",
     # A 16-leg SO (JEDEC MS-012: 9.9 x 3.9 mm body, legs 1.27 mm apart, 6.0 mm over the legs):
     # the HX711's. Drawn as the TSSOP is, from ``GULL_WING_LEGS``.
     "so16",
@@ -177,6 +180,8 @@ TSSOP28_REACH_MM = 1.0
 GULL_WING_LEGS: dict[str, tuple[int, float, float]] = {
     "tssop28": (TSSOP28_LEGS_PER_SIDE, TSSOP28_PITCH_MM, TSSOP28_REACH_MM),
     "ssop24": (12, 0.65, 1.0),
+    # TI's PW drawing: a 6.4 mm span over a 4.4 mm body, twelve legs a side.
+    "tssop24": (12, 0.65, 1.0),
     # MS-012: a 6.0 mm span over a 3.9 mm body, eight legs a side.
     "so16": (8, 1.27, 1.05),
     # TI's DCN drawing: a 3.00 mm span over a 1.75 mm body, at most.
@@ -886,6 +891,40 @@ SPARKFUN_LOGIC_LEVEL_MODULE = ModuleArt(
 ADAFRUIT_BLUE = "#0a64b2"
 ADAFRUIT_BLACK = "#1c1d20"
 
+#: Adafruit's TCA9548A I2C multiplexer, read off Adafruit's own Eagle board
+#: (Adafruit-TCA9548A-I2C-Multiplexer-PCB, 'Adafruit TCA9548A'): the 0.7 x 1.2 inch board, its two
+#: rows of twelve 0.6 inch apart and, on the top side, the TSSOP-24 with pin 1 at the corner
+#: towards VIN and the controller's header, the 10k resistors of the address pins and the
+#: reset, and the pull-up resistors, the bypass capacitor and the reset pull-up in a line
+#: along the VIN end. The solder jumpers are not drawn. ``u`` runs from the channel-0 end to the VIN
+#: end, ``v`` from the channel row to the VIN row. Sizes are the packages' (the chip TI's PW
+#: package, the passives 0805), and the tallest thing on it is the header pins' tips, 1.6 mm up,
+#: which is the footprint's top (the chip is 1.2 mm).
+ADAFRUIT_TCA9548A_MODULE = ModuleArt(
+    key="adafruit-tca9548a",
+    board_colour=ADAFRUIT_BLUE,
+    names=("tca9548a",),
+    board=(30.48, 17.78),
+    pins=24,
+    frame="columns",
+    landmark=("VIN", 1, 1),
+    parts=(
+        ArtPart("tssop24", 0.76, 0.0, 7.8, 6.4, 1.2, facing=1, text="TCA9548A", across=1),
+        ArtPart("chip-r", 6.60, -2.92, 2.0, 1.25, 0.5),
+        ArtPart("chip-r", 6.60, -0.89, 2.0, 1.25, 0.5),
+        ArtPart("chip-c", 6.60, 1.02, 2.0, 1.25, 0.85),
+        ArtPart("chip-r", 6.60, 3.05, 2.0, 1.25, 0.5),
+        ArtPart("chip-r", -4.95, -1.91, 2.0, 1.25, 0.5),
+        ArtPart("chip-r", -4.95, 0.13, 2.0, 1.25, 0.5),
+        ArtPart("chip-r", -4.95, 2.03, 2.0, 1.25, 0.5),
+    ),
+    source=(
+        "Adafruit TCA9548A Eagle board, github adafruit/Adafruit-TCA9548A-I2C-Multiplexer-PCB "
+        "(the board, both rows, every top-side part's place, package and turn); TI TCA9548A "
+        "PW package (the chip)"
+    ),
+)
+
 #: Adafruit's INA219 current sensor breakout, both revisions, read off Adafruit's own Eagle
 #: boards (github adafruit/Adafruit-INA219-Current-Sensor-PCB) and seen from above with the
 #: header along the top, VCC at the right (``pin_one``): the INA219 in TI's SOT-23-8 with its
@@ -1501,6 +1540,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     XIAO_ESP32C3_MODULE,
     SPARKFUN_TB6612_MODULE,
     SPARKFUN_PRO_MINI_MODULE,
+    ADAFRUIT_TCA9548A_MODULE,
     SPARKFUN_LOGIC_LEVEL_MODULE,
     ADAFRUIT_INA219_QT_MODULE,
     ADAFRUIT_INA219_MODULE,
