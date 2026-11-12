@@ -177,6 +177,10 @@ class Home(QWidget):
     #: A recent board's path, as a string.
     openRecent = Signal(str)
     showAtStartChanged = Signal(bool)
+    #: The update card's two buttons. The window decides what the primary one does
+    #: (download, or install and restart); Home only says it was pressed.
+    updateNotesRequested = Signal()
+    updateActionRequested = Signal()
 
     def __init__(
         self,
@@ -221,6 +225,8 @@ class Home(QWidget):
 
         name = QLabel(f"{theme.heading('Perfboard Studio')}  {theme.ink(__version__, 'tertiary')}")
         column.addWidget(name)
+        self.update_card = self._update_card()
+        column.addWidget(self.update_card)
 
         # -- the first door, for somebody with nothing yet ------------------------------
         self.first_run = QWidget()
@@ -305,6 +311,32 @@ class Home(QWidget):
         self.set_recent([])
 
     # -- what the window tells Home ----------------------------------------------------
+
+    def set_update(
+        self, version: str | None, *, summary: str = "", action: str = ""
+    ) -> None:
+        """The card that says a newer release exists, or none (``version`` ``None``).
+
+        ``action`` is what the primary button does now: ``"download"``, ``"install"`` or
+        ``""`` (nothing to press: a download is under way, or this build cannot install
+        itself). What Changed is always there, because reading is always possible.
+        """
+        if version is None:
+            self.update_card.hide()
+            return
+        self.update_headline.setText(
+            "<b>"
+            + t("Perfboard Studio {new} is available — you have {old}.").format(
+                new=version, old=__version__
+            )
+            + "</b>"
+        )
+        self.update_detail.setText(summary)
+        self.update_detail.setVisible(bool(summary))
+        labels = {"download": t("Download"), "install": t("Install and Restart")}
+        self.update_action.setVisible(action in labels)
+        self.update_action.setText(labels.get(action, ""))
+        self.update_card.show()
 
     def set_examples(self, examples: Sequence[HomeExample]) -> None:
         """The example cards, made anew: one per example, in the order given. With none --
@@ -401,6 +433,33 @@ class Home(QWidget):
         row.addWidget(importer)
         row.addStretch(1)
         return row
+
+    def _update_card(self) -> QFrame:
+        """A newer release exists: what it is, what changed, and the one button that acts."""
+        card = QFrame()
+        card.setObjectName("homeUpdate")
+        row = QHBoxLayout(card)
+        row.setContentsMargins(theme.SPACE["lg"], theme.SPACE["md"], theme.SPACE["md"], theme.SPACE["md"])
+        row.setSpacing(theme.SPACE["md"])
+        words = QVBoxLayout()
+        words.setSpacing(theme.SPACE["2xs"])
+        self.update_headline = QLabel()
+        self.update_headline.setTextFormat(Qt.TextFormat.RichText)
+        self.update_detail = QLabel()
+        theme.tone(self.update_detail, "secondary")
+        words.addWidget(self.update_headline)
+        words.addWidget(self.update_detail)
+        row.addLayout(words, 1)
+        notes = QPushButton(t("What Changed"))
+        notes.setToolTip(t("Read what this release changes."))
+        notes.clicked.connect(self.updateNotesRequested)
+        row.addWidget(notes)
+        self.update_action = QPushButton()
+        theme.variant(self.update_action, "primary")
+        self.update_action.clicked.connect(self.updateActionRequested)
+        row.addWidget(self.update_action)
+        card.hide()
+        return card
 
     def _walkthrough_card(self) -> QFrame:
         card = QFrame()

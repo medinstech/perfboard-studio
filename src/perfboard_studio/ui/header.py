@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from PySide6.QtCore import QPoint, QSize, Qt
+from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -40,6 +40,10 @@ HEADER_HEIGHT = 46
 
 class HeaderBar(QWidget):
     """☰ · the board's name · whether it is saved · the steps · undo, redo · next."""
+
+    #: The update pill was clicked: the window opens the release's notes, with the one
+    #: action that is possible right now (download, or install and restart).
+    updateRequested = Signal()
 
     def __init__(
         self,
@@ -102,6 +106,15 @@ class HeaderBar(QWidget):
         self.steps = steps
         layout.addWidget(steps, 1)
 
+        # A newer release exists. Beside the search because that is where the eye is while
+        # working; hidden until the window says so (``set_update``).
+        self.update_pill = QPushButton()
+        self.update_pill.setObjectName("headerUpdate")
+        self.update_pill.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_pill.clicked.connect(self.updateRequested)
+        self.update_pill.hide()
+        layout.addWidget(self.update_pill)
+
         # The way to every command by its name (``ui/palette.py``), where a person looks
         # for a search field: in the header, saying its key.
         self.search = QPushButton(icons.icon("search"), t("Search or run a command…"))
@@ -143,6 +156,19 @@ class HeaderBar(QWidget):
         self.place.setText(f"›  {place}" if place else "")
         self.place.setVisible(bool(place))
         self.unsaved.setVisible(modified)
+
+    def set_update(self, version: str | None) -> None:
+        """The pill for release ``version``, or none (``None``: nothing newer, or hidden)."""
+        if version is None:
+            self.update_pill.hide()
+            return
+        self.update_pill.setText("●  " + t("Update {version}").format(version=version))
+        self.update_pill.setToolTip(
+            t("Perfboard Studio {version} is available. Click to read what changed.").format(
+                version=version
+            )
+        )
+        self.update_pill.show()
 
     def open_menu(self, menu: QMenu | None = None) -> QMenu:
         """Every menu under ☰ -- or one of them, opened straight away, for Alt+its letter

@@ -447,6 +447,9 @@ TURKISH: Mapping[str, str] = {
     "Open this release's page in your browser.":
         "Bu sürümün sayfasını tarayıcınızda açar.",
     "Install and Restart": "Kur ve Yeniden Başlat",
+    "Update {version}": "Güncelleme {version}",
+    "Perfboard Studio {version} is available. Click to read what changed.":
+        "Perfboard Studio {version} çıktı. Neler değiştiğini okumak için tıklayın.",
     "Close this window (asking about unsaved work), run the installer — Windows "
     "asks for permission — and open the new version.":
         "Bu pencereyi kapatır (kaydedilmemiş iş varsa sorar), kurulum dosyasını "

@@ -90,6 +90,11 @@ def window():
     )
     made = MainWindow(document)
     yield made
+    # A test may have stubbed these on the window. The autouse fixtures that use
+    # `monkeypatch` are set up before this one and so undone after it, which would leave a
+    # stubbed `close` or `_offer_to_save` in place for the very close below.
+    for name in ("_offer_to_save", "close"):
+        made.__dict__.pop(name, None)
     made.close()
 
 
@@ -728,3 +733,180 @@ def test_open_on_github_still_goes_to_the_release_page(window, _nothing_reaches_
     dialog = a_notes_dialog()
     dialog.act_web.click()
     assert _nothing_reaches_the_desktop == ["https://example.org/r"]
+
+
+# ---------------------------------------------------------------------------
+# The window: the pill, the card and Install and Restart
+#
+# As above, nothing here runs an installer: `updater._run_elevated` or
+# `updater.start_install` is replaced before any click that could reach it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def an_installer_exists(monkeypatch):
+    """This build is one the project publishes an installer for (a source run is not)."""
+    monkeypatch.setattr(updater, "installable_asset", lambda release: release.assets[0])
+
+
+def a_window_with_the_update_downloaded(window, tmp_path, monkeypatch, *, can_install=True):
+    """The state after a verified download, without a transfer."""
+    path, digest = a_downloaded_installer(tmp_path)
+    window._on_update_checked(NEXT_RELEASE)
+    window._checker().verified_digest = digest
+    monkeypatch.setattr(updater, "can_install_in_place", lambda: can_install)
+    window._on_update_downloaded(path, True)
+    return path, digest
+
+
+def test_a_newer_release_shows_a_pill_in_the_header_and_a_card_on_home(window, an_installer_exists) -> None:
+    home = window._make_home()
+    assert window.header.update_pill.isHidden() and home.update_card.isHidden()
+    window._on_update_checked(NEXT_RELEASE)
+    assert not window.header.update_pill.isHidden()
+    assert "0.8.0" in window.header.update_pill.text()
+    assert not home.update_card.isHidden()
+    assert "0.8.0" in home.update_headline.text()
+    assert "Automatic updates" in home.update_detail.text()
+    assert home.update_action.text() == "Download" and not home.update_action.isHidden()
+
+
+def test_hiding_the_release_takes_the_pill_and_the_card_with_it(window) -> None:
+    home = window._make_home()
+    window._on_update_checked(NEXT_RELEASE)
+    window._on_update_dismissed()
+    assert window.header.update_pill.isHidden() and home.update_card.isHidden()
+
+
+def test_closing_the_strip_after_a_download_keeps_the_way_to_install(
+    window, tmp_path, monkeypatch
+) -> None:
+    home = window._make_home()
+    a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    assert home.update_action.text() == "Install and Restart"
+    window._on_update_closed()
+    assert not window.header.update_pill.isHidden(), "closing the strip is not hiding the version"
+    assert window._update_action() == "install"
+
+
+def test_while_a_download_runs_no_surface_offers_to_start_another(window, an_installer_exists) -> None:
+    home = window._make_home()
+    window._on_update_checked(NEXT_RELEASE)
+    window._update_busy = True
+    window._refresh_update_surfaces()
+    assert window._update_action() == "" and home.update_action.isHidden()
+    window._on_update_download_failed("the connection was reset")
+    assert window._update_action() == "download" and not home.update_action.isHidden()
+
+
+def test_a_build_that_cannot_install_itself_is_never_offered_the_install(
+    window, tmp_path, monkeypatch
+) -> None:
+    a_window_with_the_update_downloaded(window, tmp_path, monkeypatch, can_install=False)
+    assert window._update_action() == ""
+    assert not window.update_bar.act_install.isVisibleTo(window.update_bar)
+
+
+def test_install_and_restart_asks_about_unsaved_work_then_runs_then_closes(
+    window, tmp_path, monkeypatch
+) -> None:
+    path, digest = a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    order: list[str] = []
+    monkeypatch.setattr(window, "_offer_to_save", lambda: order.append("asked") or True)
+    monkeypatch.setattr(
+        updater,
+        "start_install",
+        lambda p, d: order.append(f"install {p == path} {d == digest}") or updater.InstallAttempt(True),
+    )
+    monkeypatch.setattr(
+        window, "close", lambda: order.append(f"close flag={window._closing_for_update}")
+    )
+    window._on_update_install()
+    assert order == ["asked", "install True True", "close flag=True"]
+    assert window._closing_for_update is False, "the flag does not outlive the close"
+
+
+def test_cancelling_the_unsaved_work_question_installs_nothing(
+    window, tmp_path, monkeypatch
+) -> None:
+    a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    ran: list[str] = []
+    monkeypatch.setattr(window, "_offer_to_save", lambda: False)
+    monkeypatch.setattr(updater, "start_install", lambda p, d: ran.append("install"))
+    monkeypatch.setattr(window, "close", lambda: ran.append("close"))
+    window._on_update_install()
+    assert ran == []
+
+
+def test_a_refused_elevation_prompt_leaves_the_window_open(window, tmp_path, monkeypatch) -> None:
+    a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    closed: list[str] = []
+    monkeypatch.setattr(window, "_offer_to_save", lambda: True)
+    monkeypatch.setattr(window, "close", lambda: closed.append("close"))
+    monkeypatch.setattr(
+        updater,
+        "start_install",
+        lambda p, d: updater.InstallAttempt(False, "Windows did not give permission."),
+    )
+    window._on_update_install()
+    assert closed == []
+    assert window.update_bar.act_install.isVisibleTo(window.update_bar), "it can be tried again"
+    assert window._update_action() == "install"
+
+
+def test_a_swapped_installer_is_dropped_and_the_download_can_be_made_again(
+    window, tmp_path, monkeypatch, an_installer_exists
+) -> None:
+    path, _ = a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    pathlib.Path(path).write_bytes(b"not what was checked")
+    monkeypatch.setattr(window, "_offer_to_save", lambda: True)
+    monkeypatch.setattr(updater, "_run_elevated", lambda p, a: pytest.fail("ran a swapped file"))
+    window._on_update_install()
+    assert not pathlib.Path(path).exists()
+    assert window._downloaded_update is None
+    assert window._update_action() == "download"
+    assert not window.update_bar.act_install.isVisibleTo(window.update_bar)
+
+
+def test_install_waits_while_the_planner_runs(window, tmp_path, monkeypatch) -> None:
+    a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    window._planner_running = True
+    try:
+        monkeypatch.setattr(window, "_offer_to_save", lambda: pytest.fail("asked mid-plan"))
+        monkeypatch.setattr(updater, "start_install", lambda p, d: pytest.fail("ran mid-plan"))
+        window._on_update_install()
+    finally:
+        window._planner_running = False
+
+
+def test_a_close_for_the_update_does_not_ask_about_unsaved_work_a_second_time(
+    window, monkeypatch
+) -> None:
+    from PySide6.QtGui import QCloseEvent
+
+    monkeypatch.setattr(window, "_offer_to_save", lambda: pytest.fail("asked twice"))
+    window._closing_for_update = True
+    event = QCloseEvent()
+    window.closeEvent(event)
+    assert event.isAccepted()
+    window._closing_for_update = False
+
+
+def test_what_changed_opens_the_notes_in_the_window_not_the_browser(
+    window, tmp_path, monkeypatch, _nothing_reaches_the_desktop
+) -> None:
+    a_window_with_the_update_downloaded(window, tmp_path, monkeypatch)
+    window._on_update_notes()
+    dialog = window._notes_dialog
+    assert dialog is not None and dialog.isVisible()
+    assert _nothing_reaches_the_desktop == []
+    assert dialog.act_action.text() == "Install and Restart"
+    dialog.close()
+
+
+def test_the_pill_opens_the_notes(window, an_installer_exists, _nothing_reaches_the_desktop) -> None:
+    window._on_update_checked(NEXT_RELEASE)
+    window.header.update_pill.click()
+    assert window._notes_dialog is not None and window._notes_dialog.isVisible()
+    assert window._notes_dialog.act_action.text() == "Download"
+    window._notes_dialog.close()

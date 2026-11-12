@@ -588,6 +588,22 @@ QPushButton[variant="link"]:hover {{ color: {k.accent_text}; }}
 QWidget#header {{ background: {k.bg_surface}; border-bottom: 1px solid {k.border}; }}
 QLabel#headerTitle {{ color: {k.text}; font-weight: {SEMIBOLD}; }}
 QLabel#headerPlace {{ color: {k.text_secondary}; }}
+/* A newer release exists: a pill in the header and a card on Home, both in the accent. */
+QPushButton#headerUpdate {{
+    background: {k.accent};
+    color: {k.text_on_accent};
+    border: none;
+    border-radius: 11px;
+    padding: {s["2xs"]}px {s["md"]}px;
+    font-weight: {SEMIBOLD};
+}}
+QPushButton#headerUpdate:hover {{ background: {k.accent_hover}; }}
+QFrame#homeUpdate {{
+    background: {k.accent_subtle};
+    border: 1px solid {k.accent};
+    border-radius: {RADIUS_LG}px;
+}}
+QFrame#homeUpdate QLabel {{ background: transparent; border: none; }}
 QToolButton#headerUnsaved {{
     color: {k.warning};
     background: transparent;

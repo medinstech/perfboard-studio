@@ -372,7 +372,7 @@ from perfboard_studio.system import (
     pair_by_net,
     placed_components,
 )
-from perfboard_studio.updates import RELEASES_PAGE_URL, Release, is_check_due
+from perfboard_studio.updates import RELEASES_PAGE_URL, Release, highlights, is_check_due
 from perfboard_studio.version import __version__
 from perfboard_studio.version import describe as describe_version
 from perfboard_studio.wiringstats import WiringStats, wiring_stats
@@ -2852,6 +2852,15 @@ class MainWindow(QMainWindow):
         self._update_release: Release | None = None
         self._update_asked_by_hand = False
         self._downloaded_update: str | None = None
+        #: A download is under way: the surfaces offer nothing to press until it ends.
+        self._update_busy = False
+        #: False once the version was hidden (Hide on the strip): the pill and the Home
+        #: card go with it, as the strip does.
+        self._update_noticed = False
+        #: Install and Restart is closing this window: the unsaved-work question was
+        #: already asked, and a second one would be asked of work that was just decided.
+        self._closing_for_update = False
+        self._notes_dialog: updater.ReleaseNotesDialog | None = None
 
         #: The document as it last hit disk. Identity comparison against the bus's
         #: current document is what "modified" means here -- see is_modified.
@@ -2924,6 +2933,7 @@ class MainWindow(QMainWindow):
         self.update_bar.cancelRequested.connect(self._on_update_cancel)
         self.update_bar.closeRequested.connect(self._on_update_closed)
         self.update_bar.dismissed.connect(self._on_update_dismissed)
+        self.update_bar.installRequested.connect(self._on_update_install)
         # EVERY VIEW IS A PANEL, INCLUDING THE BOARD. The board was the central widget and
         # the sheet a tab beside it, which made the two of them the one pair in the window
         # that could not be arranged: not side by side, not stacked, not torn off. They are
@@ -3174,6 +3184,8 @@ class MainWindow(QMainWindow):
             save=self.act_save,
             search=self.act_palette,
         )
+        # The pill opens the notes, which carry the one action that is possible now.
+        self.header.updateRequested.connect(self._on_update_notes)
         strip = QToolBar(self)
         strip.setObjectName("headerToolbar")
         strip.setMovable(False)
@@ -3813,7 +3825,10 @@ class MainWindow(QMainWindow):
         home.showAtStartChanged.connect(
             lambda on: app_settings().setValue(SHOW_WELCOME_KEY, bool(on))
         )
+        home.updateNotesRequested.connect(self._on_update_notes)
+        home.updateActionRequested.connect(self._on_update_surface_action)
         self._home_page = home
+        self._refresh_update_surfaces()
         return home
 
     def _start_a_circuit(self) -> None:
@@ -15037,7 +15052,7 @@ class MainWindow(QMainWindow):
             )
             event.ignore()
             return
-        if self._offer_to_save():
+        if self._closing_for_update or self._offer_to_save():
             # AFTER the offer, never before: a close the user backed out of must not
             # record the layout as if they had left.
             self._save_session()
@@ -16070,7 +16085,7 @@ class MainWindow(QMainWindow):
             checker.checkFailed.connect(self._on_update_check_failed)
             checker.downloadProgress.connect(self.update_bar.show_progress)
             checker.downloaded.connect(self._on_update_downloaded)
-            checker.downloadFailed.connect(self.update_bar.show_failure)
+            checker.downloadFailed.connect(self._on_update_download_failed)
             self._update_checker = checker
         return self._update_checker
 
@@ -16091,9 +16106,11 @@ class MainWindow(QMainWindow):
         if not self._update_asked_by_hand and release.version == updater.skipped_version(settings):
             return
         self._update_release = release
+        self._update_noticed = True
         self.update_bar.announce(
             release, __version__, downloadable=updater.installable_asset(release) is not None
         )
+        self._refresh_update_surfaces()
 
     def _on_update_check_failed(self, message: str) -> None:
         # Only when somebody asked. An automatic check that could not reach GitHub has
@@ -16114,11 +16131,100 @@ class MainWindow(QMainWindow):
             updater.open_url(release.url)
             return
         self.update_bar.show_progress(0, asset.size)
+        self._update_busy = True
+        self._refresh_update_surfaces()
         self._checker().download(release, asset)
+
+    def _update_action(self) -> str:
+        """What the primary button of every update surface does now: ``"download"``,
+        ``"install"``, or ``""`` for none (a download is under way, a file that cannot
+        install itself is waiting, or there is no installer for this build)."""
+        release = self._update_release
+        if release is None or self._update_busy:
+            return ""
+        if self._downloaded_update is not None:
+            return "install" if self._can_install_update() else ""
+        return "download" if updater.installable_asset(release) is not None else ""
+
+    def _can_install_update(self) -> bool:
+        checker = self._update_checker
+        return (
+            checker is not None
+            and checker.verified_digest is not None
+            and updater.can_install_in_place()
+        )
+
+    def _refresh_update_surfaces(self) -> None:
+        """The header's pill and Home's card follow the strip's state, so a newer release
+        is seen on the board and on the home page, and the strip stays where progress and
+        Install happen."""
+        release = self._update_release if self._update_noticed else None
+        action = self._update_action()
+        self.header.set_update(release.version if release is not None else None)
+        home = self._home_page
+        if home is not None:
+            summary = highlights(release.notes) if release is not None else []
+            home.set_update(
+                release.version if release is not None else None,
+                summary=" · ".join(summary),
+                action=action,
+            )
+
+    def _on_update_surface_action(self) -> None:
+        """The pill, the card and the notes dialog all press the same button."""
+        action = self._update_action()
+        if action == "install":
+            self._on_update_install()
+        elif action == "download":
+            self._on_update_download()
 
     def _on_update_notes(self) -> None:
         release = self._update_release
-        updater.open_url(release.url if release is not None else RELEASES_PAGE_URL)
+        if release is None:
+            updater.open_url(RELEASES_PAGE_URL)
+            return
+        # In the window, not on a web page; the page is one button away inside it. Not
+        # modal: the news can sit beside the board.
+        dialog = updater.ReleaseNotesDialog(release, action=self._update_action(), parent=self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.installRequested.connect(self._on_update_install)
+        dialog.downloadRequested.connect(self._on_update_download)
+        self._notes_dialog = dialog
+        dialog.show()
+
+    def _on_update_install(self) -> None:
+        """Install and Restart: the one click that runs something, and never before it.
+
+        The order is the point. The unsaved-work question is asked FIRST, as on the close
+        button, and Cancel there ends everything. Then the installer is started (its
+        checksum taken again, Windows' own elevation prompt) -- and only if that started
+        does this window close, through ``closeEvent`` so nothing else about closing
+        differs. A refused prompt leaves a window that is still open with its work saved.
+        """
+        checker = self._update_checker
+        path = self._downloaded_update
+        if checker is None or path is None or checker.verified_digest is None:
+            return
+        if self._planner_running:
+            self.statusBar().showMessage(
+                t("Still planning — cancel it or wait for it before closing."), 6000
+            )
+            return
+        if not self._offer_to_save():
+            return
+        attempt = updater.start_install(path, checker.verified_digest)
+        if not attempt.started:
+            if attempt.discarded:
+                self._downloaded_update = None
+                checker.verified_digest = None
+            self.update_bar.show_install_problem(attempt.message, retry=not attempt.discarded)
+            self._refresh_update_surfaces()
+            return
+        self._closing_for_update = True
+        try:
+            self.close()
+        finally:
+            self._closing_for_update = False
 
     def _on_update_reveal(self) -> None:
         if self._downloaded_update is not None:
@@ -16127,16 +16233,29 @@ class MainWindow(QMainWindow):
     def _on_update_cancel(self) -> None:
         if self._update_checker is not None:
             self._update_checker.cancel()
+        self._update_busy = False
         self.update_bar.dismiss()
+        self._refresh_update_surfaces()
 
     def _on_update_downloaded(self, path: str, verified: bool) -> None:
         self._downloaded_update = path
-        self.update_bar.show_downloaded(path, verified)
+        self._update_busy = False
+        self.update_bar.show_downloaded(
+            path, verified, can_install=verified and self._can_install_update()
+        )
+        self._refresh_update_surfaces()
+
+    def _on_update_download_failed(self, message: str) -> None:
+        self._update_busy = False
+        self.update_bar.show_failure(message)
+        self._refresh_update_surfaces()
 
     def _on_update_dismissed(self) -> None:
         if self._update_release is not None:
             updater.remember_skip(app_settings(), self._update_release.version)
+        self._update_noticed = False
         self.update_bar.dismiss()
+        self._refresh_update_surfaces()
 
     def _on_update_closed(self) -> None:
         """Close the strip and remember nothing.
