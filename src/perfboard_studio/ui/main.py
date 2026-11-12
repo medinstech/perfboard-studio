@@ -4634,12 +4634,16 @@ class MainWindow(QMainWindow):
 
     def _move_assembly(self, value: int, *, arrive: bool) -> None:
         """Set the slider, saying whether the 3D view should lower the part that arrives."""
-        self._finish_arrival()
+        interrupted = self._cancel_arrival()
+        moves = value != self.assembly_slider.value()
         self._arrive_next = arrive
         try:
             self.assembly_slider.setValue(value)
         finally:
             self._arrive_next = False
+        if interrupted and not moves:
+            # At an end of the build: nothing drew the step the cancelled drop was in.
+            self._refresh_3d()
 
     def step_assembly(self, delta: int) -> None:
         """One step back or forward through the build, by hand: playing stops, because a
@@ -4657,12 +4661,18 @@ class MainWindow(QMainWindow):
             max(0, min(self.assembly_slider.maximum(), value)), arrive=delta > 0
         )
 
+    def _cancel_arrival(self) -> bool:
+        """Drop a drop that is running, without drawing anything; whether there was one."""
+        arrival = self._arrival
+        if arrival is None or not arrival.running:
+            return False
+        arrival.cancel()
+        return True
+
     def _finish_arrival(self) -> None:
         """Land a part that is still coming down, now: drawn again as an ordinary step, so
         its solder is there and nothing is left in the air."""
-        arrival = self._arrival
-        if arrival is not None and arrival.running:
-            arrival.cancel()
+        if self._cancel_arrival():
             self._refresh_3d()
 
     def _on_arrival_finished(self) -> None:
@@ -4791,8 +4801,12 @@ class MainWindow(QMainWindow):
         """
         if self.vtk_widget is None or self._vtk_renderer is None:
             return
-        if self._arrival is not None:
-            self._arrival.cancel()
+        interrupted = self._cancel_arrival()
+        if interrupted and self.act_play.isChecked() and not self._assembly_timer.isActive():
+            # An edit, the exploded slider or a re-show replaced the actors a drop was
+            # moving. Nothing will say it landed, and Play waits for that: so it goes on
+            # from here, as it would have after the hold.
+            self._assembly_timer.start(self.ARRIVAL_HOLD_MS)
         if not self.dock_3d.isVisible():
             self._3d_stale = True
             return

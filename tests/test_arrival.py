@@ -218,6 +218,41 @@ def test_play_waits_for_the_drop_and_then_holds(monkeypatch) -> None:
     _close_stage(window)
 
 
+def test_play_goes_on_when_a_redraw_replaces_the_part_that_was_coming_down(monkeypatch) -> None:
+    """A redraw that is not a landing (an edit, the exploded view) cancels the drop without
+    its signal, and Play was waiting for the signal: it stood still with its button down."""
+    window, _, part_at = _stage(monkeypatch)
+    window.act_play.setChecked(True)
+    window._move_assembly(part_at, arrive=False)
+    window._assembly_timer.stop()
+    window._on_assembly_tick()
+    assert window._arrival.running and not window._assembly_timer.isActive()
+    window._refresh_3d()
+    assert not window._arrival.running
+    assert window._assembly_timer.isActive()
+    window.act_play.setChecked(False)
+    _close_stage(window)
+
+
+def test_a_forward_step_over_a_running_drop_draws_once(monkeypatch) -> None:
+    """The step that finishes a drop and moves the slider is ONE redraw, not the finishing
+    one and then the new step's."""
+    window, _, _ = _stage(monkeypatch)
+    window.step_assembly(1)
+    assert window._arrival.running
+    draws: list[bool] = []
+    real = type(window)._refresh_3d
+
+    def counted(self, *, arrive=False):
+        draws.append(arrive)
+        return real(self, arrive=arrive)
+
+    monkeypatch.setattr(type(window), "_refresh_3d", counted)
+    window.step_assembly(1)
+    assert len(draws) == 1
+    _close_stage(window)
+
+
 def test_pausing_lands_the_part_that_is_coming_down(monkeypatch) -> None:
     window, _, part_at = _stage(monkeypatch)
     window.act_play.setChecked(True)
