@@ -970,11 +970,11 @@ def test_deletes_every_conductor_as_a_single_undo_step():
     ids = tuple(c.id for c in bus.document.conductors)
 
     result = bus.dispatch(
-        "conductor.deleteMany", DeleteConductorsPayload(ids=ids, label="Remove 2 stale conductor(s)")
+        "conductor.deleteMany", DeleteConductorsPayload(ids=ids, label="Remove 2 stale conductors")
     )
 
     assert result.ok is True
-    assert result.description == "Remove 2 stale conductor(s)"
+    assert result.description == "Remove 2 stale conductors"
     assert bus.document.conductors == ()
 
     bus.undo()

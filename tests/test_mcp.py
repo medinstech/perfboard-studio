@@ -395,6 +395,27 @@ def test_autoroute_clears_stale_copper_first_exactly_as_the_gui_does(
     assert stranded not in {c.id for c in session.document.conductors}
 
 
+def test_removing_stale_copper_counts_it_in_words(session: BoardSession) -> None:
+    """The undo label read "Remove 1 stale conductor(s)": it says one or several as English
+    does, and the window says either in Turkish."""
+    from perfboard_studio.ui.engine_text import say
+    from perfboard_studio.ui.i18n import language, set_language
+
+    session.import_netlist(str(NETLIST))
+    session.place_component(ref="R1", footprint_id="r-axial-4", hole="C3")
+    assert session.add_wire("C3", "I3", kind="bare-wire", net="VCC")["ok"]
+    session.remove_stale_conductors()
+    label = session.undo()["undone"]
+    assert label == "Remove 1 stale conductor"
+    before = language()
+    set_language("tr")
+    try:
+        assert say(label) == "Eskimiş 1 iletkeni kaldır"
+        assert say("Remove 3 stale conductors") == "Eskimiş 3 iletkeni kaldır"
+    finally:
+        set_language(before)
+
+
 def test_optimize_placement_can_report_without_touching_the_board(
     loaded: BoardSession,
 ) -> None:

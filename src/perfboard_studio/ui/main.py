@@ -12183,7 +12183,7 @@ class MainWindow(QMainWindow):
                                                "connects the net it claims."), 6000
                 )
             return 0
-        label = f"Remove {len(strays)} stale conductor(s)"
+        label = f"Remove {count_noun(len(strays), 'stale conductor')}"
         result = self.bus.dispatch(
             "conductor.deleteMany", DeleteConductorsPayload(ids=strays, label=label)
         )

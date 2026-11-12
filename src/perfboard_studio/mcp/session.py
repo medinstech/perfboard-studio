@@ -2172,7 +2172,7 @@ class BoardSession:
             return _ok(removed=0, message="Every conductor still connects the net it claims.")
         result = self._dispatch(
             "conductor.deleteMany",
-            DeleteConductorsPayload(ids=strays, label=f"Remove {len(strays)} stale conductor(s)"),
+            DeleteConductorsPayload(ids=strays, label=f"Remove {count_noun(len(strays), 'stale conductor')}"),
         )
         if result["ok"]:
             result["removed"] = len(strays)
