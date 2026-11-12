@@ -1942,8 +1942,25 @@ buttons.
 
 **Tools that are one idea share a button** (`FloatingBar.add_group`): solder trace and
 reinforced trace; bare wire, insulated wire and a jumper over the parts. The button shows
-and arms the one picked last -- by the menu, its key or the button -- and offers the rest
-when held or right-clicked, with a small triangle in its corner to say so.
+and arms the one picked last -- by the menu, its key or the button. A chevron beside its
+picture opens a list of the group (`_ToolFlyout`), as a right-click and a press held down
+do: each tool with its name, its key and a line on what it lays. It was a triangle in the
+picture's corner, a fifth of the icon wide, and offered a plain menu of names: the builder
+did not see it, and a group read as the one tool it showed.
+
+**The rail is told apart by shape, and a tool names itself at once.** At 22 px Connect,
+Solder Trace, Bare Wire and Insulated Wire were all "a line between two dots" -- five
+lines of different weights between the same two pads -- and the only way to tell them
+apart was a tooltip a second later, on each in turn. Chosen from three rendered rails, the
+pictures are now what each thing looks like on a board (`icons.py`): beads flowed along a
+row of pads for solder, a wire bent up out of one hole and into another, the same in a
+sleeve, an arch over a part, and Connect a DASHED link, because it lays no copper. With the
+board's rail built `names=True`, the pointer on a button puts its name and key in a pill
+beside it at once and the tooltip is not shown as well: one label, not two saying one name
+a second apart. And the first time a tool is armed in a session, the banner says what it
+lays in place of its name (`TOOL_INTRODUCTIONS`), until the first click -- Connect that it
+lays nothing, being the tool most often taken for a wire. The sheet's rail keeps its
+tooltips: its five tools were never the ones that could not be told apart.
 
 `ui/boardpreview.py` draws a board as a picture through `BoardScene` itself -- the board
 dialogs' previews and the stock-size grid -- so a picture cannot disagree with the board OK

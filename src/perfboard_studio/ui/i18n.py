@@ -1636,7 +1636,29 @@ TURKISH: Mapping[str, str] = {
         "Henüz işaretlenmemiş ilk adım; kartta ve 3D'de gösterilir."
     ),
     "Clear Progress": "İlerlemeyi Temizle",
-    " (hold for more)": " (diğerleri için basılı tutun)",
+    "Solder flowed pad to pad, joined at every pad": "Pedden pede akıtılan lehim; her pede bağlanır",
+    "Solder over a tinned wire, for current": "Kalaylı tel üstünde lehim; akım taşıyan hatlar için",
+    "Tinned wire on the solder side; cannot cross copper": "Lehim yüzünde kalaylı tel; bakırın üstünden geçemez",
+    "Sleeved wire; may cross other copper": "Kılıfıyla başka bakırın üstünden geçebilir",
+    "On the component side, over the parts": "Parça yüzünde, parçaların üstünden",
+    "A solder trace is solder flowed from pad to pad, joined at every pad it crosses": (
+        "Lehim yolu, pedden pede akıtılan lehimdir; üstünden geçtiği her pede bağlanır"
+    ),
+    "A reinforced solder trace is solder flowed over a tinned wire, for a line that carries current": (
+        "Telli lehim yolu, kalaylı bir telin üstüne akıtılan lehimdir; akım taşıyan hatlar içindir"
+    ),
+    "A bare wire is soldered at its two ends on the solder side, and cannot cross other copper": (
+        "Çıplak tel, lehim yüzünde iki ucundan lehimlenir ve başka bakırın üstünden geçemez"
+    ),
+    "An insulated wire is soldered only at its two ends, and its sleeve lets it cross other copper": (
+        "İzoleli tel yalnızca iki ucundan lehimlenir; kılıfı sayesinde başka bakırın üstünden geçebilir"
+    ),
+    "A jumper is an insulated wire on the component side, over the parts": (
+        "Jumper, parça yüzünde parçaların üstünden geçen izoleli bir teldir"
+    ),
+    "Connect puts two pins on one net and lays no copper: wiring them comes later": (
+        "Bağla, iki pini aynı nete koyar ve bakır döşemez; kablolama sonra gelir"
+    ),
     "Clear": "Temizle",
     "Untick every step of this board.": "Bu kartın bütün adımlarının işaretini kaldırır.",
     "{done} of {total} steps done": "{total} adımın {done} tanesi yapıldı",

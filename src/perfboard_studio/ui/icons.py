@@ -125,60 +125,87 @@ def _redo(p: QPainter) -> None:
     _turn_arrow(p, leftward=False)
 
 
-def _conductor(p: QPainter, run: Callable[[QPainter], None]) -> None:
-    """Two pads with something between them: the shape every conductor icon shares."""
-    _pad(p, 22, 72)
-    _pad(p, 78, 28)
-    run(p)
+# The conductor tools are told apart by SHAPE, not by a line's weight. They were five
+# lines between the same two pads -- thick, thick with a spine, thin, thin with a sleeve,
+# curved -- and at 22 px Connect, Solder Trace, Bare Wire and Insulated Wire were all "a line
+# between two dots": the builder could not tell them apart without a tooltip. Each is now
+# what the thing looks like on a board: solder is beads flowed along a row of pads, a wire
+# is bent up out of one hole and down into another, a jumper arches over a part, and
+# Connect lays no copper at all, so its link is dashed -- an airwire.
+
+
+def _beads(p: QPainter) -> None:
+    """Three pads in a row with solder flowed along them: a bead on every pad it crosses,
+    which is what a solder trace is and a wire is not."""
+    p.setPen(_pen(_ink.body, 13))
+    p.drawLine(QPointF(18, 50), QPointF(82, 50))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(_ink.body))
+    for x in (18.0, 50.0, 82.0):
+        p.drawEllipse(QPointF(x, 50), 15, 15)
+    p.setBrush(Qt.BrushStyle.NoBrush)
 
 
 def _solder_trace(p: QPainter) -> None:
-    def run(p: QPainter) -> None:
-        p.setPen(_pen(_ink.body, 15))  # thick: solder is the widest thing on the board
-        p.drawLine(QPointF(30, 64), QPointF(70, 36))
-
-    _conductor(p, run)
+    _beads(p)
+    # The holes, left open: a bead sits on a pad, around its hole.
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(TOKENS.bg_raised))
+    for x in (18.0, 50.0, 82.0):
+        p.drawEllipse(QPointF(x, 50), 4.5, 4.5)
+    p.setBrush(Qt.BrushStyle.NoBrush)
 
 
 def _solder_trace_wired(p: QPainter) -> None:
-    """The same run with a wire spine down it -- the whole difference between the two."""
+    """The same beads with the wire they are flowed over showing through: the whole
+    difference between the two."""
+    _beads(p)
+    p.setPen(_pen(_ink.accent, 6))
+    p.drawLine(QPointF(8, 50), QPointF(92, 50))
 
-    def run(p: QPainter) -> None:
-        p.setPen(_pen(_ink.body, 15))
-        p.drawLine(QPointF(30, 64), QPointF(70, 36))
-        p.setPen(_pen(_ink.accent, 5))
-        p.drawLine(QPointF(28, 62), QPointF(72, 34))
 
-    _conductor(p, run)
+def _staple() -> QPainterPath:
+    """A wire bent up out of one hole, across, and down into another."""
+    path = QPainterPath(QPointF(18, 70))
+    path.lineTo(QPointF(18, 42))
+    path.quadTo(QPointF(18, 22), QPointF(38, 22))
+    path.lineTo(QPointF(62, 22))
+    path.quadTo(QPointF(82, 22), QPointF(82, 42))
+    path.lineTo(QPointF(82, 70))
+    return path
 
 
 def _bare_wire(p: QPainter) -> None:
-    def run(p: QPainter) -> None:
-        p.setPen(_pen(_ink.body, 6))
-        p.drawLine(QPointF(30, 64), QPointF(70, 36))
-
-    _conductor(p, run)
+    _pad(p, 18, 80, 10)
+    _pad(p, 82, 80, 10)
+    p.setPen(_pen(_ink.body, 6))
+    p.drawPath(_staple())
 
 
 def _insulated_wire(p: QPainter) -> None:
-    def run(p: QPainter) -> None:
-        p.setPen(_pen(_ink.body, 6))
-        p.drawLine(QPointF(30, 64), QPointF(70, 36))
-        # The sleeve, which is the whole difference between this and bare wire.
-        p.setPen(_pen(_ink.body, 16))
-        p.drawLine(QPointF(42, 55), QPointF(58, 45))
-
-    _conductor(p, run)
+    """The same bent wire in its sleeve, bare only where it goes into the pads -- the
+    sleeve is what lets it cross other copper, so it is the accent."""
+    _bare_wire(p)
+    sleeve = QPainterPath(QPointF(18, 56))
+    sleeve.lineTo(QPointF(18, 42))
+    sleeve.quadTo(QPointF(18, 22), QPointF(38, 22))
+    sleeve.lineTo(QPointF(62, 22))
+    sleeve.quadTo(QPointF(82, 22), QPointF(82, 42))
+    sleeve.lineTo(QPointF(82, 56))
+    p.setPen(_pen(_ink.accent, 15))
+    p.drawPath(sleeve)
 
 
 def _top_jumper(p: QPainter) -> None:
-    def run(p: QPainter) -> None:
-        path = QPainterPath(QPointF(26, 66))
-        path.cubicTo(QPointF(30, 16), QPointF(70, 16), QPointF(74, 32))
-        p.setPen(_pen(_ink.body, 6))
-        p.drawPath(path)
-
-    _conductor(p, run)
+    """A wire arching over a part, from one of its pads to the other."""
+    _pad(p, 12, 84, 9)
+    _pad(p, 88, 84, 9)
+    p.setPen(_pen(_ink.body, 6))
+    p.drawRoundedRect(QRectF(34, 56, 32, 28), 4, 4)
+    arch = QPainterPath(QPointF(12, 76))
+    arch.cubicTo(QPointF(12, 6), QPointF(88, 6), QPointF(88, 76))
+    p.setPen(_pen(_ink.accent, 7))
+    p.drawPath(arch)
 
 
 def _new_net(p: QPainter) -> None:
@@ -191,15 +218,14 @@ def _new_net(p: QPainter) -> None:
 
 
 def _connect(p: QPainter) -> None:
-    """Two pads and the link between them, with the second pad picked out.
-
-    The accent is doing real work: this is the two-click tool, and the icon says the
-    second click is the one that makes the connection.
-    """
-    _pad(p, 24, 70, 11)
-    p.drawLine(QPointF(33, 62), QPointF(67, 38))
-    p.setPen(_pen(_ink.accent))
-    _pad(p, 76, 30, 11)
+    """Two pins and a dashed link between them: joined on the net, and no copper laid --
+    the airwire the board draws for a connection still to be wired."""
+    _pad(p, 20, 74, 11)
+    _pad(p, 80, 26, 11)
+    pen = _pen(_ink.accent, 7)
+    pen.setDashPattern([1.6, 2.0])
+    p.setPen(pen)
+    p.drawLine(QPointF(29, 66), QPointF(71, 34))
 
 
 def _autoroute(p: QPainter) -> None:

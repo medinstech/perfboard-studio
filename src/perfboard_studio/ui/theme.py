@@ -666,6 +666,17 @@ QFrame[floating="true"] QToolButton {{
 }}
 QFrame[floating="true"] QToolButton:hover {{ background: {k.bg_hover}; }}
 QFrame[floating="true"] QToolButton:checked {{ background: {k.accent_subtle}; color: {k.accent_text}; }}
+/* A group's list of tools (canvastools._ToolFlyout): a row lights under the pointer and
+   while its tool is armed; its key sits in a hairline cap. */
+QFrame#toolFlyout QLabel {{ background: transparent; }}
+QFrame#toolFlyoutRow {{ background: transparent; border: none; border-radius: {RADIUS_SM}px; }}
+QFrame#toolFlyoutRow:hover, QFrame#toolFlyoutRow:focus {{ background: {k.bg_hover}; }}
+QFrame#toolFlyoutRow[armed="true"] {{ background: {k.accent_subtle}; }}
+QLabel#toolKey {{
+    border: 1px solid {k.border};
+    border-radius: {RADIUS_SM}px;
+    padding: 0 {s["xs"]}px;
+}}
 QWidget#problemsBar {{ background: {k.bg_surface}; border-top: 1px solid {k.border}; }}
 QLabel#problemsBadge[tone="danger"], QLabel#problemsBadge[tone="warning"] {{
     border-radius: 8px;

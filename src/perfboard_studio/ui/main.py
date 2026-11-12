@@ -2659,6 +2659,45 @@ class _LeaveWatcher(QObject):
         return False
 
 
+#: What each drawing tool lays, in a line, for the list a group button opens. Functions,
+#: so ``t`` is asked once the language is chosen rather than at import.
+TOOL_NOTES: dict[str, Callable[[], str]] = {
+    "solder-trace": lambda: t("Solder flowed pad to pad, joined at every pad"),
+    "solder-trace-wired": lambda: t("Solder over a tinned wire, for current"),
+    "bare-wire": lambda: t("Tinned wire on the solder side; cannot cross copper"),
+    "insulated-wire": lambda: t("Sleeved wire; may cross other copper"),
+    "top-jumper": lambda: t("On the component side, over the parts"),
+}
+
+#: What a tool lays, said once over the board the first time it is armed in a session:
+#: the rail's pictures and the list's one line are not the whole difference between a
+#: wire and a run of solder, and the moment a tool is picked is when it matters.
+#: ``connect`` lays nothing, and says so -- it is the tool most often taken for a wire.
+TOOL_INTRODUCTIONS: dict[str, Callable[[], str]] = {
+    "solder-trace": lambda: t(
+        "A solder trace is solder flowed from pad to pad, joined at every pad it crosses"
+    ),
+    "solder-trace-wired": lambda: t(
+        "A reinforced solder trace is solder flowed over a tinned wire, for a line that "
+        "carries current"
+    ),
+    "bare-wire": lambda: t(
+        "A bare wire is soldered at its two ends on the solder side, and cannot cross "
+        "other copper"
+    ),
+    "insulated-wire": lambda: t(
+        "An insulated wire is soldered only at its two ends, and its sleeve lets it cross "
+        "other copper"
+    ),
+    "top-jumper": lambda: t(
+        "A jumper is an insulated wire on the component side, over the parts"
+    ),
+    "connect": lambda: t(
+        "Connect puts two pins on one net and lays no copper: wiring them comes later"
+    ),
+}
+
+
 class MainWindow(QMainWindow):
     #: Where the selection was last made, so Properties describes that one
     #: (``_current_selection``).
@@ -2897,6 +2936,10 @@ class MainWindow(QMainWindow):
         #: Where the conductor being drawn has got to ("F1 → F3 · 3 pads · LED_A"), "" for
         #: nothing drawn yet.
         self._draw_progress = ""
+        #: The tools that have said what they lay this session (``TOOL_INTRODUCTIONS``),
+        #: and what the one armed now is saying until its first click.
+        self._tools_introduced: set[str] = set()
+        self._tool_intro = ""
         self.scene.drawArmed.connect(self._on_draw_armed)
         self.scene.conductorDrawn.connect(self._on_conductor_drawn)
         self.scene.drawChecked.connect(self._on_draw_checked)
@@ -6113,18 +6156,25 @@ class MainWindow(QMainWindow):
         self.act_import.setIcon(icons.icon("import"))
         self.act_guide.setIcon(icons.icon("guide"))
 
-        tools = FloatingBar(self.view, Qt.Corner.TopLeftCorner, vertical=True, name="boardTools")
-        tools.add_action(self.act_select_tool)
+        # ``names``: a tool says its name and key the moment the pointer is on it. The rail
+        # is pictures alone, and four of them could not be told apart without waiting for
+        # a tooltip on each.
+        tools = FloatingBar(
+            self.view, Qt.Corner.TopLeftCorner, vertical=True, name="boardTools", names=True
+        )
+        tools.add_action(self.act_select_tool, key="Esc")
         tools.add_action(self.act_connect)
         tools.add_separator()
         pictures = {self.act_draw[kind]: icons.icon(kind) for kind in self.act_draw}
+        notes = {self.act_draw[kind]: TOOL_NOTES[kind]() for kind in self.act_draw}
         self.solder_tools = tools.add_group(
-            [self.act_draw["solder-trace"], self.act_draw["solder-trace-wired"]], pictures
+            [self.act_draw["solder-trace"], self.act_draw["solder-trace-wired"]], pictures, notes
         )
         self.wire_tools = tools.add_group(
             [self.act_draw["bare-wire"], self.act_draw["insulated-wire"],
              self.act_draw["top-jumper"]],
             pictures,
+            notes,
         )
         # Only where there is a strip to cut: on any other board it is a disabled button
         # for a tool that cannot apply, which is clutter rather than information.
@@ -6619,7 +6669,8 @@ class MainWindow(QMainWindow):
         if self.scene.connect_armed:
             first = self.scene.connect_from()
             if first is None:
-                return f"{t('Connecting')}  ·  {t('click the first pin, Esc cancels')}"
+                lead = self._tool_intro or t("Connecting")
+                return f"{lead}  ·  {t('click the first pin, Esc cancels')}"
             return (
                 f"{t('Connecting from')} {first[0]}.{first[1]}  ·  "
                 f"{t('click the pin it joins, Esc cancels')}"
@@ -6654,21 +6705,25 @@ class MainWindow(QMainWindow):
             )
             laid, face = self.scene.drawing_as(kind)
             word = conductor_word(laid, self._guide_language())
+            # What is said about the face after the tool's name; kept when a tool's first
+            # arming says what it lays in place of its name.
+            far_note = ""
             if has_component_side_copper(self.bus.document.board):
                 # The banner names the face: on this board it is one of two, and it follows
                 # the view only until Draw on says otherwise.
                 where = t("on the component side") if face == "top" else t("on the solder side")
-                word = f"{word}  ·  {where}"
+                far_note = f"  ·  {where}"
                 if kind == "bare-wire" and self.scene.side == "top":
                     # The one tool that does not follow the view: bare copper never lies
                     # among the parts' standing leads.
                     only = t("a bare wire goes under the board only: an insulated wire goes over the parts")
-                    word = f"{word}  ·  {only}"
+                    far_note = f"{far_note}  ·  {only}"
                 elif face != self.scene.side:
                     # Draw on names the face the builder is not looking at, and nothing on
                     # the screen but this says so.
                     far = t("the copper goes on the far face: Ctrl+F turns the board over")
-                    word = f"{word}  ·  {far}"
+                    far_note = f"{far_note}  ·  {far}"
+            word = f"{word}{far_note}"
             # What the next click or Enter would do wrong takes the hint's place while it
             # holds: the preview turns red at the hole, and this says why.
             # What the next click or Enter would do wrong takes the hint's place while it
@@ -6680,6 +6735,9 @@ class MainWindow(QMainWindow):
                     f"{t('Drawing')} {word}  ·  {self._draw_progress}  ·  "
                     f"{t('Enter or right-click finishes, Esc cancels')}"
                 )
+            if self._tool_intro:
+                # The first time this session: what it lays, in place of its name.
+                return f"{self._tool_intro}{far_note}  ·  {how}"
             return f"{t('Drawing')} {word}  ·  {how}"
 
         if self.scene.cut_armed:
@@ -13410,10 +13468,21 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().clearMessage()
 
+    def _introduce(self, tool: str) -> None:
+        """What ``tool`` lays, for the banner, the first time it is armed this session;
+        nothing after that, or for a tool with nothing to say."""
+        intro = TOOL_INTRODUCTIONS.get(tool)
+        if tool and intro is not None and tool not in self._tools_introduced:
+            self._tools_introduced.add(tool)
+            self._tool_intro = intro()
+        else:
+            self._tool_intro = ""
+
     def _on_draw_armed(self, kind: str) -> None:
         """Keep the menu in step when the scene ends drawing by itself (Esc, or Enter on
         nothing drawn) -- and the status line: the hint arming put up outlived the tool,
         saying "Drawing solder trace" through the clicks and selections after it."""
+        self._introduce(kind)
         for name, action in self.act_draw.items():
             action.setChecked(name == kind)
         if not kind:
@@ -13473,6 +13542,8 @@ class MainWindow(QMainWindow):
             self.view.show_drag(text)
             return
         progress = self._draw_progress_text(check)
+        if progress or text:
+            self._tool_intro = ""
         if text != self._draw_problem or progress != self._draw_progress:
             self._draw_problem = text
             self._draw_progress = progress
@@ -14679,6 +14750,7 @@ class MainWindow(QMainWindow):
         self.scene.arm_connect(checked)
 
     def _on_connect_armed(self, on: bool) -> None:
+        self._introduce("connect" if on else "")
         self.act_connect.setChecked(on)
         self._refresh_mode_banner()
         if on:
@@ -14690,6 +14762,8 @@ class MainWindow(QMainWindow):
             self.statusBar().clearMessage()
 
     def _on_connect_progress(self, picked: list[Any]) -> None:
+        if picked:
+            self._tool_intro = ""
         self._refresh_mode_banner()
         if picked:
             self.statusBar().showMessage(

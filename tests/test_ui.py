@@ -6687,7 +6687,7 @@ def test_tools_that_are_one_idea_share_a_button_that_shows_the_one_picked() -> N
     window = _window_on(_load_dense())
     try:
         wires = window.wire_tools
-        assert wires.group_menu.actions() == [
+        assert list(wires.tools) == [
             window.act_draw["bare-wire"],
             window.act_draw["insulated-wire"],
             window.act_draw["top-jumper"],
@@ -6700,7 +6700,7 @@ def test_tools_that_are_one_idea_share_a_button_that_shows_the_one_picked() -> N
         window.on_stop_tool()
         assert window.act_select_tool.isChecked()
         assert window.act_draw["top-jumper"].shortcut().toString() == "J"
-        solder = window.solder_tools.group_menu.actions()
+        solder = list(window.solder_tools.tools)
         assert solder == [window.act_draw["solder-trace"], window.act_draw["solder-trace-wired"]]
     finally:
         _close(window)
@@ -14966,6 +14966,7 @@ def test_every_action_the_old_toolbars_had_has_a_place_on_screen() -> None:
                 on_screen.add(button.defaultAction())
                 if button.menu() is not None:
                     on_screen.update(button.menu().actions())
+                on_screen.update(getattr(button, "tools", ()))  # a group's list
         on_screen.update((window.act_board_panel, window.act_schematic, window.act_3d,
                           window.act_guide_panel))  # the views' tabs
         # Save is "Not saved" in the header, there when there is something to save.
@@ -15480,24 +15481,198 @@ def test_the_3d_views_controls_are_at_its_foot() -> None:
         _close(window)
 
 
-def test_a_group_button_says_it_holds_more(monkeypatch) -> None:
-    """The corner triangle is small: the tip says a press held down offers the rest, and
-    still names the tool the button arms."""
+def test_a_tool_on_the_rail_says_its_name_and_key_at_once_and_no_tooltip_after(monkeypatch) -> None:
+    """The rail is pictures, and four of them read as "a line between two dots": a tool was
+    named only by a tooltip a second later. The pointer on a button puts its name and key
+    beside it at once, and the tooltip is not shown as well -- the pointer, which has no
+    key of its own, gives Escape, the key that comes back to it."""
     from PySide6.QtCore import QEvent, QPoint
     from PySide6.QtGui import QHelpEvent
-
-    from perfboard_studio.ui import canvastools
-    from perfboard_studio.ui.i18n import t
+    from PySide6.QtWidgets import QApplication, QToolTip
 
     shown: list[str] = []
-    monkeypatch.setattr(
-        canvastools.QToolTip, "showText", lambda _at, text, *_rest: shown.append(text)
-    )
+    monkeypatch.setattr(QToolTip, "showText", lambda *args, **_kw: shown.append(str(args)))
     window = _window_on(_load_dense())
+    window.show()
     try:
-        button = window.wire_tools
-        button.event(QHelpEvent(QEvent.Type.ToolTip, QPoint(2, 2), QPoint(2, 2)))
-        assert shown == [button.defaultAction().toolTip() + t(" (hold for more)")]
+        tools = window.board_tools
+        pill = tools.name_pill
+        assert pill is not None and pill.isHidden()
+        for button in tools.buttons:
+            if not button.isVisibleTo(tools):
+                continue
+            QApplication.sendEvent(button, QEvent(QEvent.Type.Enter))
+            action = button.defaultAction()
+            assert not pill.isHidden(), action.text()
+            name = action.text().replace("&", "")
+            assert name in pill.text()
+            key = action.shortcut().toString() or "Esc"
+            assert key in pill.text(), pill.text()
+            # Beside the bar, level with the button.
+            assert pill.x() > tools.geometry().right()
+            middle = tools.y() + button.y() + button.height() // 2
+            assert pill.y() <= middle <= pill.y() + pill.height()
+            QApplication.sendEvent(
+                button, QHelpEvent(QEvent.Type.ToolTip, QPoint(2, 2), button.mapToGlobal(QPoint(2, 2)))
+            )
+            QApplication.sendEvent(button, QEvent(QEvent.Type.Leave))
+            assert pill.isHidden()
+        assert shown == []
+        # The wire group names the tool it would arm.
+        window.act_draw["insulated-wire"].trigger()
+        window.on_stop_tool()
+        QApplication.sendEvent(window.wire_tools, QEvent(QEvent.Type.Enter))
+        assert "Shift+W" in pill.text()
+    finally:
+        _close(window)
+
+
+def test_a_group_lists_its_tools_with_their_names_keys_and_what_they_lay() -> None:
+    """The chevron beside a group's picture opens it (the triangle in its corner was not
+    seen): each tool a row with its name, a line on what it lays and its key. A row arms
+    its tool and puts the list away; the armed tool is lit; a tool the board cannot take is
+    greyed, as a menu greys it."""
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+
+    from perfboard_studio.ui import canvastools
+    from perfboard_studio.ui.main import TOOL_NOTES
+
+    window = _window_on(_load_dense())
+    window.show()
+    try:
+        wires = window.wire_tools
+        assert wires.iconSize().width() > wires.iconSize().height()  # the chevron's room
+        at = QPointF(wires.width() - 3, wires.height() / 2)
+        wires.mousePressEvent(
+            QMouseEvent(
+                QEvent.Type.MouseButtonPress, at, wires.mapToGlobal(at.toPoint()),
+                Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+            )
+        )
+        flyout = wires.flyout
+        assert flyout is not None and flyout.isVisible()
+        # Still open once the events have run: a label shown before it had a parent was a
+        # window of its own, and it closed the list as it opened.
+        QApplication.processEvents()
+        assert flyout.isVisible()
+        assert not window.act_draw["bare-wire"].isChecked()  # the chevron arms nothing
+        rows = flyout.rows
+        assert [row.action_ for row in rows] == list(wires.tools)
+        for row in rows:
+            kind = next(k for k, a in window.act_draw.items() if a is row.action_)
+            assert row.name.text() == canvastools.tool_name(row.action_)
+            assert row.note.text() == TOOL_NOTES[kind]()
+            assert row.key.text() == row.action_.shortcut().toString()
+        # Beside the bar, not over it.
+        assert flyout.geometry().left() >= window.board_tools.mapToGlobal(
+            window.board_tools.rect().topRight()
+        ).x() - flyout.SHADOW
+        rows[1].click()
+        assert not flyout.isVisible()
+        assert window.act_draw["insulated-wire"].isChecked()
+        assert wires.defaultAction() is window.act_draw["insulated-wire"]
+        # One action on the button, so Qt draws no menu arrow of its own under the chevron.
+        assert wires.actions() == [window.act_draw["insulated-wire"]]
+        # Opened again: the armed one is lit, and picking it again keeps it armed.
+        wires.open_group()
+        assert [row.isChecked() for row in rows] == [False, True, False]
+        rows[1].click()
+        assert window.act_draw["insulated-wire"].isChecked()
+        window.on_stop_tool()
+        # A right-click opens it too; a tool the board cannot take is grey there.
+        window.act_draw["bare-wire"].setEnabled(False)
+        wires.open_group()
+        assert not rows[0].isEnabled() and rows[2].isEnabled()
+        flyout.hide()
+    finally:
+        _close(window)
+
+
+def test_the_conductor_tools_are_told_apart_by_their_pictures() -> None:
+    """Connect, Solder Trace, Bare Wire and Insulated Wire were all a line between two
+    pads at 22 px. Each picture is now its own shape, so no two of them are the same
+    image -- nor so nearly the same that only a few pixels tell them apart."""
+    from PySide6.QtGui import QImage
+
+    from perfboard_studio.ui.icons import SIZE, icon
+
+    names = ("connect", "solder-trace", "solder-trace-wired", "bare-wire", "insulated-wire",
+             "top-jumper")
+    images = {
+        name: icon(name).pixmap(SIZE * 2, SIZE * 2).toImage().convertToFormat(
+            QImage.Format.Format_ARGB32
+        )
+        for name in names
+    }
+
+    def apart(a: QImage, b: QImage) -> int:
+        """Pixels where the two pictures differ by more than a shade: in ink or colour."""
+        count = 0
+        for y in range(a.height()):
+            for x in range(a.width()):
+                one, two = a.pixelColor(x, y), b.pixelColor(x, y)
+                if (
+                    abs(one.alpha() - two.alpha()) > 96
+                    or (min(one.alpha(), two.alpha()) > 96
+                        and sum(abs(u - v) for u, v in zip(one.getRgb()[:3], two.getRgb()[:3], strict=True)) > 90)
+                ):
+                    count += 1
+        return count
+
+    def inked(image: QImage) -> int:
+        return sum(
+            1 for y in range(image.height()) for x in range(image.width())
+            if image.pixelColor(x, y).alpha() > 96
+        )
+
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            differ = apart(images[a], images[b])
+            # The reinforced trace is the trace with its wire showing: the one pair meant
+            # to look alike, and still a sixth of it apart.
+            assert differ > 0.15 * min(inked(images[a]), inked(images[b])), (a, b, differ)
+
+
+def test_a_tool_says_what_it_lays_the_first_time_it_is_armed() -> None:
+    """The picture and the list's line are not the whole difference between a wire and a
+    run of solder: the first time a tool is armed in a session, the banner says what it
+    lays, in place of its name. Once something is drawn, or the next time it is armed, the
+    banner is as it was. Connect says it lays no copper at all."""
+    from perfboard_studio.commands import create_empty_document
+    from perfboard_studio.model import DocumentMeta, HoleCoord
+    from perfboard_studio.ui import view2d
+    from perfboard_studio.ui.i18n import t
+    from perfboard_studio.ui.main import TOOL_INTRODUCTIONS
+
+    doc = create_empty_document(
+        DocumentMeta(name="t", created="2024-01-01T00:00:00.000Z", modified="2024-01-01T00:00:00.000Z")
+    )
+    window = _window_on(doc)
+    try:
+        intro = TOOL_INTRODUCTIONS["insulated-wire"]()
+        window.act_draw["insulated-wire"].trigger()
+        assert window.view.mode_banner.text().startswith(intro)
+        window.scene.draw_click(HoleCoord(1, 1))
+        window.scene.hover_at(view2d.hole_to_screen(HoleCoord(4, 1), doc.board, "top"))
+        assert intro not in window.view.mode_banner.text()
+        window.on_stop_tool()
+        window.act_draw["insulated-wire"].trigger()
+        assert intro not in window.view.mode_banner.text()
+        assert window.view.mode_banner.text().startswith(t("Drawing"))
+        # Another tool has its own first time.
+        window.act_draw["solder-trace"].trigger()
+        assert window.view.mode_banner.text().startswith(TOOL_INTRODUCTIONS["solder-trace"]())
+        window.on_stop_tool()
+
+        said = TOOL_INTRODUCTIONS["connect"]()
+        window.act_connect.trigger()
+        assert window.view.mode_banner.text().startswith(said)
+        window.on_stop_tool()
+        window.act_connect.trigger()
+        assert said not in window.view.mode_banner.text()
+        window.on_stop_tool()
     finally:
         _close(window)
 
