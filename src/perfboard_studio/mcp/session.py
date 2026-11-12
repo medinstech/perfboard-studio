@@ -112,6 +112,7 @@ from perfboard_studio.commands import (
     UpdateNetPayload,
     UpdatePartPayload,
     _Keep,
+    count_noun,
     create_document_id_generator,
     create_empty_document,
     create_standard_registry,
@@ -905,7 +906,7 @@ class BoardSession:
                     "block.place",
                     PlaceBlockPayload(
                         components=tuple(placements),
-                        label=f"Place {len(placements)} imported part(s)",
+                        label=f"Place {count_noun(len(placements), 'imported part')}",
                     ),
                 )
                 if not placed["ok"]:

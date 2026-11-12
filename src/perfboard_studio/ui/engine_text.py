@@ -118,6 +118,8 @@ TEMPLATES: tuple[str, ...] = (
     # -- the design ----------------------------------------------------------------------
     "Add {count} imported part",
     "Add {count} imported parts",
+    "Place {count} imported part",
+    "Place {count} imported parts",
     "Add {count} part to the schematic",
     "Add {count} parts to the schematic",
     "Add {ref} {value} to the schematic",

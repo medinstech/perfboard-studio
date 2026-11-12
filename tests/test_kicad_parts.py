@@ -307,8 +307,9 @@ def test_an_agent_imports_and_places_in_one_call(tmp_path: Path) -> None:
     assert result["missing_components"] == []
     q1 = next(c for c in session.document.components if c.ref == "Q1")
     assert q1.value == "BC547" and dict(q1.pin_names)["1"] == "C"
-    # One undo takes every placed part back.
-    session.undo()
+    # One undo takes every placed part back, and its label counts them in words.
+    placed = len(session.document.components)
+    assert session.undo()["undone"] == f"Place {placed} imported parts"
     assert session.document.components == ()
 
 

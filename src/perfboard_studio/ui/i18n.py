@@ -5531,6 +5531,8 @@ TURKISH: Mapping[str, str] = {
     "Auto-place (no change)": "Otomatik yerleşim (değişiklik yok)",
     "Add {count} imported part": "İçe aktarılan {count} parçayı ekle",
     "Add {count} imported parts": "İçe aktarılan {count} parçayı ekle",
+    "Place {count} imported part": "İçe aktarılan {count} parçayı yerleştir",
+    "Place {count} imported parts": "İçe aktarılan {count} parçayı yerleştir",
     "Add {count} part to the schematic": "Şemaya {count} parça ekle",
     "Add {count} parts to the schematic": "Şemaya {count} parça ekle",
     "Add {ref} {value} to the schematic": "Şemaya {ref} {value} ekle",
