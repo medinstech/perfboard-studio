@@ -3103,6 +3103,59 @@ TURKISH: Mapping[str, str] = {
         "karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan"
         " ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
+    "Adafruit ADXL345 accelerometer (on a header)": (
+        "Adafruit ADXL345 ivmeölçer (header üzerinde)"
+    ),
+    "3-axis accelerometer, on I2C or SPI. Its cable plugs into this 9-pin header: VIN "
+    "3V3 GND CS INT1 INT2 SDO SDA SCL from pin 1": (
+        "I2C veya SPI üzerinden 3 eksenli ivmeölçer. Kablosu bu 9 pinli header'a "
+        "takılır: 1. pinden VIN 3V3 GND CS INT1 INT2 SDO SDA SCL"
+    ),
+    "VIN feeds a regulator on the board and 3V3 is that regulator's output, not a "
+    "second input. SCL and SDA go through level-shifting transistors, so the bus may "
+    "run at VIN's level. CS is pulled high on the board, which leaves the chip on I2C: "
+    "pull it low only to use SPI. SDO is pulled low on the board, which makes the I2C "
+    "address 0x53; tie it to 3V3 for 0x1D. INT1 and INT2 are the chip's interrupt "
+    "outputs and can stay unwired. Other ADXL345 boards carry a different header, so "
+    "compare the names printed on yours with these. Match each lead to the name printed"
+    " beside the module's pins, not to its place: sellers' boards are not all wired in "
+    "the same order.": (
+        "VIN, kartın üzerindeki bir regülatörü besler ve 3V3 o regülatörün çıkışıdır, "
+        "ikinci bir giriş değildir. SCL ile SDA seviye çeviren transistörlerden geçer, "
+        "bu yüzden hat VIN seviyesinde çalışabilir. CS kartın üzerinde yüksek tutulur, "
+        "bu da çipi I2C'de bırakır: yalnızca SPI kullanmak için düşük çekin. SDO kartın"
+        " üzerinde düşük tutulur, bu da I2C adresini 0x53 yapar; 0x1D için SDO'yu 3V3'e"
+        " bağlayın. INT1 ile INT2 çipin kesme çıkışlarıdır ve boş kalabilir. Başka "
+        "ADXL345 kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları "
+        "bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin "
+        "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "Adafruit SHT31-D temperature and humidity sensor (on a header)": (
+        "Adafruit SHT31-D sıcaklık ve nem sensörü (header üzerinde)"
+    ),
+    "Temperature and humidity sensor, on I2C. Its cable plugs into this 7-pin header: "
+    "VIN GND SCL SDA ADR RST ALR from pin 1": (
+        "I2C üzerinden sıcaklık ve nem sensörü. Kablosu bu 7 pinli header'a takılır: 1."
+        " pinden VIN GND SCL SDA ADR RST ALR"
+    ),
+    "VIN and the logic take 3.3 to 5 V by the board's silkscreen, and the board has no "
+    "regulator. Resistors on the board pull SCL, SDA and RST up to the sensor's supply,"
+    " and ADR is pulled low, which makes the I2C address 0x44; tie ADR to VIN for 0x45."
+    " RST is the sensor's reset line (pull it low to reset) and ALR its alert output: "
+    "both can stay unwired. Other SHT31 boards carry a different header, so compare the"
+    " names printed on yours with these. Match each lead to the name printed beside the"
+    " module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "VIN ile mantık seviyesi, kartın baskısına göre 3,3 ile 5 V alır ve kartta "
+        "regülatör yoktur. Kartın üzerindeki dirençler SCL, SDA ve RST'yi sensörün "
+        "beslemesine çeker, ADR ise düşük tutulur; bu da I2C adresini 0x44 yapar, 0x45 "
+        "için ADR'yi VIN'e bağlayın. RST sensörün sıfırlama hattıdır (sıfırlamak için "
+        "düşük çekin), ALR de uyarı çıkışıdır: ikisi de boş kalabilir. Başka SHT31 "
+        "kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları bunlarla "
+        "karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan"
+        " ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
     "HC-05 Bluetooth module, ZS-040 (on a header)": (
         "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
     ),

@@ -208,6 +208,8 @@ SOLD_AS = {
     "adafruit-bh1750": "BH1750",
     "adafruit-aht20": "AHT20",
     "adafruit-vl53l0x": "VL53L0X",
+    "adafruit-adxl345": "ADXL345",
+    "adafruit-sht31": "SHT31",
     "st7735-tft-18": "ST7735 TFT",
     "nokia-5110": "Nokia 5110",
     "adafruit-rfm9x-lora": "RFM9x",

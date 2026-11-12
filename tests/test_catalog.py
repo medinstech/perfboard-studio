@@ -1088,6 +1088,27 @@ def test_adafruits_sensor_breakouts_are_headers_in_the_silkscreens_order() -> No
         }, part_id
 
 
+def test_adafruits_motion_and_humidity_breakouts_are_headers_in_the_silkscreens_order() -> None:
+    expected = {
+        "adafruit-adxl345": (
+            ["VIN", "3V3", "GND", "CS", "INT1", "INT2", "SDO", "SDA", "SCL"],
+            "Adafruit_ADXL345_PCB",
+        ),
+        "adafruit-sht31": (
+            ["VIN", "GND", "SCL", "SDA", "ADR", "RST", "ALR"],
+            "Adafruit-SHT31-Sensor-Breakout-PCB",
+        ),
+    }
+    for part_id, (names, repo) in expected.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        assert [name for _, name in part.pin_names] == names, part_id
+        assert repo in part.source, part_id
+        assert part.value is not None and part_id in {
+            found.id for found in search_catalog(part.value)
+        }, part_id
+
+
 def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> None:
     expected = {
         "st7735-tft-18": (

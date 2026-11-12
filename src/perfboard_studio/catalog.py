@@ -1927,6 +1927,53 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("VL53L0X", "ToF", "time of flight", "laser distance", "distance sensor",
                          "mesafe sensörü")),
+    CatalogPart("adafruit-adxl345", "Adafruit ADXL345 accelerometer (on a header)", "sensor",
+                "hdr-1x9",
+                "3-axis accelerometer, on I2C or SPI. Its cable plugs into this 9-pin header: "
+                "VIN 3V3 GND CS INT1 INT2 SDO SDA SCL from pin 1",
+                _legs("VIN", "3V3", "GND", "CS", "INT1", "INT2", "SDO", "SDA", "SCL"),
+                value="ADXL345", ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its ADXL345 breakout "
+                    "(github.com/adafruit/Adafruit_ADXL345_PCB), the 9-pin header JP1: pad 1 at "
+                    "VIN and every name read off its silkscreen, each pad's net checked against "
+                    "the board's nets"
+                ),
+                check=(
+                    "VIN feeds a regulator on the board and 3V3 is that regulator's output, "
+                    "not a second input. SCL and SDA go through level-shifting transistors, so "
+                    "the bus may run at VIN's level. CS is pulled high on the board, which "
+                    "leaves the chip on I2C: pull it low only to use SPI. SDO is pulled low on "
+                    "the board, which makes the I2C address 0x53; tie it to 3V3 for 0x1D. "
+                    "INT1 and INT2 are the chip's interrupt outputs and can stay unwired. "
+                    "Other ADXL345 boards carry a different header, so compare the names "
+                    "printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("ADXL345", "GY-291", "accelerometer", "ivmeölçer", "ivme sensörü")),
+    CatalogPart("adafruit-sht31", "Adafruit SHT31-D temperature and humidity sensor (on a header)",
+                "sensor", "hdr-1x7",
+                "Temperature and humidity sensor, on I2C. Its cable plugs into this 7-pin "
+                "header: VIN GND SCL SDA ADR RST ALR from pin 1",
+                _legs("VIN", "GND", "SCL", "SDA", "ADR", "RST", "ALR"), value="SHT31",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its SHT31-D breakout "
+                    "(github.com/adafruit/Adafruit-SHT31-Sensor-Breakout-PCB), the 7-pin header JP2: "
+                    "pad 1 at VIN and every name read off its silkscreen, each pad's net "
+                    "checked against the board's nets. The silkscreen reads Vin and Logic "
+                    "3.3-5V"
+                ),
+                check=(
+                    "VIN and the logic take 3.3 to 5 V by the board's silkscreen, and the board "
+                    "has no regulator. Resistors on the board pull SCL, SDA and RST up to the "
+                    "sensor's supply, and ADR is pulled low, which makes the I2C address 0x44; "
+                    "tie ADR to VIN for 0x45. RST is the sensor's reset line (pull it low to "
+                    "reset) and ALR its alert output: both can stay unwired. Other SHT31 "
+                    "boards carry a different header, so compare the names printed on yours "
+                    "with these. " + _CABLED_CHECK
+                ),
+                aliases=("SHT31", "SHT31-D", "SHT3x", "temperature sensor", "humidity sensor",
+                         "sıcaklık nem sensörü", "nem sensörü")),
     CatalogPart("hc-05","HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
                 "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
                 "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",
