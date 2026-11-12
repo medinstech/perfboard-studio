@@ -13,6 +13,7 @@ Pure and deterministic: no I/O, no clock, no randomness.
 
 from __future__ import annotations
 
+import functools
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -414,8 +415,7 @@ def _stack(
     for index, wire in enumerate(wires):
         ends = {hole_key(wire.path[0]), hole_key(wire.path[-1])}
         for start, stop in zip(wire.path, wire.path[1:], strict=False):
-            for hole in holes_under_line(start, stop):
-                key = hole_key(hole)
+            for key in _keys_under_line(start, stop):
                 if key in ends:
                     continue
                 if (key, wire.side) in stubs:
@@ -470,15 +470,13 @@ def _stack(
             [conductor.layer_z, 1 if over_stub[index] else 0]
             + [layers[wires[o].id] + 1 for o in above[index] if wires[o].id in layers]
         )
+        box = _box(conductor.path)
         taken = {
             level
             for other, level in placed
             if other.side == conductor.side
-            and _paths_may_meet(conductor.path, other.path)
-            and (
-                paths_cross(conductor.path, other.path) is not None
-                or paths_overlap(conductor.path, other.path)
-            )
+            and _boxes_meet(box, _box(other.path))
+            and _paths_meet(conductor.path, other.path)
         }
         level = floor
         while level in taken:
@@ -489,22 +487,37 @@ def _stack(
     return layers, tuple(loops)
 
 
-def _paths_may_meet(a: tuple[HoleCoord, ...], b: tuple[HoleCoord, ...]) -> bool:
+@functools.lru_cache(maxsize=1 << 16)
+def _keys_under_line(start: HoleCoord, stop: HoleCoord) -> tuple[str, ...]:
+    """``holes_under_line`` as hole keys, remembered: a segment's holes depend on its two
+    ends alone, and auto-wire stacks the board once per connection it lays
+    (``router._end_levels``), from the same few hundred segments each time."""
+    return tuple(hole_key(hole) for hole in holes_under_line(start, stop))
+
+
+@functools.lru_cache(maxsize=1 << 14)
+def _box(path: tuple[HoleCoord, ...]) -> tuple[int, int, int, int]:
+    """A path's bounding box (min col, max col, min row, max row), remembered for the same
+    reason as :func:`_keys_under_line`."""
+    cols = [h.col for h in path]
+    rows = [h.row for h in path]
+    return min(cols), max(cols), min(rows), max(rows)
+
+
+@functools.lru_cache(maxsize=1 << 16)
+def _paths_meet(a: tuple[HoleCoord, ...], b: tuple[HoleCoord, ...]) -> bool:
+    """Whether two wires on one face cross or share a stretch of line, remembered: the
+    stacker asks it of the same pairs once per connection auto-wire lays."""
+    return paths_cross(a, b) is not None or paths_overlap(a, b)
+
+
+def _boxes_meet(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
     """Cheap bounding-box reject before the O(segments x segments) crossing test.
 
     Most pairs on a real board are nowhere near each other, and ``paths_cross`` is the
     expensive half of a function that runs on every rebuild of the 3D scene.
     """
-    a_cols = [h.col for h in a]
-    a_rows = [h.row for h in a]
-    b_cols = [h.col for h in b]
-    b_rows = [h.row for h in b]
-    return (
-        min(a_cols) <= max(b_cols)
-        and max(a_cols) >= min(b_cols)
-        and min(a_rows) <= max(b_rows)
-        and max(a_rows) >= min(b_rows)
-    )
+    return a[0] <= b[1] and a[1] >= b[0] and a[2] <= b[3] and a[3] >= b[2]
 
 
 def conductors_touching(

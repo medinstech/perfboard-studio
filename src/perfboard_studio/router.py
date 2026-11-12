@@ -111,7 +111,7 @@ from .model import (
     has_component_side_copper,
     is_crossing_blocked,
 )
-from .occupancy import OccupancyIndex, build_occupancy
+from .occupancy import OccupancyIndex, build_occupancy, stacking_layers
 from .wiregauge import wire_gauge_for_current
 
 # ---------------------------------------------------------------------------
@@ -181,6 +181,18 @@ class RouterCosts:
     #: and golden board auto-wired: wires lying across a pin 110 -> 44, across another
     #: wire's end 64 -> 29. Unused when straight.
     wire_over_joint: float = 3
+    #: Per level of the wire whose end a wire laid along the grid lies across, on top of
+    #: ``wire_over_joint``. The wire lying across goes in above it
+    #: (``occupancy.stacking_layers``), so lying across a level-5 wire's end makes a level-6
+    #: wire -- and ``wire_over_joint`` priced it as lying across a lead. On atmega328-relay
+    #: that was the whole tower: PB2 run straight down J4's pin column over the ends of
+    #: PB3, PB4 and PB5, three wires already crossing one another, and RELAY_NC across
+    #: PB2's end. At one ``wire_over_joint`` per level the stack went 6 -> 4, wires across a
+    #: pin 22 -> 13 and across an end 14 -> 6, for 9.7 % more wire and 9 more bends; at a
+    #: third of that the stack did not move, and at five thirds it went to 5. An insulated
+    #: wire stands at level 1 at the least, so its end costs one level more than a bare
+    #: wire's, which is right: one more layer goes over it. Unused when straight.
+    wire_over_stack: float = 3
     #: Per hole a wire laid along the grid passes over where a wire ENDS that has to be
     #: above this one -- because it, or a wire that has to be above it, lies across one of
     #: this wire's own ends. Each would then have to be above the other: a loop
@@ -691,7 +703,7 @@ def _candidates(
         if insulated is not None:
             candidates.append(insulated)
         if two_faces and options.wire_path == "grid":
-            over = _component_side_wire_candidate(doc, ctx, from_, to)
+            over = _component_side_wire_candidate(doc, lookup, ctx, from_, to)
             if over is not None:
                 candidates.append(over)
         if options.allow_top_jumper:
@@ -962,6 +974,9 @@ def _route_context(
             _joint_holes(doc, occupancy) if options.wire_path == "grid" else frozenset()
         ),
         loop_holes=_loop_holes(doc, from_, to) if options.wire_path == "grid" else frozenset(),
+        end_levels=(
+            _end_levels(doc, lookup) if options.wire_path == "grid" and options.costs.wire_over_stack else {}
+        ),
         preferred_side=_net_preferred_side(doc, request.net_id) if two_faces else None,
         swept_any_face=_trace_blocked_holes(doc, any_face=True) if two_faces else frozenset(),
     )
@@ -1059,6 +1074,9 @@ class _RouteContext:
     #: For a wire laid along the grid: every hole where something is soldered on the solder
     #: side, a pin or a conductor's end -- see ``RouterCosts.wire_over_joint``.
     joint_holes: frozenset[tuple[int, int]] = frozenset()
+    #: For a wire laid along the grid: the tallest stacking level of the wires that end in
+    #: each hole on its face -- see ``RouterCosts.wire_over_stack``.
+    end_levels: dict[tuple[int, int], int] = field(default_factory=dict)
     #: For a wire laid along the grid: where the wires end that have to be above this one
     #: -- see ``RouterCosts.wire_into_loop`` and :func:`_loop_holes`.
     loop_holes: frozenset[tuple[int, int]] = frozenset()
@@ -2129,6 +2147,7 @@ def _off_face(ctx: _RouteContext, candidate: RouteCandidate) -> RouteCandidate:
 
 def _component_side_wire_candidate(
     doc: PerfDocument,
+    lookup: FootprintLookup,
     ctx: _RouteContext,
     from_: HoleCoord,
     to: HoleCoord,
@@ -2154,6 +2173,7 @@ def _component_side_wire_candidate(
         covered_steps=_covered_steps(doc, "top"),
         joint_holes=_joint_holes(doc, occupancy, "top"),
         loop_holes=_loop_holes(doc, from_, to, "top"),
+        end_levels=_end_levels(doc, lookup, "top") if ctx.opts.costs.wire_over_stack else {},
         traversable={},
         blocked_edges={},
         risky_holes={},
@@ -2429,6 +2449,8 @@ def _find_grid_wire_path(
     along = ctx.opts.costs.wire_along_copper
     over_joint = ctx.opts.costs.wire_over_joint
     into_loop = ctx.opts.costs.wire_into_loop
+    over_stack = ctx.opts.costs.wire_over_stack
+    end_levels = ctx.end_levels
     start = _key(from_)
     goal = _key(to)
 
@@ -2477,7 +2499,7 @@ def _find_grid_wire_path(
                 if nxt in ctx.covered_holes:
                     cost += over
                 if nxt in ctx.joint_holes:
-                    cost += over_joint
+                    cost += over_joint + over_stack * end_levels.get(nxt, 0)
                 if nxt in ctx.loop_holes:
                     cost += into_loop
             if (min((col, row), nxt), max((col, row), nxt)) in ctx.covered_steps:
@@ -2522,7 +2544,7 @@ def _grid_path_cost(
                 if nxt in ctx.covered_holes:
                     total += costs.wire_over_copper
                 if nxt in ctx.joint_holes:
-                    total += costs.wire_over_joint
+                    total += costs.wire_over_joint + costs.wire_over_stack * ctx.end_levels.get(nxt, 0)
                 if nxt in ctx.loop_holes:
                     total += costs.wire_into_loop
             if (min(here, nxt), max(here, nxt)) in ctx.covered_steps:
@@ -2615,6 +2637,24 @@ def _joint_holes(
             keys.add(_key(conductor.path[0]))
             keys.add(_key(conductor.path[-1]))
     return frozenset(keys)
+
+
+def _end_levels(
+    doc: PerfDocument, lookup: FootprintLookup, face: BoardSide = "bottom"
+) -> dict[tuple[int, int], int]:
+    """How tall the wires stand that end in each hole on ``face`` -- see
+    ``RouterCosts.wire_over_stack``."""
+    levels = stacking_layers(doc, lookup=lookup)
+    found: dict[tuple[int, int], int] = {}
+    for conductor in doc.conductors:
+        if conductor.side != face or len(conductor.path) < 2 or contacts_every_path_hole(conductor):
+            continue
+        level = levels.get(conductor.id, 0)
+        for hole in (conductor.path[0], conductor.path[-1]):
+            key = _key(hole)
+            if level > found.get(key, 0):
+                found[key] = level
+    return found
 
 
 def _loop_holes(

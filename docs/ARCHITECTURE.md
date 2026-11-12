@@ -2968,6 +2968,24 @@ window would have needed a third; a summary saying "44 places a wire lies over a
 selects 43 wires is worse than none. `err`, `warn` and `drawn` stay in the tool: DRC is its
 own answer, and `drawn` measures the 3D view's tubes.
 
+**Lying across a wire's end costs more the higher that wire stands**
+(`RouterCosts.wire_over_stack`). `wire_over_joint` priced every joint lain across alike, a
+lead's stub or the end of a wire already five levels up; but the wire lying across goes in
+above whatever ends there, so the second makes a sixth level. That was atmega328-relay's
+whole tower: J4's pins down column I and U1's along row 4 are a fan-out in reverse order,
+so PB3, PB4 and PB5 cross one another (levels 2 to 4, which the plane forces); PB2 ran
+straight down J4's own pin column across their three ends (5), and RELAY_NC across PB2's
+(6). Every detour there runs along other wires, so the flat price kept the straight run.
+Now each level of the wire ending in the hole adds one `wire_over_joint`, read off
+`occupancy.stacking_layers` once per connection (`router._end_levels`). Over the sweep the
+tower went 6 -> 4, wires across a pin 35 -> 23 and across an end 17 -> 6 on every board
+together, for atmega's 9.7 % more wire and 9 more bends. A third of the price did not move
+the tower; five thirds made it 5. Stacking the board once per connection cost atmega's
+sweep 45 % until the stacker remembered what depends only on a path -- a segment's holes,
+a path's box, whether two paths meet -- after which the sweep was no slower than before.
+Which way the trade goes is the judgement this section leaves to the commit: a wire six
+deep is soldered in a fixed order nobody can rework, and 12 cm of wire is cut once.
+
 **A wire is laid against the plan, then against the finished plan.** Routing is in order,
 and a wire laid early never saw the wires after it; the later ones paid for every crossing
 from their side. `autoroute._relay_wires` lays each grid wire once more with all the others

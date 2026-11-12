@@ -151,6 +151,13 @@ closed without a bump.
 
 ### Changed
 
+- **Auto-wire no longer builds a tower of wires.** Lying across another wire's end puts the
+  new wire above it, so the router now prices that by how high the wire underneath already
+  stands. On atmega328-relay the tallest stack goes from six wires to four, wires lying
+  across a pin from 22 to 13 and across another wire's end from 14 to 6, for 9.7 % more
+  wire and 9 more bends; the shield and nano-relay lose their last wire across an end. Six
+  wires deep had to be soldered in one fixed order and could not be reworked.
+
 - **Trying every wiring style says which one it is wiring, and Cancel stops it.** The
   progress label names the style ("Wiring in “Balanced” (1 of 4)…"); Cancel stops
   between styles and keeps the best of those already wired, and the status line says how
