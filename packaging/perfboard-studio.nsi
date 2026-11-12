@@ -50,6 +50,21 @@
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
 
+; The two FileFunc calls .onInit makes. Inserted here rather than relied on, because a
+; function that is only called through ${...} in one place is easy to lose in a cleanup.
+!insertmacro GetParameters
+!insertmacro GetOptions
+
+; The process id the application passes as /UPDATE=<pid> when it starts this installer
+; itself (Install and Restart). Empty on every other run: a download opened by hand, winget.
+Var UpdatePid
+
+; WaitForApplication's own, so that it leaves every register as the caller had it.
+Var WaitDir
+Var WaitHandle
+Var WaitTries
+Var WaitProbe
+
 ; ----------------------------------------------------------------- system --
 Name "${APP_NAME} ${APP_VERSION}"
 OutFile "${ROOT}\releases\${SETUP_NAME}"
@@ -152,6 +167,14 @@ Function .onInit
   ; in this file talking about one set of keys.
   SetRegView 64
 
+  ; /UPDATE=<pid> is the application saying "I am closing, replace me and start the new
+  ; one". It is read here, ahead of the language dialog, and it changes nothing else:
+  ; with no such switch this installer behaves exactly as before, which is what winget
+  ; relies on.
+  StrCpy $UpdatePid ""
+  ${GetParameters} $R0
+  ${GetOptions} $R0 "/UPDATE=" $UpdatePid
+
   ; Pick the installer's language from the machine rather than asking. Somebody who set
   ; their Windows to Turkish has already answered this question.
   !insertmacro MUI_LANGDLL_DISPLAY
@@ -186,6 +209,73 @@ Function AssertExeClosed
       ${Else}
         FileClose $R1
       ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+; Called with the install folder on the stack, only when the application started this
+; installer. It waits for the process that did, then for the executable to be free, so
+; that AssertExeClosed -- whose silent answer is Cancel -- never races a window that is
+; still tearing down.
+;
+; The process is waited on by its id, but the file lock is what is trusted: OpenProcess can
+; fail (the id is already gone, or this installer was elevated under another account), and
+; a process that has exited can still hold its image open for a moment. Both are covered by
+; the second loop, which gives up after about half a minute and leaves the decision to
+; AssertExeClosed, as before.
+Function WaitForApplication
+  ; Its own variables, and no register: the caller keeps $R2 (the folder it is about to
+  ; RMDir) and $R0/$R1 across this call, and a helper that borrowed them once turned
+  ; "RMDir /r $R2" into a removal of a relative path named after a loop counter.
+  Pop $WaitDir
+  ${If} $UpdatePid == ""
+    Return
+  ${EndIf}
+
+  ; SYNCHRONIZE (0x00100000) is all that waiting needs.
+  System::Call 'kernel32::OpenProcess(i 0x00100000, i 0, i $UpdatePid) p .s'
+  Pop $WaitHandle
+  ${If} $WaitHandle <> 0
+    System::Call 'kernel32::WaitForSingleObject(p $WaitHandle, i 60000)'
+    System::Call 'kernel32::CloseHandle(p $WaitHandle)'
+  ${EndIf}
+
+  StrCpy $WaitTries 0
+  ${While} $WaitTries < 60
+    ${IfNot} ${FileExists} "$WaitDir\${EXE_NAME}"
+      ${Break}
+    ${EndIf}
+    ClearErrors
+    FileOpen $WaitProbe "$WaitDir\${EXE_NAME}" a
+    ${IfNot} ${Errors}
+      FileClose $WaitProbe
+      ${Break}
+    ${EndIf}
+    Sleep 500
+    IntOp $WaitTries $WaitTries + 1
+  ${EndWhile}
+FunctionEnd
+
+; The new version opens by itself, and NOT elevated. This installer is an administrator's
+; process; anything it starts inherits that, and an editor that saves its documents with
+; administrator rights writes files the user cannot then change. Explorer is the user's
+; own process, so asking it to open the executable starts the application the way a
+; double-click would. Only after a silent update the application asked for: an interactive
+; install has the finish page's "Run" box, and winget's has no one to run it for.
+Function .onInstSuccess
+  ${If} $UpdatePid != ""
+  ${AndIf} ${Silent}
+    Exec '"$WINDIR\explorer.exe" "$INSTDIR\${EXE_NAME}"'
+  ${EndIf}
+FunctionEnd
+
+; If the install stopped before the old copy was removed, the application the person was
+; using is still there and they asked for it to stay open: give it back. After the removal
+; there is nothing to start and nothing is said, as for any failed install.
+Function .onInstFailed
+  ${If} $UpdatePid != ""
+  ${AndIf} ${Silent}
+  ${AndIf} ${FileExists} "$INSTDIR\${EXE_NAME}"
+    Exec '"$WINDIR\explorer.exe" "$INSTDIR\${EXE_NAME}"'
   ${EndIf}
 FunctionEnd
 
@@ -237,6 +327,8 @@ Section "$(S_SecMain)" SecMain
   ${AndIf} ${FileExists} "$R2\${EXE_NAME}"     ; never RMDir a path from a broken key
     DetailPrint "$(S_RemovingOld)"
     Push "$R2"
+    Call WaitForApplication
+    Push "$R2"
     Call AssertExeClosed
     RMDir /r "$R2"
     ; Both contexts, for the same reason: 0.4.0's shortcuts went into the profile of
@@ -251,6 +343,8 @@ Section "$(S_SecMain)" SecMain
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
   ${EndIf}
 
+  Push "$INSTDIR"
+  Call WaitForApplication
   Push "$INSTDIR"
   Call AssertExeClosed
 
