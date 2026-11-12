@@ -10097,6 +10097,101 @@ def test_a_drawn_wire_can_be_rubbed_out_without_disconnecting_anything() -> None
     _close(window)
 
 
+def _click_sheet(window, point) -> None:
+    """A left click on the sheet at a point in sheet millimetres, through the viewport."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+
+    view = window.schematic_view
+    at = view.mapFromScene(QPointF(point.x, point.y))
+    QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, at)
+
+
+def _open_point_on(view, path):
+    """The middle of the first segment of a wire that no symbol's box covers, so a click
+    there is a click on the wire."""
+    from perfboard_studio.model import Point2
+
+    for start, end in __import__("itertools").pairwise(path):
+        at = Point2(x=(start.x + end.x) / 2, y=(start.y + end.y) / 2)
+        covered = any(
+            s.at.x <= at.x <= s.at.x + s.width and s.at.y <= at.y <= s.at.y + s.height
+            for s in view.item.drawing.symbols
+        )
+        if not covered:
+            return at
+    raise AssertionError("every segment of the wire is under a symbol")
+
+
+def _press_delete(window) -> None:
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    QTest.keyClick(window.schematic_view, Qt.Key.Key_Delete)
+
+
+def test_a_drawn_wire_is_selected_by_a_click_and_rubbed_out_by_delete() -> None:
+    """A click on a wire used to select its NET and nothing else, so no wire could be
+    deleted. Now it is the wire that is selected -- the net is still lit -- and Delete
+    takes the wire off and, a two-pin net having no other wire, the net with it."""
+    window = _blank_window()
+    _add(window, "R1", "r-axial-3")
+    _add(window, "R2", "r-axial-3")
+    window._on_sheet_wire_drawn("R1", "2", "R2", "1", [(0.0, 0.0), (10.16, 0.0)])
+    window._refresh_schematic_panel()
+    view = window.schematic_view
+    nets_before = window.bus.document.nets
+    (ends, path) = view.wire_runs()[0]
+    middle = _open_point_on(view, path)
+
+    _click_sheet(window, middle)
+    assert view.selected_wire == ends
+    assert view.item.selected_wire_path == path
+
+    _press_delete(window)
+    assert window.bus.document.sheet_wires == ()
+    assert window.bus.document.nets == ()
+    window.bus.undo()
+    assert len(window.bus.document.sheet_wires) == 1
+    assert window.bus.document.nets == nets_before
+    _close(window)
+
+
+@pytest.mark.parametrize("name", ["atmega328-relay", "nano-relay", "ne555-astable"])
+def test_a_wire_on_an_example_sheet_nobody_has_frozen_can_be_selected_and_deleted(name) -> None:
+    """The derived sheet draws wires that are not stored. Clicking one selects it all the
+    same, and Delete freezes the sheet (its own undo step, as drawing a wire does) and
+    then rubs the line out; the circuit is untouched."""
+    import pathlib
+
+    from perfboard_studio import persist
+
+    golden = pathlib.Path(__file__).resolve().parent.parent / "examples" / f"{name}.perf"
+    document = persist.deserialize_document(golden.read_text(encoding="utf-8")).document
+    window = _window_on(document)
+    window.show_schematic()
+    window._refresh_schematic_panel()
+    view = window.schematic_view
+    assert window.bus.document.sheet == ()
+    assert view.unfrozen_wires
+    nets_before = window.bus.document.nets
+    ends, path = view.wire_runs()[0]
+    middle = _open_point_on(view, path)
+
+    _click_sheet(window, middle)
+    assert view.selected_wire == ends
+
+    _press_delete(window)
+    assert window.bus.document.sheet  # frozen
+    assert not any((w.a, w.b) == ends for w in window.bus.document.sheet_wires)
+    # The pin only that wire joined has left its net; every other connection is as it was.
+    assert len(window.bus.document.nets) <= len(nets_before)
+    assert sum(len(n.nodes) for n in window.bus.document.nets) < sum(
+        len(n.nodes) for n in nets_before
+    )
+    _close(window)
+
+
 def test_a_click_on_bare_sheet_is_offered_no_wire_to_rub_out() -> None:
     from perfboard_studio.model import Point2
 

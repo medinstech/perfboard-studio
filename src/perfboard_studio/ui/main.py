@@ -184,6 +184,7 @@ from perfboard_studio.commands import (
     ApplyBoardPresetPayload,
     AutoSymbolsPayload,
     ConnectPinsPayload,
+    CutSheetWiresPayload,
     DeleteBoardNotesPayload,
     DeleteComponentPayload,
     DeleteComponentsPayload,
@@ -431,7 +432,7 @@ from .view2d import (
     picture_beside_the_pointer,
     print_scene,
 )
-from .viewsch import SchematicView, SheetTool
+from .viewsch import WIRE_DELETE, SchematicView, SheetTool
 from .wiringreview import WiringNote, vias_said, wiring_notes, wiring_summary
 from .workflow import (
     STEP_ORDER,
@@ -6892,6 +6893,7 @@ class MainWindow(QMainWindow):
         self.schematic_view.labelRequested.connect(self.on_sheet_label)
         self.schematic_view.noteDrawn.connect(self.on_sheet_note_drawn)
         self.schematic_view.deleteRequested.connect(self.on_sheet_delete)
+        self.schematic_view.wireDeleteRequested.connect(self._on_sheet_wires_delete)
         self.schematic_view.turnRequested.connect(self.on_schematic_rotate)
         self.schematic_view.footprintDropped.connect(self._on_sheet_footprint_dropped)
         self.schematic_view.contextMenuRequested.connect(self._on_sheet_context_menu)
@@ -7137,6 +7139,13 @@ class MainWindow(QMainWindow):
         # The circuit's findings ringed on the pins they are about: the sheet is where the
         # circuit is drawn, so it is where an unpowered VCC is looked for.
         self.schematic_view.set_findings(self._last_erc)
+        # On a sheet still being arranged, the wires it would keep if it were frozen now,
+        # so a wire there is selected like any other (see ``SchematicView.unfrozen_wires``).
+        self.schematic_view.set_unfrozen_wires(
+            ()
+            if self.bus.system_document.sheet
+            else wires_as_drawn(drawing, self.bus.system_document)
+        )
         self.schematic_view.set_drawing(drawing)
         self._sync_schematic_highlight()
         self._consider_arrange_hint(drawing)
@@ -9776,7 +9785,7 @@ class MainWindow(QMainWindow):
         drawn = self._drawn_wire_at(where)
         if drawn is None:
             return
-        action = menu.addAction(t("&Rub Out This Wire"))
+        action = menu.addAction(t("Remove &Line Only"))
         action.setToolTip(
             t(
                 "Take the line off the sheet. The pins stay connected — the net says so by "
@@ -9787,6 +9796,55 @@ class MainWindow(QMainWindow):
             lambda _checked=False, wire=drawn: self._rub_out_wire(wire)
         )
         menu.addSeparator()
+
+    def _on_sheet_wires_delete(self, ends: object) -> None:
+        """Delete was pressed with a wire selected: ``viewsch.WIRE_DELETE`` says what that
+        means. Rubbing out is the one meaning built; a sheet still being arranged is frozen
+        first, as drawing a wire freezes it, and that is its own undo step for the same
+        reason (``_on_sheet_wire_drawn``)."""
+        if not isinstance(ends, list) or not ends:
+            return
+        wires = tuple(
+            SheetWire(
+                a=NetNode(component_ref=str(ar), pin=str(ap)),
+                b=NetNode(component_ref=str(br), pin=str(bp)),
+                path=(),
+            )
+            for ar, ap, br, bp in ends
+        )
+        if not self.bus.system_document.sheet:
+            self._dispatch_sheet_layout({}, t("Keep the symbols where they are"))
+        if WIRE_DELETE == "rub-out":
+            result = self.bus.dispatch(
+                "sheet.wire.delete", DeleteSheetWiresPayload(wires=wires)
+            )
+            if not result.ok:
+                self.statusBar().showMessage(refused(result), 8000)
+                return
+            self.statusBar().showMessage(
+                t("Wire rubbed out. The pins stay connected, by name; Ctrl+Z brings it back."),
+                8000,
+            )
+            return
+        before = {net.id: net for net in self.bus.system_document.nets}
+        result = self.bus.dispatch("sheet.wire.cut", CutSheetWiresPayload(wires=wires))
+        if not result.ok:
+            self.statusBar().showMessage(refused(result), 8000)
+            return
+        after = {
+            net.id: {(n.component_ref, n.pin) for n in net.nodes}
+            for net in self.bus.system_document.nets
+        }
+        left = [
+            t("{pin} left {net}").format(pin=f"{node.component_ref}.{node.pin}", net=net.name)
+            for net in before.values()
+            for node in net.nodes
+            if (node.component_ref, node.pin) not in after.get(net.id, set())
+        ]
+        said = ", ".join(left) if left else t("The pins stay joined by other wires")
+        self.statusBar().showMessage(
+            t("{said}. Ctrl+Z brings the wire back.").format(said=said), 8000
+        )
 
     def _drawn_wire_at(self, where: Point2) -> SheetWire | None:
         """Which hand-drawn wire a point on the sheet is nearest, within picking distance.

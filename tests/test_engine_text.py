@@ -32,6 +32,7 @@ from perfboard_studio.commands import (
     ApplyBoardPresetPayload,
     AutoSymbolsPayload,
     ConnectPinsPayload,
+    CutSheetWiresPayload,
     DeleteBoardNotesPayload,
     DeleteConductorPayload,
     DeleteConductorsPayload,
@@ -283,6 +284,8 @@ def _session() -> list[str]:
     )
     run("sheet.wire", DrawSheetWirePayload(wire=wire))
     run("sheet.wire.delete", DeleteSheetWiresPayload(wires=bus.document.sheet_wires))
+    run("sheet.wire", DrawSheetWirePayload(wire=wire))
+    run("sheet.wire.cut", CutSheetWiresPayload(wires=bus.document.sheet_wires))
     run("symbol.auto", AutoSymbolsPayload(ids=(part("R9").id,)))
     run("symbol.auto", AutoSymbolsPayload())
     run(

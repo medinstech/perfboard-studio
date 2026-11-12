@@ -1345,7 +1345,13 @@ TURKISH: Mapping[str, str] = {
         "Bağlantılarıyla birlikte tasarımın dışına."
     ),
     "&Disconnect {pin} from {net}": "{pin} pinini {net} netinden A&yır",
-    "&Rub Out This Wire": "Bu Teli &Sil",
+    "Remove &Line Only": "Yalnızca Çizgiyi &Kaldır",
+    "{pin} left {net}": "{pin}, {net} netinden ayrıldı",
+    "The pins stay joined by other wires": "Pinler başka tellerle bağlı kalır",
+    "{said}. Ctrl+Z brings the wire back.": "{said}. Ctrl+Z teli geri getirir.",
+    "Wire rubbed out. The pins stay connected, by name; Ctrl+Z brings it back.": (
+        "Tel silindi. Pinler adla bağlı kalır; Ctrl+Z teli geri getirir."
+    ),
     "Take the line off the sheet. The pins stay connected — the net says so by "
     "name instead.": (
         "Çizgiyi sayfadan kaldırır. Pinler bağlı kalır — net bunu artık adıyla söyler."
@@ -5509,6 +5515,8 @@ TURKISH: Mapping[str, str] = {
     "Rub out {count} wire(s) on the sheet": "Şemadaki {count} teli sil",
     "Rub out the wire from {a} to {b} and {branches} branch(es) off it": "{a}–{b} telini ve ondan çıkan {branches} dalı sil",
     "Rub out the wire from {a} to {b}": "{a}–{b} telini sil",
+    "Delete the wire from {a} to {b}": "{a}–{b} telini sil",
+    "Delete {count} wire(s) on the sheet": "Şemadaki {count} teli sil",
     "Draw a {shape} on the sheet": "Şemaya bir {shape} çiz",
     "Write “{text}” on the sheet": "Şemaya “{text}” yaz",
     "Edit a note on the sheet": "Şemadaki bir notu düzenle",

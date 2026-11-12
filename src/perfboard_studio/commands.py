@@ -1111,6 +1111,15 @@ class DeleteSheetWiresPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class CutSheetWiresPayload:
+    """Delete drawn wires AND the connections only they drew: what Delete means to a wire
+    selected on the sheet, as it does in KiCad. ``sheet.wire.delete`` is the other meaning,
+    the picture alone, and stays for "Remove Line Only"."""
+
+    wires: tuple[SheetWire, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AddSheetNotePayload:
     """A caption or a box on the drawing. Nothing derives anything from it."""
 
@@ -3184,6 +3193,70 @@ class _DeleteSheetWires:
         return f"Rub out {len(p.wires)} wire(s) on the sheet{tail}"
 
 
+class _CutSheetWires:
+    """Rub out drawn wires and take off the net each pin that only they joined to it.
+
+    THE RULES, because "delete a wire" has edge cases and each one has to be one answer:
+
+    - The wires go, with every T branching off them (``_with_branches``), as a rub-out does.
+    - A PIN LEAVES ITS NET when it was an end of a wire that went and no wire still drawn
+      has it as an end. The end of a T that lands ON a wire is the pin it starts from
+      (``a``); the pin ``b`` it names is joined through the wire it lands on, which is
+      still there or went with it.
+    - A pin still joined by another drawn wire stays: both ends of a wire that something
+      else also joins are left as they are, and only the line goes. A net drawn as a chain
+      A-B, B-C, C-D stays one net when B-C goes: the netlist says one net and a person
+      cutting a wire in the middle of it gets the line off the sheet, not a split circuit.
+    - A pin joined by NAME ONLY has no wire to cut and is never touched.
+    - A net left with no pin is dropped, as a two-pin net is when its one wire goes: an
+      empty net is a name in the Nets panel that means nothing.
+
+    One command, one undo step: the lines and the connections they drew go together.
+    """
+
+    type = "sheet.wire.cut"
+
+    def apply(
+        self, doc: PerfDocument, p: CutSheetWiresPayload, ctx: CommandContext
+    ) -> PerfDocument:
+        if not p.wires:
+            raise CommandError("empty-batch", "sheet.wire.cut needs at least one wire to cut.")
+        wanted = _with_branches(doc, {frozenset((wire.a, wire.b)) for wire in p.wires})
+        gone = [w for w in doc.sheet_wires if frozenset((w.a, w.b)) in wanted]
+        if not gone:
+            raise CommandError("nothing-to-do", "No wire on the sheet joins those pins.")
+        kept = tuple(w for w in doc.sheet_wires if frozenset((w.a, w.b)) not in wanted)
+        touched: set[NetNode] = set()
+        for w in kept:
+            touched.add(w.a)
+            if w.tap is None:
+                touched.add(w.b)
+        leaving: dict[str, set[tuple[str, str]]] = {}
+        for w in gone:
+            net = next((n for n in doc.nets if w.a in n.nodes and w.b in n.nodes), None)
+            if net is None:
+                continue  # Not drawn any more: there is no connection for it to be cut from.
+            for node in (w.a, w.b) if w.tap is None else (w.a,):
+                if node not in touched:
+                    leaving.setdefault(net.id, set()).add((node.component_ref, node.pin))
+        nets: list[Net] = []
+        for net in doc.nets:
+            out = leaving.get(net.id)
+            if not out:
+                nets.append(net)
+                continue
+            remaining = tuple(n for n in net.nodes if (n.component_ref, n.pin) not in out)
+            if remaining:
+                nets.append(dataclasses.replace(net, nodes=remaining))
+        return dataclasses.replace(doc, nets=tuple(nets), sheet_wires=kept)
+
+    def describe(self, p: CutSheetWiresPayload, doc: PerfDocument) -> str:
+        if len(p.wires) == 1:
+            wire = p.wires[0]
+            return f"Delete the wire from {_pin_name(wire.a)} to {_pin_name(wire.b)}"
+        return f"Delete {len(p.wires)} wire(s) on the sheet"
+
+
 class _AddSheetNote:
     type = "sheet.note.add"
 
@@ -4228,6 +4301,7 @@ DESIGN_COMMANDS = frozenset(
         "sheet.note.delete",
         "sheet.note.update",
         "sheet.wire",
+        "sheet.wire.cut",
         "sheet.wire.delete",
         "symbol.auto",
         "symbol.move",
@@ -4671,6 +4745,7 @@ move_symbols: CommandDefinition[MoveSymbolsPayload] = _MoveSymbols()
 auto_symbols: CommandDefinition[AutoSymbolsPayload] = _AutoSymbols()
 draw_sheet_wire: CommandDefinition[DrawSheetWirePayload] = _DrawSheetWire()
 delete_sheet_wires: CommandDefinition[DeleteSheetWiresPayload] = _DeleteSheetWires()
+cut_sheet_wires: CommandDefinition[CutSheetWiresPayload] = _CutSheetWires()
 add_sheet_note: CommandDefinition[AddSheetNotePayload] = _AddSheetNote()
 update_sheet_note: CommandDefinition[UpdateSheetNotePayload] = _UpdateSheetNote()
 delete_sheet_notes: CommandDefinition[DeleteSheetNotesPayload] = _DeleteSheetNotes()
@@ -4741,6 +4816,7 @@ _COMMANDS: tuple[CommandDefinition[Any], ...] = (
     move_symbols,
     draw_sheet_wire,
     delete_sheet_wires,
+    cut_sheet_wires,
     add_sheet_note,
     update_sheet_note,
     delete_sheet_notes,

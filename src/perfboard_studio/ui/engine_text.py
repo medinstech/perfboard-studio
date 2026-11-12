@@ -133,6 +133,8 @@ TEMPLATES: tuple[str, ...] = (
     "Rub out {count} wire(s) on the sheet",
     "Rub out the wire from {a} to {b} and {branches} branch(es) off it",
     "Rub out the wire from {a} to {b}",
+    "Delete the wire from {a} to {b}",
+    "Delete {count} wire(s) on the sheet",
     "Draw a {shape} on the sheet",
     "Write “{text}” on the sheet",
     "Edit a note on the sheet",

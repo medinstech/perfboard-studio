@@ -77,7 +77,7 @@ from PySide6.QtWidgets import (
 )
 
 from perfboard_studio.erc import ErcFinding, ErcSeverity
-from perfboard_studio.model import NetNode, Point2
+from perfboard_studio.model import NetNode, Point2, SheetWire
 from perfboard_studio.schematic import (
     GRID_MM,
     NET_LABEL_MM,
@@ -234,6 +234,13 @@ PART_MARK_OFFSET_MM = 0.6
 #: How close a click has to land to a wire to count as hitting it, in millimetres.
 PICK_MM = 1.6
 
+#: WHAT DELETE DOES TO A SELECTED WIRE, in one place so it is one line to change.
+#: "disconnect" is KiCad's: the wire goes and a pin only it joined leaves the net
+#: (``sheet.wire.cut``); "rub-out" takes the line off and leaves the pins connected, the net
+#: saying so by name (``sheet.wire.delete``, still the right-click "Remove Line Only").
+#: The window reads it in ``MainWindow._on_sheet_wires_delete``.
+WIRE_DELETE: Literal["disconnect", "rub-out"] = "disconnect"
+
 #: The same for a pin, and deliberately larger. A wire is a long target and a pin is a
 #: point; the pins of a DIP are one 2.54 mm pitch apart, so this stays under half of that
 #: or two neighbouring pins would compete for the same click.
@@ -348,6 +355,16 @@ class SheetItem(QGraphicsItem):
         #: What ERC says about each pin and each whole part (``finding_marks``).
         self.pin_marks: dict[tuple[str, str], Mark] = {}
         self.part_marks: dict[str, Mark] = {}
+        #: The drawn wire the next Delete rubs out, and the one under the pointer, as paths.
+        self.selected_wire_path: tuple[Point2, ...] = ()
+        self.hover_wire_path: tuple[Point2, ...] = ()
+
+    def set_wire_selection(self, path: Sequence[Point2], hover: Sequence[Point2] = ()) -> None:
+        path, hover = tuple(path), tuple(hover)
+        if path == self.selected_wire_path and hover == self.hover_wire_path:
+            return
+        self.selected_wire_path, self.hover_wire_path = path, hover
+        self.update()
 
     def boundingRect(self) -> QRectF:
         return QRectF(0.0, 0.0, self.drawing.width, self.drawing.height).adjusted(
@@ -401,6 +418,16 @@ class SheetItem(QGraphicsItem):
         for rail in drawing.rails:
             self._stroke(painter, rail.path, rail.net_class, rail.net_id in self.highlight_nets)
             self._rail_glyph(painter, rail)
+
+        if self.hover_wire_path and self.hover_wire_path != self.selected_wire_path:
+            self._stroke(painter, self.hover_wire_path, "signal", True)
+        if self.selected_wire_path:
+            self._stroke(painter, self.selected_wire_path, "signal", True)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(SELECTED)))
+            for corner in self.selected_wire_path:
+                painter.drawEllipse(_point(corner), DOT_MM, DOT_MM)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
 
         for junction in drawing.junctions:
             lit = junction.net_id in self.highlight_nets
@@ -959,6 +986,9 @@ class SchematicView(QGraphicsView):
     noteMoved = Signal(int, float, float)
     #: Delete was pressed with something selected.
     deleteRequested = Signal()
+    #: Delete was pressed with a drawn wire selected: a list of (ref a, pin a, ref b,
+    #: pin b). What Delete means to a wire is ``WIRE_DELETE``, applied by the window.
+    wireDeleteRequested = Signal(list)
     #: R (+1) or Shift+R (-1) was pressed: turn the selected symbols by that many quarters.
     turnRequested = Signal(int)
     #: The selection changed on the sheet itself.
@@ -988,6 +1018,12 @@ class SchematicView(QGraphicsView):
         self.pending_tee: Tee | None = None
         self.selected_refs: list[str] = []
         self.selected_notes: list[int] = []
+        #: The drawn wire that is selected, by its two pins, and the wires of a sheet still
+        #: being arranged as they WOULD be drawn once it is frozen
+        #: (``schematic.wires_as_drawn``, handed over by the window): on that sheet a wire is
+        #: clicked like any other, and the freeze happens when something is done to it.
+        self.selected_wire: tuple[NetNode, NetNode] | None = None
+        self.unfrozen_wires: tuple[SheetWire, ...] = ()
         #: ERC's findings, kept here for the selection's reason: the item is thrown away on
         #: every rebuild, and the findings arrive from the window, not from the drawing.
         self.findings: tuple[ErcFinding, ...] = ()
@@ -1105,6 +1141,7 @@ class SchematicView(QGraphicsView):
         )
         self.item.pending_pin = self.pending_pin
         self.item.set_findings(self.findings)
+        self._show_wire_selection()
         self._scene.addItem(self.item)
         self._scene.setSceneRect(self.item.boundingRect())
         # A fitted sheet STAYS fitted when it changes size, as it does when the panel does:
@@ -1174,8 +1211,69 @@ class SchematicView(QGraphicsView):
     def set_selection(self, refs: Sequence[str], notes: Sequence[int] = ()) -> None:
         self.selected_refs = list(refs)
         self.selected_notes = list(notes)
+        self.selected_wire = None
         if self.item is not None:
             self.item.set_selection(refs, {f"n{index}" for index in notes})
+            self._show_wire_selection()
+
+    def set_unfrozen_wires(self, wires: Sequence[SheetWire]) -> None:
+        """The wires a sheet still being arranged would draw if it were frozen now."""
+        self.unfrozen_wires = tuple(wires)
+        self._show_wire_selection()
+
+    def wire_runs(self) -> list[tuple[tuple[NetNode, NetNode], tuple[Point2, ...]]]:
+        """Every wire that can be selected, by its two pins, with the path it is drawn on:
+        the drawn wires, or on a sheet nobody has frozen yet the ones the freeze would keep."""
+        if self.item is None:
+            return []
+        runs = [
+            (wire.ends, tuple(wire.path))
+            for wire in self.item.drawing.wires
+            if wire.ends is not None
+        ]
+        if not runs:
+            runs = [((wire.a, wire.b), tuple(wire.path)) for wire in self.unfrozen_wires]
+        return runs
+
+    def wire_at(
+        self, scene_pos: QPointF
+    ) -> tuple[tuple[NetNode, NetNode], tuple[Point2, ...]] | None:
+        """The wire nearest the point within ``PICK_MM``, or None."""
+        best: tuple[float, tuple[tuple[NetNode, NetNode], tuple[Point2, ...]]] | None = None
+        for ends, path in self.wire_runs():
+            for start, end in itertools.pairwise(path):
+                distance = _distance_to_segment(scene_pos, _point(start), _point(end))
+                if distance <= PICK_MM and (best is None or distance < best[0]):
+                    best = (distance, (ends, path))
+        return best[1] if best is not None else None
+
+    def _path_of(self, ends: tuple[NetNode, NetNode] | None) -> tuple[Point2, ...]:
+        if ends is None:
+            return ()
+        for run_ends, path in self.wire_runs():
+            if run_ends == ends:
+                return path
+        return ()
+
+    def _show_wire_selection(self, hover: Sequence[Point2] = ()) -> None:
+        """Paint the selected wire, and forget it if the drawing no longer has it."""
+        if self.item is None:
+            return
+        path = self._path_of(self.selected_wire)
+        if not path:
+            self.selected_wire = None
+        self.item.set_wire_selection(path, hover)
+
+    def _select_wire(self, ends: tuple[NetNode, NetNode], where: QPointF) -> None:
+        """Select one drawn wire: it is what Delete rubs out. The net it is on is lit as
+        before, so a click on a wire still says which net that is."""
+        self.set_selection([], [])
+        self.selectionChanged.emit([])
+        net = self.net_at(where)
+        if net is not None:
+            self.netClicked.emit(net[0])
+        self.selected_wire = ends
+        self._show_wire_selection()
 
     def gesture_in_flight(self) -> bool:
         """Whether the left button is in the middle of something Escape can call off: a
@@ -1529,6 +1627,12 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
 
+        run = self.wire_at(where)
+        if run is not None:
+            self._select_wire(run[0], where)
+            event.accept()
+            return
+
         net = self.net_at(where)
         if net is not None:
             self.set_selection([], [])
@@ -1719,6 +1823,9 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
 
+        if self.item is not None and self.tool == "select" and not event.buttons():
+            over = self.wire_at(where)
+            self._show_wire_selection(over[1] if over is not None else ())
         self.setToolTip(self.describe(where))
         super().mouseMoveEvent(event)
 
@@ -1934,6 +2041,11 @@ class SchematicView(QGraphicsView):
             event.accept()
             return
         deleting = event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
+        if deleting and self.selected_wire is not None:
+            a, b = self.selected_wire
+            self.wireDeleteRequested.emit([(a.component_ref, a.pin, b.component_ref, b.pin)])
+            event.accept()
+            return
         if deleting and (self.selected_refs or self.selected_notes):
             self.deleteRequested.emit()
             event.accept()
