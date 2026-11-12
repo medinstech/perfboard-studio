@@ -1067,6 +1067,27 @@ def test_the_power_modules_are_wires_named_as_printed() -> None:
     assert next(found.id for found in search_catalog("AMS1117")) == "ams1117-33-module"
 
 
+def test_adafruits_sensor_breakouts_are_headers_in_the_silkscreens_order() -> None:
+    """Read off each board's own Eagle file: pad 1 first, every name as the silkscreen prints it
+    (the regulators' outputs, 3Vo and 2v8, included, because they are pads on the header)."""
+    expected = {
+        "adafruit-bh1750": (["VIN", "3Vo", "GND", "SCL", "SDA", "ADDR"], "Adafruit-BH1750-PCB"),
+        "adafruit-aht20": (["VIN", "GND", "SCL", "SDA"], "Adafruit-AHT20-PCB"),
+        "adafruit-vl53l0x": (
+            ["VIN", "2v8", "GND", "GPIO", "SHDN", "SCL", "SDA"],
+            "Adafruit-VL53L0X-ToF-Distance-Sensor-PCB",
+        ),
+    }
+    for part_id, (names, repo) in expected.items():
+        part = catalog_part(part_id)
+        assert part is not None, part_id
+        assert [name for _, name in part.pin_names] == names, part_id
+        assert repo in part.source, part_id
+        assert part.value is not None and part_id in {
+            found.id for found in search_catalog(part.value)
+        }, part_id
+
+
 def test_the_display_and_touch_boards_are_headers_in_their_sources_order() -> None:
     expected = {
         "st7735-tft-18": (

@@ -3026,6 +3026,83 @@ TURKISH: Mapping[str, str] = {
         "şarj diyotunu sökün. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan "
         "ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
     ),
+    "Adafruit BH1750 light sensor (on a header)": (
+        "Adafruit BH1750 ışık sensörü (header üzerinde)"
+    ),
+    "Light sensor, 1 to 65535 lux, on I2C. Its cable plugs into this 6-pin header: VIN "
+    "3Vo GND SCL SDA ADDR from pin 1": (
+        "I2C üzerinden 1 ile 65535 lüks arası ışık sensörü. Kablosu bu 6 pinli header'a"
+        " takılır: 1. pinden VIN 3Vo GND SCL SDA ADDR"
+    ),
+    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the sensor's"
+    " supply, and 3Vo is that regulator's output, not a second input. SCL and SDA go "
+    "through level-shifting transistors, so the bus may run at VIN's level. The "
+    "silkscreen gives the default I2C address as 0x23: a resistor on the board holds "
+    "ADDR low, and the solder jumper beside it ties ADDR to 3.3 V for the other "
+    "address, so leave ADDR unwired for the default. Other BH1750 boards carry a "
+    "different header, so compare the names printed on yours with these. Match each "
+    "lead to the name printed beside the module's pins, not to its place: sellers' "
+    "boards are not all wired in the same order.": (
+        "VIN, kartın baskısına göre 3 ile 5 V alır: kartın üzerindeki 3,3 V'luk bir "
+        "regülatör sensörün beslemesini üretir ve 3Vo o regülatörün çıkışıdır, ikinci "
+        "bir giriş değildir. SCL ile SDA seviye çeviren transistörlerden geçer, bu "
+        "yüzden hat VIN seviyesinde çalışabilir. Baskı varsayılan I2C adresini 0x23 "
+        "olarak verir: kartın üzerindeki bir direnç ADDR'yi düşük tutar, yanındaki "
+        "lehim köprüsü de öteki adres için ADDR'yi 3,3 V'a bağlar; varsayılan için "
+        "ADDR'yi boş bırakın. Başka BH1750 kartlarının header'ı farklıdır: sizinkinin "
+        "üzerinde yazan adları bunlarla karşılaştırın. Her kabloyu yerine göre değil, "
+        "modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
+        "sırayla bağlanmamıştır."
+    ),
+    "Adafruit AHT20 temperature and humidity sensor (on a header)": (
+        "Adafruit AHT20 sıcaklık ve nem sensörü (header üzerinde)"
+    ),
+    "Temperature and humidity sensor, on I2C. Its cable plugs into this 4-pin header: "
+    "VIN GND SCL SDA from pin 1": (
+        "I2C üzerinden sıcaklık ve nem sensörü. Kablosu bu 4 pinli header'a takılır: 1."
+        " pinden VIN GND SCL SDA"
+    ),
+    "VIN takes 3 to 5 V by the board's silkscreen, and the board has no regulator: the "
+    "sensor's supply is VIN through a resistor and a capacitor, and the pull-ups on SCL"
+    " and SDA go to VIN, so the bus idles at VIN's level. Other AHT20 boards carry a "
+    "different header, so compare the names printed on yours with these. Match each "
+    "lead to the name printed beside the module's pins, not to its place: sellers' "
+    "boards are not all wired in the same order.": (
+        "VIN, kartın baskısına göre 3 ile 5 V alır ve kartta regülatör yoktur: sensörün"
+        " beslemesi VIN'dir, bir direnç ve bir kondansatörden geçer; SCL ile SDA'nın "
+        "yukarı çekme dirençleri de VIN'e gider, bu yüzden hat VIN seviyesinde bekler. "
+        "Başka AHT20 kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları "
+        "bunlarla karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin "
+        "yanında yazan ada göre bağlayın: satıcıların kartları aynı sırayla "
+        "bağlanmamıştır."
+    ),
+    "Adafruit VL53L0X time-of-flight distance sensor (on a header)": (
+        "Adafruit VL53L0X uçuş süresi mesafe sensörü (header üzerinde)"
+    ),
+    "Laser distance sensor, about 30 to 1000 mm, on I2C. Its cable plugs into this "
+    "7-pin header: VIN 2v8 GND GPIO SHDN SCL SDA from pin 1": (
+        "I2C üzerinden lazerli mesafe sensörü, yaklaşık 30 ile 1000 mm. Kablosu bu 7 "
+        "pinli header'a takılır: 1. pinden VIN 2v8 GND GPIO SHDN SCL SDA"
+    ),
+    "VIN takes 3 to 5 V by the board's silkscreen: a 2.8 V regulator makes the sensor's"
+    " supply, and 2v8 is its output, not a second input. SCL and SDA go through level-"
+    "shifting transistors, so the bus may run at VIN's level. SHDN is the sensor's "
+    "XSHUT line, held high by a resistor on the board: pull it low to switch the sensor"
+    " off, or leave it unwired. GPIO is the sensor's interrupt output and can stay "
+    "unwired. Other VL53L0X boards carry a different header, so compare the names "
+    "printed on yours with these. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "VIN, kartın baskısına göre 3 ile 5 V alır: kartın üzerindeki 2,8 V'luk bir "
+        "regülatör sensörün beslemesini üretir ve 2v8 onun çıkışıdır, ikinci bir giriş "
+        "değildir. SCL ile SDA seviye çeviren transistörlerden geçer, bu yüzden hat VIN"
+        " seviyesinde çalışabilir. SHDN sensörün XSHUT hattıdır ve kartın üzerindeki "
+        "bir dirençle yüksek tutulur: sensörü kapatmak için düşük çekin, ya da boş "
+        "bırakın. GPIO sensörün kesme çıkışıdır ve boş kalabilir. Başka VL53L0X "
+        "kartlarının header'ı farklıdır: sizinkinin üzerinde yazan adları bunlarla "
+        "karşılaştırın. Her kabloyu yerine göre değil, modülün pinlerinin yanında yazan"
+        " ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
     "HC-05 Bluetooth module, ZS-040 (on a header)": (
         "HC-05 Bluetooth modülü, ZS-040 (header üzerinde)"
     ),

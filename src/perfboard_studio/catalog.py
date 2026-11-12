@@ -1858,7 +1858,76 @@ CATALOG: tuple[CatalogPart, ...] = (
                 ),
                 aliases=("PCA9685", "servo driver", "servo shield", "16 channel PWM", "PWM driver",
                          "servo sürücü")),
-    CatalogPart("hc-05", "HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
+    CatalogPart("adafruit-bh1750", "Adafruit BH1750 light sensor (on a header)", "sensor",
+                "hdr-1x6",
+                "Light sensor, 1 to 65535 lux, on I2C. Its cable plugs into this 6-pin header: "
+                "VIN 3Vo GND SCL SDA ADDR from pin 1",
+                _legs("VIN", "3Vo", "GND", "SCL", "SDA", "ADDR"), value="BH1750",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its BH1750 breakout "
+                    "(github.com/adafruit/Adafruit-BH1750-PCB), the 6-pin header JP1 along the "
+                    "board's edge: pad 1 at VIN and every name read off its silkscreen, each "
+                    "pad's net checked against the board's nets"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V by the board's silkscreen: a 3.3 V regulator makes the "
+                    "sensor's supply, and 3Vo is that regulator's output, not a second input. "
+                    "SCL and SDA go through level-shifting transistors, so the bus may run at "
+                    "VIN's level. The silkscreen gives the default I2C address as 0x23: a "
+                    "resistor on the board holds ADDR low, and the solder jumper beside it "
+                    "ties ADDR to 3.3 V for the other address, so leave ADDR unwired for the "
+                    "default. Other BH1750 boards carry a different header, so "
+                    "compare the names printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("BH1750", "light sensor", "lux sensor", "GY-302", "ışık sensörü",
+                         "lux")),
+    CatalogPart("adafruit-aht20", "Adafruit AHT20 temperature and humidity sensor (on a header)",
+                "sensor", "hdr-1x4",
+                "Temperature and humidity sensor, on I2C. Its cable plugs into this 4-pin "
+                "header: VIN GND SCL SDA from pin 1",
+                _legs("VIN", "GND", "SCL", "SDA"), value="AHT20", ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its AHT20 breakout "
+                    "(github.com/adafruit/Adafruit-AHT20-PCB), the 4-pin header JP2: pad 1 at "
+                    "VIN and every name read off its silkscreen, each pad's net checked against "
+                    "the board's nets"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V by the board's silkscreen, and the board has no "
+                    "regulator: the sensor's supply is VIN through a resistor and a capacitor, "
+                    "and the pull-ups on SCL and SDA go to VIN, so the bus idles at VIN's "
+                    "level. Other AHT20 boards carry a different header, so compare the names "
+                    "printed on yours with these. " + _CABLED_CHECK
+                ),
+                aliases=("AHT20", "AHT10", "temperature sensor", "humidity sensor",
+                         "sıcaklık nem sensörü", "nem sensörü")),
+    CatalogPart("adafruit-vl53l0x", "Adafruit VL53L0X time-of-flight distance sensor (on a header)",
+                "sensor", "hdr-1x7",
+                "Laser distance sensor, about 30 to 1000 mm, on I2C. Its cable plugs into "
+                "this 7-pin header: VIN 2v8 GND GPIO SHDN SCL SDA from pin 1",
+                _legs("VIN", "2v8", "GND", "GPIO", "SHDN", "SCL", "SDA"), value="VL53L0X",
+                ref_prefix="J",
+                source=(
+                    "Adafruit's own Eagle board for its VL53L0X breakout "
+                    "(github.com/adafruit/Adafruit-VL53L0X-ToF-Distance-Sensor-PCB, 'Adafruit "
+                    "VL53L0X'), the 7-pin header JP1: pad 1 at VIN and every name read off its "
+                    "silkscreen, each pad's net checked against the board's nets. The silkscreen "
+                    "gives the range as about 30 to 1000 mm"
+                ),
+                check=(
+                    "VIN takes 3 to 5 V by the board's silkscreen: a 2.8 V regulator makes the "
+                    "sensor's supply, and 2v8 is its output, not a second input. SCL and SDA "
+                    "go through level-shifting transistors, so the bus may run at VIN's "
+                    "level. SHDN is the sensor's XSHUT line, held high by a resistor on the "
+                    "board: pull it low to switch the sensor off, or leave it unwired. GPIO is "
+                    "the sensor's interrupt output and can stay unwired. Other VL53L0X boards "
+                    "carry a different header, so compare the names printed on yours with "
+                    "these. " + _CABLED_CHECK
+                ),
+                aliases=("VL53L0X", "ToF", "time of flight", "laser distance", "distance sensor",
+                         "mesafe sensörü")),
+    CatalogPart("hc-05","HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
                 "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
                 "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",
                 _legs("STATE", "RXD", "TXD", "GND", "VCC", "EN"), value="HC-05", ref_prefix="J",
