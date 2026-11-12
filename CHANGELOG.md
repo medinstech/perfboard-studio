@@ -218,6 +218,9 @@ closed without a bump.
 - **A long banner over the board wraps every time, clear of the tool rail.** Once wrapped
   to the room it came back on the next mouse move as one line cut off at both ends, and it
   lay over the tools down the left.
+- **A wired solder run that bends on the far face is a line again.** Seen through the board,
+  its spine was drawn with the joints' fill still set, so a run turning a corner on the other
+  face showed as a solid triangle over every hole inside the bend.
 - **The Bare Wire and Insulated Wire tools say how they draw.** Their tooltips still said
   "Click both ends." from before a wire could turn; they now say to click where it starts and
   wherever it turns, and that Enter, a right-click or a double-click finishes.

@@ -7545,6 +7545,43 @@ def test_far_side_copper_reads_as_a_band_not_just_hatch_strokes() -> None:
     assert tinted / len(samples) > 0.95
 
 
+def test_a_bent_wired_run_on_the_far_face_is_a_line_not_a_filled_triangle() -> None:
+    """The far face's joints are drawn with a brush, and the wired run's spine core was
+    stroked after them with that brush still set: Qt closed the bent spine and filled it,
+    and a wired run turning a corner on the far face became a solid triangle across every
+    hole inside the bend."""
+    from PySide6.QtGui import QColor, QImage, QPainter
+
+    from perfboard_studio.commands import DEFAULT_BOARD
+
+    path = tuple(HoleCoord(c, 3) for c in range(2, 7)) + tuple(
+        HoleCoord(6, r) for r in range(4, 8)
+    )
+    run = SolderTraceConductor(id="t", path=path, kind="solder-trace-wired", side="bottom")
+    item = ConductorItem(run, DEFAULT_BOARD, "top")
+    assert item.is_far_side()
+
+    px_per_mm = 20
+    pitch = DEFAULT_BOARD.pitch
+    image = QImage(int(12 * pitch * px_per_mm), int(11 * pitch * px_per_mm), QImage.Format.Format_ARGB32)
+    image.fill(QColor("#2e6b3a"))
+    painter = QPainter(image)
+    painter.scale(px_per_mm, px_per_mm)
+    item.paint(painter, None)
+    painter.end()
+
+    # Inside the bend: a pitch and a half from the run's first leg, a pitch from its second.
+    a = view2d.hole_to_screen(HoleCoord(5, 4), DEFAULT_BOARD, "top")
+    b = view2d.hole_to_screen(HoleCoord(5, 5), DEFAULT_BOARD, "top")
+    inside = ((a.x() + b.x()) / 2 * px_per_mm, (a.y() + b.y()) / 2 * px_per_mm)
+    assert image.pixel(int(inside[0]), int(inside[1])) == QColor("#2e6b3a").rgb()
+    # ...and the run itself is still drawn, on its corner.
+    corner = view2d.hole_to_screen(HoleCoord(6, 3), DEFAULT_BOARD, "top")
+    assert image.pixel(int(corner.x() * px_per_mm), int(corner.y() * px_per_mm)) != (
+        QColor("#2e6b3a").rgb()
+    )
+
+
 # ---------------------------------------------------------------------------
 # The schematic panel
 # ---------------------------------------------------------------------------

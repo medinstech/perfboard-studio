@@ -2693,6 +2693,9 @@ class ConductorItem(QGraphicsItem):
             else:
                 self._paint_back_layer(painter, path, width, colour)
                 if kind == "solder-trace-wired":
+                    # The joints just left their brush set, and an open path stroked with
+                    # a brush is closed and filled: a bent spine was a solid triangle.
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
                     painter.setPen(_stroke_pen(SPINE_CORE, 0.3))
                     painter.drawPath(path)
             return
