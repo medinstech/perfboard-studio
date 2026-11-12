@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -358,6 +358,9 @@ class SheetItem(QGraphicsItem):
         #: The drawn wire the next Delete rubs out, and the one under the pointer, as paths.
         self.selected_wire_path: tuple[Point2, ...] = ()
         self.hover_wire_path: tuple[Point2, ...] = ()
+        #: The wires as a drag in progress would leave them (``SchematicView.live_wires_for``),
+        #: drawn in place of the drawing's own while the symbols are held.
+        self.live_wires: tuple[Wire, ...] | None = None
 
     def set_wire_selection(self, path: Sequence[Point2], hover: Sequence[Point2] = ()) -> None:
         path, hover = tuple(path), tuple(hover)
@@ -413,7 +416,7 @@ class SheetItem(QGraphicsItem):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         drawing = self.drawing
 
-        for wire in drawing.wires:
+        for wire in drawing.wires if self.live_wires is None else self.live_wires:
             self._stroke(painter, wire.path, wire.net_class, wire.net_id in self.highlight_nets)
         for rail in drawing.rails:
             self._stroke(painter, rail.path, rail.net_class, rail.net_id in self.highlight_nets)
@@ -1024,6 +1027,11 @@ class SchematicView(QGraphicsView):
         #: clicked like any other, and the freeze happens when something is done to it.
         self.selected_wire: tuple[NetNode, NetNode] | None = None
         self.unfrozen_wires: tuple[SheetWire, ...] = ()
+        #: Asked while symbols are dragged, with (ref, x, y) for each: the wires as the drop
+        #: would leave them, or None. Set by the window.
+        self.live_wires_for: (
+            Callable[[list[tuple[str, float, float]]], tuple[Wire, ...] | None] | None
+        ) = None
         #: ERC's findings, kept here for the selection's reason: the item is thrown away on
         #: every rebuild, and the findings arrive from the window, not from the drawing.
         self.findings: tuple[ErcFinding, ...] = ()
@@ -1298,6 +1306,7 @@ class SchematicView(QGraphicsView):
         self._pin_press = None
         if self.item is not None:
             self.item.drag_offset = None
+            self.item.live_wires = None
             self.item.ghost_path = ()
             self.item.ghost_shape = None
             self.item.update()
@@ -1850,7 +1859,18 @@ class SchematicView(QGraphicsView):
             return
         self._dragging = True
         start = self._press_scene or where
-        self.item.drag_offset = _snapped(where - start)
+        offset = _snapped(where - start)
+        if offset != self.item.drag_offset and self.live_wires_for is not None:
+            # The wires follow the symbols while they are held, laid as the drop will lay
+            # them: the answer comes from the window, which owns the document.
+            self.item.live_wires = self.live_wires_for(
+                [
+                    (symbol.ref, symbol.at.x + offset.x(), symbol.at.y + offset.y())
+                    for symbol in self.item.drawing.symbols
+                    if symbol.ref in self.selected_refs
+                ]
+            )
+        self.item.drag_offset = offset
         self.item.update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:

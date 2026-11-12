@@ -61,6 +61,7 @@ Coordinates grow right and down, matching the rest of the application.
 
 from __future__ import annotations
 
+import dataclasses
 import heapq
 import itertools
 import math
@@ -3158,6 +3159,87 @@ def _reanchored(path: tuple[Point2, ...], start: Point2, end: Point2) -> tuple[P
     return _tidy(points)
 
 
+_EPS = 1e-6
+
+
+def _run_overlap(p: Point2, q: Point2, r: Point2, s: Point2) -> bool:
+    """Whether two segments lie along one line and share more than a point of it."""
+    if abs(p.y - q.y) < _EPS and abs(r.y - s.y) < _EPS and abs(p.y - r.y) < _EPS:
+        lo = max(min(p.x, q.x), min(r.x, s.x))
+        hi = min(max(p.x, q.x), max(r.x, s.x))
+        return hi - lo > _EPS
+    if abs(p.x - q.x) < _EPS and abs(r.x - s.x) < _EPS and abs(p.x - r.x) < _EPS:
+        lo = max(min(p.y, q.y), min(r.y, s.y))
+        hi = min(max(p.y, q.y), max(r.y, s.y))
+        return hi - lo > _EPS
+    return False
+
+
+def _backtracks(path: Sequence[Point2]) -> bool:
+    """A run that turns straight back on itself: the shape a wire takes when its end moves
+    further than the first leg is long."""
+    for a, b, c in itertools.zip_longest(path, path[1:], path[2:]):
+        if b is None or c is None:
+            break
+        first_x, first_y = b.x - a.x, b.y - a.y
+        then_x, then_y = c.x - b.x, c.y - b.y
+        if abs(first_x * then_y - first_y * then_x) < _EPS and first_x * then_x + first_y * then_y < -_EPS:
+            return True
+    return False
+
+
+def _overlaps_itself(path: Sequence[Point2]) -> bool:
+    runs = list(itertools.pairwise(path))
+    return any(
+        _run_overlap(*runs[i], *runs[j])
+        for i in range(len(runs))
+        for j in range(i + 1, len(runs))
+    )
+
+
+def _through_a_body(path: Sequence[Point2], boxes: Sequence[tuple[Mm, Mm, Mm, Mm]]) -> bool:
+    """Whether a run passes through the inside of a symbol's box. Running along its edge, or
+    meeting it at a pin, is not through."""
+    for a, b in itertools.pairwise(path):
+        lo_x, hi_x, lo_y, hi_y = min(a.x, b.x), max(a.x, b.x), min(a.y, b.y), max(a.y, b.y)
+        for x0, y0, x1, y1 in boxes:
+            if hi_x > x0 + _EPS and lo_x < x1 - _EPS and hi_y > y0 + _EPS and lo_y < y1 - _EPS:
+                return True
+            # A run with no width (a straight one) inside the box on an axis is not a
+            # rectangle to test, but it is through the body all the same.
+            if abs(lo_y - hi_y) < _EPS and y0 + _EPS < lo_y < y1 - _EPS and hi_x > x0 + _EPS and lo_x < x1 - _EPS:
+                return True
+            if abs(lo_x - hi_x) < _EPS and x0 + _EPS < lo_x < x1 - _EPS and hi_y > y0 + _EPS and lo_y < y1 - _EPS:
+                return True
+    return False
+
+
+def _on_another_nets_wire(
+    path: Sequence[Point2], net_id: NetId, laid: Sequence[tuple[NetId, tuple[Point2, ...]]]
+) -> bool:
+    return any(
+        _run_overlap(a, b, c, d)
+        for other, run in laid
+        if other != net_id
+        for a, b in itertools.pairwise(path)
+        for c, d in itertools.pairwise(run)
+    )
+
+
+def _spoils(
+    path: Sequence[Point2],
+    boxes: Sequence[tuple[Mm, Mm, Mm, Mm]],
+    net_id: NetId,
+    laid: Sequence[tuple[NetId, tuple[Point2, ...]]],
+) -> bool:
+    return (
+        _backtracks(path)
+        or _overlaps_itself(path)
+        or _through_a_body(path, boxes)
+        or _on_another_nets_wire(path, net_id, laid)
+    )
+
+
 def _hand_drawn_sheet(
     doc: PerfDocument,
     symbols: dict[str, _Placed],
@@ -3210,6 +3292,7 @@ def _hand_drawn_sheet(
     longest_run: dict[NetId, tuple[Mm, str, Point2, Point2]] = {}
     waiting = list(doc.sheet_wires)
     stalled = False
+    provisional: SchematicDrawing | None = None
     while waiting:
         still: list[SheetWire] = []
         for wire in waiting:
@@ -3235,6 +3318,49 @@ def _hand_drawn_sheet(
                 end = pin_end
                 drawn_pins.add((wire.b.component_ref, wire.b.pin))
             path = _reanchored(wire.path, start, end)
+            if wire.path[0] != start or wire.path[-1] != end:
+                # AN END MOVED. A wire that is still clean keeps the middle it was drawn
+                # with; one that backtracks, overlaps itself, runs through a symbol or lies
+                # on another net's line is laid again, round the symbols, as it would be
+                # drawn from scratch.
+                boxes = [
+                    (p.x, p.y, p.x + p.body.width, p.y + p.body.height)
+                    for p in symbols.values()
+                ]
+                laid = [(w.net_id, w.path) for w in wires]
+
+                if _spoils(path, boxes, net.id, laid):
+                    relay = True
+                    if host_path is not None:
+                        # A T: across onto the wire it lands on, from the pin, at the
+                        # point of that wire nearest the pin, turning once.
+                        landing, _on_end = _laid_onto(start, host_path)
+                        for corner in (_p(landing.x, start.y), _p(start.x, landing.y)):
+                            candidate = _tidy((start, corner, landing))
+                            if not _spoils(candidate, boxes, net.id, laid):
+                                path = candidate
+                                end = landing
+                                relay = False
+                                break
+                        # No such turn is clear: go round the symbols to the pin the wire
+                        # it lands on ends at, which is on that wire.
+                        far = _pin_of(symbols, wire.b)
+                        if relay and far is None:
+                            relay = False
+                    if relay:
+                        if provisional is None:
+                            provisional = _provisional_drawing(symbols, placements)
+                        relaid = route_sheet_wire(
+                            dataclasses.replace(provisional, wires=tuple(wires)),
+                            (wire.a.component_ref, wire.a.pin),
+                            (wire.b.component_ref, wire.b.pin),
+                        )
+                        if relaid is not None:
+                            path = _tidy(relaid)
+                            if host_path is not None:
+                                end = path[-1]
+                                if tees and tees[-1].at != end and not on_end:
+                                    tees.pop()
             wires.append(
                 Wire(
                     net_id=net.id,
@@ -3326,7 +3452,30 @@ def _hand_drawn_sheet(
 
     width, height = _sheet_extent(ordered, wires, rails, no_connects, annotations)
 
-    drawn = tuple(
+    drawn = _symbols_drawn(ordered, placements)
+    if parked:
+        notes.append(
+            f"{len(parked)} part(s) have no place on this sheet yet and are parked at the "
+            f"right-hand edge: {', '.join(parked)}"
+        )
+    return SchematicDrawing(
+        symbols=drawn,
+        wires=tuple(wires),
+        rails=tuple(rails),
+        junctions=junctions,
+        no_connects=tuple(no_connects),
+        labels=(*part_labels, *rail_names, *net_labels),
+        annotations=annotations,
+        width=width,
+        height=height,
+        notes=tuple(notes),
+    )
+
+
+def _symbols_drawn(
+    ordered: Sequence[_Placed], placements: dict[str, SymbolPlacement]
+) -> tuple[Symbol, ...]:
+    return tuple(
         Symbol(
             ref=placed.ref,
             value=placed.value,
@@ -3345,23 +3494,74 @@ def _hand_drawn_sheet(
         )
         for placed in ordered
     )
-    if parked:
-        notes.append(
-            f"{len(parked)} part(s) have no place on this sheet yet and are parked at the "
-            f"right-hand edge: {', '.join(parked)}"
-        )
-    return SchematicDrawing(
-        symbols=drawn,
-        wires=tuple(wires),
-        rails=tuple(rails),
-        junctions=junctions,
-        no_connects=tuple(no_connects),
-        labels=(*part_labels, *rail_names, *net_labels),
-        annotations=annotations,
-        width=width,
-        height=height,
-        notes=tuple(notes),
+
+
+def _provisional_drawing(
+    symbols: dict[str, _Placed], placements: dict[str, SymbolPlacement]
+) -> SchematicDrawing:
+    """The sheet as far as ``route_sheet_wire`` needs it: the symbols where they are. The
+    wires laid so far are put in by the caller."""
+    ordered = sorted(symbols.values(), key=lambda placed: _ref_sort_key(placed.ref))
+    return SchematicDrawing(symbols=_symbols_drawn(ordered, placements))
+
+
+def _after_move(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    moved: Sequence[SymbolPlacement],
+    frozen: Sequence[SheetWire],
+) -> tuple[SchematicDrawing, dict[frozenset[NetNode], SheetWire]]:
+    placed = {p.id: p for p in doc.sheet}
+    placed.update({p.id: p for p in moved})
+    stored = {frozenset((w.a, w.b)): w for w in doc.sheet_wires}
+    stored.update({frozenset((w.a, w.b)): w for w in frozen})
+    after = dataclasses.replace(
+        doc, sheet=tuple(placed.values()), sheet_wires=tuple(stored.values())
     )
+    return build_schematic(after, lookup), stored
+
+
+def drawing_after_move(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    moved: Sequence[SymbolPlacement],
+    frozen: Sequence[SheetWire] = (),
+) -> SchematicDrawing:
+    """The sheet as it would be drawn with ``moved`` in place: what a drag shows while it
+    is still going, from the same code that decides what the drop saves."""
+    return _after_move(doc, lookup, moved, frozen)[0]
+
+
+def wires_after_move(
+    doc: PerfDocument,
+    lookup: FootprintLookup,
+    moved: Sequence[SymbolPlacement],
+    frozen: Sequence[SheetWire] = (),
+) -> tuple[SheetWire, ...]:
+    """The wires a move of ``moved`` leaves, as the sheet draws them: what the window puts
+    in the move's own ``wires`` so the saved file is what the screen shows.
+
+    A symbol that moves takes its wires with it, and a wire it drags into a backtrack, a
+    line over itself, a symbol or another net's wire is laid again
+    (``_hand_drawn_sheet``). That is done in drawing, and this reads the answer off it:
+    every wire from pin to pin whose path the move changed. ``frozen`` is the derived
+    sheet's wires when this move is the one freezing it (``wires_as_drawn``), which then
+    come back too, changed or not -- they are not stored yet.
+    """
+    drawing, stored = _after_move(doc, lookup, moved, frozen)
+    out: dict[frozenset[NetNode], SheetWire] = {
+        frozenset((w.a, w.b)): w for w in frozen
+    }
+    for wire in drawing.wires:
+        if wire.ends is None:
+            continue
+        key = frozenset(wire.ends)
+        old = stored.get(key)
+        if old is None or old.tap is not None:
+            continue
+        if wire.path != old.path:
+            out[key] = dataclasses.replace(old, path=wire.path)
+    return tuple(out.values())
 
 
 def _laid_onto(point: Point2, path: Sequence[Point2]) -> tuple[Point2, bool]:

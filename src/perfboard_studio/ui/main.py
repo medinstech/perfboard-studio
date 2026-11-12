@@ -355,8 +355,11 @@ from perfboard_studio.recovery import RecoveryRecord, is_worth_offering
 from perfboard_studio.router import CrossingPolicy, RouterOptions, RoutingStyle, options_for_style
 from perfboard_studio.schematic import (
     SchematicDrawing,
+    Wire,
     build_schematic,
+    drawing_after_move,
     snap_to_grid,
+    wires_after_move,
     wires_as_drawn,
 )
 from perfboard_studio.schematic_export import drawing_to_svg
@@ -7096,6 +7099,7 @@ class MainWindow(QMainWindow):
         self.schematic_view.noteDrawn.connect(self.on_sheet_note_drawn)
         self.schematic_view.deleteRequested.connect(self.on_sheet_delete)
         self.schematic_view.wireDeleteRequested.connect(self._on_sheet_wires_delete)
+        self.schematic_view.live_wires_for = self._live_wires
         self.schematic_view.turnRequested.connect(self.on_schematic_rotate)
         self.schematic_view.footprintDropped.connect(self._on_sheet_footprint_dropped)
         self.schematic_view.contextMenuRequested.connect(self._on_sheet_context_menu)
@@ -7566,6 +7570,39 @@ class MainWindow(QMainWindow):
         )
         self._dispatch_sheet_layout(places, label)
 
+    def _live_wires(self, moved: list[tuple[str, float, float]]) -> tuple[Wire, ...] | None:
+        """The wires as dropping the symbols here would leave them, for a drag still going:
+        the drawing the drop's own ``wires`` are read off, so what is shown is what is
+        saved."""
+        places = {
+            str(ref): Point2(x=float(x), y=float(y))
+            for ref, x, y in moved
+            if self._id_of(str(ref)) is not None
+        }
+        if not places:
+            return None
+        placements = self._sheet_placements(places)
+        moving = {p.id for p in placements if self._ref_of_id(p.id) in places}
+        drawing = drawing_after_move(
+            self.bus.system_document,
+            self.lookup,
+            [p for p in placements if p.id in moving],
+            self._wires_kept_by_freezing(),
+        )
+        return drawing.wires
+
+    def _sheet_wires_after(
+        self, placements: Sequence[SymbolPlacement]
+    ) -> tuple[SheetWire, ...]:
+        """The wires this move leaves, for the move's own ``wires``: the freeze's, when it
+        is the one freezing the sheet, and every wire the move dragged into a backtrack,
+        a line over itself, a symbol or another net's wire, laid again
+        (``schematic.wires_after_move``). One command, so the saved file is what the screen
+        shows and one undo takes both back."""
+        return wires_after_move(
+            self.bus.system_document, self.lookup, placements, self._wires_kept_by_freezing()
+        )
+
     def _wires_kept_by_freezing(self) -> tuple[SheetWire, ...]:
         """The derived sheet's wires as drawn wires, when this edit is the one freezing the
         sheet -- see ``schematic.wires_as_drawn``. Nothing on a sheet that already has
@@ -7582,7 +7619,7 @@ class MainWindow(QMainWindow):
         result = self.bus.dispatch(
             "symbol.move",
             MoveSymbolsPayload(
-                placements=placements, label=label, wires=self._wires_kept_by_freezing()
+                placements=placements, label=label, wires=self._sheet_wires_after(placements)
             ),
         )
         if not result.ok:
@@ -7617,7 +7654,7 @@ class MainWindow(QMainWindow):
             MoveSymbolsPayload(
                 placements=tuple(turned),
                 label=f"Turn {len(refs)} symbol(s) on the sheet",
-                wires=self._wires_kept_by_freezing(),
+                wires=self._sheet_wires_after(tuple(turned)),
             ),
         )
         if not result.ok:
@@ -7640,7 +7677,7 @@ class MainWindow(QMainWindow):
             MoveSymbolsPayload(
                 placements=flipped,
                 label=f"Flip {len(refs)} symbol(s) on the sheet",
-                wires=self._wires_kept_by_freezing(),
+                wires=self._sheet_wires_after(flipped),
             ),
         )
         if not result.ok:

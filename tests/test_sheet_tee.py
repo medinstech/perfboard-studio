@@ -185,9 +185,12 @@ def test_a_tee_stays_on_its_wire_when_the_symbols_move() -> None:
         assert branch.path[0] == _at(drawing, "R3", "1")
         for s, e in itertools.pairwise(branch.path):
             assert s.x == pytest.approx(e.x) or s.y == pytest.approx(e.y)
-        # The T was in the middle of the wire, and only its end runs move.
+        # The T is in the middle of the wire, and only its end runs move, so moving the
+        # wire's own symbols leaves it where it was. Moving R3 may move it: the branch's old
+        # path then runs through R3's body, and it is laid again straight onto the wire.
         if ref != "R3":
-            assert tee == at
+            assert tee == at, (ref, tee, at)
+        at = tee
 
 
 def test_a_tee_can_land_on_a_tee() -> None:
