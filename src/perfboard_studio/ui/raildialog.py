@@ -247,14 +247,21 @@ class RailDialog(QDialog):
             self.payload()
         except CommandError as error:
             problem = rail_refusal(error)
+        # No bridge is not refused by the engine -- an agent may lay the strip first and
+        # bridge it after -- but from this dialog it is a rail that carries nothing, laid
+        # and then reported by DRC straight away. The button waits for a bridge, and says
+        # why where it waits.
+        bridged = bool(self.bridge_holes())
         if problem:
             self.warning.setText(problem)
-        elif not self.bridge_holes():
-            self.warning.setText(t("A rail with no bridge carries nothing."))
+        elif not bridged:
+            self.warning.setText(
+                t("A rail with no bridge carries nothing: tick at least one bridge to lay it.")
+            )
         else:
             self.warning.setText("")
         self.warning.setVisible(bool(self.warning.text()))
-        self.ok.setEnabled(not problem)
+        self.ok.setEnabled(not problem and bridged)
 
     def span_said(self) -> str:
         """"A2/L–A9/L": the two fingers the rail runs between, as a message names them."""

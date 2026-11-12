@@ -238,6 +238,10 @@ closed without a bump.
   labels the new board has no room for and takes them up with the board, in one undo step;
   Board ▸ Design the Board asks the same. `board.applyPreset` takes `take_up` for it, and a part the new
   grid strands still refuses the board.
+- **Lay the Rail waits for a bridge.** With no bridge ticked the button stayed on, and the
+  rail it laid carried nothing and came back from DRC as a warning straight away; the
+  default net is often one with no pin beside the fingers, so that was the first thing a
+  click did. The button is off until a bridge is ticked, and the dialog says so.
 - **A board opened while Home is showing comes to the front.** Home's own cards left Home
   first, but the menu bar stays under it, and File ▸ Examples, Open, New Board and the
   command palette opened the board behind Home, which stayed in front with nothing saying

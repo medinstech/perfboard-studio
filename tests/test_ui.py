@@ -20119,8 +20119,13 @@ def test_make_this_strip_a_rail_from_the_strips_own_menu() -> None:
         assert dialog.bridge_holes() == [(beside.col, beside.row)]
         assert not dialog.warning.isVisibleTo(dialog)
         dialog.set_bridges([])
-        assert dialog.warning.text() == t("A rail with no bridge carries nothing.")
-        assert dialog.ok.isEnabled()
+        assert dialog.warning.text() == t(
+            "A rail with no bridge carries nothing: tick at least one bridge to lay it."
+        )
+        assert not dialog.ok.isEnabled(), "a rail that carries nothing waits for a bridge"
+        dialog.set_bridges([(beside.col, beside.row)])
+        assert dialog.ok.isEnabled() and not dialog.warning.isVisibleTo(dialog)
+        dialog.set_bridges([])
         # One finger and no bridge is not a rail at all.
         dialog.end.setCurrentIndex(0)
         assert not dialog.ok.isEnabled()

@@ -1377,7 +1377,9 @@ TURKISH: Mapping[str, str] = {
         "Her köprü bir telin üzerine döşenir: parmağa olan boşluk, lehimin aşabileceğinden "
         "geniştir."
     ),
-    "A rail with no bridge carries nothing.": "Köprüsü olmayan ray hiçbir şey taşımaz.",
+    "A rail with no bridge carries nothing: tick at least one bridge to lay it.": (
+        "Köprüsü olmayan ray hiçbir şey taşımaz: döşemek için en az bir köprü işaretleyin."
+    ),
     "Lay the Rail": "Rayı Döşe",
     "{hole} to {finger}": "{hole} deliğinden {finger} parmağına",
     "Lay a rail {start}–{end}": "{start}–{end} rayını döşe",
