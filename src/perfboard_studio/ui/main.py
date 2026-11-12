@@ -4449,11 +4449,22 @@ class MainWindow(QMainWindow):
     # second thing to remember to turn off before the view means what it looks like it
     # means.
 
-    #: One step per this many milliseconds while playing. Slow enough to read the caption,
-    #: fast enough that a 40-step board is not a chore.
+    #: One step per this many milliseconds while playing, for a step with no drop of its
+    #: own to wait for. Slow enough to read the caption, fast enough that a 40-step board
+    #: is not a chore.
     ASSEMBLY_FRAME_MS = 650
 
+    #: How long a part sits where it landed before Play fits the next: the drop has its own
+    #: time (``arrival.ARRIVAL_MS``), and this is the pause after it.
+    ARRIVAL_HOLD_MS = 200
+
     _assembly_timer: QTimer
+
+    #: The drop that is running, made on first use (it imports VTK, which a start does not
+    #: pay for), and whether the next move of the slider is one that should arrive: a step
+    #: forward by hand or by Play, never a drag, a step back or an edit.
+    _arrival: Any = None
+    _arrive_next = False
 
     #: The 3D panel's foot, made with the panel: stood down while System is in front.
     _assembly_bar: QWidget | None = None
@@ -4521,8 +4532,10 @@ class MainWindow(QMainWindow):
             button.setAutoRaise(True)
             row.addWidget(button)
 
+        # One shot, restarted after each step: a step with a drop waits for the drop and
+        # then for the hold, one without waits the old interval.
         self._assembly_timer = QTimer(self)
-        self._assembly_timer.setInterval(self.ASSEMBLY_FRAME_MS)
+        self._assembly_timer.setSingleShot(True)
         self._assembly_timer.timeout.connect(self._on_assembly_tick)
 
         self._sync_assembly_range()
@@ -4617,16 +4630,61 @@ class MainWindow(QMainWindow):
         self._update_assembly_label()
         self._sync_step_buttons()
         self._follow_step_in_guide()
-        self._refresh_3d()
+        self._refresh_3d(arrive=self._arrive_next)
+
+    def _move_assembly(self, value: int, *, arrive: bool) -> None:
+        """Set the slider, saying whether the 3D view should lower the part that arrives."""
+        self._finish_arrival()
+        self._arrive_next = arrive
+        try:
+            self.assembly_slider.setValue(value)
+        finally:
+            self._arrive_next = False
 
     def step_assembly(self, delta: int) -> None:
         """One step back or forward through the build, by hand: playing stops, because a
-        step asked for and a timer stepping on past it are two people at one slider."""
+        step asked for and a timer stepping on past it are two people at one slider.
+
+        A step forward lowers its part; a step back does not, and a drop still running is
+        finished first -- the new input wins, and what it asked for is never waiting on a
+        picture of the one before.
+        """
         if self.assembly_slider is None or not self.assembly_slider.isEnabled():
             return
         self.act_play.setChecked(False)
         value = self.assembly_slider.value() + delta
-        self.assembly_slider.setValue(max(0, min(self.assembly_slider.maximum(), value)))
+        self._move_assembly(
+            max(0, min(self.assembly_slider.maximum(), value)), arrive=delta > 0
+        )
+
+    def _finish_arrival(self) -> None:
+        """Land a part that is still coming down, now: drawn again as an ordinary step, so
+        its solder is there and nothing is left in the air."""
+        arrival = self._arrival
+        if arrival is not None and arrival.running:
+            arrival.cancel()
+            self._refresh_3d()
+
+    def _on_arrival_finished(self) -> None:
+        # The part has landed: the step drawn again, with its fillets, and then Play's
+        # pause before the next one.
+        self._refresh_3d()
+        if self.act_play.isChecked():
+            self._assembly_timer.start(self.ARRIVAL_HOLD_MS)
+
+    def _start_arrival(self, actors: list[Any], board_top_z: float) -> bool:
+        """Lower ``actors`` from above the board, if anything is there to lower."""
+        from . import arrival
+
+        if self._arrival is None:
+            self._arrival = arrival.ArrivalAnimation(self)
+            self._arrival.finished.connect(self._on_arrival_finished)
+        lift = arrival.start_lift_mm(actors, board_top_z)
+        render = self.vtk_widget.GetRenderWindow().Render
+        started = bool(self._arrival.start(actors, lift, render))
+        if started:
+            self._vtk_renderer.ResetCameraClippingRange()
+        return started
 
     def _sync_step_buttons(self) -> None:
         """Back and forward, each while there is somewhere to go: nothing before the bare
@@ -4691,16 +4749,20 @@ class MainWindow(QMainWindow):
             # complete board can only sensibly mean "show me how it got there".
             if self.assembly_slider.value() >= self.assembly_slider.maximum():
                 self.assembly_slider.setValue(0)
-            self._assembly_timer.start()
+            self._assembly_timer.start(self.ASSEMBLY_FRAME_MS)
         else:
             self._assembly_timer.stop()
+            self._finish_arrival()
         self.act_play.setText(t("Pause") if playing else t("Play"))
 
     def _on_assembly_tick(self) -> None:
         if self.assembly_slider.value() >= self.assembly_slider.maximum():
             self.act_play.setChecked(False)
             return
-        self.assembly_slider.setValue(self.assembly_slider.value() + 1)
+        self._move_assembly(self.assembly_slider.value() + 1, arrive=True)
+        if self._arrival is None or not self._arrival.running:
+            # Nothing came down, so nothing will say it is finished: the old pace.
+            self._assembly_timer.start(self.ASSEMBLY_FRAME_MS)
 
     def _3d_is_live(self) -> bool:
         return self.vtk_widget is not None and self.dock_3d.isVisible()
@@ -4716,14 +4778,21 @@ class MainWindow(QMainWindow):
             return
         self._3d_refresh_timer.start()
 
-    def _refresh_3d(self) -> None:
+    def _refresh_3d(self, *, arrive: bool = False) -> None:
         """Re-actor the existing renderer. Deliberately does NOT touch the camera.
+
+        ``arrive`` lowers the step's part into its holes instead of setting it there
+        (``ui/arrival.py``). Every other way in -- an edit, a drag of the slider, Step back
+        -- draws the step as it is, and drops a drop that was still running: this replaces
+        the actors it was moving.
 
         Marks itself stale and returns immediately when nobody is looking, so a closed panel
         costs nothing per command; ``_on_3d_visibility_changed`` catches up on reopen.
         """
         if self.vtk_widget is None or self._vtk_renderer is None:
             return
+        if self._arrival is not None:
+            self._arrival.cancel()
         if not self.dock_3d.isVisible():
             self._3d_stale = True
             return
@@ -4736,6 +4805,7 @@ class MainWindow(QMainWindow):
             self._assembly_bar.setEnabled(not system_wide)
         subject = SYSTEM_ENTRY if system_wide else self.bus.board_id
         index = self._assembly_index()
+        steps: tuple[GuideStep, ...] = ()
         if index is None:
             document = self.bus.document
             highlight = None
@@ -4765,6 +4835,17 @@ class MainWindow(QMainWindow):
                 owners=self._3d_owners,
             )
         else:
+            # A part arriving is lowered, so its solids are asked for: only a step that
+            # fits a part, only on the board as it is (not exploded, where parts are
+            # already up in the air).
+            lowering = (
+                arrive
+                and index is not None
+                and 0 <= index < len(steps)
+                and isinstance(steps[index], PartStep)
+                and exploded_mm <= 0
+            )
+            arriving: list[Any] = []
             view3d.populate_renderer(
                 self._vtk_renderer,
                 document,
@@ -4773,8 +4854,11 @@ class MainWindow(QMainWindow):
                 highlight=highlight,
                 pin_names=self._pin_names_shown(),
                 board_notes=self._board_labels_shown(),
+                arriving=arriving if lowering else None,
                 owners=self._3d_owners,
             )
+            if lowering:
+                self._start_arrival(arriving, view3d.pad_z(document.board, "top"))
         if subject != self._3d_subject:
             # Something else is in front -- the System, another board: a request to look at
             # it, as opening the panel is, so it is framed. An edit never gets here.

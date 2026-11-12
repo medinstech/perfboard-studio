@@ -2025,6 +2025,22 @@ FINGERS (`EdgeConnectorItem.shape`): its bounding rectangle is the whole board, 
 by that, every click on the board would have chosen it. Board ▸ Board Features… stays, and
 shows the board's editor with its holes and connectors in view.
 
+**Play lowers each part into its holes, and moves actors without rebuilding them**
+(`ui/arrival.py`). A step forward -- by Play or by hand -- that fits a PART draws the step once
+with `populate_renderer(arriving=[...])`, which reports the part's solids and leaves its
+solder fillets out (`build_joints(unsoldered=)`: a fillet under a part still in the air says
+the joint was made), then sets those actors 15 mm above the board at their lowest point and
+eases them down over 700 ms by the wall clock, not a frame count, so a slow frame makes a
+choppy drop and never a long one. Nothing is constructed per frame, which is why a 40-step
+board costs what a 4-step one does (a frame is 4-15 ms on software GL). Landing draws the
+step again, once, as an ordinary step, so the picture a drop ends on is the ordinary one and
+cannot drift from it. Only a forward step arrives: a drag of the slider, Step back, an edit
+and the exploded view draw the step as it is, and every one of them (and every new step, and
+Pause) finishes a drop still running -- the new input wins. While playing, a part with a drop
+is followed by `MainWindow.ARRIVAL_HOLD_MS` (200 ms) and a step without one by the old
+`ASSEMBLY_FRAME_MS`, through the one-shot `_assembly_timer`, which the animation's `finished`
+signal restarts.
+
 ## The words, the first start and help tell one story
 
 A newcomer met the window's jargon before anything else -- Trace, Spine, Bare, Ratsnest,

@@ -7325,9 +7325,19 @@ def _fillet_source(lead_radius: float, side: BoardSide) -> vtk.vtkPolyData:
     return _lathe(profile, resolution=BEAD_RESOLUTION + 8)
 
 
-def build_joints(doc: PerfDocument, lookup: FootprintLookup) -> list[vtk.vtkActor]:
+#: What the solder fillets' one actor is called, so a test can count them.
+JOINTS_ACTOR_NAME = "solder-joints"
+
+
+def build_joints(
+    doc: PerfDocument, lookup: FootprintLookup, *, unsoldered: str | None = None
+) -> list[vtk.vtkActor]:
     """A fillet of solder round every lead where it comes through the solder side, in one
     instanced actor.
+
+    ``unsoldered`` is a component id whose leads get none: the part that is still on its
+    way down in the Play animation has not touched the board, and a fillet under it would
+    say it had.
 
     The leads came out of bare rings: a board with every part fitted and nothing soldered,
     on the one view whose job is to show the solder side. Not drawn on a hole a mounting
@@ -7344,6 +7354,8 @@ def build_joints(doc: PerfDocument, lookup: FootprintLookup) -> list[vtk.vtkActo
         if footprint is None:
             continue
         radius = max(radius, footprint.lead_diameter / 2 if footprint.lead_diameter else 0.0)
+        if comp.id == unsoldered:
+            continue
         for _pin, hole in all_pin_holes(comp, footprint):
             if not (0 <= hole.col < board.cols and 0 <= hole.row < board.rows):
                 continue
@@ -7364,6 +7376,7 @@ def build_joints(doc: PerfDocument, lookup: FootprintLookup) -> list[vtk.vtkActo
     actor.SetMapper(glyph)
     actor.GetProperty().SetColor(*SOLDER_RGB)
     _finish(actor.GetProperty(), SOLDER_MAT)
+    actor.SetObjectName(JOINTS_ACTOR_NAME)
     return [actor]
 
 
@@ -7569,6 +7582,7 @@ def populate_renderer(
     pin_names: bool = True,
     board_notes: bool = True,
     subject_actors: list[vtk.vtkActor] | None = None,
+    arriving: list[vtk.vtkActor] | None = None,
     owners: dict[vtk.vtkActor, ActorOwner] | None = None,
 ) -> dict[str, int]:
     """Rebuild the board's actors in an EXISTING renderer, leaving the camera alone.
@@ -7582,6 +7596,11 @@ def populate_renderer(
     answer worked out from the footprint. ``owners``, if given, is filled with the part or
     conductor each of their solids belongs to, which is how a click in the interactive
     view finds what it landed on (:func:`owner_at`).
+
+    ``arriving``, if given, is filled with everything that moves when the highlighted PART
+    is lowered into its holes (``ui/arrival.py``): its solids and the names printed on its
+    own module, which rise with it. The part has no solder fillets then -- it has not
+    reached the board -- so they appear when it lands and the view is drawn again.
 
     The BOARD is never dimmed, only the other parts and the copper. A step card says which
     holes a part goes in, and a reader who cannot see the holes has been given a picture
@@ -7647,7 +7666,9 @@ def populate_renderer(
         # Not in an exploded view: the parts are off the board there, and a joint round a
         # lead that is not in its hole is solder on nothing. Nor on a breadboard, which is
         # not soldered.
-        for actor in build_joints(doc, lookup):
+        for actor in build_joints(
+            doc, lookup, unsoldered=highlight if arriving is not None else None
+        ):
             ren.AddActor(actor)
     leaders = build_drop_lines(lookup, doc, exploded_mm)
     if leaders is not None:
@@ -7669,6 +7690,8 @@ def populate_renderer(
                 (_pick_out if subject else _dim)(actor)
             if subject and subject_actors is not None:
                 subject_actors.append(actor)
+            if subject and arriving is not None:
+                arriving.append(actor)
             if owners is not None:
                 owners[actor] = ("component", comp.id)
             ren.AddActor(actor)
@@ -7684,6 +7707,8 @@ def populate_renderer(
                     _lift(actor, exploded_mm if on_module else 0.0)
                     if highlight is not None:
                         (_pick_out if subject else _dim)(actor)
+                    if subject and on_module and arriving is not None:
+                        arriving.append(actor)
                     if owners is not None:
                         owners[actor] = ("component", comp.id)
                     ren.AddActor(actor)
