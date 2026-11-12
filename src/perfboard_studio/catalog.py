@@ -1819,6 +1819,45 @@ CATALOG: tuple[CatalogPart, ...] = (
     # Bluetooth serial modules on their carrier boards. The HC-05 is the one on the ZS-040
     # board with an EN pin where older boards had KEY; the HC-06 is the four-pin slave-only
     # one. Both run at 3.3 V inside, and their RXD is not 5 V tolerant.
+    CatalogPart("ftdi-basic", "FTDI / USB-serial basic board (on a header)", "connector", "hdr-1x6",
+                "USB to serial adapter for programming and logging. Its cable plugs into this "
+                "6-pin header: GND CTS VCC TXO RXI DTR from pin 1",
+                _legs("GND", "CTS", "VCC", "TXO", "RXI", "DTR"), value="FTDI BASIC",
+                ref_prefix="J",
+                source=(
+                    "SparkFun FTDI Basic Breakout and Serial Basic Breakout, 1 x 6 header read "
+                    "off their Eagle boards: GND, CTS, VCC, TXO, RXI, DTR, the order the Arduino "
+                    "Pro Mini's programming header expects. The FTDI cable has RTS on the sixth "
+                    "lead where these have DTR"
+                ),
+                check=(
+                    "TXO goes to the controller's RX and RXI to its TX. Pick 3.3 V or 5 V on the "
+                    "board's jumper before it is plugged into the target, and DTR goes to the "
+                    "target's reset through a 100 nF capacitor. " + _CABLED_CHECK
+                ),
+                aliases=("FTDI", "FT232", "FT232RL", "CH340", "USB serial", "USB-serial", "UART",
+                         "programmer", "seri adaptör", "USB seri")),
+    CatalogPart("pca9685-servo-driver", "PCA9685 16-channel PWM driver (on a header)", "connector",
+                "hdr-1x6",
+                "16-channel 12-bit PWM driver on I2C, for servos and LEDs. Its cable plugs into "
+                "this 6-pin header: V+ VCC SDA SCL OE GND from pin 1",
+                _legs("V+", "VCC", "SDA", "SCL", "OE", "GND"), value="PCA9685",
+                ref_prefix="J",
+                source=(
+                    "Adafruit 16-channel PWM/Servo board (rev C) Eagle board, the 1 x 6 header "
+                    "along its short edge, numbered from the V+ end; its silkscreen reads the "
+                    "other way, GND first. V+ is the servo supply, joined to the channels' middle "
+                    "pins and to the screw terminal through a reverse-polarity MOSFET, and VCC "
+                    "is the chip's 3.3 to 5 V"
+                ),
+                check=(
+                    "V+ is the servo supply and is not the chip's VCC: bring each from its own "
+                    "source, with the grounds joined. OE enables the outputs when low and "
+                    "a 10k on the board holds it low, so it can be left unwired. The servo plugs are on the board's 16 channel headers, not on "
+                    "this one. " + _CABLED_CHECK
+                ),
+                aliases=("PCA9685", "servo driver", "servo shield", "16 channel PWM", "PWM driver",
+                         "servo sürücü")),
     CatalogPart("hc-05", "HC-05 Bluetooth module, ZS-040 (on a header)", "connector", "hdr-1x6",
                 "Bluetooth serial module, master or slave, 3.3 V logic. Its cable plugs into "
                 "this 6-pin header: STATE RXD TXD GND VCC EN from pin 1",
@@ -2523,6 +2562,26 @@ CATALOG: tuple[CatalogPart, ...] = (
                     "Raspberry Pi Pico datasheet pinout"
                 ),
                 check=_MODULE_TOP),
+    CatalogPart("sparkfun-hx711", "SparkFun HX711 load cell amplifier", "module",
+                "mod-2x5-p11-r1-30.48x22.86x2-s8.5",
+                "24-bit ADC for a load cell, two 1 x 5 headers 27.94 mm apart",
+                _two_columns(("AVDD", "GND", "A-", "A+", "GND"), ("VDD", "VCC", "DAT", "SCK", "GND")),
+                ref_prefix="U", value="HX711",
+                source=(
+                    "SparkFun HX711 Load Cell Amplifier breakout, its Eagle board: 30.48 x 22.86 mm, "
+                    "a 1 x 5 header down each side (left AVDD, GND, A-, A+, GND; right VDD, VCC, "
+                    "DAT, SCK, GND) and a separate 2-pin B+ and B- header on the board's middle"
+                ),
+                check=(
+                    "The load cell goes to A+ and A-, a second one to the 2-pin B+ and B- header, "
+                    "which is off the pin grid. AVDD is made on the board from VCC and brought out "
+                    "for the bridge; VCC and VDD are both inputs, so feed them from one supply. "
+                    "The green HX711 boards sold under the same name carry a different header, so "
+                    "compare the names printed on the board with these before using it. "
+                    + _MODULE_TOP
+                ),
+                aliases=("HX711", "load cell", "loadcell", "scale", "weight", "yük hücresi",
+                         "terazi")),
     CatalogPart("pololu-a4988", "Pololu A4988 carrier", "module",
                 "mod-2x8-p5-r1-15.24x20.32x2-s8.5",
                 "Stepper motor driver, 8-35 V, 1 A per coil (2 A with cooling), rows 12.7 mm apart",

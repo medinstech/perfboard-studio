@@ -118,6 +118,8 @@ def test_a_module_is_a_module_and_its_rows_are_where_its_source_measured_them() 
         "nrf24l01": 2.54,
         # Two ROWS of four across the end of the board: Ai-Thinker's figure 2.1.
         "esp-01": 2.54,
+        # SparkFun's Eagle board: its headers at x = 1.27 and 29.21 mm, 1.1 inch apart.
+        "sparkfun-hx711": 27.94,
     }
     modules = [part for part in CATALOG if part.category == "module"]
     assert {part.id for part in modules} == set(expected_rows_mm)

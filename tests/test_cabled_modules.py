@@ -208,6 +208,8 @@ SOLD_AS = {
     "st7735-tft-18": "ST7735 TFT",
     "nokia-5110": "Nokia 5110",
     "ttp223-touch": "TTP223",
+    "ftdi-basic": "FTDI BASIC",
+    "pca9685-servo-driver": "PCA9685",
 }
 
 

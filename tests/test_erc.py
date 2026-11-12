@@ -133,7 +133,9 @@ def test_the_catalog_s_supply_pins_are_exactly_the_ones_named_as_supplies() -> N
     are a split-supply op-amp's rails and VS the LM386's; VBAT on a DS1307 is a coin cell it
     can run without, and VREF on an ADC is the scale it measures against. VEE is the
     74HC4051's negative rail, which lets it switch signals below ground. VCCa and VCCb are the
-    KY-051 level shifter's two supplies, one for each side."""
+    KY-051 level shifter's two supplies, one for each side. AVDD is the HX711's analogue
+    supply: made on the board from VCC, but it is what the bridge hangs on, so an unwired
+    one is worth a warning."""
     found: dict[str, set[str]] = {}
     for entry in search_catalog(""):
         for _, name in entry.pin_names:
@@ -141,7 +143,9 @@ def test_the_catalog_s_supply_pins_are_exactly_the_ones_named_as_supplies() -> N
             if kind is not None:
                 found.setdefault(kind, set()).add(name)
     assert found == {
-        "positive": {"VCC", "VCC1", "VCC2", "VCCa", "VCCb", "VDD", "AVCC", "+VS", "V+", "VS"},
+        "positive": {
+            "VCC", "VCC1", "VCC2", "VCCa", "VCCb", "VDD", "AVCC", "AVDD", "+VS", "V+", "VS",
+        },
         "ground": {"GND", "AGND", "DGND"},
         "negative": {"VSS", "V-", "VEE"},
     }

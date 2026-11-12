@@ -127,6 +127,9 @@ ArtKind = Literal[
     # A 24-leg SSOP (Toshiba's SSOP24-P-300-0.65A, 7.8 x 5.6 mm, legs 0.65 mm apart): the
     # TB6612FNG's. Drawn as the TSSOP is, from ``GULL_WING_LEGS``.
     "ssop24",
+    # A 16-leg SO (JEDEC MS-012: 9.9 x 3.9 mm body, legs 1.27 mm apart, 6.0 mm over the legs):
+    # the HX711's. Drawn as the TSSOP is, from ``GULL_WING_LEGS``.
+    "so16",
     # A SOT-23-8: TI's DCN (R-PDSO-G8), 3.0 x 1.75 mm, legs 0.65 mm apart -- an INA219's.
     "sot23-8",
     "qfn",
@@ -174,6 +177,8 @@ TSSOP28_REACH_MM = 1.0
 GULL_WING_LEGS: dict[str, tuple[int, float, float]] = {
     "tssop28": (TSSOP28_LEGS_PER_SIDE, TSSOP28_PITCH_MM, TSSOP28_REACH_MM),
     "ssop24": (12, 0.65, 1.0),
+    # MS-012: a 6.0 mm span over a 3.9 mm body, eight legs a side.
+    "so16": (8, 1.27, 1.05),
     # TI's DCN drawing: a 3.00 mm span over a 1.75 mm body, at most.
     "sot23-8": (4, 0.65, 0.625),
 }
@@ -1435,6 +1440,52 @@ HC_SR501_MODULE = ModuleArt(
     ),
 )
 
+#: SparkFun's HX711 Load Cell Amplifier breakout, read off SparkFun's own Eagle board
+#: (SparkFun_HX711_Breakout.brd, the 1.2 x 0.9 inch board): the SO-16 in the middle, its pin 1
+#: at the AVDD end and the VCC-side row of pins, the PNP transistor and the 100 ohm, 20k,
+#: 8.2k resistors and the 3.3 uH bead of the analogue supply in a column by the A+ and A- row,
+#: the 10 uF 1210 and 0.1 uF 0603 decoupling along the AVDD end, the bare pads of the
+#: second load cell's B+ and B- header, and four 3.3 mm mounting holes. ``u`` runs from the
+#: AVDD end to the GND end of the rows, ``v`` from the AVDD row to the VDD row. The jumper
+#: pad SJ2 and the logo are on the back and not drawn. Sizes are the packages': the 1210 is
+#: the board's tDocu 3.2 x 2.6 mm, the SO-16 JEDEC MS-012's.
+SPARKFUN_HX711_MODULE = ModuleArt(
+    key="sparkfun-hx711",
+    board_colour=SPARKFUN_RED,
+    names=("hx711",),
+    board=(22.86, 30.48),
+    pins=10,
+    frame="columns",
+    landmark=("AVDD", -1, -1),
+    names_over_parts=True,
+    parts=(
+        ArtPart("so16", 0.0, 0.0, 9.9, 6.0, 1.75, facing=-1, across=-1, text="HX711"),
+        ArtPart("sot23", -5.40, -6.40, 2.9, 2.4, 1.1, along_v=True, facing=-1),
+        ArtPart("chip-r", 6.98, -6.35, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-r", 5.08, -6.35, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-c", 3.17, -6.35, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", 1.27, -6.35, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-r", -0.63, -6.35, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-r", -2.54, -6.35, 2.0, 1.25, 0.9, along_v=True),
+        ArtPart("chip-c", 6.98, 0.0, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-r", -2.54, 6.35, 1.6, 0.8, 0.5, along_v=True),
+        ArtPart("chip-c", -4.45, 6.35, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -8.89, -7.62, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -8.89, -3.18, 3.2, 2.6, 1.7, along_v=True),
+        ArtPart("chip-c", -8.89, 2.54, 1.6, 0.8, 0.8, along_v=True),
+        ArtPart("chip-c", -8.89, 7.24, 3.2, 2.6, 1.7, along_v=True),
+        ArtPart("pads", 1.27, 6.35, 5.08, 1.7, 0.0),
+        ArtPart("hole", 8.89, -12.70, 3.3, 3.3, 0.0),
+        ArtPart("hole", 8.89, 12.70, 3.3, 3.3, 0.0),
+        ArtPart("hole", -8.89, -12.70, 3.3, 3.3, 0.0),
+        ArtPart("hole", -8.89, 12.70, 3.3, 3.3, 0.0),
+    ),
+    source=(
+        "SparkFun HX711 Load Cell Amplifier breakout Eagle board (every part's position and "
+        "package; the SJ2 jumper and the logos are on the back); JEDEC MS-012 (the SO-16)"
+    ),
+)
+
 MODULE_ARTS: tuple[ModuleArt, ...] = (
     LM2596_MODULE,
     SN65HVD230_MODULE,
@@ -1462,6 +1513,7 @@ MODULE_ARTS: tuple[ModuleArt, ...] = (
     ESP01_MODULE,
     NRF24_MODULE,
     HC_SR501_MODULE,
+    SPARKFUN_HX711_MODULE,
 )
 
 

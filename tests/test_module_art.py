@@ -787,6 +787,7 @@ def test_a_module_board_is_the_colour_its_maker_makes_it() -> None:
         "hc-sr501": None,  # blue, as the photograph's is
         "sparkfun-tb6612fng": SPARKFUN_RED,
         "sparkfun-pro-mini": SPARKFUN_RED,
+        "sparkfun-hx711": SPARKFUN_RED,
         "sparkfun-logic-level-converter": SPARKFUN_RED,
         "adafruit-ina219": ADAFRUIT_BLUE,
         "adafruit-ina219-stemma-qt": ADAFRUIT_BLACK,
@@ -1243,6 +1244,7 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
     ("pololu-drv8825", ""): (1, -1),  # Pololu's photograph: VMOT end, trimmer side
     ("pololu-drv8833", "8833"): (1, 1),  # Pololu's picture: towards AOUT1
     ("sparkfun-tb6612fng", "TB6612"): (-1, -1),  # SparkFun's board: U1's pad 1, towards VM
+    ("sparkfun-hx711", "HX711"): (-1, -1),  # SparkFun's board: U1's pad 1, towards AVDD and VCC
     # Adafruit's boards, both revisions: U1's pad 1, towards VIN+ and the shunt.
     ("adafruit-ina219", ""): (1, -1),
     ("adafruit-ina219-stemma-qt", ""): (1, -1),
@@ -1256,6 +1258,7 @@ PIN_ONE_CORNERS: dict[tuple[str, str], tuple[int, int] | None] = {
 _CHIP_SIZES: dict[str, tuple[float, float, float]] = {
     "qfn": (5.0, 5.0, 0.9),
     "soic8": (4.9, 6.0, 1.6),
+    "so16": (9.9, 6.0, 1.75),
     "ssop24": (7.8, 7.6, 1.5),
     "sot23-8": (3.0, 3.0, 1.45),
     "tssop28": (9.7, 6.4, 1.2),

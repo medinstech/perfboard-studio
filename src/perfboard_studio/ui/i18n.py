@@ -3051,6 +3051,66 @@ TURKISH: Mapping[str, str] = {
         "modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların kartları aynı "
         "sırayla bağlanmamıştır."
     ),
+    "FTDI / USB-serial basic board (on a header)": (
+        "FTDI / USB-seri temel kart (header üzerinde)"
+    ),
+    "USB to serial adapter for programming and logging. Its cable plugs into this 6-pin"
+    " header: GND CTS VCC TXO RXI DTR from pin 1": (
+        "Programlama ve kayıt için USB - seri adaptör. Kablosu bu 6 pinli header'a "
+        "takılır: 1. pinden GND CTS VCC TXO RXI DTR"
+    ),
+    "TXO goes to the controller's RX and RXI to its TX. Pick 3.3 V or 5 V on the "
+    "board's jumper before it is plugged into the target, and DTR goes to the target's "
+    "reset through a 100 nF capacitor. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "TXO denetleyicinin RX'ine, RXI de TX'ine gider. Hedefe takmadan önce kartın "
+        "jumper'ıyla 3,3 V ya da 5 V seçin; DTR hedefin reset ucuna 100 nF'lık bir "
+        "kondansatörle gider. Her kabloyu yerine göre değil, modülün pinlerinin yanında"
+        " yazan ada göre bağlayın: satıcıların kartları aynı sırayla bağlanmamıştır."
+    ),
+    "PCA9685 16-channel PWM driver (on a header)": (
+        "PCA9685 16 kanallı PWM sürücü (header üzerinde)"
+    ),
+    "16-channel 12-bit PWM driver on I2C, for servos and LEDs. Its cable plugs into "
+    "this 6-pin header: V+ VCC SDA SCL OE GND from pin 1": (
+        "Servolar ve LED'ler için I2C üzerinden 16 kanallı, 12 bit PWM sürücü. Kablosu "
+        "bu 6 pinli header'a takılır: 1. pinden V+ VCC SDA SCL OE GND"
+    ),
+    "V+ is the servo supply and is not the chip's VCC: bring each from its own source, "
+    "with the grounds joined. OE enables the outputs when low and a 10k on the board "
+    "holds it low, so it can be left unwired. The servo plugs are on the board's 16 "
+    "channel headers, not on this one. Match each lead to the name printed beside the "
+    "module's pins, not to its place: sellers' boards are not all wired in the same "
+    "order.": (
+        "V+ servo beslemesidir ve çipin VCC'si değildir: her birini kendi kaynağından "
+        "getirin, topraklar birleşik olsun. OE düşükken çıkışları açar ve kartın "
+        "üzerindeki bir 10k onu düşük tutar, bu yüzden boş bırakılabilir. Servo fişleri"
+        " bu header'da değil, kartın 16 kanal header'ındadır. Her kabloyu yerine göre "
+        "değil, modülün pinlerinin yanında yazan ada göre bağlayın: satıcıların "
+        "kartları aynı sırayla bağlanmamıştır."
+    ),
+    "SparkFun HX711 load cell amplifier": (
+        "SparkFun HX711 yük hücresi yükselteci"
+    ),
+    "24-bit ADC for a load cell, two 1 x 5 headers 27.94 mm apart": (
+        "Yük hücresi için 24 bit ADC, 27,94 mm arayla iki adet 1 x 5 header"
+    ),
+    "The load cell goes to A+ and A-, a second one to the 2-pin B+ and B- header, which"
+    " is off the pin grid. AVDD is made on the board from VCC and brought out for the "
+    "bridge; VCC and VDD are both inputs, so feed them from one supply. The green HX711"
+    " boards sold under the same name carry a different header, so compare the names "
+    "printed on the board with these before using it. The height of what is on the "
+    "board is an estimate, and so is its colour; the pins, the rows and the board "
+    "outline are measured.": (
+        "Yük hücresi A+ ve A-'ye, ikincisi ise ızgaranın dışındaki 2 pinli B+ ve B- "
+        "header'ına gider. AVDD kartın üzerinde VCC'den üretilir ve köprü için dışarı "
+        "çıkarılır; VCC ile VDD ikisi de girişlerdir, bu yüzden ikisini aynı kaynaktan "
+        "besleyin. Aynı adla satılan yeşil HX711 kartlarının header'ı farklıdır: "
+        "kullanmadan önce kartın üzerinde yazan adları bunlarla karşılaştırın. Kartın "
+        "üzerindekilerin yüksekliği ve rengi tahmindir; pinler, sıralar ve kart "
+        "çerçevesi ölçülmüştür."
+    ),
     "MAX485 RS-485 module (on a header)": (
         "MAX485 RS-485 modülü (header üzerinde)"
     ),

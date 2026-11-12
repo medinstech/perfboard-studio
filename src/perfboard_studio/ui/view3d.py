@@ -6274,6 +6274,7 @@ _ART_BUILDERS: dict[str, Callable[[_ArtSolid], list[_Piece]]] = {
     "soic8": _art_soic8,
     "tssop28": _art_gull_wing,
     "ssop24": _art_gull_wing,
+    "so16": _art_gull_wing,
     "sot23-8": _art_gull_wing,
     "qfn": _art_qfn,
     "tqfp32": _art_tqfp32,
