@@ -10569,6 +10569,7 @@ class MainWindow(QMainWindow):
             to_review=len(
                 {cid for note in self._last_wiring for cid in note.conductor_ids}
             ),
+            off_face=len(self._current_face_notes()),
         )
         size = _board_size_name(self.bus.document.board)
         side = t("component side") if self.side == "top" else f'{t("solder side")} ({t("mirrored")})'
@@ -10889,8 +10890,8 @@ class MainWindow(QMainWindow):
         prefers, and why. A preference is a price, never a rule (``Net.preferred_side``),
         so this is said as information -- in the secondary colour, counted as nothing --
         and a click on a row lights its net."""
-        said_of, notes = self._face_notes
-        if said_of is not self.bus.document or not notes:
+        notes = self._current_face_notes()
+        if not notes:
             return
         rows = [say(note.message) for note in notes]
         root = QTreeWidgetItem([
@@ -10914,6 +10915,12 @@ class MainWindow(QMainWindow):
             root.addChild(leaf)
         root.setExpanded(True)
 
+    def _current_face_notes(self) -> tuple[FaceNote, ...]:
+        """The last Auto-wire's face notes while the board is still the one they were said
+        of: any edit since may have moved the copper they are about."""
+        said_of, notes = self._face_notes
+        return notes if said_of is self.bus.document else ()
+
     def _say_face_notes(
         self, planned_on: PerfDocument, plan: AutoroutePlan | ReroutePlan
     ) -> str:
@@ -10922,6 +10929,7 @@ class MainWindow(QMainWindow):
         the plan was made FROM, before its copper was laid."""
         notes = face_notes(planned_on, plan, self.lookup)
         self._face_notes = (self.bus.document, notes) if notes else (None, ())
+        self._refresh_problems_bar()
         if not notes:
             return ""
         if self._last_lvs is not None:

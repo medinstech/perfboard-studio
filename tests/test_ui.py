@@ -19825,6 +19825,7 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
     pin there is under J2's plastic. The window says so -- on the status line and in a
     Faces group of the Problems drawer -- and counts it as nothing: a preference is a price,
     never a rule."""
+    from perfboard_studio.ui import theme
     from perfboard_studio.ui.engine_text import say
     from perfboard_studio.ui.i18n import counted, t
     from perfboard_studio.ui.main import ROLE_FINDING_KEY
@@ -19867,13 +19868,22 @@ def test_auto_wire_says_a_net_wired_off_its_face_as_information_not_a_problem() 
         window._on_drc_item_clicked(faces.child(0), 1)
         assert note.net_id in window._selected_net_ids()
 
-        # Counted as nothing: the badge reads the same with the note and without it.
+        # On the bar, in the neutral colour beside the facts, and counted as nothing: the
+        # badge reads the same with the note and without it.
+        off = counted(1, t("{count} net off its face"), t("{count} nets off their face"))
+        assert off in window.problems_bar.facts.text()
+        assert theme.ink("●", "secondary") + " " + off in window.problems_bar.facts.text()
         counts: list[dict] = []
+        real_set_counts = window.problems_bar.set_counts
         window.problems_bar.set_counts = lambda **kw: counts.append(kw)  # type: ignore[method-assign]
         window._refresh_problems_bar()
         window._face_notes = (None, ())
         window._refresh_problems_bar()
+        assert (counts[0].pop("off_face"), counts[1].pop("off_face")) == (1, 0)
         assert counts[0] == counts[1]
+        window.problems_bar.set_counts = real_set_counts  # type: ignore[method-assign]
+        window._refresh_problems_bar()
+        assert off not in window.problems_bar.facts.text()
         # ...and the group goes with the note.
         window._refresh_drc_panel(window._last_violations, window._last_lvs)
         assert all(

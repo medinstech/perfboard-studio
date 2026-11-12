@@ -109,13 +109,18 @@ class ProblemsBar(QWidget):
         nets: int,
         to_check: int = 0,
         to_review: int = 0,
+        off_face: int = 0,
     ) -> None:
         """What the bar says. ``matched`` is None while there is nothing on the board to
         compare with the circuit. ``to_check`` is the findings the build guide makes a check
         at the bench of (``guide.is_bench_check``): counted beside what is left to wire,
         never in the badge, which is what is wrong. ``to_review`` is the wires worth a look
         (``wiringreview``): not wrong either, so not in the badge -- but not "No problems"
-        over them, which is what Auto-wire finished on over wires lying across pins 44 times."""
+        over them, which is what Auto-wire finished on over wires lying across pins 44 times.
+        ``off_face`` is the nets wired off the face they prefer (the drawer's Faces group):
+        information, in the neutral colour, counted as nothing. Said only in the drawer, it
+        was the fifth clause of a long status line and a group in a closed drawer, and a
+        builder who set GND to the component side saw it come back underneath unexplained."""
         self.errors, self.warnings = errors, warnings
         total = errors + warnings
         if total:
@@ -148,6 +153,11 @@ class ProblemsBar(QWidget):
             facts.append(
                 theme.ink("●", "secondary") + " "
                 + t("{count} to check at the bench").format(count=to_check)
+            )
+        if off_face:
+            facts.append(
+                theme.ink("●", "secondary") + " "
+                + counted(off_face, t("{count} net off its face"), t("{count} nets off their face"))
             )
         if matched is not None and nets:
             facts.append(t("Matches the circuit: {matched} of {total} nets").format(

@@ -23,7 +23,8 @@ closed without a bump.
 ### Added
 
 - **Auto-wire says, in the window, when a net was wired off the face it prefers.** The
-  status line names how many, and a Faces group in the Problems drawer gives each net's
+  status line names how many, the Problems bar says "1 net off its face" in its neutral
+  colour with the drawer closed, and a Faces group in the Problems drawer gives each net's
   reason (its pins on that face are under a part's body, the board has no pads there, or no
   clear way was found), a click lighting the net. It is information, not a problem: the
   badge does not count it and nothing waits on it. Redo Wiring says it too, also when the
