@@ -2745,7 +2745,7 @@ def test_measuring_reports_three_different_distances() -> None:
     assert "C7" in text and "G9" in text
     assert "5 × 3 holes" in text
     assert "11.36 mm" in text  # sqrt(4^2 + 2^2) * 2.54
-    assert "6 step(s)" in text
+    assert "6 steps by trace" in text
 
 
 def test_measuring_the_same_hole_twice_is_not_a_measurement() -> None:
@@ -13620,7 +13620,7 @@ def test_the_module_wizard_describes_a_module_and_its_pin_names() -> None:
     assert get_footprint(footprint.id) == footprint
 
     dialog.pin_names_edit.setPlainText("3V3 GND CTX CRX")
-    assert "4 name(s) for 6 pin(s)" in dialog.summary.text()
+    assert "4 names for 6 pins." in dialog.summary.text()
     dialog.pin_names_edit.setPlainText("3V3, GND, CTX, CRX, CAN H, CAN L")
     assert dict(dialog.chosen_pin_names()) == {
         "1": "3V3", "2": "GND", "3": "CTX", "4": "CRX", "5": "CAN H", "6": "CAN L",
@@ -18523,7 +18523,7 @@ def test_a_group_turned_over_says_how_many_need_rewiring() -> None:
         window.scene.select_components([parts[ref].id for ref in resistors])
         window._refresh_selection_state()
         window.on_side_selection()
-        assert window.statusBar().currentMessage().startswith("Moved 2 part(s) to the solder side")
+        assert window.statusBar().currentMessage().startswith("Moved 2 parts to the solder side")
         window.bus.undo()
 
         window.scene.select_components([parts[ref].id for ref in [*resistors, "U1"]])
@@ -18531,7 +18531,7 @@ def test_a_group_turned_over_says_how_many_need_rewiring() -> None:
         window.on_side_selection()
         message = window.statusBar().currentMessage()
         assert message.startswith("1 of 3 parts changed holes: its wiring needs redoing"), message
-        assert "Moved 3 part(s) to the solder side" in message
+        assert "Moved 3 parts to the solder side" in message
     finally:
         _close(window)
 

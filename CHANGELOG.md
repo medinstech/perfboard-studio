@@ -251,6 +251,10 @@ closed without a bump.
   to measure for isolation", counted from the planner's pads, beside the Problems drawer and
   bar saying "1 to check at the bench", counted from DRC's findings. The line now says the
   drawer's words with the drawer's count.
+- **A count is said as words: "1 part", "3 parts", never "3 part(s)".** The undo labels a
+  part or a component gives ("Place and arrange 8 parts from the schematic", "Rotate 1
+  component", "Paste 2 parts and 1 connection"), every count the window's status line and
+  questions say, the Parts panel's pin counts and the 2D view's measure and drag banner.
 - **A board opened while Home is showing comes to the front.** Home's own cards left Home
   first, but the menu bar stays under it, and File ▸ Examples, Open, New Board and the
   command palette opened the board behind Home, which stayed in front with nothing saying

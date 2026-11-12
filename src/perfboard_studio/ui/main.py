@@ -215,6 +215,7 @@ from perfboard_studio.commands import (
     UpdateComponentsPayload,
     UpdateNetPayload,
     UpdatePartPayload,
+    count_noun,
     create_document_id_generator,
     create_standard_registry,
     create_starter_document,
@@ -1099,7 +1100,7 @@ def populate_part_tree(tree: QTreeWidget, text: str, custom: dict[str, Footprint
         leaf.setToolTip(
             0,
             f"{footprint_label(footprint.name)}\n{footprint.id} — "
-            + t("{count} pin(s)").format(count=len(footprint.pins)),
+            + counted(len(footprint.pins), t("{count} pin"), t("{count} pins")),
         )
         return leaf
 
@@ -1659,15 +1660,18 @@ class CustomPartDialog(QDialog):
             self.summary.setText(t("Those measurements do not make a part."))
             return
         self.identifier.setText(footprint.id)
-        summary = t("{name} — {pins} pin(s), {height} mm tall").format(
+        summary = counted(
+            len(footprint.pins),
+            t("{name} — {count} pin, {height} mm tall"),
+            t("{name} — {count} pins, {height} mm tall"),
             name=footprint_label(footprint.name),
-            pins=len(footprint.pins),
             height=f"{footprint.body_height:g}",
         )
         typed = self._typed_names()
         if family.names and typed and len(typed) != len(footprint.pins):
-            summary += "\n" + t("{names} name(s) for {pins} pin(s).").format(
-                names=len(typed), pins=len(footprint.pins)
+            summary += "\n" + t("{names} for {pins}.").format(
+                names=counted(len(typed), t("{count} name"), t("{count} names")),
+                pins=counted(len(footprint.pins), t("{count} pin"), t("{count} pins")),
             )
         self.summary.setText(summary)
 
@@ -11448,10 +11452,17 @@ class MainWindow(QMainWindow):
             # Auto-place rearranges what is ON the board; a design waiting to go on it is
             # Place on the Board's, and "the board is empty" sent nobody there.
             self.statusBar().showMessage(
-                t(
-                    "{count} part(s) in the design are not on the board yet: Place on the "
-                    "Board puts them there, arranged."
-                ).format(count=len(self.bus.document.parts))
+                counted(
+                    len(self.bus.document.parts),
+                    t(
+                        "{count} part in the design is not on the board yet: Place on the "
+                        "Board puts it there."
+                    ),
+                    t(
+                        "{count} parts in the design are not on the board yet: Place on the "
+                        "Board puts them there, arranged."
+                    ),
+                )
                 if self.bus.document.parts
                 else t("Nothing to place: the board is empty."),
                 8000,
@@ -12024,10 +12035,17 @@ class MainWindow(QMainWindow):
                     "plans again.</p>"
                 ).format(names=", ".join(names))
                 + "<p>"
-                + t(
-                    "{removed} conductor(s) on them go and are planned again; copper with "
-                    "no net assigned is left alone. One Ctrl+Z puts it all back."
-                ).format(removed=removed)
+                + counted(
+                    removed,
+                    t(
+                        "{count} conductor on them goes and is planned again; copper with "
+                        "no net assigned is left alone. One Ctrl+Z puts it all back."
+                    ),
+                    t(
+                        "{count} conductors on them go and are planned again; copper with "
+                        "no net assigned is left alone. One Ctrl+Z puts it all back."
+                    ),
+                )
                 + "</p>"
             )
             redo = box.addButton(t("Redo Their Wiring…"), QMessageBox.ButtonRole.AcceptRole)
@@ -12570,7 +12588,9 @@ class MainWindow(QMainWindow):
             if len(turns) == 1
             else self.bus.dispatch("component.rotateMany", RotateComponentsPayload(rotations=turns))
         )
-        self._report_group(result, t("Rotated {count} part(s)").format(count=len(turns)))
+        self._report_group(
+            result, counted(len(turns), t("Rotated {count} part"), t("Rotated {count} parts"))
+        )
 
     def _report_group(self, result: DispatchResult, done: str) -> None:
         """Say what a group gesture did, or why it did nothing at all.
@@ -12611,7 +12631,9 @@ class MainWindow(QMainWindow):
             if len(flips) == 1
             else self.bus.dispatch("component.mirrorMany", MirrorComponentsPayload(mirrors=flips))
         )
-        self._report_group(result, t("Mirrored {count} part(s)").format(count=len(flips)))
+        self._report_group(
+            result, counted(len(flips), t("Mirrored {count} part"), t("Mirrored {count} parts"))
+        )
 
     def _side_to_move_to(self, components: list[ComponentInstance]) -> BoardSide:
         """Where Move to … Side sends a selection: back to the component side when every
@@ -12650,10 +12672,18 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(say(result.description), 10000)
             return
         done = (
-            t("Moved {count} part(s) to the solder side: Ctrl+F turns the board over")
+            counted(
+                len(moves),
+                t("Moved {count} part to the solder side: Ctrl+F turns the board over"),
+                t("Moved {count} parts to the solder side: Ctrl+F turns the board over"),
+            )
             if side == "bottom"
-            else t("Moved {count} part(s) to the component side")
-        ).format(count=len(moves))
+            else counted(
+                len(moves),
+                t("Moved {count} part to the component side"),
+                t("Moved {count} parts to the component side"),
+            )
+        )
         rewired = self._moved_off_their_holes(components) if result.ok else 0
         if rewired:
             said = (
@@ -12708,14 +12738,24 @@ class MainWindow(QMainWindow):
         block = block_from_json(text)
         if block is None:
             return
-        message = t("Copied {parts} part(s), {conductors} conductor(s)").format(
-            parts=len(block.components), conductors=len(block.conductors)
+        message = t("Copied {parts}, {conductors}").format(
+            parts=counted(len(block.components), t("{count} part"), t("{count} parts")),
+            conductors=counted(
+                len(block.conductors), t("{count} conductor"), t("{count} conductors")
+            ),
         )
         if block.orphaned_lead_bends:
-            message += " — " + t(
-                "{count} lead bend(s) left behind: a bent leg belongs to a part that was not "
-                "in the selection"
-            ).format(count=block.orphaned_lead_bends)
+            message += " — " + counted(
+                block.orphaned_lead_bends,
+                t(
+                    "{count} lead bend left behind: a bent leg belongs to a part that was not "
+                    "in the selection"
+                ),
+                t(
+                    "{count} lead bends left behind: a bent leg belongs to a part that was not "
+                    "in the selection"
+                ),
+            )
         self.statusBar().showMessage(message, 8000)
 
     def on_paste(self) -> None:
@@ -12766,18 +12806,22 @@ class MainWindow(QMainWindow):
         # pasted rather than on whatever happened to be selected when it was copied.
         self.scene.select_components([spec.id for spec in paste.payload.components if spec.id])
         done = (
-            t("Pasted {parts} part(s) and {conductors} conductor(s) at {hole}")
+            t("Pasted {parts} and {conductors} at {hole}")
             if what == "Paste"
-            else t("Duplicated {parts} part(s) and {conductors} conductor(s) at {hole}")
+            else t("Duplicated {parts} and {conductors} at {hole}")
         )
         message = done.format(
-            parts=len(paste.payload.components),
-            conductors=len(paste.payload.conductors),
+            parts=counted(len(paste.payload.components), t("{count} part"), t("{count} parts")),
+            conductors=counted(
+                len(paste.payload.conductors), t("{count} conductor"), t("{count} conductors")
+            ),
             hole=format_hole(at, self.bus.document.board),
         )
         if paste.dropped_conductors:
-            message += " — " + t("{count} conductor(s) would have run off the board").format(
-                count=paste.dropped_conductors
+            message += " — " + counted(
+                paste.dropped_conductors,
+                t("{count} conductor would have run off the board"),
+                t("{count} conductors would have run off the board"),
             )
         self.statusBar().showMessage(message, 8000)
 
@@ -13421,7 +13465,10 @@ class MainWindow(QMainWindow):
                 ),
             )
         )
-        self._report_group(result, t("Deleted {count} part(s)").format(count=len(components)))
+        self._report_group(
+            result,
+            counted(len(components), t("Deleted {count} part"), t("Deleted {count} parts")),
+        )
 
     def _confirm(self, title: str, body: str, verb: str) -> bool:
         """Ask before something destructive, with the SAFE answer under Enter.
@@ -13468,8 +13515,12 @@ class MainWindow(QMainWindow):
                 LockComponentsPayload(ids=tuple(c.id for c in components), locked=locking),
             )
         )
-        done = t("Locked {count} part(s)") if locking else t("Unlocked {count} part(s)")
-        self._report_group(result, done.format(count=len(components)))
+        done = (
+            counted(len(components), t("Locked {count} part"), t("Locked {count} parts"))
+            if locking
+            else counted(len(components), t("Unlocked {count} part"), t("Unlocked {count} parts"))
+        )
+        self._report_group(result, done)
 
     def on_component_properties(self, component_id: str = "") -> None:
         """Part Properties is the Properties panel. F2 puts the keyboard in the selected
@@ -13577,9 +13628,11 @@ class MainWindow(QMainWindow):
                     )
             notice += " " + t("The wiring is checked again after the change.")
             if bends:
-                notice += " " + t(
-                    "Its {count} lead bend(s) were bent to this package's pins and go with it."
-                ).format(count=bends)
+                notice += " " + counted(
+                    bends,
+                    t("Its {count} lead bend was bent to this package's pins and goes with it."),
+                    t("Its {count} lead bends were bent to this package's pins and go with it."),
+                )
             return notice
 
         chosen = self._pick_package(component.footprint_id, say_where)
@@ -13743,9 +13796,12 @@ class MainWindow(QMainWindow):
         self.view.fit_board()
         self.statusBar().showMessage(
             t(
-                "The same layout on a solderable breadboard: {parts} part(s) and {wires} "
-                "wire(s), each on the holes it had."
-            ).format(parts=len(document.components), wires=len(document.conductors)),
+                "The same layout on a solderable breadboard: {parts} and {wires}, each on the "
+                "holes it had."
+            ).format(
+                parts=counted(len(document.components), t("{count} part"), t("{count} parts")),
+                wires=counted(len(document.conductors), t("{count} wire"), t("{count} wires")),
+            ),
             8000,
         )
 
@@ -14089,8 +14145,12 @@ class MainWindow(QMainWindow):
         if result.skipped:
             note = "; " + t("{count} not written").format(count=len(result.skipped))
         self.statusBar().showMessage(
-            t("Project saved to {path}: the board and {count} generated file(s){note}").format(
-                path=result.directory, count=len(result.written), note=note
+            counted(
+                len(result.written),
+                t("Project saved to {path}: the board and {count} generated file{note}"),
+                t("Project saved to {path}: the board and {count} generated files{note}"),
+                path=result.directory,
+                note=note,
             ),
             0,
         )
@@ -14310,7 +14370,7 @@ class MainWindow(QMainWindow):
             self.view.fit_board()
             self._show_what_the_document_has()
         note = (
-            " " + t("({count} warning(s))").format(count=len(result.warnings))
+            " " + counted(len(result.warnings), t("({count} warning)"), t("({count} warnings)"))
             if result.warnings
             else ""
         )
@@ -14477,7 +14537,10 @@ class MainWindow(QMainWindow):
             )
             for net_id, nodes in by_net.items()
         ]
-        self._report_refusals(results, t("Disconnected {count} pin(s)").format(count=len(picked)))
+        self._report_refusals(
+            results,
+            counted(len(picked), t("Disconnected {count} pin"), t("Disconnected {count} pins")),
+        )
 
     def on_delete_net(self) -> None:
         net_id = self._one_selected_net()
@@ -14493,10 +14556,17 @@ class MainWindow(QMainWindow):
         freed = sum(1 for c in self.bus.document.conductors if c.net_id == net.id)
         note = (
             "\n\n"
-            + t(
-                "{count} conductor(s) already laid for it stay on the board, and Redo "
-                "Wiring and Remove Out-of-Date Wiring leave them alone from then on."
-            ).format(count=freed)
+            + counted(
+                freed,
+                t(
+                    "{count} conductor already laid for it stays on the board, and Redo "
+                    "Wiring and Remove Out-of-Date Wiring leave it alone from then on."
+                ),
+                t(
+                    "{count} conductors already laid for it stay on the board, and Redo "
+                    "Wiring and Remove Out-of-Date Wiring leave them alone from then on."
+                ),
+            )
             if freed
             else ""
         )
@@ -14624,8 +14694,11 @@ class MainWindow(QMainWindow):
                 t("Import failed"), refused(result))
             return
 
-        note = t("Imported {count} net(s) from {name}").format(
-            count=len(imported.nets), name=path.name
+        note = counted(
+            len(imported.nets),
+            t("Imported {count} net from {name}"),
+            t("Imported {count} nets from {name}"),
+            name=path.name,
         )
         lines = [say(warning) for warning in imported.warnings] + [
             f"{ref}: {line}" for ref, said in sorted(plan.notes.items()) for line in said
@@ -14682,7 +14755,7 @@ class MainWindow(QMainWindow):
                     )
                     for suggestion in wanted
                 ),
-                label=f"Add {len(wanted)} imported part(s)",
+                label=f"Add {count_noun(len(wanted), 'imported part')}",
             ),
         )
         if not result.ok:
@@ -14693,12 +14766,18 @@ class MainWindow(QMainWindow):
             for source in ("catalog", "kicad", "guess")
         }
         self.show_schematic()
-        message = t(
-            "{count} part(s) are in the design: {catalog} known from the catalog, {kicad} "
-            "matched by their KiCad footprint, {guess} guessed from their reference — check "
-            "those. Next: choose a board and place them."
-        ).format(
-            count=len(wanted),
+        message = counted(
+            len(wanted),
+            t(
+                "{count} part is in the design: {catalog} known from the catalog, {kicad} "
+                "matched by its KiCad footprint, {guess} guessed from its reference. Next: "
+                "choose a board and place it."
+            ),
+            t(
+                "{count} parts are in the design: {catalog} known from the catalog, {kicad} "
+                "matched by their KiCad footprint, {guess} guessed from their reference — "
+                "check those. Next: choose a board and place them."
+            ),
             catalog=counts["catalog"],
             kicad=counts["kicad"],
             guess=counts["guess"],
@@ -15698,8 +15777,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 t("The guide has gaps"),
-                t("Written to {folder}, with {count} thing(s) it could not cover:").format(
-                    folder=written[0].parent, count=len(gaps)
+                counted(
+                    len(gaps),
+                    t("Written to {folder}, with {count} thing it could not cover:"),
+                    t("Written to {folder}, with {count} things it could not cover:"),
+                    folder=written[0].parent,
                 )
                 + f"\n\n{lines}",
             )
@@ -15772,7 +15854,7 @@ class MainWindow(QMainWindow):
             return
 
         self.statusBar().showMessage(
-            t("{parts} part(s)").format(parts=len(drawing.symbols))
+            counted(len(drawing.symbols), t("{count} part"), t("{count} parts"))
             + " — "
             + t("{name} and {count} more").format(name=written[0].name, count=len(written) - 1),
             8000,

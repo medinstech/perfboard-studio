@@ -57,7 +57,7 @@ def test_a_group_turned_together_is_one_undo_step() -> None:
     )
     assert result.ok, result
     assert all(_by_id(bus.document, i).rotation == 90 for i in ids)
-    assert bus.history() == ("Rotate 3 component(s)",)
+    assert bus.history() == ("Rotate 3 components",)
     bus.undo()
     assert bus.document == before
 
@@ -147,7 +147,7 @@ def test_parts_and_the_copper_selected_with_them_go_in_one_step() -> None:
     result = bus.dispatch("component.deleteMany", DeleteComponentsPayload(ids=tuple(ids), conductor_ids=copper))
     assert result.ok, result
     assert not any(c.id in copper for c in bus.document.conductors)
-    assert bus.history() == ("Delete 2 component(s) and 2 conductor(s)",)
+    assert bus.history() == ("Delete 2 components and 2 conductors",)
     bus.undo()
     assert bus.document == before
 
@@ -161,10 +161,10 @@ def test_a_mixed_selection_is_locked_to_one_state_in_one_step() -> None:
     before = bus.document
     assert bus.dispatch("component.lockMany", LockComponentsPayload(ids=(first, second, third), locked=True)).ok
     assert all(_by_id(bus.document, i).locked for i in (first, second, third))
-    assert bus.history()[-1] == "Lock 3 component(s)"
+    assert bus.history()[-1] == "Lock 3 components"
     assert bus.dispatch("component.lockMany", LockComponentsPayload(ids=(first, second, third), locked=False)).ok
     assert not any(_by_id(bus.document, i).locked for i in (first, second, third))
-    assert bus.history()[-1] == "Unlock 3 component(s)"
+    assert bus.history()[-1] == "Unlock 3 components"
     bus.undo()
     bus.undo()
     assert bus.document == before

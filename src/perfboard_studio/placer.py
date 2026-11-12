@@ -102,6 +102,7 @@ from .commands import (
     MoveComponentsPayload,
     PartPlacement,
     PlacePartsPayload,
+    count_noun,
     create_document_id_generator,
     move_components,
     place_parts,
@@ -3111,7 +3112,7 @@ class DesignPlacement:
     def payload(self) -> PlacePartsPayload:
         return PlacePartsPayload(
             placements=self.placements,
-            label=f"Place and arrange {len(self.placements)} part(s) from the schematic",
+            label=f"Place and arrange {count_noun(len(self.placements), 'part')} from the schematic",
         )
 
 
@@ -4182,7 +4183,11 @@ def _plan_from(
     locked: int,
     seed: int | None,
 ) -> PlacementPlan:
-    label = f"Auto-place {len(changes)} component(s)" if changes else "Auto-place (no change)"
+    label = (
+        f"Auto-place {count_noun(len(changes), 'component')}"
+        if changes
+        else "Auto-place (no change)"
+    )
     preview = doc
     if changes:
         payload = MoveComponentsPayload(

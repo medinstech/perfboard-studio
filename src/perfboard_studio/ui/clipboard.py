@@ -50,6 +50,7 @@ from perfboard_studio.commands import (
     NewWireConductor,
     PlaceBlockPayload,
     PlaceComponentPayload,
+    count_noun,
     create_document_id_generator,
 )
 from perfboard_studio.connectivity import FootprintLookup
@@ -611,10 +612,10 @@ def paste_payload(
 
 def _describe(parts: int, copper: int) -> str:
     if parts and copper:
-        return f"Paste {parts} part(s) and {copper} connection(s)"
+        return f"Paste {count_noun(parts, 'part')} and {count_noun(copper, 'connection')}"
     if parts:
-        return f"Paste {parts} part(s)"
-    return f"Paste {copper} connection(s)"
+        return f"Paste {count_noun(parts, 'part')}"
+    return f"Paste {count_noun(copper, 'connection')}"
 
 
 def _new_conductor(

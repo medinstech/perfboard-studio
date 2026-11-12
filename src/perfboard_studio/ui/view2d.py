@@ -92,6 +92,7 @@ from perfboard_studio.commands import (
     PlaceComponentPayload,
     SetConductorPathPayload,
     UpdateBoardNotePayload,
+    count_noun,
     next_net_name,
     plan_pin_join,
     wire_side,
@@ -210,8 +211,8 @@ from .bodies import (
 )
 from .canvasinput import wheel_intent
 from .drawcheck import DrawCheck, DrawProblem, check_drawn
+from .i18n import counted, t
 from .i18n import language as current_language
-from .i18n import t
 from .moduleart import (
     ART_COLOURS,
     FRESNEL_DOME_MM,
@@ -1779,7 +1780,7 @@ def describe_span(a: HoleCoord, b: HoleCoord, board: Board) -> str:
     return (
         f"{format_hole(a, board)} → {format_hole(b, board)}   {span}   "
         f"{t('{mm:.2f} mm apart').format(mm=mm)}   "
-        f"{t('{steps} step(s) by trace').format(steps=steps)}"
+        f"{counted(steps, t('{count} step by trace'), t('{count} steps by trace'))}"
     )
 
 
@@ -7123,7 +7124,7 @@ class BoardScene(QGraphicsScene):
         """Whether the parts being dragged can land where they are, said while they are
         dragged rather than after the release: each one's outline goes red where it cannot,
         and the line returned -- and shown over every view of this board -- says where the
-        part held is going and what is in the way: "R1 → D11 · 1 pin(s) in a used hole".
+        part held is going and what is in the way: "R1 → D11 · 1 pin in a used hole".
 
         A DRAG USED TO SAY NOTHING UNTIL IT WAS OVER. The placement ghost has always been red
         where a part cannot go; a part already on the board, dragged, was the one gesture
@@ -7156,9 +7157,15 @@ class BoardScene(QGraphicsScene):
         if off:
             line += f" · {t('off the board')}"
         elif used:
-            line += f" · {t('{count} pin(s) in a used hole').format(count=used)}"
+            line += " · " + counted(
+                used, t("{count} pin in a used hole"), t("{count} pins in a used hole")
+            )
         elif unpadded:
-            line += f" · {t('{count} pin(s) where there is no pad').format(count=unpadded)}"
+            line += " · " + counted(
+                unpadded,
+                t("{count} pin where there is no pad"),
+                t("{count} pins where there is no pad"),
+            )
         self._say_drag(line)
         return line
 
@@ -7356,7 +7363,7 @@ class BoardScene(QGraphicsScene):
                     placements=tuple(
                         ComponentPlacement(id=comp_id, anchor=anchor) for comp_id, anchor in moves
                     ),
-                    label=f"Move {len(moves)} component(s)",
+                    label=f"Move {count_noun(len(moves), 'component')}",
                 ),
             )
         ]

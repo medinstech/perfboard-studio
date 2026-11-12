@@ -292,7 +292,7 @@ def test_a_group_moves_over_in_one_step_or_not_at_all() -> None:
     )
     assert bus.dispatch("component.setSideMany", both).ok
     assert [c.side for c in bus.document.components] == ["bottom", "bottom"]
-    assert bus.history() == ("Move 2 component(s) to another side",)
+    assert bus.history() == ("Move 2 components to another side",)
     bus.undo()
     assert bus.document == doc
 

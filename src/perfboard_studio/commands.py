@@ -1761,7 +1761,10 @@ class _PlaceBlock:
     def describe(self, p: PlaceBlockPayload, doc: PerfDocument) -> str:
         if p.label:
             return p.label
-        return f"Place {len(p.components)} part(s) and {len(p.conductors)} connection(s)"
+        return (
+            f"Place {count_noun(len(p.components), 'part')} and "
+            f"{count_noun(len(p.conductors), 'connection')}"
+        )
 
 
 class _MoveComponent:
@@ -1829,7 +1832,7 @@ class _MoveComponents:
     def describe(self, p: MoveComponentsPayload, doc: PerfDocument) -> str:
         if p.label:
             return p.label
-        return f"Move {len(p.placements)} component(s)"
+        return f"Move {count_noun(len(p.placements), 'component')}"
 
 
 class _RotateComponent:
@@ -2029,7 +2032,7 @@ class _RotateComponents:
         return _each_component(doc, p.rotations, rotate_component, ctx, self.type)
 
     def describe(self, p: RotateComponentsPayload, doc: PerfDocument) -> str:
-        return p.label or f"Rotate {len(p.rotations)} component(s)"
+        return p.label or f"Rotate {count_noun(len(p.rotations), 'component')}"
 
 
 class _MirrorComponents:
@@ -2041,7 +2044,7 @@ class _MirrorComponents:
         return _each_component(doc, p.mirrors, mirror_component, ctx, self.type)
 
     def describe(self, p: MirrorComponentsPayload, doc: PerfDocument) -> str:
-        return p.label or f"Mirror {len(p.mirrors)} component(s)"
+        return p.label or f"Mirror {count_noun(len(p.mirrors), 'component')}"
 
 
 class _SetComponentSides:
@@ -2053,7 +2056,7 @@ class _SetComponentSides:
         return _each_component(doc, p.sides, set_component_side, ctx, self.type)
 
     def describe(self, p: SetComponentSidesPayload, doc: PerfDocument) -> str:
-        return p.label or f"Move {len(p.sides)} component(s) to another side"
+        return p.label or f"Move {count_noun(len(p.sides), 'component')} to another side"
 
 
 class _UpdateComponents:
@@ -2065,7 +2068,7 @@ class _UpdateComponents:
         return _each_component(doc, p.updates, update_component, ctx, self.type)
 
     def describe(self, p: UpdateComponentsPayload, doc: PerfDocument) -> str:
-        return p.label or f"Update {len(p.updates)} component(s)"
+        return p.label or f"Update {count_noun(len(p.updates), 'component')}"
 
 
 class _LockComponents:
@@ -2081,8 +2084,8 @@ class _LockComponents:
         if p.label:
             return p.label
         if p.locked:
-            return f"Lock {len(p.ids)} component(s)"
-        return f"Unlock {len(p.ids)} component(s)"
+            return f"Lock {count_noun(len(p.ids), 'component')}"
+        return f"Unlock {count_noun(len(p.ids), 'component')}"
 
 
 class _DeleteComponents:
@@ -2101,8 +2104,11 @@ class _DeleteComponents:
         if p.label:
             return p.label
         if p.conductor_ids:
-            return f"Delete {len(p.ids)} component(s) and {len(p.conductor_ids)} conductor(s)"
-        return f"Delete {len(p.ids)} component(s)"
+            return (
+                f"Delete {count_noun(len(p.ids), 'component')} and "
+                f"{count_noun(len(p.conductor_ids), 'conductor')}"
+            )
+        return f"Delete {count_noun(len(p.ids), 'component')}"
 
 
 class _DeleteComponent:
@@ -2197,7 +2203,7 @@ class _AddParts:
         return doc
 
     def describe(self, p: AddPartsPayload, doc: PerfDocument) -> str:
-        return p.label or f"Add {len(p.parts)} part(s) to the schematic"
+        return p.label or f"Add {count_noun(len(p.parts), 'part')} to the schematic"
 
 
 class _UpdatePart:
@@ -2339,7 +2345,7 @@ class _PlaceParts:
             spec = p.placements[0]
             part = by_id.get(spec.id)
             return f"Place {part.ref if part is not None else spec.id} at {format_hole(spec.anchor, doc.board)}"
-        return f"Place {len(p.placements)} part(s) on the board"
+        return f"Place {count_noun(len(p.placements), 'part')} on the board"
 
 
 class _UnplaceComponent:
@@ -4876,6 +4882,14 @@ def _without(doc: PerfDocument, left: LeftOffBoard) -> PerfDocument:
         cuts=tuple(c for c in doc.cuts if c.id not in cuts),
         board_notes=tuple(n for n in doc.board_notes if n.id not in notes),
     )
+
+
+def count_noun(count: int, noun: str) -> str:
+    """``count`` and ``noun`` the way English says them: "1 part", "3 parts". An undo label
+    read "Place and arrange 8 part(s) from the schematic"; ``ui/engine_text`` knows each
+    label in both forms, and Turkish says them alike, since it takes the singular after a
+    number."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
 def preset_payload(

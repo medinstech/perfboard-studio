@@ -896,7 +896,7 @@ def test_rotating_a_selection_is_one_undo_step() -> None:
         steps = len(window.bus.history())
         window.on_rotate_selection(90)
         assert len(window.bus.history()) == steps + 1
-        assert window.bus.history()[-1] == "Rotate 3 component(s)"
+        assert window.bus.history()[-1] == "Rotate 3 components"
         window.on_undo()
         assert window.bus.document == before
     finally:
@@ -924,7 +924,7 @@ def test_locking_a_selection_is_one_step_to_one_state() -> None:
         window.on_toggle_lock_selection()  # The first part is unlocked, so: lock them all.
         assert all(c.locked for c in window.bus.document.components if c.id in ids)
         assert len(window.bus.history()) == steps + 1
-        assert window.bus.history()[-1] == "Lock 3 component(s)"
+        assert window.bus.history()[-1] == "Lock 3 components"
     finally:
         _close_window(window)
 
@@ -1001,7 +1001,7 @@ def test_a_part_dragged_onto_another_parts_pin_goes_red_and_says_so_before_the_r
         assert held.pending_anchor == other.anchor
         assert held.drag_blocked
         said = view.drag_banner.text()
-        assert said.startswith(f"{item.comp.ref} → ") and "pin(s) in a used hole" in said
+        assert said.startswith(f"{item.comp.ref} → ") and " in a used hole" in said
         assert not view.drag_banner.isHidden()
 
         _mouse(view.viewport(), QEvent.Type.MouseButtonRelease, end, NONE)

@@ -259,7 +259,7 @@ def test_falls_back_to_a_count_when_the_batch_has_no_label():
         "component.moveMany",
         MoveComponentsPayload(placements=(ComponentPlacement(id="cmp-1", anchor=HoleCoord(4, 5)),)),
     )
-    assert bus.history()[-1] == "Move 1 component(s)"
+    assert bus.history()[-1] == "Move 1 component"
 
 
 def test_refuses_an_empty_batch_of_placements():

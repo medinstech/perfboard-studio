@@ -154,8 +154,7 @@ TURKISH: Mapping[str, str] = {
     "Every part and every jumper on the same holes of a solderable breadboard, as a new document — how a circuit that works on the breadboard is made permanent. The breadboard and its file stay exactly as they are.":
         "Her parça ve her jumper, lehimlenebilir bir breadboard'un aynı deliklerinde, yeni bir belge olarak — breadboard'da çalışan bir devre böyle kalıcı hâle getirilir. Breadboard ve dosyası olduğu gibi kalır.",
     "Only a solderless breadboard's layout moves to a solderable one.": "Yalnızca lehimsiz bir breadboard'un yerleşimi lehimlenebilir bir karta taşınır.",
-    "The same layout on a solderable breadboard: {parts} part(s) and {wires} wire(s), each on the holes it had.":
-        "Aynı yerleşim lehimlenebilir bir breadboard'da: {parts} parça ve {wires} tel, her biri eski deliklerinde.",
+    "The same layout on a solderable breadboard: {parts} and {wires}, each on the holes it had.": "Aynı yerleşim lehimlenebilir bir breadboard'da: {parts} ve {wires}, her biri eski deliklerinde.",
     "{count} part waiting in the design: choose the board it goes on.": (
         "Tasarımda {count} parça bekliyor: hangi karta gideceğini seçin."
     ),
@@ -526,17 +525,17 @@ TURKISH: Mapping[str, str] = {
     "no pins yet": "henüz pin yok",
     "The guide has no steps yet: it is written from the parts on the board.":
         "Rehberde henüz adım yok: rehber karttaki parçalardan yazılır.",
-    "{count} part(s) in the design are not on the board yet: Place on the Board puts them there, arranged.":
-        "Tasarımdaki {count} parça henüz kartta değil: Karta Yerleştir onları dizerek "
-        "oraya koyar.",
-    "Copied {parts} part(s), {conductors} conductor(s)": "{parts} parça, {conductors} iletken kopyalandı",
-    "{count} lead bend(s) left behind: a bent leg belongs to a part that was not in the selection":
-        "{count} bacak bükme geride kaldı: bükülen bacak, seçimde olmayan bir parçanın",
-    "Pasted {parts} part(s) and {conductors} conductor(s) at {hole}":
-        "{parts} parça ve {conductors} iletken {hole} deliğine yapıştırıldı",
-    "Duplicated {parts} part(s) and {conductors} conductor(s) at {hole}":
-        "{parts} parça ve {conductors} iletken {hole} deliğine çoğaltıldı",
-    "{count} conductor(s) would have run off the board": "{count} iletken kartın dışına taşacaktı",
+    "{count} part in the design is not on the board yet: Place on the Board puts it there.": "Tasarımdaki {count} parça henüz kartta değil: Karta Yerleştir onu oraya koyar.",
+    "{count} parts in the design are not on the board yet: Place on the Board puts them there, arranged.": "Tasarımdaki {count} parça henüz kartta değil: Karta Yerleştir onları dizerek oraya koyar.",
+    "Copied {parts}, {conductors}": "{parts}, {conductors} kopyalandı",
+    "{count} conductor": "{count} iletken",
+    "{count} conductors": "{count} iletken",
+    "{count} lead bend left behind: a bent leg belongs to a part that was not in the selection": "{count} bacak bükme geride kaldı: bükülen bacak, seçimde olmayan bir parçanın",
+    "{count} lead bends left behind: a bent leg belongs to a part that was not in the selection": "{count} bacak bükme geride kaldı: bükülen bacak, seçimde olmayan bir parçanın",
+    "Pasted {parts} and {conductors} at {hole}": "{parts} ve {conductors} {hole} deliğine yapıştırıldı",
+    "Duplicated {parts} and {conductors} at {hole}": "{parts} ve {conductors} {hole} deliğine çoğaltıldı",
+    "{count} conductor would have run off the board": "{count} iletken kartın dışına taşacaktı",
+    "{count} conductors would have run off the board": "{count} iletken kartın dışına taşacaktı",
     "{ref} at {hole}": "{ref}, {hole} deliğinde",
     "untitled": "adsız",
     "{path} is a directory, not a .perf document.": "{path} bir klasör, .perf belgesi değil.",
@@ -722,11 +721,9 @@ TURKISH: Mapping[str, str] = {
     "From {pin} — click the pin it joins.": "{pin} pininden — birleşeceği pine tıklayın.",
     "Could not write the guide: {err}": "Rehber yazılamadı: {err}",
     "{name} and {count} more": "{name} ve {count} dosya daha",
-    "Written to {folder}, with {count} thing(s) it could not cover:": (
-        "{folder} klasörüne yazıldı; kapsayamadığı {count} şey var:"
-    ),
+    "Written to {folder}, with {count} thing it could not cover:": "{folder} klasörüne yazıldı; kapsayamadığı {count} şey var:",
+    "Written to {folder}, with {count} things it could not cover:": "{folder} klasörüne yazıldı; kapsayamadığı {count} şey var:",
     "Could not write the schematic: {err}": "Şema yazılamadı: {err}",
-    "{parts} part(s)": "{parts} parça",
     "Perfboard layout design, verification and a soldering guide.": (
         "Perfboard yerleşim tasarımı, doğrulama ve bir lehimleme rehberi."
     ),
@@ -863,8 +860,10 @@ TURKISH: Mapping[str, str] = {
     # -- a part dragged across the board, while it is dragged ---------------------------
     "and {count} more": "ve {count} parça daha",
     "off the board": "kartın dışında",
-    "{count} pin(s) in a used hole": "{count} pin dolu bir delikte",
-    "{count} pin(s) where there is no pad": "{count} pin pedi olmayan bir yerde",
+    "{count} pin in a used hole": "{count} pin dolu bir delikte",
+    "{count} pins in a used hole": "{count} pin dolu bir delikte",
+    "{count} pin where there is no pad": "{count} pin pedi olmayan bir yerde",
+    "{count} pins where there is no pad": "{count} pin pedi olmayan bir yerde",
     "Part hangs past the edge": "Parça kenardan taşıyor",
     "Part too tall for the case": "Parça kutuya göre fazla yüksek",
     "Wires or traces cross": "Teller ya da yollar kesişiyor",
@@ -1075,9 +1074,8 @@ TURKISH: Mapping[str, str] = {
     "A new design. Draw the circuit; the board it goes on is the next step, tried with the circuit on it.": (
         "Yeni bir tasarım. Devreyi çizin; gideceği kart bir sonraki adımda, devre üzerindeyken denenir."
     ),
-    "{removed} conductor(s) on them go and are planned again; copper with no net assigned is left alone. One Ctrl+Z puts it all back.": (
-        "Üzerlerindeki {removed} iletken kaldırılıp yeniden planlanır; neti olmayan bakıra dokunulmaz. Tek Ctrl+Z hepsini geri alır."
-    ),
+    "{count} conductor on them goes and is planned again; copper with no net assigned is left alone. One Ctrl+Z puts it all back.": "Üzerlerindeki {count} iletken kaldırılıp yeniden planlanır; neti olmayan bakıra dokunulmaz. Tek Ctrl+Z hepsini geri alır.",
+    "{count} conductors on them go and are planned again; copper with no net assigned is left alone. One Ctrl+Z puts it all back.": "Üzerlerindeki {count} iletken kaldırılıp yeniden planlanır; neti olmayan bakıra dokunulmaz. Tek Ctrl+Z hepsini geri alır.",
     "Locked": "Kilitli",
     "Kind": "Tür",
     "Type what the part is; Enter puts it on the sheet.": (
@@ -1128,9 +1126,8 @@ TURKISH: Mapping[str, str] = {
     "The wiring is checked again after the change.": (
         "Değişiklikten sonra bağlantılar yeniden denetlenir."
     ),
-    "Its {count} lead bend(s) were bent to this package's pins and go with it.": (
-        "{count} bacak bükümü bu gövdenin pinlerine göre bükülmüştü; onunla birlikte kalkar."
-    ),
+    "Its {count} lead bend was bent to this package's pins and goes with it.": "{count} bacak bükümü bu gövdenin pinlerine göre bükülmüştü; onunla birlikte kalkar.",
+    "Its {count} lead bends were bent to this package's pins and go with it.": "{count} bacak bükümü bu gövdenin pinlerine göre bükülmüştü; onunla birlikte kalkar.",
     "{ref} is a {part} now.": "{ref} artık bir {part}.",
     "Properties edits one part at a time — select a single part.": (
         "Özellikler tek seferde tek parçayı düzenler — tek bir parça seçin."
@@ -1482,9 +1479,8 @@ TURKISH: Mapping[str, str] = {
     "Could not save the project": "Proje kaydedilemedi",
     "The board itself: {err}": "Kartın kendisi: {err}",
     "{count} not written": "{count} tanesi yazılmadı",
-    "Project saved to {path}: the board and {count} generated file(s){note}": (
-        "Proje {path} konumuna kaydedildi: kart ve {count} üretilmiş dosya{note}"
-    ),
+    "Project saved to {path}: the board and {count} generated file{note}": "Proje {path} konumuna kaydedildi: kart ve {count} üretilmiş dosya{note}",
+    "Project saved to {path}: the board and {count} generated files{note}": "Proje {path} konumuna kaydedildi: kart ve {count} üretilmiş dosya{note}",
     "Some files were not written": "Bazı dosyalar yazılmadı",
     "no board view to print from": "basılacak bir kart görünümü yok",
     "the design has no parts to draw yet": "tasarımda henüz çizilecek parça yok",
@@ -1681,10 +1677,8 @@ TURKISH: Mapping[str, str] = {
         "kişinin kurması gereken bir kütüphanede değil, kartın kendisiyle birlikte gider."
     ),
     "Those measurements do not make a part.": "Bu ölçüler bir parça etmiyor.",
-    "{name} — {pins} pin(s), {height} mm tall": (
-        "{name} — {pins} pin, {height} mm yükseklik"
-    ),
-    "{count} pin(s)": "{count} pin",
+    "{name} — {count} pin, {height} mm tall": "{name} — {count} pin, {height} mm yükseklik",
+    "{name} — {count} pins, {height} mm tall": "{name} — {count} pin, {height} mm yükseklik",
     # -- the Parts panel's package families (main._archetype_headings) -------------------
     "Axial resistors and diodes": "Eksenel dirençler ve diyotlar",
     "Resistors and diodes stood on end": "Dik takılan dirençler ve diyotlar",
@@ -1970,7 +1964,8 @@ TURKISH: Mapping[str, str] = {
         "koyar. Kablolamayı yeniden yapmak onu söküp yeniden planlar.</p>"
     ),
     "Imported with warnings": "Uyarılarla içe aktarıldı",
-    "Imported {count} net(s) from {name}": "{name} dosyasından {count} net içe aktarıldı",
+    "Imported {count} net from {name}": "{name} dosyasından {count} net içe aktarıldı",
+    "Imported {count} nets from {name}": "{name} dosyasından {count} net içe aktarıldı",
     "with warnings:": "uyarılar:",
     "… and {count} more": "… ve {count} tane daha",
     # -- the status bar and the panels' summaries ---------------------------------
@@ -1996,8 +1991,10 @@ TURKISH: Mapping[str, str] = {
     "edit its properties": "özelliklerini düzenleyin",
     "change it": "değiştirin",
     "{count} refused: {reasons}": "{count} reddedildi: {reasons}",
-    "Rotated {count} part(s)": "{count} parça döndürüldü",
-    "Mirrored {count} part(s)": "{count} parça aynalandı",
+    "Rotated {count} part": "{count} parça döndürüldü",
+    "Rotated {count} parts": "{count} parça döndürüldü",
+    "Mirrored {count} part": "{count} parça aynalandı",
+    "Mirrored {count} parts": "{count} parça aynalandı",
     "Move to &Solder Side": "&Lehim Yüzüne Al",
     "A part on the solder side is put in from underneath, turned over, so it is mirrored; "
     "its leads are soldered on the component side.": (
@@ -2006,10 +2003,10 @@ TURKISH: Mapping[str, str] = {
     ),
     "Move to Component &Side": "Parça Yüzüne A&l",
     "move it to the other side": "öbür yüze alın",
-    "Moved {count} part(s) to the solder side: Ctrl+F turns the board over": (
-        "{count} parça lehim yüzüne alındı: Ctrl+F kartı çevirir"
-    ),
-    "Moved {count} part(s) to the component side": "{count} parça, parça yüzüne alındı",
+    "Moved {count} part to the solder side: Ctrl+F turns the board over": "{count} parça lehim yüzüne alındı: Ctrl+F kartı çevirir",
+    "Moved {count} parts to the solder side: Ctrl+F turns the board over": "{count} parça lehim yüzüne alındı: Ctrl+F kartı çevirir",
+    "Moved {count} part to the component side": "{count} parça, parça yüzüne alındı",
+    "Moved {count} parts to the component side": "{count} parça, parça yüzüne alındı",
     "{count} of {total} parts changed holes: its wiring needs redoing": (
         "{total} parçadan {count} tanesi başka deliklere geçti: kablolaması yeniden yapılmalı"
     ),
@@ -2021,10 +2018,14 @@ TURKISH: Mapping[str, str] = {
         "{ref} lehim yüzünde, ters çevrilmiş olduğu için zaten aynalı. Shift+M onu parça "
         "yüzüne geri getirir."
     ),
-    "Locked {count} part(s)": "{count} parça kilitlendi",
-    "Unlocked {count} part(s)": "{count} parçanın kilidi açıldı",
-    "Deleted {count} part(s)": "{count} parça silindi",
-    "Disconnected {count} pin(s)": "{count} pin ayrıldı",
+    "Locked {count} part": "{count} parça kilitlendi",
+    "Locked {count} parts": "{count} parça kilitlendi",
+    "Unlocked {count} part": "{count} parçanın kilidi açıldı",
+    "Unlocked {count} parts": "{count} parçanın kilidi açıldı",
+    "Deleted {count} part": "{count} parça silindi",
+    "Deleted {count} parts": "{count} parça silindi",
+    "Disconnected {count} pin": "{count} pin ayrıldı",
+    "Disconnected {count} pins": "{count} pin ayrıldı",
     # -- confirmations, with the verb on the button ------------------------------------
     "Delete {refs}?": "{refs} silinsin mi?",
     "The selected conductor goes with them.": "Seçili iletken de onlarla birlikte silinir.",
@@ -2036,11 +2037,8 @@ TURKISH: Mapping[str, str] = {
         "Diğer teller ve lehim yolları yerinde kalır — boşta kalan ne varsa denetimler gösterir."
     ),
     "Delete net {name}?": "{name} neti silinsin mi?",
-    "{count} conductor(s) already laid for it stay on the board, and Redo Wiring and "
-    "Remove Out-of-Date Wiring leave them alone from then on.": (
-        "Onun için döşenmiş {count} iletken kartta kalır; Kablolamayı Yeniden Yap ve "
-        "Eskimiş Kablolamayı Kaldır artık onlara dokunmaz."
-    ),
+    "{count} conductor already laid for it stays on the board, and Redo Wiring and Remove Out-of-Date Wiring leave it alone from then on.": "Onun için döşenmiş {count} iletken kartta kalır; Kablolamayı Yeniden Yap ve Eskimiş Kablolamayı Kaldır artık ona dokunmaz.",
+    "{count} conductors already laid for it stay on the board, and Redo Wiring and Remove Out-of-Date Wiring leave them alone from then on.": "Onun için döşenmiş {count} iletken kartta kalır; Kablolamayı Yeniden Yap ve Eskimiş Kablolamayı Kaldır artık onlara dokunmaz.",
     "{name} has changes that are not saved.": "{name} üzerinde kaydedilmemiş değişiklikler var.",
     "This board has changes that are not saved.": "Bu kartta kaydedilmemiş değişiklikler var.",
     "Don't Save": "Kaydetme",
@@ -2063,7 +2061,8 @@ TURKISH: Mapping[str, str] = {
     "Import KiCad netlist": "KiCad netlist içe aktar",
     "KiCad netlists (*.net);;All files (*)": "KiCad netlist dosyaları (*.net);;Tüm dosyalar (*)",
     "Loaded {name}": "{name} yüklendi",
-    "({count} warning(s))": "({count} uyarı)",
+    "({count} warning)": "({count} uyarı)",
+    "({count} warnings)": "({count} uyarı)",
     "Opened with warnings": "Uyarılarla açıldı",
     "{name} loaded, but not all of it was understood:": "{name} yüklendi, ama tamamı anlaşılamadı:",
     "Save failed": "Kaydedilemedi",
@@ -2134,7 +2133,8 @@ TURKISH: Mapping[str, str] = {
     "{hole} — the same hole.": "{hole} — aynı delik.",
     "holes": "delik",
     "{mm:.2f} mm apart": "{mm:.2f} mm arayla",
-    "{steps} step(s) by trace": "lehim yoluyla {steps} adım",
+    "{count} step by trace": "lehim yoluyla {count} adım",
+    "{count} steps by trace": "lehim yoluyla {count} adım",
     "Click the first hole.": "İlk deliğe tıklayın.",
     "From {hole} — click the second hole.": "{hole} deliğinden — ikinci deliğe tıklayın.",
     "No component pin at {hole}.": "{hole} deliğinde parça pini yok.",
@@ -2272,7 +2272,9 @@ TURKISH: Mapping[str, str] = {
         "Önce pin 1, sonra satır satır: sütunlar boyunca soldan sağa, sonra bir alttaki "
         "satır. Boş bırakılırsa pinler yalnız numaralanır."
     ),
-    "{names} name(s) for {pins} pin(s).": "{pins} pin için {names} ad.",
+    "{names} for {pins}.": "{pins} için {names}.",
+    "{count} name": "{count} ad",
+    "{count} names": "{count} ad",
     "Sho&w Pin Names": "P&in Adlarını Göster",
     "No room to print:": "Basacak yer yok:",
     "Show Labels on &the Board": "Karttaki &Etiketleri Göster",
@@ -4942,13 +4944,8 @@ TURKISH: Mapping[str, str] = {
     ),
     "Or drag a part here from the Library.": "Ya da Kütüphaneden buraya bir parça sürükleyin.",
     # -- the empty board --------------------------------------------------------------
-    "{count} part(s) are in the design: {catalog} known from the catalog, {kicad} "
-    "matched by their KiCad footprint, {guess} guessed from their reference — check "
-    "those. Next: choose a board and place them.": (
-        "{count} parça tasarımda: {catalog} tanesi katalogdan tanındı, {kicad} tanesi "
-        "KiCad kılıfından eşleşti, {guess} tanesi referansından tahmin edildi — onları "
-        "kontrol edin. Sıradaki: bir kart seçip parçaları yerleştirin."
-    ),
+    "{count} part is in the design: {catalog} known from the catalog, {kicad} matched by its KiCad footprint, {guess} guessed from its reference. Next: choose a board and place it.": "{count} parça tasarımda: {catalog} tanesi katalogdan tanındı, {kicad} tanesi KiCad kılıfından eşleşti, {guess} tanesi referansından tahmin edildi. Sıradaki: bir kart seçip parçayı yerleştirin.",
+    "{count} parts are in the design: {catalog} known from the catalog, {kicad} matched by their KiCad footprint, {guess} guessed from their reference — check those. Next: choose a board and place them.": "{count} parça tasarımda: {catalog} tanesi katalogdan tanındı, {kicad} tanesi KiCad kılıfından eşleşti, {guess} tanesi referansından tahmin edildi — onları kontrol edin. Sıradaki: bir kart seçip parçaları yerleştirin.",
     # -- help (ui/helpcards.py): F1, What's This and the glossary say one text -----------
     "Help for What's Under the &Pointer": "İmlecin Altındakinin &Yardımı",
     "What's &This?": "Bu &Nedir?",
@@ -5435,18 +5432,33 @@ TURKISH: Mapping[str, str] = {
         "tellerini seçer."
     ),
     # -- what the engine says it did (ui/engine_text.py) ---------------------------
-    "Place {parts} part(s) and {links} connection(s)": "{parts} parça ve {links} bağlantı yerleştir",
-    "Place and arrange {count} part(s) from the schematic": "Şemadaki {count} parçayı karta yerleştir ve diz",
-    "Place {count} part(s) on the board": "{count} parçayı karta yerleştir",
+    "Place {parts} part and {links} connection": "{parts} parça ve {links} bağlantı yerleştir",
+    "Place {parts} part and {links} connections": "{parts} parça ve {links} bağlantı yerleştir",
+    "Place {parts} parts and {links} connection": "{parts} parça ve {links} bağlantı yerleştir",
+    "Place {parts} parts and {links} connections": "{parts} parça ve {links} bağlantı yerleştir",
+    "Place and arrange {count} part from the schematic": "Şemadaki {count} parçayı karta yerleştir ve diz",
+    "Place and arrange {count} parts from the schematic": "Şemadaki {count} parçayı karta yerleştir ve diz",
+    "Place {count} part on the board": "{count} parçayı karta yerleştir",
+    "Place {count} parts on the board": "{count} parçayı karta yerleştir",
     "Place {ref} at {hole}": "{ref} parçasını {hole} deliğine yerleştir",
-    "Move {count} component(s)": "{count} parçayı taşı",
-    "Rotate {count} component(s)": "{count} parçayı döndür",
-    "Mirror {count} component(s)": "{count} parçayı aynala",
-    "Update {count} component(s)": "{count} parçayı güncelle",
-    "Lock {count} component(s)": "{count} parçayı kilitle",
-    "Unlock {count} component(s)": "{count} parçanın kilidini aç",
-    "Delete {count} component(s) and {conductors} conductor(s)": "{count} parçayı ve {conductors} iletkeni sil",
-    "Delete {count} component(s)": "{count} parçayı sil",
+    "Move {count} component": "{count} parçayı taşı",
+    "Move {count} components": "{count} parçayı taşı",
+    "Rotate {count} component": "{count} parçayı döndür",
+    "Rotate {count} components": "{count} parçayı döndür",
+    "Mirror {count} component": "{count} parçayı aynala",
+    "Mirror {count} components": "{count} parçayı aynala",
+    "Update {count} component": "{count} parçayı güncelle",
+    "Update {count} components": "{count} parçayı güncelle",
+    "Lock {count} component": "{count} parçayı kilitle",
+    "Lock {count} components": "{count} parçayı kilitle",
+    "Unlock {count} component": "{count} parçanın kilidini aç",
+    "Unlock {count} components": "{count} parçanın kilidini aç",
+    "Delete {count} component and {conductors} conductor": "{count} parçayı ve {conductors} iletkeni sil",
+    "Delete {count} component and {conductors} conductors": "{count} parçayı ve {conductors} iletkeni sil",
+    "Delete {count} components and {conductors} conductor": "{count} parçayı ve {conductors} iletkeni sil",
+    "Delete {count} components and {conductors} conductors": "{count} parçayı ve {conductors} iletkeni sil",
+    "Delete {count} component": "{count} parçayı sil",
+    "Delete {count} components": "{count} parçayı sil",
     "Move {count} symbol(s) on the sheet": "Şemada {count} sembolü taşı",
     "Move {count} symbols on the sheet": "Şemada {count} sembolü taşı",
     "Move {ref} on the sheet": "{ref} sembolünü şemada taşı",
@@ -5462,19 +5474,28 @@ TURKISH: Mapping[str, str] = {
         "{ref} parçasını parça yüzüne taşı: bacakları başka deliklere geçti, kablolamasını yeniden yapmanız gerekir",
     "Move {ref} to Solder Side": "{ref} parçasını lehim yüzüne taşı",
     "Move {ref} to Component Side": "{ref} parçasını parça yüzüne taşı",
-    "Move {count} component(s) to another side": "{count} parçayı öbür yüze taşı",
+    "Move {count} component to another side": "{count} parçayı öbür yüze taşı",
+    "Move {count} components to another side": "{count} parçayı öbür yüze taşı",
     "Rotate {ref} to {degrees} degrees": "{ref} parçasını {degrees} dereceye döndür",
     "Unmirror {ref}": "{ref} parçasının aynalamasını kaldır",
     "Mirror {ref}": "{ref} parçasını aynala",
     "Take {ref} off the board": "{ref} parçasını karttan kaldır",
-    "Paste {parts} part(s) and {links} connection(s)": "{parts} parça ve {links} bağlantı yapıştır",
-    "Paste {parts} part(s)": "{parts} parça yapıştır",
-    "Paste {links} connection(s)": "{links} bağlantı yapıştır",
+    "Paste {parts} part and {links} connection": "{parts} parça ve {links} bağlantı yapıştır",
+    "Paste {parts} part and {links} connections": "{parts} parça ve {links} bağlantı yapıştır",
+    "Paste {parts} parts and {links} connection": "{parts} parça ve {links} bağlantı yapıştır",
+    "Paste {parts} parts and {links} connections": "{parts} parça ve {links} bağlantı yapıştır",
+    "Paste {parts} part": "{parts} parça yapıştır",
+    "Paste {parts} parts": "{parts} parça yapıştır",
+    "Paste {links} connection": "{links} bağlantı yapıştır",
+    "Paste {links} connections": "{links} bağlantı yapıştır",
     "{what} at {hole}": "{hole} deliğine {what}",
-    "Auto-place {count} component(s)": "{count} parçayı otomatik yerleştir",
+    "Auto-place {count} component": "{count} parçayı otomatik yerleştir",
+    "Auto-place {count} components": "{count} parçayı otomatik yerleştir",
     "Auto-place (no change)": "Otomatik yerleşim (değişiklik yok)",
-    "Add {count} imported part(s)": "İçe aktarılan {count} parçayı ekle",
-    "Add {count} part(s) to the schematic": "Şemaya {count} parça ekle",
+    "Add {count} imported part": "İçe aktarılan {count} parçayı ekle",
+    "Add {count} imported parts": "İçe aktarılan {count} parçayı ekle",
+    "Add {count} part to the schematic": "Şemaya {count} parça ekle",
+    "Add {count} parts to the schematic": "Şemaya {count} parça ekle",
     "Add {ref} {value} to the schematic": "Şemaya {ref} {value} ekle",
     "Add {ref} to the schematic": "Şemaya {ref} ekle",
     "Delete {ref} and its {count} connection(s)": "{ref} parçasını ve {count} bağlantısını sil",
@@ -5974,11 +5995,12 @@ def hole_grid(cols: int, rows: int) -> str:
     return t("{cols} × {rows} holes").format(cols=cols, rows=rows)
 
 
-def counted(count: int, one: str, many: str) -> str:
+def counted(count: int, one: str, many: str, **fields: object) -> str:
     """``one`` or ``many`` -- each already through ``t()``, so the catalogue scan sees both --
-    with the count in it. "3 part(s)" read like a machine. English needs the two forms;
-    Turkish says the singular after a number, so its two entries are the same words."""
-    return (one if count == 1 else many).format(count=count)
+    with the count in it, and any other ``fields`` the sentence has. "3 part(s)" read like a
+    machine. English needs the two forms; Turkish says the singular after a number, so its
+    two entries are the same words."""
+    return (one if count == 1 else many).format(count=count, **fields)
 
 
 def t(text: str) -> str:
